@@ -22,6 +22,7 @@ from pygsti.optimize.customsolve import custom_solve as _custom_solve
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
+from pygsti.objectivefns.objectivefns import Chi2Function, TimeIndependentMDCObjectiveFunction
 from typing import Callable
 
 #Make sure SIGINT will generate a KeyboardInterrupt (even if we're launched in the background)
@@ -238,7 +239,7 @@ class SimplerLMOptimizer(Optimizer):
                    serial_solve_proc_threshold=state['serial_solve_number_of_processors_threshold'],
                    lsvec_mode=state.get('lsvec_mode', 'normal'))
 
-    def run(self, objective, profiler, printer):
+    def run(self, objective: TimeIndependentMDCObjectiveFunction, profiler, printer):
 
         """
         Perform the optimization.
@@ -280,7 +281,8 @@ class SimplerLMOptimizer(Optimizer):
         if isinstance(objective.layout, _DL):
             ari = _ari.DistributedArraysInterface(objective.layout, self.lsvec_mode, nExtra)
         else:
-            ari = _ari.UndistributedArraysInterface(nEls, nP)
+            # ari = _ari.UndistributedArraysInterface(nEls, nP)
+            ari = _ari.ImplicitArraysInterface(nEls, nP)
 
         opt_x, converged, msg, mu, nu, norm_f, f, opt_jtj = simplish_leastsq(
             objective_func, jacobian, x0,
@@ -564,7 +566,6 @@ def simplish_leastsq(
             if profiler: profiler.memory_check("simplish_leastsq: begin outer iter")
 
             Jac = jac_guarded(k, num_fd_iters, obj_fn, jac_fn, f, ari, global_x, fdJac)
-
 
             if profiler: profiler.memory_check("simplish_leastsq: after jacobian:"
                                                + "shape=%s, GB=%.2f" % (str(Jac.shape),

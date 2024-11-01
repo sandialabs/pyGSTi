@@ -11,7 +11,7 @@ Implements the ArraysInterface object and supporting functionality.
 #***************************************************************************************************
 
 import numpy as _np
-
+import scipy.linalg as _la
 from pygsti.tools import sharedmemtools as _smt
 
 
@@ -580,6 +580,120 @@ class UndistributedArraysInterface(ArraysInterface):
         return _np.diag_indices_from(jtj)
 
 
+class ImplicitArraysInterface(ArraysInterface):
+
+    def __init__(self, num_global_elements, num_global_params): 
+        self.num_global_elements = num_global_elements 
+        self.num_global_params = num_global_params 
+        pass
+    
+    def allocate_jac(self):
+        return _np.empty((self.num_global_elements, self.num_global_params), 'd')
+
+    def allocate_jtf(self):
+        return _np.empty(self.num_global_params, 'd') 
+    
+    def jtf_param_slice(self):
+        return slice(0, self.num_global_params)
+    
+    def jac_param_slice(self, only_if_leader=False):
+        return slice(0, self.num_global_params)
+
+    def allgather_x(self, x, global_x):
+        global_x[:] = x
+        return
+    
+    def allgather_f(self, f, global_f):
+        global_f[:] = f
+        return
+
+    def allscatter_x(self, global_x, x):
+        x[:] = global_x
+        return
+    
+    def dot_x(self, x1, x2):
+        return x1 @ x2
+    
+    def norm2_x(self, x):
+        return _la.norm(x)**2
+
+    def infnorm_x(self, x):
+        return _la.norm(x, ord=_np.inf)
+    
+    def max_x(self, x):
+        return _np.max(x)
+    
+    def norm2_f(self, f):
+        return _la.norm(f)**2
+    
+    def fill_jtf(self, j, f, jtf):
+        jtf[:] = j.T @ f
+        return
+
+    def global_num_elements(self):
+        return self.num_global_elements
+
+    """
+    Functions where you need to think a bit about how they 
+    should be implemented when Jacobians are implict.
+    """
+
+    def allocate_jtj(self):
+        return _np.empty((self.num_global_params, self.num_global_params), 'd') 
+    
+    def norm2_jac(self, j):
+        return _la.norm(j)**2
+
+    def fill_jtj(self, j, jtj, shared_mem_buff=None):
+        assert shared_mem_buff is None or shared_mem_buff == (None, None)
+        jtj[:] = j.T @ j
+        return
+
+    def jtj_diag_indices(self, jtj):
+        # The question of how to implement this
+        # is less significant than the question of how
+        # to handle people's attempts at indexing into jtj
+        # when it's only defined implicitly.
+        return _np.diag_indices_from(jtj)
+
+    """No-ops"""
+
+    def deallocate_jac(self, jac): pass
+
+    def deallocate_jtf(self, jtf): pass
+
+    def deallocate_jtj(self, jtj): pass
+
+    def allocate_jtj_shared_mem_buf(self): return None, None
+    
+    def deallocate_jtj_shared_mem_buf(self, jtj_buff): pass
+
+    """
+    Omitted function definitions:
+        param_fine_info
+            Only called in customsolve.py::_back_substitution.
+        gather_jtj
+            Only called in customsolve.py::custom_solve.
+        gather_jtf
+            Only called in customsolve.py::custom_solve.     
+        scatter_x
+            Only called in customsolve.py::custom_solve.  
+        scatter_jtf
+            Not called anywhere!
+        scatter_jtj
+            Called in customlm.py::custom_leastsq, in the codepath
+            that uses non-identity damping in the singular value basis.
+        global_svd_dot
+            Called in customlm.py::custom_leastsq, in the codepath
+            that uses non-identity damping in the singular value basis.
+        fill_dx_svd
+            Called in customlm.py::custom_leastsq, in the codepath
+            that uses non-identity damping in the singular value basis.
+        norm2_jtj
+            Not called anywhere!
+    """
+
+
 class DistributedArraysInterface(ArraysInterface):
     """
     An arrays interface where the arrays are distributed according to a distributed layout.
@@ -625,6 +739,9 @@ class DistributedArraysInterface(ArraysInterface):
     def allocate_jac(self):
         """
         Allocate an array for holding a Jacobian matrix (type `'ep'`).
+
+        Note: this function is only called when the Jacobian needs to be
+        approximated with finite differences.
 
         Returns
         -------
