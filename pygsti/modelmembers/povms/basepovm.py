@@ -67,7 +67,7 @@ class _BasePOVM(_POVM):
             self.complement_label = None
 
         if evotype is not None:
-            evotype = _Evotype.cast(evotype)  # e.g., resolve "default"
+            evotype = _Evotype.cast(evotype, items[0][1].state_space)  # e.g., resolve "default"
 
         #Copy each effect vector and set it's parent and gpindices.
         # Assume each given effect vector's parameters are independent.

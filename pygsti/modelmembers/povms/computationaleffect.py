@@ -151,7 +151,7 @@ class ComputationalBasisPOVMEffect(_POVMEffect):
         # or maybe remove and use self._rep.basis if that's the std attribute
         self._basis = basis
 
-        evotype = _Evotype.cast(evotype)
+        evotype = _Evotype.cast(evotype, state_space=state_space)
         self._evotype = evotype  # set this before call to _State.__init__ so self.to_dense() can work...
         rep = evotype.create_computational_effect_rep(zvals, basis, state_space)
         _POVMEffect.__init__(self, rep, evotype)

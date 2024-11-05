@@ -313,7 +313,7 @@ class DenseOperator(DenseOperatorInterface, _KrausOperatorInterface, _LinearOper
         mx = _LinearOperator.convert_to_matrix(mx)
         state_space = _statespace.default_space_for_dim(mx.shape[0]) if (state_space is None) \
             else _statespace.StateSpace.cast(state_space)
-        evotype = _Evotype.cast(evotype)
+        evotype = _Evotype.cast(evotype, state_space=state_space)
         self._basis = _Basis.cast(basis, state_space.dim) if (basis is not None) else None  # for Hilbert-Schmidt space
         rep = evotype.create_dense_superop_rep(mx, self._basis, state_space)
         _LinearOperator.__init__(self, rep, evotype)
@@ -533,7 +533,7 @@ class DenseUnitaryOperator(DenseOperatorInterface, _KrausOperatorInterface, _Lin
         state_space = _statespace.default_space_for_udim(mx.shape[0]) if (state_space is None) \
             else _statespace.StateSpace.cast(state_space)
         basis = _Basis.cast(basis, state_space.dim)  # basis for Hilbert-Schmidt (superop) space
-        evotype = _Evotype.cast(evotype)
+        evotype = _Evotype.cast(evotype, state_space=state_space)
 
         #Try to create a dense unitary rep.  If this fails, see if a dense superop rep
         # can be created, as this type of rep can also hold arbitrary unitary ops.

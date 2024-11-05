@@ -72,11 +72,13 @@ class ComputationalBasisPOVM(_POVM, _NoErrorGeneratorInterface):
         #LATER - do something with qubit_filter here
         # qubits = self.qubit_filter if (self.qubit_filter is not None) else list(range(self.nqubits))
 
-        evotype = _Evotype.cast(evotype)
         items = []  # init as empty (lazy creation of members)
         if state_space is None:
             state_space = _statespace.QubitSpace(nqubits)
         assert(state_space.num_qubits == nqubits), "`state_space` must describe %d qubits!" % nqubits
+        
+        evotype = _Evotype.cast(evotype, state_space=state_space)
+
         try:
             rep = evotype.create_computational_povm_rep(self.nqubits, self.qubit_filter)
         except AttributeError:
