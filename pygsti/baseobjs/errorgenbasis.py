@@ -623,7 +623,7 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
         if self._cached_local_labels is None:
             if self._cached_global_labels is None:
                 self._cached_global_labels = self.global_labels()
-            self._cached_local_labels = tuple([_LocalElementaryErrorgenLabel.cast(lbl) for lbl in self._cached_global_labels])
+            self._cached_local_labels = tuple([_LocalElementaryErrorgenLabel.cast(lbl, sslbls=self.sslbls) for lbl in self._cached_global_labels])
         return self._cached_local_labels
     
     def sublabels(self, errorgen_type):
@@ -646,11 +646,11 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
                                            self.max_weights.get(errorgen_type, None),
                                            self._sslbl_overlap)
         if self._default_lbl_typ == 'local':
-            labels = tuple([_LocalElementaryErrorgenLabel.cast(lbl) for lbl in labels])
+            labels = tuple([_LocalElementaryErrorgenLabel.cast(lbl, sslbls=self.sslbls) for lbl in labels])
         return labels
     
     @property
-    def elemgen_supports(self, identity_label='I'):
+    def elemgen_supports(self):
         """
         Returns a tuple of tuples, each corresponding to the support
         of the elementary error generators in this basis, returned in
