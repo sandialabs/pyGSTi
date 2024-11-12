@@ -573,64 +573,6 @@ def fast_kron(np.ndarray[double, ndim=1, mode="c"] outvec not None,
     #assert(sz == N)
 
 
-
-#An attempt at a faster matrix prod specific to 2D matrices -- much SLOWER than numpy!!
-#@cython.cdivision(True) # turn off divide-by-zero checking
-#@cython.boundscheck(False) # turn off bounds-checking for entire function
-#@cython.wraparound(False)  # turn off negative index wrapping for entire function
-#def fast_dot2(np.ndarray[double, ndim=2] out,
-#              np.ndarray[double, ndim=2] a, np.ndarray[double, ndim=2] b):
-#    cdef double* out_ptr = <double*>out.data
-#    cdef double* a_ptr = <double*>a.data
-#    cdef double* b_ptr = <double*>b.data
-#    cdef double* arow
-#    cdef double* bcol
-#    cdef double* outrow
-#    cdef double tot
-#    cdef INT m = a.shape[0]
-#    cdef INT n = b.shape[1]
-#    cdef INT l = a.shape[1]
-#    cdef INT astride = a.strides[0] // a.itemsize
-#    cdef INT bstride = b.strides[0] // b.itemsize
-#    cdef INT outstride = out.strides[0] // out.itemsize
-#    cdef INT ainc = a.strides[1] // a.itemsize
-#    cdef INT binc = b.strides[1] // b.itemsize
-#    cdef INT outinc = out.strides[1] // out.itemsize
-#    cdef INT i_times_astride
-#    cdef INT i_times_outstride
-#    cdef INT j_times_binc
-#    cdef INT j_times_outinc
-#    cdef INT k_times_bstride
-#    cdef INT k_times_ainc
-#    cdef INT i
-#    cdef INT j
-#    cdef INT k
-#
-#    # out_ij = sum_k a_ik * b_kl
-#
-#    i_times_astride = 0
-#    i_times_outstride = 0
-#    for i in range(m):
-#        arow = &a_ptr[i_times_astride]
-#        outrow = &out_ptr[i_times_outstride]
-#        j_times_binc = 0
-#        j_times_outinc = 0
-#        for j in range(n):
-#            bcol = &b_ptr[j_times_binc]
-#            k_times_bstride = 0
-#            k_times_ainc = 0
-#            tot = 0.0
-#            for k in range(l):
-#                tot = tot + arow[k_times_ainc] * bcol[k_times_bstride]
-#                k_times_bstride = k_times_bstride + bstride
-#                k_times_ainc = k_times_ainc + ainc
-#            outrow[j_times_outinc] = tot
-#            j_times_binc = j_times_binc + binc
-#            j_times_outinc = j_times_outinc + outinc
-#        i_times_astride = i_times_astride + astride
-#        i_times_outstride = i_times_outstride + outstride
-
-
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
 def fast_kron_complex(np.ndarray[np.complex128_t, ndim=1, mode="c"] outvec not None,

@@ -379,10 +379,6 @@ class FOGIGraphDiagram(FOGIDiagram):
     def _normalize(self, v):
         return -_np.log10(max(v, 10**(-self.MAX_POWER)) * 10**self.MIN_POWER) / (self.MAX_POWER - self.MIN_POWER)
 
-    #def _normalize(v):
-    #    v = min(max(v, 10**(-MAX_POWER)), 10**(-MIN_POWER))
-    #    return 1.0 - v / (10**(-MIN_POWER) - 10**(-MAX_POWER))
-
     def _node_HScolor(self, Hvalue, Svalue):
         r, g, b, a = _Hcmap(self._normalize(Hvalue))
         r2, g2, b2, a2 = _Scmap(self._normalize(Svalue))
@@ -621,18 +617,6 @@ class FOGISvgGraphDiagram(FOGIGraphDiagram):
         for x in drawing.nodes: d.append(x)
         if filename: d.saveSvg(filename)
         return d
-
-    #def _draw_node_simple(self, drawing, r, theta, coh, sto, op_label, total, val_max):
-    #    nodes = drawing.nodes
-    #    back_color, border_color, tcolor, _, labels, _ = self._get_node_colors(coh, sto, total)
-    #    x, y = r * _np.cos(theta), r * _np.sin(theta)
-    #    scale = (coh + sto) / val_max
-    #    node_width = 20 + 40 * scale
-    #    node_height = 20 + 40 * scale
-    #    nodes.append(_draw.Rectangle(x - node_width / 2, y - node_height / 2, node_width, node_height, rx=3,
-    #                                 fill=back_color, stroke=border_color, stroke_width=2))
-    #    nodes.append(_draw.Text(labels, self.node_fontsize * (0.5 + scale), x, y, fill=tcolor,
-    #                            text_anchor="middle", valign='middle', font_family='Times'))
 
     def _draw_node(self, drawing, r, theta, coh, sto, op_label, total, val_max, groupid, info):
         nodes = drawing.nodes

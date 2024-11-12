@@ -1770,11 +1770,6 @@ class StandardGST(_proto.Protocol):
         #Advanced options that could be changed by users who know what they're doing
         self.starting_point = {}  # a dict whose keys are modes
 
-    #def run_using_germs_and_fiducials(self, dataset, target_model, prep_fiducials, meas_fiducials, germs, max_lengths):
-    #    design = StandardGSTDesign(target_model, prep_fiducials, meas_fiducials, germs, max_lengths)
-    #    data = _proto.ProtocolData(design, dataset)
-    #    return self.run(data)
-
     def run(self, data, memlimit=None, comm=None, checkpoint=None, checkpoint_path=None,
             disable_checkpointing=False, simulator: Optional[ForwardSimulator.Castable]=None):
         """
