@@ -59,17 +59,19 @@ class ErrorGeneratorPropagator:
         """
 
         if use_bch:
-            raise NotImplementedError('Still under development.')
-            propagated_error_generators = self.propagate_errorgens_bch(circuit, multi_gate_dict=multi_gate_dict,
-                                                                       *bch_kwargs)
+            #should return a single dictionary of error generator rates
+            propagated_error_generator = self.propagate_errorgens_bch(circuit, multi_gate_dict=multi_gate_dict,
+                                                                       **bch_kwargs)
+            #convert this to a process matrix
+            return _spl.expm(self.errorgen_layer_dict_to_errorgen(propagated_error_generator, mx_basis='pp'))
             
         else:
             propagated_error_generators = self.propagate_errorgens(circuit, multi_gate_dict, include_spam)
             #loop though the propagated error generator layers and construct their error generators.
             #Then exponentiate
             exp_error_generators = []
-            for err_gen_layer_list in propagated_error_generators:
-                if err_gen_layer_list: #if not empty. Should be length one if not empty.
+            for err_gen_layer in propagated_error_generators:
+                if err_gen_layer: #if not empty.
                     #Keep the error generator in the standard basis until after the end-of-circuit
                     #channel is constructed so we can reduce the overhead of changing basis.
                     exp_error_generators.append(_spl.expm(self.errorgen_layer_dict_to_errorgen(err_gen_layer_list[0], mx_basis='pp')))
@@ -229,14 +231,14 @@ class ErrorGeneratorPropagator:
             with state preparation and measurement.
         """
 
-        msg = 'When bch_layerwise is True this can take the values of either 1 or 2.'\
-              +' Otherwise only a value of 1 is currently implemented.'
-        if not bch_layerwise:
-            assert bch_order==1, msg
-        else:
-            msg1 = 'When bch_layerwise is False only bch_order values of 1 and 2 are currently'\
-                   + ' supported.'
-            assert bch_order==1 or bch_order==2, msg1
+        #msg = 'When bch_layerwise is True this can take the values of either 1 or 2.'\
+        #      +' Otherwise only a value of 1 is currently implemented.'
+        #if not bch_layerwise:
+        #    assert bch_order==1, msg
+        #else:
+        #    msg1 = 'When bch_layerwise is False only bch_order values of 1 and 2 are currently'\
+        #           + ' supported.'
+        #    assert bch_order==1 or bch_order==2, msg1
 
         #if not doing layerwise BCH then we can re-use `propagate_errorgens` fully.
         if not bch_layerwise:
@@ -261,11 +263,11 @@ class ErrorGeneratorPropagator:
             assert circuit.line_labels is not None and circuit.line_labels != ('*',)
             errorgen_layers = self.construct_errorgen_layers(circuit, len(circuit.line_labels), include_spam)
 
-            #propagate the errorgen_layers through the propagation_layers to get a list
-            #of end of circuit error generator dictionaries.
-            propagated_errorgen_layers = self._propagate_errorgen_layers_bch(errorgen_layers, propagation_layers, 
+            #propagate the errorgen_layers through the propagation_layers to get the
+            #end of circuit error generator dictionary.
+            propagated_errorgen_layers = self._propagate_errorgen_layers_bch(errorgen_layers, propagation_layers,
+                                                                             bch_order=bch_order,
                                                                              include_spam = include_spam)
-
         return propagated_errorgen_layers
 
         
@@ -434,7 +436,7 @@ class ErrorGeneratorPropagator:
             value currently found in the model.
         Returns
         -------
-        List of lists of dictionaries, each one containing the error generator coefficients and rates for a circuit layer,
+        List of dictionaries, each one containing the error generator coefficients and rates for a circuit layer,
         with the error generator coefficients now represented using LocalStimErrorgenLabel.
 
         """
@@ -471,7 +473,7 @@ class ErrorGeneratorPropagator:
                     errorgen_layer[_LSE(errgen_coeff_lbl.errorgen_type, paulis, circuit_time=j)] = rate if fixed_rate is None else fixed_rate
                 else:
                     errorgen_layer[_LSE(errgen_coeff_lbl.errorgen_type, paulis)] = rate if fixed_rate is None else fixed_rate
-            error_gen_dicts_by_layer.append([errorgen_layer])
+            error_gen_dicts_by_layer.append(errorgen_layer)
         return error_gen_dicts_by_layer
     
     def _propagate_errorgen_layers(self, errorgen_layers, propagation_layers, include_spam=True):
@@ -519,16 +521,12 @@ class ErrorGeneratorPropagator:
         for i in range(stopping_idx):
             err_layer = errorgen_layers[i]
             prop_layer = propagation_layers[i]
-            new_err_layer = []
-            #err_layer should be length 1 if using this method
-            for bch_level_list in err_layer: 
-                new_error_dict=dict()
-                #iterate through dictionary of error generator coefficients and propagate each one.
-                for errgen_coeff_lbl in bch_level_list:
-                    propagated_error_gen = errgen_coeff_lbl.propagate_error_gen_tableau(prop_layer, bch_level_list[errgen_coeff_lbl])
-                    new_error_dict[propagated_error_gen[0]] = propagated_error_gen[1]
-                new_err_layer.append(new_error_dict)        
-            fully_propagated_layers.append(new_err_layer)
+            new_error_dict=dict()
+            #iterate through dictionary of error generator coefficients and propagate each one.
+            for errgen_coeff_lbl in err_layer:
+                propagated_error_gen = errgen_coeff_lbl.propagate_error_gen_tableau(prop_layer, err_layer[errgen_coeff_lbl])
+                new_error_dict[propagated_error_gen[0]] = propagated_error_gen[1]
+            fully_propagated_layers.append(new_error_dict)
         #add the final layers which didn't require actual propagation (since they were already at the end).
         fully_propagated_layers.extend(errorgen_layers[stopping_idx:])
         return fully_propagated_layers
@@ -565,24 +563,15 @@ class ErrorGeneratorPropagator:
         
         Returns
         -------
-        fully_propagated_layers : list of lists of dicts
-            A list of list of dicts with the same structure as errorgen_layers corresponding
-            to the results of having propagated each of the error generator layers through
-            the circuit to the end while combining the layers in a layerwise fashion using the
-            BCH approximation. As a result of this combination, this list should have a length
-            of one.
+        fully_propagated_layer : dict
+            Dictionart corresponding to the results of having propagated each of the error generator
+            layers through the circuit to the end while combining the layers in a layerwise fashion 
+            using the BCH approximation. 
         """
-
-        #Add temporary errors when trying to do BCH beyond 1st order while the details of the 2nd order
-        #approximation's implementation are sorted out.
-        if bch_order != 1:
-            msg = 'The implementation of the 2nd order BCH approx is still under development. For now only 1st order is supported.'
-            raise NotImplementedError(msg)
-        assert all([len(layer)==1 for layer in errorgen_layers]), msg
-
-        fully_propagated_layers=[]
+        #TODO: Refactor this and _propagate_errorgen_layers to reduce code repetition as their current
+        #implementations are very close to each other.
         #initialize a variable as temporary storage of the result
-        #of performing BCH on pairwise between a propagater errorgen
+        #of performing BCH on pairwise between a propagated errorgen
         #layer and an unpropagated layer for layerwise BCH.
         if len(errorgen_layers)>0:
             combined_err_layer = errorgen_layers[0]
@@ -597,25 +586,19 @@ class ErrorGeneratorPropagator:
         for i in range(stopping_idx):
             #err_layer = errorgen_layers[i]
             prop_layer = propagation_layers[i]
-            new_err_layer = []
-            #err_layer should be length 1 if using this method
-            for bch_level_dict in combined_err_layer: 
-                new_error_dict = dict()
-                #iterate through dictionary of error generator coefficients and propagate each one.
-                for errgen_coeff_lbl in bch_level_dict:
-                    propagated_error_gen = errgen_coeff_lbl.propagate_error_gen_tableau(prop_layer, bch_level_dict[errgen_coeff_lbl])
-                    new_error_dict[propagated_error_gen[0]] = propagated_error_gen[1]
-                new_err_layer.append(new_error_dict)
+            new_error_dict = dict()
+            #iterate through dictionary of error generator coefficients and propagate each one.
+            for errgen_coeff_lbl in combined_err_layer:
+                propagated_error_gen = errgen_coeff_lbl.propagate_error_gen_tableau(prop_layer, combined_err_layer[errgen_coeff_lbl])
+                new_error_dict[propagated_error_gen[0]] = propagated_error_gen[1]
             #next use BCH to combine new_err_layer with the now adjacent layer of errorgen_layers[i+1]
-            combined_err_layer = _eprop.bch_approximation(new_err_layer, errorgen_layers[i+1], bch_order=1)
-
+            combined_err_layer = _eprop.bch_approximation(new_error_dict, errorgen_layers[i+1], bch_order=bch_order)
         #If we are including spam then there will be one last error generator which we doesn't have an associated propagation
         #which needs to be combined using BCH.
         if include_spam:
-            combined_err_layer = _eprop.bch_approximation(combined_err_layer, errorgen_layers[-1], bch_order=1)
+            combined_err_layer = _eprop.bch_approximation(combined_err_layer, errorgen_layers[-1], bch_order=bch_order)
 
-        fully_propagated_layers.append(combined_err_layer)
-        return fully_propagated_layers
+        return combined_err_layer
     
     def errorgen_layer_dict_to_errorgen(self, errorgen_layer, mx_basis='pp'):
         """

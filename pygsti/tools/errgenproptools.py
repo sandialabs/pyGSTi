@@ -15,6 +15,7 @@ from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GEEL
 from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE
 from pygsti.modelmembers.operations import LindbladErrorgen as _LinbladErrorgen
 from numpy import conjugate
+from functools import reduce
 
 def errgen_coeff_label_to_stim_pauli_strs(err_gen_coeff_label, num_qubits):
     """
@@ -80,9 +81,8 @@ def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1):
 
     Parameters
     ----------
-    errgen_layer_1 : list of dicts
-        Each lists contains dictionaries of the error generator coefficients and rates for a circuit layer. 
-        Each dictionary corresponds to a different order of the BCH approximation.
+    errgen_layer_1 : dict
+        Dictionary of the error generator coefficients and rates for a circuit layer. 
         The error generator coefficients are represented using LocalStimErrorgenLabel.
     
     errgen_layer_2 : list of dicts
@@ -90,62 +90,130 @@ def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1):
 
     Returns
     -------
-    combined_errgen_layer : list of dicts?
-        A list with the same general structure as `errgen_layer_1` and `errgen_layer_2`, but with the
+    combined_errgen_layer : dict
+        A dictionary with the same general structure as `errgen_layer_1` and `errgen_layer_2`, but with the
         rates combined according to the selected order of the BCH approximation.
 
     """
-    if bch_order != 1:
-        msg = 'The implementation of the 2nd order BCH approx is still under development. For now only 1st order is supported.'
-        raise NotImplementedError(msg)
-
     new_errorgen_layer=[]
     for curr_order in range(0,bch_order):
-        working_order_dict = dict()
         #add first order terms into new layer
         if curr_order == 0:
-            #get the dictionaries of error generator coefficient labels and rates
-            #for the current working BCH order.
-            current_errgen_dict_1 = errgen_layer_1[curr_order]
-            current_errgen_dict_2 = errgen_layer_2[curr_order]
             #Get a combined set of error generator coefficient labels for these two
             #dictionaries.
-            current_combined_coeff_lbls = set(current_errgen_dict_1.keys()) | set(current_errgen_dict_2.keys())
+            current_combined_coeff_lbls = set(errgen_layer_1.keys()) | set(errgen_layer_2.keys())
             
+            first_order_dict = dict()
             #loop through the combined set of coefficient labels and add them to the new dictionary for the current BCH
             #approximation order. If present in both we sum the rates.
             for coeff_lbl in current_combined_coeff_lbls:
-                working_order_dict[coeff_lbl] = current_errgen_dict_1.get(coeff_lbl, 0) + current_errgen_dict_2.get(coeff_lbl, 0) 
-            new_errorgen_layer.append(working_order_dict)
+                first_order_dict[coeff_lbl] = errgen_layer_1.get(coeff_lbl, 0) + errgen_layer_2.get(coeff_lbl, 0) 
+            
+            #allow short circuiting to avoid an expensive bunch of recombination logic when only using first order BCH
+            #which will likely be a common use case.
+            if bch_order==1:
+                return first_order_dict
+            new_errorgen_layer.append(first_order_dict)
+        
         #second order BCH terms.
+        # (1/2)*[X,Y]
         elif curr_order == 1:
-            current_errgen_dict_1 = errgen_layer_1[curr_order-1]
-            current_errgen_dict_2 = errgen_layer_2[curr_order-1]
             #calculate the pairwise commutators between each of the error generators in current_errgen_dict_1 and
             #current_errgen_dict_2.
-            for error1 in current_errgen_dict_1.keys():
-                for error2 in current_errgen_dict_2.keys():
+            commuted_errgen_list = []
+            for error1 in errgen_layer_1.keys():
+                for error2 in errgen_layer_2.keys():
                     #get the list of error generator labels 
-                    commuted_errgen_list = error_generator_commutator(error1, error2, 
-                                                                    weight=1/2*current_errgen_dict_1[error1]*current_errgen_dict_1[error2])
-                    print(commuted_errgen_list)
-                    #Add all of these error generators to the working dictionary of updated error generators and weights.
-                    #There may be duplicates, which should be summed together.
-                    for error_tuple in commuted_errgen_list:
-                        working_order_dict[error_tuple[0]]=error_tuple[1]
-            
-            
-            if len(errgen_layer_1)==2:
-                for error_key in errgen_layer_1[1]:
-                    working_order_dict[error_key]=errgen_layer_1[1][error_key]
-            if len(errgen_layer_2)==2:
-                for error_key in errgen_layer_2[1]:
-                    working_order_dict[error_key]=errgen_layer_2[1][error_key]
-            new_errorgen_layer.append(working_order_dict)
+                    commuted_errgen_sublist = error_generator_commutator(error1, error2, 
+                                                                         weight= .5*errgen_layer_1[error1]*errgen_layer_2[error2])
+                    commuted_errgen_list.extend(commuted_errgen_sublist)
+            #print(f'{commuted_errgen_list=}')   
+            #loop through all of the elements of commuted_errorgen_list and instantiate a dictionary with the requisite keys.
+            second_order_comm_dict = {error_tuple[0]:0 for error_tuple in commuted_errgen_list}
 
+            #Add all of these error generators to the working dictionary of updated error generators and weights.
+            #There may be duplicates, which should be summed together.
+            for error_tuple in commuted_errgen_list:
+                second_order_comm_dict[error_tuple[0]] += error_tuple[1]
+            new_errorgen_layer.append(second_order_comm_dict)
+            
+        #third order BCH terms
+        # (1/12)*([X,[X,Y]] - [Y,[X,Y]])
+        elif curr_order == 2:
+            #we've already calculated (1/2)*[X,Y] in the previous order, so reuse this result.
+            #two different lists for the two different commutators so that we can more easily reuse
+            #this at higher order if needed.
+            commuted_errgen_list_1 = []
+            commuted_errgen_list_2 = []
+            first_order_comm = new_errorgen_layer[1]
+
+            for error1a, error1b in zip(errgen_layer_1.keys(), errgen_layer_2.keys()):
+                for error2 in first_order_comm:
+                    first_order_comm_rate = first_order_comm[error2]
+                    #only need a factor of 1/6 because new_errorgen_layer[1] is 1/2 the commutator 
+                    commuted_errgen_sublist = error_generator_commutator(error1a, error2, 
+                                                                         weight=(1/6)*errgen_layer_1[error1a]*first_order_comm_rate)
+                    commuted_errgen_list_1.extend(commuted_errgen_sublist)
+
+                    #only need a factor of -1/6 because new_errorgen_layer[1] is 1/2 the commutator 
+                    commuted_errgen_sublist = error_generator_commutator(error1b, error2, 
+                                                                         weight=-(1/6)*errgen_layer_2[error1b]*first_order_comm_rate)
+                    commuted_errgen_list_2.extend(commuted_errgen_sublist)   
+
+            #turn the two new commuted error generator lists into dictionaries.
+            #loop through all of the elements of commuted_errorgen_list and instantiate a dictionary with the requisite keys.
+            third_order_comm_dict_1 = {error_tuple[0]:0 for error_tuple in commuted_errgen_list_1}
+            third_order_comm_dict_2 = {error_tuple[0]:0 for error_tuple in commuted_errgen_list_2}
+            
+            #Add all of these error generators to the working dictionary of updated error generators and weights.
+            #There may be duplicates, which should be summed together.
+            for error_tuple in commuted_errgen_list_1:
+                third_order_comm_dict_1[error_tuple[0]] += error_tuple[1]
+            for error_tuple in commuted_errgen_list_2:
+                third_order_comm_dict_2[error_tuple[0]] += error_tuple[1]
+            
+            #finally sum these two dictionaries
+            third_order_comm_dict =  {key: third_order_comm_dict_1.get(key, 0) + third_order_comm_dict_2.get(key, 0) 
+                                      for key in set(third_order_comm_dict_1) | set(third_order_comm_dict_2)}
+
+            new_errorgen_layer.append(third_order_comm_dict)
+                         
+        #fourth order BCH terms
+        # -(1/24)*[Y,[X,[X,Y]]]
+        elif curr_order == 3:
+            #we've already calculated (1/12)*[X,[X,Y]] so reuse this result.
+            #this is stored in third_order_comm_dict_1
+            commuted_errgen_list = []
+            for error1 in errgen_layer_2.keys():
+                for error2 in third_order_comm_dict_1.keys():
+                    #only need a factor of -1/2 because third_order_comm_dict_1 is 1/12 the nested commutator 
+                    commuted_errgen_sublist = error_generator_commutator(error1, error2, 
+                                                                         weight= -.5*errgen_layer_2[error1]*third_order_comm_dict_1[error2])
+                    commuted_errgen_list.extend(commuted_errgen_sublist)
+            
+            #loop through all of the elements of commuted_errorgen_list and instantiate a dictionary with the requisite keys.
+            fourth_order_comm_dict = {error_tuple[0]:0 for error_tuple in commuted_errgen_list}
+
+            #Add all of these error generators to the working dictionary of updated error generators and weights.
+            #There may be duplicates, which should be summed together.
+            for error_tuple in commuted_errgen_list:
+                fourth_order_comm_dict[error_tuple[0]] += error_tuple[1]
+            new_errorgen_layer.append(fourth_order_comm_dict)
         else:
-            raise ValueError("Higher Orders are not Implemented Yet")
-    return new_errorgen_layer
+            raise NotImplementedError("Higher orders beyond fourth order are not implemented yet.")
+
+    #Finally accumulate all of the dictionaries in new_errorgen_layer into a single one, summing overlapping terms.   
+    errorgen_labels_by_order = [set(order_dict) for order_dict in new_errorgen_layer]
+    complete_errorgen_labels = reduce(lambda a, b: a|b, errorgen_labels_by_order)
+
+    #initialize a dictionary with requisite keys
+    new_errorgen_layer_dict = {lbl: 0 for lbl in complete_errorgen_labels}
+
+    for order_dict in new_errorgen_layer:
+        for lbl, rate in order_dict.items():
+            new_errorgen_layer_dict[lbl] += rate
+
+    return new_errorgen_layer_dict
 
 
 def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight=1.0):
