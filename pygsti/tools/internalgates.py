@@ -402,7 +402,8 @@ def standard_gatenames_stim_conversions():
     'Gxx'   : stim.Tableau.from_named_gate('SQRT_XX'),
     'Gzz'   : stim.Tableau.from_named_gate('SQRT_ZZ'),
     'Gcnot' : stim.Tableau.from_named_gate('CNOT'),
-    'Gswap' : stim.Tableau.from_named_gate('SWAP')
+    'Gswap' : stim.Tableau.from_named_gate('SWAP'),
+    'Gcphase' : stim.Tableau.from_named_gate('CZ')
     }
     return pyGSTi_to_stim_GateDict
 

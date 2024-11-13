@@ -15,7 +15,8 @@ import scipy.sparse as _sps
 
 from pygsti.tools.basistools import basis_matrices
 import pygsti.baseobjs as _bo
-from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GlobalElementaryErrorgenLabel
+from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GlobalElementaryErrorgenLabel, \
+                                          LocalElementaryErrorgenLabel as _LocalElementaryErrorgenLabel
 from pygsti.baseobjs.statespace import QubitSpace as _QubitSpace
 import warnings as _warnings
 
@@ -236,7 +237,8 @@ def create_lindbladian_term_errorgen(typ, Lm, Ln=None, sparse=False):  # noqa N8
 
 def random_error_generator_rates(num_qubits, errorgen_types=('H', 'S', 'C', 'A'), max_weights=None,
                                  H_params=(0.,.01), SCA_params=(0.,.01), error_metric=None, error_metric_value=None, 
-                                 relative_HS_contribution=None, fixed_errorgen_rates=None, sslbl_overlap=None, seed = None):
+                                 relative_HS_contribution=None, fixed_errorgen_rates=None, sslbl_overlap=None, 
+                                 label_type='global', seed = None):
     """
     Function for generating a random set of CPTP error generator rates.
     
@@ -307,7 +309,12 @@ def random_error_generator_rates(num_qubits, errorgen_types=('H', 'S', 'C', 'A')
         control the weight and allowed types of the error generators in this
         model. If specifying fixed C and A rates it is possible for the final
         error generator to be non-CP.
-        
+    
+    label_type : str, optional (default 'global')
+        String which can be either 'global' or 'local', indicating whether to
+        return a dictionary with keys which are `GlobalElementaryErrorgenLabel`
+        or `LocalElementaryErrorgenLabel` objects respectively.
+
     seed : int, optional (default None)
         An optional integer used in seeding the RNG.
     
@@ -485,5 +492,12 @@ def random_error_generator_rates(num_qubits, errorgen_types=('H', 'S', 'C', 'A')
     for errgen_type in errorgen_types:
         errorgen_rates_dict.update(random_rates_dicts[errgen_type])
     
+    if label_type not in ['global', 'local']:
+        raise ValueError('Unsupported label type {label_type}.')
+
+    if label_type == 'local':
+        errorgen_rates_dict = {_LocalElementaryErrorgenLabel.cast(lbl, state_space.state_space_labels): val 
+                               for lbl, val in  errorgen_rates_dict.items()}
+
     return errorgen_rates_dict
 

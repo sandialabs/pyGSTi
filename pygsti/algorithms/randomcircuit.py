@@ -844,8 +844,9 @@ def create_random_circuit(pspec, length, qubit_labels=None, sampler='Qeliminatio
         1-element list consisting of a list of the relevant gate names (e.g., `lsargs` = ['Gi,
         'Gxpi, 'Gypi', 'Gzpi']).
 
-    rand_state: RandomState, optional
-        A np.random.RandomState object for seeding RNG
+    rand_state: RandomState or int, optional (default None)
+        A np.random.RandomState object for seeding RNG. If an integer is passed in
+        this is used to set the seed for a newly constructed RNG.
 
     Returns
     -------
@@ -859,6 +860,8 @@ def create_random_circuit(pspec, length, qubit_labels=None, sampler='Qeliminatio
         lsargs = []
     if rand_state is None:
         rand_state = _np.random.RandomState()
+    if isinstance(rand_state, int):
+        rand_state = _np.random.RandomState(rand_state)
 
     if isinstance(sampler, str):
 
