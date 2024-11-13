@@ -74,7 +74,7 @@ def errgen_coeff_label_to_stim_pauli_strs(err_gen_coeff_label, num_qubits):
         raise ValueError(f'Unsupported error generator type {errorgen_typ}')
     
 
-def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1):
+def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1, truncation_threshold=1e-14):
     """
     Apply the BCH approximation at the given order to combine the input dictionaries
     of  error generator rates.
@@ -87,6 +87,10 @@ def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1):
     
     errgen_layer_2 : list of dicts
         See errgen_layer_1.
+    
+    truncation_threshold : float, optional (default 1e-14)
+        Threshold for which any error generators with magnitudes below this value
+        are truncated.
 
     Returns
     -------
@@ -96,7 +100,7 @@ def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1):
 
     """
     new_errorgen_layer=[]
-    for curr_order in range(0,bch_order):
+    for curr_order in range(0, bch_order):
         #add first order terms into new layer
         if curr_order == 0:
             #Get a combined set of error generator coefficient labels for these two
@@ -107,7 +111,10 @@ def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1):
             #loop through the combined set of coefficient labels and add them to the new dictionary for the current BCH
             #approximation order. If present in both we sum the rates.
             for coeff_lbl in current_combined_coeff_lbls:
-                first_order_dict[coeff_lbl] = errgen_layer_1.get(coeff_lbl, 0) + errgen_layer_2.get(coeff_lbl, 0) 
+                #only add to the first order dictionary if the coefficient exceeds the truncation threshold.
+                first_order_rate = errgen_layer_1.get(coeff_lbl, 0) + errgen_layer_2.get(coeff_lbl, 0)
+                if abs(first_order_rate) > truncation_threshold:
+                    first_order_dict[coeff_lbl] = first_order_rate
             
             #allow short circuiting to avoid an expensive bunch of recombination logic when only using first order BCH
             #which will likely be a common use case.
@@ -123,20 +130,31 @@ def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1):
             commuted_errgen_list = []
             for error1 in errgen_layer_1.keys():
                 for error2 in errgen_layer_2.keys():
-                    #get the list of error generator labels 
+                    #get the list of error generator labels
+                    weight = .5*errgen_layer_1[error1]*errgen_layer_2[error2]
+                    #I *think* you can pick up at most around a factor of 8 from the commutator
+                    #itself. Someone should validate that. Set this conservatively, but also
+                    #avoid computing commutators which will be effectively zero.
+                    if abs(weight) < 10*truncation_threshold:
+                        continue
                     commuted_errgen_sublist = error_generator_commutator(error1, error2, 
-                                                                         weight= .5*errgen_layer_1[error1]*errgen_layer_2[error2])
+                                                                         weight= weight)
                     commuted_errgen_list.extend(commuted_errgen_sublist)
             #print(f'{commuted_errgen_list=}')   
             #loop through all of the elements of commuted_errorgen_list and instantiate a dictionary with the requisite keys.
-            second_order_comm_dict = {error_tuple[0]:0 for error_tuple in commuted_errgen_list}
+            second_order_comm_dict = {error_tuple[0]: 0 for error_tuple in commuted_errgen_list}
 
             #Add all of these error generators to the working dictionary of updated error generators and weights.
             #There may be duplicates, which should be summed together.
             for error_tuple in commuted_errgen_list:
                 second_order_comm_dict[error_tuple[0]] += error_tuple[1]
-            new_errorgen_layer.append(second_order_comm_dict)
             
+            #truncate any terms which are below the truncation threshold following
+            #aggregation.
+            second_order_comm_dict = {key: val for key, val in second_order_comm_dict.items() if abs(val)>truncation_threshold}
+
+            new_errorgen_layer.append(second_order_comm_dict)
+
         #third order BCH terms
         # (1/12)*([X,[X,Y]] - [Y,[X,Y]])
         elif curr_order == 2:
@@ -145,20 +163,26 @@ def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1):
             #this at higher order if needed.
             commuted_errgen_list_1 = []
             commuted_errgen_list_2 = []
-            first_order_comm = new_errorgen_layer[1]
-
             for error1a, error1b in zip(errgen_layer_1.keys(), errgen_layer_2.keys()):
-                for error2 in first_order_comm:
-                    first_order_comm_rate = first_order_comm[error2]
+                for error2 in second_order_comm_dict:
+                    second_order_comm_rate = second_order_comm_dict[error2]
+                    #I *think* you can pick up at most around a factor of 8 from the commutator
+                    #itself. Someone should validate that. Set this conservatively, but also
+                    #avoid computing commutators which will be effectively zero.
                     #only need a factor of 1/6 because new_errorgen_layer[1] is 1/2 the commutator 
-                    commuted_errgen_sublist = error_generator_commutator(error1a, error2, 
-                                                                         weight=(1/6)*errgen_layer_1[error1a]*first_order_comm_rate)
-                    commuted_errgen_list_1.extend(commuted_errgen_sublist)
+                    weighta = (1/6)*errgen_layer_1[error1a]*second_order_comm_rate
 
+                    if not abs(weighta) < 10*truncation_threshold:
+                        commuted_errgen_sublist = error_generator_commutator(error1a, error2, 
+                                                                             weight=weighta)
+                        commuted_errgen_list_1.extend(commuted_errgen_sublist)
+                    
                     #only need a factor of -1/6 because new_errorgen_layer[1] is 1/2 the commutator 
-                    commuted_errgen_sublist = error_generator_commutator(error1b, error2, 
-                                                                         weight=-(1/6)*errgen_layer_2[error1b]*first_order_comm_rate)
-                    commuted_errgen_list_2.extend(commuted_errgen_sublist)   
+                    weightb = -(1/6)*errgen_layer_2[error1b]*second_order_comm_rate
+                    if not abs(weightb) < 10*truncation_threshold:                    
+                        commuted_errgen_sublist = error_generator_commutator(error1b, error2, 
+                                                                             weight=weightb)
+                        commuted_errgen_list_2.extend(commuted_errgen_sublist)   
 
             #turn the two new commuted error generator lists into dictionaries.
             #loop through all of the elements of commuted_errorgen_list and instantiate a dictionary with the requisite keys.
@@ -172,10 +196,12 @@ def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1):
             for error_tuple in commuted_errgen_list_2:
                 third_order_comm_dict_2[error_tuple[0]] += error_tuple[1]
             
-            #finally sum these two dictionaries
-            third_order_comm_dict =  {key: third_order_comm_dict_1.get(key, 0) + third_order_comm_dict_2.get(key, 0) 
-                                      for key in set(third_order_comm_dict_1) | set(third_order_comm_dict_2)}
-
+            #finally sum these two dictionaries, keeping only terms which are greater than the threshold.
+            third_order_comm_dict = dict()
+            for lbl in set(third_order_comm_dict_1) | set(third_order_comm_dict_2):
+                third_order_rate = third_order_comm_dict_1.get(lbl, 0) + third_order_comm_dict_2.get(lbl, 0)
+                if abs(third_order_rate) > truncation_threshold:
+                    third_order_comm_dict[lbl] = third_order_rate
             new_errorgen_layer.append(third_order_comm_dict)
                          
         #fourth order BCH terms
@@ -186,9 +212,15 @@ def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1):
             commuted_errgen_list = []
             for error1 in errgen_layer_2.keys():
                 for error2 in third_order_comm_dict_1.keys():
-                    #only need a factor of -1/2 because third_order_comm_dict_1 is 1/12 the nested commutator 
+                    #I *think* you can pick up at most around a factor of 8 from the commutator
+                    #itself. Someone should validate that. Set this conservatively, but also
+                    #avoid computing commutators which will be effectively zero.
+                    #only need a factor of -1/2 because third_order_comm_dict_1 is 1/12 the nested commutator
+                    weight = -.5*errgen_layer_2[error1]*third_order_comm_dict_1[error2]
+                    if abs(weight) < 10*truncation_threshold:
+                        continue
                     commuted_errgen_sublist = error_generator_commutator(error1, error2, 
-                                                                         weight= -.5*errgen_layer_2[error1]*third_order_comm_dict_1[error2])
+                                                                         weight=weight)
                     commuted_errgen_list.extend(commuted_errgen_sublist)
             
             #loop through all of the elements of commuted_errorgen_list and instantiate a dictionary with the requisite keys.
@@ -198,6 +230,9 @@ def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1):
             #There may be duplicates, which should be summed together.
             for error_tuple in commuted_errgen_list:
                 fourth_order_comm_dict[error_tuple[0]] += error_tuple[1]
+
+            #drop any terms below the truncation threshold after aggregation
+            fourth_order_comm_dict = {key: val for key, val in fourth_order_comm_dict.items() if abs(val)>truncation_threshold}
             new_errorgen_layer.append(fourth_order_comm_dict)
         else:
             raise NotImplementedError("Higher orders beyond fourth order are not implemented yet.")
@@ -212,6 +247,8 @@ def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1):
     for order_dict in new_errorgen_layer:
         for lbl, rate in order_dict.items():
             new_errorgen_layer_dict[lbl] += rate
+
+    #Future: Possibly do one last truncation pass in case any of the different order cancel out when aggregated?
 
     return new_errorgen_layer_dict
 

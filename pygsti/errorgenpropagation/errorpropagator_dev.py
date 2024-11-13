@@ -65,7 +65,7 @@ class ErrorGeneratorPropagator:
             propagated_error_generator = self.propagate_errorgens_bch(circuit, multi_gate_dict=multi_gate_dict,
                                                                        **bch_kwargs)
             #convert this to a process matrix
-            return _spl.expm(self.errorgen_layer_dict_to_errorgen(propagated_error_generator, mx_basis='pp'))
+            return _spl.expm(self.errorgen_layer_dict_to_errorgen(propagated_error_generator, mx_basis='pp', return_dense=True))
             
         else:
             propagated_error_generators = self.propagate_errorgens(circuit, multi_gate_dict, include_spam)
@@ -76,7 +76,7 @@ class ErrorGeneratorPropagator:
                 if err_gen_layer: #if not empty.
                     #Keep the error generator in the standard basis until after the end-of-circuit
                     #channel is constructed so we can reduce the overhead of changing basis.
-                    exp_error_generators.append(_spl.expm(self.errorgen_layer_dict_to_errorgen(err_gen_layer, mx_basis='pp')))
+                    exp_error_generators.append(_spl.expm(self.errorgen_layer_dict_to_errorgen(err_gen_layer, mx_basis='pp', return_dense=True)))
             #Next take the product of these exponentiated error generators.
             #These are in circuit ordering, so reverse for matmul.
             exp_error_generators.reverse()
@@ -205,7 +205,7 @@ class ErrorGeneratorPropagator:
         
 
     def propagate_errorgens_bch(self, circuit, bch_order=1, bch_layerwise=False, multi_gate_dict=None,
-                                include_spam=True):
+                                include_spam=True, truncation_threshold=1e-14):
         """
         Propagate all of the error generators for each circuit to the end,
         performing approximation/recombination either along the way (layerwise)
@@ -235,6 +235,10 @@ class ErrorGeneratorPropagator:
         include_spam : bool, optional (default True)
             If True then we include in the propagation the error generators associated
             with state preparation and measurement.
+
+        truncation_threshold : float, optional (default 1e-14)
+            Threshold below which any error generators with magnitudes below this value
+            are truncated during the BCH approximation.
         """
 
         #msg = 'When bch_layerwise is True this can take the values of either 1 or 2.'\
@@ -248,6 +252,7 @@ class ErrorGeneratorPropagator:
 
         #if not doing layerwise BCH then we can re-use `propagate_errorgens` fully.
         if not bch_layerwise:
+            raise NotImplementedError('Still under development.')
             propagated_errorgen_layers = self.propagate_errorgens(circuit, multi_gate_dict, 
                                                                   include_spam=include_spam)
         #otherwise we need to do the error generator layer propagation slightly
@@ -273,7 +278,8 @@ class ErrorGeneratorPropagator:
             #end of circuit error generator dictionary.
             propagated_errorgen_layers = self._propagate_errorgen_layers_bch(errorgen_layers, propagation_layers,
                                                                              bch_order=bch_order,
-                                                                             include_spam = include_spam)
+                                                                             include_spam = include_spam,
+                                                                             truncation_threshold=truncation_threshold)
         return propagated_errorgen_layers
 
         
@@ -538,7 +544,7 @@ class ErrorGeneratorPropagator:
         return fully_propagated_layers
     
     #TODO: Add an option to return the results with the different BCH order combined.
-    def _propagate_errorgen_layers_bch(self, errorgen_layers, propagation_layers, bch_order=1, include_spam=True):
+    def _propagate_errorgen_layers_bch(self, errorgen_layers, propagation_layers, bch_order=1, include_spam=True, truncation_threshold=1e-14):
         """
         Propagates the error generator layers through each of the corresponding propagation layers
         (i.e. the clifford operations for the remainder of the circuit). In this version we 
@@ -566,6 +572,10 @@ class ErrorGeneratorPropagator:
             If True then include the error generators for state preparation and measurement
             are included in errogen_layers, and the state preparation error generator should
             be propagated through (the measurement one is simply appended at the end).
+
+        truncation_threshold : float, optional (default 1e-14)
+            Threshold below which any error generators with magnitudes below this value
+            are truncated during the BCH approximation.
         
         Returns
         -------
@@ -598,15 +608,15 @@ class ErrorGeneratorPropagator:
                 propagated_error_gen = errgen_coeff_lbl.propagate_error_gen_tableau(prop_layer, combined_err_layer[errgen_coeff_lbl])
                 new_error_dict[propagated_error_gen[0]] = propagated_error_gen[1]
             #next use BCH to combine new_err_layer with the now adjacent layer of errorgen_layers[i+1]
-            combined_err_layer = _eprop.bch_approximation(new_error_dict, errorgen_layers[i+1], bch_order=bch_order)
+            combined_err_layer = _eprop.bch_approximation(new_error_dict, errorgen_layers[i+1], bch_order=bch_order, truncation_threshold=truncation_threshold)
         #If we are including spam then there will be one last error generator which we doesn't have an associated propagation
         #which needs to be combined using BCH.
         if include_spam:
-            combined_err_layer = _eprop.bch_approximation(combined_err_layer, errorgen_layers[-1], bch_order=bch_order)
+            combined_err_layer = _eprop.bch_approximation(combined_err_layer, errorgen_layers[-1], bch_order=bch_order, truncation_threshold=truncation_threshold)
 
         return combined_err_layer
     
-    def errorgen_layer_dict_to_errorgen(self, errorgen_layer, mx_basis='pp'):
+    def errorgen_layer_dict_to_errorgen(self, errorgen_layer, mx_basis='pp', return_dense=False):
         """
         Helper method for converting from an error generator dictionary in the format
         utilized in the `errorgenpropagation` module into a numpy array.
@@ -620,6 +630,10 @@ class ErrorGeneratorPropagator:
         mx_basis : Basis or str, optional (default 'pp')
             Either a `Basis` object, or a string which can be cast to a `Basis`, specifying the
             basis in which to return the error generator.
+
+        return_dense : bool, optional (default False)
+            If True return the error generator as a dense numpy array.
+
         Returns
         -------
         errorgen : numpy.ndarray
@@ -659,11 +673,15 @@ class ErrorGeneratorPropagator:
         #    raise err 
         
         global_errorgen_coeffs = [coeff_lbl.to_global_eel() for coeff_lbl in errorgen_layer.keys()]
-        coeff_dict = {lbl:val for lbl, val in zip(global_errorgen_coeffs, errorgen_layer.values())}
+        coeff_dict = {lbl:_np.real_if_close(val) for lbl, val in zip(global_errorgen_coeffs, errorgen_layer.values())}
 
-        errorgen = _LindbladErrorgen.from_elementary_errorgens(coeff_dict, parameterization='GLND', state_space=self.model.state_space)
+        errorgen = _LindbladErrorgen.from_elementary_errorgens(coeff_dict, parameterization='GLND', state_space=self.model.state_space,
+                                                               mx_basis=mx_basis)
 
-        return errorgen.to_dense()
+        if return_dense:
+            return errorgen.to_dense()
+        else:
+            return errorgen
 
 
 
