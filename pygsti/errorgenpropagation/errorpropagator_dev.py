@@ -11,6 +11,8 @@ import copy as _copy
 from pygsti.baseobjs import Label, ExplicitElementaryErrorgenBasis as _ExplicitElementaryErrorgenBasis
 import pygsti.tools.errgenproptools as _eprop
 import pygsti.tools.basistools as _bt
+import pygsti.tools.matrixtools as _mt
+from pygsti.modelmembers.operations import LindbladErrorgen as _LindbladErrorgen
 
 class ErrorGeneratorPropagator:
 
@@ -74,13 +76,17 @@ class ErrorGeneratorPropagator:
                 if err_gen_layer: #if not empty.
                     #Keep the error generator in the standard basis until after the end-of-circuit
                     #channel is constructed so we can reduce the overhead of changing basis.
-                    exp_error_generators.append(_spl.expm(self.errorgen_layer_dict_to_errorgen(err_gen_layer_list[0], mx_basis='pp')))
+                    exp_error_generators.append(_spl.expm(self.errorgen_layer_dict_to_errorgen(err_gen_layer, mx_basis='pp')))
             #Next take the product of these exponentiated error generators.
             #These are in circuit ordering, so reverse for matmul.
             exp_error_generators.reverse()
-            #print(exp_error_generators)
-            eoc_error_channel = _np.linalg.multi_dot(exp_error_generators)
-            #eoc_error_channel = _bt.change_basis(eoc_error_channel, from_basis='std', to_basis='pp')
+            if len(exp_error_generators)>1:
+                eoc_error_channel = _np.linalg.multi_dot(exp_error_generators)
+            else:
+                eoc_error_channel = exp_error_generators[0]
+           
+            if mx_basis != 'pp':
+                eoc_error_channel = _bt.change_basis(eoc_error_channel, from_basis='pp', to_basis=mx_basis)
 
         return eoc_error_channel
     
@@ -446,25 +452,25 @@ class ErrorGeneratorPropagator:
 
         #TODO: Infer the number of qubits from the model and/or the circuit somehow.
         #Pull out the error generator dictionaries for each operation (may need to generalize this for implicit models):
-        model_error_generator_dict = dict() #key will be a label and value the lindblad error generator dictionary.
-        for op_lbl, op in self.model.operations.items():
-            #TODO add assertion that the operation is a lindblad error generator type modelmember.
-            model_error_generator_dict[op_lbl] = op.errorgen_coefficients()
+        #model_error_generator_dict = dict() #key will be a label and value the lindblad error generator dictionary.
+        #for op_lbl, op in self.model.operations.items():
+        #    #TODO add assertion that the operation is a lindblad error generator type modelmember.
+        #    model_error_generator_dict[op_lbl] = op.errorgen_coefficients()
         #add in the error generators for the prep and measurement if needed.
-        if include_spam:
-            for prep_lbl, prep in self.model.preps.items():
-                model_error_generator_dict[prep_lbl] = prep.errorgen_coefficients()
-            for povm_lbl, povm in self.model.povms.items():
-                model_error_generator_dict[povm_lbl] = povm.errorgen_coefficients()
+        #if include_spam:
+        #    for prep_lbl, prep in self.model.preps.items():
+        #        model_error_generator_dict[prep_lbl] = prep.errorgen_coefficients()
+        #    for povm_lbl, povm in self.model.povms.items():
+        #        model_error_generator_dict[povm_lbl] = povm.errorgen_coefficients()
 
         #TODO: Generalize circuit time to not be in one-to-one correspondence with the layer index.
         error_gen_dicts_by_layer = []
         for j in range(len(circuit)):
             circuit_layer = circuit[j] # get the layer
             #can probably relax this if we detect that the model is a crosstalk free model.
-            assert isinstance(circuit_layer, Label), 'Correct support for parallel gates is still under development.'
+            #assert isinstance(circuit_layer, Label), 'Correct support for parallel gates is still under development.'
             errorgen_layer = dict()
-            layer_errorgen_coeff_dict = model_error_generator_dict[circuit_layer] #get the errors for the gate
+            layer_errorgen_coeff_dict = self.model.circuit_layer_operator(circuit_layer).errorgen_coefficients() #get the errors for the gate
             for errgen_coeff_lbl, rate in layer_errorgen_coeff_dict.items(): #for an error in the accompanying error dictionary 
                 #TODO: Can probably replace this function call with `padded_basis_element_labels` method of `GlobalElementaryErrorgenLabel`
                 paulis = _eprop.errgen_coeff_label_to_stim_pauli_strs(errgen_coeff_lbl, num_qubits)
@@ -625,22 +631,39 @@ class ErrorGeneratorPropagator:
 
         #Construct a list of new errorgen coefficients by looping through the keys of errorgen_layer
         #and converting them to LocalElementaryErrorgenLabels.
-        local_errorgen_coeffs = [coeff_lbl.to_local_eel() for coeff_lbl in errorgen_layer.keys()]
-
-        errorgen_basis = _ExplicitElementaryErrorgenBasis(self.model.state_space, local_errorgen_coeffs, basis_1q='PP')
         
-        #Stack the arrays and then use broadcasting to weight them according to the rates
-        elemgen_matrices_array = _np.stack(errorgen_basis.elemgen_matrices, axis=-1)
-        weighted_elemgen_matrices_array = _np.fromiter(errorgen_layer.values(), dtype=_np.double)*elemgen_matrices_array
+        #TODO: Debug this implementation, something weird is going on with the basis management and is only
+        #getting picked up for two or more qubits.
+        #local_errorgen_coeffs = [coeff_lbl.to_local_eel() for coeff_lbl in errorgen_layer.keys()]
+        #
+        #errorgen_basis = _ExplicitElementaryErrorgenBasis(self.model.state_space, local_errorgen_coeffs, basis_1q='PP', elemgen_basis='pp')
+        #print(f'{errorgen_basis.elemgen_matrices=}')
+        ##Stack the arrays and then use broadcasting to weight them according to the rates
+        #elemgen_matrices_array = _np.stack(errorgen_basis.elemgen_matrices, axis=-1)
+        #weighted_elemgen_matrices_array = _np.fromiter(errorgen_layer.values(), dtype=_np.double)*elemgen_matrices_array
+        #weighted_elemgen_matrices_array = _np.real_if_close(weighted_elemgen_matrices_array)
+        ##The error generator is then just the sum of weighted_elemgen_matrices_array along the third axis.
+        #errorgen = _np.sum(weighted_elemgen_matrices_array, axis = 2)
+        ##print(f'{errorgen=}')
+        #
+        ##finally need to change from the standard basis (which is what the error generator is currently in)
+        ##to the pauli basis.
+        #try:
+        #    errorgen = _bt.change_basis(errorgen, from_basis='std', to_basis=mx_basis)#, expect_real=False)
+        #except ValueError as err:
+        #    print(f'{local_errorgen_coeffs=}')
+        #    print(f'{errorgen_basis.labels=}')
+        #    print(f'{_mt.is_hermitian(errorgen)=}')
+        #    print(f'{errorgen_layer=}')
+        #    _mt.print_mx(errorgen)
+        #    raise err 
+        
+        global_errorgen_coeffs = [coeff_lbl.to_global_eel() for coeff_lbl in errorgen_layer.keys()]
+        coeff_dict = {lbl:val for lbl, val in zip(global_errorgen_coeffs, errorgen_layer.values())}
 
-        #The error generator is then just the sum of weighted_elemgen_matrices_array along the third axis.
-        errorgen = _np.sum(weighted_elemgen_matrices_array, axis = 2)
+        errorgen = _LindbladErrorgen.from_elementary_errorgens(coeff_dict, parameterization='GLND', state_space=self.model.state_space)
 
-        #finally need to change from the standard basis (which is what the error generator is currently in)
-        #to the pauli basis.
-        errorgen = _bt.change_basis(errorgen, from_basis='std', to_basis=mx_basis)
-
-        return errorgen
+        return errorgen.to_dense()
 
 
 
