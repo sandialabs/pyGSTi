@@ -9,6 +9,9 @@
 #***************************************************************************************************
 
 from . import neuralnets
+from . import neuralnets_cpu_optimization
+# from . import neuralnets3
 from . import tools
 from .neuralnets import *
+# from .neuralnets2 import *
 from .tools import *
