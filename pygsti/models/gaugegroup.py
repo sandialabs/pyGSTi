@@ -675,6 +675,8 @@ class DiagGaugeGroup(OpGaugeGroup):
         rtrans = _np.identity(dim, 'd')
         baseMx = _np.identity(dim, 'd')
         parameterArray = _np.zeros(dim, 'd')
+        # ^ ... shouldn't that be ones?
+        #   parameterArray = _np.ones(dim, 'd')
         parameterToBaseIndicesMap = {i: [(i, i)] for i in range(dim)}
         operation = _op.LinearlyParamArbitraryOp(baseMx, parameterArray, parameterToBaseIndicesMap, ltrans, rtrans,
                                                  real=True, evotype=evotype, state_space=state_space)
@@ -731,6 +733,7 @@ class TPDiagGaugeGroup(TPGaugeGroup):
         rtrans = _np.identity(dim, 'd')
         baseMx = _np.identity(dim, 'd')
         parameterArray = _np.zeros(dim - 1, 'd')
+        # parameterArray = _np.ones(dim - 1, 'd')
         parameterToBaseIndicesMap = {i: [(i + 1, i + 1)] for i in range(dim - 1)}
         operation = _op.LinearlyParamArbitraryOp(baseMx, parameterArray, parameterToBaseIndicesMap, ltrans, rtrans,
                                                  real=True, evotype=evotype, state_space=state_space)
@@ -837,6 +840,7 @@ class SpamGaugeGroup(OpGaugeGroup):
         rtrans = _np.identity(dim, 'd')
         baseMx = _np.identity(dim, 'd')
         parameterArray = _np.zeros(2, 'd')
+        # parameterArray = _np.ones(2, 'd')
         parameterToBaseIndicesMap = {0: [(0, 0)],
                                      1: [(i, i) for i in range(1, dim)]}
         operation = _op.LinearlyParamArbitraryOp(baseMx, parameterArray, parameterToBaseIndicesMap, ltrans, rtrans,
@@ -895,6 +899,7 @@ class TPSpamGaugeGroup(OpGaugeGroup):
         rtrans = _np.identity(dim, 'd')
         baseMx = _np.identity(dim, 'd')
         parameterArray = _np.zeros(1, 'd')
+        # parameterArray = _np.ones(1, 'd')
         parameterToBaseIndicesMap = {0: [(i, i) for i in range(1, dim)]}
         operation = _op.LinearlyParamArbitraryOp(baseMx, parameterArray, parameterToBaseIndicesMap, ltrans, rtrans,
                                                  real=True, evotype=evotype, state_space=state_space)
