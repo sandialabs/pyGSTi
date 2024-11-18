@@ -172,14 +172,14 @@ def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1, truncation_th
                     #only need a factor of 1/6 because new_errorgen_layer[1] is 1/2 the commutator 
                     weighta = (1/6)*errgen_layer_1[error1a]*second_order_comm_rate
 
-                    if not abs(weighta) < 10*truncation_threshold:
+                    if not abs(weighta) < truncation_threshold:
                         commuted_errgen_sublist = error_generator_commutator(error1a, error2, 
                                                                              weight=weighta)
                         commuted_errgen_list_1.extend(commuted_errgen_sublist)
                     
                     #only need a factor of -1/6 because new_errorgen_layer[1] is 1/2 the commutator 
                     weightb = -(1/6)*errgen_layer_2[error1b]*second_order_comm_rate
-                    if not abs(weightb) < 10*truncation_threshold:                    
+                    if not abs(weightb) < truncation_threshold:                    
                         commuted_errgen_sublist = error_generator_commutator(error1b, error2, 
                                                                              weight=weightb)
                         commuted_errgen_list_2.extend(commuted_errgen_sublist)   
@@ -217,7 +217,8 @@ def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1, truncation_th
                     #avoid computing commutators which will be effectively zero.
                     #only need a factor of -1/2 because third_order_comm_dict_1 is 1/12 the nested commutator
                     weight = -.5*errgen_layer_2[error1]*third_order_comm_dict_1[error2]
-                    if abs(weight) < 10*truncation_threshold:
+                    if abs(weight) < truncation_threshold:
+                        #print('continuing')
                         continue
                     commuted_errgen_sublist = error_generator_commutator(error1, error2, 
                                                                          weight=weight)
