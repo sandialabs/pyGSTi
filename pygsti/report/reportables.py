@@ -2186,6 +2186,11 @@ def general_decomposition(model_a, model_b):
 
         target_evals = _np.linalg.eigvals(targetOp)
         if _np.any(_np.isclose(target_evals, -1.0)):
+            # It's not clear if this codepath is required for correctness. 
+            # In my experience it can lead to runtime errors when basis conversions
+            # end up with a matrix with imaginary part when the matrix should only 
+            # be real. So I'd like to wrap this in a try-catch.
+            # 
             target_logG = _tools.unitary_superoperator_matrix_log(targetOp, mxBasis)
             logG = _tools.approximate_matrix_log(gate, target_logG)
         else:
