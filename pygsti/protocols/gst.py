@@ -871,14 +871,13 @@ class GSTGaugeOptSuite(_NicelySerializable):
 
     def __init__(self, gaugeopt_suite_names=None, gaugeopt_argument_dicts=None, gaugeopt_target=None):
         super().__init__()
-        if gaugeopt_suite_names is not None:
-            if gaugeopt_suite_names == 'none':
-                self.gaugeopt_suite_names = None
-            else:
-                self.gaugeopt_suite_names = (gaugeopt_suite_names,) \
-                    if isinstance(gaugeopt_suite_names, str) else tuple(gaugeopt_suite_names)
-        else:
+        if gaugeopt_suite_names is None or gaugeopt_suite_names == 'none':
             self.gaugeopt_suite_names = None
+        elif isinstance(gaugeopt_suite_names, str):
+            self.gaugeopt_suite_names = gaugeopt_suite_names
+        else:
+            self.gaugeopt_suite_names = tuple(gaugeopt_suite_names)
+
 
         if gaugeopt_argument_dicts is not None:
             self.gaugeopt_argument_dicts = gaugeopt_argument_dicts.copy()
@@ -2042,8 +2041,8 @@ def _add_gaugeopt_and_badfit(results, estlbl, target_model, gaugeopt_suite,
     return results
 
 
-def _add_gauge_opt(results, base_est_label, gaugeopt_suite, starting_model,
-                   unreliable_ops, comm=None, verbosity=0):
+def _add_gauge_opt(results, base_est_label, gaugeopt_suite_or_gsdict, starting_model,
+                   unreliable_ops=(), comm=None, verbosity=0):
     """
     Add a gauge optimization to an estimate.
 
@@ -2088,8 +2087,12 @@ def _add_gauge_opt(results, base_est_label, gaugeopt_suite, starting_model,
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, comm)
 
     #Get gauge optimization dictionary
-    gaugeopt_suite_dict = gaugeopt_suite.to_dictionary(starting_model,
-                                                       unreliable_ops, printer - 1)
+    if isinstance(gaugeopt_suite_or_gsdict, dict):
+        gaugeopt_suite_dict = gaugeopt_suite_or_gsdict
+    else:
+        gaugeopt_suite_dict = gaugeopt_suite_or_gsdict.to_dictionary(
+            starting_model, unreliable_ops, printer - 1
+        )
 
     #Gauge optimize to list of gauge optimization parameters
     for go_label, goparams in gaugeopt_suite_dict.items():
