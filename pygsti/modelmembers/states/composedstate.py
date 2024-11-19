@@ -763,10 +763,18 @@ class ComposedState(_State):  # , _ErrorMapContainer
         self.error_map.depolarize(amount)
         self._update_rep()
 
-    def errorgen_coefficient_labels(self):
+    def errorgen_coefficient_labels(self, label_type='global'):
         """
         The elementary error-generator labels corresponding to the elements of :meth:`errorgen_coefficients_array`.
 
+        Parameters
+        ----------
+        label_type : str, optional (default 'global')
+            String specifying which type of `ElementaryErrorgenLabel` to use
+            as the keys for the returned dictionary. Allowed options are
+            'global' for `GlobalElementaryErrorgenLabel` and 'local' for
+            `LocalElementaryErrorgenLabel`.
+        
         Returns
         -------
         tuple
@@ -791,7 +799,7 @@ class ComposedState(_State):  # , _ErrorMapContainer
         """
         return self.error_map.errorgen_coefficients_array()
 
-    def errorgen_coefficients(self, return_basis=False, logscale_nonham=False):
+    def errorgen_coefficients(self, return_basis=False, logscale_nonham=False, label_type='global'):
         """
         Constructs a dictionary of the Lindblad-error-generator coefficients of this state.
 
@@ -814,6 +822,12 @@ class ComposedState(_State):  # , _ErrorMapContainer
             channel where all stochastic generators had this same coefficient.
             This is the value returned by :meth:`error_rates`.
 
+        label_type : str, optional (default 'global')
+            String specifying which type of `ElementaryErrorgenLabel` to use
+            as the keys for the returned dictionary. Allowed options are
+            'global' for `GlobalElementaryErrorgenLabel` and 'local' for
+            `LocalElementaryErrorgenLabel`.
+
         Returns
         -------
         lindblad_term_dict : dict
@@ -829,7 +843,7 @@ class ComposedState(_State):  # , _ErrorMapContainer
             A Basis mapping the basis labels used in the
             keys of `lindblad_term_dict` to basis matrices.
         """
-        return self.error_map.errorgen_coefficients(return_basis, logscale_nonham)
+        return self.error_map.errorgen_coefficients(return_basis, logscale_nonham, label_type)
 
     def set_errorgen_coefficients(self, lindblad_term_dict, action="update", logscale_nonham=False, truncate=True):
         """

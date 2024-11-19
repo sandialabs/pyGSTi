@@ -356,13 +356,17 @@ class LindbladErrorgen(_LinearOperator):
         dim = state_space.dim  # Store superop dimension
         basis = _Basis.cast(elementary_errorgen_basis, dim)
 
-        #convert elementary errorgen labels to *local* labels (ok to specify w/global labels)
-        identity_label_1Q = 'I'  # maybe we could get this from a 1Q basis somewhere?
-        sslbls = state_space.sole_tensor_product_block_labels  # first TPB labels == all labels
-        elementary_errorgens = _collections.OrderedDict(
-            [(_LocalElementaryErrorgenLabel.cast(lbl, sslbls, identity_label_1Q), val)
-             for lbl, val in elementary_errorgens.items()])
-
+        #check the first key, if local then no need to convert, otherwise convert from global.
+        first_key = next(iter(elementary_errorgens))
+        if isinstance(first_key, (_GlobalElementaryErrorgenLabel, tuple)):
+            #convert keys to local elementary errorgen labels (the same as those used by the coefficient blocks):
+            identity_label_1Q = 'I'  # maybe we could get this from a 1Q basis somewhere?
+            sslbls = state_space.sole_tensor_product_block_labels  # take first TPB labels as all labels
+            elementary_errorgens = {_LocalElementaryErrorgenLabel.cast(k, sslbls, identity_label_1Q): v
+                                    for k, v in elementary_errorgens.items()}
+        else:
+            assert isinstance(first_key, _LocalElementaryErrorgenLabel), 'Unsupported error generator label type as key.'
+        
         parameterization = LindbladParameterization.minimal_from_elementary_errorgens(elementary_errorgens) \
             if parameterization == "auto" else LindbladParameterization.cast(parameterization)
 
@@ -993,7 +997,7 @@ class LindbladErrorgen(_LinearOperator):
         self._update_rep()
         self.dirty = dirty_value
 
-    def coefficients(self, return_basis=False, logscale_nonham=False):
+    def coefficients(self, return_basis=False, logscale_nonham=False, label_type='global'):
         """
         TODO: docstring
         Constructs a dictionary of the Lindblad-error-generator coefficients of this error generator.
@@ -1016,6 +1020,12 @@ class LindbladErrorgen(_LinearOperator):
             the contribution this term would have within a depolarizing
             channel where all stochastic generators had this same coefficient.
             This is the value returned by :meth:`error_rates`.
+        
+        label_type : str, optional (default 'global')
+            String specifying which type of `ElementaryErrorgenLabel` to use
+            as the keys for the returned dictionary. Allowed options are
+            'global' for `GlobalElementaryErrorgenLabel` and 'local' for
+            `LocalElementaryErrorgenLabel`.
 
         Returns
         -------
@@ -1032,6 +1042,8 @@ class LindbladErrorgen(_LinearOperator):
             A Basis mapping the basis labels used in the
             keys of `Ltermdict` to basis matrices.
         """
+        assert label_type=='global' or label_type=='local', "Allowed values of label_type are 'global' and 'local'."
+
         elem_errorgens = {}
         bases = set()
         for blk in self.coefficient_blocks:
@@ -1039,12 +1051,12 @@ class LindbladErrorgen(_LinearOperator):
             if blk._basis not in bases:
                 bases.add(blk._basis)
 
-        #convert to *global* elementary errorgen labels
-        identity_label_1Q = 'I'  # maybe we could get this from a 1Q basis somewhere?
-        sslbls = self.state_space.sole_tensor_product_block_labels  # take first TPB labels as all labels
-        elem_errorgens = _collections.OrderedDict(
-            [(_GlobalElementaryErrorgenLabel.cast(local_eeg_lbl, sslbls, identity_label_1Q), value)
-             for local_eeg_lbl, value in elem_errorgens.items()])
+        if label_type=='global':
+            #convert to *global* elementary errorgen labels
+            identity_label_1Q = 'I'  # maybe we could get this from a 1Q basis somewhere?
+            sslbls = self.state_space.sole_tensor_product_block_labels  # take first TPB labels as all labels
+            elem_errorgens = {_GlobalElementaryErrorgenLabel.cast(local_eeg_lbl, sslbls, identity_label_1Q): value
+                            for local_eeg_lbl, value in elem_errorgens.items()}
 
         if logscale_nonham:
             dim = self.dim
@@ -1060,9 +1072,17 @@ class LindbladErrorgen(_LinearOperator):
         else:
             return elem_errorgens
 
-    def coefficient_labels(self):
+    def coefficient_labels(self, label_type='global'):
         """
         The elementary error-generator labels corresponding to the elements of :meth:`coefficients_array`.
+
+        Parameters
+        ----------
+        label_type : str, optional (default 'global')
+            String specifying which type of `ElementaryErrorgenLabel` to use
+            as the keys for the returned dictionary. Allowed options are
+            'global' for `GlobalElementaryErrorgenLabel` and 'local' for
+            `LocalElementaryErrorgenLabel`.
 
         Returns
         -------
@@ -1075,11 +1095,14 @@ class LindbladErrorgen(_LinearOperator):
             #labels.extend(blk.coefficent_labels)
             labels.extend(blk.elementary_errorgens.keys())
 
+        if label_type == 'global':
         #convert to *global* elementary errorgen labels
-        identity_label_1Q = 'I'  # maybe we could get this from a 1Q basis somewhere?
-        sslbls = self.state_space.sole_tensor_product_block_labels  # take first TPB labels as all labels
-        return tuple([_GlobalElementaryErrorgenLabel.cast(local_eeg_lbl, sslbls, identity_label_1Q)
-                      for local_eeg_lbl in labels])
+            identity_label_1Q = 'I'  # maybe we could get this from a 1Q basis somewhere?
+            sslbls = self.state_space.sole_tensor_product_block_labels  # take first TPB labels as all labels
+            labels = [_GlobalElementaryErrorgenLabel.cast(local_eeg_lbl, sslbls, identity_label_1Q)
+                        for local_eeg_lbl in labels]
+        return tuple(labels)
+
 
     def coefficients_array(self):
         """
@@ -1128,7 +1151,7 @@ class LindbladErrorgen(_LinearOperator):
             ret *= self._coefficient_weights[:, None]
         return ret
 
-    def error_rates(self):
+    def error_rates(self, label_type='global'):
         """
         Constructs a dictionary of the error rates associated with this error generator.
 
@@ -1153,6 +1176,14 @@ class LindbladErrorgen(_LinearOperator):
         rates is not necessarily the error rate of the overall
         channel.
 
+        Parameters
+        ----------
+        label_type : str, optional (default 'global')
+            String specifying which type of `ElementaryErrorgenLabel` to use
+            as the keys for the returned dictionary. Allowed options are
+            'global' for `GlobalElementaryErrorgenLabel` and 'local' for
+            `LocalElementaryErrorgenLabel`.
+
         Returns
         -------
         lindblad_term_dict : dict
@@ -1165,7 +1196,7 @@ class LindbladErrorgen(_LinearOperator):
             terms.  Values are real error rates except for the 2-basis-label
             case.
         """
-        return self.coefficients(return_basis=False, logscale_nonham=True)
+        return self.coefficients(return_basis=False, logscale_nonham=True, label_type=label_type)
 
     def set_coefficients(self, elementary_errorgens, action="update", logscale_nonham=False, truncate=True):
         """
@@ -1210,12 +1241,16 @@ class LindbladErrorgen(_LinearOperator):
         -------
         None
         """
-        #convert keys to local elementary errorgen labels (the same as those used by the coefficient blocks):
-        identity_label_1Q = 'I'  # maybe we could get this from a 1Q basis somewhere?
-        sslbls = self.state_space.sole_tensor_product_block_labels  # take first TPB labels as all labels
-        elem_errorgens = _collections.OrderedDict(
-            [(_LocalElementaryErrorgenLabel.cast(k, sslbls, identity_label_1Q), v)
-             for k, v in elementary_errorgens.items()])
+        #check the first key, if local then no need to convert, otherwise convert from global.
+        first_key = next(iter(elementary_errorgens))
+        if isinstance(first_key, (_GlobalElementaryErrorgenLabel, tuple)):
+            #convert keys to local elementary errorgen labels (the same as those used by the coefficient blocks):
+            identity_label_1Q = 'I'  # maybe we could get this from a 1Q basis somewhere?
+            sslbls = self.state_space.sole_tensor_product_block_labels  # take first TPB labels as all labels
+            elem_errorgens = {_LocalElementaryErrorgenLabel.cast(k, sslbls, identity_label_1Q): v
+                              for k, v in elementary_errorgens.items()}
+        else:
+            assert isinstance(first_key, _LocalElementaryErrorgenLabel), 'Unsupported error generator label type as key.'
 
         processed = set()  # keep track of which entries in elem_errorgens have been processed by a block
         for blk in self.coefficient_blocks:
@@ -1541,28 +1576,18 @@ class LindbladErrorgen(_LinearOperator):
         mm_dict = super().to_memoized_dict(mmg_memo)
 
         mm_dict['rep_type'] = self._rep_type
-        #OLD: mm_dict['parameterization'] = self.parameterization.to_nice_serialization()
-        #OLD: mm_dict['lindblad_basis'] = self.lindblad_basis.to_nice_serialization()
-        #OLD: mm_dict['coefficients'] = [(str(k), self._encodevalue(v)) for k, v in self.coefficients().items()]
         mm_dict['matrix_basis'] = self.matrix_basis.to_nice_serialization()
         mm_dict['coefficient_blocks'] = [blk.to_nice_serialization() for blk in self.coefficient_blocks]
         return mm_dict
 
     @classmethod
     def _from_memoized_dict(cls, mm_dict, serial_memo):
-        #lindblad_term_dict = {_GlobalElementaryErrorgenLabel.cast(k): cls._decodevalue(v)
-        #                      for k, v in mm_dict['coefficients']}  # convert keys from str->objects
-        #parameterization = LindbladParameterization.from_nice_serialization(mm_dict['parameterization'])
-        #lindblad_basis = _Basis.from_nice_serialization(mm_dict['lindblad_basis'])
-        #truncate = False  # shouldn't need to truncate since we're reloading a valid set of coefficients
         mx_basis = _Basis.from_nice_serialization(mm_dict['matrix_basis'])
         state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
         coeff_blocks = [_LindbladCoefficientBlock.from_nice_serialization(blk)
                         for blk in mm_dict['coefficient_blocks']]
 
         return cls(coeff_blocks, 'auto', mx_basis, mm_dict['evotype'], state_space)
-        #return cls(lindblad_term_dict, parameterization, lindblad_basis,
-        #           mx_basis, truncate, mm_dict['evotype'], state_space)
 
     def _is_similar(self, other, rtol, atol):
         """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
@@ -1575,10 +1600,10 @@ class LindbladErrorgen(_LinearOperator):
             (self.dim, self.num_params)
         return s
 
-    def _oneline_contents(self):
+    def _oneline_contents(self, label_type='global'):
         """ Summarizes the contents of this object in a single line.  Does not summarize submembers. """
         MAXLEN = 60
-        coeff_dict = self.coefficients(); s = ""
+        coeff_dict = self.coefficients(label_type=label_type); s = ""
         for lbl, val in coeff_dict.items():
             if len(s) > MAXLEN:
                 s += "..."; break

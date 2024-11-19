@@ -552,7 +552,7 @@ class EmbeddedOp(_LinearOperator):
         # s and Sinv matrices... but haven't needed it yet.
         raise NotImplementedError("Cannot transform an EmbeddedOp yet...")
 
-    def errorgen_coefficients(self, return_basis=False, logscale_nonham=False):
+    def errorgen_coefficients(self, return_basis=False, logscale_nonham=False, label_type='global'):
         """
         Constructs a dictionary of the Lindblad-error-generator coefficients of this operation.
 
@@ -575,6 +575,12 @@ class EmbeddedOp(_LinearOperator):
             channel where all stochastic generators had this same coefficient.
             This is the value returned by :meth:`error_rates`.
 
+        label_type : str, optional (default 'global')
+            String specifying which type of `ElementaryErrorgenLabel` to use
+            as the keys for the returned dictionary. Allowed options are
+            'global' for `GlobalElementaryErrorgenLabel` and 'local' for
+            `LocalElementaryErrorgenLabel`.
+
         Returns
         -------
         lindblad_term_dict : dict
@@ -591,16 +597,24 @@ class EmbeddedOp(_LinearOperator):
             keys of `lindblad_term_dict` to basis matrices.
         """
         #*** Note: this function is nearly identical to EmbeddedErrorgen.coefficients() ***
-        embedded_coeffs = self.embedded_op.errorgen_coefficients(return_basis, logscale_nonham)
+        embedded_coeffs = self.embedded_op.errorgen_coefficients(return_basis, logscale_nonham, label_type)
         if self.target_labels != self.embedded_op.state_space.sole_tensor_product_block_labels:
             mapdict = {loc: tgt for loc, tgt in zip(self.embedded_op.state_space.sole_tensor_product_block_labels,
                                                     self.target_labels)}
             embedded_coeffs = {k.map_state_space_labels(mapdict): v for k, v in embedded_coeffs.items()}
         return embedded_coeffs
 
-    def errorgen_coefficient_labels(self):
+    def errorgen_coefficient_labels(self, label_type='global'):
         """
         The elementary error-generator labels corresponding to the elements of :meth:`errorgen_coefficients_array`.
+
+        Parameters
+        ----------
+        label_type : str, optional (default 'global')
+            String specifying which type of `ElementaryErrorgenLabel` to use
+            as the keys for the returned dictionary. Allowed options are
+            'global' for `GlobalElementaryErrorgenLabel` and 'local' for
+            `LocalElementaryErrorgenLabel`.
 
         Returns
         -------
@@ -608,7 +622,7 @@ class EmbeddedOp(_LinearOperator):
             A tuple of (<type>, <basisEl1> [,<basisEl2]) elements identifying the elementary error
             generators of this gate.
         """
-        embedded_labels = self.embedded_op.errorgen_coefficient_labels()
+        embedded_labels = self.embedded_op.errorgen_coefficient_labels(label_type)
         if self.target_labels != self.embedded_op.state_space.sole_tensor_product_block_labels:
             mapdict = {loc: tgt for loc, tgt in zip(self.embedded_op.state_space.sole_tensor_product_block_labels,
                                                     self.target_labels)}
@@ -644,7 +658,7 @@ class EmbeddedOp(_LinearOperator):
         """
         return self.embedded_op.errorgen_coefficients_array_deriv_wrt_params()
 
-    def error_rates(self):
+    def error_rates(self, label_type='global'):
         """
         Constructs a dictionary of the error rates associated with this operation.
 
@@ -667,6 +681,14 @@ class EmbeddedOp(_LinearOperator):
         rates is not necessarily the error rate of the overall
         channel.
 
+        Parameters
+        ----------
+        label_type : str, optional (default 'global')
+            String specifying which type of `ElementaryErrorgenLabel` to use
+            as the keys for the returned dictionary. Allowed options are
+            'global' for `GlobalElementaryErrorgenLabel` and 'local' for
+            `LocalElementaryErrorgenLabel`.
+
         Returns
         -------
         lindblad_term_dict : dict
@@ -679,7 +701,7 @@ class EmbeddedOp(_LinearOperator):
             terms.  Values are real error rates except for the 2-basis-label
             case.
         """
-        return self.errorgen_coefficients(return_basis=False, logscale_nonham=True)
+        return self.errorgen_coefficients(return_basis=False, logscale_nonham=True, label_type=label_type)
 
     def set_errorgen_coefficients(self, lindblad_term_dict, action="update", logscale_nonham=False, truncate=True):
         """
