@@ -19,97 +19,19 @@ import scipy as _scipy
 
 from pygsti.optimize import arraysinterface as _ari
 from pygsti.optimize.customsolve import custom_solve as _custom_solve
+from pygsti.optimize.simplerlm import Optimizer, OptimizerResult
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 
-# from scipy.optimize import OptimizeResult as _optResult
-
-#Make sure SIGINT will generate a KeyboardInterrupt (even if we're launched in the background)
-#This may be problematic for multithreaded parallelism above pyGSTi, e.g. Dask,
-#so this can be turned off by setting the PYGSTI_NO_CUSTOMLM_SIGINT environment variable
+# Make sure SIGINT will generate a KeyboardInterrupt (even if we're launched in the background)
+# This may be problematic for multithreaded parallelism above pyGSTi, e.g. Dask,
+# so this can be turned off by setting the PYGSTI_NO_CUSTOMLM_SIGINT environment variable
 if 'PYGSTI_NO_CUSTOMLM_SIGINT' not in _os.environ:
     _signal.signal(_signal.SIGINT, _signal.default_int_handler)
 
 #constants
 _MACH_PRECISION = 1e-12
-#MU_TOL1 = 1e10 # ??
-#MU_TOL2 = 1e3  # ??
-
-
-class OptimizerResult(object):
-    """
-    The result from an optimization.
-
-    Parameters
-    ----------
-    objective_func : ObjectiveFunction
-        The objective function that was optimized.
-
-    opt_x : numpy.ndarray
-        The optimal argument (x) value.  Often a vector of parameters.
-
-    opt_f : numpy.ndarray
-        the optimal objective function (f) value.  Often this is the least-squares
-        vector of objective function values.
-
-    opt_jtj : numpy.ndarray, optional
-        the optimial `dot(transpose(J),J)` value, where `J`
-        is the Jacobian matrix.  This may be useful for computing
-        approximate error bars.
-
-    opt_unpenalized_f : numpy.ndarray, optional
-        the optimal objective function (f) value with any
-        penalty terms removed.
-
-    chi2_k_distributed_qty : float, optional
-        a value that is supposed to be chi2_k distributed.
-
-    optimizer_specific_qtys : dict, optional
-        a dictionary of additional optimization parameters.
-    """
-    def __init__(self, objective_func, opt_x, opt_f=None, opt_jtj=None,
-                 opt_unpenalized_f=None, chi2_k_distributed_qty=None,
-                 optimizer_specific_qtys=None):
-        self.objective_func = objective_func
-        self.x = opt_x
-        self.f = opt_f
-        self.jtj = opt_jtj  # jacobian.T * jacobian
-        self.f_no_penalties = opt_unpenalized_f
-        self.optimizer_specific_qtys = optimizer_specific_qtys
-        self.chi2_k_distributed_qty = chi2_k_distributed_qty
-
-
-class Optimizer(_NicelySerializable):
-    """
-    An optimizer.  Optimizes an objective function.
-    """
-
-    @classmethod
-    def cast(cls, obj):
-        """
-        Cast `obj` to a :class:`Optimizer`.
-
-        If `obj` is already an `Optimizer` it is just returned,
-        otherwise this function tries to create a new object
-        using `obj` as a dictionary of constructor arguments.
-
-        Parameters
-        ----------
-        obj : Optimizer or dict
-            The object to cast.
-
-        Returns
-        -------
-        Optimizer
-        """
-        if isinstance(obj, cls):
-            return obj
-        else:
-            return cls(**obj) if obj else cls()
-
-    def __init__(self):
-        super().__init__()
 
 
 class CustomLMOptimizer(Optimizer):
@@ -374,13 +296,6 @@ class CustomLMOptimizer(Optimizer):
 
         return OptimizerResult(objective, opt_x, norm_f, opt_jtj, unpenalized_normf, chi2k_qty,
                                {'msg': msg, 'mu': mu, 'nu': nu, 'fvec': f})
-
-#Scipy version...
-#            opt_x, _, _, msg, flag = \
-#                _spo.leastsq(objective_func, x0, xtol=tol['relx'], ftol=tol['relf'], gtol=tol['jac'],
-#                             maxfev=maxfev * (len(x0) + 1), full_output=True, Dfun=jacobian)  # pragma: no cover
-#            printer.log("Least squares message = %s; flag =%s" % (msg, flag), 2)            # pragma: no cover
-#            opt_state = (msg,)
 
 
 def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,

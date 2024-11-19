@@ -5,7 +5,7 @@ from pygsti.modelpacks.legacy import std1Q_XYI, std2Q_XYICNOT
 from pygsti.objectivefns.objectivefns import PoissonPicDeltaLogLFunction
 from pygsti.models.gaugegroup import TrivialGaugeGroup
 from pygsti.objectivefns import FreqWeightedChi2Function
-from pygsti.optimize.customlm import CustomLMOptimizer
+from pygsti.optimize.simplerlm import SimplerLMOptimizer
 from pygsti.protocols import gst
 from pygsti.protocols.estimate import Estimate
 from pygsti.protocols.protocol import ProtocolData, Protocol
@@ -65,7 +65,7 @@ class GSTUtilTester(BaseCase):
 
     def test_add_badfit_estimates(self):
         builder = PoissonPicDeltaLogLFunction.builder()
-        opt = CustomLMOptimizer()
+        opt = SimplerLMOptimizer()
         badfit_opts = gst.GSTBadFitOptions(threshold=-10, actions=("robust", "Robust", "robust+", "Robust+",
                                                                    "wildcard", "do nothing"))
         res = self.results.copy()
