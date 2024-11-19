@@ -666,6 +666,7 @@ class Analysis:
         stddevs = np.sqrt(np.diag(pcov))
         if fitlog:
             stddevs[1] = np.exp(-p[1])*abs(2*np.sinh(stddevs[1]))
+            p[1] = np.exp(-p[1])
         return p, stddevs
     
     @staticmethod
