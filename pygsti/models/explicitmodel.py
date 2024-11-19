@@ -909,7 +909,7 @@ class ExplicitOpModel(_mdl.OpModel):
         for lbl, inst in self.instruments.items():
             s += "%s = " % str(lbl) + str(inst) + "\n"
         for lbl, factory in self.factories.items():
-            s += "%s = (factory)" % lbl + '\n'
+            s += "%s = (factory)" % str(lbl) + '\n'
         s += "\n"
 
         return s
