@@ -558,6 +558,8 @@ class RawObjectiveFunction(ObjectiveFunction):
         """
         return _np.sqrt(self.terms(probs, counts, total_counts, freqs, intermediates))
 
+    # Infinite loop in evaluation of "dterms" and "dlsvec".
+
     def dterms(self, probs, counts, total_counts, freqs, intermediates=None):
         """
         Compute the derivatives of the terms of this objective function.
@@ -592,10 +594,11 @@ class RawObjectiveFunction(ObjectiveFunction):
         """
         if intermediates is None:
             intermediates = self._intermediates(probs, counts, total_counts, freqs)
-        lsvec = self.lsvec(probs, counts, total_counts, freqs, intermediates)
+        u = self.lsvec(probs, counts, total_counts, freqs, intermediates)
+        v = self.dlsvec(probs, counts, total_counts, freqs, intermediates)
         # NOTE: this function is correct under the assumption that terms == lsvec**2,
         #       independent of whether or not lsvec is nonnegative.
-        return 2 * lsvec * self.dlsvec(probs, counts, total_counts, freqs, intermediates)
+        return 2 * u * v
 
     def dlsvec(self, probs, counts, total_counts, freqs, intermediates=None):
         """
@@ -2765,37 +2768,37 @@ class RawCustomWeightedChi2Function(RawChi2Function):
             return 2 * _np.ones(len(probs))
 
 
-# The log(Likelihood) within the Poisson picture is:                                                                                                    # noqa
-#                                                                                                                                                       # noqa
-# L = prod_{i,sl} lambda_{i,sl}^N_{i,sl} e^{-lambda_{i,sl}} / N_{i,sl}!                                                                                 # noqa
-#                                                                                                                                                       # noqa
-# Where lamba_{i,sl} := p_{i,sl}*N[i] is a rate, i indexes the operation sequence,                                                                      # noqa
-#  and sl indexes the spam label.  N[i] is the total counts for the i-th circuit, and                                                                   # noqa
-#  so sum_{sl} N_{i,sl} == N[i]. We can ignore the p-independent N_j! and take the log:                                                                 # noqa
-#                                                                                                                                                       # noqa
-# log L = sum_{i,sl} N_{i,sl} log(N[i]*p_{i,sl}) - N[i]*p_{i,sl}                                                                                        # noqa
-#       = sum_{i,sl} N_{i,sl} log(p_{i,sl}) - N[i]*p_{i,sl}   (where we ignore the p-independent log(N[i]) terms)                                       # noqa
-#                                                                                                                                                       # noqa
-# The objective function computes the negative log(Likelihood) as a vector of leastsq                                                                   # noqa
-#  terms, where each term == sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} )                                                                        # noqa
-#                                                                                                                                                       # noqa
-# See LikelihoodFunctions.py for details on patching                                                                                                    # noqa
-# The log(Likelihood) within the standard picture is:
-#
-# L = prod_{i,sl} p_{i,sl}^N_{i,sl}
-#
-# Where i indexes the operation sequence, and sl indexes the spam label.
-#  N[i] is the total counts for the i-th circuit, and
-#  so sum_{sl} N_{i,sl} == N[i]. We take the log:
-#
-# log L = sum_{i,sl} N_{i,sl} log(p_{i,sl})
-#
-# The objective function computes the negative log(Likelihood) as a vector of leastsq
-#  terms, where each term == sqrt( N_{i,sl} * -log(p_{i,sl}) )
-#
-# See LikelihoodFunction.py for details on patching
+"""
+The log(Likelihood) within the Poisson picture is:                                                                                                    # noqa
+                                                                                                                                                      # noqa
+L = prod_{i,sl} lambda_{i,sl}^N_{i,sl} e^{-lambda_{i,sl}} / N_{i,sl}!                                                                                 # noqa
+                                                                                                                                                      # noqa
+Where lamba_{i,sl} := p_{i,sl}*N[i] is a rate, i indexes the operation sequence,                                                                      # noqa
+ and sl indexes the spam label.  N[i] is the total counts for the i-th circuit, and                                                                   # noqa
+ so sum_{sl} N_{i,sl} == N[i]. We can ignore the p-independent N_j! and take the log:                                                                 # noqa
+                                                                                                                                                      # noqa
+log L = sum_{i,sl} N_{i,sl} log(N[i]*p_{i,sl}) - N[i]*p_{i,sl}                                                                                        # noqa
+      = sum_{i,sl} N_{i,sl} log(p_{i,sl}) - N[i]*p_{i,sl}   (where we ignore the p-independent log(N[i]) terms)                                       # noqa
+                                                                                                                                                      # noqa
+The objective function computes the negative log(Likelihood) as a vector of leastsq                                                                   # noqa
+ terms, where each term == sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} )                                                                        # noqa
+                                                                                                                                                      # noqa
+See LikelihoodFunctions.py for details on patching                                                                                                    # noqa
+The log(Likelihood) within the standard picture is:
 
+L = prod_{i,sl} p_{i,sl}^N_{i,sl}
 
+Where i indexes the operation sequence, and sl indexes the spam label.
+ N[i] is the total counts for the i-th circuit, and
+ so sum_{sl} N_{i,sl} == N[i]. We take the log:
+
+log L = sum_{i,sl} N_{i,sl} log(p_{i,sl})
+
+The objective function computes the negative log(Likelihood) as a vector of leastsq
+ terms, where each term == sqrt( N_{i,sl} * -log(p_{i,sl}) )
+
+See LikelihoodFunction.py for details on patching
+"""
 class RawPoissonPicDeltaLogLFunction(RawObjectiveFunction):
     """
     The function `N*f*log(f/p) - N*(f-p)`.
@@ -4032,6 +4035,9 @@ class RawTVDFunction(RawObjectiveFunction):
                  resource_alloc=None, name='tvd', description="Total Variational Distance (TVD)", verbosity=0):
         super().__init__(regularization, resource_alloc, name, description, verbosity)
 
+    def chi2k_distributed_qty(self, objective_function_value):
+        return -1
+
     def terms(self, probs, counts, total_counts, freqs, intermediates=None):
         """
         Compute the terms of the objective function.
@@ -4097,7 +4103,11 @@ class RawTVDFunction(RawObjectiveFunction):
         numpy.ndarray
             A 1D array of length equal to that of each array argument.
         """
-        raise NotImplementedError("Derivatives not implemented for TVD yet!")
+        _warnings.warn('This derivative is discontinuous and does not return a full subgradient.')
+        t = self.terms(probs, counts, total_counts, freqs, intermediates)
+        d = 0.5*_np.ones_like(t)
+        d[t < 0] *= -1
+        return d
 
     def hterms(self, probs, counts, total_counts, freqs, intermediates=None):
         """

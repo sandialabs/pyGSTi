@@ -1007,11 +1007,13 @@ def _do_runopt(objective, optimizer, printer):
         tm = _time.time()
         nDataParams = objective.num_data_params()  # TODO - cache this somehow in term-based calcs...
         profiler.add_time("run_gst_fit: num data params", tm)
-
-        chi2_k_qty = opt_result.chi2_k_distributed_qty  # total chi2 or 2*deltaLogL
         desc = objective.description
+        chi2_k_qty = opt_result.chi2_k_distributed_qty  # total chi2 or 2*deltaLogL
+        if chi2_k_qty > 0:
         # reject GST model if p-value < threshold (~0.05?)
-        pvalue = 1.0 - _stats.chi2.cdf(chi2_k_qty, nDataParams - nModelParams)
+            pvalue = 1.0 - _stats.chi2.cdf(chi2_k_qty, nDataParams - nModelParams)
+        else:
+            pvalue = 0.0
         printer.log("%s = %g (%d data params - %d (approx) model params = expected mean of %g; p-value = %g)" %
                     (desc, chi2_k_qty, nDataParams, nModelParams, nDataParams - nModelParams, pvalue), 1)
 
