@@ -435,20 +435,31 @@ class ErrorGeneratorPropagator:
 
         #TODO: Generalize circuit time to not be in one-to-one correspondence with the layer index.
         error_gen_dicts_by_layer = []
+
+        #cache the error generator coefficients for a circuit layer to accelerate cases where we've already seen that layer.
+        circuit_layer_errorgen_cache = dict()
+
         for j in range(len(circuit)):
             circuit_layer = circuit[j] # get the layer
             #can probably relax this if we detect that the model is a crosstalk free model.
             #assert isinstance(circuit_layer, Label), 'Correct support for parallel gates is still under development.'
             errorgen_layer = dict()
-            layer_errorgen_coeff_dict = self.model.circuit_layer_operator(circuit_layer).errorgen_coefficients() #get the errors for the gate
+
+            layer_errorgen_coeff_dict = circuit_layer_errorgen_cache.get(circuit_layer, None)
+            if layer_errorgen_coeff_dict is None:
+                layer_errorgen_coeff_dict = self.model.circuit_layer_operator(circuit_layer).errorgen_coefficients(label_type='local') #get the errors for the gate
+                circuit_layer_errorgen_cache[circuit_layer] = layer_errorgen_coeff_dict
+            
             for errgen_coeff_lbl, rate in layer_errorgen_coeff_dict.items(): #for an error in the accompanying error dictionary 
-                #TODO: Can probably replace this function call with `padded_basis_element_labels` method of `GlobalElementaryErrorgenLabel`
-                paulis = _eprop.errgen_coeff_label_to_stim_pauli_strs(errgen_coeff_lbl, num_qubits)
-                if include_circuit_time:
-                    #TODO: Refactor the fixed rate stuff to reduce the number of if statement evaluations.
-                    errorgen_layer[_LSE(errgen_coeff_lbl.errorgen_type, paulis, circuit_time=j)] = rate if fixed_rate is None else fixed_rate
-                else:
-                    errorgen_layer[_LSE(errgen_coeff_lbl.errorgen_type, paulis)] = rate if fixed_rate is None else fixed_rate
+                #only track this error generator if its rate is not exactly zero. #TODO: Add more flexible initial truncation logic.
+                if rate !=0 or fixed_rate is not None:
+                    #TODO: Can probably replace this function call with `padded_basis_element_labels` method of `GlobalElementaryErrorgenLabel`
+                    paulis = _eprop.errgen_coeff_label_to_stim_pauli_strs(errgen_coeff_lbl, num_qubits)
+                    if include_circuit_time:
+                        #TODO: Refactor the fixed rate stuff to reduce the number of if statement evaluations.
+                        errorgen_layer[_LSE(errgen_coeff_lbl.errorgen_type, paulis, circuit_time=j)] = rate if fixed_rate is None else fixed_rate
+                    else:
+                        errorgen_layer[_LSE(errgen_coeff_lbl.errorgen_type, paulis)] = rate if fixed_rate is None else fixed_rate
             error_gen_dicts_by_layer.append(errorgen_layer)
         return error_gen_dicts_by_layer
     
@@ -638,6 +649,11 @@ class ErrorGeneratorPropagator:
         #    print(f'{errorgen_layer=}')
         #    _mt.print_mx(errorgen)
         #    raise err 
+
+        #if the model's basis is already the same as mx_basis then reuse the one from the model
+        if isinstance(mx_basis, str):
+            if set(self.model.basis.name.split('*')) == set([mx_basis]) or self.model.basis.name==mx_basis:
+                mx_basis = self.model.basis
         
         global_errorgen_coeffs = [coeff_lbl.to_global_eel() for coeff_lbl in errorgen_layer.keys()]
         coeff_dict = {lbl:_np.real_if_close(val) for lbl, val in zip(global_errorgen_coeffs, errorgen_layer.values())}
