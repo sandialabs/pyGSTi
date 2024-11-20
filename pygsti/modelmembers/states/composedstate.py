@@ -781,7 +781,7 @@ class ComposedState(_State):  # , _ErrorMapContainer
             A tuple of (<type>, <basisEl1> [,<basisEl2]) elements identifying the elementary error
             generators of this gate.
         """
-        return self.error_map.errorgen_coefficient_labels()
+        return self.error_map.errorgen_coefficient_labels(label_type)
 
     def errorgen_coefficients_array(self):
         """

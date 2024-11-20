@@ -11,7 +11,7 @@ Tools for the propagation of error generators through circuits.
 #***************************************************************************************************
 
 import stim
-from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GEEL
+from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GEEL, LocalElementaryErrorgenLabel as _LEEL
 from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE
 from pygsti.modelmembers.operations import LindbladErrorgen as _LinbladErrorgen
 from numpy import conjugate
@@ -24,7 +24,7 @@ def errgen_coeff_label_to_stim_pauli_strs(err_gen_coeff_label, num_qubits):
 
     Parameters
     ----------
-    err_gen_coeff_label : `GlobalElementaryErrorgenLabel`
+    err_gen_coeff_label : `GlobalElementaryErrorgenLabel` or `LocalElementaryErrorgenLabel`
         The error generator coefficient label to construct the tuple of pauli
         strings for.
 
@@ -41,38 +41,42 @@ def errgen_coeff_label_to_stim_pauli_strs(err_gen_coeff_label, num_qubits):
         given the support of the error generator label.
 
     """
-    assert isinstance(err_gen_coeff_label, _GEEL), 'Only `GlobalElementaryErrorgenLabel is currently supported.'
 
-    #the coefficient label is a tuple with 3 elements. 
-    #The first element is the error generator type.
-    #the second element is a tuple of paulis either of length 1 or 2 depending on the error gen type.
-    #the third element is a tuple of subsystem labels.
-    errorgen_typ = err_gen_coeff_label.errorgen_type
-    pauli_lbls = err_gen_coeff_label.basis_element_labels
-    sslbls = err_gen_coeff_label.support
+    if isinstance(err_gen_coeff_label, _GEEL):
+        #the coefficient label is a tuple with 3 elements. 
+        #The first element is the error generator type.
+        #the second element is a tuple of paulis either of length 1 or 2 depending on the error gen type.
+        #the third element is a tuple of subsystem labels.
+        errorgen_typ = err_gen_coeff_label.errorgen_type
+        pauli_lbls = err_gen_coeff_label.basis_element_labels
+        sslbls = err_gen_coeff_label.support
 
-    #double check that the number of qubits specified is greater than or equal to the length of the
-    #basis element labels.
-    #assert len(pauli_lbls) >= num_qubits, 'Specified `num_qubits` is less than the length of the basis element labels.'
+        #double check that the number of qubits specified is greater than or equal to the length of the
+        #basis element labels.
+        #assert len(pauli_lbls) >= num_qubits, 'Specified `num_qubits` is less than the length of the basis element labels.'
 
-    if errorgen_typ == 'H' or errorgen_typ == 'S':
-        pauli_string = num_qubits*['I']
-        pauli_lbl = pauli_lbls[0]
-        for i, sslbl in enumerate(sslbls):
-            pauli_string[sslbl] = pauli_lbl[i]
-        pauli_string = stim.PauliString(''.join(pauli_string))
-        return (pauli_string,)
-    elif errorgen_typ == 'C' or errorgen_typ == 'A':
-        pauli_strings = []
-        for pauli_lbl in pauli_lbls: #iterate through both pauli labels
+        if errorgen_typ == 'H' or errorgen_typ == 'S':
             pauli_string = num_qubits*['I']
+            pauli_lbl = pauli_lbls[0]
             for i, sslbl in enumerate(sslbls):
                 pauli_string[sslbl] = pauli_lbl[i]
-            pauli_strings.append(stim.PauliString(''.join(pauli_string)))
-        return tuple(pauli_strings)
+            pauli_string = stim.PauliString(''.join(pauli_string))
+            return (pauli_string,)
+        elif errorgen_typ == 'C' or errorgen_typ == 'A':
+            pauli_strings = []
+            for pauli_lbl in pauli_lbls: #iterate through both pauli labels
+                pauli_string = num_qubits*['I']
+                for i, sslbl in enumerate(sslbls):
+                    pauli_string[sslbl] = pauli_lbl[i]
+                pauli_strings.append(stim.PauliString(''.join(pauli_string)))
+            return tuple(pauli_strings)
+        else:
+            raise ValueError(f'Unsupported error generator type {errorgen_typ}')
+    elif isinstance(err_gen_coeff_label, _LEEL):
+        return tuple([stim.PauliString(bel) for bel in  err_gen_coeff_label.basis_element_labels])
+
     else:
-        raise ValueError(f'Unsupported error generator type {errorgen_typ}')
-    
+        raise ValueError('Only `GlobalElementaryErrorgenLabel and LocalElementaryErrorgenLabel is currently supported.')
 
 def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1, truncation_threshold=1e-14):
     """
@@ -157,6 +161,7 @@ def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1, truncation_th
 
         #third order BCH terms
         # (1/12)*([X,[X,Y]] - [Y,[X,Y]])
+        #TODO: Can make this more efficient by using linearity of commutators
         elif curr_order == 2:
             #we've already calculated (1/2)*[X,Y] in the previous order, so reuse this result.
             #two different lists for the two different commutators so that we can more easily reuse
@@ -202,6 +207,7 @@ def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1, truncation_th
                 third_order_rate = third_order_comm_dict_1.get(lbl, 0) + third_order_comm_dict_2.get(lbl, 0)
                 if abs(third_order_rate) > truncation_threshold:
                     third_order_comm_dict[lbl] = third_order_rate
+            #print(f'{third_order_comm_dict=}')
             new_errorgen_layer.append(third_order_comm_dict)
                          
         #fourth order BCH terms
@@ -233,8 +239,11 @@ def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1, truncation_th
                 fourth_order_comm_dict[error_tuple[0]] += error_tuple[1]
 
             #drop any terms below the truncation threshold after aggregation
+            #print(f'{fourth_order_comm_dict=}')
             fourth_order_comm_dict = {key: val for key, val in fourth_order_comm_dict.items() if abs(val)>truncation_threshold}
             new_errorgen_layer.append(fourth_order_comm_dict)
+            #print(f'{fourth_order_comm_dict=}')
+     
         else:
             raise NotImplementedError("Higher orders beyond fourth order are not implemented yet.")
 

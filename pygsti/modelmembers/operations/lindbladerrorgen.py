@@ -412,8 +412,6 @@ class LindbladErrorgen(_LinearOperator):
         state_space = _statespace.StateSpace.cast(state_space)
         dim = state_space.dim  # Store superop dimension
 
-        #UPDATE: no more self.lindblad_basis
-        #self.lindblad_basis = _Basis.cast(lindblad_basis, dim, sparse=sparse_bases)
         if lindblad_basis == "auto":
             assert(all([(blk._basis is not None) for blk in lindblad_coefficient_blocks])), \
                 "When `lindblad_basis == 'auto'`, the supplied coefficient blocks must have valid bases!"
@@ -425,26 +423,6 @@ class LindbladErrorgen(_LinearOperator):
             if blk._basis is None: blk._basis = default_lindblad_basis
             elif blk._basis.sparse != sparse_bases:  # update block bases to desired sparsity if needed
                 blk._basis = blk._basis.with_sparsity(sparse_bases)
-
-        #UPDATE - this essentially constructs the coefficient blocks from a single dict, which are now given as input
-        ## lindblad_term_dict, basis => bases + parameter values
-        ## but maybe we want lindblad_term_dict, basisdict => basis + projections/coeffs,
-        ##  then projections/coeffs => paramvals? since the latter is what set_errgen needs
-        #hamC, otherC, self.ham_basis, self.other_basis = \
-        #    _ot.lindblad_terms_to_projections(lindblad_term_dict, self.lindblad_basis,
-        #                                      self.parameterization.nonham_mode)
-
-        #UPDATE - self.ham_basis_size and self.other_basis_size have been removed!
-        #self.ham_basis_size = len(self.ham_basis)
-        #self.other_basis_size = len(self.other_basis)
-        #assert(self.parameterization.ham_params_allowed or self.ham_basis_size == 0), \
-        #    "Hamiltonian lindblad terms are not allowed!"
-        #assert(self.parameterization.nonham_params_allowed or self.other_basis_size == 0), \
-        #    "Non-Hamiltonian lindblad terms are not allowed!"
-        #
-        ## Check that bases have the desired sparseness (should be same as lindblad_basis)
-        #assert (self.ham_basis_size == 0 or self.ham_basis.sparse == sparse_bases)
-        #assert (self.other_basis_size == 0 or self.other_basis.sparse == sparse_bases)
 
         self.coefficient_blocks = lindblad_coefficient_blocks
         self.matrix_basis = _Basis.cast(mx_basis, dim, sparse=sparse_bases)
@@ -1051,13 +1029,19 @@ class LindbladErrorgen(_LinearOperator):
             if blk._basis not in bases:
                 bases.add(blk._basis)
 
-        if label_type=='global':
+        first_key = next(iter(elem_errorgens))
+        if label_type=='global' and isinstance(first_key, _LocalElementaryErrorgenLabel):
             #convert to *global* elementary errorgen labels
             identity_label_1Q = 'I'  # maybe we could get this from a 1Q basis somewhere?
             sslbls = self.state_space.sole_tensor_product_block_labels  # take first TPB labels as all labels
             elem_errorgens = {_GlobalElementaryErrorgenLabel.cast(local_eeg_lbl, sslbls, identity_label_1Q): value
                             for local_eeg_lbl, value in elem_errorgens.items()}
-
+        elif label_type=='local' and isinstance(first_key, _GlobalElementaryErrorgenLabel):
+            identity_label_1Q = 'I'  # maybe we could get this from a 1Q basis somewhere?
+            sslbls = self.state_space.sole_tensor_product_block_labels  # take first TPB labels as all labels
+            elem_errorgens = {_LocalElementaryErrorgenLabel.cast(local_eeg_lbl, sslbls, identity_label_1Q): value
+                            for local_eeg_lbl, value in elem_errorgens.items()}
+        
         if logscale_nonham:
             dim = self.dim
             for k in elem_errorgens.keys():
@@ -1095,11 +1079,18 @@ class LindbladErrorgen(_LinearOperator):
             #labels.extend(blk.coefficent_labels)
             labels.extend(blk.elementary_errorgens.keys())
 
-        if label_type == 'global':
-        #convert to *global* elementary errorgen labels
+        first_label = labels[0] if len(labels)>0 else None
+
+        if label_type == 'global' and isinstance(first_label, _LocalElementaryErrorgenLabel):
+            #convert to *global* elementary errorgen labels
             identity_label_1Q = 'I'  # maybe we could get this from a 1Q basis somewhere?
             sslbls = self.state_space.sole_tensor_product_block_labels  # take first TPB labels as all labels
             labels = [_GlobalElementaryErrorgenLabel.cast(local_eeg_lbl, sslbls, identity_label_1Q)
+                        for local_eeg_lbl in labels]
+        elif label_type=='local' and isinstance(first_label, _GlobalElementaryErrorgenLabel):
+            identity_label_1Q = 'I'  # maybe we could get this from a 1Q basis somewhere?
+            sslbls = self.state_space.sole_tensor_product_block_labels  # take first TPB labels as all labels
+            labels = [_LocalElementaryErrorgenLabel.cast(local_eeg_lbl, sslbls, identity_label_1Q)
                         for local_eeg_lbl in labels]
         return tuple(labels)
 

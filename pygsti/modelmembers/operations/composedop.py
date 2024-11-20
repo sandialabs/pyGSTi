@@ -720,8 +720,14 @@ class ComposedOp(_LinearOperator):
         for op in self.factorops:
             try:
                 factor_coeffs = op.errorgen_coefficients(return_basis, logscale_nonham, label_type)
+
             except AttributeError:
                 continue  # just skip members that don't implemnt errorgen_coefficients (?)
+            
+            #If the op has a NoErrorgenInterface as a parent class then factor_coeffs could be empty
+            #which should be skipped.
+            if (return_basis and not factor_coeffs[0]) or not factor_coeffs:
+                continue
 
             if return_basis:
                 ltdict, factor_basis = factor_coeffs
