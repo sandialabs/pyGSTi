@@ -52,16 +52,19 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
             #convert to a tuple representation
             assert sslbls is not None, 'Must specify sslbls when casting from `GlobalElementaryErrorgenLabel`.'
             obj = (obj.errorgen_type, obj.basis_element_labels, obj.sslbls)
+            initial_label=None
         
         if isinstance(obj, _LEEL):
             #convert to a tuple representation
+            initial_label = obj
             obj = (obj.errorgen_type, obj.basis_element_labels)
         
         if isinstance(obj, (tuple, list)):
             #In this case assert that the first element of the tuple is a string corresponding to the
             #error generator type.
             errorgen_type = obj[0]
-            
+            initial_label = None
+
             #two elements for a local label and three for a global one
             #second element should have the basis element labels
             assert len(obj)==2 or len(obj)==3 and isinstance(obj[1], (tuple, list)) 
@@ -93,7 +96,7 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
             else:
                 raise ValueError('Only str and `stim.PauliString` basis element labels are supported presently.')
             
-        return cls(errorgen_type, stim_bels)
+        return cls(errorgen_type, stim_bels, initial_label=initial_label)
 
 
     def __init__(self, errorgen_type, basis_element_labels, circuit_time=None, initial_label=None,
@@ -108,7 +111,7 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
             an element of. Allowed values are 'H', 'S', 'C' and 'A'.
 
         basis_element_labels : tuple or list
-            A list or tuple of strings labeling basis elements used to label this error generator.
+            A list or tuple of stim.PauliString labeling basis elements used to label this error generator.
             This is either length-1 for 'H' and 'S' type error generators, or length-2 for 'C' and 'A'
             type.
 
@@ -140,11 +143,12 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
         else:
             self.initial_label = self.to_local_eel()
 
+        self._hashable_basis_element_labels = tuple([str(pauli) for pauli in self.basis_element_labels])
+
     #TODO: Update various methods to account for additional metadata that has been added.
 
     def __hash__(self):
-        pauli_hashable = [str(pauli) for pauli in self.basis_element_labels]
-        return hash((self.errorgen_type, tuple(pauli_hashable)))
+        return hash((self.errorgen_type, self._hashable_basis_element_labels))
     
     def bel_to_strings(self):
         """
@@ -226,22 +230,34 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
         """
         Parameters
         ----------
-        slayer : 
+        slayer : `stim.Tableau`
+            `stim.Tableau` object corresponding to an ideal Clifford operations for 
+            a circuit layer which we will be propagating this error generator through. 
 
         weight : float
-
+            Current weight of this error generator.
+        
+        Returns
+        -------
+        tuple of consisting of an `LocalStimErrorgenLabel` and an updated error generator
+        weight, which may have changed by a sign.
         """
-        if self.errorgen_type =='Z' or self.errorgen_type=='I':
-            return (self, weight)
+        #if self.errorgen_type =='Z' or self.errorgen_type=='I':
+        #    return (self, weight)
         new_basis_labels = []
-        weightmod = 1
-        for pauli in self.basis_element_labels:
-            temp = slayer(pauli)
-            weightmod=_np.real(temp.sign) * weightmod
-            temp=temp*temp.sign
-            new_basis_labels.append(temp)
-        if self.errorgen_type =='S':
-            weightmod=1.0
+        weightmod = 1.0
+        if self.errorgen_type == 'S':
+            for pauli in self.basis_element_labels:
+                temp = slayer(pauli)
+                temp = temp*temp.sign
+                new_basis_labels.append(temp)
+        else:
+            for pauli in self.basis_element_labels:
+                temp = slayer(pauli)
+                temp_sign = temp.sign
+                weightmod = temp_sign.real*weightmod
+                temp = temp*temp_sign
+                new_basis_labels.append(temp)
         
         return (LocalStimErrorgenLabel(self.errorgen_type, new_basis_labels, initial_label=self.initial_label, circuit_time=self.circuit_time), 
                 weightmod*weight)

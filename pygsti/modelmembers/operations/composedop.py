@@ -711,7 +711,7 @@ class ComposedOp(_LinearOperator):
             A Basis mapping the basis labels used in the
             keys of `lindblad_term_dict` to basis matrices.
         """
-        #*** Note: this function is nearly identitcal to ComposedErrorgen.coefficients() ***
+        #*** Note: this function is nearly identical to ComposedErrorgen.coefficients() ***
         Ltermdict = dict()
         basisdict = dict()
         first_nonempty_basis = None
