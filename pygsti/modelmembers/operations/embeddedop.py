@@ -60,6 +60,10 @@ class EmbeddedOp(_LinearOperator):
         evotype = operation_to_embed._evotype
         rep = self._create_rep_object(evotype, state_space)
 
+        self._cached_embedded_errorgen_labels_global = None
+        self._cached_embedded_errorgen_labels_local = None
+        self._cached_embedded_label_identity_label = None
+
         _LinearOperator.__init__(self, rep, evotype)
         self.init_gpindices(allocated_to_parent)  # initialize our gpindices based on sub-members
         if self._rep_type == 'dense': self._update_denserep()
@@ -605,31 +609,34 @@ class EmbeddedOp(_LinearOperator):
             keys of `lindblad_term_dict` to basis matrices.
         """
         #*** Note: this function is nearly identical to EmbeddedErrorgen.coefficients() ***
-        embedded_coeffs = self.embedded_op.errorgen_coefficients(return_basis, logscale_nonham, label_type)
+        coeffs_to_embed = self.embedded_op.errorgen_coefficients(return_basis, logscale_nonham, label_type)
         #print(f'{embedded_coeffs=}')
-
-        if embedded_coeffs:
-            first_coeff_lbl = next(iter(embedded_coeffs))
-            if isinstance(first_coeff_lbl, _GlobalElementaryErrorgenLabel):
+        
+        if coeffs_to_embed:
+            embedded_labels = self.errorgen_coefficient_labels(label_type=label_type, identity_label=identity_label)
+            embedded_coeffs = {lbl:val for lbl, val in zip(embedded_labels, coeffs_to_embed.values())}
+            #first_coeff_lbl = next(iter(coeffs_to_embed))
+            #if isinstance(first_coeff_lbl, _GlobalElementaryErrorgenLabel):
 #        if self.target_labels != self.embedded_op.state_space.sole_tensor_product_block_labels:
-                mapdict = {loc: tgt for loc, tgt in zip(self.embedded_op.state_space.sole_tensor_product_block_labels,
-                                                        self.target_labels)}
-                embedded_coeffs = {k.map_state_space_labels(mapdict): v for k, v in embedded_coeffs.items()}
-            elif isinstance(first_coeff_lbl, _LocalElementaryErrorgenLabel):
-                embedded_labels = list(embedded_coeffs.keys())
-                #use different embedding scheme for local labels
-                base_label = [identity_label for _ in range(self.state_space.num_qudits)]
-                for lbl in embedded_labels:
-                    new_bels = []
-                    for bel in lbl.basis_element_labels:
-                        base_label = [identity_label for _ in range(self.state_space.num_qudits)]
-                        for target, pauli in zip(self.target_labels, bel):
-                            base_label[target] = pauli
-                        new_bels.append(''.join(base_label))
-                    lbl.basis_element_labels = tuple(new_bels)
-                embedded_coeffs = {lbl:val for lbl, val in zip(embedded_labels, embedded_coeffs.values())}
-            else:
-                raise ValueError(f'Invalid error generator label type {first_coeff_lbl}')
+                #mapdict = {loc: tgt for loc, tgt in zip(self.embedded_op.state_space.sole_tensor_product_block_labels,
+                #                                        self.target_labels)}
+                #embedded_coeffs = {k.map_state_space_labels(mapdict): v for k, v in coeffs_to_embed.items()}
+            #elif isinstance(first_coeff_lbl, _LocalElementaryErrorgenLabel):
+            #    embedded_labels = self.errorgen_coefficient_labels()
+            #    #use different embedding scheme for local labels
+            #    base_label = [identity_label for _ in range(self.state_space.num_qudits)]
+            #    embedded_labels = []
+            #    for lbl in coeff_lbls_to_embed:
+            #        new_bels = []
+            #        for bel in lbl.basis_element_labels:
+            #            base_label = [identity_label for _ in range(self.state_space.num_qudits)]
+            #            for target, pauli in zip(self.target_labels, bel):
+            #                base_label[target] = pauli
+            #            new_bels.append(''.join(base_label))
+            #        embedded_labels.append(_LocalElementaryErrorgenLabel(lbl.errorgen_type, tuple(new_bels)))
+            #    embedded_coeffs = {lbl:val for lbl, val in zip(embedded_labels, coeffs_to_embed.values())}
+            #else:
+            #    raise ValueError(f'Invalid error generator label type {first_coeff_lbl}')
 
         return embedded_coeffs
 
@@ -658,31 +665,39 @@ class EmbeddedOp(_LinearOperator):
             A tuple of (<type>, <basisEl1> [,<basisEl2]) elements identifying the elementary error
             generators of this gate.
         """
-        embedded_labels = self.embedded_op.errorgen_coefficient_labels(label_type)
+        if label_type=='global' and self._cached_embedded_errorgen_labels_global is not None:
+            return self._cached_embedded_errorgen_labels_global
+        elif label_type=='local' and self._cached_embedded_errorgen_labels_local is not None and self._cached_embedded_label_identity_label==identity_label:
+            return self._cached_embedded_errorgen_labels_local
+
+        labels_to_embed = self.embedded_op.errorgen_coefficient_labels(label_type)
         #print(f'{embedded_labels=}')
     
         #if self.target_labels != self.embedded_op.state_space.sole_tensor_product_block_labels:
         #print(f'{self.target_labels=}')
         #print(f'{self.embedded_op.state_space.sole_tensor_product_block_labels=}')
-        if len(embedded_labels)>0:
-            if isinstance(embedded_labels[0], _GlobalElementaryErrorgenLabel):
+        if len(labels_to_embed)>0:
+            if isinstance(labels_to_embed[0], _GlobalElementaryErrorgenLabel):
                 mapdict = {loc: tgt for loc, tgt in zip(self.embedded_op.state_space.sole_tensor_product_block_labels,
                                                         self.target_labels)}
-                embedded_labels = [k.map_state_space_labels(mapdict) for k in embedded_labels]
-            elif isinstance(embedded_labels[0], _LocalElementaryErrorgenLabel):
+                embedded_labels = [k.map_state_space_labels(mapdict) for k in labels_to_embed]
+                self._cached_embedded_errorgen_labels_global = embedded_labels
+            elif isinstance(labels_to_embed[0], _LocalElementaryErrorgenLabel):
                 #use different embedding scheme for local labels
+                embedded_labels = []
                 base_label = [identity_label for _ in range(self.state_space.num_qudits)]
-                for lbl in embedded_labels:
+                for lbl in labels_to_embed:
                     new_bels = []
                     for bel in lbl.basis_element_labels:
                         base_label = [identity_label for _ in range(self.state_space.num_qudits)]
                         for target, pauli in zip(self.target_labels, bel):
                             base_label[target] = pauli
                         new_bels.append(''.join(base_label))
-                    lbl.basis_element_labels = tuple(new_bels)
+                    embedded_labels.append(_LocalElementaryErrorgenLabel(lbl.errorgen_type, tuple(new_bels)))
+                self._cached_embedded_errorgen_labels_local = embedded_labels
+                self._cached_embedded_label_identity_label = identity_label
             else:
-                raise ValueError(f'Invalid error generator label type {embedded_labels[0]}')
-        #print(f'{embedded_labels=}')
+                raise ValueError(f'Invalid error generator label type {labels_to_embed[0]}')
         return embedded_labels
 
     def errorgen_coefficients_array(self):

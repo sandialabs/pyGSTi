@@ -194,7 +194,6 @@ class ErrorGeneratorPropagator:
         #TODO: Add proper inferencing for number of qubits:
         assert circuit.line_labels is not None and circuit.line_labels != ('*',)
         errorgen_layers = self.construct_errorgen_layers(circuit, len(circuit.line_labels), include_spam)
-
         #propagate the errorgen_layers through the propagation_layers to get a list
         #of end of circuit error generator dictionaries.
         propagated_errorgen_layers = self._propagate_errorgen_layers(errorgen_layers, propagation_layers, include_spam)
@@ -654,7 +653,6 @@ class ErrorGeneratorPropagator:
         if isinstance(mx_basis, str):
             if set(self.model.basis.name.split('*')) == set([mx_basis]) or self.model.basis.name==mx_basis:
                 mx_basis = self.model.basis
-        
         global_errorgen_coeffs = [coeff_lbl.to_global_eel() for coeff_lbl in errorgen_layer.keys()]
         coeff_dict = {lbl:_np.real_if_close(val) for lbl, val in zip(global_errorgen_coeffs, errorgen_layer.values())}
 
