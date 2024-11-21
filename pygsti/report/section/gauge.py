@@ -171,7 +171,7 @@ class GaugeVariantSection(_Section):
         if kwargs.get('n_leak', 0) == 0:
             display = ('inf', 'agi', 'trace', 'diamond', 'nuinf', 'nuagi')
         else:
-            display = ('inf', 'la-inf', 'agi', 'trace', 'la-trace', 'diamond', 'nuinf', 'nuagi')
+            display = ('la-frob', 'la-inf', 'la-trace', 'frob', 'inf', 'trace', 'agi', 'diamond', 'nuinf', 'nuagi')
         return workspace.GatesVsTargetTable(
             switchboard.mdl_final, switchboard.mdl_target, _cri(1, switchboard, confidence_level, ci_brevity),
             display=display

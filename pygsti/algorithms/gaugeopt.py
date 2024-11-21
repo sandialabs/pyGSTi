@@ -23,6 +23,39 @@ from pygsti.tools import slicetools as _slct
 from pygsti.models.gaugegroup import TrivialGaugeGroupElement as _TrivialGaugeGroupElement
 
 
+class LoggingFriendlyGaugeoptObjective:
+
+    def __init__(self, callme, loglist):
+        self.callme = callme
+        self.loglist = loglist
+        self.calls_since_callabackcall = 0
+        self.log = None
+        self.num_callbackcalls = 0
+        self.first_call = None
+
+
+    def __call__(self, gaugeGroupEl, oob_check):
+        self.calls_since_callabackcall += 1
+        val = self.callme(gaugeGroupEl, oob_check)
+        if self.first_call is None:
+            self.first_call = self.loglist[0]
+        return val
+    
+    def callback(self, arg):
+        keep = self.loglist[-1]
+        self.num_callbackcalls += 1
+        for _ in range(self.calls_since_callabackcall):
+            self.loglist.pop()
+        self.loglist.append(keep)
+        self.calls_since_callabackcall = 0
+
+    def finalize(self):
+        self.loglist.insert(0, self.first_call)
+        temp =  _np.array(self.loglist)
+        temp = _np.swapaxes(_np.swapaxes(temp,0,2),1,2)
+        self.log = temp
+
+
 def gaugeopt_to_target(model, target_model, item_weights=None,
                        cptp_penalty_factor=0, spam_penalty_factor=0,
                        gates_metric="frobenius", spam_metric="frobenius",
@@ -167,20 +200,30 @@ def gaugeopt_to_target(model, target_model, item_weights=None,
             else:
                 raise ValueError("Invalid `convert_model_to` arguments: %s" % str(args))
 
-    objective_fn, jacobian_fn = _create_objective_fn(
+    objective_fn, jacobian_fn, iter_logs = _create_objective_fn(
         model, target_model, item_weights,
         cptp_penalty_factor, spam_penalty_factor,
         gates_metric, spam_metric, method, comm, check_jac, n_leak)
+
+    objective_fn = LoggingFriendlyGaugeoptObjective(objective_fn, iter_logs)
 
     result = gaugeopt_custom(model, objective_fn, gauge_group, method,
                              maxiter, maxfev, tol, oob_check_interval,
                              return_all, jacobian_fn, comm, verbosity)
 
+    objective_fn.finalize()
+    _np.set_printoptions(linewidth=200, edgeitems=20)
+    print(objective_fn.log)
+    # if len(iter_logs) > 0:
+    #     iter_logs = _np.array(iter_logs)
+    #     _np.set_printoptions(linewidth=200, edgeitems=20)
+    #     print(iter_logs)
+
     #If we've gauge optimized to a target model, declare that the
     # resulting model is now in the same basis as the target.
-    if target_model is not None:
-        newModel = result[-1] if return_all else result
-        newModel.basis = target_model.basis.copy()
+    # if target_model is not None:
+    #     newModel = result[-1] if return_all else result
+    #     newModel.basis = target_model.basis.copy()
 
     return result
 
@@ -331,7 +374,7 @@ def gaugeopt_custom(model, objective_fn, gauge_group=None,
         minSol = _opt.minimize(_call_objective_fn, x0,
                                method=method, maxiter=maxiter, maxfev=maxfev,
                                tol=tol, jac=_call_jacobian_fn,
-                               callback=print_obj_func)
+                               callback=objective_fn.callback)
         solnX = minSol.x
         solnF = minSol.fun
 
@@ -355,7 +398,8 @@ def _create_objective_fn(model, target_model, item_weights=None,
     Creates the objective function and jacobian (if available)
     for gaugeopt_to_target
     """
-    if item_weights is None: item_weights = {}
+    if item_weights is None:
+        item_weights = {}
     opWeight = item_weights.get('gates', 1.0)
     spamWeight = item_weights.get('spam', 1.0)
     mxBasis = model.basis
@@ -376,6 +420,8 @@ def _create_objective_fn(model, target_model, item_weights=None,
         else:
             mdl.transform_inplace(gauge_group_el)
         return mdl
+
+    iteration_log = []
 
     if method == "ls":
         # least-squares case where objective function returns an array of
@@ -599,65 +645,94 @@ def _create_objective_fn(model, target_model, item_weights=None,
         metric = spam_metric
 
         dim = int(_np.sqrt(mxBasis.dim))
-        B = _tools.leading_dxd_submatrix_basis_vectors(dim - n_leak, dim, mxBasis)
-        P = B @ B.T.conj()
-        assert _np.linalg.norm(P.imag) <= 1e-12
-        P = P.real
+        if dim % 3 == 0:
+            B = _tools.leading_dxd_submatrix_basis_vectors(dim - 1, dim, mxBasis)
+            P = B @ B.T.conj()
+            assert _np.linalg.norm(P.imag) <= 1e-12
+            P = P.real
+        else:
+            P = _np.eye(dim)
 
-        log = []
+
+        elements_per_iter_log = 1 + len(model.operations)
+        if spamWeight > 0:
+            elements_per_iter_log += len(model.preps)
+            elements_per_iter_log += len(model.effects)
+        if cptp_penalty_factor > 0:
+            elements_per_iter_log += 1
+        if spam_penalty_factor > 0:
+            elements_per_iter_log += 1
 
         def _objective_fn(gauge_group_el, oob_check):
             mdl = _transform_with_oob_check(model, gauge_group_el, oob_check)
-            ret = 0
 
-            if cptp_penalty_factor > 0:
-                mdl.basis = mxBasis  # set basis for jamiolkowski iso
-                cpPenaltyVec = _cptp_penalty(mdl, cptp_penalty_factor, mdl.basis)
-                ret += _np.sum(cpPenaltyVec)
-
-            if spam_penalty_factor > 0:
-                mdl.basis = mxBasis
-                spamPenaltyVec = _spam_penalty(mdl, spam_penalty_factor, mdl.basis)
-                ret += _np.sum(spamPenaltyVec)
+            iter_log = _np.zeros((elements_per_iter_log,2))
     
-            d = 0
             nSummands = 0.0
+            i = 1
             for opLabel, gate in mdl.operations.items():
                 wt = item_weights.get(opLabel, opWeight)
                 gate_mx = gate.to_dense()
                 other_mx = target_model.operations[opLabel].to_dense()
                 delta = gate_mx - other_mx
+                iter_log[i,0] = wt * _np.linalg.norm(delta)**2
                 delta = delta @ P
-                val = _np.linalg.norm(delta.flatten())
-                d += wt * val**2
                 nSummands += wt * (gate.dim)**2
+                val = _np.linalg.norm(delta)
+                iter_log[i,1] = wt * val**2
+                i += 1
 
-            for lbl, rhoV in mdl.preps.items():
-                wt = item_weights.get(lbl, spamWeight)
-                d += wt * rhoV.frobeniusdist_squared(target_model.preps[lbl], None, None)
-                nSummands += wt * rhoV.dim
+            if spamWeight > 0:
+                for lbl, rhoV in mdl.preps.items():
+                    wt = item_weights.get(lbl, spamWeight)
+                    nSummands += wt * rhoV.dim
+                    val = rhoV.frobeniusdist_squared(target_model.preps[lbl], None, None)
+                    iter_log[i,:] = wt * val
+                    i += 1
 
-            for lbl, Evec in mdl.effects.items():
-                wt = item_weights.get(lbl, spamWeight)
-                evec = Evec.to_dense()
-                other = target_model.effects[lbl].to_dense()
-                delta = evec - other
-                delta = delta @ P
-                val = _np.linalg.norm(delta.flatten())
-                d += wt * val**2
-                nSummands += wt * Evec.dim
+                for lbl, Evec in mdl.effects.items():
+                    wt = item_weights.get(lbl, spamWeight)
+                    evec = Evec.to_dense()
+                    other = target_model.effects[lbl].to_dense()
+                    delta = evec - other
+                    iter_log[i,0] = wt * _np.linalg.norm(delta)**2
+                    delta = delta @ P
+                    nSummands += wt * Evec.dim
+                    val = _np.linalg.norm(delta)
+                    iter_log[i,1] = wt * val**2
+                    i += 1
 
-            val = _np.sqrt(d / nSummands)
+            iter_log[0,:] = _np.sqrt(_np.sum(iter_log[1:,:], axis=0) / nSummands)
+
             if "squared" in metric:
-                val = val ** 2
-            ret += val
+                iter_log[0,:] *= iter_log[0,:]
+
+            if cptp_penalty_factor > 0:
+                mdl.basis = mxBasis  # set basis for jamiolkowski iso
+                cpPenaltyVec = _cptp_penalty(mdl, cptp_penalty_factor, mdl.basis)
+                val = _np.sum(cpPenaltyVec)
+                iter_log[i,:]  = val
+                iter_log[0,:] += val
+                i += 1
+
+            if spam_penalty_factor > 0:
+                mdl.basis = mxBasis
+                spamPenaltyVec = _spam_penalty(mdl, spam_penalty_factor, mdl.basis)
+                val = _np.sum(spamPenaltyVec)
+                iter_log[i,:]  = val
+                iter_log[0,:] += val
+                i += 1
+
+            iteration_log.append(iter_log)
+
+            ret = iter_log[0,0] if n_leak == 0 else iter_log[0,1]
             return ret
 
             # end _objective_fn
 
         _jacobian_fn = None
 
-    return _objective_fn, _jacobian_fn
+    return _objective_fn, _jacobian_fn, iteration_log
 
 
 def _cptp_penalty_size(mdl):
