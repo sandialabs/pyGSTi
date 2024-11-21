@@ -591,45 +591,24 @@ def _create_objective_fn(model, target_model, item_weights=None,
     else:
         # non-least-squares case where objective function returns a single float
         # and (currently) there's no analytic jacobian
-        dim = int(_np.sqrt(mxBasis.dim))
-        if n_leak > 0:
-            B = _tools.leading_dxd_submatrix_basis_vectors(dim - n_leak, dim, mxBasis)
-            """
-            ^ Need to do something else. 
-            
-              In a leakage-friendly basis the operation matrices can be partitioned as 
-                  [comp     , semileak1]
-                  [semileak2, fulleak  ].
-              Instead of projecting only on to comp, we want to keep everything
-              except fullleak. ... But I don't think we can implement that just by
-              pre-multiplying by a projector.
-            
-              I think this distinction might not be significant under certain idealized
-              assumptions, but small deviations from those conditions (which are certain
-              to happen in practice) might make it matter.
-            """
-            P = B @ B.T.conj()
-            if _np.linalg.norm(P.imag) > 1e-12:
-                raise ValueError()
-            else:
-                P = P.real
-            transform_mx_arg = (P, None)
-            # ^ The semantics of this tuple are defined by the frobeniusdist function
-            #   in the ExplicitOpModelCalc class. There are intended semantics for 
-            #   the second element of the tuple, but those aren't implemented yet so
-            #   for now I'm setting the second entry to None. -- Riley
-        else:
-            transform_mx_arg = (_np.eye(mxBasis.dim), None)
 
+        assert target_model is not None
         assert gates_metric != "frobeniustt"
         assert spam_metric  != "frobeniustt"
-        assert spam_metric == gates_metric
-        metric = spam_metric
-        # assert spam_metric == gates_metric
         # ^ Erik and Corey said these are rarely used. I've removed support for
         # them in this codepath (non-LS optimizer) in order to make it easier to
         # read my updated code for leakage-aware metrics. It wouldn't be hard to
         # add support back, but I just want to keep things simple. -- Riley
+        assert spam_metric == gates_metric
+        metric = spam_metric
+
+        dim = int(_np.sqrt(mxBasis.dim))
+        B = _tools.leading_dxd_submatrix_basis_vectors(dim - n_leak, dim, mxBasis)
+        P = B @ B.T.conj()
+        assert _np.linalg.norm(P.imag) <= 1e-12
+        P = P.real
+
+        log = []
 
         def _objective_fn(gauge_group_el, oob_check):
             mdl = _transform_with_oob_check(model, gauge_group_el, oob_check)
@@ -645,25 +624,35 @@ def _create_objective_fn(model, target_model, item_weights=None,
                 spamPenaltyVec = _spam_penalty(mdl, spam_penalty_factor, mdl.basis)
                 ret += _np.sum(spamPenaltyVec)
 
-            assert target_model is not None
-            """
-            Leakage-aware metric supported, per implementation in mdl.frobeniusdist.
-            Refer to how mdl.frobeniusdist handles the case when transform_mx_arg
-            is a tuple in order to understand how the leakage-aware metric is defined.
-            
-                Idea: raise an error if mxBasis isn't leakage-friendly. 
-                    PROBLEM: if we're deep in the code then we end up needing to be
-                            working in a basis that has the identity matrix as its
-                            first element. The leakage-friendly basis doesn't even
-                            have the identity matrix as an element, let alone the first element
-            
-                TODO: dig into function calls below and see where we can
-                    access the mxBasis object. (I'm sure we can.)
-                    Looks like it isn't accessible within ExplicitOpModelCalc objects.
-                    It's most definitely available in ExplicitOpModel.       
-            """
             if "frobenius" in metric:
-                val = mdl.frobeniusdist(target_model, transform_mx_arg, item_weights)
+                d = 0
+                nSummands = 0.0
+                for opLabel, gate in mdl.operations.items():
+                    wt = item_weights.get(opLabel, opWeight)
+                    gate_mx = gate.to_dense()
+                    other_mx = target_model.operations[opLabel].to_dense()
+                    delta = gate_mx - other_mx
+                    delta = delta @ P
+                    val = _np.linalg.norm(delta.flatten())
+                    d += wt * val**2
+                    nSummands += wt * (gate.dim)**2
+
+                for lbl, rhoV in mdl.preps.items():
+                    wt = item_weights.get(lbl, spamWeight)
+                    d += wt * rhoV.frobeniusdist_squared(target_model.preps[lbl], None, None)
+                    nSummands += wt * rhoV.dim
+
+                for lbl, Evec in mdl.effects.items():
+                    wt = item_weights.get(lbl, spamWeight)
+                    evec = Evec.to_dense()
+                    other = target_model.effects[lbl].to_dense()
+                    delta = evec - other
+                    delta = delta @ P
+                    val = _np.linalg.norm(delta.flatten())
+                    d += wt * val**2
+                    nSummands += wt * Evec.dim
+
+                val = _np.sqrt(d / nSummands)
                 if "squared" in metric:
                     val = val ** 2
                 ret += val
@@ -711,7 +700,7 @@ def _create_objective_fn(model, target_model, item_weights=None,
             else:
                 raise ValueError("Invalid metric: %s" % metric)
             # end _objective_fn
-        
+
         _jacobian_fn = None
 
     return _objective_fn, _jacobian_fn
