@@ -623,40 +623,82 @@ def _create_objective_fn(model, target_model, item_weights=None,
                 mdl.basis = mxBasis
                 spamPenaltyVec = _spam_penalty(mdl, spam_penalty_factor, mdl.basis)
                 ret += _np.sum(spamPenaltyVec)
-    
-            d = 0
-            nSummands = 0.0
-            for opLabel, gate in mdl.operations.items():
-                wt = item_weights.get(opLabel, opWeight)
-                gate_mx = gate.to_dense()
-                other_mx = target_model.operations[opLabel].to_dense()
-                delta = gate_mx - other_mx
-                delta = delta @ P
-                val = _np.linalg.norm(delta.flatten())
-                d += wt * val**2
-                nSummands += wt * (gate.dim)**2
 
-            for lbl, rhoV in mdl.preps.items():
-                wt = item_weights.get(lbl, spamWeight)
-                d += wt * rhoV.frobeniusdist_squared(target_model.preps[lbl], None, None)
-                nSummands += wt * rhoV.dim
+            if "frobenius" in metric:
+                d = 0
+                nSummands = 0.0
+                for opLabel, gate in mdl.operations.items():
+                    wt = item_weights.get(opLabel, opWeight)
+                    gate_mx = gate.to_dense()
+                    other_mx = target_model.operations[opLabel].to_dense()
+                    delta = gate_mx - other_mx
+                    delta = delta @ P
+                    val = _np.linalg.norm(delta.flatten())
+                    d += wt * val**2
+                    nSummands += wt * (gate.dim)**2
 
-            for lbl, Evec in mdl.effects.items():
-                wt = item_weights.get(lbl, spamWeight)
-                evec = Evec.to_dense()
-                other = target_model.effects[lbl].to_dense()
-                delta = evec - other
-                delta = delta @ P
-                val = _np.linalg.norm(delta.flatten())
-                d += wt * val**2
-                nSummands += wt * Evec.dim
+                for lbl, rhoV in mdl.preps.items():
+                    wt = item_weights.get(lbl, spamWeight)
+                    d += wt * rhoV.frobeniusdist_squared(target_model.preps[lbl], None, None)
+                    nSummands += wt * rhoV.dim
 
-            val = _np.sqrt(d / nSummands)
-            if "squared" in metric:
-                val = val ** 2
-            ret += val
-            return ret
+                for lbl, Evec in mdl.effects.items():
+                    wt = item_weights.get(lbl, spamWeight)
+                    evec = Evec.to_dense()
+                    other = target_model.effects[lbl].to_dense()
+                    delta = evec - other
+                    delta = delta @ P
+                    val = _np.linalg.norm(delta.flatten())
+                    d += wt * val**2
+                    nSummands += wt * Evec.dim
 
+                val = _np.sqrt(d / nSummands)
+                if "squared" in metric:
+                    val = val ** 2
+                ret += val
+                return ret
+
+            elif metric == "fidelity":
+                # Leakage-aware metric supported for gates, using leaky_entanglement_fidelity.
+                for opLbl in mdl.operations:
+                    wt = item_weights.get(opLbl, opWeight)
+                    top = target_model.operations[opLbl].to_dense()
+                    mop = mdl.operations[opLbl].to_dense()
+                    ret += wt * (1.0 - _tools.leaky_entanglement_fidelity(top, mop, mxBasis, n_leak))**2
+                # Leakage-aware metrics NOT available for SPAM
+                for preplabel, m_prep in mdl.preps.items():
+                    wt = item_weights.get(preplabel, spamWeight)
+                    rhoMx1 = _tools.vec_to_stdmx(m_prep.to_dense(), mxBasis)
+                    t_prep = target_model.preps[preplabel]
+                    rhoMx2 = _tools.vec_to_stdmx(t_prep.to_dense(), mxBasis)
+                    ret += wt * (1.0 - _tools.fidelity(rhoMx1, rhoMx2))**2
+                for povmlabel in mdl.povms.keys():
+                    wt = item_weights.get(povmlabel, spamWeight)
+                    fidelity = _tools.povm_fidelity(mdl, target_model, povmlabel)
+                    ret += wt * (1.0 - fidelity)**2
+                return ret
+
+            elif metric == "tracedist":
+                # Leakage-aware metric supported, using leaky_jtracedist.
+                for opLbl in mdl.operations:
+                    wt = item_weights.get(opLbl, opWeight)
+                    top = target_model.operations[opLbl].to_dense()
+                    mop = mdl.operations[opLbl].to_dense()
+                    ret += wt * _tools.leaky_jtracedist(top, mop, mxBasis, n_leak)
+                # Leakage-aware metrics NOT available for SPAM
+                for preplabel, m_prep in mdl.preps.items():
+                    wt = item_weights.get(preplabel, spamWeight)
+                    rhoMx1 = _tools.vec_to_stdmx(m_prep.to_dense(), mxBasis)
+                    t_prep = target_model.preps[preplabel]
+                    rhoMx2 = _tools.vec_to_stdmx(t_prep.to_dense(), mxBasis)
+                    ret += wt * _tools.tracedist(rhoMx1, rhoMx2)
+                for povmlabel in mdl.povms.keys():
+                    wt = item_weights.get(povmlabel, spamWeight)
+                    ret += wt * _tools.povm_jtracedist(mdl, target_model, povmlabel)
+                return ret
+
+            else:
+                raise ValueError("Invalid metric: %s" % metric)
             # end _objective_fn
 
         _jacobian_fn = None
