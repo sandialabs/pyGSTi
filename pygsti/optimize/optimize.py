@@ -156,7 +156,7 @@ def minimize(fn, x0, method='cg', callback=None,
         #Set options for different algorithms
         opts = {'maxiter': maxiter, 'disp': False}
         if method == "BFGS": opts['gtol'] = tol  # gradient norm tolerance
-        elif method == "L-BFGS-B": opts['gtol'] = opts['ftol'] = tol/1e4  # gradient norm and fractional y-tolerance
+        elif method == "L-BFGS-B": opts['gtol'] = opts['ftol'] = tol  # gradient norm and fractional y-tolerance
         elif method == "Nelder-Mead": opts['maxfev'] = maxfev  # max fn evals (note: ftol and xtol can also be set)
 
         solution = _spo.minimize(fn, x0, options=opts, method=method, tol=tol, callback=callback, jac=jac)
