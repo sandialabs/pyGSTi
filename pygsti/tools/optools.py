@@ -597,9 +597,10 @@ def leading_dxd_submatrix_basis_vectors(d: int, n: int, current_basis, return_la
     """
     assert d <= n
     current_basis = _pgb.Basis.cast(current_basis, dim=n**2)
-    std_to_current = current_basis.create_transform_matrix('std')
+    X = current_basis.create_transform_matrix('std')
+    X = X.T.conj()
     if d == n:
-        return std_to_current
+        return X
     # we have to select a proper subset of columns in current_basis
     std_basis = _pgb.BuiltinBasis(name='std', dim_or_statespace=n**2)
     label2ind = {ell: idx for idx,ell in enumerate(std_basis.labels)}
@@ -611,7 +612,7 @@ def leading_dxd_submatrix_basis_vectors(d: int, n: int, current_basis, return_la
             basis_ind.append(label2ind[ell])
             basis_labels.append(ell)
     basis_ind = _np.array(basis_ind)
-    submatrix_basis_vectors = std_to_current[:, basis_ind]
+    submatrix_basis_vectors = X[:, basis_ind]
     if return_labels:
         return submatrix_basis_vectors, basis_labels
     if not return_labels:
