@@ -623,8 +623,6 @@ def _create_objective_fn(model, target_model, item_weights=None,
 
         assert gates_metric != "frobeniustt"
         assert spam_metric  != "frobeniustt"
-        assert spam_metric == gates_metric
-        metric = spam_metric
         # assert spam_metric == gates_metric
         # ^ Erik and Corey said these are rarely used. I've removed support for
         # them in this codepath (non-LS optimizer) in order to make it easier to
@@ -645,73 +643,103 @@ def _create_objective_fn(model, target_model, item_weights=None,
                 spamPenaltyVec = _spam_penalty(mdl, spam_penalty_factor, mdl.basis)
                 ret += _np.sum(spamPenaltyVec)
 
-            assert target_model is not None
-            """
-            Leakage-aware metric supported, per implementation in mdl.frobeniusdist.
-            Refer to how mdl.frobeniusdist handles the case when transform_mx_arg
-            is a tuple in order to understand how the leakage-aware metric is defined.
-            
-                Idea: raise an error if mxBasis isn't leakage-friendly. 
-                    PROBLEM: if we're deep in the code then we end up needing to be
-                            working in a basis that has the identity matrix as its
-                            first element. The leakage-friendly basis doesn't even
-                            have the identity matrix as an element, let alone the first element
-            
-                TODO: dig into function calls below and see where we can
-                    access the mxBasis object. (I'm sure we can.)
-                    Looks like it isn't accessible within ExplicitOpModelCalc objects.
-                    It's most definitely available in ExplicitOpModel.       
-            """
-            if "frobenius" in metric:
-                val = mdl.frobeniusdist(target_model, transform_mx_arg, item_weights)
-                if "squared" in metric:
-                    val = val ** 2
-                ret += val
-                return ret
+            if target_model is not None:
+                """
+                Leakage-aware metric supported, per implementation in mdl.frobeniusdist.
+                Refer to how mdl.frobeniusdist handles the case when transform_mx_arg
+                is a tuple in order to understand how the leakage-aware metric is defined.
+                
+                  Idea: raise an error if mxBasis isn't leakage-friendly. 
+                      PROBLEM: if we're deep in the code then we end up needing to be
+                               working in a basis that has the identity matrix as its
+                               first element. The leakage-friendly basis doesn't even
+                               have the identity matrix as an element, let alone the first element
+                
+                  TODO: dig into function calls below and see where we can
+                        access the mxBasis object. (I'm sure we can.)
+                        Looks like it isn't accessible within ExplicitOpModelCalc objects.
+                        It's most definitely available in ExplicitOpModel.       
+                """
+                if "frobenius" in gates_metric:
+                    if spam_metric == gates_metric:
+                        val = mdl.frobeniusdist(target_model, transform_mx_arg, item_weights)
+                    else:
+                        wts = item_weights.copy()
+                        wts['spam'] = 0.0
+                        for k in wts:
+                            if k in mdl.preps or k in mdl.povms:
+                                wts[k] = 0.0
+                        val = mdl.frobeniusdist(target_model, transform_mx_arg, wts, n_leak)
+                    if "squared" in gates_metric:
+                        val = val ** 2
+                    ret += val
 
-            elif metric == "fidelity":
-                # Leakage-aware metric supported for gates, using leaky_entanglement_fidelity.
-                for opLbl in mdl.operations:
-                    wt = item_weights.get(opLbl, opWeight)
-                    top = target_model.operations[opLbl].to_dense()
-                    mop = mdl.operations[opLbl].to_dense()
-                    ret += wt * (1.0 - _tools.leaky_entanglement_fidelity(top, mop, mxBasis, n_leak))**2
-                # Leakage-aware metrics NOT available for SPAM
-                for preplabel, m_prep in mdl.preps.items():
-                    wt = item_weights.get(preplabel, spamWeight)
-                    rhoMx1 = _tools.vec_to_stdmx(m_prep.to_dense(), mxBasis)
-                    t_prep = target_model.preps[preplabel]
-                    rhoMx2 = _tools.vec_to_stdmx(t_prep.to_dense(), mxBasis)
-                    ret += wt * (1.0 - _tools.fidelity(rhoMx1, rhoMx2))**2
-                for povmlabel in mdl.povms.keys():
-                    wt = item_weights.get(povmlabel, spamWeight)
-                    fidelity = _tools.povm_fidelity(mdl, target_model, povmlabel)
-                    ret += wt * (1.0 - fidelity)**2
-                return ret
+                elif gates_metric == "fidelity":
+                    # Leakage-aware metric supported, using leaky_entanglement_fidelity.
+                    for opLbl in mdl.operations:
+                        wt = item_weights.get(opLbl, opWeight)
+                        top = target_model.operations[opLbl].to_dense()
+                        mop = mdl.operations[opLbl].to_dense()
+                        ret += wt * (1.0 - _tools.leaky_entanglement_fidelity(top, mop, mxBasis, n_leak))**2
 
-            elif metric == "tracedist":
-                # Leakage-aware metric supported, using leaky_jtracedist.
-                for opLbl in mdl.operations:
-                    wt = item_weights.get(opLbl, opWeight)
-                    top = target_model.operations[opLbl].to_dense()
-                    mop = mdl.operations[opLbl].to_dense()
-                    ret += wt * _tools.leaky_jtracedist(top, mop, mxBasis, n_leak)
-                # Leakage-aware metrics NOT available for SPAM
-                for preplabel, m_prep in mdl.preps.items():
-                    wt = item_weights.get(preplabel, spamWeight)
-                    rhoMx1 = _tools.vec_to_stdmx(m_prep.to_dense(), mxBasis)
-                    t_prep = target_model.preps[preplabel]
-                    rhoMx2 = _tools.vec_to_stdmx(t_prep.to_dense(), mxBasis)
-                    ret += wt * _tools.tracedist(rhoMx1, rhoMx2)
-                for povmlabel in mdl.povms.keys():
-                    wt = item_weights.get(povmlabel, spamWeight)
-                    ret += wt * _tools.povm_jtracedist(mdl, target_model, povmlabel)
-                return ret
+                elif gates_metric == "tracedist":
+                    # Leakage-aware metric supported, using leaky_jtracedist.
+                    for opLbl in mdl.operations:
+                        wt = item_weights.get(opLbl, opWeight)
+                        top = target_model.operations[opLbl].to_dense()
+                        mop = mdl.operations[opLbl].to_dense()
+                        ret += wt * _tools.leaky_jtracedist(top, mop, mxBasis, n_leak)
 
-            else:
-                raise ValueError("Invalid metric: %s" % metric)
-            # end _objective_fn
-        
+                else: raise ValueError("Invalid gates_metric: %s" % gates_metric)
+
+                if "frobenius" in spam_metric and gates_metric == spam_metric:
+                    # We already handled SPAM error in this case. Just return.
+                    return ret
+
+                elif "frobenius" in spam_metric:
+                    # Leakage-aware metric supported in principle via implementation in
+                    # mdl.frobeniusdist (check implementation to see how it handles the
+                    # case when transform_mx_arg is a tuple).
+                    wts = item_weights.copy(); wts['gates'] = 0.0
+                    for k in wts:
+                        if k in mdl.operations or \
+                            k in mdl.instruments: wts[k] = 0.0
+                    val = mdl.frobeniusdist(target_model, transform_mx_arg, wts)
+                    if "squared" in spam_metric:
+                        val = val ** 2
+                    ret += val 
+
+                elif spam_metric == "fidelity":
+                    # Leakage-aware metrics NOT available
+                    for preplabel, m_prep in mdl.preps.items():
+                        wt = item_weights.get(preplabel, spamWeight)
+                        rhoMx1 = _tools.vec_to_stdmx(m_prep.to_dense(), mxBasis)
+                        t_prep = target_model.preps[preplabel]
+                        rhoMx2 = _tools.vec_to_stdmx(t_prep.to_dense(), mxBasis)
+                        ret += wt * (1.0 - _tools.fidelity(rhoMx1, rhoMx2))**2
+ 
+                    for povmlabel in mdl.povms.keys():
+                        wt = item_weights.get(povmlabel, spamWeight)
+                        fidelity = _tools.povm_fidelity(mdl, target_model, povmlabel)
+                        ret += wt * (1.0 - fidelity)**2
+
+                elif spam_metric == "tracedist":
+                    # Leakage-aware metrics NOT available.
+                    for preplabel, m_prep in mdl.preps.items():
+                        wt = item_weights.get(preplabel, spamWeight)
+                        rhoMx1 = _tools.vec_to_stdmx(m_prep.to_dense(), mxBasis)
+                        t_prep = target_model.preps[preplabel]
+                        rhoMx2 = _tools.vec_to_stdmx(t_prep.to_dense(), mxBasis)
+                        ret += wt * _tools.tracedist(rhoMx1, rhoMx2)
+
+                    for povmlabel in mdl.povms.keys():
+                        wt = item_weights.get(povmlabel, spamWeight)
+                        ret += wt * _tools.povm_jtracedist(mdl, target_model, povmlabel)
+
+                else: raise ValueError("Invalid spam_metric: %s" % spam_metric)
+
+            return ret
+
         _jacobian_fn = None
 
     return _objective_fn, _jacobian_fn
