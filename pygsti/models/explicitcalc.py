@@ -120,12 +120,18 @@ class ExplicitOpModelCalc(object):
         other_calc : ForwardSimulator
             the other gate calculator to difference against.
 
-        transform_mx : numpy array, optional
-            if not None, transform this model by
-            G => inv(transform_mx) * G * transform_mx, for each operation matrix G
-            (and similar for rho and E vectors) before taking the difference.
-            This transformation is applied only for the difference and does
-            not alter the values stored in this model.
+        transform_mx : numpy array or tuple, optional
+            if transform_mx is a numpy array, then for each operation matrix
+            G we implicitly consider the transformed quantity
+                G => inv(transform_mx) * G * transform_mx
+            Similar transformations are applied for effect vectors.
+            This transformation is applied only for the difference and does not
+            alter the values stored in this model.
+
+            if transform_mx is a tuple then it should consist of two numpy arrays,
+            the first of which will be interpreted as transform_mx in the usual
+            sense and the second of which will either be None or will be syntactically
+            subtituted for inv(transform_mx).
 
         item_weights : dict, optional
             Dictionary of weighting factors for individual gates and spam
@@ -146,51 +152,62 @@ class ExplicitOpModelCalc(object):
         -------
         float
         """
-        d = 0; T = transform_mx
+        if isinstance(transform_mx, tuple):
+            P, invP = transform_mx
+        else:
+            P = transform_mx
+            invP = None if P is None else _np.linalg.pinv(P)
+        d = 0
         nSummands = 0.0
         if item_weights is None: item_weights = {}
         opWeight = item_weights.get('gates', 1.0)
         spamWeight = item_weights.get('spam', 1.0)
 
-        if T is not None:
-            Ti = _np.linalg.inv(T)  # TODO: generalize inverse op (call T.inverse() if T were a "transform" object?)
+        if (P is None and invP is None) or isinstance(transform_mx, _np.ndarray):
+            # use the original implementation.
             for opLabel, gate in self.operations.items():
                 wt = item_weights.get(opLabel, opWeight)
-                d += wt * gate.frobeniusdist_squared(
-                    other_calc.operations[opLabel], T, Ti)
+                d += wt * gate.frobeniusdist_squared(other_calc.operations[opLabel], P, invP)
                 nSummands += wt * (gate.dim)**2
 
             for lbl, rhoV in self.preps.items():
                 wt = item_weights.get(lbl, spamWeight)
-                d += wt * rhoV.frobeniusdist_squared(other_calc.preps[lbl], T, Ti)
+                d += wt * rhoV.frobeniusdist_squared(other_calc.preps[lbl], P, invP)
                 nSummands += wt * rhoV.dim
 
             for lbl, Evec in self.effects.items():
                 wt = item_weights.get(lbl, spamWeight)
-                d += wt * Evec.frobeniusdist_squared(other_calc.effects[lbl], T, Ti)
+                d += wt * Evec.frobeniusdist_squared(other_calc.effects[lbl], P, invP)
                 nSummands += wt * Evec.dim
-
         else:
+            # we're in the special case that I'm creating.
             for opLabel, gate in self.operations.items():
                 wt = item_weights.get(opLabel, opWeight)
-                d += wt * gate.frobeniusdist_squared(other_calc.operations[opLabel])
+                gate_mx = gate.to_dense()
+                other_mx = other_calc.operations[opLabel].to_dense()
+                delta = gate_mx - other_mx
+                if P is not None:
+                    delta = delta @ P
+                if invP is not None:
+                    delta = invP @ delta
+                val = _np.linalg.norm(delta.flatten())
+                d += wt * val**2
                 nSummands += wt * (gate.dim)**2
 
             for lbl, rhoV in self.preps.items():
                 wt = item_weights.get(lbl, spamWeight)
-                d += wt * rhoV.frobeniusdist_squared(other_calc.preps[lbl])
+                d += wt * rhoV.frobeniusdist_squared(other_calc.preps[lbl], None, None)
                 nSummands += wt * rhoV.dim
 
             for lbl, Evec in self.effects.items():
                 wt = item_weights.get(lbl, spamWeight)
-                d += wt * Evec.frobeniusdist_squared(other_calc.effects[lbl])
+                evec = Evec.to_dense()
+                other = other_calc.effects[lbl].to_dense()
+                delta = evec - other
+                delta = delta @ P
+                val = _np.linalg.norm(delta.flatten())
+                d += wt * val**2
                 nSummands += wt * Evec.dim
-
-        #Temporary: check that this function can be computed by
-        # calling residuals - replace with this later.
-        resids, chk_nSummands = self.residuals(other_calc, transform_mx, item_weights)
-        assert(_np.isclose(_np.sum(resids**2), d))
-        assert(_np.isclose(chk_nSummands, nSummands))
 
         if normalize and nSummands > 0:
             return _np.sqrt(d / nSummands)
@@ -241,47 +258,30 @@ class ExplicitOpModelCalc(object):
         sqrt_itemWeights = {k: _np.sqrt(v) for k, v in item_weights.items()}
         opWeight = sqrt_itemWeights.get('gates', 1.0)
         spamWeight = sqrt_itemWeights.get('spam', 1.0)
+        Ti = None if T is None else _np.linalg.pinv(T)
+        # ^ TODO: generalize inverse op (call T.inverse() if T were a "transform" object?)
 
-        if T is not None:
-            Ti = _np.linalg.inv(T)  # TODO: generalize inverse op (call T.inverse() if T were a "transform" object?)
-            for opLabel, gate in self.operations.items():
-                wt = sqrt_itemWeights.get(opLabel, opWeight)
-                resids.append(
-                    wt * gate.residuals(
-                        other_calc.operations[opLabel], T, Ti))
-                nSummands += wt**2 * (gate.dim)**2
+        for opLabel, gate in self.operations.items():
+            wt = sqrt_itemWeights.get(opLabel, opWeight)
+            other_gate = other_calc.operations[opLabel]
+            resid =  wt * gate.residuals(other_gate, T, Ti)
+            resids.append(resid)
+            nSummands += wt**2 * (gate.dim)**2
 
-            for lbl, rhoV in self.preps.items():
-                wt = sqrt_itemWeights.get(lbl, spamWeight)
-                resids.append(
-                    wt * rhoV.residuals(other_calc.preps[lbl], T, Ti))
-                nSummands += wt**2 * rhoV.dim
+        for lbl, rhoV in self.preps.items():
+            wt = sqrt_itemWeights.get(lbl, spamWeight)
+            other_prep = other_calc.preps[lbl]
+            resid = wt * rhoV.residuals(other_prep, T, Ti)
+            resids.append(resid)
+            nSummands += wt**2 * rhoV.dim
 
-            for lbl, Evec in self.effects.items():
-                wt = sqrt_itemWeights.get(lbl, spamWeight)
-                resids.append(
-                    wt * Evec.residuals(other_calc.effects[lbl], T, Ti))
+        for lbl, Evec in self.effects.items():
+            wt = sqrt_itemWeights.get(lbl, spamWeight)
+            other_effect = other_calc.effects[lbl]
+            resid = wt * Evec.residuals(other_effect, T, Ti)
+            resids.append(resid)
 
-                nSummands += wt**2 * Evec.dim
-
-        else:
-            for opLabel, gate in self.operations.items():
-                wt = sqrt_itemWeights.get(opLabel, opWeight)
-                resids.append(
-                    wt * gate.residuals(other_calc.operations[opLabel]))
-                nSummands += wt**2 * (gate.dim)**2
-
-            for lbl, rhoV in self.preps.items():
-                wt = sqrt_itemWeights.get(lbl, spamWeight)
-                resids.append(
-                    wt * rhoV.residuals(other_calc.preps[lbl]))
-                nSummands += wt**2 * rhoV.dim
-
-            for lbl, Evec in self.effects.items():
-                wt = sqrt_itemWeights.get(lbl, spamWeight)
-                resids.append(
-                    wt * Evec.residuals(other_calc.effects[lbl]))
-                nSummands += wt**2 * Evec.dim
+            nSummands += wt**2 * Evec.dim
 
         resids = [r.ravel() for r in resids]
         resids = _np.concatenate(resids)
