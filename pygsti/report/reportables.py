@@ -1194,6 +1194,14 @@ Fro_diff = _modf.opsfn_factory(frobenius_diff)
 # init args == (model1, model2, op_label)
 
 
+def leaky_gate_frob_dist(a, b, mx_basis):
+    n_leak = 1
+    return _tools.subspace_restricted_fro_dist(a, b, mx_basis, n_leak)
+
+
+Leaky_gate_frob_dist = _modf.opsfn_factory(leaky_gate_frob_dist)
+
+
 def jtrace_diff(a, b, mx_basis):  # assume vary model1, model2 fixed
     """
     Jamiolkowski trace distance between a and b
@@ -2504,6 +2512,8 @@ def info_of_opfn_by_name(name):
                         "where (a_i,b_i) are corresponding eigenvalues of A and B."),
         "frob": ("Frobenius|Distance",
                  "sqrt( sum( (A_ij - B_ij)^2 ) )"),
+        "la-frob": ("Frobenius|Distance (subspace)",
+                    "TO WRITE"),
         "unmodeled": ("Un-modeled|Error",
                       "The per-operation budget used to account for un-modeled errors (model violation)")
     }
@@ -2591,6 +2601,9 @@ def evaluate_opfn_by_name(name, model, target_model, op_label_or_string,
     elif name == "evnudiamond":
         fn = Eigenvalue_nonunitary_diamondnorm if b else \
             Circuit_eigenvalue_nonunitary_diamondnorm
+    elif name == "la-frob":
+        assert b
+        fn = Leaky_gate_frob_dist
     elif name == "frob":
         fn = Fro_diff if b else \
             Circuit_fro_diff
