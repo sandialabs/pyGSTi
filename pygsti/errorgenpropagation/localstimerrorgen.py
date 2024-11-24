@@ -149,7 +149,7 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
         if pauli_str_reps is not None:
             self._hashable_basis_element_labels = pauli_str_reps
         else:
-            self._hashable_basis_element_labels = tuple([str(pauli) for pauli in self.basis_element_labels])
+            self._hashable_basis_element_labels = self.bel_to_strings()
 
     #TODO: Update various methods to account for additional metadata that has been added.
 
