@@ -6,6 +6,10 @@ import numpy as _np
 from pygsti.tools import change_basis
 from pygsti.tools.lindbladtools import create_elementary_errorgen
 
+#TODO: Split this into a parent class and subclass for markovian and non-markovian
+#propagation. There is some overhead in instantiating the NM version of these labels
+#which we can avoid and make markovian applications much more efficient (label instantiation
+#is like a third of runtime when using higher-order BCH, e.g.)
 class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
 
     """
