@@ -42,7 +42,10 @@ def errgen_coeff_label_to_stim_pauli_strs(err_gen_coeff_label, num_qubits):
 
     """
 
-    if isinstance(err_gen_coeff_label, _GEEL):
+    if isinstance(err_gen_coeff_label, _LEEL):
+        return tuple([stim.PauliString(bel) for bel in err_gen_coeff_label.basis_element_labels])
+
+    elif isinstance(err_gen_coeff_label, _GEEL):
         #the coefficient label is a tuple with 3 elements. 
         #The first element is the error generator type.
         #the second element is a tuple of paulis either of length 1 or 2 depending on the error gen type.
@@ -72,9 +75,6 @@ def errgen_coeff_label_to_stim_pauli_strs(err_gen_coeff_label, num_qubits):
             return tuple(pauli_strings)
         else:
             raise ValueError(f'Unsupported error generator type {errorgen_typ}')
-    elif isinstance(err_gen_coeff_label, _LEEL):
-        return tuple([stim.PauliString(bel) for bel in  err_gen_coeff_label.basis_element_labels])
-
     else:
         raise ValueError('Only `GlobalElementaryErrorgenLabel and LocalElementaryErrorgenLabel is currently supported.')
 
@@ -139,7 +139,7 @@ def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1, truncation_th
                     #I *think* you can pick up at most around a factor of 8 from the commutator
                     #itself. Someone should validate that. Set this conservatively, but also
                     #avoid computing commutators which will be effectively zero.
-                    if abs(weight) < 10*truncation_threshold:
+                    if abs(weight) < truncation_threshold:
                         continue
                     commuted_errgen_sublist = error_generator_commutator(error1, error2, 
                                                                          weight= weight)

@@ -453,17 +453,20 @@ class ErrorGeneratorPropagator:
             for errgen_coeff_lbl, rate in layer_errorgen_coeff_dict.items(): #for an error in the accompanying error dictionary 
                 #only track this error generator if its rate is not exactly zero. #TODO: Add more flexible initial truncation logic.
                 if rate !=0 or fixed_rate is not None:
-                    if isinstance(errgen_coeff_lbl, _LocalElementaryErrogenLabel):
-                        initial_label = errgen_coeff_lbl
-                    else:
-                        initial_label = None
+                    #if isinstance(errgen_coeff_lbl, _LocalElementaryErrogenLabel):
+                    initial_label = errgen_coeff_lbl
+                    #else:
+                    #    initial_label = None
                     #TODO: Can probably replace this function call with `padded_basis_element_labels` method of `GlobalElementaryErrorgenLabel`
                     paulis = _eprop.errgen_coeff_label_to_stim_pauli_strs(errgen_coeff_lbl, num_qubits)
+                    pauli_strs = errgen_coeff_lbl.basis_element_labels #get the original python string reps from local labels
                     if include_circuit_time:
                         #TODO: Refactor the fixed rate stuff to reduce the number of if statement evaluations.
-                        errorgen_layer[_LSE(errgen_coeff_lbl.errorgen_type, paulis, circuit_time=j, initial_label=initial_label)] = rate if fixed_rate is None else fixed_rate
+                        errorgen_layer[_LSE(errgen_coeff_lbl.errorgen_type, paulis, circuit_time=j, 
+                                            initial_label=initial_label, pauli_str_reps=pauli_strs)] = rate if fixed_rate is None else fixed_rate
                     else:
-                        errorgen_layer[_LSE(errgen_coeff_lbl.errorgen_type, paulis, initial_label=initial_label)] = rate if fixed_rate is None else fixed_rate
+                        errorgen_layer[_LSE(errgen_coeff_lbl.errorgen_type, paulis, initial_label=initial_label, 
+                                            pauli_str_reps=pauli_strs)] = rate if fixed_rate is None else fixed_rate
             error_gen_dicts_by_layer.append(errorgen_layer)
         return error_gen_dicts_by_layer
     

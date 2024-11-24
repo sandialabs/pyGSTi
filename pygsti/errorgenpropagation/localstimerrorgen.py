@@ -100,7 +100,7 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
 
 
     def __init__(self, errorgen_type, basis_element_labels, circuit_time=None, initial_label=None,
-                 label=None):
+                 label=None, pauli_str_reps=None):
         """
         Create a new instance of  `LocalStimErrorgenLabel`
 
@@ -130,10 +130,13 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
             An optional label string which is included when printing the string representation of this
             label.
 
+        pauli_str_reps : tuple of str, optional (default None)
+            Optional tuple of python strings corresponding to the stim.PauliStrings in basis_element_labels.
+            When specified can speed up construction of hashable label representations.
         """
-        self.errorgen_type=str(errorgen_type)
-        self.basis_element_labels=tuple(basis_element_labels) 
-        self.label=label
+        self.errorgen_type = errorgen_type
+        self.basis_element_labels = tuple(basis_element_labels) 
+        self.label = label
         self.circuit_time = circuit_time
 
         #additionally store a copy of the value of the original error generator label which will remain unchanged
@@ -143,7 +146,10 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
         else:
             self.initial_label = self.to_local_eel()
 
-        self._hashable_basis_element_labels = tuple([str(pauli) for pauli in self.basis_element_labels])
+        if pauli_str_reps is not None:
+            self._hashable_basis_element_labels = pauli_str_reps
+        else:
+            self._hashable_basis_element_labels = tuple([str(pauli) for pauli in self.basis_element_labels])
 
     #TODO: Update various methods to account for additional metadata that has been added.
 
@@ -163,8 +169,8 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
         Performs equality check by seeing if the two error gen labels have the same `errorgen_type` 
         and `basis_element_labels`.
         """
-        return isinstance(other, LocalStimErrorgenLabel) and self.errorgen_type == other.errorgen_type \
-               and self.basis_element_labels == other.basis_element_labels
+        return self.errorgen_type == other.errorgen_type and self.basis_element_labels == other.basis_element_labels \
+            and isinstance(other, LocalStimErrorgenLabel)
     
  
     def __str__(self):
