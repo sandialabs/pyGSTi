@@ -1023,11 +1023,16 @@ class LindbladErrorgen(_LinearOperator):
         assert label_type=='global' or label_type=='local', "Allowed values of label_type are 'global' and 'local'."
 
         elem_errorgens = {}
-        bases = set()
-        for blk in self.coefficient_blocks:
-            elem_errorgens.update(blk.elementary_errorgens)
-            if blk._basis not in bases:
-                bases.add(blk._basis)
+        
+        if return_basis:
+            bases = set()
+            for blk in self.coefficient_blocks:
+                elem_errorgens.update(blk.elementary_errorgens)
+                if blk._basis not in bases:
+                    bases.add(blk._basis)
+        else: #split this off to avoid expensive basis hashing and equivalence checking if not needed.
+            for blk in self.coefficient_blocks:
+                elem_errorgens.update(blk.elementary_errorgens)
 
         first_key = next(iter(elem_errorgens))
         if label_type=='global' and isinstance(first_key, _LocalElementaryErrorgenLabel):

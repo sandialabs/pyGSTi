@@ -752,10 +752,9 @@ class ComposedOp(_LinearOperator):
                 ltdict = factor_coeffs
 
             for key, coeff in ltdict.items():
-                if key in Ltermdict:
-                    Ltermdict[key] += coeff
-                else:
-                    Ltermdict[key] = coeff
+                Ltermdict[key] = coeff + Ltermdict.get(key, 0)
+
+        Ltermdict = dict(Ltermdict)
 
         if return_basis:
             #Use constant_basis or turn basisdict into a Basis to return
