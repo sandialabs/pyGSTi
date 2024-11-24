@@ -3729,18 +3729,20 @@ class Circuit(object):
         f.close()
 
 
-    def convert_to_stim_tableau_layers(self,gate_name_conversions=None):
+    def convert_to_stim_tableau_layers(self, gate_name_conversions=None, num_qubits=None):
         """
         Converts this circuit to a list of stim tableau layers
 
         Parameters
         ----------
-        gate_name_conversions : Dict
-            A map from pygsti gatenames to standard stim tableaus. If set to None a standard set of gate names is used
+        gate_name_conversions : dict, optional (default None)
+            A map from pygsti gatenames to standard stim tableaus. 
+            If None a standard set of gate names is used from 
+            `pygsti.tools.internalgates`
 
         Returns
         -------
-        A layer by layer list of stim tabluaes    
+        A layer by layer list of stim tableaus    
         """
         try:
             import stim
@@ -3749,14 +3751,23 @@ class Circuit(object):
         if gate_name_conversions is None:
             gate_name_conversions = _itgs.standard_gatenames_stim_conversions()
 
-        qubits=len(self.line_labels)
+        if num_qubits is None:
+            line_labels = self._line_labels
+            assert line_labels != ('*',), "Cannot convert circuits with placeholder line label to stim Tableau unless number of qubits is specified."
+            num_qubits=len(line_labels)
+        
         stim_layers=[]
-        for j in range(self.depth):
-            layer = self.layer(j)
-            stim_layer=stim.Tableau(qubits)
+
+        if self._static:
+            circuit_layers = [layer.components for layer in self._labels]
+        else:
+            circuit_layers = self._labels
+        empty_tableau = stim.Tableau(num_qubits)
+        for layer in circuit_layers:
+            stim_layer = empty_tableau.copy()
             for sub_lbl in layer:
                 temp = gate_name_conversions[sub_lbl.name]    
-                stim_layer.append(temp,sub_lbl.qubits)
+                stim_layer.append(temp, sub_lbl.qubits)
             stim_layers.append(stim_layer)
         return stim_layers
     
