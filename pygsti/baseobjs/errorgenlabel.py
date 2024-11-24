@@ -100,9 +100,21 @@ class LocalElementaryErrorgenLabel(ElementaryErrorgenLabel):
 
         self.errorgen_type = str(errorgen_type)
         self.basis_element_labels = tuple(basis_element_labels)
+        self._hash = hash((self.errorgen_type, self.basis_element_labels))
 
     def __hash__(self):
-        return hash((self.errorgen_type, self.basis_element_labels))
+        return self._hash
+    
+    #pickle management functions
+    def __getstate__(self):
+        state_dict = self.__dict__
+        return state_dict
+
+    def __setstate__(self, state_dict):
+        for k, v in state_dict.items():
+            self.__dict__[k] = v
+        #reinitialize the hash
+        self._hash = hash((self.errorgen_type, self.basis_element_labels))
 
     def __eq__(self, other):
         return (self.errorgen_type == other.errorgen_type
@@ -205,9 +217,21 @@ class GlobalElementaryErrorgenLabel(ElementaryErrorgenLabel):
         self.sslbls = tuple(sslbls)
         # Note: each element of basis_element_labels must be an iterable over
         #  1-qubit basis labels of length len(self.sslbls) (?)
+        self._hash = hash((self.errorgen_type, self.basis_element_labels, self.sslbls))
 
     def __hash__(self):
-        return hash((self.errorgen_type, self.basis_element_labels, self.sslbls))
+        return self._hash
+    
+    #pickle management functions
+    def __getstate__(self):
+        state_dict = self.__dict__
+        return state_dict
+
+    def __setstate__(self, state_dict):
+        for k, v in state_dict.items():
+            self.__dict__[k] = v
+        #reinitialize the hash
+        self._hash = hash((self.errorgen_type, self.basis_element_labels, self.sslbls))
 
     def __eq__(self, other):
         return (self.errorgen_type == other.errorgen_type

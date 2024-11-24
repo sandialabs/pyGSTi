@@ -385,7 +385,7 @@ def standard_gatenames_stim_conversions():
         import stim
     except ImportError:
         raise ImportError("Stim is required for this operation, and it does not appear to be installed.")
-    pyGSTi_to_stim_GateDict={
+    gate_dict = {
     'Gi'    : stim.Tableau.from_named_gate('I'),
     'Gxpi'  : stim.Tableau.from_named_gate('X'),
     'Gypi'  : stim.Tableau.from_named_gate('Y'),
@@ -405,7 +405,7 @@ def standard_gatenames_stim_conversions():
     'Gswap' : stim.Tableau.from_named_gate('SWAP'),
     'Gcphase' : stim.Tableau.from_named_gate('CZ')
     }
-    return pyGSTi_to_stim_GateDict
+    return gate_dict
 
 def standard_gatenames_cirq_conversions():
     """
