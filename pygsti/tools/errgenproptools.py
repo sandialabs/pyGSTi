@@ -131,18 +131,22 @@ def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1, truncation_th
         elif curr_order == 1:
             #calculate the pairwise commutators between each of the error generators in current_errgen_dict_1 and
             #current_errgen_dict_2.
+            #precompute an identity string for comparisons in commutator calculations.
+            if errgen_layer_1:
+                identity = stim.PauliString('I'*len(next(iter(errgen_layer_1)).basis_element_labels[0]))
             commuted_errgen_list = []
-            for error1 in errgen_layer_1.keys():
-                for error2 in errgen_layer_2.keys():
+            for error1, error1_val in errgen_layer_1.items():
+                for error2, error2_val in errgen_layer_2.items():
                     #get the list of error generator labels
-                    weight = .5*errgen_layer_1[error1]*errgen_layer_2[error2]
+                    #weight = .5*errgen_layer_1[error1]*errgen_layer_2[error2]
+                    weight = .5*error1_val*error2_val
                     #I *think* you can pick up at most around a factor of 8 from the commutator
                     #itself. Someone should validate that. Set this conservatively, but also
                     #avoid computing commutators which will be effectively zero.
                     if abs(weight) < truncation_threshold:
                         continue
                     commuted_errgen_sublist = error_generator_commutator(error1, error2, 
-                                                                         weight= weight)
+                                                                         weight= weight, identity=identity)
                     commuted_errgen_list.extend(commuted_errgen_sublist)
             #print(f'{commuted_errgen_list=}')   
             #loop through all of the elements of commuted_errorgen_list and instantiate a dictionary with the requisite keys.
@@ -168,25 +172,24 @@ def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1, truncation_th
             #this at higher order if needed.
             commuted_errgen_list_1 = []
             commuted_errgen_list_2 = []
-            for error1a, error1b in zip(errgen_layer_1.keys(), errgen_layer_2.keys()):
-                for error2 in second_order_comm_dict:
-                    second_order_comm_rate = second_order_comm_dict[error2]
+            for (error1a, error1a_val), (error1b, error1b_val) in zip(errgen_layer_1.items(), errgen_layer_2.items()):
+                for error2, error2_val in second_order_comm_dict.items():
                     #I *think* you can pick up at most around a factor of 8 from the commutator
                     #itself. Someone should validate that. Set this conservatively, but also
                     #avoid computing commutators which will be effectively zero.
                     #only need a factor of 1/6 because new_errorgen_layer[1] is 1/2 the commutator 
-                    weighta = (1/6)*errgen_layer_1[error1a]*second_order_comm_rate
+                    weighta = (1/6)*error1a_val*error2_val
 
                     if not abs(weighta) < truncation_threshold:
                         commuted_errgen_sublist = error_generator_commutator(error1a, error2, 
-                                                                             weight=weighta)
+                                                                             weight=weighta, identity=identity)
                         commuted_errgen_list_1.extend(commuted_errgen_sublist)
                     
                     #only need a factor of -1/6 because new_errorgen_layer[1] is 1/2 the commutator 
-                    weightb = -(1/6)*errgen_layer_2[error1b]*second_order_comm_rate
+                    weightb = -(1/6)*error1b_val*error2_val
                     if not abs(weightb) < truncation_threshold:                    
                         commuted_errgen_sublist = error_generator_commutator(error1b, error2, 
-                                                                             weight=weightb)
+                                                                             weight=weightb, identity=identity)
                         commuted_errgen_list_2.extend(commuted_errgen_sublist)   
 
             #turn the two new commuted error generator lists into dictionaries.
@@ -216,18 +219,17 @@ def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1, truncation_th
             #we've already calculated (1/12)*[X,[X,Y]] so reuse this result.
             #this is stored in third_order_comm_dict_1
             commuted_errgen_list = []
-            for error1 in errgen_layer_2.keys():
-                for error2 in third_order_comm_dict_1.keys():
+            for error1, error1_val in errgen_layer_2.items():
+                for error2, error2_val in third_order_comm_dict_1.items():
                     #I *think* you can pick up at most around a factor of 8 from the commutator
                     #itself. Someone should validate that. Set this conservatively, but also
                     #avoid computing commutators which will be effectively zero.
                     #only need a factor of -1/2 because third_order_comm_dict_1 is 1/12 the nested commutator
-                    weight = -.5*errgen_layer_2[error1]*third_order_comm_dict_1[error2]
+                    weight = -.5*error1_val*error2_val
                     if abs(weight) < truncation_threshold:
-                        #print('continuing')
                         continue
                     commuted_errgen_sublist = error_generator_commutator(error1, error2, 
-                                                                         weight=weight)
+                                                                         weight=weight, identity=identity)
                     commuted_errgen_list.extend(commuted_errgen_sublist)
             
             #loop through all of the elements of commuted_errorgen_list and instantiate a dictionary with the requisite keys.
@@ -263,7 +265,7 @@ def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1, truncation_th
     return new_errorgen_layer_dict
 
 
-def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight=1.0):
+def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight=1.0, identity=None):
     """
     Returns the commutator of two error generators. I.e. [errorgen_1, errorgen_2].
     
@@ -280,6 +282,12 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
     
     weight : float, optional (default 1.0)
         An optional weighting value to apply to the value of the commutator.
+    
+    identity : stim.PauliString, optional (default None)
+        An optional stim.PauliString to use for comparisons to the identity.
+        Passing in this kwarg isn't necessary, but can allow for reduced 
+        stim.PauliString creation when calling this function many times for
+        improved efficiency.
 
     Returns
     -------
@@ -308,7 +316,8 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
         errorgen_2_bel_1 = errorgen_2.basis_element_labels[1]
 
     #create the identity stim.PauliString for later comparisons.
-    identity = stim.PauliString('I'*len(errorgen_1_bel_0))
+    if identity is None:
+        identity = stim.PauliString('I'*len(errorgen_1_bel_0))
         
     if errorgen_1_type=='H' and errorgen_2_type=='H':
         ptup = com(errorgen_1_bel_0 , errorgen_2_bel_0)
@@ -797,7 +806,6 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
 def com(P1, P2):
     #P1 and P2 either commute or anticommute.
     if P1.commutes(P2):
-        P3 = 0
         return None
     else:
         P3 = P1*P2

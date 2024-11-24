@@ -139,23 +139,25 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
         self.label = label
         self.circuit_time = circuit_time
 
+        if pauli_str_reps is not None:
+            self._hashable_basis_element_labels = pauli_str_reps
+            self._hashable_string_rep = self.errorgen_type.join(pauli_str_reps)
+        else:
+            self._hashable_basis_element_labels = self.bel_to_strings()
+            self._hashable_string_rep = self.errorgen_type.join(self.bel_to_strings())
+
         #additionally store a copy of the value of the original error generator label which will remain unchanged
         #during the course of propagation for later bookkeeping purposes.
         if initial_label is not None:
             self.initial_label = initial_label
         else:
             self.initial_label = self.to_local_eel()
-
-        if pauli_str_reps is not None:
-            self._hashable_basis_element_labels = pauli_str_reps
-        else:
-            self._hashable_basis_element_labels = self.bel_to_strings()
-
     #TODO: Update various methods to account for additional metadata that has been added.
 
     def __hash__(self):
-        return hash((self.errorgen_type, self._hashable_basis_element_labels))
-    
+        #return hash((self.errorgen_type, self._hashable_basis_element_labels))
+        return hash(self._hashable_string_rep)
+
     def bel_to_strings(self):
         """
         Convert the elements of `basis_element_labels` to python strings
@@ -296,6 +298,6 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
         -------
         `LocalElementaryErrorgenLabel`
         """
-        return _LEEL(self.errorgen_type, self.bel_to_strings())
+        return _LEEL(self.errorgen_type, self._hashable_basis_element_labels)
 
 
