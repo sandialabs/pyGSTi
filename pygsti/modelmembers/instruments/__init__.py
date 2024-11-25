@@ -14,6 +14,9 @@ from .instrument import Instrument
 from .tpinstrument import TPInstrument
 from .tpinstrumentop import TPInstrumentOp
 
+from .composedinstrument import ComposedInstrument
+from .composedinstrumentop import ComposedInstrumentOp
+
 from pygsti.tools import optools as _ot
 
 # Avoid circular import
