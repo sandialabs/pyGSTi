@@ -201,8 +201,12 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
     for results in results_dict.values():
         est_labels = _add_new_estimate_labels(est_labels, results.estimates,
                                               combine_robust)
-        loc_Ls = results.circuit_lists['final'].xs \
-            if isinstance(results.circuit_lists['final'], _PlaquetteGridCircuitStructure) else [0]
+        if results.circuit_lists is not None:
+            loc_Ls = results.circuit_lists['final'].xs \
+                if isinstance(results.circuit_lists['final'], _PlaquetteGridCircuitStructure) else [0]
+        else: 
+            loc_Ls = results.data.edesign.circuit_lists[-1].xs \
+                if isinstance(results.data.edesign.circuit_lists[-1], _PlaquetteGridCircuitStructure) else [0]
         Ls = _add_new_labels(Ls, loc_Ls)
         for est in results.estimates.values():
             gauge_opt_labels = _add_new_labels(gauge_opt_labels,
@@ -263,19 +267,30 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
     switchBd.add("mdl_all_modvi", (0, 1))
     switchBd.add("circuits_all", (0,))  # a list of circuit lists, one per L-val (iteration)
     switchBd.add("mdl_final_grid", (2,))
-
     switchBd.add("idtresults", (0,))
+    
+
+    switchBd.add('current_mdc_store', (0, 1, 3))#mdc stores for this estimate/dataset indexed by L
+    switchBd.add('mdc_store_all', (0,1)) #list of all the mdc stores for this estimate/dataset
+    switchBd.add('final_mdc_store', (0, 1))
+    switchBd.add('mdl_final_modvi', (0, 1))
 
     if confidence_level is not None:
         switchBd.add("cri", (0, 1, 2))
         switchBd.add("cri_gaugeinv", (0, 1))
+        switchBd.add("cri_target_and_final", (0, 1, 2)) 
 
     for d, dslbl in enumerate(dataset_labels):
         results = results_dict[dslbl]
 
-        prep_fiducials = results.circuit_lists.get('prep fiducials', None)
-        meas_fiducials = results.circuit_lists.get('meas fiducials', None)
-        germs = results.circuit_lists.get('germs', None)
+        if results.circuit_lists is not None:
+            prep_fiducials = results.circuit_lists.get('prep fiducials', None)
+            meas_fiducials = results.circuit_lists.get('meas fiducials', None)
+            germs = results.circuit_lists.get('germs', None)
+        else: 
+            prep_fiducials = results.data.edesign.prep_fiducials
+            meas_fiducials = results.data.edesign.meas_fiducials
+            germs = results.data.edesign.germs
 
         NA = ws.NotApplicable()
         if prep_fiducials is None:
@@ -288,23 +303,39 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
             germs = results.data.edesign.germs \
                 if hasattr(results.data.edesign, 'germs') else NA
 
-        switchBd.ds[d] = results.dataset
+        try:
+            switchBd.ds[d] = results.dataset
+        except AttributeError:
+            switchBd.ds[d] = results.data.dataset
         switchBd.prep_fiducials[d] = prep_fiducials
         switchBd.meas_fiducials[d] = meas_fiducials
         switchBd.fiducials_tup[d] = (prep_fiducials, meas_fiducials) \
             if (prep_fiducials is not NA and meas_fiducials is not NA) else NA
         switchBd.germs[d] = germs
 
-        switchBd.circuits_final[d] = results.circuit_lists['final']
+        if results.circuit_lists is not None:
+            switchBd.circuits_final[d] = results.circuit_lists['final']
 
-        loc_Ls = results.circuit_lists['final'].xs \
-            if isinstance(results.circuit_lists['final'], _PlaquetteGridCircuitStructure) else [0]
+            loc_Ls = results.circuit_lists['final'].xs \
+                if isinstance(results.circuit_lists['final'], _PlaquetteGridCircuitStructure) else [0]
 
-        for iL, L in enumerate(swLs):  # allow different results to have different Ls
-            if L in loc_Ls:
-                k = loc_Ls.index(L)
-                switchBd.circuits_current[d, iL] = results.circuit_lists['iteration'][k]
-        switchBd.circuits_all[d] = results.circuit_lists['iteration']
+            for iL, L in enumerate(swLs):  # allow different results to have different Ls
+                if L in loc_Ls:
+                    k = loc_Ls.index(L)
+                    switchBd.circuits_current[d, iL] = results.circuit_lists['iteration'][k]
+            switchBd.circuits_all[d] = results.circuit_lists['iteration']
+
+        else:
+            switchBd.circuits_final[d] = results.data.edesign.circuit_lists[-1]
+
+            loc_Ls = results.data.edesign.circuit_lists[-1].xs \
+                if isinstance(results.data.edesign.circuit_lists[-1], _PlaquetteGridCircuitStructure) else [0]
+
+            for iL, L in enumerate(swLs):  # allow different results to have different Ls
+                if L in loc_Ls:
+                    k = loc_Ls.index(L)
+                    switchBd.circuits_current[d, iL] = results.data.edesign.circuit_lists[k]
+            switchBd.circuits_all[d] = results.data.edesign.circuit_lists
 
         if idt_results_dict is not None:
             switchBd.idtresults[d] = idt_results_dict.get(dslbl, None)
@@ -325,7 +356,12 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
             switchBd.objfn_builder_modvi[d, i] = est_modvi.parameters.get(
                 'final_objfn_builder', _objfns.ObjectiveFunctionBuilder.create_from('logl'))
             switchBd.params[d, i] = est.parameters
+            
+            #add the final mdc store
+            switchBd.final_mdc_store[d,i]= est.parameters.get('final_mdc_store', None)
+            switchBd.mdc_store_all[d,i] = est.parameters.get('per_iter_mdc_store', None)
 
+            #TODO: Fix this next block
             switchBd.clifford_compilation[d, i] = est.parameters.get("clifford compilation", 'auto')
             if switchBd.clifford_compilation[d, i] == 'auto':
                 switchBd.clifford_compilation[d, i] = find_std_clifford_compilation(
@@ -352,9 +388,15 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
                 effds, scale_subMxs = est.create_effective_dataset(True)
                 switchBd.eff_ds[d, i] = effds
                 switchBd.scaled_submxs_dict[d, i] = {'scaling': scale_subMxs, 'scaling.colormap': "revseq"}
-                switchBd.modvi_ds[d, i] = results.dataset if combine_robust else effds
+                try:
+                    switchBd.modvi_ds[d, i] = results.dataset if combine_robust else effds
+                except AttributeError:
+                    switchBd.modvi_ds[d, i] = results.data.dataset if combine_robust else effds
             else:
-                switchBd.modvi_ds[d, i] = results.dataset
+                try:
+                    switchBd.modvi_ds[d, i] = results.dataset
+                except AttributeError:
+                    switchBd.modvi_ds[d, i] = results.data.dataset
                 switchBd.eff_ds[d, i] = NA
                 switchBd.scaled_submxs_dict[d, i] = NA
 
@@ -382,6 +424,10 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
 
             switchBd.mdl_target[d, i] = est.models['target']
             switchBd.mdl_gaugeinv[d, i] = est.models[GIRepLbl]
+            
+            switchBd.mdl_final_modvi[d, i]= est.models['final iteration estimate']
+            #print(est.models['final iteration estimate'])
+            
             try:
                 switchBd.mdl_gaugeinv_ep[d, i] = _tools.project_to_target_eigenspace(est.models[GIRepLbl],
                                                                                      est.models['target'])
@@ -406,6 +452,11 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
                     k = loc_Ls.index(L)
                     switchBd.mdl_current[d, i, iL] = est.models['iteration %d estimate' % k]
                     switchBd.mdl_current_modvi[d, i, iL] = est_modvi.models['iteration %d estimate' % k]
+                    #add the intermediate iteration mdc stores.
+                    if est.parameters.get('per_iter_mdc_store', None):
+                        switchBd.current_mdc_store[d,i,iL] = est.parameters['per_iter_mdc_store'][k]
+                    else:
+                        switchBd.current_mdc_store[d,i,iL] = None
             switchBd.mdl_all[d, i] = [est.models['iteration %d estimate' % k] for k in range(est.num_iterations)]
             switchBd.mdl_all_modvi[d, i] = [est_modvi.models['iteration %d estimate' % k]
                                             for k in range(est_modvi.num_iterations)]
@@ -416,6 +467,7 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
                 for il, l in enumerate(gauge_opt_labels):
                     if l in est.models:
                         switchBd.cri[d, i, il] = None  # default
+                        switchBd.cri_target_and_final[d, i, il] = [None, None] #default
                         crf = _get_viewable_crf(est, lbl, l, printer - 2)
 
                         if crf is not None:
@@ -426,8 +478,13 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
                             region_type = "normal" if misfit_sigma <= nmthreshold \
                                           else "non-markovian"
                             switchBd.cri[d, i, il] = crf.view(confidence_level, region_type)
+                            #Now that we have identifies the gauge-optimization with the CRI
+                            #add this to the switchboard.
+                            switchBd.cri_target_and_final[d,i,il] = [None, crf.view(confidence_level, region_type)]
+                    else: 
+                        switchBd.cri[d, i, il] = NA
+                        switchBd.cri_target_and_final[d, i, il] = NA
 
-                    else: switchBd.cri[d, i, il] = NA
 
                 # "Gauge Invariant Representation" model
                 # If we can't compute CIs for this, ignore SILENTLY, since any
@@ -491,8 +548,12 @@ def _construct_idtresults(idt_idle_op, idt_pauli_dicts, gst_results_dict, printe
         qubit_labels = idt_target.state_space.sole_tensor_product_block_labels
         GiStr = _Circuit((idt_idle_op,), line_labels=qubit_labels)
 
-        circuits_final = results.circuit_lists['final']
-        if not isinstance(circuits_final, _CircuitList): continue
+        if results.circuit_lists is not None:
+            circuits_final = results.circuit_lists['final']
+            if not isinstance(circuits_final, _CircuitList): continue
+        else: 
+            circuits_final = results.data.edesign.circuit_lists[-1]
+            if not isinstance(circuits_final, _CircuitList): continue   
 
         circuit_struct = _PlaquetteGridCircuitStructure.cast(circuits_final)
         if GiStr not in circuit_struct.ys: continue
@@ -513,10 +574,17 @@ def _construct_idtresults(idt_idle_op, idt_pauli_dicts, gst_results_dict, printe
         pauli_fidpairs = _idt.fidpairs_to_pauli_fidpairs(list(plaq.fidpairs.values()), idt_pauli_dicts, nQubits)
         idt_advanced = {'pauli_fidpairs': pauli_fidpairs, 'jacobian mode': "together"}
         printer.log(" * Running idle tomography on %s dataset *" % ky)
-        idtresults = _idt.do_idle_tomography(nQubits, results.dataset, maxLengths, idt_pauli_dicts,
-                                             maxweight=2,  # HARDCODED for now (FUTURE)
-                                             idle_string=idStr, advanced_options=idt_advanced)
-        idt_results_dict[ky] = idtresults
+
+        try:
+            idtresults = _idt.do_idle_tomography(nQubits, results.dataset, maxLengths, idt_pauli_dicts,
+                                                maxweight=2,  # HARDCODED for now (FUTURE)
+                                                idle_string=idStr, advanced_options=idt_advanced)
+            idt_results_dict[ky] = idtresults
+        except AttributeError:
+            idtresults = _idt.do_idle_tomography(nQubits, results.data.dataset, maxLengths, idt_pauli_dicts,
+                                                maxweight=2,  # HARDCODED for now (FUTURE)
+                                                idle_string=idStr, advanced_options=idt_advanced)
+            idt_results_dict[ky] = idtresults
 
     return idt_results_dict
 

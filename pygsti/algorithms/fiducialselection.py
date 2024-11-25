@@ -1256,7 +1256,7 @@ def _find_fiducials_integer_slack(model, fid_list, prep_or_meas=None,
         printer.log("Complete initial fiducial set succeeds.", 1)
         printer.log("Now searching for best fiducial set.", 1)
     else:
-        printer.warning("Complete initial fiducial set FAILS.")
+        printer.warning("Complete initial fiducial set FAILS. Try increasing candidate_fid_counts from 2 to something higher.")
         printer.warning("Aborting search.")
         return None
 
@@ -1460,7 +1460,7 @@ def _find_fiducials_integer_slack(model, fid_list, prep_or_meas=None,
     if initial_test[0]:
         printer.log("Final fiducial set succeeds.", 1)
     else:
-        printer.log("WARNING: Final fiducial set FAILS.", 1)
+        printer.log("WARNING: Final fiducial set FAILS. Try increasing candidate_fid_counts from 2 to something higher.", 1)
 
     if return_all:
         return goodFidList, weights, scoreD
@@ -1579,7 +1579,7 @@ def _find_fiducials_grasp(model, fids_list, prep_or_meas, alpha,
         printer.log("Complete initial fiducial set succeeds.", 1)
         printer.log("Now searching for best fiducial set.", 1)
     else:
-        printer.warning("Complete initial fiducial set FAILS.")
+        printer.warning("Complete initial fiducial set FAILS. Try increasing candidate_fid_counts from 2 to something higher.")
         printer.warning("Aborting search.")
         return (None, None, None) if return_all else None
 
@@ -1731,7 +1731,7 @@ def _find_fiducials_greedy(model, fids_list, prep_or_meas, op_penalty=0.0,
         printer.log("Complete initial fiducial set succeeds.", 1)
         printer.log("Now searching for best fiducial set.", 1)
     else:
-        printer.warning("Complete initial fiducial set FAILS.")
+        printer.warning("Complete initial fiducial set FAILS. Try increasing candidate_fid_counts from 2 to something higher.")
         printer.warning("Aborting search.")
         return None, None
 

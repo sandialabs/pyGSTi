@@ -140,8 +140,7 @@ class CircuitPlaquette(_NicelySerializable):
             Dictates how to combine the `elementvec` components corresponding to a single
             plaquette entry (circuit).  If "sum", the returned array contains summed
             values.  If a format string, e.g. `"%.2f"`, then the so-formatted components
-            are joined together with separating commas, and the resulting array contains
-            string (object-type) entries.
+            are joined, and the resulting array contains string (object-type) entries.
 
         Returns
         -------
@@ -155,10 +154,36 @@ class CircuitPlaquette(_NicelySerializable):
             fmt = mergeop
             ret = _np.nan * _np.ones((self.num_rows, self.num_cols), dtype=_np.object_)
             for (i, j), opstr in self.elements.items():
-                ret[i, j] = ", ".join(["NaN" if _np.isnan(x) else
+                ret[i, j] = "".join(["NaN" if _np.isnan(x) else
                                        (fmt % x) for x in elementvec[layout.indices(opstr)]])
         else:
             raise ValueError("Invalid `mergeop` arg: %s" % str(mergeop))
+        return ret
+
+
+    def elementvec_to_matrix_simple(self, elementvec):
+        """
+        Form a matrix of values corresponding to this plaquette from an element vector.
+
+        An element vector holds individual-outcome elements (e.g. the bulk probabilities
+        computed by a model).
+
+        Parameters
+        ----------
+        elementvec : numpy array
+            An array containting the values to use when constructing a
+            matrix of values for this plaquette.  This array may contain more
+            values than are needed by this plaquette.  Indices into this array
+            are given by `elindices_lookup`.
+
+        Returns
+        -------
+        numpy array
+        """
+        ret = _np.nan * _np.ones((self.num_rows, self.num_cols), 'd')
+        for (i, j), opstr in self.elements.items():
+            ret[i, j] = elementvec[opstr]
+        
         return ret
 
     def process_circuits(self, processor_fn, updated_aliases=None):

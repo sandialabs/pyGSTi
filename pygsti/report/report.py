@@ -93,7 +93,7 @@ class Report:
     def write_html(self, path, auto_open=False, link_to=None,
                    connected=False, build_options=None, brevity=0,
                    precision=None, resizable=True, autosize='initial',
-                   single_file=False, verbosity=0):
+                   single_file=False, verbosity=0, low_counts=False):
         """
         Write this report to the disk as a collection of HTML documents.
 
@@ -159,6 +159,9 @@ class Report:
 
         verbosity : int, optional
             Amount of detail to print to stdout.
+
+        low_counts: bool, optional 
+            Whether to correct for low count pathologies. 
         """
 
         build_options = build_options or {}

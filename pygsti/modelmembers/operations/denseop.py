@@ -227,7 +227,7 @@ class DenseOperatorInterface(object):
 
     def __str__(self):
         s = "%s with shape %s\n" % (self.__class__.__name__, str(self._ptr.shape))
-        s += _mt.mx_to_string(self._ptr, width=4, prec=2)
+        s += _mt.mx_to_string(self._ptr, width=6, prec=3)
         return s
 
     #Mimic array behavior

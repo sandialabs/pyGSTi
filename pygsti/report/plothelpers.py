@@ -163,8 +163,16 @@ def _compute_sub_mxs(gss, model, sub_mx_creation_fn, dataset=None, sub_mx_creati
 #@smart_cached
 def _compute_sub_mxs_circuit_list(circuit_lists, model, sub_mx_creation_fn, dataset=None, sub_mx_creation_fn_extra_arg=None):
     subMxs = [sub_mx_creation_fn(circuit_list, sub_mx_creation_fn_extra_arg) for circuit_list in circuit_lists]
-
     return subMxs
+
+
+def _compute_sub_dofs(gss, model, sub_mx_creation_fn, dataset):
+    circ_dof_dict = dataset.degrees_of_freedom(method = "from model", model=model, per_circuit=True)
+    max_dof = circ_dof_dict[max(circ_dof_dict)]
+    subdofs = [[sub_mx_creation_fn(gss.plaquette(x, y, True), x, y, circ_dof_dict)
+               for x in gss.used_xs] for y in gss.used_ys]
+    return max_dof, subdofs
+
 
 @smart_cached
 def dscompare_llr_matrices(gsplaq, dscomparator):
@@ -280,7 +288,8 @@ def drift_maxtvd_matrices(gsplaq, drifttuple):
     return ret
 
 
-def rated_n_sigma(dataset, model, circuits, objfn_builder, np=None, wildcard=None, return_all=False, comm=None):
+def rated_n_sigma(dataset, model, circuits, objfn_builder, np=None, wildcard=None, return_all=False, comm=None,
+                  mdc_store=None):
     """
     Computes the number of standard deviations of model violation between `model` and `data`.
 
@@ -322,6 +331,11 @@ def rated_n_sigma(dataset, model, circuits, objfn_builder, np=None, wildcard=Non
         When not None, an MPI communicator for distributing the computation
         across multiple processors.
 
+    mdc_store : ModelDatasetCircuitStore, optional (default None)
+        Optional argument to pass in pre-computed ModelDatasetCircuitStore
+        object to speed up the construction of the objective function
+        for evaluating model violation.
+
     Returns
     -------
     Nsig : float
@@ -342,7 +356,10 @@ def rated_n_sigma(dataset, model, circuits, objfn_builder, np=None, wildcard=Non
     if isinstance(objfn_builder, str):
         objfn_builder = _objfns.ObjectiveFunctionBuilder.create_from(objfn_builder)
 
-    objfn = objfn_builder.build(model, dataset, circuits, {'comm': comm})
+    if mdc_store is not None:
+        objfn = objfn_builder.build_from_store(mdc_store)
+    else:
+        objfn = objfn_builder.build(model, dataset, circuits, {'comm': comm})
     if wildcard:
         objfn.terms()  # objfn used within wildcard objective fn must be pre-evaluated
         objfn = _objfns.LogLWildcardFunction(objfn, model.to_vector(), wildcard)
@@ -352,7 +369,7 @@ def rated_n_sigma(dataset, model, circuits, objfn_builder, np=None, wildcard=Non
     ds_gstrs = _tools.apply_aliases_to_circuits(circuits, aliases)
     np = model.num_modeltest_params
 
-    Ns = dataset.degrees_of_freedom(ds_gstrs)  # number of independent parameters in dataset
+    Ns = dataset.degrees_of_freedom(ds_gstrs, method="from model", model=model)  # number of independent parameters in dataset
     k = max(Ns - np, 1)  # expected chi^2 or 2*(logL_ub-logl) mean
     Nsig = (fitqty - k) / _np.sqrt(2 * k)
     if Ns <= np: _warnings.warn("Max-model params (%d) <= model params (%d)!  Using k == 1." % (Ns, np))

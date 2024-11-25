@@ -174,7 +174,13 @@ class TPInstrument(_mm.ModelMember, _collections.OrderedDict):
         lbl_member_pairs = [(lbl, serial_memo[subm_serial_id])
                             for lbl, subm_serial_id in zip(mm_dict['member_labels'], mm_dict['submembers'])]
         MT_member = next(filter(lambda pair: pair[1].index == len(lbl_member_pairs) - 1, lbl_member_pairs))
-        param_ops = MT_member.submembers()  # the final (TP) member has all the param_ops as its submembers
+        if type(MT_member) is tuple:
+            param_ops = []
+            for lbl in lbl_member_pairs:
+                param_ops += [lbl[1]]
+        else: 
+            param_ops = MT_member.submembers()  # the final (TP) member has all the param_ops as its submembers
+         
 
         ret = TPInstrument.__new__(TPInstrument)
         ret.param_ops = param_ops
@@ -417,5 +423,5 @@ class TPInstrument(_mm.ModelMember, _collections.OrderedDict):
     def __str__(self):
         s = "TPInstrument with elements:\n"
         for lbl, element in self.items():
-            s += "%s:\n%s\n" % (lbl, _mt.mx_to_string(element.to_dense(), width=4, prec=2))
+            s += "%s:\n%s\n" % (lbl, _mt.mx_to_string(element.to_dense(), width=6, prec=3))
         return s

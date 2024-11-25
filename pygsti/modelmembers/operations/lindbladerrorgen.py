@@ -226,10 +226,61 @@ class LindbladErrorgen(_LinearOperator):
     def from_error_generator(cls, errgen_or_dim, parameterization="CPTP", lindblad_basis='PP', mx_basis='pp',
                              truncate=True, evotype="default", state_space=None):
         """
-        TODO: docstring - take from now-private version below Note: errogen_or_dim can be an integer => zero errgen
+        Create a Lindblad-form error generator from an error generator matrix and a basis.
+
+        The basis specifies how to decompose (project) the error generator.
+
+        Parameters
+        ----------
+        errgen_or_dim : numpy array or SciPy sparse matrix or int
+            a square 2D array that gives the full error generator. The shape of
+            this array sets the dimension of the operator. The projections of
+            this quantity onto the `ham_basis` and `nonham_basis` are closely
+            related to the parameters of the error generator (they may not be
+            exactly equal if, e.g `cptp=True`). If an integer is passed in
+            that value is interpretted as the dimension of the error generator
+            and an all zeros array with that dimension is used for initialization.
+
+        parameterization : {"GLND", "CPTPLND", ...}
+            Describes how the Lindblad coefficients/projections relate to the
+            operation's parameter values. See `cast` methof of `LindbladParameterization`
+            For complete list of allowed values. Commonly used values include:
+            - `"GLND"` (coeffs are independent unconstrained parameters)
+            - `"CPTPLND"` (independent parameters but constrained so map is CPTP)
+
+        mx_basis : {'std', 'gm', 'pp', 'qt'} or Basis object
+            The source and destination basis, respectively.  Allowed
+            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+            and Qutrit (qt) (or a custom basis object).
+
+        truncate : bool, optional
+            Whether to truncate the projections onto the Lindblad terms in
+            order to meet constraints (e.g. to preserve CPTP) when necessary.
+            If False, then an error is thrown when the given `errgen` cannot
+            be realized by the specified set of Lindblad projections.
+
+        evotype : {"densitymx","svterm","cterm"}
+            The evolution type of the error generator being constructed.
+            `"densitymx"` means usual Lioville density-matrix-vector propagation
+            via matrix-vector products.  `"svterm"` denotes state-vector term-
+            based evolution (action of operation is obtained by evaluating the rank-1
+            terms up to some order).  `"cterm"` is similar but uses Clifford operation
+            action on stabilizer states.
+
+        state_space : StateSpace, optional (default None)
+            StateSpace object to use in construction of this LindbladErrorgen.
+            If None we use the function `pygsti.baseobjs.statespace.default_space_for_dim`
+            to infer the correct state space from the dimensions of the passed in
+            error generator.
+
+        Returns
+        -------
+        LindbladErrorgen
         """
-        errgen = _np.zeros((errgen_or_dim, errgen_or_dim), 'd') \
-            if isinstance(errgen_or_dim, (int, _np.int64)) else errgen_or_dim
+        if isinstance(errgen_or_dim, (int, _np.int64)):
+            errgen = _np.zeros((errgen_or_dim, errgen_or_dim), 'd')
+        else:
+            errgen =  errgen_or_dim
         return cls._from_error_generator(errgen, parameterization, lindblad_basis,
                                          mx_basis, truncate, evotype, state_space)
 
@@ -264,29 +315,12 @@ class LindbladErrorgen(_LinearOperator):
             related to the parameters of the error generator (they may not be
             exactly equal if, e.g `cptp=True`).
 
-        ham_basis: {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
-            The basis is used to construct the Hamiltonian-type lindblad error
-            Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
-            and Qutrit (qt), list of numpy arrays, or a custom basis object.
-
-        nonham_basis: {'std', 'gm', 'pp', 'qt'}, list of matrices, or Basis object
-            The basis is used to construct the non-Hamiltonian-type lindblad error
-            Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
-            and Qutrit (qt), list of numpy arrays, or a custom basis object.
-
-        param_mode : {"unconstrained", "cptp", "depol", "reldepol"}
+        parameterization : {"GLND", "CPTPLND"}
             Describes how the Lindblad coefficients/projections relate to the
-            operation's parameter values.  Allowed values are:
-            `"unconstrained"` (coeffs are independent unconstrained parameters),
-            `"cptp"` (independent parameters but constrained so map is CPTP),
-            `"reldepol"` (all non-Ham. diagonal coeffs take the *same* value),
-            `"depol"` (same as `"reldepol"` but coeffs must be *positive*)
-
-        nonham_mode : {"diagonal", "diag_affine", "all"}
-            Which non-Hamiltonian Lindblad projections are potentially non-zero.
-            Allowed values are: `"diagonal"` (only the diagonal Lind. coeffs.),
-            `"diag_affine"` (diagonal coefficients + affine projections), and
-            `"all"` (the entire matrix of coefficients is allowed).
+            operation's parameter values. See `cast` methof of `LindbladParameterization`
+            For complete list of allowed values. Commonly used values include:
+            - `"GLND"` (coeffs are independent unconstrained parameters)
+            - `"CPTPLND"` (independent parameters but constrained so map is CPTP)
 
         mx_basis : {'std', 'gm', 'pp', 'qt'} or Basis object
             The source and destination basis, respectively.  Allowed
@@ -307,7 +341,11 @@ class LindbladErrorgen(_LinearOperator):
             terms up to some order).  `"cterm"` is similar but uses Clifford operation
             action on stabilizer states.
 
-        state_space : TODO docstring
+        state_space : StateSpace, optional (default None)
+            StateSpace object to use in construction of this LindbladErrorgen.
+            If None we use the function `pygsti.baseobjs.statespace.default_space_for_dim`
+            to infer the correct state space from the dimensions of the passed in
+            error generator.
 
         Returns
         -------
@@ -1583,12 +1621,6 @@ class LindbladParameterization(_NicelySerializable):
         self.param_modes = tuple(param_modes)
         self.abbrev = abbrev
         self.meta = meta
-
-        #REMOVE
-        #self.nonham_block_type = nonham_block_type  #nonham_mode
-        #self.nonham_param_mode = nonham_param_mode  #param_mode
-        #self.include_ham_block = include_ham_block #ham_params_allowed = ham_params_allowed
-        #self.include_nonham_block = include_nonham_block  #nonham_params_allowed = nonham_params_allowed
 
     def __hash__(self):
         return hash((self.block_types, self.param_modes))

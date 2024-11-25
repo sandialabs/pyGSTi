@@ -134,7 +134,7 @@ class DenseStateInterface(object):
 
     def __str__(self):
         s = "%s with dimension %d\n" % (self.__class__.__name__, self.dim)
-        s += _mt.mx_to_string(self.to_dense(on_space='minimal'), width=4, prec=2)
+        s += _mt.mx_to_string(self.to_dense(on_space='minimal'), width=6, prec=3)
         return s
 
 

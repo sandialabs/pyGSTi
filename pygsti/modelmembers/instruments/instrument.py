@@ -254,7 +254,7 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
         for operation, factor_local_inds in zip(self.values(), self._submember_rpindices):
             v[factor_local_inds] = operation.to_vector()
         return v
-
+    
     def from_vector(self, v, close=False, dirty_value=True):
         """
         Initialize the Instrument using a vector of its parameters.
@@ -391,5 +391,5 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
     def __str__(self):
         s = "Instrument with elements:\n"
         for lbl, element in self.items():
-            s += "%s:\n%s\n" % (lbl, _mt.mx_to_string(element.to_dense(), width=4, prec=2))
+            s += "%s:\n%s\n" % (lbl, _mt.mx_to_string(element.to_dense(), width=6, prec=3))
         return s

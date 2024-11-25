@@ -1,5 +1,5 @@
 ####### Requirements #######
 numpy
 scipy
-plotly
+plotly >= 3
 pandas

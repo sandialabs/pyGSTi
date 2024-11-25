@@ -13,6 +13,7 @@ Sub-package holding model instrument objects.
 from .instrument import Instrument
 from .tpinstrument import TPInstrument
 from .tpinstrumentop import TPInstrumentOp
+from .embeddedinst import EmbeddedInst
 
 from .composedinstrument import ComposedInstrument
 from .composedinstrumentop import ComposedInstrumentOp

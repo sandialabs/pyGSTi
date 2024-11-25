@@ -163,7 +163,7 @@ def opfn_factory(fn):
     """
     Creates a class that evaluates `fn(gate,basis,...)`.
 
-    Hhere `gate` is a single operation matrix, `basis` describes what basis it's
+    Here `gate` is a single operation matrix, `basis` describes what basis it's
     in, and `...` are additional arguments (see below).
 
     Parameters
@@ -181,18 +181,26 @@ def opfn_factory(fn):
     class GSFTemp(ModelFunction):
         """ ModelFunction class created by opfn_factory """
 
-        def __init__(self, model, gl, *args, **kwargs):
+        def __init__(self, model, gl, comp_lbl=None, *args, **kwargs):
             """ Creates a new ModelFunction dependent on a single gate"""
             self.gl = gl
+            self.comp_lbl = comp_lbl
             self.args = args
             self.kwargs = kwargs
-            ModelFunction.__init__(self, model, [("gate", gl)])
+            if self.comp_lbl is None: 
+                ModelFunction.__init__(self, model, [("gate", gl)])
+            else: 
+                ModelFunction.__init__(self, model, [("gate", gl, comp_lbl)])
 
         def evaluate(self, model):
             """ Evaluate this gate-set-function at `model`."""
-            return fn(model.operations[self.gl].to_dense(on_space='HilbertSchmidt'), model.basis,
+            if self.comp_lbl is None: 
+                ev_res = fn(model.operations[self.gl].to_dense(on_space='HilbertSchmidt'), model.basis,
                       *self.args, **self.kwargs)
-
+            else: 
+                ev_res = fn(model.instruments[self.gl][self.comp_lbl].to_dense(on_space='HilbertSchmidt'), model.basis,
+                      *self.args, **self.kwargs)
+            return ev_res 
     GSFTemp.__name__ = fn.__name__ + str("_class")
     return GSFTemp
 
