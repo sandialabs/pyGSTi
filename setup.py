@@ -46,6 +46,11 @@ extras = {
     'report_pickling': ['pandas'],
     'report_pdf_figures': ['matplotlib'],
     'html_reports': ['jinja2', 'MarkupSafe'],
+    'reports':[
+        'pygsti[report_pickling]',
+        'pygsti[report_pdf_figures]',
+        'pygsti[html_reports]'
+    ],
     'notebooks': [
         'ipython',
         'notebook',
@@ -59,31 +64,36 @@ extras = {
         'flake8'
     ],
     'interpygate': ['csaps'],
+    'serialization': ['bson'],
+    'ibmq': [
+        'qiskit>1',
+        'qiskit-ibm-runtime>=0.17.1',
+        'tqdm>=4.42.0',
+        'dill',
+        'pathos'
+    ],
     'testing': [
         'pytest',
         'pytest-xdist',
         'pytest-cov',
+        'cython', # Don't call this pygsti[extensions] for testing_no_cython logic below
+        'mpi4py', # Don't call this pygsti[multiprocessor] for no_mpi logic below
         'nbval',
-        'csaps',
-        'cvxopt',
-        'cvxpy',
-        'cython',
-        'matplotlib',
-        'mpi4py',
-        'msgpack',
         'packaging',
-        'pandas',
         'psutil',
         'zmq',
-        'jinja2',
         'seaborn',
         'scipy',
         'ply',
         'cirq-core',
-        'notebook',
-        'ipython',
-        'jupyter_server',
-        'torch'
+        'pygsti[diamond_norm]',
+        'pygsti[ibmq]',
+        'pygsti[interpygate]',
+        'pygsti[msgpack]',
+        'pygsti[notebooks]',
+        'pygsti[pytorch]',
+        'pygsti[reports]',
+        'pygsti[serialization]'
     ]
 }
 
@@ -277,7 +287,7 @@ def setup_with_extensions(extensions=None):
             'pandas'
         ],
         extras_require=extras,
-        python_requires='>=3.5',
+        python_requires='>=3.8',
         platforms=["any"],
         url='http://www.pygsti.info',
         download_url='https://github.com/pyGSTio/pyGSTi/tarball/master',
