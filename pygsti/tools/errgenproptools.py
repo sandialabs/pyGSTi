@@ -91,6 +91,9 @@ def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1, truncation_th
     
     errgen_layer_2 : list of dicts
         See errgen_layer_1.
+
+    bch_order : int, optional (default 1)
+        Order of the BCH approximation to use. Currently support for up to fifth order.
     
     truncation_threshold : float, optional (default 1e-14)
         Threshold for which any error generators with magnitudes below this value
@@ -238,9 +241,187 @@ def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1, truncation_th
             #drop any terms below the truncation threshold after aggregation
             fourth_order_comm_dict = {key: val for key, val in fourth_order_comm_dict.items() if abs(val)>truncation_threshold}
             new_errorgen_layer.append(fourth_order_comm_dict)
-     
+
+        #Note for fifth order and beyond we can save a bunch of commutators
+        #by using the results of https://doi.org/10.1016/j.laa.2003.09.010
+        #Revisit this if going up to high-order ever becomes a regular computation.
+        #fifth-order BCH terms:
+        #-(1/720)*([X,F] - [Y, E]) + (1/360)*([Y,F] - [X,E]) + (1/120)*([Y,G] - [X,D])
+        # Where: E = [Y,C]; F = [X,B]; G=[X,C]
+        # B = [X,[X,Y]]; C = [Y,[X,Y]]; D = [Y,[X,[X,Y]]]
+        # B, C and D have all been previously calculated (up to the leading constant). 
+        # B is proportional to third_order_comm_dict_1, C is proportional to third_order_comm_dict_2
+        # D is proportional to fourth_order_comm_dict
+        # This gives 9 new commutators to calculate (7 if you used linearity, and even fewer would be needed
+        # using the result from the paper above, but we won't here atm).
+        elif curr_order == 4:
+            B = third_order_comm_dict_1
+            C = third_order_comm_dict_2
+            D = fourth_order_comm_dict
+            #Compute the new commutators E, F and G as defined above.
+            #Start with E:
+            commuted_errgen_list_E = []
+            for error1, error1_val in errgen_layer_2.items():
+                for error2, error2_val in C.items():
+                    #Won't add any weight adjustments at this stage, will do that for next commutator.
+                    weight = error1_val*error2_val
+                    if abs(weight) < truncation_threshold:
+                        continue
+                    commuted_errgen_sublist = error_generator_commutator(error1, error2, 
+                                                                         weight=weight, identity=identity)
+                    commuted_errgen_list_E.extend(commuted_errgen_sublist)
+            #Next F:
+            commuted_errgen_list_F = []
+            for error1, error1_val in errgen_layer_1.items():
+                for error2, error2_val in B.items():
+                    #Won't add any weight adjustments at this stage, will do that for next commutator.
+                    weight = error1_val*error2_val
+                    if abs(weight) < truncation_threshold:
+                        continue
+                    commuted_errgen_sublist = error_generator_commutator(error1, error2, 
+                                                                         weight=weight, identity=identity)
+                    commuted_errgen_list_F.extend(commuted_errgen_sublist)
+            #Then G:
+            commuted_errgen_list_G = []
+            for error1, error1_val in errgen_layer_1.items():
+                for error2, error2_val in C.items():
+                    #Won't add any weight adjustments at this stage, will do that for next commutator.
+                    weight = error1_val*error2_val
+                    if abs(weight) < truncation_threshold:
+                        continue
+                    commuted_errgen_sublist = error_generator_commutator(error1, error2, 
+                                                                         weight=weight, identity=identity)
+                    commuted_errgen_list_G.extend(commuted_errgen_sublist)
+
+            #Turn the commutator lists into dictionaries:
+            #loop through all of the elements of commuted_errorgen_list and instantiate a dictionary with the requisite keys.
+            E_comm_dict = {error_tuple[0]:0 for error_tuple in commuted_errgen_list_E}
+            F_comm_dict = {error_tuple[0]:0 for error_tuple in commuted_errgen_list_F}
+            G_comm_dict = {error_tuple[0]:0 for error_tuple in commuted_errgen_list_G}
+            
+            #Add all of these error generators to the working dictionary of updated error generators and weights.
+            #There may be duplicates, which should be summed together.
+            for error_tuple in commuted_errgen_list_E:
+                E_comm_dict[error_tuple[0]] += error_tuple[1]
+            for error_tuple in commuted_errgen_list_F:
+                F_comm_dict[error_tuple[0]] += error_tuple[1]
+            for error_tuple in commuted_errgen_list_G:
+                G_comm_dict[error_tuple[0]] += error_tuple[1]
+
+            #drop any terms below the truncation threshold after aggregation
+            E_comm_dict = {key: val for key, val in E_comm_dict.items() if abs(val)>truncation_threshold}
+            F_comm_dict = {key: val for key, val in F_comm_dict.items() if abs(val)>truncation_threshold}
+            G_comm_dict = {key: val for key, val in G_comm_dict.items() if abs(val)>truncation_threshold}
+            #-(1/720)*([X,F] - [Y, E]) + (1/360)*([Y,F] - [X,E]) + (1/120)*([Y,G] - [X,D])
+            #Now do the next round of 6 commutators: [X,F], [Y,E], [Y,F], [X,E], [Y,G] and [X,D]
+            #We also need the following weight factors. F has a leading factor of (1/12)
+            #E and G have a leading factor of (-1/12). D has a leading factor of (-1/24) 
+            #This gives the following additional weight multipliers:
+            #[X,F] = (-1/60); [Y,E] = (1/60); [Y,F]= (1/30); [X,E]= (1/30); [Y,G] = (-1/10); [X,D] = (1/5)
+
+            #[X,F]:
+            commuted_errgen_list_XF = []
+            for error1, error1_val in errgen_layer_1.items():
+                for error2, error2_val in F_comm_dict.items():
+                    #Won't add any weight adjustments at this stage, will do that for next commutator.
+                    weight = -(1/60)*error1_val*error2_val
+                    if abs(weight) < truncation_threshold:
+                        continue
+                    commuted_errgen_sublist = error_generator_commutator(error1, error2, 
+                                                                         weight=weight, identity=identity)
+                    commuted_errgen_list_XF.extend(commuted_errgen_sublist)
+            #[Y,E]:
+            commuted_errgen_list_YE = []
+            for error1, error1_val in errgen_layer_2.items():
+                for error2, error2_val in E_comm_dict.items():
+                    #Won't add any weight adjustments at this stage, will do that for next commutator.
+                    weight = (1/60)*error1_val*error2_val
+                    if abs(weight) < truncation_threshold:
+                        continue
+                    commuted_errgen_sublist = error_generator_commutator(error1, error2, 
+                                                                         weight=weight, identity=identity)
+                    commuted_errgen_list_YE.extend(commuted_errgen_sublist)
+            #[Y,F]:
+            commuted_errgen_list_YF = []
+            for error1, error1_val in errgen_layer_2.items():
+                for error2, error2_val in F_comm_dict.items():
+                    #Won't add any weight adjustments at this stage, will do that for next commutator.
+                    weight = (1/30)*error1_val*error2_val
+                    if abs(weight) < truncation_threshold:
+                        continue
+                    commuted_errgen_sublist = error_generator_commutator(error1, error2, 
+                                                                         weight=weight, identity=identity)
+                    commuted_errgen_list_YF.extend(commuted_errgen_sublist)
+            #[X,E]:
+            commuted_errgen_list_XE = []
+            for error1, error1_val in errgen_layer_1.items():
+                for error2, error2_val in E_comm_dict.items():
+                    #Won't add any weight adjustments at this stage, will do that for next commutator.
+                    weight = (1/30)*error1_val*error2_val
+                    if abs(weight) < truncation_threshold:
+                        continue
+                    commuted_errgen_sublist = error_generator_commutator(error1, error2, 
+                                                                         weight=weight, identity=identity)
+                    commuted_errgen_list_XE.extend(commuted_errgen_sublist)
+            #[Y,G]:
+            commuted_errgen_list_YG = []
+            for error1, error1_val in errgen_layer_2.items():
+                for error2, error2_val in G_comm_dict.items():
+                    #Won't add any weight adjustments at this stage, will do that for next commutator.
+                    weight = -.1*error1_val*error2_val
+                    if abs(weight) < truncation_threshold:
+                        continue
+                    commuted_errgen_sublist = error_generator_commutator(error1, error2, 
+                                                                         weight=weight, identity=identity)
+                    commuted_errgen_list_YG.extend(commuted_errgen_sublist)
+            #[X,D]:
+            commuted_errgen_list_XD = []
+            for error1, error1_val in errgen_layer_1.items():
+                for error2, error2_val in D.items():
+                    #Won't add any weight adjustments at this stage, will do that for next commutator.
+                    weight = .2*error1_val*error2_val
+                    if abs(weight) < truncation_threshold:
+                        continue
+                    commuted_errgen_sublist = error_generator_commutator(error1, error2, 
+                                                                         weight=weight, identity=identity)
+                    commuted_errgen_list_XD.extend(commuted_errgen_sublist)
+
+            #Turn the commutator lists into dictionaries:
+            #loop through all of the elements of commuted_errorgen_list and instantiate a dictionary with the requisite keys.
+            XF_comm_dict = {error_tuple[0]:0 for error_tuple in commuted_errgen_list_XF}
+            YE_comm_dict = {error_tuple[0]:0 for error_tuple in commuted_errgen_list_YE}
+            YF_comm_dict = {error_tuple[0]:0 for error_tuple in commuted_errgen_list_YF}
+            XE_comm_dict = {error_tuple[0]:0 for error_tuple in commuted_errgen_list_XE}
+            YG_comm_dict = {error_tuple[0]:0 for error_tuple in commuted_errgen_list_YG}
+            XD_comm_dict = {error_tuple[0]:0 for error_tuple in commuted_errgen_list_XD}
+
+            #Add all of these error generators to the working dictionary of updated error generators and weights.
+            #There may be duplicates, which should be summed together.
+            for error_tuple in commuted_errgen_list_XF:
+                XF_comm_dict[error_tuple[0]] += error_tuple[1]
+            for error_tuple in commuted_errgen_list_YE:
+                YE_comm_dict[error_tuple[0]] += error_tuple[1]
+            for error_tuple in commuted_errgen_list_YF:
+                YF_comm_dict[error_tuple[0]] += error_tuple[1]
+            for error_tuple in commuted_errgen_list_XE:
+                XE_comm_dict[error_tuple[0]] += error_tuple[1]
+            for error_tuple in commuted_errgen_list_YG:
+                YG_comm_dict[error_tuple[0]] += error_tuple[1]
+            for error_tuple in commuted_errgen_list_XD:
+                XD_comm_dict[error_tuple[0]] += error_tuple[1]
+
+            #finally sum these six dictionaries, keeping only terms which are greater than the threshold.
+            fifth_order_comm_dict = dict()
+            fifth_order_dicts = [XF_comm_dict, YE_comm_dict, YF_comm_dict, XE_comm_dict, YG_comm_dict, XD_comm_dict]
+            current_combined_coeff_lbls = {key: None for key in chain(*fifth_order_dicts)}
+            for lbl in current_combined_coeff_lbls:
+                fifth_order_rate = sum([comm_dict.get(lbl, 0) for comm_dict in fifth_order_dicts])
+                if abs(fifth_order_rate) > truncation_threshold:
+                    fifth_order_comm_dict[lbl] = fifth_order_rate
+            new_errorgen_layer.append(fifth_order_comm_dict)
+
         else:
-            raise NotImplementedError("Higher orders beyond fourth order are not implemented yet.")
+            raise NotImplementedError("Higher orders beyond fifth order are not implemented yet.")
 
     #Finally accumulate all of the dictionaries in new_errorgen_layer into a single one, summing overlapping terms.   
     errorgen_labels_by_order = [{key: None for key in order_dict} for order_dict in new_errorgen_layer]
