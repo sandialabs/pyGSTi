@@ -401,7 +401,21 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
         raise ValueError("'{}' is not a valid algorithm "
                          "identifier.".format(algorithm))
 
-    return germList
+    #force the line labels on each circuit to match the state space labels for the target model.
+    #this is suboptimal for many-qubit models, so will probably want to revisit this. #TODO
+    finalGermList = []
+    for ckt in germList:
+        if ckt._static:
+            new_ckt = ckt.copy(editable=True)
+            new_ckt.line_labels = target_model.state_space.state_space_labels
+            print(new_ckt.line_labels)
+            new_ckt.done_editing()
+            finalGermList.append(new_ckt)
+        else:
+            ckt.line_labels = target_model.state_space.state_space_labels
+            finalGermList.append(ckt)
+
+    return finalGermList
 
 
 def compute_germ_set_score(germs, target_model=None, neighborhood=None,
@@ -2922,7 +2936,7 @@ def drop_random_germs(candidate_list, rand_frac, target_model, keep_bare=True, s
 
 
 #Future Performance Enhancements:
-#Inventory of possible future perofrmance enhancements.
+#Inventory of possible future performance enhancements.
 #   1. At the start of each iteration we compute a so-called 'update cache'. This is really just the eigenvalues and eigenvectors
 #      for the jacobian of our current candidate set as well as the projector onto the orthogonal complement of U's column space.
 #      This is calculated in the standard way using eigh. We could in principle use the second half of the Matthew Brand result

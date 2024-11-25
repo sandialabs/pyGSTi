@@ -266,27 +266,28 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         assert len(self.qjobs) == len(self.job_ids), \
             "Mismatch between jobs and job ids! If loading from file, use the regen_jobs=True option in from_dir()."
         
-        def reverse_dict_key_bits(counts_dict):
-            new_dict = {}
-            for key in counts_dict.keys():
-                new_dict[key[::-1]] = counts_dict[key]
-            return new_dict
-
-        # NOTE: This is probably duplicative of some other code in pyGSTi
-        def partial_trace(ordered_target_indices, input_dict):
-            output_dict = {}
-            for bitstring in input_dict.keys():
-                new_string = ''
+        def to_labeled_counts(input_dict, ordered_target_indices, num_qubits_in_pspec): 
+            """
+            Implements handling for mid-circuit measurement outcomes.  
+            """
+            outcome_labels = []
+            counts_data = []
+            for bitstring, count in input_dict.items():
+                new_label = []
+                term_string = ''
+                term_bits = bitstring[:num_qubits_in_pspec][::-1]
+                mid_bits = bitstring[num_qubits_in_pspec:][::-1]
                 for index in ordered_target_indices:
-                    new_string += bitstring[index]
-                try:
-                    output_dict[new_string] += input_dict[bitstring]
-                except:
-                    output_dict[new_string] = input_dict[bitstring]
-            return output_dict
+                    term_string += term_bits[index]
+                for bit in mid_bits:
+                    new_label.append('p'+bit)
+                new_label.append(term_string)
+                outcome_labels.append(tuple(new_label))
+                counts_data.append(count)
+            return outcome_labels, counts_data
 
-        if len(self.batch_results):
-            print(f'Already retrieved results of {len(self.batch_results)}/{len(self.qiskit_isa_circuit_batches)} circuit batches')
+        #if len(self.batch_results):
+            #print(f'Already retrieved results of {len(self.batch_results)}/{len(self.qiskit_isa_circuit_batches)} circuit batches')
 
         #get results from backend jobs and add to dict
         ds = _data.DataSet()
@@ -299,10 +300,14 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
             if not self.disable_checkpointing:
                 self._write_checkpoint()
 
+            num_qubits_in_pspec = self.processor_spec.num_qubits
             for i, circ in enumerate(self.pygsti_circuit_batches[exp_idx]):
-                ordered_target_indices = [self.processor_spec.qubit_labels.index(q) for q in circ.line_labels]
-                counts_data = partial_trace(ordered_target_indices, reverse_dict_key_bits(batch_result[i].data.cr.get_counts()))
-                ds.add_count_dict(circ, counts_data)
+                ordered_target_indices = [self.processor_spec.qubit_labels.index(q) for q in circ.line_labels] 
+                labeled_counts = to_labeled_counts(batch_result[i].data.cr.get_counts(), ordered_target_indices, num_qubits_in_pspec)
+                outcome_labels = labeled_counts[0]
+                counts_data = labeled_counts[1]
+                ds.add_count_list(circ, outcome_labels, counts_data)
+
 
         self.data = _ProtocolData(self.edesign, ds)
 
