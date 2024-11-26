@@ -709,25 +709,35 @@ class Analysis:
         return ps, sigmas
 
     @staticmethod
-    def fit_and_plot_with_rates(x, ys, ax : plt_axes.Axes, fitlog, F=None):
+    def fit_and_plot_with_rates_stderrors(x, ys, ax : plt_axes.Axes, fitlog, F=None):
         if F is None:
             F = get_F()
-        rates, ps, sigmas = Analysis.fit_and_get_rates(x, ys, fitlog)
+        rates, ps, ps_sigmas = Analysis.fit_and_get_rates(x, ys, fitlog)
         f_mu = ps[:,1]
-        f_sig = sigmas[:,1]
-        rates = la.solve(F, f_mu)
+        f_sig = ps_sigmas[:,1]
+        invF = la.inv(F)  # doing this properly by factoring F isn't worth it.
+        rates = invF @ f_mu
+        rates_sig = np.sqrt(np.diag( invF @ np.diag(f_sig**2) @ invF.T ))
         default_colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
         model = Analysis.exp_decay_logvar if fitlog else Analysis.exp_decay
         for i,r in enumerate(rates):
             y = ys[i,:]
-            textstr = f'{i}: f = {f_mu[i]:.3f}±({f_sig[i]:.3f}) | rate = {r:.3f}'
+            if fitlog:
+                textstr = f'{i}: f = {f_mu[i]:.3f}±({f_sig[i]:.3f}) | rate = {r:.3f}'
+            else:
+                textstr = f'{i}: f = {f_mu[i]:.3f} | rate = {r:.3f}±({rates_sig[i]:.4f})'
             ax.scatter(x, y, label=textstr, color=default_colors[i % len(default_colors)], s=20)
             ax.plot(x, model(x, ps[i,0], ps[i,1]), color=default_colors[i % len(default_colors)], linestyle='-')
         ax.legend()
+        return rates, rates_sig, ps, ps_sigmas
+    
+    @staticmethod
+    def fit_and_plot_with_rates(x, ys, ax : plt_axes.Axes, fitlog, F=None):
+        rates, _, ps, sigmas = Analysis.fit_and_plot_with_rates_stderrors(x, ys, ax, fitlog, F)
         return rates, ps, sigmas
 
     @staticmethod
-    def synspam_rb_fig(_rbm : Union[SU2RBSim, SU2CharacterRBSim], fitlog=False, figax=None):
+    def synspam_rb_fig(_rbm : Union[SU2RBSim, SU2CharacterRBSim], fitlog=False, figax=None, rate_stderrs=False):
         sps = np.inf
         if type(_rbm) == SU2RBSim:
             pkm, _ = SU2RBSim.synspam_transform(_rbm.probs, shots_per_circuit=sps)
@@ -751,7 +761,11 @@ class Analysis:
             showfig = False
             names = _rbm.noise_channel_parameter_names
             axs.set_title(f'{names[0]} = {_rbm._noise_channel_info[1][0]}, {names[1]} = {_rbm._noise_channel_info[1][1]} ')
-        out = Analysis.fit_and_plot_with_rates(_rbm.design.lengths + 1, pkm, axs, fitlog)
+        if not rate_stderrs:
+            out = Analysis.fit_and_plot_with_rates(_rbm.design.lengths + 1, pkm, axs, fitlog)
+        else:
+            assert not fitlog
+            out = Analysis.fit_and_plot_with_rates_stderrors(_rbm.design.lengths + 1, pkm, axs, fitlog)
         if showfig:
             fig.show()
         return out
