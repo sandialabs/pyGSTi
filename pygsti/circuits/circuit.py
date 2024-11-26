@@ -3773,24 +3773,26 @@ class Circuit(object):
     
     def convert_to_stim_tableau(self,gate_name_conversions=None):
         """
-        Converts this circuit to a stim tableu
+        Converts this circuit to a stim tableau
 
         Parameters
         ----------
-        gate_name_conversions : Dict
-            A map from pygsti gatenames to standard stim tableaus. If set to None a standard set of gate names is used
+        gate_name_conversions : dict, optional (default None)
+            A map from pygsti gatenames to standard stim tableaus. 
+            If None a standard set of gate names is used from 
+            `pygsti.tools.internalgates`
 
         Returns
         -------
-        A single stim tableu representing the entire circuit 
+        A single stim.Tableau representing the entire circuit.
         """
         layers=self.convert_to_stim_tableau_layers(gate_name_conversions)
-        tableu=layers.pop(0)
-        for layer in layers:
-            tableu=tableu*layer
-        return tableu
+        if layers:        
+            tableau=layers[0]
+            for layer in layers[1:]:
+                tableau= layer*tableau
+            return tableau
         
-    
 
     def convert_to_cirq(self,
                         qubit_conversion,
