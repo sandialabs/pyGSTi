@@ -14,6 +14,8 @@ import functools as _functools
 import itertools as _itertools
 
 import numpy as _np
+import scipy.linalg as _spl
+import scipy.optimize as _spo
 
 from .complementeffect import ComplementPOVMEffect
 from .composedeffect import ComposedPOVMEffect
@@ -334,6 +336,8 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False):
         The converted POVM vector, usually a distinct
         object from the object passed as input.
     """
+
+    ##TEST CONVERSION BETWEEN LINBLAD TYPES
     to_types = to_type if isinstance(to_type, (tuple, list)) else (to_type,)  # HACK to support multiple to_type values
     error_msgs = {}
 
@@ -375,14 +379,96 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False):
                                           for lbl, vec in povm.items()]
                         else:
                             raise RuntimeError('Evotype must be compatible with Hilbert ops to use pure effects')
-                    except Exception:  # try static mixed states next:
-                        base_items = [(lbl, convert_effect(vec, 'static', basis, idl.get(lbl, None), flatten_structure))
-                                      for lbl, vec in povm.items()]
+                    except RuntimeError:  # try static mixed states next:
+                        #if idl.get(lbl,None) is not None:
+                        
+                        base_items = []
+                        for lbl, vec in povm.items():
+                            ideal_effect = idl.get(lbl,None)
+                            if ideal_effect is not None:
+                                base_items.append((lbl, convert_effect(ideal_effect, 'static', basis, ideal_effect, flatten_structure)))
+                            else:
+                                base_items.append((lbl, convert_effect(vec, 'static', basis, idl.get(lbl, None), flatten_structure)))
                     base_povm = UnconstrainedPOVM(base_items, povm.evotype, povm.state_space)
 
                 proj_basis = 'PP' if povm.state_space.is_entirely_qubits else basis
                 errorgen = _LindbladErrorgen.from_error_generator(povm.state_space.dim, lndtype, proj_basis,
                                                                   basis, truncate=True, evotype=povm.evotype)
+                if to_type == 'GLND' and isinstance(povm, destination_types.get('full TP', NoneType)):
+                    
+                    #Collect all ideal effects
+                    base_dense_effects = []
+                    for item in base_items:
+                        dense_effect = item[1].to_dense()
+                        base_dense_effects.append(dense_effect.reshape((1,len(dense_effect))))
+
+                    dense_ideal_povm = _np.concatenate(base_dense_effects, axis=0)
+
+                    #Collect all noisy effects
+                    dense_effects = []
+                    for effect in povm.values():
+                        dense_effect = effect.to_dense()
+                        dense_effects.append(dense_effect.reshape((1,len(dense_effect))))
+
+                    dense_ideal_povm = _np.concatenate(base_dense_effects, axis=0)
+                    dense_povm = _np.concatenate(dense_effects, axis=0)
+
+                    #It is often the case that there are more error generators than physical degrees of freedom in the POVM
+                    #We define a function which finds linear comb. of errgens that span these degrees of freedom.
+                    #This has been called "the dumb gauge", and this function is meant to avoid it
+                    def calc_physical_subspace(dense_ideal_povm, epsilon = 1e-9):
+        
+                            errgen = _LindbladErrorgen.from_error_generator(4, parameterization="GLND")
+                            exp_errgen = _ExpErrorgenOp(errgen)
+                            num_qubits = povm.state_space.num_qubits
+                            num_errgens = 2**(4*num_qubits)-2**(2*num_qubits)
+                            #TODO: Maybe we can use the num of params instead of number of matrix entries, as some of them are linearly dependent.
+                            #i.e E0 completely determines E1 if those are the only two povm elements (E0 + E1 = Identity)
+                            num_entries = dense_ideal_povm.shape[0]*dense_ideal_povm.shape[1]
+                            assert num_errgens > povm.num_params, "POVM has too many elements, GLND parameterization is not possible"
+
+                            ideal_vec = _np.zeros(num_errgens)
+
+                            #Compute the jacobian with respect to the error generators. This will allow us to see which
+                            #error generators change the POVM entries
+                            J = _np.zeros((num_entries,num_errgens))
+                            
+                            for i in range(len(ideal_vec)):
+                                new_vec = ideal_vec.copy()
+                                new_vec[i] = epsilon
+                                exp_errgen.from_vector(new_vec)
+                                vectorized_povm = _np.zeros(num_entries)
+                                perturbed_povm = (dense_ideal_povm @ exp_errgen.to_dense() - dense_ideal_povm)/epsilon
+
+                                perturbed_povm_t = perturbed_povm.transpose()
+                                for j, column in enumerate(perturbed_povm_t):
+                                    vectorized_povm[j*len(perturbed_povm_t[0]):(j+1)*len(perturbed_povm_t[0])] = column
+                                
+                                J[:,i] = vectorized_povm.transpose()
+
+                            _,S,V = _np.linalg.svd(J)
+                            return V[:len(S),]
+                    
+                    phys_directions = calc_physical_subspace(dense_ideal_povm)
+
+                    #We use optimization to find the best error generator representation
+                    #we only vary physical directions, not independent error generators
+                    def _objfn(v):
+                        L_vec = _np.zeros(len(phys_directions[0]))
+                        for coeff, phys_direction in zip(v,phys_directions):
+                            L_vec += coeff * phys_direction
+                        errorgen.from_vector(L_vec)
+                        return _np.linalg.norm(dense_povm - dense_ideal_povm @ _spl.expm(errorgen.to_dense()))
+                    
+                    #def callback(x): print("callbk: ",_np.linalg.norm(x),_objfn(x))  # REMOVE
+                    soln = _spo.minimize(_objfn, _np.zeros(len(phys_directions), 'd'), method="Nelder-Mead", options={},
+                                            tol=1e-13)  # , callback=callback)
+                    #print("DEBUG: opt done: ",soln.success, soln.fun, soln.x)  # REMOVE
+                    if not soln.success and soln.fun > 1e-6:  # not "or" because success is often not set correctly
+                        raise ValueError("Failed to find an errorgen such that <ideal|exp(errorgen) = <effect|")
+                    errgen_vec = _np.linalg.pinv(phys_directions)  @ soln.x
+                    errorgen.from_vector(errgen_vec)
+                
                 EffectiveExpErrorgen = _IdentityPlusErrorgenOp if lndtype.meta == '1+' else _ExpErrorgenOp
                 return ComposedPOVM(EffectiveExpErrorgen(errorgen), base_povm, mx_basis=basis)
 
