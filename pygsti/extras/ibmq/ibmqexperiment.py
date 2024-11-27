@@ -286,8 +286,8 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
                 counts_data.append(count)
             return outcome_labels, counts_data
 
-        #if len(self.batch_results):
-            #print(f'Already retrieved results of {len(self.batch_results)}/{len(self.qiskit_isa_circuit_batches)} circuit batches')
+        if len(self.batch_results):
+            print(f'Already retrieved results of {len(self.batch_results)}/{len(self.qiskit_isa_circuit_batches)} circuit batches')
 
         #get results from backend jobs and add to dict
         ds = _data.DataSet()
