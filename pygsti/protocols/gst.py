@@ -1473,7 +1473,7 @@ class GateSetTomography(_proto.Protocol):
         ret.add_estimate(estimate, estimate_key=self.name)
 
         #Add some better handling for when gauge optimization is turned off (current code path isn't working.)
-        if not self.gaugeopt_suite.is_empty():  # maybe add flag to do this even when empty?
+        if not self.gaugeopt_suite.is_empty() or len(self.badfit_options.actions) > 0:  # maybe add flag to do this even when empty?
             ret = _add_gaugeopt_and_badfit(ret, self.name, target_model,
                                            self.gaugeopt_suite, self.unreliable_ops,
                                            self.badfit_options, self.optimizer, 
@@ -2019,7 +2019,7 @@ def _add_gaugeopt_and_badfit(results, estlbl, target_model, gaugeopt_suite,
     profiler = resource_alloc.profiler
 
     #Do final gauge optimization to *final* iteration result only
-    if gaugeopt_suite:
+    if gaugeopt_suite is not None and not gaugeopt_suite.is_empty():
         model_to_gaugeopt = results.estimates[estlbl].models['final iteration estimate']
         if gaugeopt_suite.gaugeopt_target is None:  # add a default target model to gauge opt if needed
             #TODO: maybe make these two lines into a method of GSTGaugeOptSuite for adding a target model?
@@ -2028,7 +2028,7 @@ def _add_gaugeopt_and_badfit(results, estlbl, target_model, gaugeopt_suite,
         _add_gauge_opt(results, estlbl, gaugeopt_suite,
                        model_to_gaugeopt, unreliable_ops, comm, printer - 1)
         profiler.add_time('%s: gauge optimization' % estlbl, tref); tref = _time.time()
-        
+
         _add_badfit_estimates(results, estlbl, badfit_options, optimizer, resource_alloc, printer, gaugeopt_suite= gaugeopt_suite)
         profiler.add_time('%s: add badfit estimates' % estlbl, tref); tref = _time.time()
     else:
