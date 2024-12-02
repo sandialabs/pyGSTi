@@ -405,8 +405,8 @@ class QuditProcessorSpec(ProcessorSpec):
         -------
         str or dict
         """
-        if name in self.nonstd_instruments:
-            return self.nonstd_instruments[name]
+        if tuple(name) in self.nonstd_instruments.keys():
+            return self.nonstd_instruments[tuple(name)]
         else:
             # assert(is_standard_instrument_name(name)) TODO
             return name
