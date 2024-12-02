@@ -122,7 +122,7 @@ def calculate_edesign_estimated_runtime(edesign, gate_time_dict=None, gate_time_
     return total_circ_time + total_upload_time
 
 
-def calculate_fisher_information_per_circuit(regularized_model, circuits, approx=False, verbosity=1, comm = None, mem_limit = None):
+def calculate_fisher_information_per_circuit(model, circuits, approx=False, regularization=1e-8, verbosity=1, comm=None, mem_limit=None):
     """Helper function to calculate all Fisher information terms for each circuit.
 
     This function can be used to pre-generate a cache for the
@@ -131,10 +131,8 @@ def calculate_fisher_information_per_circuit(regularized_model, circuits, approx
 
     Parameters
     ----------
-    regularized_model: OpModel
+    model: OpModel
         The model used to calculate the terms of the Fisher information matrix.
-        This model must already be "regularized" such that there are no small probabilities,
-        usually by adding a small amount of SPAM error.
 
     circuits: list
         List of circuits to compute Fisher information for.
@@ -142,7 +140,12 @@ def calculate_fisher_information_per_circuit(regularized_model, circuits, approx
     approx: bool, optional (default False)
         When set to true use the approximate fisher information where we drop the 
         hessian term. Significantly faster to compute than when including the hessian.
-        
+    
+    regularization: float, optional (default 1e-8)
+        A regularization parameter used to set a minimum probability value for
+        circuits. This is needed to avoid division by zero problems in the fisher
+        information calculation.
+
     verbosity: int, optional (default 1)
         Used to control the level of output printed by a VerbosityPrinter object.
 
@@ -163,18 +166,28 @@ def calculate_fisher_information_per_circuit(regularized_model, circuits, approx
     
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, comm)
     
-    num_params = regularized_model.num_params
-    outcomes = regularized_model.sim.probs(()).keys()
+    num_params = model.num_params
     
+    #pull out the outcomes for each circuit expanding out the instruments if needed.
+    expanded_circuit_dict_list = model.bulk_expand_instruments_and_separate_povm(circuits)
+    #data structure is awkward so massage this into a nicer format for our current use.
+    expanded_circuit_outcomes = [ [val for val in exp_outcome_dict.values()] for exp_outcome_dict in expanded_circuit_dict_list]
+    #create a dictionary with circuits as keys, and list of outcome keys as values.
+    outcomes = {}
+    for exp_ckt_outcomes, ckt in zip(expanded_circuit_outcomes, circuits):
+        #exp_ckt_outcomes will be a list of tuples whose entries are outcome label tuples.
+        #flatten this into a single list of outcome labels.
+        outcomes[ckt] = [outcome for outcome_tuple in exp_ckt_outcomes for outcome in outcome_tuple]
+        
     resource_alloc = _baseobjs.ResourceAllocation(comm= comm, mem_limit = mem_limit)
     
     printer.log('Calculating Probabilities, Jacobians and Hessians (if not using approx FIM).', 3)
-    ps = regularized_model.sim.bulk_probs(circuits, resource_alloc)
-    js = regularized_model.sim.bulk_dprobs(circuits, resource_alloc)
+    ps = model.sim.bulk_probs(circuits, resource_alloc)
+    js = model.sim.bulk_dprobs(circuits, resource_alloc)
     #if approx is true we add in the hessian term as well.
     if not approx:
         printer.log('Calculating Hessians.', 3)
-        hs = regularized_model.sim.bulk_hprobs(circuits, resource_alloc)
+        hs = model.sim.bulk_hprobs(circuits, resource_alloc)
 
     if comm is not None:
     #divide the job of doing the accumulation among the ranks:
@@ -230,15 +243,14 @@ def calculate_fisher_information_per_circuit(regularized_model, circuits, approx
         #now calculate the fisher information terms on each rank:
         printer.log('Distributed calculation of FIM.', 4)
         if approx:
-            split_fisher_info_terms = accumulate_fim_matrix_per_circuit(split_circuit_list, num_params, 
-                                                                        outcomes, ps, js,
-                                                                        printer,
-                                                                        approx=True)
+            split_fisher_info_terms = _accumulate_fim_matrix_per_circuit(split_circuit_list, num_params, 
+                                                                        outcomes, ps, js, printer,
+                                                                        approx=True, regularization=regularization)
         else:
-            split_fisher_info_terms, total_hterm = accumulate_fim_matrix_per_circuit(split_circuit_list, num_params, 
+            split_fisher_info_terms, total_hterm = _accumulate_fim_matrix_per_circuit(split_circuit_list, num_params, 
                                                                                      outcomes, ps, js,
-                                                                                     printer,
-                                                                                     hs, approx=False)
+                                                                                     printer,hs, approx=False, 
+                                                                                     regularization=regularization)
 
         #gather these back onto rank 0.
         #This should return a list of dictionaries to rank 0.
@@ -294,15 +306,14 @@ def calculate_fisher_information_per_circuit(regularized_model, circuits, approx
     #otherwise do things without splitting up among multiple cores.
     else:
         if approx:
-            fisher_info_terms = accumulate_fim_matrix_per_circuit(circuits, num_params, 
-                                                                  outcomes, ps, js,
-                                                                  printer,
-                                                                  approx=True)
+            fisher_info_terms = _accumulate_fim_matrix_per_circuit(circuits, num_params, 
+                                                                  outcomes, ps, js, printer,
+                                                                  approx=True, regularization=regularization)
         else:
-            fisher_info_terms, total_hterm = accumulate_fim_matrix_per_circuit(circuits, num_params, 
+            fisher_info_terms, total_hterm = _accumulate_fim_matrix_per_circuit(circuits, num_params, 
                                                                                outcomes, ps, js,
-                                                                               printer,
-                                                                               hs, approx=False)
+                                                                               printer, hs, 
+                                                                               approx=False, regularization=regularization)
     
         fisher_info_terms = {ckt: fisher_info_terms[i,:,:] for i, ckt in enumerate(circuits)}
         if not approx:
@@ -315,13 +326,10 @@ def calculate_fisher_information_per_circuit(regularized_model, circuits, approx
 
 
 def calculate_fisher_information_matrix(model, circuits, num_shots=1, term_cache=None,
-                                        regularize_spam=True, approx= False, mem_efficient_mode= False, 
+                                        regularization=1e-8, approx= False, mem_efficient_mode= False, 
                                         circuit_chunk_size = 100, verbosity=1, comm = None, mem_limit = None):
     """Calculate the Fisher information matrix for a set of circuits and a model.
 
-    Note that the model should be regularized so that no probability should be very small
-    for numerical stability. This is done by default for models with a dense SPAM parameterization,
-    but must be done manually if this is not the case (e.g. CPTP parameterization).
 
     Parameters
     ----------
@@ -341,10 +349,10 @@ def calculate_fisher_information_matrix(model, circuits, num_shots=1, term_cache
         will be updated with any additional circuits that need to be calculated in the given
         circuit list.
 
-    regularize_spam: bool
-        If True, depolarizing SPAM noise is added to prevent 0 probabilities for numerical
-        stability. Note that this may fail if the model does not have a dense SPAM
-        paramerization. In that case, pass an already "regularized" model and set this to False.
+    regularization: float, optional (default 1e-8)
+        A regularization parameter used to set a minimum probability value for
+        circuits. This is needed to avoid division by zero problems in the fisher
+        information calculation.
         
     approx: bool, optional (default False)
         When set to true use the approximate fisher information where we drop the 
@@ -377,11 +385,8 @@ def calculate_fisher_information_matrix(model, circuits, num_shots=1, term_cache
     
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, comm)
     
-    # Regularize model
-    regularized_model = model.copy()
-    if regularize_spam:
-        regularized_model = regularized_model.depolarize(spam_noise=1e-3)
-    num_params = regularized_model.num_params
+    model = model.copy()
+    num_params = model.num_params
 
     if isinstance(num_shots, dict):
         assert _np.all([c in num_shots for c in circuits]), \
@@ -400,11 +405,13 @@ def calculate_fisher_information_matrix(model, circuits, num_shots=1, term_cache
             #might also return hessian terms if approx is False, but we currently aren't using this in
             #this function.
             if approx:
-                new_terms = calculate_fisher_information_per_circuit(regularized_model, needed_circuits, 
-                                                                    approx, verbosity=verbosity, comm=comm, mem_limit=mem_limit)
+                new_terms = calculate_fisher_information_per_circuit(model, needed_circuits, 
+                                                                    approx, regularization, 
+                                                                    verbosity=verbosity, comm=comm, mem_limit=mem_limit)
             else:
-                new_terms, _ = calculate_fisher_information_per_circuit(regularized_model, needed_circuits, 
-                                                                    approx, verbosity=verbosity, comm=comm, mem_limit=mem_limit)
+                new_terms, _ = calculate_fisher_information_per_circuit(model, needed_circuits, 
+                                                                    approx, regularization,
+                                                                    verbosity=verbosity, comm=comm, mem_limit=mem_limit)
             if comm is None or comm.Get_rank()==0:
                 term_cache.update(new_terms)
 
@@ -435,11 +442,11 @@ def calculate_fisher_information_matrix(model, circuits, num_shots=1, term_cache
                 printer.show_progress(iteration = i, total=len(chunked_circuit_lists), bar_length=50, 
                                       suffix= f'Circuit chunk {i+1} out of {len(chunked_circuit_lists)}')                         
                 if approx:
-                    fim_term_for_chunk = _calculate_fisher_information_per_chunk(regularized_model, ckt_chunk, 
-                                                                     approx, num_shots, verbosity=verbosity, comm=comm, mem_limit=mem_limit)
+                    fim_term_for_chunk = _calculate_fisher_information_per_chunk(model, ckt_chunk, 
+                                                                     approx, num_shots, regularization, verbosity=verbosity, comm=comm, mem_limit=mem_limit)
                 else:
-                    fim_term_for_chunk, _ = _calculate_fisher_information_per_chunk(regularized_model, ckt_chunk, 
-                                                                     approx, num_shots, verbosity=verbosity, comm=comm, mem_limit=mem_limit)
+                    fim_term_for_chunk, _ = _calculate_fisher_information_per_chunk(model, ckt_chunk, 
+                                                                     approx, regularization, num_shots, verbosity=verbosity, comm=comm, mem_limit=mem_limit)
                 # Collect all terms, do this on rank zero:
                 if comm is None or comm.Get_rank() == 0:
                     fisher_information += fim_term_for_chunk
@@ -455,7 +462,7 @@ def calculate_fisher_information_matrix(model, circuits, num_shots=1, term_cache
     return fisher_information
 
 def calculate_fisher_information_matrices_by_L(model, circuit_lists, Ls, num_shots=1, term_cache=None,
-                                               regularize_spam=True, cumulative=True, approx = False,
+                                               regularization=1e-8, cumulative=True, approx = False,
                                                mem_efficient_mode= False, circuit_chunk_size = 100,
                                                verbosity= 1,
                                                comm = None, mem_limit = None):
@@ -484,10 +491,10 @@ def calculate_fisher_information_matrices_by_L(model, circuit_lists, Ls, num_sho
         will be updated with any additional circuits that need to be calculated in the given
         circuit list.
 
-    regularize_spam: bool
-        If True, depolarizing SPAM noise is added to prevent 0 probabilities for numerical
-        stability. Note that this may fail if the model does not have a dense SPAM
-        paramerization. In that case, pass an already "regularized" model and set this to False.
+    regularization: float, optional (default 1e-8)
+        A regularization parameter used to set a minimum probability value for
+        circuits. This is needed to avoid division by zero problems in the fisher
+        information calculation.
 
     cumulative: bool
         Whether to include Fisher information matrices for lower L (True) or not.
@@ -521,12 +528,8 @@ def calculate_fisher_information_matrices_by_L(model, circuit_lists, Ls, num_sho
         Dictionary with keys as circuit length L and value as Fisher information matrices
     """
     
-    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, comm)
-    
-    # Regularize model
-    regularized_model = model.copy()
-    if regularize_spam:
-        regularized_model = regularized_model.depolarize(spam_noise=1e-3)
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, comm)    
+    model = model.copy()
 
     if isinstance(num_shots, dict):
         assert _np.all([c in num_shots for ckt_list in circuit_lists for c in ckt_list]), \
@@ -551,10 +554,10 @@ def calculate_fisher_information_matrices_by_L(model, circuit_lists, Ls, num_sho
         needed_circuits = [c for ckt_list in circuit_lists for c in ckt_list if c not in term_cache]
         if len(needed_circuits):
             if approx:
-                new_terms = calculate_fisher_information_per_circuit(regularized_model, needed_circuits, approx, verbosity=verbosity, 
+                new_terms = calculate_fisher_information_per_circuit(model, needed_circuits, approx, regularization, verbosity=verbosity, 
                                                                     comm=comm, mem_limit=mem_limit)
             else:
-                new_terms, _ = calculate_fisher_information_per_circuit(regularized_model, needed_circuits, approx, verbosity=verbosity, 
+                new_terms, _ = calculate_fisher_information_per_circuit(model, needed_circuits, approx, regularization, verbosity=verbosity, 
                                                                     comm=comm, mem_limit=mem_limit)
             if comm is None or comm.Get_rank()==0:
                 term_cache.update(new_terms)
@@ -567,9 +570,9 @@ def calculate_fisher_information_matrices_by_L(model, circuit_lists, Ls, num_sho
             
             for i, (L, ckt_list) in enumerate(zip(Ls, unique_circuit_lists)):
                 printer.log(f'Current length L={L}', 2)
-                fisher_information_by_L[L] = calculate_fisher_information_matrix(regularized_model, ckt_list, num_shots,
-                                                               term_cache=term_cache, regularize_spam=False, verbosity=verbosity)
-                if i!=0:
+                fisher_information_by_L[L] = calculate_fisher_information_matrix(model, ckt_list, num_shots,
+                                                               term_cache=term_cache, regularization=regularization, verbosity=verbosity)
+                if i!=0 and cumulative:
                     #Add previous iteration's FIM on rank 0 (on other ranks this is None which is why we don't do it there).
                     fisher_information_by_L[L]=fisher_information_by_L[L] + fisher_information_by_L[Ls[i-1]]
 
@@ -583,21 +586,21 @@ def calculate_fisher_information_matrices_by_L(model, circuit_lists, Ls, num_sho
         fisher_information_by_L = {}
         for i, (L, ckt_list) in enumerate(zip(Ls, unique_circuit_lists)):
             printer.log(f'Current length L={L}',2)
-            fisher_information_by_L[L] = calculate_fisher_information_matrix(regularized_model, ckt_list, num_shots,
-                                                           term_cache=None, regularize_spam=False,
-                                                           approx = approx, 
+            fisher_information_by_L[L] = calculate_fisher_information_matrix(model, ckt_list, num_shots,
+                                                           term_cache=None, approx = approx, 
+                                                           regularization=regularization,
                                                            mem_efficient_mode=mem_efficient_mode,
                                                            circuit_chunk_size = circuit_chunk_size,
                                                            verbosity = verbosity,
                                                            comm=comm, mem_limit=mem_limit)
-            if i!=0 and (comm is None or comm.Get_rank()==0):
+            if i!=0 and (comm is None or comm.Get_rank()==0) and cumulative:
                 #Add previous iteration's FIM on rank 0 (on other ranks this is None which is why we don't do it there).
                 fisher_information_by_L[L]=fisher_information_by_L[L] + fisher_information_by_L[Ls[i-1]]
     #In memory efficient mode the fisher information is None on any rank other than 0 when using MPI.    
     return fisher_information_by_L
     
 #Helper function for memory efficient MPI implementation that combines the contributions for each circuit chunk together more cleverly
-def _calculate_fisher_information_per_chunk(regularized_model, circuits, approx=False, num_shots=None, verbosity=1, comm = None, mem_limit = None):
+def _calculate_fisher_information_per_chunk(model, circuits, approx=False, regularization=1e-8, num_shots=None, verbosity=1, comm = None, mem_limit = None):
     """Helper function to calculate all Fisher information terms for a chunk of circuits.
     Used primarily in memory efficient MPI implementation.
 
@@ -607,10 +610,8 @@ def _calculate_fisher_information_per_chunk(regularized_model, circuits, approx=
 
     Parameters
     ----------
-    regularized_model: OpModel
+    model: OpModel
         The model used to calculate the terms of the Fisher information matrix.
-        This model must already be "regularized" such that there are no small probabilities,
-        usually by adding a small amount of SPAM error.
 
     circuits: list
         List of circuits to compute Fisher information for.
@@ -619,6 +620,11 @@ def _calculate_fisher_information_per_chunk(regularized_model, circuits, approx=
         When set to true use the approximate fisher information where we drop the 
         hessian term. Significantly faster to compute than when including the hessian.
         
+    regularization: float, optional (default 1e-8)
+        A regularization parameter used to set a minimum probability value for
+        circuits. This is needed to avoid division by zero problems in the fisher
+        information calculation.
+
     num_shots : dict, optional (default None)
         A dictionary of per circuit shot counts. When None each circuit gets assigned 1 shot.
         
@@ -642,17 +648,27 @@ def _calculate_fisher_information_per_chunk(regularized_model, circuits, approx=
     
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, comm)
     
-    num_params = regularized_model.num_params
-    outcomes = regularized_model.sim.probs(()).keys()
+    num_params = model.num_params
+    
+    #pull out the outcomes for each circuit expanding out the instruments if needed.
+    expanded_circuit_dict_list = model.bulk_expand_instruments_and_separate_povm(circuits)
+    #data structure is awkward so massage this into a nicer format for our current use.
+    expanded_circuit_outcomes = [list(exp_outcome_dict.values())[0] for exp_outcome_dict in expanded_circuit_dict_list]
+    #create a dictionary with circuits as keys, and list of outcome keys as values.
+    outcomes = {}
+    for exp_ckt_outcomes, ckt in zip(expanded_circuit_outcomes, circuits):
+        #exp_ckt_outcomes will be a list of tuples whose entries are outcome label tuples.
+        #flatten this into a single list of outcome labels.
+        outcomes[ckt] = [outcome for outcome_tuple in exp_ckt_outcomes for outcome in outcome_tuple]
     
     resource_alloc = _baseobjs.ResourceAllocation(comm= comm, mem_limit = mem_limit)
     
     printer.log('Calculating Probabilities, Jacobians and Hessians (if not using approx FIM).', 3)
-    ps = regularized_model.sim.bulk_probs(circuits, resource_alloc)
-    js = regularized_model.sim.bulk_dprobs(circuits, resource_alloc)
+    ps = model.sim.bulk_probs(circuits, resource_alloc)
+    js = model.sim.bulk_dprobs(circuits, resource_alloc)
     #if approx is true we  add in the hessian term as well.
     if not approx:
-        hs = regularized_model.sim.bulk_hprobs(circuits, resource_alloc)
+        hs = model.sim.bulk_hprobs(circuits, resource_alloc)
         
     if comm is not None:
     #divide the job of doing the accumulation among the ranks:
@@ -708,15 +724,15 @@ def _calculate_fisher_information_per_chunk(regularized_model, circuits, approx=
         #now calculate the fisher information terms on each rank:
         printer.log('Distributed accumulation of FIM.', 3)
         if approx:
-            split_fisher_info_terms = accumulate_fim_matrix(split_circuit_list, num_params, 
+            split_fisher_info_terms = _accumulate_fim_matrix(split_circuit_list, num_params, 
                                                             num_shots, outcomes, ps, js,
-                                                            printer,
-                                                            hs=None, approx=True)
+                                                            printer,hs=None, approx=True,
+                                                            regularization=regularization)
         else:
-            split_fisher_info_terms, split_total_hterm = accumulate_fim_matrix(split_circuit_list, num_params, 
+            split_fisher_info_terms, split_total_hterm = _accumulate_fim_matrix(split_circuit_list, num_params, 
                                                                                 num_shots, outcomes, ps, js,
-                                                                                printer,
-                                                                                hs, approx=False)
+                                                                                printer, hs, approx=False,
+                                                                                regularization=regularization)
                                                                                 
         if comm.Get_rank() == 0:
             #1D buffer long enough to hold every element, will then reshape this later.
@@ -750,20 +766,20 @@ def _calculate_fisher_information_per_chunk(regularized_model, circuits, approx=
     #otherwise do things without splitting up among multiple cores.
     else:
         if approx:
-            fisher_info_term = accumulate_fim_matrix(circuits, num_params, num_shots, outcomes, 
+            fisher_info_term = _accumulate_fim_matrix(circuits, num_params, num_shots, outcomes, 
                                                      ps, js, printer, hs=None, 
-                                                     approx=True)
+                                                     approx=True, regularization=regularization)
         else:
-            fisher_info_term, total_hterm = accumulate_fim_matrix(circuits, num_params, num_shots, outcomes, 
+            fisher_info_term, total_hterm = _accumulate_fim_matrix(circuits, num_params, num_shots, outcomes, 
                                                                   ps, js, printer, hs, 
-                                                                  approx=False)
+                                                                  approx=False, regularization=regularization)
     if approx:
         return fisher_info_term
     else:
         return fisher_info_term, total_hterm    
     
 #helper function for distribution using MPI
-def accumulate_fim_matrix(subcircuits, num_params, num_shots, outcomes, ps, js, printer, hs=None, approx=False):
+def _accumulate_fim_matrix(subcircuits, num_params, num_shots, outcomes, ps, js, printer, hs=None, approx=False, regularization=1e-8):
     printer.log('Accumulating terms for per-circuit FIM.', 4)
     fisher_info_terms = _np.zeros([num_params, num_params], dtype = _np.double)
     if not approx:
@@ -775,26 +791,32 @@ def accumulate_fim_matrix(subcircuits, num_params, num_shots, outcomes, ps, js, 
         else:
             num_shots_for_circuit=1
         p = ps[circuit]
+        #regularize any probabilities that are too small.
+        clipped_p = _np.clip(_np.fromiter(p.values(), dtype=_np.double), a_min=regularization, a_max=None)
+        #renormalize this vector (probably not necessary, but better to be safe).
+        renormalized_clipped_p = clipped_p/_np.linalg.norm(clipped_p) 
+        regularized_p = {outcome_lbl: val for outcome_lbl, val in zip(p.keys(), renormalized_clipped_p)}
+
         j = js[circuit]
         if not approx:
             h = hs[circuit]
-        for i, outcome in enumerate(outcomes):
+        for i, outcome in enumerate(outcomes[circuit]):
             if not approx:
-                jvec = _np.sqrt(num_shots_for_circuit/p[outcome])*(j[outcome].reshape(num_params,1))
-                fisher_info_terms +=_np.dot(jvec, jvec.T) -  num_shots_for_circuit*h[outcome]
+                jvec = _np.sqrt(num_shots_for_circuit/regularized_p[outcome])*(j[outcome].reshape(num_params,1))
+                fisher_info_terms += jvec@jvec.T -  num_shots_for_circuit*h[outcome]
                 total_hterm += num_shots_for_circuit*h[outcome]
             else:
                 #fisher_info_terms += _np.outer(j[outcome], j[outcome]) / p[outcome]
                 #faster outer product
-                jvec = _np.sqrt(num_shots_for_circuit/p[outcome])*(j[outcome].reshape(num_params,1))
-                fisher_info_terms +=_np.dot(jvec, jvec.T)
+                jvec = _np.sqrt(num_shots_for_circuit/regularized_p[outcome])*(j[outcome].reshape(num_params,1))
+                fisher_info_terms += jvec@jvec.T
     if approx:
         return fisher_info_terms
     else:
         return fisher_info_terms, total_hterm
     
 #helper function for distribution using MPI
-def accumulate_fim_matrix_per_circuit(subcircuits, num_params, outcomes, ps, js, printer, hs=None, approx=False):
+def _accumulate_fim_matrix_per_circuit(subcircuits, num_params, outcomes, ps, js, printer, hs=None, approx=False, regularization=1e-8):
     printer.log('Accumulating terms for per-circuit FIM.', 4)
     fisher_info_terms = _np.zeros([len(subcircuits),num_params, num_params])
     if not approx:
@@ -802,19 +824,25 @@ def accumulate_fim_matrix_per_circuit(subcircuits, num_params, outcomes, ps, js,
     
     for k, circuit in enumerate(subcircuits):
         p = ps[circuit]
+        #regularize any probabilities that are too small.
+        clipped_p = _np.clip(_np.fromiter(p.values(), dtype=_np.double), a_min=regularization, a_max=None)
+        #renormalize this vector (probably not necessary, but better to be safe).
+        renormalized_clipped_p = clipped_p/_np.linalg.norm(clipped_p) 
+        regularized_p = {outcome_lbl: val for outcome_lbl, val in zip(p.keys(), renormalized_clipped_p)}
+
         j = js[circuit]
         if not approx:
             h = hs[circuit]
-        for i, outcome in enumerate(outcomes):
+        for i, outcome in enumerate(outcomes[circuit]):
             if not approx:
-                jvec = (1/_np.sqrt(p[outcome]))*(j[outcome].reshape(num_params,1))
-                fisher_info_terms[k,:,:] +=_np.dot(jvec, jvec.T) - h[outcome]
+                jvec = (1/_np.sqrt(regularized_p[outcome]))*(j[outcome].reshape(num_params,1))
+                fisher_info_terms[k,:,:] += jvec@jvec.T - h[outcome]
                 total_hterm[k,:,:] += h[outcome]
             else:
                 #fisher_info_terms[circuit] += _np.outer(j[outcome], j[outcome]) / p[outcome]
                 #faster outer product
-                jvec = (1/_np.sqrt(p[outcome]))*(j[outcome].reshape(num_params,1))
-                fisher_info_terms[k,:,:] +=_np.dot(jvec, jvec.T)
+                jvec = (1/_np.sqrt(regularized_p[outcome]))*(j[outcome].reshape(num_params,1))
+                fisher_info_terms[k,:,:] += jvec@jvec.T
     if approx:
         return fisher_info_terms
     else:

@@ -312,15 +312,12 @@ class TestDriversMethods(DriversTestCase):
                                                                   advanced_options= {'max_iterations':3})
 
         #Assert that this gives the same result as before:
-        #diff = norm(result_standardgst.estimates['CPTPLND'].models['final iteration estimate'].to_vector()- 
-        #                 result_standardgst_warmstart.estimates['CPTPLND'].models['final iteration estimate'].to_vector())
-        diff = pygsti.tools.logl(result_standardgst.estimates['CPTPLND'].models['final iteration estimate'], ds)- \
-               pygsti.tools.logl(result_standardgst_warmstart.estimates['CPTPLND'].models['final iteration estimate'], ds)
-               
+        diff = norm(result_standardgst.estimates['CPTPLND'].models['final iteration estimate'].to_vector()- 
+                         result_standardgst_warmstart.estimates['CPTPLND'].models['final iteration estimate'].to_vector())               
         diff1 = norm(result_standardgst.estimates['full TP'].models['final iteration estimate'].to_vector()- 
                      result_standardgst_warmstart.estimates['full TP'].models['final iteration estimate'].to_vector())
         
-        self.assertTrue(abs(diff)<=1e-6)
+        self.assertTrue(abs(diff)<=1e-10)
         self.assertTrue(diff1<=1e-10)
 
 if __name__ == "__main__":

@@ -1408,28 +1408,25 @@ class LindbladErrorgen(_LinearOperator):
         mm_dict = super().to_memoized_dict(mmg_memo)
 
         mm_dict['rep_type'] = self._rep_type
-        #OLD: mm_dict['parameterization'] = self.parameterization.to_nice_serialization()
-        #OLD: mm_dict['lindblad_basis'] = self.lindblad_basis.to_nice_serialization()
-        #OLD: mm_dict['coefficients'] = [(str(k), self._encodevalue(v)) for k, v in self.coefficients().items()]
         mm_dict['matrix_basis'] = self.matrix_basis.to_nice_serialization()
         mm_dict['coefficient_blocks'] = [blk.to_nice_serialization() for blk in self.coefficient_blocks]
+        #serialize the paramval attribute. Rederiving this from the block data has been leading to sign
+        #ambiguity on deserialization.
+        mm_dict['paramvals'] = self._encodemx(self.paramvals)
+
         return mm_dict
 
     @classmethod
     def _from_memoized_dict(cls, mm_dict, serial_memo):
-        #lindblad_term_dict = {_GlobalElementaryErrorgenLabel.cast(k): cls._decodevalue(v)
-        #                      for k, v in mm_dict['coefficients']}  # convert keys from str->objects
-        #parameterization = LindbladParameterization.from_nice_serialization(mm_dict['parameterization'])
-        #lindblad_basis = _Basis.from_nice_serialization(mm_dict['lindblad_basis'])
-        #truncate = False  # shouldn't need to truncate since we're reloading a valid set of coefficients
         mx_basis = _Basis.from_nice_serialization(mm_dict['matrix_basis'])
         state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
         coeff_blocks = [_LindbladCoefficientBlock.from_nice_serialization(blk)
                         for blk in mm_dict['coefficient_blocks']]
-
-        return cls(coeff_blocks, 'auto', mx_basis, mm_dict['evotype'], state_space)
-        #return cls(lindblad_term_dict, parameterization, lindblad_basis,
-        #           mx_basis, truncate, mm_dict['evotype'], state_space)
+        ret = cls(coeff_blocks, 'auto', mx_basis, mm_dict['evotype'], state_space)
+        #reinitialize the paramvals attribute from memoized dict. Rederiving this from the block data has 
+        #been leading to sign ambiguity on deserialization.
+        ret.paramvals = ret._decodemx(mm_dict['paramvals'])
+        return ret
 
     def _is_similar(self, other, rtol, atol):
         """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
