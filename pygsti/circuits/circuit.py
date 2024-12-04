@@ -3771,7 +3771,7 @@ class Circuit(object):
             stim_layers.append(stim_layer)
         return stim_layers
     
-    def convert_to_stim_tableau(self,gate_name_conversions=None):
+    def convert_to_stim_tableau(self, gate_name_conversions=None):
         """
         Converts this circuit to a stim tableau
 
