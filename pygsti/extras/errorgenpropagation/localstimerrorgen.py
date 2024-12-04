@@ -48,8 +48,7 @@ class localstimerrorgen(ElementaryErrorgenLabel):
     checks and if two error gens have the same type and labels
     '''
     def __eq__(self, other):
-        return (self.errorgen_type == other.errorgen_type
-                and self.basis_element_labels == other.basis_element_labels)
+        return (self.errorgen_type == other.errorgen_type and self.basis_element_labels == other.basis_element_labels and self.label == other.label)
     
     '''
     displays the errorgens as strings
