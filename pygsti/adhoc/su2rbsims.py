@@ -769,3 +769,22 @@ class Analysis:
         if showfig:
             fig.show()
         return out
+
+    @staticmethod
+    def synspam_rb(_rbm : Union[SU2RBSim, SU2CharacterRBSim]):
+        sps = np.inf
+        if type(_rbm) == SU2RBSim:
+            pkm, _ = SU2RBSim.synspam_transform(_rbm.probs, shots_per_circuit=sps)
+        elif isinstance(_rbm, SU2CharacterRBSim):
+            chararg = _rbm.charcores if _rbm.ssr1rb else  _rbm.chars
+            pkm, _ = SU2CharacterRBSim.synspam_character_transform(_rbm.probs, chararg, Spin72.irrep_block_sizes, shots_per_circuit=sps)
+        else:
+            raise ValueError()
+        F = get_F()
+        rates, ps, ps_sigmas = Analysis.fit_and_get_rates(_rbm.design.lengths + 1, pkm, fitlog=False)
+        f_mu = ps[:,1]
+        f_sig = ps_sigmas[:,1]
+        invF = la.inv(F)  # doing this properly by factoring F isn't worth it.
+        rates = invF @ f_mu
+        rates_sigmas = np.sqrt(np.diag( invF @ np.diag(f_sig**2) @ invF.T ))
+        return rates, rates_sigmas
