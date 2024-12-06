@@ -118,7 +118,7 @@ def is_sparse_basis(name_or_basis):
         return False
 
 
-def change_basis(mx, from_basis, to_basis):
+def change_basis(mx, from_basis, to_basis, expect_real=True):
     """
     Convert a operation matrix from one basis of a density matrix space to another.
 
@@ -134,6 +134,10 @@ def change_basis(mx, from_basis, to_basis):
     to_basis : {'std', 'gm', 'pp', 'qt'} or Basis object
         The destination basis.  Allowed values are Matrix-unit (std), Gell-Mann
         (gm), Pauli-product (pp), and Qutrit (qt) (or a custom basis object).
+    
+    expect_real : bool, optional (default True)
+        Optional flag specifying whether it is expected that the returned
+        array in the new basis is real valued. Default is True.
 
     Returns
     -------
@@ -196,7 +200,7 @@ def change_basis(mx, from_basis, to_basis):
     if not to_basis.real:
         return ret
 
-    if _mt.safe_norm(ret, 'imag') > 1e-8:
+    if expect_real and _mt.safe_norm(ret, 'imag') > 1e-8:
         raise ValueError("Array has non-zero imaginary part (%g) after basis change (%s to %s)!\n%s" %
                          (_mt.safe_norm(ret, 'imag'), from_basis, to_basis, ret))
     return _mt.safe_real(ret)
@@ -549,9 +553,9 @@ def stdmx_to_vec(m, basis):
     v = _np.empty((basis.size, 1))
     for i, mx in enumerate(basis.elements):
         if basis.real:
-            v[i, 0] = _np.real(_mt.trace(_np.dot(mx, m)))
+            v[i, 0] = _np.real(_np.vdot(mx, m))
         else:
-            v[i, 0] = _np.real_if_close(_mt.trace(_np.dot(mx, m)))
+            v[i, 0] = _np.real_if_close(_np.vdot(mx, m))
     return v
 
 

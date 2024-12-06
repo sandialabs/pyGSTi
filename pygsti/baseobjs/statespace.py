@@ -469,7 +469,7 @@ class StateSpace(_NicelySerializable):
                     other_udim = other_state_space.label_udimension(lbl)
                     other_typ = other_state_space.label_type(lbl)
                     if other_iTPB != iTPB or other_udim != udim or other_typ != typ:
-                        raise ValueError(("Cannot take state space union: repeated label '%s' has inconsistent index,"
+                        raise ValueError(("Cannot take state space intersection: repeated label '%s' has inconsistent index,"
                                           " dim, or type!") % str(lbl))
                     ret_lbls.append(lbl)
                     ret_udims.append(udim)
@@ -532,6 +532,58 @@ class StateSpace(_NicelySerializable):
                     ret_tpb_labels[iTPB].append(lbl)
                     ret_tpb_udims[iTPB].append(udim)
                     ret_tpb_types[iTPB].append(typ)
+
+        return ExplicitStateSpace(ret_tpb_labels, ret_tpb_udims, ret_tpb_types)
+    
+
+    def difference(self, other_state_space):
+        """
+        Create a state space whose labels are the difference of the labels of this space and one other.
+        I.e. a state space containing the labels of this space which don't appear in the other.
+
+        Dimensions associated with the labels are preserved, as is the tensor product block index.
+        If the two spaces have the same label, but their dimensions or indices do not agree, an
+        error is raised.
+
+        Parameters
+        ----------
+        other_state_space : StateSpace
+            The other state space.
+
+        Returns
+        -------
+        StateSpace
+        """
+        ret_tpb_labels = []
+        ret_tpb_udims = []
+        ret_tpb_types = []
+
+        for iTPB, (lbls, udims, typs) in enumerate(zip(self.tensor_product_blocks_labels,
+                                                       self.tensor_product_blocks_udimensions,
+                                                       self.tensor_product_blocks_types)):
+            ret_lbls = []; ret_udims = []; ret_types = []
+            for lbl, udim, typ in zip(lbls, udims, typs):
+                #If the label does appear in the other state space, verify that the 
+                #properties of the label are consistently defined accross the two state spaces
+                #otherwise raise an error.
+                if other_state_space.contains_label(lbl):
+                    other_iTPB = other_state_space.label_tensor_product_block_index(lbl)
+                    other_udim = other_state_space.label_udimension(lbl)
+                    other_typ = other_state_space.label_type(lbl)
+                    if other_iTPB != iTPB or other_udim != udim or other_typ != typ:
+                        raise ValueError(("Cannot take state space difference: repeated label '%s' has inconsistent index,"
+                                          " dim, or type!") % str(lbl))
+                    continue
+                #Otherwise add this to the state space.
+                else:
+                    ret_lbls.append(lbl)
+                    ret_udims.append(udim)
+                    ret_types.append(typ)
+
+            if len(ret_lbls) > 0:
+                ret_tpb_labels.append(ret_lbls)
+                ret_tpb_udims.append(ret_udims)
+                ret_tpb_types.append(ret_types)
 
         return ExplicitStateSpace(ret_tpb_labels, ret_tpb_udims, ret_tpb_types)
 
@@ -604,21 +656,42 @@ class QuditSpace(StateSpace):
     def __init__(self, nqudits_or_labels, udim_or_udims):
         super().__init__()
         if isinstance(nqudits_or_labels, int):
-            self.qudit_labels = tuple(range(nqudits_or_labels))
+            self._qudit_labels = tuple(range(nqudits_or_labels))
         else:
-            self.qudit_labels = tuple(nqudits_or_labels)
+            self._qudit_labels = tuple(nqudits_or_labels)
 
         if isinstance(udim_or_udims, int):
-            self.qudit_udims = tuple([udim_or_udims] * len(self.qudit_labels))
+            self._qudit_udims = tuple([udim_or_udims] * len(self._qudit_labels))
         else:
-            self.qudit_udims = tuple(udim_or_udims)
-            assert(len(self.qudit_udims) == len(self.qudit_labels)), \
+            self._qudit_udims = tuple(udim_or_udims)
+            assert(len(self._qudit_udims) == len(self._qudit_labels)), \
                 "`udim_or_udims` must either be an interger or have length equal to the number of qudits!"
+    
+        #This state space is effectively static, so we can precompute the hash for it for performance
+        self._hash = hash((self.tensor_product_blocks_labels,
+                           self.tensor_product_blocks_dimensions,
+                           self.tensor_product_blocks_types))
+    
+    def __hash__(self):
+        return self._hash
+    
+    #pickle management functions
+    def __getstate__(self):
+        state_dict = self.__dict__
+        return state_dict
+
+    def __setstate__(self, state_dict):
+        for k, v in state_dict.items():
+            self.__dict__[k] = v
+        #reinitialize the hash
+        self._hash = hash((self.tensor_product_blocks_labels,
+                           self.tensor_product_blocks_dimensions,
+                           self.tensor_product_blocks_types))
 
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
-        state.update({'qudit_labels': self.qudit_labels,
-                      'qudit_udims': self.qudit_udims})
+        state.update({'qudit_labels': self._qudit_labels,
+                      'qudit_udims': self._qudit_udims})
         return state
 
     @classmethod
@@ -626,11 +699,20 @@ class QuditSpace(StateSpace):
         return cls(state['qudit_labels'], state['qudit_udims'])
 
     @property
+    def qudit_labels(self):
+        """The labels of the qudits in this state space."""
+        return self._qudit_labels
+
+    @property
+    def qudit_udims(self):
+        """Integer Hilbert (unitary operator) space dimensions of the qudits in ths quantum state space."""
+
+    @property
     def udim(self):
         """
         Integer Hilbert (unitary operator) space dimension of this quantum state space.
         """
-        return _np.prod(self.qudit_udims)
+        return _np.prod(self._qudit_udims)
 
     @property
     def dim(self):
@@ -642,7 +724,7 @@ class QuditSpace(StateSpace):
         """
         The number of qubits in this quantum state space.
         """
-        return len(self.qudit_labels)
+        return len(self._qudit_labels)
 
     @property
     def num_tensor_product_blocks(self):
@@ -664,7 +746,7 @@ class QuditSpace(StateSpace):
         -------
         tuple of tuples
         """
-        return (self.qudit_labels,)
+        return (self._qudit_labels,)
 
     @property
     def tensor_product_blocks_dimensions(self):
@@ -675,7 +757,7 @@ class QuditSpace(StateSpace):
         -------
         tuple of tuples
         """
-        return (tuple([udim**2 for udim in self.qudit_udims]),)
+        return (tuple([udim**2 for udim in self._qudit_udims]),)
 
     @property
     def tensor_product_blocks_udimensions(self):
@@ -686,7 +768,7 @@ class QuditSpace(StateSpace):
         -------
         tuple of tuples
         """
-        return (self.qudit_udims,)
+        return (self._qudit_udims,)
 
     @property
     def tensor_product_blocks_types(self):
@@ -697,7 +779,7 @@ class QuditSpace(StateSpace):
         -------
         tuple of tuples
         """
-        return (('Q',) * len(self.qudit_labels))
+        return (('Q',) * len(self._qudit_labels))
 
     def label_dimension(self, label):
         """
@@ -712,9 +794,9 @@ class QuditSpace(StateSpace):
         -------
         int
         """
-        if label in self.qudit_labels:
-            i = self.qudit_labels.index(label)
-            return self.qudit_udims[i]**2
+        if label in self._qudit_labels:
+            i = self._qudit_labels.index(label)
+            return self._qudit_udims[i]**2
         else:
             raise KeyError("Invalid qudit label: %s" % label)
 
@@ -731,9 +813,9 @@ class QuditSpace(StateSpace):
         -------
         int
         """
-        if label in self.qudit_labels:
-            i = self.qudit_labels.index(label)
-            return self.qudit_udims[i]
+        if label in self._qudit_labels:
+            i = self._qudit_labels.index(label)
+            return self._qudit_udims[i]
         else:
             raise KeyError("Invalid qudit label: %s" % label)
 
@@ -750,7 +832,7 @@ class QuditSpace(StateSpace):
         -------
         int
         """
-        if label in self.qudit_labels:
+        if label in self._qudit_labels:
             return 0
         else:
             raise KeyError("Invalid qudit label: %s" % label)
@@ -768,13 +850,13 @@ class QuditSpace(StateSpace):
         -------
         str
         """
-        if label in self.qudit_labels:
+        if label in self._qudit_labels:
             return 'Q'
         else:
             raise KeyError("Invalid qudit label: %s" % label)
 
     def __str__(self):
-        return 'QuditSpace(' + str(self.qudit_labels) + ")"
+        return 'QuditSpace(' + str(self._qudit_labels) + ")"
 
 
 class QubitSpace(QuditSpace):
@@ -809,7 +891,7 @@ class QubitSpace(QuditSpace):
     @property
     def qubit_labels(self):
         """The labels of the qubits"""
-        return self.qudit_labels
+        return self._qudit_labels
 
     @property
     def num_qubits(self):  # may raise ValueError if the state space doesn't consist entirely of qubits
@@ -1105,6 +1187,27 @@ class ExplicitStateSpace(StateSpace):
             elif all([typ == 'Q' for typ in self.label_types.values()]):
                 self._nqudits = len(self.labels[0])
 
+        #This state space is effectively static, so we can precompute the hash for it for performance
+        self._hash = hash((self.tensor_product_blocks_labels,
+                           self.tensor_product_blocks_dimensions,
+                           self.tensor_product_blocks_types))
+    
+    def __hash__(self):
+        return self._hash
+    
+    #pickle management functions
+    def __getstate__(self):
+        state_dict = self.__dict__
+        return state_dict
+
+    def __setstate__(self, state_dict):
+        for k, v in state_dict.items():
+            self.__dict__[k] = v
+        #reinitialize the hash
+        self._hash = hash((self.tensor_product_blocks_labels,
+                           self.tensor_product_blocks_dimensions,
+                           self.tensor_product_blocks_types))
+
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
         state.update({'labels': self.labels,
@@ -1116,6 +1219,17 @@ class ExplicitStateSpace(StateSpace):
     @classmethod
     def _from_nice_serialization(cls, state):
         return cls(state['labels'], state['unitary_space_dimensions'], state['types'])
+
+    @property
+    def labels(self):
+        """
+        The labels for all the tensor-product blocks.
+
+        Returns
+        -------
+        tuple of tuples
+        """
+        return self.labels
 
     @property
     def udim(self):

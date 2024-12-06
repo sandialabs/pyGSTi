@@ -93,7 +93,7 @@ class EmbeddedErrorgen(_EmbeddedOp):
         _EmbeddedOp.from_vector(self, v, close, dirty_value)
         self.dirty = dirty_value
 
-    def coefficients(self, return_basis=False, logscale_nonham=False):
+    def coefficients(self, return_basis=False, logscale_nonham=False, label_type='global'):
         """
         Constructs a dictionary of the Lindblad-error-generator coefficients of this operation.
 
@@ -115,6 +115,12 @@ class EmbeddedErrorgen(_EmbeddedOp):
             the contribution this term would have within a depolarizing
             channel where all stochastic generators had this same coefficient.
             This is the value returned by :meth:`error_rates`.
+        
+        label_type : str, optional (default 'global')
+            String specifying which type of `ElementaryErrorgenLabel` to use
+            as the keys for the returned dictionary. Allowed options are
+            'global' for `GlobalElementaryErrorgenLabel` and 'local' for
+            `LocalElementaryErrorgenLabel`.
 
         Returns
         -------
@@ -131,11 +137,19 @@ class EmbeddedErrorgen(_EmbeddedOp):
             A Basis mapping the basis labels used in the
             keys of `Ltermdict` to basis matrices.
         """
-        return self.embedded_op.coefficients(return_basis, logscale_nonham)
+        return self.embedded_op.coefficients(return_basis, logscale_nonham, label_type)
 
-    def coefficient_labels(self):
+    def coefficient_labels(self, label_type='global'):
         """
         The elementary error-generator labels corresponding to the elements of :meth:`coefficients_array`.
+
+        Parameters
+        ----------
+        label_type : str, optional (default 'global')
+            String specifying which type of `ElementaryErrorgenLabel` to use
+            as the keys for the returned dictionary. Allowed options are
+            'global' for `GlobalElementaryErrorgenLabel` and 'local' for
+            `LocalElementaryErrorgenLabel`.
 
         Returns
         -------
@@ -143,7 +157,7 @@ class EmbeddedErrorgen(_EmbeddedOp):
             A tuple of (<type>, <basisEl1> [,<basisEl2]) elements identifying the elementary error
             generators of this gate.
         """
-        return self.embedded_op.coefficient_labels()
+        return self.embedded_op.coefficient_labels(label_type)
 
     def coefficients_array(self):
         """
@@ -174,7 +188,7 @@ class EmbeddedErrorgen(_EmbeddedOp):
         """
         return self.embedded_op.coefficients_array_deriv_wrt_params()
 
-    def error_rates(self):
+    def error_rates(self, label_type='global'):
         """
         Constructs a dictionary of the error rates associated with this error generator.
 
@@ -199,6 +213,14 @@ class EmbeddedErrorgen(_EmbeddedOp):
         rates is not necessarily the error rate of the overall
         channel.
 
+        Parameters
+        ----------
+        label_type : str, optional (default 'global')
+            String specifying which type of `ElementaryErrorgenLabel` to use
+            as the keys for the returned dictionary. Allowed options are
+            'global' for `GlobalElementaryErrorgenLabel` and 'local' for
+            `LocalElementaryErrorgenLabel`.
+
         Returns
         -------
         lindblad_term_dict : dict
@@ -211,7 +233,7 @@ class EmbeddedErrorgen(_EmbeddedOp):
             terms.  Values are real error rates except for the 2-basis-label
             case.
         """
-        return self.coefficients(return_basis=False, logscale_nonham=True)
+        return self.coefficients(return_basis=False, logscale_nonham=True, label_type=label_type)
 
     def set_coefficients(self, lindblad_term_dict, action="update", logscale_nonham=False, truncate=True):
         """

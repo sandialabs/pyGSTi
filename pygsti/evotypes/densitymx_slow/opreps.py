@@ -174,7 +174,7 @@ class OpRepStandard(OpRepDenseSuperop):
         state_space = _StateSpace.cast(state_space)
         assert(superop.shape[0] == state_space.dim)
 
-        super(OpRepStandard, self).__init__(superop, state_space)
+        super(OpRepStandard, self).__init__(superop, basis, state_space)
 
 
 class OpRepKraus(OpRep):

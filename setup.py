@@ -92,6 +92,9 @@ extras['complete'] = list({pkg for req in extras.values() for pkg in req})
 # which is unavailable in some common environments.
 extras['no_mpi'] = [e for e in extras['complete'] if e != 'mpi4py']
 
+# Add testing_no_cython target, identical to `testing` but no cython
+extras['testing_no_cython'] = [e for e in extras['testing'] if e != 'cython']
+
 
 # Configure setuptools_scm to build the post-release version number
 def custom_version():
@@ -131,7 +134,8 @@ def setup_with_extensions(extensions=None):
         cmdclass={'build_ext': build_ext_compiler_check},
         description='A python implementation of Gate Set Tomography',
         long_description=descriptionTxt,
-        author='Erik Nielsen, Kenneth Rudinger, Timothy Proctor, John Gamble, Robin Blume-Kohout',
+        author='Erik Nielsen, Stefan Seritan, Corey Ostrove, Riley Murray, Jordan Hines, ' +\
+            'Kenneth Rudinger, Timothy Proctor, John Gamble, Robin Blume-Kohout',
         author_email='pygsti@sandia.gov',
         packages=[
             'pygsti',
@@ -142,6 +146,7 @@ def setup_with_extensions(extensions=None):
             'pygsti.circuits.circuitparser',
             'pygsti.data',
             'pygsti.drivers',
+            'pygsti.errorgenpropagation',
             'pygsti.evotypes',
             'pygsti.evotypes.densitymx',
             'pygsti.evotypes.densitymx_slow',
@@ -160,6 +165,7 @@ def setup_with_extensions(extensions=None):
             'pygsti.extras.interpygate',
             'pygsti.extras.crosstalk',
             'pygsti.extras.devices',
+            'pygsti.extras.lfh',
             'pygsti.forwardsims',
             'pygsti.io',
             'pygsti.layouts',

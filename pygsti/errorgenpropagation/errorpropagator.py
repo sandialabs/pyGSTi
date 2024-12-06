@@ -58,6 +58,7 @@ def ErrorPropagator(circ,errorModel,MultiGateDict={},BCHOrder=1,
         for err_order in err_layer:
             for errorGenerator in err_order:
                 errorGenerator.propagate_error_gen_inplace_tableau(layer)
+
         if BCHLayerwise and not NonMarkovian:
             following_layer = errorLayers.pop(0)
             new_errors=BCH_Handler(err_layer,following_layer,BCHOrder)
@@ -213,7 +214,7 @@ def buildErrorlayers(circ,errorDict,qubits):
                     paulis.append(p2)     
                 errorLayer.append(propagatableerrorgen(errType,paulis,gErrorDict[errs]))
         ErrorGens.append([errorLayer])
-        print(ErrorGens)
+        
     return ErrorGens
 
 
