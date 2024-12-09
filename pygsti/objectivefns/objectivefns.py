@@ -5189,9 +5189,9 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         if resource_alloc.is_host_leader:  # hprobs, dprobs12, and probs are shared among resource_alloc procs
             hprobs *= hprobs_coeffs[:, None, None]
             dprobs12 *= dprobs12_coeffs[:, None, None]
-            firsts = [(iel - element_slice.start) for iel in self.firsts
+            if self.firsts is not None:
+                firsts = [(iel - element_slice.start) for iel in self.firsts
                       if element_slice.start <= iel < element_slice.stop]
-            if firsts is not None:
                 hprobs[firsts, :, :] += hprobs_omitted_coeffs[:, None, None] * hprobs_omitted_rowsum
                 dprobs12[firsts, :, :] += dprobs12_omitted_coeffs[:, None, None] * dprobs12_omitted_rowsum
             hessian = dprobs12; hessian += hprobs
