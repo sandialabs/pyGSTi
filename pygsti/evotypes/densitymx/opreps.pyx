@@ -672,6 +672,24 @@ cdef class OpRepEmbedded(OpRep):
         return _copy.deepcopy(self)  # I think this should work using reduce/setstate framework TODO - test and maybe put in base class?
 
 
+#TODO: can add this after creating OpCRep_IdentityPlusErrorgen if it seems useful
+#cdef class OpRepIdentityPlusErrorgen(OpRep):
+#    cdef public object errorgen_rep
+#
+#    def __init__(self, errorgen_rep):
+#        self.errorgen_rep = errorgen_rep
+#        assert(self.c_rep == NULL)
+#        self.c_rep = new OpCRep_IdentityPlusErrorgen((<OpRep?>errorgen_rep).c_rep)
+#        self.state_space = errorgen_rep.state_space
+#
+#    def __reduce__(self):
+#        return (OpRepIdentityPlusErrorgen, (self.errorgen_rep,))
+#
+#    #Needed?
+#    #def errgenrep_has_changed(self, onenorm_upperbound):
+#    #    pass
+
+
 cdef class OpRepExpErrorgen(OpRep):
     cdef public object errorgen_rep
 
