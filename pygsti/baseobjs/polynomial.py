@@ -35,7 +35,7 @@ def _vinds_to_int(vinds, vindices_per_int, max_num_vars):
     return tuple(ret_tup)
 
 
-class FASTPolynomial(object):
+class Polynomial(object):
     """
     A polynomial that behaves like a Python dict of coefficients.
 
@@ -136,7 +136,7 @@ class FASTPolynomial(object):
         rep = list_of_polys[0]._rep
         for p in list_of_polys[1:]:
             rep = rep.mult(p._rep)
-        return FASTPolynomial.from_rep(rep)
+        return Polynomial.from_rep(rep)
 
     def __init__(self, coeffs=None, max_num_vars=100):
         """
@@ -161,7 +161,7 @@ class FASTPolynomial(object):
             have (x_0 to x_(`max_num_vars-1`)).  This sets the maximum allowed
             variable index within this polynomial.
         """
-        vindices_per_int = FASTPolynomial._vindices_per_int(max_num_vars)
+        vindices_per_int = Polynomial._vindices_per_int(max_num_vars)
 
         int_coeffs = {_vinds_to_int(k, vindices_per_int, max_num_vars): v for k, v in coeffs.items()}
         self._rep = _PolynomialRep(int_coeffs, max_num_vars, vindices_per_int)
@@ -245,7 +245,7 @@ class FASTPolynomial(object):
                 del l[l.index(wrt_param)]
                 dcoeffs[tuple(l)] = cnt * coeff
 
-        return FASTPolynomial(dcoeffs, self.max_num_vars)
+        return Polynomial(dcoeffs, self.max_num_vars)
 
     @property
     def degree(self):
@@ -314,7 +314,7 @@ class FASTPolynomial(object):
         -------
         Polynomial
         """
-        return FASTPolynomial.from_rep(self._rep.copy())
+        return Polynomial.from_rep(self._rep.copy())
 
     def map_indices(self, mapfn):
         """
@@ -335,7 +335,7 @@ class FASTPolynomial(object):
         -------
         Polynomial
         """
-        return FASTPolynomial({mapfn(k): v for k, v in self.coeffs.items()}, self.max_num_vars)
+        return Polynomial({mapfn(k): v for k, v in self.coeffs.items()}, self.max_num_vars)
 
     def map_indices_inplace(self, mapfn):
         """
@@ -421,7 +421,7 @@ class FASTPolynomial(object):
         Polynomial
             The polynomial representing self * x.
         """
-        return FASTPolynomial.from_rep(self._rep.mult(x._rep))
+        return Polynomial.from_rep(self._rep.mult(x._rep))
 
     def scale(self, x):
         """
@@ -488,7 +488,7 @@ class FASTPolynomial(object):
 
     def __add__(self, x):
         newpoly = self.copy()
-        if isinstance(x, FASTPolynomial):
+        if isinstance(x, Polynomial):
             newpoly._rep.add_inplace(x._rep)
         else:  # assume a scalar that can be added to values
             newpoly._rep.add_scalar_to_all_coeffs_inplace(x)
@@ -496,14 +496,14 @@ class FASTPolynomial(object):
 
     def __iadd__(self, x):
         """ Does self += x more efficiently """
-        if isinstance(x, FASTPolynomial):
+        if isinstance(x, Polynomial):
             self._rep.add_inplace(x._rep)
         else:  # assume a scalar that can be added to values
             self._rep.add_scalar_to_all_coeffs_inplace(x)
         return self
 
     def __mul__(self, x):
-        if isinstance(x, FASTPolynomial):
+        if isinstance(x, Polynomial):
             return self.mult(x)
         else:  # assume a scalar that can multiply values
             return self.scalar_mult(x)
@@ -512,7 +512,7 @@ class FASTPolynomial(object):
         return self.__mul__(x)
 
     def __pow__(self, n):
-        ret = FASTPolynomial({(): 1.0}, self.max_num_vars)  # max_order updated by mults below
+        ret = Polynomial({(): 1.0}, self.max_num_vars)  # max_order updated by mults below
         cur = self
         for i in range(int(_np.floor(_np.log2(n))) + 1):
             rem = n % 2  # gets least significant bit (i-th) of n
@@ -540,7 +540,8 @@ class FASTPolynomial(object):
         return self._rep
 
 
-Polynomial = FASTPolynomial
+FASTPolynomial = Polynomial
+# ^ That alias is deprecated and should be removed.
 
 
 def bulk_load_compact_polynomials(vtape, ctape, keep_compact=False, max_num_vars=100):
