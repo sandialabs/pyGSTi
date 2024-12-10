@@ -331,13 +331,6 @@ class CircuitEigenvalues(_modf.ModelFunction):
     # ref for eigenvalue derivatives: https://www.win.tue.nl/casa/meetings/seminar/previous/_abstract051019_files/Presentation.pdf                              # noqa
 
 
-#def circuit_eigenvalues(model, circuit):
-#    return _np.array(sorted(_np.linalg.eigvals(model.sim.product(circuit)),
-#                            key=lambda ev: abs(ev), reverse=True))
-#CircuitEigenvalues = _modf.modelfn_factory(circuit_eigenvalues)
-## init args == (model, circuit)
-
-
 def rel_circuit_eigenvalues(model_a, model_b, circuit):
     """
     Eigenvalues of dot(productB(circuit)^-1, productA(circuit))
@@ -541,13 +534,6 @@ if _CVXPY_AVAILABLE:
             J = JBstd - JAstd
             val = 0.5 * (_np.vdot(J.real, self.W.real) + _np.vdot(J.imag, self.W.imag))
             return val
-
-    #def circuit_half_diamond_norm(model_a, model_b, circuit):
-    #    A = model_a.sim.product(circuit) # "gate"
-    #    B = model_b.sim.product(circuit) # "target gate"
-    #    return half_diamond_norm(A, B, model_b.basis)
-    #CircuitHalfDiamondNorm = _modf.modelfn_factory(circuit_half_diamond_norm)
-    #  # init args == (model_a, model_b, circuit)
 
 else:
     circuit_half_diamond_norm = None
