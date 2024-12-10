@@ -276,6 +276,17 @@ class EmbeddedOp(_LinearOperator):
         numpy.ndarray
         """
 
+        #FUTURE: maybe here or in a new "tosymplectic" method, could
+        # create an embeded clifford symplectic rep as follows (when
+        # evotype == "stabilizer"):
+        #def tosymplectic(self):
+        #    #Embed operation's symplectic rep in larger "full" symplectic rep
+        #    #Note: (qubit) labels are in first (and only) tensor-product-block
+        #    qubitLabels = self.state_space.sole_tensor_product_block_labels
+        #    smatrix, svector = _symp.embed_clifford(self.embedded_op.smatrix,
+        #                                            self.embedded_op.svector,
+        #                                            self.qubit_indices,len(qubitLabels))
+
         embedded_dense = self.embedded_op.to_dense(on_space)
         if on_space == 'minimal':  # resolve 'minimal' based on embedded rep type
             on_space = 'Hilbert' if embedded_dense.shape[0] == self.embedded_op.state_space.udim else 'HilbertSchmidt'

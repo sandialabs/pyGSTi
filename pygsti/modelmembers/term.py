@@ -272,6 +272,16 @@ class RankOneTerm(object):
     def __rmul__(self, x):
         return self.__mul__(x)
 
+    #Not needed - but we would use this if we changed
+    # the "effect term" convention so that the pre/post ops
+    # were associated with the pre/post effect vector and
+    # not vice versa (right now the post effect is preceded
+    # by the *pre* ops, and vice versa).  If the reverse
+    # were true we'd need to conjugate the terms created
+    # for ComposedPOVMEffect objects, for example.
+    #def conjugate(self):
+    #    return self.__class__(self._rep.conjugate())
+
 
 class _HasMagnitude(object):
     """
