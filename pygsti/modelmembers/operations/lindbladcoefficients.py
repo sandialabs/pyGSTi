@@ -1124,7 +1124,10 @@ class LindbladCoefficientBlock(_NicelySerializable):
             if self._param_mode == "cholesky":
                 if superops_are_flat:  # then un-flatten
                     superops = superops.reshape((num_bels, num_bels, superops.shape[1], superops.shape[2]))
-                d2Odp2 = _np.zeros([superops.shape[2], superops.shape[3], nP, nP, nP, nP], 'complex')
+                sqrt_nP = _np.sqrt(nP)
+                snP = int(sqrt_nP)
+                assert snP == sqrt_nP == num_bels
+                d2Odp2 = _np.zeros([superops.shape[2], superops.shape[3], snP, snP, snP, snP], 'complex')
                 # yikes! maybe make this SPARSE in future?
 
                 #Note: correspondence w/Erik's notes: a=alpha, b=beta, q=gamma, r=delta
@@ -1136,11 +1139,11 @@ class LindbladCoefficientBlock(_NicelySerializable):
                         parameter indices s.t. ab > base and qr > base.  If
                         ab_inc_eq == True then the > becomes a >=, and likewise
                         for qr_inc_eq.  Used for looping over nonzero hessian els. """
-                    for _base in range(nP):
+                    for _base in range(snP):
                         start_ab = _base if ab_inc_eq else _base + 1
                         start_qr = _base if qr_inc_eq else _base + 1
-                        for _ab in range(start_ab, nP):
-                            for _qr in range(start_qr, nP):
+                        for _ab in range(start_ab, snP):
+                            for _qr in range(start_qr, snP):
                                 yield (_base, _ab, _qr)
 
                 for base, a, q in iter_base_ab_qr(True, True):  # Case1: base=b=r, ab=a, qr=q
@@ -1153,7 +1156,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
                     d2Odp2[:, :, base, b, base, r] = superops[b, r] + superops[r, b]
 
             elif self._param_mode == 'elements':  # unconstrained
-                d2Odp2 = _np.zeros([superops.shape[2], superops.shape[3], nP, nP, nP, nP], 'd')  # all params linear
+                d2Odp2 = _np.zeros([superops.shape[2], superops.shape[3], snP, snP, snP, snP], 'd')  # all params linear
             else:
                 raise ValueError("Internal error: invalid parameter mode (%s) for block type %s!"
                                  % (self._param_mode, self._block_type))
