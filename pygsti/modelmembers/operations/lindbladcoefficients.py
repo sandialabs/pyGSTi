@@ -20,69 +20,61 @@ IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 
 
 class LindbladCoefficientBlock(_NicelySerializable):
-    """ SCRATCH:
-        This routine computes the Hamiltonian and Non-Hamiltonian ("other")
-        superoperator generators which correspond to the terms of the Lindblad
-        expression:
-
-        L(rho) = sum_i( h_i [A_i,rho] ) +
-                 sum_ij( o_ij * (B_i rho B_j^dag -
-                                 0.5( rho B_j^dag B_i + B_j^dag B_i rho) ) )
-
-        where {A_i} and {B_i} are bases (possibly the same) for Hilbert Schmidt
-        (density matrix) space with the identity element removed so that each
-        A_i and B_i are traceless.  If we write L(rho) in terms of superoperators
-        H_i and O_ij,
-
-        L(rho) = sum_i( h_i H_i(rho) ) + sum_ij( o_ij O_ij(rho) )
-
-        then this function computes the matrices for H_i and O_ij using the given
-        density matrix basis.  Thus, if `dmbasis` is expressed in the standard
-        basis (as it should be), the returned matrices are also in this basis.
-
-        If these elements are used as projectors it may be usedful to normalize
-        them (by setting `normalize=True`).  Note, however, that these projectors
-        are not all orthogonal - in particular the O_ij's are not orthogonal to
-        one another.
-
-        Parameters
-        ----------
-        dmbasis_ham : list
-            A list of basis matrices {B_i} *including* the identity as the first
-            element, for the returned Hamiltonian-type error generators.  This
-            argument is easily obtained by call to  :func:`pp_matrices` or a
-            similar function.  The matrices are expected to be in the standard
-            basis, and should be traceless except for the identity.  Matrices
-            should be NumPy arrays or SciPy CSR sparse matrices.
-
-        dmbasis_other : list
-            A list of basis matrices {B_i} *including* the identity as the first
-            element, for the returned Stochastic-type error generators.  This
-            argument is easily obtained by call to  :func:`pp_matrices` or a
-            similar function.  The matrices are expected to be in the standard
-            basis, and should be traceless except for the identity.  Matrices
-            should be NumPy arrays or SciPy CSR sparse matrices.
-
-        normalize : bool
-            Whether or not generators should be normalized so that
-            numpy.linalg.norm(generator.flat) == 1.0  Note that the generators
-            will still, in general, be non-orthogonal.
-
-        other_mode : {"diagonal", "diag_affine", "all"}
-            Which non-Hamiltonian Lindblad error generators to construct.
-            Allowed values are: `"diagonal"` (only the diagonal Stochastic
-            generators are returned; that is, the generators corresponding to the
-            `i==j` terms in the Lindblad expression.), `"diag_affine"` (diagonal +
-            affine generators), and `"all"` (all generators).
+    """ 
+    Class for storing and managing the parameters associated with particular subblocks of error-generator
+    parameters. Responsible for management of different internal representations utilized when employing
+    various error generator constraints.
     """
 
     _superops_cache = {}  # a custom cache for create_lindblad_term_superoperators method calls
 
     def __init__(self, block_type, basis, basis_element_labels=None, initial_block_data=None, param_mode='static',
                  truncate=False):
+        """
+        Parameters
+        ----------
+        block_type : str
+            String specifying the type of error generator parameters contained within this block. Allowed
+            values are 'ham' (for Hamiltonian error generators), 'other_diagonal' (for Pauli stochastic error generators),
+            and 'other' (for Pauli stochastic, Pauli correlation and active error generators).
+        
+        basis : `Basis`
+            `Basis` object to be used by this coefficient block. Not this must be an actual `Basis` object, and not
+            a string (as the coefficient block doesn't have the requisite dimensionality information needed for casting).
+        
+        basis_element_labels : list or tuple of str
+            Iterable of strings corresponding to the basis element subscripts used by the error generators managed by
+            this coefficient block.
+        
+        initial_block_data : _np.ndarray, optional (default None)
+            Numpy array with initial parameter values to use in setting initial state of this coefficient block.
+        
+        param_mode : str, optional (default 'static')
+            String specifying the type of internal parameterization used by this coefficient block. Allowed options are:
+            
+            - For all block types: 'static'
+            - For 'ham': 'elements'
+            - For 'other_diagonal': 'elements', 'cholesky', 'depol', 'reldepol'
+            - For 'other': 'elements', 'cholesky'
+
+            Note that the most commonly encounted settings in practice are 'elements' and 'cholesky',
+            which when used in the right combination are utilized in the construction of GLND and CPTPLND
+            parameterized models. For both GLND and CPTPLND the 'ham' block used the 'elements' `param_mode`.
+            GLND the 'other' block uses 'elements', and for CPTPLND it uses 'cholesky'. 
+            
+            'depol' and 'reldepol' are special modes used only for Pauli stochastic only coefficient blocks
+            (i.e. 'other_diagonal'), and correspond to special reduced parameterizations applicable to depolarizing
+            channels. (TODO: Add better explanation of the difference between depol and reldepol).
+        
+        truncate : bool, optional (default False)
+            Flag specifying whether to truncate the parameters given by `initial_block_data` in order to meet
+            constraints (e.g. to preserve CPTP) when necessary. If False, then an error is thrown when the 
+            given intial data cannot be parameterized as specified. 
+        """
+
         super().__init__()
         self._block_type = block_type  # 'ham' or 'other' or 'other_diagonal'
-        self._param_mode = param_mode  # 'static', 'elements', 'cholesky', or 'real_cholesky', 'depol', 'reldepol'
+        self._param_mode = param_mode  # 'static', 'elements', 'cholesky', 'depol', 'reldepol'
         self._basis = basis  # must be a full Basis object, not just a string, as we otherwise don't know dimension
         self._bel_labels = tuple(basis_element_labels) if (basis_element_labels is not None) \
             else tuple(basis.labels[1:])  # Note: don't include identity
@@ -1124,11 +1116,11 @@ class LindbladCoefficientBlock(_NicelySerializable):
             if self._param_mode == "depol":
                 #d2Odp2  = _np.einsum('alj->lj', self.otherGens)[:,:,None,None] * 2
                 d2Odp2 = _np.sum(superops, axis=0)[:, :, None, None] * 2
-            elif self.parameterization.param_mode == "cptp":
+            elif self._param_mode == "cholesky":
                 assert(nP == num_bels)
                 #d2Odp2  = _np.einsum('alj,aq->ljaq', self.otherGens, 2*_np.identity(nP,'d'))
                 d2Odp2 = _np.transpose(superops, (1, 2, 0))[:, :, :, None] * 2 * _np.identity(nP, 'd')
-            else:  # param_mode == "unconstrained" or "reldepol"
+            else:  # param_mode == "elements" or "reldepol"
                 assert(nP == num_bels)
             d2Odp2 = _np.zeros((superops.shape[1], superops.shape[2], nP, nP), 'd')
 
@@ -1168,6 +1160,11 @@ class LindbladCoefficientBlock(_NicelySerializable):
                     d2Odp2[:, :, base, b, base, r] = superops[b, r] + superops[r, b]
 
             elif self._param_mode == 'elements':  # unconstrained
+                if superops_are_flat:  # then un-flatten
+                    superops = superops.reshape((num_bels, num_bels, superops.shape[1], superops.shape[2]))
+                sqrt_nP = _np.sqrt(nP)
+                snP = int(sqrt_nP)
+                assert snP == sqrt_nP == num_bels
                 d2Odp2 = _np.zeros([superops.shape[2], superops.shape[3], snP, snP, snP, snP], 'd')  # all params linear
             else:
                 raise ValueError("Internal error: invalid parameter mode (%s) for block type %s!"
