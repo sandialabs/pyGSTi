@@ -21,7 +21,7 @@ from pygsti.modelmembers.povms.fulleffect import FullPOVMEffect as _FullPOVMEffe
 from pygsti.modelmembers.povms.povm import POVM as _POVM
 from pygsti.modelmembers import modelmember as _mm
 from pygsti.evotypes import Evotype as _Evotype
-from pygsti.baseobjs.statespace import StateSpace as _StateSpace
+from pygsti.baseobjs.statespace import StateSpace as _StateSpace, default_space_for_dim
 
 
 class _BasePOVM(_POVM):
@@ -67,7 +67,12 @@ class _BasePOVM(_POVM):
             self.complement_label = None
 
         if evotype is not None:
-            evotype = _Evotype.cast(evotype, items[0][1].state_space)  # e.g., resolve "default"
+            if state_space is None and isinstance(items[0][1], (_np.ndarray, list)):
+                evotype = _Evotype.cast(evotype, default_space_for_dim(len(items[0][1])))  # e.g., resolve "default"
+            elif state_space is not None:
+                evotype = _Evotype.cast(evotype, state_space)  # e.g., resolve "default"
+            else: #try to grab the state space from the first effect as a fall back.
+                evotype = _Evotype.cast(evotype, items[0][1].state_space)  # e.g., resolve "default"
 
         #Copy each effect vector and set it's parent and gpindices.
         # Assume each given effect vector's parameters are independent.
