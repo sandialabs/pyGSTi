@@ -1386,6 +1386,10 @@ class LindbladErrorgen(_LinearOperator):
         mm_dict['rep_type'] = self._rep_type
         mm_dict['matrix_basis'] = self.matrix_basis.to_nice_serialization()
         mm_dict['coefficient_blocks'] = [blk.to_nice_serialization() for blk in self.coefficient_blocks]
+        #serialize the paramval attribute. Rederiving this from the block data has been leading to sign
+        #ambiguity on deserialization.
+        mm_dict['paramvals'] = self._encodemx(self.paramvals)
+
         return mm_dict
 
     @classmethod
@@ -1394,8 +1398,11 @@ class LindbladErrorgen(_LinearOperator):
         state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
         coeff_blocks = [_LindbladCoefficientBlock.from_nice_serialization(blk)
                         for blk in mm_dict['coefficient_blocks']]
-
-        return cls(coeff_blocks, 'auto', mx_basis, mm_dict['evotype'], state_space)
+        ret = cls(coeff_blocks, 'auto', mx_basis, mm_dict['evotype'], state_space)
+        #reinitialize the paramvals attribute from memoized dict. Rederiving this from the block data has 
+        #been leading to sign ambiguity on deserialization.
+        ret.paramvals = ret._decodemx(mm_dict['paramvals'])
+        return ret
 
     def _is_similar(self, other, rtol, atol):
         """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
