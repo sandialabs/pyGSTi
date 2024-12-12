@@ -1249,20 +1249,8 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         # dp_dOps[i,j] = dot( e, dot( d_gs, rho ) )[0,i,j,0]
         # dp_dOps      = squeeze( dot( e, dot( d_gs, rho ) ), axis=(0,3))
         old_err2 = _np.seterr(invalid='ignore', over='ignore')
-        #print(f'{d_gs.shape=}')
-        #print(f'{e.shape=}')
-        #print(f'{rho.shape=}')
-        #print(f'{_np.dot(d_gs, rho).shape=}')
-        #print(f'{_np.dot(e, _np.dot(d_gs, rho)).shape=}')
-        #print(f'{_np.squeeze(_np.dot(e, _np.dot(d_gs, rho)), axis=(0, 3)).shape=}')
-        #
-        #print(f"{_np.einsum('hk,ijkl,lm->ij', e, d_gs, rho).shape=}")
-        #
-        #print(f"{_np.linalg.norm(_np.squeeze(_np.dot(e, _np.dot(d_gs, rho))) - _np.einsum('hk,ijkl,lm->ij', e, d_gs, rho))=}")
         path = _np.einsum_path('hk,ijkl,lm->ij', e, d_gs, rho, optimize='optimal')
-        #print(path[1])
         dp_dOps = _np.einsum('hk,ijkl,lm->ij', e, d_gs, rho, optimize=path[0]) * scale_vals[:, None]
-        #dp_dOps = _np.squeeze(_np.dot(e, _np.dot(d_gs, rho)), axis=(0, 3)) * scale_vals[:, None]
         _np.seterr(**old_err2)
         # may overflow, but OK ; shape == (len(circuit_list), nDerivCols)
         # may also give invalid value due to scale_vals being inf and dot-prod being 0. In

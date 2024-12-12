@@ -239,7 +239,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
             Allowed options are 'size', which corresponds to balancing the number of circuits, 
             and 'propagations', which corresponds to balancing the number of state propagations.
 
-        load_balancing_parameters : tuple of floats, optional (default (1.2, .1))
+        load_balancing_parameters : tuple of floats, optional (default (1.15, .1))
             A tuple of floats used as load balancing parameters when splitting a layout across atoms,
             as in the multi-processor setting when using MPI. These parameters correspond to the `imbalance_threshold`
             and `minimum_improvement_threshold` parameters described in the method `find_splitting_new`

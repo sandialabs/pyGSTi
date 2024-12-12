@@ -157,17 +157,6 @@ namespace CReps_densitymx {
     return ret;
   }
 
-//  INT EffectCRep_Computational::parity(INT x) {
-//    // int64-bit specific
-//    x = (x & 0x00000000FFFFFFFF)^(x >> 32);
-//    x = (x & 0x000000000000FFFF)^(x >> 16);
-//    x = (x & 0x00000000000000FF)^(x >> 8);
-//    x = (x & 0x000000000000000F)^(x >> 4);
-//    x = (x & 0x0000000000000003)^(x >> 2);
-//    x = (x & 0x0000000000000001)^(x >> 1);
-//    return x & 1; // return the last bit (0 or 1)
-//  }
-
   inline INT EffectCRep_Computational::parity(INT x) {
     x ^= (x >> 32);
     x ^= (x >> 16);
