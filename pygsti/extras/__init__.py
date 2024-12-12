@@ -9,5 +9,4 @@
 """ Container for beyond-GST sub-packages """
 
 # from . import drift
-# from . import rb  # temporarily removed until RB analysis is fixed
 # from . import rpe
