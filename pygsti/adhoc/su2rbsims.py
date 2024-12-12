@@ -256,6 +256,15 @@ class SU2RBSim:
         fn = self.main_filename.strip('.pkl') + '_nonspam_comp.pkl'
         return fn
     
+    @property 
+    def rbtype(self) -> str:
+        return 'SSRB'
+    
+    @property
+    def synprobs(self) -> np.ndarray:
+        pkm, _ = self.synspam_transform(self.probs, shots_per_circuit=np.inf)
+        return pkm
+    
     def load_nonspam_compositions(self):
         if self.nonspam_compositions is not None:
             return
@@ -535,6 +544,19 @@ class SU2CharacterRBSim(SU2RBSim):
     @property
     def ssr1rb(self) -> bool:
         return self.design.ssr1rb
+    
+    @property
+    def rbtype(self) -> str:
+        if self.ssr1rb:
+            return 'SSR1RB'
+        else:
+            return r'SS$_{\chi}$RB'
+        
+    @property
+    def synprobs(self) -> np.ndarray:
+        chararg = self.charcores if self.ssr1rb else self.chars
+        pkm, _ = SU2CharacterRBSim.synspam_character_transform(self.probs, chararg, self.design.irrep_sizes, shots_per_circuit=np.inf)
+        return pkm
 
     def _process_circuits(self, fixedlen_circuits):
         if la.norm(self._noise_channel - np.eye(self._noise_channel.shape[0])) <= 1e-16:
@@ -737,53 +759,33 @@ class Analysis:
         return rates, ps, sigmas
 
     @staticmethod
-    def synspam_rb_fig(_rbm : Union[SU2RBSim, SU2CharacterRBSim], fitlog=False, figax=None, rate_stderrs=False):
-        sps = np.inf
-        if type(_rbm) == SU2RBSim:
-            pkm, _ = SU2RBSim.synspam_transform(_rbm.probs, shots_per_circuit=sps)
-            rbtype = 'Standard'
-        elif isinstance(_rbm, SU2CharacterRBSim):
-            if _rbm.ssr1rb:
-                rbtype = 'Rank-1 Character'
-                chararg = _rbm.charcores
-            else:
-                rbtype = 'Character'
-                chararg = _rbm.chars
-            pkm, _ = SU2CharacterRBSim.synspam_character_transform(_rbm.probs, chararg, Spin72.irrep_block_sizes, shots_per_circuit=sps)
-        else:
-            raise ValueError()
+    def synspam_rb_fig(_rbm : SU2RBSim, fitlog=False, figax=None, rate_stderrs=False):
         if figax is None:
             fig, axs = plt.subplots(nrows=1, ncols=1)
             showfig = True
-            fig.suptitle(f'{rbtype} RB with synSPAM, {sps} shot/circuit. Noise model {_rbm._noise_channel_info}')
+            fig.suptitle(f'{ _rbm.rbtype}, {np.inf} shot/circuit. Noise model {_rbm._noise_channel_info}')
         else:
             fig, axs = figax
             showfig = False
             names = _rbm.noise_channel_parameter_names
             axs.set_title(f'{names[0]} = {_rbm._noise_channel_info[1][0]}, {names[1]} = {_rbm._noise_channel_info[1][1]} ')
-        if not rate_stderrs:
-            out = Analysis.fit_and_plot_with_rates(_rbm.design.lengths + 1, pkm, axs, fitlog)
-        else:
+        ys = _rbm.synprobs
+        x  = _rbm.design.lengths + 1
+        if rate_stderrs:
             assert not fitlog
-            out = Analysis.fit_and_plot_with_rates_stderrors(_rbm.design.lengths + 1, pkm, axs, fitlog)
+            out = Analysis.fit_and_plot_with_rates_stderrors(x, ys, axs, fitlog)
+        else:
+            out = Analysis.fit_and_plot_with_rates(x, ys, axs, fitlog)
         if showfig:
             fig.show()
         return out
 
     @staticmethod
-    def synspam_rb(_rbm : Union[SU2RBSim, SU2CharacterRBSim]):
-        sps = np.inf
-        if type(_rbm) == SU2RBSim:
-            pkm, _ = SU2RBSim.synspam_transform(_rbm.probs, shots_per_circuit=sps)
-        elif isinstance(_rbm, SU2CharacterRBSim):
-            chararg = _rbm.charcores if _rbm.ssr1rb else  _rbm.chars
-            pkm, _ = SU2CharacterRBSim.synspam_character_transform(_rbm.probs, chararg, Spin72.irrep_block_sizes, shots_per_circuit=sps)
-        else:
-            raise ValueError()
-        F = get_F()
-        rates, ps, ps_sigmas = Analysis.fit_and_get_rates(_rbm.design.lengths + 1, pkm, fitlog=False)
+    def synspam_rb(_rbm : SU2RBSim):
+        rates, ps, ps_sigmas = Analysis.fit_and_get_rates(_rbm.design.lengths + 1, _rbm.synprobs, fitlog=False)
         f_mu = ps[:,1]
         f_sig = ps_sigmas[:,1]
+        F = get_F()
         invF = la.inv(F)  # doing this properly by factoring F isn't worth it.
         rates = invF @ f_mu
         rates_sigmas = np.sqrt(np.diag( invF @ np.diag(f_sig**2) @ invF.T ))
