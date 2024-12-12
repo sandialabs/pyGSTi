@@ -745,9 +745,9 @@ class Analysis:
         for i,r in enumerate(rates):
             y = ys[i,:]
             if fitlog:
-                textstr = f'{i}: f = {f_mu[i]:.3f}±({f_sig[i]:.3f}) | rate = {r:.3f}'
+                textstr = f'{i}: f = {f_mu[i]:.3f}±({f_sig[i]:.3f}) | p = {r:.3f}'
             else:
-                textstr = f'{i}: f = {f_mu[i]:.3f} | rate = {r:.3f}±({rates_sig[i]:.4f})'
+                textstr = f'{i}: f = {f_mu[i]:.3f} | p = { " " if r >= 0 else "-" }{abs(r):.3f}±({rates_sig[i]:.4f})'
             ax.scatter(x, y, label=textstr, color=default_colors[i % len(default_colors)], s=20)
             ax.plot(x, model(x, ps[i,0], ps[i,1]), color=default_colors[i % len(default_colors)], linestyle='-')
         ax.legend()
