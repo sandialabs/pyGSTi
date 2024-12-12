@@ -697,7 +697,7 @@ class Analysis:
         ps, sigmas = Analysis.fit_exp_batch(x, pkm, fitlog)
         f_mu = ps[:,1]
         f_sig = sigmas[:,1]
-        default_colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+        default_colors = Analysis.plot_colors
         model = Analysis.exp_decay_logvar if fitlog else Analysis.exp_decay
         num_series = f_mu.size
         for i in range(num_series):
@@ -718,7 +718,7 @@ class Analysis:
         invF = la.inv(F)  # doing this properly by factoring F isn't worth it.
         rates = invF @ f_mu
         rates_sig = np.sqrt(np.diag( invF @ np.diag(f_sig**2) @ invF.T ))
-        default_colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+        default_colors = Analysis.plot_colors
         model = Analysis.exp_decay_logvar if fitlog else Analysis.exp_decay
         for i,r in enumerate(rates):
             y = ys[i,:]
