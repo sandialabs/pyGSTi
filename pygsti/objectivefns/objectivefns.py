@@ -4380,10 +4380,9 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             self._clip_probs()
             if shared_mem_leader:
                 terms_no_penalty = self.raw_objfn.terms(self.probs, self.counts, self.total_counts, self.freqs)
-                m = terms_no_penalty.size
-                terms[:m] = terms_no_penalty
+                terms[:self.nelements] = terms_no_penalty
                 if self._process_penalties:
-                    terms[m:] = self._penaltyvec(paramvec)
+                    terms[self.nelements:] = self._penaltyvec(paramvec)
 
         if self.firsts is not None and shared_mem_leader:
             omitted_probs = 1.0 - _np.array([self.probs[self.layout.indices_for_index(i)].sum() for i in self.indicesOfCircuitsWithOmittedData])
@@ -4443,7 +4442,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
                 dprobs[self.firsts] -= omitted_dprobs_firsts_dterms[:, None] * self.dprobs_omitted_rowsum
 
             if self._process_penalties:
-                self._fill_dterms_penalty(paramvec, self.jac[self.nelements:, :])  # jac.shape == (nelements+N,N)
+                self._fill_dterms_penalty(paramvec, self.jac[self.nelements:, :])  # jac.shape == (nelements + local_ex, nparams)
         
         unit_ralloc.host_comm_barrier()
         self.raw_objfn.resource_alloc.profiler.add_time("JACOBIAN", tm)
@@ -4474,8 +4473,15 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         numpy.ndarray
             An array of shape `(nElements,)` where `nElements = self.nelements + self.ex_local`.
         """
-        if oob_check: _warnings.warn('oob_check ignored')
         lsvec = self.terms(paramvec, "LS OBJECTIVE")
+        if oob_check and _np.any(lsvec < 0):
+            bad_locs = _np.where(lsvec < 0)[0]
+            msg = f"""
+            lsvec is only defined when terms is elementwise nonnegative.
+            We encountered negative values for terms[i] for indices i
+            in {bad_locs}.
+            """
+            raise RuntimeError(msg)
         lsvec **= 0.5
         return lsvec
 
