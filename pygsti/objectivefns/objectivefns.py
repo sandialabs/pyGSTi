@@ -4326,8 +4326,10 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         self.prob_clip_interval = prob_clip_interval  # not really a "penalty" per se, but including it as one
         # gives the user the ability to easily set it if they ever need to (unlikely)
 
-        self._process_penalties = self.layout.part_of_final_atom_processor \
-            if isinstance(self.layout, _DistributableCOPALayout) else True
+        if isinstance(self.layout, _DistributableCOPALayout):
+            self._process_penalties = self.layout.part_of_final_atom_processor
+        else:
+            self._process_penalties = True
 
         ex = 0  # Compute "extra" number of terms/lsvec-element/rows-of-jacobian beyond evaltree elements
 
@@ -4361,8 +4363,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         Returns
         -------
         numpy.ndarray
-            An array of shape `(nElements,)` where `nElements` is the number
-            of circuit outcomes.
+            An array of shape `(nElements,)` where `nElements = self.nelements + self.ex_local`.
         """
         tm = _time.time()
         if paramvec is None:
@@ -4412,8 +4413,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         Returns
         -------
         numpy.ndarray
-            An array of shape `(nElements,nParams)` where `nElements` is the number
-            of circuit outcomes and `nParams` is the number of model parameters.
+            An array of shape `(nElements,nParams)` where `nElements = self.nelements + self.ex_local`.
         """
         tm = _time.time()
         dprobs = self.jac[0:self.nelements, :]
@@ -4472,8 +4472,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         Returns
         -------
         numpy.ndarray
-            An array of shape `(nElements,)` where `nElements` is the number
-            of circuit outcomes.
+            An array of shape `(nElements,)` where `nElements = self.nelements + self.ex_local`.
         """
         if oob_check: _warnings.warn('oob_check ignored')
         lsvec = self.terms(paramvec, "LS OBJECTIVE")
