@@ -752,7 +752,7 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
     state_space = _statespace.QubitSpace(qudit_labels) if all([udim == 2 for udim in processor_spec.qudit_udims]) \
         else _statespace.QuditSpace(qudit_labels, processor_spec.qudit_udims)
     std_gate_unitaries = _itgs.standard_gatename_unitaries()
-    evotype = _Evotype.cast(evotype)
+    evotype = _Evotype.cast(evotype, state_space=state_space)
     modelnoise = _OpModelNoise.cast(modelnoise)
     modelnoise.reset_access_counters()
 
@@ -1676,7 +1676,7 @@ def _create_crosstalk_free_model(processor_spec, modelnoise, custom_gates=None, 
     qudit_labels = processor_spec.qudit_labels
     state_space = _statespace.QubitSpace(qudit_labels) if all([udim == 2 for udim in processor_spec.qudit_udims]) \
         else _statespace.QuditSpace(qudit_labels, processor_spec.qudit_udims)
-    evotype = _Evotype.cast(evotype)
+    evotype = _Evotype.cast(evotype, state_space=state_space)
     modelnoise = _OpModelNoise.cast(modelnoise)
     modelnoise.reset_access_counters()
 
@@ -1867,7 +1867,7 @@ def _create_cloud_crosstalk_model(processor_spec, modelnoise, custom_gates=None,
     qudit_labels = processor_spec.qudit_labels
     state_space = _statespace.QubitSpace(qudit_labels) if all([udim == 2 for udim in processor_spec.qudit_udims]) \
         else _statespace.QuditSpace(qudit_labels, processor_spec.qudit_udims)  # FUTURE: allow more types of spaces
-    evotype = _Evotype.cast(evotype)
+    evotype = _Evotype.cast(evotype, state_space=state_space)
     modelnoise = _OpModelNoise.cast(modelnoise)
     modelnoise.reset_access_counters()
     printer = _VerbosityPrinter.create_printer(verbosity)

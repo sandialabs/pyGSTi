@@ -69,7 +69,7 @@ class ComposedOp(_LinearOperator):
             evotype = ops_to_compose[0]._evotype
         assert(all([evotype == operation._evotype for operation in ops_to_compose])), \
             "All operations must have the same evolution type (%s expected)!" % evotype
-        evotype = _Evotype.cast(evotype)
+        evotype = _Evotype.cast(evotype, state_space=state_space)
 
         rep = self._create_rep_object(evotype, state_space)
 
