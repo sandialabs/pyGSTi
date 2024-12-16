@@ -14,6 +14,7 @@ import itertools as _itertools
 import sys as _sys
 import time as _time
 import pathlib as _pathlib
+import warnings as _warnings
 
 import numpy as _np
 
@@ -4477,7 +4478,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
                     terms[m:] = self._penaltyvec(paramvec)
 
         if self.firsts is not None and shared_mem_leader:
-            omitted_probs = 1.0 - _np.array([probs[self.layout.indices_for_index(i)].sum() for i in self.indicesOfCircuitsWithOmittedData])
+            omitted_probs = 1.0 - _np.array([self.probs[self.layout.indices_for_index(i)].sum() for i in self.indicesOfCircuitsWithOmittedData])
             omitted_probs_firsts_terms = self.raw_objfn.zero_freq_terms(self.total_counts[self.firsts], omitted_probs)
             terms[self.firsts] += omitted_probs_firsts_terms
         
@@ -4530,9 +4531,9 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         
         if shared_mem_leader:
             if self.firsts is not None:
-                omitted_probs = 1.0 - _np.array([_np.sum(probs[self.layout.indices_for_index(i)]) for i in self.indicesOfCircuitsWithOmittedData])
+                omitted_probs = 1.0 - _np.array([_np.sum(self.probs[self.layout.indices_for_index(i)]) for i in self.indicesOfCircuitsWithOmittedData])
                 omitted_dprobs_firsts_dterms = self.raw_objfn.zero_freq_dterms(self.total_counts[self.firsts], omitted_probs)
-                dterms[self.firsts] -= omitted_dprobs_firsts_dterms[:, None] * self.dprobs_omitted_rowsum
+                dprobs[self.firsts] -= omitted_dprobs_firsts_dterms[:, None] * self.dprobs_omitted_rowsum
 
             if self._process_penalties:
                 self._fill_dterms_penalty(paramvec, self.jac[self.nelements:, :])  # jac.shape == (nelements+N,N)
@@ -4567,7 +4568,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             An array of shape `(nElements,)` where `nElements` is the number
             of circuit outcomes.
         """
-        if oob_check: warnings.warn('oob_check ignored')
+        if oob_check: _warnings.warn('oob_check ignored')
         lsvec = self.terms(paramvec, "LS OBJECTIVE")
         lsvec **= 0.5
         return lsvec
