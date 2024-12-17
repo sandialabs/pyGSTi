@@ -55,6 +55,7 @@ class ModelBase(object):
 
     def setUp(self):
         self.model = self._model.copy()
+        self.model.sim = 'matrix'
         super(ModelBase, self).setUp()
 
     def test_construction(self):
@@ -462,26 +463,6 @@ class SimMethodBase(object):
         self.assertAlmostEqual(1 - expected_1, actual_1[1-zero_outcome_index1])
         self.assertAlmostEqual(1 - expected_2, actual_2[1-zero_outcome_index2])
 
-    def test_bulk_fill_probs_with_split_tree(self):
-        self.skipTest("Need a way to manually create 'split' layouts")
-        # XXX is this correct?  EGN: looks right to me.
-        evt, lookup, _ = self.model.bulk_evaltree([self.gatestring1, self.gatestring2])
-        nElements = evt.num_final_elements()
-        probs_to_fill = np.empty(nElements, 'd')
-        lookup_split = evt.split(lookup, num_sub_trees=2)
-
-        with self.assertNoWarns():
-            self.model.bulk_fill_probs(probs_to_fill, evt)
-
-        expected_1 = self._expected_probs[self.gatestring1]
-        expected_2 = self._expected_probs[self.gatestring2]
-        actual_1 = probs_to_fill[lookup_split[0]]
-        actual_2 = probs_to_fill[lookup_split[1]]
-        self.assertAlmostEqual(expected_1, actual_1[0])
-        self.assertAlmostEqual(expected_2, actual_2[0])
-        self.assertAlmostEqual(1 - expected_1, actual_1[1])
-        self.assertAlmostEqual(1 - expected_2, actual_2[1])
-
     def test_bulk_dprobs(self):
         with self.assertNoWarns():
             bulk_dprobs = self.model.sim.bulk_dprobs([self.gatestring1, self.gatestring2])
@@ -517,17 +498,6 @@ class SimMethodBase(object):
 
             self.model.sim.bulk_fill_dprobs(dprobs_to_fill, layout)
             # TODO assert correctness
-
-    def test_bulk_fill_dprobs_with_split_tree(self):
-        self.skipTest("Need a way to manually create 'split' layouts")
-        evt, lookup, _ = self.model.bulk_evaltree([self.gatestring1, self.gatestring2])
-        nElements = evt.num_final_elements()
-        nParams = self.model.num_params
-        dprobs_to_fill = np.empty((nElements, nParams), 'd')
-        lookup_split = evt.split(lookup, num_sub_trees=2)
-        with self.assertNoWarns():
-            self.model.bulk_fill_dprobs(dprobs_to_fill, evt)
-        # TODO assert correctness
 
     def test_bulk_hprobs(self):
         # call normally
@@ -581,17 +551,6 @@ class SimMethodBase(object):
             self.model.sim.bulk_fill_hprobs(hprobs_to_fill, layout)
             # TODO assert correctness
 
-    def test_bulk_fill_hprobs_with_split_tree(self):
-        self.skipTest("Need a way to manually create 'split' layouts")
-        evt, lookup, _ = self.model.bulk_evaltree([self.gatestring1, self.gatestring2])
-        nElements = evt.num_final_elements()
-        nParams = self.model.num_params
-        hprobs_to_fill = np.empty((nElements, nParams, nParams), 'd')
-        lookup_split = evt.split(lookup, num_sub_trees=2)
-        #with self.assertNoWarns():  # - now *can* warn about inefficient evaltree (ok)
-        self.model.bulk_fill_hprobs(hprobs_to_fill, evt)
-        # TODO assert correctness
-
     def test_iter_hprobs_by_rectangle(self):
         layout = self.model.sim.create_layout([self.gatestring1, self.gatestring2], array_types=('epp',))
         nP = self.model.num_params
@@ -607,7 +566,7 @@ class SimMethodBase(object):
         all_d12cols = np.concatenate(d12cols, axis=2)
         # TODO assert correctness
 
-    def test_bulk_evaltree(self):
+    def test_layout_construction(self):
         # Test tree construction
         circuits = pc.to_circuits(
             [('Gx',),
@@ -622,14 +581,6 @@ class SimMethodBase(object):
              ('Gy', 'Gx', 'Gx')])
 
         layout = self.model.sim.create_layout(circuits)
-
-        #TODO: test different forced splittings, once this is possible to do...
-        #evt, lookup, outcome_lookup = self.model.bulk_evaltree(circuits, max_tree_size=4)
-        #evt, lookup, outcome_lookup = self.model.bulk_evaltree(circuits, min_subtrees=2, max_tree_size=4)
-        #with self.assertWarns(Warning):
-        #    self.model.bulk_evaltree(circuits, min_subtrees=3, max_tree_size=8)
-        #    #balanced to trigger 2 re-splits! (Warning: could not create a tree ...)
-
 
 class StandardMethodBase(GeneralMethodBase, SimMethodBase, ThresholdMethodBase):
     pass
@@ -721,7 +672,7 @@ class FullMapSimMethodTester(FullModelBase, SimMethodBase, BaseCase):
         super(FullMapSimMethodTester, self).setUp()
         self.model.sim = mapforwardsim.MapForwardSimulator(self.model)
 
-    def test_bulk_evaltree(self):
+    def test_layout_construction(self):
         # Test tree construction
         circuits = pc.to_circuits(
             [('Gx',),
@@ -736,14 +687,6 @@ class FullMapSimMethodTester(FullModelBase, SimMethodBase, BaseCase):
              ('Gy', 'Gx', 'Gx')])
 
         layout = self.model.sim.create_layout(circuits)
-
-        #TODO: test different forced splittings, once this is possible to do...
-        #evt, lookup, outcome_lookup = self.model.bulk_evaltree(circuits, max_tree_size=4)
-        #evt, lookup, outcome_lookup = self.model.bulk_evaltree(circuits, min_subtrees=2, max_tree_size=4)
-        #with self.assertNoWarns():
-        #    self.model.bulk_evaltree(circuits, min_subtrees=3, max_tree_size=8)
-        #    #balanced to trigger 2 re-splits! (Warning: could not create a tree ...)
-
 
 class FullHighThresholdMethodTester(FullModelBase, ThresholdMethodBase, BaseCase):
     def setUp(self):
