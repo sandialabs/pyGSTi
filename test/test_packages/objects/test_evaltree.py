@@ -51,10 +51,12 @@ class LayoutTestCase(BaseTestCase):
         self._test_layout(pygsti.layouts.copalayout.CircuitOutcomeProbabilityArrayLayout.create_from(self.circuits[:], self.model))
 
     def test_map_layout(self):
+        self.model.sim = 'map'
         self._test_layout(pygsti.layouts.maplayout.MapCOPALayout(self.circuits[:], self.model))
         #TODO: test split layouts
 
     def test_matrix_layout(self):
+        self.model.sim = 'matrix'
         self._test_layout(pygsti.layouts.matrixlayout.MatrixCOPALayout(self.circuits[:], self.model))
 
     #SCRATCH
