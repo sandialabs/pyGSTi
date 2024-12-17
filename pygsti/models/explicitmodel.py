@@ -340,7 +340,7 @@ class ExplicitOpModel(_mdl.OpModel):
             raise KeyError("Key %s has an invalid prefix" % label)
 
     def convert_members_inplace(self, to_type, categories_to_convert='all', labels_to_convert='all',
-                                ideal_model=None, flatten_structure=False, set_default_gauge_group=False, cptp_truncation_tol= 1e-6, spam_cptp_penalty = 1e-6):
+                                ideal_model=None, flatten_structure=False, set_default_gauge_group=False, cptp_truncation_tol= 1e-7, spam_cptp_penalty = 1e-6):
         """
         TODO: docstring -- like set_all_parameterizations but doesn't set default gauge group by default
         """

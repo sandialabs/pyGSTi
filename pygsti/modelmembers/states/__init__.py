@@ -189,7 +189,7 @@ def state_type_from_op_type(op_type):
     return state_type_preferences
 
 
-def convert(state, to_type, basis, cptp_penalty, ideal_state=None, flatten_structure=False):
+def convert(state, to_type, basis, cptp_penalty=1e-7, ideal_state=None, flatten_structure=False):
     """
     TODO: update docstring
     Convert SPAM vector to a new type of parameterization.

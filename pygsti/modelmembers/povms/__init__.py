@@ -299,7 +299,7 @@ def povm_type_from_op_type(op_type):
     return povm_type_preferences
 
 
-def convert(povm, to_type, basis, cptp_penalty, ideal_povm=None, flatten_structure=False):
+def convert(povm, to_type, basis, cptp_penalty=1e-7, ideal_povm=None, flatten_structure=False):
     """
     TODO: update docstring
     Convert a POVM to a new type of parameterization.
