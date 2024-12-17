@@ -4347,7 +4347,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
         return ex
 
-    def terms(self, paramvec=None, profiler_str="TERMS OBJECTIVE"):
+    def terms(self, paramvec=None, oob_check=False, profiler_str="TERMS OBJECTIVE"):
         """
         Compute the terms of the objective function.
 
@@ -4378,6 +4378,11 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         with self.resource_alloc.temporarily_track_memory(self.nelements):  # 'e' (terms)
             self.model.sim.bulk_fill_probs(self.probs, self.layout)
             self._clip_probs()
+    
+            if oob_check:  # Only used for termgap cases
+                if not self.model.sim.bulk_test_if_paths_are_sufficient(self.layout, self.probs, verbosity=1):
+                    raise ValueError("Out of bounds!")  # signals LM optimizer
+
             if shared_mem_leader:
                 terms_no_penalty = self.raw_objfn.terms(self.probs, self.counts, self.total_counts, self.freqs)
                 terms[:self.nelements] = terms_no_penalty
@@ -4473,8 +4478,8 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         numpy.ndarray
             An array of shape `(nElements,)` where `nElements = self.nelements + self.ex_local`.
         """
-        lsvec = self.terms(paramvec, "LS OBJECTIVE")
-        if oob_check and _np.any(lsvec < 0):
+        lsvec = self.terms(paramvec, oob_check, "LS OBJECTIVE")
+        if _np.any(lsvec < 0):
             bad_locs = _np.where(lsvec < 0)[0]
             msg = f"""
             lsvec is only defined when terms is elementwise nonnegative.
