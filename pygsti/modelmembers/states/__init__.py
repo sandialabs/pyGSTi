@@ -31,6 +31,7 @@ from .tensorprodstate import TensorProductState
 from .tpstate import TPState
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.tools import basistools as _bt
+from pygsti.baseobjs import Basis
 from pygsti.tools import optools as _ot
 from pygsti.tools import sum_of_negative_choi_eigenvalues_gate
 
@@ -188,7 +189,7 @@ def state_type_from_op_type(op_type):
     return state_type_preferences
 
 
-def convert(state, to_type, basis, ideal_state=None, flatten_structure=False):
+def convert(state, to_type, basis, cptp_penalty, ideal_state=None, flatten_structure=False):
     """
     TODO: update docstring
     Convert SPAM vector to a new type of parameterization.
@@ -220,6 +221,10 @@ def convert(state, to_type, basis, ideal_state=None, flatten_structure=False):
         are separately converted, leaving the original state's structure
         unchanged.  When `True`, composed and embedded operations are "flattened"
         into a single state of the requested `to_type`.
+    
+    cptp_penalty : float, optional
+        CPTP penalty that gets factored into the optimization to find the resulting model
+        when converting to an error-generator type.
 
     Returns
     -------
@@ -237,7 +242,6 @@ def convert(state, to_type, basis, ideal_state=None, flatten_structure=False):
                          'static unitary': StaticPureState,
                          'static clifford': ComputationalBasisState}
     NoneType = type(None)
-
     for to_type in to_types:
         try:
             if isinstance(state, destination_types.get(to_type, NoneType)):
@@ -263,13 +267,14 @@ def convert(state, to_type, basis, ideal_state=None, flatten_structure=False):
                     dense_st = st.to_dense()
                     dense_state = state.to_dense()
                     num_qubits = st.state_space.num_qubits
-                    num_errgens = 2**(4*num_qubits)-2**(2*num_qubits)
+                    
+                    errgen = _LindbladErrorgen.from_error_generator(2**(2*num_qubits), parameterization=to_type)
+                    num_errgens = errgen.num_params
 
                     #GLND for states suffers from "dumb gauge" freedom. This function identifies
                     #the physical directions to avoid this gauge.
                     def calc_physical_subspace(ideal_prep, epsilon = 1e-9):
 	
-                        errgen = _LindbladErrorgen.from_error_generator(2**(2*num_qubits), parameterization="GLND")
                         exp_errgen = _ExpErrorgenOp(errgen)
                         ideal_vec = _np.zeros(num_errgens)
 
@@ -287,7 +292,7 @@ def convert(state, to_type, basis, ideal_state=None, flatten_structure=False):
                         return V[:len(S),]
                         
                     phys_directions = calc_physical_subspace(dense_state)
-                    cptp_penalty = .5
+    
                     #We use optimization to find the best error generator representation
                     #we only vary physical directions, not independent error generators
 
@@ -297,7 +302,9 @@ def convert(state, to_type, basis, ideal_state=None, flatten_structure=False):
                             L_vec += coeff * phys_direction
                         errorgen.from_vector(L_vec)
                         proc_matrix = _spl.expm(errorgen.to_dense())
-                        return _np.linalg.norm(proc_matrix @ dense_st - dense_state) + cptp_pentaly * sum_of_negative_choi_eigenvalues_gate(proc_matrix)
+                        #basis of to_dense() CHECK if always pp
+                        dense_basis = Basis.cast('pp', (2**num_qubits)**2)
+                        return _np.linalg.norm(proc_matrix @ dense_st - dense_state) + cptp_penalty * sum_of_negative_choi_eigenvalues_gate(proc_matrix, dense_basis)
                     
                     soln = _spo.minimize(_objfn, _np.zeros(len(phys_directions), 'd'), method="Nelder-Mead", options={},
                                          tol=1e-13)  # , callback=callback)
