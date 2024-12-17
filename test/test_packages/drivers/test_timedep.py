@@ -68,30 +68,20 @@ class TimeDependentTestCase(BaseTestCase):
         ds = pygsti.data.simulate_data(mdl, circuits, num_samples=100,
                                        sample_error='none', seed=1234, times=[0,0.1,0.2])
 
-        self.assertArraysEqual(ds[Circuit([Label('Gi',0)], line_labels=(0,))].time, np.array([0.,  0.,  0.1, 0.1, 0.2, 0.2]))
-        self.assertArraysAlmostEqual(ds[Circuit([Label('Gi',0)], line_labels=(0,))].reps, np.array([100.,   0.,  95.,   5.,  90.,  10.]), places=9)
-        # ^ NOTE: the .reps array semantically stores integers, but for some reason the underlying datatype is forced to be float32.
-        #         See the definition of Repcount_type in dataset.py. As long as the datatype is float32 we should check approximate
-        #         equality (up to 9 decimal points) rather than actual equality.
-        self.assertArraysEqual(ds[Circuit([Label('Gi',0)], line_labels=(0,))].outcomes, [('0',), ('1',), ('0',), ('1',), ('0',), ('1',)])
+        dsr = ds[Circuit([Label('Gi',0)], line_labels=(0,))]
+        self.assertArraysEqual(dsr.time, np.array([0.,  0.,  0.1, 0.1, 0.2, 0.2]))
+        self.assertArraysEqual(dsr.reps, np.array([100.,   0.,  95.,   5.,  90.,  10.]))
+        self.assertArraysEqual(dsr.outcomes, [('0',), ('1',), ('0',), ('1',), ('0',), ('1',)])
 
         # sparse data
         ds2 = pygsti.data.simulate_data(mdl, circuits, num_samples=100,
                                         sample_error='none', seed=1234, times=[0,0.1,0.2],
                                         record_zero_counts=False)
         ds2r = ds2[Circuit([Label('Gi',0)], line_labels=(0,))]
-        nonzero_selector = ds2r.reps > 1e-10
-        effective_time = ds2r.time[nonzero_selector]
-        effective_reps = ds2r.reps[nonzero_selector]
-        effective_outcomes = [o for (i,o) in enumerate (ds2r.outcomes) if nonzero_selector[i]]
-        self.assertArraysEqual(effective_time, np.array([0.,  0.1, 0.1, 0.2, 0.2]))
-        self.assertArraysAlmostEqual(effective_reps, np.array([100.,  95.,   5.,  90.,  10.]))
-        self.assertArraysEqual(effective_outcomes, [('0',), ('0',), ('1',), ('0',), ('1',)])
-        # ^ NOTE: the point of this test is for zero counts to not be stored explicitly.
-        #         So it's technically against the spirit of the test to check for indices 
-        #         that are less than 1e-10. The problem is that for some reason dsr2.reps
-        #         has dtype of float32 (see def of Repcount_type in dataset.py) and can
-        #         contain nonzeros on the order of 1e-15.
+        self.assertArraysEqual(ds2r.time, np.array([0.,  0.1, 0.1, 0.2, 0.2]))
+        self.assertArraysEqual(ds2r.reps, np.array([100.,  95.,   5.,  90.,  10.]))
+        self.assertArraysEqual(ds2r.outcomes, [('0',), ('0',), ('1',), ('0',), ('1',)])
+        return
 
     def test_time_dependent_gst_staticdata(self):
         
