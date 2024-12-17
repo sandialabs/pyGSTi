@@ -460,6 +460,19 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
         ok_if_missing : bool
            If True, then returns `None` instead of an integer when the given label is not present.
         """
+        try:
+            return self.labels.index(elemgen_label)
+        except ValueError as error:
+            
+            if ok_if_missing:
+                return None
+            else:
+                raise error
+        """
+        TODO: 2 qubit labels returning None when label does exist in self.labels. 
+        '(support, left_support) not in self._offsets[eetype]' returning True incorrectly
+
+
         support = elemgen_label.sslbls
         eetype = elemgen_label.errorgen_type
         bels = elemgen_label.basis_element_labels
@@ -490,6 +503,7 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
             raise ValueError("Invalid elementary errorgen type: %s" % str(eetype))
 
         return base + indices[elemgen_label]
+        """
 
     #@property
     #def sslbls(self):
