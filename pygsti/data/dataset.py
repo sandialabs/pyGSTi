@@ -1730,6 +1730,11 @@ class DataSet(_MongoSerializable):
                 # so we need to build this up for all existings sequences:
                 self._add_explicit_repetition_counts()
 
+        if rep_array is not None:
+            dtype_info = _np.finfo(rep_array.dtype)
+            near_zero = rep_array < 10**(-1.5*dtype_info.precision)
+            rep_array[near_zero] = 0
+
         if not record_zero_counts:
             # Go through repArray and remove any zeros, along with
             # corresponding elements of oliArray and timeArray
