@@ -55,6 +55,7 @@ class ModelBase(object):
 
     def setUp(self):
         self.model = self._model.copy()
+        self.model.sim = 'matrix'
         super(ModelBase, self).setUp()
 
     def test_construction(self):

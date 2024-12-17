@@ -14,6 +14,7 @@ class InstrumentTestCase(BaseTestCase):
     def setUp(self):
         #Add an instrument to the standard target model
         self.target_model = std.target_model()
+        self.target_model.sim = 'matrix'
         E = self.target_model.povms['Mdefault']['0']
         Erem = self.target_model.povms['Mdefault']['1']
         Gmz_plus = np.dot(E,E.T)
@@ -176,6 +177,7 @@ class InstrumentTestCase(BaseTestCase):
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"])
         #    prep_labels=["rho0"], prep_expressions=["0"],
         #    effect_labels=["0","1"], effect_expressions=["0","complement"])
+        model.sim= 'matrix'
 
         v0 = modelconstruction.create_spam_vector("0", "Q0", "pp")
         v1 = modelconstruction.create_spam_vector("1", "Q0", "pp")

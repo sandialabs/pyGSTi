@@ -14,6 +14,9 @@ class LayoutTestCase(BaseTestCase):
         self.circuits = pygsti.circuits.to_circuits(["Gxpi2:0", "Gypi2:0", "Gxpi2:0Gxpi2:0",
                                                          "Gypi2:0Gypi2:0", "Gxpi2:0Gypi2:0"])
         self.model = smq1Q_XY.target_model()
+        model_matrix = self.model.copy()
+        model_matrix.sim = 'map'
+        self.model_matrix = model_matrix
 
     def _test_layout(self, layout):
         self.assertEqual(layout.num_elements, len(self.circuits) * 2)  # 2 outcomes per circuit
@@ -169,6 +172,7 @@ class LayoutTestCase(BaseTestCase):
     #    for i in range(4): #then number of original strings (num final strings)
     #        self.assertArraysAlmostEqual(probs[mlookup[i]], split_probs[mlookup_splt[i]])
 
+        self._test_layout(pygsti.layouts.matrixlayout.MatrixCOPALayout(self.circuits[:], self.model_matrix))
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

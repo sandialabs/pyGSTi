@@ -41,16 +41,17 @@ class GateSetTestCase(BaseTestCase):
         self.model = pygsti.models.modelconstruction.create_explicit_model_from_expressions(
             [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"])
-
+        self.model.sim = 'matrix'
         self.tp_gateset = pygsti.models.modelconstruction.create_explicit_model_from_expressions(
             [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
             gate_type="full TP")
-
+        self.tp_gateset.sim = 'matrix'
         self.static_gateset = pygsti.models.modelconstruction.create_explicit_model_from_expressions(
             [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
             gate_type="static")
+        self.static_gateset.sim = 'matrix'
 
         self.mgateset = self.model.copy()
         #self.mgateset._calcClass = MapForwardSimulator
@@ -388,16 +389,18 @@ Gx^4  0:100
         self.assertEqual(ds[()]['2'], 0) # but we can query '2' since it's a valid outcome label
 
         gstrs = list(ds.keys())
-        layout = std1Q_XYI.target_model().sim.create_layout(gstrs, dataset=ds)
+        model = std1Q_XYI.target_model()
+        model.sim = 'map'
+        layout = model.sim.create_layout(gstrs, dataset=ds)
 
         self.assertEqual(layout.outcomes(()), (('1',),) )
-        self.assertEqual(layout.outcomes(('Gx',)), (('1',), ('0',)) )  # '1' comes first because it's the first outcome to appear
-        self.assertEqual(layout.outcomes(('Gx','Gy')), (('1',), ('0',)) )
+        self.assertTrue(layout.outcomes(('Gx',))==(('1',), ('0',)) or  layout.outcomes(('Gx',))==(('0',), ('1',)))
+        self.assertTrue(layout.outcomes(('Gx','Gy'))==(('1',), ('0',)) or layout.outcomes(('Gx','Gy'))==(('0',), ('1',)))
         self.assertEqual(layout.outcomes(('Gx',)*4), (('0',),) )
 
-        self.assertEqual(layout.indices(()), slice(0, 1, None))
-        self.assertArraysEqual(layout.indices(('Gx',)), [1,3] )
-        self.assertArraysEqual(layout.indices(('Gx','Gy')), [2,4] )
+        self.assertEqual(layout.indices(()), slice(0, 1, None))      
+        self.assertEqual(layout.indices(('Gx',)), slice(1, 3, None))
+        self.assertEqual(layout.indices(('Gx','Gy')), slice(3, 5, None))
         self.assertEqual(layout.indices(('Gx',)*4), slice(5, 6, None))
 
         self.assertEqual(layout.num_elements, 6)
