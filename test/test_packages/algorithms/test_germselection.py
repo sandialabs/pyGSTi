@@ -121,7 +121,9 @@ class GermSelectionTestCase(AlgorithmTestCase, GermSelectionTestData):
         threshold             = 1e6
         randomizationStrength = 1e-3
         neighborhoodSize      = 2
-        gatesetNeighborhood   = pygsti.alg.randomize_model_list([std.target_model()],
+        model = std.target_model()
+        model.sim = 'matrix'
+        gatesetNeighborhood = pygsti.alg.randomize_model_list([model],
                                                                 randomization_strength=randomizationStrength,
                                                                 num_copies=neighborhoodSize, seed=2014)
 
@@ -141,7 +143,9 @@ class GermSelectionTestCase(AlgorithmTestCase, GermSelectionTestData):
     def test_germsel_driver_greedy(self):
         #GREEDY
         options = {'threshold': 1e6 }
-        germs = pygsti.alg.find_germs(std.target_model(), randomize=True, randomization_strength=1e-3,
+        model = std.target_model()
+        model.sim = 'matrix'
+        germs = pygsti.alg.find_germs(model, randomize=True, randomization_strength=1e-3,
                                       num_gs_copies=2, seed=2017, candidate_germ_counts={3: 'all upto', 4: 10, 5:10, 6:10},
                                       candidate_seed=2017, force="singletons", algorithm='greedy',
                                       algorithm_kwargs=options, mem_limit=None, comm=None,
@@ -152,7 +156,9 @@ class GermSelectionTestCase(AlgorithmTestCase, GermSelectionTestData):
     def test_germsel_driver_grasp(self):
         #more args
         options = {'threshold': 1e6 , 'return_all': True}
-        germs = pygsti.alg.find_germs(std.target_model(), randomize=True, randomization_strength=1e-3,
+        model = std.target_model()
+        model.sim = 'matrix'
+        germs = pygsti.alg.find_germs(model, randomize=True, randomization_strength=1e-3,
                                        num_gs_copies=2, seed=2017, candidate_germ_counts={3: 'all upto', 4: 10, 5:10, 6:10},
                                        candidate_seed=2017, force="singletons", algorithm='grasp',
                                        algorithm_kwargs=options, mem_limit=None,
@@ -166,7 +172,9 @@ class GermSelectionTestCase(AlgorithmTestCase, GermSelectionTestData):
     def test_germsel_driver_slack(self):
         #SLACK
         options = dict(fixed_slack=False, slack_frac=0.1)
-        germs = pygsti.alg.find_germs(std.target_model(), randomize=True, randomization_strength=1e-3,
+        model = std.target_model()
+        model.sim = 'matrix'
+        germs = pygsti.alg.find_germs(model, randomize=True, randomization_strength=1e-3,
                                       num_gs_copies=2, seed=2017, candidate_germ_counts={3: 'all upto', 4: 10, 5:10, 6:10},
                                       candidate_seed=2017, force="singletons", algorithm='slack',
                                       algorithm_kwargs=options, mem_limit=None, comm=None,

@@ -15,6 +15,7 @@ class ObjectiveFunctionData(object):
 
     def setUp(self):
         self.model = smqfixtures.ns.datagen_model.copy()
+        self.model.sim = 'matrix'
         self.circuits = smqfixtures.ns.circuits
         self.dataset = smqfixtures.ns.dataset.copy()
         self.sparse_dataset = smqfixtures.ns.sparse_dataset.copy()
