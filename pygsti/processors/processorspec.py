@@ -155,9 +155,30 @@ class QuditProcessorSpec(ProcessorSpec):
                 specifier would be:
                 {'even': [np.array([1,0,0,0], np.array([0,0,0,1])], 'odd': [np.array([0,1,0,0], np.array([0,0,1,0])]}
               -list of string specifiers: Alternatively one can specify a list of effect specifiers using special string
-               notation. Effect specifier strings are always prefixed by 'E'
+               notation. String specifiers can take three formats:
+                1. They can be strings which directly correspond to the desired output bit/ditstring in the standard basis.
+                   E.g. "0000" or "2212" 
+                2. Strings prefixed by either 'E_' or 'E' (w/o an underscore). In the first case any digits proceeding the
+                   "E_" are interpretted as a bit/ditstring written in whatever base is appropriate given the qudit dimensions.
+                   If prefixed by "E" (w/o an underscore) the proceeding digits are interpreted as an integer and converted into
+                   a base d number using right-LSB convention. E.g. 'E_0000' corresponds to the state |0000>, and E15 corresponds
+                   to |1111> (assuming this was acting on 4-qubits).
 
         nonstd_instruments : dict, optional (default None)
+            Dictionary mapping instrument names (as specified in `instrument_names`) to corresponding instruments. The values
+            of this dictionary can be the following specifiers:
+
+            - string specifiers: Presently only one special string specifier is supported, 'Iz'. This corresponds to a quantum
+              instrument for computational-basis readout.
+            - dictionary: A dictionary whose keys are instrument effect labels, and whose values are specifiers used to construct the
+              corresponding instrument effects. Instrument effect specifiers can take the following form:
+              - numpy array: A numpy array corresponding to the dense representation of the instrument effect.
+              - lists of 2-tuples: Each tuple in this list of 2-tuples is such that the first element corresponds to a POVM effect
+                specifier (see `nonstd_povms` for supported options), and the second element is a state preparation specifier
+                (see `nonstd_preps` for supported options). These specifiers are used to construct appropriate effect and preparation
+                representations which are then have their outer product taken. This is done for each 2-tuple, and the outer products are
+                then summed to get the overall instrument effect. In the case where there is only a single 2-tuple for an instrument effect
+                this tuple can be used directly as the dictionary value (w/o being wrapped in a list) for convenience.
 
         qubit_labels : list or tuple, optional
             The labels (integers or strings) of the qubits.  If `None`, then the integers starting with zero are used.
@@ -183,7 +204,7 @@ class QuditProcessorSpec(ProcessorSpec):
         self.nonstd_instruments = nonstd_instruments.copy() if (nonstd_instruments is not None) else {}
 
         # Store the unitary matrices defining the gates, as it is convenient to have these easily accessable.
-        self.gate_unitaries = _collections.OrderedDict()
+        self.gate_unitaries = dict()
         std_gate_unitaries = _itgs.standard_gatename_unitaries()
         for gname in gate_names:
             if gname in nonstd_gate_unitaries:
@@ -234,9 +255,9 @@ class QuditProcessorSpec(ProcessorSpec):
         assert(len(self.qudit_labels) == len(self.qudit_udims))
 
         # Set availability
-        if availability is None: availability = {}
-        self.availability = _collections.OrderedDict([(gatenm, availability.get(gatenm, 'all-edges'))
-                                                      for gatenm in self.gate_names])
+        if availability is None: 
+            availability = {}
+        self.availability = {gatenm: availability.get(gatenm, 'all-edges') for gatenm in self.gate_names}
         # if _Lbl(gatenm).sslbls is not None NEEDED?
 
         self.compiled_from = None  # could hold (QuditProcessorSpec, compilations) tuple if not None
@@ -515,8 +536,8 @@ class QuditProcessorSpec(ProcessorSpec):
 
         self.gate_names = tuple([rename(nm) for nm in self.gate_names])
         self.nonstd_gate_unitaries = {rename(k): v for k, v in self.nonstd_gate_unitaries}
-        self.gate_unitaries = _collections.OrderedDict([(rename(k), v) for k, v in self.gate_unitaries])
-        self.availability = _collections.OrderedDict([(rename(k), v) for k, v in self.availability])
+        self.gate_unitaries = {rename(k): v for k, v in self.gate_unitaries}
+        self.availability = {rename(k): v for k, v in self.availability}
 
     def resolved_availability(self, gate_name, tuple_or_function="auto"):
         """
@@ -807,77 +828,149 @@ class QuditProcessorSpec(ProcessorSpec):
 class QubitProcessorSpec(QuditProcessorSpec):
     """
     The device specification for a one or more qudit quantum computer.
-
-    Parameters
-    ----------
-    num_qubits : int
-        The number of qubits in the device.
-
-    gate_names : list of strings
-        The names of gates in the device.  This may include standard gate
-        names known by pyGSTi (see below) or names which appear in the
-        `nonstd_gate_unitaries` argument. The set of standard gate names
-        includes, but is not limited to:
-
-        - 'Gi' : the 1Q idle operation
-        - 'Gx','Gy','Gz' : 1-qubit pi/2 rotations
-        - 'Gxpi','Gypi','Gzpi' : 1-qubit pi rotations
-        - 'Gh' : Hadamard
-        - 'Gp' : phase or S-gate (i.e., ((1,0),(0,i)))
-        - 'Gcphase','Gcnot','Gswap' : standard 2-qubit gates
-
-        Alternative names can be used for all or any of these gates, but
-        then they must be explicitly defined in the `nonstd_gate_unitaries`
-        dictionary.  Including any standard names in `nonstd_gate_unitaries`
-        overrides the default (builtin) unitary with the one supplied.
-
-    nonstd_gate_unitaries: dictionary of numpy arrays
-        A dictionary with keys that are gate names (strings) and values that are numpy arrays specifying
-        quantum gates in terms of unitary matrices. This is an additional "lookup" database of unitaries -
-        to add a gate to this `QubitProcessorSpec` its names still needs to appear in the `gate_names` list.
-        This dictionary's values specify additional (target) native gates that can be implemented in the device
-        as unitaries acting on ordinary pure-state-vectors, in the standard computationl basis. These unitaries
-        need not, and often should not, be unitaries acting on all of the qubits. E.g., a CNOT gate is specified
-        by a key that is the desired name for CNOT, and a value that is the standard 4 x 4 complex matrix for CNOT.
-        All gate names must start with 'G'.  As an advanced behavior, a unitary-matrix-returning function which
-        takes a single argument - a tuple of label arguments - may be given instead of a single matrix to create
-        an operation *factory* which allows continuously-parameterized gates.  This function must also return
-        an empty/dummy unitary when `None` is given as it's argument.
-
-    availability : dict, optional
-        A dictionary whose keys are some subset of the keys (which are gate names) `nonstd_gate_unitaries` and the
-        strings (which are gate names) in `gate_names` and whose values are lists of qubit-label-tuples.  Each
-        qubit-label-tuple must have length equal to the number of qubits the corresponding gate acts upon, and
-        causes that gate to be available to act on the specified qubits. Instead of a list of tuples, values of
-        `availability` may take the special values `"all-permutations"` and `"all-combinations"`, which as their
-        names imply, equate to all possible permutations and combinations of the appropriate number of qubit labels
-        (deterined by the gate's dimension). If a gate name is not present in `availability`, the default is
-        `"all-permutations"`.  So, the availability of a gate only needs to be specified when it cannot act in every
-        valid way on the qubits (e.g., the device does not have all-to-all connectivity).
-
-    geometry : {"line","ring","grid","torus"} or QubitGraph, optional
-        The type of connectivity among the qubits, specifying a graph used to
-        define neighbor relationships.  Alternatively, a :class:`QubitGraph`
-        object with `qubit_labels` as the node labels may be passed directly.
-        This argument is only used as a convenient way of specifying gate
-        availability (edge connections are used for gates whose availability
-        is unspecified by `availability` or whose value there is `"all-edges"`).
-
-    qubit_labels : list or tuple, optional
-        The labels (integers or strings) of the qubits.  If `None`, then the integers starting with zero are used.
-
-    nonstd_gate_symplecticreps : dict, optional
-        A dictionary similar to `nonstd_gate_unitaries` that supplies, instead of a unitary matrix, the symplectic
-        representation of a Clifford operations, given as a 2-tuple of numpy arrays.
-
-    aux_info : dict, optional
-        Any additional information that should be attached to this processor spec.
     """
-
     def __init__(self, num_qubits, gate_names, nonstd_gate_unitaries=None, availability=None,
                  geometry=None, qubit_labels=None, nonstd_gate_symplecticreps=None,
                  prep_names=('rho0',), povm_names=('Mdefault',), instrument_names=(),
                  nonstd_preps=None, nonstd_povms=None, nonstd_instruments=None, aux_info=None):
+        """
+        Parameters
+        ----------
+        num_qubits : int
+            The number of qubits in the device.
+
+        gate_names : list of strings
+            The names of gates in the device.  This may include standard gate
+            names known by pyGSTi (see below) or names which appear in the
+            `nonstd_gate_unitaries` argument. The set of standard gate names
+            includes, but is not limited to:
+
+            - 'Gi' : the 1Q idle operation
+            - 'Gx','Gy','Gz' : 1-qubit pi/2 rotations
+            - 'Gxpi','Gypi','Gzpi' : 1-qubit pi rotations
+            - 'Gh' : Hadamard
+            - 'Gp' : phase or S-gate (i.e., ((1,0),(0,i)))
+            - 'Gcphase','Gcnot','Gswap' : standard 2-qubit gates
+
+            Alternative names can be used for all or any of these gates, but
+            then they must be explicitly defined in the `nonstd_gate_unitaries`
+            dictionary.  Including any standard names in `nonstd_gate_unitaries`
+            overrides the default (builtin) unitary with the one supplied.
+
+        nonstd_gate_unitaries: dictionary of numpy arrays
+            A dictionary with keys that are gate names (strings) and values that are numpy arrays specifying
+            quantum gates in terms of unitary matrices. This is an additional "lookup" database of unitaries -
+            to add a gate to this `QubitProcessorSpec` its names still needs to appear in the `gate_names` list.
+            This dictionary's values specify additional (target) native gates that can be implemented in the device
+            as unitaries acting on ordinary pure-state-vectors, in the standard computationl basis. These unitaries
+            need not, and often should not, be unitaries acting on all of the qubits. E.g., a CNOT gate is specified
+            by a key that is the desired name for CNOT, and a value that is the standard 4 x 4 complex matrix for CNOT.
+            All gate names must start with 'G'.  As an advanced behavior, a unitary-matrix-returning function which
+            takes a single argument - a tuple of label arguments - may be given instead of a single matrix to create
+            an operation *factory* which allows continuously-parameterized gates.  This function must also return
+            an empty/dummy unitary when `None` is given as it's argument.
+
+        availability : dict, optional
+            A dictionary whose keys are some subset of the keys (which are gate names) `nonstd_gate_unitaries` and the
+            strings (which are gate names) in `gate_names` and whose values are lists of qubit-label-tuples.  Each
+            qubit-label-tuple must have length equal to the number of qubits the corresponding gate acts upon, and
+            causes that gate to be available to act on the specified qubits. Instead of a list of tuples, values of
+            `availability` may take the special values `"all-permutations"` and `"all-combinations"`, which as their
+            names imply, equate to all possible permutations and combinations of the appropriate number of qubit labels
+            (deterined by the gate's dimension). If a gate name is not present in `availability`, the default is
+            `"all-permutations"`.  So, the availability of a gate only needs to be specified when it cannot act in every
+            valid way on the qubits (e.g., the device does not have all-to-all connectivity).
+
+        geometry : {"line","ring","grid","torus"} or QubitGraph, optional
+            The type of connectivity among the qubits, specifying a graph used to
+            define neighbor relationships.  Alternatively, a :class:`QubitGraph`
+            object with `qubit_labels` as the node labels may be passed directly.
+            This argument is only used as a convenient way of specifying gate
+            availability (edge connections are used for gates whose availability
+            is unspecified by `availability` or whose value there is `"all-edges"`).
+        
+        qubit_labels : list or tuple, optional
+            The labels (integers or strings) of the qubits.  If `None`, then the integers starting with zero are used.
+
+        nonstd_gate_symplecticreps : dict, optional
+            A dictionary similar to `nonstd_gate_unitaries` that supplies, instead of a unitary matrix, the symplectic
+            representation of a Clifford operations, given as a 2-tuple of numpy arrays. 
+            #TODO: Better explanation of this specifier.
+
+        prep_names : list or tuple of str, optional (default ('rho0',))
+                List of strings corresponding to the names of the native state preparation
+                operations supported by this processor specification. State preparation names
+                must start with 'rho'.
+
+        povm_names : list or tuple of str, optional (default ('Mdefault',))
+            List of strings corresponding to the names of the native POVMs
+            supported by this processor specification. POVM names must start with
+            'M'.
+
+        instrument_names : list or tuple of str, optional (default ())
+            List of strings corresponding to the names of the quantum instruments
+            supported by this processor specification. Instrument names must start with
+            'I'.
+        
+        nonstd_preps : dict, optional (default None)
+            Dictionary mapping preparation names (as specified in `prep_names`) to corresponding
+            state preparations. The values of this dictionary can be the following specifiers:
+                    
+            - numpy ndarray: numpy vector corresponding to the dense representation of the pure
+                state corresponding to this state preparation, written in the standard/computational
+                basis.
+            - string specifiers: For string state preparation specifiers there are two prefixes supported
+                which determine the parsing applied for conversion to a corresponding state preparation.:
+                The first prefix is 'rho_'. When this prefix is used, any digits proceeding in the string
+                are interpreted as the bitstring labeling a standard basis state. 
+                E.g. 'rho_01' corresponds to the state |01>. The second prefix is 'rho' (w/o the underscore). When this
+                prefix is used the following digits are interpreted as an integer. This integer is then converted
+                into a bitstring labeling the corresponding standard basis state (with the conversion using right-LSB convention).
+        
+        nonstd_povms : dict, optional (default None)
+            Dictionary mapping POVM names (as specified in `povm_names`) to corresponding POVMs. The values of
+            this dictionary can be the following specifiers:
+
+            - string specifiers: Presently two special string specifiers are supported, 'Mdefault' and 'Mz',
+                both of which map to POVMs for computational-basis readout with the appropriate dimensions.
+            - dictionary: A dictionary whose keys are effect labels, and whose values are specifiers used to construct
+                corresponding effects. Effect specifiers can themselves take two forms:
+                - list of numpy arrays: List of numpy arrays corresponding to the component pure states whose corresponding
+                projectors (density matrix vectors) are summed to produce this POVM effect. When there is only a single
+                such pure state then one can alternatively use that numpy array directly as the value (without wrapping 
+                in a list) for convenience. E.g. to construct a two-qubit, two-outcome, POVM corresponding to parity readout wherein
+                each POVM effect corresponds to a rank-2 projector onto the even or odd computational subspace the complete POVM
+                specifier would be:
+                {'even': [np.array([1,0,0,0], np.array([0,0,0,1])], 'odd': [np.array([0,1,0,0], np.array([0,0,1,0])]}
+                -list of string specifiers: Alternatively one can specify a list of effect specifiers using special string
+                notation. String specifiers can take three formats:
+                1. They can be strings which directly correspond to the desired output bit/ditstring in the standard basis.
+                    E.g. "0000" or "1001". 
+                2. Strings prefixed by either 'E_' or 'E' (w/o an underscore). In the first case any digits proceeding the
+                    "E_" are interpretted as a bitstring.
+                    If prefixed by "E" (w/o an underscore) the proceeding digits are interpreted as an integer and converted into
+                    a base d number using right-LSB convention. E.g. 'E_0000' corresponds to the state |0000>, and E15 corresponds
+                    to |1111> (assuming this was acting on 4-qubits).
+
+        nonstd_instruments : dict, optional (default None)
+            Dictionary mapping instrument names (as specified in `instrument_names`) to corresponding instruments. The values
+            of this dictionary can be the following specifiers:
+
+            - string specifiers: Presently only one special string specifier is supported, 'Iz'. This corresponds to a quantum
+                instrument for computational-basis readout.
+            - dictionary: A dictionary whose keys are instrument effect labels, and whose values are specifiers used to construct the
+                corresponding instrument effects. Instrument effect specifiers can take the following form:
+                - numpy array: A numpy array corresponding to the dense representation of the instrument effect.
+                - lists of 2-tuples: Each tuple in this list of 2-tuples is such that the first element corresponds to a POVM effect
+                specifier (see `nonstd_povms` for supported options), and the second element is a state preparation specifier
+                (see `nonstd_preps` for supported options). These specifiers are used to construct appropriate effect and preparation
+                representations which are then have their outer product taken. This is done for each 2-tuple, and the outer products are
+                then summed to get the overall instrument effect. In the case where there is only a single 2-tuple for an instrument effect
+                this tuple can be used directly as the dictionary value (w/o being wrapped in a list) for convenience.
+
+        aux_info : dict, optional
+            Any additional information that should be attached to this processor spec.
+        """
         assert(type(num_qubits) is int), "The number of qubits, n, should be an integer!"
         assert(not (num_qubits > 1 and availability is None and geometry is None)), \
             "For multi-qubit processors you must specify either the geometry or the availability!"
@@ -1273,3 +1366,4 @@ class QubitProcessorSpec(QuditProcessorSpec):
                     twoQ_connectivity[qubit_labels.index(sslbls[0]), qubit_labels.index(sslbls[1])] = True
 
         return _qgraph.QubitGraph(qubit_labels, twoQ_connectivity)
+    

@@ -103,7 +103,6 @@ class SimpleMapForwardSimulator(_ForwardSimulator):
         # and this is done by the parent model which will cause _set_evotype to be called.
         return state
 
-
 class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimulator):
     """
     Computes circuit outcome probabilities using circuit layer maps that act on a state.

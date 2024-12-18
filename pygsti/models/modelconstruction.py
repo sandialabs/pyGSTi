@@ -883,7 +883,7 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
             key = _label.Label(instrument_name, inds)
 
             if isinstance(instrument_spec, str):
-                if instrument_spec == "Iz":
+                if instrument_spec == "Iz": #TODO: Create a set of standard instruments the same way we handle gates.
                     #NOTE: this is very inefficient currently - there should be a better way of
                     # creating an Iz instrument in the FUTURE
                     inst_members = {}
@@ -903,7 +903,15 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
                     num_qudits = len(qudit_labels)
                     if isinstance(spec, str):
                         if spec.isdigit():  # all([l in ('0', '1') for l in spec]): for qubits
-                            bydigit_index = effect_spec
+                            bydigit_index = spec
+                            assert (len(bydigit_index) == num_qudits), \
+                                "Wrong number of qudits in '%s': expected %d" % (spec, num_qudits)
+                            v = _np.zeros(state_space.udim)
+                            inc = _np.flip(_np.cumprod(list(reversed(processor_spec.qudit_udims[1:] + (1,)))))
+                            index = _np.dot(inc, list(map(int, bydigit_index)))
+                            v[index] = 1.0
+                        elif (not is_prep) and spec.startswith("E_") and spec[len('E_'):].isdigit():
+                            bydigit_index = spec[len('E_'):]
                             assert (len(bydigit_index) == num_qudits), \
                                 "Wrong number of qudits in '%s': expected %d" % (spec, num_qudits)
                             v = _np.zeros(state_space.udim)
@@ -915,6 +923,14 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
                             assert (0 <= index < state_space.udim), \
                                 "Index in '%s' out of bounds for state space with udim %d" % (spec, state_space.udim)
                             v = _np.zeros(state_space.udim); v[index] = 1.0
+                        elif is_prep and spec.startswith("rho_") and spec[len('rho_'):].isdigit():
+                            bydigit_index = spec[len('rho_'):]
+                            assert (len(bydigit_index) == num_qudits), \
+                                "Wrong number of qudits in '%s': expected %d" % (spec, num_qudits)
+                            v = _np.zeros(state_space.udim)
+                            inc = _np.flip(_np.cumprod(list(reversed(processor_spec.qudit_udims[1:] + (1,)))))
+                            index = _np.dot(inc, list(map(int, bydigit_index)))
+                            v[index] = 1.0
                         elif is_prep and spec.startswith("rho") and spec[len('rho'):].isdigit():
                             index = int(effect_spec[len('rho'):])
                             assert (0 <= index < state_space.udim), \
@@ -932,22 +948,27 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
 
                     return _bt.change_basis(_ot.state_to_dmvec(v), 'std', basis)
 
-                # elements are key, list-of-2-tuple pairs
+                # elements are key, list-of-2-tuple pairs or numpy array 
                 inst_members = {}
-                for k, lst in instrument_spec.items():
+                for k, inst_effect_spec in instrument_spec.items():
+                    #one option is to specify the full dense instrument effect as a numpy array.
+                    if isinstance(inst_effect_spec, _np.ndarray):
+                        inst_members[k] = inst_effect_spec.copy()
+                        continue
                     member = None
-                    if len(lst) == 2:
-                        for effect_spec, prep_spec in lst:
+                    if isinstance(inst_effect_spec, tuple):
+                        inst_effect_spec = [inst_effect_spec]
+                    elif isinstance(inst_effect_spec, list):
+                        #elements should be 2-tuples corresponding to effect specs and prep effects respectively.
+                        for (effect_spec, prep_spec) in inst_effect_spec:
                             effect_vec = _spec_to_densevec(effect_spec, is_prep=False)
                             prep_vec = _spec_to_densevec(prep_spec, is_prep=True)
                             if member is None:
                                 member = _np.outer(effect_vec, prep_vec)
                             else:
                                 member += _np.outer(effect_vec, prep_vec)
-                    else: # elements are key, array of outer product already
-                        # TODO: This appears to be the new standard format. Deprecate outer prod code above?
-                        # But old code could still be useful.
-                        member = lst.copy()
+                    else:
+                        raise ValueError('Unsupported instrument effect specification. See documentation of `QuditProcessorSpec` or `QubitProcessorSpec` for supported formats.')
 
                     assert (member is not None), \
                         "You must provide at least one rank-1 specifier for each instrument member!"

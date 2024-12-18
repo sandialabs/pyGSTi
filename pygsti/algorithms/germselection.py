@@ -413,7 +413,6 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
         if ckt._static:
             new_ckt = ckt.copy(editable=True)
             new_ckt.line_labels = target_model.state_space.state_space_labels
-            print(new_ckt.line_labels)
             new_ckt.done_editing()
             finalGermList.append(new_ckt)
         else:
