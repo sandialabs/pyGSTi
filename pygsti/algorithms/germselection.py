@@ -27,6 +27,7 @@ from pygsti.tools import mpitools as _mpit
 from pygsti.baseobjs.statespace import ExplicitStateSpace as _ExplicitStateSpace
 from pygsti.baseobjs.statespace import QuditSpace as _QuditSpace
 from pygsti.models import ExplicitOpModel as _ExplicitOpModel
+from pygsti.forwardsims import MatrixForwardSimulator as _MatrixForwardSimulator
 
 FLOATSIZE = 8  # in bytes: TODO: a better way
 
@@ -57,10 +58,8 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
 
     Parameters
     ----------
-    target_model : Model or list of Model
-        The model you are aiming to implement, or a list of models that are
-        copies of the model you are trying to implement (either with or
-        without random unitary perturbations applied to the models).
+    target_model : Model
+        The model you are aiming to implement.
 
     randomize : bool, optional
         Whether or not to add random unitary perturbations to the model(s)
@@ -188,8 +187,14 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
         A list containing the germs making up the germ set.
     """
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, comm)
+    
+    if not isinstance(target_model.sim, _MatrixForwardSimulator):
+        target_model = target_model.copy()
+        target_model.sim = 'matrix'
+
     modelList = _setup_model_list(target_model, randomize,
                                   randomization_strength, num_gs_copies, seed)
+                                  
     gates = list(target_model.operations.keys())
     availableGermsList = []
     if candidate_germ_counts is None: candidate_germ_counts = {6: 'all upto'}
@@ -1364,6 +1369,10 @@ def test_germ_set_finitel(model, germs_to_test, length, weights=None,
         eigenvalues (from small to large) of the jacobian^T * jacobian
         matrix used to determine parameter amplification.
     """
+    if not isinstance(model.sim, _MatrixForwardSimulator):
+        model = model.copy()
+        model.sim = 'matrix'
+
     # Remove any SPAM vectors from model since we only want
     # to consider the set of *gate* parameters for amplification
     # and this makes sure our parameter counting is correct
