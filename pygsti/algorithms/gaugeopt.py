@@ -290,7 +290,7 @@ def gaugeopt_custom(model, objective_fn, gauge_group=None,
     gaugeGroupEl = gauge_group.compute_element(x0)  # re-used element for evals
 
     def _call_objective_fn(gauge_group_el_vec, oob_check=False):
-        # Note: oob_check can be True if oob_check_interval>=1 is given to the custom_leastsq below
+        # Note: oob_check can be True if oob_check_interval>=1 is given to the simplish_leastsq below
         gaugeGroupEl.from_vector(gauge_group_el_vec)
         return objective_fn(gaugeGroupEl, oob_check)
 
@@ -309,7 +309,7 @@ def gaugeopt_custom(model, objective_fn, gauge_group=None,
         assert(_call_jacobian_fn is not None), "Cannot use 'ls' method unless jacobian is available"
         ralloc = _baseobjs.ResourceAllocation(comm)  # FUTURE: plumb up a resource alloc object?
         test_f = _call_objective_fn(x0)
-        solnX, converged, msg, _, _, _, _, _ = _opt.custom_leastsq(
+        solnX, converged, msg, _, _, _, _ = _opt.simplish_leastsq(
             _call_objective_fn, _call_jacobian_fn, x0, f_norm2_tol=tol,
             jac_norm_tol=tol, rel_ftol=tol, rel_xtol=tol,
             max_iter=maxiter, resource_alloc=ralloc,
