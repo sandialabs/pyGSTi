@@ -5,7 +5,6 @@ from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.protocols.protocol import FreeformDesign as _FreeformDesign
 from pygsti.protocols.protocol import CombinedExperimentDesign as _CombinedExperimentDesign
 
-from pygsti.processors import central_pauli as _cp
 from pygsti.processors import random_compilation as _rc
 
 import utils #TODO: integrate all the needed functionality from utils into pygsti
@@ -21,17 +20,17 @@ def bare_mirror_circuit(circ, randomized_state_preparation=True, rand_state=None
     n = circ.width
     d = circ.depth
     
-    layers_to_invert = [utils.haar_random_u3_layer(qubits, rand_state)] if randomized_state_preparation else []
+    layers_to_invert = [_rc.haar_random_u3_layer(qubits, rand_state)] if randomized_state_preparation else []
     for j in range(d):
         layer = circ.layer(j)
         if pad_layers and layer[0].name == 'Gu3':
             # Pad single-qubit layers to be dense
-            layer = utils.pad_layer(circ.layer(j), qubits)
+            layer = _rc.pad_layer(circ.layer(j), qubits)
         layers_to_invert.append(layer)
     
     mirrored_layers = []
     for layer in layers_to_invert:
-        inverse_layer = [utils.gate_inverse(gate_label) for gate_label in layer]
+        inverse_layer = [_rc.gate_inverse(gate_label) for gate_label in layer]
         mirrored_layers.insert(0, inverse_layer)
 
     # Avoid checks for speed
@@ -73,7 +72,7 @@ def sample_mirror_circuits(edesign, central_pauli=False, random_compiling=True,
 
         for j in range(num_mcs_per_circ):
             if central_pauli:
-                cp_mc, cp_bs = _cp.central_pauli_mirror_circuit(c, randomized_state_preparation=randomized_state_preparation,
+                cp_mc, cp_bs = _rc.central_pauli_mirror_circuit(c, randomized_state_preparation=randomized_state_preparation,
                                                             rand_state=rand_state)
                 cp_mc_aux = [{'base_aux': a, 'idealout': cp_bs, 'id': j} for a in auxlist]
                 central_pauli_mcs[cp_mc] = cp_mc_aux
@@ -99,7 +98,7 @@ def sample_mirror_circuits(edesign, central_pauli=False, random_compiling=True,
         for j in _tqdm.tqdm(range(len(subset_indices)), ascii=True, desc=f'Sampling width {w} reference circuits'):
             subset_idx = subset_indices[j]
             if central_pauli:
-                cp_ref_circ, cp_ref_bs = _cp.central_pauli_mirror_circuit(_Circuit('',
+                cp_ref_circ, cp_ref_bs = _rc.central_pauli_mirror_circuit(_Circuit('',
                                                                     line_labels=width_subsets[subset_idx]), 
                                                                     randomized_state_preparation=randomized_state_preparation,
                                                                     rand_state=rand_state)
@@ -108,9 +107,9 @@ def sample_mirror_circuits(edesign, central_pauli=False, random_compiling=True,
                 else:
                     cp_ref_cs[cp_ref_circ] = [{'idealout': cp_ref_bs, 'id': j, 'width': w}]
             if random_compiling:
-                prep_layer = utils.haar_random_u3_layer(width_subsets[subset_idx])
+                prep_layer = _rc.haar_random_u3_layer(width_subsets[subset_idx])
                 ref_circ = _Circuit([prep_layer], width_subsets[subset_idx])
-                inverse_layer = [utils.gate_inverse(label) for label in prep_layer]
+                inverse_layer = [_rc.gate_inverse(label) for label in prep_layer]
                 ref_circ = ref_circ + _Circuit([inverse_layer], width_subsets[subset_idx])
                 ref_circ, bs = _rc.pauli_randomize_circuit(ref_circ)
 

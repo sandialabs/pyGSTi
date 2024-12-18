@@ -12,5 +12,4 @@ pyGSTi Processors Python Package
 
 from .processorspec import ProcessorSpec, QubitProcessorSpec, QuditProcessorSpec
 from .compilationrules import CompilationRules, CliffordCompilationRules, CompilationError
-from .central_pauli import *
-from .random_compilation import *
+from .random_compilation import pauli_randomize_circuit, new_central_pauli_mirror_circuit

@@ -11,11 +11,7 @@ from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.protocols.protocol import FreeformDesign as _FreeformDesign
 from pygsti.protocols.protocol import CombinedExperimentDesign as _CombinedExperimentDesign
 
-from pygsti.processors import central_pauli as _cp
 from pygsti.processors import random_compilation as _rc
-
-import utils #TODO: integrate all the needed functionality from utils into pygsti
-from circuit_inverse import u3_cx_inv #TODO: refactor to obselete this import or integrate it into pygsti
 
 #TODO: OOP-ify this code?
 
@@ -138,7 +134,7 @@ def make_mirror_edesign(test_edesign: _FreeformDesign,
                     #print(f'ref depth: {R.depth}, ref_inv depth: {R_inv.depth}, L depth: {L_inv.depth}')
                     #reload(cp)
                     # test_rand_state1 = _np.random.RandomState(8675309)
-                    L_T_Rinv_Linv, L_T_Rinv_Linv_bs = _cp.new_central_pauli_mirror_circuit(forward_circ=L+T, reverse_circ=R_inv+L_inv, rand_state=rand_state)
+                    L_T_Rinv_Linv, L_T_Rinv_Linv_bs = _rc.new_central_pauli_mirror_circuit(forward_circ=L+T, reverse_circ=R_inv+L_inv, rand_state=rand_state)
                     # print("new function:")
                     # print(L_T_Rinv_Linv)
                     # print(L_T_Rinv_Linv_bs)
@@ -215,7 +211,7 @@ def compute_inverse(circ: _Circuit,
         except:
             raise RuntimeError(f"User-provided inverse function for gate set '{gate_set}' returned an error!")
     if gate_set == 'u3_cx':
-        circ_inv = u3_cx_inv(circ)
+        circ_inv = _rc.u3_cx_inv(circ)
     elif gate_set == 'clifford':
         #TODO: add clifford inverse function to circuit_inverse.py
         raise NotImplementedError("Clifford inversion is not yet supported!")
@@ -240,7 +236,7 @@ def init_layer(qubits,
         except:
             raise RuntimeError(f"User-provided state_initialization function for gate set '{gate_set}' returned an error!")
     elif gate_set == 'u3_cx':
-        prep_layer = utils.haar_random_u3_layer(qubits, rand_state)
+        prep_layer = _rc.haar_random_u3_layer(qubits, rand_state)
         L = _Circuit([prep_layer], qubits)
     elif gate_set == 'clifford':
         #TODO: add clifford default initialization
