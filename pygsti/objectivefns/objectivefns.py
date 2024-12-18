@@ -4583,29 +4583,97 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         lsvec **= 0.5
         return lsvec
 
+    # def dlsvec(self, paramvec=None):
+    #     """
+    #     It's possible that lsvec.shape[0] == terms.shape[0] > self.nelements
+    #     if regularization is used. The relationship that lsvec = sqrt(terms)
+    #     holds regardless of whether or not regularization is used.
+
+    #      dlsvec(mdl; self)) = Jac(sqrt(terms(mdl; self)))
+    #                          = diag(0.5 / sqrt(terms(mdl; self))) Jac(terms(mdl; self))
+    #                          = diag(        0.5 / lsvec        )  Jac(terms(mdl; self))
+
+    #     This implementation is valid for any objective function. We need it here
+    #     (instead of the default implementation) since the default makes a call to
+    #     the raw objective function, and the raw objective function doesn't use the
+    #     weighting we want. 
+    #     """
+    #     jac = self.dterms(paramvec)
+    #     unit_ralloc = self.layout.resource_alloc('param-processing')
+    #     if unit_ralloc.is_host_leader:
+    #         lsvec = self.lsvec(paramvec)
+    #         p5over_lsvec = 0.5/lsvec
+    #         p5over_lsvec[lsvec < 1e-100] = 0.0
+    #         jac *= p5over_lsvec[:, None]
+    #     return jac
+
+
+    # Jacobian function
     def dlsvec(self, paramvec=None):
         """
-        It's possible that lsvec.shape[0] == terms.shape[0] > self.nelements
-        if regularization is used. The relationship that lsvec = sqrt(terms)
-        holds regardless of whether or not regularization is used.
+        The derivative (jacobian) of the least-squares vector.
 
-         dlsvec(mdl; self)) = Jac(sqrt(terms(mdl; self)))
-                             = diag(0.5 / sqrt(terms(mdl; self))) Jac(terms(mdl; self))
-                             = diag(        0.5 / lsvec        )  Jac(terms(mdl; self))
+        Derivatives are taken with respect to model parameters.
 
-        This implementation is valid for any objective function. We need it here
-        (instead of the default implementation) since the default makes a call to
-        the raw objective function, and the raw objective function doesn't use the
-        weighting we want. 
+        Parameters
+        ----------
+        paramvec : numpy.ndarray, optional
+            The vector of (model) parameters to evaluate the objective function at.
+            If `None`, then the model's current parameter vector is used (held internally).
+
+        Returns
+        -------
+        numpy.ndarray
+            An array of shape `(nElements,nParams)` where `nElements` is the number
+            of circuit outcomes and `nParams` is the number of model parameters.
         """
-        jac = self.dterms(paramvec)
+        tm = _time.time()
+        dprobs = self.jac[0:self.nelements, :]  # avoid mem copying: use jac mem for dprobs
+        dprobs.shape = (self.nelements, self.nparams)
+        if paramvec is not None:
+            self.model.from_vector(paramvec)
+        else:
+            paramvec = self.model.to_vector()
+
         unit_ralloc = self.layout.resource_alloc('param-processing')
-        if unit_ralloc.is_host_leader:
-            lsvec = self.lsvec(paramvec)
-            p5over_lsvec = 0.5/lsvec
-            p5over_lsvec[lsvec < 1e-100] = 0.0
-            jac *= p5over_lsvec[:, None]
-        return jac
+        shared_mem_leader = unit_ralloc.is_host_leader
+
+        with self.resource_alloc.temporarily_track_memory(2 * self.nelements):  # 'e' (dg_dprobs, lsvec)
+            self.model.sim.bulk_fill_dprobs(dprobs, self.layout, self.probs)  # wrtSlice)
+            self._clip_probs()  # clips self.probs in place w/shared mem sync
+
+            if shared_mem_leader:
+                if self.firsts is not None:
+                    for ii, i in enumerate(self.indicesOfCircuitsWithOmittedData):
+                        self.dprobs_omitted_rowsum[ii, :] = _np.sum(dprobs[self.layout.indices_for_index(i), :], axis=0)
+
+                dg_dprobs = self.raw_objfn.dlsvec(self.probs, self.counts, self.total_counts, self.freqs)
+                dprobs *= dg_dprobs[:, None]
+    
+        if shared_mem_leader:  # only "leader" modifies shared mem (dprobs & self.jac)
+            if self.firsts is not None:
+                #Note: lsvec is assumed to be *not* updated w/omitted probs contribution
+                omitted_probs = 1.0 - _np.array([self.probs[self.layout.indices_for_index(i)].sum() for i in self.indicesOfCircuitsWithOmittedData])
+                omitted_dprobs_firsts_dterms = self.raw_objfn.zero_freq_dterms(self.total_counts[self.firsts], omitted_probs)
+            
+                lsvec = _np.sqrt(self.raw_objfn.terms(self.probs, self.counts, self.total_counts, self.freqs))
+                lsvec_firsts = lsvec[self.firsts]
+                temp = self.raw_objfn.zero_freq_terms(self.total_counts[self.firsts], omitted_probs)
+                updated_lsvec = _np.sqrt(lsvec_firsts**2 + temp)
+                updated_lsvec = _np.where(updated_lsvec == 0, 1.0, updated_lsvec)  # avoid 0/0 where lsvec & deriv == 0 d
+                omitted_dprobs_firsts_dterms = (0.5 / updated_lsvec) * omitted_dprobs_firsts_dterms
+                dprobs[self.firsts] *= (lsvec_firsts / updated_lsvec)[:, None]
+
+                dprobs[self.firsts] -= omitted_dprobs_firsts_dterms[:, None] * self.dprobs_omitted_rowsum
+
+
+            if self._process_penalties and shared_mem_leader:
+                self._fill_lspenaltyvec_jac(paramvec, self.jac[self.nelements:, :])  # jac.shape == (nelements+N,N)
+        unit_ralloc.host_comm_barrier()  # have non-leader procs wait for leaders to set shared mem
+
+        self.raw_objfn.resource_alloc.profiler.add_time("JACOBIAN", tm)
+        return self.jac
+
 
     # Helpers, supporting main public instance functions
 
@@ -4873,6 +4941,15 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         # suming over element dimension gets current subtree contribution for (N,N')-sized block of Hessian
         return _np.sum(hessian, axis=0)
 
+
+"""
+PLAN: have Chi2Function override dlsvec, and _maybe_ lsvec, so that these functions can 
+make calls to raw_objfn.[d]lsvec. Then have FreqWeightedChi2Function and CustomWeightedChi2Function.
+
+Note ... TimeDependentMDCObjectiveFunction classes don't have access to a default implementation of
+dlsvec and lsvec; subclasses based on RawChi2Function have very simple implementations. How's that
+possible?
+"""
 
 class Chi2Function(TimeIndependentMDCObjectiveFunction):
     """
