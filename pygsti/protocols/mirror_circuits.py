@@ -7,8 +7,6 @@ from pygsti.protocols.protocol import CombinedExperimentDesign as _CombinedExper
 
 from pygsti.processors import random_compilation as _rc
 
-import utils #TODO: integrate all the needed functionality from utils into pygsti
-
 #TODO: OOP-ify this code?
 
 ## FUNCTIONS TAKEN AND MODIFIED FROM utils.py in circuit-verification-using-mirroring
