@@ -51,16 +51,22 @@ class _MapCOPALayoutAtom(_DistributableAtom):
     """
 
     def __init__(self, unique_complete_circuits, ds_circuits, group, model,
-                 dataset, max_cache_size):
+                 dataset, max_cache_size, expanded_complete_circuit_cache = None):
 
-        expanded_circuit_info_by_unique = _collections.OrderedDict()
-        expanded_circuit_set = _collections.OrderedDict()  # only use SeparatePOVMCircuit keys as ordered set
+        expanded_circuit_info_by_unique = dict()
+        expanded_circuit_set = dict() # only use SeparatePOVMCircuit keys as ordered set
+
+        if expanded_complete_circuit_cache is None:
+            expanded_complete_circuit_cache = dict()
+
         for i in group:
-            observed_outcomes = None if (dataset is None) else dataset[ds_circuits[i]].outcomes
-            d = unique_complete_circuits[i].expand_instruments_and_separate_povm(model, observed_outcomes)
+            d = expanded_complete_circuit_cache.get(unique_complete_circuits[i], None)
+            if d is None:
+                unique_observed_outcomes = None if (dataset is None) else dataset[ds_circuits[i]].unique_outcomes
+                d = model.expand_instruments_and_separate_povm(unique_complete_circuits[i], unique_observed_outcomes)
             expanded_circuit_info_by_unique[i] = d  # a dict of SeparatePOVMCircuits => tuples of outcome labels
             expanded_circuit_set.update(d)
-
+            
         expanded_circuits = list(expanded_circuit_set.keys())
         self.table = _PrefixTable(expanded_circuits, max_cache_size)
 
@@ -91,8 +97,7 @@ class _MapCOPALayoutAtom(_DistributableAtom):
         self.outcomes_by_expcircuit = {}
         self.povm_and_elbls_by_expcircuit = {}
 
-        elindex_outcome_tuples = _collections.OrderedDict([
-            (unique_i, list()) for unique_i in range(len(unique_complete_circuits))])
+        elindex_outcome_tuples = {unique_i: list() for unique_i in range(len(unique_complete_circuits))}
 
         #Assign element indices, "global" indices starting at `offset`
         local_offset = 0
@@ -206,13 +211,42 @@ class MapCOPALayout(_DistributableCOPALayout):
 
     def __init__(self, circuits, model, dataset=None, max_cache_size=None,
                  num_sub_tables=None, num_table_processors=1, num_param_dimension_processors=(),
-                 param_dimensions=(), param_dimension_blk_sizes=(), resource_alloc=None, verbosity=0):
+                 param_dimensions=(), param_dimension_blk_sizes=(), resource_alloc=None, verbosity=0,
+                 layout_creation_circuit_cache=None):
 
         unique_circuits, to_unique = self._compute_unique_circuits(circuits)
         aliases = circuits.op_label_aliases if isinstance(circuits, _CircuitList) else None
         ds_circuits = _lt.apply_aliases_to_circuits(unique_circuits, aliases)
-        unique_complete_circuits = [model.complete_circuit(c) for c in unique_circuits]
-        unique_povmless_circuits = [model.split_circuit(c, split_prep=False)[1] for c in unique_complete_circuits]
+
+        #extract subcaches from layout_creation_circuit_cache:
+        if layout_creation_circuit_cache is None:
+            layout_creation_circuit_cache = dict()
+        self.completed_circuit_cache = layout_creation_circuit_cache.get('completed_circuits', None)
+        self.split_circuit_cache = layout_creation_circuit_cache.get('split_circuits', None)
+        self.expanded_and_separated_circuits_cache = layout_creation_circuit_cache.get('expanded_and_separated_circuits', None)
+        
+        if self.completed_circuit_cache is None:
+            unique_complete_circuits = model.complete_circuits(unique_circuits)
+            split_circuits = model.split_circuits(unique_complete_circuits, split_prep=False)
+        else:
+            unique_complete_circuits = []
+            for c in unique_circuits:
+                comp_ckt = self.completed_circuit_cache.get(c, None)
+                if comp_ckt is not None:
+                    unique_complete_circuits.append(comp_ckt)
+                else:
+                    unique_complete_circuits.append(model.complete_circuit(c))
+            split_circuits = []
+            for c, c_complete in zip(unique_circuits,unique_complete_circuits):
+                split_ckt = self.split_circuit_cache.get(c, None)
+                if split_ckt is not None:
+                    split_circuits.append(split_ckt)
+                else:
+                    split_circuits.append(model.split_circuit(c_complete, split_prep=False))
+            
+
+        #construct list of unique POVM-less circuits.
+        unique_povmless_circuits = [ckt_tup[1] for ckt_tup in split_circuits]
 
         max_sub_table_size = None  # was an argument but never used; remove in future
         if (num_sub_tables is not None and num_sub_tables > 1) or max_sub_table_size is not None:
@@ -221,19 +255,10 @@ class MapCOPALayout(_DistributableCOPALayout):
         else:
             groups = [set(range(len(unique_complete_circuits)))]
 
-        #atoms = []
-        #elindex_outcome_tuples = _collections.OrderedDict(
-        #    [(unique_i, list()) for unique_i in range(len(unique_circuits))])
-
-        #offset = 0
-        #for group in groups:
-        #    atoms.append(_MapCOPALayoutAtom(unique_complete_circuits, ds_circuits, to_orig, group,
-        #                                    model, dataset, offset, elindex_outcome_tuples, max_cache_size))
-        #    offset += atoms[-1].num_elements
-
         def _create_atom(group):
             return _MapCOPALayoutAtom(unique_complete_circuits, ds_circuits, group,
-                                      model, dataset, max_cache_size)
+                                      model, dataset, max_cache_size,
+                                      expanded_complete_circuit_cache=self.expanded_and_separated_circuits_cache)
 
         super().__init__(circuits, unique_circuits, to_unique, unique_complete_circuits,
                          _create_atom, groups, num_table_processors,

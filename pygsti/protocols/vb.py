@@ -456,10 +456,6 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
                                                                   self.descriptor)
 
 
-
-
-
-
 class SummaryStatistics(_proto.Protocol):
     """
     A protocol that can construct "summary" quantities from raw data.
@@ -1013,17 +1009,6 @@ class ByDepthSummaryStatistics(SummaryStatistics):
                                      {i: j for i, j in enumerate(percircuitdata)})
             results.statistics[statistic_nm] = statistic_per_dwc
         return results
-
-# This is currently not used I think
-# class PredictedByDepthSummaryStatsConstructor(ByDepthSummaryStatsConstructor):
-#     """
-#     Runs a volumetric benchmark on success/fail data predicted from a model
-
-#     """
-#     def __init__(self, model_or_summary_data, depths='all', statistic='mean',
-#                  dscomparator=None, name=None):
-#         super().__init__(depths, 'success_probabilities', statistic,
-#                          dscomparator, model_or_summary_data, name)
 
 
 class SummaryStatisticsResults(_proto.ProtocolResults):

@@ -35,6 +35,7 @@ The primary goals of the pyGSTi project are to:
 
 # Extra requirements
 extras = {
+    'pytorch' : ['torch'],
     'diamond_norm': [
         'cvxopt',
         'cvxpy'
@@ -78,11 +79,11 @@ extras = {
         'seaborn',
         'scipy',
         'ply',
-        'qibo<=0.1.7',
         'cirq-core',
         'notebook',
         'ipython',
-        'jupyter_server'
+        'jupyter_server',
+        'torch'
     ]
 }
 
@@ -155,7 +156,6 @@ def setup_with_extensions(extensions=None):
             'pygsti.evotypes.stabilizer',
             'pygsti.evotypes.stabilizer_slow',
             'pygsti.evotypes.chp',
-            'pygsti.evotypes.qibo',
             'pygsti.extras',
             'pygsti.extras.rb',
             'pygsti.extras.rpe',

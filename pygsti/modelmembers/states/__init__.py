@@ -15,8 +15,6 @@ import scipy.linalg as _spl
 import scipy.optimize as _spo
 import warnings as _warnings
 
-from numpy.lib.arraysetops import isin
-
 from pygsti.modelmembers.povms.computationalpovm import ComputationalBasisPOVM
 
 from .composedstate import ComposedState
