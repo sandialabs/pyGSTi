@@ -5,12 +5,13 @@ from pathlib import Path
 
 try:
     from mpi4py import MPI
-except ImportError:
+except (ImportError, RuntimeError):
     MPI = None
+
 
 class MPITester:
 
-    @pytest.mark.skipif(MPI is None, reason="mpi4py is not installed.")
+    @pytest.mark.skipif(MPI is None, reason="mpi4py could not be imported")
     def test_all(self, capfd: pytest.LogCaptureFixture):
         current_filepath = Path(os.path.abspath(__file__))
         to_run = current_filepath.parents[0] / Path('run_me_with_mpiexec.py')
