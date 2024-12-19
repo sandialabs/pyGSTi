@@ -13,6 +13,8 @@ Tools for the propagation of error generators through circuits.
 import stim
 import numpy as _np
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GEEL, LocalElementaryErrorgenLabel as _LEEL
+from pygsti.baseobjs import QubitSpace as _QubitSpace
+from pygsti.baseobjs.errorgenbasis import CompleteElementaryErrorgenBasis as _CompleteElementaryErrorgenBasis
 from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE
 from pygsti.modelmembers.operations import LindbladErrorgen as _LinbladErrorgen
 from pygsti.circuits import Circuit as _Circuit
@@ -79,6 +81,8 @@ def errgen_coeff_label_to_stim_pauli_strs(err_gen_coeff_label, num_qubits):
             raise ValueError(f'Unsupported error generator type {errorgen_typ}')
     else:
         raise ValueError('Only `GlobalElementaryErrorgenLabel and LocalElementaryErrorgenLabel is currently supported.')
+
+#------- Error Generator Math -------------#
 
 def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1, truncation_threshold=1e-14):
     """
@@ -440,7 +444,6 @@ def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1, truncation_th
 
     return new_errorgen_layer_dict
 
-
 def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight=1.0, identity=None):
     """
     Returns the commutator of two error generators. I.e. [errorgen_1, errorgen_2].
@@ -471,7 +474,7 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
     weighted by the specified value of `weight`.
     """
     
-    errorGens=[]
+    errorgens=[]
     
     if flip_weight:
         w= -weight
@@ -498,41 +501,41 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
     if errorgen_1_type=='H' and errorgen_2_type=='H':
         ptup = com(errorgen_1_bel_0 , errorgen_2_bel_0)
         if ptup is not None:
-            errorGens.append((_LSE('H', [ptup[1]]), -1j*w *ptup[0]))
+            errorgens.append((_LSE('H', [ptup[1]]), -1j*w *ptup[0]))
         
     elif errorgen_1_type=='H' and errorgen_2_type=='S':
         ptup = com(errorgen_2_bel_0 , errorgen_1_bel_0)
         if ptup is not None:
             if errorgen_2_bel_0 == ptup[1]:
-                errorGens.append(( _LSE('S', [errorgen_2_bel_0]), 2*1j*w*ptup[0]))
+                errorgens.append(( _LSE('S', [errorgen_2_bel_0]), 2*1j*w*ptup[0]))
             else:
                 new_bels =  [errorgen_2_bel_0, ptup[1]] if stim_pauli_string_less_than(errorgen_2_bel_0, ptup[1])\
                             else [ptup[1], errorgen_2_bel_0]
-                errorGens.append(( _LSE('C', new_bels), 1j*w*ptup[0]))
+                errorgens.append(( _LSE('C', new_bels), 1j*w*ptup[0]))
 
     elif errorgen_1_type=='S' and errorgen_2_type=='H':
-        errorGens = error_generator_commutator(errorgen_2, errorgen_1, flip_weight=True, weight=weight)
+        errorgens = error_generator_commutator(errorgen_2, errorgen_1, flip_weight=True, weight=weight)
           
     elif errorgen_1_type=='H' and errorgen_2_type=='C':
         ptup1 = com(errorgen_2_bel_0 , errorgen_1_bel_0)
         ptup2 = com(errorgen_2_bel_1 , errorgen_1_bel_0)
         if ptup1 is not None:
             if ptup1[1] == errorgen_2_bel_1:
-                errorGens.append((_LSE('S', [errorgen_2_bel_1]), 2*1j*w*ptup1[0]))
+                errorgens.append((_LSE('S', [errorgen_2_bel_1]), 2*1j*w*ptup1[0]))
             else:
                 new_bels =  [ptup1[1], errorgen_2_bel_1] if stim_pauli_string_less_than(ptup1[1], errorgen_2_bel_1)\
                             else [errorgen_2_bel_1, ptup1[1]]
-                errorGens.append((_LSE('C', new_bels), 1j*w*ptup1[0]))
+                errorgens.append((_LSE('C', new_bels), 1j*w*ptup1[0]))
         if ptup2 is not None:
             if ptup2[1] == errorgen_2_bel_0:
-                errorGens.append(( _LSE('S', [errorgen_2_bel_0]), 2*1j*w*ptup2[0]))
+                errorgens.append(( _LSE('S', [errorgen_2_bel_0]), 2*1j*w*ptup2[0]))
             else:
                 new_bels =  [ptup2[1], errorgen_2_bel_0] if stim_pauli_string_less_than(ptup2[1], errorgen_2_bel_0)\
                             else [errorgen_2_bel_0, ptup2[1]]
-                errorGens.append((_LSE('C', new_bels), 1j*w*ptup2[0]))
+                errorgens.append((_LSE('C', new_bels), 1j*w*ptup2[0]))
                           
     elif errorgen_1_type=='C' and errorgen_2_type=='H':
-        errorGens = error_generator_commutator(errorgen_2, errorgen_1, flip_weight=True, weight=weight)
+        errorgens = error_generator_commutator(errorgen_2, errorgen_1, flip_weight=True, weight=weight)
     
     elif errorgen_1_type=='H' and errorgen_2_type=='A':
         ptup1 = com(errorgen_1_bel_0 , errorgen_2_bel_0)
@@ -540,97 +543,97 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
         if ptup1 is not None:
             if ptup1[1] != errorgen_2_bel_1:
                 if stim_pauli_string_less_than(ptup1[1], errorgen_2_bel_1):
-                    errorGens.append((_LSE('A', [ptup1[1], errorgen_2_bel_1]), -1j*w*ptup1[0]))
+                    errorgens.append((_LSE('A', [ptup1[1], errorgen_2_bel_1]), -1j*w*ptup1[0]))
                 else:
-                    errorGens.append((_LSE('A', [errorgen_2_bel_1, ptup1[1]]), 1j*w*ptup1[0]))
+                    errorgens.append((_LSE('A', [errorgen_2_bel_1, ptup1[1]]), 1j*w*ptup1[0]))
         if ptup2 is not None:
             if ptup2[1] != errorgen_2_bel_0:
                 if stim_pauli_string_less_than(errorgen_2_bel_0, ptup2[1]):
-                    errorGens.append((_LSE('A', [errorgen_2_bel_0, ptup2[1]]), -1j*w*ptup2[0]))
+                    errorgens.append((_LSE('A', [errorgen_2_bel_0, ptup2[1]]), -1j*w*ptup2[0]))
                 else:
-                    errorGens.append((_LSE('A', [ptup2[1], errorgen_2_bel_0]), 1j*w*ptup2[0]))
+                    errorgens.append((_LSE('A', [ptup2[1], errorgen_2_bel_0]), 1j*w*ptup2[0]))
                           
     elif errorgen_1_type=='A' and errorgen_2_type=='H':
-        errorGens = error_generator_commutator(errorgen_2, errorgen_1, flip_weight=True, weight=weight)
+        errorgens = error_generator_commutator(errorgen_2, errorgen_1, flip_weight=True, weight=weight)
 
     elif errorgen_1_type=='S' and errorgen_2_type=='S':
         #Commutator of S with S is zero.
         pass
                          
     elif errorgen_1_type=='S' and errorgen_2_type=='C':
-        ptup1 = product(errorgen_1_bel_0 , errorgen_2_bel_0)
-        ptup2 = product(errorgen_2_bel_1 , errorgen_1_bel_0)
+        ptup1 = pauli_product(errorgen_1_bel_0 , errorgen_2_bel_0)
+        ptup2 = pauli_product(errorgen_2_bel_1 , errorgen_1_bel_0)
         if ptup1[1] != ptup2[1]:
             if (ptup1[1] != identity) and (ptup2[1] != identity):
                 if stim_pauli_string_less_than(ptup1[1], ptup2[1]):
-                    errorGens.append((_LSE('A', [ptup1[1], ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
+                    errorgens.append((_LSE('A', [ptup1[1], ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
                 else:
-                    errorGens.append((_LSE('A', [ptup2[1], ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
+                    errorgens.append((_LSE('A', [ptup2[1], ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
             elif ptup1[1] == identity:
-                errorGens.append((_LSE('H', [ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
+                errorgens.append((_LSE('H', [ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
             else: #ptup2[1] == identity
-                errorGens.append((_LSE('H', [ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
+                errorgens.append((_LSE('H', [ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
 
-        ptup1 = product(errorgen_1_bel_0, errorgen_2_bel_1)
-        ptup2 = product(errorgen_2_bel_0, errorgen_1_bel_0)
+        ptup1 = pauli_product(errorgen_1_bel_0, errorgen_2_bel_1)
+        ptup2 = pauli_product(errorgen_2_bel_0, errorgen_1_bel_0)
         if ptup1[1] != ptup2[1]:
             if (ptup1[1] != identity) and (ptup2[1] != identity):
                 if stim_pauli_string_less_than(ptup1[1], ptup2[1]):
-                    errorGens.append((_LSE('A', [ptup1[1], ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
+                    errorgens.append((_LSE('A', [ptup1[1], ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
                 else:
-                    errorGens.append((_LSE('A', [ptup2[1], ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
+                    errorgens.append((_LSE('A', [ptup2[1], ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
             elif ptup1[1] == identity:
-                errorGens.append((_LSE('H', [ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
+                errorgens.append((_LSE('H', [ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
             else: #ptup2[1] == identity
-                errorGens.append((_LSE('H', [ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
+                errorgens.append((_LSE('H', [ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
 
         ptup1 = acom(errorgen_2_bel_0, errorgen_2_bel_1)
         if ptup1 is not None:
-            ptup2 = product(ptup1[1], errorgen_1_bel_0)
+            ptup2 = pauli_product(ptup1[1], errorgen_1_bel_0)
             #it shouldn't be possible for ptup2[1] to equal errorgen_1_bel_0,
             #as that would imply that errorgen_1_bel_0 was the identity.
             if ptup2[1] == identity:
-                errorGens.append((_LSE('H', [errorgen_1_bel_0]), -1j*.5*w*ptup1[0]*ptup2[0]))
+                errorgens.append((_LSE('H', [errorgen_1_bel_0]), -1j*.5*w*ptup1[0]*ptup2[0]))
             else:
                 if stim_pauli_string_less_than(ptup2[1], errorgen_1_bel_0):
-                    errorGens.append((_LSE('A', [ptup2[1], errorgen_1_bel_0]) , -1j*.5*w*ptup1[0]*ptup2[0]))
+                    errorgens.append((_LSE('A', [ptup2[1], errorgen_1_bel_0]) , -1j*.5*w*ptup1[0]*ptup2[0]))
                 else:
-                    errorGens.append((_LSE('A', [errorgen_1_bel_0, ptup2[1]]) , 1j*.5*w*ptup1[0]*ptup2[0]))
+                    errorgens.append((_LSE('A', [errorgen_1_bel_0, ptup2[1]]) , 1j*.5*w*ptup1[0]*ptup2[0]))
 
             #ptup3 is just the product from ptup2 in reverse, so this can be done
             #more efficiently, but I'm not going to do that at present...
-            ptup3 = product(errorgen_1_bel_0, ptup1[1])
+            ptup3 = pauli_product(errorgen_1_bel_0, ptup1[1])
             if ptup3[1] == identity:
-                errorGens.append((_LSE('H', [errorgen_1_bel_0]), 1j*.5*w*ptup1[0]*ptup3[0]) )
+                errorgens.append((_LSE('H', [errorgen_1_bel_0]), 1j*.5*w*ptup1[0]*ptup3[0]) )
             else:
                 if stim_pauli_string_less_than(errorgen_1_bel_0, ptup3[1]):
-                    errorGens.append((_LSE('A', [errorgen_1_bel_0, ptup3[1]]) , -1j*.5*w*ptup1[0]*ptup3[0]))
+                    errorgens.append((_LSE('A', [errorgen_1_bel_0, ptup3[1]]) , -1j*.5*w*ptup1[0]*ptup3[0]))
                 else:
-                    errorGens.append((_LSE('A', [ptup3[1], errorgen_1_bel_0]) , 1j*.5*w*ptup1[0]*ptup3[0]))
+                    errorgens.append((_LSE('A', [ptup3[1], errorgen_1_bel_0]) , 1j*.5*w*ptup1[0]*ptup3[0]))
                          
     elif errorgen_1_type == 'C' and errorgen_2_type == 'S':
-        errorGens = error_generator_commutator(errorgen_2, errorgen_1, flip_weight=True, weight=weight)
+        errorgens = error_generator_commutator(errorgen_2, errorgen_1, flip_weight=True, weight=weight)
 
     elif errorgen_1_type == 'S' and errorgen_2_type == 'A':
-        ptup1 = product(errorgen_1_bel_0, errorgen_2_bel_0)
-        ptup2 = product(errorgen_2_bel_1, errorgen_1_bel_0)
+        ptup1 = pauli_product(errorgen_1_bel_0, errorgen_2_bel_0)
+        ptup2 = pauli_product(errorgen_2_bel_1, errorgen_1_bel_0)
         if ptup1[1] != ptup2[1]:
             if (ptup1[1] != identity) and (ptup2[1] != identity):
                 new_bels = [ptup1[1], ptup2[1]] if stim_pauli_string_less_than(ptup1[1], ptup2[1]) else [ptup2[1], ptup1[1]]
-                errorGens.append((_LSE('C', new_bels), 1j*w*ptup1[0]*ptup2[0]))
+                errorgens.append((_LSE('C', new_bels), 1j*w*ptup1[0]*ptup2[0]))
         else:
             if ptup[1] != identity:
-                errorGens.append((_LSE('S', [ptup1[1]]), 2*1j*w*ptup1[0]*ptup2[0]))
+                errorgens.append((_LSE('S', [ptup1[1]]), 2*1j*w*ptup1[0]*ptup2[0]))
 
-        ptup1 = product(errorgen_1_bel_0, errorgen_2_bel_1)
-        ptup2 = product(errorgen_2_bel_0, errorgen_1_bel_0)
+        ptup1 = pauli_product(errorgen_1_bel_0, errorgen_2_bel_1)
+        ptup2 = pauli_product(errorgen_2_bel_0, errorgen_1_bel_0)
         if ptup1[1] != ptup2[1]:
             if (ptup1[1] != identity) and (ptup2[1] != identity):
                 new_bels = [ptup1[1], ptup2[1]] if stim_pauli_string_less_than(ptup1[1], ptup2[1]) else [ptup2[1], ptup1[1]]
-                errorGens.append((_LSE('C', new_bels), -1j*w*ptup1[0]*ptup2[0]))
+                errorgens.append((_LSE('C', new_bels), -1j*w*ptup1[0]*ptup2[0]))
         else:
             if ptup[1] != identity:
-                errorGens.append((_LSE('S', [ptup1[1]]), -2*1j*w*ptup1[0]*ptup2[0]))
+                errorgens.append((_LSE('S', [ptup1[1]]), -2*1j*w*ptup1[0]*ptup2[0]))
         
         ptup1 = com(errorgen_2_bel_0, errorgen_2_bel_1)
         if ptup1 is not None:
@@ -644,65 +647,65 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
                 #And com(errorgen_1_bel_0,com(errorgen_2_bel_0, errorgen_2_bel_1)) can't be by the same
                 #argument that it can't be errorgen_1_bel_0
                 if stim_pauli_string_less_than(errorgen_1_bel_0, ptup2[1]):
-                    errorGens.append((_LSE('A', [errorgen_1_bel_0, ptup2[1]]), -.5*w*ptup1[0]*ptup2[0]))
+                    errorgens.append((_LSE('A', [errorgen_1_bel_0, ptup2[1]]), -.5*w*ptup1[0]*ptup2[0]))
                 else:
-                    errorGens.append((_LSE('A', [ptup2[1], errorgen_1_bel_0]), .5*w*ptup1[0]*ptup2[0]))
+                    errorgens.append((_LSE('A', [ptup2[1], errorgen_1_bel_0]), .5*w*ptup1[0]*ptup2[0]))
                             
     elif errorgen_1_type == 'A' and errorgen_2_type == 'S':
-        errorGens = error_generator_commutator(errorgen_2, errorgen_1, flip_weight=True, weight=weight)
+        errorgens = error_generator_commutator(errorgen_2, errorgen_1, flip_weight=True, weight=weight)
                          
     elif errorgen_1_type == 'C' and errorgen_2_type == 'C':
-        ptup1 = product(errorgen_1_bel_0, errorgen_2_bel_0)
-        ptup2 = product(errorgen_2_bel_1, errorgen_1_bel_1)
+        ptup1 = pauli_product(errorgen_1_bel_0, errorgen_2_bel_0)
+        ptup2 = pauli_product(errorgen_2_bel_1, errorgen_1_bel_1)
         if ptup1[1] != ptup2[1]:
             if (ptup1[1] != identity) and (ptup2[1] != identity):
                 if stim_pauli_string_less_than(ptup1[1], ptup2[1]):
-                    errorGens.append((_LSE('A', [ptup1[1], ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
+                    errorgens.append((_LSE('A', [ptup1[1], ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
                 else:
-                    errorGens.append((_LSE('A', [ptup2[1], ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
+                    errorgens.append((_LSE('A', [ptup2[1], ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
             elif ptup1[1] == identity: 
-                errorGens.append((_LSE('H', [ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
+                errorgens.append((_LSE('H', [ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
             else: #ptup2[1] == identity
-                errorGens.append((_LSE('H', [ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
+                errorgens.append((_LSE('H', [ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
 
-        ptup1 = product(errorgen_1_bel_0, errorgen_2_bel_1)
-        ptup2 = product(errorgen_2_bel_0, errorgen_1_bel_1)
+        ptup1 = pauli_product(errorgen_1_bel_0, errorgen_2_bel_1)
+        ptup2 = pauli_product(errorgen_2_bel_0, errorgen_1_bel_1)
         if ptup1[1] != ptup2[1]:
             if (ptup1[1] != identity) and (ptup2[1] != identity):
                 if stim_pauli_string_less_than(ptup1[1], ptup2[1]):
-                    errorGens.append((_LSE('A', [ptup1[1], ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
+                    errorgens.append((_LSE('A', [ptup1[1], ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
                 else:
-                    errorGens.append((_LSE('A', [ptup2[1], ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
+                    errorgens.append((_LSE('A', [ptup2[1], ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
             elif ptup1[1] == identity:
-                errorGens.append((_LSE('H', [ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
+                errorgens.append((_LSE('H', [ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
             else: #ptup2[1] == identity
-                errorGens.append((_LSE('H', [ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
+                errorgens.append((_LSE('H', [ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
 
-        ptup1 = product(errorgen_1_bel_1,errorgen_2_bel_0)
-        ptup2 = product(errorgen_2_bel_1,errorgen_1_bel_0)                 
+        ptup1 = pauli_product(errorgen_1_bel_1,errorgen_2_bel_0)
+        ptup2 = pauli_product(errorgen_2_bel_1,errorgen_1_bel_0)                 
         if ptup1[1] != ptup2[1]:
             if (ptup1[1] != identity) and (ptup2[1] != identity):
                 if stim_pauli_string_less_than(ptup1[1], ptup2[1]):
-                    errorGens.append((_LSE('A', [ptup1[1], ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
+                    errorgens.append((_LSE('A', [ptup1[1], ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
                 else:
-                    errorGens.append((_LSE('A', [ptup2[1], ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))        
+                    errorgens.append((_LSE('A', [ptup2[1], ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))        
             elif ptup1[1] == identity:
-                errorGens.append((_LSE('H', [ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
+                errorgens.append((_LSE('H', [ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
             else: #ptup2[1] == identity
-                errorGens.append((_LSE('H', [ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
+                errorgens.append((_LSE('H', [ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
 
-        ptup1 = product(errorgen_1_bel_1, errorgen_2_bel_1)
-        ptup2 = product(errorgen_2_bel_0, errorgen_1_bel_0)
+        ptup1 = pauli_product(errorgen_1_bel_1, errorgen_2_bel_1)
+        ptup2 = pauli_product(errorgen_2_bel_0, errorgen_1_bel_0)
         if ptup1[1] != ptup2[1]:
             if (ptup1[1] != identity) and (ptup2[1] != identity):
                 if stim_pauli_string_less_than(ptup1[1], ptup2[1]):
-                    errorGens.append((_LSE('A', [ptup1[1], ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
+                    errorgens.append((_LSE('A', [ptup1[1], ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
                 else:
-                    errorGens.append((_LSE('A', [ptup2[1], ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
+                    errorgens.append((_LSE('A', [ptup2[1], ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
             elif ptup1[1] == identity:
-                errorGens.append((_LSE('H', [ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
+                errorgens.append((_LSE('H', [ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
             else: #ptup2[1] == identity
-                errorGens.append((_LSE('H', [ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
+                errorgens.append((_LSE('H', [ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
         
         ptup1 = acom(errorgen_1_bel_0, errorgen_1_bel_1)
         if ptup1 is not None:
@@ -712,9 +715,9 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
                     #errorgen_2_bel_1 can't be the identity,
                     #And com(errorgen_2_bel_0, acom(errorgen_1_bel_0, errorgen_1_bel_1)) can't be either.
                     if stim_pauli_string_less_than(ptup2[1], errorgen_2_bel_1):
-                        errorGens.append((_LSE('A', [ptup2[1], errorgen_2_bel_1]), -.5*1j*w*ptup1[0]*ptup2[0]))
+                        errorgens.append((_LSE('A', [ptup2[1], errorgen_2_bel_1]), -.5*1j*w*ptup1[0]*ptup2[0]))
                     else:
-                        errorGens.append((_LSE('A', [errorgen_2_bel_1, ptup2[1]]), .5*1j*w*ptup1[0]*ptup2[0]))
+                        errorgens.append((_LSE('A', [errorgen_2_bel_1, ptup2[1]]), .5*1j*w*ptup1[0]*ptup2[0]))
 
         ptup1 = acom(errorgen_1_bel_0, errorgen_1_bel_1)
         if ptup1 is not None:
@@ -724,9 +727,9 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
                     #errorgen_2_bel_0 can't be the identity.
                     #And com(errorgen_2_bel_1, acom(errorgen_1_bel_0, errorgen_1_bel_1)) can't be either.
                     if stim_pauli_string_less_than(ptup2[1], errorgen_2_bel_0):
-                        errorGens.append((_LSE('A', [ptup2[1], errorgen_2_bel_0]), -.5*1j*w*ptup1[0]*ptup2[0]))
+                        errorgens.append((_LSE('A', [ptup2[1], errorgen_2_bel_0]), -.5*1j*w*ptup1[0]*ptup2[0]))
                     else:
-                        errorGens.append((_LSE('A', [errorgen_2_bel_0, ptup2[1]]), .5*1j*w*ptup1[0]*ptup2[0]))
+                        errorgens.append((_LSE('A', [errorgen_2_bel_0, ptup2[1]]), .5*1j*w*ptup1[0]*ptup2[0]))
 
         ptup1 = acom(errorgen_2_bel_0, errorgen_2_bel_1)
         if ptup1 is not None:
@@ -736,9 +739,9 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
                     #errorgen_1_bel_1 can't be the identity.
                     #And com(acom(errorgen_2_bel_0, errorgen_2_bel_1), errorgen_2_bel_0) can't be either
                     if stim_pauli_string_less_than(ptup2[1], errorgen_1_bel_1):
-                        errorGens.append((_LSE('A', [ptup2[1], errorgen_1_bel_1]), -.5*1j*w*ptup1[0]*ptup2[0]))
+                        errorgens.append((_LSE('A', [ptup2[1], errorgen_1_bel_1]), -.5*1j*w*ptup1[0]*ptup2[0]))
                     else:
-                        errorGens.append((_LSE('A', [errorgen_1_bel_1, ptup2[1]]), .5*1j*w*ptup1[0]*ptup2[0]))
+                        errorgens.append((_LSE('A', [errorgen_1_bel_1, ptup2[1]]), .5*1j*w*ptup1[0]*ptup2[0]))
 
         ptup1 = acom(errorgen_2_bel_0, errorgen_2_bel_1)
         if ptup1 is not None:
@@ -748,9 +751,9 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
                     #errorgen_1_bel_0 can't be the identity.
                     #And com(acom(errorgen_2_bel_0, errorgen_2_bel_1), errorgen_2_bel_1) can't be either
                     if stim_pauli_string_less_than(ptup2[1], errorgen_1_bel_0):
-                        errorGens.append((_LSE('A', [ptup2[1], errorgen_1_bel_0]), -.5*1j*w*ptup1[0]*ptup2[0]))
+                        errorgens.append((_LSE('A', [ptup2[1], errorgen_1_bel_0]), -.5*1j*w*ptup1[0]*ptup2[0]))
                     else:
-                        errorGens.append((_LSE('A', [errorgen_1_bel_0, ptup2[1]]), .5*1j*w*ptup1[0]*ptup2[0]))
+                        errorgens.append((_LSE('A', [errorgen_1_bel_0, ptup2[1]]), .5*1j*w*ptup1[0]*ptup2[0]))
 
         ptup1 = acom(errorgen_1_bel_0, errorgen_1_bel_1)
         if ptup1 is not None:
@@ -759,48 +762,48 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
                 ptup3 = com(ptup1[1], ptup2[1])
                 if ptup3 is not None:
                     #It shouldn't be possible for ptup3 to be the identity given valid error generator indices.
-                    errorGens.append((_LSE('H', [ptup3[1]]), .25*1j*w*ptup1[0]*ptup2[0]*ptup3[0]))
+                    errorgens.append((_LSE('H', [ptup3[1]]), .25*1j*w*ptup1[0]*ptup2[0]*ptup3[0]))
 
     elif errorgen_1_type == 'C' and errorgen_2_type == 'A':
-        ptup1 = product(errorgen_1_bel_0, errorgen_2_bel_0)
-        ptup2 = product(errorgen_2_bel_1, errorgen_1_bel_1)
+        ptup1 = pauli_product(errorgen_1_bel_0, errorgen_2_bel_0)
+        ptup2 = pauli_product(errorgen_2_bel_1, errorgen_1_bel_1)
         if ptup1[1] != ptup2[1]:
             if ptup1[1] != identity and ptup2[1] != identity:
                 new_bels = [ptup1[1], ptup2[1]] if stim_pauli_string_less_than(ptup1[1], ptup2[1]) else [ptup2[1], ptup1[1]]
-                errorGens.append((_LSE('C', new_bels), 1j*w*ptup1[0]*ptup2[0]))
+                errorgens.append((_LSE('C', new_bels), 1j*w*ptup1[0]*ptup2[0]))
         else: #ptup[1] == ptup[2]
             if ptup1[1] != identity:
-                errorGens.append((_LSE('S', [ptup1[1]]), 2*1j*w*ptup1[0]*ptup2[0]))
+                errorgens.append((_LSE('S', [ptup1[1]]), 2*1j*w*ptup1[0]*ptup2[0]))
 
-        ptup1 = product(errorgen_1_bel_0, errorgen_2_bel_1)
-        ptup2 = product(errorgen_2_bel_0, errorgen_1_bel_1)
+        ptup1 = pauli_product(errorgen_1_bel_0, errorgen_2_bel_1)
+        ptup2 = pauli_product(errorgen_2_bel_0, errorgen_1_bel_1)
         if ptup1[1] != ptup2[1]:
             if ptup1[1] != identity and ptup2[1] != identity:
                 new_bels = [ptup1[1], ptup2[1]] if stim_pauli_string_less_than(ptup1[1], ptup2[1]) else [ptup2[1], ptup1[1]]
-                errorGens.append((_LSE('C', new_bels), -1j*w*ptup1[0]*ptup2[0]))
+                errorgens.append((_LSE('C', new_bels), -1j*w*ptup1[0]*ptup2[0]))
         else: #ptup[1] == ptup[2]
             if ptup1[1] != identity:
-                errorGens.append((_LSE('S', [ptup1[1]]), -2*1j*w*ptup1[0]*ptup2[0]))
+                errorgens.append((_LSE('S', [ptup1[1]]), -2*1j*w*ptup1[0]*ptup2[0]))
 
-        ptup1 = product(errorgen_1_bel_1, errorgen_2_bel_0)
-        ptup2 = product(errorgen_2_bel_1, errorgen_1_bel_0)
+        ptup1 = pauli_product(errorgen_1_bel_1, errorgen_2_bel_0)
+        ptup2 = pauli_product(errorgen_2_bel_1, errorgen_1_bel_0)
         if ptup1[1] != ptup2[1]:
             if ptup1[1] != identity and ptup2[1] != identity:
                 new_bels = [ptup1[1], ptup2[1]] if stim_pauli_string_less_than(ptup1[1], ptup2[1]) else [ptup2[1], ptup1[1]]
-                errorGens.append((_LSE('C', new_bels), 1j*w*ptup1[0]*ptup2[0]))
+                errorgens.append((_LSE('C', new_bels), 1j*w*ptup1[0]*ptup2[0]))
         else: #ptup[1] == ptup[2]
             if ptup1[1] != identity:
-                errorGens.append((_LSE('S', [ptup1[1]]), 2*1j*w*ptup1[0]*ptup2[0]))
+                errorgens.append((_LSE('S', [ptup1[1]]), 2*1j*w*ptup1[0]*ptup2[0]))
 
-        ptup1 = product(errorgen_2_bel_0, errorgen_1_bel_0)
-        ptup2 = product(errorgen_1_bel_1, errorgen_2_bel_1)
+        ptup1 = pauli_product(errorgen_2_bel_0, errorgen_1_bel_0)
+        ptup2 = pauli_product(errorgen_1_bel_1, errorgen_2_bel_1)
         if ptup1[1] != ptup2[1]:
             if ptup1[1] != identity and ptup2[1] != identity:
                 new_bels = [ptup1[1], ptup2[1]] if stim_pauli_string_less_than(ptup1[1], ptup2[1]) else [ptup2[1], ptup1[1]]
-                errorGens.append((_LSE('C', new_bels), -1j*w*ptup1[0]*ptup2[0]))
+                errorgens.append((_LSE('C', new_bels), -1j*w*ptup1[0]*ptup2[0]))
         else: #ptup[1] == ptup[2]
             if ptup1[1] != identity:
-                errorGens.append((_LSE('S', [ptup1[1]]), -2*1j*w*ptup1[0]*ptup2[0]))
+                errorgens.append((_LSE('S', [ptup1[1]]), -2*1j*w*ptup1[0]*ptup2[0]))
 
         ptup1 = com(errorgen_2_bel_0, errorgen_2_bel_1)
         if ptup1 is not None:
@@ -810,9 +813,9 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
                     #errorgen_1_bel_1 can't be the identity.
                     #com(errorgen_1_bel_0, com(errorgen_2_bel_0, errorgen_2_bel_1)) can't be either.
                     if stim_pauli_string_less_than(ptup2[1], errorgen_1_bel_1):
-                        errorGens.append((_LSE('A', [ptup2[1], errorgen_1_bel_1]), .5*w*ptup1[0]*ptup2[0]))
+                        errorgens.append((_LSE('A', [ptup2[1], errorgen_1_bel_1]), .5*w*ptup1[0]*ptup2[0]))
                     else:
-                        errorGens.append((_LSE('A', [errorgen_1_bel_1, ptup2[1]]), -.5*w*ptup1[0]*ptup2[0]))
+                        errorgens.append((_LSE('A', [errorgen_1_bel_1, ptup2[1]]), -.5*w*ptup1[0]*ptup2[0]))
         
         ptup1 = com(errorgen_2_bel_0, errorgen_2_bel_1)
         if ptup1 is not None:
@@ -822,9 +825,9 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
                     #errorgen_1_bel_0 can't be the identity.
                     #com(errorgen_1_bel_1, com(errorgen_2_bel_0, errorgen_2_bel_1)) can't be either.
                     if stim_pauli_string_less_than(ptup2[1], errorgen_1_bel_0):
-                        errorGens.append((_LSE('A', [ptup2[1], errorgen_1_bel_0]), .5*w*ptup1[0]*ptup2[0]))
+                        errorgens.append((_LSE('A', [ptup2[1], errorgen_1_bel_0]), .5*w*ptup1[0]*ptup2[0]))
                     else:
-                        errorGens.append((_LSE('A', [errorgen_1_bel_0, ptup2[1]]), -.5*w*ptup1[0]*ptup2[0]))
+                        errorgens.append((_LSE('A', [errorgen_1_bel_0, ptup2[1]]), -.5*w*ptup1[0]*ptup2[0]))
 
         ptup1 = acom(errorgen_1_bel_0, errorgen_1_bel_1)
         if ptup1 is not None:
@@ -834,9 +837,9 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
                     #errorgen_2_bel_1 can't be the identity.
                     #com(errorgen_2_bel_1, acom(errorgen_1_bel_0, errorgen_1_bel_1)) can't be either
                     new_bels = [ptup2[1], errorgen_2_bel_1] if stim_pauli_string_less_than(ptup2[1], errorgen_2_bel_1) else [errorgen_2_bel_1, ptup2[1]]
-                    errorGens.append((_LSE('C', new_bels), .5*1j*w*ptup1[0]*ptup2[0]))
+                    errorgens.append((_LSE('C', new_bels), .5*1j*w*ptup1[0]*ptup2[0]))
                 else: #ptup2[1] == errorgen_2_bel_1, don't need to check that errorgen_2_bel_1 isn't identity.
-                    errorGens.append((_LSE('S', [errorgen_2_bel_1]), 1j*w*ptup1[0]*ptup2[0]))
+                    errorgens.append((_LSE('S', [errorgen_2_bel_1]), 1j*w*ptup1[0]*ptup2[0]))
 
 
         ptup1 = acom(errorgen_1_bel_0,errorgen_1_bel_1)
@@ -847,9 +850,9 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
                     #errorgen_2_bel_0 can't be the identity.
                     #com(errorgen_2_bel_1, acom(errorgen_1_bel_0, errorgen_1_bel_1)) can't be either
                     new_bels = [ptup2[1], errorgen_2_bel_0] if stim_pauli_string_less_than(ptup2[1], errorgen_2_bel_0) else [errorgen_2_bel_0, ptup2[1]]
-                    errorGens.append((_LSE('C', new_bels), -.5*1j*w*ptup1[0]*ptup2[0]))
+                    errorgens.append((_LSE('C', new_bels), -.5*1j*w*ptup1[0]*ptup2[0]))
                 else: #ptup2[1] == errorgen_2_bel_0, don't need to check that errorgen_2_bel_0 isn't identity.
-                    errorGens.append((_LSE('S', [errorgen_2_bel_0]), -1j*w*ptup1[0]*ptup2[0]))
+                    errorgens.append((_LSE('S', [errorgen_2_bel_0]), -1j*w*ptup1[0]*ptup2[0]))
 
         ptup1 = com(errorgen_2_bel_0, errorgen_2_bel_1)
         if ptup1 is not None:
@@ -859,64 +862,64 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
                 if ptup3 is not None:
                     #it shouldn't be possible for ptup3 to be identity given valid error generator
                     #indices.
-                    errorGens.append((_LSE('H', [ptup3[1]]), -.25*w*ptup1[0]*ptup2[0]*ptup3[0]))
+                    errorgens.append((_LSE('H', [ptup3[1]]), -.25*w*ptup1[0]*ptup2[0]*ptup3[0]))
     
     elif errorgen_1_type == 'A' and errorgen_2_type == 'C':
-        errorGens = error_generator_commutator(errorgen_2, errorgen_1, flip_weight=True, weight=weight)
+        errorgens = error_generator_commutator(errorgen_2, errorgen_1, flip_weight=True, weight=weight)
                          
     elif errorgen_1_type == 'A' and errorgen_2_type == 'A':
-        ptup1 = product(errorgen_2_bel_1, errorgen_1_bel_1)
-        ptup2 = product(errorgen_1_bel_0, errorgen_2_bel_0)
+        ptup1 = pauli_product(errorgen_2_bel_1, errorgen_1_bel_1)
+        ptup2 = pauli_product(errorgen_1_bel_0, errorgen_2_bel_0)
 
         if ptup1[1] != ptup2[1]:
             if (ptup1[1] != identity) and (ptup2[1] != identity):
                 if stim_pauli_string_less_than(ptup1[1], ptup2[1]):
-                    errorGens.append((_LSE('A', [ptup1[1], ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
+                    errorgens.append((_LSE('A', [ptup1[1], ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
                 else:
-                    errorGens.append((_LSE('A', [ptup2[1], ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
+                    errorgens.append((_LSE('A', [ptup2[1], ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
             elif ptup1[1] == identity:
-                errorGens.append((_LSE('H', [ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
+                errorgens.append((_LSE('H', [ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
             else: #ptup2[1] == identity
-                errorGens.append((_LSE('H', [ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
+                errorgens.append((_LSE('H', [ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
 
-        ptup1 = product(errorgen_2_bel_0, errorgen_1_bel_0)
-        ptup2 = product(errorgen_1_bel_1, errorgen_2_bel_1)
+        ptup1 = pauli_product(errorgen_2_bel_0, errorgen_1_bel_0)
+        ptup2 = pauli_product(errorgen_1_bel_1, errorgen_2_bel_1)
         if ptup1[1] != ptup2[1]:
             if (ptup1[1] != identity) and (ptup2[1] != identity):
                 if stim_pauli_string_less_than(ptup1[1], ptup2[1]):
-                    errorGens.append((_LSE('A', [ptup1[1], ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
+                    errorgens.append((_LSE('A', [ptup1[1], ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
                 else:
-                    errorGens.append((_LSE('A', [ptup2[1], ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
+                    errorgens.append((_LSE('A', [ptup2[1], ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
             elif ptup1[1] == identity:
-                errorGens.append((_LSE('H', [ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
+                errorgens.append((_LSE('H', [ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
             else: #ptup2[1] == identity
-                errorGens.append((_LSE('H', [ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
+                errorgens.append((_LSE('H', [ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
 
-        ptup1 = product(errorgen_1_bel_1, errorgen_2_bel_0)
-        ptup2 = product(errorgen_2_bel_1, errorgen_1_bel_0)
+        ptup1 = pauli_product(errorgen_1_bel_1, errorgen_2_bel_0)
+        ptup2 = pauli_product(errorgen_2_bel_1, errorgen_1_bel_0)
         if ptup1[1] != ptup2[1]:
             if (ptup1[1] != identity) and (ptup2[1] != identity):
                 if stim_pauli_string_less_than(ptup1[1], ptup2[1]):
-                    errorGens.append((_LSE('A', [ptup1[1], ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
+                    errorgens.append((_LSE('A', [ptup1[1], ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
                 else:
-                    errorGens.append((_LSE('A', [ptup2[1], ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
+                    errorgens.append((_LSE('A', [ptup2[1], ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
             elif ptup1[1] == identity:
-                errorGens.append((_LSE('H', [ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
+                errorgens.append((_LSE('H', [ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
             else: #ptup2[1] == identity
-                errorGens.append((_LSE('H', [ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
+                errorgens.append((_LSE('H', [ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
 
-        ptup1 = product(errorgen_1_bel_0, errorgen_2_bel_1)
-        ptup2 = product(errorgen_2_bel_0, errorgen_1_bel_1)
+        ptup1 = pauli_product(errorgen_1_bel_0, errorgen_2_bel_1)
+        ptup2 = pauli_product(errorgen_2_bel_0, errorgen_1_bel_1)
         if ptup1[1] != ptup2[1]:
             if (ptup1[1] != identity) and (ptup2[1] != identity):
                 if stim_pauli_string_less_than(ptup1[1], ptup2[1]):
-                    errorGens.append((_LSE('A', [ptup1[1], ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
+                    errorgens.append((_LSE('A', [ptup1[1], ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
                 else:
-                    errorGens.append((_LSE('A', [ptup2[1], ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
+                    errorgens.append((_LSE('A', [ptup2[1], ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
             elif ptup1[1] == identity:
-                errorGens.append((_LSE('H', [ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
+                errorgens.append((_LSE('H', [ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
             else: #ptup2[1] == identity
-                errorGens.append((_LSE('H', [ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
+                errorgens.append((_LSE('H', [ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
 
         ptup1 = com(errorgen_2_bel_0, errorgen_2_bel_1)
         if ptup1 is not None:
@@ -926,9 +929,9 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
                     #errorgen_1_bel_0 can't be the identity.
                     #com(errorgen_1_bel_1, com(errorgen_2_bel_0, errorgen_2_bel_1)) can't be either.
                     new_bels = [ptup2[1], errorgen_1_bel_0] if stim_pauli_string_less_than(ptup2[1], errorgen_1_bel_0) else [errorgen_1_bel_0, ptup2[1]]
-                    errorGens.append((_LSE('C', new_bels), .5*w*ptup1[0]*ptup2[0]))
+                    errorgens.append((_LSE('C', new_bels), .5*w*ptup1[0]*ptup2[0]))
                 else: #ptup2[1] == errorgen_1_bel_0
-                    errorGens.append((_LSE('S', [errorgen_1_bel_0]), w*ptup1[0]*ptup2[0]))
+                    errorgens.append((_LSE('S', [errorgen_1_bel_0]), w*ptup1[0]*ptup2[0]))
 
         ptup1 = com(errorgen_2_bel_0, errorgen_2_bel_1)
         if ptup1 is not None:
@@ -938,9 +941,9 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
                     #errorgen_1_bel_1 can't be the identity.
                     #com(errorgen_1_bel_0, com(errorgen_2_bel_0, errorgen_2_bel_1)) can't be either.
                     new_bels = [ptup2[1], errorgen_1_bel_1] if stim_pauli_string_less_than(ptup2[1], errorgen_1_bel_1) else [errorgen_1_bel_1, ptup2[1]]
-                    errorGens.append((_LSE('C', new_bels), -.5*w*ptup1[0]*ptup2[0]))
+                    errorgens.append((_LSE('C', new_bels), -.5*w*ptup1[0]*ptup2[0]))
                 else: #ptup2[1] == errorgen_1_bel_1
-                    errorGens.append((_LSE('S', [errorgen_1_bel_1]), -1*w*ptup1[0]*ptup2[0]))
+                    errorgens.append((_LSE('S', [errorgen_1_bel_1]), -1*w*ptup1[0]*ptup2[0]))
         
         ptup1 = com(errorgen_1_bel_0, errorgen_1_bel_1)
         if ptup1 is not None:
@@ -950,9 +953,9 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
                     #errorgen_2_bel_1 can't be the identity.
                     #com(errorgen_2_bel_0, com(errorgen_1_bel_0, errorgen_1_bel_1)) can't be either.
                     new_bels = [ptup2[1], errorgen_2_bel_1] if stim_pauli_string_less_than(ptup2[1], errorgen_2_bel_1) else [errorgen_2_bel_1, ptup2[1]]
-                    errorGens.append((_LSE('C', new_bels), .5*w*ptup1[0]*ptup2[0]))
+                    errorgens.append((_LSE('C', new_bels), .5*w*ptup1[0]*ptup2[0]))
                 else: #ptup2[1] == errorgen_2_bel_1
-                    errorGens.append((_LSE('S', [errorgen_2_bel_1]), w*ptup1[0]*ptup2[0]))
+                    errorgens.append((_LSE('S', [errorgen_2_bel_1]), w*ptup1[0]*ptup2[0]))
 
 
         ptup1 = com(errorgen_1_bel_0, errorgen_1_bel_1)
@@ -963,9 +966,9 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
                     #errorgen_2_bel_0 can't be the identity.
                     #com(errorgen_2_bel_1, com(errorgen_1_bel_0,errorgen_1_bel_1)) can't be either.
                     new_bels = [ptup2[1], errorgen_2_bel_0] if stim_pauli_string_less_than(ptup2[1], errorgen_2_bel_0) else [errorgen_2_bel_0, ptup2[1]]
-                    errorGens.append((_LSE('C', new_bels), -.5*w*ptup1[0]*ptup2[0]))
+                    errorgens.append((_LSE('C', new_bels), -.5*w*ptup1[0]*ptup2[0]))
                 else: #ptup2[1] == errorgen_2_bel_0
-                    errorGens.append((_LSE('S', [errorgen_2_bel_0]), -1*w*ptup1[0]*ptup2[0]))
+                    errorgens.append((_LSE('S', [errorgen_2_bel_0]), -1*w*ptup1[0]*ptup2[0]))
 
         ptup1 = com(errorgen_2_bel_0, errorgen_2_bel_1)
         if ptup1 is not None:
@@ -975,9 +978,260 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
                 if ptup3 is not None:
                     #it shouldn't be possible for ptup3 to be identity given valid error generator
                     #indices.
-                    errorGens.append((_LSE('H', [ptup3[1]]), .25*1j*w*ptup1[0]*ptup2[0]*ptup3[0]))
+                    errorgens.append((_LSE('H', [ptup3[1]]), .25*1j*w*ptup1[0]*ptup2[0]*ptup3[0]))
            
-    return errorGens
+    return errorgens
+
+def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=None):
+    """
+    Returns the composition of two error generators. I.e. errorgen_1[errorgen_2[\cdot]].
+    
+    Parameters
+    ----------
+    errorgen1 : `LocalStimErrorgenLabel`
+        First error generator.
+
+    errorgen2 : `LocalStimErrorgenLabel`
+        Second error generator
+    
+    weight : float, optional (default 1.0)
+        An optional weighting value to apply to the value of the composition.
+    
+    identity : stim.PauliString, optional (default None)
+        An optional stim.PauliString to use for comparisons to the identity.
+        Passing in this kwarg isn't necessary, but can allow for reduced 
+        stim.PauliString creation when calling this function many times for
+        improved efficiency.
+
+    Returns
+    -------
+    list of `LocalStimErrorgenLabel`s corresponding to the composition of the two input error generators,
+    weighted by the specified value of `weight`.
+    """
+
+    composed_errorgens = []
+
+    w = weight
+
+    errorgen_1_type = errorgen_1.errorgen_type
+    errorgen_2_type = errorgen_2.errorgen_type
+
+    #The first basis element label is always well defined, 
+    #the second we'll define only of the error generator is C or A type.
+    errorgen_1_bel_0 = errorgen_1.basis_element_labels[0] 
+    errorgen_2_bel_0 = errorgen_2.basis_element_labels[0] 
+    
+    if errorgen_1_type == 'C' or errorgen_1_type == 'A':
+        errorgen_1_bel_1 = errorgen_1.basis_element_labels[1]
+    if errorgen_2_type == 'C' or errorgen_2_type == 'A':
+        errorgen_2_bel_1 = errorgen_2.basis_element_labels[1]
+
+    #create the identity stim.PauliString for later comparisons.
+    if identity is None:
+        identity = stim.PauliString('I'*len(errorgen_1_bel_0))
+
+    if errorgen_1_type == 'H' and errorgen_2_type == 'H':
+        if errorgen_1_bel_0.commutes(errorgen_2_bel_0):
+            if errorgen_1_bel_0==errorgen_2_bel_0:
+                composed_errorgens.append((_LSE('S', [errorgen_1_bel_0]), 2*w))
+            else:
+                new_bels = [errorgen_1_bel_0, errorgen_2_bel_0] if stim_pauli_string_less_than(errorgen_1_bel_0, errorgen_2_bel_0) else [errorgen_2_bel_0, errorgen_1_bel_0]
+                composed_errorgens.append((_LSE('C', new_bels), w))
+        else:
+            ptup = pauli_product(errorgen_1_bel_0, errorgen_2_bel_0)
+            composed_errorgens.append((_LSE('H', [ptup[1]]), -1j*w*ptup[0]))
+            new_bels = [errorgen_1_bel_0, errorgen_2_bel_0] if stim_pauli_string_less_than(errorgen_1_bel_0, errorgen_2_bel_0) else [errorgen_2_bel_0, errorgen_1_bel_0]
+            composed_errorgens.append((_LSE('C', new_bels), w))
+
+    elif errorgen_1_type == 'H' and errorgen_2_type == 'S':
+        ptup = pauli_product(errorgen_1_bel_0, errorgen_2_bel_0)
+        if errorgen_1_bel_0.commutes(errorgen_2_bel_0):
+            if ptup[1] == identity:
+                composed_errorgens.append((_LSE('H', [errorgen_2_bel_0]), -w*ptup[0]))
+                composed_errorgens.append((_LSE('H', [errorgen_1_bel_0]), -w))   
+            else:
+                if stim_pauli_string_less_than(ptup[1], errorgen_2_bel_0):
+                    composed_errorgens.append((_LSE('A', [ptup[1], errorgen_2_bel_0]), -w*ptup[0]))
+                else:
+                    composed_errorgens.append((_LSE('A', [ptup[1], errorgen_2_bel_0]), w*ptup[0]))    
+                composed_errorgens.append((_LSE('H', [errorgen_1_bel_0]), -w))
+        else: #if errorgen_1_bel_0 and errorgen_2_bel_0 only multiply to identity they are equal (in which case they commute).
+            new_bels = [ptup[1], errorgen_2_bel_0] if stim_pauli_string_less_than(ptup[1], errorgen_2_bel_0) else [errorgen_2_bel_0, ptup[1]]
+            composed_errorgens.append((_LSE('C', new_bels), -1j*w*ptup[0]))
+            composed_errorgens.append((_LSE('H', [errorgen_1_bel_0]), -w))
+    #Apologies to poor soul reading this code later, switching back and forth between notation in my notes and in previous code starts to
+    #get too hard at this point and forward, so switching some notation. -CIO
+    elif errorgen_1_type == 'H' and errorgen_2_type == 'C':
+        #H_A[C_{P,Q}] A->errorgen_1_bel_0, P,Q -> errorgen_2_bel_0, errorgen_2_bel_1
+        P = errorgen_2_bel_0
+        Q = errorgen_2_bel_1
+        A = errorgen_1_bel_0 
+        #Case 1: [P,Q]=0
+        if P.commutes(Q):
+            #precompute some products we'll need.
+            PA = pauli_product(P, A)
+            QA = pauli_product(Q, A)
+            PQ = pauli_product(P, Q)
+            APQ = pauli_product(A, PQ[1])
+            #also precompute whether pairs commute or anticommute
+            com_AP = A.commutes(P)
+            com_AQ = A.commutes(Q)
+            #also also precompute whether any of these products are the identity
+            PA_ident = (PA[1] == identity)
+            QA_ident = (QA[1] == identity)
+            PQ_ident = (PQ[1] == identity)
+            APQ_ident = (APQ[1] == identity)
+            #also also also precompute whether certain relevant pauli pairs are equal.
+            PA_eq_Q = (PA[1]==Q)
+            QA_eq_P = (QA[1]==P)
+            PQ_eq_A = (PQ[1]==A)
+            
+            #Case 1a: [A,P]=0, [A,Q]=0
+            if com_AP and com_AQ:
+                new_eg_type_0, new_bels_0, addl_sign_0 = _ordered_new_bels_A(PA[1], Q, PA_ident, False, PA_eq_Q)
+                new_eg_type_1, new_bels_1, addl_sign_1 = _ordered_new_bels_A(QA[1], P, QA_ident, False, QA_eq_P)
+                new_eg_type_2, new_bels_2, addl_sign_2 = _ordered_new_bels_A(PQ[1], A, PQ_ident, False, PQ_eq_A)
+                if new_eg_type_0 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1*PA[0]*addl_sign_0*w))
+                if new_eg_type_1 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1*QA[0]*addl_sign_1*w))
+                if new_eg_type_2 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1*PQ[0]*addl_sign_2*w))
+                if not APQ_ident:
+                    composed_errorgens.append((_LSE('H', [APQ[1]]), -1*APQ[0]*w))
+            #Case 1b: {A,P}=0, {A,Q}=0
+            elif not com_AP and not com_AQ:
+                new_eg_type_0, new_bels_0, addl_scale_0 = _ordered_new_bels_C(PA[1], Q, PA_ident, False, PA_eq_Q)
+                new_eg_type_1, new_bels_1, addl_scale_1 = _ordered_new_bels_C(QA[1], P, QA_ident, False, QA_eq_P)
+                new_eg_type_2, new_bels_2, addl_sign_2  = _ordered_new_bels_A(PQ[1], A, PQ_ident, False, PQ_eq_A)
+                if new_eg_type_0 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1j*PA[0]*addl_scale_0*w))
+                if new_eg_type_1 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), 1j*QA[0]*addl_scale_1*w))
+                if new_eg_type_2 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1*PQ[0]*addl_sign_2*w))
+                if not APQ_ident:
+                    composed_errorgens.append((_LSE('H', [APQ[1]]), -1*APQ[0]*w))
+            #Case 1c: [A,P]=0, {A,Q}=0
+            elif com_AP and not com_AQ:
+                new_eg_type_0, new_bels_0, addl_sign_0  = _ordered_new_bels_A(PA[1], Q, PA_ident, False, PA_eq_Q)
+                new_eg_type_1, new_bels_1, addl_scale_1 = _ordered_new_bels_C(QA[1], P, QA_ident, False, QA_eq_P)
+                new_eg_type_2, new_bels_2, addl_sign_2  = _ordered_new_bels_A(PQ[1], A, PQ_ident, False, PQ_eq_A)
+                if new_eg_type_0 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1*PA[0]*addl_sign_0*w))
+                if new_eg_type_1 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), 1j*QA[0]*addl_scale_1*w))
+                if new_eg_type_2 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1*PQ[0]*addl_sign_2*w))
+            #Case 1d: {A,P}=0, [A,Q]=0
+            elif not com_AP and com_AQ:
+                new_eg_type_0, new_bels_0, addl_scale_0 = _ordered_new_bels_C(PA[1], Q, PA_ident, False, PA_eq_Q)
+                new_eg_type_1, new_bels_1, addl_sign_1  = _ordered_new_bels_A(QA[1], P, QA_ident, False, QA_eq_P)
+                new_eg_type_2, new_bels_2, addl_sign_2  = _ordered_new_bels_A(PQ[1], A, PQ_ident, False, PQ_eq_A)
+                if new_eg_type_0 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1j*PA[0]*addl_scale_0*w))
+                if new_eg_type_1 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1*QA[0]*addl_sign_1*w))
+                if new_eg_type_2 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1*PQ[0]*addl_sign_2*w))
+        else: #Case 2: {P,Q}=0
+            #precompute some products we'll need.
+            PA = pauli_product(P, A)
+            QA = pauli_product(Q, A)
+            #also precompute whether pairs commute or anticommute
+            com_AP = A.commutes(P)
+            com_AQ = A.commutes(Q)
+            #also also precompute whether any of these products are the identity
+            PA_ident = (PA[1] == identity)
+            QA_ident = (QA[1] == identity)
+            #also also also precompute whether certain relevant pauli pairs are equal.
+            PA_eq_Q = (PA[1]==Q)
+            QA_eq_P = (QA[1]==P)
+            #Case 2a: [A,P]=0, [A,Q]=0
+            if com_AP and com_AQ:
+                new_eg_type_0, new_bels_0, addl_sign_0 = _ordered_new_bels_A(PA[1], Q, PA_ident, False, PA_eq_Q)
+                new_eg_type_1, new_bels_1, addl_sign_1 = _ordered_new_bels_A(QA[1], P, QA_ident, False, QA_eq_P)
+                if new_eg_type_0 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1*PA[0]*addl_sign_0*w))
+                if new_eg_type_1 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1*QA[0]*addl_sign_1*w))
+            #Case 1b: {A,P}=0, {A,Q}=0
+            elif not com_AP and not com_AQ:
+                new_eg_type_0, new_bels_0, addl_scale_0 = _ordered_new_bels_C(PA[1], Q, PA_ident, False, PA_eq_Q)
+                new_eg_type_1, new_bels_1, addl_scale_1 = _ordered_new_bels_C(QA[1], P, QA_ident, False, QA_eq_P)
+                if new_eg_type_0 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1j*PA[0]*addl_scale_0*w))
+                if new_eg_type_1 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), 1j*QA[0]*addl_scale_1*w))
+            #Case 1c: [A,P]=0, {A,Q}=0
+            elif com_AP and not com_AQ:
+                new_eg_type_0, new_bels_0, addl_sign_0  = _ordered_new_bels_A(PA[1], Q, PA_ident, False, PA_eq_Q)
+                new_eg_type_1, new_bels_1, addl_scale_1 = _ordered_new_bels_C(QA[1], P, QA_ident, False, QA_eq_P)
+                if new_eg_type_0 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1*PA[0]*addl_sign_0*w))
+                if new_eg_type_1 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), 1j*QA[0]*addl_scale_1*w))
+            #Case 1d: {A,P}=0, [A,Q]=0
+            elif not com_AP and com_AQ:
+                new_eg_type_0, new_bels_0, addl_scale_0 = _ordered_new_bels_C(PA[1], Q, PA_ident, False, PA_eq_Q)
+                new_eg_type_1, new_bels_1, addl_sign_1  = _ordered_new_bels_A(QA[1], P, QA_ident, False, QA_eq_P)
+                if new_eg_type_0 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1j*PA[0]*addl_scale_0*w))
+                if new_eg_type_1 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1*QA[0]*addl_sign_1*w))
+
+
+
+
+
+
+
+
+    return composed_errorgens
+
+#helper function for getting the new (properly ordered) basis element labels, error generator type (A can turn into H with certain index combinations), and additional signs.
+#reduces code repetition in composition code.
+def _ordered_new_bels_A(pauli1, pauli2, first_pauli_ident, second_pauli_ident, pauli_eq):
+    """
+    Helper function for managing new basis element labels, error generator types and proper basis element label ordering. Returns None
+    if both pauli identity flags are True, which signals that the error generator is zero (i.e. should be skipped). Same for is pauli_eq is True.
+    """
+    if pauli_eq:
+        return (None,None,None)
+    if first_pauli_ident:
+        if second_pauli_ident:
+            return (None,None,None)
+        else:
+            new_eg_type = 'H'
+            new_bels = [pauli2] 
+            addl_sign = 1
+    else:
+        if second_pauli_ident:
+            new_eg_type = 'H'
+            new_bels = [pauli1]
+            addl_sign = -1
+        else:
+            new_eg_type = 'A'
+            new_bels, addl_sign = ([pauli1, pauli2], 1) if stim_pauli_string_less_than(pauli2, pauli2) else ([pauli2, pauli1], -1)
+    return new_eg_type, new_bels, addl_sign
+
+def _ordered_new_bels_C(pauli1, pauli2, first_pauli_ident, second_pauli_ident, pauli_eq):
+    """
+    Helper function for managing new basis element labels, error generator types and proper basis element label ordering. Returns None
+    if both pauli identity flags are True, which signals that the error generator is zero (i.e. should be skipped). Same for is pauli_eq is True.
+    """
+    if first_pauli_ident or second_pauli_ident:
+        return (None,None,None)
+
+    if pauli_eq:
+        new_eg_type = 'S'
+        new_bels = [pauli1]
+        addl_scale_fac = 2
+    else:
+        new_eg_type = 'C'
+        addl_scale_fac = 1
+        new_bels = [pauli1, pauli2] if stim_pauli_string_less_than(pauli2, pauli2) else [pauli2, pauli1]
+    return new_eg_type, new_bels, addl_scale_fac
 
 def com(P1, P2):
     #P1 and P2 either commute or anticommute.
@@ -1000,7 +1254,7 @@ def acom(P1, P2):
     #return (sign(P3) * 2 if P1 and P2 commute, 0 o.w.,
     #        unsigned P3)
 
-def product(P1, P2):
+def pauli_product(P1, P2):
     P3 = P1*P2
     return (P3.sign, P3 / P3.sign)
     #return (sign(P3),
@@ -1024,6 +1278,221 @@ def stim_pauli_string_less_than(pauli1, pauli2):
     unsigned_pauli2_str = str(unsigned_pauli2)[1:].replace('_', 'I')
     
     return unsigned_pauli1_str < unsigned_pauli2_str
+
+def errorgen_layer_to_matrix(errorgen_layer, num_qubits, errorgen_matrix_dict=None, sslbls=None):
+    """
+    Converts an iterable over error generator coefficients and rates into the corresponding
+    dense numpy array representation.
+
+    Parameters
+    ----------
+    errorgen_layer : list, tuple or dict
+        An iterable over error generator coefficient and rates. If a list or a tuple the
+        elements should correspond to two-element tuples, the first value being an `ElementaryErrorgenLabel`
+        and the second value the rate. If a dictionary the keys should be `ElementaryErrorgenLabel` and the
+        values the rates.
+
+    num_qubits : int
+        Number of qubits for the error generator matrix being constructed.
+
+    errorgen_matrix_dict : dict, optional (default None)
+        An optional dictionary mapping `ElementaryErrorgenLabel`s to numpy arrays for their dense representation.
+        If not specified this will be constructed from scratch each call, so specifying this can provide a performance
+        benefit.
+    
+    sslbls : list or tuple, optional (default None)
+        A tuple or list of state space labels corresponding to the qubits upon which the error generators
+        can supported. Only required when passing in a value of `errorgen_matrix_dict` with
+        `GlobalElementaryErrogenLabel` keys in conjunction with an `errorgen_layer` with labels
+        which are `LocalElementaryErrorgenLabel` (or vice-versa).
+    
+    Returns
+    -------
+    errorgen_mat : ndarray 
+        ndarray for the dense representation of the specified error generator in the standard basis.
+    """
+
+    #if the list is empty return all zeros
+    #initialize empty array for accumulation.
+    mat = _np.zeros((4**num_qubits, 4**num_qubits), dtype=_np.complex128)
+    if not errorgen_layer:
+        return mat
+    
+    if errorgen_matrix_dict is None:
+        #create an error generator basis.
+        errorgen_basis = _CompleteElementaryErrorgenBasis('PP', _QubitSpace(num_qubits), default_label_type='local')
+        
+        #use this basis to construct a dictionary from error generator labels to their
+        #matrices.
+        errorgen_lbls = errorgen_basis.labels
+        errorgen_matrix_dict = {lbl: mat for lbl, mat in zip(errorgen_lbls, errorgen_basis.elemgen_matrices)}
+
+    #infer the correct label type.
+    if errorgen_matrix_dict:
+        first_label = next(iter(errorgen_matrix_dict))
+        if isinstance(first_label, _LEEL):
+            label_type = 'local'
+        elif isinstance(first_label, _GEEL):
+            label_type = 'global'
+        else:
+            msg = f'Label type {type(first_label)} is not supported as a key for errorgen_matrix_dict.'\
+                  + 'Please use either LocalElementaryErrorgenLabel or GlobalElementaryErrorgenLabel.'
+            raise ValueError()
+    else:
+        raise ValueError('Non-empty errorgen_layer, but errorgen_matrix_dict is empty. Cannot convert.')
+        
+    #loop through errorgen_layer and accumulate the weighted error generators prescribed.
+    if isinstance(errorgen_layer, (list, tuple)):
+        first_coefficient_lbl = errorgen_layer[0][0]
+        errorgen_layer_iter = errorgen_layer
+    elif isinstance(errorgen_layer, dict):
+        first_coefficient_lbl = next(iter(errorgen_layer))
+        errorgen_layer_iter = errorgen_layer.items()
+    else:
+        raise ValueError(f'errorgen_layer should be either a list, tuple or dict. {type(errorgen_layer)=}')
+
+    if ((isinstance(first_coefficient_lbl, _LEEL) and label_type == 'global') \
+        or (isinstance(first_coefficient_lbl, _GEEL) and label_type == 'local')) and sslbls is None:
+        msg = "You have passed in an `errogen_layer` with `LocalElementaryErrorgenLabel` coefficients, and " \
+              +"an `errorgen_matrix_dict` with keys which are `GlobalElementaryErrorgenLabel` (or vice-versa). When using this "\
+              +"combination you must also specify the state space labels with `sslbls`."
+        raise ValueError(msg)
+
+    if isinstance(first_coefficient_lbl, _LSE):
+        if label_type == 'local':
+            for lbl, rate in errorgen_layer_iter:
+                mat +=  rate*errorgen_matrix_dict[lbl.to_local_eel()]
+        else:
+            for lbl, rate in errorgen_layer_iter:
+                mat +=  rate*errorgen_matrix_dict[lbl.to_global_eel()]
+    elif isinstance(first_coefficient_lbl, _LEEL):
+        if label_type == 'local':
+            for lbl, rate in errorgen_layer_iter:
+                mat +=  rate*errorgen_matrix_dict[lbl]
+        else:
+            for lbl, rate in errorgen_layer_iter:
+                mat +=  rate*errorgen_matrix_dict[_GEEL.cast(lbl, sslbls=sslbls)]
+    elif isinstance(first_coefficient_lbl, _GEEL):
+        if label_type == 'local':
+            for lbl, rate in errorgen_layer_iter:
+                mat +=  rate*errorgen_matrix_dict[_LEEL.cast(lbl, sslbls=sslbls)]
+        else:
+            for lbl, rate in errorgen_layer_iter:
+                mat +=  rate*errorgen_matrix_dict[lbl]
+    else:
+        raise ValueError('The coefficient labels in `errorgen_layer` should be either `LocalStimErrorgenLabel`, `LocalElementaryErrorgenLabel` or `GlobalElementaryErrorgenLabel`.')
+    
+    return mat
+
+
+#Helper function for doing numeric commutators and compositions.
+
+def error_generator_commutator_numerical(errorgen1, errorgen2, errorgen_matrix_dict=None, num_qubits=None):
+    """
+    Numerically compute the commutator of the two specified elementary error generators.
+
+    Parameters
+    ----------
+    errorgen1 : `LocalElementaryErrorgenLabel` or `LocalStimErrorgenLabel`
+        First error generator.
+
+    errorgen2 : `ElementaryErrorgenLabel` or `LocalStimErrorgenLabel`
+        Second error generator.
+
+    errorgen_matrix_dict : dict, optional (default None)
+        An optional dictionary mapping `ElementaryErrorgenLabel`s to numpy arrays for their dense representation.
+        If not specified this will be constructed from scratch each call, so specifying this can provide a performance
+        benefit.
+
+    num_qubits : int, optional (default None)
+        Number of qubits for the error generator commutator being computed. Only required if `errorgen_matrix_dict` is None.
+    
+    Returns
+    -------
+    ndarray
+        Numpy array corresponding to the dense representation of the commutator of the input error generators in the standard basis.
+    """
+
+    assert isinstance(errorgen1, (_LEEL, _LSE)) and isinstance(errorgen2, (_LEEL, _LSE))
+    assert type(errorgen1) == type(errorgen2), "The elementary error generator labels have mismatched types."
+    
+    if errorgen_matrix_dict is None:
+        #create an error generator basis.
+        errorgen_basis = _CompleteElementaryErrorgenBasis('PP', _QubitSpace(num_qubits), default_label_type='local')
+        
+        #use this basis to construct a dictionary from error generator labels to their
+        #matrices.
+        errorgen_lbls = errorgen_basis.labels
+        errorgen_matrix_dict = {lbl: mat for lbl, mat in zip(errorgen_lbls, errorgen_basis.elemgen_matrices)}
+
+    first_label = next(iter(errorgen_matrix_dict))
+    
+    if isinstance(first_label, _LEEL):
+        if isinstance(errorgen1, _LEEL):
+            comm = errorgen_matrix_dict[errorgen1]@errorgen_matrix_dict[errorgen2] - errorgen_matrix_dict[errorgen2]@errorgen_matrix_dict[errorgen1]
+        else:
+            comm = errorgen_matrix_dict[errorgen1.to_local_eel()]@errorgen_matrix_dict[errorgen2.to_local_eel()]\
+                  - errorgen_matrix_dict[errorgen2.to_local_eel()]@errorgen_matrix_dict[errorgen1.to_local_eel()]
+    else:
+        if isinstance(errorgen1, _LSE):
+            comm = errorgen_matrix_dict[errorgen1]@errorgen_matrix_dict[errorgen2] - errorgen_matrix_dict[errorgen2]@errorgen_matrix_dict[errorgen1]
+        else:
+            comm = errorgen_matrix_dict[_LSE.cast(errorgen1)]@errorgen_matrix_dict[_LSE.cast(errorgen2)]\
+                  - errorgen_matrix_dict[_LSE.cast(errorgen2)]@errorgen_matrix_dict[_LSE.cast(errorgen1)]
+    return comm
+
+def error_generator_composition_numerical(errorgen1, errorgen2, errorgen_matrix_dict=None, num_qubits=None):
+    """
+    Numerically compute the composition of the two specified elementary error generators.
+
+    Parameters
+    ----------
+    errorgen1 : `LocalElementaryErrorgenLabel` or `LocalStimErrorgenLabel`
+        First error generator.
+
+    errorgen2 : `ElementaryErrorgenLabel` or `LocalStimErrorgenLabel`
+        Second error generator.
+
+    errorgen_matrix_dict : dict, optional (default None)
+        An optional dictionary mapping `ElementaryErrorgenLabel`s to numpy arrays for their dense representation.
+        If not specified this will be constructed from scratch each call, so specifying this can provide a performance
+        benefit.
+
+    num_qubits : int, optional (default None)
+        Number of qubits for the error generator commutator being computed. Only required if `errorgen_matrix_dict` is None.
+    
+    Returns
+    -------
+    ndarray
+        Numpy array corresponding to the dense representation of the composition of the input error generators in the standard basis.
+        
+    """
+    assert isinstance(errorgen1, (_LEEL, _LSE)) and isinstance(errorgen2, (_LEEL, _LSE))
+    assert type(errorgen1) == type(errorgen2), "The elementary error generator labels have mismatched types."
+    
+    if errorgen_matrix_dict is None:
+        #create an error generator basis.
+        errorgen_basis = _CompleteElementaryErrorgenBasis('PP', _QubitSpace(num_qubits), default_label_type='local')
+        
+        #use this basis to construct a dictionary from error generator labels to their
+        #matrices.
+        errorgen_lbls = errorgen_basis.labels
+        errorgen_matrix_dict = {lbl: mat for lbl, mat in zip(errorgen_lbls, errorgen_basis.elemgen_matrices)}
+
+    first_label = next(iter(errorgen_matrix_dict))
+    
+    if isinstance(first_label, _LEEL):
+        if isinstance(errorgen1, _LEEL):
+            comp = errorgen_matrix_dict[errorgen1]@errorgen_matrix_dict[errorgen2]
+        else:
+            comp = errorgen_matrix_dict[errorgen1.to_local_eel()]@errorgen_matrix_dict[errorgen2.to_local_eel()]
+    else:
+        if isinstance(errorgen1, _LSE):
+            comp = errorgen_matrix_dict[errorgen1]@errorgen_matrix_dict[errorgen2]
+        else:
+            comp = errorgen_matrix_dict[_LSE.cast(errorgen1)]@errorgen_matrix_dict[_LSE.cast(errorgen2)]
+    return comp
+
 
 #-----------First-Order Approximate Error Generator Probabilities---------------#
 
