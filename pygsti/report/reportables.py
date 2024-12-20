@@ -907,13 +907,16 @@ def upper_bound_fidelity(gate, mx_basis):
     gate : numpy.ndarray
         the transfer-matrix specifying a gate's action.
 
-    mx_basis : Basis or {'pp', 'gm', 'std'}
-        the basis that `gate` is in.
+    mx_basis : Basis or string
+        Currently restricted to Pauli-product
 
     Returns
     -------
     float
     """
+    basis_str = mx_basis if isinstance(mx_basis, str) else mx_basis.name
+    if basis_str != 'pp':
+        raise NotImplementedError(f'Basis must be Pauli-Product, got {mx_basis}.')
     return _tools.fidelity_upper_bound(gate)[0]
 
 
@@ -996,6 +999,14 @@ def maximum_trace_dist(gate, mx_basis):
 Maximum_trace_dist = _modf.opfn_factory(maximum_trace_dist)
 # init args == (model, op_label)
 
+def leaky_maximum_trace_dist(gate, mx_basis):
+    closestUOpMx = _alg.find_closest_unitary_opmx(gate)
+    _tools.jamiolkowski_iso(closestUOpMx, mx_basis, mx_basis)
+    n_leak = 1
+    return _tools.leaky_jtracedist(gate, closestUOpMx, mx_basis, n_leak)
+
+Leaky_maximum_trace_dist = _modf.opfn_factory(leaky_maximum_trace_dist)
+
 
 def angles_btwn_rotn_axes(model):
     """
@@ -1067,6 +1078,12 @@ def entanglement_fidelity(a, b, mx_basis):
 Entanglement_fidelity = _modf.opsfn_factory(entanglement_fidelity)
 # init args == (model1, model2, op_label)
 
+def leaky_entanglement_fidelity(a, b, mx_basis):
+    n_leak = 1
+    return _tools.leaky_entanglement_fidelity(a, b, mx_basis, n_leak)
+
+Leaky_entanglement_fidelity = _modf.opsfn_factory(leaky_entanglement_fidelity)
+
 
 def entanglement_infidelity(a, b, mx_basis):
     """
@@ -1092,6 +1109,11 @@ def entanglement_infidelity(a, b, mx_basis):
 
 Entanglement_infidelity = _modf.opsfn_factory(entanglement_infidelity)
 # init args == (model1, model2, op_label)
+
+def leaky_entanglement_infidelity(a, b, mx_basis):
+    return 1 - leaky_entanglement_fidelity(a, b, mx_basis)
+
+Leaky_entanglement_infidelity = _modf.opsfn_factory(leaky_entanglement_infidelity)
 
 
 def closest_unitary_fidelity(a, b, mx_basis):  # assume vary model1, model2 fixed
@@ -1159,6 +1181,14 @@ Fro_diff = _modf.opsfn_factory(frobenius_diff)
 # init args == (model1, model2, op_label)
 
 
+def leaky_gate_frob_dist(a, b, mx_basis):
+    n_leak = 1
+    return _tools.subspace_restricted_fro_dist(a, b, mx_basis, n_leak)
+
+
+Leaky_gate_frob_dist = _modf.opsfn_factory(leaky_gate_frob_dist)
+
+
 def jtrace_diff(a, b, mx_basis):  # assume vary model1, model2 fixed
     """
     Jamiolkowski trace distance between a and b
@@ -1183,6 +1213,12 @@ def jtrace_diff(a, b, mx_basis):  # assume vary model1, model2 fixed
 
 Jt_diff = _modf.opsfn_factory(jtrace_diff)
 # init args == (model1, model2, op_label)
+
+def leaky_jtrace_diff(a, b, mx_basis):
+    n_leak = 1
+    return _tools.leaky_jtracedist(a, b, mx_basis, n_leak)
+
+Leaky_Jt_diff = _modf.opsfn_factory(leaky_jtrace_diff)
 
 
 if _CVXPY_AVAILABLE:
@@ -2130,6 +2166,11 @@ def general_decomposition(model_a, model_b):
 
         target_evals = _np.linalg.eigvals(targetOp)
         if _np.any(_np.isclose(target_evals, -1.0)):
+            # It's not clear if this codepath is required for correctness. 
+            # In my experience it can lead to runtime errors when basis conversions
+            # end up with a matrix with imaginary part when the matrix should only 
+            # be real. So I'd like to wrap this in a try-catch.
+            # 
             target_logG = _tools.unitary_superoperator_matrix_log(targetOp, mxBasis)
             logG = _tools.approximate_matrix_log(gate, target_logG)
         else:
@@ -2404,10 +2445,14 @@ def info_of_opfn_by_name(name):
     info = {
         "inf": ("Entanglement|Infidelity",
                 "1.0 - <psi| 1 x Lambda(psi) |psi>"),
+        "la-inf": ("Entanglement|Infidelity (subspace)",
+                   "TO-WRITE"),
         "agi": ("Avg. Gate|Infidelity",
                 "d/(d+1) (entanglement infidelity)"),
         "trace": ("1/2 Trace|Distance",
                   "0.5 | Chi(A) - Chi(B) |_tr"),
+        "la-trace" : ("1/2 Trace|Distance (subspace)",
+                      "TO-WRITE"),
         "diamond": ("1/2 Diamond-Dist",
                     "0.5 sup | (1 x (A-B))(rho) |_tr"),
         "nuinf": ("Non-unitary|Ent. Infidelity",
@@ -2432,6 +2477,8 @@ def info_of_opfn_by_name(name):
                         "where (a_i,b_i) are corresponding eigenvalues of A and B."),
         "frob": ("Frobenius|Distance",
                  "sqrt( sum( (A_ij - B_ij)^2 ) )"),
+        "la-frob": ("Frobenius|Distance (subspace)",
+                    "TO WRITE"),
         "unmodeled": ("Un-modeled|Error",
                       "The per-operation budget used to account for un-modeled errors (model violation)")
     }
@@ -2477,12 +2524,18 @@ def evaluate_opfn_by_name(name, model, target_model, op_label_or_string,
     if name == "inf":
         fn = Entanglement_infidelity if b else \
             Circuit_entanglement_infidelity
+    elif name == "la-inf":
+        assert b
+        fn = Leaky_entanglement_infidelity
     elif name == "agi":
         fn = Avg_gate_infidelity if b else \
             Circuit_avg_gate_infidelity
     elif name == "trace":
         fn = Jt_diff if b else \
             Circuit_jt_diff
+    elif name == "la-trace":
+        assert b
+        fn = Leaky_Jt_diff
     elif name == "diamond":
         fn = HalfDiamondNorm if b else \
             CircuitHalfDiamondNorm
@@ -2510,6 +2563,9 @@ def evaluate_opfn_by_name(name, model, target_model, op_label_or_string,
     elif name == "evnudiamond":
         fn = Eigenvalue_nonunitary_diamondnorm if b else \
             Circuit_eigenvalue_nonunitary_diamondnorm
+    elif name == "la-frob":
+        assert b
+        fn = Leaky_gate_frob_dist
     elif name == "frob":
         fn = Fro_diff if b else \
             Circuit_fro_diff

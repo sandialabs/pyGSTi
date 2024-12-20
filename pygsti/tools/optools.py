@@ -10,6 +10,11 @@ Utility functions operating on operation matrices
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
+from typing import TYPE_CHECKING, List, Tuple
+if TYPE_CHECKING:
+    import cvxpy as cp
+
 import collections as _collections
 import warnings as _warnings
 
@@ -23,6 +28,8 @@ from pygsti.tools import basistools as _bt
 from pygsti.tools import jamiolkowski as _jam
 from pygsti.tools import lindbladtools as _lt
 from pygsti.tools import matrixtools as _mt
+from pygsti.tools import sdptools as _sdps
+from pygsti.baseobjs import basis as _pgb
 from pygsti.baseobjs.basis import Basis as _Basis, ExplicitBasis as _ExplicitBasis, DirectSumBasis as _DirectSumBasis
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LocalElementaryErrorgenLabel
@@ -269,7 +276,7 @@ def tracedist(a, b):
     return 0.5 * tracenorm(a - b)
 
 
-def diamonddist(a, b, mx_basis='pp', return_x=False):
+def diamonddist(a, b, mx_basis='pp', return_x=False, return_all_vars=False):
     """
     Returns the approximate diamond norm describing the difference between gate matrices.
 
@@ -302,98 +309,32 @@ def diamonddist(a, b, mx_basis='pp', return_x=False):
         Only returned if `return_x = True`.  Encodes the state rho, such that
         `dm = trace( |(J(a)-J(b)).T * W| )`.
     """
+    assert _sdps.CVXPY_ENABLED
+    assert a.shape == b.shape
     mx_basis = _bt.create_basis_for_matrix(a, mx_basis)
 
-    # currently cvxpy is only needed for this function, so don't import until here
-    import cvxpy as _cvxpy
-    old_cvxpy = bool(tuple(map(int, _cvxpy.__version__.split('.'))) < (1, 0))
-    if old_cvxpy:
-        raise RuntimeError('CVXPY 0.4 is no longer supported. Please upgrade to CVXPY 1.0 or higher.')
-
+    c = b - a
     # _jam code below assumes *un-normalized* Jamiol-isomorphism.
-    # It will convert a & b to a "single-block" basis representation
-    # when mx_basis has multiple blocks. So after we call it, we need
-    # to multiply by mx dimension (`smallDim`).
-    JAstd = _jam.fast_jamiolkowski_iso_std(a, mx_basis)
-    JBstd = _jam.fast_jamiolkowski_iso_std(b, mx_basis)
-    dim = JAstd.shape[0]
-    smallDim = int(_np.sqrt(dim))
-    JAstd *= smallDim
-    JBstd *= smallDim
-    assert(dim == JAstd.shape[1] == JBstd.shape[0] == JBstd.shape[1])
-
-    J = JBstd - JAstd
-    prob, vars = _diamond_norm_model(dim, smallDim, J)
+    # It will convert c a "single-block" basis representation
+    # when mx_basis has multiple blocks.
+    J = _jam.fast_jamiolkowski_iso_std(c, mx_basis, normalized=False)
+    prob, vars = _sdps.diamond_norm_model_jamiolkowski(J)
 
     try:
         prob.solve(solver='CVXOPT')
-    except _cvxpy.error.SolverError as e:
+        objective_val = prob.value
+        varvals = [v.value for v in vars]
+    except Exception as e:
         _warnings.warn("CVXPY failed: %s - diamonddist returning -2!" % str(e))
-        return (-2, _np.zeros((dim, dim))) if return_x else -2
-    except:
-        _warnings.warn("CVXOPT failed (unknown err) - diamonddist returning -2!")
-        return (-2, _np.zeros((dim, dim))) if return_x else -2
+        objective_val = -2
+        varvals = [_np.zeros_like(J), None, None]
 
-    if return_x:
-        return prob.value, vars[0].value
+    if return_all_vars:
+        return objective_val, varvals
+    elif return_x:
+        return objective_val, varvals[0]
     else:
-        return prob.value
-
-
-def _diamond_norm_model(dim, smallDim, J):
-    # return a model for computing the diamond norm.
-    #
-    # Uses the primal SDP from arXiv:1207.5726v2, Sec 3.2
-    #
-    # Maximize 1/2 ( < J(phi), X > + < J(phi).dag, X.dag > )
-    # Subject to  [[ I otimes rho0,       X        ],
-    #              [      X.dag   ,   I otimes rho1]] >> 0
-    #              rho0, rho1 are density matrices
-    #              X is linear operator
-
-    import cvxpy as _cp
-
-    rho0 = _cp.Variable((smallDim, smallDim), name='rho0', hermitian=True)
-    rho1 = _cp.Variable((smallDim, smallDim), name='rho1', hermitian=True)
-    X = _cp.Variable((dim, dim), name='X', complex=True)
-    Y = _cp.real(X)
-    Z = _cp.imag(X)
-
-    K = J.real
-    L = J.imag
-    if hasattr(_cp, 'scalar_product'):
-        objective_expr = _cp.scalar_product(K, Y) + _cp.scalar_product(L, Z)
-    else:
-        Kf = K.flatten(order='F')
-        Yf = Y.flatten(order='F')
-        Lf = L.flatten(order='F')
-        Zf = Z.flatten(order='F')
-        objective_expr = Kf @ Yf + Lf @ Zf
-
-    objective = _cp.Maximize(objective_expr)
-
-    ident = _np.identity(smallDim, 'd')
-    kr_tau0 = _cp.kron(ident, _cp.imag(rho0))
-    kr_tau1 = _cp.kron(ident, _cp.imag(rho1))
-    kr_sig0 = _cp.kron(ident, _cp.real(rho0))
-    kr_sig1 = _cp.kron(ident, _cp.real(rho1))
-
-    block_11 = _cp.bmat([[kr_sig0 ,    Y   ],
-                         [   Y.T  , kr_sig1]])
-    block_21 = _cp.bmat([[kr_tau0 ,    Z   ],
-                         [   -Z.T , kr_tau1]])
-    block_12 = block_21.T
-    mat_joint = _cp.bmat([[block_11, block_12],
-                          [block_21, block_11]])
-    constraints = [
-        mat_joint >> 0,
-        rho0 >> 0,
-        rho1 >> 0,
-        _cp.trace(rho0) == 1.,
-        _cp.trace(rho1) == 1.
-    ]
-    prob = _cp.Problem(objective, constraints)
-    return prob, [X, rho0, rho1]
+        return objective_val
 
 
 def jtracedist(a, b, mx_basis='pp'):  # Jamiolkowski trace distance:  Tr(|J(a)-J(b)|)
@@ -491,8 +432,8 @@ def entanglement_fidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
     
     #if the tp flag isn't set we'll calculate whether it is true here
     if is_tp is None:
-        def is_tp_fn(x): return _np.isclose(x[0, 0], 1.0) and all(
-        [_np.isclose(x[0, i], 0) for i in range(1,d2)])
+        def is_tp_fn(x):
+            return _np.isclose(x[0, 0], 1.0) and _np.allclose(x[0, 1:d2], 0)
         
         is_tp= (is_tp_fn(a) and is_tp_fn(b))
    
@@ -516,6 +457,179 @@ def entanglement_fidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
     JA = _jam.jamiolkowski_iso(a, mx_basis, mx_basis)
     JB = _jam.jamiolkowski_iso(b, mx_basis, mx_basis)
     return fidelity(JA, JB)
+
+
+def lift_and_act_on_maxmixed_state(op_a, op_b, mx_basis, n_leak=0):
+    # Note: this function is only really useful for gates on a single system (qubit, qutrit, qudit);
+    # not tensor products of such systems.
+    dim = int(_np.sqrt(op_a.shape[0]))
+    assert op_a.shape == (dim**2, dim**2)
+    assert op_b.shape == (dim**2, dim**2)
+
+    # op_a and op_b act on the smallest real-linear space "S" that contains density matrices 
+    # for a dim-level system.
+    #
+    # We care about op_a and op_b only up to their action on the subspace
+    #    U = {rho in S : <i|rho|i> = 0 for all i >= dim - n_leak }.
+    #
+    # It's easier to talk about this subspace (and related subspaces) if op_a and op_b are in
+    # the standard basis. So the first thing we do is convert to that basis.
+    std_basis = _pgb.BuiltinBasis('std', dim**2)
+    op_a = _mt.change_basis(op_a, mx_basis, std_basis)
+    op_b = _mt.change_basis(op_b, mx_basis, std_basis)
+   
+    # Our next step is to construct lifted operators "lift_op_a" and "lift_op_b" that act on the
+    # tensor product space S2 = (S \otimes S) according to the identities
+    #
+    #   lift_op_a( sigma \otimes rho ) = op_a(sigma) \otimes rho
+    #   lift_op_b( sigma \otimes rho ) = op_b(sigma) \otimes rho
+    #
+    # for all sigma, rho in S. The way we do this implicitly fixes a basis for S2 as the
+    # tensor product basis (std_basis \otimes std_basis). We'll make that explicit later on.
+    idle_gate = _np.eye(dim**2, dtype=_np.complex128)
+    lift_op_a = _np.kron(op_a, idle_gate)
+    lift_op_b = _np.kron(op_b, idle_gate)
+
+    # Now we'll compare these lifted operators by how they act on specific state in S2.
+    # That state is rho_mm = |psi><psi|, where
+    #
+    #   |psi> = (|00> + |11> + ... + |dim - n_leak - 1>) / sqrt(dim - n_leak).
+    #
+    # The "mm" in "rho_mm" stands for "maximally mixed."
+    temp = _np.eye(dim, dtype=_np.complex128)
+    if n_leak > 0:
+        temp[-n_leak:,-n_leak:] = 0.0
+    temp /= _np.sqrt(dim - n_leak)
+    psi = _bt.stdmx_to_stdvec(temp).ravel()
+    rho_mm = _np.outer(psi, psi)
+
+    # Of course, lift_op_a and lift_op_b only act on states in their superket representations.
+    # We need the superket representation of rho_mm in terms of the tensor product basis for S2.
+    #
+    # Luckily, pyGSTi has a class for generating bases for a tensor-product space given
+    # bases for the constituent spaces appearing in the tensor product.
+    ten_basis = _pgb.TensorProdBasis((std_basis, std_basis))
+    rho_mm_superket = _bt.stdmx_to_vec(rho_mm, ten_basis).ravel()
+
+    temp1 = lift_op_a @ rho_mm_superket
+    temp2 = lift_op_b @ rho_mm_superket
+
+    return temp1, temp2, ten_basis
+
+
+def leaky_entanglement_fidelity(op_a, op_b, mx_basis, n_leak=0):
+    temp1, temp2, _ = lift_and_act_on_maxmixed_state(op_a, op_b, mx_basis, n_leak)
+    ent_fid = _np.real(temp1.conj() @ temp2)
+    return ent_fid
+
+
+def leaky_jtracedist(op_a, op_b, mx_basis, n_leak=0):
+    temp1, temp2, ten_basis = lift_and_act_on_maxmixed_state(op_a, op_b, mx_basis, n_leak)
+    temp1_std = _bt.vec_to_stdmx(temp1, ten_basis, keep_complex=True)
+    temp2_std = _bt.vec_to_stdmx(temp2, ten_basis, keep_complex=True)
+    j_dist = tracedist(temp1_std, temp2_std)
+    return j_dist
+
+
+def leading_dxd_submatrix_basis_vectors(d: int, n: int, current_basis, return_labels=False):
+    """
+    Let "H" denote n^2 dimensional Hilbert-Schdmit space, and let "U" denote the d^2
+    dimensional subspace of H spanned by vectors whose Hermitian matrix representations
+    are zero outside the leading d-by-d submatrix.
+
+    This function returns a column-unitary matrix "B" where P = B B^{\dagger} is the
+    orthogonal projector from H to U with respect to current_basis. We return B rather
+    than P only because it's simpler to get P from B than it is to get B from P.
+    
+    See below for this function's original use-case.
+    
+    Raison d'etre
+    -------------
+    Suppose we canonically measure the distance between two process matrices (M1, M2) by
+
+        D(M1, M2; H) = max || (M1 - M2) v ||
+                            v is in H,                   (Eq. 1)
+                            tr(v) = 1,
+                            v is positive
+
+    for some norm || * ||.  Suppose also that we want an analog of this distance when
+    (M1, M2) are restricted to the linear subspace U consisting of all vectors in H
+    whose matrix representations are zero outside of their leading d-by-d submatrix.
+
+    One natural way to do this is via the function D(M1, M2; U) -- i.e., just replace
+    H in (Eq. 1) with the subspace U. Using P to denote the orthogonal projector onto U,
+    we claim that we can evaluate this function via the identity
+
+        D(M1, M2; U) = D(M1 P, M2 P; H).                (Eq. 2)
+
+    To see why this is the case, consider a positive vector v and its projection u = P v.
+    Since a vector is called positive whenever its Hermitian matrix representation is positive
+    semidefinite (PSD), we need to show that u is positive. This can be seen by considering
+    block 2-by-2 partitions of the matrix representations of (u,v), where the leading block
+    is d-by-d:
+
+        mat(v) = [x11,  x12]         and      mat(u) = [x11,  0]
+                 [x21,  x22]                           [  0,  0].
+    
+    In particular, u is positive if and only if x11 is PSD, and x11 must be PSD for v
+    to be positive. Furthermore, positivity of v requires that x22 is PSD, which implies
+
+        0 <= tr(u) = tr(x11) <= tr(v).
+    
+    Given this, it is easy to establish (Eq 2.) by considering how the following pair 
+    of problems have the same optimal objective function value
+
+        max || (M1 - M2) P v ||         and        max || (M1 - M2) P v || 
+            mat(v) = [x11, x12]                         mat(v) = [x11, x12]
+                     [x21, x22]                                  [x21, x22]
+            mat(v) is PSD                               x11 is PSD
+            tr(x11) + tr(x22) = 1                       tr(x11) <= 1.
+
+    In fact, this can be taken a little further! The whole argument goes through unchanged
+    if, instead of starting with the objective function || (M1 - M2) v ||, we started with
+    f((M1 - M2) v) and f satisfied the property that f(c v) >= f(v) whenever c is a scalar
+    greater than or equal to one.
+
+    Interesting idea:
+        Set M2 = 0.
+        Use || (I - P) M1 P || as a metric for leakage.
+        Use || P M1 (I - P) || as a metric for seepage
+    """
+    assert d <= n
+    current_basis = _pgb.Basis.cast(current_basis, dim=n**2)
+    X = current_basis.create_transform_matrix('std')
+    X = X.T.conj()
+    if d == n:
+        return X
+    # we have to select a proper subset of columns in current_basis
+    std_basis = _pgb.BuiltinBasis(name='std', dim_or_statespace=n**2)
+    label2ind = {ell: idx for idx,ell in enumerate(std_basis.labels)}
+    basis_ind = []
+    basis_labels = []
+    for i in range(d):
+        for j in range(d):
+            ell = f"({i},{j})"
+            basis_ind.append(label2ind[ell])
+            basis_labels.append(ell)
+    basis_ind = _np.array(basis_ind)
+    submatrix_basis_vectors = X[:, basis_ind]
+    if return_labels:
+        return submatrix_basis_vectors, basis_labels
+    if not return_labels:
+        return submatrix_basis_vectors
+
+
+def subspace_restricted_fro_dist(a, b, mx_basis, n_leak=0):
+    diff = a -  b
+    if n_leak == 0:
+        return _np.linalg.norm(diff, 'fro')
+    if n_leak == 1:
+        d = int(_np.sqrt(a.shape[0]))
+        assert a.shape == b.shape == (d**2, d**2)
+        B = leading_dxd_submatrix_basis_vectors(d-n_leak, d, mx_basis)
+        P = B @ B.T.conj()
+        return _np.linalg.norm(diff @ P)
+    raise ValueError()
 
 
 def average_gate_fidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
@@ -570,7 +684,7 @@ def average_gate_fidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
     d = int(round(_np.sqrt(a.shape[0])))
     PF = entanglement_fidelity(a, b, mx_basis, is_tp, is_unitary)
     AGF = (d * PF + 1) / (1 + d)
-    return float(AGF)
+    return AGF
 
 
 def average_gate_infidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
@@ -660,7 +774,7 @@ def entanglement_infidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
     EI : float
         The EI of a to b.
     """
-    return 1 - float(entanglement_fidelity(a, b, mx_basis, is_tp, is_unitary))
+    return 1 - entanglement_fidelity(a, b, mx_basis, is_tp, is_unitary)
 
 
 def gateset_infidelity(model, target_model, itype='EI',

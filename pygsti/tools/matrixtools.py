@@ -138,6 +138,46 @@ def is_valid_density_mx(mx, tol=1e-9):
     return abs(_np.trace(mx) - 1.0) < tol and is_pos_def(mx, tol)
 
 
+def frobeniusnorm(ar):
+    """
+    Compute the frobenius norm of an array (or matrix),
+
+    sqrt( sum( each_element_of_a^2 ) )
+
+    Parameters
+    ----------
+    ar : numpy array
+        What to compute the frobenius norm of.  Note that ar can be any shape
+        or number of dimenions.
+
+    Returns
+    -------
+    float or complex
+        depending on the element type of ar.
+    """
+    return _np.linalg.norm(ar.ravel())
+
+
+def frobeniusnorm_squared(ar):
+    """
+    Compute the squared frobenius norm of an array (or matrix),
+
+    sum( each_element_of_a^2 ) )
+
+    Parameters
+    ----------
+    ar : numpy array
+        What to compute the squared frobenius norm of.  Note that ar can be any
+        shape or number of dimenions.
+
+    Returns
+    -------
+    float or complex
+        depending on the element type of ar.
+    """
+    return _np.linalg.norm(ar.ravel())**2
+
+
 def nullspace(m, tol=1e-7):
     """
     Compute the nullspace of a matrix.
