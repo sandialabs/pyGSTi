@@ -1031,6 +1031,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
         identity = stim.PauliString('I'*len(errorgen_1_bel_0))
 
     if errorgen_1_type == 'H' and errorgen_2_type == 'H':
+        #H_P[H_Q] P->errorgen_1_bel_0, Q -> errorgen_2_bel_0
         P = errorgen_1_bel_0
         Q = errorgen_2_bel_0
         P_eq_Q = (P==Q)
@@ -1044,6 +1045,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
             composed_errorgens.append((_LSE(new_eg_type, new_bels), addl_scale*w))
 
     elif errorgen_1_type == 'H' and errorgen_2_type == 'S':
+        #H_P[S_Q] P->errorgen_1_bel_0, Q -> errorgen_2_bel_0
         P = errorgen_1_bel_0
         Q = errorgen_2_bel_0
         PQ = pauli_product(P, Q)
@@ -1058,7 +1060,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
             new_eg_type, new_bels, addl_scale = _ordered_new_bels_C(PQ[1], Q, PQ_ident, False, PQ_eq_Q)
             if new_eg_type is not None:
                 composed_errorgens.append((_LSE(new_eg_type, new_bels), -1j*PQ[0]*addl_scale*w))
-            composed_errorgens.append((_LSE('H', [errorgen_1_bel_0]), -w))
+            composed_errorgens.append((_LSE('H', [P]), -w))
 
     elif errorgen_1_type == 'H' and errorgen_2_type == 'C':
         #H_A[C_{P,Q}] A->errorgen_1_bel_0, P,Q -> errorgen_2_bel_0, errorgen_2_bel_1
@@ -1298,9 +1300,39 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                 if new_eg_type_2 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), 1j*PQ[0]*addl_sign_2*w))
 
+    #Note: This could be done by leveraging the commutator code, but that adds
+    #additional overhead which I am opting to avoid.
+    elif errorgen_1_type == 'S' and errorgen_2_type == 'H':
+        #S_P[H_Q] P->errorgen_1_bel_0, Q -> errorgen_2_bel_0
+        P = errorgen_1_bel_0
+        Q = errorgen_2_bel_0
+        PQ = pauli_product(P, Q)
+        PQ_ident = (PQ[1] == identity)
+        PQ_eq_Q = (PQ[1]==Q)
+        if P.commutes(Q):
+            new_eg_type, new_bels, addl_sign = _ordered_new_bels_A(PQ[1], P, PQ_ident, False, PQ_eq_Q)
+            if new_eg_type is not None:
+                composed_errorgens.append((_LSE(new_eg_type, new_bels), -PQ[0]*addl_sign*w))
+            composed_errorgens.append((_LSE('H', [Q]), -w))   
+        else: #if errorgen_1_bel_0 and errorgen_2_bel_0 only multiply to identity they are equal (in which case they commute).
+            new_eg_type, new_bels, addl_scale = _ordered_new_bels_C(PQ[1], P, PQ_ident, False, PQ_eq_Q)
+            if new_eg_type is not None:
+                composed_errorgens.append((_LSE(new_eg_type, new_bels), -1j*PQ[0]*addl_scale*w))
+            composed_errorgens.append((_LSE('H', [Q]), -w))
 
+    elif errorgen_1_type == 'S' and errorgen_2_type == 'S':
+        #S_P[S_Q] P->errorgen_1_bel_0, Q -> errorgen_2_bel_0
+        P = errorgen_1_bel_0
+        Q = errorgen_2_bel_0
+        PQ = pauli_product(P, Q)
+        PQ_ident = (PQ[1] == identity)
+        if not PQ_ident:
+            composed_errorgens.append((_LSE('S', [PQ[1]]), w))
+        composed_errorgens.append((_LSE('S', [P]), -w))
+        composed_errorgens.append((_LSE('S', [Q]),- w))
 
-
+    elif errorgen_1_type == 'S' and errorgen_2_type == 'C':
+        pass
 
     return composed_errorgens
 
