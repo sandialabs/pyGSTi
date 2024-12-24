@@ -299,10 +299,12 @@ class TimeIndependentMDSObjectiveFunctionTesterBase(ObjectiveFunctionData):
                                          places=3)  # each *element* should match to 3 places
 
             if self.computes_lsvec:
-                lsvec = objfn.lsvec().copy()
-                dlsvec = objfn.dlsvec().copy()
-                self.assertArraysAlmostEqual(dterms / nEls, 2 * lsvec[:, None] * dlsvec / nEls,
-                                             places=4)  # each *element* should match to 4 places
+                arg1   = dterms / nEls
+                lsvec  = objfn.lsvec(v0).copy()
+                dlsvec = objfn.dlsvec(v0).copy()
+                arg2   = 2 * lsvec[:, None] * dlsvec / nEls
+                self.assertArraysAlmostEqual(arg1, arg2, places=4)  # each *element* should match to 4 places
+                return
 
     def test_approximate_hessian(self):
         if not self.enable_hessian_tests:
