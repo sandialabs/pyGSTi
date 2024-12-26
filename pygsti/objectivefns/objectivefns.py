@@ -592,7 +592,6 @@ class RawObjectiveFunction(ObjectiveFunction):
         lsvec = self.lsvec(probs, counts, total_counts, freqs, intermediates)
         # NOTE: this function is correct under the assumption that terms == lsvec**2,
         #       independent of whether or not lsvec is nonnegative.
-        # lsvec = _np.abs(self.lsvec(probs, counts, total_counts, freqs, intermediates))
         return 2 * lsvec * self.dlsvec(probs, counts, total_counts, freqs, intermediates)
 
     def dlsvec(self, probs, counts, total_counts, freqs, intermediates=None):
@@ -1636,6 +1635,8 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
 #                         = (p - f)^2 * ( ((1-p) + p)/(p*(1-p)) )
 #                         = 1/(p*(1-p)) * (p - f)^2
 
+
+# negative lsvec possible
 class RawChi2Function(RawObjectiveFunction):
     """
     The function `N(p-f)^2 / p`
@@ -2283,6 +2284,7 @@ class RawChiAlphaFunction(RawObjectiveFunction):
         return total_counts * _np.where(probs > p0, 1.0, 2 * c1 * probs)
 
 
+# negative lsvec possible
 class RawFreqWeightedChi2Function(RawChi2Function):
 
     """
@@ -2477,6 +2479,7 @@ class RawFreqWeightedChi2Function(RawChi2Function):
         return 2 * total_counts / self.min_freq_clip_for_weighting
 
 
+# negative lsvec possible
 class RawCustomWeightedChi2Function(RawChi2Function):
 
     """
@@ -2697,6 +2700,8 @@ class RawCustomWeightedChi2Function(RawChi2Function):
 #  terms, where each term == sqrt( N_{i,sl} * -log(p_{i,sl}) )
 #
 # See LikelihoodFunction.py for details on patching
+
+
 class RawPoissonPicDeltaLogLFunction(RawObjectiveFunction):
     """
     The function `N*f*log(f/p) - N*(f-p)`.
@@ -4108,6 +4113,13 @@ class RawTVDFunction(RawObjectiveFunction):
         raise NotImplementedError("Derivatives not implemented for TVD yet!")
 
 
+######################################################
+#
+#   Start MDCObjectiveFunction subclasses
+#
+######################################################
+
+
 class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
     """
     A time-independent model-based (:class:`MDCObjectiveFunction`-derived) objective function.
@@ -4393,7 +4405,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         assert(terms.shape == (self.nelements + self.local_ex,))
         return terms
 
-    def lsvec(self, paramvec=None, oob_check=False):
+    def lsvec(self, paramvec=None, oob_check=False, raw_objfn_lsvec_signs=True):
         lsvec = self.terms(paramvec, oob_check, "LS OBJECTIVE")
         if _np.any(lsvec < 0):
             bad_locs = _np.where(lsvec < 0)[0]
@@ -4404,27 +4416,11 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             """
             raise RuntimeError(msg)
         lsvec **= 0.5
-        self._compensate_for_dlsvec_sign(lsvec)
-        # ^ That wouldn't be needed if we computed dlsvec using dlsvec_generic(...),
-        #   which only triggers indirect calls to raw_objfn.dterms, raw_objfn.terms.
+        if raw_objfn_lsvec_signs:
+            if self.layout.resource_alloc('atom-processing').is_host_leader:
+                raw_lsvec = self.raw_objfn.lsvec(self.probs, self.counts, self.total_counts, self.freqs)
+                lsvec[:self.nelements][raw_lsvec < 0] *= -1
         return lsvec
-    
-    def _compensate_for_dlsvec_sign(self, lsvec):
-        """
-        Assumes that lsvec has been computed as sqrt(terms), so it's nonnegative.
-
-        Assumes that lsvec is later used in least squares with a Jacobian matrix
-        "dlsvec", where dlsvec has been computed by a formula derived with a different
-        convention for lsvec (namely, the convention that terms == lsvec**2).
-
-        On exit, lsvec has signs expected by the aforementioned dlsvec implementation.
-        """
-        unit_ralloc = self.layout.resource_alloc('atom-processing')
-        shared_mem_leader = unit_ralloc.is_host_leader
-        if shared_mem_leader:
-            raw_lsvec = self.raw_objfn.lsvec(self.probs, self.counts, self.total_counts, self.freqs)
-            lsvec[:self.nelements][raw_lsvec < 0] *= -1
-        return
 
     def dterms(self, paramvec=None):
         tm = _time.time()
@@ -4454,13 +4450,21 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         else:
             self.model.from_vector(paramvec)
 
-        self._dvecmap_fill_core('lsvec', shared_mem_leader)
-        if shared_mem_leader and self._process_penalties:
-            self._dterms_fill_penalty(paramvec, self.jac[self.nelements:, :])
-            lsvec_penalty = _np.sqrt(self._terms_penalty(paramvec))
-            p5over_lsvec_penalty = 0.5/lsvec_penalty
-            p5over_lsvec_penalty[lsvec_penalty < 1e-100] = 0.0
-            self.jac[self.nelements:, :] *= p5over_lsvec_penalty[:, None]
+        if False:
+            self._dvecmap_fill_core('lsvec', shared_mem_leader)
+            if shared_mem_leader and self._process_penalties:
+                self._dterms_fill_penalty(paramvec, self.jac[self.nelements:, :])
+                lsvec_penalty = _np.sqrt(self._terms_penalty(paramvec))
+                p5over_lsvec_penalty = 0.5/lsvec_penalty
+                p5over_lsvec_penalty[lsvec_penalty < 1e-100] = 0.0
+                self.jac[self.nelements:, :] *= p5over_lsvec_penalty[:, None]
+        else:
+            jac = self.dterms(paramvec)
+            if shared_mem_leader:
+                lsvec = self.lsvec(paramvec)
+                p5over_lsvec = 0.5/lsvec
+                p5over_lsvec[_np.abs(lsvec) < 1e-100] = 0.0
+                jac *= p5over_lsvec[:, None]
 
         unit_ralloc.host_comm_barrier()
         self.raw_objfn.resource_alloc.profiler.add_time("JACOBIAN", tm)
