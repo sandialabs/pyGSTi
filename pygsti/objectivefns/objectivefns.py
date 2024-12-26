@@ -4432,7 +4432,25 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         else:
             self.model.from_vector(paramvec)
     
-        self._dvecmap_fill_core('terms', shared_mem_leader)
+        dprobs = self.jac[0:self.nelements, :]
+        dprobs.shape = (self.nelements, self.nparams)
+
+        with self.resource_alloc.temporarily_track_memory(2 * self.nelements):
+            self.model.sim.bulk_fill_dprobs(dprobs, self.layout, self.probs)
+            self._clip_probs()
+            if shared_mem_leader:
+                if self.firsts is not None:
+                    for ii, i in enumerate(self.indicesOfCircuitsWithOmittedData):
+                        self.dprobs_omitted_rowsum[ii, :] = _np.sum(dprobs[self.layout.indices_for_index(i), :], axis=0)
+                dg_probs = self.raw_objfn.dterms(self.probs, self.counts, self.total_counts, self.freqs)
+                dprobs *= dg_probs[:, None]
+        
+        if shared_mem_leader and self.firsts is not None:
+            total_counts_firsts = self.total_counts[self.firsts]
+            omitted_probs = 1.0 - _np.array([_np.sum(self.probs[self.layout.indices_for_index(i)]) for i in self.indicesOfCircuitsWithOmittedData])
+            omitted_dprobs_firsts_dterms = self.raw_objfn.zero_freq_dterms(total_counts_firsts, omitted_probs)
+            dprobs[self.firsts] -= omitted_dprobs_firsts_dterms[:, None] * self.dprobs_omitted_rowsum
+        
         if shared_mem_leader and self._process_penalties:
             self._dterms_fill_penalty(paramvec, self.jac[self.nelements:, :])
 
@@ -4450,74 +4468,18 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         else:
             self.model.from_vector(paramvec)
 
-        if False:
-            self._dvecmap_fill_core('lsvec', shared_mem_leader)
-            if shared_mem_leader and self._process_penalties:
-                self._dterms_fill_penalty(paramvec, self.jac[self.nelements:, :])
-                lsvec_penalty = _np.sqrt(self._terms_penalty(paramvec))
-                p5over_lsvec_penalty = 0.5/lsvec_penalty
-                p5over_lsvec_penalty[lsvec_penalty < 1e-100] = 0.0
-                self.jac[self.nelements:, :] *= p5over_lsvec_penalty[:, None]
-        else:
-            jac = self.dterms(paramvec)
-            if shared_mem_leader:
-                lsvec = self.lsvec(paramvec)
-                p5over_lsvec = 0.5/lsvec
-                p5over_lsvec[_np.abs(lsvec) < 1e-100] = 0.0
-                jac *= p5over_lsvec[:, None]
+        jac = self.dterms(paramvec)
+        if shared_mem_leader:
+            lsvec = self.lsvec(paramvec)
+            p5over_lsvec = 0.5/lsvec
+            p5over_lsvec[_np.abs(lsvec) < 1e-100] = 0.0
+            jac *= p5over_lsvec[:, None]
 
         unit_ralloc.host_comm_barrier()
         self.raw_objfn.resource_alloc.profiler.add_time("JACOBIAN", tm)
         return self.jac
     
     # Helpers, supporting main public instance functions
-
-    def _dvecmap_fill_core(self, vecmap, shared_mem_leader):
-        if vecmap == 'lsvec':
-            dprobs_scaling_vec_callable = self.raw_objfn.dlsvec
-        elif vecmap == 'terms':
-            dprobs_scaling_vec_callable = self.raw_objfn.dterms
-        else:
-            raise ValueError()
-        
-        dprobs = self.jac[0:self.nelements, :]
-        dprobs.shape = (self.nelements, self.nparams)
-
-        with self.resource_alloc.temporarily_track_memory(2 * self.nelements):
-            self.model.sim.bulk_fill_dprobs(dprobs, self.layout, self.probs)
-            self._clip_probs()
-            if shared_mem_leader:
-                if self.firsts is not None:
-                    for ii, i in enumerate(self.indicesOfCircuitsWithOmittedData):
-                        self.dprobs_omitted_rowsum[ii, :] = _np.sum(dprobs[self.layout.indices_for_index(i), :], axis=0)
-                dg_probs = dprobs_scaling_vec_callable(self.probs, self.counts, self.total_counts, self.freqs)
-                dprobs *= dg_probs[:, None]
-        
-        if shared_mem_leader and self.firsts is not None:
-            """TODO: remove this comment, probably.
-            Logic formerly handled by self._update_dterms_for_omitted_probs(...), which called self._omitted_prob_first_dterms(...).
-            """
-            total_counts_firsts = self.total_counts[self.firsts]
-            omitted_probs = 1.0 - _np.array([_np.sum(self.probs[self.layout.indices_for_index(i)]) for i in self.indicesOfCircuitsWithOmittedData])
-            omitted_dprobs_firsts_dterms = self.raw_objfn.zero_freq_dterms(total_counts_firsts, omitted_probs)
-
-            if vecmap == 'lsvec':
-                """TODO: remove this comment, probably.
-                Logic formerly handled by self._update_dlsvec_for_omitted_probs(...), which called
-                self._omitted_prob_first_terms(...) and self._omitted_prob_first_dterms(...).
-                """
-                lsvec_firsts = _np.sqrt(self.raw_objfn.terms(
-                    self.probs[self.firsts], self.counts[self.firsts], total_counts_firsts, self.freqs[self.firsts]
-                ))
-                temp = self.raw_objfn.zero_freq_terms(total_counts_firsts, omitted_probs)
-                updated_lsvec = _np.sqrt(lsvec_firsts**2 + temp)
-                updated_lsvec = _np.where(updated_lsvec == 0, 1.0, updated_lsvec)  # avoid 0/0 where lsvec & deriv == 0
-                omitted_dprobs_firsts_dterms *= (0.5 / updated_lsvec)
-                dprobs[self.firsts] *= (lsvec_firsts / updated_lsvec)[:, None]
-
-            dprobs[self.firsts] -= omitted_dprobs_firsts_dterms[:, None] * self.dprobs_omitted_rowsum
-
-        return
     
     def _dterms_fill_penalty(self, paramvec, terms_jac):
         wrtslice = self.layout.global_param_slice if isinstance(self.layout, _DistributableCOPALayout) else slice(0, len(paramvec))  # all params
@@ -4595,32 +4557,6 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
                 self.layout.resource_alloc('atom-processing').host_comm_barrier()
             else:
                 _np.clip(self.probs, self.prob_clip_interval[0], self.prob_clip_interval[1], out=self.probs)
-
-    # Temp
-
-    def dlsvec_generic(self, paramvec=None):
-        """
-        It's possible that lsvec.shape[0] == terms.shape[0] > self.nelements
-        if regularization is used. The relationship that lsvec = sqrt(terms)
-        holds regardless of whether or not regularization is used.
-
-         dlsvec(mdl; self)) = Jac(sqrt(terms(mdl; self)))
-                             = diag(0.5 / sqrt(terms(mdl; self))) Jac(terms(mdl; self))
-                             = diag(        0.5 / lsvec        )  Jac(terms(mdl; self))
-
-        This implementation is valid for any objective function. We need it here
-        (instead of the default implementation) since the default makes a call to
-        the raw objective function, and the raw objective function doesn't use the
-        weighting we want. 
-        """
-        jac = self.dterms(paramvec)
-        unit_ralloc = self.layout.resource_alloc('param-processing')
-        if unit_ralloc.is_host_leader:
-            lsvec = self.lsvec(paramvec)
-            p5over_lsvec = 0.5/lsvec
-            p5over_lsvec[lsvec < 1e-100] = 0.0
-            jac *= p5over_lsvec[:, None]
-        return jac
 
     # Hessians, public and private instance functions
 
