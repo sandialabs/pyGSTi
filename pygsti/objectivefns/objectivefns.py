@@ -630,7 +630,8 @@ class RawObjectiveFunction(ObjectiveFunction):
             A 1D array of length equal to that of each array argument.
         """
         # lsvec = sqrt(terms)
-        #   NOTE: ^ That's only correct if lsvec is >= 0, and some classes don't satisfy that.
+        #   NOTE: ^ That's only correct if lsvec is >= 0.
+        #           Any class that doesn't ensure lsvec >= 0 must override this function.
         # dlsvec = 0.5/lsvec * dterms
         #
         if intermediates is None:
