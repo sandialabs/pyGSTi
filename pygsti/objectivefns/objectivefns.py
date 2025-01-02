@@ -1470,96 +1470,6 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         """
         raise NotImplementedError("Derived classes should implement this!")
 
-    #MOVED - but these versions have updated names
-    #def _persistent_memory_estimate(self, num_elements=None):
-    #    #  Estimate & check persistent memory (from allocs within objective function)
-    #    """
-    #    Compute the amount of memory needed to perform evaluations of this objective function.
-    #
-    #    This number includes both intermediate and final results, and assumes
-    #    that the types of evauations given by :meth:`_evaltree_subcalls`
-    #    are required.
-    #
-    #    Parameters
-    #    ----------
-    #    num_elements : int, optional
-    #        The number of elements (circuit outcomes) that will be computed.
-    #
-    #    Returns
-    #    -------
-    #    int
-    #    """
-    #    if num_elements is None:
-    #        nout = int(round(_np.sqrt(self.mdl.dim)))  # estimate of avg number of outcomes per string
-    #        nc = len(self.circuits)
-    #        ne = nc * nout  # estimate of the number of elements (e.g. probabilities, # LS terms, etc) to compute
-    #    else:
-    #        ne = num_elements
-    #    np = self.mdl.num_params
-    #
-    #    # "persistent" memory is that used to store the final results.
-    #    obj_fn_mem = FLOATSIZE * ne
-    #    jac_mem = FLOATSIZE * ne * np
-    #    hess_mem = FLOATSIZE * ne * np**2
-    #    persistent_mem = 4 * obj_fn_mem + jac_mem  # 4 different objective-function sized arrays, 1 jacobian array?
-    #    if any([nm == "bulk_fill_hprobs" for nm in self._evaltree_subcalls()]):
-    #        persistent_mem += hess_mem  # we need room for the hessian too!
-    #    # TODO: what about "bulk_hprobs_by_block"?
-    #
-    #    return persistent_mem
-    #
-    #def _evaltree_subcalls(self):
-    #    """
-    #    The types of calls that will be made to an evaluation tree.
-    #
-    #    This information is used for memory estimation purposes.
-    #
-    #    Returns
-    #    -------
-    #    list
-    #    """
-    #    calls = ["bulk_fill_probs", "bulk_fill_dprobs"]
-    #    if self.enable_hessian: calls.append("bulk_fill_hprobs")
-    #    return calls
-    #
-    #def num_data_params(self):
-    #    """
-    #    The number of degrees of freedom in the data used by this objective function.
-    #
-    #    Returns
-    #    -------
-    #    int
-    #    """
-    #    return self.dataset.degrees_of_freedom(self.ds_circuits,
-    #                                               aggregate_times=not self.time_dependent)
-
-    #def _precompute_omitted_freqs(self):
-    #    """
-    #    Detect omitted frequences (assumed to be 0) so we can compute objective fn correctly
-    #    """
-    #    self.firsts = []; self.indicesOfCircuitsWithOmittedData = []
-    #    for i, c in enumerate(self.circuits):
-    #        lklen = _slct.length(self.lookup[i])
-    #        if 0 < lklen < self.mdl.compute_num_outcomes(c):
-    #            self.firsts.append(_slct.to_array(self.lookup[i])[0])
-    #            self.indicesOfCircuitsWithOmittedData.append(i)
-    #    if len(self.firsts) > 0:
-    #        self.firsts = _np.array(self.firsts, 'i')
-    #        self.indicesOfCircuitsWithOmittedData = _np.array(self.indicesOfCircuitsWithOmittedData, 'i')
-    #        self.dprobs_omitted_rowsum = _np.empty((len(self.firsts), self.nparams), 'd')
-    #        self.raw_objfn.printer.log("SPARSE DATA: %d of %d rows have sparse data" %
-    #                                   (len(self.firsts), len(self.circuits)))
-    #    else:
-    #        self.firsts = None  # no omitted probs
-    #
-    #def _compute_count_vectors(self):
-    #    """
-    #    Ensure self.cache contains count and total-count vectors.
-    #    """
-    #    if not self.cache.has_count_vectors():
-    #        self.cache.add_count_vectors(self.dataset, self.ds_circuits, self.circuit_weights)
-    #    return self.cache.counts, self.cache.total_counts
-
     def _construct_hessian(self, counts, total_counts, prob_clip_interval):
         """
         Framework for constructing a hessian matrix row by row using a derived
@@ -4104,7 +4014,7 @@ class RawTVDFunction(RawObjectiveFunction):
             A 1D array of length equal to that of each array argument.
         """
         _warnings.warn('This derivative is discontinuous and does not return a full subgradient.')
-        t = self.terms(probs, counts, total_counts, freqs, intermediates)
+        t = probs - freqs
         d = 0.5*_np.ones_like(t)
         d[t < 0] *= -1
         return d
@@ -5308,6 +5218,109 @@ class TVDFunction(TimeIndependentMDCObjectiveFunction):
     def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0):
         raw_objfn = RawTVDFunction(regularization, mdc_store.resource_alloc, name, description, verbosity)
         super().__init__(raw_objfn, mdc_store, penalties, verbosity)
+        self.num_circuits = 0
+        self.terms_weights = _np.array([])
+        self._update_terms_weights() # <-- properly computes the two properties above.
+
+    def _update_terms_weights(self):
+        # if self.num_circuits == self.layout.num_circuits:
+        #     # Assume there's nothing to do.
+        #     return
+        # else, assume that self.layout has been updated.
+        self.num_circuits = self.layout.num_circuits
+        num_elements = self.layout.num_elements
+        circuit_sizes = _np.zeros((num_elements,))
+        for elind, circuit, _ in self.layout:
+            circuit_sizes[elind] = 1 + circuit.num_gates
+        assert _np.all(circuit_sizes > 0)
+        self.terms_weights = 1 / circuit_sizes
+        self.terms_weights /= _np.mean(self.terms_weights)
+        # ^ Make the weights mean-1 to avoid unintended changes to Levenberg-Marquardt
+        #   stopping criteria.
+        return
+
+    # QUESTION: could I just call the base class's implementation of terms and then scale the 
+    # result? If so then I can avoid a ton of code duplication.
+    def terms(self, paramvec=None, oob_check=False, profiler_str="TERMS OBJECTIVE"):
+        tm = _time.time()
+        if paramvec is None:
+            paramvec = self.model.to_vector()
+        else:
+            self.model.from_vector(paramvec)
+        terms = self.obj.view()
+
+        unit_ralloc = self.layout.resource_alloc('atom-processing')
+        shared_mem_leader = unit_ralloc.is_host_leader
+
+        with self.resource_alloc.temporarily_track_memory(self.nelements):  # 'e' (terms)
+            self.model.sim.bulk_fill_probs(self.probs, self.layout)
+            self._clip_probs()
+    
+            if oob_check:  # Only used for termgap cases
+                if not self.model.sim.bulk_test_if_paths_are_sufficient(self.layout, self.probs, verbosity=1):
+                    raise ValueError("Out of bounds!")  # signals LM optimizer
+
+            if shared_mem_leader:
+                terms_no_penalty = self.raw_objfn.terms(self.probs, self.counts, self.total_counts, self.freqs)
+                terms[:self.nelements] = terms_no_penalty
+                if self._process_penalties:
+                    terms[self.nelements:] = self._terms_penalty(paramvec)
+
+        if self.firsts is not None and shared_mem_leader:
+            omitted_probs = 1.0 - _np.array([self.probs[self.layout.indices_for_index(i)].sum() for i in self.indicesOfCircuitsWithOmittedData])
+            omitted_probs_firsts_terms = self.raw_objfn.zero_freq_terms(self.total_counts[self.firsts], omitted_probs)
+            terms[self.firsts] += omitted_probs_firsts_terms
+        
+        self._update_terms_weights()
+        terms[:self.nelements] *= self.terms_weights
+        
+        unit_ralloc.host_comm_barrier()
+
+        self.raw_objfn.resource_alloc.profiler.add_time(profiler_str, tm)
+        assert(terms.shape == (self.nelements + self.local_ex,))
+        terms *= self.terms_weights
+        return terms
+
+    # QUESTION: could I just call the base class's implementation of dterms and then scale the 
+    # leading rows of the result? If so then I can avoid a ton of code duplication.
+    def dterms(self, paramvec=None):
+        tm = _time.time()
+        unit_ralloc = self.layout.resource_alloc('param-processing')
+        shared_mem_leader = unit_ralloc.is_host_leader
+
+        if paramvec is None:
+            paramvec = self.model.to_vector()
+        else:
+            self.model.from_vector(paramvec)
+    
+        dprobs = self.jac[0:self.nelements, :]
+        dprobs.shape = (self.nelements, self.nparams)
+
+        with self.resource_alloc.temporarily_track_memory(2 * self.nelements):
+            self.model.sim.bulk_fill_dprobs(dprobs, self.layout, self.probs)
+            self._clip_probs()
+            if shared_mem_leader:
+                if self.firsts is not None:
+                    for ii, i in enumerate(self.indicesOfCircuitsWithOmittedData):
+                        self.dprobs_omitted_rowsum[ii, :] = _np.sum(dprobs[self.layout.indices_for_index(i), :], axis=0)
+                dg_probs = self.raw_objfn.dterms(self.probs, self.counts, self.total_counts, self.freqs)
+                dprobs *= dg_probs[:, None]
+        
+        if shared_mem_leader and self.firsts is not None:
+            total_counts_firsts = self.total_counts[self.firsts]
+            omitted_probs = 1.0 - _np.array([_np.sum(self.probs[self.layout.indices_for_index(i)]) for i in self.indicesOfCircuitsWithOmittedData])
+            omitted_dprobs_firsts_dterms = self.raw_objfn.zero_freq_dterms(total_counts_firsts, omitted_probs)
+            dprobs[self.firsts] -= omitted_dprobs_firsts_dterms[:, None] * self.dprobs_omitted_rowsum
+    
+        self._update_terms_weights()
+        dprobs[:self.nelements] *= self.terms_weights[:, None]
+
+        if shared_mem_leader and self._process_penalties:
+            self._dterms_fill_penalty(paramvec, self.jac[self.nelements:, :])
+
+        unit_ralloc.host_comm_barrier()
+        self.raw_objfn.resource_alloc.profiler.add_time("JACOBIAN", tm)
+        return self.jac
 
 
 class TimeDependentMDCObjectiveFunction(MDCObjectiveFunction):
