@@ -33,7 +33,7 @@ Y = _np.array([[0, -1j], [1j, 0]])
 
 
 def _x_2qubit(theta):
-    """
+    r"""
     Returns X(theta)^\otimes 2 (2-qubit 'XX' unitary)
 
     Parameters
@@ -50,7 +50,7 @@ def _x_2qubit(theta):
 
 
 def _y_2qubit(theta):
-    """
+    r"""
     Returns Y(theta)^\otimes 2 (2-qubit 'YY' unitary)
 
     Parameters
