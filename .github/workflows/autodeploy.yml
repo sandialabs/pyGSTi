@@ -4,8 +4,6 @@
 name: Deploy new version on pypi.org
 
 on:
-  push:
-    branches: [ "master" ]
   release:
     types:
       - published

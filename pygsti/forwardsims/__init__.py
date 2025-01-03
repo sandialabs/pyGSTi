@@ -12,6 +12,7 @@ pyGSTi Forward Simulators Python Package
 
 from .forwardsim import ForwardSimulator
 from .mapforwardsim import SimpleMapForwardSimulator, MapForwardSimulator
+from .torchfwdsim import TorchForwardSimulator
 from .matrixforwardsim import SimpleMatrixForwardSimulator, MatrixForwardSimulator
 from .termforwardsim import TermForwardSimulator
 from .weakforwardsim import WeakForwardSimulator

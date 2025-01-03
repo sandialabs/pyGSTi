@@ -8,78 +8,73 @@ import warnings as _warnings
 from pygsti.tools import lindbladtools as _lt
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools import optools as _ot
+from pygsti.tools import fastcalc as _fc
 from pygsti.baseobjs.basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis
 from pygsti.modelmembers import term as _term
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 
+from functools import lru_cache
+
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 
 
 class LindbladCoefficientBlock(_NicelySerializable):
-    """ SCRATCH:
-        This routine computes the Hamiltonian and Non-Hamiltonian ("other")
-        superoperator generators which correspond to the terms of the Lindblad
-        expression:
-
-        L(rho) = sum_i( h_i [A_i,rho] ) +
-                 sum_ij( o_ij * (B_i rho B_j^dag -
-                                 0.5( rho B_j^dag B_i + B_j^dag B_i rho) ) )
-
-        where {A_i} and {B_i} are bases (possibly the same) for Hilbert Schmidt
-        (density matrix) space with the identity element removed so that each
-        A_i and B_i are traceless.  If we write L(rho) in terms of superoperators
-        H_i and O_ij,
-
-        L(rho) = sum_i( h_i H_i(rho) ) + sum_ij( o_ij O_ij(rho) )
-
-        then this function computes the matrices for H_i and O_ij using the given
-        density matrix basis.  Thus, if `dmbasis` is expressed in the standard
-        basis (as it should be), the returned matrices are also in this basis.
-
-        If these elements are used as projectors it may be usedful to normalize
-        them (by setting `normalize=True`).  Note, however, that these projectors
-        are not all orthogonal - in particular the O_ij's are not orthogonal to
-        one another.
-
-        Parameters
-        ----------
-        dmbasis_ham : list
-            A list of basis matrices {B_i} *including* the identity as the first
-            element, for the returned Hamiltonian-type error generators.  This
-            argument is easily obtained by call to  :func:`pp_matrices` or a
-            similar function.  The matrices are expected to be in the standard
-            basis, and should be traceless except for the identity.  Matrices
-            should be NumPy arrays or SciPy CSR sparse matrices.
-
-        dmbasis_other : list
-            A list of basis matrices {B_i} *including* the identity as the first
-            element, for the returned Stochastic-type error generators.  This
-            argument is easily obtained by call to  :func:`pp_matrices` or a
-            similar function.  The matrices are expected to be in the standard
-            basis, and should be traceless except for the identity.  Matrices
-            should be NumPy arrays or SciPy CSR sparse matrices.
-
-        normalize : bool
-            Whether or not generators should be normalized so that
-            numpy.linalg.norm(generator.flat) == 1.0  Note that the generators
-            will still, in general, be non-orthogonal.
-
-        other_mode : {"diagonal", "diag_affine", "all"}
-            Which non-Hamiltonian Lindblad error generators to construct.
-            Allowed values are: `"diagonal"` (only the diagonal Stochastic
-            generators are returned; that is, the generators corresponding to the
-            `i==j` terms in the Lindblad expression.), `"diag_affine"` (diagonal +
-            affine generators), and `"all"` (all generators).
+    """ 
+    Class for storing and managing the parameters associated with particular subblocks of error-generator
+    parameters. Responsible for management of different internal representations utilized when employing
+    various error generator constraints.
     """
 
     _superops_cache = {}  # a custom cache for create_lindblad_term_superoperators method calls
 
     def __init__(self, block_type, basis, basis_element_labels=None, initial_block_data=None, param_mode='static',
                  truncate=False):
+        """
+        Parameters
+        ----------
+        block_type : str
+            String specifying the type of error generator parameters contained within this block. Allowed
+            values are 'ham' (for Hamiltonian error generators), 'other_diagonal' (for Pauli stochastic error generators),
+            and 'other' (for Pauli stochastic, Pauli correlation and active error generators).
+        
+        basis : `Basis`
+            `Basis` object to be used by this coefficient block. Not this must be an actual `Basis` object, and not
+            a string (as the coefficient block doesn't have the requisite dimensionality information needed for casting).
+        
+        basis_element_labels : list or tuple of str
+            Iterable of strings corresponding to the basis element subscripts used by the error generators managed by
+            this coefficient block.
+        
+        initial_block_data : _np.ndarray, optional (default None)
+            Numpy array with initial parameter values to use in setting initial state of this coefficient block.
+        
+        param_mode : str, optional (default 'static')
+            String specifying the type of internal parameterization used by this coefficient block. Allowed options are:
+            
+            - For all block types: 'static'
+            - For 'ham': 'elements'
+            - For 'other_diagonal': 'elements', 'cholesky', 'depol', 'reldepol'
+            - For 'other': 'elements', 'cholesky'
+
+            Note that the most commonly encounted settings in practice are 'elements' and 'cholesky',
+            which when used in the right combination are utilized in the construction of GLND and CPTPLND
+            parameterized models. For both GLND and CPTPLND the 'ham' block used the 'elements' `param_mode`.
+            GLND the 'other' block uses 'elements', and for CPTPLND it uses 'cholesky'. 
+            
+            'depol' and 'reldepol' are special modes used only for Pauli stochastic only coefficient blocks
+            (i.e. 'other_diagonal'), and correspond to special reduced parameterizations applicable to depolarizing
+            channels. (TODO: Add better explanation of the difference between depol and reldepol).
+        
+        truncate : bool, optional (default False)
+            Flag specifying whether to truncate the parameters given by `initial_block_data` in order to meet
+            constraints (e.g. to preserve CPTP) when necessary. If False, then an error is thrown when the 
+            given intial data cannot be parameterized as specified. 
+        """
+
         super().__init__()
         self._block_type = block_type  # 'ham' or 'other' or 'other_diagonal'
-        self._param_mode = param_mode  # 'static', 'elements', 'cholesky', or 'real_cholesky', 'depol', 'reldepol'
+        self._param_mode = param_mode  # 'static', 'elements', 'cholesky', 'depol', 'reldepol'
         self._basis = basis  # must be a full Basis object, not just a string, as we otherwise don't know dimension
         self._bel_labels = tuple(basis_element_labels) if (basis_element_labels is not None) \
             else tuple(basis.labels[1:])  # Note: don't include identity
@@ -195,7 +190,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
                 if sparse:
                     #Note: complex OK here sometimes, as only linear combos of "other" gens
                     # (like (i,j) + (j,i) terms) need to be real.
-                    superops = [_mt.safe_dot(leftTrans, _mt.safe_dot(mx, rightTrans)) for mx in superops]
+                    superops = [leftTrans @ (mx @ rightTrans) for mx in superops]
                     for mx in superops: mx.sort_indices()
                 else:
                     #superops = _np.einsum("ik,akl,lj->aij", leftTrans, superops, rightTrans)
@@ -816,12 +811,19 @@ class LindbladCoefficientBlock(_NicelySerializable):
                 #  encodes a lower-triangular matrix "cache_mx" via:
                 #  cache_mx[i,i] = params[i,i]
                 #  cache_mx[i,j] = params[i,j] + 1j*params[j,i] (i > j)
-                cache_mx = self._cache_mx
-                iparams = 1j * params
-                for i in range(num_bels):
-                    cache_mx[i, i] = params[i, i]
-                    cache_mx[i, :i] = params[i, :i] + iparams[:i, i]
 
+                cache_mx = self._cache_mx
+
+                params_upper_indices = _fc.fast_triu_indices(num_bels) 
+                params_upper = 1j*params[params_upper_indices]
+                params_lower = (params.T)[params_upper_indices]
+
+                cache_mx_trans = cache_mx.T
+                cache_mx_trans[params_upper_indices] = params_lower + params_upper
+                        
+                diag_indices = cached_diag_indices(num_bels)
+                cache_mx[diag_indices] = params[diag_indices]
+                
                 #The matrix of (complex) "other"-coefficients is build by assuming
                 # cache_mx is its Cholesky decomp; means otherCoeffs is pos-def.
 
@@ -830,20 +832,22 @@ class LindbladCoefficientBlock(_NicelySerializable):
                 # matrix, but we don't care about this uniqueness criteria and so
                 # the diagonal els of cache_mx can be negative and that's fine -
                 # block_data will still be posdef.
-                self.block_data[:, :] = _np.dot(cache_mx, cache_mx.T.conjugate())
+                self.block_data[:, :] = cache_mx@cache_mx.T.conj()
 
-                #DEBUG - test for pos-def
-                #evals = _np.linalg.eigvalsh(block_data)
-                #DEBUG_TOL = 1e-16; #print("EVALS DEBUG = ",evals)
-                #assert(all([ev >= -DEBUG_TOL for ev in evals]))
 
             elif self._param_mode == "elements":  # params mx stores block_data (hermitian) directly
                 #params holds block_data real and imaginary parts directly
-                iparams = 1j * params
-                for i in range(num_bels):
-                    self.block_data[i, i] = params[i, i]
-                    self.block_data[i, :i] = params[i, :i] + iparams[:i, i]
-                    self.block_data[:i, i] = params[i, :i] - iparams[:i, i]
+                params_upper_indices = _fc.fast_triu_indices(num_bels) 
+                params_upper = -1j*params[params_upper_indices]
+                params_lower = (params.T)[params_upper_indices]
+
+                block_data_trans = self.block_data.T
+                self.block_data[params_upper_indices] = params_lower + params_upper
+                block_data_trans[params_upper_indices] = params_lower - params_upper
+
+                diag_indices = cached_diag_indices(num_bels)
+                self.block_data[diag_indices] = params[diag_indices]
+
             else:
                 raise ValueError("Internal error: invalid parameter mode (%s) for block type %s!"
                                  % (self._param_mode, self._block_type))
@@ -1112,11 +1116,11 @@ class LindbladCoefficientBlock(_NicelySerializable):
             if self._param_mode == "depol":
                 #d2Odp2  = _np.einsum('alj->lj', self.otherGens)[:,:,None,None] * 2
                 d2Odp2 = _np.sum(superops, axis=0)[:, :, None, None] * 2
-            elif self.parameterization.param_mode == "cptp":
+            elif self._param_mode == "cholesky":
                 assert(nP == num_bels)
                 #d2Odp2  = _np.einsum('alj,aq->ljaq', self.otherGens, 2*_np.identity(nP,'d'))
                 d2Odp2 = _np.transpose(superops, (1, 2, 0))[:, :, :, None] * 2 * _np.identity(nP, 'd')
-            else:  # param_mode == "unconstrained" or "reldepol"
+            else:  # param_mode == "elements" or "reldepol"
                 assert(nP == num_bels)
             d2Odp2 = _np.zeros((superops.shape[1], superops.shape[2], nP, nP), 'd')
 
@@ -1124,7 +1128,10 @@ class LindbladCoefficientBlock(_NicelySerializable):
             if self._param_mode == "cholesky":
                 if superops_are_flat:  # then un-flatten
                     superops = superops.reshape((num_bels, num_bels, superops.shape[1], superops.shape[2]))
-                d2Odp2 = _np.zeros([superops.shape[2], superops.shape[3], nP, nP, nP, nP], 'complex')
+                sqrt_nP = _np.sqrt(nP)
+                snP = int(sqrt_nP)
+                assert snP == sqrt_nP == num_bels
+                d2Odp2 = _np.zeros([superops.shape[2], superops.shape[3], snP, snP, snP, snP], 'complex')
                 # yikes! maybe make this SPARSE in future?
 
                 #Note: correspondence w/Erik's notes: a=alpha, b=beta, q=gamma, r=delta
@@ -1136,11 +1143,11 @@ class LindbladCoefficientBlock(_NicelySerializable):
                         parameter indices s.t. ab > base and qr > base.  If
                         ab_inc_eq == True then the > becomes a >=, and likewise
                         for qr_inc_eq.  Used for looping over nonzero hessian els. """
-                    for _base in range(nP):
+                    for _base in range(snP):
                         start_ab = _base if ab_inc_eq else _base + 1
                         start_qr = _base if qr_inc_eq else _base + 1
-                        for _ab in range(start_ab, nP):
-                            for _qr in range(start_qr, nP):
+                        for _ab in range(start_ab, snP):
+                            for _qr in range(start_qr, snP):
                                 yield (_base, _ab, _qr)
 
                 for base, a, q in iter_base_ab_qr(True, True):  # Case1: base=b=r, ab=a, qr=q
@@ -1153,7 +1160,12 @@ class LindbladCoefficientBlock(_NicelySerializable):
                     d2Odp2[:, :, base, b, base, r] = superops[b, r] + superops[r, b]
 
             elif self._param_mode == 'elements':  # unconstrained
-                d2Odp2 = _np.zeros([superops.shape[2], superops.shape[3], nP, nP, nP, nP], 'd')  # all params linear
+                if superops_are_flat:  # then un-flatten
+                    superops = superops.reshape((num_bels, num_bels, superops.shape[1], superops.shape[2]))
+                sqrt_nP = _np.sqrt(nP)
+                snP = int(sqrt_nP)
+                assert snP == sqrt_nP == num_bels
+                d2Odp2 = _np.zeros([superops.shape[2], superops.shape[3], snP, snP, snP, snP], 'd')  # all params linear
             else:
                 raise ValueError("Internal error: invalid parameter mode (%s) for block type %s!"
                                  % (self._param_mode, self._block_type))
@@ -1204,3 +1216,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
         if len(self._bel_labels) < 10:
             s += " Coefficients are:\n" + str(_np.round(self.block_data, 4))
         return s
+
+@lru_cache(maxsize=16)
+def cached_diag_indices(n):
+    return _np.diag_indices(n)

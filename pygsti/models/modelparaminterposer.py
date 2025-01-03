@@ -78,7 +78,7 @@ class LinearInterposer(ModelParamsInterposer):
         # This can and should be improved later - particularly this will be awful when labels (els of wl) are tuples.
         ret = []
         for irow in range(self.inv_transform_matrix.shape[0]):
-            lbl = ' + '.join(["%g%s" % (coeff, str(lbl)) for coeff, lbl in zip(self.inv_transform_matrix[irow, :], wl)])
+            lbl = ' + '.join(["%g%s" % (coeff, str(lbl)) for coeff, lbl in zip(self.inv_transform_matrix[irow, :], wl) if abs(coeff)>1e-10])
             ret.append(lbl)
         return ret
 

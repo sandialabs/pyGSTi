@@ -10,7 +10,7 @@ A sub-package holding circuit-related objects
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from .circuit import Circuit
+from .circuit import Circuit, SeparatePOVMCircuit
 from .circuitlist import CircuitList
 from .circuitstructure import CircuitPlaquette, FiducialPairPlaquette, \
     GermFiducialPairPlaquette, PlaquetteGridCircuitStructure
