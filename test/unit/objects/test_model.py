@@ -137,14 +137,14 @@ class GeneralMethodBase(object):
             nParamsPerSP=6
         )
     
-    def test_set_all_parameterizations_(self):
-        self.model.set_all_parameterizations("H+S")
+    def test_set_all_parameterizations_GLND(self):
+        self.model.set_all_parameterizations("GLND")
         self._assert_model_params(
             nOperations=3,
-            nSPVecs=2,
-            nEVecs=0,
-            nParamsPerGate=6,
-            nParamsPerSP=6
+            nSPVecs=?   ,
+            nEVecs=?,
+            nParamsPerGate=12,
+            nParamsPerSP=12
         )
 
     def test_element_accessors(self):

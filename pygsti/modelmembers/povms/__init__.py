@@ -12,7 +12,7 @@ Sub-package holding model POVM and POVM effect objects.
 import _collections
 import functools as _functools
 import itertools as _itertools
-
+import warnings
 import numpy as _np
 import scipy.linalg as _spl
 import scipy.optimize as _spo
@@ -332,7 +332,7 @@ def convert(povm, to_type, basis, cptp_penalty=1e-7, ideal_povm=None, flatten_st
         unchanged.  When `True`, composed and embedded operations are "flattened"
         into a single POVM of the requested `to_type`.
     
-    spam_cptp_penalty : float, optional (default .5)
+    cptp_penalty : float, optional (default 1e-7)
             Converting SPAM operations to error generator types includes extra degrees of gauge freedom (dumb gauge).
             This cptp penalty is used to favor channels within this gauge orbit which are CPTP.
 
@@ -373,7 +373,8 @@ def convert(povm, to_type, basis, cptp_penalty=1e-7, ideal_povm=None, flatten_st
                 from ..operations import IdentityPlusErrorgenOp as _IdentityPlusErrorgenOp
                 from ..operations import LindbladParameterization as _LindbladParameterization
                 lndtype = _LindbladParameterization.cast(to_type)
-                print("Warning: Noisy POVMs are not guaranteed to have a error generator representation")
+
+                
                 #Construct a static "base" POVM
                 if isinstance(povm, ComputationalBasisPOVM):  # special easy case
                     base_povm = ComputationalBasisPOVM(povm.state_space.num_qubits, povm.evotype)  # just copy it?
@@ -416,14 +417,19 @@ def convert(povm, to_type, basis, cptp_penalty=1e-7, ideal_povm=None, flatten_st
                     dense_effect = effect.to_dense()
                     dense_effects.append(dense_effect.reshape((1,len(dense_effect))))
 
-                dense_ideal_povm = _np.concatenate(base_dense_effects, axis=0)
                 dense_povm = _np.concatenate(dense_effects, axis=0)
+                degrees_of_freedom = (dense_ideal_povm.shape[0] - 1) * dense_ideal_povm.shape[1]
+
+                
+                
                 #It is often the case that there are more error generators than physical degrees of freedom in the POVM
                 #We define a function which finds linear comb. of errgens that span these degrees of freedom.
                 #This has been called "the dumb gauge", and this function is meant to avoid it
                 def calc_physical_subspace(dense_ideal_povm, epsilon = 1e-9):
     
                         errgen = _LindbladErrorgen.from_error_generator(povm.state_space.dim, parameterization=to_type)
+                        if degrees_of_freedom > errgen:
+                            warnings.warn("POVM has more degrees of freedom than the available number of parameters, representation in this parameterization is not guaranteed", warnings.UserWarning)
                         exp_errgen = _ExpErrorgenOp(errgen)
                         
                         num_errgens = errgen.num_params
