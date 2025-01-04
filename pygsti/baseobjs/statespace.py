@@ -1117,10 +1117,10 @@ class ExplicitStateSpace(StateSpace):
             if udims is not None: udims = [udims]
             if types is not None: types = [types]
 
-        self.labels = tuple([tuple(tpbLabels) for tpbLabels in label_list])
+        self._labels = tuple([tuple(tpbLabels) for tpbLabels in label_list])
 
         #Type check - labels must be strings or ints
-        for tpbLabels in self.labels:  # loop over tensor-prod-blocks
+        for tpbLabels in self._labels:  # loop over tensor-prod-blocks
             for lbl in tpbLabels:
                 if not is_label(lbl):
                     raise ValueError("'%s' is an invalid state-space label (must be a string or integer)" % lbl)
@@ -1128,11 +1128,11 @@ class ExplicitStateSpace(StateSpace):
         # Get the type of each labeled space
         self.label_types = {}
         if types is None:  # use defaults
-            for tpbLabels in self.labels:  # loop over tensor-prod-blocks
+            for tpbLabels in self._labels:  # loop over tensor-prod-blocks
                 for lbl in tpbLabels:
                     self.label_types[lbl] = 'C' if (isinstance(lbl, str) and lbl.startswith('C')) else 'Q'  # default
         else:
-            for tpbLabels, tpbTypes in zip(self.labels, types):
+            for tpbLabels, tpbTypes in zip(self._labels, types):
                 for lbl, typ in zip(tpbLabels, tpbTypes):
                     self.label_types[lbl] = typ
 
@@ -1140,7 +1140,7 @@ class ExplicitStateSpace(StateSpace):
         self.label_udims = {}
         self.label_dims = {}
         if udims is None:
-            for tpbLabels in self.labels:  # loop over tensor-prod-blocks
+            for tpbLabels in self._labels:  # loop over tensor-prod-blocks
                 for lbl in tpbLabels:
                     if isinstance(lbl, _numbers.Integral): d = 2  # ints = qubits
                     elif lbl.startswith('T'): d = 3  # qutrit
@@ -1151,7 +1151,7 @@ class ExplicitStateSpace(StateSpace):
                     self.label_udims[lbl] = d
                     self.label_dims[lbl] = d**2 if (isinstance(lbl, _numbers.Integral) or lbl[0] in ('Q', 'T')) else d
         else:
-            for tpbLabels, tpbDims in zip(self.labels, udims):
+            for tpbLabels, tpbDims in zip(self._labels, udims):
                 for lbl, udim in zip(tpbLabels, tpbDims):
                     self.label_udims[lbl] = udim
                     self.label_dims[lbl] = udim**2
@@ -1162,7 +1162,7 @@ class ExplicitStateSpace(StateSpace):
 
         self.tpb_dims = []
         self.tpb_udims = []
-        for iTPB, tpbLabels in enumerate(self.labels):
+        for iTPB, tpbLabels in enumerate(self._labels):
             float_prod = _np.prod(_np.array([self.label_dims[lbl] for lbl in tpbLabels], 'd'))
             if float_prod >= float(_sys.maxsize):  # too many qubits to hold dimension in an integer
                 self.tpb_dims.append(_np.inf)
@@ -1181,11 +1181,11 @@ class ExplicitStateSpace(StateSpace):
         self._udim = sum(self.tpb_udims)
 
         self._nqubits = self._nqudits = None
-        if len(self.labels) == 1:
+        if len(self._labels) == 1:
             if all([v == 2 for v in self.label_udims.values()]):
-                self._nqudits = self._nqubits = len(self.labels[0])  # there's a well-defined number of qubits
+                self._nqudits = self._nqubits = len(self._labels[0])  # there's a well-defined number of qubits
             elif all([typ == 'Q' for typ in self.label_types.values()]):
-                self._nqudits = len(self.labels[0])
+                self._nqudits = len(self._labels[0])
 
         #This state space is effectively static, so we can precompute the hash for it for performance
         self._hash = hash((self.tensor_product_blocks_labels,
@@ -1210,9 +1210,9 @@ class ExplicitStateSpace(StateSpace):
 
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
-        state.update({'labels': self.labels,
-                      'unitary_space_dimensions': [[self.label_udims[l] for l in tpb] for tpb in self.labels],
-                      'types': [[self.label_types[l] for l in tpb] for tpb in self.labels]
+        state.update({'labels': self._labels,
+                      'unitary_space_dimensions': [[self.label_udims[l] for l in tpb] for tpb in self._labels],
+                      'types': [[self.label_types[l] for l in tpb] for tpb in self._labels]
                       })
         return state
 
@@ -1229,7 +1229,7 @@ class ExplicitStateSpace(StateSpace):
         -------
         tuple of tuples
         """
-        return self.labels
+        return self._labels
 
     @property
     def udim(self):
@@ -1276,7 +1276,7 @@ class ExplicitStateSpace(StateSpace):
         -------
         int
         """
-        return len(self.labels)
+        return len(self._labels)
 
     @property
     def tensor_product_blocks_labels(self):
@@ -1287,7 +1287,7 @@ class ExplicitStateSpace(StateSpace):
         -------
         tuple of tuples
         """
-        return self.labels
+        return self._labels
 
     @property
     def tensor_product_blocks_dimensions(self):
@@ -1298,7 +1298,7 @@ class ExplicitStateSpace(StateSpace):
         -------
         tuple of tuples
         """
-        return tuple([tuple([self.label_dims[lbl] for lbl in tpb_labels]) for tpb_labels in self.labels])
+        return tuple([tuple([self.label_dims[lbl] for lbl in tpb_labels]) for tpb_labels in self._labels])
 
     @property
     def tensor_product_blocks_udimensions(self):
@@ -1309,7 +1309,7 @@ class ExplicitStateSpace(StateSpace):
         -------
         tuple of tuples
         """
-        return tuple([tuple([self.label_udims[lbl] for lbl in tpb_labels]) for tpb_labels in self.labels])
+        return tuple([tuple([self.label_udims[lbl] for lbl in tpb_labels]) for tpb_labels in self._labels])
 
     @property
     def tensor_product_blocks_types(self):
@@ -1320,7 +1320,7 @@ class ExplicitStateSpace(StateSpace):
         -------
         tuple of tuples
         """
-        return tuple([tuple([self.label_types[lbl] for lbl in tpb_labels]) for tpb_labels in self.labels])
+        return tuple([tuple([self.label_types[lbl] for lbl in tpb_labels]) for tpb_labels in self._labels])
 
     def label_dimension(self, label):
         """
@@ -1383,10 +1383,10 @@ class ExplicitStateSpace(StateSpace):
         return self.label_types[label]
 
     def __str__(self):
-        if len(self.labels) == 0: return "ZeroDimSpace"
+        if len(self._labels) == 0: return "ZeroDimSpace"
         return ' + '.join(
             ['*'.join(["%s(%d%s)" % (lbl, self.label_dims[lbl], 'c' if (self.label_types[lbl] == 'C') else '')
-                       for lbl in tpb]) for tpb in self.labels])
+                       for lbl in tpb]) for tpb in self._labels])
 
 def default_space_for_dim(dim):
     """
