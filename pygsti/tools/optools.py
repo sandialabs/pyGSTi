@@ -1835,55 +1835,204 @@ def _assert_shape(ar, shape, sparse=False):
 def create_elementary_errorgen_nqudit(typ, basis_element_labels, basis_1q, normalize=False,
                                       sparse=False, tensorprod_basis=False):
     """
-    TODO: docstring  - labels can be, e.g. ('H', 'XX') and basis should be a 1-qubit basis w/single-char labels
-    """
-    return _create_elementary_errorgen_nqudit(typ, basis_element_labels, basis_1q,
-                                              normalize, sparse, tensorprod_basis, create_dual=False)
+    Construct the elementary error generator matrix, either in a dense or sparse representation,
+    corresponding to the specified type and basis element subscripts.
 
+    Parameters
+    ----------
+    typ : str
+        String specifying the type of error generator to be constructed. Can be either 'H', 'S', 'C' or 'A'.
+
+    basis_element_labels : list or tuple of str
+        A list or tuple of strings corresponding to the basis element labels subscripting the desired elementary
+        error generators. If `typ` is 'H' or 'S' this should be length-1, and for 'C' and 'A' length-2. 
+
+    basis_1q : `Basis`
+        A one-qubit `Basis` object used in the construction of the elementary error generator.
+
+    normalize : bool, optional (default False)
+        If True the elementary error generator is normalized to have unit Frobenius norm.
+
+    sparse : bool, optional (default False)
+        If True the elementary error generator is returned as a sparse array.
+    
+    tensorprod_basis : bool, optional (default False)
+        If True, the returned array is given in a basis consisting of the appropriate tensor product of
+        single-qubit standard bases, as opposed to the N=2^n dimensional standard basis (the values are the same
+        but this may result in some reordering of entries). 
+
+    Returns
+    -------
+    np.ndarray or Scipy CSR matrix
+    """
+    eglist =  _create_elementary_errorgen_nqudit([typ], [basis_element_labels], basis_1q,
+                                              normalize, sparse, tensorprod_basis, create_dual=False)
+    return eglist[0]
 
 def create_elementary_errorgen_nqudit_dual(typ, basis_element_labels, basis_1q, normalize=False,
                                            sparse=False, tensorprod_basis=False):
     """
-    TODO: docstring  - labels can be, e.g. ('H', 'XX') and basis should be a 1-qubit basis w/single-char labels
-    """
-    return _create_elementary_errorgen_nqudit(typ, basis_element_labels, basis_1q,
-                                              normalize, sparse, tensorprod_basis, create_dual=True)
+    Construct the dual elementary error generator matrix, either in a dense or sparse representation,
+    corresponding to the specified type and basis element subscripts.
 
+    Parameters
+    ----------
+    typ : str
+        String specifying the type of dual error generator to be constructed. Can be either 'H', 'S', 'C' or 'A'.
+
+    basis_element_labels : list or tuple of str
+        A list or tuple of strings corresponding to the basis element labels subscripting the desired dual elementary
+        error generators. If `typ` is 'H' or 'S' this should be length-1, and for 'C' and 'A' length-2. 
+
+    basis_1q : `Basis`
+        A one-qubit `Basis` object used in the construction of the dual elementary error generator.
+
+    normalize : bool, optional (default False)
+        If True the dual elementary error generator is normalized to have unit Frobenius norm.
+
+    sparse : bool, optional (default False)
+        If True the dual elementary error generator is returned as a sparse array.
+    
+    tensorprod_basis : bool, optional (default False)
+        If True, the returned array is given in a basis consisting of the appropriate tensor product of
+        single-qubit standard bases, as opposed to the N=2^n dimensional standard basis (the values are the same
+        but this may result in some reordering of entries). 
+
+    Returns
+    -------
+    np.ndarray or Scipy CSR matrix
+    """
+    eglist =  _create_elementary_errorgen_nqudit([typ], [basis_element_labels], basis_1q,
+                                              normalize, sparse, tensorprod_basis, create_dual=True)
+    return eglist[0]
+
+def bulk_create_elementary_errorgen_nqudit(typ, basis_element_labels, basis_1q, normalize=False,
+                                           sparse=False, tensorprod_basis=False):
+    """
+    Construct the elementary error generator matrices, either in a dense or sparse representation,
+    corresponding to the specified types and list of basis element subscripts.
+
+    Parameters
+    ----------
+    typ : list of str
+        List of strings specifying the types of error generator to be constructed. Entries can be 'H', 'S', 'C' or 'A'.
+
+    basis_element_labels : list of lists or tuples of str
+        A list containing sublists or subtuple of strings corresponding to the basis element labels subscripting the desired elementary
+        error generators. For each sublist, if the corresponding entry of `typ` is 'H' or 'S' this should be length-1, 
+        and for 'C' and 'A' length-2. 
+
+    basis_1q : `Basis`
+        A one-qubit `Basis` object used in the construction of the elementary error generators.
+
+    normalize : bool, optional (default False)
+        If True the elementary error generators are normalized to have unit Frobenius norm.
+
+    sparse : bool, optional (default False)
+        If True the elementary error generators are returned as a sparse array.
+    
+    tensorprod_basis : bool, optional (default False)
+        If True, the returned arrays are given in a basis consisting of the appropriate tensor product of
+        single-qubit standard bases, as opposed to the N=2^n dimensional standard basis (the values are the same
+        but this may result in some reordering of entries). 
+
+    Returns
+    -------
+    list of np.ndarray or Scipy CSR matrix
+    """
+
+    return _create_elementary_errorgen_nqudit(typ, basis_element_labels, basis_1q, normalize,
+                                              sparse, tensorprod_basis, create_dual=False)
+
+    
+def bulk_create_elementary_errorgen_nqudit_dual(typ, basis_element_labels, basis_1q, normalize=False,
+                                                sparse=False, tensorprod_basis=False):
+    """
+    Construct the dual elementary error generator matrices, either in a dense or sparse representation,
+    corresponding to the specified types and list of basis element subscripts.
+
+    Parameters
+    ----------
+    typ : list of str
+        List of strings specifying the types of dual error generators to be constructed. Entries can be 'H', 'S', 'C' or 'A'.
+
+    basis_element_labels : list of lists or tuples of str
+        A list containing sublists or subtuple of strings corresponding to the basis element labels subscripting the desired dual elementary
+        error generators. For each sublist, if the corresponding entry of `typ` is 'H' or 'S' this should be length-1, 
+        and for 'C' and 'A' length-2. 
+
+    basis_1q : `Basis`
+        A one-qubit `Basis` object used in the construction of the dual elementary error generators.
+
+    normalize : bool, optional (default False)
+        If True the dual elementary error generators are normalized to have unit Frobenius norm.
+
+    sparse : bool, optional (default False)
+        If True the dual elementary error generators are returned as a sparse array.
+    
+    tensorprod_basis : bool, optional (default False)
+        If True, the returned arrays are given in a basis consisting of the appropriate tensor product of
+        single-qubit standard bases, as opposed to the N=2^n dimensional standard basis (the values are the same
+        but this may result in some reordering of entries). 
+
+    Returns
+    -------
+    list of np.ndarray or Scipy CSR matrix
+    """
+
+    return _create_elementary_errorgen_nqudit(typ, basis_element_labels, basis_1q, normalize,
+                                              sparse, tensorprod_basis, create_dual=True)
 
 def _create_elementary_errorgen_nqudit(typ, basis_element_labels, basis_1q, normalize=False,
                                        sparse=False, tensorprod_basis=False, create_dual=False):
+    #See docstrings for `bulk_create_elementary_errorgen_nqudit` and `bulk_create_elementary_errorgen_nqudit_dual`.
+
     create_fn = _lt.create_elementary_errorgen_dual if create_dual else _lt.create_elementary_errorgen
-    if typ in 'HS':
-        B = _functools.reduce(_np.kron, [basis_1q[bel] for bel in basis_element_labels[0]])
-        ret = create_fn(typ, B, sparse=sparse)  # in std basis
-    elif typ in 'CA':
-        B = _functools.reduce(_np.kron, [basis_1q[bel] for bel in basis_element_labels[0]])
-        C = _functools.reduce(_np.kron, [basis_1q[bel] for bel in basis_element_labels[1]])
-        ret = create_fn(typ, B, C, sparse=sparse)  # in std basis
-    else:
-        raise ValueError("Invalid elementary error generator type: %s" % str(typ))
-
-    if normalize:
-        normfn = _spsl.norm if sparse else _np.linalg.norm
-        norm = normfn(ret)  # same as norm(term.flat)
-        if not _np.isclose(norm, 0):
-            ret /= norm  # normalize projector
-            assert(_np.isclose(normfn(ret), 1.0))
-
+    normfn = _spsl.norm if sparse else _np.linalg.norm
+    
     if tensorprod_basis:
         # convert from "flat" std basis to tensorprod of std bases (same elements but in
         # a different order).  Important if want to also construct ops by kroneckering the
         # returned maps with, e.g., identities
-        nQubits = int(round(_np.log(ret.shape[0]) / _np.log(4))); assert(ret.shape[0] == 4**nQubits)
-        current_basis = _Basis.cast('std', ret.shape[0])
-        tensorprod_basis = _Basis.cast('std', [(4,) * nQubits])
-        ret = _bt.change_basis(ret, current_basis, tensorprod_basis)
+        orig_bases = dict() #keys will be numbers of qubits, values basis objects.
+        tensorprod_bases = dict()
 
-    return ret
+    eglist = []
+    for egtyp, bels in zip(typ, basis_element_labels):
+        if egtyp in 'HS':
+            B = _functools.reduce(_np.kron, [basis_1q[bel] for bel in bels[0]])
+            ret = create_fn(egtyp, B, sparse=sparse)  # in std basis
+        elif egtyp in 'CA':
+            B = _functools.reduce(_np.kron, [basis_1q[bel] for bel in bels[0]])
+            C = _functools.reduce(_np.kron, [basis_1q[bel] for bel in bels[1]])
+            ret = create_fn(egtyp, B, C, sparse=sparse)  # in std basis
+        else:
+            raise ValueError("Invalid elementary error generator type: %s" % str(typ))
+
+        if normalize:
+            norm = normfn(ret)  # same as norm(term.flat)
+            if not _np.isclose(norm, 0):
+                ret /= norm  # normalize projector
+                assert(_np.isclose(normfn(ret), 1.0))
+
+        if tensorprod_basis:
+            num_qudits = int(round(_np.log(ret.shape[0]) / _np.log(basis_1q.dim))); 
+            assert(ret.shape[0] == basis_1q.dim**num_qudits)
+            current_basis = orig_bases.get(num_qudits, None)
+            tensorprod_basis = tensorprod_bases.get(num_qudits, None)
+            if current_basis is None:
+                current_basis = _Basis.cast('std', basis_1q.dim**num_qudits)
+                orig_bases[num_qudits] = current_basis
+            if tensorprod_basis is None:
+                tensorprod_basis = _Basis.cast('std', [(basis_1q.dim,)*num_qudits])
+                tensorprod_bases[num_qudits] = tensorprod_basis
+            
+            ret = _bt.change_basis(ret, current_basis, tensorprod_basis)
+        eglist.append(ret)
+
+    return eglist
 
 
-#TODO: replace two_qubit_gate, one_qubit_gate, unitary_to_pauligate_* with
-# calls to this one and unitary_to_std_processmx
 def rotation_gate_mx(r, mx_basis="gm"):
     """
     Construct a rotation operation matrix.
