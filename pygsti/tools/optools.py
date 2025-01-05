@@ -1987,7 +1987,20 @@ def _create_elementary_errorgen_nqudit(typ, basis_element_labels, basis_1q, norm
                                        sparse=False, tensorprod_basis=False, create_dual=False):
     #See docstrings for `bulk_create_elementary_errorgen_nqudit` and `bulk_create_elementary_errorgen_nqudit_dual`.
 
-    create_fn = _lt.create_elementary_errorgen_dual if create_dual else _lt.create_elementary_errorgen
+    #check if we're using the pauli basis
+    is_pauli = set(basis_1q.name.split('*')) == set(['PP']) or set(basis_1q.name.split('*')) == set(['pp'])
+
+    if create_dual:
+        if is_pauli:
+            create_fn = _lt.create_elementary_errorgen_dual_pauli
+        else:
+            create_fn = _lt.create_elementary_errorgen_dual
+    else:
+        if is_pauli:
+            create_fn = _lt.create_elementary_errorgen_pauli
+        else:
+            create_fn = _lt.create_elementary_errorgen
+
     normfn = _spsl.norm if sparse else _np.linalg.norm
     
     if tensorprod_basis:
