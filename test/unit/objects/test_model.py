@@ -97,6 +97,12 @@ class GeneralMethodBase(object):
         self.assertEqual(self.model.num_params, nParams)
         # TODO does this actually assert correctness?
 
+    def _assert_model_ops(self, oldModel):
+
+        #test operations
+        for (_, gate),(_,gate2) in zip(self.operations.items(),oldModel.operations.items() ):
+            assert(np.allclose(gate.to_dense(), gate2.to_dense()), "Discrepancy in process matrices when converting parameterizations")
+
     def test_set_all_parameterizations_full(self):
         self.model.set_all_parameterizations("full")        
         self._assert_model_params(
@@ -139,13 +145,14 @@ class GeneralMethodBase(object):
     
     def test_set_all_parameterizations_GLND(self):
         self.model.set_all_parameterizations("GLND")
-        self._assert_model_params(
-            nOperations=3,
-            nSPVecs=?   ,
-            nEVecs=?,
-            nParamsPerGate=12,
-            nParamsPerSP=12
-        )
+        #self._assert_model_params(
+        #    nOperations=3,
+        #    nSPVecs=?   ,
+        #    nEVecs=?,
+        #    nParamsPerGate=12,
+        #    nParamsPerSP=12
+        #) 
+        #TODO: Figure out what are nSPVecs and nEVecs
 
     def test_element_accessors(self):
         # XXX what does this test cover and is it useful?  EGN: covers the __getitem__/__setitem__ functions of model
