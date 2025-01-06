@@ -101,7 +101,7 @@ class GeneralMethodBase(object):
 
         #test operations
         for (_, gate),(_,gate2) in zip(self.operations.items(),oldModel.operations.items() ):
-            assert(np.allclose(gate.to_dense(), gate2.to_dense()), "Discrepancy in process matrices when converting parameterizations")
+            assert np.allclose(gate.to_dense(), gate2.to_dense()), "Discrepancy in process matrices when converting parameterizations"
 
     def test_set_all_parameterizations_full(self):
         self.model.set_all_parameterizations("full")        
