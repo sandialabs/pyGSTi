@@ -131,7 +131,7 @@ def create_elementary_errorgen_dual(typ, p, q=None, sparse=False, normalization_
 def create_elementary_errorgen_dual_pauli(typ, p, q=None, sparse=False):
     """
     Construct a "dual" elementary error generator matrix in the "standard" (matrix-unit) basis.
-    Specialized to p and q being elements of the pauli basis.
+    Specialized to p and q being elements of the (unnormalized) pauli basis.
 
     The elementary error generator that is dual to the one computed by calling
     :func:`create_elementary_errorgen` with the same argument.  This dual element
@@ -337,7 +337,7 @@ def create_elementary_errorgen(typ, p, q=None, sparse=False):
 def create_elementary_errorgen_pauli(typ, p, q=None, sparse=False):
     """
     Construct an elementary error generator as a matrix in the "standard" (matrix-unit) basis.
-    Specialized to the case where p and q are elements of the pauli basis.
+    Specialized to the case where p and q are elements of the (unnormalized) pauli basis.
 
     There are four different types of elementary error generators: 'H' (Hamiltonian),
     'S' (stochastic), 'C' (correlation), and 'A' (active).  See arxiv:2103.01928.

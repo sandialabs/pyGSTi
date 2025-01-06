@@ -1988,8 +1988,7 @@ def _create_elementary_errorgen_nqudit(typ, basis_element_labels, basis_1q, norm
     #See docstrings for `bulk_create_elementary_errorgen_nqudit` and `bulk_create_elementary_errorgen_nqudit_dual`.
 
     #check if we're using the pauli basis
-    is_pauli = set(basis_1q.name.split('*')) == set(['PP']) or set(basis_1q.name.split('*')) == set(['pp'])
-
+    is_pauli = set(basis_1q.name.split('*')) == set(['PP'])
     if create_dual:
         if is_pauli:
             create_fn = _lt.create_elementary_errorgen_dual_pauli
