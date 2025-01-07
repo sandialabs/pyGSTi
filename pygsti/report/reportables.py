@@ -29,6 +29,7 @@ from pygsti.baseobjs.basis import Basis as _Basis, DirectSumBasis as _DirectSumB
 from pygsti.baseobjs.label import Label as _Lbl
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LEEL
 from pygsti.modelmembers.operations.lindbladcoefficients import LindbladCoefficientBlock as _LindbladCoefficientBlock
+from pygsti.models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
 
 
 _CVXPY_AVAILABLE = pkgutil.find_loader('cvxpy') is not None
@@ -1190,7 +1191,10 @@ if _CVXPY_AVAILABLE:
 
         def __init__(self, model_a, model_b, oplabel):
             self.oplabel = oplabel
-            self.B = model_b.operations[oplabel].to_dense(on_space='HilbertSchmidt')
+            if isinstance(model_b, _ExplicitOpModel):
+                self.B = model_b.operations[oplabel].to_dense(on_space='HilbertSchmidt')
+            else:
+                self.B = model_b.operation_blks['gates'][oplabel].to_dense(on_space='HilbertSchmidt')
             self.d = int(round(_np.sqrt(model_a.dim)))
             _modf.ModelFunction.__init__(self, model_a, [("gate", oplabel)])
 
@@ -1208,8 +1212,13 @@ if _CVXPY_AVAILABLE:
             float
             """
             gl = self.oplabel
-            dm, W = _tools.diamonddist(model.operations[gl].to_dense(on_space='HilbertSchmidt'),
-                                       self.B, model.basis, return_x=True)
+            if isinstance(model, _ExplicitOpModel):
+                dm, W = _tools.diamonddist(model.operations[gl].to_dense(on_space='HilbertSchmidt'),
+                                           self.B, model.basis, return_x=True)
+            else:
+                dm, W = _tools.diamonddist(model.operation_blks['gates'][gl].to_dense(on_space='HilbertSchmidt'),
+                                           self.B, 'pp', return_x=True)  # HACK - need to get basis from model 'pp' HARDCODED for now
+
             self.W = W
             return 0.5 * dm
 
@@ -1227,7 +1236,11 @@ if _CVXPY_AVAILABLE:
             float
             """
             mxBasis = nearby_model.basis
-            A = nearby_model.operations[self.oplabel].to_dense(on_space='HilbertSchmidt')
+            if isinstance(nearby_model, _ExplicitOpModel):
+                A = nearby_model.operations[self.oplabel].to_dense(on_space='HilbertSchmidt')
+            else:
+                A = nearby_model.operation_blks['gates'][self.oplabel].to_dense(on_space='HilbertSchmidt')
+                mxBasis = 'pp'  # HACK need to set mxBasis based on model but not the full model basis
             JAstd = self.d * _tools.fast_jamiolkowski_iso_std(A, mxBasis)
             JBstd = self.d * _tools.fast_jamiolkowski_iso_std(self.B, mxBasis)
             J = JBstd - JAstd

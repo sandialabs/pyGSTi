@@ -134,12 +134,18 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
             obj_wrtFilter = []  # values = object-local param indices
             relevant_gpindices = []  # indices into original wrt_filter'd indices
 
-            gpindices = obj.gpindices_as_array()
+            if isinstance(obj.gpindices, slice):
+                gpindices_list = _slct.indices(obj.gpindices)
+            elif obj.gpindices is None:
+                gpindices_list = []
+            else:
+                gpindices_list = list(obj.gpindices)
+            gpindices_set = set(gpindices_list)
 
             for ii, i in enumerate(wrt_filter):
-                if i in gpindices:
+                if i in gpindices_set:
                     relevant_gpindices.append(ii)
-                    obj_wrtFilter.append(list(gpindices).index(i))
+                    obj_wrtFilter.append(gpindices_list.index(i))
             relevant_gpindices = _np.array(relevant_gpindices, _np.int64)
             if len(relevant_gpindices) == 1:
                 #Don't return a length-1 list, as this doesn't index numpy arrays
@@ -1236,7 +1242,8 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         # dp_dOps[i,j] = dot( e, dot( d_gs, rho ) )[0,i,j,0]
         # dp_dOps      = squeeze( dot( e, dot( d_gs, rho ) ), axis=(0,3))
         old_err2 = _np.seterr(invalid='ignore', over='ignore')
-        dp_dOps = _np.squeeze(_np.dot(e, _np.dot(d_gs, rho)), axis=(0, 3)) * scale_vals[:, None]
+        path = _np.einsum_path('hk,ijkl,lm->ij', e, d_gs, rho, optimize='optimal')
+        dp_dOps = _np.einsum('hk,ijkl,lm->ij', e, d_gs, rho, optimize=path[0]) * scale_vals[:, None]
         _np.seterr(**old_err2)
         # may overflow, but OK ; shape == (len(circuit_list), nDerivCols)
         # may also give invalid value due to scale_vals being inf and dot-prod being 0. In
@@ -1276,7 +1283,6 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             # dp_drhos[i,J0+J] = sum_kl e[0,k] gs[i,k,l] drhoP[l,J]
             # dp_drhos[i,J0+J] = dot(e, gs, drhoP)[0,i,J]
             # dp_drhos[:,J0+J] = squeeze(dot(e, gs, drhoP),axis=(0,))[:,J]
-
             dp_drhos = _np.zeros((nCircuits, nOpDerivCols))
             _fas(dp_drhos, [None, rho_gpindices],
                  _np.squeeze(_np.dot(_np.dot(e, gs),

@@ -45,7 +45,7 @@ class RepeatedOp(_LinearOperator):
 
         if evotype == "auto":
             evotype = op_to_repeat._evotype
-        evotype = _Evotype.cast(evotype)
+        evotype = _Evotype.cast(evotype, state_space=state_space)
         rep = evotype.create_repeated_rep(self.repeated_op._rep, self.num_repetitions, state_space)
         _LinearOperator.__init__(self, rep, evotype)
         self.init_gpindices()  # initialize our gpindices based on sub-members

@@ -14,6 +14,7 @@
 
 import numpy as np
 from libc.stdlib cimport malloc, free
+from functools import lru_cache
 cimport numpy as np
 cimport cython
 
@@ -570,9 +571,6 @@ def fast_kron(np.ndarray[double, ndim=1, mode="c"] outvec not None,
             outvec[endoff+i] *= mult
         sz *= fastArraySizes[k]
 
-    #assert(sz == N)
-
-
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
 def fast_kron_complex(np.ndarray[np.complex128_t, ndim=1, mode="c"] outvec not None,
@@ -622,21 +620,6 @@ def fast_kron_complex(np.ndarray[np.complex128_t, ndim=1, mode="c"] outvec not N
     #assert(sz == N)
 
 
-#Manually inline to avoid overhead of argument passing
-#@cython.boundscheck(False) # turn off bounds-checking for entire function
-#@cython.wraparound(False)  # turn off negative index wrapping for entire function
-#cdef vec_inf_norm(np.ndarray[double, ndim=1] v):
-#    cdef INT i
-#    cdef INT N = v.shape[0]
-#    cdef double mx = 0.0
-#    cdef double a
-#    for i in range(N):
-#        a = abs(v[i])
-#        if a > mx: mx = a
-#    return mx
-
-
-
 @cython.cdivision(True) # turn off divide-by-zero checking
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
@@ -657,9 +640,6 @@ def custom_expm_multiply_simple_core(np.ndarray[double, ndim=1, mode="c"] Adata,
                                        mu, m_star, s, tol, eta,
                                        &F[0], &scratch[0])
     return F
-
-
-
 
 @cython.cdivision(True) # turn off divide-by-zero checking
 cdef custom_expm_multiply_simple_core_c(double* Adata, INT* Aindptr,
@@ -1247,6 +1227,38 @@ def fast_compose_cliffords(np.ndarray[np.int64_t, ndim=2] s1, np.ndarray[np.int6
     return s, p
 
 
+#Faster generation of upper triangular indices specialized to first
+#superdiagonal and up.
+@cython.boundscheck(False)  # Deactivate bounds checking
+@cython.wraparound(False)   # Deactivate negative indexing.
+@cython.cdivision(True)
+@lru_cache(maxsize=16)
+def fast_triu_indices(int n):
+    if n < 1:
+        raise ValueError('n must be greater than 0')
+        
+    cdef int size = (n**2-n)/2
+    cdef int curr_idx = 0
+    cdef int j, i
+    
+    cdef np.ndarray[np.int64_t, ndim=1, mode="c"] row_indices_np = np.empty(size, dtype=np.int64)
+    cdef np.ndarray[np.int64_t, ndim=1, mode="c"] col_indices_np = np.empty(size, dtype=np.int64)
+    
+    cdef np.int64_t[::1] row_indices = row_indices_np
+    cdef np.int64_t[::1] col_indices = col_indices_np
+
+    for j in range(n-1):
+        for i in range(n-j-1, 0, -1):
+            row_indices[curr_idx] = j
+            curr_idx += 1
+
+    curr_idx = 0
+    for j in range(1, n):
+        for i in range(j, n):
+            col_indices[curr_idx] = i
+            curr_idx += 1
+
+    return row_indices_np, col_indices_np
 
 
 

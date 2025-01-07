@@ -38,6 +38,7 @@ from pygsti import baseobjs as _baseobjs
 from pygsti.processors import QuditProcessorSpec as _QuditProcessorSpec
 from pygsti.modelmembers import operations as _op
 from pygsti.models import Model as _Model
+from pygsti.models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
 from pygsti.models.gaugegroup import GaugeGroup as _GaugeGroup, GaugeGroupElement as _GaugeGroupElement
 from pygsti.objectivefns import objectivefns as _objfns, wildcardbudget as _wild
 from pygsti.circuits.circuitlist import CircuitList as _CircuitList
@@ -1249,15 +1250,16 @@ class GateSetTomography(_proto.Protocol):
 
         if isinstance(optimizer, _opt.Optimizer):
             self.optimizer = optimizer
-            if isinstance(optimizer, _opt.CustomLMOptimizer) and optimizer.first_fditer is None:
-                #special behavior: can set optimizer's first_fditer to `None` to mean "fill with default"
+            if hasattr(optimizer,'first_fditer') and optimizer.first_fditer is None:
+                # special behavior: can set optimizer's first_fditer to `None` to mean "fill with default"
                 self.optimizer = _copy.deepcopy(optimizer)  # don't mess with caller's optimizer
                 self.optimizer.first_fditer = default_first_fditer
         else:
-            if optimizer is None: optimizer = {}
+            if optimizer is None:
+                optimizer = {}
             if 'first_fditer' not in optimizer:  # then add default first_fditer value
                 optimizer['first_fditer'] = default_first_fditer
-            self.optimizer = _opt.CustomLMOptimizer.cast(optimizer)
+            self.optimizer = _opt.SimplerLMOptimizer.cast(optimizer)
 
         self.objfn_builders = GSTObjFnBuilders.cast(objfn_builders)
 
@@ -1472,7 +1474,7 @@ class GateSetTomography(_proto.Protocol):
         ret.add_estimate(estimate, estimate_key=self.name)
 
         #Add some better handling for when gauge optimization is turned off (current code path isn't working.)
-        if not self.gaugeopt_suite.is_empty():
+        if not self.gaugeopt_suite.is_empty() or len(self.badfit_options.actions) > 0:  # maybe add flag to do this even when empty?
             ret = _add_gaugeopt_and_badfit(ret, self.name, target_model,
                                            self.gaugeopt_suite, self.unreliable_ops,
                                            self.badfit_options, self.optimizer, 
@@ -1751,12 +1753,12 @@ class StandardGST(_proto.Protocol):
         self.target_model = target_model
         self.gaugeopt_suite = GSTGaugeOptSuite.cast(gaugeopt_suite)
         self.objfn_builders = GSTObjFnBuilders.cast(objfn_builders) if (objfn_builders is not None) else None
-        self.optimizer = _opt.CustomLMOptimizer.cast(optimizer)
+        self.optimizer = _opt.SimplerLMOptimizer.cast(optimizer)
         self.badfit_options = GSTBadFitOptions.cast(badfit_options)
         self.verbosity = verbosity
 
         if not isinstance(optimizer, _opt.Optimizer) and isinstance(optimizer, dict) \
-           and 'first_fditer' not in optimizer:  # then a dict was cast into a CustomLMOptimizer above.
+           and 'first_fditer' not in optimizer:  # then a dict was cast into an Optimizer above.
             # by default, set special "first_fditer=auto" behavior (see logic in GateSetTomography.__init__)
             self.optimizer.first_fditer = None
 
@@ -2013,7 +2015,7 @@ def _add_gaugeopt_and_badfit(results, estlbl, target_model, gaugeopt_suite,
     profiler = resource_alloc.profiler
 
     #Do final gauge optimization to *final* iteration result only
-    if gaugeopt_suite:
+    if gaugeopt_suite is not None and not gaugeopt_suite.is_empty():
         model_to_gaugeopt = results.estimates[estlbl].models['final iteration estimate']
         if gaugeopt_suite.gaugeopt_target is None:  # add a default target model to gauge opt if needed
             #TODO: maybe make these two lines into a method of GSTGaugeOptSuite for adding a target model?
@@ -2022,7 +2024,7 @@ def _add_gaugeopt_and_badfit(results, estlbl, target_model, gaugeopt_suite,
         _add_gauge_opt(results, estlbl, gaugeopt_suite,
                        model_to_gaugeopt, unreliable_ops, comm, printer - 1)
         profiler.add_time('%s: gauge optimization' % estlbl, tref); tref = _time.time()
-        
+
         _add_badfit_estimates(results, estlbl, badfit_options, optimizer, resource_alloc, printer, gaugeopt_suite= gaugeopt_suite)
         profiler.add_time('%s: add badfit estimates' % estlbl, tref); tref = _time.time()
     else:
@@ -2358,9 +2360,16 @@ def _compute_wildcard_budget_1d_model(estimate, objfn_cache, mdc_objfn, paramete
     if gaugeopt_suite is None or gaugeopt_suite.gaugeopt_suite_names is None:
         gaugeopt_labels = None
         primitive_ops = list(ref.keys())
+        if sum([v**2 for v in ref.values()]) < 1e-4:
+            _warnings.warn("Reference values for 1D wildcard budget are all near-zero!"
+                           "This usually indicates an incorrect target model and will likely cause problems computing alpha.")
+
     else:
         gaugeopt_labels = gaugeopt_suite.gaugeopt_suite_names
         primitive_ops = list(ref[list(gaugeopt_labels)[0]].keys())
+        if sum([v**2 for v in ref[list(gaugeopt_labels)[0]].values()]) < 1e-4:
+            _warnings.warn("Reference values for 1D wildcard budget are all near-zero!"
+                           "This usually indicates an incorrect target model and will likely cause problems computing alpha.")
 
     if gaugeopt_labels is None:
         wcm = _wild.PrimitiveOpsSingleScaleWildcardBudget(primitive_ops, [ref[k] for k in primitive_ops],
@@ -2385,21 +2394,38 @@ def _compute_1d_reference_values_and_name(estimate, badfit_options, gaugeopt_sui
         if gaugeopt_suite is None or gaugeopt_suite.gaugeopt_suite_names is None:
             final_model = estimate.models['final iteration estimate']
             target_model = estimate.models['target']
-            gaugeopt_model = _alg.gaugeopt_to_target(final_model, target_model)
+
+            if isinstance(final_model, _ExplicitOpModel):
+                gaugeopt_model = _alg.gaugeopt_to_target(final_model, target_model)
+                operations_dict = gaugeopt_model.operations
+                targetops_dict = target_model.operations
+                preps_dict = gaugeopt_model.preps
+                targetpreps_dict = target_model.preps
+                povmops_dict = gaugeopt_model.povms
+            else:
+                # Local/cloud noise models don't have default_gauge_group attribute and can't be gauge
+                #  optimized - at least not easily.
+                gaugeopt_model = final_model
+                operations_dict = gaugeopt_model.operation_blks['gates']
+                targetops_dict = target_model.operation_blks['gates']
+                preps_dict = gaugeopt_model.prep_blks['layers']
+                targetpreps_dict = target_model.prep_blks['layers']
+                povmops_dict = {}  # HACK - need to rewrite povm_diamonddist below to work
+
             dd = {}
-            for key, op in gaugeopt_model.operations.items():
-                dd[key] = 0.5 * _tools.diamonddist(op.to_dense(), target_model.operations[key].to_dense())
+            for key, op in operations_dict.items():
+                dd[key] = 0.5 * _tools.diamonddist(op.to_dense(), targetops_dict[key].to_dense())
                 if dd[key] < 0:  # indicates that diamonddist failed (cvxpy failure)
                     _warnings.warn(("Diamond distance failed to compute %s reference value for 1D wildcard budget!"
                                     " Falling back to trace distance.") % str(key))
-                    dd[key] = _tools.jtracedist(op.to_dense(), target_model.operations[key].to_dense())
+                    dd[key] = _tools.jtracedist(op.to_dense(), targetops_dict[key].to_dense())
 
             spamdd = {}
-            for key, op in gaugeopt_model.preps.items():
+            for key, op in preps_dict.items():
                 spamdd[key] = _tools.tracedist(_tools.vec_to_stdmx(op.to_dense(), 'pp'),
-                                               _tools.vec_to_stdmx(target_model.preps[key].to_dense(), 'pp'))
+                                               _tools.vec_to_stdmx(targetpreps_dict[key].to_dense(), 'pp'))
 
-            for key in gaugeopt_model.povms.keys():
+            for key in povmops_dict.keys():
                 spamdd[key] = 0.5 * _tools.optools.povm_diamonddist(gaugeopt_model, target_model, key)
 
             dd['SPAM'] = sum(spamdd.values())
