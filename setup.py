@@ -157,7 +157,6 @@ def setup_with_extensions(extensions=None):
             'pygsti.evotypes.stabilizer_slow',
             'pygsti.evotypes.chp',
             'pygsti.extras',
-            'pygsti.extras.rb',
             'pygsti.extras.rpe',
             'pygsti.extras.drift',
             'pygsti.extras.ibmq',
