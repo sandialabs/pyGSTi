@@ -11,6 +11,7 @@ The EmbeddedErrorgen class and supporting functionality.
 #***************************************************************************************************
 
 import collections as _collections
+from pygsti.baseobjs.basis import Basis as _Basis
 import warnings as _warnings
 
 from pygsti.modelmembers.operations.embeddedop import EmbeddedOp as _EmbeddedOp
