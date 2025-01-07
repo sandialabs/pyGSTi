@@ -152,8 +152,7 @@ class LocalNoiseModel(_ImplicitOpModel):
 
         simulator = _FSim.cast(simulator,
                                state_space.num_qubits if isinstance(state_space, _statespace.QubitSpace) else None)
-        prefer_dense_reps = isinstance(simulator, _MatrixFSim)
-        evotype = _Evotype.cast(evotype, default_prefer_dense_reps=prefer_dense_reps)
+        evotype = _Evotype.cast(evotype, state_space=state_space)
 
         # Build gate dictionaries. A value of `gatedict` can be an array, a LinearOperator, or an OpFactory.
         # For later processing, we'll create mm_gatedict to contain each item as a ModelMember.  In local noise

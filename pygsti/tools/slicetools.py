@@ -295,7 +295,7 @@ def list_to_slice(lst, array_ok=False, require_contiguous=True):
     step = lst[1] - lst[0]
     stop = start + step * len(lst)
 
-    if list(lst) == list(range(start, stop, step)):
+    if step != 0 and list(lst) == list(range(start, stop, step)):
         if require_contiguous and step != 1:
             if array_ok: 
                 return _np.array(lst, _np.int64)
