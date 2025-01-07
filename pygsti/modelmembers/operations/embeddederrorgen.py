@@ -14,7 +14,6 @@ import collections as _collections
 import warnings as _warnings
 
 from pygsti.modelmembers.operations.embeddedop import EmbeddedOp as _EmbeddedOp
-from pygsti.baseobjs.basis import Basis as _Basis, EmbeddedBasis as _EmbeddedBasis
 
 
 # Idea:
