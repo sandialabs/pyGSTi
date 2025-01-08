@@ -205,7 +205,6 @@ def setup_with_extensions(extensions=None):
                 'effectreps.pxd',
                 'effectreps.pyx',
                 'effectcreps.cpp',
-                'effectcreps.h'
             ],
             'pygsti.evotypes.statevec': [
                 'opreps.pxd',
