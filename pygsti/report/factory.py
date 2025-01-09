@@ -1286,7 +1286,7 @@ def construct_standard_report(results, title="auto",
         skip_sections = [s.lower().replace(' ','') for s in skip_sections]
         for s in skip_sections:
             possible_sections.pop(s)
-    sections = list(possible_sections.keys())
+    sections = list(possible_sections.values())
     # ^ This whole process won't affect ordering of objects in "sections".
 
     if 'ShowScaling' in flags:
