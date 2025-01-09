@@ -1172,6 +1172,32 @@ def construct_standard_report(results, title="auto",
         - idt_idle_oplabel : Label, optional
             The label identifying the idle gate (for use with idle tomography).
 
+        - skip_sections : tuple[str], optional
+             Contains names of standard report sections that should be skipped
+             in this particular report. Strings will be cast to lowercase, 
+             stripped of white space, and then mapped to omitted Section classes
+             as follows
+
+                {
+                    'summary'         : SummarySection,
+                    'goodness'        : GoodnessSection,
+                    'colorbox'        : GoodnessColorBoxPlotSection,
+                    'invariantgates'  : GaugeInvariantsGatesSection,
+                    'invariantgerms'  : GaugeInvariantsGermsSection,
+                    'variant'         : GaugeVariantSection,
+                    'variantraw'      : GaugeVariantsRawSection,
+                    'variantdecomp'   : GaugeVariantsDecompSection,
+                    'varianterrorgen' : GaugeVariantsErrorGenSection,
+                    'input'           : InputSection,
+                    'meta'            : MetaSection,
+                    'help'            : HelpSection
+                }
+            
+            A KeyError will be raised if skip_sections contains a string
+            that is not in the keys of the above dict (after casting to
+            lower case and stripping white space).
+
+
     verbosity : int, optional
         How much detail to send to stdout.
 
@@ -1240,20 +1266,28 @@ def construct_standard_report(results, title="auto",
         flags.add('CombineRobust')
 
     # build section list
-    sections = [
-        _section.SummarySection(),
-        _section.GoodnessSection(),
-        _section.GoodnessColorBoxPlotSection(),
-        _section.GaugeInvariantsGatesSection(),
-        _section.GaugeInvariantsGermsSection(),
-        _section.GaugeVariantSection(),
-        _section.GaugeVariantsRawSection(),
-        _section.GaugeVariantsDecompSection(),
-        _section.GaugeVariantsErrorGenSection(),
-        _section.InputSection(),
-        _section.MetaSection(),
-        _section.HelpSection()
-    ]
+    possible_sections = {
+        'summary'         : _section.SummarySection(),
+        'goodness'        : _section.GoodnessSection(),
+        'colorbox'        : _section.GoodnessColorBoxPlotSection(),
+        'invariantgates'  : _section.GaugeInvariantsGatesSection(),
+        'invariantgerms'  : _section.GaugeInvariantsGermsSection(),
+        'variant'         : _section.GaugeVariantSection(),
+        'variantraw'      : _section.GaugeVariantsRawSection(),
+        'variantdecomp'   : _section.GaugeVariantsDecompSection(),
+        'varianterrorgen' : _section.GaugeVariantsErrorGenSection(),
+        'input'           : _section.InputSection(),
+        'meta'            : _section.MetaSection(),
+        'help'            : _section.HelpSection()
+    }
+
+    skip_sections = advanced_options.get('skip_sections', tuple())
+    if skip_sections:
+        skip_sections = [s.lower().replace(' ','') for s in skip_sections]
+        for s in skip_sections:
+            possible_sections.pop(s)
+    sections = list(possible_sections.keys())
+    # ^ This whole process won't affect ordering of objects in "sections".
 
     if 'ShowScaling' in flags:
         sections.append(_section.GoodnessScalingSection())
