@@ -28,7 +28,8 @@ class SummarySection(_Section):
     def final_model_fit_histogram(workspace, switchboard=None, linlog_percentile=5, comm=None, bgcolor='white',
                                   **kwargs):
         return workspace.ColorBoxPlot(
-            switchboard.objfn_builder, switchboard.circuits_final,
+            switchboard.objfn_builder_modvi,  # NOTE: this should objfun_builder_modvi
+            switchboard.circuits_final,
             switchboard.modvi_ds, switchboard.mdl_current_modvi,
             linlg_pcntle=linlog_percentile / 100,
             typ='histogram', comm=comm, bgcolor=bgcolor
