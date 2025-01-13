@@ -39,10 +39,6 @@ cdef class EffectRep(_basereps_cython.EffectRep):
     def nqubits(self):
         return self.state_space.num_qubits
 
-    #@property
-    #def dim(self):
-    #    return 2**(self.c_effect._n)  # assume "unitary evolution"-type mode
-
     def probability(self, StateRep state not None):
         #unnecessary (just put in signature): cdef StateRep st = <StateRep?>state
         return self.c_effect.probability(state.c_state)

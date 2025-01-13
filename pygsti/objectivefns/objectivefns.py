@@ -112,9 +112,6 @@ def _objfn(objfn_cls, model, dataset, circuits=None,
 
     return ofn
 
-    #def __len__(self):
-    #    return len(self.circuits)
-
 
 class ObjectiveFunctionBuilder(_NicelySerializable):
     """
@@ -1460,96 +1457,6 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
             of model parameters.
         """
         raise NotImplementedError("Derived classes should implement this!")
-
-    #MOVED - but these versions have updated names
-    #def _persistent_memory_estimate(self, num_elements=None):
-    #    #  Estimate & check persistent memory (from allocs within objective function)
-    #    """
-    #    Compute the amount of memory needed to perform evaluations of this objective function.
-    #
-    #    This number includes both intermediate and final results, and assumes
-    #    that the types of evauations given by :meth:`_evaltree_subcalls`
-    #    are required.
-    #
-    #    Parameters
-    #    ----------
-    #    num_elements : int, optional
-    #        The number of elements (circuit outcomes) that will be computed.
-    #
-    #    Returns
-    #    -------
-    #    int
-    #    """
-    #    if num_elements is None:
-    #        nout = int(round(_np.sqrt(self.mdl.dim)))  # estimate of avg number of outcomes per string
-    #        nc = len(self.circuits)
-    #        ne = nc * nout  # estimate of the number of elements (e.g. probabilities, # LS terms, etc) to compute
-    #    else:
-    #        ne = num_elements
-    #    np = self.mdl.num_params
-    #
-    #    # "persistent" memory is that used to store the final results.
-    #    obj_fn_mem = FLOATSIZE * ne
-    #    jac_mem = FLOATSIZE * ne * np
-    #    hess_mem = FLOATSIZE * ne * np**2
-    #    persistent_mem = 4 * obj_fn_mem + jac_mem  # 4 different objective-function sized arrays, 1 jacobian array?
-    #    if any([nm == "bulk_fill_hprobs" for nm in self._evaltree_subcalls()]):
-    #        persistent_mem += hess_mem  # we need room for the hessian too!
-    #    # TODO: what about "bulk_hprobs_by_block"?
-    #
-    #    return persistent_mem
-    #
-    #def _evaltree_subcalls(self):
-    #    """
-    #    The types of calls that will be made to an evaluation tree.
-    #
-    #    This information is used for memory estimation purposes.
-    #
-    #    Returns
-    #    -------
-    #    list
-    #    """
-    #    calls = ["bulk_fill_probs", "bulk_fill_dprobs"]
-    #    if self.enable_hessian: calls.append("bulk_fill_hprobs")
-    #    return calls
-    #
-    #def num_data_params(self):
-    #    """
-    #    The number of degrees of freedom in the data used by this objective function.
-    #
-    #    Returns
-    #    -------
-    #    int
-    #    """
-    #    return self.dataset.degrees_of_freedom(self.ds_circuits,
-    #                                               aggregate_times=not self.time_dependent)
-
-    #def _precompute_omitted_freqs(self):
-    #    """
-    #    Detect omitted frequences (assumed to be 0) so we can compute objective fn correctly
-    #    """
-    #    self.firsts = []; self.indicesOfCircuitsWithOmittedData = []
-    #    for i, c in enumerate(self.circuits):
-    #        lklen = _slct.length(self.lookup[i])
-    #        if 0 < lklen < self.mdl.compute_num_outcomes(c):
-    #            self.firsts.append(_slct.to_array(self.lookup[i])[0])
-    #            self.indicesOfCircuitsWithOmittedData.append(i)
-    #    if len(self.firsts) > 0:
-    #        self.firsts = _np.array(self.firsts, 'i')
-    #        self.indicesOfCircuitsWithOmittedData = _np.array(self.indicesOfCircuitsWithOmittedData, 'i')
-    #        self.dprobs_omitted_rowsum = _np.empty((len(self.firsts), self.nparams), 'd')
-    #        self.raw_objfn.printer.log("SPARSE DATA: %d of %d rows have sparse data" %
-    #                                   (len(self.firsts), len(self.circuits)))
-    #    else:
-    #        self.firsts = None  # no omitted probs
-    #
-    #def _compute_count_vectors(self):
-    #    """
-    #    Ensure self.cache contains count and total-count vectors.
-    #    """
-    #    if not self.cache.has_count_vectors():
-    #        self.cache.add_count_vectors(self.dataset, self.ds_circuits, self.circuit_weights)
-    #    return self.cache.counts, self.cache.total_counts
 
     def _construct_hessian(self, counts, total_counts, prob_clip_interval):
         """
@@ -6505,10 +6412,6 @@ class LogLWildcardFunction(ObjectiveFunction):
         #assumes self.logl_objfn.fn(...) was called to initialize the members of self.logl_objfn
         self.logl_objfn.resource_alloc.add_tracked_memory(self.logl_objfn.probs.size)
         self.probs = self.logl_objfn.probs.copy()
-
-    #def _default_evalpt(self):
-    #    """The default point to evaluate functions at """
-    #    return self.wildcard_budget.to_vector()
 
     #Mimic the underlying LogL objective
     def __getattr__(self, attr):

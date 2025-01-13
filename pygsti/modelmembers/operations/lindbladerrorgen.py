@@ -698,7 +698,6 @@ class LindbladErrorgen(_LinearOperator):
         else:  # dense rep
             return _sps.csr_matrix(self.to_dense(on_space))
 
-
     def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):
         """
         Get the `order`-th order Taylor-expansion terms of this operation.
@@ -746,11 +745,6 @@ class LindbladErrorgen(_LinearOperator):
             Lblocks = self._rep.lindblad_coefficient_blocks
             self._rep.Lterms, self._rep.Lterm_coeffs = self._init_terms(Lblocks, max_polynomial_vars)
         return self._rep.Lterms  # terms with local-index polynomial coefficients
-
-    #def get_direct_order_terms(self, order): # , order_base=None - unused currently b/c order is always 0...
-    #    v = self.to_vector()
-    #    poly_terms = self.get_taylor_order_terms(order)
-    #    return [ term.evaluate_coeff(v) for term in poly_terms ]
 
     @property
     def total_term_magnitude(self):
@@ -1249,7 +1243,6 @@ class LindbladErrorgen(_LinearOperator):
         else:
             raise ValueError("Invalid transform for this LindbladErrorgen: type %s"
                              % str(type(s)))
-        
 
     def deriv_wrt_params(self, wrt_filter=None):
         """

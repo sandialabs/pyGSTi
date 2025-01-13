@@ -3295,80 +3295,81 @@ def symmetric_low_rank_spectrum_update(update, orig_e, U, proj_U, force_rank_inc
     #return the new eigenvalues
     return new_evals, True
  
-#Note: This function won't work for our purposes because of the assumptions
-#about the rank of the update on the nullspace of the matrix we're updating,
-#but keeping this here commented for future reference.
-#Function for doing fast calculation of the updated inverse trace:
-#def riedel_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=True):
-#    """
-#    input:
-#    
-#    update : ndarray
-#        symmetric low-rank update to perform.
-#        This is the first half the symmetric rank decomposition s.t.
-#        update@update.T= the full update matrix.
-#    
-#    orig_e : ndarray
-#        Spectrum of the original matrix. This is a 1-D array.
-#        
-#    proj_U : ndarray
-#        Projector onto the complement of the column space of the
-#        original matrix's eigenvectors.
-#        
-#    output:
-#    
-#    trace : float
-#        Value of the trace of the updated psuedoinverse matrix.
-#    
-#    updated_rank : int
-#        total rank of the updated matrix.
-#        
-#    rank_increase_flag : bool
-#        a flag that is returned to indicate is a candidate germ failed to amplify additional parameters. 
-#        This indicates things short circuited and so the scoring function should skip this germ.
-#    """
-#    
-#    #First we need to for the matrix P, whose column space
-#    #forms an orthonormal basis for the component of update
-#    #that is in the complement of U.
-#    
-#    proj_update= proj_U@update
-#    
-#    #Next take the RRQR decomposition of this matrix:
-#    q_update, r_update, _ = _sla.qr(proj_update, mode='economic', pivoting=True)
-#    
-#    #Construct P by taking the columns of q_update corresponding to non-zero values of r_A on the diagonal.
-#    nonzero_indices_update= _np.nonzero(_np.diag(r_update)>1e-10) #HARDCODED (threshold is hardcoded)
-#    
-#    #if the rank doesn't increase then we can't use the Riedel approach.
-#    #Abort early and return a flag to indicate the rank did not increase.
-#    if len(nonzero_indices_update[0])==0 and force_rank_increase:
-#        return None, None, False
-#    
-#    P= q_update[: , nonzero_indices_update[0]]
-#    
-#    updated_rank= len(orig_e)+ len(nonzero_indices_update[0])
-#    
-#    #Now form the matrix R_update which is given by P.T @ proj_update.
-#    R_update= P.T@proj_update
-#    
-#    #R_update gets concatenated with U.T@update to form
-#    #a block column matrixblock_column= np.concatenate([U.T@update, R_update], axis=0)    
-#    
-#    Uta= U.T@update
-#    
-#    try:
-#        RRRDinv= R_update@_np.linalg.inv(R_update.T@R_update) 
-#    except _np.linalg.LinAlgError as err:
-#        print('Numpy thinks this matrix is singular, condition number is: ', _np.linalg.cond(R_update.T@R_update))
-#        print((R_update.T@R_update).shape)
-#        raise err
-#    pinv_orig_e_mat= _np.diag(1/orig_e)
-#    
-#    trace= _np.sum(1/orig_e) + _np.trace( RRRDinv@(_np.eye(Uta.shape[1]) + Uta.T@pinv_orig_e_mat@Uta)@RRRDinv.T )
-#    
-#    return trace, updated_rank, True
+# Note: Th function below won't work for our purposes because of the assumptions
+# about the rank of the update on the nullspace of the matrix we're updating,
+# but keeping this here commented for future reference.
+'''
+def riedel_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=True):
+    """
+    input:
     
+    update : ndarray
+        symmetric low-rank update to perform.
+        This is the first half the symmetric rank decomposition s.t.
+        update@update.T= the full update matrix.
+    
+    orig_e : ndarray
+        Spectrum of the original matrix. This is a 1-D array.
+        
+    proj_U : ndarray
+        Projector onto the complement of the column space of the
+        original matrix's eigenvectors.
+        
+    output:
+    
+    trace : float
+        Value of the trace of the updated psuedoinverse matrix.
+    
+    updated_rank : int
+        total rank of the updated matrix.
+        
+    rank_increase_flag : bool
+        a flag that is returned to indicate is a candidate germ failed to amplify additional parameters. 
+        This indicates things short circuited and so the scoring function should skip this germ.
+    """
+    
+    #First we need to for the matrix P, whose column space
+    #forms an orthonormal basis for the component of update
+    #that is in the complement of U.
+    
+    proj_update= proj_U@update
+    
+    #Next take the RRQR decomposition of this matrix:
+    q_update, r_update, _ = _sla.qr(proj_update, mode='economic', pivoting=True)
+    
+    #Construct P by taking the columns of q_update corresponding to non-zero values of r_A on the diagonal.
+    nonzero_indices_update= _np.nonzero(_np.diag(r_update)>1e-10) #HARDCODED (threshold is hardcoded)
+    
+    #if the rank doesn't increase then we can't use the Riedel approach.
+    #Abort early and return a flag to indicate the rank did not increase.
+    if len(nonzero_indices_update[0])==0 and force_rank_increase:
+        return None, None, False
+    
+    P= q_update[: , nonzero_indices_update[0]]
+    
+    updated_rank= len(orig_e)+ len(nonzero_indices_update[0])
+    
+    #Now form the matrix R_update which is given by P.T @ proj_update.
+    R_update= P.T@proj_update
+    
+    #R_update gets concatenated with U.T@update to form
+    #a block column matrixblock_column= np.concatenate([U.T@update, R_update], axis=0)    
+    
+    Uta= U.T@update
+    
+    try:
+        RRRDinv= R_update@_np.linalg.inv(R_update.T@R_update) 
+    except _np.linalg.LinAlgError as err:
+        print('Numpy thinks this matrix is singular, condition number is: ', _np.linalg.cond(R_update.T@R_update))
+        print((R_update.T@R_update).shape)
+        raise err
+    pinv_orig_e_mat= _np.diag(1/orig_e)
+    
+    trace= _np.sum(1/orig_e) + _np.trace( RRRDinv@(_np.eye(Uta.shape[1]) + Uta.T@pinv_orig_e_mat@Uta)@RRRDinv.T )
+    
+    return trace, updated_rank, True
+'''
+
 def minamide_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=False):
     """
     This function performs a low-rank update to the components of

@@ -377,16 +377,6 @@ class ThresholdMethodBase(object):
         hp_flat = self.model.sim.hproduct(circuit, flat=True)
         # TODO assert correctness for all of the above
 
-    #REMOVED from fwdsim (unused)
-    #def test_bulk_hproduct(self):
-    #    gatestring1 = ('Gx', 'Gy')
-    #    gatestring2 = ('Gx', 'Gy', 'Gy')
-    #    circuits = [gatestring1, gatestring2]
-    #    hp = self.model.sim.bulk_hproduct(circuits)
-    #    hp_flat = self.model.sim.bulk_hproduct(circuits, flat=True)
-    #    hp_scaled, scaleVals = self.model.sim.bulk_hproduct(circuits, scale=True)
-    #    # TODO assert correctness for all of the above
-
 
 class SimMethodBase(object):
     """Tests for model methods which can use different forward sims"""
