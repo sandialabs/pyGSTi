@@ -5,14 +5,42 @@ from pygsti.baseobjs.label import Label as _Label
 
 #TODO: OOP-ify this code?
 
-def pauli_randomize_circuit(circ, return_target_pauli=False, rand_state=None):
+class RandomCompilation(object):
+    def __init__(self, rc_strategy, rand_state): #pauli_rc, central_pauli are currently the supported options
+        # do I need to call super().__init__?
+        # is this even the right class to inherit from?
+        self.rc_strategy = rc_strategy if rc_strategy is not None else "pauli_rc"
+
+        if isinstance(rand_state, _np.random.RandomState):
+            self.rand_state = rand_state
+        elif isinstance(rand_state, int):
+            self.rand_state = _np.random.RandomState(seed=rand_state)
+        else:
+            self.rand_state = _np.random.RandomState()
+
+
+    def compile(self, circ: _Circuit): # may need to a kwarg dict parameter to this function to allow for things to be passed to a given vompilation choice
+        # d = circ.depth
+        # n = circ.width
+        # framedata = {}
+
+        if self.rc_strategy == 'pauli_rc':
+            return pauli_randomize_circuit(circ=circ, rand_state=self.rand_state, return_target_pauli=False)
+        elif self.rc_strategy == 'central_pauli':
+            return randomize_central_pauli(circ=circ, rand_state=self.rand_state)
+        else:
+            raise ValueError(f"unknown compilation strategy '{self.rc_strategy}'!")
+
+
+
+def pauli_randomize_circuit(circ, rand_state=None, return_target_pauli=False):
     if rand_state is None:
         rand_state = _np.random.RandomState()
 
     d = circ.depth
     n = circ.width
     p = _np.zeros(2*n, int)
-    
+
     qubits = circ.line_labels
 
     layers = []
@@ -54,72 +82,59 @@ def pauli_randomize_circuit(circ, return_target_pauli=False, rand_state=None):
         return rc_circ, bs, q
     
 
+# def central_pauli_mirror_circuit(self, circ: _Circuit): #want this function to stay backwards compatible, but it does need modified (or another function needs created)
 
-def central_pauli_mirror_circuit(test_circ, ref_circ=None, randomized_state_preparation=True, rand_state=None, new=False): #want this function to stay backwards compatible, but it does need modified (or another function needs created)
-    if rand_state is None:
-        rand_state = _np.random.RandomState()
+#     qubits = circ.line_labels
 
-    qubits = test_circ.line_labels
+#     n = circ.width
+#     d = circ.depth
 
-    if new:
-        circuit_to_mirror = ref_circ
-    else:
-        if randomized_state_preparation:
-            prep_circ = _Circuit([haar_random_u3_layer(qubits, rand_state)], line_labels=qubits)
-            circuit_to_mirror = prep_circ + test_circ
-        else: 
-            circuit_to_mirror = test_circ
+#     central_pauli = 2 * self.rand_state.randint(0, 2, 2*n)
+#     central_pauli_layer = pauli_vector_to_u3_layer(central_pauli, qubits)
+#     q = central_pauli.copy()
 
-    n = circuit_to_mirror.width
-    d = circuit_to_mirror.depth
+#     quasi_inverse_circ = _Circuit(line_labels=qubits, editable=True)
 
-    central_pauli = 2 * rand_state.randint(0, 2, 2*n)
-    central_pauli_layer = pauli_vector_to_u3_layer(central_pauli, qubits)
-    q = central_pauli.copy()
+#     for i in range(d):
+#         layer = circ.layer_label(d - i - 1).components
 
-    quasi_inverse_circ = _Circuit(line_labels=test_circ.line_labels, editable=True)
+#         #print(layer)
+#         quasi_inverse_layer = [gate_inverse(gate_label) for gate_label in layer]
 
-    for i in range(d):
+#         #print(quasi_inverse_layer)
         
-        layer = circuit_to_mirror.layer_label(d - i - 1).components
+#         # Update the u3 gates.
+#         if len(layer) == 0 or layer[0].name == 'Gu3':
+#             # update_u3_parameters now twirls/adds label for empty qubits, so don't prepad for speed
+#             #padded_layer = pad_layer(quasi_inverse_layer, qubits)
+#             quasi_inverse_layer = update_u3_parameters(quasi_inverse_layer, q, q, qubits)
 
-        #print(layer)
-        quasi_inverse_layer = [gate_inverse(gate_label) for gate_label in layer]
-
-        #print(quasi_inverse_layer)
-        
-        # Update the u3 gates.
-        if len(layer) == 0 or layer[0].name == 'Gu3':
-            # update_u3_parameters now twirls/adds label for empty qubits, so don't prepad for speed
-            #padded_layer = pad_layer(quasi_inverse_layer, qubits)
-            quasi_inverse_layer = update_u3_parameters(quasi_inverse_layer, q, q, qubits)
-
-        # Update q based on the CNOTs in the layer.
-        else:
-            for g in layer:
-                if g.name == 'Gcnot':
-                    (control, target) = g.qubits
-                    q[qubits.index(control)] = (q[qubits.index(control)] + q[qubits.index(target)]) % 4
-                    q[n + qubits.index(target)] = (q[n + qubits.index(control)] + q[n + qubits.index(target)]) % 4
-                else:
-                    raise ValueError("Circuit can only contain Gcnot and Gu3 gates in separate layers!")
+#         # Update q based on the CNOTs in the layer.
+#         else:
+#             for g in layer:
+#                 if g.name == 'Gcnot':
+#                     (control, target) = g.qubits
+#                     q[qubits.index(control)] = (q[qubits.index(control)] + q[qubits.index(target)]) % 4
+#                     q[n + qubits.index(target)] = (q[n + qubits.index(control)] + q[n + qubits.index(target)]) % 4
+#                 else:
+#                     raise ValueError("Circuit can only contain Gcnot and Gu3 gates in separate layers!")
                 
-        #print(quasi_inverse_layer)
+#         #print(quasi_inverse_layer)
 
-        quasi_inverse_circ.insert_layer_inplace(quasi_inverse_layer, i)
+#         quasi_inverse_circ.insert_layer_inplace(quasi_inverse_layer, i)
 
-        #print(quasi_inverse_circ)
+#         #print(quasi_inverse_circ)
 
-        if new:
-            mc = test_circ + _Circuit([central_pauli_layer], line_labels=test_circ.line_labels) + quasi_inverse_circ
-        else:
-            mc = circuit_to_mirror + _Circuit([central_pauli_layer], line_labels=test_circ.line_labels) + quasi_inverse_circ  
-          
-    mc.done_editing()
+#         if new:
+#             mc = test_circ + _Circuit([central_pauli_layer], line_labels=test_circ.line_labels) + quasi_inverse_circ
+#         else:
+#             mc = circuit_to_mirror + _Circuit([central_pauli_layer], line_labels=test_circ.line_labels) + quasi_inverse_circ  
+        
+#     mc.done_editing()
 
-    bs = ''.join([str(b // 2) for b in q[n:]])
+#     bs = ''.join([str(b // 2) for b in q[n:]])
 
-    return mc, bs
+#     return mc, bs
 
 
 def randomize_central_pauli(circ: _Circuit, rand_state=None):
@@ -130,12 +145,45 @@ def randomize_central_pauli(circ: _Circuit, rand_state=None):
     qubits = circ.line_labels
 
     n = circ.width
-    n = circ.depth
+    d = circ.depth
 
     central_pauli = 2 * rand_state.randint(0, 2, 2*n)
     central_pauli_layer = pauli_vector_to_u3_layer(central_pauli, qubits)
     q = central_pauli.copy()
 
+    layers = [central_pauli_layer]
+
+    for i in range(d):
+
+        layer = circ.layer_label(i).components
+
+        if layer[0].name in ['Gi', 'Gdelay']: #making this explicit for the sake of clarity
+            # should we be tacking a Pauli on at the end (as though this were RC of u3(0,0,0) layers?)
+            layers.append(layer)
+
+        elif len(layer) == 0 or layer[0].name == 'Gu3':
+            q = 2 * rand_state.randint(0, 2, 2*n)
+            # update_u3_parameters now twirls/adds label for empty qubits, so don't prepad for speed
+            #padded_layer = pad_layer(layer, qubits)
+            rc_layer = update_u3_parameters(layer, q, q, qubits)
+            layers.append(rc_layer)
+            
+        else:
+            layers.append(layer)
+            for g in layer:
+                if g.name == 'Gcnot':
+                    (control, target) = g.qubits
+                    q[qubits.index(control)] = (q[qubits.index(control)] + q[qubits.index(target)]) % 4
+                    q[n + qubits.index(target)] = (q[n + qubits.index(control)] + q[n + qubits.index(target)]) % 4
+                else:
+                    raise ValueError("Circuit can only contain Gcnot, Gu3, and Gi gates in separate layers!")
+
+    bs = ''.join([str(b // 2) for b in q[n:]])
+
+    # Avoid checks for speed
+    cp_circ = _Circuit(layers, line_labels=circ.line_labels, check=False, expand_subcircuits=False)
+
+    return cp_circ, bs
 
 def new_central_pauli_mirror_circuit(forward_circ: _Circuit, reverse_circ: _Circuit, rand_state=None):
     # the differences between this function and central_pauli_mirror_circuit (legacy) are:

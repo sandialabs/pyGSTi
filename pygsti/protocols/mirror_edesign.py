@@ -100,8 +100,10 @@ def make_mirror_edesign(test_edesign: _FreeformDesign,
                 
             # compute needed circuit inverses, which are the SPAM layer and reference circuit inverse            
             L_inv = compute_inverse(circ=L, gate_set=gate_set, inverse=inverse, inv_kwargs=inv_kwargs)
+
+            random_compiler = _rc.RandomCompilation(mirroring_strategy, rand_state)
             
-            if mirroring_strategy == 'rc':
+            if mirroring_strategy == 'pauli_rc':
                 if rc_function is not None:
                     try:
                         Rinv_Linv, L_T_Rinv_Linv_bs = rc_function(circ=R_inv + L_inv, rand_state=rand_state, **rc_kwargs)
@@ -110,10 +112,10 @@ def make_mirror_edesign(test_edesign: _FreeformDesign,
                     except:
                         raise RuntimeError(f"User-provided RC function for gate set '{gate_set}' returned an error!")
                 elif gate_set == 'u3_cx':
-                    Rinv_Linv, L_T_Rinv_Linv_bs = _rc.pauli_randomize_circuit(R_inv + L_inv, rand_state=rand_state)
+                    Rinv_Linv, L_T_Rinv_Linv_bs = random_compiler.compile(R_inv + L_inv)
                     L_T_Rinv_Linv = L + T + Rinv_Linv
                     # L_T_Rinv_Linv = L_T_Rinv_Linv.reorder_lines(c.line_labels)
-                    L_R_Rinv_Linv, L_R_Rinv_Linv_bs = _rc.pauli_randomize_circuit(L + R + R_inv + L_inv, rand_state=rand_state)
+                    L_R_Rinv_Linv, L_R_Rinv_Linv_bs = random_compiler.compile(L + R + R_inv + L_inv)
                 elif gate_set == 'clifford':
                     #TODO: add clifford RC function
                     raise NotImplementedError("Clifford RC is not yet supported!")
@@ -123,7 +125,7 @@ def make_mirror_edesign(test_edesign: _FreeformDesign,
                 else: #we have no support for this gate set at this point, the user must provide a custom RC function
                     raise RuntimeError(f"No default RC function for gate set '{gate_set}' exists, you must provide your own!")
 
-            elif mirroring_strategy == 'cp':
+            elif mirroring_strategy == 'central_pauli':
                 #do central pauli mirror circuit
                 if cp_function is not None:
                     try:
@@ -134,7 +136,9 @@ def make_mirror_edesign(test_edesign: _FreeformDesign,
                     #print(f'ref depth: {R.depth}, ref_inv depth: {R_inv.depth}, L depth: {L_inv.depth}')
                     #reload(cp)
                     # test_rand_state1 = _np.random.RandomState(8675309)
-                    L_T_Rinv_Linv, L_T_Rinv_Linv_bs = _rc.new_central_pauli_mirror_circuit(forward_circ=L+T, reverse_circ=R_inv+L_inv, rand_state=rand_state)
+
+                    CP_Rinv_Linv, L_T_Rinv_Linv_bs = random_compiler.compile(circ=R_inv+L_inv)
+                    L_T_Rinv_Linv = L + T + CP_Rinv_Linv
                     # print("new function:")
                     # print(L_T_Rinv_Linv)
                     # print(L_T_Rinv_Linv_bs)
@@ -162,7 +166,7 @@ def make_mirror_edesign(test_edesign: _FreeformDesign,
             L_T_Rinv_Linv_aux = [{'base_aux': a, 'idealout': L_T_Rinv_Linv_bs, 'id': j} for a in auxlist]
             test_ref_invs[L_T_Rinv_Linv] = L_T_Rinv_Linv_aux
 
-            if mirroring_strategy == 'rc': #we do not have this class of circuit for central pauli
+            if mirroring_strategy == 'pauli_rc': #we do not have this class of circuit for central pauli
                 L_R_Rinv_Linv_aux = [{'base_aux': a, 'idealout': L_R_Rinv_Linv_bs, 'id': j} for a in auxlist]
                 ref_ref_invs[L_R_Rinv_Linv] = L_R_Rinv_Linv_aux
  
@@ -188,11 +192,11 @@ def make_mirror_edesign(test_edesign: _FreeformDesign,
 
 
     edesigns = {}
-    if mirroring_strategy == 'rc':
+    if mirroring_strategy == 'pauli_rc':
         edesigns['br'] = _FreeformDesign(test_ref_invs)
         edesigns['rr'] = _FreeformDesign(ref_ref_invs)
         edesigns['ref'] = _FreeformDesign(spam_refs)
-    elif mirroring_strategy == 'cp':
+    elif mirroring_strategy == 'central_pauli':
         edesigns['cp'] = _FreeformDesign(test_ref_invs)
         edesigns['cpref'] = _FreeformDesign(spam_refs)
     else:
