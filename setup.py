@@ -273,10 +273,11 @@ def setup_with_extensions(extensions=None):
             'numpy>=1.15.0',
             'scipy',
             'plotly',
-            'pandas'
+            'pandas',
+            'networkx'
         ],
         extras_require=extras,
-        python_requires='>=3.5',
+        python_requires='>=3.8',
         platforms=["any"],
         url='http://www.pygsti.info',
         download_url='https://github.com/pyGSTio/pyGSTi/tarball/master',

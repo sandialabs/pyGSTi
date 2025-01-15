@@ -102,7 +102,7 @@ class ExampleProcess_timedep(interp.PhysicalProcess):
         L = dephasing * self.dephasing_generator + decoherence * self.decoherence_generator
 
         processes = [change_basis(_expm((H + L) * t), 'pp', 'col') for t in times]
-        states = [unvec_square(_np.dot(process, _np.outer(state, state.conj())).ravel(order='F'),'F') for process in processes]
+        states = [unvec_square(_np.dot(process, _np.outer(state, state.conj()).ravel(order='F')),'F') for process in processes]
 
         return states
 
