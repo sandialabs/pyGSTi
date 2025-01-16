@@ -1,11 +1,10 @@
 ********************************************************************************
-  pyGSTi 0.9.12.1
+  pyGSTi 0.9.13
 ********************************************************************************
 
-![master build](https://github.com/pyGSTio/pyGSTi/workflows/Build%20and%20run%20tests/badge.svg?branch=master)
-![develop build](https://github.com/pyGSTio/pyGSTi/workflows/Build%20and%20run%20tests/badge.svg?branch=develop)
-![beta build](https://github.com/pyGSTio/pyGSTi/workflows/Build%20and%20run%20test%20extras/badge.svg?branch=beta)
-![notebooks on beta](https://github.com/pyGSTio/pyGSTi/workflows/Build%20and%20run%20notebook%20regression/badge.svg?branch=beta)
+[![master build](https://github.com/sandialabs/pyGSTi/actions/workflows/beta-master.yml/badge.svg?branch=master)](https://github.com/sandialabs/pyGSTi/actions/workflows/beta-master.yml)
+[![develop build](https://github.com/sandialabs/pyGSTi/actions/workflows/develop.yml/badge.svg?branch=develop)](https://github.com/sandialabs/pyGSTi/actions/workflows/develop.yml)
+[![beta build](https://github.com/sandialabs/pyGSTi/actions/workflows/beta-master.yml/badge.svg?branch=beta)](https://github.com/sandialabs/pyGSTi/actions/workflows/beta-master.yml)
 
 pyGSTi
 ------
