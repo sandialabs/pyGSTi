@@ -3,7 +3,7 @@
 ********************************************************************************
 
 [![master build](https://img.shields.io/github/actions/workflow/status/sandialabs/pyGSTi/beta-master.yml?branch=master&label=master)](https://github.com/sandialabs/pyGSTi/actions/workflows/beta-master.yml)
-[![develop build](https://img.shields.io/github/actions/workflow/status/sandialabs/pyGSTi/beta-master.yml?branch=develop&label=develop)](https://github.com/sandialabs/pyGSTi/actions/workflows/develop.yml)
+[![develop build](https://img.shields.io/github/actions/workflow/status/sandialabs/pyGSTi/develop.yml?branch=develop&label=develop)](https://github.com/sandialabs/pyGSTi/actions/workflows/develop.yml)
 [![beta build](https://img.shields.io/github/actions/workflow/status/sandialabs/pyGSTi/beta-master.yml?branch=beta&label=beta)](https://github.com/sandialabs/pyGSTi/actions/workflows/beta-master.yml)
 
 pyGSTi
