@@ -17,7 +17,6 @@ import scipy.sparse as _sps
 from scipy.sparse.linalg import LinearOperator
 
 from .statereps import StateRepDense as _StateRepDense
-from .. import basereps as _basereps
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from ...tools import basistools as _bt
 from ...tools import internalgates as _itgs
@@ -26,7 +25,11 @@ from ...tools import matrixtools as _mt
 from ...tools import optools as _ot
 
 
-class OpRep(_basereps.OpRep):
+class OpRep:
+    """
+    A real superoperator on Hilbert-Schmidt space.
+    """
+
     def __init__(self, state_space):
         self.state_space = state_space
 
@@ -41,6 +44,10 @@ class OpRep(_basereps.OpRep):
         raise NotImplementedError()
 
     def aslinearoperator(self):
+        """
+        Return a SciPy LinearOperator that accepts superket representations of vectors
+        in Hilbert-Schmidt space and returns a vector of that same representation.
+        """
         def mv(v):
             if v.ndim == 2 and v.shape[1] == 1: v = v[:, 0]
             in_state = _StateRepDense(_np.ascontiguousarray(v, 'd'), self.state_space, None)
@@ -54,6 +61,12 @@ class OpRep(_basereps.OpRep):
 
 
 class OpRepDenseSuperop(OpRep):
+    """
+    A real superoperator on Hilbert-Schmidt space.
+    The operator's action (and adjoint action) work with Hermitian matrices
+    stored as *vectors* in their real superket representations.
+    """
+
     def __init__(self, mx, basis, state_space):
         state_space = _StateSpace.cast(state_space)
         if mx is None:
@@ -257,10 +270,6 @@ class OpRepStochastic(OpRepRandomUnitary):
         self.rates[:] = rates
         self.update_unitary_rates(unitary_rates)
 
-#class OpRepClifford(OpRep):  # TODO?
-#    #def __init__(self, unitarymx, symplecticrep):
-#    #    pass
-
 
 class OpRepComposed(OpRep):
 
@@ -362,13 +371,6 @@ class OpRepEmbedded(OpRep):
         self.offset = sum(blocksizes[0:self.active_block_index])
         super(OpRepEmbedded, self).__init__(state_space)
 
-    #def __reduce__(self):
-    #    return (DMOpRepEmbedded, (self.embedded,
-    #                              self.num_basis_els, self.action_inds,
-    #                              self.blocksizes, self.embeddedDim,
-    #                              self.ncomponents, self.active_block_index,
-    #                              self.nblocks, self.dim))
-
     def _acton_other_blocks_trivially(self, output_state, state):
         offset = 0
         for iBlk, blockSize in enumerate(self.blocksizes):
@@ -452,15 +454,6 @@ class OpRepExpErrorgen(OpRep):
 
     def exp_params(self):
         return (self.mu, self.eta, self.m_star, self.s)
-
-    #def __reduce__(self):
-    #    if self.unitary_postfactor is None:
-    #        return (DMOpRepLindblad, (self.errorgen_rep, self.mu, self.eta, self.m_star, self.s,
-    #                                  _np.empty(0, 'd'), _np.empty(0, _np.int64), _np.zeros(1, _np.int64)))
-    #    else:
-    #        return (DMOpRepLindblad, (self.errorgen_rep, self.mu, self.eta, self.m_star, self.s,
-    #                                  self.unitary_postfactor.data, self.unitary_postfactor.indices,
-    #                                  self.unitary_postfactor.indptr))
 
     def acton(self, state):
         """ Act this gate map on an input state """

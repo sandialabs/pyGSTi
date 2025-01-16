@@ -243,16 +243,6 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         # and this is done by the parent model which will cause _set_evotype to be called.
         return state
 
-    #OLD - now we have a _set_evotype method.
-    #@_ForwardSimulator.model.setter
-    #def model(self, val):
-    #    _ForwardSimulator.model.fset(self, val)  # set the base class property (self.model)
-    #
-    #    #Do some additional initialization
-    #    if self.model.evotype not in ("svterm", "cterm"):
-    #        #raise ValueError(f"Evolution type {self.model.evotype} is incompatible with term-based calculations")
-    #        _warnings.warn("Evolution type %s is incompatible with term-based calculations" % self.model.evotype)
-
     def copy(self):
         """
         Return a shallow copy of this TermForwardSimulator.
@@ -267,7 +257,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
                                     self.oob_check_interval, self.cache)
 
     def create_layout(self, circuits, dataset=None, resource_alloc=None, array_types=('E',),
-                      derivative_dimension=None, verbosity=0):
+                      derivative_dimension=None, verbosity=0, layout_creation_circuit_cache=None):
         """
         Constructs an circuit-outcome-probability-array (COPA) layout for a list of circuits.
 
@@ -296,6 +286,12 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         verbosity : int or VerbosityPrinter
             Determines how much output to send to stdout.  0 means no output, higher
             integers mean more output.
+        
+        layout_creation_circuit_cache:
+            A precomputed dictionary serving as a cache for completed
+            circuits. I.e. circuits with prep labels and POVM labels appended.
+            Along with other useful pre-computed circuit structures used in layout
+            creation.
 
         Returns
         -------
@@ -330,6 +326,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         printer.log("   %d atoms, parameter block size limits %s" % (natoms, str(param_blk_sizes)))
         assert(_np.prod((na,) + npp) <= nprocs), "Processor grid size exceeds available processors!"
 
+        # TODO: Layout circuit creation cache unused for TermCOPALayout
         layout = _TermCOPALayout(circuits, self.model, dataset, natoms, na, npp, param_dimensions,
                                  param_blk_sizes, resource_alloc, printer)
         #MEM debug_prof.print_memory("CreateLayout2 - nAtoms = %d" % len(layout.atoms), True)
@@ -408,105 +405,6 @@ class TermForwardSimulator(_DistributableForwardSimulator):
             hprobs = _bulk_eval_compact_polynomials(
                 hpolys[0], hpolys[1], self.model.to_vector(), (nEls, len(wrtInds1), len(wrtInds2)))
         _fas(array_to_fill, [slice(0, array_to_fill.shape[0]), dest_param_slice1, dest_param_slice2], hprobs)
-
-    #DIRECT FNS - keep these around, but they need to be updated (as do routines in fastreplib.pyx)
-    #def _prs_directly(self, layout_atom, resource_alloc): #comm=None, mem_limit=None, reset_wts=True, repcache=None):
-    #    """
-    #    Compute probabilities of `layout`'s circuits using "direct" mode.
-    #
-    #    Parameters
-    #    ----------
-    #    layout : CircuitOutcomeProbabilityArrayLayout
-    #        The layout.
-    #
-    #    comm : mpi4py.MPI.Comm, optional
-    #        When not None, an MPI communicator for distributing the computation
-    #        across multiple processors.  Distribution is performed over
-    #        subtrees of eval_tree (if it is split).
-    #
-    #    mem_limit : int, optional
-    #        A rough memory limit in bytes.
-    #
-    #    reset_wts : bool, optional
-    #        Whether term magnitudes should be updated based on current term coefficients
-    #        (which are based on the current point in model-parameter space) or not.
-    #
-    #    repcache : dict, optional
-    #        A cache of term representations for increased performance.
-    #    """
-    #    prs = _np.empty(layout_atom.num_elements, 'd')
-    #    #print("Computing prs directly for %d circuits" % len(circuit_list))
-    #    if repcache is None: repcache = {}  # new repcache...
-    #    k = 0   # *linear* evaluation order so we know final indices are just running
-    #    for i in eval_tree.evaluation_order():
-    #        circuit = eval_tree[i]
-    #        #print("Computing prs directly: circuit %d of %d" % (i,len(circuit_list)))
-    #        assert(self.evotype == "svterm")  # for now, just do SV case
-    #        fastmode = False  # start with slow mode
-    #        wtTol = 0.1
-    #        rholabel = circuit[0]
-    #        opStr = circuit[1:]
-    #        elabels = eval_tree.simplified_circuit_elabels[i]
-    #        prs[k:k + len(elabels)] = replib.SV_prs_directly(self, rholabel, elabels, opStr,
-    #                                                         repcache, comm, mem_limit, fastmode, wtTol, reset_wts,
-    #                                                         self.times_debug)
-    #        k += len(elabels)
-    #    #print("PRS = ",prs)
-    #    return prs
-    #
-    #def _dprs_directly(self, eval_tree, wrt_slice, comm=None, mem_limit=None, reset_wts=True, repcache=None):
-    #    """
-    #    Compute probability derivatives of `eval_tree`'s circuits using "direct" mode.
-    #
-    #    Parameters
-    #    ----------
-    #    eval_tree : TermEvalTree
-    #        The evaluation tree.
-    #
-    #    wrt_slice : slice
-    #        A slice specifying which model parameters to differentiate with respect to.
-    #
-    #    comm : mpi4py.MPI.Comm, optional
-    #        When not None, an MPI communicator for distributing the computation
-    #        across multiple processors.  Distribution is performed over
-    #        subtrees of eval_tree (if it is split).
-    #
-    #    mem_limit : int, optional
-    #        A rough memory limit in bytes.
-    #
-    #    reset_wts : bool, optional
-    #        Whether term magnitudes should be updated based on current term coefficients
-    #        (which are based on the current point in model-parameter space) or not.
-    #
-    #    repcache : dict, optional
-    #        A cache of term representations for increased performance.
-    #    """
-    #    #Note: Finite difference derivatives are SLOW!
-    #    if wrt_slice is None:
-    #        wrt_indices = list(range(self.Np))
-    #    elif isinstance(wrt_slice, slice):
-    #        wrt_indices = _slct.indices(wrt_slice)
-    #    else:
-    #        wrt_indices = wrt_slice
-    #
-    #    eps = 1e-6  # HARDCODED
-    #    probs = self._prs_directly(eval_tree, comm, mem_limit, reset_wts, repcache)
-    #    dprobs = _np.empty((eval_tree.num_final_elements(), len(wrt_indices)), 'd')
-    #    orig_vec = self.to_vector().copy()
-    #    iParamToFinal = {i: ii for ii, i in enumerate(wrt_indices)}
-    #    for i in range(self.Np):
-    #        #print("direct dprobs cache %d of %d" % (i,self.Np))
-    #        if i in iParamToFinal:  # LATER: add MPI support?
-    #            iFinal = iParamToFinal[i]
-    #            vec = orig_vec.copy(); vec[i] += eps
-    #            self.from_vector(vec, close=True)
-    #            dprobs[:, iFinal] = (self._prs_directly(eval_tree,
-    #                                                   comm=None,
-    #                                                   mem_limit=None,
-    #                                                   reset_wts=False,
-    #                                                   repcache=repcache) - probs) / eps
-    #    self.from_vector(orig_vec, close=True)
-    #    return dprobs
 
     ## ----- Find a "minimal" path set (i.e. find thresholds for each circuit -----
     def _compute_pruned_pathmag_threshold(self, rholabel, elabels, circuit, polynomial_vindices_per_int,

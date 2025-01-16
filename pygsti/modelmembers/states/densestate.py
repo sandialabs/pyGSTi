@@ -166,9 +166,11 @@ class DenseState(DenseStateInterface, _State):
 
     def __init__(self, vec, basis, evotype, state_space):
         vec = _State._to_vector(vec)
-        state_space = _statespace.default_space_for_dim(vec.shape[0]) if (state_space is None) \
-            else _statespace.StateSpace.cast(state_space)
-        evotype = _Evotype.cast(evotype)
+        if state_space is None:
+            state_space = _statespace.default_space_for_dim(vec.shape[0])
+        else:
+            state_space = _statespace.StateSpace.cast(state_space)
+        evotype = _Evotype.cast(evotype, state_space=state_space)
         self._basis = _Basis.cast(basis, state_space.dim)
         rep = evotype.create_dense_state_rep(vec, self._basis, state_space)
 
@@ -263,7 +265,7 @@ class DensePureState(DenseStateInterface, _State):
         purevec = purevec.astype(complex)
         state_space = _statespace.default_space_for_udim(purevec.shape[0]) if (state_space is None) \
             else _statespace.StateSpace.cast(state_space)
-        evotype = _Evotype.cast(evotype)
+        evotype = _Evotype.cast(evotype, state_space=state_space)
         basis = _Basis.cast(basis, state_space.dim)  # basis for Hilbert-Schmidt (superop) space
         
         #Try to create a dense pure rep.  If this fails, see if a dense superket rep

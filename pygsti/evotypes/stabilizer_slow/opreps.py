@@ -34,10 +34,6 @@ class OpRep(_basereps.OpRep):
     def nqubits(self):
         return self.state_space.num_qubits
 
-    #@property
-    #def dim(self):
-    #    return 2**(self.nqubits)  # assume "unitary evolution"-type mode
-
 
 class OpRepClifford(OpRep):
     def __init__(self, unitarymx, symplecticrep, basis, state_space):

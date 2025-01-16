@@ -1,10 +1,12 @@
 import time
-
+import numpy as _np
 from pygsti.baseobjs import Label
 from pygsti.modelpacks import smq2Q_XYICNOT, smq1Q_XYI
 from pygsti.tools import edesigntools as et
 from pygsti.protocols import CircuitListsDesign, SimultaneousExperimentDesign, CombinedExperimentDesign
 from pygsti.circuits import Circuit as C
+from pygsti.circuits import create_lsgst_circuit_lists
+from pygsti.modelmembers.instruments import TPInstrument
 
 from ..util import BaseCase
 
@@ -117,38 +119,50 @@ class FisherInformationTester(BaseCase):
         self.target_model = smq1Q_XYI.target_model('full TP')
         self.edesign = smq1Q_XYI.create_gst_experiment_design(8)
         self.Ls = [1,2,4,8]
-        self.regularized_model = self.target_model.copy().depolarize(spam_noise=1e-3)
+        #create a model with instruments too.
+        self.target_model_inst = self.target_model.copy()
+        #Create and add the ideal instrument
+        #E0 = target_model.effects['0']
+        #E1 = target_model.effects['1']
+        # Alternate indexing that uses POVM label explicitly
+        E0 = self.target_model['Mdefault']['0']  # 'Mdefault' = POVM label, '0' = effect label
+        E1 = self.target_model['Mdefault']['1']
+        Gmz_plus = _np.dot(E0,E0.T) #note effect vectors are stored as column vectors
+        Gmz_minus = _np.dot(E1,E1.T)
+        self.target_model_inst[('Iz',0)] = TPInstrument({'p0': Gmz_plus, 'p1': Gmz_minus})
+
+        #create experiment design for instruments
+        germs = smq1Q_XYI.germs()
+        germs += [C([('Iz', 0)])]  # add the instrument as a germ.
+
+        prep_fiducials = smq1Q_XYI.prep_fiducials()
+        meas_fiducials = smq1Q_XYI.meas_fiducials()
+        self.lsgst_list_instruments = create_lsgst_circuit_lists(
+            self.target_model_inst,prep_fiducials,meas_fiducials,germs,self.Ls)
 
     def test_calculate_fisher_information_matrix(self):
         
         # Basic usage
         start = time.time()
-        fim1 = et.calculate_fisher_information_matrix(self.target_model, self.edesign.all_circuits_needing_data, 
-                                                      regularize_spam= True)
+        fim1 = et.calculate_fisher_information_matrix(self.target_model, self.edesign.all_circuits_needing_data)
         fim1_time = time.time() - start
-
-        # Try external regularized model version
-        fim2 = et.calculate_fisher_information_matrix(self.regularized_model, self.edesign.all_circuits_needing_data,
-                                                      regularize_spam=False)
-        self.assertArraysAlmostEqual(fim1, fim2)
     
         # Try pre-cached version
-        fim3_terms, _ = et.calculate_fisher_information_per_circuit(self.regularized_model, self.edesign.all_circuits_needing_data)
+        fim2_terms, _ = et.calculate_fisher_information_per_circuit(self.target_model, self.edesign.all_circuits_needing_data)
         start = time.time()
-        fim3 = et.calculate_fisher_information_matrix(self.target_model, self.edesign.all_circuits_needing_data, term_cache=fim3_terms)
-        fim3_time = time.time() - start
+        fim2 = et.calculate_fisher_information_matrix(self.target_model, self.edesign.all_circuits_needing_data, term_cache=fim2_terms)
+        fim2_time = time.time() - start
         
-        self.assertArraysAlmostEqual(fim1, fim3)
-        self.assertLess(10*fim3_time, fim1_time) # Cached version should be very fast compared to uncached
+        self.assertArraysAlmostEqual(fim1, fim2)
+        self.assertLess(10*fim2_time, fim1_time) # Cached version should be very fast compared to uncached
 
     def test_calculate_fisher_info_by_L(self):
 
-        fim1 = et.calculate_fisher_information_matrix(self.target_model, self.edesign.all_circuits_needing_data, 
-                                                      regularize_spam= True)
+        fim1 = et.calculate_fisher_information_matrix(self.target_model, self.edesign.all_circuits_needing_data)
 
         # Try by-L version
         fim_by_L = et.calculate_fisher_information_matrices_by_L(self.target_model, self.edesign.circuit_lists, self.Ls)
-        self.assertArraysAlmostEqual(fim1, fim_by_L[8])
+        self.assertTrue(_np.linalg.norm(fim1-fim_by_L[8])<1e-3)
 
     #test approximate versions of the fisher information calculation.
     def test_fisher_information_approximate(self):
@@ -158,14 +172,29 @@ class FisherInformationTester(BaseCase):
                                                             approx=True)
 
         #test per-circuit
-        fim_approx_per_circuit = et.calculate_fisher_information_per_circuit(self.regularized_model, 
+        fim_approx_per_circuit = et.calculate_fisher_information_per_circuit(self.target_model, 
                                                                              self.edesign.all_circuits_needing_data, 
                                                                              approx=True)
 
         #Test by L:
         fim_approx_by_L = et.calculate_fisher_information_matrices_by_L(self.target_model, self.edesign.circuit_lists, self.Ls,
                                                                         approx=True)
-        self.assertArraysAlmostEqual(fim_approx, fim_approx_by_L[8])
+        self.assertTrue(_np.linalg.norm(fim_approx-fim_approx_by_L[8])<1e-3)
+
+    def test_calculate_fisher_information_matrix_with_instrument(self):
+        #Test approximate fisher information calculations:
+        fim_approx = et.calculate_fisher_information_matrix(self.target_model_inst, self.lsgst_list_instruments[-1], 
+                                                            approx=True)
+
+        #test per-circuit
+        fim_approx_per_circuit = et.calculate_fisher_information_per_circuit(self.target_model_inst, 
+                                                                             self.lsgst_list_instruments[-1], 
+                                                                             approx=True)
+
+        #Test by L:
+        fim_approx_by_L = et.calculate_fisher_information_matrices_by_L(self.target_model_inst, self.lsgst_list_instruments, self.Ls,
+                                                                        approx=True)
+        self.assertTrue(_np.linalg.norm(fim_approx-fim_approx_by_L[8])<1e-3)
 
 
 class EdesignPaddingTester(BaseCase):

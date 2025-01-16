@@ -88,7 +88,7 @@ class NamedDict(dict, _NicelySerializable):
             #TODO: serialize via _to_memoized_dict once we have a base class
             if x is None or isinstance(x, (float, int, str)):
                 return x
-            elif isinstance(x, _np.int64):
+            elif isinstance(x, (_np.int64, _np.int32)):
                 return int(x)
             elif isinstance(x, _NicelySerializable):
                 return x.to_nice_serialization()

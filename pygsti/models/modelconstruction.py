@@ -99,7 +99,7 @@ def create_spam_vector(vec_expr, state_space, basis):
     std_basis = basis.create_equivalent('std')
     vecInSimpleStdBasis = _np.zeros(std_basis.elshape, 'd')  # a matrix, but flattened it is our spamvec
     vecInSimpleStdBasis[index, index] = 1.0  # now a matrix with just a single 1 on the diag
-    vecInReducedStdBasis = _np.dot(std_basis.from_elementstd_transform_matrix, vecInSimpleStdBasis.flatten())
+    vecInReducedStdBasis = std_basis.from_elementstd_transform_matrix @ vecInSimpleStdBasis.ravel()
     # translates the density matrix / state vector to the std basis with our desired block structure
 
     vec = _bt.change_basis(vecInReducedStdBasis, std_basis, basis)
@@ -752,7 +752,7 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
     state_space = _statespace.QubitSpace(qudit_labels) if all([udim == 2 for udim in processor_spec.qudit_udims]) \
         else _statespace.QuditSpace(qudit_labels, processor_spec.qudit_udims)
     std_gate_unitaries = _itgs.standard_gatename_unitaries()
-    evotype = _Evotype.cast(evotype)
+    evotype = _Evotype.cast(evotype, state_space=state_space)
     modelnoise = _OpModelNoise.cast(modelnoise)
     modelnoise.reset_access_counters()
 
@@ -1676,7 +1676,7 @@ def _create_crosstalk_free_model(processor_spec, modelnoise, custom_gates=None, 
     qudit_labels = processor_spec.qudit_labels
     state_space = _statespace.QubitSpace(qudit_labels) if all([udim == 2 for udim in processor_spec.qudit_udims]) \
         else _statespace.QuditSpace(qudit_labels, processor_spec.qudit_udims)
-    evotype = _Evotype.cast(evotype)
+    evotype = _Evotype.cast(evotype, state_space=state_space)
     modelnoise = _OpModelNoise.cast(modelnoise)
     modelnoise.reset_access_counters()
 
@@ -1867,7 +1867,7 @@ def _create_cloud_crosstalk_model(processor_spec, modelnoise, custom_gates=None,
     qudit_labels = processor_spec.qudit_labels
     state_space = _statespace.QubitSpace(qudit_labels) if all([udim == 2 for udim in processor_spec.qudit_udims]) \
         else _statespace.QuditSpace(qudit_labels, processor_spec.qudit_udims)  # FUTURE: allow more types of spaces
-    evotype = _Evotype.cast(evotype)
+    evotype = _Evotype.cast(evotype, state_space=state_space)
     modelnoise = _OpModelNoise.cast(modelnoise)
     modelnoise.reset_access_counters()
     printer = _VerbosityPrinter.create_printer(verbosity)

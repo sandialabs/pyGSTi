@@ -27,6 +27,7 @@ from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.objectivefns.objectivefns import PoissonPicDeltaLogLFunction as _PoissonPicDeltaLogLFunction
 from pygsti.objectivefns.objectivefns import Chi2Function as _Chi2Function
 from pygsti.objectivefns.objectivefns import FreqWeightedChi2Function as _FreqWeightedChi2Function
+from pygsti.models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
 
 
 # NON-MARKOVIAN ERROR BARS
@@ -482,9 +483,15 @@ class ConfidenceRegionFactory(_NicelySerializable):
             label = projection_type
 
         model = self.parent.models[self.model_lbl]
-        nongauge_space, gauge_space = model.compute_nongauge_and_gauge_spaces()
-        self.nNonGaugeParams = nongauge_space.shape[1]
-        self.nGaugeParams = model.num_params - self.nNonGaugeParams
+
+        if projection_type != 'none':
+            nongauge_space, gauge_space = model.compute_nongauge_and_gauge_spaces()
+            self.nNonGaugeParams = nongauge_space.shape[1]
+            self.nGaugeParams = model.num_params - self.nNonGaugeParams
+        else:
+            # no projection means we take the entire space as non-gauge
+            self.nNonGaugeParams = model.num_params
+            self.nGaugeParams = 0
 
         #Project Hessian onto non-gauge space
         if projection_type == 'none':
@@ -691,13 +698,13 @@ class ConfidenceRegionFactory(_NicelySerializable):
             sub_crf.project_hessian('none')
             crfv = sub_crf.view(level)
 
-            operationCIs = _np.concatenate([crfv.retrieve_profile_likelihood_confidence_intervals(gl).flatten()
+            operationCIs = _np.concatenate([crfv.retrieve_profile_likelihood_confidence_intervals(gl).ravel()
                                             for gl in model.operations])
             return _np.sqrt(_np.sum(operationCIs**2))
 
         #Run Minimization Algorithm
         startM = _np.zeros((self.nNonGaugeParams, self.nGaugeParams), 'd')
-        x0 = startM.flatten()
+        x0 = startM.ravel()
         print_obj_func = _opt.create_objfn_printer(_objective_func)
         minSol = _opt.minimize(_objective_func, x0,
                                method=method, maxiter=maxiter,
@@ -727,7 +734,7 @@ class ConfidenceRegionFactory(_NicelySerializable):
                                           self.circuit_list_lbl, projected_hessian, 0.0)
         sub_crf.project_hessian('none')
         crfv = sub_crf.view(level)
-        operationCIs = _np.concatenate([crfv.retrieve_profile_likelihood_confidence_intervals(gl).flatten()
+        operationCIs = _np.concatenate([crfv.retrieve_profile_likelihood_confidence_intervals(gl).ravel()
                                         for gl in model.operations])
         op_intrinsic_err = _np.sqrt(_np.mean(operationCIs**2))
 
@@ -738,7 +745,7 @@ class ConfidenceRegionFactory(_NicelySerializable):
                                           self.circuit_list_lbl, projected_hessian, 0.0)
         sub_crf.project_hessian('none')
         crfv = sub_crf.view(level)
-        spamCIs = _np.concatenate([crfv.retrieve_profile_likelihood_confidence_intervals(sl).flatten()
+        spamCIs = _np.concatenate([crfv.retrieve_profile_likelihood_confidence_intervals(sl).ravel()
                                    for sl in _itertools.chain(iter(model.preps),
                                                               iter(model.povms))])
         spam_intrinsic_err = _np.sqrt(_np.mean(spamCIs**2))
@@ -755,9 +762,9 @@ class ConfidenceRegionFactory(_NicelySerializable):
             sub_crf.project_hessian('none')
             crfv = sub_crf.view(level)
 
-            operationCIs = _np.concatenate([crfv.retrieve_profile_likelihood_confidence_intervals(gl).flatten()
+            operationCIs = _np.concatenate([crfv.retrieve_profile_likelihood_confidence_intervals(gl).ravel()
                                             for gl in model.operations])
-            spamCIs = _np.concatenate([crfv.retrieve_profile_likelihood_confidence_intervals(sl).flatten()
+            spamCIs = _np.concatenate([crfv.retrieve_profile_likelihood_confidence_intervals(sl).ravel()
                                        for sl in _itertools.chain(iter(model.preps),
                                                                   iter(model.povms))])
             op_err = _np.sqrt(_np.mean(operationCIs**2))
@@ -1068,11 +1075,18 @@ class ConfidenceRegionFactoryView(object):
             else:
                 # copy objects because we add eps to them below
                 typ, lbl = dependency
-                if typ == "gate": modelObj = mdl.operations[lbl]
-                elif typ == "prep": modelObj = mdl.preps[lbl]
-                elif typ == "povm": modelObj = mdl.povms[lbl]
-                elif typ == "instrument": modelObj = mdl.instruments[lbl]
-                else: raise ValueError("Invalid dependency type: %s" % typ)
+                if isinstance(mdl, _ExplicitOpModel):
+                    if typ == "gate": modelObj = mdl.operations[lbl]
+                    elif typ == "prep": modelObj = mdl.preps[lbl]
+                    elif typ == "povm": modelObj = mdl.povms[lbl]
+                    elif typ == "instrument": modelObj = mdl.instruments[lbl]
+                    else: raise ValueError("Invalid dependency type: %s" % typ)
+                else:
+                    if typ == "gate": modelObj = mdl.operation_blks['gates'][lbl]
+                    elif typ == "prep": modelObj = mdl.prep_blks['layers'][lbl]
+                    elif typ == "povm": modelObj = mdl.povm_blks['layers'][lbl]
+                    elif typ == "instrument": modelObj = mdl.instrument_blks['layers'][lbl]
+                    else: raise ValueError("Invalid dependency type: %s" % typ)
                 all_gpindices.extend(modelObj.gpindices_as_array())
 
         vec0 = mdl.to_vector()

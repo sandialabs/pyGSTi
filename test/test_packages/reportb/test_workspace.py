@@ -312,30 +312,6 @@ class TestWorkspace(ReportBaseCase):
         with self.assertRaises(ValueError):
             w.ColorBoxPlot(("chi2",), self.gss, self.ds, self.mdl, typ="foobar")
 
-        from pygsti.algorithms import directx as dx
-        #specs = pygsti.construction.build_spam_specs(
-        #        prepStrs=prepStrs,
-        #        effectStrs=effectStrs,
-        #        prep_labels=list(self.mdl.preps.keys()),
-        #        effect_labels=self.mdl.get_effect_labels() )
-
-        baseStrs = [plaq.base for _, plaq in self.gss.iter_plaquettes()]
-        #print(f'{baseStrs=}')
-        #print(f'{prepStrs=}')
-        #print(f'{effectStrs=}')
-        #print(self.ds)
-        #print(f'{list(self.gss)=}')
-        #print(self.mdl)
-        
-        directModels = dx.direct_mlgst_models(
-            baseStrs, self.ds, prepStrs, effectStrs, self.tgt, svd_truncate_to=4)
-        #print(f'{directModels=}')
-        plts.append( w.ColorBoxPlot(["chi2","logl","blank"], self.gss,
-                                    self.ds, self.mdl, box_labels=False, direct_gst_models=directModels) )
-        plts.append( w.ColorBoxPlot(["errorrate"], self.gss,
-                                    self.ds, self.mdl, box_labels=False, sum_up=True,
-                                    direct_gst_models=directModels) )
-
         gmx = np.identity(4,'d'); gmx[3,0] = 0.5
         plts.append(w.MatrixPlot(gmx, -1, 1, ['a','b','c','d'], ['e','f','g','h'], "X", "Y",
                                  colormap = pygsti.report.colormaps.DivergingColormap(vmin=-2, vmax=2)))
