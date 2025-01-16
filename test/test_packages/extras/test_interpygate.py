@@ -12,7 +12,7 @@ try:
     _comm = MPI.COMM_WORLD
     _rank = _comm.Get_rank()
     _size = _comm.Get_size()
-except ImportError:
+except (ImportError, RuntimeError):
     _comm = None
     _rank = 0
     _size = 1
