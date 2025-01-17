@@ -875,7 +875,7 @@ class GSTGaugeOptSuite(_NicelySerializable):
         if gaugeopt_suite_names is None or gaugeopt_suite_names == 'none':
             self.gaugeopt_suite_names = None
         elif isinstance(gaugeopt_suite_names, str):
-            self.gaugeopt_suite_names = gaugeopt_suite_names
+            self.gaugeopt_suite_names = (gaugeopt_suite_names,)
         else:
             self.gaugeopt_suite_names = tuple(gaugeopt_suite_names)
 
