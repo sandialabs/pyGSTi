@@ -598,10 +598,8 @@ def simplish_leastsq(
                 mu, nu = (tau * max_jtj_diag, 2) if init_munu == 'auto' else init_munu
                 best_x_state = (mu, nu, norm_f, f.copy())
 
-            ___temp = 0
             #determing increment using adaptive damping
             while True:  # inner loop
-                ___temp += 1
                 if profiler: profiler.memory_check("simplish_leastsq: begin inner iter")
 
                 # ok if assume fine-param-proc.size == 1 (otherwise need to sync setting local JTJ)
