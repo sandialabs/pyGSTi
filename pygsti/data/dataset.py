@@ -1731,6 +1731,9 @@ class DataSet(_MongoSerializable):
                 self._add_explicit_repetition_counts()
 
         if rep_array is not None:
+            # Check for entries that are numerically equal to zero. For any such entries,
+            # so them to _exactly_ zero in preparation for floating-point equality checks
+            # with zero below, and in unit tests.
             dtype_info = _np.finfo(rep_array.dtype)
             near_zero = rep_array < 10**(-1.5*dtype_info.precision)
             rep_array[near_zero] = 0
