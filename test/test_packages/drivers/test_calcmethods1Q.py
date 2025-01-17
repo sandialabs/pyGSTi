@@ -237,8 +237,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         target_model.sim = pygsti.forwardsims.TermForwardSimulator(mode='pruned', max_order=3, desired_perr=0.01,
                                                                allowed_perr=0.1, max_paths_per_outcome=1000,
                                                                perr_heuristic='meanscaled', max_term_stages=5)
-        perturb = 2e-10 # test fails with 1.25e-10. Smaller than 2e-10 might be possible, but that isn't worth exploring. 
-        target_model.from_vector(perturb * np.ones(target_model.num_params))  # to seed term calc (starting with perfect zeros causes trouble)
+        target_model.from_vector(1e-10 * np.ones(target_model.num_params))  # to seed term calc (starting with perfect zeros causes trouble)
         results = pygsti.run_long_sequence_gst(self.ds, target_model, std.prep_fiducials(), std.meas_fiducials(),
                                                std.germs(lite=False), self.maxLengths, verbosity=3,
                                                disable_checkpointing=True)
