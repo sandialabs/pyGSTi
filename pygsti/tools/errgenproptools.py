@@ -1067,6 +1067,10 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
         P = errorgen_2_bel_0
         Q = errorgen_2_bel_1
         A = errorgen_1_bel_0 
+        #also precompute whether pairs commute or anticommute
+        com_AP = A.commutes(P)
+        com_AQ = A.commutes(Q)
+
         #Case 1: [P,Q]=0
         if P.commutes(Q):
             #precompute some products we'll need.
@@ -1074,15 +1078,13 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
             QA = pauli_product(Q, A)
             PQ = pauli_product(P, Q)
             APQ = pauli_product(A, PQ[0]*PQ[1])
-            #also precompute whether pairs commute or anticommute
-            com_AP = A.commutes(P)
-            com_AQ = A.commutes(Q)
-            #also also precompute whether any of these products are the identity
+
+            #also precompute whether any of these products are the identity
             PA_ident = (PA[1] == identity)
             QA_ident = (QA[1] == identity)
             PQ_ident = (PQ[1] == identity)
             APQ_ident = (APQ[1] == identity)
-            #also also also precompute whether certain relevant pauli pairs are equal.
+            #also also precompute whether certain relevant pauli pairs are equal.
             PA_eq_Q = (PA[1]==Q)
             QA_eq_P = (QA[1]==P)
             PQ_eq_A = (PQ[1]==A)
@@ -1139,13 +1141,10 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
             #precompute some products we'll need.
             PA = pauli_product(P, A)
             QA = pauli_product(Q, A)
-            #also precompute whether pairs commute or anticommute
-            com_AP = A.commutes(P)
-            com_AQ = A.commutes(Q)
-            #also also precompute whether any of these products are the identity
+            #also precompute whether any of these products are the identity
             PA_ident = (PA[1] == identity)
             QA_ident = (QA[1] == identity)
-            #also also also precompute whether certain relevant pauli pairs are equal.
+            #also also precompute whether certain relevant pauli pairs are equal.
             PA_eq_Q = (PA[1]==Q)
             QA_eq_P = (QA[1]==P)
             #Case 2a: [A,P]=0, [A,Q]=0
@@ -1186,18 +1185,18 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
         P = errorgen_2_bel_0
         Q = errorgen_2_bel_1
         A = errorgen_1_bel_0
+        #precompute whether pairs commute or anticommute
+        com_AP = A.commutes(P)
+        com_AQ = A.commutes(Q)
         #Case 1: P and Q commute.
         if P.commutes(Q):
             #precompute some products we'll need.
             PA = pauli_product(P, A)
             QA = pauli_product(Q, A)
-            #also precompute whether pairs commute or anticommute
-            com_AP = A.commutes(P)
-            com_AQ = A.commutes(Q)
-            #also also precompute whether any of these products are the identity
+            #also precompute whether any of these products are the identity
             PA_ident = (PA[1] == identity)
             QA_ident = (QA[1] == identity)
-            #also also also precompute whether certain relevant pauli pairs are equal.
+            #also also precompute whether certain relevant pauli pairs are equal.
             PA_eq_Q = (PA[1]==Q)
             QA_eq_P = (QA[1]==P)
             #Case 1a: [A,P]=0, [A,Q]=0
@@ -1238,9 +1237,6 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
             QA = pauli_product(Q, A)
             PQ = pauli_product(P, Q)
             APQ = pauli_product(A, PQ[0]*PQ[1])
-            #also precompute whether pairs commute or anticommute
-            com_AP = A.commutes(P)
-            com_AQ = A.commutes(Q)
             #also also precompute whether any of these products are the identity
             PA_ident = (PA[1] == identity)
             QA_ident = (QA[1] == identity)
@@ -1337,20 +1333,21 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
         P = errorgen_2_bel_0
         Q = errorgen_2_bel_1
 
+        #also precompute whether pairs commute or anticommute
+        com_AP = A.commutes(P)
+        com_AQ = A.commutes(Q)
+
         if P.commutes(Q): #Case 1: [P,Q] = 0
             #precompute some products we'll need.
             PA = pauli_product(P, A)
             QA = pauli_product(Q, A)
             PQ = pauli_product(P, Q)
             APQ = pauli_product(A, PQ[0]*PQ[1])
-            #also precompute whether pairs commute or anticommute
-            com_AP = A.commutes(P)
-            com_AQ = A.commutes(Q)
-            #also also precompute whether any of these products are the identity
+            #also precompute whether any of these products are the identity
             PA_ident = (PA[1] == identity)
             QA_ident = (QA[1] == identity)
             APQ_ident = (APQ[1] == identity)
-            #also also also precompute whether certain relevant pauli pairs are equal.
+            #also also precompute whether certain relevant pauli pairs are equal.
             PA_eq_QA = (PA[1]==QA[1])
             #APQ can't equal A since that implies P==Q, which would be an invalid C term input.
 
@@ -1403,13 +1400,10 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
             #precompute some products we'll need.
             PA = pauli_product(P, A)
             QA = pauli_product(Q, A)
-            #also precompute whether pairs commute or anticommute
-            com_AP = A.commutes(P)
-            com_AQ = A.commutes(Q)
-            #also also precompute whether any of these products are the identity
+            #also precompute whether any of these products are the identity
             PA_ident = (PA[1] == identity)
             QA_ident = (QA[1] == identity)
-            #also also also precompute whether certain relevant pauli pairs are equal.
+            #also also precompute whether certain relevant pauli pairs are equal.
             PA_eq_QA = (PA[1]==QA[1])
             assert not PA_eq_QA #(I'm almost positive this should be true)
 
@@ -1453,17 +1447,19 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
         P = errorgen_2_bel_0
         Q = errorgen_2_bel_1
 
+        #precompute whether pairs commute or anticommute
+        com_AP = A.commutes(P)
+        com_AQ = A.commutes(Q)
+
         if P.commutes(Q): #Case 1: [P,Q]=0
             #precompute some products we'll need.
             PA = pauli_product(P, A)
             QA = pauli_product(Q, A)
-            #also precompute whether pairs commute or anticommute
-            com_AP = A.commutes(P)
-            com_AQ = A.commutes(Q)
-            #also also precompute whether any of these products are the identity
+
+            #also precompute whether any of these products are the identity
             PA_ident = (PA[1] == identity)
             QA_ident = (QA[1] == identity)
-            #also also also precompute whether certain relevant pauli pairs are equal.
+            #also also precompute whether certain relevant pauli pairs are equal.
             PA_eq_QA = (PA[1]==QA[1])
             assert not PA_eq_QA #(I'm almost positive this should be true)
 
@@ -1506,14 +1502,11 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
             QA = pauli_product(Q, A)
             PQ = pauli_product(P, Q)
             APQ = pauli_product(A, PQ[0]*PQ[1])
-            #also precompute whether pairs commute or anticommute
-            com_AP = A.commutes(P)
-            com_AQ = A.commutes(Q)
-            #also also precompute whether any of these products are the identity
+            #also precompute whether any of these products are the identity
             PA_ident = (PA[1] == identity)
             QA_ident = (QA[1] == identity)
             APQ_ident = (APQ[1] == identity)
-            #also also also precompute whether certain relevant pauli pairs are equal.
+            #also also precompute whether certain relevant pauli pairs are equal.
             PA_eq_QA = (PA[1]==QA[1])
             #APQ can't equal A since that implies P==Q, which would be an invalid C term input.
 
@@ -1563,6 +1556,236 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), APQ[0]*addl_sign_1*w))
                 if new_eg_type_2 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1*addl_sign_2*w))
+            #TODO: Cases (2a,2b) and (2c,2d) only differ by the leading sign, can compress this code a bit.
+    
+    elif errorgen_1_type == 'C' and errorgen_2_type == 'H':
+        #C_P,Q[H_A]: P -> errorgen_1_bel_0, Q-> errorgen_1_bel_1, A -> errorgen_2_bel_0
+        #TODO: This only differs from H-C by a few signs, should be able to combine the two implementations to save space.
+        P = errorgen_1_bel_0
+        Q = errorgen_1_bel_1
+        A = errorgen_2_bel_0
+        #precompute whether pairs commute or anticommute
+        com_AP = A.commutes(P)
+        com_AQ = A.commutes(Q)
+
+        if P.commutes(Q): #[P,Q]=0
+            #precompute some products we'll need.
+            PA = pauli_product(P, A)
+            QA = pauli_product(Q, A)
+            PQ = pauli_product(P, Q)
+            APQ = pauli_product(A, PQ[0]*PQ[1])
+            #also precompute whether any of these products are the identity (PQ can't be the identity if this is a valid C term).
+            PA_ident = (PA[1] == identity)
+            QA_ident = (QA[1] == identity)
+            PQ_ident = (PQ[1] == identity)
+            APQ_ident = (APQ[1] == identity)
+            #also also precompute whether certain relevant pauli pairs are equal.
+            PA_eq_Q = (PA[1]==Q)
+            QA_eq_P = (QA[1]==P)
+            PQ_eq_A = (PQ[1]==A)
+            
+            #Case 1a: [A,P]=0, [A,Q]=0
+            if com_AP and com_AQ:
+                new_eg_type_0, new_bels_0, addl_sign_0 = _ordered_new_bels_A(PA[1], Q, PA_ident, False, PA_eq_Q)
+                new_eg_type_1, new_bels_1, addl_sign_1 = _ordered_new_bels_A(QA[1], P, QA_ident, False, QA_eq_P)
+                new_eg_type_2, new_bels_2, addl_sign_2 = _ordered_new_bels_A(PQ[1], A, PQ_ident, False, PQ_eq_A)
+                if new_eg_type_0 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1*PA[0]*addl_sign_0*w))
+                if new_eg_type_1 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1*QA[0]*addl_sign_1*w))
+                if new_eg_type_2 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1*PQ[0]*addl_sign_2*w))
+                if not APQ_ident:
+                    composed_errorgens.append((_LSE('H', [APQ[1]]), -1*APQ[0]*w))
+            #Case 1b: {A,P}=0, {A,Q}=0
+            elif not com_AP and not com_AQ:
+                new_eg_type_0, new_bels_0, addl_scale_0 = _ordered_new_bels_C(PA[1], Q, PA_ident, False, PA_eq_Q)
+                new_eg_type_1, new_bels_1, addl_scale_1 = _ordered_new_bels_C(QA[1], P, QA_ident, False, QA_eq_P)
+                new_eg_type_2, new_bels_2, addl_sign_2  = _ordered_new_bels_A(PQ[1], A, PQ_ident, False, PQ_eq_A)
+                if new_eg_type_0 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1j*PA[0]*addl_scale_0*w))
+                if new_eg_type_1 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1j*QA[0]*addl_scale_1*w))
+                if new_eg_type_2 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1*PQ[0]*addl_sign_2*w))
+                if not APQ_ident:
+                    composed_errorgens.append((_LSE('H', [APQ[1]]), -1*APQ[0]*w))
+            #Case 1c: [A,P]=0, {A,Q}=0
+            elif com_AP and not com_AQ:
+                new_eg_type_0, new_bels_0, addl_sign_0  = _ordered_new_bels_A(PA[1], Q, PA_ident, False, PA_eq_Q)
+                new_eg_type_1, new_bels_1, addl_scale_1 = _ordered_new_bels_C(QA[1], P, QA_ident, False, QA_eq_P)
+                new_eg_type_2, new_bels_2, addl_sign_2  = _ordered_new_bels_A(PQ[1], A, PQ_ident, False, PQ_eq_A)
+                if new_eg_type_0 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1*PA[0]*addl_sign_0*w))
+                if new_eg_type_1 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1j*QA[0]*addl_scale_1*w))
+                if new_eg_type_2 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1*PQ[0]*addl_sign_2*w))
+            #Case 1d: {A,P}=0, [A,Q]=0
+            elif not com_AP and com_AQ:
+                new_eg_type_0, new_bels_0, addl_scale_0 = _ordered_new_bels_C(PA[1], Q, PA_ident, False, PA_eq_Q)
+                new_eg_type_1, new_bels_1, addl_sign_1  = _ordered_new_bels_A(QA[1], P, QA_ident, False, QA_eq_P)
+                new_eg_type_2, new_bels_2, addl_sign_2  = _ordered_new_bels_A(PQ[1], A, PQ_ident, False, PQ_eq_A)
+                if new_eg_type_0 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1j*PA[0]*addl_scale_0*w))
+                if new_eg_type_1 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1*QA[0]*addl_sign_1*w))
+                if new_eg_type_2 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1*PQ[0]*addl_sign_2*w))
+        else: #Case 2: {P,Q}=0
+            #precompute some products we'll need.
+            PA = pauli_product(P, A)
+            QA = pauli_product(Q, A)
+            #also precompute whether any of these products are the identity
+            PA_ident = (PA[1] == identity)
+            QA_ident = (QA[1] == identity)
+            #also also precompute whether certain relevant pauli pairs are equal.
+            PA_eq_Q = (PA[1]==Q)
+            QA_eq_P = (QA[1]==P)
+            #Case 2a: [A,P]=0, [A,Q]=0
+            if com_AP and com_AQ:
+                new_eg_type_0, new_bels_0, addl_sign_0 = _ordered_new_bels_A(PA[1], Q, PA_ident, False, PA_eq_Q)
+                new_eg_type_1, new_bels_1, addl_sign_1 = _ordered_new_bels_A(QA[1], P, QA_ident, False, QA_eq_P)
+                if new_eg_type_0 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1*PA[0]*addl_sign_0*w))
+                if new_eg_type_1 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1*QA[0]*addl_sign_1*w))
+            #Case 2b: {A,P}=0, {A,Q}=0
+            elif not com_AP and not com_AQ:
+                new_eg_type_0, new_bels_0, addl_scale_0 = _ordered_new_bels_C(PA[1], Q, PA_ident, False, PA_eq_Q)
+                new_eg_type_1, new_bels_1, addl_scale_1 = _ordered_new_bels_C(QA[1], P, QA_ident, False, QA_eq_P)
+                if new_eg_type_0 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1j*PA[0]*addl_scale_0*w))
+                if new_eg_type_1 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1j*QA[0]*addl_scale_1*w))
+            #Case 2c: [A,P]=0, {A,Q}=0
+            elif com_AP and not com_AQ:
+                new_eg_type_0, new_bels_0, addl_sign_0  = _ordered_new_bels_A(PA[1], Q, PA_ident, False, PA_eq_Q)
+                new_eg_type_1, new_bels_1, addl_scale_1 = _ordered_new_bels_C(QA[1], P, QA_ident, False, QA_eq_P)
+                if new_eg_type_0 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1*PA[0]*addl_sign_0*w))
+                if new_eg_type_1 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1j*QA[0]*addl_scale_1*w))
+            #Case 2d: {A,P}=0, [A,Q]=0
+            elif not com_AP and com_AQ:
+                new_eg_type_0, new_bels_0, addl_scale_0 = _ordered_new_bels_C(PA[1], Q, PA_ident, False, PA_eq_Q)
+                new_eg_type_1, new_bels_1, addl_sign_1  = _ordered_new_bels_A(QA[1], P, QA_ident, False, QA_eq_P)
+                if new_eg_type_0 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1j*PA[0]*addl_scale_0*w))
+                if new_eg_type_1 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1*QA[0]*addl_sign_1*w))
+
+    elif errorgen_1_type == 'C' and errorgen_2_type == 'S': #This differs from S-C by just a few signs. Should be able to combine and significantly compress code.
+        #C_P,Q[S_A] P-> errorgen_1_bel_0, Q -> errorgen_1_bel_1, A->errorgen_2_bel_0
+        P = errorgen_1_bel_0
+        Q = errorgen_2_bel_1
+        A = errorgen_2_bel_0
+        #also precompute whether pairs commute or anticommute
+        com_AP = A.commutes(P)
+        com_AQ = A.commutes(Q)
+
+        if P.commutes(Q): #Case 1: [P,Q] = 0
+            #precompute some products we'll need.
+            PA = pauli_product(P, A)
+            QA = pauli_product(Q, A)
+            PQ = pauli_product(P, Q)
+            APQ = pauli_product(A, PQ[0]*PQ[1])
+            #also precompute whether any of these products are the identity
+            PA_ident = (PA[1] == identity)
+            QA_ident = (QA[1] == identity)
+            APQ_ident = (APQ[1] == identity)
+            #also also precompute whether certain relevant pauli pairs are equal.
+            PA_eq_QA = (PA[1]==QA[1])
+            #APQ can't equal A since that implies P==Q, which would be an invalid C term input.
+
+            #Case 1a: [A,P]=0, [A,Q]=0
+            if com_AP and com_AQ:
+                new_eg_type_0, new_bels_0, addl_scale_0 = _ordered_new_bels_C(PA[1], QA[1], PA_ident, QA_ident, PA_eq_QA)
+                new_eg_type_1, new_bels_1, addl_scale_1 = _ordered_new_bels_C(APQ[1], A, APQ_ident, False, False)
+                new_eg_type_2, new_bels_2, addl_scale_2 = _ordered_new_bels_C(P, Q, False, False, False)
+                if new_eg_type_0 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1*PA[0]*QA[0]*addl_scale_0*w))
+                if new_eg_type_1 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1*APQ[0]*addl_scale_1*w))
+                if new_eg_type_2 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1*addl_scale_2*w))
+            #Case 1b: {A,P}=0, {A,Q}=0
+            elif not com_AP and not com_AQ:
+                new_eg_type_0, new_bels_0, addl_scale_0 = _ordered_new_bels_C(PA[1], QA[1], PA_ident, QA_ident, PA_eq_QA)
+                new_eg_type_1, new_bels_1, addl_scale_1 = _ordered_new_bels_C(APQ[1], A, APQ_ident, False, False)
+                new_eg_type_2, new_bels_2, addl_scale_2 = _ordered_new_bels_C(P, Q, False, False, False)
+                if new_eg_type_0 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1*PA[0]*QA[0]*addl_scale_0*w))
+                if new_eg_type_1 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1*APQ[0]*addl_scale_1*w))
+                if new_eg_type_2 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1*addl_scale_2*w))
+            #Case 1c: [A,P]=0, {A,Q}=0
+            elif com_AP and not com_AQ:
+                new_eg_type_0, new_bels_0, addl_sign_0 = _ordered_new_bels_A(PA[1], QA[1], PA_ident, QA_ident, PA_eq_QA)
+                new_eg_type_1, new_bels_1, addl_sign_1 = _ordered_new_bels_A(APQ[1], A, APQ_ident, False, False)
+                new_eg_type_2, new_bels_2, addl_scale_2 = _ordered_new_bels_C(P, Q, False, False, False)
+                if new_eg_type_0 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1j*PA[0]*QA[0]*addl_sign_0*w))
+                if new_eg_type_1 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1j*APQ[0]*addl_sign_1*w))
+                if new_eg_type_2 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1*addl_scale_2*w))
+            #Case 1d: {A,P}=0, [A,Q]=0
+            elif not com_AP and com_AQ:
+                new_eg_type_0, new_bels_0, addl_sign_0 = _ordered_new_bels_A(PA[1], QA[1], PA_ident, QA_ident, PA_eq_QA)
+                new_eg_type_1, new_bels_1, addl_sign_1 = _ordered_new_bels_A(APQ[1], A, APQ_ident, False, False)
+                new_eg_type_2, new_bels_2, addl_scale_2 = _ordered_new_bels_C(P, Q, False, False, False)
+                if new_eg_type_0 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1j*PA[0]*QA[0]*addl_sign_0*w))
+                if new_eg_type_1 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1j*APQ[0]*addl_sign_1*w))
+                if new_eg_type_2 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1*addl_scale_2*w))
+            #TODO: Cases (1a,1b) and (1c,1d) only differ by the leading sign, can compress this code a bit.
+        else: #Case 2: {P,Q}=0
+            #precompute some products we'll need.
+            PA = pauli_product(P, A)
+            QA = pauli_product(Q, A)
+            #also precompute whether any of these products are the identity
+            PA_ident = (PA[1] == identity)
+            QA_ident = (QA[1] == identity)
+            #also also precompute whether certain relevant pauli pairs are equal.
+            PA_eq_QA = (PA[1]==QA[1])
+            assert not PA_eq_QA #(I'm almost positive this should be true)
+
+            #Case 2a: [A,P]=0, [A,Q]=0
+            if com_AP and com_AQ:
+                new_eg_type_0, new_bels_0, addl_scale_0 = _ordered_new_bels_C(PA[1], QA[1], PA_ident, QA_ident, PA_eq_QA)
+                new_eg_type_1, new_bels_1, addl_scale_1 = _ordered_new_bels_C(P, Q, False, False, False)
+                if new_eg_type_0 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1*PA[0]*QA[0]*addl_scale_0*w))
+                if new_eg_type_1 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1*addl_scale_1*w))
+            #Case 2b: {A,P}=0, {A,Q}=0
+            elif not com_AP and not com_AQ:
+                new_eg_type_0, new_bels_0, addl_scale_0 = _ordered_new_bels_C(PA[1], QA[1], PA_ident, QA_ident, PA_eq_QA)
+                new_eg_type_1, new_bels_1, addl_scale_1 = _ordered_new_bels_C(P, Q, False, False, False)
+                if new_eg_type_0 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1*PA[0]*QA[0]*addl_scale_0*w))
+                if new_eg_type_1 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1*addl_scale_1*w))
+            #Case 2c: [A,P]=0, {A,Q}=0
+            elif com_AP and not com_AQ:
+                new_eg_type_0, new_bels_0, addl_sign_0  = _ordered_new_bels_A(PA[1], QA[1], PA_ident, QA_ident, PA_eq_QA)
+                new_eg_type_1, new_bels_1, addl_scale_1 = _ordered_new_bels_C(P, Q, False, False, False)
+                if new_eg_type_0 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1j*PA[0]*QA[0]*addl_sign_0*w))
+                if new_eg_type_1 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1*addl_scale_1*w))
+            #Case 2d: {A,P}=0, [A,Q]=0
+            elif not com_AP and com_AQ:
+                new_eg_type_0, new_bels_0, addl_sign_0  = _ordered_new_bels_A(PA[1], QA[1], PA_ident, QA_ident, PA_eq_QA)
+                new_eg_type_1, new_bels_1, addl_scale_1 = _ordered_new_bels_C(P, Q, False, False, False)
+                if new_eg_type_0 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1j*PA[0]*QA[0]*addl_sign_0*w))
+                if new_eg_type_1 is not None:
+                    composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1*addl_scale_1*w))
             #TODO: Cases (2a,2b) and (2c,2d) only differ by the leading sign, can compress this code a bit.
 
     return composed_errorgens
