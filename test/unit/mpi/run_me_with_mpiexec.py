@@ -1,4 +1,4 @@
-# This file is designed to be run via: mpiexec -np 4 python -W ignore testMPI.py
+# This file is designed to be run via: mpiexec -np 4 python -W ignore run_me_with_mpiexec.py
 # This does not use nosetests because I want to set verbosity differently based on rank (quiet if not rank 0)
 # By wrapping asserts in comm.rank == 0, only rank 0 should fail (should help with output)
 # Can run with different number of procs, but 4 is minimum to test all modes (pure MPI, pure shared mem, and mixed)
@@ -226,7 +226,7 @@ class ParallelTest(object):
         else:
             raise RuntimeError("Improper sim type passed by test_fills_generator")
 
-        serial_layout = mdl.sim.create_layout(circuits, array_types=('E','EP','EPP'), derivative_dimension=nP)
+        serial_layout = mdl.sim.create_layout(circuits, array_types=('E','EP','EPP'), derivative_dimensions=(nP,))
 
         nE = serial_layout.num_elements
         nC = len(circuits)
@@ -246,7 +246,7 @@ class ParallelTest(object):
         global_serial_layout = serial_layout.global_layout
     
         #Use a parallel layout to compute the same probabilities & their derivatives
-        local_layout = mdl.sim.create_layout(circuits, array_types=('E','EP','EPP'), derivative_dimension=nP,
+        local_layout = mdl.sim.create_layout(circuits, array_types=('E','EP','EPP'), derivative_dimensions=(nP,),
                                              resource_alloc=self.ralloc)
     
         vp_local = local_layout.allocate_local_array('e', 'd')
@@ -334,7 +334,7 @@ if __name__ == '__main__':
     tester = PureMPIParallel_Test()
     tester.setup_class()
     tester.ralloc = pygsti.baseobjs.ResourceAllocation(wcomm)
-    #tester.run_objfn_values('matrix','logl',4)
+    tester.run_objfn_values('matrix','logl',4)
     tester.run_fills('map', 1, None)
     tester.run_fills('map', 4, None)
     tester.run_fills('matrix', 4, 15)
