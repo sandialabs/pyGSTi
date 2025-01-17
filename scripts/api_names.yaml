@@ -3690,8 +3690,6 @@ tools:
     expm_multiply_prep: null
     expop_multiply_prep: null
     find_zero_communtant_connection: null
-    frobeniusnorm: null
-    frobeniusnorm2: frobeniusnorm_squared
     get_csr_sum_flat_indices: csr_sum_flat_indices
     get_csr_sum_indices: csr_sum_indices
     get_kite: compute_kite  # XXX parameter `evals` -> `eigenvalues`
