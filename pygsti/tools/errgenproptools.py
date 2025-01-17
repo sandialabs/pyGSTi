@@ -1678,7 +1678,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
     elif errorgen_1_type == 'C' and errorgen_2_type == 'S': #This differs from S-C by just a few signs. Should be able to combine and significantly compress code.
         #C_P,Q[S_A] P-> errorgen_1_bel_0, Q -> errorgen_1_bel_1, A->errorgen_2_bel_0
         P = errorgen_1_bel_0
-        Q = errorgen_2_bel_1
+        Q = errorgen_1_bel_1
         A = errorgen_2_bel_0
         #also precompute whether pairs commute or anticommute
         com_AP = A.commutes(P)
