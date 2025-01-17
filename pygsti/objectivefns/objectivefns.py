@@ -4392,9 +4392,6 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
                     terms[self.nelements:] = self._terms_penalty(paramvec)
 
         if self.firsts is not None and shared_mem_leader:
-            """TODO: remove this comment, probably.
-            Logic formerly handled by self._update_terms_for_omitted_probs(...), which called self._omitted_prob_first_terms(...).
-            """
             omitted_probs = 1.0 - _np.array([self.probs[self.layout.indices_for_index(i)].sum() for i in self.indicesOfCircuitsWithOmittedData])
             omitted_probs_firsts_terms = self.raw_objfn.zero_freq_terms(self.total_counts[self.firsts], omitted_probs)
             terms[self.firsts] += omitted_probs_firsts_terms
@@ -4496,7 +4493,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         if self.regularize_factor > 0:
             n = len(paramvec)
             terms_jac[off:off + n, :] = _np.diag([(self.regularize_factor * _np.sign(x) if abs(x) > 1.0 else 0.0) for x in paramvec[wrtslice]])  # (N,N)
-            paramvec_norm = self.regularize_factor * _np.array([max(0, absx - 1.0) for absx in map(abs, paramvec)], 'd')
+            paramvec_norm = _paramvec_norm_penalty(self.regularize_factor, paramvec)
             terms_jac[off:off + n, :] *= 2*paramvec_norm[:, None]
             off += n
 
@@ -4530,7 +4527,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             blocks.append(forcefn_penalty)
 
         if self.regularize_factor != 0:
-            paramvec_norm = self.regularize_factor * _np.array([max(0, absx - 1.0) for absx in map(abs, paramvec)], 'd')
+            paramvec_norm = _paramvec_norm_penalty(self.regularize_factor, paramvec)
             paramvec_norm **= 2
             blocks.append(paramvec_norm)
 
@@ -5823,6 +5820,11 @@ def _errorgen_penalty(mdl, prefactor):
     #    val += _np.sum(_np.abs(op.errorgen_coefficients_array()))
 
     return prefactor * _np.array([_np.sqrt(val)], 'd')
+
+
+def _paramvec_norm_penalty(reg_factor, paramvec):
+    out = reg_factor * _np.array([max(0, absx - 1.0) for absx in map(abs, paramvec)], 'd')
+    return out
 
 
 def _cptp_penalty_jac_fill(cp_penalty_vec_grad_to_fill, mdl, prefactor, op_basis, wrt_slice):
