@@ -1129,11 +1129,10 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                                         try:
                                             _ = obj_fn(global_x, oob_check=True)
                                             # ^ Dead-store the return value.
+                                            new_x_is_known_inbounds = True
                                         except ValueError:
                                             # Then we keep new_x_is_known_inbounds==False.
                                             pass
-                                        else:
-                                            new_x_is_known_inbounds = True
                                     if new_x_is_known_inbounds:
                                         min_norm_f = norm_f
                                         best_x[:] = x[:]

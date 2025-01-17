@@ -789,11 +789,10 @@ def simplish_leastsq(
                         try:
                             _ = obj_fn(global_x, oob_check=True)
                             # ^ Dead-store the return value.
+                            new_x_is_known_inbounds = True
                         except ValueError:
                             # Then we keep new_x_is_known_inbounds==False.
                             pass
-                        else:
-                            new_x_is_known_inbounds = True
                     if new_x_is_known_inbounds:
                         min_norm_f = norm_f
                         best_x[:] = x[:]
