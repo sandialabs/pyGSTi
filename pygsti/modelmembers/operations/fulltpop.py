@@ -164,16 +164,18 @@ class FullTPOp(_DenseOperator, _Torchable):
         self._ptr_has_changed()  # because _rep.base == _ptr (same memory)
         self.dirty = dirty_value
 
-    def stateless_data(self) -> Tuple[int]:
-        return (self.dim,)
-
-    @staticmethod
-    def torch_base(sd: Tuple[int], t_param: _torch.Tensor) -> _torch.Tensor:
-        dim = sd[0]
+    def stateless_data(self) -> Tuple[int, _torch.Tensor]:
+        dim = self.dim
         t_const = _torch.zeros(size=(1, dim), dtype=_torch.double)
         t_const[0,0] = 1.0
-        t_param_mat = t_param.reshape((dim - 1, dim))
+        return (dim, t_const)
+
+    @staticmethod
+    def torch_base(sd: Tuple[int, _torch.Tensor], t_param: _torch.Tensor) -> _torch.Tensor:
+        dim, t_const = sd
+        t_param_mat = t_param.view(dim - 1, dim)
         t = _torch.row_stack((t_const, t_param_mat))
+        # TODO: cache the row of all zeros?
         return t
 
 

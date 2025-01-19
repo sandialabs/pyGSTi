@@ -31,6 +31,7 @@ from pygsti.forwardsims.forwardsim import ForwardSimulator
 
 try:
     import torch
+    from torch.profiler import profile, record_function, ProfilerActivity
     TORCH_ENABLED = True
 except ImportError:
     TORCH_ENABLED = False
@@ -90,6 +91,7 @@ class StatelessModel:
         # framed in terms of the "layout._element_indicies" dict.
         eind = layout._element_indices
         assert isinstance(eind, dict)
+        assert len(eind) > 0
         items = iter(eind.items())
         k_prev, v_prev = next(items)
         assert k_prev == 0
@@ -160,6 +162,17 @@ class StatelessModel:
         fp in free_params. This can be done by calling fp._requires_grad(True) before calling
         this function.
         """
+        # The closest analog to this function in tgst is the first couple lines in 
+        # tgst.gst.MachineModel.circuit_outcome_probs(...).
+        # Those lines just assign values a-la new_machine.params[i][:] = fp[:].
+        #
+        #   The variables new_machine.params[i] are just references to Tensors
+        #   that are attached to tgst.abstractions objects (Gate, Measurement, State).
+        #
+        #   Calling abstr.rep_array for a given abstraction performs a computation on
+        #   its attached Tensor, and that computation is roughly analogous to 
+        #   torchable.torch_base(...).
+        #
         assert len(free_params) == len(self.param_metadata)
          # ^ A sanity check that we're being called with the correct number of arguments.
         torch_bases = dict()
@@ -203,8 +216,23 @@ class StatelessModel:
         if enable_backward:
             for fp in free_params:
                 fp._requires_grad(True)
-        torch_bases = self.get_torch_bases(free_params)
-        probs = self.circuit_probs_from_torch_bases(torch_bases)
+
+        torch_bases = dict()
+        for i, val in enumerate(free_params):
+            label, type_handle, stateless_data = self.param_metadata[i]
+            param_t = type_handle.torch_base(stateless_data, val)
+            torch_bases[label] = param_t
+
+        probs = []
+        for c in self.circuits:
+            superket = torch_bases[c.prep_label]
+            superops = [torch_bases[ol] for ol in c.op_labels]
+            povm_mat = torch_bases[c.povm_label]
+            for superop in superops:
+                superket = superop @ superket
+            circuit_probs = povm_mat @ superket
+            probs.append(circuit_probs)
+        probs = torch.concat(probs)
         return probs
 
 
@@ -249,8 +277,10 @@ class TorchForwardSimulator(ForwardSimulator):
         if slm.default_to_reverse_ad:
             # Then slm.circuit_probs_from_free_params will automatically construct the
             # torch_base dict to support reverse-mode AD.
+            # print('USING REVERSE-MODE AD')
             J_func = torch.func.jacrev(slm.circuit_probs_from_free_params, argnums=argnums)
         else:
+            # print('USING FORWARD-MODE AD')
             # Then slm.circuit_probs_from_free_params will automatically skip the extra
             # steps needed for torch_base to support reverse-mode AD.
             J_func = torch.func.jacfwd(slm.circuit_probs_from_free_params, argnums=argnums)
@@ -259,7 +289,14 @@ class TorchForwardSimulator(ForwardSimulator):
         #   have a need to override the default in the future then we'd need to override
         #   the ForwardSimulator function(s) that call self._bulk_fill_dprobs(...).
 
+        # import time
+        # print('Calling J_func at current free_params')
+        # tic = time.time()
+        # with profile(activities=[ProfilerActivity.CPU], profile_memory=True) as prof:
         J_val = J_func(*free_params)
+        # toc = time.time()
+        # print()
+        # print(f'Done! --> {toc - tic} seconds elapsed')
         J_val = torch.column_stack(J_val)
         array_to_fill[:] = J_val.cpu().detach().numpy()
         return
