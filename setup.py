@@ -35,6 +35,7 @@ The primary goals of the pyGSTi project are to:
 
 # Extra requirements
 extras = {
+    'pytorch' : ['torch'],
     'diamond_norm': [
         'cvxopt',
         'cvxpy'
@@ -64,7 +65,7 @@ extras = {
         'pytest-cov',
         'nbval',
         'csaps',
-        'cvxopt<=1.3.0.1',
+        'cvxopt',
         'cvxpy',
         'cython',
         'matplotlib',
@@ -76,12 +77,13 @@ extras = {
         'zmq',
         'jinja2',
         'seaborn',
+        'scipy',
         'ply',
-        'qibo<=0.1.7',
         'cirq-core',
         'notebook',
         'ipython',
-        'jupyter_server'
+        'jupyter_server',
+        'torch'
     ]
 }
 
@@ -91,6 +93,9 @@ extras['complete'] = list({pkg for req in extras.values() for pkg in req})
 # Add `no_mpi' target, identical to `complete' target but without mpi4py,
 # which is unavailable in some common environments.
 extras['no_mpi'] = [e for e in extras['complete'] if e != 'mpi4py']
+
+# Add testing_no_cython target, identical to `testing` but no cython
+extras['testing_no_cython'] = [e for e in extras['testing'] if e != 'cython']
 
 
 # Configure setuptools_scm to build the post-release version number
@@ -131,7 +136,8 @@ def setup_with_extensions(extensions=None):
         cmdclass={'build_ext': build_ext_compiler_check},
         description='A python implementation of Gate Set Tomography',
         long_description=descriptionTxt,
-        author='Erik Nielsen, Kenneth Rudinger, Timothy Proctor, John Gamble, Robin Blume-Kohout',
+        author='Erik Nielsen, Stefan Seritan, Corey Ostrove, Riley Murray, Jordan Hines, ' +\
+            'Kenneth Rudinger, Timothy Proctor, John Gamble, Robin Blume-Kohout',
         author_email='pygsti@sandia.gov',
         packages=[
             'pygsti',
@@ -150,9 +156,7 @@ def setup_with_extensions(extensions=None):
             'pygsti.evotypes.stabilizer',
             'pygsti.evotypes.stabilizer_slow',
             'pygsti.evotypes.chp',
-            'pygsti.evotypes.qibo',
             'pygsti.extras',
-            'pygsti.extras.rb',
             'pygsti.extras.rpe',
             'pygsti.extras.drift',
             'pygsti.extras.ibmq',
@@ -269,10 +273,11 @@ def setup_with_extensions(extensions=None):
             'numpy>=1.15.0',
             'scipy',
             'plotly',
-            'pandas'
+            'pandas',
+            'networkx'
         ],
         extras_require=extras,
-        python_requires='>=3.5',
+        python_requires='>=3.8',
         platforms=["any"],
         url='http://www.pygsti.info',
         download_url='https://github.com/pyGSTio/pyGSTi/tarball/master',
@@ -464,7 +469,7 @@ try:
                 "pygsti/forwardsims/mapforwardsim_calc_densitymx.pyx",
                 "pygsti/evotypes/densitymx/statecreps.cpp",
             ],
-            include_dirs=['.', 'pygsti/evotypes', np.get_include()],
+            include_dirs=['.', 'pygsti/evotypes', 'pygsti/evotypes/densitymx', np.get_include()],
             language="c++",
             extra_link_args=["-std=c++11"]
         ),
@@ -475,7 +480,7 @@ try:
                 "pygsti/evotypes/statevec/statecreps.cpp",
                 "pygsti/evotypes/basecreps.cpp"
             ],
-            include_dirs=['.', 'pygsti/evotypes', np.get_include()],
+            include_dirs=['.', 'pygsti/evotypes', 'pygsti/evotypes/statevec', np.get_include()],
             language="c++",
             extra_link_args=["-std=c++11"]
         ),
@@ -486,7 +491,7 @@ try:
                 "pygsti/evotypes/stabilizer/statecreps.cpp",
                 "pygsti/evotypes/basecreps.cpp"
             ],
-            include_dirs=['.', 'pygsti/evotypes', np.get_include()],
+            include_dirs=['.', 'pygsti/evotypes', 'pygsti/evotypes/stabilizer', np.get_include()],
             language="c++",
             extra_link_args=["-std=c++11"]
         ),

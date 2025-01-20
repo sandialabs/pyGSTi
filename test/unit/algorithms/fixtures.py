@@ -2,14 +2,17 @@
 import pygsti.algorithms as alg
 import pygsti.circuits as circuits
 import pygsti.data as data
-from pygsti.modelpacks.legacy import std1Q_XYI as std
+from pygsti.modelpacks import smq1Q_XY as std
 from ..util import Namespace
 
 ns = Namespace()
-ns.model = std.target_model()
+ns.fullTP_model = std.target_model('full TP', simulator='matrix')
+ns.model = std.target_model(simulator='matrix')
 ns.opLabels = list(ns.model.operations.keys())
-ns.fiducials = std.fiducials
-ns.germs = std.germs
+ns.prep_fids = std.prep_fiducials()
+ns.meas_fids = std.meas_fiducials()
+ns.germs = std.germs(lite=True)
+ns.robust_germs = std.germs(lite=False)
 ns.maxLengthList = [1, 2]
 
 
@@ -23,7 +26,7 @@ def datagen_gateset(self):
 @ns.memo
 def lgstStrings(self):
     return circuits.create_lgst_circuits(
-        self.fiducials, self.fiducials, self.opLabels
+        self.prep_fids, self.meas_fids, self.opLabels
     )
 
 
@@ -37,7 +40,7 @@ def elgstStrings(self):
 @ns.memo
 def lsgstStrings(self):
     return circuits.create_lsgst_circuit_lists(
-        self.opLabels, self.fiducials, self.fiducials,
+        self.opLabels, self.prep_fids, self.meas_fids,
         self.germs, self.maxLengthList
     )
 
@@ -45,7 +48,7 @@ def lsgstStrings(self):
 @ns.memo
 def ds(self):
     expList = circuits.create_lsgst_circuits(
-        self.opLabels, self.fiducials, self.fiducials,
+        self.opLabels, self.meas_fids, self.prep_fids,
         self.germs, self.maxLengthList
     )
     return data.simulate_data(
@@ -65,7 +68,7 @@ def ds_lgst(self):
 @ns.memo
 def mdl_lgst(self):
     return alg.run_lgst(
-        self.ds, self.fiducials, self.fiducials, self.model,
+        self.ds, self.prep_fids, self.meas_fids, self.model,
         svd_truncate_to=4, verbosity=0
     )
 

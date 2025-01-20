@@ -32,7 +32,7 @@ class CircuitList(_NicelySerializable):
         and whose values are circuits corresponding to what that operation label
         should be expanded into before querying the dataset.  Defaults to the
         empty dictionary (no aliases defined).  e.g. op_label_aliases['Gx^3'] =
-        pygsti.obj.Circuit(['Gx','Gx','Gx'])
+        pygsti.baseobjs.Circuit(['Gx','Gx','Gx'])
 
     circuit_weights : numpy.ndarray, optional
         If not None, an array of per-circuit weights (of length equal to the number of
@@ -74,7 +74,7 @@ class CircuitList(_NicelySerializable):
             and whose values are circuits corresponding to what that operation label
             should be expanded into before querying the dataset.  Defaults to the
             empty dictionary (no aliases defined).  e.g. op_label_aliases['Gx^3'] =
-            pygsti.obj.Circuit(['Gx','Gx','Gx'])
+            pygsti.baseobjs.Circuit(['Gx','Gx','Gx'])
 
         circuit_rules : list, optional
             A list of `(find,replace)` 2-tuples which specify circuit-label replacement
@@ -158,11 +158,7 @@ class CircuitList(_NicelySerializable):
         -------
         CircuitList
         """
-        if isinstance(circuits_to_keep, set):
-            new_circuits = list(filter(lambda c: c in circuits_to_keep, self._circuits))
-        else:
-            current_circuits = set(self._circuits)
-            new_circuits = list(filter(lambda c: c in current_circuits, circuits_to_keep))
+        new_circuits = list(filter(lambda c: c in set(circuits_to_keep), self._circuits))
         return CircuitList(new_circuits, self.op_label_aliases)  # don't transfer weights or name
 
     def truncate_to_dataset(self, dataset):
@@ -205,3 +201,49 @@ class CircuitList(_NicelySerializable):
         self.__dict__.update(state_dict)
         if 'uuid' not in state_dict:  # backward compatibility
             self.uuid = _uuid.uuid4()  # create a new uuid
+
+    def elementvec_to_array(self, elementvec, layout, mergeop="sum"):
+        """
+        Form an array of values corresponding to this CircuitList from an element vector.
+
+        An element vector holds individual-outcome elements (e.g. the bulk probabilities
+        computed by a model).
+
+        Parameters
+        ----------
+        elementvec : numpy array
+            An array containting the values to use when constructing a
+            matrix of values for this CircuitList. This array may contain more
+            values than are needed by this CircuitList.  Indices into this array
+            are given by `elindices_lookup`.
+
+        layout : CircuitOutcomeProbabilityArrayLayout
+            The layout of `elementvec`, giving the mapping between its elements and
+            circuit outcomes.
+
+        mergeop : "sum" or format string, optional
+            Dictates how to combine the `elementvec` components corresponding to a single
+            plaquette entry (circuit).  If "sum", the returned array contains summed
+            values.  If a format string, e.g. `"%.2f"`, then the so-formatted components
+            are joined together with separating commas, and the resulting array contains
+            string (object-type) entries.
+
+        Returns
+        -------
+        numpy array
+        """
+        
+        if mergeop == "sum":
+                ret = _np.nan * _np.ones(len(self), 'd')
+                for i,ckt in enumerate(self._circuits):
+                    ret[i] = sum(elementvec[layout.indices(ckt)])
+        elif '%' in mergeop:
+            fmt = mergeop
+            ret = _np.nan * _np.ones(len(self), dtype=_np.object_)
+            for i,ckt in enumerate(self._circuits):
+                ret[i] = ", ".join(["NaN" if _np.isnan(x) else
+                                    (fmt % x) for x in elementvec[layout.indices(ckt)]])
+        else:
+            raise ValueError("Invalid `mergeop` arg: %s" % str(mergeop))
+        
+        return ret

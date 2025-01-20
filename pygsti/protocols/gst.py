@@ -20,6 +20,7 @@ import pathlib as _pathlib
 
 import numpy as _np
 from scipy.stats import chi2 as _chi2
+from typing import Optional
 
 from pygsti.baseobjs.profiler import DummyProfiler as _DummyProfiler
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
@@ -37,6 +38,7 @@ from pygsti import baseobjs as _baseobjs
 from pygsti.processors import QuditProcessorSpec as _QuditProcessorSpec
 from pygsti.modelmembers import operations as _op
 from pygsti.models import Model as _Model
+from pygsti.models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
 from pygsti.models.gaugegroup import GaugeGroup as _GaugeGroup, GaugeGroupElement as _GaugeGroupElement
 from pygsti.objectivefns import objectivefns as _objfns, wildcardbudget as _wild
 from pygsti.circuits.circuitlist import CircuitList as _CircuitList
@@ -44,6 +46,7 @@ from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAl
 from pygsti.modelmembers import states as _states, povms as _povms
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
 from pygsti.circuits import Circuit
+from pygsti.forwardsims import ForwardSimulator
 
 
 #For results object:
@@ -535,7 +538,7 @@ class GSTInitialModel(_NicelySerializable):
         if comm is None or comm.Get_rank() == 0:
             #Advanced Options can specify further manipulation of starting model
             if self.contract_start_to_cptp:
-                mdl_start = _alg.contract(mdl_start, "CPTP")
+                mdl_start = _alg.contract(mdl_start, "CPTPLND")
                 raise ValueError(
                     "'contractStartToCPTP' has been removed b/c it can change the parameterization of a model")
             if self.depolarize_start > 0:
@@ -593,7 +596,7 @@ class GSTBadFitOptions(_NicelySerializable):
         Actions to take when a GST fit is unsatisfactory. Allowed actions include:
         
         * 'wildcard': Find an admissable wildcard model.
-        * 'ddist_wildcard': Fits a single parameter wildcard model in which
+        * 'wildcard1d': Fits a single parameter wildcard model in which
           the amount of wildcard error added to an operation is proportional
           to the diamond distance between that operation and the target.
         * 'robust': scale data according out "robust statistics v1" algorithm,
@@ -637,10 +640,8 @@ class GSTBadFitOptions(_NicelySerializable):
 
     wildcard_methods: tuple, optional
         A list of the methods to use to optimize the wildcard error vector.  Default is `("neldermead",)`.
-        Options include `"neldermead"`, `"barrier"`, `"cvxopt"`, `"cvxopt_smoothed"`, `"cvxopt_small"`,
-        and `"cvxpy_noagg"`.  So many methods exist because different convex solvers behave differently
-        (unfortunately).  Leave as the default as a safe option, but `"barrier"` is pretty reliable and much
-        faster than `"neldermead"`, and is a good option so long as it runs.
+        Options include `"neldermead"`, `"barrier"`, and `"cvxpy_noagg"`.  Leave as the default as a safe option,
+        but `"barrier"` is pretty reliable and much faster than `"neldermead"`, and is a good option so long as it runs.
 
     wildcard_inadmissable_action: {"print", "raise"}, optional
         What to do when an inadmissable wildcard error vector is found.  The default just prints this
@@ -839,7 +840,9 @@ class GSTGaugeOptSuite(_NicelySerializable):
           - "varyValidSpamWt" : varies spam weight with SPAM penalty == 1.
           - "toggleValidSpam" : toggles spame penalty (0 or 1); fixed SPAM wt.
           - "unreliable2Q" : adds branch to a spam suite that weights 2Q gates less
-          - "none" : no gauge optimizations are performed.
+          - "none" : no gauge optimizations are performed. When passed individually
+             (not in a list with other suite names) then this results in an empty
+             GSTGaugeOptSuite object (w/gaugeopt_suite_names set to None).
 
     gaugeopt_argument_dicts : dict, optional
         A dictionary whose string-valued keys label different gauge optimizations (e.g. within a
@@ -870,8 +873,11 @@ class GSTGaugeOptSuite(_NicelySerializable):
     def __init__(self, gaugeopt_suite_names=None, gaugeopt_argument_dicts=None, gaugeopt_target=None):
         super().__init__()
         if gaugeopt_suite_names is not None:
-            self.gaugeopt_suite_names = (gaugeopt_suite_names,) \
-                if isinstance(gaugeopt_suite_names, str) else tuple(gaugeopt_suite_names)
+            if gaugeopt_suite_names == 'none':
+                self.gaugeopt_suite_names = None
+            else:
+                self.gaugeopt_suite_names = (gaugeopt_suite_names,) \
+                    if isinstance(gaugeopt_suite_names, str) else tuple(gaugeopt_suite_names)
         else:
             self.gaugeopt_suite_names = None
 
@@ -949,6 +955,8 @@ class GSTGaugeOptSuite(_NicelySerializable):
                 if hasattr(goparams, 'keys'):  # goparams is a simple dict
                     gaugeopt_suite_dict[lbl] = goparams.copy()
                     gaugeopt_suite_dict[lbl].update({'verbosity': printer})
+                elif goparams is None:
+                    gaugeopt_suite_dict[lbl] = None
                 else:  # assume goparams is an iterable
                     assert(isinstance(goparams, (list, tuple))), \
                         "If not a dictionary, gauge opt params should be a list or tuple of dicts!"
@@ -961,7 +969,13 @@ class GSTGaugeOptSuite(_NicelySerializable):
         if self.gaugeopt_target is not None:
             assert(isinstance(self.gaugeopt_target, _Model)), "`gaugeopt_target` must be None or a Model"
             for goparams in gaugeopt_suite_dict.values():
-                goparams_list = [goparams] if hasattr(goparams, 'keys') else goparams
+                if hasattr(goparams, 'keys'):
+                    goparams_list = [goparams] 
+                elif goparams is None: #edge case for 'none' suite
+                    continue
+                else:
+                    goparams_list = goparams
+
                 for goparams_dict in goparams_list:
                     if 'target_model' in goparams_dict:
                         _warnings.warn(("`gaugeOptTarget` argument is overriding"
@@ -1086,8 +1100,8 @@ class GSTGaugeOptSuite(_NicelySerializable):
         elif suite_name == "unreliable2Q":
             raise ValueError(("unreliable2Q is no longer a separate 'suite'.  You should precede it with the suite"
                               " name, e.g. 'stdgaugeopt-unreliable2Q' or 'varySpam-unreliable2Q'"))
-        elif suite_name == "none":
-            pass  # add nothing
+        elif suite_name == 'none':
+            gaugeopt_suite_dict[root_lbl] = None
         else:
             raise ValueError("Unknown gauge-optimization suite '%s'" % suite_name)
 
@@ -1120,6 +1134,9 @@ class GSTGaugeOptSuite(_NicelySerializable):
             for lbl, goparams in self.gaugeopt_argument_dicts.items():
                 goparams_list = [goparams] if hasattr(goparams, 'keys') else goparams
                 serialize_list = []
+                if lbl == 'trivial_gauge_opt':
+                    dicts_to_serialize[lbl] = None
+                    continue
                 for goparams_dict in goparams_list:
                     to_add = goparams_dict.copy()
                     if 'target_model' in to_add:
@@ -1151,6 +1168,9 @@ class GSTGaugeOptSuite(_NicelySerializable):
     def _from_nice_serialization(cls, state):  # memo holds already de-serialized objects
         gaugeopt_argument_dicts = {}
         for lbl, serialized_goparams_list in state['gaugeopt_argument_dicts'].items():
+            if lbl == 'trivial_gauge_opt':
+                gaugeopt_argument_dicts[lbl] = None
+                continue
             goparams_list = []
             for serialized_goparams in serialized_goparams_list:
                 to_add = serialized_goparams.copy()
@@ -1230,15 +1250,16 @@ class GateSetTomography(_proto.Protocol):
 
         if isinstance(optimizer, _opt.Optimizer):
             self.optimizer = optimizer
-            if isinstance(optimizer, _opt.CustomLMOptimizer) and optimizer.first_fditer is None:
-                #special behavior: can set optimizer's first_fditer to `None` to mean "fill with default"
+            if hasattr(optimizer,'first_fditer') and optimizer.first_fditer is None:
+                # special behavior: can set optimizer's first_fditer to `None` to mean "fill with default"
                 self.optimizer = _copy.deepcopy(optimizer)  # don't mess with caller's optimizer
                 self.optimizer.first_fditer = default_first_fditer
         else:
-            if optimizer is None: optimizer = {}
+            if optimizer is None:
+                optimizer = {}
             if 'first_fditer' not in optimizer:  # then add default first_fditer value
                 optimizer['first_fditer'] = default_first_fditer
-            self.optimizer = _opt.CustomLMOptimizer.cast(optimizer)
+            self.optimizer = _opt.SimplerLMOptimizer.cast(optimizer)
 
         self.objfn_builders = GSTObjFnBuilders.cast(objfn_builders)
 
@@ -1257,20 +1278,8 @@ class GateSetTomography(_proto.Protocol):
         self.circuit_weights = None
         self.unreliable_ops = ('Gcnot', 'Gcphase', 'Gms', 'Gcn', 'Gcx', 'Gcz')
 
-    #TODO: Maybe make methods like this separate functions??
-    #def run_using_germs_and_fiducials(self, dataset, target_model, prep_fiducials, meas_fiducials, germs, max_lengths):
-    #    design = StandardGSTDesign(target_model, prep_fiducials, meas_fiducials, germs, max_lengths)
-    #    return self.run(_proto.ProtocolData(design, dataset))
-    #
-    #def run_using_circuit_structures(self, target_model, circuit_structs, dataset):
-    #    design = StructuredGSTDesign(target_model, circuit_structs)
-    #    return self.run(_proto.ProtocolData(design, dataset))
-    #
-    #def run_using_circuit_lists(self, target_model, circuit_lists, dataset):
-    #    design = GateSetTomographyDesign(target_model, circuit_lists)
-    #    return self.run(_proto.ProtocolData(design, dataset))
-
-    def run(self, data, memlimit=None, comm=None, checkpoint=None, checkpoint_path=None, disable_checkpointing = False):
+    def run(self, data, memlimit=None, comm=None, checkpoint=None, checkpoint_path=None, disable_checkpointing=False,
+            simulator: Optional[ForwardSimulator.Castable]=None):
         """
         Run this protocol on `data`.
 
@@ -1302,6 +1311,11 @@ class GateSetTomography(_proto.Protocol):
             When set to True checkpoint objects will not be constructed and written
             to disk during the course of this protocol. It is strongly recommended
             that this be kept set to False without good reason to disable the checkpoints.
+
+        simulator : ForwardSimulator.Castable or None
+            Ignored if None. If not None, then we call
+                fwdsim = ForwardSimulator.cast(simulator),
+            and we set the .sim attribute of every Model we encounter to fwdsim.
 
         Returns
         -------
@@ -1337,53 +1351,55 @@ class GateSetTomography(_proto.Protocol):
         tnxt = _time.time(); profiler.add_time('GST: loading', tref); tref = tnxt
         mdl_start = self.initial_model.retrieve_model(data.edesign, self.gaugeopt_suite.gaugeopt_target,
                                                       data.dataset, comm)
-        
-        if not disable_checkpointing:
-            #Set the checkpoint_path variable if None
+        if simulator is not None:
+            mdl_start.sim = simulator
+
+        if disable_checkpointing:
+            seed_model = mdl_start.copy()
+            mdl_lsgst_list = []
+            starting_idx = 0
+        else:
+            # Set the checkpoint_path variable if None
             if checkpoint_path is None:
                 checkpoint_path = _pathlib.Path('./gst_checkpoints/' + self.name)
             else:
-                #cast this to a pathlib path with the file extension (suffix) dropped
+                # cast this to a pathlib path with the file extension (suffix) dropped
                 checkpoint_path = _pathlib.Path(checkpoint_path).with_suffix('')
-            
-            #create the parent directory of the checkpoint if needed:
+
+            # create the parent directory of the checkpoint if needed:
             checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
-            
-            #If there is no checkpoint we should start from with the seed model,
-            #otherwise we should seed the next iteration with the last iteration's result.
-            #If there is no checkpoint initialize mdl_lsgst_list and final_objfn to be empty, 
-            #otherwise re-initialize their values from the checkpoint   
+
+            # If there is no checkpoint we should start from with the seed model,
+            # otherwise we should seed the next iteration with the last iteration's result.
+            # If there is no checkpoint initialize mdl_lsgst_list and final_objfn to be empty,
+            # otherwise re-initialize their values from the checkpoint
             if checkpoint is None:
                 seed_model = mdl_start.copy()
                 mdl_lsgst_list = []
                 checkpoint = GateSetTomographyCheckpoint()
             elif isinstance(checkpoint, GateSetTomographyCheckpoint):
-                #if the checkpoint's last completed iteration is non-negative
-                #(i.e. the checkpoint actually has data in it)
+                # if the checkpoint's last completed iteration is non-negative
+                # (i.e. the checkpoint actually has data in it)
                 if checkpoint.last_completed_iter >= 0:
                     seed_model = checkpoint.mdl_list[-1]
-                #otherwise seed with target
+                # otherwise seed with target
                 else:
                     seed_model = mdl_start.copy()
                 mdl_lsgst_list = checkpoint.mdl_list
                 final_objfn = checkpoint.final_objfn
-                #final_objfn initialized to None in the GateSetTomographyCheckpoint and will be overwritten
-                #during the loop below unless the last completed iteration is the final iteration
-                #in which case the loop should be skipped. If so I think it is ok that this gets
-                #left set to None. There looks to be some logic for handling this and it looks
-                #like the serialization routines effectively do this already, as the value
-                #of this is lost between writing and reading.
+                # final_objfn initialized to None in the GateSetTomographyCheckpoint and will be overwritten
+                # during the loop below unless the last completed iteration is the final iteration
+                # in which case the loop should be skipped. If so I think it is ok that this gets
+                # left set to None. There looks to be some logic for handling this and it looks
+                # like the serialization routines effectively do this already, as the value
+                # of this is lost between writing and reading.
             else:
-                NotImplementedError('The only currently valid checkpoint inputs are None and GateSetTomographyCheckpoint.')
-            
-            #note the last_completed_iter value is initialized to -1 so the below line 
+                NotImplementedError(
+                    'The only currently valid checkpoint inputs are None and GateSetTomographyCheckpoint.')
+
+            # note the last_completed_iter value is initialized to -1 so the below line
             # will have us correctly starting at 0 if this is a fresh checkpoint.
             starting_idx = checkpoint.last_completed_iter + 1
-
-        else:
-            seed_model = mdl_start.copy()
-            mdl_lsgst_list = []
-            starting_idx = 0
 
         tnxt = _time.time(); profiler.add_time('GST: Prep Initial seed', tref); tref = tnxt
         
@@ -1404,18 +1420,18 @@ class GateSetTomography(_proto.Protocol):
             #then do the final iteration slightly differently since the generator should
             #give three return values.
             if i==len(bulk_circuit_lists)-1:
-                mdl_iter, opt_iter, final_objfn =  next(gst_iter_generator)
+                mdl_iter, opt_iter, final_objfn = next(gst_iter_generator)
             else:
                 mdl_iter, opt_iter =  next(gst_iter_generator)
             mdl_lsgst_list.append(mdl_iter)
             optima_list.append(opt_iter)
 
             if not disable_checkpointing:
-                #update the checkpoint along the way:
+                # update the checkpoint along the way:
                 checkpoint.mdl_list = mdl_lsgst_list
                 checkpoint.last_completed_iter += 1
                 checkpoint.last_completed_circuit_list = bulk_circuit_lists[i]
-                #write the updated checkpoint to disk:
+                # write the updated checkpoint to disk:
                 if resource_alloc.comm_rank == 0:
                     checkpoint.write(f'{checkpoint_path}_iteration_{i}.json')
 
@@ -1442,19 +1458,37 @@ class GateSetTomography(_proto.Protocol):
             target_model = self.gaugeopt_suite.gaugeopt_target
         elif self.initial_model.target_model is not None:
             target_model = self.initial_model.target_model.copy()
-        elif self.initial_model.model is not None and self.gaugeopt_suite.is_empty() is False:
+        elif self.initial_model.model is not None:
             # when we desparately need a target model but none have been specifically given: use initial model
             target_model = self.initial_model.model.copy()
         else:
+            msg = 'Could not identify a suitable target model, this may result'\
+                 +' in unexpected behavior or missing plots in reports.'
+            _warnings.warn(msg)
             target_model = None
+
+        if target_model is not None and simulator is not None:
+            target_model.sim = simulator
 
         estimate = _Estimate.create_gst_estimate(ret, target_model, mdl_start, mdl_lsgst_list, parameters)
         ret.add_estimate(estimate, estimate_key=self.name)
 
-        return _add_gaugeopt_and_badfit(ret, self.name, target_model,
-                                        self.gaugeopt_suite, self.unreliable_ops,
-                                        self.badfit_options, self.optimizer, resource_alloc, printer)
-
+        #Add some better handling for when gauge optimization is turned off (current code path isn't working.)
+        if not self.gaugeopt_suite.is_empty() or len(self.badfit_options.actions) > 0:  # maybe add flag to do this even when empty?
+            ret = _add_gaugeopt_and_badfit(ret, self.name, target_model,
+                                           self.gaugeopt_suite, self.unreliable_ops,
+                                           self.badfit_options, self.optimizer, 
+                                           resource_alloc, printer)
+        else:
+            #add a model to the estimate that we'll call the trivial gauge optimized model which
+            #will be set to be equal to the final iteration estimate.
+            ret.estimates[self.name].models['trivial_gauge_opt'] = mdl_lsgst_list[-1]
+            #and add a key for this to the goparameters dict (this is what the report
+            #generation looks at to determine the names of the gauge optimized models).
+            #Set the value to None as a placeholder.
+            ret.estimates[self.name].goparameters['trivial_gauge_opt'] = None
+        
+        return ret
 
 class LinearGateSetTomography(_proto.Protocol):
     """
@@ -1503,6 +1537,10 @@ class LinearGateSetTomography(_proto.Protocol):
         self.oplabels = "default"
         self.oplabel_aliases = None
         self.unreliable_ops = ('Gcnot', 'Gcphase', 'Gms', 'Gcn', 'Gcx', 'Gcz')
+
+        self.auxfile_types['target_model'] = 'serialized-object'
+        self.auxfile_types['gaugeopt_suite'] = 'serialized-object'
+        self.auxfile_types['badfit_options'] = 'serialized-object'
 
     def check_if_runnable(self, data):
         """
@@ -1612,9 +1650,22 @@ class LinearGateSetTomography(_proto.Protocol):
                                    'final iteration estimate': mdl_lgst},
                              parameters)
         ret.add_estimate(estimate, estimate_key=self.name)
-        return _add_gaugeopt_and_badfit(ret, self.name, target_model, self.gaugeopt_suite,
+
+        #Add some better handling for when gauge optimization is turned off (current code path isn't working.)
+        if not self.gaugeopt_suite.is_empty():
+            ret = _add_gaugeopt_and_badfit(ret, self.name, target_model, self.gaugeopt_suite,
                                         self.unreliable_ops, self.badfit_options,
                                         None, resource_alloc, printer)
+        else:
+            #add a model to the estimate that we'll call the trivial gauge optimized model which
+            #will be set to be equal to the final iteration estimate.
+            ret.estimates[self.name].models['trivial_gauge_opt'] = mdl_lgst
+            #and add a key for this to the goparameters dict (this is what the report
+            #generation looks at to determine the names of the gauge optimized models).
+            #Set the value to None as a placeholder.
+            ret.estimates[self.name].goparameters['trivial_gauge_opt'] = None
+
+        return ret
 
 
 class StandardGST(_proto.Protocol):
@@ -1629,13 +1680,13 @@ class StandardGST(_proto.Protocol):
         parameterizations/constraints to apply to the estimated model.
         The default value is usually fine.  Allowed values are:
 
-        - "full" : full (completely unconstrained)
-        - "TP"   : TP-constrained
-        - "CPTP" : Lindbladian CPTP-constrained
-        - "H+S"  : Only Hamiltonian + Stochastic errors allowed (CPTP)
-        - "S"    : Only Stochastic errors allowed (CPTP)
-        - "Target" : use the target (ideal) gates as the estimate
-        - <model> : any key in the `models_to_test` argument
+        - "full"    : full (completely unconstrained)
+        - "TP"      : TP-constrained
+        - "CPTPLND" : Lindbladian CPTP-constrained
+        - "H+S"     : Only Hamiltonian + Stochastic errors allowed (CPTP)
+        - "S"       : Only Stochastic errors allowed (CPTP)
+        - "Target"  : use the target (ideal) gates as the estimate
+        - <model>   : any key in the `models_to_test` argument
 
     gaugeopt_suite : GSTGaugeOptSuite, optional
         Specifies which gauge optimizations to perform on each estimate.  Can also
@@ -1645,6 +1696,14 @@ class StandardGST(_proto.Protocol):
         for gauge optimization.  This model is used as the "target" for gauge-
         optimization (only), and is useful when you want to gauge optimize toward
         something other than the *ideal* target gates.
+
+    target_model : Model, optional (default None)
+        If specified use this Model as the target model. Depending on other
+        specified keyword arguments this model may be used as the target for
+        the purposes of gauge optimization, report generation/analysis, and
+        initial seeding for optimization. (For almost all of these it may be the
+        case that other keyword argument values override this for certain
+        tasks).
 
     models_to_test : dict, optional
         A dictionary of Model objects representing (gate-set) models to
@@ -1694,12 +1753,12 @@ class StandardGST(_proto.Protocol):
         self.target_model = target_model
         self.gaugeopt_suite = GSTGaugeOptSuite.cast(gaugeopt_suite)
         self.objfn_builders = GSTObjFnBuilders.cast(objfn_builders) if (objfn_builders is not None) else None
-        self.optimizer = _opt.CustomLMOptimizer.cast(optimizer)
+        self.optimizer = _opt.SimplerLMOptimizer.cast(optimizer)
         self.badfit_options = GSTBadFitOptions.cast(badfit_options)
         self.verbosity = verbosity
 
         if not isinstance(optimizer, _opt.Optimizer) and isinstance(optimizer, dict) \
-           and 'first_fditer' not in optimizer:  # then a dict was cast into a CustomLMOptimizer above.
+           and 'first_fditer' not in optimizer:  # then a dict was cast into an Optimizer above.
             # by default, set special "first_fditer=auto" behavior (see logic in GateSetTomography.__init__)
             self.optimizer.first_fditer = None
 
@@ -1713,12 +1772,8 @@ class StandardGST(_proto.Protocol):
         #Advanced options that could be changed by users who know what they're doing
         self.starting_point = {}  # a dict whose keys are modes
 
-    #def run_using_germs_and_fiducials(self, dataset, target_model, prep_fiducials, meas_fiducials, germs, max_lengths):
-    #    design = StandardGSTDesign(target_model, prep_fiducials, meas_fiducials, germs, max_lengths)
-    #    data = _proto.ProtocolData(design, dataset)
-    #    return self.run(data)
-
-    def run(self, data, memlimit=None, comm=None, checkpoint= None, checkpoint_path=None, disable_checkpointing = False):
+    def run(self, data, memlimit=None, comm=None, checkpoint=None, checkpoint_path=None,
+            disable_checkpointing=False, simulator: Optional[ForwardSimulator.Castable]=None):
         """
         Run this protocol on `data`.
 
@@ -1751,6 +1806,11 @@ class StandardGST(_proto.Protocol):
             to disk during the course of this protocol. It is strongly recommended
             that this be kept set to False without good reason to disable the checkpoints.
 
+        simulator : ForwardSimulator.Castable or None
+            Ignored if None. If not None, then we call
+                fwdsim = ForwardSimulator.cast(simulator),
+            and we set the .sim attribute of every Model we encounter to fwdsim.
+
         Returns
         -------
         ProtocolResults
@@ -1779,6 +1839,10 @@ class StandardGST(_proto.Protocol):
                 embed_gates=False, basis='pp')  # HARDCODED basis!
         else:
             target_model = None  # Usually this path leads to an error being raised below.
+
+        if target_model is not None:
+            if simulator is not None:
+                target_model.sim = simulator
 
         if not disable_checkpointing:
             #Set the checkpoint_path variable if None
@@ -1813,8 +1877,12 @@ class StandardGST(_proto.Protocol):
         with printer.progress_logging(1):
             for i, mode in enumerate(modes):
                 printer.show_progress(i, len(modes), prefix='-- Std Practice: ', suffix=' (%s) --' % mode)
-                if not disable_checkpointing:
-                    #pre python 3.9 compatible version.
+                if disable_checkpointing:
+                    checkpoint_path = None
+                    child_checkpoint = None
+                else:
+                    child_checkpoint = checkpoint.children[mode]
+                    #The line below is for compatibility with Python 3.8 and lower.
                     checkpoint_path = checkpoint_path_base.with_name(f"{checkpoint_path_base.stem}_{mode.replace(' ', '_')}")
                     #The line below only works for python 3.9+
                     #checkpoint_path = checkpoint_path_base.with_stem(f"{checkpoint_path_base.stem}_{mode.replace(' ', '_')}")
@@ -1825,21 +1893,22 @@ class StandardGST(_proto.Protocol):
                     
                     mdltest = _ModelTest(target_model, target_model, self.gaugeopt_suite,
                                          mt_builder, self.badfit_options, verbosity=printer - 1, name=mode)
-                    if not disable_checkpointing:
-                        result = mdltest.run(data, memlimit, comm, checkpoint = checkpoint.children[mode],
-                                            checkpoint_path=checkpoint_path)
-                    else:
-                        result = mdltest.run(data, memlimit, comm, disable_checkpointing=True)
+                    result = mdltest.run(data, memlimit, comm,
+                                         disable_checkpointing=disable_checkpointing,
+                                         checkpoint=child_checkpoint,
+                                         checkpoint_path=checkpoint_path)
                     ret.add_estimates(result)
 
                 elif mode in models_to_test:
-                    mdltest = _ModelTest(models_to_test[mode], target_model, self.gaugeopt_suite,
+                    mdl = models_to_test[mode]
+                    if simulator is not None:
+                        mdl.sim = simulator
+                    mdltest = _ModelTest(mdl, target_model, self.gaugeopt_suite,
                                          None, self.badfit_options, verbosity=printer - 1, name=mode)
-                    if not disable_checkpointing:
-                        result = mdltest.run(data, memlimit, comm, checkpoint = checkpoint.children[mode],
-                                            checkpoint_path=checkpoint_path)
-                    else:
-                        result = mdltest.run(data, memlimit, comm, disable_checkpointing=True)
+                    result = mdltest.run(data, memlimit, comm,
+                                         disable_checkpointing=disable_checkpointing,
+                                         checkpoint=child_checkpoint,
+                                         checkpoint_path=checkpoint_path)
                     ret.add_estimates(result)
 
                 else:
@@ -1849,7 +1918,7 @@ class StandardGST(_proto.Protocol):
 
                     #Try to interpret `mode` as a parameterization
                     parameterization = mode  # for now, 1-1 correspondence
-                    initial_model = target_model
+                    initial_model = target_model.copy()
 
                     try:
                         initial_model.set_all_parameterizations(parameterization)
@@ -1858,13 +1927,14 @@ class StandardGST(_proto.Protocol):
                                          % (mode, str(e)))
 
                     initial_model = GSTInitialModel(initial_model, self.starting_point.get(mode, None))
+                    if simulator is not None:
+                        initial_model.sim = simulator
                     gst = GST(initial_model, self.gaugeopt_suite, self.objfn_builders,
                               self.optimizer, self.badfit_options, verbosity=printer - 1, name=mode)
-                    if not disable_checkpointing:
-                        result = gst.run(data, memlimit, comm, checkpoint = checkpoint.children[mode],
-                                        checkpoint_path=checkpoint_path)
-                    else:
-                        result = gst.run(data, memlimit, comm, disable_checkpointing=True)
+                    result = gst.run(data, memlimit, comm,
+                                     disable_checkpointing=disable_checkpointing,
+                                     checkpoint=child_checkpoint,
+                                     checkpoint_path=checkpoint_path)
                     ret.add_estimates(result)
 
         return ret
@@ -1945,7 +2015,7 @@ def _add_gaugeopt_and_badfit(results, estlbl, target_model, gaugeopt_suite,
     profiler = resource_alloc.profiler
 
     #Do final gauge optimization to *final* iteration result only
-    if gaugeopt_suite:
+    if gaugeopt_suite is not None and not gaugeopt_suite.is_empty():
         model_to_gaugeopt = results.estimates[estlbl].models['final iteration estimate']
         if gaugeopt_suite.gaugeopt_target is None:  # add a default target model to gauge opt if needed
             #TODO: maybe make these two lines into a method of GSTGaugeOptSuite for adding a target model?
@@ -1954,7 +2024,7 @@ def _add_gaugeopt_and_badfit(results, estlbl, target_model, gaugeopt_suite,
         _add_gauge_opt(results, estlbl, gaugeopt_suite,
                        model_to_gaugeopt, unreliable_ops, comm, printer - 1)
         profiler.add_time('%s: gauge optimization' % estlbl, tref); tref = _time.time()
-        
+
         _add_badfit_estimates(results, estlbl, badfit_options, optimizer, resource_alloc, printer, gaugeopt_suite= gaugeopt_suite)
         profiler.add_time('%s: add badfit estimates' % estlbl, tref); tref = _time.time()
     else:
@@ -2023,26 +2093,31 @@ def _add_gauge_opt(results, base_est_label, gaugeopt_suite, starting_model,
 
         printer.log("-- Performing '%s' gauge optimization on %s estimate --" % (go_label, base_est_label), 2)
 
-        #Get starting model
-        results.estimates[base_est_label].add_gaugeoptimized(goparams, None, go_label, comm, printer - 3)
+        #add logic for the case where no gauge optimization is performed.
+        if go_label == 'none':
+            results.estimates[base_est_label].add_gaugeoptimized(goparams, starting_model, go_label, comm, printer - 3)
+        else:
+            results.estimates[base_est_label].add_gaugeoptimized(goparams, None, go_label, comm, printer - 3)
+        
+        #Get starting model for next stage
         mdl_start = results.estimates[base_est_label].retrieve_start_model(goparams)
+        if mdl_start is not None:
+            #Gauge optimize data-scaled estimate also
+            for suffix in ROBUST_SUFFIX_LIST:
+                robust_est_label = base_est_label + suffix
+                if robust_est_label in results.estimates:
+                    mdl_start_robust = results.estimates[robust_est_label].retrieve_start_model(goparams)
 
-        #Gauge optimize data-scaled estimate also
-        for suffix in ROBUST_SUFFIX_LIST:
-            robust_est_label = base_est_label + suffix
-            if robust_est_label in results.estimates:
-                mdl_start_robust = results.estimates[robust_est_label].retrieve_start_model(goparams)
-
-                if mdl_start_robust.frobeniusdist(mdl_start) < 1e-8:
-                    printer.log("-- Conveying '%s' gauge optimization from %s to %s estimate --" %
-                                (go_label, base_est_label, robust_est_label), 2)
-                    params = results.estimates[base_est_label].goparameters[go_label]  # no need to copy here
-                    gsopt = results.estimates[base_est_label].models[go_label].copy()
-                    results.estimates[robust_est_label].add_gaugeoptimized(params, gsopt, go_label, comm, printer - 3)
-                else:
-                    printer.log("-- Performing '%s' gauge optimization on %s estimate --" %
-                                (go_label, robust_est_label), 2)
-                    results.estimates[robust_est_label].add_gaugeoptimized(goparams, None, go_label, comm, printer - 3)
+                    if mdl_start_robust.frobeniusdist(mdl_start) < 1e-8:
+                        printer.log("-- Conveying '%s' gauge optimization from %s to %s estimate --" %
+                                    (go_label, base_est_label, robust_est_label), 2)
+                        params = results.estimates[base_est_label].goparameters[go_label]  # no need to copy here
+                        gsopt = results.estimates[base_est_label].models[go_label].copy()
+                        results.estimates[robust_est_label].add_gaugeoptimized(params, gsopt, go_label, comm, printer - 3)
+                    else:
+                        printer.log("-- Performing '%s' gauge optimization on %s estimate --" %
+                                    (go_label, robust_est_label), 2)
+                        results.estimates[robust_est_label].add_gaugeoptimized(goparams, None, go_label, comm, printer - 3)
 
 
 def _add_badfit_estimates(results, base_estimate_label, badfit_options,
@@ -2155,7 +2230,7 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options,
                     #corresponding to the elements of gaugeopt_labels. In this case let's  make
                     #base_estimate.extra_parameters['wildcard1d' + "_unmodeled_error"] a dictionary of
                     #the serialized PrimitiveOpsSingleScaleWildcardBudget elements
-                    if gaugeopt_suite is not None:
+                    if gaugeopt_suite is not None and gaugeopt_suite.gaugeopt_suite_names is not None:
                         gaugeopt_labels = gaugeopt_suite.gaugeopt_suite_names
                         base_estimate.extra_parameters['wildcard1d' + "_unmodeled_error"] = {lbl: budget[lbl].to_nice_serialization() for lbl in gaugeopt_labels} 
                         base_estimate.extra_parameters['wildcard1d' + "_unmodeled_active_constraints"] \
@@ -2281,14 +2356,21 @@ def _compute_wildcard_budget_1d_model(estimate, objfn_cache, mdc_objfn, paramete
     redbox_threshold = _chi2.ppf(1 - percentile / nboxes, 1)
 
     ref, reference_name = _compute_1d_reference_values_and_name(estimate, badfit_options, gaugeopt_suite)
-    
-    if gaugeopt_suite is None: 
+
+    if gaugeopt_suite is None or gaugeopt_suite.gaugeopt_suite_names is None:
         gaugeopt_labels = None
         primitive_ops = list(ref.keys())
+        if sum([v**2 for v in ref.values()]) < 1e-4:
+            _warnings.warn("Reference values for 1D wildcard budget are all near-zero!"
+                           "This usually indicates an incorrect target model and will likely cause problems computing alpha.")
+
     else:
-        gaugeopt_labels= gaugeopt_suite.gaugeopt_suite_names
+        gaugeopt_labels = gaugeopt_suite.gaugeopt_suite_names
         primitive_ops = list(ref[list(gaugeopt_labels)[0]].keys())
-    
+        if sum([v**2 for v in ref[list(gaugeopt_labels)[0]].values()]) < 1e-4:
+            _warnings.warn("Reference values for 1D wildcard budget are all near-zero!"
+                           "This usually indicates an incorrect target model and will likely cause problems computing alpha.")
+
     if gaugeopt_labels is None:
         wcm = _wild.PrimitiveOpsSingleScaleWildcardBudget(primitive_ops, [ref[k] for k in primitive_ops],
                                                       reference_name=reference_name)
@@ -2309,24 +2391,41 @@ def _compute_1d_reference_values_and_name(estimate, badfit_options, gaugeopt_sui
     DOCSTRING: TODO
     '''
     if badfit_options.wildcard1d_reference == 'diamond distance':
-        if gaugeopt_suite is None:
+        if gaugeopt_suite is None or gaugeopt_suite.gaugeopt_suite_names is None:
             final_model = estimate.models['final iteration estimate']
             target_model = estimate.models['target']
-            gaugeopt_model = _alg.gaugeopt_to_target(final_model, target_model)
+
+            if isinstance(final_model, _ExplicitOpModel):
+                gaugeopt_model = _alg.gaugeopt_to_target(final_model, target_model)
+                operations_dict = gaugeopt_model.operations
+                targetops_dict = target_model.operations
+                preps_dict = gaugeopt_model.preps
+                targetpreps_dict = target_model.preps
+                povmops_dict = gaugeopt_model.povms
+            else:
+                # Local/cloud noise models don't have default_gauge_group attribute and can't be gauge
+                #  optimized - at least not easily.
+                gaugeopt_model = final_model
+                operations_dict = gaugeopt_model.operation_blks['gates']
+                targetops_dict = target_model.operation_blks['gates']
+                preps_dict = gaugeopt_model.prep_blks['layers']
+                targetpreps_dict = target_model.prep_blks['layers']
+                povmops_dict = {}  # HACK - need to rewrite povm_diamonddist below to work
+
             dd = {}
-            for key, op in gaugeopt_model.operations.items():
-                dd[key] = 0.5 * _tools.diamonddist(op.to_dense(), target_model.operations[key].to_dense())
+            for key, op in operations_dict.items():
+                dd[key] = 0.5 * _tools.diamonddist(op.to_dense(), targetops_dict[key].to_dense())
                 if dd[key] < 0:  # indicates that diamonddist failed (cvxpy failure)
                     _warnings.warn(("Diamond distance failed to compute %s reference value for 1D wildcard budget!"
                                     " Falling back to trace distance.") % str(key))
-                    dd[key] = _tools.jtracedist(op.to_dense(), target_model.operations[key].to_dense())
+                    dd[key] = _tools.jtracedist(op.to_dense(), targetops_dict[key].to_dense())
 
             spamdd = {}
-            for key, op in gaugeopt_model.preps.items():
+            for key, op in preps_dict.items():
                 spamdd[key] = _tools.tracedist(_tools.vec_to_stdmx(op.to_dense(), 'pp'),
-                                               _tools.vec_to_stdmx(target_model.preps[key].to_dense(), 'pp'))
+                                               _tools.vec_to_stdmx(targetpreps_dict[key].to_dense(), 'pp'))
 
-            for key in gaugeopt_model.povms.keys():
+            for key in povmops_dict.keys():
                 spamdd[key] = 0.5 * _tools.optools.povm_diamonddist(gaugeopt_model, target_model, key)
 
             dd['SPAM'] = sum(spamdd.values())
@@ -2340,6 +2439,10 @@ def _compute_1d_reference_values_and_name(estimate, badfit_options, gaugeopt_sui
             for gaugeopt_model, lbl in zip(gaugeopt_models, gaugeopt_suite.gaugeopt_suite_names):
                 for key, op in gaugeopt_model.operations.items():
                     dd[lbl][key] = 0.5 * _tools.diamonddist(op.to_dense(), target_model.operations[key].to_dense())
+                    if dd[lbl][key] < 0:  # indicates that diamonddist failed (cvxpy failure)
+                        _warnings.warn(("Diamond distance failed to compute %s reference value for 1D wildcard budget!"
+                                        " Falling back to trace distance.") % str(key))
+                        dd[lbl][key] = _tools.jtracedist(op.to_dense(), target_model.operations[key].to_dense())
 
             spamdd = {}
             for key, op in gaugeopt_model.preps.items():
@@ -2569,23 +2672,14 @@ def _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options,
             elif method_name == "barrier":
                 _opt.optimize_wildcard_budget_barrier(budget, L1weights, mdc_objfn, two_dlogl_threshold,
                                                       redbox_threshold, printer, **method_options)
-            elif method_name == "cvxopt":
-                _opt.optimize_wildcard_budget_cvxopt(budget, L1weights, mdc_objfn, two_dlogl_threshold,
-                                                     redbox_threshold, printer, **method_options)
-            elif method_name == "cvxopt_smoothed":
-                _opt.optimize_wildcard_budget_cvxopt_smoothed(budget, L1weights, mdc_objfn,
-                                                              two_dlogl_threshold, redbox_threshold,
-                                                              printer, **method_options)
-            elif method_name == "cvxopt_small":
-                _opt.optimize_wildcard_budget_cvxopt_zeroreg(budget, L1weights, mdc_objfn,
-                                                             two_dlogl_threshold, redbox_threshold, printer,
-                                                             **method_options)
             elif method_name == "cvxpy_noagg":
                 _opt.optimize_wildcard_budget_percircuit_only_cvxpy(budget, L1weights, mdc_objfn,
                                                                     redbox_threshold, printer,
                                                                     **method_options)
             elif method_name == "none":
                 pass
+            elif method_name in ("cvxopt", "cvxopt_smoothed", "cvxopt_small"):
+                raise ValueError(f"Support for {method_name} was removed in pyGSTi release 0.9.13.")
             else:
                 raise ValueError("Invalid wildcard method name: %s" % method_name)
 
@@ -2979,7 +3073,8 @@ class ModelEstimateResults(_proto.ProtocolResults):
         self.estimates[estimate_key] = estimate
 
     def add_model_test(self, target_model, themodel,
-                       estimate_key='test', gaugeopt_keys="auto", verbosity=2):
+                       estimate_key='test', gaugeopt_keys="auto", verbosity=2,
+                       simulator: Optional[ForwardSimulator.Castable]=None):
         """
         Add a new model-test (i.e. non-optimized) estimate to this `Results` object.
 
@@ -3006,6 +3101,11 @@ class ModelEstimateResults(_proto.ProtocolResults):
         verbosity : int, optional
             Level of detail printed to stdout.
 
+        simulator : ForwardSimulator.Castable or None
+            Ignored if None. If not None, then we call
+                fwdsim = ForwardSimulator.cast(simulator),
+            and we set the .sim attribute of every Model we encounter to fwdsim.
+
         Returns
         -------
         None
@@ -3026,7 +3126,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
         from .modeltest import ModelTest as _ModelTest
         mdltest = _ModelTest(themodel, target_model, gaugeopt_suite,
                              objfn_builder, badfit_options, name=estimate_key, verbosity=verbosity)
-        test_result = mdltest.run(self.data)
+        test_result = mdltest.run(self.data, simulator=simulator)
         self.add_estimates(test_result)
 
     def view(self, estimate_keys, gaugeopt_keys=None):

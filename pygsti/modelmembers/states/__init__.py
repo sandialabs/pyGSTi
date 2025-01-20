@@ -15,8 +15,6 @@ import scipy.linalg as _spl
 import scipy.optimize as _spo
 import warnings as _warnings
 
-from numpy.lib.arraysetops import isin
-
 from pygsti.modelmembers.povms.computationalpovm import ComputationalBasisPOVM
 
 from .composedstate import ComposedState
@@ -426,17 +424,16 @@ def optimize_state(vec_to_optimize, target_vec):
         return
 
     from pygsti import optimize as _opt
-    from pygsti.tools import matrixtools as _mt
     assert(target_vec.dim == vec_to_optimize.dim)  # vectors must have the same overall dimension
     targetVector = target_vec.to_dense() if isinstance(target_vec, State) else target_vec
 
     def _objective_func(param_vec):
         vec_to_optimize.from_vector(param_vec)
-        return _mt.frobeniusnorm(vec_to_optimize.to_dense() - targetVector)
+        return _np.linalg.norm(vec_to_optimize.to_dense() - targetVector)
 
     x0 = vec_to_optimize.to_vector()
     minSol = _opt.minimize(_objective_func, x0, method='BFGS', maxiter=10000, maxfev=10000,
                            tol=1e-6, callback=None)
 
     vec_to_optimize.from_vector(minSol.x)
-    #print("DEBUG: optimized vector to min frobenius distance %g" % _mt.frobeniusnorm(vec_to_optimize-targetVector))
+    return

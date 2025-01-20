@@ -11,6 +11,7 @@ Defines the DataSet class and supporting classes and functions
 #***************************************************************************************************
 
 import bisect as _bisect
+from collections.abc import Iterable as _Iterable
 import copy as _copy
 import itertools as _itertools
 import numbers as _numbers
@@ -295,33 +296,9 @@ class _DataSetRow(object):
         last_time = None
         seriesDict = {self.dataset.olIndex[ol]: [] for ol in self.dataset.outcome_labels}
 
-        #REMOVED: (though this gives slightly different behavior)
-        #for outcome_label in self.outcomes:
-        #    if outcome_label not in seriesDict.keys():
-        #        seriesDict[outcome_label] = []
-
         if self.reps is None:
             reps = _np.ones(len(self.time), _np.int64)
         else: reps = self.reps
-
-        # An alternate implementation that appears to be (surprisingly?) slower...
-        ##Get time bin locations
-        #time_bins_borders = []
-        #last_time = None
-        #for i, t in enumerate(self.time):
-        #    if t != last_time:
-        #        time_bins_borders.append(i)
-        #        last_time = t
-        #time_bins_borders.append(len(self.time))
-        #nTimes = len(time_bins_borders) - 1
-        #
-        #seriesDict = {self.dataset.olIndex[ol]: _np.zeros(nTimes, _np.int64) for ol in self.dataset.outcome_labels}
-        #
-        #for i in range(nTimes):
-        #    slc = slice(time_bins_borders[i],time_bins_borders[i+1])
-        #    times.append( self.time[slc.start] )
-        #    for oli, rep in zip(self.oli[slc], reps[slc]):
-        #        seriesDict[oli][i] += rep
 
         for t, oli, rep in zip(self.time, self.oli, reps):
 
@@ -585,26 +562,28 @@ class _DataSetRow(object):
             tslc = _np.where(_np.isclose(self.time, timestamp))[0]
         else: tslc = slice(None)
 
+        oli_tslc = self.oli[tslc]
         nOutcomes = len(self.dataset.olIndex)
-        nIndices = len(self.oli[tslc])
+        nIndices = len(oli_tslc)
+        
         if nOutcomes <= nIndices or all_outcomes:
             if self.reps is None:
                 for ol, i in self.dataset.olIndex.items():
-                    cnt = float(_np.count_nonzero(_np.equal(self.oli[tslc], i)))
-                    if all_outcomes or cnt > 0:
+                    cnt = float(_np.count_nonzero(_np.equal(oli_tslc, i)))
+                    if cnt > 0 or all_outcomes:
                         cntDict.setitem_unsafe(ol, cnt)
             else:
                 for ol, i in self.dataset.olIndex.items():
-                    inds = _np.nonzero(_np.equal(self.oli[tslc], i))[0]
-                    if all_outcomes or len(inds) > 0:
+                    inds = oli_tslc[oli_tslc == i]
+                    if len(inds) > 0 or all_outcomes:
                         cntDict.setitem_unsafe(ol, float(sum(self.reps[tslc][inds])))
         else:
             if self.reps is None:
-                for ol_index in self.oli[tslc]:
+                for ol_index in oli_tslc:
                     ol = self.dataset.ol[ol_index]
                     cntDict.setitem_unsafe(ol, 1.0 + cntDict.getitem_unsafe(ol, 0.0))
             else:
-                for ol_index, reps in zip(self.oli[tslc], self.reps[tslc]):
+                for ol_index, reps in zip(oli_tslc, self.reps[tslc]):
                     ol = self.dataset.ol[ol_index]
                     cntDict.setitem_unsafe(ol, reps + cntDict.getitem_unsafe(ol, 0.0))
 
@@ -615,7 +594,8 @@ class _DataSetRow(object):
         """
         Dictionary of per-outcome counts.
         """
-        if self._cntcache: return self._cntcache  # if not None *and* len > 0
+        if self._cntcache: 
+            return self._cntcache  # if not None *and* len > 0
         ret = self._get_counts()
         if self._cntcache is not None:  # == and empty dict {}
             self._cntcache.update(ret)
@@ -1031,12 +1011,13 @@ class DataSet(_MongoSerializable):
             self.olIndex = outcome_label_indices
             self.olIndex_max = max(self.olIndex.values()) if len(self.olIndex) > 0 else -1
         elif outcome_labels is not None:
-            if isinstance(outcome_labels, _np.int64):
-                nqubits = outcome_labels
-                tup_outcomeLabels = [("".join(x),) for x in _itertools.product(*([('0', '1')] * nqubits))]
-            else:
+            if isinstance(outcome_labels, _Iterable):
                 tup_outcomeLabels = [_ld.OutcomeLabelDict.to_outcome(ol)
                                      for ol in outcome_labels]  # strings -> tuple outcome labels
+            else: # Given an int which signifies how many qubits
+                nqubits = outcome_labels
+                tup_outcomeLabels = [("".join(x),) for x in _itertools.product(*([('0', '1')] * nqubits))]
+                
             self.olIndex = _OrderedDict([(ol, i) for (i, ol) in enumerate(tup_outcomeLabels)])
             self.olIndex_max = len(tup_outcomeLabels) - 1
         else:
@@ -1197,10 +1178,10 @@ class DataSet(_MongoSerializable):
         circuit = _cir.Circuit.cast(circuit)
 
         #Note: cirIndex value is either an int (non-static) or a slice (static)
-        repData = self.repData[self.cirIndex[circuit]] \
-            if (self.repData is not None) else None
-        return _DataSetRow(self, self.oliData[self.cirIndex[circuit]],
-                           self.timeData[self.cirIndex[circuit]], repData,
+        cirIndex = self.cirIndex[circuit]
+        repData = self.repData[cirIndex] if (self.repData is not None) else None
+        return _DataSetRow(self, self.oliData[cirIndex],
+                           self.timeData[cirIndex], repData,
                            self.cnt_cache[circuit] if self.bStatic else None,
                            self.auxInfo[circuit])
 
@@ -1413,17 +1394,19 @@ class DataSet(_MongoSerializable):
         # if "keepseparate" mode, set occurrence id existing circuits to next available (positive) integer.
         if self.collisionAction == "keepseparate":
             if circuit in self.cirIndex:
-                tagged_circuit = circuit.copy()
+                tagged_circuit = circuit.copy(editable=True)
                 i = 1; tagged_circuit.occurrence = i
                 while tagged_circuit in self.cirIndex:
                     i += 1; tagged_circuit.occurrence = i
+                tagged_circuit.done_editing()
                 #add data for a new (duplicate) circuit
                 circuit = tagged_circuit
 
         # in other modes ("overwrite" and "aggregate"), strip off occurrence so duplicates are acted on appropriately
         elif circuit.occurrence is not None:
-            stripped_circuit = circuit.copy()
+            stripped_circuit = circuit.copy(editable=True)
             stripped_circuit.occurrence = None
+            stripped_circuit.done_editing()
             circuit = stripped_circuit
 
         return circuit
@@ -1601,7 +1584,7 @@ class DataSet(_MongoSerializable):
         self._add_raw_arrays(circuit, outcome_index_array, time_array, count_array,
                              overwriteExisting, record_zero_counts, aux)
 
-    def add_cirq_trial_result(self, circuit, trial_result, key):
+    def add_cirq_trial_result(self, circuit, trial_result, key, convert_int_to_binary = True, num_qubits = None):
         """
         Add a single circuit's counts --- stored in a Cirq TrialResult --- to this DataSet
 
@@ -1617,6 +1600,16 @@ class DataSet(_MongoSerializable):
         key : str
             The string key of the measurement. Set by cirq.measure.
 
+        convert_int_to_binary : bool, optional (defaut True)
+            By default the keys in the cirq Results object are the integers representing
+            the bitstrings of the measurements on a set of qubits, in big-endian convention.
+            If True this converts back to a binary string before adding the counts as a 
+            entry into the pygsti dataset.
+
+        num_qubits : int, optional (default None)
+            Number of qubits used in the conversion from integers to binary when convert_int_to_binary
+            is True. If None, then the number of line_labels on the input circuit is used.
+
         Returns
         -------
         None
@@ -1629,8 +1622,17 @@ class DataSet(_MongoSerializable):
 
         # TrialResult.histogram returns a collections.Counter object, which is a subclass of dict.
         histogram_counter = trial_result.histogram(key=key)
+
+        if num_qubits is None:
+            num_qubits = len(circuit.line_labels)
+
         # The keys in histogram_counter are integers, but pyGSTi likes dictionary keys to be strings.
-        count_dict = {str(key): value for key, value in histogram_counter.items()}
+        count_dict = {}
+        for key, value in histogram_counter.items():
+            if convert_int_to_binary:
+                count_dict[_np.binary_repr(key, width= num_qubits)] = value
+            else:
+                count_dict[str(key)] = value
         self.add_count_dict(circuit, count_dict)
 
     def add_raw_series_data(self, circuit, outcome_label_list, time_stamp_list,
@@ -1716,7 +1718,9 @@ class DataSet(_MongoSerializable):
 
     def _add_raw_arrays(self, circuit, oli_array, time_array, rep_array,
                         overwrite_existing, record_zero_counts, aux):
-
+        assert not self.bStatic, "Attempting to add arrays to a static DataSet. " + \
+            "Consider using .copy_nonstatic() to get a mutable DataSet first."
+        
         if rep_array is None:
             if self.repData is not None:
                 rep_array = _np.ones(len(oli_array), self.repType)
@@ -2114,7 +2118,8 @@ class DataSet(_MongoSerializable):
         -------
         None
         """
-        if self.bStatic: raise ValueError("Cannot add data to a static DataSet object")
+        if self.bStatic: raise ValueError("Cannot add data to a static DataSet object." + \
+            "Consider using .copy_nonstatic() to get a mutable DataSet first.")
         for circuit, dsRow in other_data_set.items():
             self.add_raw_series_data(circuit, dsRow.outcomes, dsRow.time, dsRow.reps, False)
 

@@ -87,7 +87,6 @@ class Estimate(_MongoSerializable):
 
     @classmethod
     def _create_obj_from_doc_and_mongodb(cls, doc, mongodb, quick_load=False):
-        #def from_mongodb(cls, mongodb_collection, doc_id, ):
         ret = cls.__new__(cls)
         _MongoSerializable.__init__(ret, doc.get('_id', None))
         ret.__dict__.update(_io.read_auxtree_from_mongodb_doc(mongodb, doc, 'auxfile_types', quick_load=quick_load))
@@ -277,7 +276,10 @@ class Estimate(_MongoSerializable):
         Model
         """
         goparams_list = [goparams] if hasattr(goparams, 'keys') else goparams
-        return goparams_list[0].get('model', self.models['final iteration estimate'])
+        if goparams_list:
+            return goparams_list[0].get('model', self.models['final iteration estimate'])
+        else:
+            return None
 
     def add_gaugeoptimized(self, goparams, model=None, label=None, comm=None, verbosity=None):
         """
@@ -331,8 +333,14 @@ class Estimate(_MongoSerializable):
                 label = "go%d" % i; i += 1
                 if (label not in self._gaugeopt_suite.gaugeopt_argument_dicts) and \
                    (label not in self.models): break
-
-        goparams_list = [goparams] if hasattr(goparams, 'keys') else goparams
+        if hasattr(goparams, 'keys'):
+            goparams_list = [goparams]
+        elif goparams is None:
+            goparams_list = []
+            #since this will be empty much of the code/iteration below will
+            #be skipped.
+        else:
+            goparams_list = goparams
         ordered_goparams = []
         last_gs = None
 
@@ -350,11 +358,14 @@ class Estimate(_MongoSerializable):
         printer = _VerbosityPrinter.create_printer(max_vb, printer_comm)
         printer.log("-- Adding Gauge Optimized (%s) --" % label)
 
-        for i, gop in enumerate(goparams_list):
-
-            if model is not None:
-                last_gs = model  # just use user-supplied result
-            else:
+        if model is not None:
+            last_gs = model  # just use user-supplied result
+            #sort the parameters by name for consistency
+            for gop in goparams_list:
+                ordered_goparams.append(_collections.OrderedDict(
+                    [(k, gop[k]) for k in sorted(list(gop.keys()))]))
+        else:
+            for i, gop in enumerate(goparams_list):
                 from ..algorithms import gaugeopt_to_target as _gaugeopt_to_target
                 default_model = default_target_model = False
                 gop = gop.copy()  # so we don't change the caller's dict
@@ -398,14 +409,20 @@ class Estimate(_MongoSerializable):
                 if default_model: del gop['model']
                 if default_target_model: del gop['target_model']
 
-            #sort the parameters by name for consistency
-            ordered_goparams.append(_collections.OrderedDict(
-                [(k, gop[k]) for k in sorted(list(gop.keys()))]))
+                #sort the parameters by name for consistency
+                ordered_goparams.append(_collections.OrderedDict(
+                    [(k, gop[k]) for k in sorted(list(gop.keys()))]))
 
         assert(last_gs is not None)
         self.models[label] = last_gs
-        self._gaugeopt_suite.gaugeopt_argument_dicts[label] = ordered_goparams \
-            if len(goparams_list) > 1 else ordered_goparams[0]
+
+        if goparams_list: #only do this if goparams_list wasn't empty to begin with.
+            #which would be the case except for the special case where the label is 'none'.
+            self._gaugeopt_suite.gaugeopt_argument_dicts[label] = ordered_goparams \
+                if len(goparams_list) > 1 else ordered_goparams[0]
+        else:
+            self._gaugeopt_suite.gaugeopt_argument_dicts[label] = None
+
 
     def add_confidence_region_factory(self,
                                       model_label='final iteration estimate',

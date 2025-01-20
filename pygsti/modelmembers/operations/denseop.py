@@ -313,7 +313,7 @@ class DenseOperator(DenseOperatorInterface, _KrausOperatorInterface, _LinearOper
         mx = _LinearOperator.convert_to_matrix(mx)
         state_space = _statespace.default_space_for_dim(mx.shape[0]) if (state_space is None) \
             else _statespace.StateSpace.cast(state_space)
-        evotype = _Evotype.cast(evotype)
+        evotype = _Evotype.cast(evotype, state_space=state_space)
         self._basis = _Basis.cast(basis, state_space.dim) if (basis is not None) else None  # for Hilbert-Schmidt space
         rep = evotype.create_dense_superop_rep(mx, self._basis, state_space)
         _LinearOperator.__init__(self, rep, evotype)
@@ -416,11 +416,11 @@ class DenseOperator(DenseOperatorInterface, _KrausOperatorInterface, _LinearOper
         #CHECK 1 (to unit test?) REMOVE
         #tmp_std = _bt.change_basis(superop_mx, self._basis, 'std')
         #B = _bt.basis_matrices('std', superop_mx.shape[0])
-        #check_superop = sum([ choi_mx[i,j] * _np.kron(B[i], B[j].T) for i in range(d*d) for j in range(d*d)])
+        #check_superop = sum([ choi_mx[i,j] * _np.kron(B[i], B[j].conjugate()) for i in range(d*d) for j in range(d*d)])
         #assert(_np.allclose(check_superop, tmp_std))
 
-        evals, evecs = _np.linalg.eig(choi_mx)
-        #assert(_np.allclose(evecs @ _np.diag(evals) @ (evecs.conjugate().T), choi_mx))
+        evals, evecs = _np.linalg.eigh(choi_mx)
+        assert(_np.allclose(evecs @ _np.diag(evals) @ (evecs.conjugate().T), choi_mx))
         TOL = 1e-7  # consider lowering this tolerance as it leads to errors of this order in the Kraus decomp
         if any([ev <= -TOL for ev in evals]):
             raise ValueError("Cannot compute Kraus decomposition of non-positive-definite superoperator!")
@@ -533,7 +533,7 @@ class DenseUnitaryOperator(DenseOperatorInterface, _KrausOperatorInterface, _Lin
         state_space = _statespace.default_space_for_udim(mx.shape[0]) if (state_space is None) \
             else _statespace.StateSpace.cast(state_space)
         basis = _Basis.cast(basis, state_space.dim)  # basis for Hilbert-Schmidt (superop) space
-        evotype = _Evotype.cast(evotype)
+        evotype = _Evotype.cast(evotype, state_space=state_space)
 
         #Try to create a dense unitary rep.  If this fails, see if a dense superop rep
         # can be created, as this type of rep can also hold arbitrary unitary ops.

@@ -98,7 +98,7 @@ class OpFactory(_gm.ModelMember):
     def __init__(self, state_space, evotype):
         #self._paramvec = _np.zeros(nparams, 'd')
         state_space = _statespace.StateSpace.cast(state_space)
-        evotype = _Evotype.cast(evotype)
+        evotype = _Evotype.cast(evotype, state_space=state_space)
         _gm.ModelMember.__init__(self, state_space, evotype)
 
     def create_object(self, args=None, sslbls=None):

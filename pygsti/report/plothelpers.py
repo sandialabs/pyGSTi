@@ -18,6 +18,7 @@ from pygsti import tools as _tools
 from pygsti.objectivefns import objectivefns as _objfns
 from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.baseobjs.smartcache import smart_cached
+from pygsti.baseobjs import Label
 
 
 def small_eigenvalue_err_rate(sigma, direct_gst_models):
@@ -43,7 +44,8 @@ def small_eigenvalue_err_rate(sigma, direct_gst_models):
     """
     if sigma is None: return _np.nan  # in plot processing, "None" circuits = no plot output = nan values
     mdl_direct = direct_gst_models[sigma]
-    minEigval = min(abs(_np.linalg.eigvals(mdl_direct.operations["GsigmaLbl"])))
+    key = Label('GsigmaLbl') if sigma.line_labels == ('*',) else Label('GsigmaLbl', sigma.line_labels)
+    minEigval = min(abs(_np.linalg.eigvals(mdl_direct.operations[key])))
     # (approximate) per-gate error rate; max averts divide by zero error
     return 1.0 - minEigval**(1.0 / max(len(sigma), 1))
 
@@ -101,7 +103,7 @@ def _eformat(f, prec):
 
 
 def _num_non_nan(array):
-    ixs = _np.where(_np.isnan(_np.array(array).flatten()) == False)[0]  # noqa: E712
+    ixs = _np.where(_np.isnan(_np.array(array).ravel()) == False)[0]  # noqa: E712
     return int(len(ixs))
 
 
@@ -145,7 +147,7 @@ def _compute_num_boxes_dof(sub_mxs, sum_up, element_dof):
 
         # Gets all the non-NaN boxes, flattens the resulting
         # array, and does the sum.
-        n_boxes = _np.sum(~_np.isnan(sub_mxs).flatten())
+        n_boxes = _np.sum(~_np.isnan(sub_mxs).ravel())
 
     return n_boxes, dof_per_box
 
@@ -156,7 +158,13 @@ def _compute_sub_mxs(gss, model, sub_mx_creation_fn, dataset=None, sub_mx_creati
                for x in gss.used_xs] for y in gss.used_ys]
     #Note: subMxs[y-index][x-index] is proper usage
     return subMxs
+    
+#define a modified version that is meant for working with CircuitList objects of lists of them.
+#@smart_cached
+def _compute_sub_mxs_circuit_list(circuit_lists, model, sub_mx_creation_fn, dataset=None, sub_mx_creation_fn_extra_arg=None):
+    subMxs = [sub_mx_creation_fn(circuit_list, sub_mx_creation_fn_extra_arg) for circuit_list in circuit_lists]
 
+    return subMxs
 
 @smart_cached
 def dscompare_llr_matrices(gsplaq, dscomparator):

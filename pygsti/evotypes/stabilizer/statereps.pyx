@@ -49,10 +49,6 @@ cdef class StateRep(_basereps_cython.StateRep):
     def nqubits(self):
         return self.state_space.num_qubits
 
-    #@property
-    #def dim(self):
-    #    return 2**(self.c_state._n) # assume "unitary evolution"-type mode
-
     def actionable_staterep(self):
         # return a state rep that can be acted on by op reps or mapped to
         # a probability/amplitude by POVM effect reps.
@@ -129,7 +125,7 @@ cdef class StateRepTensorProduct(StateRep):
     def __cinit__(self, factor_state_reps, state_space):
         self.factor_reps = factor_state_reps
         n = sum([sf.nqubits for sf in self.factor_reps])  # total number of qubits
-        np = int(_np.product([len(sf.pvectors) for sf in self.factor_reps]))
+        np = int(_np.prod([len(sf.pvectors) for sf in self.factor_reps]))
         self._cinit_base(_np.zeros((2 * n, 2 * n), _np.int64),
                          _np.zeros((np, 2 * n), _np.int64),
                          _np.ones(np, complex),

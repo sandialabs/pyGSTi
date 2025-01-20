@@ -54,7 +54,7 @@ class OutcomeLabelDict(_collections.OrderedDict):
         """
         return (val,) if isinstance(val, str) else tuple(val)
 
-    def __init__(self, items=[]):
+    def __init__(self, items=None):
         """
         Creates a new OutcomeLabelDict.
 
@@ -63,6 +63,8 @@ class OutcomeLabelDict(_collections.OrderedDict):
         items : list, optional
             Used by pickle and other serializations to initialize elements.
         """
+        if items is None:
+            items = []
         #** Note: if change __init__ signature, update __reduce__ below
         super(OutcomeLabelDict, self).__init__(items)
 

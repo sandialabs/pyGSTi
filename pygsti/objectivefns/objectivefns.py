@@ -19,11 +19,13 @@ import numpy as _np
 
 from pygsti import tools as _tools
 from pygsti.layouts.distlayout import DistributableCOPALayout as _DistributableCOPALayout
+from pygsti.layouts.matrixlayout import MatrixCOPALayout as _MatrixCOPALayout
 from pygsti.tools import slicetools as _slct, mpitools as _mpit, sharedmemtools as _smt
 from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from pygsti.models.model import OpModel as _OpModel
 
 
 def _objfn(objfn_cls, model, dataset, circuits=None,
@@ -109,9 +111,6 @@ def _objfn(objfn_cls, model, dataset, circuits=None,
         ofn = objfn_cls(mdc_store, regularization, penalties, verbosity=0, **addl_args)
 
     return ofn
-
-    #def __len__(self):
-    #    return len(self.circuits)
 
 
 class ObjectiveFunctionBuilder(_NicelySerializable):
@@ -843,12 +842,10 @@ class ModelDatasetCircuitsStore(object):
     point.
     """
     def __init__(self, model, dataset, circuits=None, resource_alloc=None, array_types=(),
-                 precomp_layout=None, verbosity=0):
+                 precomp_layout=None, verbosity=0, outcome_count_by_circuit=None):
         self.dataset = dataset
         self.model = model
-        #self.opBasis = mdl.basis
         self.resource_alloc = _ResourceAllocation.cast(resource_alloc)
-        # expand = ??? get from model based on fwdsim type?
 
         circuit_list = circuits if (circuits is not None) else list(dataset.keys())
         bulk_circuit_list = circuit_list if isinstance(
@@ -859,8 +856,8 @@ class ModelDatasetCircuitsStore(object):
         # probabilities (and other results) are stored in arrays - this makes sense
         # because it understands how to make this layout amenable to fast computation.
         if precomp_layout is None:
-            self.layout = model.sim.create_layout(bulk_circuit_list, dataset, self.resource_alloc,
-                                                  array_types, verbosity=verbosity)  # a CircuitProbabilityArrayLayout
+            self.layout = model.sim.create_layout(bulk_circuit_list, dataset, self.resource_alloc, array_types,
+                                                  derivative_dimensions=None, verbosity=verbosity)  # a CircuitProbabilityArrayLayout
         else:
             self.layout = precomp_layout
         self.array_types = array_types
@@ -872,8 +869,21 @@ class ModelDatasetCircuitsStore(object):
         else:
             self.global_circuits = self.circuits
 
-        #self.circuits = bulk_circuit_list[:]
-        #self.circuit_weights = bulk_circuit_list.circuit_weights
+        #If a matrix layout then we have some precached circuit structures we can
+        #grab to speed up store generation.
+        if isinstance(self.layout, _MatrixCOPALayout):
+            #Grab the split_circuit_cache and down select to those in
+            #self.circuits
+            self.split_circuit_cache = self.layout.split_circuit_cache
+            self.split_circuits = [self.split_circuit_cache[ckt] for ckt in self.circuits]
+        #currently only implemented for matrix, will eventually add map support.
+        else:
+            self.split_circuits = None
+            self.split_circuit_cache = None
+
+        #set the value of the circuit outcome count cache (can be None)
+        self.outcome_count_by_circuit_cache = outcome_count_by_circuit
+
         self.ds_circuits = self.circuits.apply_aliases()
 
         # computed by add_count_vectors
@@ -887,18 +897,6 @@ class ModelDatasetCircuitsStore(object):
         self.dprobs_omitted_rowsum = None
 
         self.time_dependent = False  # indicates whether the data should be treated as time-resolved
-
-        #if not self.cache.has_evaltree():
-        #    subcalls = self.get_evaltree_subcalls()
-        #    evt_resource_alloc = _ResourceAllocation(self.raw_objfn.comm, evt_mlim,
-        #                                             self.raw_objfn.profiler, self.raw_objfn.distribute_method)
-        #    self.cache.add_evaltree(self.mdl, self.dataset, bulk_circuit_list, evt_resource_alloc,
-        #                            subcalls, self.raw_objfn.printer - 1)
-        #self.eval_tree = self.cache.eval_tree
-        #self.lookup = self.cache.lookup
-        #self.outcomes_lookup = self.cache.outcomes_lookup
-        #self.wrt_block_size = self.cache.wrt_block_size
-        #self.wrt_block_size2 = self.cache.wrt_block_size2
 
         #convenience attributes (could make properties?)
         if isinstance(self.layout, _DistributableCOPALayout):
@@ -916,8 +914,8 @@ class ModelDatasetCircuitsStore(object):
             assert(self.global_nparams is None or self.global_nparams == self.model.num_params)
         else:
             self.global_nelements = self.host_nelements = self.nelements = len(self.layout)
-            self.global_nparams = self.host_nparams = self.nparams = self.model.num_params
-            self.global_nparams2 = self.host_nparams2 = self.nparams2 = self.model.num_params
+            self.global_nparams = self.host_nparams = self.nparams = self.model.num_params if self.model else 0
+            self.global_nparams2 = self.host_nparams2 = self.nparams2 = self.model.num_params if self.model else 0
 
     @property
     def opBasis(self):
@@ -940,14 +938,36 @@ class ModelDatasetCircuitsStore(object):
         """
         if self.firsts is None or force:
             # FUTURE: add any tracked memory? self.resource_alloc.add_tracked_memory(...)
-            self.firsts = []; self.indicesOfCircuitsWithOmittedData = []
-            for i, c in enumerate(self.circuits):
-                indices = _slct.to_array(self.layout.indices_for_index(i))
-                lklen = _slct.length(self.layout.indices_for_index(i))
-                if 0 < lklen < self.model.compute_num_outcomes(c):
+            self.firsts = [] 
+            self.indicesOfCircuitsWithOmittedData = []
+
+            if self.outcome_count_by_circuit_cache is None:
+                #bulk compute the number of outcomes.
+                if isinstance(self.model, _OpModel) and self.split_circuits is not None:
+                    bulk_outcomes_list = self.model.bulk_circuit_outcomes(self.circuits, split_circuits=self.split_circuits)
+                    num_outcomes_list = [len(outcome_tup) for outcome_tup in bulk_outcomes_list]
+                else:
+                    num_outcomes_list = [self.model.compute_num_outcomes(c) for c in self.circuits]
+            else:
+                num_outcomes_list = []
+                for ckt in self.circuits:
+                    num_outcomes = self.outcome_count_by_circuit_cache.get(ckt, None)
+                    if num_outcomes is None:
+                        num_outcomes = self.model.compute_num_outcomes(ckt)
+                        #also add this to the cache, just in case it is later needed.
+                        self.outcome_count_by_circuit_cache[ckt] = num_outcomes
+                    num_outcomes_list.append(num_outcomes)
+
+            for i in range(len(self.circuits)):
+                indices = self.layout.indices_for_index(i)
+                #The return types of indices_for_index are either ndarrays
+                #or slices.
+                if isinstance(indices, slice): 
+                    indices = _slct.indices(indices)
+                if 0 < len(indices) < num_outcomes_list[i]:
                     self.firsts.append(indices[0])
                     self.indicesOfCircuitsWithOmittedData.append(i)
-            if len(self.firsts) > 0:
+            if self.firsts:
                 self.firsts = _np.array(self.firsts, 'i')
                 self.indicesOfCircuitsWithOmittedData = _np.array(self.indicesOfCircuitsWithOmittedData, 'i')
                 self.dprobs_omitted_rowsum = _np.empty((len(self.firsts), self.nparams), 'd')
@@ -974,13 +994,15 @@ class ModelDatasetCircuitsStore(object):
 
             for (i, circuit) in enumerate(self.ds_circuits):
                 cnts = self.dataset[circuit].counts
-                totals[self.layout.indices_for_index(i)] = sum(cnts.values())  # dataset[opStr].total
-                counts[self.layout.indices_for_index(i)] = [cnts.get(x, 0) for x in self.layout.outcomes_for_index(i)]
+                idcs_for_idx = self.layout.indices_for_index(i)
+                totals[idcs_for_idx] = sum(cnts.values())  # dataset[opStr].
+                counts[idcs_for_idx] = [cnts.getitem_unsafe(x, 0) for x in self.layout.outcomes_for_index(i)]
 
             if self.circuits.circuit_weights is not None:
                 for i in range(len(self.ds_circuits)):  # multiply N's by weights
-                    counts[self.layout.indices_for_index(i)] *= self.circuits.circuit_weights[i]
-                    totals[self.layout.indices_for_index(i)] *= self.circuits.circuit_weights[i]
+                    idcs_for_idx = self.layout.indices_for_index(i)
+                    counts[idcs_for_idx] *= self.circuits.circuit_weights[i]
+                    totals[idcs_for_idx] *= self.circuits.circuit_weights[i]
 
             self.counts = counts
             self.total_counts = totals
@@ -994,7 +1016,7 @@ class EvaluatedModelDatasetCircuitsStore(ModelDatasetCircuitsStore):
 
     def __init__(self, mdc_store, verbosity):
         super().__init__(mdc_store.model, mdc_store.dataset, mdc_store.global_circuits, mdc_store.resource_alloc,
-                         mdc_store.array_types, mdc_store.layout, verbosity)
+                         mdc_store.array_types, mdc_store.layout, verbosity, mdc_store.outcome_count_by_circuit_cache)
 
         # Memory check - see if there's enough memory to hold all the evaluated quantities
         #persistent_mem = self.layout.memory_estimate()
@@ -1436,96 +1458,6 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         """
         raise NotImplementedError("Derived classes should implement this!")
 
-    #MOVED - but these versions have updated names
-    #def _persistent_memory_estimate(self, num_elements=None):
-    #    #  Estimate & check persistent memory (from allocs within objective function)
-    #    """
-    #    Compute the amount of memory needed to perform evaluations of this objective function.
-    #
-    #    This number includes both intermediate and final results, and assumes
-    #    that the types of evauations given by :meth:`_evaltree_subcalls`
-    #    are required.
-    #
-    #    Parameters
-    #    ----------
-    #    num_elements : int, optional
-    #        The number of elements (circuit outcomes) that will be computed.
-    #
-    #    Returns
-    #    -------
-    #    int
-    #    """
-    #    if num_elements is None:
-    #        nout = int(round(_np.sqrt(self.mdl.dim)))  # estimate of avg number of outcomes per string
-    #        nc = len(self.circuits)
-    #        ne = nc * nout  # estimate of the number of elements (e.g. probabilities, # LS terms, etc) to compute
-    #    else:
-    #        ne = num_elements
-    #    np = self.mdl.num_params
-    #
-    #    # "persistent" memory is that used to store the final results.
-    #    obj_fn_mem = FLOATSIZE * ne
-    #    jac_mem = FLOATSIZE * ne * np
-    #    hess_mem = FLOATSIZE * ne * np**2
-    #    persistent_mem = 4 * obj_fn_mem + jac_mem  # 4 different objective-function sized arrays, 1 jacobian array?
-    #    if any([nm == "bulk_fill_hprobs" for nm in self._evaltree_subcalls()]):
-    #        persistent_mem += hess_mem  # we need room for the hessian too!
-    #    # TODO: what about "bulk_hprobs_by_block"?
-    #
-    #    return persistent_mem
-    #
-    #def _evaltree_subcalls(self):
-    #    """
-    #    The types of calls that will be made to an evaluation tree.
-    #
-    #    This information is used for memory estimation purposes.
-    #
-    #    Returns
-    #    -------
-    #    list
-    #    """
-    #    calls = ["bulk_fill_probs", "bulk_fill_dprobs"]
-    #    if self.enable_hessian: calls.append("bulk_fill_hprobs")
-    #    return calls
-    #
-    #def num_data_params(self):
-    #    """
-    #    The number of degrees of freedom in the data used by this objective function.
-    #
-    #    Returns
-    #    -------
-    #    int
-    #    """
-    #    return self.dataset.degrees_of_freedom(self.ds_circuits,
-    #                                               aggregate_times=not self.time_dependent)
-
-    #def _precompute_omitted_freqs(self):
-    #    """
-    #    Detect omitted frequences (assumed to be 0) so we can compute objective fn correctly
-    #    """
-    #    self.firsts = []; self.indicesOfCircuitsWithOmittedData = []
-    #    for i, c in enumerate(self.circuits):
-    #        lklen = _slct.length(self.lookup[i])
-    #        if 0 < lklen < self.mdl.compute_num_outcomes(c):
-    #            self.firsts.append(_slct.to_array(self.lookup[i])[0])
-    #            self.indicesOfCircuitsWithOmittedData.append(i)
-    #    if len(self.firsts) > 0:
-    #        self.firsts = _np.array(self.firsts, 'i')
-    #        self.indicesOfCircuitsWithOmittedData = _np.array(self.indicesOfCircuitsWithOmittedData, 'i')
-    #        self.dprobs_omitted_rowsum = _np.empty((len(self.firsts), self.nparams), 'd')
-    #        self.raw_objfn.printer.log("SPARSE DATA: %d of %d rows have sparse data" %
-    #                                   (len(self.firsts), len(self.circuits)))
-    #    else:
-    #        self.firsts = None  # no omitted probs
-    #
-    #def _compute_count_vectors(self):
-    #    """
-    #    Ensure self.cache contains count and total-count vectors.
-    #    """
-    #    if not self.cache.has_count_vectors():
-    #        self.cache.add_count_vectors(self.dataset, self.ds_circuits, self.circuit_weights)
-    #    return self.cache.counts, self.cache.total_counts
-
     def _construct_hessian(self, counts, total_counts, prob_clip_interval):
         """
         Framework for constructing a hessian matrix row by row using a derived
@@ -1630,7 +1562,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
                                  len(layout.atoms), atom.num_elements))
                         _sys.stdout.flush(); k += 1
 
-                    hessian_blk = self._hessian_from_block(hprobs, dprobs12, probs, atom_counts,
+                    hessian_blk = self._hessian_from_block(hprobs, dprobs12, probs, atom.element_slice, atom_counts,
                                                            atom_total_counts, freqs, param2_resource_alloc)
                     #NOTE: _hessian_from_hprobs MAY modify hprobs and dprobs12
                     #NOTE2: we don't account for memory within _hessian_from_block - maybe we should?
@@ -1645,7 +1577,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
 
         return atom_hessian  # (my_nparams1, my_nparams2)
 
-    def _hessian_from_block(self, hprobs, dprobs12, probs, counts, total_counts, freqs, resource_alloc):
+    def _hessian_from_block(self, hprobs, dprobs12, probs, element_slice, counts, total_counts, freqs, resource_alloc):
         raise NotImplementedError("Derived classes should implement this!")
 
     def _gather_hessian(self, local_hessian):
@@ -5122,7 +5054,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         if paramvec is not None: self.model.from_vector(paramvec)
         return self._gather_hessian(self._construct_hessian(self.counts, self.total_counts, self.prob_clip_interval))
 
-    def _hessian_from_block(self, hprobs, dprobs12, probs, counts, total_counts, freqs, resource_alloc):
+    def _hessian_from_block(self, hprobs, dprobs12, probs, element_slice, counts, total_counts, freqs, resource_alloc):
         """ Factored-out computation of hessian from raw components """
 
         # Note: hprobs, dprobs12, probs are sometimes shared memory, but the caller (e.g. _construct_hessian)
@@ -5141,18 +5073,23 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         hprobs_coeffs = self.raw_objfn.dterms(probs, counts, total_counts, freqs)
 
         if self.firsts is not None:
+            # iel = element index (of self.layout), ic = circuit index
+            firsts, indicesWithOmitted = zip(*([(iel - element_slice.start, ic) for (iel, ic)
+                                                in zip(self.firsts, self.indicesOfCircuitsWithOmittedData)
+                                                if element_slice.start <= iel < element_slice.stop]))
+
             #Allocate these above?  Need to know block sizes of dprobs12 & hprobs...
-            dprobs12_omitted_rowsum = _np.empty((len(self.firsts),) + dprobs12.shape[1:], 'd')
-            hprobs_omitted_rowsum = _np.empty((len(self.firsts),) + hprobs.shape[1:], 'd')
+            dprobs12_omitted_rowsum = _np.empty((len(firsts),) + dprobs12.shape[1:], 'd')
+            hprobs_omitted_rowsum = _np.empty((len(firsts),) + hprobs.shape[1:], 'd')
 
             omitted_probs = 1.0 - _np.array([_np.sum(probs[self.layout.indices_for_index(i)])
-                                             for i in self.indicesOfCircuitsWithOmittedData])
-            for ii, i in enumerate(self.indicesOfCircuitsWithOmittedData):
+                                             for i in indicesWithOmitted])
+            for ii, i in enumerate(indicesWithOmitted):
                 dprobs12_omitted_rowsum[ii, :, :] = _np.sum(dprobs12[self.layout.indices_for_index(i), :, :], axis=0)
                 hprobs_omitted_rowsum[ii, :, :] = _np.sum(hprobs[self.layout.indices_for_index(i), :, :], axis=0)
 
-            dprobs12_omitted_coeffs = -self.raw_objfn.zero_freq_hterms(total_counts[self.firsts], omitted_probs)
-            hprobs_omitted_coeffs = -self.raw_objfn.zero_freq_dterms(total_counts[self.firsts], omitted_probs)
+            dprobs12_omitted_coeffs = -self.raw_objfn.zero_freq_hterms(total_counts[firsts], omitted_probs)
+            hprobs_omitted_coeffs = -self.raw_objfn.zero_freq_dterms(total_counts[firsts], omitted_probs)
 
         # hessian = hprobs_coeffs * hprobs + dprobs12_coeff * dprobs12
         #  but re-using dprobs12 and hprobs memory (which is overwritten!)
@@ -5160,8 +5097,10 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             hprobs *= hprobs_coeffs[:, None, None]
             dprobs12 *= dprobs12_coeffs[:, None, None]
             if self.firsts is not None:
-                hprobs[self.firsts, :, :] += hprobs_omitted_coeffs[:, None, None] * hprobs_omitted_rowsum
-                dprobs12[self.firsts, :, :] += dprobs12_omitted_coeffs[:, None, None] * dprobs12_omitted_rowsum
+                firsts = [(iel - element_slice.start) for iel in self.firsts
+                      if element_slice.start <= iel < element_slice.stop]
+                hprobs[firsts, :, :] += hprobs_omitted_coeffs[:, None, None] * hprobs_omitted_rowsum
+                dprobs12[firsts, :, :] += dprobs12_omitted_coeffs[:, None, None] * dprobs12_omitted_rowsum
             hessian = dprobs12; hessian += hprobs
         else:
             hessian = dprobs12
@@ -6473,10 +6412,6 @@ class LogLWildcardFunction(ObjectiveFunction):
         #assumes self.logl_objfn.fn(...) was called to initialize the members of self.logl_objfn
         self.logl_objfn.resource_alloc.add_tracked_memory(self.logl_objfn.probs.size)
         self.probs = self.logl_objfn.probs.copy()
-
-    #def _default_evalpt(self):
-    #    """The default point to evaluate functions at """
-    #    return self.wildcard_budget.to_vector()
 
     #Mimic the underlying LogL objective
     def __getattr__(self, attr):

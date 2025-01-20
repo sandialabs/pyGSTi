@@ -10,3 +10,15 @@
 
 from .core import PhysicalProcess, InterpolatedDenseOp, InterpolatedOpFactory
 from .process_tomography import vec, unvec, run_process_tomography
+
+# Note from Riley on September, 2024:
+#
+#   vec is deprecated, and shouldn't be called anywhere in the codebase.
+#
+#   unvec is deprecated and replaced with unvec_square; the latter function
+#   isn't imported here because we don't want people to access it just from
+#   the pygsti.extras.interpygate namespace.
+#
+#   Ideally we'd remove vec and unvec from the pygsti.extras.interpygate namespace
+#   and only have them available in pygsti.extras.interpygate.process_tomography.
+#

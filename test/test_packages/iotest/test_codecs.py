@@ -327,27 +327,6 @@ class TestCodecs(CodecsTestCase):
         self.assertEqual(c2.str, "([Gx:0Gy:1])^2")
         pygsti.circuits.Circuit.default_expand_subcircuits = True
 
-    #Debugging, because there was some weird python3 vs 2 json incompatibility with string labels
-    # - turned out to be that the unit test files needed to import unicode_literals from __future__
-    #def test_labels(self):
-    #    strLabel = pygsti.obj.Label("Gi")
-    #    #strLabel = ("Gi",)
-    #    from pygsti.modelpacks.legacy import std1Q_XYI as std
-    #
-    #    s = json.dumps(strLabel)
-    #    print("s = ",str(s))
-    #    x = msgpack.loads(s)
-    #    print("x = ",x)
-    #
-    #    print("-----------------------------")
-    #
-    #    s = json.dumps(std.prepStrs[2])
-    #    print("s = ",s)
-    #    x = json.loads(s)
-    #    print("x = ",x)
-    #    assert(False),"STOP"
-
-
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

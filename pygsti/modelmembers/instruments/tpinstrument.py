@@ -70,13 +70,13 @@ class TPInstrument(_mm.ModelMember, _collections.OrderedDict):
     # M4 = -(sum(Di)+(4-2=2)*MT) = -(sum(all)+(4-3=1)*MT)
     #n=2 case: (M1-MT) = (MT-M2)-MT = -M2, so M2 = -sum(Di)
 
-    def __init__(self, op_matrices, evotype="default", state_space=None, called_from_reduce=False, items=[]):
+    def __init__(self, op_matrices, evotype="default", state_space=None, called_from_reduce=False, items=None):
 
+        if items is None:
+            items = []
         self._readonly = False  # until init is done
         if len(items) > 0:
             assert(op_matrices is None), "`items` was given when op_matrices != None"
-
-        evotype = _Evotype.cast(evotype)
         self.param_ops = []  # first element is TP sum (MT), following
         #elements are fully-param'd (Mi-Mt) for i=0...n-2
 
@@ -96,6 +96,7 @@ class TPInstrument(_mm.ModelMember, _collections.OrderedDict):
                 "Must specify `state_space` when there are no instrument members!"
             state_space = _statespace.default_space_for_dim(matrix_list[0][1].shape[0]) if (state_space is None) \
                 else _statespace.StateSpace.cast(state_space)
+            evotype = _Evotype.cast(evotype, state_space=state_space)
 
             # Create gate objects that are used to parameterize this instrument
             MT_mx = sum([v for k, v in matrix_list])  # sum-of-instrument-members matrix
@@ -123,6 +124,7 @@ class TPInstrument(_mm.ModelMember, _collections.OrderedDict):
             #    print(k,":\n",v)
         else:
             assert(state_space is not None), "`state_space` cannot be `None` when there are no members!"
+            evotype = _Evotype.cast(evotype, state_space=state_space)
 
         _collections.OrderedDict.__init__(self, items)
         _mm.ModelMember.__init__(self, state_space, evotype)

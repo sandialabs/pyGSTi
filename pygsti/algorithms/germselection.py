@@ -27,6 +27,7 @@ from pygsti.tools import mpitools as _mpit
 from pygsti.baseobjs.statespace import ExplicitStateSpace as _ExplicitStateSpace
 from pygsti.baseobjs.statespace import QuditSpace as _QuditSpace
 from pygsti.models import ExplicitOpModel as _ExplicitOpModel
+from pygsti.forwardsims import MatrixForwardSimulator as _MatrixForwardSimulator
 
 FLOATSIZE = 8  # in bytes: TODO: a better way
 
@@ -57,10 +58,8 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
 
     Parameters
     ----------
-    target_model : Model or list of Model
-        The model you are aiming to implement, or a list of models that are
-        copies of the model you are trying to implement (either with or
-        without random unitary perturbations applied to the models).
+    target_model : Model
+        The model you are aiming to implement.
 
     randomize : bool, optional
         Whether or not to add random unitary perturbations to the model(s)
@@ -188,8 +187,14 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
         A list containing the germs making up the germ set.
     """
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, comm)
+    
+    if not isinstance(target_model.sim, _MatrixForwardSimulator):
+        target_model = target_model.copy()
+        target_model.sim = 'matrix'
+
     modelList = _setup_model_list(target_model, randomize,
                                   randomization_strength, num_gs_copies, seed)
+                                  
     gates = list(target_model.operations.keys())
     availableGermsList = []
     if candidate_germ_counts is None: candidate_germ_counts = {6: 'all upto'}
@@ -1038,23 +1043,61 @@ def _num_non_spam_gauge_params(model):
 # so SOP is op_dim^2 x op_dim^2 and acts on vectorized *gates*
 # Recall vectorizing identity (when vec(.) concats rows as flatten does):
 #     vec( A * X * B ) = A tensor B^T * vec( X )
-def _super_op_for_perfect_twirl(wrt, eps, float_type=_np.cdouble):
-    """Return super operator for doing a perfect twirl with respect to wrt.
+def _super_op_for_perfect_twirl(wrt, eps, float_type=_np.cdouble, tol=1e-12):
     """
+    Return super operator for doing a perfect twirl with respect to wrt.
+        
+    Parameters
+    ---------
+    wrt : numpy.ndarray
+        Superoperator to construct a twirling superduperoperator with
+        respect to.
+        
+    eps : float
+        Tolerance used for evaluating whether two eigenvalues are degenerate.
+        
+    float_type : numpy dtype (optional, default numpy.cdouble)
+        When specified return the resulting superduperoperator as an ndarray
+        with this dtype.
+        
+    tol : float (optional, default 1e-12)
+       
+    Returns
+    -------
+    SuperOp : ndarray
+        SuperOp (really a superduperoperator) is dim^2 x dim^2 matrix that acts on
+        vectorized superoperators to perform a projection onto the commutant of wrt.
+    """
+    
     assert wrt.shape[0] == wrt.shape[1]  # only square matrices allowed
     dim = wrt.shape[0]
     
     #The eigenvalues and eigenvectors of wrt can be complex valued, even for
-    #real-valued transfer matrices. Need to be careful here to start off using able
+    #real-valued transfer matrices. Need to be careful here to start off using a
     #complex data type. The actual projector onto the germs commutant appears to be strictly real valued though
     #(that makes sense because otherwise the projected derivative would become complex
     #So we should be able to cast it back to the specified float_type just before returning it.
     SuperOp = _np.zeros((dim**2, dim**2), dtype=_np.cdouble)
-
-    # Get spectrum and eigenvectors of wrt
-    wrtEvals, wrtEvecs = _np.linalg.eig(wrt)
-    wrtEvecsInv = _np.linalg.inv(wrtEvecs)
     
+    #Test the wrt matrix to see if it is normal. If so use the schur
+    #decomposition, otherwise use the general eigenvalue decomposition.
+    wrt_conj_transpose = wrt.conj().T
+    wrt_commutator = wrt@wrt_conj_transpose - wrt_conj_transpose@wrt
+    
+    # Get spectrum and eigenvectors of wrt
+    # May as well use the same eps here too.
+    if _np.linalg.norm(wrt_commutator) < tol*(dim**0.5):
+        schur_form, wrtEvecs = _sla.schur(wrt, output = 'complex')
+        #schur_form should be an upper triangular matrix, with the
+        #eigenvalues we want on the diagonal.
+        wrtEvals = _np.diag(schur_form)
+        wrtEvecsInv = wrtEvecs.conj().T
+    else:
+        _warnings.warn('Warning: Input matrix is not normal, using the general eigenvalue decomposition '\
+                       +'from numpy.linalg.eig. This code path has been found to suffer from numerical '\
+                       +'instability problems before, so proceed with caution.')
+        wrtEvals, wrtEvecs = _np.linalg.eig(wrt)
+        wrtEvecsInv = _np.linalg.inv(wrtEvecs)
     
     #calculate the dimensions of the eigenspaces:
     subspace_idx_list=[]
@@ -1121,7 +1164,7 @@ def _super_op_for_perfect_twirl(wrt, eps, float_type=_np.cdouble):
     #sanity check to confirm everything we're casting is actually real!
     if (float_type is _np.double) or (float_type is _np.single):
         #might as well use eps as the threshold here too.
-        if _np.any(_np.imag(SuperOp)>eps):
+        if _np.any(_np.abs(_np.imag(SuperOp))>eps):
             raise ValueError("Attempting to cast a twirling superoperator with non-trivial imaginary component to a real-valued data type.")
         #cast just the real part to specified float type.
         SuperOp=SuperOp.real.astype(float_type)
@@ -1313,6 +1356,10 @@ def test_germ_set_finitel(model, germs_to_test, length, weights=None,
         eigenvalues (from small to large) of the jacobian^T * jacobian
         matrix used to determine parameter amplification.
     """
+    if not isinstance(model.sim, _MatrixForwardSimulator):
+        model = model.copy()
+        model.sim = 'matrix'
+
     # Remove any SPAM vectors from model since we only want
     # to consider the set of *gate* parameters for amplification
     # and this makes sure our parameter counting is correct
@@ -1869,6 +1916,18 @@ def find_germs_breadthfirst(model_list, germs_list, randomize=True,
     }
 
     initN = 1
+
+    #Compute initial score (before adding any germs beyond the initial set)
+    if len(goodGerms) > 0:
+        worstScore = _scoring.CompositeScore(-1.0e100, 0, None)  # worst of all models
+        for k, currentDDD in enumerate(currentDDDList):
+            nonAC_kwargs['germ_lengths'] = _np.array([len(germ) for germ in goodGerms])
+            worstScore = max(worstScore, compute_composite_germ_set_score(
+                partial_deriv_dagger_deriv=currentDDD[None, :, :], init_n=initN,
+                **nonAC_kwargs))
+        printer.log("Initial germ score = " + str(worstScore), 4)
+        initN = worstScore.N
+
     while _np.any(weights == 0):
         printer.log("Outer iteration: %d of %d amplified, %d germs" %
                     (initN, numNonGaugeParams, len(goodGerms)), 2)
@@ -3245,80 +3304,81 @@ def symmetric_low_rank_spectrum_update(update, orig_e, U, proj_U, force_rank_inc
     #return the new eigenvalues
     return new_evals, True
  
-#Note: This function won't work for our purposes because of the assumptions
-#about the rank of the update on the nullspace of the matrix we're updating,
-#but keeping this here commented for future reference.
-#Function for doing fast calculation of the updated inverse trace:
-#def riedel_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=True):
-#    """
-#    input:
-#    
-#    update : ndarray
-#        symmetric low-rank update to perform.
-#        This is the first half the symmetric rank decomposition s.t.
-#        update@update.T= the full update matrix.
-#    
-#    orig_e : ndarray
-#        Spectrum of the original matrix. This is a 1-D array.
-#        
-#    proj_U : ndarray
-#        Projector onto the complement of the column space of the
-#        original matrix's eigenvectors.
-#        
-#    output:
-#    
-#    trace : float
-#        Value of the trace of the updated psuedoinverse matrix.
-#    
-#    updated_rank : int
-#        total rank of the updated matrix.
-#        
-#    rank_increase_flag : bool
-#        a flag that is returned to indicate is a candidate germ failed to amplify additional parameters. 
-#        This indicates things short circuited and so the scoring function should skip this germ.
-#    """
-#    
-#    #First we need to for the matrix P, whose column space
-#    #forms an orthonormal basis for the component of update
-#    #that is in the complement of U.
-#    
-#    proj_update= proj_U@update
-#    
-#    #Next take the RRQR decomposition of this matrix:
-#    q_update, r_update, _ = _sla.qr(proj_update, mode='economic', pivoting=True)
-#    
-#    #Construct P by taking the columns of q_update corresponding to non-zero values of r_A on the diagonal.
-#    nonzero_indices_update= _np.nonzero(_np.diag(r_update)>1e-10) #HARDCODED (threshold is hardcoded)
-#    
-#    #if the rank doesn't increase then we can't use the Riedel approach.
-#    #Abort early and return a flag to indicate the rank did not increase.
-#    if len(nonzero_indices_update[0])==0 and force_rank_increase:
-#        return None, None, False
-#    
-#    P= q_update[: , nonzero_indices_update[0]]
-#    
-#    updated_rank= len(orig_e)+ len(nonzero_indices_update[0])
-#    
-#    #Now form the matrix R_update which is given by P.T @ proj_update.
-#    R_update= P.T@proj_update
-#    
-#    #R_update gets concatenated with U.T@update to form
-#    #a block column matrixblock_column= np.concatenate([U.T@update, R_update], axis=0)    
-#    
-#    Uta= U.T@update
-#    
-#    try:
-#        RRRDinv= R_update@_np.linalg.inv(R_update.T@R_update) 
-#    except _np.linalg.LinAlgError as err:
-#        print('Numpy thinks this matrix is singular, condition number is: ', _np.linalg.cond(R_update.T@R_update))
-#        print((R_update.T@R_update).shape)
-#        raise err
-#    pinv_orig_e_mat= _np.diag(1/orig_e)
-#    
-#    trace= _np.sum(1/orig_e) + _np.trace( RRRDinv@(_np.eye(Uta.shape[1]) + Uta.T@pinv_orig_e_mat@Uta)@RRRDinv.T )
-#    
-#    return trace, updated_rank, True
+# Note: Th function below won't work for our purposes because of the assumptions
+# about the rank of the update on the nullspace of the matrix we're updating,
+# but keeping this here commented for future reference.
+'''
+def riedel_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=True):
+    """
+    input:
     
+    update : ndarray
+        symmetric low-rank update to perform.
+        This is the first half the symmetric rank decomposition s.t.
+        update@update.T= the full update matrix.
+    
+    orig_e : ndarray
+        Spectrum of the original matrix. This is a 1-D array.
+        
+    proj_U : ndarray
+        Projector onto the complement of the column space of the
+        original matrix's eigenvectors.
+        
+    output:
+    
+    trace : float
+        Value of the trace of the updated psuedoinverse matrix.
+    
+    updated_rank : int
+        total rank of the updated matrix.
+        
+    rank_increase_flag : bool
+        a flag that is returned to indicate is a candidate germ failed to amplify additional parameters. 
+        This indicates things short circuited and so the scoring function should skip this germ.
+    """
+    
+    #First we need to for the matrix P, whose column space
+    #forms an orthonormal basis for the component of update
+    #that is in the complement of U.
+    
+    proj_update= proj_U@update
+    
+    #Next take the RRQR decomposition of this matrix:
+    q_update, r_update, _ = _sla.qr(proj_update, mode='economic', pivoting=True)
+    
+    #Construct P by taking the columns of q_update corresponding to non-zero values of r_A on the diagonal.
+    nonzero_indices_update= _np.nonzero(_np.diag(r_update)>1e-10) #HARDCODED (threshold is hardcoded)
+    
+    #if the rank doesn't increase then we can't use the Riedel approach.
+    #Abort early and return a flag to indicate the rank did not increase.
+    if len(nonzero_indices_update[0])==0 and force_rank_increase:
+        return None, None, False
+    
+    P= q_update[: , nonzero_indices_update[0]]
+    
+    updated_rank= len(orig_e)+ len(nonzero_indices_update[0])
+    
+    #Now form the matrix R_update which is given by P.T @ proj_update.
+    R_update= P.T@proj_update
+    
+    #R_update gets concatenated with U.T@update to form
+    #a block column matrixblock_column= np.concatenate([U.T@update, R_update], axis=0)    
+    
+    Uta= U.T@update
+    
+    try:
+        RRRDinv= R_update@_np.linalg.inv(R_update.T@R_update) 
+    except _np.linalg.LinAlgError as err:
+        print('Numpy thinks this matrix is singular, condition number is: ', _np.linalg.cond(R_update.T@R_update))
+        print((R_update.T@R_update).shape)
+        raise err
+    pinv_orig_e_mat= _np.diag(1/orig_e)
+    
+    trace= _np.sum(1/orig_e) + _np.trace( RRRDinv@(_np.eye(Uta.shape[1]) + Uta.T@pinv_orig_e_mat@Uta)@RRRDinv.T )
+    
+    return trace, updated_rank, True
+'''
+
 def minamide_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=False):
     """
     This function performs a low-rank update to the components of

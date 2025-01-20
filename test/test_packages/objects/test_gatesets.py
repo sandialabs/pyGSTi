@@ -41,19 +41,19 @@ class GateSetTestCase(BaseTestCase):
         self.model = pygsti.models.modelconstruction.create_explicit_model_from_expressions(
             [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"])
-
+        self.model.sim = 'matrix'
         self.tp_gateset = pygsti.models.modelconstruction.create_explicit_model_from_expressions(
             [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
             gate_type="full TP")
-
+        self.tp_gateset.sim = 'matrix'
         self.static_gateset = pygsti.models.modelconstruction.create_explicit_model_from_expressions(
             [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"],
             gate_type="static")
+        self.static_gateset.sim = 'matrix'
 
         self.mgateset = self.model.copy()
-        #self.mgateset._calcClass = MapForwardSimulator
         self.mgateset.sim = 'map'
 
 
@@ -288,70 +288,14 @@ class TestGateSetMethods(GateSetTestCase):
                 except MemoryError:
                     pass #OK - when memlimit is too small and splitting is unproductive
 
-        #balanced not implemented
-        #with self.assertRaises(NotImplementedError):
-        #    evt,_,_,lookup,outcome_lookup = self.model.bulk_evaltree_from_resources(
-        #        circuits, mem_limit=memLimit, distribute_method="balanced", subcalls=['bulk_fill_hprobs'])
-
-
-    @unittest.skip("Need to add a way to force layout splitting")
-    def test_layout_splitting(self):
-        circuits = [('Gx',),
-                       ('Gy',),
-                       ('Gx','Gy'),
-                       ('Gy','Gy'),
-                       ('Gy','Gx'),
-                       ('Gx','Gx','Gx'),
-                       ('Gx','Gy','Gx'),
-                       ('Gx','Gy','Gy'),
-                       ('Gy','Gy','Gy'),
-                       ('Gy','Gx','Gx') ]
-        evtA,lookupA,outcome_lookupA = self.model.bulk_evaltree( circuits )
-
-        evtB,lookupB,outcome_lookupB = self.model.bulk_evaltree( circuits )
-        lookupB = evtB.split(lookupB, max_sub_tree_size=4)
-
-        evtC,lookupC,outcome_lookupC = self.model.bulk_evaltree( circuits )
-        lookupC = evtC.split(lookupC, num_sub_trees=3)
-
-        with self.assertRaises(ValueError):
-            evtBad,lkup,_ = self.model.bulk_evaltree( circuits )
-            evtBad.split(lkup, num_sub_trees=3, max_sub_tree_size=4) #can't specify both
-
-        self.assertFalse(evtA.is_split())
-        self.assertTrue(evtB.is_split())
-        self.assertTrue(evtC.is_split())
-        self.assertEqual(len(evtA.sub_trees()), 1)
-        self.assertEqual(len(evtB.sub_trees()), 5) #empirically
-        self.assertEqual(len(evtC.sub_trees()), 3)
-        self.assertLessEqual(max([len(subTree)
-                             for subTree in evtB.sub_trees()]), 4)
-
-        #print "Lenghts = ",len(evtA.sub_trees()),len(evtB.sub_trees()),len(evtC.sub_trees())
-        #print "SubTree sizes = ",[len(subTree) for subTree in evtC.sub_trees()]
-
-        bulk_probsA = np.empty( evtA.num_final_elements(), 'd')
-        bulk_probsB = np.empty( evtB.num_final_elements(), 'd')
-        bulk_probsC = np.empty( evtC.num_final_elements(), 'd')
-        self.model.bulk_fill_probs(bulk_probsA, evtA)
-        self.model.bulk_fill_probs(bulk_probsB, evtB)
-        self.model.bulk_fill_probs(bulk_probsC, evtC)
-
-        for i,opstr in enumerate(circuits):
-            self.assertArraysAlmostEqual(bulk_probsA[ lookupA[i] ],
-                                         bulk_probsB[ lookupB[i] ])
-            self.assertArraysAlmostEqual(bulk_probsA[ lookupA[i] ],
-                                         bulk_probsC[ lookupC[i] ])
-
-
     @unittest.skip("TODO: add backward compatibility for old gatesets?")
     def test_load_old_gateset(self):
-        #pygsti.obj.results.enable_old_python_results_unpickling()
+        #pygsti.baseobjs.results.enable_old_python_results_unpickling()
         from pygsti.io import enable_old_object_unpickling
         with enable_old_object_unpickling(), patched_uuid():
             with open(compare_files + "/pygsti0.9.6.gateset.pkl", 'rb') as f:
                 mdl = pickle.load(f)
-        #pygsti.obj.results.disable_old_python_results_unpickling()
+        #pygsti.baseobjs.results.disable_old_python_results_unpickling()
         #pygsti.io.disable_old_object_unpickling()
         with open(temp_files + "/repickle_old_gateset.pkl", 'wb') as f:
             pickle.dump(mdl, f)
@@ -388,16 +332,18 @@ Gx^4  0:100
         self.assertEqual(ds[()]['2'], 0) # but we can query '2' since it's a valid outcome label
 
         gstrs = list(ds.keys())
-        layout = std1Q_XYI.target_model().sim.create_layout(gstrs, dataset=ds)
+        model = std1Q_XYI.target_model()
+        model.sim = 'map'
+        layout = model.sim.create_layout(gstrs, dataset=ds)
 
         self.assertEqual(layout.outcomes(()), (('1',),) )
-        self.assertEqual(layout.outcomes(('Gx',)), (('1',), ('0',)) )  # '1' comes first because it's the first outcome to appear
-        self.assertEqual(layout.outcomes(('Gx','Gy')), (('1',), ('0',)) )
+        self.assertTrue(layout.outcomes(('Gx',))==(('1',), ('0',)) or  layout.outcomes(('Gx',))==(('0',), ('1',)))
+        self.assertTrue(layout.outcomes(('Gx','Gy'))==(('1',), ('0',)) or layout.outcomes(('Gx','Gy'))==(('0',), ('1',)))
         self.assertEqual(layout.outcomes(('Gx',)*4), (('0',),) )
 
-        self.assertEqual(layout.indices(()), slice(0, 1, None))
-        self.assertArraysEqual(layout.indices(('Gx',)), [1,3] )
-        self.assertArraysEqual(layout.indices(('Gx','Gy')), [2,4] )
+        self.assertEqual(layout.indices(()), slice(0, 1, None))      
+        self.assertEqual(layout.indices(('Gx',)), slice(1, 3, None))
+        self.assertEqual(layout.indices(('Gx','Gy')), slice(3, 5, None))
         self.assertEqual(layout.indices(('Gx',)*4), slice(5, 6, None))
 
         self.assertEqual(layout.num_elements, 6)

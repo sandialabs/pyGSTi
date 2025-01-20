@@ -88,7 +88,7 @@ class ComputationalBasisState(_State, _NoErrorGeneratorInterface):
 
         for zvals in _itertools.product(*([(0, 1)] * nqubits)):
             testvec = _functools.reduce(_np.kron, [v[i] for i in zvals])
-            if _np.allclose(testvec, vec.flatten()):
+            if _np.allclose(testvec, vec.ravel()):
                 return cls(zvals, basis, evotype, state_space)
         raise ValueError(("Given `vec` is not a z-basis product state - "
                           "cannot construct ComputationalBasisState"))
@@ -128,7 +128,7 @@ class ComputationalBasisState(_State, _NoErrorGeneratorInterface):
         v = (_np.array([1, 0], 'd'), _np.array([0, 1], 'd'))  # (v0,v1)
         for zvals in _itertools.product(*([(0, 1)] * nqubits)):
             testvec = _functools.reduce(_np.kron, [v[i] for i in zvals])
-            if _np.allclose(testvec, purevec.flatten()):
+            if _np.allclose(testvec, purevec.ravel()):
                 return cls(zvals, basis, evotype, state_space)
         raise ValueError(("Given `purevec` must be a z-basis product state - "
                           "cannot construct ComputationalBasisState"))
@@ -140,7 +140,7 @@ class ComputationalBasisState(_State, _NoErrorGeneratorInterface):
             else _statespace.StateSpace.cast(state_space)
         basis = _Basis.cast(basis, state_space)  # basis for Hilbert-Schmidt (superop) space
 
-        evotype = _Evotype.cast(evotype)
+        evotype = _Evotype.cast(evotype, state_space=state_space)
         self._evotype = evotype  # set this before call to _State.__init__ so self.to_dense() can work...
         rep = evotype.create_computational_state_rep(self._zvals, basis, state_space)
         _State.__init__(self, rep, evotype)

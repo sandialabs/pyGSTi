@@ -1,5 +1,125 @@
 # CHANGELOG
 
+## [0.9.13] - 2025-01-16
+
+### Added
+* PyTorch-backed forward simulation (#390)
+* Support for ECR gates in QASM translation (#440, #457)
+* Interleaved RB (#296, #468)
+* Pared-down Levenberg-Marquardt for nonlinear least-squares (#500)
+* Fisher information for quantum instruments (#464, #503)
+* Wildcard and Hessians for non-ExplicitOpModels (#511)
+
+### Fixed
+* Kraus operator decomposition with degenerate Choi matrix bugfix (#423)
+* NumPy improvements and fixes (#430, #431, #451, #458, #470, #518)
+* Model parameter desync bugfix (#456, #482)
+* FOGI parameter label accumulation bugfix (#486, #488)
+* Guarding `signal` to allow PyGSTi usage with Dask (#489)
+* Docstring escape and mismatch bugfixes (#502, #504)
+* CPTP deserialization sign flip bugfix (#341, #509)
+* LindbladErrorgen Hessian with dense representation bugfix (#512)
+* Test file updates (#510)
+* ProcessorSpec state space label bugfix (#474, #521)
+
+### Changed
+* Circuit primitive performance upgrades (#445)
+* Refactors for matrixtools.py and the Basis class (#429, #442, #493)
+* Layout and MDCStore creation performance upgrades (#448)
+* Major 2Q GST performance improvements (#496, #517)
+
+### Deprecated
+* We are deprecating the CVXOPT backend for CVXPY in favor of Clarabel (#437). Although pyGSTi will not warn you if you continue to use the CVXOPT backend, this change will occur with no additional warning in a future release.
+
+### Removed
+* Removed explicit dependency on CVXOPT for wildcard optimization (#444)
+* Removed deprecated QIBO interface (#262, #490)
+* Large "spring cleaning" of unused/commented out code (#424, #452)
+
+## [0.9.12.3] - 2024-06-11
+
+### Added
+* Deterministic Clifford compilation and native gate count statistics for `CliffordRBDesign` (#314, #315, #443)
+
+
+### Fixed
+* Truncation bugfix in `BenchmarkingDesign` objects with "paired" lists to `circuit_list` attribute (#408, #443)
+* Fixes and efficiency improvements for various linear algebra calls (#432)
+* `densitymx_slow` evotype hotfix (#438, #439)
+
+
+## [0.9.12.2] - 2024-04-16
+
+### Added
+* Updated Cirq parsing capabilities (#411)
+* Added ability for reports to use CircuitListDesigns and results without gauge optimizations (#412, #415)
+* Indicator that figure/title headings can be clicked for expanded details (#416)
+
+
+### Fixed
+* Several tutorial updates and fixes (#282, #317, #421)
+* Fixed fiducial selection with wrong qubit labels (#396, #418)
+* Casting operators to dense matrices to avoid type errors in `pygsti.tools.optools` (#406, #414)
+* LGST fitting with sparse dataset (#420)
+
+
+### Changed
+* Increased the speed of unit/integration tests in GitHub Actions (#380, #403)
+
+## [0.9.12.1] - 2024-02-07
+
+### Added
+* Warnings for JupyterLab incompatibility (#328)
+* Warning for modifying static DataSets (#340)
+* Keyword argument to change ForwardSim types at Protocol runtime (#358)
+* Flag to drop new `delay` instructions in QASM2 circuit output (#377)
+* Warning for non-TP gauge transformations on CPTPLND-parameterized objects (#378)
+* Code owner assignments (#384)
+* A new AffineShiftOp modelmember (#386)
+
+### Fixed
+* Several tutorial updates and fixes (#247, #395)
+* LGST fitting with various model parameterizations (#366)
+* Deprecated convolve import in scipy 1.12 (#391, #392)
+
+### Changed
+* Stricter enforcement of line labels when using "*" in circuits (#373)
+* Reimplementation of ProtectedArray (#386)
+* GitHub runner updates for faster runs on development branches (#388)
+
+## [0.9.12] - 2023-11-28
+
+### Added
+* Checkpointing for GST experiments (#347)
+* Binary randomized benchmarking (BiRB) protocol (#348)
+* Utility module for generating UML graphs of pyGSTi class inheritance structure (#353)
+* Support for non-standard POVMs and qudits in write_empty_protocol_data (#370)
+* Experimental support for updating model state spaces (#375)
+
+### Fixed
+* Numpy deprecation warnings (#325)
+* Updated deprecated code in the README (#325)
+* Finish migration of tests to pytest (#344, #362)
+* Bugfixes for instruments in pspecs (#349)
+* Remove mutable defaults (#357)
+* Reparameterize model member dicts with model (#365, #367)
+* Compute product of editable circuit (#368)
+* Error handling for single-parameter wildcard with no CVXPY (#375)
+
+### Changed
+* Enhances EmbeddingOpFactory to be used to create target-qubit-dependent operation factories (#338)
+* More efficient use of CVXPY when computing the diamond norm (#345)
+* Improved (germ-aware) global fiducial pair reduction (#350)
+* MPI-enabled Fisher information matrix calculation (#350)
+* Report compatibility with the `MapForwardSimulator` (#350)
+* Introduced new `ExperimentDevice` in `pygsti.extras.devices` as a replacement for (now legacy) device config files (#359)
+* Refactored and improved unit test performance (#372)
+* Removed Python 3.7 support and added Python 3.11 support (#374)
+
+### Deprecated
+* The `pygsti.algorithms.directx` module
+* The `qibo` evotype (#363)
+
 ## [0.9.11.2] - 2023-08-11
 
 ### Fixed

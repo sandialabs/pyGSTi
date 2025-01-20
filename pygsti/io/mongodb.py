@@ -158,7 +158,6 @@ def read_auxtree_from_mongodb_doc(mongodb, doc, auxfile_types_member='auxfile_ty
 
 
 def _load_auxdoc_member(mongodb, member_name, typ, metadata, quick_load):
-    from pymongo import ASCENDING, DESCENDING
     subtypes = typ.split(':')
     cur_typ = subtypes[0]
     next_typ = ':'.join(subtypes[1:])
@@ -256,9 +255,8 @@ def _load_auxdoc_member(mongodb, member_name, typ, metadata, quick_load):
             val = _MongoSerializable.from_mongodb_doc(mongodb, metadata['collection_name'], obj_doc)
 
         elif cur_typ == 'circuit-str-json':
-            from .readers import convert_strings_to_circuits as _convert_strings_to_circuits
             obj_doc = mongodb[metadata['collection_name']].find_one(metadata['id'])
-            val = _convert_strings_to_circuits(obj_doc['circuit_str_json'])
+            val = _load.convert_strings_to_circuits(obj_doc['circuit_str_json'])
 
         elif typ == 'numpy-array':
             array_doc = mongodb[metadata['collection_name']].find_one(metadata['id'])
@@ -810,7 +808,6 @@ def remove_auxtree_from_mongodb(mongodb, collection_name, doc_id, auxfile_types_
 
 
 def _remove_auxdoc_member(mongodb, member_name, typ, metadata, session, recursive):
-    from pymongo import ASCENDING, DESCENDING
     subtypes = typ.split(':')
     cur_typ = subtypes[0]
     next_typ = ':'.join(subtypes[1:])

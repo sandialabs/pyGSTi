@@ -14,6 +14,7 @@ import collections as _collections
 
 # from .. import modelmember as _mm
 from pygsti.modelmembers.povms.povm import POVM as _POVM
+from pygsti.modelmembers.povms import ComposedPOVMEffect as _ComposedPOVMEffect
 from pygsti.modelmembers.povms.staticeffect import StaticPOVMEffect as _StaticPOVMEffect
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from pygsti.baseobjs.label import Label as _Label
@@ -193,8 +194,8 @@ class MarginalizedPOVM(_POVM):
                     effect_vec = e.to_dense()
                 else:
                     effect_vec += e.to_dense()
-            effect = _StaticPOVMEffect(effect_vec, e._basis, self._evotype)
-            # UNSPECIFIED BASIS -- may need to rename e._basis -> e._rep.basis above if that's the std attribute name?
+            rep = e.effect_vec._rep if isinstance(e, _ComposedPOVMEffect) else e._rep
+            effect = _StaticPOVMEffect(effect_vec, rep.basis, self._evotype)
             assert(effect.allocate_gpindices(0, self.parent) == 0)  # functional! (do not remove)
             _collections.OrderedDict.__setitem__(self, key, effect)
             return effect
@@ -205,85 +206,6 @@ class MarginalizedPOVM(_POVM):
         return (MarginalizedPOVM, (self.povm_to_marginalize, self.sslbls_to_marginalize,
                                    self.sslbls_after_marginalizing),
                 {'_gpindices': self._gpindices})  # preserve gpindices (but not parent)
-
-    #May need to implement this in future if we allow non-static MarginalizedPOVMs
-    #def allocate_gpindices(self, starting_index, parent, memo=None):
-    #    """
-    #    Sets gpindices array for this object or any objects it
-    #    contains (i.e. depends upon).  Indices may be obtained
-    #    from contained objects which have already been initialized
-    #    (e.g. if a contained object is shared with other
-    #     top-level objects), or given new indices starting with
-    #    `starting_index`.
-    #
-    #    Parameters
-    #    ----------
-    #    starting_index : int
-    #        The starting index for un-allocated parameters.
-    #
-    #    parent : Model or ModelMember
-    #        The parent whose parameter array gpindices references.
-    #
-    #    memo : set, optional
-    #        Used to prevent duplicate calls and self-referencing loops.  If
-    #        `memo` contains an object's id (`id(self)`) then this routine
-    #        will exit immediately.
-    #
-    #    Returns
-    #    -------
-    #    num_new: int
-    #        The number of *new* allocated parameters (so
-    #        the parent should mark as allocated parameter
-    #        indices `starting_index` to `starting_index + new_new`).
-    #    """
-    #    if memo is None: memo = set()
-    #    if id(self) in memo: return 0
-    #    memo.add(id(self))
-    #
-    #    assert(self.base_povm.num_params == 0)  # so no need to do anything w/base_povm
-    #    num_new_params = self.error_map.allocate_gpindices(starting_index, parent, memo)  # *same* parent as self
-    #    _mm.ModelMember.set_gpindices(
-    #        self, self.error_map.gpindices, parent)
-    #    return num_new_params
-
-    #def relink_parent(self, parent):  # Unnecessary?
-    #    """
-    #    Sets the parent of this object *without* altering its gpindices.
-    #
-    #    In addition to setting the parent of this object, this method
-    #    sets the parent of any objects this object contains (i.e.
-    #    depends upon) - much like allocate_gpindices.  To ensure a valid
-    #    parent is not overwritten, the existing parent *must be None*
-    #    prior to this call.
-    #    """
-    #    self.povm_to_marginalize.relink_parent(parent)
-    #    _mm.ModelMember.relink_parent(self, parent)
-
-    #def set_gpindices(self, gpindices, parent, memo=None):
-    #    """
-    #    Set the parent and indices into the parent's parameter vector that
-    #    are used by this ModelMember object.
-    #
-    #    Parameters
-    #    ----------
-    #    gpindices : slice or integer ndarray
-    #        The indices of this objects parameters in its parent's array.
-    #
-    #    parent : Model or ModelMember
-    #        The parent whose parameter array gpindices references.
-    #
-    #    Returns
-    #    -------
-    #    None
-    #    """
-    #    if memo is None: memo = set()
-    #    elif id(self) in memo: return
-    #    memo.add(id(self))
-    #
-    #    assert(self.base_povm.num_params == 0)  # so no need to do anything w/base_povm
-    #    self.error_map.set_gpindices(gpindices, parent, memo)
-    #    self.terms = {}  # clear terms cache since param indices have changed now
-    #    _mm.ModelMember._set_only_my_gpindices(self, gpindices, parent)
 
     def simplify_effects(self, prefix=""):
         """

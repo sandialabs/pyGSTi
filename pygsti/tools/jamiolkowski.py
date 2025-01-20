@@ -117,9 +117,9 @@ def jamiolkowski_iso(operation_mx, op_mx_basis='pp', choi_mx_basis='pp'):
     for i in range(M):
         for j in range(M):
             BiBj = _np.kron(BVec[i], _np.conjugate(BVec[j]))
-            BiBj_dag = _np.transpose(_np.conjugate(BiBj))
-            choiMx[i, j] = _mt.trace(_np.dot(opMxInStdBasis, BiBj_dag)) \
-                / _mt.trace(_np.dot(BiBj, BiBj_dag))
+            num = _np.vdot(BiBj, opMxInStdBasis)
+            den = _np.linalg.norm(BiBj) ** 2
+            choiMx[i, j] = num / den 
 
     # This construction results in a Jmx with trace == dim(H) = sqrt(operation_mx.shape[0])
     #  (dimension of density matrix) but we'd like a Jmx with trace == 1, so normalize:
@@ -225,7 +225,7 @@ def fast_jamiolkowski_iso_std(operation_mx, op_mx_basis):
     N2 = opMxInStdBasis.shape[0]; N = int(_np.sqrt(N2))
     assert(N * N == N2)  # make sure N2 is a perfect square
     Jmx = opMxInStdBasis.reshape((N, N, N, N))
-    Jmx = _np.swapaxes(Jmx, 1, 2).flatten()
+    Jmx = _np.swapaxes(Jmx, 1, 2).ravel()
     Jmx = Jmx.reshape((N2, N2))
 
     # This construction results in a Jmx with trace == dim(H) = sqrt(gateMxInPauliBasis.shape[0])
@@ -261,7 +261,7 @@ def fast_jamiolkowski_iso_std_inv(choi_mx, op_mx_basis):
     N2 = choi_mx.shape[0]; N = int(_np.sqrt(N2))
     assert(N * N == N2)  # make sure N2 is a perfect square
     opMxInStdBasis = choi_mx.reshape((N, N, N, N)) * N
-    opMxInStdBasis = _np.swapaxes(opMxInStdBasis, 1, 2).flatten()
+    opMxInStdBasis = _np.swapaxes(opMxInStdBasis, 1, 2).ravel()
     opMxInStdBasis = opMxInStdBasis.reshape((N2, N2))
     op_mx_basis = _bt.create_basis_for_matrix(opMxInStdBasis, op_mx_basis)
 

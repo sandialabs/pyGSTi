@@ -69,8 +69,19 @@ class ComposedOp(_LinearOperator):
             evotype = ops_to_compose[0]._evotype
         assert(all([evotype == operation._evotype for operation in ops_to_compose])), \
             "All operations must have the same evolution type (%s expected)!" % evotype
-        evotype = _Evotype.cast(evotype)
+        evotype = _Evotype.cast(evotype, state_space=state_space)
 
+        rep = self._create_rep_object(evotype, state_space)
+
+        # caches in case terms are used
+        self.terms = {}
+        self.local_term_poly_coeffs = {}
+
+        _LinearOperator.__init__(self, rep, evotype)
+        self.init_gpindices(allocated_to_parent)  # initialize our gpindices based on sub-members
+        if self._rep_type == 'dense': self._update_denserep()  # update dense rep if needed
+
+    def _create_rep_object(self, evotype, state_space):
         #Create representation object
         rep_type_order = ('dense', 'composed') if evotype.prefer_dense_reps else ('composed', 'dense')
         rep = None
@@ -95,14 +106,7 @@ class ComposedOp(_LinearOperator):
 
         if rep is None:
             raise ValueError("Unable to construct representation with evotype: %s" % str(evotype))
-
-        # caches in case terms are used
-        self.terms = {}
-        self.local_term_poly_coeffs = {}
-
-        _LinearOperator.__init__(self, rep, evotype)
-        self.init_gpindices(allocated_to_parent)  # initialize our gpindices based on sub-members
-        if self._rep_type == 'dense': self._update_denserep()  # update dense rep if needed
+        return rep
 
     def _update_denserep(self):
         """Performs additional update for the case when we use a dense underlying representation."""
@@ -116,6 +120,10 @@ class ComposedOp(_LinearOperator):
         self._rep.base.flags.writeable = True
         self._rep.base[:, :] = mx
         self._rep.base.flags.writeable = False
+
+    def _update_submember_state_spaces(self, old_parent_state_space, new_parent_state_space):
+        self._rep = self._create_rep_object(self.evotype, new_parent_state_space)  # update representation
+        super()._update_submember_state_spaces(old_parent_state_space, new_parent_state_space)
 
     #Note: no to_memoized_dict needed, as ModelMember version does all we need.
 
@@ -483,10 +491,6 @@ class ComposedOp(_LinearOperator):
 
         self.terms[order] = terms
 
-        #def _decompose_indices(x):
-        #    return tuple(_modelmember._decompose_gpindices(
-        #        self.gpindices, _np.array(x, _np.int64)))
-
         mapvec = _np.ascontiguousarray(_np.zeros(max_polynomial_vars, _np.int64))
         for ii, i in enumerate(gpindices_array):
             mapvec[i] = ii
@@ -547,25 +551,6 @@ class ComposedOp(_LinearOperator):
                 if mag >= min_term_mag:
                     terms.append(_term.compose_terms_with_mag(factors, mag))
         return terms
-        #def _decompose_indices(x):
-        #    return tuple(_modelmember._decompose_gpindices(
-        #        self.gpindices, _np.array(x, _np.int64)))
-        #
-        #mapvec = _np.ascontiguousarray(_np.zeros(max_polynomial_vars,_np.int64))
-        #for ii,i in enumerate(self.gpindices_as_array()):
-        #    mapvec[i] = ii
-        #
-        ##poly_coeffs = [t.coeff.map_indices(_decompose_indices) for t in terms]  # with *local* indices
-        #poly_coeffs = [t.coeff.mapvec_indices(mapvec) for t in terms]  # with *local* indices
-        #tapes = [poly.compact(complex_coeff_tape=True) for poly in poly_coeffs]
-        #if len(tapes) > 0:
-        #    vtape = _np.concatenate([t[0] for t in tapes])
-        #    ctape = _np.concatenate([t[1] for t in tapes])
-        #else:
-        #    vtape = _np.empty(0, _np.int64)
-        #    ctape = _np.empty(0, complex)
-        #coeffs_as_compact_polys = (vtape, ctape)
-        #self.local_term_poly_coeffs[order] = coeffs_as_compact_polys
 
     @property
     def total_term_magnitude(self):

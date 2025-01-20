@@ -112,6 +112,16 @@ class CircuitTester(BaseCase):
         c2.factorize_repetitions_inplace()
         self.assertEqual(c2, ('Gi', CircuitLabel('', ['Gx'], None, 4), 'Gy'))
 
+    def test_expand_subcircuits_nested(self):
+        test_ckt = circuit.Circuit([Label('Gxpi2',0)]*2, line_labels=(0,))
+        test_ckt_lbl = test_ckt.to_label()
+        test_ckt_1 = circuit.Circuit([Label('Gxpi2',0)]*2 + [test_ckt_lbl], line_labels=(0,), expand_subcircuits=False)
+        test_ckt_1_lbl = test_ckt_1.to_label()
+        test_ckt_2 = circuit.Circuit([Label('Gxpi2',0)]*2 + [test_ckt_1_lbl], line_labels=(0,), expand_subcircuits=False)
+
+        #test_circuit_2 now is has multiply nested CircuitLabels. Make sure this recursively expands out correctly.
+        self.assertEqual(test_ckt_2.expand_subcircuits(), circuit.Circuit([Label('Gxpi2',0)]*6, line_labels=(0,)))
+
     def test_circuitlabel_inclusion(self):
         c = circuit.Circuit(None, stringrep="GxGx(GyGiGi)^2", expand_subcircuits=False)
         self.assertTrue('Gi' in c)
@@ -236,8 +246,10 @@ class CircuitTester(BaseCase):
         c = circuit.Circuit(layer_labels=labels, line_labels=['Q0', 'Q1', 'Q8', 'Q12'],
                             compilable_layer_indices=(1,2))
         self.assertEqual(c.compilable_layer_indices, (1,2))
-
+        
+        c = c.copy(editable=True)
         c.compilable_layer_indices = (1,)  # test setter
+        c.done_editing()
         self.assertEqual(c.compilable_layer_indices, (1,))
         self.assertArraysEqual(c.compilable_by_layer, np.array([False,True,False]))
         
@@ -457,21 +469,6 @@ class CircuitMethodTester(BaseCase):
         c.compress_depth_inplace(one_q_gate_relations=oneQrelations)
         self.assertEqual(c.depth, 3)
 
-    @unittest.skip("unused (remove?)")
-    def test_predicted_error_probability(self):
-        # Test the error-probability prediction method
-        labels = circuit.Circuit(None, stringrep="[Gx:Q0][Gi:Q0Gi:Q1]")
-        c = circuit.Circuit(layer_labels=labels, line_labels=['Q0', 'Q1'])
-        infidelity_dict = {}
-        infidelity_dict[Label('Gi', 'Q0')] = 0.7
-        infidelity_dict[Label('Gi', 'Q1')] = 0.9
-        infidelity_dict[Label('Gx', 'Q0')] = 0.8
-        infidelity_dict[Label('Gx', 'Q2')] = 0.9
-
-        # TODO fix
-        epsilon = c.predicted_error_probability(infidelity_dict)
-        self.assertLess(abs(epsilon - (1 - (1 - 0.7) * (1 - 0.8) * (1 - 0.9)**2)), 10**-10)
-
     def test_convert_to_quil(self):
         # Quil string with setup, each layer, and block_between_layers=True (current default)
         quil_str = """DECLARE ro BIT[2]
@@ -496,10 +493,123 @@ MEASURE 2 ro[2]
         s = c.convert_to_quil()
         self.assertEqual(quil_str, s)
 
+    def test_convert_to_openqasm(self):
+        ckt = circuit.Circuit([Label('Gxpi2',0), Label(()), Label([Label('Gh',0), Label('Gtdag',1)]), 
+                               Label('Gcnot', (0,1))], line_labels=(0,1))
+
+        converted_qasm = ckt.convert_to_openqasm()
+        #this is really just doing a check if anything has changed. I.e. an integration test.
+        expected_qasm = 'OPENQASM 2.0;\ninclude "qelib1.inc";\n\nopaque delay(t) q;\n\nqreg q[2];'\
+                        +'\ncreg cr[2];\n\nu3(1.570796326794897, 4.71238898038469, 1.570796326794897) q[0];\ndelay(0) q[1];'\
+                        +'\nbarrier q[0], q[1];\ndelay(0) q[0];\ndelay(0) q[1];\nbarrier q[0], q[1];\nh q[0];\ntdg q[1];'\
+                        +'\nbarrier q[0], q[1];\ncx q[0],  q[1];\nbarrier q[0], q[1];\nmeasure q[0] -> cr[0];\nmeasure q[1] -> cr[1];\n'
+
+        self.assertEqual(converted_qasm, expected_qasm)
+
+    def test_convert_to_cirq(self):        
+        try:
+            import cirq
+        except ImportError:
+            self.skipTest("Cirq is required for this operation, and it does not appear to be installed.")
+            
+        ckt = circuit.Circuit([Label('Gxpi2',0), Label(()), Label('Gn',0), Label([Label('Gh',0), Label('Gtdag',1)]), 
+                               Label('Gcnot', (0,1))], line_labels=(0,1))
+        
+        qubit_conversion = {0: cirq.GridQubit(0,0), 1: cirq.GridQubit(0,1)}
+        cirq_circuit_converted = ckt.convert_to_cirq(qubit_conversion)
+
+        #Manually build this circuit directly in cirq and compare.
+        qubit_00 = cirq.GridQubit(0,0)
+        qubit_01 = cirq.GridQubit(0,1)
+        moment1 = cirq.Moment([cirq.XPowGate(exponent=.5).on(qubit_00), cirq.I(qubit_01)])
+        moment2 = cirq.Moment([cirq.I(qubit_00), cirq.I(qubit_01)])
+        moment3 = cirq.Moment([cirq.PhasedXZGate(axis_phase_exponent=0.14758361765043326, 
+                                                            x_exponent=0.4195693767448338, 
+                                                            z_exponent=-0.2951672353008665).on(qubit_00),
+                            cirq.I(qubit_01)])
+        moment4 = cirq.Moment([cirq.H(qubit_00), (cirq.T**-1).on(qubit_01)])
+        moment5 = cirq.Moment([cirq.CNOT.on(qubit_00, qubit_01)])
+        cirq_circuit_direct = cirq.Circuit([moment1, moment2, moment3, moment4, moment5])
+
+        self.assertTrue(cirq_circuit_direct == cirq_circuit_converted)
+
+    def test_from_cirq(self):
+        try:
+            import cirq
+        except ImportError:
+            self.skipTest("Cirq is required for this operation, and it does not appear to be installed.")
+
+        qubit_00 = cirq.GridQubit(0,0)
+        qubit_01 = cirq.GridQubit(0,1)
+        moment1 = cirq.Moment([cirq.XPowGate(exponent=.5).on(qubit_00), cirq.I(qubit_01)])
+        moment2 = cirq.Moment([cirq.I(qubit_00), cirq.I(qubit_01)])
+        moment3 = cirq.Moment([cirq.PhasedXZGate(axis_phase_exponent=0.14758361765043326, 
+                                                 x_exponent=0.4195693767448338, 
+                                                 z_exponent=-0.2951672353008665).on(qubit_00),
+                            cirq.I(qubit_01)])
+        moment4 = cirq.Moment([cirq.H(qubit_00), (cirq.T**-1).on(qubit_01)])
+        moment5 = cirq.Moment([cirq.CNOT.on(qubit_00, qubit_01)])
+        cirq_circuit = cirq.Circuit([moment1, moment2, moment3, moment4, moment5])
+        
+        converted_pygsti_circuit = circuit.Circuit.from_cirq(cirq_circuit, 
+                                                             qubit_conversion= {qubit_00: 0, qubit_01: 1})
+        
+        ckt = circuit.Circuit([Label('Gxpi2',0), Label(()), Label('Gn',0), Label([Label('Gh',0), Label('Gtdag',1)]), 
+                               Label('Gcnot', (0,1))], line_labels=(0,1))
+        
+        self.assertEqual(ckt, converted_pygsti_circuit)
+
+        #test without stripping implied idles:
+        converted_pygsti_circuit_implied_idles = circuit.Circuit.from_cirq(cirq_circuit, 
+                                                             qubit_conversion= {qubit_00: 0, qubit_01: 1},
+                                                             remove_implied_idles= False)
+
+        ckt_implied_idles = circuit.Circuit([Label([Label('Gxpi2',0), Label('Gi',1)]), 
+                                             Label(()), 
+                                             Label([Label('Gn',0), Label('Gi',1)]), 
+                                             Label([Label('Gh',0), Label('Gtdag',1)]), 
+                                             Label('Gcnot', (0,1))], line_labels=(0,1))
+        
+        self.assertEqual(ckt_implied_idles, converted_pygsti_circuit_implied_idles)
+
+        #test w/replacement of global idle
+        ckt_global_idle = circuit.Circuit([Label('Gxpi2',0), Label(()), Label('Gn',0), Label([Label('Gh',0), Label('Gtdag',1)]), 
+                               Label('Gcnot', (0,1))], line_labels=(0,1))
+        ckt_global_idle_custom = circuit.Circuit([Label('Gxpi2',0), Label('Gbanana', (0,1)), Label('Gn',0), Label([Label('Gh',0), Label('Gtdag',1)]), 
+                               Label('Gcnot', (0,1))], line_labels=(0,1))
+        
+        ckt_global_idle_none = circuit.Circuit([Label('Gxpi2',0), Label([Label('Gi',0), Label('Gi',1)]), Label('Gn',0), Label([Label('Gh',0), Label('Gtdag',1)]), 
+                               Label('Gcnot', (0,1))], line_labels=(0,1))
+        
+        converted_pygsti_circuit_global_idle = circuit.Circuit.from_cirq(cirq_circuit, 
+                                                             qubit_conversion= {qubit_00: 0, qubit_01: 1},
+                                                             global_idle_replacement_label='auto')
+        
+        converted_pygsti_circuit_global_idle_custom = circuit.Circuit.from_cirq(cirq_circuit, 
+                                                             qubit_conversion= {qubit_00: 0, qubit_01: 1},
+                                                             global_idle_replacement_label='Gbanana')
+        
+        converted_pygsti_circuit_global_idle_custom_1 = circuit.Circuit.from_cirq(cirq_circuit, 
+                                                             qubit_conversion= {qubit_00: 0, qubit_01: 1},
+                                                             global_idle_replacement_label=Label('Gbanana', (0,1)))
+        
+        converted_pygsti_circuit_global_idle_none = circuit.Circuit.from_cirq(cirq_circuit, 
+                                                             qubit_conversion= {qubit_00: 0, qubit_01: 1},
+                                                             global_idle_replacement_label=None)
+        
+
+        self.assertEqual(ckt_global_idle, converted_pygsti_circuit_global_idle)
+        self.assertEqual(ckt_global_idle_custom, converted_pygsti_circuit_global_idle_custom)
+        self.assertEqual(ckt_global_idle_custom, converted_pygsti_circuit_global_idle_custom_1)
+        self.assertEqual(ckt_global_idle_none, converted_pygsti_circuit_global_idle_none)
+        
     def test_done_editing(self):
         self.c.done_editing()
         with self.assertRaises(AssertionError):
             self.c.clear()
+        #assert that the _hash and _hashable_tup attributes have been set
+        self.assertTrue(self.c._hash)
+        self.assertTrue(self.c._hashable_tup)
 
     def test_simulate(self):
         # TODO optimize
@@ -515,6 +625,14 @@ MEASURE 2 ro[2]
         out = c.simulate(mdl)
         self.assertLess(abs(out['00'] - 0.5), 10**-10)
         self.assertLess(abs(out['11'] - 0.5), 10**-10)
+
+        # Comment this back in once issue described in #505 is fixed
+        # if mdl.evotype != "densitymx_slow":
+        #     # Also tests the non-Cython code if above tested "densitymx" (the default)
+        #     mdl2 = mc.create_crosstalk_free_model(ps, evotype="densitymx_slow")
+        #     out2 = c.simulate(mdl2)
+        #     self.assertLess(abs(out2['00'] - 0.5), 10**-10)
+        #     self.assertLess(abs(out2['11'] - 0.5), 10**-10)
 
     def test_simulate_marginalization(self):
         pspec = QubitProcessorSpec(4, ['Gx', 'Gy'], geometry='line')
@@ -623,12 +741,30 @@ class CircuitOperationTester(BaseCase):
     def test_raise_on_add_non_circuit(self):
         with self.assertRaises(AssertionError):
             self.s1 + ("Gx",)  # can't add non-Circuit to circuit
+            
+    def test_raise_on_add_incompatible_circuit_labels(self):
+        with self.assertRaises(ValueError):
+            self.s1 + circuit.Circuit([Label('Gy',0)], line_labels=(0,))
+
+    def test_line_labels_on_add_non_circuit(self):
+        #Make sure that when we add to a circuit via a label
+        #that the line labels are expanded when necessary.
+        c = circuit.Circuit([Label('Gy',0)], line_labels=(0,)) + (Label('Gy',1),)
+        self.assertEqual(c.line_labels, (0,1))
 
     def test_clear(self):
         c = self.s1.copy(editable=True)
         self.assertEqual(c.size, 2)
         c.clear()
         self.assertEqual(c.size, 0)
+
+    def test_hash(self):
+        self.assertTrue(self.s1._hash == hash(self.s1) == hash(self.s1._hashable_tup) == hash(self.s1.tup))
+
+    def test_sandwich(self):
+        c = circuit.Circuit([Label('Gy',0)], line_labels=(0,))
+        sandwiched_c=  c.sandwich((Label('Gy',0),), (Label('Gx',0),))
+        self.assertEqual(sandwiched_c,  circuit.Circuit([Label('Gy',0), Label('Gy',0), Label('Gx',0)], line_labels=(0,)))
 
 
 class CompressedCircuitTester(BaseCase):

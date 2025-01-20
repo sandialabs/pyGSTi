@@ -409,13 +409,6 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
         return prepFidList, measFidList    
 
 
-#def bool_list_to_ind_list(boolList):
-#    output = _np.array([])
-#    for i, boolVal in boolList:
-#        if boolVal == 1:
-#            output = _np.append(i)
-#    return output
-
 def xor(*args):
     """
     Implements logical xor function for arbitrary number of inputs.
@@ -2013,7 +2006,23 @@ def create_candidate_fiducial_list(target_model, omit_identity= True, ops_to_omi
         else:
             availableFidList.extend(_circuits.list_random_circuits_onelen(
                 fidOps, fidLength, count, seed=candidate_seed))
-    return availableFidList
+
+    #force the line labels on each circuit to match the state space labels for the target model.
+    #this is suboptimal for many-qubit models, so will probably want to revisit this. #TODO
+    finalFidList = []
+    for ckt in availableFidList:
+        if ckt._static:
+            new_ckt = ckt.copy(editable=True)
+            new_ckt.line_labels = target_model.state_space.state_space_labels
+            new_ckt.done_editing()
+            
+            finalFidList.append(new_ckt)
+        else:
+            ckt.line_labels = target_model.state_space.state_space_labels
+
+            finalFidList.append(ckt)
+        
+    return finalFidList
     
     
     

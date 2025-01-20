@@ -23,13 +23,14 @@ from pygsti.objectivefns.objectivefns import ModelDatasetCircuitsStore as _Model
 from pygsti.report import colormaps as _colormaps
 from pygsti.report import plothelpers as _ph
 from pygsti.report.figure import ReportFigure
-from pygsti.report.workspace import WorkspacePlot
+from pygsti.report.workspace import WorkspacePlot, NotApplicable
 from pygsti import algorithms as _alg
 from pygsti import baseobjs as _baseobjs
 from pygsti.objectivefns import objectivefns as _objfns
 from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.circuits.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure, \
     GermFiducialPairPlaquette as _GermFiducialPairPlaquette
+from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.data import DataSet as _DataSet
 
 #Plotly v3 changes heirarchy of graph objects
@@ -379,9 +380,9 @@ def _summable_color_boxplot(sub_mxs, xlabels, ylabels, xlabel, ylabel,
 
     def sum_up_mx(mx):
         """ Sum up `mx` in a NAN-ignoring way """
-        flat_mx = mx.flatten()
-        if any([_np.isnan(x) for x in flat_mx]):
-            if all([_np.isnan(x) for x in flat_mx]):
+        flat_mx = mx.ravel()
+        if _np.any(_np.isnan(flat_mx)):
+            if _np.all(_np.isnan(flat_mx)):
                 return _np.nan
             # replace NaNs with zeros for purpose of summing (when there's at least one non-NaN)
             return sum(_np.nan_to_num(flat_mx))
@@ -529,6 +530,40 @@ def _create_hover_info_fn(circuit_structure, xvals, yvals, sum_up, addl_hover_su
                 txt += "<br>%s: %s" % (lbl, str(addl_subMxs[iy][ix][iiy][iix]))
             return txt
     return hover_label_fn
+    
+def _create_hover_info_fn_circuit_list(circuit_structure, sum_up, addl_hover_submxs):
+    
+    if sum_up:
+        pass
+    else:
+        if isinstance(circuit_structure, _CircuitList):
+            def hover_label_fn(val, i):
+                """ Standard hover labels """
+                #Note: in this case, we need to "flip" the iiy index because
+                # the matrices being plotted are flipped within _summable_color_boxplot(...)
+                if _np.isnan(val): return ""
+                ckt = circuit_structure[i].copy(editable=True)
+                ckt.factorize_repetitions_inplace()
+                txt = ckt.layerstr # note: *row* index = iiy
+                txt += ("<br>value: %g" % val)
+                for lbl, addl_subMxs in addl_hover_submxs.items():
+                    txt += "<br>%s: %s" % (lbl, str(addl_subMxs[i]))
+                return txt
+
+        elif isinstance(circuit_structure, list) and all([isinstance(el, _CircuitList) for el in circuit_structure]):
+            def hover_label_fn(val, i, j):
+                """ Standard hover labels """
+                #Note: in this case, we need to "flip" the iiy index because
+                # the matrices being plotted are flipped within _summable_color_boxplot(...)
+                if _np.isnan(val): return ""
+                ckt = circuit_structure[i][j].copy(editable=True)
+                ckt.factorize_repetitions_inplace()
+                txt = ckt.layerstr # note: *row* index = iiy
+                txt += ("<br>value: %g" % val)
+                for lbl, addl_subMxs in addl_hover_submxs.items():
+                    txt += "<br>%s: %s" % (lbl, str(addl_subMxs[i][j]))
+                return txt
+    return hover_label_fn
 
 
 def _circuit_color_boxplot(circuit_structure, sub_mxs, colormap,
@@ -662,42 +697,78 @@ def _circuit_color_scatterplot(circuit_structure, sub_mxs, colormap,
     plotly.Figure
     """
     g = circuit_structure
-    xvals = g.used_xs
-    yvals = g.used_ys
 
     if addl_hover_submxs is None:
         addl_hover_submxs = {}
 
     if hover_info:
-        hover_info = _create_hover_info_fn(circuit_structure, xvals, yvals, sum_up, addl_hover_submxs)
-
+        if isinstance(g, _PlaquetteGridCircuitStructure):
+            hover_info = _create_hover_info_fn(circuit_structure, g.used_xs, g.used_ys, sum_up, addl_hover_submxs)
+        elif isinstance(g, _CircuitList) or (isinstance(g, list) and all([isinstance(el, _CircuitList) for el in g])):
+            hover_info = _create_hover_info_fn_circuit_list(circuit_structure, sum_up, addl_hover_submxs)
+        
     xs = []; ys = []; texts = []
     gstrs = set()  # to eliminate duplicate strings
-    for ix, x in enumerate(g.used_xs):
-        for iy, y in enumerate(g.used_ys):
-            plaq = g.plaquette(x, y, empty_if_missing=True)
-            if sum_up:
-                if plaq.base not in gstrs:
-                    tot = sum([sub_mxs[iy][ix][iiy][iix] for iiy, iix, _ in plaq])
-                    xs.append(len(plaq.base))  # x-coord is len of *base* string
-                    ys.append(tot)
-                    gstrs.add(plaq.base)
-                    if hover_info:
-                        if callable(hover_info):
-                            texts.append(hover_info(tot, iy, ix))
-                        else:
-                            texts.append(str(tot))
+    
+    if isinstance(g, _PlaquetteGridCircuitStructure):
+        for ix, x in enumerate(g.used_xs):
+            for iy, y in enumerate(g.used_ys):
+                plaq = g.plaquette(x, y, empty_if_missing=True)
+                if sum_up:
+                    if plaq.base not in gstrs:
+                        tot = sum([sub_mxs[iy][ix][iiy][iix] for iiy, iix, _ in plaq])
+                        xs.append(len(plaq.base))  # x-coord is len of *base* string
+                        ys.append(tot)
+                        gstrs.add(plaq.base)
+                        if hover_info:
+                            if callable(hover_info):
+                                texts.append(hover_info(tot, iy, ix))
+                            else:
+                                texts.append(str(tot))
+                else:
+                    for iiy, iix, opstr in plaq:
+                        if opstr in gstrs: continue  # skip duplicates
+                        xs.append(len(opstr))
+                        ys.append(sub_mxs[iy][ix][iiy][iix])
+                        gstrs.add(opstr)
+                        if hover_info:
+                            if callable(hover_info):
+                                texts.append(hover_info(sub_mxs[iy][ix][iiy][iix], iy, ix, iiy, iix))
+                            else:
+                                texts.append(str(sub_mxs[iy][ix][iiy][iix]))
+    elif isinstance(g, _CircuitList):
+        for i, ckt in enumerate(g):
+            if ckt in gstrs:
+                continue
             else:
-                for iiy, iix, opstr in plaq:
-                    if opstr in gstrs: continue  # skip duplicates
-                    xs.append(len(opstr))
-                    ys.append(sub_mxs[iy][ix][iiy][iix])
-                    gstrs.add(opstr)
+                if sum_up:
+                    pass
+                    #TODO: Implement sum_up behavior mirroring that above.
+                gstrs.add(ckt)
+                ys.append(sub_mxs[i])
+                xs.append(len(ckt))
+                if hover_info:
+                    if callable(hover_info):
+                        texts.append(hover_info(sub_mxs[i], i))
+                    else:
+                        texts.append(str(sub_mxs[i]))
+    elif isinstance(g, list) and all([isinstance(el, _CircuitList) for el in g]):
+        for i, circuit_list in enumerate(g):
+            for j, ckt in enumerate(circuit_list):
+                if ckt in gstrs:
+                    continue
+                else:
+                    if sum_up:
+                        pass
+                        #TODO: Implement sum_up behavior mirroring that above.
+                    gstrs.add(ckt)
+                    ys.append(sub_mxs[i][j])
+                    xs.append(len(ckt))
                     if hover_info:
                         if callable(hover_info):
-                            texts.append(hover_info(sub_mxs[iy][ix][iiy][iix], iy, ix, iiy, iix))
+                            texts.append(hover_info(sub_mxs[i][j], i, j))
                         else:
-                            texts.append(str(sub_mxs[iy][ix][iiy][iix]))
+                            texts.append(str(sub_mxs[i][j]))
 
     #This GL version works, but behaves badly, sometimes failing to render...
     #trace = go.Scattergl(x=xs, y=ys, mode="markers",
@@ -768,17 +839,42 @@ def _circuit_color_histogram(circuit_structure, sub_mxs, colormap,
     plotly.Figure
     """
     g = circuit_structure
-
+        
+    #For all of the fanciness below, this all essentially looks like it just produces
+    #a flattened list of all of the contents of sub_mxs, so we can still do that with the
+    #submx structures we get from using CircuitList objects.
     ys = []  # artificially add minval so
     gstrs = set()  # to eliminate duplicate strings
-    for ix, x in enumerate(g.used_xs):
-        for iy, y in enumerate(g.used_ys):
-            plaq = g.plaquette(x, y, empty_if_missing=True)
-            #TODO: if sum_up then need to sum before appending...
-            for iiy, iix, opstr in plaq:
-                if opstr in gstrs: continue  # skip duplicates
-                ys.append(sub_mxs[iy][ix][iiy][iix])
-                gstrs.add(opstr)
+    
+    if isinstance(g, _PlaquetteGridCircuitStructure):
+        for ix, x in enumerate(g.used_xs):
+            for iy, y in enumerate(g.used_ys):
+                plaq = g.plaquette(x, y, empty_if_missing=True)
+                #TODO: if sum_up then need to sum before appending...
+                for iiy, iix, opstr in plaq:
+                    if opstr in gstrs: continue  # skip duplicates
+                    ys.append(sub_mxs[iy][ix][iiy][iix])
+                    gstrs.add(opstr)
+    
+    elif isinstance(g, _CircuitList):
+        for i, ckt in enumerate(g):
+            if ckt in gstrs:
+                continue
+            else:
+                gstrs.add(ckt)
+                ys.append(sub_mxs[i])
+    
+    elif isinstance(g, list) and all([isinstance(el, _CircuitList) for el in g]):
+        for i, circuit_list in enumerate(g):
+            for j, ckt in enumerate(circuit_list):
+                if ckt in gstrs:
+                    continue
+                else:
+                    gstrs.add(ckt)
+                    ys.append(sub_mxs[i][j])
+    else:
+        raise ValueError('Can only handle PlaquetteGridCircuitStructure, CircuitList or lists of CircuitList objects at present.')
+    
     if len(ys) == 0: ys = [0]  # case of no data - dummy so max works below
 
     minval = 0
@@ -1607,19 +1703,6 @@ class ColorBoxPlot(WorkspacePlot):
             dataset = mdc_store.dataset
             model = mdc_store.model
 
-        #DEBUG: for checking
-        #def _addl_mx_fn_chk(plaq,x,y):
-        #    gsplaq_ds = plaq.expand_aliases(dataset)
-        #    spamlabels = model.get_spam_labels()
-        #    cntMxs  = _ph.total_count_matrix(   gsplaq_ds, dataset)[None,:,:]
-        #    probMxs = _ph.probability_matrices( plaq, model, spamlabels,
-        #                                    probs_precomp_dict)
-        #    freqMxs = _ph.frequency_matrices(   gsplaq_ds, dataset, spamlabels)
-        #    logLMxs = _tools.two_delta_logl_term( cntMxs, probMxs, freqMxs, 1e-4)
-        #    return logLMxs.sum(axis=0) # sum over spam labels
-
-        # End "Additional sub-matrix" functions
-
         if not isinstance(plottypes, (list, tuple)):
             plottypes = [plottypes]
 
@@ -1641,7 +1724,6 @@ class ColorBoxPlot(WorkspacePlot):
 
                 if isinstance(objfn, (_objfns.PoissonPicDeltaLogLFunction, _objfns.DeltaLogLFunction)):
                     terms *= 2.0  # show 2 * deltaLogL values, not just deltaLogL
-
                 if isinstance(objfn, _objfns.TVDFunction):
                     colormapType = "blueseq"
                 else:
@@ -1649,16 +1731,34 @@ class ColorBoxPlot(WorkspacePlot):
                     linlog_color = "red"
 
                 ytitle = objfn.description  # "chi<sup>2</sup>" OR "2 log(L ratio)"
-
-                mx_fn = _mx_fn_from_elements  # use a *global* function so cache can tell it's the same
+                
+                if isinstance(circuits, _PlaquetteGridCircuitStructure):
+                    mx_fn = _mx_fn_from_elements  # use a *global* function so cache can tell it's the same
+                elif isinstance(circuits, _CircuitList):
+                    mx_fn = _mx_fn_from_elements_circuit_list
+                elif isinstance(circuits, list) and all([isinstance(el, _CircuitList) for el in circuits]):
+                    mx_fn = _mx_fn_from_elements_circuit_list
+                
                 extra_arg = (terms, objfn.layout, "sum")
-
-                # (function, extra_arg) tuples
-                addl_hover_info_fns['outcomes'] = (_addl_mx_fn_outcomes, objfn.layout)
-                addl_hover_info_fns['p'] = (_mx_fn_from_elements, (objfn.probs, objfn.layout, "%.5g"))
-                addl_hover_info_fns['f'] = (_mx_fn_from_elements, (objfn.freqs, objfn.layout, "%.5g"))
-                addl_hover_info_fns['counts'] = (_mx_fn_from_elements, (objfn.counts, objfn.layout, "%d"))
-
+                
+                if isinstance(circuits, _PlaquetteGridCircuitStructure):
+                    # (function, extra_arg) tuples
+                    addl_hover_info_fns['outcomes'] = (_addl_mx_fn_outcomes, objfn.layout)
+                    addl_hover_info_fns['p'] = (_mx_fn_from_elements, (objfn.probs, objfn.layout, "%.5g"))
+                    addl_hover_info_fns['f'] = (_mx_fn_from_elements, (objfn.freqs, objfn.layout, "%.5g"))
+                    addl_hover_info_fns['counts'] = (_mx_fn_from_elements, (objfn.counts, objfn.layout, "%d"))
+                elif isinstance(circuits, _CircuitList):
+                     # (function, extra_arg) tuples
+                    addl_hover_info_fns['outcomes'] = (_addl_mx_fn_outcomes_circuit_list, objfn.layout)
+                    addl_hover_info_fns['p'] = (_mx_fn_from_elements_circuit_list, (objfn.probs, objfn.layout, "%.5g"))
+                    addl_hover_info_fns['f'] = (_mx_fn_from_elements_circuit_list, (objfn.freqs, objfn.layout, "%.5g"))
+                    addl_hover_info_fns['counts'] = (_mx_fn_from_elements_circuit_list, (objfn.counts, objfn.layout, "%d"))
+                elif isinstance(circuits, list) and all([isinstance(el, _CircuitList) for el in circuits]):
+                    addl_hover_info_fns['outcomes'] = (_addl_mx_fn_outcomes_circuit_list, objfn.layout)
+                    addl_hover_info_fns['p'] = (_mx_fn_from_elements_circuit_list, (objfn.probs, objfn.layout, "%.5g"))
+                    addl_hover_info_fns['f'] = (_mx_fn_from_elements_circuit_list, (objfn.freqs, objfn.layout, "%.5g"))
+                    addl_hover_info_fns['counts'] = (_mx_fn_from_elements_circuit_list, (objfn.counts, objfn.layout, "%d"))
+                
             elif ptyp == "blank":
                 colormapType = "trivial"
                 ytitle = ""
@@ -1777,23 +1877,116 @@ class ColorBoxPlot(WorkspacePlot):
                 colormapType = submatrices.get(ptyp + ".colormap", "seq")
             else:
                 raise ValueError("Invalid plot type: %s" % ptyp)
-
-            circuit_struct = _PlaquetteGridCircuitStructure.cast(circuits)  # , dataset?
-
+            
             #TODO: propagate mdc_store down into compute_sub_mxs?
             if (submatrices is not None) and ptyp in submatrices:
                 subMxs = submatrices[ptyp]  # "custom" type -- all mxs precomputed by user
-            else:
-                subMxs = self._ccompute(_ph._compute_sub_mxs, circuit_struct, model, mx_fn, dataset, extra_arg)
 
-            addl_hover_info = _collections.OrderedDict()
-            for lbl, (addl_mx_fn, addl_extra_arg) in addl_hover_info_fns.items():
-                if (submatrices is not None) and lbl in submatrices:
-                    addl_subMxs = submatrices[lbl]  # ever useful?
+                #some of the branches below rely on circuit_struct being defined, which is previously
+                #wasn't when hitting this condition on the if statement, so add those definitions here.
+                #also need to built the addl_hover_info as well, based on circuit_struct.
+                if isinstance(circuits, _PlaquetteGridCircuitStructure):
+                    circuit_struct = circuits
+
+                    addl_hover_info = _collections.OrderedDict()
+                    for lbl, (addl_mx_fn, addl_extra_arg) in addl_hover_info_fns.items():
+                        if (submatrices is not None) and lbl in submatrices:
+                            addl_subMxs = submatrices[lbl]  # ever useful?
+                        else:
+                            addl_subMxs = self._ccompute(_ph._compute_sub_mxs, circuit_struct, model,
+                                                        addl_mx_fn, dataset, addl_extra_arg)
+                        addl_hover_info[lbl] = addl_subMxs
+
+                elif isinstance(circuits, _CircuitList):
+                    circuit_struct = [circuits]
+
+                    addl_hover_info = _collections.OrderedDict()
+                    for lbl, (addl_mx_fn, addl_extra_arg) in addl_hover_info_fns.items():
+                        if (submatrices is not None) and lbl in submatrices:
+                            addl_subMxs = submatrices[lbl]  # ever useful?
+                        else:
+                            addl_subMxs = self._ccompute(_ph._compute_sub_mxs_circuit_list, circuit_struct, model,
+                                                        addl_mx_fn, dataset, addl_extra_arg)
+                        addl_hover_info[lbl] = addl_subMxs
+
+                elif isinstance(circuits, list) and all([isinstance(el, _CircuitList) for el in circuits]):
+                    circuit_struct = circuits
+
+                    addl_hover_info = _collections.OrderedDict()
+                    for lbl, (addl_mx_fn, addl_extra_arg) in addl_hover_info_fns.items():
+                        if (submatrices is not None) and lbl in submatrices:
+                            addl_subMxs = submatrices[lbl]  # ever useful?
+                        else:
+                            addl_subMxs = self._ccompute(_ph._compute_sub_mxs_circuit_list, circuit_struct, model,
+                                                        addl_mx_fn, dataset, addl_extra_arg)
+                        addl_hover_info[lbl] = addl_subMxs
+
+                #Otherwise fall-back to the old casting behavior and proceed
                 else:
-                    addl_subMxs = self._ccompute(_ph._compute_sub_mxs, circuit_struct, model,
-                                                 addl_mx_fn, dataset, addl_extra_arg)
-                addl_hover_info[lbl] = addl_subMxs
+                    circuit_struct = _PlaquetteGridCircuitStructure.cast(circuits)
+                    addl_hover_info = _collections.OrderedDict()
+                    for lbl, (addl_mx_fn, addl_extra_arg) in addl_hover_info_fns.items():
+                        if (submatrices is not None) and lbl in submatrices:
+                            addl_subMxs = submatrices[lbl]  # ever useful?
+                        else:
+                            addl_subMxs = self._ccompute(_ph._compute_sub_mxs, circuit_struct, model,
+                                                        addl_mx_fn, dataset, addl_extra_arg)
+                        addl_hover_info[lbl] = addl_subMxs
+                
+            elif isinstance(circuits, _PlaquetteGridCircuitStructure):
+                circuit_struct= circuits
+                subMxs = self._ccompute(_ph._compute_sub_mxs, circuit_struct, model, mx_fn, dataset, extra_arg)
+                
+                addl_hover_info = _collections.OrderedDict()
+                for lbl, (addl_mx_fn, addl_extra_arg) in addl_hover_info_fns.items():
+                    if (submatrices is not None) and lbl in submatrices:
+                        addl_subMxs = submatrices[lbl]  # ever useful?
+                    else:
+                        addl_subMxs = self._ccompute(_ph._compute_sub_mxs, circuit_struct, model,
+                                                     addl_mx_fn, dataset, addl_extra_arg)
+                    addl_hover_info[lbl] = addl_subMxs
+                
+            #Add in alternative logic for constructing sub-matrices when we have either a CircuitList or a
+            #list of circuit lists:
+            elif isinstance(circuits, _CircuitList):
+                circuit_struct= [circuits]
+                subMxs = self._ccompute(_ph._compute_sub_mxs_circuit_list, circuit_struct, model, mx_fn, dataset, extra_arg)
+                
+                addl_hover_info = _collections.OrderedDict()
+                for lbl, (addl_mx_fn, addl_extra_arg) in addl_hover_info_fns.items():
+                    if (submatrices is not None) and lbl in submatrices:
+                        addl_subMxs = submatrices[lbl]  # ever useful?
+                    else:
+                        addl_subMxs = self._ccompute(_ph._compute_sub_mxs_circuit_list, circuit_struct, model,
+                                                     addl_mx_fn, dataset, addl_extra_arg)
+                    addl_hover_info[lbl] = addl_subMxs
+
+            elif isinstance(circuits, list) and all([isinstance(el, _CircuitList) for el in circuits]):
+                circuit_struct= circuits
+                subMxs = self._ccompute(_ph._compute_sub_mxs_circuit_list, circuit_struct, model, mx_fn, dataset, extra_arg)
+                
+                addl_hover_info = _collections.OrderedDict()
+                for lbl, (addl_mx_fn, addl_extra_arg) in addl_hover_info_fns.items():
+                    if (submatrices is not None) and lbl in submatrices:
+                        addl_subMxs = submatrices[lbl]  # ever useful?
+                    else:
+                        addl_subMxs = self._ccompute(_ph._compute_sub_mxs_circuit_list, circuit_struct, model,
+                                                     addl_mx_fn, dataset, addl_extra_arg)
+                    addl_hover_info[lbl] = addl_subMxs
+
+            #Otherwise fall-back to the old casting behavior and proceed
+            else:
+                circuit_struct = _PlaquetteGridCircuitStructure.cast(circuits) # , dataset?
+                subMxs = self._ccompute(_ph._compute_sub_mxs, circuit_struct, model, mx_fn, dataset, extra_arg)
+                
+                addl_hover_info = _collections.OrderedDict()
+                for lbl, (addl_mx_fn, addl_extra_arg) in addl_hover_info_fns.items():
+                    if (submatrices is not None) and lbl in submatrices:
+                        addl_subMxs = submatrices[lbl]  # ever useful?
+                    else:
+                        addl_subMxs = self._ccompute(_ph._compute_sub_mxs, circuit_struct, model,
+                                                     addl_mx_fn, dataset, addl_extra_arg)
+                    addl_hover_info[lbl] = addl_subMxs
 
             if colormapType == "linlog":
                 if dataset is None:
@@ -1827,9 +2020,17 @@ class ColorBoxPlot(WorkspacePlot):
 
             elif colormapType in ("seq", "revseq", "blueseq", "redseq"):
                 if len(subMxs) > 0:
-                    max_abs = max([_np.max(_np.abs(_np.nan_to_num(subMxs[iy][ix])))
-                                   for ix in range(len(circuit_struct.used_xs))
-                                   for iy in range(len(circuit_struct.used_ys))])
+                    if isinstance(circuit_struct, _PlaquetteGridCircuitStructure):
+                        max_abs = max([_np.max(_np.abs(_np.nan_to_num(subMxs[iy][ix])))
+                                       for ix in range(len(circuit_struct.used_xs))
+                                       for iy in range(len(circuit_struct.used_ys))])
+                    #circuit_struct logic above should mean that we always have at least a length 1 list of
+                    #CircuitList objects if not a plaquette circuit structure by this point.
+                    elif isinstance(circuit_struct, list) and all([isinstance(el, _CircuitList) for el in circuit_struct]):
+                        max_abs = max([_np.max(_np.abs(_np.nan_to_num(subMxs[i][j])))
+                                       for i, ckt_list in enumerate(circuit_struct) 
+                                       for j in range(len(ckt_list))])
+                    
                 else: max_abs = 0
                 if max_abs == 0: max_abs = 1e-6  # pick a nonzero value if all entries are zero or nan
                 if colormapType == "seq": color = "whiteToBlack"
@@ -1841,7 +2042,15 @@ class ColorBoxPlot(WorkspacePlot):
             else: assert(False), "Internal logic error"  # pragma: no cover
 
             if typ == "boxes":
-                newfig = _circuit_color_boxplot(circuit_struct, subMxs, colormap,
+                if not isinstance(circuit_struct, _PlaquetteGridCircuitStructure):
+                    #if not a plaquette structure then maybe try returning a NotApplicable object
+                    #for the figure?
+                    return NotApplicable(self.ws)
+                else:
+                    #I am expecting this cast won't do anything at the moment, but
+                    #maybe down the line it will.
+                    circuit_struct= _PlaquetteGridCircuitStructure.cast(circuits)
+                    newfig = _circuit_color_boxplot(circuit_struct, subMxs, colormap,
                                                 colorbar, box_labels, prec,
                                                 hover_info, sum_up, invert,
                                                 scale, bgcolor, addl_hover_info)
@@ -1897,16 +2106,33 @@ class ColorBoxPlot(WorkspacePlot):
 
 #Helper function for ColorBoxPlot matrix computation
 def _mx_fn_from_elements(plaq, x, y, extra):
-    return plaq.elementvec_to_matrix(extra[0], extra[1], mergeop=extra[2])
+    return plaq.elementvec_to_array(extra[0], extra[1], mergeop=extra[2])
 
+#modified version of the above meant for working with circuit lists
+def _mx_fn_from_elements_circuit_list(circuit_list, extra):
+    #Based on the convention above in the ColorBoxPlot code it looks likelihood
+    #extra[0] is the thing we want to index into, extra[1] is the layout and extra[2]
+    #is something called the merge op, which indicated how to combine the elements of extra[0]
+    #for each circuit in the circuit_list
+    if isinstance(circuit_list, _CircuitList):
+        pass
+    elif isinstance(circuit_list, list) and all([isinstance(el, _CircuitList) for el in circuit_list]):
+        circuit_list = _CircuitList.cast(circuit_list)
+    else:
+        msg = 'Invalid type. _mx_fn_from_elements_circuit_list is only presently implemented for CircuitList'\
+             +'objects and lists of Circuit objects.'
+        raise ValueError(msg)
 
+    return circuit_list.elementvec_to_array(extra[0], extra[1], mergeop=extra[2])
+    
 def _mx_fn_blank(plaq, x, y, unused):
     return _np.nan * _np.zeros((plaq.num_rows, plaq.num_cols), 'd')
 
 
 def _mx_fn_errorrate(plaq, x, y, direct_gst_models):  # error rate as 1x1 matrix which we have plotting function sum up
     base_circuit = plaq.base if isinstance(plaq, _GermFiducialPairPlaquette) \
-        else _Circuit(())
+        else _Circuit((), line_labels=list(direct_gst_models.keys())[0].line_labels) #Taking the line labels from the first circuit in direct_gst_models will probably work
+        #most of the time. TODO: Cook up a better scheme.
     return _np.array([[_ph.small_eigenvalue_err_rate(base_circuit, direct_gst_models)]])
 
 
@@ -1939,12 +2165,6 @@ def _mx_fn_driftpv(plaq, x, y, instabilityanalyzertuple):
 def _mx_fn_drifttvd(plaq, x, y, instabilityanalyzertuple):
     return _ph.drift_maxtvd_matrices(plaq, instabilityanalyzertuple)
 
-# future: delete this, or update it and added it back in.
-# def _mx_fn_driftpwr(plaq, x, y, driftresults):
-#     return _ph.drift_maxpower_matrices(plaq, driftresults)
-
-# Begin "Additional sub-matrix" functions for adding more info to hover text
-
 
 def _outcome_to_str(x):  # same function as in writers.py
     if isinstance(x, str): return x
@@ -1956,6 +2176,15 @@ def _addl_mx_fn_outcomes(plaq, x, y, layout):
     for i, j, opstr in plaq:
         slmx[i, j] = ", ".join([_outcome_to_str(ol) for ol in layout.outcomes(opstr)])
     return slmx
+
+#modified version of the above function meant to work for CircuitList objects
+def _addl_mx_fn_outcomes_circuit_list(circuit_list, layout):
+    slmx = _np.empty(len(circuit_list), dtype=_np.object_)
+    for i,ckt in enumerate(circuit_list):
+        slmx[i] = ", ".join([_outcome_to_str(ol) for ol in layout.outcomes(ckt)])
+    return slmx
+    
+    
 
 
 class GateMatrixPlot(WorkspacePlot):
@@ -2318,8 +2547,8 @@ class PolarEigenvaluePlot(WorkspacePlot):
         for i, evals in enumerate(evals_list):
             color = colors[i] if (colors is not None) else "black"
             trace = go.Scatterpolar(
-                r=list(_np.absolute(evals).flat),
-                theta=list(_np.angle(evals).flatten() * (180.0 / _np.pi)),
+                r=list(_np.absolute(evals).ravel()),
+                theta=list(_np.angle(evals).ravel() * (180.0 / _np.pi)),
                 mode='markers',
                 marker=dict(
                     color=color,
@@ -2339,8 +2568,8 @@ class PolarEigenvaluePlot(WorkspacePlot):
             if amp is not None:
                 amp_evals = evals**amp
                 trace = go.Scatterpolar(
-                    r=list(_np.absolute(amp_evals).flat),
-                    theta=list(_np.angle(amp_evals).flatten() * (180.0 / _np.pi)),
+                    r=list(_np.absolute(amp_evals).ravel()),
+                    theta=list(_np.angle(amp_evals).ravel() * (180.0 / _np.pi)),
                     showlegend=False,
                     mode='markers',
                     marker=dict(
@@ -2650,16 +2879,17 @@ class ChoiEigenvalueBarPlot(WorkspacePlot):
                                                     errbars, scale)
 
     def _create(self, evals, errbars, scale):
-
+        if errbars is not None:
+            flat_errbars = errbars.ravel()
         HOVER_PREC = 7
         xs = list(range(evals.size))
-        ys = []; colors = []; texts = []
-        for i, ev in enumerate(evals.flatten()):
+        ys, colors, texts = [], [], []
+        for i, ev in enumerate(evals.ravel()):
             ys.append(abs(ev.real))
             colors.append('rgb(200,200,200)' if ev.real > 0 else 'red')
             if errbars is not None:
                 texts.append("%g +/- %g" % (round(ev.real, HOVER_PREC),
-                                            round(errbars.flatten()[i].real, HOVER_PREC)))
+                                            round(flat_errbars[i].real, HOVER_PREC)))
             else:
                 texts.append("%g" % round(ev.real, HOVER_PREC))
 
@@ -2785,13 +3015,13 @@ class GramMatrixBarPlot(WorkspacePlot):
 
         xs = list(range(svals.size))
         trace1 = go.Bar(
-            x=xs, y=list(svals.flatten()),
+            x=xs, y=list(svals.ravel()),
             marker=dict(color="blue"),
             hoverinfo='y',
             name="from Data"
         )
         trace2 = go.Bar(
-            x=xs, y=list(target_svals.flatten()),
+            x=xs, y=list(target_svals.ravel()),
             marker=dict(color="black"),
             hoverinfo='y',
             name="from Target"
@@ -2802,7 +3032,8 @@ class GramMatrixBarPlot(WorkspacePlot):
             ymax = max(_np.max(svals), _np.max(target_svals))
             ymin = max(ymin, 1e-8)  # prevent lower y-limit from being riduculously small
         else:
-            ymin = 0.1; ymax = 1.0  # just pick some values for empty plot
+            ymin = 0.1
+            ymax = 1.0  # just pick some values for empty plot
 
         data = [trace1, trace2]
         layout = go.Layout(
@@ -3705,411 +3936,3 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
         #reverse order of data so z-ordering is nicer
         return ReportFigure(go.Figure(data=list(data), layout=layout),
                             None, pythonVal)
-
-
-#This older version on an RB decay plot contained a lot more theory detail
-# compared with the current one - so we'll keep it around (commented out)
-# in case we want to steal/revive pieces of it in the future.
-#class OLDRandomizedBenchmarkingPlot(WorkspacePlot):
-#     """ Plot of RB Decay curve """
-#     def __init__(self, ws, rb_r,xlim=None, ylim=None,
-#                  fit='standard', Magesan_zeroth=False, Magesan_first=False,
-#                  exact_decay=False,L_matrix_decay=False, Magesan_zeroth_SEB=False,
-#                  Magesan_first_SEB=False, L_matrix_decay_SEB=False,mdl=False,
-#                  target_model=False,group=False, group_to_model=None, norm='1to1', legend=True,
-#                  title='Randomized Benchmarking Decay', scale=1.0):
-#         """
-#         Plot RB decay curve, as a function of some the sequence length
-#         computed using the `gstyp` gate-label-set.
-#
-#         Parameters
-#         ----------
-#         rb_r : RBResults
-#             The RB results object containing all the relevant RB data.
-#
-#         gstyp : str, optional
-#             The gate-label-set specifying which translation (i.e. strings with
-#             which operation labels) to use when computing sequence lengths.
-#
-#         xlim : tuple, optional
-#             The x-range as (xmin,xmax).
-#
-#         ylim : tuple, optional
-#             The y-range as (ymin,ymax).
-#
-#         save_fig_path : str, optional
-#             If not None, the filename where the resulting plot should be saved.
-#
-#         fitting : str, optional
-#             Allowed values are 'standard', 'first order' or 'all'. Specifies
-#             whether the zeroth or first order fitting model results are plotted,
-#             or both.
-#
-#         Magesan_zeroth : bool, optional
-#             If True, plots the decay predicted by the 'zeroth order' theory of Magesan
-#             et al. PRA 85 042311 2012. Requires mdl and target_model to be specified.
-#
-#         Magesan_first : bool, optional
-#             If True, plots the decay predicted by the 'first order' theory of Magesan
-#             et al. PRA 85 042311 2012. Requires mdl and target_model to be specified.
-#
-#         Magesan_zeroth_SEB : bool, optional
-#             If True, plots the systematic error bound for the 'zeroth order' theory
-#             predicted decay. This is the region around the zeroth order decay in which
-#             the exact RB average survival probabilities are guaranteed to fall.
-#
-#         Magesan_first_SEB : bool, optional
-#             As above, but for 'first order' theory.
-#
-#         exact_decay : bool, optional
-#             If True, plots the exact RB decay, as predicted by the 'R matrix' theory
-#             of arXiv:1702.01853. Requires mdl and group to be specified
-#
-#         L_matrix_decay : bool, optional
-#             If True, plots the RB decay, as predicted by the approximate 'L matrix'
-#             theory of arXiv:1702.01853. Requires mdl and target_model to be specified.
-#
-#         L_matrix_decay_SEB : bool, optional
-#             If True, plots the systematic error bound for approximate 'L matrix'
-#             theory of arXiv:1702.01853. This is the region around predicted decay
-#             in which the exact RB average survival probabilities are guaranteed
-#             to fall.
-#
-#         mdl : model, optional
-#             Required, if plotting any of the theory decays. The model for which
-#             these decays should be plotted for.
-#
-#         target_model : Model, optional
-#             Required, if plotting certain theory decays. The target model for which
-#             these decays should be plotted for.
-#
-#         group : MatrixGroup, optional
-#             Required, if plotting R matrix theory decay. The matrix group that mdl
-#             is an implementation of.
-#
-#         group_to_model : dict, optional
-#             If not None, a dictionary that maps labels of group elements to labels
-#             of mdl. Only used if subset_sampling is not None. If subset_sampling is
-#             not None and the mdl and group elements have the same labels, this dictionary
-#             is not required. Otherwise it is necessary.
-#
-#         norm : str, optional
-#             The norm used for calculating the Magesan theory bounds.
-#
-#         legend : bool, optional
-#             Specifies whether a legend is added to the graph
-#
-#         title : str, optional
-#             Specifies a title for the graph
-#
-#         Returns
-#         -------
-#         None
-#         """
-# #         loc : str, optional
-# #            Specifies the location of the legend.
-#         super(RandomizedBenchmarkingPlot,self).__init__(
-#             ws, self._create, rb_r, xlim, ylim, fit, Magesan_zeroth,
-#             Magesan_first, exact_decay, L_matrix_decay, Magesan_zeroth_SEB,
-#             Magesan_first_SEB, L_matrix_decay_SEB, mdl, target_model, group,
-#             group_to_model, norm, legend, title, scale)
-#
-#     def _create(self, rb_r, xlim, ylim, fit, Magesan_zeroth,
-#                 Magesan_first, exact_decay, L_matrix_decay, Magesan_zeroth_SEB,
-#                 Magesan_first_SEB, L_matrix_decay_SEB, mdl, target_model, group,
-#                 group_to_model, norm, legend, title, scale):
-#
-#         from ..extras.rb import rbutils as _rbutils
-#         #TODO: maybe move the computational/fitting part of this function
-#         #  back to the RBResults object to reduce the logic (and dependence
-#         #  on rbutils) here.
-#
-#         #newplot = _plt.figure(figsize=(8, 4))
-#         #newplotgca = newplot.gca()
-#
-#         # Note: minus one to get xdata that discounts final Clifford-inverse
-#         xdata = _np.asarray(rb_r.results['lengths']) - 1
-#         ydata = _np.asarray(rb_r.results['successes'])
-#         A = rb_r.results['A']
-#         B = rb_r.results['B']
-#         f = rb_r.results['f']
-#         if fit == 'first order':
-#             C = rb_r.results['C']
-#         pre_avg = rb_r.pre_avg
-#
-#         if (Magesan_zeroth_SEB is True) and (Magesan_zeroth is False):
-#             print("As Magesan_zeroth_SEB is True, Setting Magesan_zeroth to True\n")
-#             Magesan_zeroth = True
-#         if (Magesan_first_SEB is True) and (Magesan_first is False):
-#             print("As Magesan_first_SEB is True, Setting Magesan_first to True\n")
-#             Magesan_first = True
-#
-#         if (Magesan_zeroth is True) or (Magesan_first is True):
-#             if (mdl is False) or (target_model is False):
-#                 raise ValueError("To plot Magesan et al theory decay curves a model" +
-#                            " and a target model is required.")
-#             else:
-#                 MTP = _rbutils.Magesan_theory_parameters(mdl, target_model,
-#                                                 success_outcomelabel=rb_r.success_outcomelabel,
-#                                                          norm=norm,d=rb_r.d)
-#                 f_an = MTP['p']
-#                 A_an = MTP['A']
-#                 B_an = MTP['B']
-#                 A1_an = MTP['A1']
-#                 B1_an = MTP['B1']
-#                 C1_an = MTP['C1']
-#                 delta = MTP['delta']
-#
-#         if exact_decay is True:
-#             if (mdl is False) or (group is False):
-#                 raise ValueError("To plot the exact decay curve a model" +
-#                                  " and the target group are required.")
-#             else:
-#                 mvalues,ASPs = _rbutils.exact_rb_asps(mdl,group,max(xdata),m_min=1,m_step=1,
-#                                                       d=rb_r.d, group_to_model=group_to_model,
-#                                                       success_outcomelabel=rb_r.success_outcomelabel)
-#
-#         if L_matrix_decay is True:
-#             if (mdl is False) or (target_model is False):
-#                 raise ValueError("To plot the L matrix theory decay curve a model" +
-#                            " and a target model is required.")
-#             else:
-#                 mvalues, LM_ASPs, LM_ASPs_SEB_lower, LM_ASPs_SEB_upper = \
-#                 _rbutils.L_matrix_asps(mdl,target_model,max(xdata),m_min=1,m_step=1,d=rb_r.d,
-#                                        success_outcomelabel=rb_r.success_outcomelabel, error_bounds=True)
-#
-#         xlabel = 'Sequence length'
-#
-#         data = [] # list of traces
-#         data.append( go.Scatter(
-#             x = xdata, y = ydata,
-#             mode = 'markers',
-#             marker = dict(
-#                 color = "rgb(0,0,0)",
-#                 size = 6 if pre_avg else 3
-#             ),
-#             name = 'Averaged RB data' if pre_avg else 'RB data',
-#         ))
-#
-#         if fit=='standard' or fit=='first order':
-#             fit_label_1='Fit'
-#             fit_label_2='Fit'
-#             color2 = "black"
-#
-#         theory_color2 = "green"
-#         theory_fill2 = "rgba(0,128,0,0.1)"
-#         if Magesan_zeroth is True and Magesan_first is True:
-#             theory_color2 = "magenta"
-#             theory_fill2 = "rgba(255,0,255,0.1)"
-#
-#         if fit=='standard':
-#             data.append( go.Scatter(
-#                 x = _np.arange(max(xdata)),
-#                 y = _rbutils.standard_fit_function(_np.arange(max(xdata)),A,B,f),
-#                 mode = 'lines',
-#                 line = dict(width=1, color="black"),
-#                 name = fit_label_1,
-#                 showlegend=legend,
-#             ))
-#
-#         if fit=='first order':
-#             data.append( go.Scatter(
-#                 x = _np.arange(max(xdata)),
-#                 y = _rbutils.first_order_fit_function(_np.arange(max(xdata)),A,B,C,f),
-#                 mode = 'lines',
-#                 line = dict(width=1, color=color2),
-#                 name = fit_label_2,
-#                 showlegend=legend,
-#             ))
-#
-#         if Magesan_zeroth is True:
-#             data.append( go.Scatter(
-#                 x = _np.arange(max(xdata)),
-#                 y = _rbutils.standard_fit_function(_np.arange(max(xdata)),A_an,B_an,f_an),
-#                 mode = 'lines',
-#                 line = dict(width=2, color="green", dash='dash'),
-#                 name = '0th order theory',
-#                 showlegend=legend,
-#             ))
-#
-#             if Magesan_zeroth_SEB is True:
-#                 data.append( go.Scatter(
-#                     x = _np.arange(max(xdata)),
-#                     y = _rbutils.seb_upper(
-#                         _rbutils.standard_fit_function(_np.arange(max(xdata)),A_an,B_an,f_an),
-#                         _np.arange(max(xdata)), delta, order='zeroth'),
-#                     mode = 'lines',
-#                     line = dict(width=0.5, color="green"),
-#                     name = '0th order bound',
-#                     fill='tonexty',
-#                     fillcolor='rgba(0,128,0,0.1)',
-#                     showlegend=False,
-#                 ))
-#                 data.append( go.Scatter(
-#                     x = _np.arange(max(xdata)),
-#                     y = _rbutils.seb_lower(
-#                         _rbutils.standard_fit_function(_np.arange(max(xdata)),A_an,B_an,f_an),
-#                         _np.arange(max(xdata)), delta, order='zeroth'),
-#                     mode = 'lines',
-#                     line = dict(width=0.5, color="green"),
-#                     name = '0th order bound',
-#                     showlegend=False,
-#                 ))
-#
-#
-#         if Magesan_first is True:
-#             data.append( go.Scatter(
-#                 x = _np.arange(max(xdata)),
-#                 y = _rbutils.first_order_fit_function(_np.arange(max(xdata)),A1_an,B1_an,C1_an,f_an),
-#                 mode = 'lines',
-#                 line = dict(width=2, color=theory_color2, dash='dash'),
-#                 name = '1st order theory',
-#                 showlegend=legend,
-#             ))
-#
-#             if Magesan_first_SEB is True:
-#                 data.append( go.Scatter(
-#                     x = _np.arange(max(xdata)),
-#                     y = _rbutils.seb_upper(
-#                         _rbutils.first_order_fit_function(_np.arange(max(xdata)),A1_an,B1_an,C1_an,f_an),
-#                         _np.arange(max(xdata)), delta, order='first'),
-#                     mode = 'lines',
-#                     line = dict(width=0.5, color=theory_color2), #linewidth=4?
-#                     name = '1st order bound',
-#                     fill='tonexty',
-#                     fillcolor=theory_fill2,
-#                     showlegend=False,
-#                 ))
-#                 data.append( go.Scatter(
-#                     x = _np.arange(max(xdata)),
-#                     y = _rbutils.seb_lower(
-#                         _rbutils.first_order_fit_function(_np.arange(max(xdata)),A1_an,B1_an,C1_an,f_an),
-#                         _np.arange(max(xdata)), delta, order='first'),
-#                     mode = 'lines',
-#                     line = dict(width=0.5, color=theory_color2),
-#                     name = '1st order bound',
-#                     showlegend=False,
-#                 ))
-#
-#
-#         if exact_decay is True:
-#             data.append( go.Scatter(
-#                 x = mvalues,
-#                 y = ASPs,
-#                 mode = 'lines',
-#                 line = dict(width=2, color="blue",dash='dash'),
-#                 name = 'Exact decay',
-#                 showlegend=legend,
-#             ))
-#
-#         if L_matrix_decay is True:
-#             data.append( go.Scatter(
-#                 x = mvalues,
-#                 y = LM_ASPs,
-#                 mode = 'lines',
-#                 line = dict(width=2, color="cyan",dash='dash'),
-#                 name = 'L matrix decay',
-#                 showlegend=legend,
-#             ))
-#             if L_matrix_decay_SEB is True:
-#                 data.append( go.Scatter(
-#                     x = mvalues,
-#                     y = LM_ASPs_SEB_upper,
-#                     mode = 'lines',
-#                     line = dict(width=0.5, color="cyan"),
-#                     name = 'LM bound',
-#                     fill='tonexty',
-#                     fillcolor='rgba(0,255,255,0.1)',
-#                     showlegend=False,
-#                 ))
-#                 data.append( go.Scatter(
-#                     x = mvalues,
-#                     y = LM_ASPs_SEB_lower,
-#                     mode = 'lines',
-#                     line = dict(width=0.5, color="cyan"),
-#                     name = 'LM bound',
-#                     showlegend=False,
-#                 ))
-#
-#         ymin = min([min(trace['y']) for trace in data])
-#         ymin -= 0.1*abs(1.0-ymin) #pad by 10%
-#
-#         layout = go.Layout(
-#             width=800*scale,
-#             height=400*scale,
-#             title=title,
-#             titlefont=dict(size=16),
-#             xaxis=dict(
-#                 title=xlabel,
-#                 titlefont=dict(size=14),
-#                 range=xlim if xlim else [0,max(xdata)],
-#             ),
-#             yaxis=dict(
-#                 title='Mean survival probability',
-#                 titlefont=dict(size=14),
-#                 range=ylim if ylim else [ymin,1.0],
-#             ),
-#             legend=dict(
-#                 font=dict(
-#                     size=13,
-#                 ),
-#             )
-#         )
-#
-#         pythonVal = {}
-#         for i,tr in enumerate(data):
-#             key = tr['name'] if ("name" in tr) else "trace%d" % i
-#             pythonVal[key] = {'x': tr['x'], 'y': tr['y']}
-#
-#         #reverse order of data so z-ordering is nicer
-#         return ReportFigure(go.Figure(data=list(reversed(data)), layout=layout),
-#                             None, pythonVal)
-#
-#         #newplotgca.set_xlabel(xlabel, fontsize=15)
-#         #newplotgca.set_ylabel('Mean survival probability',fontsize=15)
-#         #if title==True:
-#         #    newplotgca.set_title('Randomized Benchmarking Decay', fontsize=18)
-#         #newplotgca.set_frame_on(True)
-#         #newplotgca.yaxis.grid(False)
-#         #newplotgca.tick_params(axis='x', top='off', labelsize=12)
-#         #newplotgca.tick_params(axis='y', left='off', right='off', labelsize=12)
-#
-#         #if legend==True:
-#         #    leg = _plt.legend(fancybox=True, loc=loc)
-#         #    leg.get_frame().set_alpha(0.9)
-#
-#         #newplotgca.spines["top"].set_visible(False)
-#         #newplotgca.spines["right"].set_visible(False)
-#         #newplotgca.spines["bottom"].set_alpha(.7)
-#         #newplotgca.spines["left"].set_alpha(.7)
-
-
-#Histograms??
-#TODO: histogram
-#        if histogram:
-#            fig = _plt.figure()
-#            histdata = subMxSums.flatten()
-#            #take gives back (1,N) shaped array (why?)
-#            histdata_finite = _np.take(histdata, _np.where(_np.isfinite(histdata)))[0]
-#            histMin = min( histdata_finite ) if cmapFactory.vmin is None else cmapFactory.vmin
-#            histMax = max( histdata_finite ) if cmapFactory.vmax is None else cmapFactory.vmax
-#            _plt.hist(_np.clip(histdata_finite,histMin,histMax), histBins,
-#                      range=[histMin, histMax], facecolor='gray', align='mid')
-#            if save_to is not None:
-#                if len(save_to) > 0:
-#                    _plt.savefig( _makeHistFilename(save_to) )
-#                _plt.close(fig)
-
-#           if histogram:
-#                fig = _plt.figure()
-#                histdata = _np.concatenate( [ sub_mxs[iy][ix].flatten() for ix in range(nXs) for iy in range(nYs)] )
-#                #take gives back (1,N) shaped array (why?)
-#                histdata_finite = _np.take(histdata, _np.where(_np.isfinite(histdata)))[0]
-#                histMin = min( histdata_finite ) if cmapFactory.vmin is None else cmapFactory.vmin
-#                histMax = max( histdata_finite ) if cmapFactory.vmax is None else cmapFactory.vmax
-#                _plt.hist(_np.clip(histdata_finite,histMin,histMax), histBins,
-#                          range=[histMin, histMax], facecolor='gray', align='mid')
-#                if save_to is not None:
-#                    if len(save_to) > 0:
-#                        _plt.savefig( _makeHistFilename(save_to) )
-#                    _plt.close(fig)

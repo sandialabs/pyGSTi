@@ -1,0 +1,37 @@
+# This workflow runs a light test suite on all non-main branches
+# This includes only least/most supported Python version, no MacOS, only unit tests,
+# and only tests environments with Cython in them
+
+name: Build and run tests (feature branches)
+
+on:
+  push:
+    branches-ignore: [ "beta", "develop", "master" ]
+  # Hacky way to only run pull requests from forked repositories (assumes : is not used in branch names unless forked)
+  # https://github.community/t/how-to-trigger-an-action-on-push-or-pull-request-but-not-both/16662/10
+  pull_request:
+    branches: [ "**:**" ]
+  workflow_dispatch: # Allow manual running from GitHub
+
+jobs:
+  build:
+    strategy:
+      # fail-fast: true is OK here
+      matrix:
+        os: [ubuntu-latest, windows-latest] # No Mac
+        python-version: [3.8, '3.11'] # Only extremal Python versions
+    uses: ./.github/workflows/reuseable-main.yml
+    name: Run pyGSTi tests
+    with:
+      os: ${{ matrix.os }}
+      python-version: ${{ matrix.python-version }}
+      use-cython: 'true' # Only test environment with Cython
+      run-unit-tests: 'true'
+      run-extra-tests: 'false' # No integration tests
+      run-notebook-tests: 'false' # No notebook tests 
+
+
+
+
+
+
