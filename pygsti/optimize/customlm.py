@@ -1124,13 +1124,22 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                                 printer.log("      Accepted%s! gain ratio=%g  mu * %g => %g"
                                             % (" UPHILL" if uphill_ok else "", dF / dL, mu_factor, mu), 2)
                                 last_accepted_dx = dx.copy()
-                                if new_x_is_known_inbounds and norm_f < min_norm_f:
-                                    min_norm_f = norm_f
-                                    best_x[:] = x[:]
-                                    best_x_state = (mu, nu, norm_f, f.copy(), spow, None)
-                                    #Note: we use rawJTJ=None above because the current `JTJ` was evaluated
-                                    # at the *last* x-value -- we need to wait for the next outer loop
-                                    # to compute the JTJ for this best_x_state
+                                if norm_f < min_norm_f:
+                                    if not new_x_is_known_inbounds:
+                                        try:
+                                            _ = obj_fn(global_x, oob_check=True)
+                                            # ^ Dead-store the return value.
+                                            new_x_is_known_inbounds = True
+                                        except ValueError:
+                                            # Then we keep new_x_is_known_inbounds==False.
+                                            pass
+                                    if new_x_is_known_inbounds:
+                                        min_norm_f = norm_f
+                                        best_x[:] = x[:]
+                                        best_x_state = (mu, nu, norm_f, f.copy(), spow, None)
+                                        # ^ Note: we use rawJTJ=None above because the current `JTJ` was evaluated
+                                        #   at the *last* x-value -- we need to wait for the next outer loop
+                                        #   to compute the JTJ for this best_x_state
 
                                 #assert(_np.isfinite(x).all()), "Non-finite x!" # NaNs tracking
                                 #assert(_np.isfinite(f).all()), "Non-finite f!" # NaNs tracking
