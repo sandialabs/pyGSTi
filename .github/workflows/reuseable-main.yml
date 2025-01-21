@@ -81,7 +81,9 @@ jobs:
       if: ${{ inputs.run-extra-tests == 'true' }}
       run: |
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-        python -m pytest -v -n auto --dist loadscope --ignore=test/test_packages/mpi --ignore=test/test_packages/notebooks test/test_packages
+        # python -m pytest -v -n auto --dist loadscope --ignore=test/test_packages/mpi --ignore=test/test_packages/notebooks test/test_packages
+        # TEMPORARY: Only run test that we know will break MPI on Windows (test_interpygate.py should break it)
+        python -m pytest -v -n auto --dist loadscope test/test_packages/extras
     - name: Run notebook regression
       if: ${{ inputs.run-notebook-tests == 'true' }}
       run: |
