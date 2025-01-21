@@ -1,4 +1,6 @@
 """
+A standard multi-qubit gate set module.
+
 Variables for working with the 2-qubit model containing the gates
 I*X(pi/2), I*Y(pi/2), X(pi/2)*I, Y(pi/2)*I, and CNOT.
 """
@@ -10,10 +12,6 @@ I*X(pi/2), I*Y(pi/2), X(pi/2)*I, Y(pi/2)*I, and CNOT.
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
-
-from collections import OrderedDict
-from pygsti.construction import circuitconstruction as _strc
-from pygsti.construction import modelconstruction as _setc
 
 from pygsti.modelpacks._modelpack import GSTModelPack
 
@@ -90,10 +88,10 @@ class _Module(GSTModelPack):
                    (('Gxpi2', 0), ('Gxpi2', 0)), (('Gxpi2', 0), ('Gxpi2', 1)), (('Gxpi2', 0), ('Gypi2', 1)), (('Gypi2', 0), ('Gxpi2', 1)),
                    (('Gypi2', 0), ('Gypi2', 1))]
 
-    global_fidPairs = [(0, 1), (0, 5), (1, 3), (2, 4), (3, 8), (5, 5), (7, 0), (9, 3), (9, 9), (9, 10), (10, 8),
+    global_fidpairs = [(0, 1), (0, 5), (1, 3), (2, 4), (3, 8), (5, 5), (7, 0), (9, 3), (9, 9), (9, 10), (10, 8),
                        (12, 2), (12, 6), (14, 6), (15, 0), (15, 5)]
 
-    _pergerm_fidPairsDict = {
+    _pergerm_fidpairsdict = {
         (('Gypi2', 0), ): [(3, 1), (4, 1), (4, 2), (5, 0), (5, 1), (5, 7), (6, 0), (6, 8), (7, 2), (7, 4), (7, 9), (8, 0),
                     (8, 7), (9, 2), (9, 3), (10, 9), (10, 10), (14, 7), (14, 9), (15, 10)],
         (('Gxpi2', 1), ): [(0, 5), (1, 0), (1, 1), (2, 2), (2, 5), (2, 9), (3, 3), (3, 4), (3, 8), (4, 0), (4, 2), (4, 7),
@@ -256,9 +254,9 @@ class _Module(GSTModelPack):
                                                                    (12, 10), (13, 0), (13, 4), (14, 5)]
     }
 
-    global_fidPairs_lite = None
+    global_fidpairs_lite = None
 
-    _pergerm_fidPairsDict_lite = {
+    _pergerm_fidpairsdict_lite = {
       (('Gxpi2', 0),): [
             (0, 8), (1, 2), (1, 7), (2, 4), (2, 6), (2, 7), (3, 3), 
             (3, 5), (3, 8), (4, 8), (5, 0), (5, 4), (5, 5), (5, 7), 
@@ -333,12 +331,12 @@ class _Module(GSTModelPack):
             (15, 6)],
     }
 
-    def _target_model(self, sslbls):
+    def _target_model(self, sslbls, **kwargs):
         return self._build_explicit_target_model(
             sslbls, [('Gxpi2', 1), ('Gypi2', 1), ('Gxpi2', 0), ('Gypi2', 0), ('Gcnot', 0, 1)],
             ['I({0}):X(pi/2,{1})', 'I({0}):Y(pi/2,{1})', 'X(pi/2,{0}):I({1})', 'Y(pi/2,{0}):I({1})', 'CNOT({0},{1})'],
-            effectLabels=['00', '01', '10', '11'],
-            effectExpressions=['0', '1', '2', '3'])
+            effect_labels=['00', '01', '10', '11'],
+            effect_expressions=['0', '1', '2', '3'], **kwargs)
 
 
 import sys

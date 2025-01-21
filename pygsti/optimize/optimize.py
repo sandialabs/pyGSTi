@@ -1,4 +1,6 @@
-""" Optimization (minimization) functions """
+"""
+Optimization (minimization) functions
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -8,10 +10,11 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import numpy as _np
-import time as _time
-import sys as _sys
 import os as _os
+import sys as _sys
+import time as _time
+
+import numpy as _np
 import scipy.optimize as _spo
 
 try:
@@ -19,12 +22,13 @@ try:
 except:
     from scipy.optimize import OptimizeResult as _optResult  # for later scipy versions
 
-from .customcg import fmax_cg
+from pygsti.optimize.customcg import fmax_cg
+from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 
 
 def minimize(fn, x0, method='cg', callback=None,
              tol=1e-10, maxiter=1000000, maxfev=None,
-             stopval=None, jac=None):
+             stopval=None, jac=None, verbosity=0, **addl_kwargs):
     """
     Minimizes the function fn starting at x0.
 
@@ -42,19 +46,19 @@ def minimize(fn, x0, method='cg', callback=None,
 
     method : string, optional
         Which minimization method to use.  Allowed values are:
-        "simplex" : uses fmin_simplex
-        "supersimplex" : uses fmin_supersimplex
+        "simplex" : uses _fmin_simplex
+        "supersimplex" : uses _fmin_supersimplex
         "customcg" : uses fmax_cg (custom CG method)
         "brute" : uses scipy.optimize.brute
         "basinhopping" : uses scipy.optimize.basinhopping with L-BFGS-B
-        "swarm" : uses fmin_particle_swarm
-        "evolve" : uses fmin_evolutionary (which uses DEAP)
+        "swarm" : uses _fmin_particle_swarm
+        "evolve" : uses _fmin_evolutionary (which uses DEAP)
         < methods available from scipy.optimize.minimize >
 
     callback : function, optional
         A callback function to be called in order to track optimizer progress.
         Should have signature: myCallback(x, f=None, accepted=None).  Note that
-        create_obj_func_printer(...) function can be used to create a callback.
+        `create_objfn_printer(...)` function can be used to create a callback.
 
     tol : float, optional
         Tolerance value used for all types of tolerances available in a given method.
@@ -72,6 +76,12 @@ def minimize(fn, x0, method='cg', callback=None,
     jac : function
         Jacobian function.
 
+    verbosity : int
+        Level of detail to print to stdout.
+
+    addl_kwargs : dict
+        Additional arguments for the specific optimizer being used.
+
     Returns
     -------
     scipy.optimize.Result object
@@ -79,14 +89,19 @@ def minimize(fn, x0, method='cg', callback=None,
     """
 
     if maxfev is None: maxfev = maxiter
+    printer = _VerbosityPrinter.create_printer(verbosity)
 
     #Run Minimization Algorithm
     if method == 'simplex':
-        solution = fmin_simplex(fn, x0, slide=1.0, tol=tol, maxiter=maxiter)
+        solution = _fmin_simplex(fn, x0, slide=1.0, tol=tol, maxiter=maxiter, **addl_kwargs)
 
     elif method == 'supersimplex':
-        solution = fmin_supersimplex(fn, x0, outer_tol=1.0, inner_tol=tol,
-                                     max_outer_iter=100, min_inner_maxiter=100, max_inner_maxiter=maxiter)
+        if 'abs_outer_tol' not in addl_kwargs: addl_kwargs['abs_outer_tol'] = 1e-6
+        if 'inner_tol' not in addl_kwargs: addl_kwargs['inner_tol'] = 1e-6
+        if 'min_inner_maxiter' not in addl_kwargs: addl_kwargs['min_inner_maxiter'] = 100
+        if 'max_inner_maxiter' not in addl_kwargs: addl_kwargs['max_inner_maxiter'] = 100
+        solution = _fmin_supersimplex(fn, x0, rel_outer_tol=tol, max_outer_iter=maxiter, callback=callback,
+                                      printer=printer, **addl_kwargs)
 
     elif method == 'customcg':
         def fn_to_max(x):
@@ -129,10 +144,10 @@ def minimize(fn, x0, method='cg', callback=None,
         solution.success = True  # basinhopping doesn't seem to set this...
 
     elif method == 'swarm':
-        solution = fmin_particle_swarm(fn, x0, tol, maxiter, popsize=1000)  # , callback = callback)
+        solution = _fmin_particle_swarm(fn, x0, tol, maxiter, printer, popsize=1000)  # , callback = callback)
 
     elif method == 'evolve':
-        solution = fmin_evolutionary(fn, x0, num_generations=maxiter, num_individuals=500)
+        solution = _fmin_evolutionary(fn, x0, num_generations=maxiter, num_individuals=500, printer=printer)
 
 #    elif method == 'homebrew':
 #      solution = fmin_homebrew(fn, x0, maxiter)
@@ -152,7 +167,8 @@ def minimize(fn, x0, method='cg', callback=None,
     return solution
 
 
-def fmin_supersimplex(fn, x0, outer_tol, inner_tol, max_outer_iter, min_inner_maxiter, max_inner_maxiter):
+def _fmin_supersimplex(fn, x0, abs_outer_tol, rel_outer_tol, inner_tol, max_outer_iter,
+                       min_inner_maxiter, max_inner_maxiter, callback, printer):
     """
     Minimize a function using repeated applications of the simplex algorithm.
 
@@ -168,8 +184,11 @@ def fmin_supersimplex(fn, x0, outer_tol, inner_tol, max_outer_iter, min_inner_ma
     x0 : numpy array
         The starting point (argument to fn).
 
-    outer_tol : float
-        Tolerance of outer loop
+    abs_outer_tol : float
+        Absolute tolerance of outer loop
+
+    rel_outer_tol : float
+        Relative tolerance of outer loop
 
     inner_tol : float
         Tolerance fo inner loop
@@ -183,39 +202,55 @@ def fmin_supersimplex(fn, x0, outer_tol, inner_tol, max_outer_iter, min_inner_ma
     max_inner_maxiter : int
         Maxium number of outer-loop iterations
 
+    printer : VerbosityPrinter
+        Printer for displaying output status messages.
+
     Returns
     -------
     scipy.optimize.Result object
         Includes members 'x', 'fun', 'success', and 'message'.
     """
     f_init = fn(x0)
-    f_final = f_init - 10 * outer_tol  # prime the loop
+    f_final = f_init - 10 * abs_outer_tol  # prime the loop
     x_start = x0
 
     i = 1
     cnt_at_same_maxiter = 1
     inner_maxiter = min_inner_maxiter
 
-    while (f_init - f_final > outer_tol or inner_maxiter < max_inner_maxiter) and i < max_outer_iter:
-        if f_init - f_final <= outer_tol and inner_maxiter < max_inner_maxiter:
+    def check_convergence(fi, ff):  # absolute and relative tolerance exit condition
+        return ((fi - ff) < abs_outer_tol) or abs(fi - ff) / max(abs(ff), abs_outer_tol) < rel_outer_tol
+
+    def check_convergence_str(fi, ff):  # for printing status messages
+        return "abs=%g, rel=%g" % (fi - ff, abs(fi - ff) / max(abs(ff), abs_outer_tol))
+
+    for i in range(max_outer_iter):
+        # increase inner_maxiter if seems to be converging
+        if check_convergence(f_init, f_final) and inner_maxiter < max_inner_maxiter:
             inner_maxiter *= 10; cnt_at_same_maxiter = 1
+
+        # reduce inner_maxiter if things aren't progressing (hail mary)
         if cnt_at_same_maxiter > 10 and inner_maxiter > min_inner_maxiter:
             inner_maxiter /= 10; cnt_at_same_maxiter = 1
-        f_init = f_final
 
-        print(">>> fmin_supersimplex: outer iteration %d (inner_maxiter = %d)" % (i, inner_maxiter))
-        i += 1; cnt_at_same_maxiter += 1
+        printer.log("Supersimplex: outer iteration %d (inner_maxiter = %d)" % (i, inner_maxiter))
+        f_init = f_final
+        cnt_at_same_maxiter += 1
 
         opts = {'maxiter': inner_maxiter, 'maxfev': inner_maxiter, 'disp': False}
-        inner_solution = _spo.minimize(fn, x_start, options=opts, method='Nelder-Mead', callback=None, tol=inner_tol)
+        inner_solution = _spo.minimize(fn, x_start, options=opts, method='Nelder-Mead',
+                                       callback=callback, tol=inner_tol)
 
         if not inner_solution.success:
-            print("WARNING: fmin_supersimplex inner loop failed (tol=%g, maxiter=%d): %s"
-                  % (inner_tol, inner_maxiter, inner_solution.message))
+            printer.log("WARNING: Supersimplex inner loop failed (tol=%g, maxiter=%d): %s"
+                        % (inner_tol, inner_maxiter, inner_solution.message), 2)
 
         f_final = inner_solution.fun
         x_start = inner_solution.x
-        print(">>> fmin_supersimplex: outer iteration %d gives min = %f" % (i, f_final))
+        printer.log("Supersimplex: outer iteration %d gives min = %f (%s)" % (i, f_final,
+                                                                              check_convergence_str(f_init, f_final)))
+        if inner_maxiter >= max_inner_maxiter:  # to exit, we must be have been using our *maximum* inner_maxiter
+            if check_convergence(f_init, f_final): break  # converged!
 
     solution = _optResult()
     solution.x = inner_solution.x
@@ -228,7 +263,7 @@ def fmin_supersimplex(fn, x0, outer_tol, inner_tol, max_outer_iter, min_inner_ma
     return solution
 
 
-def fmin_simplex(fn, x0, slide=1.0, tol=1e-8, maxiter=1000):
+def _fmin_simplex(fn, x0, slide=1.0, tol=1e-8, maxiter=1000):
     """
     Minimizes a function using a custom simplex implmentation.
 
@@ -333,10 +368,11 @@ def fmin_simplex(fn, x0, slide=1.0, tol=1e-8, maxiter=1000):
 
 
 #TODO err_crit is never used?
-def fmin_particle_swarm(f, x0, err_crit, iter_max, popsize=100, c1=2, c2=2):
+def _fmin_particle_swarm(f, x0, err_crit, iter_max, printer, popsize=100, c1=2, c2=2):
     """
     A simple implementation of the Particle Swarm Optimization Algorithm.
-    Pradeep Gowda 2009-03-16
+
+    (Pradeep Gowda 2009-03-16)
 
     Parameters
     ----------
@@ -489,7 +525,7 @@ def fmin_particle_swarm(f, x0, err_crit, iter_max, popsize=100, c1=2, c2=2):
         #    gbest.fitness = local_soln.fun
         #    print "  final fun = ",gbest.fitness
 
-        print("Iter %d: global best = %g (index %d)" % (iter_num, gbest.fitness, ibest))
+        printer.log("Iter %d: global best = %g (index %d)" % (iter_num, gbest.fitness, ibest))
 
         #if err < err_crit:  break  #TODO: stopping condition
 
@@ -508,7 +544,7 @@ def fmin_particle_swarm(f, x0, err_crit, iter_max, popsize=100, c1=2, c2=2):
     return solution
 
 
-def fmin_evolutionary(f, x0, num_generations, num_individuals):
+def _fmin_evolutionary(f, x0, num_generations, num_individuals, printer):
     """
     Minimize a function using an evolutionary algorithm.
 
@@ -517,7 +553,7 @@ def fmin_evolutionary(f, x0, num_generations, num_individuals):
 
     Parameters
     ----------
-    fn : function
+    f : function
         The function to minimize.
 
     x0 : numpy array
@@ -531,7 +567,6 @@ def fmin_evolutionary(f, x0, num_generations, num_individuals):
         The number of individuals in each generation.  More individuals
         make finding the global optimum more likely, but take longer
         to run.
-
 
     Returns
     -------
@@ -588,7 +623,7 @@ def fmin_evolutionary(f, x0, num_generations, num_individuals):
     for g in range(num_generations):
         record = stats.compile(pop)
         logbook.record(gen=g, **record)
-        print("Gen %d: %s" % (g, record))
+        printer.log("Gen %d: %s" % (g, record))
 
         # Select the next generation individuals
         offspring = toolbox.select(pop, len(pop))
@@ -627,100 +662,16 @@ def fmin_evolutionary(f, x0, num_generations, num_individuals):
     return solution
 
 
-#def fmin_homebrew(f, x0, maxiter):
-#    """
-#    Cooked up by Erik, this algorithm is similar to basinhopping but with some tweaks.
-#
-#    Parameters
-#    ----------
-#    fn : function
-#        The function to minimize.
-#
-#    x0 : numpy array
-#        The starting point (argument to fn).
-#
-#    maxiter : int
-#        The maximum number of iterations.
-#
-#    Returns
-#    -------
-#    scipy.optimize.Result object
-#        Includes members 'x', 'fun', 'success', and 'message'.
-#    """
-#
-#    STEP = 0.01
-#    MAX_STEPS = int(2.0 / STEP) # allow a change of at most 2.0
-#    MAX_DIR_TRIES = 1000
-#    T = 1.0
-#
-#    global_best_params = cur_x0 = x0
-#    global_best = cur_f = f(x0)
-#    N = len(x0)
-#    trial_x0 = x0.copy()
-#
-#    for it in range(maxiter):
-#
-#        #Minimize using L-BFGS-B
-#        opts = {'maxiter': maxiter, 'maxfev': maxiter, 'disp': False }
-#        soln = _spo.minimize(f,trial_x0,options=opts, method='L-BFGS-B',callback=None, tol=1e-8)
-#
-#        # Update global best
-#        if soln.fun < global_best:
-#            global_best_params = soln.x
-#            global_best = soln.fun
-#
-#        #check if we accept the new minimum
-#        if soln.fun < cur_f or _np.random.random() < _np.exp( -(soln.fun - cur_f)/T ):
-#            cur_x0 = soln.x; cur_f = soln.fun
-#            print "Iter %d: f=%g accepted -- global best = %g" % (it, cur_f, global_best)
-#        else:
-#            print "Iter %d: f=%g declined" % (it, cur_f)
-#
-#        trial_x0 = None; numTries = 0
-#        while trial_x0 is None and numTries < MAX_DIR_TRIES:
-#            #choose a random direction
-#            direction = _np.random.random( N )
-#            numTries += 1
-#
-#            #print "DB: test dir %d" % numTries #DEBUG
-#
-#            #kick solution along random direction until the value of f starts to get smaller again (if it ever does)
-#            #  (this indicates we've gone over a maximum along this direction)
-#            last_f = cur_f
-#            for i in range(1,MAX_STEPS):
-#                test_x = cur_x0 + i*STEP * direction
-#                test_f = f(test_x)
-#                #print "DB: test step=%f: f=%f" % (i*STEP, test_f)
-#                if test_f < last_f:
-#                    trial_x0 = test_x
-#                    print "Found new direction in %d tries, new f(x0) = %g" % (numTries,test_f)
-#                    break
-#                last_f = test_f
-#
-#        if trial_x0 is None:
-#            raise ValueError("Maximum number of direction tries exceeded")
-#
-#    solution = _optResult()
-#    solution.x = global_best_params; solution.fun = global_best
-#    solution.success = True
-##    if it < maxiter:
-##        solution.success = True
-##    else:
-##        solution.success = False
-##        solution.message = "Maximum iterations exceeded"
-#    return solution
-
-
-def create_obj_func_printer(objFunc, startTime=None):
+def create_objfn_printer(obj_func, start_time=None):
     """
     Create a callback function that prints the value of an objective function.
 
     Parameters
     ----------
-    objFunc : function
+    obj_func : function
         The objective function to print.
 
-    startTime : float (optional)
+    start_time : float , optional
         A reference starting time to use when printing elapsed times. If None,
         then the system time when this function is called is used (which is
         often what you want).
@@ -728,18 +679,18 @@ def create_obj_func_printer(objFunc, startTime=None):
     Returns
     -------
     function
-        A callback function which prints objFunc.
+        A callback function which prints obj_func.
     """
-    if startTime is None:
-        startTime = _time.time()  # for reference point of obj func printer
+    if start_time is None:
+        start_time = _time.time()  # for reference point of obj func printer
 
     def print_obj_func(x, f=None, accepted=None):
         """Just print the objective function value (used to monitor convergence in a callback) """
         if f is not None and accepted is not None:
-            print("%5ds %22.10f %s" % (_time.time() - startTime, f, 'accepted' if accepted else 'not accepted'))
+            print("%5ds %22.10f %s" % (_time.time() - start_time, f, 'accepted' if accepted else 'not accepted'))
         else:
-            result = objFunc(x)
-            duration = _time.time() - startTime
+            result = obj_func(x)
+            duration = _time.time() - start_time
             try:
                 print("%5ds %22.10f" % (duration, result))
             except TypeError:  # Objfun returns vector, not scalar
@@ -767,7 +718,7 @@ def _fwd_diff_jacobian(f, x0, eps=1e-10):
     return jac
 
 
-def check_jac(f, x0, jacToCheck, eps=1e-10, tol=1e-6, errType='rel',
+def check_jac(f, x0, jac_to_check, eps=1e-10, tol=1e-6, err_type='rel',
               verbosity=1):
     """
     Checks a jacobian function using finite differences.
@@ -780,7 +731,7 @@ def check_jac(f, x0, jacToCheck, eps=1e-10, tol=1e-6, errType='rel',
     x0 : numpy array
         The point at which to check the jacobian.
 
-    jacToCheck : function
+    jac_to_check : function
         A function which should compute the jacobian of f at x0.
 
     eps : float, optional
@@ -788,8 +739,11 @@ def check_jac(f, x0, jacToCheck, eps=1e-10, tol=1e-6, errType='rel',
 
     tol : float, optional
         The allowd tolerance on the relative differene between the
-        values of the finite difference and jacToCheck jacobians
-        if errType == 'rel' or the absolute difference if errType == 'abs'.
+        values of the finite difference and jac_to_check jacobians
+        if err_type == 'rel' or the absolute difference if err_type == 'abs'.
+
+    err_type : {'rel', 'abs'), optional
+        How to interpret `tol` (see above).
 
     verbosity : int, optional
         Controls how much detail is printed to stdout.
@@ -813,32 +767,32 @@ def check_jac(f, x0, jacToCheck, eps=1e-10, tol=1e-6, errType='rel',
         _sys.stdout = orig_stdout
         devnull.close()
 
-    assert(jacToCheck.shape == fd_jac.shape)
-    M, N = jacToCheck.shape
+    assert(jac_to_check.shape == fd_jac.shape)
+    M, N = jac_to_check.shape
 
     errSum = 0; errs = []
-    if errType == 'rel':
+    if err_type == 'rel':
         for i in range(M):
             for j in range(N):
-                err = _np.abs(fd_jac[i, j] - jacToCheck[i, j]) / (_np.abs(fd_jac[i, j]) + 1e-10)
+                err = _np.abs(fd_jac[i, j] - jac_to_check[i, j]) / (_np.abs(fd_jac[i, j]) + 1e-10)
                 if err > tol: errs.append((i, j, err))
                 errSum += err
 
-    elif errType == 'abs':
+    elif err_type == 'abs':
         for i in range(M):
             for j in range(N):
-                err = _np.abs(fd_jac[i, j] - jacToCheck[i, j])
+                err = _np.abs(fd_jac[i, j] - jac_to_check[i, j])
                 if err > tol:
                     errs.append((i, j, err))
                     if verbosity > 1:
                         print("JAC CHECK (%d,%d): %g vs %g (diff = %g)" %
-                              (i, j, fd_jac[i, j], jacToCheck[i, j], fd_jac[i, j] - jacToCheck[i, j]))
+                              (i, j, fd_jac[i, j], jac_to_check[i, j], fd_jac[i, j] - jac_to_check[i, j]))
                 errSum += err
 
     errs.sort(key=lambda x: -x[2])
 
     if len(errs) > 0:
-        maxabs = _np.max(_np.abs(jacToCheck))
+        maxabs = _np.max(_np.abs(jac_to_check))
         max_err_ratio = _np.max([x[2] / maxabs for x in errs])
         if verbosity > 0:
             if max_err_ratio > 0.01:

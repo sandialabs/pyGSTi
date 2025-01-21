@@ -3,10 +3,10 @@
 
 <figure id="bestGatesetSpamTable" class='tbl'>
 	<figcaption><span class="captiontitle">Estimated SPAM operations</span> <span class="captiondetail">This table presents the GST-estimated SPAM operations &mdash; the initial state, as a density matrix, and the terminating measurement as a POVM &mdash; and compares them to the corresponding ideal target operations.  All of these matrices should be positive semidefinite, so their eigenvalues are shown to provide a quick diagnostic.</span></figcaption>
-	{{ bestGatesetSpamBriefTable|render }}
+	{{ final_model_brief_spam_table|render }}
 </figure>
 
 <figure id="bestGatesetGatesTable" class='tbl'>
 	<figcaption><span class="captiontitle">Estimated logic gate operations</span> <span class="captiondetail">This table presents the GST-estimated logic gates &mdash; represented as process matrices (aka Liouville superoperators or Pauli transfer matrices) &mdash; and compares them to the <em>ideal</em> (generally unitary) <q>target</q> logic gates.  Each gate is represented as a <span class="math">d^2\times d^2</span> <em>superoperator</em> that acts by matrix multiplication on vectors in the vector space <span class="math">\mathcal{B}(\mathcal{H})</span> of operators.  Matrices are displayed using a heat map that ranges between 1.0 (<span style="color:red">red</span>) and -1.0 (<span style="color:blue">blue</span>), and hovering the pointer over a matrix element will pop up its precise numerical value.  Note that it is impossible to discern even order-1%% deviations from the ideal in this view; that's what other analyses (especially the Gate Error Generators tab) are for.</span></figcaption>
-	{{ bestGatesetGatesBoxTable|render }}
+	{{ final_gates_box_table|render }}
 </figure>

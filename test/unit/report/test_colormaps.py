@@ -1,19 +1,18 @@
 import numpy as np
 
-from ..util import BaseCase, needs_matplotlib
-
 from pygsti.report import colormaps as cmap
+from ..util import BaseCase, needs_matplotlib
 
 
 class ColormapHelperTester(BaseCase):
     def test_as_rgb_array(self):
-        self.assertArraysEqual(cmap.as_rgb_array("rgb(0,255,128)"), np.array([0, 255, 128]))
-        self.assertArraysEqual(cmap.as_rgb_array("rgba(0,255,128,0.5)"), np.array([0, 255, 128]))
-        self.assertArraysEqual(cmap.as_rgb_array("#00FF80"), np.array([0, 255, 128]))
+        self.assertArraysEqual(cmap.to_rgb_array("rgb(0,255,128)"), np.array([0, 255, 128]))
+        self.assertArraysEqual(cmap.to_rgb_array("rgba(0,255,128,0.5)"), np.array([0, 255, 128]))
+        self.assertArraysEqual(cmap.to_rgb_array("#00FF80"), np.array([0, 255, 128]))
 
     def test_as_rgb_array_raises_on_arg_parse_error(self):
         with self.assertRaises(ValueError):
-            cmap.as_rgb_array("foobar")
+            cmap.to_rgb_array("foobar")
 
     def test_interpolate_plotly_colorscale(self):
         plotlyColorscale = [(0.0, "#FFFFFF"), (1.0, "rgb(0,0,0)")]
@@ -25,7 +24,7 @@ class ColormapHelperTester(BaseCase):
 class ColormapInstanceBase(object):
     @needs_matplotlib
     def test_get_matplotlib_norm_and_cmap(self):
-        mpl_norm, mpl_cmap = self.cmap.get_matplotlib_norm_and_cmap()
+        mpl_norm, mpl_cmap = self.cmap.create_matplotlib_norm_and_cmap()
         # TODO assert correctness
 
 

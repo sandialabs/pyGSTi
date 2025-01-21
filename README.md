@@ -1,8 +1,10 @@
 ********************************************************************************
-  pyGSTi 0.9
+  pyGSTi 0.9.13
 ********************************************************************************
 
-[![Build Status](https://travis-ci.org/pyGSTio/pyGSTi.svg?branch=master)](https://travis-ci.org/pyGSTio/pyGSTi)
+[![master build](https://img.shields.io/github/actions/workflow/status/sandialabs/pyGSTi/beta-master.yml?branch=master&label=master)](https://github.com/sandialabs/pyGSTi/actions/workflows/beta-master.yml)
+[![develop build](https://img.shields.io/github/actions/workflow/status/sandialabs/pyGSTi/develop.yml?branch=develop&label=develop)](https://github.com/sandialabs/pyGSTi/actions/workflows/develop.yml)
+[![beta build](https://img.shields.io/github/actions/workflow/status/sandialabs/pyGSTi/beta-master.yml?branch=beta&label=beta)](https://github.com/sandialabs/pyGSTi/actions/workflows/beta-master.yml)
 
 pyGSTi
 ------
@@ -34,7 +36,7 @@ In particular, there are a number of characterization protocols currently implem
 
 PyGSTi is designed with a modular structure so as to be highly customizable
 and easily integrated to new or existing python software.  It runs using
-python2.7 or python3.  To faclilitate integration with software for running
+python 3.8 or higher.  To faclilitate integration with software for running
 cloud-QIP experiments, pyGSTi `Circuit` objects can be converted to IBM's
 **OpenQASM** and Rigetti Quantum Computing's **Quil** circuit description languages.
 
@@ -90,11 +92,11 @@ containing *Idle*, *X(&pi;/2)*, and *Y(&pi;/2)* gates labelled `Gi`, `Gx`,
 and `Gy`, respectively:
 ~~~
 import pygsti
-from pygsti.construction import std1Q_XYI
+from pygsti.modelpacks import smq1Q_XYI
 
-mycircuit = pygsti.obj.Circuit( ('Gx','Gy','Gx') )
-model = std1Q_XYI.target_model()
-outcome_probabilities = model.probs(mycircuit)
+mycircuit = pygsti.circuits.Circuit([('Gxpi2',0), ('Gypi2',0), ('Gxpi2',0)])
+model = smq1Q_XYI.target_model()
+outcome_probabilities = model.probabilities(mycircuit)
 ~~~
 
 
@@ -122,29 +124,32 @@ Here's the basic idea:
 In code, running GST looks something like this:
 ~~~
 import pygsti
-from pygsti.construction import std1Q_XYI
+from pygsti.modelpacks import smq1Q_XYI
 
 # 1) get the ideal "target" Model (a "stock" model in this case)
-mdl_ideal = std1Q_XYI.target_model()
+mdl_ideal = smq1Q_XYI.target_model()
 
-# 2) get the building blocks needed to specify which circuits are needed
-prepfids, measfids, germs = std1Q_XYI.prepStrs, std1Q_XYI.effectStrs, std1Q_XYI.germs
-maxLengths = [1,2,4] # user-defined: how long do you want the circuits?
+# 2) generate a GST experiment design
+edesign = smq1Q_XYI.create_gst_experiment_design(4) # user-defined: how long do you want the longest circuits?
 
-# 3) generate a list of circuits for GST & write a data-set template
-listOfExperiments = pygsti.construction.make_lsgst_experiment_list(
-    mdl_ideal, prepfids, measfids, germs, maxLengths)
-pygsti.io.write_empty_dataset("MyData.txt", listOfExperiments, "## Columns = 0 count, 1 count")
+# 3) write a data-set template
+pygsti.io.write_empty_dataset("MyData.txt", edesign.all_circuits_needing_data, "## Columns = 0 count, 1 count")
 
 # STOP! "MyData.txt" now has columns of zeros where actual data should go.
 # REPLACE THE ZEROS WITH ACTUAL DATA, then proceed with:
 ds = pygsti.io.load_dataset("MyData.txt") # load data -> DataSet object
 
-# 4) run GST
-results = pygsti.do_stdpractice_gst(ds, mdl_ideal, prepfids, measfids, germs, maxLengths)
+# OR: Create a simulated dataset with:
+# ds = pygsti.data.simulate_data(mdl_ideal, edesign, num_samples=1000)
+
+# 4) run GST (now using the modern object-based interface)
+data = pygsti.protocols.ProtocolData(edesign, ds) # Step 1: Bundle up the dataset and circuits into a ProtocolData object
+protocol = pygsti.protocols.StandardGST() # Step 2: Select a Protocol to run
+results = protocol.run(data) # Step 3: Run the protocol!
 
 # 5) Create a nice HTML report detailing the results
-pygsti.report.create_standard_report(results, filename="myReport", title="Sample Report")
+report = pygsti.report.construct_standard_report(results, title="My Report", verbosity=1)
+report.write_html("myReport", auto_open=True, verbosity=1) # Can also write out Jupyter notebooks!
 ~~~
 
 Tutorials and Examples

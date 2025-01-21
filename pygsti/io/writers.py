@@ -1,4 +1,6 @@
-""" Functions for writing GST objects to text files."""
+"""
+Functions for writing GST objects to text files.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -8,19 +10,31 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import warnings as _warnings
-import numpy as _np
 import pathlib as _pathlib
+import warnings as _warnings
+import json as _json
+
+import numpy as _np
+import json
+
+from pygsti.io import readers as _readers
+from pygsti import circuits as _circuits
+from pygsti.models import gaugegroup as _gaugegroup
 
 # from . import stdinput as _stdinput
-from .. import tools as _tools
-from .. import objects as _objs
-from . import loaders as _loaders
+from pygsti import tools as _tools
+from pygsti.tools.legacytools import deprecate as _deprecated_fn
+from pygsti.modelmembers import instruments as _instrument
+from pygsti.modelmembers import operations as _op
+from pygsti.modelmembers import povms as _povm
+from pygsti.modelmembers import states as _state
 
+from pygsti.processors import QubitProcessorSpec, QuditProcessorSpec
+from itertools import product
 
-def write_empty_dataset(filename, circuit_list,
-                        headerString='## Columns = 1 frequency, count total', numZeroCols=None,
-                        appendWeightsColumn=False):
+def write_empty_dataset(filename, circuits,
+                        header_string='## Columns = 1 frequency, count total', num_zero_cols=None,
+                        append_weights_column=False):
     """
     Write an empty dataset file to be used as a template.
 
@@ -29,38 +43,41 @@ def write_empty_dataset(filename, circuit_list,
     filename : string
         The filename to write.
 
-    circuit_list : list of Circuits
-        List of operation sequences to write, each to be followed by numZeroCols zeros.
+    circuits : list of Circuits
+        List of circuits to write, each to be followed by num_zero_cols zeros.
 
-    headerString : string, optional
+    header_string : string, optional
         Header string for the file; should start with a pound (#) or double-pound (##)
         so it is treated as a commend or directive, respectively.
 
-    numZeroCols : int, optional
-        The number of zero columns to place after each operation sequence.  If None,
-        then headerString must begin with "## Columns = " and number of zero
+    num_zero_cols : int, optional
+        The number of zero columns to place after each circuit.  If None,
+        then header_string must begin with "## Columns = " and number of zero
         columns will be inferred.
 
-    appendWeightsColumn : bool, optional
+    append_weights_column : bool, optional
         Add an additional 'weights' column.
 
+    Returns
+    -------
+    None
     """
 
-    if len(circuit_list) > 0 and not isinstance(circuit_list[0], _objs.Circuit):
-        raise ValueError("Argument circuit_list must be a list of Circuit objects!")
+    if len(circuits) > 0 and not isinstance(circuits[0], _circuits.Circuit):
+        raise ValueError("Argument circuits must be a list of Circuit objects!")
 
-    if numZeroCols is None:  # TODO: cleaner way to extract number of columns from headerString?
-        if headerString.startswith('## Columns = '):
-            numZeroCols = len(headerString.split(','))
+    if num_zero_cols is None:  # TODO: cleaner way to extract number of columns from header_string?
+        if header_string.startswith('## Columns = '):
+            num_zero_cols = len(header_string.split(','))
         else:
-            raise ValueError("Must specify numZeroCols since I can't figure it out from the header string")
+            raise ValueError("Must specify num_zero_cols since I can't figure it out from the header string")
 
     with open(str(filename), 'w') as output:
-        zeroCols = "  ".join(['0'] * numZeroCols)
-        output.write(headerString + '\n')
-        for circuit in circuit_list:  # circuit should be a Circuit object here
+        zeroCols = "  ".join(['0'] * num_zero_cols)
+        output.write(header_string + '\n')
+        for circuit in circuits:  # circuit should be a Circuit object here
             output.write(circuit.str + "  " + zeroCols + (("  %f" %
-                                                           circuit.weight) if appendWeightsColumn else "") + '\n')
+                                                           circuit.weight) if append_weights_column else "") + '\n')
 
 
 def _outcome_to_str(x):
@@ -68,8 +85,8 @@ def _outcome_to_str(x):
     else: return ":".join([str(i) for i in x])
 
 
-def write_dataset(filename, dataset, circuit_list=None,
-                  outcomeLabelOrder=None, fixedColumnMode=True, withTimes="auto"):
+def write_dataset(filename, dataset, circuits=None,
+                  outcome_label_order=None, fixed_column_mode='auto', with_times="auto"):
     """
     Write a text-formatted dataset file.
 
@@ -81,43 +98,47 @@ def write_dataset(filename, dataset, circuit_list=None,
     dataset : DataSet
         The data set from which counts are obtained.
 
-    circuit_list : list of Circuits, optional
-        The list of operation sequences to include in the written dataset.
-        If None, all operation sequences are output.
+    circuits : list of Circuits, optional
+        The list of circuits to include in the written dataset.
+        If None, all circuits are output.
 
-    outcomeLabelOrder : list, optional
+    outcome_label_order : list, optional
         A list of the outcome labels in dataset which specifies
         the column order in the output file.
 
-    fixedColumnMode : bool, optional
+    fixed_column_mode : bool or 'auto', optional
         When `True`, a file is written with column headers indicating which
         outcome each column of counts corresponds to.  If a row doesn't have
         any counts for an outcome, `'--'` is used in its place.  When `False`,
         each row's counts are written in an expanded form that includes the
         outcome labels (each "count" has the format <outcomeLabel>:<count>).
 
-    withTimes : bool or "auto", optional
+    with_times : bool or "auto", optional
         Whether to include (save) time-stamp information in output.  This
-        can only be True when `fixedColumnMode=False`.  `"auto"` will set
-        this to True if `fixedColumnMode=False` and `dataset` has data at
+        can only be True when `fixed_column_mode=False`.  `"auto"` will set
+        this to True if `fixed_column_mode=False` and `dataset` has data at
         non-trivial (non-zero) times.
+
+    Returns
+    -------
+    None
     """
-    if circuit_list is not None:
-        if len(circuit_list) > 0 and not isinstance(circuit_list[0], _objs.Circuit):
-            raise ValueError("Argument circuit_list must be a list of Circuit objects!")
+    if circuits is not None:
+        if len(circuits) > 0 and not isinstance(circuits[0], _circuits.Circuit):
+            raise ValueError("Argument circuits must be a list of Circuit objects!")
     else:
-        circuit_list = list(dataset.keys())
+        circuits = list(dataset.keys())
 
-    if outcomeLabelOrder is not None:  # convert to tuples if needed
-        outcomeLabelOrder = [(ol,) if isinstance(ol, str) else ol
-                             for ol in outcomeLabelOrder]
+    if outcome_label_order is not None:  # convert to tuples if needed
+        outcome_label_order = [(ol,) if isinstance(ol, str) else ol
+                               for ol in outcome_label_order]
 
-    outcomeLabels = dataset.get_outcome_labels()
-    if outcomeLabelOrder is not None:
-        assert(len(outcomeLabelOrder) == len(outcomeLabels))
-        assert(all([ol in outcomeLabels for ol in outcomeLabelOrder]))
-        assert(all([ol in outcomeLabelOrder for ol in outcomeLabels]))
-        outcomeLabels = outcomeLabelOrder
+    outcomeLabels = dataset.outcome_labels
+    if outcome_label_order is not None:
+        assert(len(outcome_label_order) == len(outcomeLabels))
+        assert(all([ol in outcomeLabels for ol in outcome_label_order]))
+        assert(all([ol in outcome_label_order for ol in outcomeLabels]))
+        outcomeLabels = outcome_label_order
 
     headerString = ""
     if hasattr(dataset, 'comment') and dataset.comment is not None:
@@ -127,50 +148,59 @@ def write_dataset(filename, dataset, circuit_list=None,
             else:
                 headerString += "# " + commentLine + '\n'
 
-    if fixedColumnMode is True:
+    if dataset._dbcoordinates is not None:
+        headerString += '## DatabaseID = %s\n' % str(dataset._dbcoordinates[1])  # omit collection name
+
+    if fixed_column_mode == "auto":
+        if with_times == "auto":
+            with_times = not dataset.has_trivial_timedependence
+        fixed_column_mode = bool(len(outcomeLabels) <= 8 and not with_times)
+
+    if fixed_column_mode is True:
         headerString += '## Columns = ' + ", ".join(["%s count" % _outcome_to_str(ol)
                                                      for ol in outcomeLabels]) + '\n'
-        assert(not (withTimes is True)), "Cannot set `witTimes=True` when `fixedColumnMode=True`"
-    elif withTimes == "auto":
-        trivial_times = dataset.has_trivial_timedependence()
+        assert(not (with_times is True)), "Cannot set `withTimes=True` when `fixed_column_mode=True`"
     else:
-        trivial_times = not withTimes
+        headerString += '## Outcomes = ' + ", ".join([_outcome_to_str(ol) for ol in outcomeLabels]) + '\n'
+
+        if with_times == "auto":
+            trivial_times = dataset.has_trivial_timedependence
+        else:
+            trivial_times = not with_times
 
     with open(str(filename), 'w') as output:
         output.write(headerString)
-        for circuit in circuit_list:  # circuit should be a Circuit object here
+        for circuit in circuits:  # circuit should be a Circuit object here
             dataRow = dataset[circuit]
             counts = dataRow.counts
-            circuit_to_write = _objs.DataSet.strip_occurence_tag(circuit) \
-                if dataset.collisionAction == "keepseparate" else circuit
 
-            if fixedColumnMode:
+            if fixed_column_mode:
                 #output '--' for outcome labels that aren't present in this row
-                output.write(circuit_to_write.str + "  "
+                output.write(circuit.str + "  "
                              + "  ".join([(("%g" % counts[ol]) if (ol in counts) else '--')
                                           for ol in outcomeLabels]))
                 if dataRow.aux: output.write(" # %s" % str(repr(dataRow.aux)))  # write aux info
                 output.write('\n')  # finish the line
 
             elif trivial_times:  # use expanded label:count format
-                output.write(circuit_to_write.str + "  "
-                             + "  ".join([("%s:%g" % (_outcome_to_str(ol), counts[ol]))
-                                          for ol in outcomeLabels if ol in counts]))
+                output.write(circuit.str + "  "
+                             + "  ".join([("%s:%g" % (_outcome_to_str(ol), cnt)) for ol, cnt in counts.items()]))
                 if dataRow.aux: output.write(" # %s" % str(repr(dataRow.aux)))  # write aux info
                 output.write('\n')  # finish the line
 
             else:
-                output.write(circuit_to_write.str + "\n"
+                output.write(circuit.str + "\n"
                              + "times: " + "  ".join(["%g" % tm for tm in dataRow.time]) + "\n"
                              + "outcomes: " + "  ".join([_outcome_to_str(ol) for ol in dataRow.outcomes]) + "\n")
                 if dataRow.reps is not None:
-                    output.write("repetitions: " + "  ".join(["%d" % rep for rep in dataRow.reps]) + "\n")
+                    fmt = "%d" if _np.all(_np.mod(dataRow.reps, 1) == 0) else "%g"
+                    output.write("repetitions: " + "  ".join([fmt % rep for rep in dataRow.reps]) + "\n")
                 if dataRow.aux:
                     output.write("aux: " + str(repr(dataRow.aux)) + "\n")
                 output.write('\n')  # blank line between circuits
 
 
-def write_multidataset(filename, multidataset, circuit_list=None, outcomeLabelOrder=None):
+def write_multidataset(filename, multidataset, circuits=None, outcome_label_order=None):
     """
     Write a text-formatted multi-dataset file.
 
@@ -182,31 +212,35 @@ def write_multidataset(filename, multidataset, circuit_list=None, outcomeLabelOr
     multidataset : MultiDataSet
         The multi data set from which counts are obtained.
 
-    circuit_list : list of Circuits
-        The list of operation sequences to include in the written dataset.
-        If None, all operation sequences are output.
+    circuits : list of Circuits
+        The list of circuits to include in the written dataset.
+        If None, all circuits are output.
 
-    outcomeLabelOrder : list, optional
+    outcome_label_order : list, optional
         A list of the SPAM labels in multidataset which specifies
         the column order in the output file.
+
+    Returns
+    -------
+    None
     """
 
-    if circuit_list is not None:
-        if len(circuit_list) > 0 and not isinstance(circuit_list[0], _objs.Circuit):
-            raise ValueError("Argument circuit_list must be a list of Circuit objects!")
+    if circuits is not None:
+        if len(circuits) > 0 and not isinstance(circuits[0], _circuits.Circuit):
+            raise ValueError("Argument circuits must be a list of Circuit objects!")
     else:
-        circuit_list = list(multidataset.cirIndex.keys())  # TODO: make access function for circuits?
+        circuits = list(multidataset.cirIndex.keys())  # TODO: make access function for circuits?
 
-    if outcomeLabelOrder is not None:  # convert to tuples if needed
-        outcomeLabelOrder = [(ol,) if isinstance(ol, str) else ol
-                             for ol in outcomeLabelOrder]
+    if outcome_label_order is not None:  # convert to tuples if needed
+        outcome_label_order = [(ol,) if isinstance(ol, str) else ol
+                               for ol in outcome_label_order]
 
-    outcomeLabels = multidataset.get_outcome_labels()
-    if outcomeLabelOrder is not None:
-        assert(len(outcomeLabelOrder) == len(outcomeLabels))
-        assert(all([ol in outcomeLabels for ol in outcomeLabelOrder]))
-        assert(all([ol in outcomeLabelOrder for ol in outcomeLabels]))
-        outcomeLabels = outcomeLabelOrder
+    outcomeLabels = multidataset.outcome_labels
+    if outcome_label_order is not None:
+        assert(len(outcome_label_order) == len(outcomeLabels))
+        assert(all([ol in outcomeLabels for ol in outcome_label_order]))
+        assert(all([ol in outcome_label_order for ol in outcomeLabels]))
+        outcomeLabels = outcome_label_order
 
     dsLabels = list(multidataset.keys())
 
@@ -220,15 +254,11 @@ def write_multidataset(filename, multidataset, circuit_list=None, outcomeLabelOr
     headerString += '## Columns = ' + ", ".join(["%s %s count" % (dsl, _outcome_to_str(ol))
                                                  for dsl in dsLabels
                                                  for ol in outcomeLabels])
-    # parser = _stdinput.StdInputParser()
 
-    # strip_occurence_tags = any([ca == "keepseparate" for ca in multidataset.collisionActions.values()])
     datasets = [multidataset[dsl] for dsl in dsLabels]
     with open(str(filename), 'w') as output:
         output.write(headerString + '\n')
-        for circuit in circuit_list:  # circuit should be a Circuit object here
-            # circuit_to_write = _objs.DataSet.strip_occurence_tag(circuit) \
-            #     if strip_occurence_tags else circuit
+        for circuit in circuits:  # circuit should be a Circuit object here
             cnts = [ds[circuit].counts.get(ol, '--') for ds in datasets for ol in outcomeLabels]
             output.write(circuit.str + "  " + "  ".join([(("%g" % cnt) if (cnt != '--') else cnt)
                                                          for cnt in cnts]) + '\n')
@@ -238,41 +268,45 @@ def write_multidataset(filename, multidataset, circuit_list=None, outcomeLabelOr
             output.write('\n')  # finish the line
 
 
-def write_circuit_list(filename, circuit_list, header=None):
+def write_circuit_list(filename, circuits, header=None):
     """
-    Write a text-formatted operation sequence list file.
+    Write a text-formatted circuit list file.
 
     Parameters
     ----------
     filename : string
         The filename to write.
 
-    circuit_list : list of Circuits
-        The list of operation sequences to include in the written dataset.
+    circuits : list of Circuits
+        The list of circuits to include in the written dataset.
 
     header : string, optional
         Header line (first line of file).  Prepended with a pound sign (#), so no
         need to include one.
 
+    Returns
+    -------
+    None
     """
-    if len(circuit_list) > 0 and not isinstance(circuit_list[0], _objs.Circuit):
-        raise ValueError("Argument circuit_list must be a list of Circuit objects!")
+    if len(circuits) > 0 and not isinstance(circuits[0], _circuits.Circuit):
+        raise ValueError("Argument circuits must be a list of Circuit objects!")
 
     with open(str(filename), 'w') as output:
         if header is not None:
             output.write("# %s" % header + '\n')
 
-        for circuit in circuit_list:
+        for circuit in circuits:
             output.write(circuit.str + '\n')
 
 
-def write_model(mdl, filename, title=None):
+@_deprecated_fn('pygsti.models.Model.write(...)')
+def write_model(model, filename, title=None):
     """
     Write a text-formatted model file.
 
     Parameters
     ----------
-    mdl : Model
+    model : Model
         The model to write to file.
 
     filename : string
@@ -282,7 +316,11 @@ def write_model(mdl, filename, title=None):
         Header line (first line of file).  Prepended with a pound sign (#), so no
         need to include one.
 
+    Returns
+    -------
+    None
     """
+    _warnings.warn("write_model(...) is unable to write all types of pyGSTi models, and really should NOT be used!")
 
     def writeprop(f, lbl, val):
         """ Write (label,val) property to output file """
@@ -304,15 +342,15 @@ def write_model(mdl, filename, title=None):
             output.write("# %s" % title + '\n')
         output.write('\n')
 
-        for prepLabel, rhoVec in mdl.preps.items():
+        for prepLabel, rhoVec in model.preps.items():
             props = None
-            if isinstance(rhoVec, _objs.FullSPAMVec): typ = "PREP"
-            elif isinstance(rhoVec, _objs.TPSPAMVec): typ = "TP-PREP"
-            elif isinstance(rhoVec, _objs.StaticSPAMVec): typ = "STATIC-PREP"
-            elif isinstance(rhoVec, _objs.LindbladSPAMVec):
-                typ = "CPTP-PREP"
-                props = [("PureVec", rhoVec.state_vec.todense()),
-                         ("ErrgenMx", rhoVec.error_map.todense())]
+            if isinstance(rhoVec, _state.FullState): typ = "PREP"
+            elif isinstance(rhoVec, _state.TPState): typ = "TP-PREP"
+            elif isinstance(rhoVec, _state.StaticState): typ = "STATIC-PREP"
+            #elif isinstance(rhoVec, _state.LindbladSPAMVec):  # TODO - change to ComposedState?
+            #    typ = "CPTP-PREP"
+            #    props = [("PureVec", rhoVec.state_vec.to_dense(on_space='HilbertSchmidt')),
+            #             ("ErrgenMx", rhoVec.error_map.to_dense(on_space='HilbertSchmidt'))]
             else:
                 _warnings.warn(
                     ("Non-standard prep of type {typ} cannot be described by"
@@ -320,19 +358,19 @@ def write_model(mdl, filename, title=None):
                      "fully parameterized spam vector").format(typ=str(type(rhoVec))))
                 typ = "PREP"
 
-            if props is None: props = [("LiouvilleVec", rhoVec.todense())]
+            if props is None: props = [("LiouvilleVec", rhoVec.to_dense(on_space='HilbertSchmidt'))]
             output.write("%s: %s\n" % (typ, prepLabel))
             for lbl, val in props:
                 writeprop(output, lbl, val)
 
-        for povmLabel, povm in mdl.povms.items():
+        for povmLabel, povm in model.povms.items():
             props = None; povm_to_write = povm
-            if isinstance(povm, _objs.UnconstrainedPOVM): povmType = "POVM"
-            elif isinstance(povm, _objs.TPPOVM): povmType = "TP-POVM"
-            elif isinstance(povm, _objs.LindbladPOVM):
-                povmType = "CPTP-POVM"
-                props = [("ErrgenMx", povm.error_map.todense())]
-                povm_to_write = povm.base_povm
+            if isinstance(povm, _povm.UnconstrainedPOVM): povmType = "POVM"
+            elif isinstance(povm, _povm.TPPOVM): povmType = "TP-POVM"
+            #elif isinstance(povm, _povm.LindbladPOVM):  # TODO - change to ComposedPOVM?
+            #    povmType = "CPTP-POVM"
+            #    props = [("ErrgenMx", povm.error_map.to_dense(on_space='HilbertSchmidt'))]
+            #    povm_to_write = povm.base_povm
             else:
                 _warnings.warn(
                     ("Non-standard POVM of type {typ} cannot be described by"
@@ -346,10 +384,9 @@ def write_model(mdl, filename, title=None):
                     writeprop(output, lbl, val)
 
             for ELabel, EVec in povm_to_write.items():
-                if isinstance(EVec, _objs.FullSPAMVec): typ = "EFFECT"
-                elif isinstance(EVec, _objs.ComplementSPAMVec): typ = "EFFECT"  # ok
-                elif isinstance(EVec, _objs.TPSPAMVec): typ = "TP-EFFECT"
-                elif isinstance(EVec, _objs.StaticSPAMVec): typ = "STATIC-EFFECT"
+                if isinstance(EVec, _povm.FullPOVMEffect): typ = "EFFECT"
+                elif isinstance(EVec, _povm.ComplementPOVMEffect): typ = "EFFECT"  # ok
+                elif isinstance(EVec, _povm.StaticPOVMEffect): typ = "STATIC-EFFECT"
                 else:
                     _warnings.warn(
                         ("Non-standard effect of type {typ} cannot be described by"
@@ -357,23 +394,19 @@ def write_model(mdl, filename, title=None):
                          "fully parameterized spam vector").format(typ=str(type(EVec))))
                     typ = "EFFECT"
                 output.write("%s: %s\n" % (typ, ELabel))
-                writeprop(output, "LiouvilleVec", EVec.todense())
+                writeprop(output, "LiouvilleVec", EVec.to_dense(on_space='HilbertSchmidt'))
 
             output.write("END POVM\n\n")
 
-        for label, gate in mdl.operations.items():
+        for label, gate in model.operations.items():
             props = None
-            if isinstance(gate, _objs.FullDenseOp): typ = "GATE"
-            elif isinstance(gate, _objs.TPDenseOp): typ = "TP-GATE"
-            elif isinstance(gate, _objs.StaticDenseOp): typ = "STATIC-GATE"
-            elif isinstance(gate, _objs.LindbladDenseOp):
-                typ = "CPTP-GATE"
-                props = [("LiouvilleMx", gate.todense())]
-                if gate.unitary_postfactor is not None:
-                    upost = gate.unitary_postfactor.todense() \
-                        if isinstance(gate.unitary_postfactor, _objs.LinearOperator) \
-                        else gate.unitary_postfactor
-                    props.append(("RefLiouvilleMx", upost))
+            if isinstance(gate, _op.FullArbitraryOp): typ = "GATE"
+            elif isinstance(gate, _op.FullTPOp): typ = "TP-GATE"
+            elif isinstance(gate, _op.StaticArbitraryOp): typ = "STATIC-GATE"
+            elif isinstance(gate, _op.ComposedOp):
+                typ = "COMPOSED-GATE"
+                props = [("%dLiouvilleMx" % i, factor.to_dense(on_space='HilbertSchmidt'))
+                         for i, factor in enumerate(gate.factorops)]
             else:
                 _warnings.warn(
                     ("Non-standard gate of type {typ} cannot be described by"
@@ -381,14 +414,14 @@ def write_model(mdl, filename, title=None):
                      "fully parameterized gate").format(typ=str(type(gate))))
                 typ = "GATE"
 
-            if props is None: props = [("LiouvilleMx", gate.todense())]
+            if props is None: props = [("LiouvilleMx", gate.to_dense(on_space='HilbertSchmidt'))]
             output.write(typ + ": " + str(label) + '\n')
             for lbl, val in props:
                 writeprop(output, lbl, val)
 
-        for instLabel, inst in mdl.instruments.items():
-            if isinstance(inst, _objs.Instrument): typ = "Instrument"
-            elif isinstance(inst, _objs.TPInstrument): typ = "TP-Instrument"
+        for instLabel, inst in model.instruments.items():
+            if isinstance(inst, _instrument.Instrument): typ = "Instrument"
+            elif isinstance(inst, _instrument.TPInstrument): typ = "TP-Instrument"
             else:
                 _warnings.warn(
                     ("Non-standard Instrument of type {typ} cannot be described by"
@@ -398,9 +431,9 @@ def write_model(mdl, filename, title=None):
             output.write(typ + ": " + str(instLabel) + '\n\n')
 
             for label, gate in inst.items():
-                if isinstance(gate, _objs.FullDenseOp): typ = "IGATE"
-                elif isinstance(gate, _objs.TPInstrumentOp): typ = "IGATE"  # ok b/c instrument itself is marked as TP
-                elif isinstance(gate, _objs.StaticDenseOp): typ = "STATIC-IGATE"
+                if isinstance(gate, _op.FullArbitraryOp): typ = "IGATE"
+                elif isinstance(gate, _instrument.TPInstrumentOp): typ = "IGATE"  # ok b/c instrument is marked as TP
+                elif isinstance(gate, _op.StaticArbitraryOp): typ = "STATIC-IGATE"
                 else:
                     _warnings.warn(
                         ("Non-standard gate of type {typ} cannot be described by"
@@ -408,49 +441,54 @@ def write_model(mdl, filename, title=None):
                          "fully parameterized gate").format(typ=str(type(gate))))
                     typ = "IGATE"
                 output.write(typ + ": " + str(label) + '\n')
-                writeprop(output, "LiouvilleMx", gate.todense())
+                writeprop(output, "LiouvilleMx", gate.to_dense(on_space='HilbertSchmidt'))
             output.write("END Instrument\n\n")
 
-        if mdl.state_space_labels is not None:
-            output.write("STATESPACE: " + str(mdl.state_space_labels) + "\n")
-            # StateSpaceLabels.__str__ formats the output properly
+        if model.state_space is not None:
+            state_space_str = '+'.join(['*'.join(['%s(%d)' % (lbl, dim) for lbl, dim in zip(blk_lbls, blk_dims)])
+                                        for blk_lbls, blk_dims in zip(
+                                            model.state_space.tensor_product_blocks_labels,
+                                            model.state_space.tensor_product_blocks_dimensions)])
+            output.write("STATESPACE: " + state_space_str + "\n")
 
-        basisdim = mdl.basis.dim
+        basisdim = model.basis.dim
 
         if basisdim is None:
-            output.write("BASIS: %s\n" % mdl.basis.name)
+            output.write("BASIS: %s\n" % model.basis.name)
         else:
-            if mdl.basis.name not in ('std', 'pp', 'gm', 'qt'):  # a "fancy" basis
-                assert(mdl.state_space_labels is not None), \
+            if model.basis.name not in ('std', 'pp', 'gm', 'qt'):  # a "fancy" basis
+                assert(model.state_space is not None), \
                     "Must set a Model's state space labels when using fancy a basis!"
                 # don't write the dim - the state space labels will cover this.
-                output.write("BASIS: %s\n" % mdl.basis.name)
+                output.write("BASIS: %s\n" % model.basis.name)
             else:
-                output.write("BASIS: %s %d\n" % (mdl.basis.name, basisdim))
+                output.write("BASIS: %s %d\n" % (model.basis.name, basisdim))
 
-        if isinstance(mdl.default_gauge_group, _objs.FullGaugeGroup):
+        if isinstance(model.default_gauge_group, _gaugegroup.FullGaugeGroup):
             output.write("GAUGEGROUP: Full\n")
-        elif isinstance(mdl.default_gauge_group, _objs.TPGaugeGroup):
+        elif isinstance(model.default_gauge_group, _gaugegroup.TPGaugeGroup):
             output.write("GAUGEGROUP: TP\n")
-        elif isinstance(mdl.default_gauge_group, _objs.UnitaryGaugeGroup):
+        elif isinstance(model.default_gauge_group, _gaugegroup.UnitaryGaugeGroup):
             output.write("GAUGEGROUP: Unitary\n")
 
 
-def write_empty_protocol_data(edesign, dirname, sparse="auto", clobber_ok=False):
+def write_empty_protocol_data(dirname, edesign, sparse="auto", clobber_ok=False):
     """
+    Write to disk an empty :class:`ProtocolData` object.
+
     Write to a directory an experimental design (`edesign`) and the dataset
     template files needed to load in a :class:`ProtocolData` object, e.g.
-    using the :function:`load_data_from_dir` function, after the template
+    using the :func:`read_data_from_dir` function, after the template
     files are filled in.
 
     Parameters
     ----------
-    edesign : ExperimentDesign
-        The experiment design defining the circuits that need to be performed.
-
     dirname : str
         The *root* directory to write into.  This directory will have 'edesign'
         and 'data' subdirectories created beneath it.
+
+    edesign : ExperimentDesign
+        The experiment design defining the circuits that need to be performed.
 
     sparse : bool or "auto", optional
         If True, then the template data set(s) are written in a sparse-data
@@ -468,21 +506,79 @@ def write_empty_protocol_data(edesign, dirname, sparse="auto", clobber_ok=False)
     -------
     None
     """
+    if isinstance(edesign, str):
+        _warnings.warn(("write_empty_protocol_data has recently changed its signature - it looks like you need to swap"
+                        " the first two arguments.  Continuing using the old signature..."))
+        edesign, dirname = dirname, edesign
 
     dirname = _pathlib.Path(dirname)
     data_dir = dirname / 'data'
     circuits = edesign.all_circuits_needing_data
-    nQubits = "multiple" if edesign.qubit_labels == "multiple" else len(edesign.qubit_labels)
-    if sparse == "auto":
-        sparse = bool(nQubits == "multiple" or nQubits > 3)  # HARDCODED
 
-    if sparse:
-        header_str = "# Note: on each line, put comma-separated <outcome:count> items, i.e. 00110:23"
-        nZeroCols = 0
-    else:
-        fstr = '{0:0%db} count' % nQubits
-        nZeroCols = 2**nQubits
-        header_str = "## Columns = " + ", ".join([fstr.format(i) for i in range(nZeroCols)])
+    try:
+        #Need different behavior based on the following scenarios:
+        #QubitProcessorSpec or QuditProcessorSpec with no value nonstd_povms
+        #QubitProcessorSpec or QuditProcessorSpec with value for nonstd_povms
+        if isinstance(edesign.processor_spec, QubitProcessorSpec) and not edesign.processor_spec.nonstd_povms:
+            #in this case we can use the original code for setting up the header string.
+            nQubits = edesign.processor_spec.num_qubits
+            
+            if sparse == "auto":
+                sparse = bool(nQubits == "multiple" or nQubits > 3)  # HARDCODED
+
+            if sparse:
+                header_str = "# Note: on each line, put comma-separated <outcome:count> items, i.e. 00110:23"
+                nZeroCols = 0
+            else:
+                fstr = '{0:0%db} count' % nQubits
+                nZeroCols = 2**nQubits
+                header_str = "## Columns = " + ", ".join([fstr.format(i) for i in range(nZeroCols)])
+
+        elif isinstance(edesign.processor_spec, QuditProcessorSpec) and not edesign.processor_spec.nonstd_povms:
+            if sparse == "auto":
+                sparse = bool( len(edesign.processor_spec.qudit_labels) > 3 or _np.any(_np.asarray(edesign.processor_spec.qudit_udims)>3))  # HARDCODED
+            if sparse:
+                header_str = "# Note: on each line, put comma-separated <outcome:count> items, i.e. 00110:23"
+                nZeroCols = 0
+            else:
+                #In this case we should loop through the udims for each qudit, since they may be
+                #different for each one.
+                #create an iterator over all of the qudit outcome strings
+                # by taking the cartesian product of a bunch of ranges with
+                # with a size determined by each qudits udim value.
+                qudit_string_iterator = product(*[[str(j) for j in range(i)] for i in edesign.processor_spec.qudit_udims])
+                qudit_strings = ("".join(qudit_string) + " count" for qudit_string in qudit_string_iterator)
+                header_str = "## Columns = " + ", ".join(qudit_strings)
+                nZeroCols = _np.prod(edesign.processor_spec.qudit_udims)
+        #If we do have a nonstd_povm for set for either of these we will assume for now
+        #that the outcome labels are all given by the keys of the dictionary describing
+        #the first POVM (note that means this also won't work for multiple POVMs at present.
+        elif isinstance(edesign.processor_spec, (QuditProcessorSpec, QubitProcessorSpec)) and edesign.processor_spec.nonstd_povms:
+            outcome_lbls= list(list(edesign.processor_spec.nonstd_povms.values())[0].keys())
+            if sparse == "auto":
+                sparse = bool( len(outcome_lbls) > 81)  # HARDCODED (and for no particularly deep reason).
+            if sparse:
+                header_str = "# Note: on each line, put comma-separated <outcome:count> items, i.e. 00110:23"
+                nZeroCols = 0
+            else:
+                outcome_strings = [str(outcome_lbl) + " count" for outcome_lbl in outcome_lbls]
+                header_str = "## Columns = " + ", ".join(outcome_strings)
+                nZeroCols = len(outcome_strings)
+        else:
+            raise ValueError('The experiment design must contain a valid processor_spec attribute.')
+    except AttributeError:
+        # Fall back to old behavior if do not have a valid processor_spec, i.e. not a GSTDesign
+        nQubits = "multiple" if edesign.qubit_labels == "multiple" else len(edesign.qubit_labels)
+        if sparse == "auto":
+            sparse = bool(nQubits == "multiple" or nQubits > 3)  # HARDCODED
+
+        if sparse:
+            header_str = "# Note: on each line, put comma-separated <outcome:count> items, i.e. 00110:23"
+            nZeroCols = 0
+        else:
+            fstr = '{0:0%db} count' % nQubits
+            nZeroCols = 2**nQubits
+            header_str = "## Columns = " + ", ".join([fstr.format(i) for i in range(nZeroCols)])
 
     pth = data_dir / 'dataset.txt'
     if pth.exists() and clobber_ok is False:
@@ -496,37 +592,145 @@ def write_empty_protocol_data(edesign, dirname, sparse="auto", clobber_ok=False)
     write_empty_dataset(pth, circuits, header_str, nZeroCols)
 
 
-def fill_in_empty_dataset_with_fake_data(model, dataset_filename, nSamples,
-                                         sampleError="multinomial", seed=None, randState=None,
-                                         aliasDict=None, collisionAction="aggregate",
-                                         recordZeroCnts=True, comm=None, memLimit=None, times=None,
-                                         fixedColumnMode="auto"):
+def fill_in_empty_dataset_with_fake_data(dataset_filename, model, num_samples, sample_error="multinomial", seed=None,
+                                         rand_state=None, alias_dict=None, collision_action="aggregate",
+                                         record_zero_counts=True, comm=None, mem_limit=None, times=None,
+                                         fixed_column_mode="auto"):
     """
     Fills in the text-format data set file `dataset_fileame` with simulated data counts using `model`.
 
     Parameters
     ----------
+    dataset_filename : str
+        the path to the text-formatted data set file.
+
     model : Model
         the model to use to simulate the data.
 
-    dataset_filename : strictly
-        the path to the text-formatted data set file.
+    num_samples : int or list of ints or None
+        The simulated number of samples for each circuit.  This only has
+        effect when  ``sample_error == "binomial"`` or ``"multinomial"``.  If an
+        integer, all circuits have this number of total samples. If a list,
+        integer elements specify the number of samples for the corresponding
+        circuit.  If ``None``, then `model_or_dataset` must be a
+        :class:`~pygsti.objects.DataSet`, and total counts are taken from it
+        (on a per-circuit basis).
 
-    rest_of_args : various
-        same as :function:`pygsti.construction.generate_fake_data`.
+    sample_error : string, optional
+        What type of sample error is included in the counts.  Can be:
+
+        - "none"  - no sample error: counts are floating point numbers such
+          that the exact probabilty can be found by the ratio of count / total.
+        - "clip" - no sample error, but clip probabilities to [0,1] so, e.g.,
+          counts are always positive.
+        - "round" - same as "clip", except counts are rounded to the nearest
+          integer.
+        - "binomial" - the number of counts is taken from a binomial
+          distribution.  Distribution has parameters p = (clipped) probability
+          of the circuit and n = number of samples.  This can only be used
+          when there are exactly two SPAM labels in model_or_dataset.
+        - "multinomial" - counts are taken from a multinomial distribution.
+          Distribution has parameters p_k = (clipped) probability of the gate
+          string using the k-th SPAM label and n = number of samples.
+
+    seed : int, optional
+        If not ``None``, a seed for numpy's random number generator, which
+        is used to sample from the binomial or multinomial distribution.
+
+    rand_state : numpy.random.RandomState
+        A RandomState object to generate samples from. Can be useful to set
+        instead of `seed` if you want reproducible distribution samples across
+        multiple random function calls but you don't want to bother with
+        manually incrementing seeds between those calls.
+
+    alias_dict : dict, optional
+        A dictionary mapping single operation labels into tuples of one or more
+        other operation labels which translate the given circuits before values
+        are computed using `model_or_dataset`.  The resulting Dataset, however,
+        contains the *un-translated* circuits as keys.
+
+    collision_action : {"aggregate", "keepseparate"}
+        Determines how duplicate circuits are handled by the resulting
+        `DataSet`.  Please see the constructor documentation for `DataSet`.
+
+    record_zero_counts : bool, optional
+        Whether zero-counts are actually recorded (stored) in the returned
+        DataSet.  If False, then zero counts are ignored, except for
+        potentially registering new outcome labels.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not ``None``, an MPI communicator for distributing the computation
+        across multiple processors and ensuring that the *same* dataset is
+        generated on each processor.
+
+    mem_limit : int, optional
+        A rough memory limit in bytes which is used to determine job allocation
+        when there are multiple processors.
+
+    times : iterable, optional
+        When not None, a list of time-stamps at which data should be sampled.
+        `num_samples` samples will be simulated at each time value, meaning that
+        each circuit in `circuits` will be evaluated with the given time
+        value as its *start time*.
+
+    fixed_column_mode : bool or 'auto', optional
+        How the underlying data set file is written - see :func:`write_dataset`.
 
     Returns
     -------
     DataSet
         The generated data set (also written in place of the template file).
     """
-    from ..construction import generate_fake_data as _generate_fake_data
-    ds_template = _loaders.load_dataset(dataset_filename, ignoreZeroCountLines=False, withTimes=False, verbosity=0)
-    ds = _generate_fake_data(model, list(ds_template.keys()), nSamples,
-                             sampleError, seed, randState, aliasDict,
-                             collisionAction, recordZeroCnts, comm,
-                             memLimit, times)
-    if fixedColumnMode == "auto":
-        fixedColumnMode = bool(len(ds_template.get_outcome_labels()) <= 8 and times is None)
-    write_dataset(dataset_filename, ds, fixedColumnMode=fixedColumnMode)
+    if isinstance(model, str):
+        _warnings.warn(("fill_in_empty_dataset_with_fake_data has recently changed its signature - it looks like"
+                        " you need to swap the first two arguments.  Continuing using the old signature..."))
+        model, dataset_filename = dataset_filename, model
+
+    from pygsti.data.datasetconstruction import simulate_data as _simulate_data
+    ds_template = _readers.read_dataset(dataset_filename, ignore_zero_count_lines=False, with_times=False, verbosity=0)
+    ds = _simulate_data(model, list(ds_template.keys()), num_samples,
+                        sample_error, seed, rand_state, alias_dict,
+                        collision_action, record_zero_counts, comm,
+                        mem_limit, times)
+    if fixed_column_mode == "auto":
+        fixed_column_mode = bool(len(ds_template.outcome_labels) <= 8 and times is None)
+    write_dataset(dataset_filename, ds, fixed_column_mode=fixed_column_mode)
     return ds
+
+
+def convert_circuits_to_strings(obj):
+    """
+    Converts a list or dictionary potentially containing Circuit objects to a JSON-able one with circuit strings.
+
+    Parameters
+    ----------
+    obj : list or tuple or dict
+        The object to convert.
+
+    Returns
+    -------
+    object
+        A JSON-able object containing circuit string representations in place of Circuit objects.
+    """
+    from pygsti.circuits import Circuit as _Circuit
+
+    def _replace_circuits_with_strs(x):
+        if isinstance(x, (list, tuple)):
+            return [_replace_circuits_with_strs(el) for el in x]
+        if isinstance(x, dict):
+            return ['dict_items'] + [(_replace_circuits_with_strs(k), _replace_circuits_with_strs(v))
+                                     for k, v in x.items()]
+        return x.str if isinstance(x, _Circuit) else x
+
+    return _replace_circuits_with_strs(obj)
+
+
+def write_circuit_strings(filename, obj):
+    """ TODO: docstring - write various Circuit-containing standard objects with circuits
+        replaced by their string reps """
+    json_dict = convert_circuits_to_strings(obj)
+    if str(filename).endswith('.json'):
+        with open(filename, 'w') as f:
+            _json.dump(json_dict, f, indent=4)
+    else:
+        raise ValueError("Cannot determine format from extension of filename: %s" % str(filename))

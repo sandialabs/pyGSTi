@@ -1,8 +1,7 @@
 import numpy as np
 
-from ..util import BaseCase
-
 from pygsti.algorithms import scoring
+from ..util import BaseCase
 
 
 class ScoringTester(BaseCase):

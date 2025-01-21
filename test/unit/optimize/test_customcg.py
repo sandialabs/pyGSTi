@@ -1,6 +1,5 @@
-from ..util import BaseCase
-
 from pygsti.optimize import customcg as cg
+from ..util import BaseCase
 
 
 class CustomCGTester(BaseCase):
@@ -11,12 +10,12 @@ class CustomCGTester(BaseCase):
 
         start = -2.0
         guess = 4.0  # None
-        cg._maximize1D(g, start, guess, g(start))
+        cg._maximize_1d(g, start, guess, g(start))
         # TODO assert correctness
 
         start = -3.0  # None
         guess = -1.5
-        cg._maximize1D(g, start, guess, g(start))
+        cg._maximize_1d(g, start, guess, g(start))
         # TODO assert correctness
 
     def test_maximize1D_open_domain(self):
@@ -26,5 +25,5 @@ class CustomCGTester(BaseCase):
 
         start = -4.0
         guess = 4.0
-        cg._maximize1D(g, start, guess, g(start))
+        cg._maximize_1d(g, start, guess, g(start))
         # TODO assert correctness

@@ -1,6 +1,8 @@
 """
+A standard multi-qubit gate set module.
+
 Variables for working with the 2-qubit model containing the gates
-I*X(pi/2), I*Y(pi/2), X(pi/2)*I, Y(pi/2)*I, and CPHASE.
+I*X(pi/2), I*Y(pi/2), X(pi/2)*I, Y(pi/2)*I, and Idle.
 """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -12,14 +14,12 @@ I*X(pi/2), I*Y(pi/2), X(pi/2)*I, Y(pi/2)*I, and CPHASE.
 #***************************************************************************************************
 
 from collections import OrderedDict
-from pygsti.construction import circuitconstruction as _strc
-from pygsti.construction import modelconstruction as _setc
 
 from pygsti.modelpacks._modelpack import GSTModelPack
 
 
 class _Module(GSTModelPack):
-    description = "I*I, I*X(pi/2), I*Y(pi/2), X(pi/2)*I, and Y(pi/2)*I gates"
+    description = "I*I, I*X(pi/2), I*Y(pi/2), X(pi/2)*I, and Y(pi/2)*I gates and Idle"
 
     gates = [(), ('Gxpi2', 1), ('Gypi2', 1), ('Gxpi2', 0), ('Gypi2', 0)]
 
@@ -130,11 +130,11 @@ class _Module(GSTModelPack):
         ('Gc23c0', [('Gxpi2', 0), ('Gypi2', 0), ('Gxpi2', 0), ('Gxpi2', 0), ('Gxpi2', 0), (), ()])
     ])
 
-    global_fidPairs = [(0, 5), (1, 2), (1, 7), (1, 10), (2, 1), (2, 4), (2, 9), (3, 1), (3, 2), (3, 8), (5, 0), (5, 5),
+    global_fidpairs = [(0, 5), (1, 2), (1, 7), (1, 10), (2, 1), (2, 4), (2, 9), (3, 1), (3, 2), (3, 8), (5, 0), (5, 5),
                        (5, 9), (6, 4), (6, 10), (7, 9), (8, 6), (9, 0), (9, 5), (9, 7), (9, 10), (10, 0), (10, 4),
                        (11, 2), (11, 4), (12, 2), (13, 1), (13, 3), (14, 8), (15, 3)]
 
-    _pergerm_fidPairsDict = {
+    _pergerm_fidpairsdict = {
         (('Gypi2', 0), ): [(3, 1), (4, 1), (4, 2), (5, 0), (5, 1), (5, 7), (6, 0), (6, 8), (7, 2), (7, 4), (7, 9), (8, 0),
                     (8, 7), (9, 2), (9, 3), (10, 9), (10, 10), (14, 7), (14, 9), (15, 10)],
         ((), ): [(0, 8), (1, 0), (1, 1), (1, 3), (1, 10), (2, 5), (2, 9), (3, 3), (3, 9), (4, 3), (4, 8), (5, 0),
@@ -301,9 +301,9 @@ class _Module(GSTModelPack):
                                                                    (12, 10), (13, 0), (13, 4), (14, 5)]
     }
 
-    global_fidPairs_lite = None
+    global_fidpairs_lite = None
 
-    _pergerm_fidPairsDict_lite = {
+    _pergerm_fidpairsdict_lite = {
       ((),): [
             (0, 3), (0, 4), (0, 6), (0, 7), (0, 8), (0, 9), (1, 1), 
             (1, 4), (1, 5), (1, 9), (2, 1), (2, 3), (2, 4), (2, 6), 
@@ -376,12 +376,12 @@ class _Module(GSTModelPack):
             (15, 6)],
     }
 
-    def _target_model(self, sslbls):
+    def _target_model(self, sslbls, **kwargs):
         return self._build_explicit_target_model(
             sslbls, [(), ('Gxpi2', 1), ('Gypi2', 1), ('Gxpi2', 0), ('Gypi2', 0)],
             ['I({0}):I({1})', 'I({0}):X(pi/2,{1})', 'I({0}):Y(pi/2,{1})', 'X(pi/2,{0}):I({1})', 'Y(pi/2,{0}):I({1})'],
-            effectLabels=['00', '01', '10', '11'],
-            effectExpressions=['0', '1', '2', '3'])
+            effect_labels=['00', '01', '10', '11'],
+            effect_expressions=['0', '1', '2', '3'], **kwargs)
 
 
 import sys

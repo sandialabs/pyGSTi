@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
-import os.path, importlib, pkgutil, sys
+import sys
+from collections import defaultdict
+from inspect import *
+
 import pygsti
 
-from pprint import pprint
-from collections import defaultdict
-
-from inspect import *
-import inspect
 
 def fullname(o):
     try:

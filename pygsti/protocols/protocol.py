@@ -1,54 +1,83 @@
-""" Protocol object """
-#***************************************************************************************************
+"""
+Protocol object
+"""
+# ***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
-#***************************************************************************************************
+# ***************************************************************************************************
+import collections as _collections
+import copy as _copy
 import numpy as _np
 import itertools as _itertools
-import copy as _copy
-import json as _json
-import pickle as _pickle
 import pathlib as _pathlib
-import importlib as _importlib
-import collections as _collections
+import warnings as _warnings
 
-from .treenode import TreeNode as _TreeNode
-from .. import construction as _cnst
-from .. import objects as _objs
-from .. import io as _io
-from ..objects import circuit as _cir
-from ..tools import listtools as _lt
-from ..tools import NamedDict as _NamedDict
+from pygsti.protocols.treenode import TreeNode as _TreeNode
+from pygsti import io as _io
+from pygsti import circuits as _circuits
+from pygsti import data as _data
+from pygsti.tools import NamedDict as _NamedDict
+from pygsti.tools import listtools as _lt
+from pygsti.tools.dataframetools import _process_dataframe
+from pygsti.baseobjs.mongoserializable import MongoSerializable as _MongoSerializable
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 
 
-class Protocol(object):
+class Protocol(_MongoSerializable):
     """
+    An analysis routine that is run on experimental data.  A generalized notion of a  QCVV protocol.
+
     A Protocol object represents things like, but not strictly limited to, QCVV protocols.
     This class is essentially a serializable `run` function that takes as input a
     :class:`ProtocolData` object and returns a :class:`ProtocolResults` object.  This
     function describes the working of the "protocol".
+
+    Parameters
+    ----------
+    name : str, optional
+        The name of this protocol, also used to (by default) name the
+        results produced by this protocol.  If None, the class name will
+        be used.
     """
+    collection_name = "pygsti_protocols"
 
     @classmethod
-    def from_dir(cls, dirname):
+    def from_dir(cls, dirname, quick_load=False):
         """
         Initialize a new Protocol object from `dirname`.
+
+        quick_load : bool, optional
+            Setting this to True skips the loading of components that may take
+            a long time to load.
 
         Parameters
         ----------
         dirname : str
             The directory name.
 
+        quick_load : bool, optional
+            Setting this to True skips the loading of components that may take
+            a long time to load.
+
         Returns
         -------
         Protocol
         """
         ret = cls.__new__(cls)
-        ret.__dict__.update(_io.load_meta_based_dir(_pathlib.Path(dirname), 'auxfile_types'))
+        _MongoSerializable.__init__(ret)
+        ret.__dict__.update(_io.load_meta_based_dir(_pathlib.Path(dirname), 'auxfile_types', quick_load=quick_load))
+        ret._init_unserialized_attributes()
+        return ret
+
+    @classmethod
+    def _create_obj_from_doc_and_mongodb(cls, doc, mongodb, quick_load=False):
+        ret = cls.__new__(cls)
+        _MongoSerializable.__init__(ret, doc.get('_id', None))
+        ret.__dict__.update(_io.read_auxtree_from_mongodb_doc(mongodb, doc, 'auxfile_types', quick_load=quick_load))
         ret._init_unserialized_attributes()
         return ret
 
@@ -69,7 +98,9 @@ class Protocol(object):
         """
         super().__init__()
         self.name = name if name else self.__class__.__name__
+        self.tags = {}  # string-values (key,val) pairs that serve to label this protocol instance
         self.auxfile_types = {}
+        self._nameddict_attributes = ()  # (('name', 'ProtocolName', 'category'),) implied in setup_nameddict
 
     def run(self, data, memlimit=None, comm=None):
         """
@@ -110,6 +141,42 @@ class Protocol(object):
         """
         _io.write_obj_to_meta_based_dir(self, dirname, 'auxfile_types')
 
+    def _add_auxiliary_write_ops_and_update_doc(self, doc, write_ops, mongodb, collection_name, overwrite_existing):
+        _io.add_obj_auxtree_write_ops_and_update_doc(self, doc, write_ops, mongodb, collection_name,
+                                                     'auxfile_types', overwrite_existing=overwrite_existing)
+
+    @classmethod
+    def _remove_from_mongodb(cls, mongodb, collection_name, doc_id, session, recursive):
+        if recursive.protocols:
+            _io.remove_auxtree_from_mongodb(mongodb, collection_name, doc_id, 'auxfile_types', session,
+                                            recursive=recursive)
+
+    def setup_nameddict(self, final_dict):
+        """
+        Initializes a set of nested :class:`NamedDict` dictionaries describing this protocol.
+
+        This function is used by :class:`ProtocolResults` objects when they're creating
+        nested dictionaries of their contents.  This function returns a set of nested,
+        single (key,val)-pair named-dictionaries which describe the particular attributes
+        of this :class:`Protocol` object named within its `self._nameddict_attributes` tuple.
+        The final nested dictionary is set to be `final_dict`, which allows additional result
+        quantities to easily be added.
+
+        Parameters
+        ----------
+        final_dict : NamedDict
+            the final-level (innermost-nested) NamedDict in the returned nested dictionary.
+
+        Returns
+        -------
+        NamedDict
+        """
+        keys_vals_types = [('ProtocolName', self.name, 'category'),
+                           ('ProtocolType', self.__class__.__name__, 'category')]
+        keys_vals_types.extend(_convert_nameddict_attributes(self))
+        keys_vals_types.extend([(k, v, 'category') for k, v in self.tags.items()])
+        return _NamedDict.create_nested(keys_vals_types, final_dict)
+
     def _init_unserialized_attributes(self):
         """Initialize anything that isn't serialized based on the things that are serialized.
            Usually this means initializing things with auxfile_type == 'none' that aren't
@@ -120,11 +187,22 @@ class Protocol(object):
 
 class MultiPassProtocol(Protocol):
     """
-    A simple protocol that runs a given contained :class:`Protocol` on
-    all the passes within a :class:`ProtocolData` object that contains
-    a :class:`MultiDataSet`.  Instances of this class essentially act as
-    wrappers around other protocols enabling them to handle multi-pass
-    data.
+    Runs a (contained) :class:`Protocol` on all the passes of a multi-pass :class:`ProtocolData`.
+
+    A simple protocol that runs a "sub-protocol" on the passes of a :class:`ProtocolData`
+    containing a :class:`MultiDataSet`.  The sub-protocol therefore doesn't need to know
+    how to deal with multiple data passes. Instances of this class essentially act as
+    wrappers around other protocols enabling them to handle multi-pass data.
+
+    Parameters
+    ----------
+    protocol : Protocol
+        The protocol to run on each pass.
+
+    name : str, optional
+        The name of this protocol, also used to (by default) name the
+        results produced by this protocol.  If None, the class name will
+        be used.
     """
 
     # expects a MultiDataSet of passes and maybe adds data comparison (?) - probably not RB specific
@@ -146,10 +224,10 @@ class MultiPassProtocol(Protocol):
         -------
         MultiPassProtocol
         """
-        if name is None: name = self.protocol.name + "_multipass"
+        if name is None: name = protocol.name + "_multipass"
         super().__init__(name)
         self.protocol = protocol
-        self.auxfile_types['protocol'] = 'protocolobj'
+        self.auxfile_types['protocol'] = 'dir-serialized-object'
 
     def run(self, data, memlimit=None, comm=None):
         """
@@ -176,19 +254,21 @@ class MultiPassProtocol(Protocol):
             #TODO: print progress: pass X of Y, etc
             sub_results = self.protocol.run(sub_data, memlimit, comm)
             # TODO: maybe blank-out the .data and .protocol of sub_results since we don't need this info?
-            #  or call as_dict?
+            #  or call to_dict?
             results.passes[pass_name] = sub_results  # pass_name is a "ds_name" key of data.dataset (a MultiDataSet)
         return results
 
 
 class ProtocolRunner(object):
     """
-    A a :class:`ProtocolRunner` object is used to combine multiple calls to :method:`Protocol.run`,
-    that is, to run potentially multiple protocols on potentially different data.  From the outside,
-    a :class:`ProtocolRunner` object behaves similarly, and can often be used interchangably,
-    with a Protocol object.  It posesses a `run` method that takes a :class:`ProtocolData`
-    as input and returns a :class:`ProtocolResultsDir` that can contain multiple :class:`ProtocolResults`
-    objects within it.
+    Used to run :class:`Protocol` objects on an entire *tree* of data
+
+    This class provides a way of combining multiple calls to :meth:`Protocol.run`,
+    potentially running multiple protocols on different data.  From the outside, a
+    :class:`ProtocolRunner` object behaves similarly, and can often be used
+    interchangably, with a Protocol object.  It posesses a `run` method that takes a
+    :class:`ProtocolData` as input and returns a :class:`ProtocolResultsDir` that can
+    contain multiple :class:`ProtocolResults` objects within it.
     """
 
     def run(self, data, memlimit=None, comm=None):
@@ -217,6 +297,13 @@ class ProtocolRunner(object):
 class TreeRunner(ProtocolRunner):
     """
     Runs specific protocols on specific data-tree paths.
+
+    Parameters
+    ----------
+    protocol_dict : dict
+        A dictionary of :class:`Protocol` objects whose keys are paths
+        (tuples of strings) specifying where in the data-tree that
+        protocol should be run.
     """
 
     def __init__(self, protocol_dict):
@@ -271,6 +358,20 @@ class TreeRunner(ProtocolRunner):
 class SimpleRunner(ProtocolRunner):
     """
     Runs a single protocol on every data node that has no sub-nodes (possibly separately for each pass).
+
+    Parameters
+    ----------
+    protocol : Protocol
+        The protocol to run.
+
+    protocol_can_handle_multipass_data : bool, optional
+        Whether `protocol` is able to process multi-pass data, or
+        if :class:`MultiPassProtocol` objects should be created
+        implicitly.
+
+    edesign_type : type or 'all'
+        Only run `protocol` on leaves with this type.  (If 'all', then
+        no filtering is performed.)
     """
 
     def __init__(self, protocol, protocol_can_handle_multipass_data=False, edesign_type='all'):
@@ -340,21 +441,36 @@ class SimpleRunner(ProtocolRunner):
 
 class DefaultRunner(ProtocolRunner):
     """
-    Run the default protocol at each data-tree node.  (Default protocols
-    are given within :class:`ExperimentDesign` objects.)
+    Run the default protocol at each data-tree node.
+
+    (Default protocols are given within :class:`ExperimentDesign` objects.)
+
+    Parameters
+    ----------
+    run_passes_separately : bool, optional
+        If `True`, then when multi-pass data is encountered it is split into passes
+        before handing it off to the protocols.  Set this to `True` when the default
+        protocols being run expect single-pass data.
     """
 
-    def __init__(self):
+    def __init__(self, run_passes_separately=False):
         """
         Create a new DefaultRunner object, which runs the default protocol at
         each data-tree node.  (Default protocols are given within
         :class:`ExperimentDesign` objects.)
 
+        Parameters
+        ----------
+        run_passes_separately : bool, optional
+            If `True`, then when multi-pass data is encountered it is split into passes
+            before handing it off to the protocols.  Set this to `True` when the default
+            protocols being run expect single-pass data.
+
         Returns
         -------
         DefaultRunner
         """
-        pass
+        self.run_passes_separately = run_passes_separately
 
     def run(self, data, memlimit=None, comm=None):
         """
@@ -382,7 +498,12 @@ class DefaultRunner(ProtocolRunner):
             for name, protocol in node.data.edesign.default_protocols.items():
                 assert(name == protocol.name), "Protocol name inconsistency"
                 print("Running protocol %s at %s" % (name, breadcrumb))
-                node.for_protocol[name] = protocol.run(node.data, memlimit, comm)
+                if node.data.is_multipass() and self.run_passes_separately:
+                    implicit_multipassprotocol = MultiPassProtocol(protocol)
+                    node.for_protocol[implicit_multipassprotocol.name] = \
+                        implicit_multipassprotocol.run(node.data, memlimit, comm)
+                else:
+                    node.for_protocol[name] = protocol.run(node.data, memlimit, comm)
 
             for subname, subnode in node.items():
                 visit_node(subnode, breadcrumb + '/' + str(subname))
@@ -391,7 +512,7 @@ class DefaultRunner(ProtocolRunner):
         return ret
 
 
-class ExperimentDesign(_TreeNode):
+class ExperimentDesign(_TreeNode, _MongoSerializable):
     """
     An experimental-design specification for one or more QCVV protocols.
 
@@ -409,10 +530,40 @@ class ExperimentDesign(_TreeNode):
     can be used by muliple protocols).  Rather, a :class:`ExperimentDesign`
     specifies what is necessary to acquire and interpret the *data* needed for
     one or more QCVV protocols.
+
+    Parameters
+    ----------
+    circuits : list of Circuits, optional
+        A list of the circuits needing data.  If None, then the list is empty.
+
+    qubit_labels : tuple or "multiple", optional
+        The qubits that this experiment design applies to.  These should also
+        be the line labels of `circuits`.  If None,  the concatenation
+        of the qubit labels of any child experiment designs is used, or, if
+        there are no child designs, the line labels of the first circuit is used.
+        The special "multiple" value means that different circuits act on different
+        qubit lines.
+
+    children : dict, optional
+        A dictionary of whose values are child
+        :class:`ExperimentDesign` objects and whose keys are the
+        names used to identify them in a "path".
+
+    children_dirs : dict, optional
+        A dictionary whose values are directory names and keys are child
+        names (the same as the keys of `children`).  If None, then the
+        keys of `children` must be strings and are used as directory
+        names.  Directory names are used when saving the object (via
+        :meth:`write`).
+
+    child_category : str, optional
+        The category that describes the children of this object.  This
+        is used as a heading for the keys of `children`.
     """
+    collection_name = "pygsti_experiment_designs"
 
     @classmethod
-    def from_dir(cls, dirname, parent=None, name=None):
+    def from_dir(cls, dirname, parent=None, name=None, quick_load=False):
         """
         Initialize a new ExperimentDesign object from `dirname`.
 
@@ -422,19 +573,71 @@ class ExperimentDesign(_TreeNode):
             The *root* directory name (under which there is a 'edesign'
             subdirectory).
 
+        parent : ExperimentDesign, optional
+            The parent design object, if there is one.  Primarily used
+            internally - if in doubt, leave this as `None`.
+
+        name : str, optional
+            The sub-name of the design object being loaded, i.e. the
+            key of this data object beneath `parent`.  Only used when
+            `parent` is not None.
+
+        quick_load : bool, optional
+            Setting this to True skips the loading of the potentially long
+            circuit lists.  This can be useful when loading takes a long time
+            and all the information of interest lies elsewhere, e.g. in an
+            encompassing results object.
+
         Returns
         -------
         ExperimentDesign
         """
         dirname = _pathlib.Path(dirname)
         ret = cls.__new__(cls)
-        ret.__dict__.update(_io.load_meta_based_dir(dirname / 'edesign', 'auxfile_types'))
-        ret._init_children(dirname, 'edesign')
+        _MongoSerializable.__init__(ret)
+        ret.__dict__.update(_io.load_meta_based_dir(dirname / 'edesign', 'auxfile_types', quick_load=quick_load))
+        ret._init_children(dirname, 'edesign', quick_load=quick_load)
         ret._loaded_from = str(dirname.absolute())
+
+        #Fixes to JSON codec's conversion of tuples => lists
+        ret.qubit_labels = tuple(ret.qubit_labels) if isinstance(ret.qubit_labels, list) else ret.qubit_labels
+
         return ret
 
+    @classmethod
+    def _create_obj_from_doc_and_mongodb(cls, doc, mongodb, parent=None, name=None, quick_load=False):
+        ret = cls.__new__(cls)
+        _MongoSerializable.__init__(ret, doc.get('_id', None))
+        ret.__dict__.update(_io.read_auxtree_from_mongodb_doc(mongodb, doc, 'auxfile_types',
+                                                              ignore_meta=('_id', 'type', 'children_ids'),
+                                                              quick_load=quick_load))
+        ret._init_children_from_mongodb_doc(doc, mongodb, quick_load=quick_load)
+        ret._loaded_from = None
+
+        #Fixes to JSON codec's conversion of tuples => lists
+        ret.qubit_labels = tuple(ret.qubit_labels) if isinstance(ret.qubit_labels, list) else ret.qubit_labels
+        return ret
+
+    @classmethod
+    def from_edesign(cls, edesign):
+        """
+        Create an ExperimentDesign out of an existing experiment design.
+
+        Parameters
+        ----------
+        edesign : ExperimentDesign
+            The experiment design to convert (use as a base).
+
+        Returns
+        -------
+        ExperimentDesign
+        """
+        if cls != ExperimentDesign:
+            raise NotImplementedError("Cannot convert a %s to a %s!" % (str(type(edesign)), str(cls)))
+        return cls(edesign.all_circuits_needing_data, edesign.qubit_labels)
+
     def __init__(self, circuits=None, qubit_labels=None,
-                 children=None, children_dirs=None, child_category=None):
+                 children=None, children_dirs=None):
         """
         Create a new ExperimentDesign object, which holds a set of circuits (needing data).
 
@@ -461,11 +664,7 @@ class ExperimentDesign(_TreeNode):
             names (the same as the keys of `children`).  If None, then the
             keys of `children` must be strings and are used as directory
             names.  Directory names are used when saving the object (via
-            :method:`write`).
-
-        child_category : str, optional
-            The category that describes the children of this object.  This
-            is used as a heading for the keys of `children`.
+            :meth:`write`).
 
         Returns
         -------
@@ -475,6 +674,9 @@ class ExperimentDesign(_TreeNode):
         self.all_circuits_needing_data = circuits if (circuits is not None) else []
         self.alt_actual_circuits_executed = None  # None means == all_circuits_needing_data
         self.default_protocols = {}
+        self.tags = {}
+        self._nameddict_attributes = (('qubit_labels', 'Qubits', 'category'),)
+        self._loaded_from = None
 
         #Instructions for saving/loading certain members - if a __dict__ member
         # *isn't* listed in this dict, then it's assumed to be json-able and included
@@ -482,12 +684,14 @@ class ExperimentDesign(_TreeNode):
         # 'text-circuit-list' - a text circuit list file
         # 'json' - a json file
         # 'pickle' - a python pickle file (use only if really needed!)
-        self.auxfile_types = {'all_circuits_needing_data': 'text-circuit-list',
+        typ = 'serialized-object' if isinstance(self.all_circuits_needing_data, _circuits.CircuitList) \
+            else 'text-circuit-list'
+        self.auxfile_types = {'all_circuits_needing_data': typ,
                               'alt_actual_circuits_executed': 'text-circuit-list',
-                              'default_protocols': 'dict-of-protocolobjs'}
+                              'default_protocols': 'dict:dir-serialized-object'}
 
         # because TreeNode takes care of its own serialization:
-        self.auxfile_types.update({'_dirs': 'none', '_vals': 'none', '_childcategory': 'none', '_loaded_from': 'none'})
+        self.auxfile_types.update({'_dirs': 'none', '_vals': 'none', '_loaded_from': 'none'})
 
         if qubit_labels is None:
             if children:
@@ -507,25 +711,28 @@ class ExperimentDesign(_TreeNode):
         else:
             self.qubit_labels = tuple(qubit_labels)
 
-        def auto_dirname(child_key):
-            if isinstance(child_key, (list, tuple)):
-                child_key = '_'.join(map(str, child_key))
-            return child_key.replace(' ', '_')
-
         if children is None: children = {}
         children_dirs = children_dirs.copy() if (children_dirs is not None) else \
-            {subname: auto_dirname(subname) for subname in children}
+            {subname: self._auto_dirname(subname) for subname in children}
 
         assert(set(children.keys()) == set(children_dirs.keys()))
-        super().__init__(children_dirs, children, child_category)
+        _MongoSerializable.__init__(self)
+        _TreeNode.__init__(self, children_dirs, children)
+
+    def _auto_dirname(self, child_key):
+        """ A helper function to generate a default directory name base off of a sub-name key """
+        if isinstance(child_key, (list, tuple)):
+            child_key = '_'.join(map(str, child_key))
+        return child_key.replace(' ', '_')
 
     def set_actual_circuits_executed(self, actual_circuits):
         """
-        Sets a list of circuits equivalent to those in
-        self.all_circuits_needing_data that will actually be
-        executed.  For example, when the circuits in this design
-        are run simultaneously with other circuits, the circuits
-        in this design may need to be padded with idles.
+        Sets a list of circuits that will actually be executed.
+
+        This list must be parallel, and corresponding circuits must be *logically
+        equivalent*, to those in `self.all_circuits_needing_data`.  For example,
+        when the circuits in this design are run simultaneously with other circuits,
+        the circuits in this design may need to be padded with idles.
 
         Parameters
         ----------
@@ -566,6 +773,93 @@ class ExperimentDesign(_TreeNode):
         instance_name = default_protocol_instance.name
         self.default_protocols[instance_name] = default_protocol_instance
 
+    def truncate_to_circuits(self, circuits_to_keep):
+        """
+        Builds a new experiment design containing only the specified circuits.
+
+        Parameters
+        ----------
+        circuits_to_keep : list
+            A list of the circuits to keep.
+
+        Returns
+        -------
+        ExperimentDesign
+        """
+        base = _copy.deepcopy(self)  # so this works for derived classes tools
+        base._truncate_to_circuits_inplace(circuits_to_keep)
+        return base
+
+    def truncate_to_available_data(self, dataset):
+        """
+        Builds a new experiment design containing only those circuits present in `dataset`.
+
+        Parameters
+        ----------
+        dataset : DataSet
+            The dataset to filter based upon.
+
+        Returns
+        -------
+        ExperimentDesign
+        """
+        base = _copy.deepcopy(self)  # so this works for derived classes tools
+        base._truncate_to_available_data_inplace(dataset)
+        return base
+
+    def truncate_to_design(self, other_design):
+        """
+        Truncates this experiment design by only keeping the circuits also in `other_design`
+
+        Parameters
+        ----------
+        other_design : ExperimentDesign
+            The experiment design to compare with.
+
+        Returns
+        -------
+        ExperimentDesign
+            The truncated experiment design.
+        """
+        base = _copy.deepcopy(self)  # so this works for derived classes tools
+        base._truncate_to_design_inplace(other_design)
+        return base
+
+    def _truncate_to_circuits_inplace(self, circuits_to_keep):
+        self.all_circuits_needing_data = _circuits.CircuitList.cast(self.all_circuits_needing_data)
+        if self.alt_actual_circuits_executed is not None:
+            self.alt_actual_circuits_executed = _circuits.CircuitList.cast(self.alt_actual_circuits_executed)
+
+            allc = []; actualc = []
+            if isinstance(circuits_to_keep, set):
+                for c, actual_c in zip(self.all_circuits_needing_data, self.alt_actual_circuits_executed):
+                    if c in circuits_to_keep:
+                        allc.append(c)
+                        actualc.append(c)
+            else:
+                actual_lookup = {c: actual_c for c, actual_c in zip(self.all_circuits_needing_data,
+                                                                    self.alt_actual_circuits_executed)}
+                allc[:] = circuits_to_keep
+                actualc[:] = [actual_lookup[c] for c in circuits_to_keep]
+            self.all_circuits_needing_data.truncate(allc)
+            self.alt_actual_circuits_executed.truncate(actualc)
+        else:
+            self.all_circuits_needing_data = self.all_circuits_needing_data.truncate(circuits_to_keep)
+
+    def _truncate_to_design_inplace(self, other_design):
+        self._truncate_to_circuits_inplace(other_design.all_circuits_needing_data)
+        for _, sub_design in self._vals.items():
+            sub_design._truncate_to_design_inplace(other_design)
+
+    def _truncate_to_available_data_inplace(self, dataset):
+        self.all_circuits_needing_data = _circuits.CircuitList.cast(self.all_circuits_needing_data)
+        ds_circuits = self.all_circuits_needing_data.apply_aliases()
+        circuits_to_keep = [c for c, ds_c in zip(self.all_circuits_needing_data, ds_circuits) if ds_c in dataset]
+        self._truncate_to_circuits_inplace(circuits_to_keep)
+
+        for _, sub_design in self._vals.items():
+            sub_design._truncate_to_available_data_inplace(dataset)
+
     def write(self, dirname=None, parent=None):
         """
         Write this experiment design to a directory.
@@ -592,32 +886,211 @@ class ExperimentDesign(_TreeNode):
             if dirname is None: raise ValueError("`dirname` must be given because there's no default directory")
 
         _io.write_obj_to_meta_based_dir(self, _pathlib.Path(dirname) / 'edesign', 'auxfile_types')
-        self.write_children(dirname)
 
-    def create_subdata(self, subdata_name, dataset):
+        self._write_children(dirname)
+        self._loaded_from = str(_pathlib.Path(dirname).absolute())  # for future writes
+
+    def _add_auxiliary_write_ops_and_update_doc(self, doc, write_ops, mongodb, collection_name,
+                                                overwrite_existing, parent=None, name=None):
+        _io.add_obj_auxtree_write_ops_and_update_doc(self, doc, write_ops, mongodb, collection_name,
+                                                     'auxfile_types', overwrite_existing=overwrite_existing)
+        self._add_children_write_ops_and_update_doc(doc, write_ops, mongodb, overwrite_existing)
+
+    @classmethod
+    def _remove_from_mongodb(cls, mongodb, collection_name, doc_id, session, recursive):
+        if recursive.children:
+            cls._remove_children_from_mongodb(mongodb, collection_name, doc_id, session, recursive)
+        if recursive.edesigns:
+            _io.remove_auxtree_from_mongodb(mongodb, collection_name, doc_id, 'auxfile_types', session,
+                                            recursive=recursive)
+
+    def setup_nameddict(self, final_dict):
         """
-        Creates a :class:`ProtocolData` object for the sub-experiment-design
+        Initializes a set of nested :class:`NamedDict` dictionaries describing this design.
+
+        This function is used by :class:`ProtocolResults` objects when they're creating
+        nested dictionaries of their contents.  This function returns a set of nested,
+        single (key,val)-pair named-dictionaries which describe the particular attributes
+        of this :class:`ExperimentDesign` object named within its `self._nameddict_attributes`
+        tuple.  The final nested dictionary is set to be `final_dict`, which allows additional
+        result quantities to easily be added.
+
+        Parameters
+        ----------
+        final_dict : NamedDict
+            the final-level (innermost-nested) NamedDict in the returned nested dictionary.
+
+        Returns
+        -------
+        NamedDict
+        """
+        keys_vals_types = _convert_nameddict_attributes(self)
+        keys_vals_types.extend([(k, v, 'category') for k, v in self.tags.items()])
+        return _NamedDict.create_nested(keys_vals_types, final_dict)
+
+    def _create_subdata(self, subdata_name, dataset):
+        """
+        Creates a :class:`ProtocolData` object for a sub-experiment-design.
+
+        Specifically, this creates the object for the sub-experiment-design
         given by `subdata_name` starting from `dataset` as the data for *this*
         experiment design.  This is used internally by :class:`ProtocolData`
         objects, and shouldn't need to be used by external users.
+
+        Parameters
+        ----------
+        subdata_name : immutable
+            The child (node) name of the sub-experiment design to create data for.
+
+        dataset : DataSet
+            The data for *this* experiment design.
+
+        Returns
+        -------
+        ProtocolData
         """
         raise NotImplementedError("This protocol edesign cannot create any subdata!")
+
+    def promote_to_combined(self, name="**0"):
+        """
+        Promote this experiment design to be a combined experiment design.
+
+        Wraps this experiment design in a new :class:`CombinedExperimentDesign`
+        whose only sub-design is this one, and returns the combined design.
+
+        Parameters
+        ----------
+        name : str, optional
+            The sub-design-name of this experiment design within the created
+            combined experiment design.
+
+        Returns
+        -------
+        CombinedExperimentDesign
+        """
+        return CombinedExperimentDesign.from_edesign(self, name)
+
+    def promote_to_simultaneous(self):
+        """
+        Promote this experiment design to be a simultaneous experiment design.
+
+        Wraps this experiment design in a new :class:`SimultaneousExperimentDesign`
+        whose only sub-design is this one, and returns the simultaneous design.
+
+        Returns
+        -------
+        SimultaneousExperimentDesign
+        """
+        return SimultaneousExperimentDesign.from_edesign(self)
+
+    def _mapped_qubit_labels(self, mapper):
+        if self.qubit_labels in ("multiple", ('*',)):
+            mapped_qubit_labels = self.qubit_labels
+        else:
+            mapped_qubit_labels = tuple([mapper[ql] for ql in self.qubit_labels]) if isinstance(mapper, dict) \
+                else tuple(map(mapper, self.qubit_labels))
+        return mapped_qubit_labels
+
+    def map_qubit_labels(self, mapper):
+        """
+        Creates a new ExperimentDesign whose circuits' qubit labels are updated according to a given mapping.
+
+        Parameters
+        ----------
+        mapper : dict or function
+            A dictionary whose keys are the existing self.qubit_labels values
+            and whose value are the new labels, or a function which takes a
+            single (existing qubit-label) argument and returns a new qubit-label.
+
+        Returns
+        -------
+        ExperimentDesign
+        """
+        mapped_circuits = [c.map_state_space_labels(mapper) for c in self.all_circuits_needing_data]
+        mapped_qubit_labels = self._mapped_qubit_labels(mapper)
+        mapped_children = {key: child.map_qubit_labels(mapper) for key, child in self._vals.items()}
+        return ExperimentDesign(mapped_circuits, mapped_qubit_labels, mapped_children, self._dirs)
 
 
 class CircuitListsDesign(ExperimentDesign):
     """
-    Experiment deisgn specification that is comprised of multiple circuit lists.
+    Experiment design specification that is comprised of multiple circuit lists.
+
+    Parameters
+    ----------
+    circuit_lists : list or PlaquetteGridCircuitStructure
+        A list whose elements are themselves lists of :class:`Circuit`
+        objects, specifying the data that needs to be taken.  Alternatively,
+        a single :class:`PlaquetteGridCircuitStructure` object containing
+        a sequence of circuits lists, each at a different "x" value (usually
+        the maximum circuit depth).
+
+    all_circuits_needing_data : list, optional
+        A list of all the circuits needing data.  By default, This is just
+        the concatenation of the elements of `circuit_lists` with duplicates
+        removed.  The only reason to specify this separately is if you
+        happen to have this list lying around.
+
+    qubit_labels : tuple, optional
+        The qubits that this experiment design applies to. If None, the
+        line labels of the first circuit is used.
+
+    nested : bool, optional
+        Whether the elements of `circuit_lists` are nested, e.g. whether
+        `circuit_lists[i]` is a subset of `circuit_lists[i+1]`.  This
+        is useful to know because certain operations can be more efficient
+        when it is known that the lists are nested.
+
+    remove_duplicates : bool, optional
+        Whether to remove duplicates when automatically creating
+        all the circuits that need data (this argument isn't used
+        when `all_circuits_needing_data` is given).
     """
 
-    def __init__(self, circuit_lists, all_circuits_needing_data=None, qubit_labels=None, nested=False):
+    @classmethod
+    def from_edesign(cls, edesign):
+        """
+        Create a CircuitListsDesign out of an existing experiment design.
+
+        If `edesign` already is a circuit lists experiment design, it will
+        just be returned (not a copy of it).
+
+        Parameters
+        ----------
+        edesign : ExperimentDesign
+            The experiment design to convert (use as a base).
+
+        Returns
+        -------
+        CircuitListsDesign
+        """
+        if cls != CircuitListsDesign:
+            raise NotImplementedError("Cannot convert a %s to a %s!" % (str(type(edesign)), str(cls)))
+
+        if isinstance(edesign, CircuitListsDesign):
+            return edesign
+        elif isinstance(edesign, (CombinedExperimentDesign, SimultaneousExperimentDesign)):
+            circuit_lists = [subd.all_circuits_needing_data for k, subd in edesign.items()]
+            return cls(circuit_lists, edesign.all_circuits_needing_data, edesign.qubit_labels, remove_duplicates=False)
+        elif isinstance(edesign, ExperimentDesign):
+            return cls([edesign.all_circuits_needing_data], edesign.all_circuits_needing_data,
+                       edesign.qubit_labels, remove_duplicates=False)
+        else:
+            raise ValueError("Cannot convert a %s to a %s!" % (str(type(edesign)), str(cls)))
+
+    def __init__(self, circuit_lists, all_circuits_needing_data=None, qubit_labels=None,
+                 nested=False, remove_duplicates=True):
         """
         Create a new CircuitListsDesign object.
 
         Parameters
         ----------
-        circuit_lists : list
+        circuit_lists : list or PlaquetteGridCircuitStructure
             A list whose elements are themselves lists of :class:`Circuit`
-            objects, specifying the data that needs to be taken.
+            objects, specifying the data that needs to be taken.  Alternatively,
+            a single :class:`PlaquetteGridCircuitStructure` object containing
+            a sequence of circuits lists, each at a different "x" value (usually
+            the maximum circuit depth).
 
         all_circuits_needing_data : list, optional
             A list of all the circuits needing data.  By default, This is just
@@ -635,80 +1108,167 @@ class CircuitListsDesign(ExperimentDesign):
             is useful to know because certain operations can be more efficient
             when it is known that the lists are nested.
 
+        remove_duplicates : bool, optional
+            Whether to remove duplicates when automatically creating
+            all the circuits that need data (this argument isn't used
+            when `all_circuits_needing_data` is given).
+
         Returns
         -------
         CircuitListsDesign
         """
+
+        if isinstance(circuit_lists, _circuits.PlaquetteGridCircuitStructure):
+            master = circuit_lists
+            circuit_lists = [master.truncate(xs_to_keep=master.xs[0:i + 1]) for i in range(len(master.xs))]
+            nested = True  # (by this construction)
+
         if all_circuits_needing_data is not None:
-            all_circuits = all_circuits_needing_data
+            all_circuits = all_circuits_needing_data  # (ok if this is a CircuitList)
         elif nested and len(circuit_lists) > 0:
-            all_circuits = circuit_lists[-1]
+            all_circuits = circuit_lists[-1]  # (ok if this is a CircuitList)
         else:
             all_circuits = []
             for lst in circuit_lists:
-                all_circuits.extend(lst)
-            _lt.remove_duplicates_in_place(all_circuits)
+                all_circuits.extend(lst)  # Note: this should work even for type(lst) == CircuitList
+            if remove_duplicates:
+                _lt.remove_duplicates_in_place(all_circuits)
 
         self.circuit_lists = circuit_lists
         self.nested = nested
 
         super().__init__(all_circuits, qubit_labels)
-        self.auxfile_types['circuit_lists'] = 'text-circuit-lists'
+        self.auxfile_types['circuit_lists'] = 'list:serialized-object' \
+            if any([isinstance(lst, _circuits.CircuitList) for lst in circuit_lists]) else 'list:text-circuit-list'
 
-
-class CircuitStructuresDesign(CircuitListsDesign):
-    """
-    An experiment design that is comprised of multiple
-    circuit structures (:class:`CircuitStructure` objects).
-    """
-
-    def __init__(self, circuit_structs, qubit_labels=None, nested=False):
+    def truncate_to_lists(self, list_indices_to_keep):
         """
-        Create a new CircuitStructuresDesign object.
+        Truncates this experiment design by only keeping a subset of its circuit lists.
 
         Parameters
         ----------
-        circuit_structs : list or CircuitStructure
-            A list of :class:`CircuitStructure` objects, specifying the circuits
-            for which data is needed, OR a single :class:`CircuitStructure`
-            object specifying circuits at different lengths.
-
-        qubit_labels : tuple, optional
-            The qubits that this experiment design applies to. If None, the
-            line labels of the first circuit is used.
-
-        nested : bool, optional
-            Whether the elements of `circuit_structs` contain nested circuit
-            lists, e.g. whether `circuit_structs[i].allstrs` is a subset of
-            `circuit_structs[i+1].allstrs`.
+        list_indices_to_keep : iterable
+            A list of the (integer) list indices to keep.
 
         Returns
         -------
-        CircuitStructureDesign
+        CircuitListsDesign
+            The truncated experiment design.
         """
-        #Convert a single LsGermsStruct to a list if needed:
-        validStructTypes = (_objs.LsGermsStructure, _objs.LsGermsSerialStructure)
-        if isinstance(circuit_structs, validStructTypes):
-            master = circuit_structs
-            circuit_structs = [master.truncate(Ls=master.Ls[0:i + 1])
-                               for i in range(len(master.Ls))]
-            nested = True  # (by this construction)
+        return CircuitListsDesign([self.circuit_lists[i] for i in list_indices_to_keep],
+                                  qubit_labels=self.qubit_labels, nested=self.nested)
 
-        super().__init__([s.allstrs for s in circuit_structs], None, qubit_labels, nested)
-        self.circuit_structs = circuit_structs
-        self.auxfile_types['circuit_structs'] = 'pickle'
+    def _truncate_to_circuits_inplace(self, circuits_to_keep):
+        truncated_circuit_lists = [_circuits.CircuitList.cast(lst).truncate(circuits_to_keep)
+                                   for lst in self.circuit_lists]
+        self.circuit_lists = truncated_circuit_lists
+        self.nested = False  # we're not sure whether the truncated lists are nested
+        super()._truncate_to_circuits_inplace(circuits_to_keep)
+
+    def _truncate_to_design_inplace(self, other_design):
+        self.circuit_lists = [my_circuit_list.truncate(other_circuit_list) for my_circuit_list, other_circuit_list
+                              in zip(self.circuit_lists, other_design.circuit_lists)]
+        super()._truncate_to_design_inplace(other_design)
+
+    def _truncate_to_available_data_inplace(self, dataset):
+        truncated_lists = [_circuits.CircuitList.cast(clist).truncate_to_dataset(dataset)
+                           for clist in self.circuit_lists]
+        self.circuit_lists = truncated_lists
+        #self.nested = False
+        super()._truncate_to_available_data_inplace(dataset)
+
+    def map_qubit_labels(self, mapper):
+        """
+        Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
+
+        Parameters
+        ----------
+        mapper : dict or function
+            A dictionary whose keys are the existing self.qubit_labels values
+            and whose value are the new labels, or a function which takes a
+            single (existing qubit-label) argument and returns a new qubit-label.
+
+        Returns
+        -------
+        CircuitListsDesign
+        """
+        mapped_circuits = [c.map_state_space_labels(mapper) for c in self.all_circuits_needing_data]
+        mapped_circuit_lists = [[c.map_state_space_labels(mapper) for c in circuit_list]
+                                for circuit_list in self.circuit_lists]
+        mapped_qubit_labels = self._mapped_qubit_labels(mapper)
+        return CircuitListsDesign(mapped_circuit_lists, mapped_circuits, mapped_qubit_labels,
+                                  self.nested, remove_duplicates=False)  # no need to remove duplicates
 
 
 class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the same dataset
     """
-    An experiment design that combines the specifications of
-    one or more "sub-designs".  The sub-designs are preserved as children under
-    the :class:`CombinedExperimentDesign` instance, creating a "data-tree" structure.  The
-    :class:`CombinedExperimentDesign` object itself simply merges all of the circuit lists.
+    An experiment design that combines the specifications of one or more "sub-designs".
+
+    The sub-designs are preserved as children under the
+    :class:`CombinedExperimentDesign` instance, creating a "data-tree" structure.
+    The :class:`CombinedExperimentDesign` object itself simply merges all of the
+    circuit lists.
+
+    Parameters
+    ----------
+    sub_designs : dict or list
+        A dictionary of other :class:`ExperimentDesign` objects whose keys
+        are names for each sub-edesign (used for directories and to index
+        the sub-edesigns from this experiment design).  If a list is given instead,
+        a default names of the form " `**<number>` " are used.
+
+    all_circuits : list, optional
+        A list of :class:`Circuit`s, specifying all the circuits needing
+        data.  This can include additional circuits that are not in any
+        of `sub_designs`.  By default, the union of all the circuits in
+        the sub-designs is used.
+
+    qubit_labels : tuple, optional
+        The qubits that this experiment design applies to. If None, the line labels
+        of the first circuit is used.
+
+    sub_design_dirs : dict, optional
+        A dictionary whose values are directory names and keys are sub-edesign
+        names (the same as the keys of `sub_designs`).  If None, then the
+        keys of `sub_designs` must be strings and are used as directory
+        names.  Directory names are used when saving the object (via
+        :meth:`write`).
+
+    interleave : bool, optional
+        Whether the circuits of the `sub_designs` should be interleaved to
+        form the circuit ordering of this experiment design.
     """
 
+    @classmethod
+    def from_edesign(cls, edesign, name):
+        """
+        Create a combined experiment design out of an existing experiment design.
+
+        This makes `edesign` the one and only member of a new combined experiment design,
+        even in `edesign` is already a `CombinedExperimentDesign`.
+
+        Parameters
+        ----------
+        edesign : ExperimentDesign
+            The experiment design to convert (use as a base).
+
+        name : str
+            The sub-name of `edesign` within the returned combined experiment design.
+
+        Returns
+        -------
+        CombinedExperimentDesign
+        """
+        if cls != CombinedExperimentDesign:
+            raise NotImplementedError("Cannot convert a %s to a %s!" % (str(type(edesign)), str(cls)))
+
+        if isinstance(edesign, ExperimentDesign):
+            return cls({name: edesign}, edesign.all_circuits_needing_data, edesign.qubit_labels)
+        else:
+            raise ValueError("Cannot convert a %s to a %s!" % (str(type(edesign)), str(cls)))
+
     def __init__(self, sub_designs, all_circuits=None, qubit_labels=None, sub_design_dirs=None,
-                 interleave=False, category='EdesignBranch'):
+                 interleave=False):
         """
         Create a new CombinedExperimentDesign object.
 
@@ -718,7 +1278,7 @@ class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the
             A dictionary of other :class:`ExperimentDesign` objects whose keys
             are names for each sub-edesign (used for directories and to index
             the sub-edesigns from this experiment design).  If a list is given instead,
-            a default names of the form "**<number>" are used.
+            a default names of the form " `**<number>` " are used.
 
         all_circuits : list, optional
             A list of :class:`Circuit`s, specifying all the circuits needing
@@ -735,11 +1295,11 @@ class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the
             names (the same as the keys of `sub_designs`).  If None, then the
             keys of `sub_designs` must be strings and are used as directory
             names.  Directory names are used when saving the object (via
-            :method:`write`).
+            :meth:`write`).
 
-        category : str, optional
-            The category that describes the sub-edesigns of this object.  This
-            is used as a heading for the keys of `sub_designs`.
+        interleave : bool, optional
+            Whether the circuits of the `sub_designs` should be interleaved to
+            form the circuit ordering of this experiment design.
 
         Returns
         -------
@@ -751,11 +1311,17 @@ class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the
 
         if all_circuits is None:
             all_circuits = []
-            if not interleave:
+            if interleave:
+                subdesign_circuit_lists = [sub_design.all_circuits_needing_data for sub_design in sub_designs.values()]
+                #zip_longest is like zip, but if the iterables are of different lengths it returns a specified fill value
+                #(default None) in place of the missing elements once an iterable has been exhausted.
+                for circuits in _itertools.zip_longest(*subdesign_circuit_lists):
+                    for circuit in circuits:
+                        if circuit is not None:
+                            all_circuits.append(circuit)
+            else:
                 for des in sub_designs.values():
                     all_circuits.extend(des.all_circuits_needing_data)
-            else:
-                raise NotImplementedError("Interleaving not implemented yet")
             _lt.remove_duplicates_in_place(all_circuits)  # Maybe don't always do this?
 
         if qubit_labels is None and len(sub_designs) > 0:
@@ -765,35 +1331,140 @@ class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the
             else:
                 qubit_labels = first
 
-        super().__init__(all_circuits, qubit_labels, sub_designs, sub_design_dirs, category)
+        super().__init__(all_circuits, qubit_labels, sub_designs, sub_design_dirs)
 
-    def create_subdata(self, sub_name, dataset):
+    def _create_subdata(self, sub_name, dataset):
         """
-        Creates a :class:`ProtocolData` object for the sub-experiment-design
+        Creates a :class:`ProtocolData` object for a sub-experiment-design.
+
+        Specifically, this creates the object for the sub-experiment-design
         given by `subdata_name` starting from `dataset` as the data for *this*
         experiment design.  This is used internally by :class:`ProtocolData`
         objects, and shouldn't need to be used by external users.
+
+        Parameters
+        ----------
+        sub_name : immutable
+            The child (node) name of the sub-experiment design to create data for.
+
+        dataset : DataSet
+            The data for *this* experiment design.
+
+        Returns
+        -------
+        ProtocolData
         """
         sub_circuits = self[sub_name].all_circuits_needing_data
-        truncated_ds = dataset.truncate(sub_circuits)  # maybe have filter_dataset also do this?
+        if isinstance(dataset, dict):  # then do truncation "element-wise"
+            truncated_ds = {k: ds.truncate(sub_circuits) for k, ds in dataset.items()}
+            for tds in truncated_ds.values(): tds.add_std_nqubit_outcome_labels(len(self[sub_name].qubit_labels))
+        else:
+            truncated_ds = dataset.truncate(sub_circuits)  # maybe have filter_dataset also do this?
+            sub_nqubits = len(self[sub_name].qubit_labels)
+            outcome_labels = tuple(filter(lambda ol: (len(ol) != 1
+                                                      or any([letter not in ('0', '1') for letter in ol[0]])
+                                                      or len(ol[0]) == sub_nqubits), dataset.outcome_labels))
+            truncated_ds.add_outcome_labels(outcome_labels)  # make sure truncated ds has all outcomes
+            #truncated_ds.add_std_nqubit_outcome_labels(len(self[sub_name].qubit_labels))  # can be very SLOW
         return ProtocolData(self[sub_name], truncated_ds)
+
+    def __setitem__(self, key, val):
+        # must set base class self._vals and self._dirs (see treenode.py)
+        if not isinstance(val, ExperimentDesign):
+            raise ValueError("Only experiment designs can be set as sub-designs of a CombinedExperimentDesign!")
+
+        #Check whether the new design adds any more circuits (it's not allowed to
+        # because other objects, e.g. a ProtocolData object, may hold a reference to
+        # this combined experiment design (e.g., to index data) and expect that it will
+        # not change.
+        current_circuits = set(self.all_circuits_needing_data)
+        new_circuits = [c for c in val.all_circuits_needing_data if c not in current_circuits]
+        if len(new_circuits) > 0:
+            raise ValueError((("Adding this experiment design would add %d new circuits.  Adding circuits is not"
+                               " allowed because an experiment design's circuit list may be used to index data.  The"
+                               " circuits that would be added are:\n") % len(new_circuits))
+                             + "\n".join([c.str for c in new_circuits[0:10]])
+                             + ("\n..." if len(new_circuits) > 10 else ""))
+
+        self._dirs[key] = self._auto_dirname(key)
+        self._vals[key] = val
+
+    def map_qubit_labels(self, mapper):
+        """
+        Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
+
+        Parameters
+        ----------
+        mapper : dict or function
+            A dictionary whose keys are the existing self.qubit_labels values
+            and whose value are the new labels, or a function which takes a
+            single (existing qubit-label) argument and returns a new qubit-label.
+
+        Returns
+        -------
+        CombinedExperimentDesign
+        """
+        mapped_circuits = [c.map_state_space_labels(mapper) for c in self.all_circuits_needing_data]
+        mapped_qubit_labels = self._mapped_qubit_labels(mapper)
+        mapped_sub_designs = {key: child.map_qubit_labels(mapper) for key, child in self._vals.items()}
+        return CombinedExperimentDesign(mapped_sub_designs, mapped_circuits, mapped_qubit_labels, self._dirs)
 
 
 class SimultaneousExperimentDesign(ExperimentDesign):
     """
-    An experiment design whose circuits are the tensor-products
-    of the circuits from one or more  :class:`ExperimentDesign` objects that
-    act on disjoint sets of qubits.  The sub-designs are preserved as children under
-    the :class:`SimultaneousExperimentDesign` instance, creating a "data-tree" structure.
+    An experiment design whose circuits are the tensor-products of the circuits from one or more sub-designs.
+
+    The sub-:class:`ExperimentDesign` objects must act on disjoint sets of qubits.  The sub-designs
+    are preserved as children under the :class:`SimultaneousExperimentDesign` instance, creating
+    a "data-tree" structure.
+
+    Parameters
+    ----------
+    edesigns : list
+        A list of :class:`ExperimentDesign` objects  whose circuits
+        are to occur simultaneously.
+
+    tensored_circuits : list, optional
+        A list of all the circuits for this experiment design.  By default,
+        these are the circuits of those in `edesigns` tensored together.
+        Typically this is left as the default.
+
+    qubit_labels : tuple, optional
+        The qubits that this experiment design applies to. If None, the
+        concatenated qubit labels of `edesigns` are used (this is usually
+        what you want).
+
+    category : str, optional
+        The category name for the qubit-label-tuples correspoding to the
+        elements of `edesigns`.
     """
 
-    #@classmethod
-    #def from_tensored_circuits(cls, circuits, template_edesign, qubit_labels_per_edesign):
-    #    pass #Useful??? - need to break each circuit into different parts
-    # based on qubits, then copy (?) template edesign and just replace itself
-    # all_circuits_needing_data member?
+    @classmethod
+    def from_edesign(cls, edesign):
+        """
+        Create a simultaneous experiment design out of an existing experiment design.
 
-    def __init__(self, edesigns, tensored_circuits=None, qubit_labels=None, category='Qubits'):
+        This makes `edesign` the one and only member of a new simultanieous experiment
+        design, even in `edesign` is already a `SimultaneousExperimentDesign`.
+
+        Parameters
+        ----------
+        edesign : ExperimentDesign
+            The experiment design to convert (use as a base).
+
+        Returns
+        -------
+        SimultaneousExperimentDesign
+        """
+        if cls != SimultaneousExperimentDesign:
+            raise NotImplementedError("Cannot convert a %s to a %s!" % (str(type(edesign)), str(cls)))
+
+        if isinstance(edesign, ExperimentDesign):
+            return cls([edesign], None, edesign.qubit_labels)
+        else:
+            raise ValueError("Cannot convert a %s to a %s!" % (str(type(edesign)), str(cls)))
+
+    def __init__(self, edesigns, tensored_circuits=None, qubit_labels=None):
         """
         Create a new SimultaneousExperimentDesign object.
 
@@ -812,10 +1483,6 @@ class SimultaneousExperimentDesign(ExperimentDesign):
             The qubits that this experiment design applies to. If None, the
             concatenated qubit labels of `edesigns` are used (this is usually
             what you want).
-
-        category : str, optional
-            The category name for the qubit-label-tuples correspoding to the
-            elements of `edesigns`.
 
         Returns
         -------
@@ -838,48 +1505,64 @@ class SimultaneousExperimentDesign(ExperimentDesign):
             for lst in circuits_per_edesign:
                 if len(lst) < maxLen: lst.extend([None] * (maxLen - len(lst)))
 
-            def PAD(subcs):
+            def pad(subcs, actually_padded_mask):
                 maxLen = max([len(c) if (c is not None) else 0 for c in subcs])
                 padded = []
-                for c in subcs:
+                for i, c in enumerate(subcs):
                     if c is not None and len(c) < maxLen:
-                        cpy = c.copy(editable=True)
-                        cpy.insert_idling_layers(None, maxLen - len(cpy))
-                        cpy.done_editing()
-                        padded.append(cpy)
+                        padded.append(c.insert_idling_layers(None, maxLen - len(c)))
+                        actually_padded_mask[i] = True
                     else:
                         padded.append(c)
                 assert(all([len(c) == maxLen for c in padded if c is not None]))
                 return padded
 
+            actually_padded_msk = _np.zeros(len(edesigns), dtype=bool)
             padded_circuit_lists = [list() for des in edesigns]
             for subcircuits in zip(*circuits_per_edesign):
-                c = _cir.Circuit(num_lines=0, editable=True)  # Creates a empty circuit over no wires
-                padded_subcircuits = PAD(subcircuits)
+                c = _circuits.Circuit(num_lines=0, editable=True)  # Creates a empty circuit over no wires
+                padded_subcircuits = pad(subcircuits, actually_padded_msk)  # updates actually_padded array
                 for subc in padded_subcircuits:
                     if subc is not None:
-                        c.tensor_circuit(subc)
+                        c.tensor_circuit_inplace(subc)
                 c.line_labels = qubit_labels
                 c.done_editing()
                 tensored_circuits.append(c)
                 for lst, subc in zip(padded_circuit_lists, padded_subcircuits):
                     if subc is not None: lst.append(subc)
 
-            for des, padded_circuits in zip(edesigns, padded_circuit_lists):
-                des.set_actual_circuits_executed(padded_circuits)
+            for i, (padded_circuits, actually_padded) in enumerate(zip(padded_circuit_lists, actually_padded_msk)):
+                if actually_padded:
+                    des = _copy.deepcopy(edesigns[i])  # since we're setting actual circuits executed.
+                    des.set_actual_circuits_executed(padded_circuits)
+                    edesigns[i] = des  # update edesigns list with copy
 
         sub_designs = {des.qubit_labels: des for des in edesigns}
         sub_design_dirs = {qlbls: '_'.join(map(str, qlbls)) for qlbls in sub_designs}
-        super().__init__(tensored_circuits, qubit_labels, sub_designs, sub_design_dirs, category)
+        super().__init__(tensored_circuits, qubit_labels, sub_designs, sub_design_dirs)
 
-    def create_subdata(self, qubit_labels, dataset):
+    def _create_subdata(self, qubit_labels, dataset):
         """
-        Creates a :class:`ProtocolData` object for the sub-experiment-design
+        Creates a :class:`ProtocolData` object for a sub-experiment-design.
+
+        Specifically, this creates the object for the sub-experiment-design
         given by `subdata_name` starting from `dataset` as the data for *this*
         experiment design.  This is used internally by :class:`ProtocolData`
         objects, and shouldn't need to be used by external users.
+
+        Parameters
+        ----------
+        qubit_labels : tuple
+            The child (node) label of the sub-experiment design to create data for.
+
+        dataset : DataSet
+            The data for *this* experiment design.
+
+        Returns
+        -------
+        ProtocolData
         """
-        if isinstance(dataset, _objs.MultiDataSet):
+        if isinstance(dataset, _data.MultiDataSet):
             raise NotImplementedError("SimultaneousExperimentDesigns don't work with multi-pass data yet.")
 
         all_circuits = self.all_circuits_needing_data
@@ -887,30 +1570,187 @@ class SimultaneousExperimentDesign(ExperimentDesign):
         qubit_index = {qlabel: i for i, qlabel in enumerate(qubit_ordering)}
         sub_design = self[qubit_labels]
         qubit_indices = [qubit_index[ql] for ql in qubit_labels]  # order determined by first circuit (see above)
-        filtered_ds = _cnst.filter_dataset(dataset, qubit_labels, qubit_indices)  # Marginalize dataset
+
+        if isinstance(dataset, dict):  # then do filtration "element-wise"
+            filtered_ds = {k: _data.filter_dataset(ds, qubit_labels, qubit_indices) for k, ds in dataset.items()}
+            for fds in filtered_ds.values(): fds.add_std_nqubit_outcome_labels(len(qubit_labels))
+        else:
+            filtered_ds = _data.filter_dataset(dataset, qubit_labels, qubit_indices)  # Marginalize dataset
+            filtered_ds.add_std_nqubit_outcome_labels(len(qubit_labels))  # ensure filtered_ds has appropriate outcomes
 
         if sub_design.alt_actual_circuits_executed:
             actual_to_desired = _collections.defaultdict(lambda: None)
             actual_to_desired.update({actual: desired for actual, desired in
                                       zip(sub_design.alt_actual_circuits_executed,
                                           sub_design.all_circuits_needing_data)})
-            filtered_ds = filtered_ds.copy_nonstatic()
-            filtered_ds.process_circuits(lambda c: actual_to_desired[c], aggregate=False)
-            filtered_ds.done_adding_data()
+            if isinstance(dataset, dict):  # then do circuit processing "element-wise"
+                for k in filtered_ds:
+                    filtered_ds[k] = filtered_ds[k].process_circuits(lambda c: actual_to_desired[c], aggregate=False)
+            else:
+                filtered_ds = filtered_ds.process_circuits(lambda c: actual_to_desired[c], aggregate=False)
         return ProtocolData(sub_design, filtered_ds)
 
+    def map_qubit_labels(self, mapper):
+        """
+        Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
 
-class ProtocolData(_TreeNode):
+        Parameters
+        ----------
+        mapper : dict or function
+            A dictionary whose keys are the existing self.qubit_labels values
+            and whose value are the new labels, or a function which takes a
+            single (existing qubit-label) argument and returns a new qubit-label.
+
+        Returns
+        -------
+        SimultaneousExperimentDesign
+        """
+        mapped_circuits = [c.map_state_space_labels(mapper) for c in self.all_circuits_needing_data]
+        mapped_qubit_labels = self._mapped_qubit_labels(mapper)
+        mapped_edesigns = [child.map_qubit_labels(mapper) for child in self._vals.values()]
+        return SimultaneousExperimentDesign(mapped_edesigns, mapped_circuits, mapped_qubit_labels)
+
+
+class FreeformDesign(ExperimentDesign):
     """
-    A :class:`ProtocolData` object represents the experimental data needed to
-    run one or more QCVV protocols.  This class contains a :class:`ProtocolIput`,
-    which describes a set of circuits, and a :class:`DataSet` (or :class:`MultiDataSet`)
-    that holds data for these circuits.  These members correspond to the `.edesign`
-    and `.dataset` attributes.
+    Experiment design holding an arbitrary circuit list and meta data.
+
+    Parameters
+    ----------
+    circuits : list or dict
+        A list of the circuits needing data.  If None, then the list is empty.
+
+    qubit_labels : tuple, optional
+        The qubits that this experiment design applies to. If None, the
+        line labels of the first circuit is used.
     """
 
     @classmethod
-    def from_dir(cls, dirname, parent=None, name=None):
+    def from_dataframe(cls, df, qubit_labels=None):
+        """
+        Create a FreeformDesign from a pandas dataframe.
+
+        Parameters
+        ----------
+        df : pandas.Dataframe
+            A dataframe containing a `"Circuit"` column and possibly others.
+
+        qubit_labels : tuple, optional
+            The qubits that this experiment design applies to. If None, the
+            line labels of the first circuit is used.
+
+        Returns
+        -------
+        FreeformDesign
+        """
+        circuits = {}
+        for index, row in df.iterrows():
+            data = {k: v for k, v in row.items() if k != 'Circuit'}
+            circuits[_circuits.Circuit(row['Circuit'])] = data
+        return cls(circuits, qubit_labels)
+
+    @classmethod
+    def from_edesign(cls, edesign):
+        """
+        Create a FreeformDesign out of an existing experiment design.
+
+        If `edesign` already is a free-form experiment design, it will
+        just be returned (not a copy of it).
+
+        Parameters
+        ----------
+        edesign : ExperimentDesign
+            The experiment design to convert (use as a base).
+
+        Returns
+        -------
+        FreeformDesign
+        """
+        if cls != FreeformDesign:
+            raise NotImplementedError("Cannot convert a %s to a %s!" % (str(type(edesign)), str(cls)))
+
+        if isinstance(edesign, FreeformDesign):
+            return edesign
+        elif isinstance(edesign, ExperimentDesign):
+            return cls(edesign.all_circuits_needing_data, edesign.qubit_labels)
+        else:
+            raise ValueError("Cannot convert a %s to a %s!" % (str(type(edesign)), str(cls)))
+
+    def __init__(self, circuits, qubit_labels=None):
+        if isinstance(circuits, dict):
+            self.aux_info = circuits.copy()
+            circuits = list(circuits.keys())
+        else:
+            self.aux_info = {c: None for c in circuits}
+        super().__init__(circuits, qubit_labels)
+        self.auxfile_types['aux_info'] = 'pickle'
+
+    def _truncate_to_circuits_inplace(self, circuits_to_keep):
+        truncated_aux_info = {k: v for k, v in self.aux_info.items() if k in circuits_to_keep}
+        self.aux_info = truncated_aux_info
+        super()._truncate_to_circuits_inplace(circuits_to_keep)
+
+    def to_dataframe(self, pivot_valuename=None, pivot_value="Value", drop_columns=False):
+        cdict = _NamedDict('Circuit', None)
+        for cir, info in self.aux_info.items():
+            cdict[cir.str] = _NamedDict('ValueName', 'category', items=info)
+        df = cdict.to_dataframe()
+        return _process_dataframe(df, pivot_valuename, pivot_value, drop_columns, preserve_order=True)
+
+    def map_qubit_labels(self, mapper):
+        """
+        Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
+
+        Parameters
+        ----------
+        mapper : dict or function
+            A dictionary whose keys are the existing self.qubit_labels values
+            and whose value are the new labels, or a function which takes a
+            single (existing qubit-label) argument and returns a new qubit-label.
+
+        Returns
+        -------
+        FreeformDesign
+        """
+        mapped_circuits = [c.map_state_space_labels(mapper) for c in self.all_circuits_needing_data]
+        mapped_qubit_labels = self._mapped_qubit_labels(mapper)
+        return FreeformDesign(mapped_circuits, mapped_qubit_labels)
+
+
+class ProtocolData(_TreeNode, _MongoSerializable):
+    """
+    Represents the experimental data needed to run one or more QCVV protocols.
+
+    This class contains a :class:`ProtocolIput`, which describes a set of circuits,
+    and a :class:`DataSet` (or :class:`MultiDataSet`) that holds data for these
+    circuits.  These members correspond to the `.edesign` and `.dataset` attributes.
+
+    Parameters
+    ----------
+    edesign : ExperimentDesign
+        The experiment design describing what circuits this object
+        contains data for.  If None, then an unstructured
+        :class:`ExperimentDesign` is created containing the circuits
+        present in `dataset`.
+
+    dataset : DataSet or MultiDataSet, optional
+        The data counts themselves.
+
+    cache : dict, optional
+        A cache of values which holds values derived *only* from
+        the experiment design and data in this object.
+
+    Attributes
+    ----------
+    passes : dict
+        A dictionary of the data on a per-pass basis (works even it there's just one pass).
+    """
+    collection_name = "pygsti_protocol_data"
+    CACHE_COLLECTION_NAME = "pygsti_protocol_data_caches"
+
+    @classmethod
+    def from_dir(cls, dirname, parent=None, name=None, preloaded_edesign=None, quick_load=False,
+                 record_zero_counts=True):
         """
         Initialize a new ProtocolData object from `dirname`.
 
@@ -920,34 +1760,97 @@ class ProtocolData(_TreeNode):
             The *root* directory name (under which there are 'edesign'
             and 'data' subdirectories).
 
+        parent : ProtocolData, optional
+            The parent data object, if there is one.  This is needed for
+            sub-data objects which reference/inherit their parent's dataset.
+            Primarily used internally - if in doubt, leave this as `None`.
+
+        name : str, optional
+            The sub-name of the object being loaded, i.e. the
+            key of this data object beneath `parent`.  Only used when
+            `parent` is not None.
+
+        preloaded_edesign : ExperimentDesign, optional
+            In the case that the :class:`ExperimentDesign` object for `dirname`
+            is already loaded, it can be passed in here.  Otherwise leave this
+            as None and it will be loaded.
+
+        quick_load : bool, optional
+            Setting this to True skips the loading of components that may take
+            a long time, e.g. the actual raw data set(s). This can be useful
+            when loading takes a long time and all the information of interest
+            lies elsewhere, e.g. in an encompassing results object.
+
+        record_zero_counts : bool, optional
+            Whether zero-counts are actually recorded (stored) in the datasets
+            held within this ProtocolData object.
+
         Returns
         -------
         ProtocolData
         """
         p = _pathlib.Path(dirname)
-        edesign = parent.edesign[name] if parent and name else \
-            _io.load_edesign_from_dir(dirname)
+        edesign = parent.edesign[name] if (parent and name) else \
+            (preloaded_edesign if preloaded_edesign is not None else
+             _io.read_edesign_from_dir(dirname, quick_load=quick_load))
 
         data_dir = p / 'data'
-        #with open(data_dir / 'meta.json', 'r') as f:
-        #    meta = _json.load(f)
+        attributes_from_meta = _io.load_meta_based_dir(data_dir, auxfile_types_member=None, quick_load=quick_load)
 
-        #Load dataset or multidataset based on what files exist
-        dataset_files = sorted(list(data_dir.glob('*.txt')))
-        if len(dataset_files) == 0:  # assume same dataset as parent
-            if parent is None: parent = ProtocolData.from_dir(dirname / '..')
-            dataset = parent.dataset
-        elif len(dataset_files) == 1 and dataset_files[0].name == 'dataset.txt':  # a single dataset.txt file
-            dataset = _io.load_dataset(dataset_files[0], verbosity=0)
+        if quick_load:
+            dataset = None  # don't load any dataset - just the cache (usually b/c loading is slow)
+            # Note: could also use (path.stat().st_size >= max_size) to condition on size of data files
         else:
-            raise NotImplementedError("Need to implement MultiDataSet.init_from_dict!")
-            dataset = _objs.MultiDataSet.init_from_dict(
-                {pth.name: _io.load_dataset(pth, verbosity=0) for pth in dataset_files})
+            #Load dataset or multidataset based on what files exist
+            dataset_files = sorted(list(data_dir.glob('*.txt')))
+            if len(dataset_files) == 0:  # assume same dataset as parent
+                if parent is None: parent = ProtocolData.from_dir(dirname / '..')
+                dataset = parent.dataset
+            elif len(dataset_files) == 1 and dataset_files[0].name == 'dataset.txt':  # a single dataset.txt file
+                dataset = _io.read_dataset(dataset_files[0], record_zero_counts=record_zero_counts,
+                                           ignore_zero_count_lines=False, verbosity=0)
+            else:
+                dataset = {pth.stem: _io.read_dataset(pth, record_zero_counts=record_zero_counts,
+                                                      ignore_zero_count_lines=False, verbosity=0)
+                           for pth in dataset_files}
+                #FUTURE: use MultiDataSet, BUT in addition to init_from_dict we'll need to add truncate, filter, and
+                # process_circuits support for MultiDataSet objects -- for now (above) we just use dicts of DataSets.
+                #raise NotImplementedError("Need to implement MultiDataSet.init_from_dict!")
+                #dataset = _data.MultiDataSet.init_from_dict(
+                #    {pth.name: _io.read_dataset(pth, verbosity=0) for pth in dataset_files})
 
-        cache = _io.read_json_or_pkl_files_to_dict(data_dir / 'cache')
+        cache = _io.metadir._read_json_or_pkl_files_to_dict(data_dir / 'cache')
 
         ret = cls(edesign, dataset, cache)
-        ret._init_children(dirname, 'data')  # loads child nodes
+        ret.__dict__.update(attributes_from_meta)  # attribute updates, e.g. dbcoordinates
+        ret._init_children(dirname, 'data', quick_load=quick_load)  # loads child nodes
+        return ret
+
+    @classmethod
+    def _create_obj_from_doc_and_mongodb(cls, doc, mongodb, parent=None, name=None,
+                                         quick_load=False, preloaded_edesign=None, record_zero_counts=True):
+        edesign = parent.edesign[name] if parent and name else \
+            (preloaded_edesign if preloaded_edesign is not None else
+             _io.read_edesign_from_mongodb(mongodb, doc['edesign_id'], quick_load=quick_load, comm=None))
+
+        if quick_load:
+            dataset = None  # don't load any dataset - just the cache (usually b/c loading is slow)
+        else:
+            #Load dataset or multidataset from database
+            if 'dataset_id' in doc:
+                dataset = _data.DataSet.from_mongodb(mongodb, doc['dataset_id'], record_zero_counts=record_zero_counts)
+            elif 'dataset_ids' in doc:
+                dataset = {}
+                for dsname, ds_id in doc['dataset_ids'].items():
+                    dataset[dsname] = _data.DataSet.from_mongodb(mongodb, ds_id, record_zero_counts=record_zero_counts)
+
+        doc_id = doc['_id']
+        cache = _io.read_dict_from_mongodb(mongodb, cls.CACHE_COLLECTION_NAME,
+                                           {'member': 'cache',
+                                            'protocoldata_parent': doc_id})
+
+        ret = cls(edesign, dataset, cache)
+        ret._init_children_from_mongodb_doc(doc, mongodb, preloaded_edesign=edesign, quick_load=quick_load)
         return ret
 
     def __init__(self, edesign, dataset=None, cache=None):
@@ -976,8 +1879,9 @@ class ProtocolData(_TreeNode):
         self.edesign = edesign
         self.dataset = dataset  # MultiDataSet allowed for multi-pass data; None also allowed.
         self.cache = cache if (cache is not None) else {}
+        self.tags = {}
 
-        if isinstance(self.dataset, _objs.MultiDataSet):
+        if isinstance(self.dataset, (_data.MultiDataSet, dict)):  # can be dict of DataSets instead of a multi-ds
             for dsname in self.dataset:
                 if dsname not in self.cache: self.cache[dsname] = {}  # create separate caches for each pass
             self._passdatas = {dsname: ProtocolData(self.edesign, ds, self.cache[dsname])
@@ -989,7 +1893,8 @@ class ProtocolData(_TreeNode):
 
         if self.edesign is None:
             self.edesign = ExperimentDesign(list(ds_to_get_circuits_from.keys()))
-        super().__init__(self.edesign._dirs, {}, self.edesign._childcategory)  # children created on-demand
+        _MongoSerializable.__init__(self)
+        _TreeNode.__init__(self, self.edesign._dirs, {})  # children created on-demand
 
     def __getstate__(self):
         # don't pickle ourself recursively if self._passdatas contains just ourself
@@ -998,37 +1903,60 @@ class ProtocolData(_TreeNode):
             to_pickle['_passdatas'] = None
         return to_pickle
 
-    def __setstate__(self, stateDict):
-        self.__dict__.update(stateDict)
+    def __setstate__(self, state_dict):
+        self.__dict__.update(state_dict)
         if self._passdatas is None:
             self._passdatas = {None: self}
 
     def _create_childval(self, key):  # (this is how children are created on-demand)
         """ Create the value for `key` on demand. """
-        return self.edesign.create_subdata(key, self.dataset)
+        return self.edesign._create_subdata(key, self.dataset)
+
+    def copy(self):
+        """
+        Make a copy of this object.
+
+        Returns
+        -------
+        ProtocolData
+        """
+        if list(self._passdatas.keys()) == [None]:
+            # Don't copy ourself recursively
+            self._passdatas = {}
+            cpy = _copy.deepcopy(self)
+            self._passdatas = {None: self}
+        else:
+            cpy = _copy.deepcopy(self)
+        return cpy
 
     @property
     def passes(self):
-        """A dictionary of the per-pass sub-results."""
+        """
+        A dictionary of the data on a per-pass basis (works even it there's just one pass).
+
+        Returns
+        -------
+        dict
+        """
         return self._passdatas
 
     def is_multipass(self):
         """
-        Whether this protocol data contains multiple passes (more
-        accurately, whether the `.dataset` of this object is a
-        :class:`MultiDataSet`).
+        Whether this protocol data contains multiple passes.
+
+        More accurately, whether the `.dataset` of this object is a
+        :class:`MultiDataSet`.
 
         Returns
         -------
         bool
         """
-        return isinstance(self.dataset, _objs.MultiDataSet)
+        return isinstance(self.dataset, (_data.MultiDataSet, dict))
 
-    #def get_tree_paths(self):
-    #    return self.edesign.get_tree_paths()
-
-    def filter_paths(self, paths, paths_are_sorted=False):
+    def prune_tree(self, paths, paths_are_sorted=False):
         """
+        Prune the tree rooted here to include only the given paths, discarding all else.
+
         Returns a new :class:`ProtocolData` object with a subset of the
         data-tree paths contained under this one.
 
@@ -1053,10 +1981,10 @@ class ProtocolData(_TreeNode):
                 if subname in src_data._vals:  # if we've actually created this sub-data...
                     ret._vals[subname] = build_data(subedesign, src_data._vals[subname])
             return ret
-        filtered_edesign = self.edesign.filter_paths(paths, paths_are_sorted)
+        filtered_edesign = self.edesign.prune_tree(paths, paths_are_sorted)
         return build_data(filtered_edesign, self)
 
-    def write(self, dirname=None, parent=None):
+    def write(self, dirname=None, parent=None, edesign_already_written=False):
         """
         Write this protocol data to a directory.
 
@@ -1073,6 +2001,10 @@ class ProtocolData(_TreeNode):
             The parent protocol data, when a parent is writing this
             data as a sub-protocol-data object.  Otherwise leave as None.
 
+        edesign_already_written : bool, optional
+            If `True`, the experiment design within this data object is not written to
+            disk, and it is left to the caller to ensure the experiment design is saved.
+
         Returns
         -------
         None
@@ -1083,17 +2015,19 @@ class ProtocolData(_TreeNode):
         dirname = _pathlib.Path(dirname)
         data_dir = dirname / 'data'
         data_dir.mkdir(parents=True, exist_ok=True)
-        _io.obj_to_meta_json(self, data_dir)
+        _io.metadir.write_obj_to_meta_based_dir(self, data_dir, auxfile_types_member=None,
+                                                include_attributes=('_dbcoordinates',))  # just include DB coordinates
+        #Write our class information but no member data other than _dbcoordinates to meta.json
 
-        if parent is None:
-            self.edesign.write(dirname)  # assume parent has already written edesign
+        if parent is None and not edesign_already_written:
+            self.edesign.write(dirname)  # otherwise assume parent has already written edesign
 
         if self.dataset is not None:  # otherwise don't write any dataset
             if parent and (self.dataset is parent.dataset):  # then no need to write any data
                 assert(len(list(data_dir.glob('*.txt'))) == 0), "There shouldn't be *.txt files in %s!" % str(data_dir)
             else:
                 data_dir.mkdir(exist_ok=True)
-                if isinstance(self.dataset, _objs.MultiDataSet):
+                if isinstance(self.dataset, (_data.MultiDataSet, dict)):
                     for dsname, ds in self.dataset.items():
                         _io.write_dataset(data_dir / (dsname + '.txt'), ds)
                 else:
@@ -1102,18 +2036,162 @@ class ProtocolData(_TreeNode):
         if self.cache:
             _io.write_dict_to_json_or_pkl_files(self.cache, data_dir / 'cache')
 
-        self.write_children(dirname, write_subdir_json=False)  # writes sub-datas
+        self._write_children(dirname, write_subdir_json=False)  # writes sub-datas
 
+    def _add_auxiliary_write_ops_and_update_doc(self, doc, write_ops, mongodb, collection_name,
+                                                overwrite_existing, parent=None, name=None,
+                                                already_written_edesign_id=None):
+        #Note: adding args beyond overwrite_existing allow 1) use with TreeNode children functions, which
+        # supply 'parent' when this object is a child and 2) additional kwargs (`already_written_edesign_id` in this
+        # case) for write_to_mongodb calls
 
-class ProtocolResults(object):
-    """
-    A :class:`ProtocolResults` object contains a :class:`ProtocolData` object
-    and stores the results from running a QCVV protocol (a :class:`Protcocol`)
-    on this data.
-    """
+        #Write our class information (*not* any member data, so include_attributes == ()) to mongodb,
+        # even though we don't currently use this when loading (FUTURE work)
+        _io.add_obj_auxtree_write_ops_and_update_doc(self, doc, write_ops, mongodb, collection_name,
+                                                     auxfile_types_member=None, include_attributes=(),
+                                                     overwrite_existing=overwrite_existing)
+
+        if already_written_edesign_id is not None:
+            doc['edesign_id'] = already_written_edesign_id
+        elif parent is not None:  # assume parent has written edesign
+            doc['edesign_id'] = parent.edesign[name]._dbcoordinates[1]
+        else:
+            doc['edesign_id'] = self.edesign.write_to_mongodb(mongodb, write_ops.session, overwrite_existing)
+            # Don't do: self.edesign.add_mongodb_write_ops(write_ops, mongodb, overwrite_existing)
+            # because this doesn't actually perform the write, which we need to access IDs in
+            # children (via ._dbcoordinates)
+
+        doc_id = doc['_id']
+        if self.dataset is not None:  # otherwise don't write any dataset
+            if parent and (self.dataset is parent.dataset):
+                pass  # then no need to write any data
+            else:
+                if isinstance(self.dataset, (_data.MultiDataSet, dict)):
+                    ds_ids = {}; ds_cnms = set()
+                    for dsname, ds in self.dataset.items():
+                        ds_ids[dsname] = ds.add_mongodb_write_ops(write_ops, mongodb, overwrite_existing)
+                        ds_cnms.add(ds.collection_name)
+                    assert len(ds_cnms) == 0, "All datasets must be saved in *same* collection!"
+                    doc['dataset_ids'] = ds_ids
+                    doc['dataset_collection_name'] = next(iter(ds_cnms)) if (len(ds_cnms) > 0) else None
+                else:
+                    doc['dataset_id'] = self.dataset.add_mongodb_write_ops(write_ops, mongodb, overwrite_existing)
+                    doc['dataset_collection_name'] = self.dataset.collection_name
+
+        if self.cache:
+            _io.add_dict_to_mongodb_write_ops(self.cache, write_ops, mongodb, self.CACHE_COLLECTION_NAME,
+                                              {'member': 'cache',
+                                               'protocoldata_parent': doc_id}, overwrite_existing=overwrite_existing)
+            # Maybe always overwrite_existing should be True?
+
+        self._add_children_write_ops_and_update_doc(doc, write_ops, mongodb,
+                                                    overwrite_existing)  # writes sub-datas
 
     @classmethod
-    def from_dir(cls, dirname, name, preloaded_data=None):
+    def _remove_from_mongodb(cls, mongodb, collection_name, doc_id, session, recursive):
+        doc = mongodb[collection_name].find_one({'_id': doc_id}, session=session)
+        if recursive.children:
+            cls._remove_children_from_mongodb(mongodb, collection_name, doc_id, session, recursive)
+
+        if recursive.data:
+            _io.remove_dict_from_mongodb(mongodb, cls.CACHE_COLLECTION_NAME,
+                                         {'member': 'cache',
+                                          'protocoldata_parent': doc_id},
+                                         session=session)
+
+            dataset_ids = doc['dataset_ids'] if ('dataset_ids' in doc) else {None: doc['dataset_id']}
+            for ds_id in dataset_ids.values():
+                _data.DataSet.remove_from_mongodb(mongodb, ds_id, doc['dataset_collection_name'], session, recursive)
+
+            # Remove ProtocolData document itself
+            _io.remove_auxtree_from_mongodb(mongodb, collection_name, doc_id, 'auxfile_types', session,
+                                            recursive=recursive)
+
+        # Perhaps parent has already done this, but try to remove edesign anyway
+        _io.remove_edesign_from_mongodb(mongodb, doc['edesign_id'], session, recursive)
+
+    def setup_nameddict(self, final_dict):
+        """
+        Initializes a set of nested :class:`NamedDict` dictionaries describing this data.
+
+        This function is used by :class:`ProtocolResults` objects when they're creating
+        nested dictionaries of their contents.  The final nested dictionary is set to be
+        `final_dict`, which allows additional result quantities to easily be added.
+
+        Parameters
+        ----------
+        final_dict : NamedDict
+            the final-level (innermost-nested) NamedDict in the returned nested dictionary.
+
+        Returns
+        -------
+        NamedDict
+        """
+        keys_vals_types = [(k, v, 'category') for k, v in self.tags.items()]
+        return self.edesign.setup_nameddict(_NamedDict.create_nested(keys_vals_types, final_dict))
+
+    def to_dataframe(self, pivot_valuename=None, pivot_value=None, drop_columns=False):
+        """
+        Create a Pandas dataframe with this data.
+
+        Parameters
+        ----------
+        pivot_valuename : str, optional
+            If not None, the resulting dataframe is pivoted using `pivot_valuename`
+            as the column whose values name the pivoted table's column names.
+            If None and `pivot_value` is not None,`"ValueName"` is used.
+
+        pivot_value : str, optional
+            If not None, the resulting dataframe is pivoted such that values of
+            the `pivot_value` column are rearranged into new columns whose names
+            are given by the values of the `pivot_valuename` column. If None and
+            `pivot_valuename` is not None,`"Value"` is used.
+
+        drop_columns : bool or list, optional
+            A list of column names to drop (prior to performing any pivot).  If
+            `True` appears in this list or is given directly, then all
+            constant-valued columns are dropped as well.  No columns are dropped
+            when `drop_columns == False`.
+
+        Returns
+        -------
+        pandas.DataFrame
+        """
+        cdict = _NamedDict('Circuit', None)
+        if isinstance(self.dataset, _data.FreeformDataSet):
+            for cir, i in self.dataset.cirIndex.items():
+                d = _NamedDict('ValueName', 'category', items=self.dataset._info[i])
+                if isinstance(self.edesign, FreeformDesign):
+                    edesign_aux = self.edesign.aux_info[cir]
+                    if edesign_aux is not None:
+                        d.update(edesign_aux)
+                cdict[cir.str] = d
+        else:
+            raise NotImplementedError("Can only convert free-form data to dataframes currently.")
+
+        df = cdict.to_dataframe()
+        return _process_dataframe(df, pivot_valuename, pivot_value, drop_columns, preserve_order=True)
+
+
+class ProtocolResults(_MongoSerializable):
+    """
+    Stores the results from running a QCVV protocol on data.
+
+    A :class:`ProtocolResults` object Contains a :class:`ProtocolData` object and stores
+    the results of running a :class:`Protcocol` on this data.
+
+    Parameters
+    ----------
+    data : ProtocolData
+        The input data from which these results are derived.
+
+    protocol_instance : Protocol
+        The protocol that created these results.
+    """
+    collection_name = "pygsti_results"
+
+    @classmethod
+    def from_dir(cls, dirname, name, preloaded_data=None, quick_load=False):
         """
         Initialize a new ProtocolResults object from `dirname` / results / `name`.
 
@@ -1133,16 +2211,50 @@ class ProtocolResults(object):
             is already loaded, it can be passed in here.  Otherwise leave this
             as None and it will be loaded.
 
+        quick_load : bool, optional
+            Setting this to True skips the loading of data and experiment-design
+            components that may take a long time to load. This can be useful
+            all the information of interest lies only within the results object.
+
         Returns
         -------
         ProtocolResults
         """
         dirname = _pathlib.Path(dirname)
-        ret = cls.__new__(cls)
+        ret = cls._from_dir_partial(dirname / 'results' / name, quick_load, load_protocol=True)
         ret.data = preloaded_data if (preloaded_data is not None) else \
-            _io.load_data_from_dir(dirname)
-        ret.__dict__.update(_io.load_meta_based_dir(dirname / 'results' / name, 'auxfile_types'))
+            _io.read_data_from_dir(dirname, quick_load=quick_load)
         assert(ret.name == name), "ProtocolResults name inconsistency!"
+        return ret
+
+    @classmethod
+    def _from_dir_partial(cls, dirname, quick_load=False, load_protocol=False):
+        """
+        Internal method for loading only the results-specific data, and not the `data` member.
+        This method may be used independently by derived ProtocolResults objects which contain
+        multiple sub-results (e.g. MultiPassResults)
+        """
+        ignore = ('type',) if load_protocol else ('type', 'protocol')
+        ret = cls.__new__(cls)
+        _MongoSerializable.__init__(ret)
+        ret.__dict__.update(_io.load_meta_based_dir(dirname, 'auxfile_types', ignore, quick_load=quick_load))
+        return ret
+
+    @classmethod
+    def _create_obj_from_doc_and_mongodb(cls, doc, mongodb, quick_load=False,
+                                         preloaded_data=None, load_protocol=True, load_data=True):
+        ignore = ('_id', 'type', 'protocoldata_id')  # don't load these as members
+        if not load_protocol:
+            ignore += ('protocol',)
+        ret = cls.__new__(cls)
+        _MongoSerializable.__init__(ret, doc.get('_id', None))
+        ret.__dict__.update(_io.read_auxtree_from_mongodb_doc(mongodb, doc, 'auxfile_types', ignore,
+                                                              quick_load=quick_load))
+
+        if load_data:  # can we get rid of this?
+            ret.data = (preloaded_data if preloaded_data is not None else
+                        _io.read_data_from_mongodb(mongodb, doc['protocoldata_id'],
+                                                   quick_load=quick_load, comm=None))
         return ret
 
     def __init__(self, data, protocol_instance):
@@ -1161,10 +2273,11 @@ class ProtocolResults(object):
         -------
         ProtocolResults
         """
+        super().__init__()
         self.name = protocol_instance.name  # just for convenience in JSON dir
         self.protocol = protocol_instance
         self.data = data
-        self.auxfile_types = {'data': 'none', 'protocol': 'protocolobj'}
+        self.auxfile_types = {'data': 'none', 'protocol': 'dir-serialized-object'}
 
     def write(self, dirname=None, data_already_written=False):
         """
@@ -1201,9 +2314,38 @@ class ProtocolResults(object):
             self.data.write(dirname)
 
         #write qtys to results dir
-        _io.write_obj_to_meta_based_dir(self, results_dir, 'auxfile_types')
+        self._write_partial(results_dir, write_protocol=True)
 
-    def as_nameddict(self):
+    def _write_partial(self, results_dir, write_protocol=False):
+        """
+        Internal method used to write the results-specific data to a directory.
+        This method does not write the object's `data` member, which must be
+        serialized separately.
+        """
+        _io.write_obj_to_meta_based_dir(self, results_dir, 'auxfile_types',
+                                        omit_attributes=() if write_protocol else ('protocol',))
+
+    def _add_auxiliary_write_ops_and_update_doc(self, doc, write_ops, mongodb, collection_name,
+                                                overwrite_existing, already_written_data_id=None):
+        if already_written_data_id is not None:
+            doc['protocoldata_id'] = already_written_data_id
+        else:
+            doc['protocoldata_id'] = self.data.add_mongodb_write_ops(write_ops, mongodb, overwrite_existing)
+
+        _io.add_obj_auxtree_write_ops_and_update_doc(self, doc, write_ops, mongodb, collection_name, 'auxfile_types',
+                                                     overwrite_existing=overwrite_existing)
+        #omit_attributes=() if write_protocol else ('protocol',),
+        #additional_meta={'directory_id': doc_id},
+
+    @classmethod
+    def _remove_from_mongodb(cls, mongodb, collection_name, doc_id, session, recursive):
+        doc = mongodb[collection_name].find_one({'_id': doc_id}, session=session)
+        if recursive.results:
+            _io.remove_auxtree_from_mongodb(mongodb, collection_name, doc_id, 'auxfile_types', session,
+                                            recursive=recursive)
+        _io.remove_data_from_mongodb(mongodb, doc['protocoldata_id'], session, recursive)
+
+    def to_nameddict(self):
         """
         Convert these results into nested :class:`NamedDict` objects.
 
@@ -1211,45 +2353,122 @@ class ProtocolResults(object):
         -------
         NamedDict
         """
+        return self.protocol.setup_nameddict(
+            self.data.setup_nameddict(
+                self._my_attributes_as_nameddict()
+            ))
+
+    def _my_attributes_as_nameddict(self):
         #This function can be overridden by derived classes - this just
-        # tries to give a decent default implementation
-        ret = _NamedDict('Qty', 'category')
+        # tries to give a decent default implementation.  Ideally derived
+        # implementatons would use ValueName and Value columns so results
+        # can be aggregated easily.
+        vals = _NamedDict('ValueName', 'category')
         ignore_members = ('name', 'protocol', 'data', 'auxfile_types')
         for k, v in self.__dict__.items():
             if k.startswith('_') or k in ignore_members: continue
             if isinstance(v, ProtocolResults):
-                ret[k] = v.as_nameddict()
+                vals[k] = v.to_nameddict()
             elif isinstance(v, _NamedDict):
-                ret[k] = v
+                vals[k] = v
             elif isinstance(v, dict):
                 pass  # don't know how to make a dict into a (nested) NamedDict
             else:  # non-dicts are ok to just store
-                ret[k] = v
-        return ret
+                vals[k] = v
+        return vals
 
-    def as_dataframe(self):
+    def to_dataframe(self, pivot_valuename=None, pivot_value=None, drop_columns=False):
         """
         Convert these results into Pandas dataframe.
+
+        Parameters
+        ----------
+        pivot_valuename : str, optional
+            If not None, the resulting dataframe is pivoted using `pivot_valuename`
+            as the column whose values name the pivoted table's column names.
+            If None and `pivot_value` is not None,`"ValueName"` is used.
+
+        pivot_value : str, optional
+            If not None, the resulting dataframe is pivoted such that values of
+            the `pivot_value` column are rearranged into new columns whose names
+            are given by the values of the `pivot_valuename` column. If None and
+            `pivot_valuename` is not None,`"Value"` is used.
+
+        drop_columns : bool or list, optional
+            A list of column names to drop (prior to performing any pivot).  If
+            `True` appears in this list or is given directly, then all
+            constant-valued columns are dropped as well.  No columns are dropped
+            when `drop_columns == False`.
 
         Returns
         -------
         DataFrame
         """
-        return self.as_nameddict().as_dataframe()
+        df = self.to_nameddict().to_dataframe()
+        return _process_dataframe(df, pivot_valuename, pivot_value, drop_columns)
 
     def __str__(self):
         import pprint
         P = pprint.PrettyPrinter()
-        return P.pformat(self.as_nameddict())
+        return P.pformat(self.to_nameddict())
 
 
 class MultiPassResults(ProtocolResults):
     """
-    Holds the results of a single protocol on multiple "passes"
-    (sets of data, typically taken at different times).  The results
-    of each pass are held as a separate :class:`ProtcolResults` object
-    within the `.passes` attribute.
+    Holds the results of a single protocol on multiple "passes" (sets of data, typically taken at different times).
+
+    The results of each pass are held as a separate :class:`ProtcolResults`
+    object within the `.passes` attribute.
+
+    Parameters
+    ----------
+    data : ProtocolData
+        The input data from which these results are derived.
+
+    protocol_instance : Protocol
+        The protocol that created these results.
     """
+
+    @classmethod
+    def from_dir(cls, dirname, name, preloaded_data=None, quick_load=False):
+        """
+        Initialize a new MultiPassResults object from `dirname` / results / `name`.
+
+        Parameters
+        ----------
+        dirname : str
+            The *root* directory name (under which there is are 'edesign',
+            'data', and 'results' subdirectories).
+
+        name : str
+            The sub-directory name of the particular results object to load
+            (there can be multiple under a given root `dirname`).  This is the
+            name of a subdirectory of `dirname` / results.
+
+        preloaded_data : ProtocolData, optional
+            In the case that the :class:`ProtocolData` object for `dirname`
+            is already loaded, it can be passed in here.  Otherwise leave this
+            as None and it will be loaded.
+
+        quick_load : bool, optional
+            Setting this to True skips the loading of data and experiment-design
+            components that may take a long time to load. This can be useful
+            all the information of interest lies only within the results object.
+
+        Returns
+        -------
+        ProtocolResults
+        """
+        #Because 'dict-of-resultsobjs' only does *partial* loading/writing of the given results
+        # objects, we need to finish the loading manually.  Only partial loading is performed so
+        # because it is assumed that whatever object has a 'dict-of-resultsobjs' and isn't a
+        # ProtocolResultsDir must separately have access to the protocol and data used by these
+        # results (as they should be derivative of the protocol and data of the object).
+        ret = super(MultiPassResults, cls).from_dir(dirname, name, preloaded_data, quick_load)  # call base class
+        for pass_name, partially_loaded_results in ret.passes.items():
+            partially_loaded_results.data = ret.data.passes[pass_name]  # assumes data and ret.passes use *same* keys
+            partially_loaded_results.protocol = ret.protocol.protocol  # assumes ret.protocol is MultiPassProtocol-like
+        return ret
 
     def __init__(self, data, protocol_instance):
         """
@@ -1271,20 +2490,63 @@ class MultiPassResults(ProtocolResults):
         """
         super().__init__(data, protocol_instance)
 
-        self.passes = {}
-        self.auxfile_types['passes'] = 'dict-of-resultsobjs'
+        self.passes = _collections.OrderedDict()  # _NamedDict('Pass', 'category') - to_nameddict takes care of this
+        self.auxfile_types['passes'] = 'dict:partialdir-serialized-object'
+
+    def to_nameddict(self):
+        """
+        Create a :class:`NamedDict` of the results within this object.
+
+        Returns
+        -------
+        NamedDict
+        """
+        # essentially inject a 'Pass' dict right beneath the outer-most Protocol Name dict
+        ret = _NamedDict('ProtocolName', 'category')
+        for pass_name, r in self.passes.items():
+            sub = r.to_nameddict()  # should have outer-most 'ProtocolName' dict
+            assert(sub.keyname == 'ProtocolName' and len(sub) == 1)
+            pname = r.protocol.name  # also list(sub.keys())[0]
+            if pname not in ret:
+                ret[pname] = _NamedDict('Pass', 'category')
+            ret[pname][pass_name] = sub[pname]
+
+        return ret
+
+    def copy(self):
+        """
+        Make a copy of this object.
+
+        Returns
+        -------
+        MultiPassResults
+        """
+        cpy = MultiPassResults(self.data.copy(), _copy.deepcopy(self.protocol))
+        for k, v in self.passes.items():
+            cpy.passes[k] = v.copy()
+        return cpy
 
 
-class ProtocolResultsDir(_TreeNode):
+class ProtocolResultsDir(_TreeNode, _MongoSerializable):
     """
-    A :class:`ProtocolResultsDir` holds a dictionary of :class:`ProtocolResults`
-    objects.  It contains a :class:`ProtocolData` object and is rooted at the_model
-    corresponding node of the data-tree.  It contains links to child-:class:`ProtocolResultsDir`
-    objects representing sub-directories.
+    Holds a dictionary of :class:`ProtocolResults` objects.
+
+    It contains a :class:`ProtocolData` object and is rooted at the_model
+    corresponding node of the data-tree.  It contains links to
+    child-:class:`ProtocolResultsDir` objects representing sub-directories.
+
+    This container object holds two things:
+    
+    1. A `.for_protocol` dictionary of :class:`ProtocolResults` corresponding
+       to different protocols (keys are protocol names).
+
+    2. Child :class:`ProtocolResultsDir` objects, obtained by indexing this
+       object directly using the name of the sub-directory.
     """
+    collection_name = "pygsti_results_directories"
 
     @classmethod
-    def from_dir(cls, dirname, parent=None, name=None):
+    def from_dir(cls, dirname, parent=None, name=None, preloaded_data=None, quick_load=False):
         """
         Initialize a new ProtocolResultsDir object from `dirname`.
 
@@ -1304,37 +2566,100 @@ class ProtocolResultsDir(_TreeNode):
             The name of this result within `parent`.  This is only
             used when `parent` is not None.
 
+        preloaded_data : ProtocolData, optional
+            In the case that the :class:`ProtocolData` object for `dirname`
+            is already loaded, it can be passed in here.  Otherwise leave this
+            as None and it will be loaded.
+
+        quick_load : bool, optional
+            Setting this to True skips the loading of data and experiment-design
+            components that may take a long time to load. This can be useful
+            all the information of interest lies only within the contained results objects.
+
         Returns
         -------
         ProtcolResultsDir
         """
         dirname = _pathlib.Path(dirname)
         data = parent.data[name] if (parent and name) else \
-            _io.load_data_from_dir(dirname)
+            (preloaded_data if preloaded_data is not None else
+             _io.read_data_from_dir(dirname, quick_load=quick_load))
 
         #Load results in results_dir
         results = {}
         results_dir = dirname / 'results'
+        attributes_from_meta = _io.load_meta_based_dir(results_dir, auxfile_types_member=None, quick_load=quick_load) \
+            if (results_dir / 'meta.json').exists() else {}  # Back-compatibility (old result dirs have no meta.json)
+
         if results_dir.is_dir():  # if results_dir doesn't exist that's ok (just no results to load)
             for pth in results_dir.iterdir():
                 if pth.is_dir() and (pth / 'meta.json').is_file():
-                    results[pth.name] = _io.cls_from_meta_json(pth).from_dir(
-                        dirname, pth.name, preloaded_data=data)
+                    results[pth.name] = _io.metadir._cls_from_meta_json(pth).from_dir(
+                        dirname, pth.name, preloaded_data=data, quick_load=quick_load)
 
         ret = cls(data, results, {})  # don't initialize children now
-        ret._init_children(dirname, meta_subdir='results')
+        ret.__dict__.update(attributes_from_meta)  # attribute updates, e.g. dbcoordinates
+        ret._init_children(dirname, meta_subdir='results', quick_load=quick_load)
+        return ret
+
+    @classmethod
+    def _create_obj_from_doc_and_mongodb(cls, doc, mongodb, parent=None, name=None,
+                                         quick_load=False, preloaded_data=None, read_all_results_for_data=False):
+        data_id = doc['protocoldata_id']
+        data = parent.data[name] if (parent and name) else \
+            (preloaded_data if preloaded_data is not None else
+             _io.read_data_from_mongodb(mongodb, data_id, quick_load=quick_load, comm=None))
+        assert data._dbcoordinates[1] == data_id, "Inconsistent preloaded vs recorded ProtocolData ID!"
+
+        #Load results with same protocoldata_id as us (we don't actually use doc['result_ids'])
+        results = {}
+        result_collection = ProtocolResults.collection_name  # could store this in db (?)
+
+        #First pass - results that have their IDs stored directly
+        loaded_ids = set()
+        for result_name, result_id in doc['result_ids'].items():
+            try:
+                res = ProtocolResults.from_mongodb(mongodb, result_id, preloaded_data=data, quick_load=quick_load)
+                loaded_ids.add(result_id)
+            except Exception as e:
+                print("Failed to load results ", result_name, ' (so skipping):\n', str(e))
+            else:
+                results[result_name] = res
+
+        if read_all_results_for_data:
+            #Second pass - results with our protocol data id -- but don't let these overwrite existing results!
+            for res_doc in mongodb[result_collection].find({'protocoldata_id': data_id}):
+                if res_doc['_id'] in loaded_ids:
+                    continue  # already loaded
+
+                try:
+                    res = ProtocolResults.from_mongodb_doc(mongodb, result_collection, res_doc,
+                                                           preloaded_data=data, quick_load=quick_load)
+                except Exception as e:
+                    print("Failed to load results ", str(res_doc['name']), ':\n', str(e))
+                else:
+                    tag = 2
+                    nm = res_doc['name']
+                    while nm in results:
+                        nm = res_doc['name'] + ("-%d" % tag)
+                        tag += 1
+                    if nm != res_doc['name']:
+                        print("Note: result for key '%s' already exists -> storing as '%s'" % (res_doc['name'], nm))
+                    results[nm] = res
+
+        ret = cls(data, results, {})  # don't initialize children now
+        #Note: we never call the below update as it currently doesn't have anything in it.
+        #ret.__dict__.update(_io.read_auxtree_from_mongodb_doc(mongodb, doc, 'auxfile_types',
+        #                                                      ignore_meta=('_id', 'type', 'children_ids',
+        #                                                                   'protocoldata_id', 'result_ids'),
+        #                                                      quick_load=quick_load))
+        ret._init_children_from_mongodb_doc(doc, mongodb, preloaded_data=data, quick_load=quick_load,
+                                            read_all_results_for_data=read_all_results_for_data)
         return ret
 
     def __init__(self, data, protocol_results=None, children=None):
         """
         Create a new ProtocolResultsDir object.
-
-        This container object holds two things:
-        1. A `.for_protocol` dictionary of :class:`ProtocolResults` corresponding
-           to different protocols (keys are protocol names).
-
-        2. Child :class:`ProtocolResultsDir` objects, obtained by indexing this
-           object directly using the name of the sub-directory.
 
         Parameters
         ----------
@@ -1342,10 +2667,11 @@ class ProtocolResultsDir(_TreeNode):
             The data from which *all* the Results objects in this
             ProtocolResultsDir are derived.
 
-        protocol_results : ProtocolResults, optional
-            An initial (single) results object to add.  The name of the
-            results object is used as its key within the `.for_protocol`
-            dictionary.  If None, then an empty results directory is created.
+        protocol_results : ProtocolResults or dict, optional
+            An initial dictionary of :class:`ProtocolResults` objects to add, or a single
+            results object. The name(s) of the results object(s) must be used as keys (and
+            will used as its key for a single results object).  This beccomes the created
+            object's `.for_protocol` dictionary.  If None, then an empty results directory is created.
 
         children : dict, optional
             A dictionary of the :class:`ProtocolResultsDir` objects that are
@@ -1358,7 +2684,12 @@ class ProtocolResultsDir(_TreeNode):
         ProtocolResultsDir
         """
         self.data = data  # edesign and data
-        self.for_protocol = protocol_results.copy() if protocol_results else {}
+        if isinstance(protocol_results, dict):
+            self.for_protocol = protocol_results.copy()
+        elif isinstance(protocol_results, ProtocolResults):
+            self.for_protocol = {protocol_results.name: protocol_results}
+        else:
+            self.for_protocol = {}
         assert(all([r.data is self.data for r in self.for_protocol.values()]))
 
         #self._children = children if (children is not None) else {}
@@ -1371,9 +2702,56 @@ class ProtocolResultsDir(_TreeNode):
         else:
             children = children.copy()
 
-        super().__init__(self.data.edesign._dirs, children, self.data.edesign._childcategory)
+        _MongoSerializable.__init__(self)
+        _TreeNode.__init__(self, self.data.edesign._dirs, children)
 
-    def write(self, dirname=None, parent=None):
+    def add_results(self, for_protocol_name, results):
+        """
+        Add a new results object to this results directory node.
+
+        The added results object must share this result directory's data, i.e., its
+        `.data` attribute must match the `.data` of this directory.  This requirement
+        is usually met because the results have been created by running a protocol on
+        this directory's `.data`.  The results object is stored in the
+        `.for_protocol[for_protocol_name]` attribute of this directory.
+
+        Parameters
+        ----------
+        for_protocol_name : str
+            Name of the protocol to be added.
+
+        results : ProtocolResults
+            The results object to be added
+
+        Returns
+        -------
+        None
+        """
+        assert results.data is self.data, "Added result.data must be result directory's .data!"
+        self.for_protocol[for_protocol_name] = results
+
+    def _create_childval(self, key):  # (this is how children are created on-demand)
+        """ Create the value for `key` on demand. """
+        if self.data.edesign._loaded_from and key in self._dirs:
+            dirname = _pathlib.Path(self.data.edesign._loaded_from)
+            subdir = self._dirs[key]
+            subobj_dir = dirname / subdir
+
+            if subobj_dir.exists():
+                submeta_dir = subobj_dir / 'results'
+                if submeta_dir.exists() and (submeta_dir / 'meta.json').exists():
+                    # then use this metadata to determine the results-dir object type
+                    classobj = _io.metadir._cls_from_meta_json(submeta_dir)
+                else:
+                    # otherwise just make the sub-resultsdir object the same type as this one
+                    classobj = self.__class__
+                return classobj.from_dir(subobj_dir, parent=self, name=key, preloaded_data=self.data[key])
+            else:
+                raise ValueError("Expected directory: '%s' doesn't exist!" % str(subobj_dir))
+        else:
+            raise KeyError("Invalid key: %s" % str(key))
+
+    def write(self, dirname=None, parent=None, data_already_written=False):
         """
         Write this "protocol results directory" to a directory.
 
@@ -1390,6 +2768,10 @@ class ProtocolResultsDir(_TreeNode):
             The parent protocol results directory, when a parent is writing this
             results dir as a sub-results-dir.  Otherwise leave as None.
 
+        data_already_written : bool, optional
+            If `True`, the data object within this results directory is not written to
+            disk, and it is left to the caller to ensure the data object is saved.
+
         Returns
         -------
         None
@@ -1398,21 +2780,87 @@ class ProtocolResultsDir(_TreeNode):
             dirname = self.data.edesign._loaded_from
             if dirname is None: raise ValueError("`dirname` must be given because there's no default directory")
 
-        if parent is None: self.data.write(dirname)  # assume parent has already written data
+        if parent is None and not data_already_written:  # assume parent writes data
+            self.data.write(dirname)
         dirname = _pathlib.Path(dirname)
 
         results_dir = dirname / 'results'
         results_dir.mkdir(parents=True, exist_ok=True)
-        _io.obj_to_meta_json(self, results_dir)
+        _io.metadir.write_obj_to_meta_based_dir(self, results_dir, auxfile_types_member=None,
+                                                include_attributes=('_dbcoordinates',))  # just include DB coordinates
+        #Write our class information but no member data other than _dbcoordinates to meta.json
 
         #write the results
         for name, results in self.for_protocol.items():
             assert(results.name == name)
             results.write(dirname, data_already_written=True)
 
-        self.write_children(dirname, write_subdir_json=False)  # writes sub-nodes
+        self._write_children(dirname, write_subdir_json=False)  # writes sub-nodes
 
-    def as_nameddict(self):
+    def _add_auxiliary_write_ops_and_update_doc(self, doc, write_ops, mongodb, collection_name,
+                                                overwrite_existing, parent=None, name=None,
+                                                already_written_data_id=None):
+        if already_written_data_id is not None:
+            doc['protocoldata_id'] = already_written_data_id
+        elif parent is not None:  # assume parent has written data
+            coords_from_parent = doc['protocoldata_id'] = parent.data[name]._dbcoordinates
+            if coords_from_parent is None:  # parent's sub-data exists but hasn't actually been written
+                _warnings.warn(("Saving this ProtocolResultsDirs has prompted re-saving its data object because"
+                                " the data object didn't have any existing DB coordinates.  This *shouldn't*"
+                                " happen and this re-saving action is a last effort to finish this write operation"
+                                " without failing - you should check the results."))
+                # This may happen if parent data object didn't have all its sub-datas generated before is
+                # was saved.  Accessing the subdata above should have generated it, so re-saving the parent
+                # will hopefully cause the data to be saved correctly (i.e. with link to parent data object)
+                self.data.write_to_mongodb(mongodb, write_ops.session, overwrite_existing)
+            doc['protocoldata_id'] = parent.data[name]._dbcoordinates[1]
+        else:
+            doc['protocoldata_id'] = self.data.write_to_mongodb(mongodb, write_ops.session, overwrite_existing)
+            # Not: self.data.add_mongodb_write_ops(write_ops, mongodb, overwrite_existing), see edesign_id comment above
+
+        #write the results
+        result_ids = {}
+        for name, results in self.for_protocol.items():
+            assert(results.name == name)
+            result_ids[name] = results.add_mongodb_write_ops(write_ops, mongodb, overwrite_existing,
+                                                             already_written_data_id=doc['protocoldata_id'])
+        doc['result_ids'] = result_ids
+        self._add_children_write_ops_and_update_doc(doc, write_ops, mongodb, overwrite_existing)
+
+    @classmethod
+    def _remove_from_mongodb(cls, mongodb, collection_name, doc_id, session, recursive):
+        doc = mongodb[collection_name].find_one({'_id': doc_id}, session=session)
+        if recursive.children:
+            cls._remove_children_from_mongodb(mongodb, collection_name, doc_id, session, recursive)
+
+        if recursive.results:
+            for name, result_id in doc['result_ids'].items():
+                ProtocolResults.remove_from_mongodb(mongodb, result_id, session=session, recursive=recursive)
+            mongodb[collection_name].delete_one({'_id': doc_id}, session=session)  # delete main document
+
+        # Perhaps parent has already done this, but try to remove data anyway
+        _io.remove_data_from_mongodb(mongodb, doc['protocoldata_id'], session, recursive)
+
+    def _result_namedicts_on_this_node(self):
+        nds = [v.to_nameddict() for v in self.for_protocol.values()]
+        if len(nds) > 0:
+            assert(all([nd.keyname == nds[0].keyname for nd in nds])), \
+                "All protocols on a given node must return a NamedDict with the *same* root name!"  # eg "ProtocolName"
+            results_on_this_node = nds[0]
+            for nd in nds[1:]:
+                results_on_this_node.update(nd)
+        else:
+            results_on_this_node = None
+        return results_on_this_node
+
+    def _addto_bypath_nameddict(self, dest, path):
+        results_on_this_node = self._result_namedicts_on_this_node()
+        if results_on_this_node is not None:
+            dest[path] = results_on_this_node
+        for k, v in self.items():
+            v._addto_bypath_nameddict(dest, path + (k,))
+
+    def to_nameddict(self):
         """
         Convert the results in this object into nested :class:`NamedDict` objects.
 
@@ -1420,34 +2868,44 @@ class ProtocolResultsDir(_TreeNode):
         -------
         NamedDict
         """
-        sub_results = {k: v.as_nameddict() for k, v in self.items()}
-        results_on_this_node = _NamedDict('Protocol Instance', 'category',
-                                          items={k: v.as_nameddict() for k, v in self.for_protocol.items()})
-        if sub_results:
-            category = self.child_category if self.child_category else 'nocategory'
-            ret = _NamedDict(category, 'category')
-            if results_on_this_node:
-                #Results in this (self's) dir don't have a value for the sub-category, so put None
-                ret[None] = results_on_this_node
-            ret.update(sub_results)
-            return ret
-        else:  # no sub-results, so can just return a dict of results on this node
-            return results_on_this_node
+        nd = _NamedDict('Path', 'object')  # so it can hold tuples of tuples, etc.
+        self._addto_bypath_nameddict(nd, path=())
+        return nd
 
-    def as_dataframe(self):
+    def to_dataframe(self, pivot_valuename=None, pivot_value=None, drop_columns=False):
         """
         Convert these results into Pandas dataframe.
+
+        Parameters
+        ----------
+        pivot_valuename : str, optional
+            If not None, the resulting dataframe is pivoted using `pivot_valuename`
+            as the column whose values name the pivoted table's column names.
+            If None and `pivot_value` is not None,`"ValueName"` is used.
+
+        pivot_value : str, optional
+            If not None, the resulting dataframe is pivoted such that values of
+            the `pivot_value` column are rearranged into new columns whose names
+            are given by the values of the `pivot_valuename` column. If None and
+            `pivot_valuename` is not None,`"Value"` is used.
+
+        drop_columns : bool or list, optional
+            A list of column names to drop (prior to performing any pivot).  If
+            `True` appears in this list or is given directly, then all
+            constant-valued columns are dropped as well.  No columns are dropped
+            when `drop_columns == False`.
 
         Returns
         -------
         DataFrame
         """
-        return self.as_nameddict().as_dataframe()
+        df = self.to_nameddict().to_dataframe()
+        return _process_dataframe(df, pivot_valuename, pivot_value, drop_columns)
 
     def __str__(self):
         import pprint
         P = pprint.PrettyPrinter()
-        return P.pformat(self.as_nameddict())
+        return P.pformat(self.to_nameddict())
 
 
 def run_default_protocols(data, memlimit=None, comm=None):
@@ -1475,15 +2933,22 @@ def run_default_protocols(data, memlimit=None, comm=None):
 
 class ProtocolPostProcessor(object):
     """
-    A :class:`ProtocolPostProcessor` is similar to a protocol, but runs on an
-    *existing* results object, and produces a new (updated?) Results object.
+    Similar to a protocol, but runs on an *existing* :class:`ProtocolResults` object.
+
+    Running a :class:`ProtocolPostProcessor` produces a new (or updated)
+    :class:`ProtocolResults` object.
+
+    Parameters
+    ----------
+    name : str
+        The name of this post-processor.
     """
 
     #Note: this is essentially a duplicate of the Protocol class (except run takes a results object)
     # but it's conceptually a different thing...  Should we derive it from Protocol?
 
     @classmethod
-    def from_dir(cls, dirname):  # same I/O pattern as Protocol
+    def from_dir(cls, dirname, quick_load=False):  # same I/O pattern as Protocol
         """
         Initialize a new ProtocolPostProcessor object from `dirname`.
 
@@ -1492,12 +2957,16 @@ class ProtocolPostProcessor(object):
         dirname : str
             The directory name.
 
+        quick_load : bool, optional
+            Setting this to True skips the loading of components that may take
+            a long time to load.
+
         Returns
         -------
         ProtocolPostProcessor
         """
         ret = cls.__new__(cls)
-        ret.__dict__.update(_io.load_meta_based_dir(_pathlib.Path(dirname), 'auxfile_types'))
+        ret.__dict__.update(_io.load_meta_based_dir(_pathlib.Path(dirname), 'auxfile_types', quick_load=quick_load))
         ret._init_unserialized_attributes()
         return ret
 
@@ -1559,3 +3028,202 @@ class ProtocolPostProcessor(object):
         None
         """
         _io.write_obj_to_meta_based_dir(self, dirname, 'auxfile_types')
+
+
+class DataSimulator(object):
+    """
+    An analysis routine that is run on an experiment design to produce per-circuit data.
+
+    A DataSimulator fundamentally simulates a model to create data, taking an :class:`ExperimentDesign`
+    as input and producing a :class:`ProtocolData` object as output.
+
+    The produced data may consist of data counts for some/all of the circuit outcomes, and
+    thus result in a :class:`ProtocolData` containsing a normal :class:`DataSet`.  Alternatively,
+    a data simulator may compute arbitrary quantities to be associated with the circuits, resulting
+    in a :class:`ProtocolData` containsing a normal :class:`FreeformDataSet`.
+
+    """
+
+    def __init__(self):
+        pass
+
+    def run(self, edesign, memlimit=None, comm=None):
+        """
+        Run this data simulator on an experiment design.
+
+        Parameters
+        ----------
+        edesign : ExperimentDesign
+            The input experiment design.
+
+        memlimit : int, optional
+            A rough per-processor memory limit in bytes.
+
+        comm : mpi4py.MPI.Comm, optional
+            When not ``None``, an MPI communicator used to run this data
+            simulator in parallel.
+
+        Returns
+        -------
+        ProtocolData
+        """
+        raise NotImplementedError("Derived classes should implement this!")
+
+
+class DataCountsSimulator(DataSimulator):
+    """
+    Simulates data counts for each circuit outcome, producing a simulated data set.
+
+    This object can also be used to compute the outcome probabilities for each
+    circuit outcome instead of sampled counts by setting `sample_error="none"`.
+
+    Parameters
+    ----------
+    model : Model
+        The model to simulate.
+
+    num_samples : int or list of ints or None, optional
+        The simulated number of samples for each circuit.  This only has
+        effect when  ``sample_error == "binomial"`` or ``"multinomial"``.  If an
+        integer, all circuits have this number of total samples. If a list,
+        integer elements specify the number of samples for the corresponding
+        circuit.  If ``None``, then `model_or_dataset` must be a
+        :class:`~pygsti.objects.DataSet`, and total counts are taken from it
+        (on a per-circuit basis).
+
+    sample_error : string, optional
+        What type of sample error is included in the counts.  Can be:
+
+        - "none"  - no sample error: counts are floating point numbers such
+          that the exact probabilty can be found by the ratio of count / total.
+        - "clip" - no sample error, but clip probabilities to [0,1] so, e.g.,
+          counts are always positive.
+        - "round" - same as "clip", except counts are rounded to the nearest
+          integer.
+        - "binomial" - the number of counts is taken from a binomial
+          distribution.  Distribution has parameters p = (clipped) probability
+          of the circuit and n = number of samples.  This can only be used
+          when there are exactly two SPAM labels in model_or_dataset.
+        - "multinomial" - counts are taken from a multinomial distribution.
+          Distribution has parameters p_k = (clipped) probability of the gate
+          string using the k-th SPAM label and n = number of samples.
+
+    seed : int, optional
+        If not ``None``, a seed for numpy's random number generator, which
+        is used to sample from the binomial or multinomial distribution.
+
+    rand_state : numpy.random.RandomState
+        A RandomState object to generate samples from. Can be useful to set
+        instead of `seed` if you want reproducible distribution samples across
+        multiple random function calls but you don't want to bother with
+        manually incrementing seeds between those calls.
+
+    alias_dict : dict, optional
+        A dictionary mapping single operation labels into tuples of one or more
+        other operation labels which translate the given circuits before values
+        are computed using `model_or_dataset`.  The resulting Dataset, however,
+        contains the *un-translated* circuits as keys.
+
+    collision_action : {"aggregate", "keepseparate"}
+        Determines how duplicate circuits are handled by the resulting
+        `DataSet`.  Please see the constructor documentation for `DataSet`.
+
+    record_zero_counts : bool, optional
+        Whether zero-counts are actually recorded (stored) in the returned
+        DataSet.  If False, then zero counts are ignored, except for
+        potentially registering new outcome labels.
+
+    times : iterable, optional
+        When not None, a list of time-stamps at which data should be sampled.
+        `num_samples` samples will be simulated at each time value, meaning that
+        each circuit in `circuit_list` will be evaluated with the given time
+        value as its *start time*.
+    """
+
+    def __init__(self, model, num_samples=1000, sample_error='multinomial',
+                 seed=None, rand_state=None, alias_dict=None,
+                 collision_action="aggregate", record_zero_counts=True, times=None):
+        super().__init__()
+        self.model = model
+        self.num_samples = num_samples
+        self.sample_error = sample_error
+        self.seed = seed
+        self.rand_state = rand_state
+        self.alias_dict = alias_dict
+        self.collision_action = collision_action
+        self.record_zero_counts = record_zero_counts
+        self.times = times
+
+    def run(self, edesign, memlimit=None, comm=None):
+        """
+        Run this data simulator on an experiment design.
+
+        Parameters
+        ----------
+        edesign : ExperimentDesign
+            The input experiment design.
+
+        memlimit : int, optional
+            A rough per-processor memory limit in bytes.
+
+        comm : mpi4py.MPI.Comm, optional
+            When not ``None``, an MPI communicator used to run this data
+            simulator in parallel.
+
+        Returns
+        -------
+        ProtocolData
+        """
+        from pygsti.data.datasetconstruction import simulate_data as _simulate_data
+        ds = _simulate_data(self.model, edesign.all_circuits_needing_data, self.num_samples,
+                            self.sample_error, self.seed, self.rand_state,
+                            self.alias_dict, self.collision_action,
+                            self.record_zero_counts, comm, memlimit, self.times)
+        return ProtocolData(edesign, ds)
+
+class ProtocolCheckpoint(_NicelySerializable):
+    """
+    Class for storing checkpointing intermediate progress during
+    the running of a protocol in order to enable restarting subsequent
+    runs of the protocol from that point.
+    
+    Parameters
+    ----------
+    name : str
+        Name of the protocol associated with this checkpoint.
+
+    parent : ProtocolCheckpoint, optional (default None)
+        When specified this checkpoint object is treated as the child of another ProtocolCheckpoint
+        object that acts as the parent. When present, the parent's `write` method supersedes
+        the child objects and is called when calling `write` on the child. Currently only used
+        in the implementation of StandardGSTCheckpoint.
+    """
+
+    def __init__(self, name, parent = None):
+        self.name = name
+        self.parent = parent
+        #Need to add this for MongoDB serialization related reasons.
+        self._dbcoordinates = None
+
+    def write(self, path):
+        if self.parent is not None:
+            self.parent.write(path)
+        else:
+            super().write(path)
+
+
+#In the future, we could put this function into a base class for
+# the classes that utilize it above, so it would become a proper method.
+def _convert_nameddict_attributes(obj):
+    """
+    A helper function that converts the elements of the "_nameddict_attributes"
+    attribute of several classes to the (key, value, type) array expected by
+    :meth:`NamedDict.create_nested`.
+    """
+    keys_vals_types = []
+    for tup in obj._nameddict_attributes:
+        if len(tup) == 1: attr, key, typ = tup[0], tup[0], None
+        elif len(tup) == 2: attr, key, typ = tup[0], tup[1], None
+        elif len(tup) == 3: attr, key, typ = tup
+        keys_vals_types.append((key, getattr(obj, attr), typ))
+    return keys_vals_types

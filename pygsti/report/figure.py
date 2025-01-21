@@ -1,4 +1,6 @@
-""" Defines the ReportTable class """
+"""
+Defines the ReportTable class
+"""
 
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -9,18 +11,31 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from collections import OrderedDict as _OrderedDict
-from .row import Row
-from .convert import convertDict as _convertDict
-
 
 class ReportFigure(object):
-    '''
-    A report figure, encapsulating a plotly figure and related metadata that
-    can be rendered in a variety of formats.
-    '''
+    """
+    A  plotly figure and related metadata that can be rendered in a variety of formats.
 
-    def __init__(self, plotlyfig, colormap=None, pythonValue=None, **kwargs):
+    For use in pyGSTi reports.
+
+    Parameters
+    ----------
+    plotlyfig : plotly.Figure
+        The plotly figure to encapsulate
+
+    colormap : ColorMap, optional
+        A pygsti color map object used for this figure.
+
+    python_value : object, optional
+        A python object to be used as the Python-version of
+        this figure (usually the data being plotted in some
+        convenient format).
+
+    kwargs : dict
+        Additional meta-data relevant to this figure
+    """
+
+    def __init__(self, plotlyfig, colormap=None, python_value=None, **kwargs):
         '''
         Create a table object
 
@@ -32,7 +47,7 @@ class ReportFigure(object):
         colormap : ColorMap, optional
             A pygsti color map object used for this figure.
 
-        pythonValue : object, optional
+        python_value : object, optional
             A python object to be used as the Python-version of
             this figure (usually the data being plotted in some
             convenient format).
@@ -42,7 +57,7 @@ class ReportFigure(object):
         '''
         self.plotlyfig = plotlyfig
         self.colormap = colormap
-        self.pythonvalue = pythonValue
+        self.pythonvalue = python_value
         self.metadata = dict(kwargs).copy()
 
     def __getstate__(self):

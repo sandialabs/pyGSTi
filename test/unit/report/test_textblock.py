@@ -1,6 +1,5 @@
-from ..util import BaseCase
-
 from pygsti.report.textblock import ReportText
+from ..util import BaseCase
 
 
 class TextBlockTester(BaseCase):

@@ -5,19 +5,19 @@ Information pertaining to the ideal target gate set and data set.
 ### Ideal SPAM operations.
 The *ideal* input state ($\rho_0$) and `plus' POVM effect $E_0$ for the device on which we report.  SPAM gates are given here as $d\times d$ matrices.
 @@code
-ws.SpamTable(target_model, None, 'boxes', includeHSVec=False)
+ws.SpamTable(target_model, None, 'boxes', include_hs_vec=False)
 
 @@markdown
 ### Fiducial sequences.
 A list of the preparation and measurement "fiducial" gate sequences.
 @@code
-ws.CircuitTable(strs,["Prep.","Measure"], commonTitle="Fiducials")
+ws.CircuitTable((prep_fiducials, meas_fiducials),["Prep.","Measure"], common_title="Fiducials")
 
 @@markdown
 ### Germ sequences.
 A list of the "germ" gate sequences.
 @@code
-ws.CircuitTable(germs, "Germ", nCols=2)
+ws.CircuitTable(germs, "Germ", num_cols=2)
 
 @@markdown
 ### General dataset properties.

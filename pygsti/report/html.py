@@ -1,6 +1,7 @@
 """
-Routines for converting python objects to HTML.  Parallel rountines as
-latex.py has for latex conversion.
+Routines for converting python objects to HTML.
+
+Parallel rountines as latex.py has for latex conversion.
 """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -11,8 +12,9 @@ latex.py has for latex conversion.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import numpy as _np
 import cmath
+
+import numpy as _np
 
 '''
 table() and cell() functions are used by table.py in table creation
@@ -20,39 +22,43 @@ everything else is used in creating formatters in formatters.py
 '''
 
 
-def table(customHeadings, colHeadingsFormatted, rows, spec):
-    '''
+def table(custom_headings, col_headings_formatted, rows, spec):
+    """
     Create an HTML table
 
     Parameters
     ----------
-    customHeadings : None, dict
+    custom_headings : None, dict
         optional dictionary of custom table headings
-    colHeadingsFormatted : list
+
+    col_headings_formatted : list
         formatted column headings
+
     rows : list of lists of cell-strings
         Data in the table, pre-formatted
+
     spec : dict
         options for the formatter
+
     Returns
     -------
     dict : contains keys 'html' and 'js', which correspond to a html and js strings representing the table
-    '''
+    """
     tableclass = spec['tableclass']
-    tableID = spec['tableID']
+    tableID = spec['table_id']
     html = ""
     js = ""
 
-    if customHeadings is not None \
-            and "html" in customHeadings:
-        html += customHeadings['html'] % {'tableclass': tableclass,
-                                          'tableid': tableID}
+    if custom_headings is not None \
+            and "html" in custom_headings:
+        html += custom_headings['html'] % {'tableclass': tableclass,
+                                           'tableid': tableID}
     else:
         html += "<table"
         if tableclass: html += ' class="%s"' % tableclass
         if tableID: html += ' id="%s"' % tableID
         html += "><thead><tr><th> %s </th></tr>" % \
-            (" </th><th> ".join(colHeadingsFormatted))
+            (" </th><th> ".join(col_headings_formatted))
         html += "</thead><tbody>"
     for formatted_rowData in rows:
         if len(formatted_rowData) > 0:
@@ -77,21 +83,24 @@ def table(customHeadings, colHeadingsFormatted, rows, spec):
 
 
 def cell(data, label, spec):
-    '''
+    """
     Format the cell of an HTML table
 
     Parameters
     ----------
     data : string
         string representation of cell content
+
     label : string
         optional cell label, used for tooltips
+
     spec : dict
         options for the formatters
+
     Returns
     -------
     string
-    '''
+    """
     if isinstance(data, dict) or label is None:
         return data
     return '<span title="{}">{}</span>'.format(label, data)
@@ -211,7 +220,7 @@ def value(el, specs, mathmode=False):
     precision = specs['precision']
     sciprecision = specs['sciprecision']
     polarprecision = specs['polarprecision']
-    complexAsPolar = specs['complexAsPolar']
+    complexAsPolar = specs['complex_as_polar']
 
     def render(x):
         """Render a single float (can be real or imag part)"""

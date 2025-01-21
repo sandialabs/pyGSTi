@@ -1,47 +1,43 @@
+import pytest
+
 import pickle
 
+from pygsti.baseobjs.label import Label as L
+
+from pygsti.serialization import jsoncodec
+from pygsti.circuits import Circuit
 from ..util import BaseCase
 
-from pygsti.objects import Circuit
-from pygsti.io import jsoncodec
-from pygsti.objects.label import Label as L
+labels = [
+    L('Gx', 0),  # a LabelTup
+    L('Gx', (0, 1)),  # a LabelTup
+    L(('Gx', 0, 1)),  # a LabelTup
+    L('Gx'),  # a LabelStr
+    L('Gx', None),  # still a LabelStr
+    L([('Gx', 0), ('Gy', 0)]),  # a LabelTupTup of LabelTup objs
+    L((('Gx', None), ('Gy', None))),  # a LabelTupTup of LabelStr objs
+    L([('Gx', 0)]),  # just a LabelTup b/c only one component
+    L([L('Gx'), L('Gy')]),  # a LabelTupTup of LabelStrs
+    L(L('Gx'))  # Init from another label
+]
 
+@pytest.mark.parametrize('label', labels)
+def test_to_native(label):
+    native = label.to_native()
+    from_native = L(native)
+    assert label == from_native
 
-def test_label_methods():
-    def test_to_native(label):
-        native = label.tonative()
-        # TODO assert correctness
-        from_native = L(native)
-        assert label == from_native
+@pytest.mark.parametrize('label', labels)
+def test_pickle(label):
+    s = pickle.dumps(label)
+    l2 = pickle.loads(s)
+    assert type(label) == type(l2)
 
-    def test_pickle(label):
-        s = pickle.dumps(label)
-        l2 = pickle.loads(s)
-        assert type(label) == type(l2)
-
-    def test_json_encode(label):
-        j = jsoncodec.encode_obj(label, False)
-        l2 = jsoncodec.decode_obj(j, False)
-        assert type(label) == type(l2)
-
-    labels = [
-        L('Gx', 0),  # a LabelTup
-        L('Gx', (0, 1)),  # a LabelTup
-        L(('Gx', 0, 1)),  # a LabelTup
-        L('Gx'),  # a LabelStr
-        L('Gx', None),  # still a LabelStr
-        L([('Gx', 0), ('Gy', 0)]),  # a LabelTupTup of LabelTup objs
-        L((('Gx', None), ('Gy', None))),  # a LabelTupTup of LabelStr objs
-        L([('Gx', 0)]),  # just a LabelTup b/c only one component
-        L([L('Gx'), L('Gy')]),  # a LabelTupTup of LabelStrs
-        L(L('Gx'))  # Init from another label
-    ]
-
-    for lbl in labels:
-        yield test_to_native, lbl
-        yield test_pickle, lbl
-        yield test_json_encode, lbl
-
+@pytest.mark.parametrize('label', labels)
+def test_json_encode(label):
+    j = jsoncodec.encode_obj(label, False)
+    l2 = jsoncodec.decode_obj(j, False)
+    assert type(label) == type(l2)
 
 class LabelTester(BaseCase):
     def test_circuit_init(self):
@@ -98,3 +94,31 @@ class LabelTester(BaseCase):
         l = L('GrotX', (0, 1), args=('1.4',), time=0.2)
         self.assertEqual(str(l), "GrotX;1.4:0:1!0.2")  # make sure we do print time when it's nonzero
         self.assertEqual(l.time, 0.2)
+
+    def test_label_rep_evalulation(self):
+        """ Make sure Label reps evaluate back to the correct Label """
+        from pygsti.baseobjs import Label, CircuitLabel
+        labels_to_test = []
+        l = Label(('Gx', 0)); labels_to_test.append(l)
+        l = Label('Gx', (0,)); labels_to_test.append(l)
+        l = Label('rho0'); labels_to_test.append(l)
+        l = Label((('Gx', 0), ('Gy', 1))); labels_to_test.append(l)
+        l = Label(('Gx', 0, ';', 0.1)); labels_to_test.append(l)
+        l = Label('Gx', (0,), args=(0.1,)); labels_to_test.append(l)
+
+        l = Label(('Gx', 0), time=1.0); labels_to_test.append(l)
+        l = Label('Gx', (0,), time=1.0); labels_to_test.append(l)
+        l = Label('rho0', time=1.0); labels_to_test.append(l)
+        l = Label((('Gx', 0), ('Gy', 1)), time=1.0); labels_to_test.append(l)
+        l = Label(('Gx', 0, ';', 0.1, '!', 1.0)); labels_to_test.append(l)
+        l = Label('Gx', (0,), args=(0.1,), time=1.0); labels_to_test.append(l)
+
+        c = Circuit("[Gx:0Gy:1]^2[Gi]", line_labels=(0,1))
+        l = c.to_label(); labels_to_test.append(l)
+
+        for l in labels_to_test:
+            print(l, type(l).__name__, end='')
+            r = repr(l)
+            print(' => eval ' + r)
+            evald_repr_l = eval(r)
+            self.assertEqual(l, evald_repr_l)

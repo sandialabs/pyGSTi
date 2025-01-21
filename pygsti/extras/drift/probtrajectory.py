@@ -8,19 +8,11 @@
 #***************************************************************************************************
 """Functions for Fourier analysis of equally spaced time-series data"""
 
-from . import signal as _sig
+import copy as _copy
+import time as _tm
 
 import numpy as _np
-import time as _tm
-import warnings as _warnings
-import copy as _copy
 from scipy.optimize import minimize as _minimize
-
-
-from scipy.fftpack import dct as _dct
-from scipy.fftpack import idct as _idct
-from scipy.fftpack import fft as _fft
-from scipy.fftpack import ifft as _ifft
 
 try:
     from astropy.stats import LombScargle as _LombScargle
@@ -74,9 +66,9 @@ class ProbTrajectory(object):
 
     def basisfunction(self, i, times):
         """
-        The ith basis function of the model, evaluated at the times in `times.
+        The ith basis function of the model, evaluated at the times in `times`.
 
-        *** Defined in a derived class ***
+        **Defined in a derived class**
 
         Parameters
         ----------
@@ -132,7 +124,7 @@ class ProbTrajectory(object):
         self.parameters = {o: parameterslist[oind * len(self.hyperparameters):(1 + oind) * len(self.hyperparameters)]
                            for oind, o in enumerate(self.outcomes[:-1])}
 
-    def get_parameters_as_list(self):
+    def parameters_as_list(self):
         """
         Returns the parameters as a list, in the same format as when input to `set_parameters_from_list`.
         See the docstring of that method for more info.
@@ -144,14 +136,14 @@ class ProbTrajectory(object):
 
         return _copy.copy(parameterslist)
 
-    def get_parameters(self):
+    def parameters_copy(self):
         """
         Returns the values of the parameters, in the dictionary form in which it is internally stored.
 
         """
         return _copy.deepcopy(self.parameters)
 
-    def get_probabilities(self, times, trim=True):
+    def probabilities(self, times, trim=True):
         """
         Returns the probability distribution for each time in `times`.
 
@@ -274,7 +266,7 @@ class CosineProbTrajectory(ProbTrajectory):
 
         numtimes : int
             The number of data collection times defining the DCT basis functions (defines the total number
-            of DCT basis functions: the hyperparameters list is then a subset of this [0,1,2,...,numtimes-1]).
+            of DCT basis functions: the hyperparameters list is then a subset of this `[0,1,2,...,numtimes-1]`).
             This is typically set to the number of data collection times for the circuit that this probability
             trajectory is being defined for.
 
@@ -376,7 +368,7 @@ def negloglikelihood(probtrajectory, clickstreams, times, minp=0., maxp=1.):
     float
         The log-likehood of the model given the time-series data.
     """
-    probs = probtrajectory.get_probabilities(times)
+    probs = probtrajectory.probabilities(times)
     return probsdict_negloglikelihood(probs, clickstreams, minp, maxp)
 
 
@@ -410,7 +402,7 @@ def probsdict_negloglikelihood(probs, clickstreams, minp=0., maxp=1.):
 
 
 def maxlikelihood(probtrajectory, clickstreams, times, minp=0.0001, maxp=0.999999, method='Nelder-Mead',
-                  returnOptout=False, options={}, verbosity=1):
+                  return_opt_output=False, options=None, verbosity=1):
     """
     Implements maximum likelihood estimation over a model for a time-resolved probabilities trajectory,
     and returns the maximum likelihood model.
@@ -446,7 +438,7 @@ def maxlikelihood(probtrajectory, clickstreams, times, minp=0.0001, maxp=0.99999
     verbosity : int, optional
         The amount of print to screen.
 
-    returnOptout : bool, optional
+    return_opt_output : bool, optional
         Whether or not to return the output of the optimizer.
 
     Returns
@@ -454,10 +446,12 @@ def maxlikelihood(probtrajectory, clickstreams, times, minp=0.0001, maxp=0.99999
     ProbTrajectory
         The maximum likelihood model returned by the optimizer.
 
-    if returnOptout:
+    if return_opt_output:
         optout
             The output of the optimizer.
     """
+    if options is None:
+        options = dict()
     maxlprobtrajectory = probtrajectory.copy()
 
     def objfunc(parameterslist):
@@ -475,7 +469,7 @@ def maxlikelihood(probtrajectory, clickstreams, times, minp=0.0001, maxp=0.99999
         options['disp'] = True
 
     start = _tm.time()
-    seed = probtrajectory.get_parameters_as_list()
+    seed = probtrajectory.parameters_as_list()
     optout = _minimize(objfunc, seed, method=method, options=options)
     mleparameters = optout.x
     end = _tm.time()
@@ -496,7 +490,7 @@ def maxlikelihood(probtrajectory, clickstreams, times, minp=0.0001, maxp=0.99999
         print("      - The negloglikelihood of the ouput = {} (with boundard adjustment = {})".format(
             nll_result, nll_result_adj))
 
-    if returnOptout:
+    if return_opt_output:
         return maxlprobtrajectory, optout
     else:
         return maxlprobtrajectory
@@ -551,8 +545,8 @@ def amplitude_compression(probtrajectory, times, epsilon=0., verbosity=1):
     multiplier = 1
 
     alpha0s = {}
-    probs = probtrajectory.get_probabilities(times, trim=False)
-    params = probtrajectory.get_parameters()
+    probs = probtrajectory.probabilities(times, trim=False)
+    params = probtrajectory.parameters_copy()
     # Add in the outcome that's parameters are fully defined by the others.
     params[probtrajectory.outcomes[-1]] = _np.zeros(len(params[list(params.keys())[0]]))
     # Populate those parameters.
@@ -583,7 +577,7 @@ def amplitude_compression(probtrajectory, times, epsilon=0., verbosity=1):
 
     if multiplier < 1:
         shape = (len(probtrajectory.outcomes) - 1, len(probtrajectory.hyperparameters))
-        parameters = _np.reshape(probtrajectory.get_parameters_as_list(), shape)
+        parameters = _np.reshape(probtrajectory.parameters_as_list(), shape)
         compparameters = multiplier * parameters
         # set the alpha0s as unchanged, except if rectified:
         for ind, o in enumerate(probtrajectory.outcomes[:-1]):

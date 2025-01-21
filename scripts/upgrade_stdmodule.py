@@ -3,11 +3,11 @@ Note that the resulting source code may require minor adjustment and reformattin
 """
 
 import argparse
-import importlib
-from pprint import pformat
-import astor
 import ast as _ast
+import importlib
 from functools import lru_cache
+
+import astor
 
 from pygsti.objects import Circuit
 
@@ -76,7 +76,7 @@ def stringy_ast(obj):
 
 
 def prototype_circuits(circuits):
-    """ Deconstruct a circuit structure into a raw data structure that can be used as an argument to `circuit_list` """
+    """ Deconstruct a circuit structure into a raw data structure that can be used as an argument to `to_circuits` """
     for c in circuits:
         if isinstance(c, Circuit):
             yield tuple(str(lbl) for lbl in c)

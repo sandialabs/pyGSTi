@@ -8,21 +8,19 @@
 #***************************************************************************************************
 """Functions for Fourier analysis of equally spaced time-series data"""
 
-from . import signal as _sig
-from . import probtrajectory as _ptraj
-
-import numpy as _np
-import time as _tm
 import copy as _copy
+import time as _tm
 
 from scipy.optimize import minimize as _minimize
+
+from . import probtrajectory as _ptraj
 
 
 class TimeResolvedModel(object):
     """
     Encapsulates a basic form of time-resolved model, for implementing simple types of time-resolved characterization,
     e.g., time-resolved Ramsey spectroscopy. This object is a container for specifying a particular time-resolved
-    model, which is achieved by defining the method `get_probabilities`. See the docstring of that method for further
+    model, which is achieved by defining the method `probabilities`. See the docstring of that method for further
     details.
 
     This object is *not* intended to be used to encapsulate a time-resolved model that requires any intensive
@@ -61,15 +59,15 @@ class TimeResolvedModel(object):
         """
         self.parameters = _copy.deepcopy(parameters)
 
-    def get_parameters(self):
+    def parameters_copy(self):
         """
         Returns the parameters of the model.
         """
         return _copy.deepcopy(self.parameters)
 
-    def get_probabilities(self, circuit, times):
+    def probabilities(self, circuit, times):
         """
-        *** Specified in each derive class ***
+        **Specified in each derived class**
 
         Specifying this method is the core to building a time-resolved model. This method should return the
         probabiilties for each outcome, for the input circuit at the specified times.
@@ -120,15 +118,15 @@ def negloglikelihood(trmodel, ds, minp=0, maxp=1):
     """
     negll = 0.
     for circuit in ds.keys():
-        times, clickstreams = ds[circuit].get_timeseries_for_outcomes()
-        probs = trmodel.get_probabilities(circuit, times)
+        times, clickstreams = ds[circuit].timeseries_for_outcomes
+        probs = trmodel.probabilities(circuit, times)
         negll += _ptraj.probsdict_negloglikelihood(probs, clickstreams, minp, maxp)
 
     return negll
 
 
-def maxlikelihood(trmodel, ds, minp=1e-4, maxp=1 - 1e-6, bounds=None, optout=False,
-                  optoptions={}, verbosity=1):
+def maxlikelihood(trmodel, ds, minp=1e-4, maxp=1 - 1e-6, bounds=None, returnoptout=False,
+                  optoptions=None, verbosity=1):
     """
     Finds the maximum likelihood TimeResolvedModel given the data.
 
@@ -159,6 +157,8 @@ def maxlikelihood(trmodel, ds, minp=1e-4, maxp=1 - 1e-6, bounds=None, optout=Fal
         The maximum loglikelihood model
 
     """
+    if optoptions is None:
+        optoptions = dict()
     maxlmodel = trmodel.copy()
 
     def objfunc(parameters):
@@ -166,11 +166,11 @@ def maxlikelihood(trmodel, ds, minp=1e-4, maxp=1 - 1e-6, bounds=None, optout=Fal
         return negloglikelihood(maxlmodel, ds, minp, maxp)
 
     if verbosity > 0:
-        print("- Performing MLE over {} parameters...".format(len(maxlmodel.get_parameters())), end='')
+        print("- Performing MLE over {} parameters...".format(len(maxlmodel.parameters_copy())), end='')
     if verbosity > 1:
         print("")
 
-    seed = maxlmodel.get_parameters()
+    seed = maxlmodel.parameters_copy()
     start = _tm.time()
     optout = _minimize(objfunc, seed, options=optoptions, bounds=bounds)
     maxlparameters = optout.x
@@ -182,7 +182,7 @@ def maxlikelihood(trmodel, ds, minp=1e-4, maxp=1 - 1e-6, bounds=None, optout=Fal
     if verbosity > 0:
         print("- Time taken: {} seconds".format(end - start)),
 
-    if optout:
+    if returnoptout:
         return maxlmodel, optout
     else:
         return maxlmodel

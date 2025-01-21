@@ -1,14 +1,13 @@
-from ..util import BaseCase
-
 from pygsti.tools import legacytools
+from ..util import BaseCase
 
 
 class LegacyTestCase(BaseCase):
     def test_deprecation_warning(self):
 
-        @legacytools.deprecated_fn("Replacement function name")
+        @legacytools.deprecate("Replacement function name")
         def oldFn(x):
             return x
 
-        oldFn(5)
-        # TODO assert correctness
+        with self.assertWarns(UserWarning):
+            oldFn(5)

@@ -14,6 +14,7 @@
 
 import numpy as np
 from libc.stdlib cimport malloc, free
+from functools import lru_cache
 cimport numpy as np
 cimport cython
 
@@ -50,7 +51,7 @@ def embedded_fast_acton_sparse(embedded_gate_acton_fn,
     cdef np.ndarray[double, ndim=1, mode="c"] slc1 = np.empty(nActionIndices, dtype='d')
     cdef np.ndarray[double, ndim=1, mode="c"] slc2 = np.empty(nActionIndices, dtype='d')
 
-    # nActionIndices = np.product(numBasisEls_action)
+    # nActionIndices = np.prod(numBasisEls_action)
     #for i in range(nAction):
     #    nActionIndices *= numBasisEls_action[i]
 
@@ -274,7 +275,7 @@ def embedded_fast_acton_sparse_complex(embedded_gate_acton_fn,
     cdef np.ndarray[np.complex128_t, ndim=1, mode="c"] slc1 = np.empty(nActionIndices, dtype=np.complex128)
     cdef np.ndarray[np.complex128_t, ndim=1, mode="c"] slc2 = np.empty(nActionIndices, dtype=np.complex128)
 
-    # nActionIndices = np.product(numBasisEls_action)
+    # nActionIndices = np.prod(numBasisEls_action)
     #for i in range(nAction):
     #    nActionIndices *= numBasisEls_action[i]
 
@@ -612,9 +613,6 @@ def fast_kron(np.ndarray[double, ndim=1, mode="c"] outvec not None,
             outvec[endoff+i] *= mult
         sz *= fastArraySizes[k]
 
-    #assert(sz == N)
-
-
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
 def fast_kron_complex(np.ndarray[np.complex128_t, ndim=1, mode="c"] outvec not None,
@@ -664,21 +662,6 @@ def fast_kron_complex(np.ndarray[np.complex128_t, ndim=1, mode="c"] outvec not N
     #assert(sz == N)
 
 
-#Manually inline to avoid overhead of argument passing
-#@cython.boundscheck(False) # turn off bounds-checking for entire function
-#@cython.wraparound(False)  # turn off negative index wrapping for entire function
-#cdef vec_inf_norm(np.ndarray[double, ndim=1] v):
-#    cdef INT i
-#    cdef INT N = v.shape[0]
-#    cdef double mx = 0.0
-#    cdef double a
-#    for i in range(N):
-#        a = abs(v[i])
-#        if a > mx: mx = a
-#    return mx
-
-
-
 @cython.cdivision(True) # turn off divide-by-zero checking
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
@@ -699,9 +682,6 @@ def custom_expm_multiply_simple_core(np.ndarray[double, ndim=1, mode="c"] Adata,
                                        mu, m_star, s, tol, eta,
                                        &F[0], &scratch[0])
     return F
-
-
-
 
 @cython.cdivision(True) # turn off divide-by-zero checking
 cdef custom_expm_multiply_simple_core_c(double* Adata, INT* Aindptr,
@@ -1101,3 +1081,226 @@ def fast_csr_sum_flat(np.ndarray[np.complex128_t, ndim=1, mode="c"] data,
         coeff = coeffs[iMx]
         for i in range(mx_nnz_indptr[iMx], mx_nnz_indptr[iMx+1]):
             data[flat_dest_index_array[i]] = data[flat_dest_index_array[i]] + coeff * flat_csr_mx_data[i]
+
+
+@cython.cdivision(True) # turn off divide-by-zero checking
+@cython.boundscheck(False) # turn off bounds-checking for entire function
+@cython.wraparound(False)  # turn off negative index wrapping for entire function
+def faster_update_rows(np.ndarray[double, ndim=2, mode='c'] a,
+                     np.ndarray[double, ndim=1, mode='c'] b,
+                     int icol, int ipivot_local,
+                     np.ndarray[double, ndim=1, mode='c'] pivot_row,
+                     double pivot_b):
+    cdef int i
+    cdef int m = a.shape[0]
+    cdef int n = a.shape[1]
+    cdef double* a_ptr = <double*>a.data
+    cdef double* b_ptr = <double*>b.data
+    cdef double* pivot_row_ptr = <double*>pivot_row.data
+    cdef double* row
+    cdef double pivot_val = pivot_row_ptr[icol]
+    cdef double alpha
+    
+    if 0 <= ipivot_local and ipivot_local < m:  #split loop into 2 parts
+        for i in range(ipivot_local):
+            row = &a_ptr[i * n]
+            alpha = row[icol] / pivot_val
+            for j in range(icol):
+                row[j] = row[j] - alpha * pivot_row_ptr[j]
+            for j in range(icol+1, n):
+                row[j] = row[j] - alpha * pivot_row_ptr[j]
+            row[icol] = 0.0  # this sometimes isn't exactly true because of finite precision error
+            b_ptr[i] = b_ptr[i] - alpha * pivot_b
+
+        for i in range(ipivot_local + 1, m):
+            row = &a_ptr[i * n]
+            alpha = row[icol] / pivot_val
+            for j in range(icol):
+                row[j] = row[j] - alpha * pivot_row_ptr[j]
+            for j in range(icol+1, n):
+                row[j] = row[j] - alpha * pivot_row_ptr[j]
+            row[icol] = 0.0  # this sometimes isn't exactly true because of finite precision error
+            b_ptr[i] = b_ptr[i] - alpha * pivot_b
+
+    else:  # we don't own pivot - just use a single loop
+        for i in range(m):
+            row = &a_ptr[i * n]
+            alpha = row[icol] / pivot_val
+            for j in range(icol):
+                row[j] = row[j] - alpha * pivot_row_ptr[j]
+            for j in range(icol+1, n):
+                row[j] = row[j] - alpha * pivot_row_ptr[j]
+            row[icol] = 0.0  # this sometimes isn't exactly true because of finite precision error
+            b_ptr[i] = b_ptr[i] - alpha * pivot_b
+
+    #a[:, icol] = 0.0  # this sometimes isn't exactly true because of finite precision error
+
+    #alpha = a[:, icol] / pivot_row[icol]  # (k,)
+    #a[:, :] -= _np.kron(alpha, pivot_row)
+    #a[:, icol] = 0  # this sometimes isn't exactly true because of finite precision error
+    #b[:] -= alpha * pivot_b
+
+@cython.cdivision(True) # turn off divide-by-zero checking
+@cython.boundscheck(False) # turn off bounds-checking for entire function
+@cython.wraparound(False)  # turn off negative index wrapping for entire function
+def fast_update_rows(np.ndarray[double, ndim=2] a,
+                     np.ndarray[double, ndim=1] b,
+                     int icol, int ipivot_local,
+                     np.ndarray[double, ndim=1] pivot_row,
+                     double pivot_b):
+    cdef int i
+    cdef int m = a.shape[0]
+    cdef double alpha
+    cdef double pivot_val = pivot_row[icol]
+
+    if 0 <= ipivot_local and ipivot_local < m:  #split loop into 2 parts
+        for i in range(ipivot_local):
+            alpha = a[i, icol] / pivot_val
+            a[i, :] -=  alpha * pivot_row
+            b[i] = b[i] - alpha * pivot_b
+
+        for i in range(ipivot_local + 1, m):
+            alpha = a[i, icol] / pivot_val
+            a[i, :] -=  alpha * pivot_row
+            b[i] = b[i] - alpha * pivot_b
+
+        a[0:ipivot_local, icol] = 0.0  # this sometimes isn't exactly true because of finite precision error
+        a[ipivot_local + 1:, icol] = 0.0
+
+    else:  # we don't own pivot - just use a single loop
+        for i in range(m):
+            alpha = a[i, icol] / pivot_val
+            a[i, :] -=  alpha * pivot_row
+            b[i] = b[i] - alpha * pivot_b
+
+        a[:, icol] = 0.0  # this sometimes isn't exactly true because of finite precision error
+
+
+@cython.cdivision(True) # turn off divide-by-zero checking
+@cython.boundscheck(False) # turn off bounds-checking for entire function
+@cython.wraparound(False)  # turn off negative index wrapping for entire function
+def restricted_abs_argmax(np.ndarray[double, ndim=1] ar, np.ndarray[np.int64_t, ndim=1] restrict_to):
+
+    cdef int i
+    cdef int indx
+    cdef int n = restrict_to.shape[0]
+    cdef int max_indx
+    cdef double val
+    cdef double max_val
+    cdef double* ar_ptr = <double*>ar.data
+    cdef INT* to_ptr = <INT*>restrict_to.data
+    cdef INT ar_stride = ar.strides[0] // ar.itemsize
+    cdef INT to_stride = restrict_to.strides[0] // restrict_to.itemsize
+
+    #indx = restrict_to[0]
+    #max_val = abs(ar[indx])
+    #max_indx = indx
+    #
+    #for i in range(1, n):
+    #    indx = restrict_to[i]
+    #    val = abs(ar[indx])
+    #    if val > max_val:
+    #        max_val = val
+    #        max_indx = indx
+
+    indx = to_ptr[0]
+    max_val = abs(ar_ptr[indx * ar_stride])
+    max_indx = indx
+    
+    for i in range(1, n):
+        indx = to_ptr[i * to_stride]
+        val = abs(ar_ptr[indx * ar_stride])
+        if val > max_val:
+            max_val = val
+            max_indx = indx
+
+    return max_val, max_indx
+
+#@cython.cdivision(True) # turn off divide-by-zero checking (keeping off for Python behavior of div/mods)
+@cython.boundscheck(False) # turn off bounds-checking for entire function
+@cython.wraparound(False)  # turn off negative index wrapping for entire function
+def fast_compose_cliffords(np.ndarray[np.int64_t, ndim=2] s1, np.ndarray[np.int64_t, ndim=1] p1,
+                           np.ndarray[np.int64_t, ndim=2] s2, np.ndarray[np.int64_t, ndim=1] p2):
+    cdef INT i
+    cdef INT j
+    cdef INT k
+    cdef INT N = s1.shape[0] // 2 # Number of qubits
+
+    # Temporary space of C^T U C terms
+    cdef np.ndarray[np.int64_t, ndim=2, mode="c"] inner = np.zeros([2*N, 2*N], dtype=np.int64)
+
+    # Outputs
+    cdef np.ndarray[np.int64_t, ndim=2, mode="c"] s = np.zeros([2*N, 2*N], dtype=np.int64)
+    cdef np.ndarray[np.int64_t, ndim=1, mode="c"] p = np.zeros([2*N], dtype=np.int64)
+
+    # If C' = [[C^00, C^01], [C^10, C^11]] and U = [[0, 0], [I, 0]]
+    # then C'^T U C' = [[C^10^T C00, C^10^T C^01], [C^11^T C^00, C^11^T C^01]]
+    for i in range(N):
+        for j in range(N):
+            for k in range(N):
+                inner[i, j]     += s2[k+N, i] * s2[k, j]     # C^10^T C00
+                inner[i, j+N]   += s2[k+N, i] * s2[k, j+N]   # C^10^T C^01
+                inner[i+N, j]   += s2[k+N, i+N] * s2[k, j]   # C^11^T C^00
+                inner[i+N, j+N] += s2[k+N, i+N] * s2[k, j+N] # C^11^T C^01
+    
+    # 2P_upps(C'^T U C') + P_diag(C'^T U C') in-place (now equivalent to matrix in Python version)
+    for i in range(2*N):
+        for j in range(0, i):
+            inner[i, j] = 0
+        for j in range(i+1, 2*N):
+            inner[i, j] = 2*inner[i,j]
+
+    # Eqn 8 from Hostens and De Moor PRA 71, 042315 (2005)
+    for i in range(2*N):
+        p[i] += p1[i] # h
+        for j in range(2*N):
+            p[i] += s1[j, i] * p2[j] # C^T h'
+            p[i] -= s1[j, i] * inner[j, j] # - C^T Vdiag(C'^T U C') (OK because diagonal only)
+            for k in range(2*N):
+                s[i, j] += s2[i, k] * s1[k, j] # C'' = C' C
+                p[i] += s1[j, i] * inner[j, k] * s1[k, i] # Vdiag(C^T [2P_upps(C'^T U C') + P_diag(C'^T U C')] C)
+
+    # Mod d/2d
+    for i in range(2*N):
+        p[i] = p[i] % 4
+        for j in range(2*N):
+            s[i, j] = s[i, j] % 2
+
+    return s, p
+
+
+#Faster generation of upper triangular indices specialized to first
+#superdiagonal and up.
+@cython.boundscheck(False)  # Deactivate bounds checking
+@cython.wraparound(False)   # Deactivate negative indexing.
+@cython.cdivision(True)
+@lru_cache(maxsize=16)
+def fast_triu_indices(int n):
+    if n < 1:
+        raise ValueError('n must be greater than 0')
+        
+    cdef int size = (n**2-n)/2
+    cdef int curr_idx = 0
+    cdef int j, i
+    
+    cdef np.ndarray[np.int64_t, ndim=1, mode="c"] row_indices_np = np.empty(size, dtype=np.int64)
+    cdef np.ndarray[np.int64_t, ndim=1, mode="c"] col_indices_np = np.empty(size, dtype=np.int64)
+    
+    cdef np.int64_t[::1] row_indices = row_indices_np
+    cdef np.int64_t[::1] col_indices = col_indices_np
+
+    for j in range(n-1):
+        for i in range(n-j-1, 0, -1):
+            row_indices[curr_idx] = j
+            curr_idx += 1
+
+    curr_idx = 0
+    for j in range(1, n):
+        for i in range(j, n):
+            col_indices[curr_idx] = i
+            curr_idx += 1
+
+    return row_indices_np, col_indices_np
+
+
+

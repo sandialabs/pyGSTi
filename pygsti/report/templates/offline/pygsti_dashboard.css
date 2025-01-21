@@ -53,16 +53,16 @@ code {
   display: inline-block;
 }
 q:before {
-  content: "“";
+  content: "\201c";
 }
 q:after {
-  content: "”";
+  content: "\201d";
 }
 q > q:before {
-  content: "‘";
+  content: "\2018";
 }
 q > q:after {
-  content: "’";
+  content: "\2019";
 }
 figure {
   /*margin: 1.333em 0 2.333em;*/
@@ -597,6 +597,12 @@ div.sidenav div.linkgroup a.active {
 .showcaption {
     display: block !important;
 }
+
+.defaultcaptiondetail {
+    display: none;
+    font-weight: normal;
+}
+
 
 #status {
     color: #777;

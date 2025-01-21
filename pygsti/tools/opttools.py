@@ -1,4 +1,6 @@
-""" This module defines tools for optimization and profiling """
+"""
+This module defines tools for optimization and profiling
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -9,30 +11,41 @@
 #***************************************************************************************************
 
 
-from time import time
-from contextlib import contextmanager
 from collections import defaultdict
+from contextlib import contextmanager
 from datetime import datetime
 from functools import lru_cache
-from ..tools.legacytools import deprecated_fn
-import warnings
+from time import time
+
+from pygsti.tools.legacytools import deprecate
+
 
 # note that this decorator ignores **kwargs
 
 
-@deprecated_fn('functools.lru_cache')
+@deprecate('functools.lru_cache')
 def cache_by_hashed_args(obj):
-    """ Decorator for caching a function values
+    """
+    Decorator for caching a function values
 
     .. deprecated:: v0.9.8.3
-       :func:`cache_by_hashed_args` will be removed in pyGSTi
-       v0.9.9. Use :func:`functools.lru_cache` instead.
+        :func:`cache_by_hashed_args` will be removed in pyGSTi
+        v0.9.9. Use :func:`functools.lru_cache` instead.
+
+    Parameters
+    ----------
+    obj : function
+        function to decorate
+
+    Returns
+    -------
+    function
     """
     return lru_cache(maxsize=128)(obj)
 
 
 @contextmanager
-def timed_block(label, timeDict=None, printer=None, verbosity=2, roundPlaces=6, preMessage=None, formatStr=None):
+def timed_block(label, time_dict=None, printer=None, verbosity=2, round_places=6, pre_message=None, format_str=None):
     """
     Context manager that times a block of code
 
@@ -41,7 +54,7 @@ def timed_block(label, timeDict=None, printer=None, verbosity=2, roundPlaces=6, 
     label : str
         An identifying label for this timed block.
 
-    timeDict : dict, optional
+    time_dict : dict, optional
         A dictionary to store the final time in, under the key `label`.
 
     printer : VerbosityPrinter, optional
@@ -52,14 +65,14 @@ def timed_block(label, timeDict=None, printer=None, verbosity=2, roundPlaces=6, 
         The verbosity level at which to print the time message (if `printer` is
         given).
 
-    roundPlaces : int, opitonal
+    round_places : int, opitonal
         How many decimal places of precision to print time with (in seconds).
 
-    preMessage : str, optional
+    pre_message : str, optional
         A format string to print out before the timer's message, which
         formats the `label` arguent, e.g. `"My label is {}"`.
 
-    formatStr : str, optional
+    format_str : str, optional
         A format string used to format the label before the resulting "rendered
         label" is used as the first argument in the final formatting string
         `"{} took {} seconds"`.
@@ -71,25 +84,31 @@ def timed_block(label, timeDict=None, printer=None, verbosity=2, roundPlaces=6, 
         else:
             printer.log(message, verbosity)
 
-    if preMessage is not None:
-        put(preMessage.format(label))
+    if pre_message is not None:
+        put(pre_message.format(label))
     start = time()
     try:
         yield
     finally:
         end = time()
         t = end - start
-        if timeDict is not None:
-            if isinstance(timeDict, defaultdict):
-                timeDict[label].append(t)
+        if time_dict is not None:
+            if isinstance(time_dict, defaultdict):
+                time_dict[label].append(t)
             else:
-                timeDict[label] = t
+                time_dict[label] = t
         else:
-            if formatStr is not None:
-                label = formatStr.format(label)
-            put('{} took {} seconds'.format(label, str(round(t, roundPlaces))))
+            if format_str is not None:
+                label = format_str.format(label)
+            put('{} took {} seconds'.format(label, str(round(t, round_places))))
 
 
 def time_hash():
-    """Get string-version of current time"""
+    """
+    Get string-version of current time
+
+    Returns
+    -------
+    str
+    """
     return str(datetime.now())

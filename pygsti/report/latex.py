@@ -1,6 +1,7 @@
 """
-Routines for converting python objects to latex.  Parallel rountines as
-html.py has for HTML conversion.
+Routines for converting python objects to latex.
+
+Parallel rountines as html.py has for HTML conversion.
 """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -11,8 +12,9 @@ html.py has for HTML conversion.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import numpy as _np
 import cmath
+
+import numpy as _np
 
 '''
 table() and cell() functions are used by table.py in table creation
@@ -20,34 +22,38 @@ everything else is used in creating formatters in formatters.py
 '''
 
 
-def table(customHeadings, colHeadingsFormatted, rows, spec):
-    '''
+def table(custom_headings, col_headings_formatted, rows, spec):
+    """
     Create a LaTeX table
 
     Parameters
     ----------
-    customHeadings : None, dict
+    custom_headings : None, dict
         optional dictionary of custom table headings
-    colHeadingsFormatted : list
+
+    col_headings_formatted : list
         formatted column headings
+
     rows : list of lists of cell-strings
         Data in the table, pre-formatted
+
     spec : dict
         options for the formatter
+
     Returns
     -------
     dict : contains key 'latex', which corresponds to a latex string representing the table
-    '''
+    """
     longtables = spec['longtables']
     table = "longtable" if longtables else "tabular"
-    if customHeadings is not None \
-            and "latex" in customHeadings:
-        latex = customHeadings['latex']
+    if custom_headings is not None \
+            and "latex" in custom_headings:
+        latex = custom_headings['latex']
     else:
         latex = "\\begin{%s}[l]{%s}\n\hline\n" % \
-            (table, "|c" * len(colHeadingsFormatted) + "|")
+            (table, "|c" * len(col_headings_formatted) + "|")
         latex += ("%s \\\\ \hline\n"
-                  % (" & ".join(colHeadingsFormatted)))
+                  % (" & ".join(col_headings_formatted)))
 
     for formatted_rowData in rows:
 
@@ -83,21 +89,24 @@ def table(customHeadings, colHeadingsFormatted, rows, spec):
 
 
 def cell(data, label, spec):
-    '''
+    """
     Format the cell of a latex table
 
     Parameters
     ----------
     data : string
         string representation of cell content
+
     label : string
         optional cell label, used for tooltips
+
     spec : dict
         options for the formatters
+
     Returns
     -------
     string
-    '''
+    """
     addMathMode = bool(("^" in data or "_" in data) and "$" not in data)
     return "$" + data + "$" if addMathMode else data
 
@@ -216,7 +225,7 @@ def value(el, specs, mathmode=False):
     precision = specs['precision']
     sciprecision = specs['sciprecision']
     polarprecision = specs['polarprecision']
-    complexAsPolar = specs['complexAsPolar']
+    complexAsPolar = specs['complex_as_polar']
 
     def render(x):
         """Render a single float (can be real or imag part)"""

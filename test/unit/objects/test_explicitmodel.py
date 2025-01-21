@@ -1,10 +1,10 @@
 import numpy as np
 
-from ..util import BaseCase
-
+import pygsti.models.explicitmodel as mdl
+from pygsti.baseobjs import ExplicitStateSpace
+from pygsti.models.modelconstruction import create_explicit_model_from_expressions, create_operation
 from pygsti.modelpacks.legacy import std1Q_XYI as std
-from pygsti.construction.modelconstruction import build_explicit_model, build_operation
-import pygsti.objects.explicitmodel as mdl
+from ..util import BaseCase
 
 
 class ExplicitOpModelStrictAccessTester(BaseCase):
@@ -37,10 +37,10 @@ class ExplicitOpModelToolTester(BaseCase):
     def setUp(self):
         mdl.ExplicitOpModel._strict = False
         # XXX can these be constructed directly?  EGN: yes, some model-construction tests should do it.
-        self.model = build_explicit_model([('Q0',)], ['Gi', 'Gx', 'Gy'],
-                                          ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"])
+        self.model = create_explicit_model_from_expressions([('Q0',)], ['Gi', 'Gx', 'Gy'],
+                                                            ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"])
 
-        self.gateset_2q = build_explicit_model(
+        self.gateset_2q = create_explicit_model_from_expressions(
             [('Q0', 'Q1')], ['GIX', 'GIY', 'GXI', 'GYI', 'GCNOT'],
             ["I(Q0):X(pi/2,Q1)", "I(Q0):Y(pi/2,Q1)", "X(pi/2,Q0):I(Q1)", "Y(pi/2,Q0):I(Q1)", "CX(pi,Q0,Q1)"])
 
@@ -50,9 +50,10 @@ class ExplicitOpModelToolTester(BaseCase):
         # TODO assert correctness
 
     def test_rotate_1q(self):
-        rotXPi = build_operation([(4,)], [('Q0',)], "X(pi,Q0)")
-        rotXPiOv2 = build_operation([(4,)], [('Q0',)], "X(pi/2,Q0)")
-        rotYPiOv2 = build_operation([(4,)], [('Q0',)], "Y(pi/2,Q0)")
+        sslbls = ExplicitStateSpace("Q0")
+        rotXPi = create_operation("X(pi,Q0)", sslbls, "pp")
+        rotXPiOv2 = create_operation("X(pi/2,Q0)", sslbls, "pp")
+        rotYPiOv2 = create_operation("Y(pi/2,Q0)", sslbls, "pp")
         gateset_rot = self.model.rotate((np.pi / 2, 0, 0))  # rotate all gates by pi/2 about X axis
         self.assertArraysAlmostEqual(gateset_rot['Gi'], rotXPiOv2)
         self.assertArraysAlmostEqual(gateset_rot['Gx'], rotXPi)
@@ -86,7 +87,7 @@ class ExplicitOpModelToolTester(BaseCase):
 
     def test_depolarize_with_spam_noise(self):
         gateset_spam = self.model.depolarize(spam_noise=0.1)
-        self.assertAlmostEqual(float(np.dot(self.model['Mdefault']['0'].T, self.model['rho0'])), 1.0)
+        self.assertAlmostEqual(float(np.dot(self.model['Mdefault']['0'].to_dense().T, self.model['rho0'].to_dense())), 1.0)
         # Since np.ndarray doesn't implement __round__... (assertAlmostEqual() doesn't work)
         # Compare the single element dot product result to 0.095 instead (coverting the array's contents ([[ 0.095 ]]) to a **python** float (0.095))
         # print("DEBUG gateset_spam = ")
@@ -96,11 +97,11 @@ class ExplicitOpModelToolTester(BaseCase):
         # print(gateset_spam['Mdefault']['0'].T)
         # print(gateset_spam['rho0'].T)
         # not 0.905 b/c effecs aren't depolarized now
-        self.assertAlmostEqual(np.dot(gateset_spam['Mdefault']['0'].T, gateset_spam['rho0']).reshape(-1,)[0], 0.95)
-        self.assertArraysAlmostEqual(gateset_spam['rho0'], 1 / np.sqrt(2) * np.array([1, 0, 0, 0.9]).reshape(-1, 1))
+        self.assertAlmostEqual(np.dot(gateset_spam['Mdefault']['0'].to_dense().T, gateset_spam['rho0'].to_dense()).reshape(-1,)[0], 0.95)
+        self.assertArraysAlmostEqual(gateset_spam['rho0'].to_dense(), 1 / np.sqrt(2) * np.array([1, 0, 0, 0.9]))
         #self.assertArraysAlmostEqual(gateset_spam['Mdefault']['0'], 1/np.sqrt(2)*np.array([1,0,0,0.9]).reshape(-1,1) ) #not depolarized now
-        self.assertArraysAlmostEqual(gateset_spam['Mdefault']['0'], 1 / np.sqrt(2)
-                                     * np.array([1, 0, 0, 1]).reshape(-1, 1))  # not depolarized now
+        print(gateset_spam['Mdefault']['0'].to_dense())
+        self.assertArraysAlmostEqual(gateset_spam['Mdefault']['0'].to_dense(), 1 / np.sqrt(2) * np.array([1, 0, 0, 1]))  # not depolarized now
 
     def test_random_rotate_1q(self):
         gateset_rand_rot = self.model.rotate(max_rotate=0.2)

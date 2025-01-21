@@ -1,4 +1,6 @@
-""" Sub-package containing protocol objects and related inputs, data, and results """
+"""
+Sub-package containing protocol objects and related inputs, data, and results
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -8,9 +10,12 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from .protocol import *
+from .freeformsim import *
 from .gst import *
+from .modeltest import *
+from .protocol import *
 from .rb import *
 from .rpe import *
-from .modeltest import *
 from .stability import *
+from .vb import *
+from .vbdataframe import *

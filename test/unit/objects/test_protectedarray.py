@@ -1,8 +1,7 @@
 import numpy as np
+import pygsti.baseobjs.protectedarray as pa
 
 from ..util import BaseCase
-
-import pygsti.objects.protectedarray as pa
 
 
 class ProtectedArrayTester(BaseCase):
@@ -16,12 +15,21 @@ class ProtectedArrayTester(BaseCase):
         #protect first row
         # TODO assert correctness
 
-        pa5 = pa.ProtectedArray(np.zeros((3, 3), 'd'), (0, [0, 1]))
+        pa5 = pa.ProtectedArray(np.zeros((3, 3), 'd'), ((0,0), (0, 1)))
         #protect (0,0) and (0,1) elements
 
         s1 = pa5[0, :]  # slice s1 should have first two elements protected:
-        self.assertEqual(s1.indicesToProtect, ([0, 1],))
+        self.assertTrue(np.all(s1.protected_index_mask == np.array([1, 1, 0])))
 
+    def test_construction_from_mask_and_invalid_set(self):
+        mask = np.eye(3, dtype=np.bool_)
+        pa1 = pa.ProtectedArray(np.zeros((3,3)), protected_index_mask= mask)
+        #check that accessing a protected element of this raises an
+        #exception
+        
+        with self.assertRaises(ValueError):
+            pa1[0,0] = 1
+        
     def test_raises_on_index_out_of_range(self):
         pa5 = pa.ProtectedArray(np.zeros((3, 3), 'd'), (0, [0, 1]))
         with self.assertRaises(IndexError):
@@ -29,7 +37,7 @@ class ProtectedArrayTester(BaseCase):
 
     def test_raises_on_bad_index_type(self):
         pa5 = pa.ProtectedArray(np.zeros((3, 3), 'd'), (0, [0, 1]))
-        with self.assertRaises(TypeError):
+        with self.assertRaises(IndexError):
             pa5["str"] = 4
 
     def test_raises_on_construct_index_out_of_range(self):
@@ -37,5 +45,5 @@ class ProtectedArrayTester(BaseCase):
             pa.ProtectedArray(np.zeros((3, 3), 'd'), (0, 10))
 
     def test_raises_on_construct_bad_index_type(self):
-        with self.assertRaises(TypeError):
+        with self.assertRaises(IndexError):
             pa.ProtectedArray(np.zeros((3, 3), 'd'), (0, "str"))

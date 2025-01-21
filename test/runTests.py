@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
-from helpers.automation_tools    import directory, get_changed_packages
-import subprocess, argparse, shutil, sys, os
+import argparse
+import os
+import shutil
+import subprocess
+import sys
+import warnings
 import webbrowser
+
+from helpers.automation_tools import directory, get_changed_packages
 
 '''
 Script for running the test suite.
@@ -53,8 +59,8 @@ def run_tests(testnames, version=None, fast=False, changed=False, coverage=True,
             # The version specified
             pythoncommands = ['python%s' % version]
 
-        # Always use nose
-        pythoncommands += ['-m', 'nose', '-v']
+        # Always use pytest
+        pythoncommands += ['-m', 'pytest', '-v']
 
         # Since last commit to current branch
         if changed:
@@ -79,20 +85,16 @@ def run_tests(testnames, version=None, fast=False, changed=False, coverage=True,
             testnames.remove('mpi')
 
         postcommands = []
-        # Use parallelism native to nose
         if parallel:
-            if cores is None:
-                pythoncommands.append('--processes=-1')
-                # (-1) will use all cores
-            else:
-                pythoncommands.append('--processes=%s' % cores)
+            warnings.warn(
+                "This option is no longer supported. It is left over"
+                "from when PyGSTi used nose for tests. PyGSTi now uses"
+                "pytest. We may add an option for parallel testing with"
+                "pytest in the future"
+
+            )
             # Some tests take up to an hour
             pythoncommands.append('--process-timeout=14400') # Four hours
-        else:
-            # Use the failure monitoring native to nose
-            postcommands = ['--with-id']
-            if failed:
-                postcommands = ['--failed']# ~implies --with-id
 
         if coverage:
             # html coverage is prettiest
@@ -135,11 +137,10 @@ def run_tests(testnames, version=None, fast=False, changed=False, coverage=True,
                     print(testoutput.read())
 
         if parallel:
-            #Only combine when run in parallel mode, since this
-            # causes nose tests to create .coverage.<processid>
-            # files instead of just a single .coverage file, which
-            # "coverage combine" will overwrite with no-data (eek!).
-            subprocess.call([coverage_cmd, 'combine'])
+            # Test logs written to disk by different processes might need to be merged
+            # into a single file. This would be the place to merge them, if we decide
+            # to support that in the future
+            pass
 
         if covermpi:
             print('Running mpi with coverage')
@@ -148,6 +149,8 @@ def run_tests(testnames, version=None, fast=False, changed=False, coverage=True,
 
             if serial_coverage_exists: 
                 #In this case, nose tests have erased old coverage files
+                #TODO: figure out if this is necessary now that we switched
+                # to pytest.
                 shutil.copy2('.coverage', '../output/temp_coverage')
             else:
                 #If no serial tests have run, then we need to erase old files

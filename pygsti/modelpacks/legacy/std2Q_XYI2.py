@@ -11,29 +11,34 @@ Variables for working with the a model containing Idle, X(pi/2) and Y(pi/2) gate
 """
 
 import sys as _sys
-from ...construction import circuitconstruction as _strc
-from ...construction import modelconstruction as _setc
-from ...construction import stdtarget as _stdtarget
 from collections import OrderedDict as _OrderedDict
+
+from ...circuits import circuitconstruction as _strc
+from ...models import modelconstruction as _setc
+from .. import stdtarget as _stdtarget
 
 description = "Idle, X(pi/2), and Y(pi/2) gates"
 
 gates = ['Gii', 'Gix', 'Giy']
-fiducials = _strc.circuit_list([(), ('Gix',), ('Giy',), ('Gix', 'Gix')], line_labels=('*',))
+fiducials = _strc.to_circuits([(), ('Gix',), ('Giy',), ('Gix', 'Gix')], line_labels=('*',))
 #                                     ('Gix','Gix','Gix'), ('Giy','Giy','Giy') ] ) # for 1Q MUB
 prepStrs = effectStrs = fiducials
 
-germs = _strc.circuit_list([('Gii',), ('Gix',), ('Giy',), ('Gix', 'Giy'),
+germs = _strc.to_circuits([('Gii',), ('Gix',), ('Giy',), ('Gix', 'Giy'),
                             ('Gix', 'Giy', 'Gii'), ('Gix', 'Gii', 'Giy'), ('Gix', 'Gii', 'Gii'), ('Giy', 'Gii', 'Gii'),
                             ('Gix', 'Gix', 'Gii', 'Giy'), ('Gix', 'Giy', 'Giy', 'Gii'),
                             ('Gix', 'Gix', 'Giy', 'Gix', 'Giy', 'Giy')], line_labels=('*',))
 
 #Construct a target model: Identity, X(pi/2), Y(pi/2)
-_target_model = _setc.build_explicit_model([('Q0',)], ['Gii', 'Gix', 'Giy'],
-                                           ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"],
-                                           effectLabels=['0', '1'], effectExpressions=["0", "1"])
+_target_model = _setc.create_explicit_model_from_expressions([('Q0',)], ['Gii', 'Gix', 'Giy'],
+                                                             ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"],
+                                                             effect_labels=['0', '1'], effect_expressions=["0", "1"])
 
 _gscache = {("full", "auto"): _target_model}
+
+
+def processor_spec():
+    return target_model('static').create_processor_spec(None)
 
 
 def target_model(parameterization_type="full", sim_type="auto"):
@@ -44,7 +49,7 @@ def target_model(parameterization_type="full", sim_type="auto"):
     ----------
     parameterization_type : {"TP", "CPTP", "H+S", "S", ... }
         The gate and SPAM vector parameterization type. See
-        :function:`Model.set_all_parameterizations` for all allowed values.
+        :func:`Model.set_all_parameterizations` for all allowed values.
 
     sim_type : {"auto", "matrix", "map", "termorder:X" }
         The simulator type to be used for model calculations (leave as

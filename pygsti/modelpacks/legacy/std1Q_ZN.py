@@ -11,30 +11,30 @@ Variables for working with the a model containing Idle, Z(pi/2) and rot(X=pi/2, 
 """
 
 import sys as _sys
-from ...construction import circuitconstruction as _strc
-from ...construction import modelconstruction as _setc
-from ...construction import stdtarget as _stdtarget
+
+from ...circuits import circuitconstruction as _strc
+from ...models import modelconstruction as _setc
+from .. import stdtarget as _stdtarget
+
+_target_model = _setc.create_explicit_model_from_expressions([('Q0',)], ['Gz', 'Gn'],
+                                                             ["Z(pi/2,Q0)", "N(pi/2, sqrt(3)/2, 0, -0.5, Q0)"])
 
 
-_target_model = _setc.build_explicit_model([('Q0',)], ['Gz', 'Gn'],
-                                           ["Z(pi/2,Q0)", "N(pi/2, sqrt(3)/2, 0, -0.5, Q0)"])
-
-
-prepStrs = _strc.circuit_list([(),
+prepStrs = _strc.to_circuits([(),
                                ('Gn',),
                                ('Gn', 'Gn'),
                                ('Gn', 'Gz', 'Gn'),
                                ('Gn', 'Gn', 'Gn',),
                                ('Gn', 'Gz', 'Gn', 'Gn', 'Gn')], line_labels=('*',))  # for 1Q MUB
 
-effectStrs = _strc.circuit_list([(),
+effectStrs = _strc.to_circuits([(),
                                  ('Gn',),
                                  ('Gn', 'Gn'),
                                  ('Gn', 'Gz', 'Gn'),
                                  ('Gn', 'Gn', 'Gn',),
                                  ('Gn', 'Gn', 'Gn', 'Gz', 'Gn')], line_labels=('*',))  # for 1Q MUB
 
-germs = _strc.circuit_list([('Gz',),
+germs = _strc.to_circuits([('Gz',),
                             ('Gn',),
                             ('Gz', 'Gn'),
                             ('Gz', 'Gz', 'Gn'),
@@ -46,6 +46,10 @@ germs_lite = germs[:]  # same list!
 _gscache = {("full", "auto"): _target_model}
 
 
+def processor_spec():
+    return target_model('static').create_processor_spec(None)
+
+
 def target_model(parameterization_type="full", sim_type="auto"):
     """
     Returns a copy of the target model in the given parameterization.
@@ -54,7 +58,7 @@ def target_model(parameterization_type="full", sim_type="auto"):
     ----------
     parameterization_type : {"TP", "CPTP", "H+S", "S", ... }
         The gate and SPAM vector parameterization type. See
-        :function:`Model.set_all_parameterizations` for all allowed values.
+        :func:`Model.set_all_parameterizations` for all allowed values.
 
     sim_type : {"auto", "matrix", "map", "termorder:X" }
         The simulator type to be used for model calculations (leave as

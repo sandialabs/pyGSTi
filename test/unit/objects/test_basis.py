@@ -1,15 +1,23 @@
 import numpy as np
 
-from ..util import BaseCase
-
-from pygsti.objects import basis
+import pygsti.baseobjs.basisconstructors as bc
 import pygsti.tools.basistools as bt
+from pygsti.baseobjs import basis
+from ..util import BaseCase
 
 
 class BasisTester(BaseCase):
     def test_composite_basis(self):
         comp = basis.Basis.cast([('std', 4,), ('std', 1)])
-        # TODO assert correctness
+        b4 = basis.Basis.cast('std', 4)
+        b1 = basis.Basis.cast('std', 1)
+        for mcomp, mb4 in zip(comp.elements[:4], b4.elements):
+            # Pad the standalone matrix up to what composite should be
+            padded = np.pad(mb4, [(0,1), (0,1)])
+            self.assertArraysAlmostEqual(mcomp, padded)
+        for mcomp, mb1 in zip(comp.elements[4:], b1.elements):
+            padded = np.pad(mb1, [(2,0), (2,0)])
+            self.assertArraysAlmostEqual(mcomp, padded)
 
         a = basis.Basis.cast([('std', 4), ('std', 4)])
         b = basis.Basis.cast('std', [4, 4])
@@ -18,13 +26,18 @@ class BasisTester(BaseCase):
 
     def test_qt(self):
         qt = basis.Basis.cast('qt', 9)
+        mats = bc.qt_matrices(3)
+        self.assertArraysAlmostEqual(qt.elements, mats)
+
         qt = basis.Basis.cast('qt', [9])
-        # TODO assert correctness
+        self.assertArraysAlmostEqual(qt.elements, mats)
 
     def test_basis_casting(self):
-        basis.Basis.cast('pp', 4)
-        basis.Basis.cast('std', [4, 1])
-        # TODO assert correctness
+        pp = basis.Basis.cast('pp', 4)
+        # Test correctness with Pauli matrix identities (s_x^2 = s_y^2 = s_z^2 = I)
+        for mx in pp.elements:
+            self.assertArraysAlmostEqual(np.dot(mx, mx), 0.5*np.eye(2))
+        
         with self.assertRaises(AssertionError):
             basis.Basis.cast([('std', 16), ('gm', 4)])  # inconsistent .real values of components!
 
@@ -40,7 +53,8 @@ class BasisTester(BaseCase):
         self.assertFalse(unnorm.is_normalized())
 
         composite = basis.DirectSumBasis([gm, gm])
-        # TODO assert correctness
+        altComposite = basis.Basis.cast([('gm', 4), ('gm', 4)])
+        self.assertArraysAlmostEqual(composite.elements, altComposite.elements)
 
         comp = basis.DirectSumBasis([gm, gm], name='comp', longname='CustomComposite')
 
@@ -72,12 +86,12 @@ class BasisTester(BaseCase):
     def test_basis_object(self):
         # test a few aspects of a Basis object that other tests miss...
         b = basis.Basis.cast("pp", 4)
-        beq = b.simple_equivalent()
+        beq = b.create_simple_equivalent()
         longnm = bt.basis_longname(b)
         lbls = bt.basis_element_labels(b, None)
 
         raw_mxs = bt.basis_matrices("pp", 4)
-        # TODO assert correctness for all
+        self.assertArraysAlmostEqual(b.elements, raw_mxs)
 
         with self.assertRaises(AssertionError):
             bt.basis_matrices("foobar", 4)  # invalid basis name
@@ -94,11 +108,21 @@ class BasisTester(BaseCase):
 
         mxs = sparsePP.elements
         block_mxs = sparseBlockPP.elements
-        # TODO assert correctness
+        for mblock, mx in zip(block_mxs[:4], mxs):
+            # Pad the standalone matrix up to what composite should be
+            padded = np.pad(mx.todense(), [(0,2), (0,2)])
+            self.assertArraysAlmostEqual(mblock.todense(), padded)
+        for mblock, mx in zip(block_mxs[4:], mxs):
+            padded = np.pad(mx.todense(), [(2,0), (2,0)])
+            self.assertArraysAlmostEqual(mblock.todense(), padded)
 
-        expeq = sparsePP.simple_equivalent()
-        block_expeq = sparseBlockPP.simple_equivalent()
-        # TODO assert correctness
+        # Equivalent matrices should be the same size
+        expeq = sparsePP.create_simple_equivalent()
+        for eqmx, mx in zip(expeq.elements, sparsePP.elements):
+            self.assertEqual(eqmx.shape, mx.shape)
+        block_expeq = sparseBlockPP.create_simple_equivalent()
+        for eqmx, mx in zip(block_expeq.elements, sparseBlockPP.elements):
+            self.assertEqual(eqmx.shape, mx.shape)
 
         raw_mxs = bt.basis_matrices("pp", 4, sparse=True)
 
@@ -109,10 +133,11 @@ class BasisTester(BaseCase):
         self.assertNotEqual(sparsePP_2Q, sparseGM_2Q)
 
         #sparse transform matrix
-        trans = sparsePP.transform_matrix(sparsePP2)
+        trans = sparsePP.create_transform_matrix(sparsePP2)
         self.assertArraysAlmostEqual(trans, np.identity(4, 'd'))
-        trans2 = sparsePP.transform_matrix(denseGM)
-        # TODO assert correctness
+        trans2 = sparsePP.create_transform_matrix(denseGM)
+        trans3 = denseGM.reverse_transform_matrix(sparsePP)
+        self.assertArraysAlmostEqual(np.dot(trans3, trans2), np.identity(4, 'd'))
 
         #test equality for large bases
         large_sparsePP = basis.Basis.cast("pp", 256, sparse=True)
@@ -125,12 +150,11 @@ class BasisTester(BaseCase):
         pp3 = basis.Basis.cast('pp', [(4, 4)])
         self.assertTrue(isinstance(pp1, basis.BuiltinBasis))
         self.assertTrue(isinstance(pp2, basis.DirectSumBasis))
-        self.assertTrue(isinstance(pp3, basis.DirectSumBasis))
+        self.assertTrue(isinstance(pp3, basis.TensorProdBasis))
         self.assertTrue(isinstance(pp2.component_bases[0], basis.BuiltinBasis))
         self.assertTrue(isinstance(pp2.component_bases[1], basis.BuiltinBasis))
-        self.assertTrue(isinstance(pp3.component_bases[0], basis.TensorProdBasis))
-        self.assertTrue(isinstance(pp3.component_bases[0].component_bases[0], basis.BuiltinBasis))
-        self.assertTrue(isinstance(pp3.component_bases[0].component_bases[1], basis.BuiltinBasis))
+        self.assertTrue(isinstance(pp3.component_bases[0], basis.BuiltinBasis))
+        self.assertTrue(isinstance(pp3.component_bases[1], basis.BuiltinBasis))
 
     def test_tensorprod_basis(self):
         pp1 = basis.Basis.cast('pp', 4)  # 1Q

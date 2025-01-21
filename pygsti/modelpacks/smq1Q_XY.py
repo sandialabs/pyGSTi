@@ -1,4 +1,6 @@
 """
+A standard multi-qubit gate set module.
+
 Variables for working with the a model containing X(pi/2) and Y(pi/2) gates.
 """
 #***************************************************************************************************
@@ -11,8 +13,6 @@ Variables for working with the a model containing X(pi/2) and Y(pi/2) gates.
 #***************************************************************************************************
 
 from collections import OrderedDict
-from pygsti.construction import circuitconstruction as _strc
-from pygsti.construction import modelconstruction as _setc
 
 from pygsti.modelpacks._modelpack import GSTModelPack, RBModelPack
 
@@ -61,9 +61,9 @@ class _Module(GSTModelPack, RBModelPack):
                                         ('Gc22', [('Gxpi2', 0), ('Gxpi2', 0), ('Gxpi2', 0), ('Gypi2', 0), ('Gypi2', 0)]),
                                         ('Gc23', [('Gxpi2', 0), ('Gypi2', 0), ('Gxpi2', 0), ('Gxpi2', 0), ('Gxpi2', 0)])])
 
-    global_fidPairs = [(0, 0), (2, 3), (5, 2), (5, 4)]
+    global_fidpairs = [(0, 0), (2, 3), (5, 2), (5, 4)]
 
-    _pergerm_fidPairsDict = {
+    _pergerm_fidpairsdict = {
         (('Gxpi2', 0), ): [(1, 1), (3, 4), (4, 2), (5, 5)],
         (('Gypi2', 0), ): [(0, 2), (2, 2), (2, 4), (4, 4)],
         (('Gxpi2', 0), ('Gypi2', 0)): [(0, 0), (0, 4), (2, 5), (5, 4)],
@@ -72,18 +72,18 @@ class _Module(GSTModelPack, RBModelPack):
         (('Gxpi2', 0), ('Gxpi2', 0), ('Gypi2', 0), ('Gxpi2', 0), ('Gypi2', 0), ('Gypi2', 0)): [(0, 0), (2, 3), (5, 2), (5, 4)]
     }
 
-    global_fidPairs_lite = [(0, 2), (2, 4), (3, 1), (3, 3)]
+    global_fidpairs_lite = [(0, 2), (2, 4), (3, 1), (3, 3)]
 
-    _pergerm_fidPairsDict_lite = {
+    _pergerm_fidpairsdict_lite = {
         (('Gxpi2', 0), ): [(1, 1), (3, 4), (4, 2), (5, 5)],
         (('Gypi2', 0), ): [(0, 2), (2, 2), (2, 4), (4, 4)],
         (('Gxpi2', 0), ('Gypi2', 0)): [(0, 0), (0, 4), (2, 5), (5, 4)],
         (('Gxpi2', 0), ('Gxpi2', 0), ('Gypi2', 0)): [(1, 3), (1, 4), (3, 5), (5, 0), (5, 4), (5, 5)]
     }
 
-    def _target_model(self, sslbls):
+    def _target_model(self, sslbls, **kwargs):
         return self._build_explicit_target_model(
-            sslbls, [('Gxpi2', 0), ('Gypi2', 0)], ['X(pi/2,{0})', 'Y(pi/2,{0})'])
+            sslbls, [('Gxpi2', 0), ('Gypi2', 0)], ['X(pi/2,{0})', 'Y(pi/2,{0})'], **kwargs)
 
 
 import sys

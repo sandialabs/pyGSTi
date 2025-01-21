@@ -1,16 +1,13 @@
 """Utilities shared by unit tests"""
-import sys
-import numpy as np
-import numbers
 import functools
-import types
-from contextlib import contextmanager
 import os
-import warnings
-from pathlib import Path
-from unittest import mock
-from tempfile import TemporaryDirectory
 import unittest
+import warnings
+from contextlib import contextmanager
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+import numpy as np
 
 
 def needs_cvxpy(fn):
@@ -222,8 +219,11 @@ class Namespace(object):
         except AttributeError as err:
             if name in self.__ns_props__:
                 return self.__ns_props__[name](self)
-            else:
-                raise err
+            # else:
+            #     raise err
+            return None
+            # ^ necessary to avoid cursed issues that can arise when a call to pyest.main(...)
+            #   ends up triggering a test which needs the Namespace class.
 
     def property(self, fn):
         """Dynamic namespace property"""

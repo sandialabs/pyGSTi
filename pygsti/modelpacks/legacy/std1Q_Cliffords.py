@@ -11,10 +11,10 @@ Variables for working with the a model containing all 24 1-qubit Clifford gates
 """
 
 import sys as _sys
-from ...construction import circuitconstruction as _strc
-from ...construction import modelconstruction as _setc
-from ...construction import stdtarget as _stdtarget
 from collections import OrderedDict as _OrderedDict
+
+from ...models import modelconstruction as _setc
+from .. import stdtarget as _stdtarget
 
 description = "The 1-qubit Clifford group"
 
@@ -40,9 +40,13 @@ expressions = ["I(Q0)", "X(pi/2,Q0):Y(pi/2,Q0)", "Y(-pi/2,Q0):X(-pi/2,Q0)",
                "X(pi,Q0):Y(-pi/2,Q0)", "Y(pi,Q0):X(pi/2,Q0)", "X(pi/2,Q0):Y(-pi/2,Q0):X(pi/2,Q0)",
                "Y(pi/2,Q0)", "Y(pi,Q0):X(-pi/2,Q0)", "X(-pi/2,Q0):Y(pi/2,Q0):X(pi/2,Q0)"]
 
-_target_model = _setc.build_explicit_model([('Q0',)], gates, expressions)
+_target_model = _setc.create_explicit_model_from_expressions([('Q0',)], gates, expressions)
 
 _gscache = {("full", "auto"): _target_model}
+
+
+def processor_spec():
+    return target_model('static').create_processor_spec(None)
 
 
 def target_model(parameterization_type="full", sim_type="auto"):
@@ -53,7 +57,7 @@ def target_model(parameterization_type="full", sim_type="auto"):
     ----------
     parameterization_type : {"TP", "CPTP", "H+S", "S", ... }
         The gate and SPAM vector parameterization type. See
-        :function:`Model.set_all_parameterizations` for all allowed values.
+        :func:`Model.set_all_parameterizations` for all allowed values.
 
     sim_type : {"auto", "matrix", "map", "termorder:X" }
         The simulator type to be used for model calculations (leave as

@@ -10,13 +10,15 @@
 
 import numpy as _np
 from scipy import optimize as _opt
+
 from ...tools import decompose_gate_matrix as _decompose_gate_matrix
+
 
 #from rpe_models import rpeInstanceDict
 
 
-def extract_rotation_hat(xhat, yhat, k, Nx, Ny, angleName="epsilon",
-                         previousAngle=None, rpeconfig_inst=None):
+def extract_rotation_hat(xhat, yhat, k, nx, ny, angle_name="epsilon",
+                         previous_angle=None, rpeconfig_inst=None):
     """
     For a single germ generation (k value), estimate the angle of rotation
     for either alpha, epsilon, or Phi.  (Warning:  Do not use for theta
@@ -33,16 +35,16 @@ def extract_rotation_hat(xhat, yhat, k, Nx, Ny, angleName="epsilon",
     k : float
        The generation of experiments that xhat and yhat come from.
 
-    Nx : float
+    nx : float
        The number of sin string clicks.
 
-    Ny : float
+    ny : float
        The number cos string clicks.
 
-    angleName : { "alpha", "epsilon", "Phi" }, optional
+    angle_name : { "alpha", "epsilon", "Phi" }, optional
       The angle to be extracted
 
-    previousAngle : float, optional
+    previous_angle : float, optional
        Angle estimate from previous generation; used to refine this
        generation's estimate.  Default is None (for estimation with no
        previous genereation's data)
@@ -56,38 +58,39 @@ def extract_rotation_hat(xhat, yhat, k, Nx, Ny, angleName="epsilon",
         The current angle estimate.
     """
 
-    if angleName == 'alpha':
-        arctan2Val = rpeconfig_inst.alpha_hat_func(xhat, yhat, Nx, Ny)
-#            _np.arctan2((xhat-Nx/2.)/Nx,-(yhat-Ny/2.)/Ny)
-    elif angleName == 'epsilon':
-        arctan2Val = rpeconfig_inst.epsilon_hat_func(xhat, yhat, Nx, Ny)
-    elif angleName == 'Phi':
-        arctan2Val = rpeconfig_inst.Phi_hat_func(xhat, yhat, Nx, Ny)
-#            arctan2Val = _np.arctan2((xhat-Nx/2.)/Nx,-(yhat-Ny/2.)/Ny)
+    if angle_name == 'alpha':
+        arctan2Val = rpeconfig_inst.alpha_hat_func(xhat, yhat, nx, ny)
+#            _np.arctan2((xhat-nx/2.)/nx,-(yhat-ny/2.)/ny)
+    elif angle_name == 'epsilon':
+        arctan2Val = rpeconfig_inst.epsilon_hat_func(xhat, yhat, nx, ny)
+    elif angle_name == 'Phi':
+        arctan2Val = rpeconfig_inst.Phi_hat_func(xhat, yhat, nx, ny)
+#            arctan2Val = _np.arctan2((xhat-nx/2.)/nx,-(yhat-ny/2.)/ny)
     else:
         raise Exception('Need valid angle name!')
 
-    if k != 1 and previousAngle is None:
-        raise Exception('Need previousAngle!')
+    if k != 1 and previous_angle is None:
+        raise Exception('Need previous_angle!')
     if k == 1:
-        #        return _np.arctan2((xhat-Nx/2.)/Nx,(yhat-Ny/2.)/Ny)
+        #        return _np.arctan2((xhat-nx/2.)/nx,(yhat-ny/2.)/ny)
         return arctan2Val
 
     elif k > 1:
-        #        angle_j = 1./k * _np.arctan2((xhat-Nx/2.)/Nx,(yhat-Ny/2.)/Ny)
+        #        angle_j = 1./k * _np.arctan2((xhat-nx/2.)/nx,(yhat-ny/2.)/ny)
         angle_j = 1. / k * arctan2Val
-        while not (angle_j >= previousAngle - _np.pi / k
-                   and angle_j <= previousAngle + _np.pi / k):
-            if angle_j <= previousAngle - _np.pi / k:
+        while not (angle_j >= previous_angle - _np.pi / k
+                   and angle_j <= previous_angle + _np.pi / k):
+            if angle_j <= previous_angle - _np.pi / k:
                 angle_j += 2 * _np.pi / k
-            elif angle_j > previousAngle + _np.pi / k:
+            elif angle_j > previous_angle + _np.pi / k:
                 angle_j -= 2 * _np.pi / k
             else:
                 raise Exception('What?!')
         return angle_j
 
 
-def est_angle_list(DS, angleSinStrs, angleCosStrs, angleName="epsilon", lengthList=None, rpeconfig_inst=None):
+def estimate_angles(dataset, angle_sin_strs, angle_cos_strs, angle_name="epsilon",
+                    length_list=None, rpeconfig_inst=None):
     """
     For a dataset containing sin and cos strings to estimate either alpha,
     epsilon, or Phi return a list of alpha, epsilon, or Phi estimates (one for
@@ -96,22 +99,22 @@ def est_angle_list(DS, angleSinStrs, angleCosStrs, angleName="epsilon", lengthLi
 
     Parameters
     ----------
-    DS : DataSet
+    dataset : DataSet
        The dataset from which the angle estimates will be extracted.
 
-    angleSinStrs : list of Circuits
+    angle_sin_strs : list of Circuits
        The list of sin strs that the estimator will use.
 
-    angleCosStrs : list of Circuits
+    angle_cos_strs : list of Circuits
        The list of cos strs that the estimator will use.
 
-    angleName : { "alpha", "epsilon", "Phi" }, optional
+    angle_name : { "alpha", "epsilon", "Phi" }, optional
       The angle to be extracted
 
-    lengthList : The list of sequence lengths.  Default is None;
-        If None is specified, then lengthList becomes [1,2,4,...,2**(len(angleSinStrs)-1)]
+    length_list : The list of sequence lengths.  Default is None;
+        If None is specified, then length_list becomes [1,2,4,...,2**(len(angle_sin_strs)-1)]
 
-    rpeconfig_inst : rpeconfig object
+    rpeconfig_inst : RPEconfig object
         Declares which model configuration RPE should be trying to fit;
         determines particular functions and values to be used.
 
@@ -122,31 +125,31 @@ def est_angle_list(DS, angleSinStrs, angleCosStrs, angleName="epsilon", lengthLi
     """
     angleTemp1 = None
     angleHatList = []
-    genNum = len(angleSinStrs)
+    genNum = len(angle_sin_strs)
 
     up_labels = rpeconfig_inst.up_labels
     dn_labels = rpeconfig_inst.dn_labels
 
-    if lengthList is None:
-        lengthList = [2**k for k in range(genNum)]
-    for i, length in enumerate(lengthList):
-        xhatTemp = _np.sum(DS[angleSinStrs[i]][up_label] for up_label in up_labels)
-        yhatTemp = _np.sum(DS[angleCosStrs[i]][up_label] for up_label in up_labels)
-        Nx = xhatTemp + _np.sum(DS[angleSinStrs[i]][dn_label] for dn_label in dn_labels)
-        Ny = yhatTemp + _np.sum(DS[angleCosStrs[i]][dn_label] for dn_label in dn_labels)
-#        xhatTemp = DS[angleSinStrs[i]]['0']
-#        yhatTemp = DS[angleCosStrs[i]]['0']
-#        Nx = xhatTemp + DS[angleSinStrs[i]]['1']
-#        Ny = yhatTemp + DS[angleCosStrs[i]]['1']
+    if length_list is None:
+        length_list = [2**k for k in range(genNum)]
+    for i, length in enumerate(length_list):
+        xhatTemp = sum(dataset[angle_sin_strs[i]][up_label] for up_label in up_labels)
+        yhatTemp = sum(dataset[angle_cos_strs[i]][up_label] for up_label in up_labels)
+        Nx = xhatTemp + sum(dataset[angle_sin_strs[i]][dn_label] for dn_label in dn_labels)
+        Ny = yhatTemp + sum(dataset[angle_cos_strs[i]][dn_label] for dn_label in dn_labels)
+#        xhatTemp = dataset[angle_sin_strs[i]]['0']
+#        yhatTemp = dataset[angle_cos_strs[i]]['0']
+#        Nx = xhatTemp + dataset[angle_sin_strs[i]]['1']
+#        Ny = yhatTemp + dataset[angle_cos_strs[i]]['1']
         angleTemp1 = extract_rotation_hat(xhatTemp, yhatTemp, length,
-                                          Nx, Ny, angleName, angleTemp1, rpeconfig_inst)
+                                          Nx, Ny, angle_name, angleTemp1, rpeconfig_inst)
         angleHatList.append(angleTemp1)
     return angleHatList
 
 
-def sin_phi2_func(theta, Phi, epsilon, rpeconfig_inst=None):
+def _sin_phi2(theta, phi, epsilon, rpeconfig_inst=None):
     """
-    Returns the function whose zero, for fixed Phi and epsilon, occurs at the
+    Returns the function whose zero, for fixed phi and epsilon, occurs at the
     desired value of theta. (This function exists to be passed to a minimizer
     to obtain theta.)
 
@@ -155,8 +158,8 @@ def sin_phi2_func(theta, Phi, epsilon, rpeconfig_inst=None):
     theta : float
        Angle between estimated "loose axis" and target "loose axis".
 
-    Phi : float
-       The auxiliary angle Phi; necessary to calculate theta.
+    phi : float
+       The auxiliary angle phi; necessary to calculate theta.
 
     epsilon : float
        Angle of rotation about "loose axis".
@@ -164,7 +167,7 @@ def sin_phi2_func(theta, Phi, epsilon, rpeconfig_inst=None):
     Returns
     -------
     sinPhi2FuncVal
-        The value of sin_phi2_func for given inputs.  (Must be 0 to achieve "true" theta.)
+        The value of _sin_phi2 for given inputs.  (Must be 0 to achieve "true" theta.)
     """
 
     newEpsilon = rpeconfig_inst.new_epsilon_func(epsilon)
@@ -172,11 +175,12 @@ def sin_phi2_func(theta, Phi, epsilon, rpeconfig_inst=None):
     sinPhi2FuncVal = _np.abs(2 * _np.sin(theta) * _np.cos(_np.pi * newEpsilon / 2)
                              * _np.sqrt(1 - _np.sin(theta)**2
                                         * _np.cos(_np.pi * newEpsilon / 2)**2)
-                             - _np.sin(Phi / 2))
+                             - _np.sin(phi / 2))
     return sinPhi2FuncVal
 
 
-def est_theta_list(DS, angleSinStrs, angleCosStrs, epsilonList, returnPhiFunList=False, rpeconfig_inst=None):
+def estimate_thetas(dataset, angle_sin_strs, angle_cos_strs, epsilon_list,
+                    return_phi_fun_list=False, rpeconfig_inst=None):
     """
     For a dataset containing sin and cos strings to estimate theta,
     along with already-made estimates of epsilon, return a list of theta
@@ -184,23 +188,23 @@ def est_theta_list(DS, angleSinStrs, angleCosStrs, epsilonList, returnPhiFunList
 
     Parameters
     ----------
-    DS : DataSet
+    dataset : DataSet
        The dataset from which the theta estimates will be extracted.
 
-    angleSinStrs : list of Circuits
+    angle_sin_strs : list of Circuits
        The list of sin strs that the estimator will use.
 
-    angleCosStrs : list of Circuits
+    angle_cos_strs : list of Circuits
        The list of cos strs that the estimator will use.
 
-    epsilonList : list of floats
+    epsilon_list : list of floats
        List of epsilon estimates.
 
-    returnPhiFunList : bool, optional
+    return_phi_fun_list : bool, optional
        Set to True to obtain measure of how well Eq. III.7 is satisfied.
        Default is False.
 
-    rpeconfig_inst : rpeconfig object
+    rpeconfig_inst : RPEconfig object
         Declares which model configuration RPE should be trying to fit;
         determines particular functions and values to be used.
 
@@ -210,22 +214,22 @@ def est_theta_list(DS, angleSinStrs, angleCosStrs, epsilonList, returnPhiFunList
         A list of theta estimates, ordered by generation (k).
 
     PhiFunList : list of floats
-        A list of sin_phi2_func vals at optimal theta values.  If not close to
-        0, constraints unsatisfiable.  Only returned if returnPhiFunList is set
+        A list of _sin_phi2 vals at optimal theta values.  If not close to
+        0, constraints unsatisfiable.  Only returned if return_phi_fun_list is set
         to True.
     """
 
-    PhiList = est_angle_list(DS, angleSinStrs, angleCosStrs, 'Phi', rpeconfig_inst=rpeconfig_inst)
+    PhiList = estimate_angles(dataset, angle_sin_strs, angle_cos_strs, 'Phi', rpeconfig_inst=rpeconfig_inst)
     thetaList = []
     PhiFunList = []
     for index, Phi in enumerate(PhiList):
-        epsilon = epsilonList[index]
-        soln = _opt.minimize(lambda x: sin_phi2_func(x, Phi, epsilon, rpeconfig_inst), 0)
+        epsilon = epsilon_list[index]
+        soln = _opt.minimize(lambda x: _sin_phi2(x, Phi, epsilon, rpeconfig_inst), 0)
         thetaList.append(soln['x'][0])
         PhiFunList.append(soln['fun'])
 #        if soln['fun'] > 1e-2:
 #            print Phi, epsilon
-    if returnPhiFunList:
+    if return_phi_fun_list:
         return thetaList, PhiFunList
     else:
         return thetaList
@@ -243,7 +247,7 @@ def extract_alpha(model, rpeconfig_inst):
     model : Model
        The model whose angle of rotation about the fixed axis is to be calculated.
 
-    rpeconfig_inst : rpeconfig object
+    rpeconfig_inst : RPEconfig object
         Declares which model configuration RPE should be trying to fit;
         determines particular functions and values to be used.
 
@@ -270,7 +274,7 @@ def extract_epsilon(model, rpeconfig_inst):
     model : Model
        The model whose angle of rotation about the "loose axis" is to be calculated.
 
-    rpeconfig_inst : rpeconfig object
+    rpeconfig_inst : RPEconfig object
         Declares which model configuration RPE should be trying to fit;
         determines particular functions and values to be used.
 
@@ -299,7 +303,7 @@ def extract_theta(model, rpeconfig_inst):
     model : Model
         The model whose loose axis misalignment is to be calculated.
 
-    rpeconfig_inst : rpeconfig object
+    rpeconfig_inst : RPEconfig object
         Declares which model configuration RPE should be trying to fit;
         determines particular functions and values to be used.
 
@@ -343,7 +347,7 @@ def consistency_check(angle_k, angle_final, k):
         return 0.0
 
 
-def analyze_rpe_data(inputDataset, trueOrTargetModel, stringListD, rpeconfig_inst, do_consistency_check=False,
+def analyze_rpe_data(input_dataset, true_or_target_model, string_list_d, rpeconfig_inst, do_consistency_check=False,
                      k_list=None):
     """
     Compute angle estimates and compare to true or target values for alpha, epsilon,
@@ -354,71 +358,70 @@ def analyze_rpe_data(inputDataset, trueOrTargetModel, stringListD, rpeconfig_ins
 
     Parameters
     ----------
-    inputDataset : DataSet
+    input_dataset : DataSet
         The dataset containing the RPE experiments.
 
-    trueOrTargetModel : Model
+    true_or_target_model : Model
         The model used to generate the RPE data OR the target model.
 
-    stringListD : dict
+    string_list_d : dict
        The dictionary of operation sequence lists used for the RPE experiments.
        This should be generated via make_rpe_string_list_d.
 
-    rpeconfig_inst : rpeconfig object
+    rpeconfig_inst : RPEconfig object
         Declares which model configuration RPE should be trying to fit;
         determines particular functions and values to be used.
 
     Returns
     -------
     resultsD : dict
-        A dictionary of the results
-        The keys of the dictionary are:
+        A dictionary of the results. The keys of the dictionary are:
 
-        -'alphaHatList' : List (ordered by k) of alpha estimates.
-        -'epsilonHatList' : List (ordered by k) of epsilon estimates.
-        -'thetaHatList' : List (ordered by k) of theta estimates.
-        -'alphaErrorList' : List (ordered by k) of difference between true
+        * 'alphaHatList' : List (ordered by k) of alpha estimates.
+        * 'epsilonHatList' : List (ordered by k) of epsilon estimates.
+        * 'thetaHatList' : List (ordered by k) of theta estimates.
+        * 'alphaErrorList' : List (ordered by k) of difference between true
           alpha and RPE estimate of alpha.
-        -'epsilonErrorList' : List (ordered by k) of difference between true
+        * 'epsilonErrorList' : List (ordered by k) of difference between true
           epsilon and RPE estimate of epsilon.
-        -'thetaErrorList' : List (ordered by k) of difference between true
+        * 'thetaErrorList' : List (ordered by k) of difference between true
           theta and RPE estimate of theta.
-        -'PhiFunErrorList' : List (ordered by k) of sin_phi2_func values.
-
+        * 'PhiFunErrorList' : List (ordered by k) of _sin_phi2 values.
+        
     """
-    alphaCosStrList = stringListD['alpha', 'cos']
-    alphaSinStrList = stringListD['alpha', 'sin']
-    epsilonCosStrList = stringListD['epsilon', 'cos']
-    epsilonSinStrList = stringListD['epsilon', 'sin']
-    thetaCosStrList = stringListD['theta', 'cos']
-    thetaSinStrList = stringListD['theta', 'sin']
+    alphaCosStrList = string_list_d['alpha', 'cos']
+    alphaSinStrList = string_list_d['alpha', 'sin']
+    epsilonCosStrList = string_list_d['epsilon', 'cos']
+    epsilonSinStrList = string_list_d['epsilon', 'sin']
+    thetaCosStrList = string_list_d['theta', 'cos']
+    thetaSinStrList = string_list_d['theta', 'sin']
     try:
-        alphaTrue = trueOrTargetModel.alphaTrue
+        alphaTrue = true_or_target_model.alphaTrue
     except:
-        alphaTrue = extract_alpha(trueOrTargetModel, rpeconfig_inst)
+        alphaTrue = extract_alpha(true_or_target_model, rpeconfig_inst)
     try:
-        epsilonTrue = trueOrTargetModel.epsilonTrue
+        epsilonTrue = true_or_target_model.epsilonTrue
     except:
-        epsilonTrue = extract_epsilon(trueOrTargetModel, rpeconfig_inst)
+        epsilonTrue = extract_epsilon(true_or_target_model, rpeconfig_inst)
     try:
-        thetaTrue = trueOrTargetModel.thetaTrue
+        thetaTrue = true_or_target_model.thetaTrue
     except:
-        thetaTrue = extract_theta(trueOrTargetModel, rpeconfig_inst)
+        thetaTrue = extract_theta(true_or_target_model, rpeconfig_inst)
     alphaErrorList = []
     epsilonErrorList = []
     thetaErrorList = []
 #    PhiFunErrorList = []
-    alphaHatList = est_angle_list(inputDataset,
-                                  alphaSinStrList,
-                                  alphaCosStrList, 'alpha', rpeconfig_inst=rpeconfig_inst)
-    epsilonHatList = est_angle_list(inputDataset,
-                                    epsilonSinStrList,
-                                    epsilonCosStrList, 'epsilon', rpeconfig_inst=rpeconfig_inst)
-    thetaHatList, PhiFunErrorList = est_theta_list(inputDataset,
-                                                   thetaSinStrList,
-                                                   thetaCosStrList,
-                                                   epsilonHatList, rpeconfig_inst=rpeconfig_inst,
-                                                   returnPhiFunList=True)
+    alphaHatList = estimate_angles(input_dataset,
+                                   alphaSinStrList,
+                                   alphaCosStrList, 'alpha', rpeconfig_inst=rpeconfig_inst)
+    epsilonHatList = estimate_angles(input_dataset,
+                                     epsilonSinStrList,
+                                     epsilonCosStrList, 'epsilon', rpeconfig_inst=rpeconfig_inst)
+    thetaHatList, PhiFunErrorList = estimate_thetas(input_dataset,
+                                                    thetaSinStrList,
+                                                    thetaCosStrList,
+                                                    epsilonHatList, rpeconfig_inst=rpeconfig_inst,
+                                                    return_phi_fun_list=True)
     for alphaTemp1 in alphaHatList:
         alphaErrorList.append(abs(alphaTrue - alphaTemp1))
     for epsilonTemp1 in epsilonHatList:

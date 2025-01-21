@@ -1,4 +1,6 @@
-""" LinearOperator Set Tomography Algorithms Python Package """
+"""
+LinearOperator Set Tomography Algorithms Python Package
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -11,11 +13,12 @@
 #Import the most important/useful routines of each module into
 # the package namespace
 
+from .compilers import compile_clifford, compile_stabilizer_state, compile_stabilizer_measurement, compile_cnot_circuit
+from .contract import *
 from .core import *
-from .grammatrix import *
-from .germselection import *
 from .fiducialpairreduction import *
 from .fiducialselection import *
 from .gaugeopt import *
-from .contract import *
-from .compilers import compile_clifford, compile_stabilizer_state, compile_stabilizer_measurement, compile_cnot_circuit
+from .germselection import *
+from .grammatrix import *
+from .mirroring import *

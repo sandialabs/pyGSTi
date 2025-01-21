@@ -1,4 +1,6 @@
-""" Text-parsing classes and functions to read input files."""
+"""
+Text-parsing classes and functions to read input files.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -8,44 +10,69 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import re as _re
+import ast as _ast
 import os as _os
+import re as _re
 import sys as _sys
 import time as _time
-import numpy as _np
-import ast as _ast
 import warnings as _warnings
-from scipy.linalg import expm as _expm
 from collections import OrderedDict as _OrderedDict
 
-from .. import objects as _objs
-from .. import tools as _tools
+import numpy as _np
+from scipy.linalg import expm as _expm
 
-from . import CircuitParser as _CircuitParser
+from pygsti import baseobjs as _baseobjs
+from pygsti import tools as _tools
+from pygsti.modelmembers import instruments as _instrument
+from pygsti.modelmembers import operations as _op
+from pygsti.modelmembers import povms as _povm
+from pygsti.modelmembers import states as _state
+from pygsti.baseobjs import statespace as _statespace
+from pygsti.models import gaugegroup as _gaugegroup
+from pygsti.circuits.circuit import Circuit as _Circuit
+from pygsti.circuits.circuitparser import CircuitParser as _CircuitParser
+from pygsti.data import DataSet as _DataSet, MultiDataSet as _MultiDataSet
+
+# A dictionary mapping qubit string representations into created
+# :class:`Circuit` objects, which can improve performance by reducing
+# or eliminating the need to parse circuit strings we've already parsed.
+_global_parse_cache = {False: {}, True: {}}  # key == create_subcircuits
 
 
-def get_display_progress_fn(showProgress):
+def _create_display_progress_fn(show_progress):
     """
-    Create and return a progress-displaying function if `showProgress == True`
-    and it's run within an interactive environment.
+    Create and return a progress-displaying function.
+
+    Only return a function that does somethign if `show_progress == True`
+    and the current environment is interactive. Otherwise, return a
+    do-nothing function.
+
+    Parameters
+    ----------
+    show_progress : bool
+        Whether or not to even try to get a real progress-displaying function.
+
+    Returns
+    -------
+    function
     """
 
     def _is_interactive():
         import __main__ as main
         return not hasattr(main, '__file__')
 
-    if _is_interactive() and showProgress:
+    if _is_interactive() and show_progress:
         try:
             from IPython.display import clear_output
 
-            def _display_progress(i, N, filename):
+            def _display_progress(i, n, filename):
                 _time.sleep(0.001); clear_output()
-                print("Loading %s: %.0f%%" % (filename, 100.0 * float(i) / float(N)))
+                print("Reading %s: %.0f%%" % (filename, 100.0 * float(i) / float(n)))
                 _sys.stdout.flush()
         except:
-            def _display_progress(i, N, f): pass
+            def _display_progress(i, n, f): pass
     else:
-        def _display_progress(i, N, f): pass
+        def _display_progress(i, n, f): pass
 
     return _display_progress
 
@@ -57,14 +84,15 @@ class StdInputParser(object):
 
     #  Using a single parser. This speeds up parsing, however, it means the parser is NOT reentrant
     _circuit_parser = _CircuitParser()
+    use_global_parse_cache = True
 
     def __init__(self):
         """ Create a new standard-input parser object """
         pass
 
-    def parse_circuit(self, s, lookup={}, create_subcircuits=True):
+    def parse_circuit(self, s, lookup=None, create_subcircuits=True):
         """
-        Parse a operation sequence (string in grammar)
+        Parse a circuit from a string.
 
         Parameters
         ----------
@@ -82,16 +110,77 @@ class StdInputParser(object):
 
         Returns
         -------
-        tuple of operation labels
-            Representing the operation sequence.
+        Circuit
         """
-        self._circuit_parser.lookup = lookup
-        circuit_tuple, circuit_labels = self._circuit_parser.parse(s, create_subcircuits)
-        # print "DB: result = ",result
-        # print "DB: stack = ",self.exprStack
-        return circuit_tuple, circuit_labels
+        if lookup is None:
+            lookup = dict()
+        circuit = None
+        if self.use_global_parse_cache:
+            circuit = _global_parse_cache[create_subcircuits].get(s, None)
+        if circuit is None:  # wasn't in cache
+            layer_tuple, line_lbls, occurrence_id, compilable_indices = \
+                self.parse_circuit_raw(s, lookup, create_subcircuits)
+            if line_lbls is None:  # if there are no line labels then we need to use "auto" and do a full init
+                circuit = _Circuit(layer_tuple, stringrep=s, line_labels="auto",
+                                   expand_subcircuits=False, check=False, occurrence=occurrence_id,
+                                   compilable_layer_indices=compilable_indices)
+                #Note: never expand subcircuits since parse_circuit_raw already does this w/create_subcircuits arg
+            else:
+                circuit = _Circuit._fastinit(layer_tuple, line_lbls, editable=False,
+                                             name='', stringrep=s, occurrence=occurrence_id,
+                                             compilable_layer_indices_tup=compilable_indices)
 
-    def parse_dataline(self, s, lookup={}, expectedCounts=-1, create_subcircuits=True):
+            if self.use_global_parse_cache:
+                _global_parse_cache[create_subcircuits][s] = circuit
+        return circuit
+
+    def parse_circuit_raw(self, s, lookup=None, create_subcircuits=True):
+        """
+        Parse a circuit's constituent pieces from a string.
+
+        This doesn't actually create a circuit object, which may be desirable
+        in some scenarios.
+
+        Parameters
+        ----------
+        s : string
+            The string to parse.
+
+        lookup : dict, optional
+            A dictionary with keys == reflbls and values == tuples of operation labels
+            which can be used for substitutions using the S<reflbl> syntax.
+
+        create_subcircuits : bool, optional
+            Whether to create sub-circuit-labels when parsing
+            string representations or to just expand these into non-subcircuit
+            labels.
+
+        Returns
+        -------
+        label_tuple: tuple
+            Tuple of operation labels representing the circuit's layers.
+        line_labels: tuple or None
+            A tuple or `None` giving the parsed line labels (follwing the '@' symbol) of the circuit.
+        occurrence_id: int or None
+            The "occurence id" - an integer following a second '@' symbol that identifies a particular
+            copy of this circuit.
+        compilable_indices : tuple
+            A tuple of layer indices (into `label_tuple`) marking the layers that can be "compiled",
+            and are *not* followed by a barrier so they can be compiled with following layers.  This
+            is non-empty only when there are explicit markers within the circuit string indicating
+            the presence or absence of barriers.
+        """
+        if lookup is None:
+            lookup = dict()
+        self._circuit_parser.lookup = lookup
+        circuit_tuple, circuit_labels, occurrence_id, compilable_indices = \
+            self._circuit_parser.parse(s, create_subcircuits)
+        compilable_indices = compilable_indices if compilable_indices is not None else ()
+
+        return circuit_tuple, circuit_labels, occurrence_id, compilable_indices
+
+    def parse_dataline(self, s, lookup=None, expected_counts=-1, create_subcircuits=True,
+                       line_labels=None):
         """
         Parse a data line (dataline in grammar)
 
@@ -104,29 +193,31 @@ class StdInputParser(object):
             A dictionary with keys == reflbls and values == tuples of operation labels
             which can be used for substitutions using the S<reflbl> syntax.
 
-        expectedCounts : int, optional
-            The expected number of counts to accompany the operation sequence on this
+        expected_counts : int, optional
+            The expected number of counts to accompany the circuit on this
             data line.  If < 0, no check is performed; otherwise raises ValueError
-            if the number of counts does not equal expectedCounts.
+            if the number of counts does not equal expected_counts.
+
+        create_subcircuits : bool, optional
+            Whether to create sub-circuit-labels when parsing string representations
+            or to just expand these into non-subcircuit labels.
 
         Returns
         -------
-        circuitTuple : tuple
-            The circuit as a tuple of layer-operation labels.
-        circuitStr : string
-            The circuit as represented as a string in the dataline (minus any line labels)
-        circuitLabels : tuple
-            A tuple of the circuit's line labels (given after '@' symbol on line)
+        circuit : Circuit
+            The circuit.
         counts : list
-            List of counts following the operation sequence.
+            List of counts following the circuit.
         """
 
         # get counts from end of s
+        if lookup is None:
+            lookup = {}
         parts = s.split()
         circuitStr = parts[0]
 
         counts = []
-        if expectedCounts == -1:  # then we expect to be given <outcomeLabel>:<count> items
+        if expected_counts == -1:  # then we expect to be given <outcomeLabel>:<count> items
             if len(parts) == 1:  # only a circuit, no counts on line
                 pass  # just leave counts empty
             elif parts[1] == "BAD":
@@ -143,17 +234,17 @@ class StdInputParser(object):
                 else:
                     counts.append(float(p))
 
-            if len(counts) > expectedCounts >= 0:
-                counts = counts[0:expectedCounts]
+            if len(counts) > expected_counts >= 0:
+                counts = counts[0:expected_counts]
 
             nCounts = len(counts)
-            if nCounts != expectedCounts:
-                raise ValueError("Found %d count columns when %d were expected" % (nCounts, expectedCounts))
+            if nCounts != expected_counts:
+                raise ValueError("Found %d count columns when %d were expected" % (nCounts, expected_counts))
             if nCounts == len(parts):
                 raise ValueError("No circuit column found -- all columns look like data")
 
-        circuitTuple, circuitLabels = self.parse_circuit(circuitStr, lookup, create_subcircuits)
-        return circuitTuple, circuitStr, circuitLabels, counts
+        circuit = self.parse_circuit(circuitStr, lookup, create_subcircuits)
+        return circuit, counts
 
     def parse_dictline(self, s):
         """
@@ -167,11 +258,20 @@ class StdInputParser(object):
         Returns
         -------
         circuitLabel : string
-            The user-defined label to represent this operation sequence.
+            The user-defined label to represent this circuit.
         circuitTuple : tuple
-            The operation sequence as a tuple of operation labels.
+            The circuit as a tuple of operation labels.
         circuitStr : string
-            The operation sequence as represented as a string in the dictline.
+            The circuit as represented as a string in the dictline.
+        circuitLineLabels : tuple
+            The line labels of the cirucit.
+        occurrence : object
+            Circuit's occurrence id, or `None` if there is none.
+        compilable_indices : tuple or None
+            A tuple of layer indices (into `label_tuple`) marking the layers that can be "compiled",
+            and are *not* followed by a barrier so they can be compiled with following layers.  This
+            is non-`None` only when there are explicit markers within the circuit string indicating
+            the presence or absence of barriers.
         """
         label = r'\s*([a-zA-Z0-9_]+)\s+'
         match = _re.match(label, s)
@@ -179,10 +279,10 @@ class StdInputParser(object):
             raise ValueError("'{}' is not a valid dictline".format(s))
         circuitLabel = match.group(1)
         circuitStr = s[match.end():]
-        circuitTuple, circuitLineLabels = self._circuit_parser.parse(circuitStr)
-        return circuitLabel, circuitTuple, circuitStr, circuitLineLabels
+        circuitTuple, circuitLineLabels, occurrence_id, compilable_indices = self._circuit_parser.parse(circuitStr)
+        return circuitLabel, circuitTuple, circuitStr, circuitLineLabels, occurrence_id, compilable_indices
 
-    def parse_stringfile(self, filename, line_labels="auto", num_lines=None):
+    def parse_stringfile(self, filename, line_labels="auto", num_lines=None, create_subcircuits=True):
         """
         Parse a circuit list file.
 
@@ -203,6 +303,10 @@ class StdInputParser(object):
             Specify this instead of `line_labels` to set the latter to the
             integers between 0 and `num_lines-1`.
 
+        create_subcircuits : bool, optional
+            Whether to create sub-circuit-labels when parsing
+            string representations or to just expand these into non-subcircuit
+            labels.
 
         Returns
         -------
@@ -214,14 +318,19 @@ class StdInputParser(object):
             for line in stringfile:
                 line = line.strip()
                 if len(line) == 0 or line[0] == '#': continue
-                layer_lbls, line_lbls = self.parse_circuit(line)
-                if line_lbls is None:
-                    line_lbls = line_labels  # default to the passed-in argument
-                    nlines = num_lines
-                else: nlines = None  # b/c we've got a valid line_lbls
-
-                circuit_list.append(_objs.Circuit(layer_lbls, stringrep=line.strip(),
-                                                  line_labels=line_lbls, num_lines=nlines, check=False))
+                if line_labels == "auto":
+                    # can be cached, and cache assumes "auto" behavior
+                    circuit = self.parse_circuit(line, {}, create_subcircuits)
+                else:
+                    layer_lbls, parsed_line_lbls, occurrence_id, compilable_indices = \
+                        self.parse_circuit_raw(line, {}, create_subcircuits)
+                    if parsed_line_lbls is None:
+                        parsed_line_lbls = line_labels  # default to the passed-in argument
+                    circuit = _Circuit._fastinit(layer_lbls, parsed_line_lbls, editable=False,
+                                                 name='', stringrep=line.strip(), occurrence=occurrence_id,
+                                                 compilable_layer_indices_tup=compilable_indices)
+                    ##Note: never expand subcircuits since parse_circuit_raw already does this w/create_subcircuits arg
+                circuit_list.append(circuit)
         return circuit_list
 
     def parse_dictfile(self, filename):
@@ -236,21 +345,23 @@ class StdInputParser(object):
         Returns
         -------
         dict
-           Dictionary with keys == operation sequence labels and values == Circuits.
+            Dictionary with keys == circuit labels and values == Circuits.
         """
         lookupDict = {}
         with open(filename, 'r') as dictfile:
             for line in dictfile:
                 line = line.strip()
                 if len(line) == 0 or line[0] == '#': continue
-                label, tup, s, lineLbls = self.parse_dictline(line)
+                label, tup, s, lineLbls, occurrence_id, compilable_indices = self.parse_dictline(line)
                 if lineLbls is None: lineLbls = "auto"
-                lookupDict[label] = _objs.Circuit(tup, stringrep=s, line_labels=lineLbls, check=False)
+                lookupDict[label] = _Circuit(tup, stringrep=s, line_labels=lineLbls,
+                                             check=False, occurrence=occurrence_id,
+                                             compilable_layer_indices=compilable_indices)
         return lookupDict
 
-    def parse_datafile(self, filename, showProgress=True,
-                       collisionAction="aggregate", recordZeroCnts=True,
-                       ignoreZeroCountLines=True, withTimes="auto"):
+    def parse_datafile(self, filename, show_progress=True,
+                       collision_action="aggregate", record_zero_counts=True,
+                       ignore_zero_count_lines=True, with_times="auto"):
         """
         Parse a data set file into a DataSet object.
 
@@ -259,25 +370,24 @@ class StdInputParser(object):
         filename : string
             The file to parse.
 
-        showProgress : bool, optional
+        show_progress : bool, optional
             Whether or not progress should be displayed
 
-        collisionAction : {"aggregate", "keepseparate"}
-            Specifies how duplicate operation sequences should be handled.  "aggregate"
-            adds duplicate-sequence counts, whereas "keepseparate" tags duplicate-
-            sequence data with by appending a final "#<number>" operation label to the
-            duplicated gate sequence.
+        collision_action : {"aggregate", "keepseparate"}
+            Specifies how duplicate circuits should be handled.  "aggregate"
+            adds duplicate-circuit counts, whereas "keepseparate" tags duplicate
+            circuits by setting their `.occurrence` IDs to sequential positive integers.
 
-        recordZeroCnts : bool, optional
+        record_zero_counts : bool, optional
             Whether zero-counts are actually recorded (stored) in the returned
             DataSet.  If False, then zero counts are ignored, except for potentially
             registering new outcome labels.
 
-        ignoreZeroCountLines : bool, optional
+        ignore_zero_count_lines : bool, optional
             Whether circuits for which there are no counts should be ignored
             (i.e. omitted from the DataSet) or not.
 
-        withTimes : bool or "auto", optional
+        with_times : bool or "auto", optional
             Whether to the time-stamped data format should be read in.  If
             "auto", then this format is allowed but not required.  Typically
             you only need to set this to False when reading in a template file.
@@ -302,8 +412,14 @@ class StdInputParser(object):
                 elif line.startswith("#"):
                     preamble_comments.append(line[1:].strip())
 
+        def str_to_outcome(x):  # always return a tuple as the "outcome label" (even if length 1)
+            return tuple(x.strip().split(":"))
+
         #Process premble
         orig_cwd = _os.getcwd()
+        outcomeLabels = None
+        outcome_labels_specified_in_preamble = False
+        dbID = None
         if len(_os.path.dirname(filename)) > 0: _os.chdir(
             _os.path.dirname(filename))  # allow paths relative to datafile path
         try:
@@ -312,28 +428,62 @@ class StdInputParser(object):
             else: lookupDict = {}
             if 'Columns' in preamble_directives:
                 colLabels = [l.strip() for l in preamble_directives['Columns'].split(",")]
-                outcomeLabels, fillInfo = self._extractLabelsFromColLabels(colLabels)
+                #OLD: outcomeLabels, fillInfo = self._extract_labels_from_col_labels(colLabels)
+                fixed_column_outcome_labels = []
+                for i, colLabel in enumerate(colLabels):
+                    assert(colLabel.endswith(' count')), \
+                        "Invalid count column name `%s`! (Only *count* columns are supported now)" % colLabel
+                    outcomeLabel = str_to_outcome(colLabel[:-len(' count')])
+                    if outcomeLabel not in fixed_column_outcome_labels:
+                        fixed_column_outcome_labels.append(outcomeLabel)
+
                 nDataCols = len(colLabels)
             else:
-                outcomeLabels = fillInfo = None
+                fixed_column_outcome_labels = None
                 nDataCols = -1  # no column count check
+            if 'Outcomes' in preamble_directives:
+                outcomeLabels = [l.strip().split(':') for l in preamble_directives['Outcomes'].split(",")]
+                outcome_labels_specified_in_preamble = True
+            if 'StdOutcomeQubits' in preamble_directives:
+                outcomeLabels = int(preamble_directives['StdOutcomeQubits'])
+                outcome_labels_specified_in_preamble = True
+            if not outcome_labels_specified_in_preamble and 'Columns' in preamble_directives:
+                outcomeLabels = sorted(fixed_column_outcome_labels)
+                outcome_labels_specified_in_preamble = True
+            if 'DatabaseID' in preamble_directives:
+                try:
+                    from bson.objectid import ObjectId as _ObjectId
+                    dbID = _ObjectId(preamble_directives['DatabaseID'])
+                except ImportError:
+                    _warnings.warn("Could not import DataSet's database ID because `bson` package is missing.")
+                    dbID = None
+
         finally:
             _os.chdir(orig_cwd)
 
         #Read data lines of data file
-        dataset = _objs.DataSet(outcomeLabels=outcomeLabels, collisionAction=collisionAction,
-                                comment="\n".join(preamble_comments))
+        dataset = _DataSet(outcome_labels=outcomeLabels, collision_action=collision_action,
+                           comment="\n".join(preamble_comments))
+
+        if dbID is not None:
+            dataset._dbcoordinates = (_DataSet.collection_name, dbID)
+
+        if outcome_labels_specified_in_preamble and (fixed_column_outcome_labels is not None):
+            fixed_column_outcome_indices = [dataset.olIndex[ol] for ol in fixed_column_outcome_labels]
+        else:
+            fixed_column_outcome_indices = None
+
         nLines = 0
         with open(filename, 'r') as datafile:
             nLines = sum(1 for line in datafile)
         nSkip = int(nLines / 100.0)
         if nSkip == 0: nSkip = 1
 
-        display_progress = get_display_progress_fn(showProgress)
+        display_progress = _create_display_progress_fn(show_progress)
         warnings = []  # to display *after* display progress
         looking_for = "circuit_line"; current_item = {}
 
-        def parse_comment(comment, filename, iLine):
+        def parse_comment(comment, filename, i_line):
             commentDict = {}
             comment = comment.strip()
             if len(comment) == 0: return {}
@@ -347,8 +497,10 @@ class StdInputParser(object):
             except:
                 commentDict = {}
                 warnings.append("%s Line %d: Could not parse comment '%s'"
-                                % (filename, iLine, comment))
+                                % (filename, i_line, comment))
             return commentDict
+
+        last_circuit = last_commentDict = None
 
         with open(filename, 'r') as inputfile:
             for (iLine, line) in enumerate(inputfile):
@@ -361,57 +513,98 @@ class StdInputParser(object):
                 else:
                     dataline, comment = line, ""
 
+                if looking_for == "circuit_data_or_line":
+                    # Special confusing case:  lines that just have a circuit could be either the beginning of a
+                    # long-format (with times, reps, etc, lines) block OR could just be a circuit that doesn't have
+                    # any count data.  This case figures out which one based on the line that follows.
+                    if len(dataline) == 0 or dataline.split()[0] in ('times:', 'outcomes:', 'repetitions:', 'aux:'):
+                        looking_for = "circuit_data"  # blank lines shoudl process acumulated data
+                    else:
+                        # previous blank line was just a circuit without any data (*not* the beginning of a timestamped
+                        # section), so add it with zero counts (if we don't ignore it), and look for next circuit.
+                        looking_for = "circuit_line"
+                        if ignore_zero_count_lines is False and last_circuit is not None:
+                            dataset.add_count_list(last_circuit, [], [], aux=last_commentDict,
+                                                   record_zero_counts=record_zero_counts, update_ol=False, unsafe=True)
+
                 if looking_for == "circuit_line":
                     if len(dataline) == 0: continue
                     try:
-                        circuitTuple, circuitStr, circuitLbls, valueList = \
+                        circuit, valueList = \
                             self.parse_dataline(dataline, lookupDict, nDataCols,
-                                                create_subcircuits=not _objs.Circuit.default_expand_subcircuits)
+                                                create_subcircuits=not _Circuit.default_expand_subcircuits)
 
                         commentDict = parse_comment(comment, filename, iLine)
 
                     except ValueError as e:
                         raise ValueError("%s Line %d: %s" % (filename, iLine, str(e)))
 
-                    if circuitLbls is None: circuitLbls = "auto"  # if line labels weren't given just use defaults
-                    circuit = _objs.Circuit(circuitTuple, stringrep=circuitStr,
-                                            line_labels=circuitLbls, expand_subcircuits=False, check=False)
-                    #Note: don't expand subcircuits because we've already directed parse_dataline to expand if needed
-
-                    if withTimes is True and len(valueList) > 0:
+                    if with_times is True and len(valueList) > 0:
                         raise ValueError(("%s Line %d: Circuit line cannot contain count information when "
-                                          "'withTimes=True'") % (filename, iLine))
+                                          "'with_times=True'") % (filename, iLine))
 
-                    if withTimes is False or len(valueList) > 0:
-                        bBad = ('BAD' in valueList)  # supresses warnings
-                        countDict = _objs.labeldicts.OutcomeLabelDict()
-                        self._fillDataCountDict(countDict, fillInfo, valueList)
-                        if all([(abs(v) < 1e-9) for v in list(countDict.values())]):
-                            if ignoreZeroCountLines is True:
-                                if not bBad:
-                                    s = circuitStr if len(circuitStr) < 40 else circuitStr[0:37] + "..."
+                    if with_times is False or len(valueList) > 0:
+                        if 'BAD' in valueList:  # entire line is known to be BAD => no data for this circuit
+                            oliArray = _np.zeros(0, dataset.oliType)
+                            countArray = _np.zeros(0, dataset.repType)
+                            count_values = []
+                        else:
+                            if fixed_column_outcome_labels is not None:
+                                if outcome_labels_specified_in_preamble:
+                                    outcome_indices, count_values = \
+                                        zip(*[(oli, v) for (oli, v) in zip(fixed_column_outcome_indices, valueList)
+                                              if v != '--'])  # drop "empty" sentinels
+                                else:
+                                    outcome_labels, count_values = \
+                                        zip(*[(nm, v) for (nm, v) in zip(fixed_column_outcome_labels, valueList)
+                                              if v != '--'])  # drop "empty" sentinels
+                                    dataset.add_outcome_labels(outcome_labels, update_ol=False)
+                                    outcome_indices = [dataset.olIndex[ol] for ol in outcome_labels]
+
+                            else:  # assume valueList is a list of (outcomeLabel, count) tuples -- see parse_dataline
+                                outcome_labels, count_values = zip(*valueList) if len(valueList) else ([], [])
+                                if not outcome_labels_specified_in_preamble:
+                                    dataset.add_outcome_labels(outcome_labels, update_ol=False)
+                                outcome_indices = [dataset.olIndex[ol] for ol in outcome_labels]
+
+                            # When reading in time-independent data (all at a single time), order (sort)
+                            # the counts according to outcome index to make it easier to compare datarows.
+                            assert len(set(outcome_indices)) == len(outcome_indices), "Duplicate fixed column!"
+                            if len(outcome_indices) > 0:  # sort count values by outcome index unless there aren't any
+                                outcome_indices, count_values = zip(*sorted(zip(outcome_indices, count_values)))
+
+                            oliArray = _np.array(outcome_indices, dataset.oliType)
+                            countArray = _np.array(count_values, dataset.repType)
+
+                        if all([(abs(v) < 1e-9) for v in count_values]):
+                            if ignore_zero_count_lines is True:
+                                if not ('BAD' in valueList):  # supress "no data" warning for known-bad circuits
+                                    s = circuit.str if len(circuit.str) < 40 else circuit.str[0:37] + "..."
                                     warnings.append("Dataline for circuit '%s' has zero counts and will be ignored" % s)
                                 continue  # skip lines in dataset file with zero counts (no experiments done)
                             else:
-                                #if not bBad:
-                                #    s = circuitStr if len(circuitStr) < 40 else circuitStr[0:37] + "..."
-                                #    warnings.append("Dataline for circuit '%s' has zero counts." % s)
-                                # don't make a fuss if we don't ignore the lines (needed for
-                                # fill_in_empty_dataset_with_fake_data).
                                 pass
 
-                        dataset.add_count_dict(circuit, countDict, aux=commentDict, recordZeroCnts=recordZeroCnts,
-                                               update_ol=False)  # for performance - to this once at the end.
+                        #Call this low-level function for performance, so need to construct outcome *index* arrays above
+                        dataset.add_count_arrays(circuit, oliArray, countArray,
+                                                 record_zero_counts=record_zero_counts, aux=commentDict)
                     else:
+                        current_item.clear()
                         current_item['circuit'] = circuit
-                        looking_for = "circuit_data"
+                        current_item['aux'] = commentDict
+                        last_circuit, last_commentDict = circuit, commentDict  # for circuit_data_or_line processing
+                        looking_for = "circuit_data" if (with_times is True) else "circuit_data_or_line"
 
                 elif looking_for == "circuit_data":
                     if len(line) == 0:
                         #add current item & look for next one
-                        dataset.add_raw_series_data(current_item['circuit'], current_item['outcomes'],
-                                                    current_item['times'], current_item.get('repetitions', None),
-                                                    recordZeroCnts=recordZeroCnts, aux=current_item.get('aux', None),
+                        # Note: if last line was just a circuit (without any following data lines)
+                        # then current_item will only have 'circuit' & 'aux' keys, so we need to use .get(...) below
+                        dataset.add_raw_series_data(current_item['circuit'], current_item.get('outcomes', []),
+                                                    current_item.get('times', []),
+                                                    current_item.get('repetitions', None),
+                                                    record_zero_counts=record_zero_counts,
+                                                    aux=current_item.get('aux', None),
                                                     update_ol=False)  # for performance - to this once at the end.
                         current_item.clear()
                         looking_for = "circuit_line"
@@ -422,17 +615,20 @@ class StdInputParser(object):
                         elif parts[0] == 'outcomes:':
                             current_item['outcomes'] = parts[1:]  # no conversion needed
                         elif parts[0] == 'repetitions:':
-                            current_item['repetitions'] = [int(x) for x in parts[1:]]
+                            try:
+                                current_item['repetitions'] = [int(x) for x in parts[1:]]
+                            except ValueError:  # raised if int(x) fails b/c reps are floats
+                                current_item['repetitions'] = [float(x) for x in parts[1:]]
                         elif parts[0] == 'aux:':
                             current_item['aux'] = parse_comment(" ".join(parts[1:]), filename, iLine)
                         else:
                             raise ValueError("Invalid circuit data-line prefix: '%s'" % parts[0])
 
-        if looking_for == "circuit_data" and current_item:
+        if looking_for in ("circuit_data", "circuit_data_or_line") and current_item:
             #add final circuit info (no blank line at end of file)
-            dataset.add_raw_series_data(current_item['circuit'], current_item['outcomes'],
-                                        current_item['times'], current_item.get('repetitions', None),
-                                        recordZeroCnts=recordZeroCnts, aux=current_item.get('aux', None),
+            dataset.add_raw_series_data(current_item['circuit'], current_item.get('outcomes', []),
+                                        current_item.get('times', []), current_item.get('repetitions', None),
+                                        record_zero_counts=record_zero_counts, aux=current_item.get('aux', None),
                                         update_ol=False)  # for performance - to this once at the end.
 
         dataset.update_ol()  # because we set update_ol=False above, we need to do this
@@ -442,84 +638,8 @@ class StdInputParser(object):
         dataset.done_adding_data()
         return dataset
 
-    def _extractLabelsFromColLabels(self, colLabels):
-        outcomeLabels = []; countCols = []; freqCols = []; impliedCountTotCol1Q = (-1, -1)
-
-        def str_to_outcome(x):  # always return a tuple as the "outcome label" (even if length 1)
-            return tuple(x.strip().split(":"))
-
-        for i, colLabel in enumerate(colLabels):
-            if colLabel.endswith(' count'):
-                outcomeLabel = str_to_outcome(colLabel[:-len(' count')])
-                if outcomeLabel not in outcomeLabels: outcomeLabels.append(outcomeLabel)
-                countCols.append((outcomeLabel, i))
-
-            elif colLabel.endswith(' frequency'):
-                if 'count total' not in colLabels:
-                    raise ValueError("Frequency columns specified without count total")
-                else: iTotal = colLabels.index('count total')
-                outcomeLabel = str_to_outcome(colLabel[:-len(' frequency')])
-                if outcomeLabel not in outcomeLabels: outcomeLabels.append(outcomeLabel)
-                freqCols.append((outcomeLabel, i, iTotal))
-
-        if 'count total' in colLabels:
-            if ('1',) in outcomeLabels and ('0',) not in outcomeLabels:
-                outcomeLabels.append(('0',))
-                impliedCountTotCol1Q = ('0',), colLabels.index('count total')
-            elif ('0',) in outcomeLabels and ('1',) not in outcomeLabels:
-                outcomeLabels.append(('1',))
-                impliedCountTotCol1Q = '1', colLabels.index('count total')
-            #TODO - add standard count completion for 2Qubit case?
-
-        fillInfo = (countCols, freqCols, impliedCountTotCol1Q)
-        return outcomeLabels, fillInfo
-
-    def _fillDataCountDict(self, countDict, fillInfo, colValues):
-        if 'BAD' in colValues:
-            return  # indicates entire row is known to be bad (no counts)
-
-        #Note: can use setitem_unsafe here because countDict is a OutcomeLabelDict and
-        # by construction (see str_to_outcome in _extractLabelsFromColLabels) the
-        # outcome labels in fillInfo are *always* tuples.
-        if fillInfo is not None:
-            countCols, freqCols, impliedCountTotCol1Q = fillInfo
-
-            for outcomeLabel, iCol in countCols:
-                if colValues[iCol] == '--': continue  # skip blank sentinels
-                if colValues[iCol] > 0 and colValues[iCol] < 1:
-                    _warnings.warn("Count column (%d) contains value(s) between 0 and 1 - "
-                                   "could this be a frequency?" % iCol)
-                assert(not isinstance(colValues[iCol], tuple)), \
-                    "Expanded-format count not allowed with column-key header"
-                countDict.setitem_unsafe(outcomeLabel, colValues[iCol])
-
-            for outcomeLabel, iCol, iTotCol in freqCols:
-                if colValues[iCol] == '--' or colValues[iTotCol] == '--': continue  # skip blank sentinels
-                if colValues[iCol] < 0 or colValues[iCol] > 1.0:
-                    _warnings.warn("Frequency column (%d) contains value(s) outside of [0,1.0] interval - "
-                                   "could this be a count?" % iCol)
-                assert(not isinstance(colValues[iTotCol], tuple)), \
-                    "Expanded-format count not allowed with column-key header"
-                countDict.setitem_unsafe(outcomeLabel, colValues[iCol] * colValues[iTotCol])
-
-            if impliedCountTotCol1Q[1] >= 0:
-                impliedOutcomeLabel, impliedCountTotCol = impliedCountTotCol1Q
-                if impliedOutcomeLabel == ('0',):
-                    countDict.setitem_unsafe(('0',), colValues[impliedCountTotCol] - countDict[('1',)])
-                else:
-                    countDict.setitem_unsafe(('1',), colValues[impliedCountTotCol] - countDict[('0',)])
-
-        else:  # assume colValues is a list of (outcomeLabel, count) tuples
-            for tup in colValues:
-                assert(isinstance(tup, tuple)), \
-                    ("Outcome labels must be specified with"
-                     "count data when there's no column-key header")
-                assert(len(tup) == 2), "Invalid count! (parsed to %s)" % str(tup)
-                countDict.setitem_unsafe(tup[0], tup[1])
-        return countDict
-
-    def parse_multidatafile(self, filename, showProgress=True,
-                            collisionAction="aggregate", recordZeroCnts=True, ignoreZeroCountLines=True):
+    def parse_multidatafile(self, filename, show_progress=True,
+                            collision_action="aggregate", record_zero_counts=True, ignore_zero_count_lines=True):
         """
         Parse a multiple data set file into a MultiDataSet object.
 
@@ -528,21 +648,20 @@ class StdInputParser(object):
         filename : string
             The file to parse.
 
-        showProgress : bool, optional
+        show_progress : bool, optional
             Whether or not progress should be displayed
 
-        collisionAction : {"aggregate", "keepseparate"}
-            Specifies how duplicate operation sequences should be handled.  "aggregate"
-            adds duplicate-sequence counts, whereas "keepseparate" tags duplicate-
-            sequence data with by appending a final "#<number>" operation label to the
-            duplicated gate sequence.
+        collision_action : {"aggregate", "keepseparate"}
+            Specifies how duplicate circuits should be handled.  "aggregate"
+            adds duplicate-circuit counts, whereas "keepseparate" tags duplicate
+            circuits by setting their `.occurrence` IDs to sequential positive integers.
 
-        recordZeroCnts : bool, optional
+        record_zero_counts : bool, optional
             Whether zero-counts are actually recorded (stored) in the returned
             MultiDataSet.  If False, then zero counts are ignored, except for
             potentially registering new outcome labels.
 
-        ignoreZeroCountLines : bool, optional
+        ignore_zero_count_lines : bool, optional
             Whether circuits for which there are no counts should be ignored
             (i.e. omitted from the MultiDataSet) or not.
 
@@ -577,7 +696,7 @@ class StdInputParser(object):
             if 'Columns' in preamble_directives:
                 colLabels = [l.strip() for l in preamble_directives['Columns'].split(",")]
             else: colLabels = ['dataset1 1 count', 'dataset1 count total']
-            dsOutcomeLabels, fillInfo = self._extractLabelsFromMultiDataColLabels(colLabels)
+            dsOutcomeLabels, fillInfo = self._extract_labels_from_multi_data_col_labels(colLabels)
             nDataCols = len(colLabels)
         finally:
             _os.chdir(orig_cwd)
@@ -585,8 +704,8 @@ class StdInputParser(object):
         #Read data lines of data file
         datasets = _OrderedDict()
         for dsLabel, outcomeLabels in dsOutcomeLabels.items():
-            datasets[dsLabel] = _objs.DataSet(outcomeLabels=outcomeLabels,
-                                              collisionAction=collisionAction)
+            datasets[dsLabel] = _DataSet(outcome_labels=outcomeLabels,
+                                         collision_action=collision_action)
 
         dsCountDicts = _OrderedDict()
         for dsLabel in dsOutcomeLabels: dsCountDicts[dsLabel] = {}
@@ -596,9 +715,9 @@ class StdInputParser(object):
             nLines = sum(1 for line in datafile)
         nSkip = max(int(nLines / 100.0), 1)
 
-        display_progress = get_display_progress_fn(showProgress)
+        display_progress = _create_display_progress_fn(show_progress)
         warnings = []  # to display *after* display progress
-        mds = _objs.MultiDataSet(comment="\n".join(preamble_comments))
+        mds = _MultiDataSet(comment="\n".join(preamble_comments))
 
         with open(filename, 'r') as inputfile:
             for (iLine, line) in enumerate(inputfile):
@@ -613,9 +732,9 @@ class StdInputParser(object):
                 if len(dataline) == 0: continue
 
                 try:
-                    circuitTuple, circuitStr, circuitLbls, valueList = \
+                    circuit, valueList = \
                         self.parse_dataline(dataline, lookupDict, nDataCols,
-                                            create_subcircuits=not _objs.Circuit.default_expand_subcircuits)
+                                            create_subcircuits=not _Circuit.default_expand_subcircuits)
 
                     commentDict = {}
                     comment = comment.strip()
@@ -632,30 +751,27 @@ class StdInputParser(object):
                 except ValueError as e:
                     raise ValueError("%s Line %d: %s" % (filename, iLine, str(e)))
 
-                if circuitLbls is None: circuitLbls = "auto"  # if line labels aren't given find them automatically
-                opStr = _objs.Circuit(circuitTuple, stringrep=circuitStr, line_labels=circuitLbls,
-                                      check=False, expand_subcircuits=False)  # , lookup=lookupDict)
-                #Note: don't expand subcircuits because we've already directed parse_dataline to expand if needed
                 bBad = ('BAD' in valueList)  # supresses warnings
-                self._fillMultiDataCountDicts(dsCountDicts, fillInfo, valueList)
+                for count_dict in dsCountDicts.values(): count_dict.clear()  # reset before filling
+                self._fill_multi_data_count_dicts(dsCountDicts, fillInfo, valueList)
 
                 bSkip = False
                 if all([(abs(v) < 1e-9) for cDict in dsCountDicts.values() for v in cDict.values()]):
-                    if ignoreZeroCountLines:
+                    if ignore_zero_count_lines:
                         if not bBad:
-                            s = circuitStr if len(circuitStr) < 40 else circuitStr[0:37] + "..."
+                            s = circuit.str if len(circuit.str) < 40 else circuit.str[0:37] + "..."
                             warnings.append("Dataline for circuit '%s' has zero counts and will be ignored" % s)
                         bSkip = True  # skip lines in dataset file with zero counts (no experiments done)
                     else:
                         if not bBad:
-                            s = circuitStr if len(circuitStr) < 40 else circuitStr[0:37] + "..."
+                            s = circuit.str if len(circuit.str) < 40 else circuit.str[0:37] + "..."
                             warnings.append("Dataline for circuit '%s' has zero counts." % s)
 
                 if not bSkip:
                     for dsLabel, countDict in dsCountDicts.items():
                         datasets[dsLabel].add_count_dict(
-                            opStr, countDict, recordZeroCnts=recordZeroCnts, update_ol=False)
-                        mds.add_auxiliary_info(opStr, commentDict)
+                            circuit, countDict, record_zero_counts=record_zero_counts, update_ol=False)
+                        mds.add_auxiliary_info(circuit, commentDict)
 
         for dsLabel, ds in datasets.items():
             ds.update_ol()  # because we set update_ol=False above, we need to do this
@@ -667,17 +783,21 @@ class StdInputParser(object):
     #Note: outcome labels must not contain spaces since we use spaces to separate
     # the outcome label from the dataset label
 
-    def _extractLabelsFromMultiDataColLabels(self, colLabels):
+    def _extract_labels_from_multi_data_col_labels(self, col_labels):
+
+        def str_to_outcome(x):  # always return a tuple as the "outcome label" (even if length 1)
+            return tuple(x.strip().split(":"))
+
         dsOutcomeLabels = _OrderedDict()
         countCols = []; freqCols = []; impliedCounts1Q = []
-        for i, colLabel in enumerate(colLabels):
+        for i, colLabel in enumerate(col_labels):
             wordsInColLabel = colLabel.split()  # split on whitespace into words
             if len(wordsInColLabel) < 3: continue  # allow other columns we don't recognize
 
             if wordsInColLabel[-1] == 'count':
                 if len(wordsInColLabel) > 3:
                     _warnings.warn("Column label '%s' has more words than were expected (3)" % colLabel)
-                outcomeLabel = wordsInColLabel[-2]
+                outcomeLabel = str_to_outcome(wordsInColLabel[-2])
                 dsLabel = wordsInColLabel[-3]
                 if dsLabel not in dsOutcomeLabels:
                     dsOutcomeLabels[dsLabel] = [outcomeLabel]
@@ -687,12 +807,12 @@ class StdInputParser(object):
             elif wordsInColLabel[-1] == 'frequency':
                 if len(wordsInColLabel) > 3:
                     _warnings.warn("Column label '%s' has more words than were expected (3)" % colLabel)
-                outcomeLabel = wordsInColLabel[-2]
+                outcomeLabel = str_to_outcome(wordsInColLabel[-2])
                 dsLabel = wordsInColLabel[-3]
-                if '%s count total' % dsLabel not in colLabels:
+                if '%s count total' % dsLabel not in col_labels:
                     raise ValueError("Frequency columns specified without"
                                      "count total for dataset '%s'" % dsLabel)
-                else: iTotal = colLabels.index('%s count total' % dsLabel)
+                else: iTotal = col_labels.index('%s count total' % dsLabel)
 
                 if dsLabel not in dsOutcomeLabels:
                     dsOutcomeLabels[dsLabel] = [outcomeLabel]
@@ -700,51 +820,52 @@ class StdInputParser(object):
                 freqCols.append((dsLabel, outcomeLabel, i, iTotal))
 
         for dsLabel, outcomeLabels in dsOutcomeLabels.items():
-            if '%s count total' % dsLabel in colLabels:
-                if '1' in outcomeLabels and '0' not in outcomeLabels:
-                    dsOutcomeLabels[dsLabel].append('0')
-                    iTotal = colLabels.index('%s count total' % dsLabel)
-                    impliedCounts1Q.append((dsLabel, '0', iTotal))
-                if '0' in outcomeLabels and '1' not in outcomeLabels:
-                    dsOutcomeLabels[dsLabel].append('1')
-                    iTotal = colLabels.index('%s count total' % dsLabel)
-                    impliedCounts1Q.append((dsLabel, '1', iTotal))
+            if '%s count total' % dsLabel in col_labels:
+                if ('1',) in outcomeLabels and ('0',) not in outcomeLabels:
+                    dsOutcomeLabels[dsLabel].append(('0',))
+                    iTotal = col_labels.index('%s count total' % dsLabel)
+                    impliedCounts1Q.append((dsLabel, ('0',), iTotal))
+                if ('0',) in outcomeLabels and ('1',) not in outcomeLabels:
+                    dsOutcomeLabels[dsLabel].append(('1',))
+                    iTotal = col_labels.index('%s count total' % dsLabel)
+                    impliedCounts1Q.append((dsLabel, ('1',), iTotal))
 
             #TODO - add standard count completion for 2Qubit case?
 
         fillInfo = (countCols, freqCols, impliedCounts1Q)
         return dsOutcomeLabels, fillInfo
 
-    def _fillMultiDataCountDicts(self, countDicts, fillInfo, colValues):
-        countCols, freqCols, impliedCounts1Q = fillInfo
+    def _fill_multi_data_count_dicts(self, count_dicts, fill_info, col_values):
+        countCols, freqCols, impliedCounts1Q = fill_info
 
         for dsLabel, outcomeLabel, iCol in countCols:
-            if colValues[iCol] == '--':
+            if col_values[iCol] == '--':
                 continue
-            if colValues[iCol] > 0 and colValues[iCol] < 1:
+            if col_values[iCol] > 0 and col_values[iCol] < 1:
                 raise ValueError("Count column (%d) contains value(s) between 0 and 1 - "
                                  "could this be a frequency?" % iCol)
-            countDicts[dsLabel][outcomeLabel] = colValues[iCol]
+            count_dicts[dsLabel][outcomeLabel] = col_values[iCol]
 
         for dsLabel, outcomeLabel, iCol, iTotCol in freqCols:
-            if colValues[iCol] == '--':
+            if col_values[iCol] == '--':
                 continue
-            if colValues[iCol] < 0 or colValues[iCol] > 1.0:
+            if col_values[iCol] < 0 or col_values[iCol] > 1.0:
                 raise ValueError("Frequency column (%d) contains value(s) outside of [0,1.0] interval - "
                                  "could this be a count?" % iCol)
-            countDicts[dsLabel][outcomeLabel] = colValues[iCol] * colValues[iTotCol]
+            count_dicts[dsLabel][outcomeLabel] = col_values[iCol] * col_values[iTotCol]
 
         for dsLabel, outcomeLabel, iTotCol in impliedCounts1Q:
-            if colValues[iTotCol] == '--': raise ValueError("Mising total (== '--')!")
+            if col_values[iTotCol] == '--': raise ValueError("Mising total (== '--')!")
             if outcomeLabel == '0':
-                countDicts[dsLabel]['0'] = colValues[iTotCol] - countDicts[dsLabel]['1']
+                count_dicts[dsLabel]['0'] = col_values[iTotCol] - count_dicts[dsLabel]['1']
             elif outcomeLabel == '1':
-                countDicts[dsLabel]['1'] = colValues[iTotCol] - countDicts[dsLabel]['0']
+                count_dicts[dsLabel]['1'] = col_values[iTotCol] - count_dicts[dsLabel]['0']
 
         #TODO - add standard count completion for 2Qubit case?
-        return countDicts
+        return count_dicts
 
-    def parse_tddatafile(self, filename, showProgress=True, recordZeroCnts=True):
+    def parse_tddatafile(self, filename, show_progress=True, record_zero_counts=True,
+                         create_subcircuits=True):
         """
         Parse a timstamped data set file into a DataSet object.
 
@@ -753,13 +874,18 @@ class StdInputParser(object):
         filename : string
             The file to parse.
 
-        showProgress : bool, optional
+        show_progress : bool, optional
             Whether or not progress should be displayed
 
-        recordZeroCnts : bool, optional
+        record_zero_counts : bool, optional
             Whether zero-counts are actually recorded (stored) in the returned
             DataSet.  If False, then zero counts are ignored, except for
             potentially registering new outcome labels.
+
+        create_subcircuits : bool, optional
+            Whether to create sub-circuit-labels when parsing
+            string representations or to just expand these into non-subcircuit
+            labels.
 
         Returns
         -------
@@ -796,13 +922,13 @@ class StdInputParser(object):
         outcomeLabels = outcomeLabelAbbrevs.values()
 
         #Read data lines of data file
-        dataset = _objs.DataSet(outcomeLabels=outcomeLabels)
+        dataset = _DataSet(outcome_labels=outcomeLabels)
         with open(filename, 'r') as f:
             nLines = sum(1 for line in f)
         nSkip = int(nLines / 100.0)
         if nSkip == 0: nSkip = 1
 
-        display_progress = get_display_progress_fn(showProgress)
+        display_progress = _create_display_progress_fn(show_progress)
 
         with open(filename, 'r') as f:
             for (iLine, line) in enumerate(f):
@@ -814,10 +940,7 @@ class StdInputParser(object):
                     parts = line.split()
                     lastpart = parts[-1]
                     circuitStr = line[:-len(lastpart)].strip()
-                    circuitTuple, circuitLbls = self.parse_circuit(circuitStr, lookupDict)
-                    # maybe allow a default line_labels to be passed in later?
-                    if circuitLbls is None: circuitLbls = "auto"
-                    circuit = _objs.Circuit(circuitTuple, stringrep=circuitStr, line_labels=circuitLbls, check=False)
+                    circuit = self.parse_circuit(circuitStr, lookupDict, create_subcircuits)
                     timeSeriesStr = lastpart.strip()
                 except ValueError as e:
                     raise ValueError("%s Line %d: %s" % (filename, iLine, str(e)))
@@ -825,24 +948,24 @@ class StdInputParser(object):
                 seriesList = [outcomeLabelAbbrevs[abbrev] for abbrev in timeSeriesStr]  # iter over characters in str
                 timesList = list(range(len(seriesList)))  # FUTURE: specify an offset and step??
                 dataset.add_raw_series_data(circuit, seriesList, timesList,
-                                            recordZeroCnts=recordZeroCnts)
+                                            record_zero_counts=record_zero_counts)
 
         dataset.done_adding_data()
         return dataset
 
 
-def _evalElement(el, bComplex):
+def _eval_element(el, b_complex):
     myLocal = {'pi': _np.pi, 'sqrt': _np.sqrt}
     exec("element = %s" % el, {"__builtins__": None}, myLocal)
-    return complex(myLocal['element']) if bComplex else float(myLocal['element'])
+    return complex(myLocal['element']) if b_complex else float(myLocal['element'])
 
 
-def _evalRowList(rows, bComplex):
-    return _np.array([[_evalElement(x, bComplex) for x in r] for r in rows],
-                     'complex' if bComplex else 'd')
+def _eval_row_list(rows, b_complex):
+    return _np.array([[_eval_element(x, b_complex) for x in r] for r in rows],
+                     'complex' if b_complex else 'd')
 
 
-def read_model(filename):
+def parse_model(filename):
     """
     Parse a model file into a Model object.
 
@@ -855,12 +978,13 @@ def read_model(filename):
     -------
     Model
     """
+    from ..models import ExplicitOpModel as _ExplicitOpModel
     basis = 'pp'  # default basis to load as
 
     basis_abbrev = "pp"  # default assumed basis
     basis_dim = None
     gaugegroup_name = None
-    state_space_labels = None
+    state_space = None
 
     #First try to find basis:
     with open(filename) as inputfile:
@@ -882,43 +1006,47 @@ def read_model(filename):
                     _warnings.warn(("Unknown GAUGEGROUP name %s.  Default gauge"
                                     "group will be set to None") % gaugegroup_name)
             elif line.startswith("STATESPACE:"):
-                tpbs_lbls = []; tpbs_dims = []
+                tpbs_lbls = []; tpbs_udims = []
                 tensor_prod_blk_strs = line[len("STATESPACE:"):].split("+")
                 for tpb_str in tensor_prod_blk_strs:
-                    tpb_lbls = []; tpb_dims = []
+                    tpb_lbls = []; tpb_udims = []
                     for lbl_and_dim in tpb_str.split("*"):
                         start = lbl_and_dim.index('(')
                         end = lbl_and_dim.rindex(')')
                         lbl, dim = lbl_and_dim[:start], lbl_and_dim[start + 1:end]
                         tpb_lbls.append(lbl.strip())
-                        tpb_dims.append(int(dim.strip()))
+                        tpb_udims.append(int(_np.sqrt(int(dim.strip()))))
                     tpbs_lbls.append(tuple(tpb_lbls))
-                    tpbs_dims.append(tuple(tpb_dims))
-                state_space_labels = _objs.StateSpaceLabels(tpbs_lbls, tpbs_dims)
+                    tpbs_udims.append(tuple(tpb_udims))
+                state_space = _statespace.ExplicitStateSpace(tpbs_lbls, tpbs_udims)
 
     if basis_dim is not None:
         # then specfy a dimensionful basis at the outset
         # basis_dims should be just a single int now that the *vector-space* dimension
-        basis = _objs.BuiltinBasis(basis_abbrev, basis_dim)
+        basis = _baseobjs.BuiltinBasis(basis_abbrev, basis_dim)
     else:
         # otherwise we'll try to infer one from state space labels
-        if state_space_labels is not None:
-            basis = _objs.Basis.cast(basis_abbrev, state_space_labels.dim)
+        if state_space is not None:
+            basis = _baseobjs.Basis.cast(basis_abbrev, state_space.dim)
         else:
             raise ValueError("Cannot infer basis dimension!")
 
-    if state_space_labels is None:
+    if state_space is None:
         assert(basis_dim is not None)  # b/c of logic above
-        state_space_labels = _objs.StateSpaceLabels(['*'], [basis_dim])
+        state_space = _statespace.ExplicitStateSpace(['*'], [int(round(_np.sqrt(basis_dim)))])
         # special '*' state space label w/entire dimension inferred from BASIS line
 
-    mdl = _objs.ExplicitOpModel(state_space_labels, basis)
+    mdl = _ExplicitOpModel(state_space, basis)
 
     state = "look for label or property"
     cur_obj = None
     cur_group_obj = None
     cur_property = ""; cur_rows = []
     top_level_objs = []
+
+    def to_int(x):  # tries to convert state space labels to integers, but if fails OK
+        try: return int(x)
+        except Exception: return x
 
     with open(filename) as inputfile:
         for line in inputfile:
@@ -951,9 +1079,11 @@ def read_model(filename):
                 if any([line.startswith(pre) for pre in ("BASIS", "GAUGEGROUP", "STATESPACE")]):
                     pass  # handled above
 
-                elif len(parts) == 2:  # then this is a '<type>: <label>' line => new cur_obj
+                elif len(parts) >= 2:  # then this is a '<type>: <label>' line => new cur_obj
                     typ = parts[0].strip()
-                    label = parts[1].strip()
+                    label = _baseobjs.Label(name=parts[1].strip() if parts[1].strip() != "[]" else (),
+                                            state_space_labels=tuple(map(to_int, parts[2:]))
+                                            if len(parts) > 2 else None)
 
                     # place any existing cur_obj
                     if cur_obj is not None:
@@ -1010,35 +1140,35 @@ def read_model(filename):
     if cur_group_obj is not None:
         top_level_objs.append(cur_group_obj)
 
-    def get_liouville_mx(obj, prefix=""):
+    def _get_liouville_mx(obj, prefix=""):
         """ Process properties of `obj` to extract a single liouville representation """
         props = obj['properties']; lmx = None
         if prefix + "StateVec" in props:
-            ar = _evalRowList(props[prefix + "StateVec"], bComplex=True)
+            ar = _eval_row_list(props[prefix + "StateVec"], b_complex=True)
             if ar.shape == (1, 2):
                 stdmx = _tools.state_to_stdmx(ar[0, :])
                 lmx = _tools.stdmx_to_vec(stdmx, basis)
             else: raise ValueError("Invalid state vector shape for %s: %s" % (cur_label, ar.shape))
 
         elif prefix + "DensityMx" in props:
-            ar = _evalRowList(props[prefix + "DensityMx"], bComplex=True)
+            ar = _eval_row_list(props[prefix + "DensityMx"], b_complex=True)
             if ar.shape == (2, 2) or ar.shape == (4, 4):
                 lmx = _tools.stdmx_to_vec(ar, basis)
             else: raise ValueError("Invalid density matrix shape for %s: %s" % (cur_label, ar.shape))
 
         elif prefix + "LiouvilleVec" in props:
-            lmx = _np.transpose(_evalRowList(props[prefix + "LiouvilleVec"], bComplex=False))
+            lmx = _np.transpose(_eval_row_list(props[prefix + "LiouvilleVec"], b_complex=False))
 
         elif prefix + "UnitaryMx" in props:
-            ar = _evalRowList(props[prefix + "UnitaryMx"], bComplex=True)
-            lmx = _tools.change_basis(_tools.unitary_to_process_mx(ar), 'std', basis)
+            ar = _eval_row_list(props[prefix + "UnitaryMx"], b_complex=True)
+            lmx = _tools.unitary_to_superop(ar, basis)
 
         elif prefix + "UnitaryMxExp" in props:
-            ar = _evalRowList(props[prefix + "UnitaryMxExp"], bComplex=True)
-            lmx = _tools.change_basis(_tools.unitary_to_process_mx(_expm(-1j * ar)), 'std', basis)
+            ar = _eval_row_list(props[prefix + "UnitaryMxExp"], b_complex=True)
+            lmx = _tools.unitary_to_superop(_expm(-1j * ar), basis)
 
         elif prefix + "LiouvilleMx" in props:
-            lmx = _evalRowList(props[prefix + "LiouvilleMx"], bComplex=False)
+            lmx = _eval_row_list(props[prefix + "LiouvilleMx"], b_complex=False)
 
         if lmx is None:
             raise ValueError("No valid format found in %s" % str(list(props.keys())))
@@ -1052,24 +1182,24 @@ def read_model(filename):
 
         #Preps
         if cur_typ == "PREP":
-            mdl.preps[cur_label] = _objs.FullSPAMVec(
-                get_liouville_mx(obj), typ="prep")
+            mdl.preps[cur_label] = _state.FullState(
+                _get_liouville_mx(obj), basis)
         elif cur_typ == "TP-PREP":
-            mdl.preps[cur_label] = _objs.TPSPAMVec(
-                get_liouville_mx(obj))
+            mdl.preps[cur_label] = _state.TPState(_get_liouville_mx(obj), basis)
         elif cur_typ == "CPTP-PREP":
             props = obj['properties']
             assert("PureVec" in props and "ErrgenMx" in props)  # must always be Liouville reps!
-            qty = _evalRowList(props["ErrgenMx"], bComplex=False)
+            qty = _eval_row_list(props["ErrgenMx"], b_complex=False)
             nQubits = _np.log2(qty.size) / 2.0
             bQubits = bool(abs(nQubits - round(nQubits)) < 1e-10)  # integer # of qubits?
             proj_basis = "pp" if (basis == "pp" or bQubits) else basis
-            errorMap = _objs.LindbladDenseOp.from_operation_matrix(
-                qty, None, proj_basis, proj_basis, truncate=False, mxBasis=basis)  # unitary postfactor = Id
-            pureVec = _objs.StaticSPAMVec(_np.transpose(_evalRowList(props["PureVec"], bComplex=False)), typ="prep")
-            mdl.preps[cur_label] = _objs.LindbladSPAMVec(pureVec, errorMap, "prep")
+            errorgen = _op.LinbladErrorgen.from_operation_matrix(
+                qty, proj_basis, proj_basis, truncate=False, mx_basis=basis)
+            errorMap = _op.ExpErrorgenOp(errorgen)
+            pureVec = _state.StaticState(_np.transpose(_eval_row_list(props["PureVec"], b_complex=False)), basis)
+            mdl.preps[cur_label] = _state.ComposedState(pureVec, errorMap)
         elif cur_typ == "STATIC-PREP":
-            mdl.preps[cur_label] = _objs.StaticSPAMVec(get_liouville_mx(obj), typ="prep")
+            mdl.preps[cur_label] = _state.StaticState(_get_liouville_mx(obj), basis)
 
         #POVMs
         elif cur_typ in ("POVM", "TP-POVM", "CPTP-POVM"):
@@ -1077,66 +1207,72 @@ def read_model(filename):
             for sub_obj in obj['objects']:
                 sub_typ = sub_obj['type']
                 if sub_typ == "EFFECT":
-                    Evec = _objs.FullSPAMVec(get_liouville_mx(sub_obj), typ="effect")
+                    Evec = _povm.FullPOVMEffect(_get_liouville_mx(sub_obj), basis)
                 elif sub_typ == "STATIC-EFFECT":
-                    Evec = _objs.StaticSPAMVec(get_liouville_mx(sub_obj), typ="effect")
+                    Evec = _povm.StaticPOVMEffect(_get_liouville_mx(sub_obj), basis)
                 #elif sub_typ == "CPTP-EFFECT":
                 #    Evec = _objs.LindbladSPAMVec.from_spam_vector(qty,qty,"effect")
                 effects.append((sub_obj['label'], Evec))
 
             if cur_typ == "POVM":
-                mdl.povms[cur_label] = _objs.UnconstrainedPOVM(effects)
+                mdl.povms[cur_label] = _povm.UnconstrainedPOVM(effects)
             elif cur_typ == "TP-POVM":
                 assert(len(effects) > 1), "TP-POVMs must have at least 2 elements!"
-                mdl.povms[cur_label] = _objs.TPPOVM(effects)
+                mdl.povms[cur_label] = _povm.TPPOVM(effects)
             elif cur_typ == "CPTP-POVM":
                 props = obj['properties']
                 assert("ErrgenMx" in props)  # and it must always be a Liouville rep!
-                qty = _evalRowList(props["ErrgenMx"], bComplex=False)
+                qty = _eval_row_list(props["ErrgenMx"], b_complex=False)
                 nQubits = _np.log2(qty.size) / 2.0
                 bQubits = bool(abs(nQubits - round(nQubits)) < 1e-10)  # integer # of qubits?
                 proj_basis = "pp" if (basis == "pp" or bQubits) else basis
-                errorMap = _objs.LindbladDenseOp.from_operation_matrix(
-                    qty, None, proj_basis, proj_basis, truncate=False, mxBasis=basis)  # unitary postfactor = Id
-                base_povm = _objs.UnconstrainedPOVM(effects)  # could try to detect a ComputationalBasisPOVM in FUTURE
-                mdl.povms[cur_label] = _objs.LindbladPOVM(errorMap, base_povm)
+                errorgen = _op.LinbladErrorgen.from_operation_matrix(
+                    qty, proj_basis, proj_basis, truncate=False, mx_basis=basis)
+                errorMap = _op.ExpErrorgenOp(errorgen)
+                base_povm = _povm.UnconstrainedPOVM(effects)  # could try to detect a ComputationalBasisPOVM in FUTURE
+                mdl.povms[cur_label] = _povm.ComposedPOVM(errorMap, base_povm)
             else: assert(False), "Logic error!"
 
         elif cur_typ == "GATE":
-            mdl.operations[cur_label] = _objs.FullDenseOp(
-                get_liouville_mx(obj))
+            mdl.operations[cur_label] = _op.FullArbitraryOp(_get_liouville_mx(obj))
         elif cur_typ == "TP-GATE":
-            mdl.operations[cur_label] = _objs.TPDenseOp(
-                get_liouville_mx(obj))
-        elif cur_typ == "CPTP-GATE":
-            qty = get_liouville_mx(obj)
-            try:
-                unitary_post = get_liouville_mx(obj, "Ref")
-            except ValueError:
-                unitary_post = None
-            nQubits = _np.log2(qty.shape[0]) / 2.0
-            bQubits = bool(abs(nQubits - round(nQubits)) < 1e-10)  # integer # of qubits?
-            proj_basis = "pp" if (basis == "pp" or bQubits) else basis
-            mdl.operations[cur_label] = _objs.LindbladDenseOp.from_operation_matrix(
-                qty, unitary_post, proj_basis, proj_basis, truncate=False, mxBasis=basis)
+            mdl.operations[cur_label] = _op.FullTPOp(_get_liouville_mx(obj))
+        elif cur_typ == "COMPOSED-GATE":
+            i = 0; qtys = []
+            while True:
+                try:
+                    qtys.append(_get_liouville_mx(obj, '%d' % i))
+                except Exception:
+                    break
+                i += 1
+
+            mdl.operations[cur_label] = _op.ComposedOp(
+                [_op.StaticArbitraryOp(qty, evotype='default') for qty in qtys])
+
+            #Utilize this when we fix this:
+            #nQubits = _np.log2(qty.shape[0]) / 2.0
+            #bQubits = bool(abs(nQubits - round(nQubits)) < 1e-10)  # integer # of qubits?
+            #proj_basis = "pp" if (basis == "pp" or bQubits) else basis
+            #_op.ExpErrogenOp(_op.LinbladErrorgen.from_operation_matrix(
+            #qty, proj_basis, proj_basis, truncate=False, mx_basis=basis))
 
         elif cur_typ == "STATIC-GATE":
-            mdl.operations[cur_label] = _objs.StaticDenseOp(get_liouville_mx(obj))
+            mdl.operations[cur_label] = _op.StaticArbitraryOp(_get_liouville_mx(obj))
 
         elif cur_typ in ("Instrument", "TP-Instrument"):
             matrices = []
             for sub_obj in obj['objects']:
                 sub_typ = sub_obj['type']
-                qty = get_liouville_mx(sub_obj)
-                mxOrOp = _objs.StaticDenseOp(qty) if cur_typ == "STATIC-IGATE" \
+                qty = _get_liouville_mx(sub_obj)
+                mxOrOp = _op.StaticArbitraryOp(qty) if cur_typ == "STATIC-IGATE" \
                     else qty  # just add numpy array `qty` to matrices list
                 # and it will be made into a fully-param gate.
                 matrices.append((sub_obj['label'], mxOrOp))
 
             if cur_typ == "Instrument":
-                mdl.instruments[cur_label] = _objs.Instrument(matrices)
+                mdl.instruments[cur_label] = _instrument.Instrument(matrices)
             elif cur_typ == "TP-Instrument":
-                mdl.instruments[cur_label] = _objs.TPInstrument(matrices)
+                mdl.instruments[cur_label] = _instrument.TPInstrument(matrices)
             else: assert(False), "Logic error!"
         else:
             raise ValueError("Unknown type: %s!" % cur_typ)
@@ -1144,11 +1280,11 @@ def read_model(filename):
     #Add default gauge group -- the full group because
     # we add FullyParameterizedGates above.
     if gaugegroup_name == "Full":
-        mdl.default_gauge_group = _objs.FullGaugeGroup(mdl.dim)
+        mdl.default_gauge_group = _gaugegroup.FullGaugeGroup(mdl.state_space, mdl.basis, mdl.evotype)
     elif gaugegroup_name == "TP":
-        mdl.default_gauge_group = _objs.TPGaugeGroup(mdl.dim)
+        mdl.default_gauge_group = _gaugegroup.TPGaugeGroup(mdl.state_space, mdl.basis, mdl.evotype)
     elif gaugegroup_name == "Unitary":
-        mdl.default_gauge_group = _objs.UnitaryGaugeGroup(mdl.dim, mdl.basis)
+        mdl.default_gauge_group = _gaugegroup.UnitaryGaugeGroup(mdl.state_space, mdl.basis, mdl.evotype)
     else:
         mdl.default_gauge_group = None
 

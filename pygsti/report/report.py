@@ -1,4 +1,6 @@
-""" Internal model of a report during generation """
+"""
+Internal model of a report during generation
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -8,29 +10,58 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import time as _time
-import warnings as _warnings
-from pathlib import Path as _Path
-import shutil as _shutil
-from collections import defaultdict as _defaultdict, OrderedDict as _OrderedDict
 import pickle as _pickle
+import time as _time
+from collections import defaultdict as _defaultdict
+from pathlib import Path as _Path
 
-from . import autotitle as _autotitle
-from . import merge_helpers as _merge
-from .. import _version, tools as _tools
-from ..objects import VerbosityPrinter as _VerbosityPrinter, ExplicitOpModel as _ExplicitOpModel
-from . import workspace as _ws
-from .notebook import Notebook as _Notebook
+from pygsti.report import merge_helpers as _merge
+from pygsti.report import workspace as _ws
+from pygsti.report.notebook import Notebook as _Notebook
+from pygsti.baseobjs import VerbosityPrinter as _VerbosityPrinter
 
 
 # TODO this whole thing needs to be rewritten with different reports as derived classes
 class Report:
-    """ The internal model of a report.
+    """
+    The internal model of a report.
 
     This class should never be instantiated directly. Instead, users
     should use the appropriate factory method in
     `pygsti.report.factory`.
 
+    Parameters
+    ----------
+    templates : dict (str -> Path-like)
+        A map of the available report generation types (html, pdf, notebook) to template paths.
+
+    results : Results or similar
+        The underlying Results-like object used to generate this report.
+
+    sections : iterable of Section
+        Collection of sections to be built into the generated report.
+
+    flags : set of str
+        Set of flags controlling aspects of report generation.
+
+    global_qtys : dict (str -> any)
+        Key-value map of report quantities not tied to any specific section.
+
+    report_params : dict (str -> any)
+        Key-value map of report quantities used when building sections.
+
+    build_defaults : dict (str -> any), optional
+        Default values for the `build_options` parameter of this
+        instance's build methods. Defaults to an empty dict.
+
+    pdf_available : bool, optional
+        ``True`` if the underlying results can be represented as a
+        static PDF. If this report cannot be represented statically,
+        ``write_pdf`` will raise. Defaults to ``True``.
+
+    workspace : Workspace, optional
+        A ``Workspace`` used for caching figure computation. By
+        default, a new workspace will be used.
     """
     def __init__(self, templates, results, sections, flags,
                  global_qtys, report_params, build_defaults=None,
@@ -63,7 +94,8 @@ class Report:
                    connected=False, build_options=None, brevity=0,
                    precision=None, resizable=True, autosize='initial',
                    single_file=False, verbosity=0):
-        """ Write this report to the disk as a collection of HTML documents.
+        """
+        Write this report to the disk as a collection of HTML documents.
 
         Parameters
         ----------
@@ -88,8 +120,8 @@ class Report:
             them.
 
         build_options : dict
-           Dict of options for building plots. Expected values are
-           defined during construction of this report object.
+            Dict of options for building plots. Expected values are
+            defined during construction of this report object.
 
         brevity : int, optional
             Amount of detail to include in the report.  Larger values mean smaller
@@ -148,24 +180,25 @@ class Report:
             assert(embed_figures), \
                 "Single-file mode requires `embed_figures` to be True"
             _merge.merge_jinja_template(
-                qtys, path, templateDir=self._templates['html'],
+                qtys, path, template_dir=self._templates['html'],
                 auto_open=auto_open, precision=precision,
                 link_to=link_to, connected=connected, toggles=toggles,
-                renderMath=True, resizable=resizable,
+                render_math=True, resizable=resizable,
                 autosize=autosize, verbosity=verbosity
             )
         else:
             _merge.merge_jinja_template_dir(
-                qtys, path, templateDir=self._templates['html'],
+                qtys, path, template_dir=self._templates['html'],
                 auto_open=auto_open, precision=precision,
                 link_to=link_to, connected=connected, toggles=toggles,
-                renderMath=True, resizable=resizable,
+                render_math=True, resizable=resizable,
                 autosize=autosize, embed_figures=embed_figures,
                 verbosity=verbosity
             )
 
     def write_notebook(self, path, auto_open=False, connected=False, verbosity=0):
-        """ Write this report to the disk as an IPython notebook
+        """
+        Write this report to the disk as an IPython notebook
 
         A notebook report allows the user to interact more flexibly with the data
         underlying the figures, and to easily generate customized variants on the
@@ -173,11 +206,17 @@ class Report:
         who want to tinker with the standard analysis presented in the static
         HTML or LaTeX format reports.
 
+        Note that interactive cells in report notebooks require JavaScript,
+        and therefore do not work with JupyterLab. Please continue to use
+        classic Jupyter notebooks for PyGSTi report notebooks. To track this issue,
+        see https://github.com/pyGSTio/pyGSTi/issues/205.
+
         Parameters
         ----------
         path : str or path-like object
             The filesystem path to write the report to. By convention,
             this should use the `.ipynb` file extension.
+
         auto_open : bool, optional
             If True, automatically open the report in a web browser after it
             has been generated.
@@ -188,7 +227,7 @@ class Report:
             to web resources (e.g. CDN libraries) instead of embedding them.
 
         verbosity : int, optional
-           How much detail to send to stdout.
+            How much detail to send to stdout.
         """
 
         # TODO this only applies to standard reports; rewrite generally
@@ -196,7 +235,7 @@ class Report:
         confidenceLevel = self._report_params['confidence_level']
 
         path = _Path(path)
-        printer = _VerbosityPrinter.build_printer(verbosity)
+        printer = _VerbosityPrinter.create_printer(verbosity)
         templatePath = _Path(__file__).parent / 'templates' / self._templates['notebook']
         outputDir = path.parent
 
@@ -215,6 +254,12 @@ class Report:
         nb = _Notebook()
         nb.add_markdown('# {title}\n(Created on {date})'.format(
             title=title, date=_time.strftime("%B %d, %Y")))
+        
+        nb.add_markdown("## JupyterLab Incompatibility Warning\n" + 
+        "<font color='red'>Note that interactive cells in report notebooks require JavaScript, " +
+        "and therefore do not work with JupyterLab. Please continue to use " +
+        "classic Jupyter notebooks for PyGSTi report notebooks. To track this issue, " +
+        "see https://github.com/pyGSTio/pyGSTi/issues/205.</font>")
 
         nb.add_code("""\
             import pickle
@@ -250,31 +295,25 @@ class Report:
             gopt      = '{goLabel}'
             ds        = results.dataset
 
-            gssFinal  = results.circuit_structs['final']
-            Ls        = results.circuit_structs['final'].Ls
-            gssPerIter = results.circuit_structs['iteration'] #ALL_L
+            circuits_final = results.circuit_lists['final']
+            circuits_per_iter = results.circuit_lists['iteration']  # All L-values
+            if isinstance(circuits_final, pygsti.circuits.PlaquetteGridCircuitStructure):
+                Ls = circuits_final.xs
 
-            prepStrs = results.circuit_lists['prep fiducials']
-            effectStrs = results.circuit_lists['meas fiducials']
+            prep_fiducials = results.circuit_lists['prep fiducials']
+            meas_fiducials = results.circuit_lists['meas fiducials']
             germs = results.circuit_lists['germs']
-            strs = (prepStrs, effectStrs)
 
             params = estimate.parameters
-            objective = estimate.parameters['objective']
-            if objective == "logl":
-                mpc = estimate.parameters['minProbClip']
-            else:
-                mpc = estimate.parameters['minProbClipForWeighting']
+            objfn_builder = estimate.parameters.get('final_objfn_builder', 'logl')
             clifford_compilation = estimate.parameters.get('clifford_compilation',None)
+            effective_ds, scale_submxs = estimate.create_effective_dataset(True)
 
-            effective_ds, scale_subMxs = estimate.get_effective_dataset(True)
-            scaledSubMxsDict = {{'scaling': scale_subMxs, 'scaling.colormap': "revseq"}}
-
-            models       = estimate.models
-            mdl          = models[gopt] #FINAL
-            mdl_final    = models['final iteration estimate'] #ITER
-            target_model = models['target']
-            mdlPerIter   = models['iteration estimates']
+            models        = estimate.models
+            mdl           = models[gopt]  # final, gauge-optimized estimate
+            mdl_final     = models['final iteration estimate'] # final estimate before gauge-opt
+            target_model  = models['target']
+            mdl_per_iter  = [models['iteration %d estimate' % k] for k in range(estimate.num_iterations)]
 
             mdl_eigenspace_projected = pygsti.tools.project_to_target_eigenspace(mdl, target_model)
 
@@ -284,7 +323,7 @@ class Report:
             if confidenceLevel is None:
                 cri = None
             else:
-                crfactory = estimate.get_confidence_region_factory(gopt)
+                crfactory = estimate.create_confidence_region_factory(gopt)
                 region_type = "normal" if confidenceLevel >= 0 else "non-markovian"
                 cri = crfactory.view(abs(confidenceLevel), region_type)\
         """.format(goLabel=goLabels[0], CL=confidenceLevel))
@@ -310,10 +349,10 @@ class Report:
             nb.add_code("""\
             dslbl1 = '{dsLbl1}'
             dslbl2 = '{dsLbl2}'
-            dscmp_gss = results_dict[dslbl1].circuit_structs['final']
+            dscmp_circuits = results_dict[dslbl1].circuit_lists['final']
             ds1 = results_dict[dslbl1].dataset
             ds2 = results_dict[dslbl2].dataset
-            dscmp = pygsti.obj.DataComparator([ds1, ds2], DS_names=[dslbl1, dslbl2])
+            dscmp = pygsti.baseobjs.DataComparator([ds1, ds2], ds_names=[dslbl1, dslbl2])
             """.format(dsLbl1=dsKeys[0], dsLbl2=dsKeys[1]))
             nb.add_notebook_text_files([
                 templatePath / 'data_comparison.txt'])
@@ -325,6 +364,11 @@ class Report:
 
         printer.log("Report Notebook created as %s" % path)
 
+        printer.warning("""Note that interactive cells in report notebooks require JavaScript,
+         and therefore do not work with JupyterLab. Please continue to use
+         classic Jupyter notebooks for PyGSTi report notebooks. To track this issue,
+         see https://github.com/pyGSTio/pyGSTi/issues/205.""")
+
         if auto_open:
             port = "auto" if auto_open is True else int(auto_open)
             nb.launch(str(path), port=port)
@@ -335,7 +379,8 @@ class Report:
                   build_options=None,
                   brevity=0, precision=None, auto_open=False,
                   comm=None, verbosity=0):
-        """ Write this report to the disk as a PDF document.
+        """
+        Write this report to the disk as a PDF document.
 
         Parameters
         ----------
@@ -351,8 +396,8 @@ class Report:
             List of flags to pass when calling `latex_cmd`.
 
         build_options : dict
-           Dict of options for building plots. Expected values are
-           defined during construction of this report object.
+            Dict of options for building plots. Expected values are
+            defined during construction of this report object.
 
         brevity : int, optional
             Amount of detail to include in the report.  Larger values mean smaller
@@ -385,7 +430,7 @@ class Report:
 
         if not self._pdf_available:
             raise ValueError(("PDF output unavailable.  (Usually this is because this report"
-                              " has multiple gauge optimizations and/or datasets.)"))
+                              " has multiple gauge optimizations and/or data.)"))
 
         toggles = _defaultdict(lambda: False)
         toggles.update(
@@ -394,7 +439,7 @@ class Report:
         for k in range(brevity, 4):
             toggles['BrevityLT' + str(k + 1)] = True
 
-        printer = _VerbosityPrinter.build_printer(verbosity, comm=comm)
+        printer = _VerbosityPrinter.create_printer(verbosity, comm=comm)
         path = _Path(path)
         latex_flags = latex_flags or ["-interaction=nonstopmode", "-halt-on-error", "-shell-escape"]
 

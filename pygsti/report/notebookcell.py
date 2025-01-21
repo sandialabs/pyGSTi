@@ -1,4 +1,6 @@
-""" Defines the NotebookCell class """
+"""
+Defines the NotebookCell class
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -13,31 +15,42 @@ import os as _os
 
 
 class NotebookCell(object):
-    '''
+    """
     Struct representing either a code or markdown cell
-    '''
 
-    def __init__(self, cellType='code', source=None):
+    Parameters
+    ----------
+    cell_type : str, optional
+        Tag for the cell: either 'code' or 'markdown'
+
+    source : list, optional
+        A list of strings that are the lines of code/markdown in the cell.
+    """
+
+    def __init__(self, cell_type='code', source=None):
         '''
         Build a notebook cell
 
         Parameters
         ----------
-        cellType : str, optional
+        cell_type : str, optional
             tag for the cell: either 'code' or 'markdown'
         source : list(str), optional
             lines of code/markdown in the cell
         '''
         if source is None:
             source = []
-        self.cellType = cellType
+        self.cellType = cell_type
         self.source = source
 
     def to_json_dict(self):
-        '''
-        Convert this cell to a json representation of a cell,
-        using a default template
-        '''
+        """
+        Convert this cell to a json representation of a cell, using a default template
+
+        Returns
+        -------
+        dict
+        """
         if self.cellType == 'markdown':
             templateFilename = 'MDcell.json'
         elif self.cellType == 'code':

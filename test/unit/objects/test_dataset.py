@@ -1,11 +1,15 @@
-import numpy as np
-from collections import OrderedDict
+import pytest
+
 import pickle
+from collections import OrderedDict
 
+import numpy as np
+
+import pygsti.circuits as pc
+from pygsti.baseobjs import outcomelabeldict as ld
+from pygsti.circuits import Circuit
+from pygsti.data import DataSet
 from ..util import BaseCase
-
-import pygsti.construction as pc
-from pygsti.objects import DataSet, labeldicts as ld, Circuit
 
 
 class DataSetTester(BaseCase):
@@ -27,19 +31,19 @@ class DataSetTester(BaseCase):
         self.reps_nonstc = [10 * np.ones(2, 'i'), 10 * np.ones(2, 'i'), 10 * np.ones(2, 'i')]
 
     def test_construct_empty_dataset(self):
-        dsEmpty = DataSet(outcomeLabels=['0', '1'])
+        dsEmpty = DataSet(outcome_labels=['0', '1'])
         dsEmpty.done_adding_data()
         # TODO assert correctness
 
     def test_initialize_by_index(self):
-        ds1 = DataSet(outcomeLabels=['0', '1'])
+        ds1 = DataSet(outcome_labels=['0', '1'])
         ds1.add_count_dict(('Gx',), {'0': 10, '1': 90})
-        ds2 = DataSet(outcomeLabels=['0', '1'])
+        ds2 = DataSet(outcome_labels=['0', '1'])
         ds2[('Gx',)] = {'0': 10, '1': 90}
         # TODO assert correctness
 
     def test_initialize_from_raw_series_data(self):
-        ds = DataSet(outcomeLabelIndices=self.olInds)
+        ds = DataSet(outcome_label_indices=self.olInds)
         ds.add_raw_series_data(('Gy',),  # gate sequence
                                ['0', '1'],  # spam labels
                                [0.0, 1.0],  # time stamps
@@ -47,7 +51,7 @@ class DataSetTester(BaseCase):
         # TODO assert correctness
 
     def test_initialize_from_series_data(self):
-        ds = DataSet(outcomeLabels=['0', '1'])
+        ds = DataSet(outcome_labels=['0', '1'])
         ds.add_series_data(('Gy', 'Gy'), [{'0': 2, '1': 8}, {'0': 6, '1': 4}, {'1': 10}],
                            [0.0, 1.2, 2.4])
         ds.add_series_data(('Gy', 'Gy', 'Gy'),
@@ -59,29 +63,27 @@ class DataSetTester(BaseCase):
 
     def test_construct_from_list(self):
         ds = DataSet(self.oli_nonstc, self.time_nonstc, self.reps_nonstc,
-                     circuits=self.gstrs, outcomeLabels=['0', '1'])
+                     circuits=self.gstrs, outcome_labels=['0', '1'])
         # TODO assert correctness
 
     def test_construct_from_map(self):
         ds = DataSet(self.oli_nonstc[:], self.time_nonstc[:], self.reps_nonstc[:],
-                     circuitIndices=self.gstrInds, outcomeLabelIndices=self.olInds)
+                     circuit_indices=self.gstrInds, outcome_label_indices=self.olInds)
         # TODO assert correctness
 
     def test_construct_static(self):
         ds = DataSet(self.oli_nonstc, self.time_nonstc, self.reps_nonstc,
-                     circuitIndices=self.gstrInds_static, outcomeLabels=['0', '1'], bStatic=True)
+                     circuit_indices=self.gstrInds_static, outcome_labels=['0', '1'], static=True)
         with self.assertRaises(ValueError):
             ds.add_counts_from_dataset(ds)  # can't add to static DataSet
 
     def test_construct_keep_separate_on_collision(self):
-        ds = DataSet(outcomeLabels=['0', '1'], collisionAction="keepseparate")
+        ds = DataSet(outcome_labels=['0', '1'], collision_action="keepseparate")
         ds.add_count_dict(('Gx', 'Gx'), {'0': 10, '1': 90})
         ds.add_count_dict(('Gx', 'Gy'), {'0': 20, '1': 80})
         ds.add_count_dict(('Gx', 'Gx'), {'0': 30, '1': 70})  # a duplicate
-        self.assertEqual(ds.keys(), [('Gx', 'Gx'), ('Gx', 'Gy'), ('Gx', 'Gx', '#1')])
-        self.assertEqual(ds.keys(stripOccurrenceTags=True), [('Gx', 'Gx'), ('Gx', 'Gy'), ('Gx', 'Gx')])
-        # TODO set_row test separately
-        ds.set_row(('Gx', 'Gx'), {'0': 5, '1': 95}, occurrence=1)  # test set_row with occurrence arg
+        self.assertEqual(list(ds.keys()), [('Gx', 'Gx'), ('Gx', 'Gy'), ('Gx', 'Gx')])
+        self.assertEqual(list(ds.keys())[2].occurrence, 1)
 
     def test_constructor_raises_on_missing_spam_labels(self):
         gstrs = [('Gx',), ('Gx', 'Gy'), ('Gy',)]
@@ -91,17 +93,17 @@ class DataSetTester(BaseCase):
     def test_static_constructor_raises_on_missing_oplabels(self):
         with self.assertRaises(ValueError):
             DataSet(self.oli_static, self.time_static, self.reps_static,
-                    outcomeLabels=['0', '1'], bStatic=True)
+                    outcome_labels=['0', '1'], static=True)
 
     def test_static_constructor_raises_on_missing_counts(self):
         with self.assertRaises(ValueError):
-            DataSet(circuits=self.gstrs, outcomeLabels=['0', '1'], bStatic=True)
+            DataSet(circuits=self.gstrs, outcome_labels=['0', '1'], static=True)
 
 
 class DefaultDataSetInstance(object):
     def setUp(self):
         super(DefaultDataSetInstance, self).setUp()
-        self.ds = DataSet(outcomeLabels=['0', '1'], collisionAction='aggregate') # adds counts at next available integer timestep
+        self.ds = DataSet(outcome_labels=['0', '1'], collision_action='aggregate') # adds counts at next available integer timestep
         self.ds.add_count_dict(('Gx',), {'0': 10, '1': 90})
         self.ds.add_count_dict(('Gy', 'Gy'), {'1': 90})
         self.ds.add_count_dict(('Gy', 'Gy'), ld.OutcomeLabelDict([('0', 10), ('1', 90)]))  
@@ -109,7 +111,7 @@ class DefaultDataSetInstance(object):
     def test_construction(self):
         self.assertEqual(self.ds[('Gx',)]['0'], 10)
         self.assertEqual(self.ds[('Gx',)]['1'], 90)
-        self.assertAlmostEqual(self.ds[('Gx',)].fraction('0'), 0.1)
+        self.assertAlmostEqual(self.ds[('Gx',)].fractions['0'], 0.1)
 
     def test_raise_on_new_outcome_label(self):
         with self.assertRaises(NotImplementedError):
@@ -119,7 +121,7 @@ class DefaultDataSetInstance(object):
 class RawSeriesDataSetInstance(object):
     def setUp(self):
         super(RawSeriesDataSetInstance, self).setUp()
-        self.ds = DataSet(outcomeLabels=['0', '1'])
+        self.ds = DataSet(outcome_labels=['0', '1'])
         self.ds.add_raw_series_data(('Gx',),
                                     ['0', '0', '1', '0', '1', '0', '1', '1', '1', '0'],
                                     [0.0, 0.2, 0.5, 0.6, 0.7, 0.9, 1.1, 1.3, 1.35, 1.5], None)
@@ -141,16 +143,16 @@ class DataSetMethodBase(object):
         time_nonstc = [np.zeros(2, 'd'), np.zeros(2, 'd'), np.zeros(2, 'd')]
         reps_nonstc = [10 * np.ones(2, 'i'), 10 * np.ones(2, 'i'), 10 * np.ones(2, 'i')]
         ds2 = DataSet(oli_nonstc, time_nonstc, reps_nonstc,
-                      circuits=gstrs, outcomeLabels=['0', '1'])
+                      circuits=gstrs, outcome_labels=['0', '1'])
         ds2.add_counts_from_dataset(self.ds)
         # TODO assert correctness
 
     def test_get_outcome_labels(self):
-        outcomes = self.ds.get_outcome_labels()
+        outcomes = self.ds.outcome_labels
         self.assertEqual(outcomes, [('0',), ('1',)])
 
     def test_get_gate_labels(self):
-        gates = self.ds.get_gate_labels()
+        gates = self.ds.gate_labels()
         self.assertEqual(gates, ['Gx', 'Gy'])
 
     def test_copy(self):
@@ -163,8 +165,8 @@ class DataSetMethodBase(object):
         writable[('Gy',)] = {'0': 20, '1': 80}
 
     def test_get_degrees_of_freedom(self):
-        dof = self.ds.get_degrees_of_freedom()
-        dof = self.ds.get_degrees_of_freedom([('Gx',)])
+        dof = self.ds.degrees_of_freedom()
+        dof = self.ds.degrees_of_freedom([('Gx',)])
         # TODO assert correctness
 
     def test_truncate(self):
@@ -173,15 +175,15 @@ class DataSetMethodBase(object):
 
     def test_truncate_ignore_on_missing(self):
         with self.assertNoWarns():
-            self.ds.truncate([('Gx',), ('Gz',)], missingAction="ignore")
+            self.ds.truncate([('Gx',), ('Gz',)], missing_action="ignore")
 
     def test_truncate_warn_on_missing(self):
         with self.assertWarns(Warning):
-            self.ds.truncate([('Gx',), ('Gz',)], missingAction="warn")
+            self.ds.truncate([('Gx',), ('Gz',)], missing_action="warn")
 
     def test_truncate_raise_on_missing(self):
         with self.assertRaises(KeyError):
-            self.ds.truncate([('Gx',), ('Gz',)], missingAction="raise")
+            self.ds.truncate([('Gx',), ('Gz',)], missing_action="raise")
 
     def test_len(self):
         n = len(self.ds)
@@ -200,10 +202,11 @@ class DataSetMethodBase(object):
             self.assertTrue(opstr in self.ds)
             self.assertTrue(Circuit(opstr) in self.ds)
 
+    @pytest.mark.filterwarnings('ignore:No counts in the requested time range') # Specifically testing an empty slice
     def test_time_slice(self):
         empty_slice = self.ds.time_slice(100.0, 101.0)
         ds_slice = self.ds.time_slice(1.0, 2.0)
-        ds_slice = self.ds.time_slice(1.0, 2.0, aggregateToTime=0.0)
+        ds_slice = self.ds.time_slice(1.0, 2.0, aggregate_to_time=0.0)
         # TODO assert correctness
 
     def test_pickle(self):
@@ -215,19 +218,19 @@ class DataSetMethodBase(object):
 
     # Row instance tests
     def test_row_get_expanded_ol(self):
-        self.dsRow.get_expanded_ol()
+        self.dsRow.expanded_ol
         # TODO assert correctness
 
     def test_row_get_expanded_oli(self):
-        self.dsRow.get_expanded_oli()
+        self.dsRow.expanded_oli
         # TODO assert correctness
 
     def test_row_get_expanded_times(self):
-        self.dsRow.get_expanded_times()
+        self.dsRow.expanded_times
         # TODO assert correctness
 
-    def test_row_fraction(self):
-        self.dsRow.fraction('0')
+    def test_row_fractions(self):
+        self.dsRow.fractions['0']
         # TODO assert correctness
 
     def test_row_counts_at_time(self):
@@ -256,7 +259,7 @@ class DataSetMethodBase(object):
         # TODO assert correctness
 
     def test_row_as_dict(self):
-        cntDict = self.dsRow.as_dict()
+        cntDict = self.dsRow.to_dict()
         # TODO assert correctness
 
     def test_row_outcomes_raise_on_modify(self):
@@ -266,23 +269,23 @@ class DataSetMethodBase(object):
 
 class DataSetNonstaticInstanceTester(DataSetMethodBase, DefaultDataSetInstance, BaseCase):
     def test_process_circuits(self):
-        self.ds.process_circuits(lambda s: pc.manipulate_circuit(s, [(('Gx',), ('Gy',))]))
-        test_cntDict = self.ds[('Gy',)].as_dict()
+        ds = self.ds.process_circuits(lambda s: pc.manipulate_circuit(s, [(('Gx',), ('Gy',))]))
+        test_cntDict = ds[('Gy',)].to_dict()
         # TODO assert correctness
 
     def test_scale(self):
-        self.dsRow.scale(2.0)
+        self.dsRow.scale_inplace(2.0)
         self.assertEqual(self.dsRow['0'], 20)
         self.assertEqual(self.dsRow['1'], 180)
 
     def test_warn_on_nonintegral_scaled_row_access(self):
-        self.dsRow.scale(3.141592)
+        self.dsRow.scale_inplace(3.141592)
         with self.assertWarns(Warning):
-            self.dsRow.get_expanded_ol()
+            self.dsRow.expanded_ol
         with self.assertWarns(Warning):
-            self.dsRow.get_expanded_oli()
+            self.dsRow.expanded_oli
         with self.assertWarns(Warning):
-            self.dsRow.get_expanded_times()
+            self.dsRow.expanded_times
 
 
 class DataSetStaticInstanceTester(DataSetMethodBase, DefaultDataSetInstance, BaseCase):
@@ -312,17 +315,17 @@ class DataSetStaticInstanceTester(DataSetMethodBase, DefaultDataSetInstance, Bas
 
     def test_raise_on_scale(self):
         with self.assertRaises(ValueError):
-            self.dsRow.scale(2.0)
+            self.dsRow.scale_inplace(2.0)
 
 
 class RawSeriesDataSetInstanceTester(DataSetMethodBase, RawSeriesDataSetInstance, BaseCase):
     def test_build_repetition_counts(self):
-        self.ds.build_repetition_counts()
+        self.ds._add_explicit_repetition_counts()
         # TODO assert correctness
 
     def test_scale_raises_on_missing_repeat_counts(self):
         with self.assertRaises(ValueError):
-            self.ds[('Gx',)].scale(2.0)
+            self.ds[('Gx',)].scale_inplace(2.0)
 
 
 class RawSeriesDatasetStaticInstanceTester(DataSetMethodBase, RawSeriesDataSetInstance, BaseCase):
@@ -332,4 +335,4 @@ class RawSeriesDatasetStaticInstanceTester(DataSetMethodBase, RawSeriesDataSetIn
 
     def test_raise_on_build_repetition_counts(self):
         with self.assertRaises(ValueError):
-            self.ds.build_repetition_counts()
+            self.ds._add_explicit_repetition_counts()
