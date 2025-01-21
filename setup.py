@@ -277,7 +277,7 @@ def setup_with_extensions(extensions=None):
             'networkx'
         ],
         extras_require=extras,
-        python_requires='>=3.8',
+        python_requires='>=3.9',
         platforms=["any"],
         url='http://www.pygsti.info',
         download_url='https://github.com/sandialabs/pyGSTi/tarball/master',
