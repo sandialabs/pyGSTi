@@ -34,14 +34,17 @@ jobs:
     runs-on: ${{ inputs.os }}
     steps:
     - uses: actions/checkout@v4
-    - name: Set up installation environment (Linux and Windows)
-      if: ${{ inputs.os != 'macos-13' }}
+    - name: Set up installation environment (Linux)
+      if: ${{ inputs.os == 'ubuntu-latest' }}
       run: |
         ./.github/ci-scripts/before_install.sh
     - name: Set up installation environment (MacOS)
-      if: ${{ inputs.os == 'macos-13' }}
+      if: ${{ inputs.os == 'macos-latest' }}
       run: |
         ./.github/ci-scripts/before_install_macos.sh
+    - name: Set up MPI (Windows)
+      if: ${{ inputs.os == 'windows-latest' }}
+      uses: mpi4py/setup-mpi@v1
     - name: Set up Python ${{ inputs.python-version }}
       uses: actions/setup-python@v5
       with:
