@@ -45,6 +45,8 @@ jobs:
     - name: Set up MPI (Windows)
       if: ${{ inputs.os == 'windows-latest' }}
       uses: mpi4py/setup-mpi@v1
+      with:
+        mpi: intelmpi
     - name: Set up Python ${{ inputs.python-version }}
       uses: actions/setup-python@v5
       with:
