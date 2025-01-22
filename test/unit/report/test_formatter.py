@@ -51,9 +51,9 @@ class FormatterTester(BaseCase):
         self.assertEqual(fmt.convert_html('|<STAR>', {}), ' &#9733;')
         self.assertEqual(
             fmt.convert_latex('%% # half-width 1/2 Diamond Check <STAR>', {}),
-            '$\%\% \# $\\nicefrac{1}{2}$-width $\\nicefrac{1}{2}$ $\Diamond$ \checkmark \\bigstar$'
+            '$\\%\\% \# $\\nicefrac{1}{2}$-width $\\nicefrac{1}{2}$ $\\Diamond$ \\checkmark \\bigstar$'
         )
-        self.assertEqual(fmt.convert_latex('x|y', {}), '\\begin{tabular}{c}x\\\\y\end{tabular}')
+        self.assertEqual(fmt.convert_latex('x|y', {}), '\\begin{tabular}{c}x\\\\y\\end{tabular}')
 
     def test_value_fns(self):
         specs = {'precision': 2, 'sciprecision': 2, 'polarprecision': 2, 'complex_as_polar': True}
@@ -118,7 +118,7 @@ class PiHTMLEBFormatterTester(EBFormatterBase, BaseCase):
 
 
 class PrecisionFormatterBase(object):
-    expected_LaTeX_fmt = '\\begin{{tabular}}[l]{{|c|}}\n\hline\n{0} \\\\ \hline\n\end{{tabular}}\n'
+    expected_LaTeX_fmt = '\\begin{{tabular}}[l]{{|c|}}\n\\hline\n{0} \\\\ \\hline\n\\end{{tabular}}\n'
     expected_HTML_fmt = '<table><thead><tr><th> <span title="{0}">{1}</span> </th></tr></thead><tbody></tbody></table>'
 
     def setUp(self):
