@@ -655,7 +655,7 @@ class InterpolatedQuantity(object):
 
         value = _np.zeros(self.qty_shape, dtype='d')
         for i, interpolator in enumerate(self.interpolators.flat):
-            value.flat[i] = interpolator(*v)[0]
+            value.flat[i] = interpolator(*v)
         return value
 
     def write(self, filename):

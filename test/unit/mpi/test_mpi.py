@@ -15,7 +15,8 @@ class MPITester:
     def test_all(self, capfd: pytest.LogCaptureFixture):
         current_filepath = Path(os.path.abspath(__file__))
         to_run = current_filepath.parents[0] / Path('run_me_with_mpiexec.py')
-        subprocess_args = (f"mpiexec -np 4 python -W ignore {str(to_run)}").split(' ')
+        # Oversubscribe is needed because latest Mac runners have only 3 cores
+        subprocess_args = (f"mpiexec -np 4 -oversubscribe python -W ignore {str(to_run)}").split(' ')
         
         result = subprocess.run(subprocess_args, capture_output=False, text=True)
         out, err = capfd.readouterr()
