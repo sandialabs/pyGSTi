@@ -181,7 +181,7 @@ def to_label(x):
     """
     if isinstance(x, _Label): return x
     # # do this manually when desired, as it "boxes" a circuit being inserted
-    #elif isinstance(x,Circuit): return x.to_circuit_label()
+    elif isinstance(x,Circuit): return x.to_label()
     else: return _Label(x)
 
 
