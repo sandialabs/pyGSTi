@@ -51,7 +51,7 @@ class FormatterTester(BaseCase):
         self.assertEqual(fmt.convert_html('|<STAR>', {}), ' &#9733;')
         self.assertEqual(
             fmt.convert_latex('%% # half-width 1/2 Diamond Check <STAR>', {}),
-            '$\\%\\% \# $\\nicefrac{1}{2}$-width $\\nicefrac{1}{2}$ $\\Diamond$ \\checkmark \\bigstar$'
+            '$\\%\\% \\# $\\nicefrac{1}{2}$-width $\\nicefrac{1}{2}$ $\\Diamond$ \\checkmark \\bigstar$'
         )
         self.assertEqual(fmt.convert_latex('x|y', {}), '\\begin{tabular}{c}x\\\\y\\end{tabular}')
 

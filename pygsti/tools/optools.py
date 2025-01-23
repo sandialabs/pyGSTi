@@ -753,7 +753,7 @@ def unitarity(a, mx_basis="gm"):
     noise" NJP 17 113020 (2015). The unitarity is given by (Prop 1 in Wallman
     et al):
 
-    `u(a) = Tr( A_u^{\dagger} A_u ) / (d^2  - 1)`,
+    `u(a) = Tr( A_u^{\\dagger} A_u ) / (d^2  - 1)`,
 
     where A_u is the unital submatrix of a, and d is the dimension of
     the Hilbert space. When a is written in any basis for which the
