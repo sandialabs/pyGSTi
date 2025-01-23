@@ -1,5 +1,7 @@
 import numpy as np
 from pygsti.protocols import CircuitListsDesign, HasProcessorSpec
+from pygsti.circuits.circuitlist import CircuitList
+from pygsti.circuits.circuit import Circuit
 import copy
 
 
@@ -54,8 +56,10 @@ def stitch_circuits_by_germ_power_only(color_patches: dict, vertices: list,
     aux_info = {}
 
     for patch, edge_set in color_patches.items():
-        used_qubits = np.flatten(np.array(edge_set))
+        # This might be broken when edge_set is empty.
+        used_qubits = np.array(edge_set).ravel()
         unused_qubits = np.setdiff1d(np.array(vertices), used_qubits)
+        assert len(oneq_gstdesign.circuit_lists) == len(twoq_gstdesign.circuit_lists), "Not implemented."
 
         for L, (oneq_circuits, twoq_circuits) in enumerate(zip(oneq_gstdesign.circuit_lists, twoq_gstdesign.circuit_lists)):   # assumes that they use the same L 
             oneq_len = len(oneq_circuits)
@@ -63,55 +67,67 @@ def stitch_circuits_by_germ_power_only(color_patches: dict, vertices: list,
 
             max_len = max(oneq_len, twoq_len)
             min_len = min(oneq_len, twoq_len)
-            num_batches = (max_len // min_len) + 1
+            num_batches = int(np.ceil(max_len / min_len))
 
-            if oneq_len <= twoq_len:
-                # 2Q GST circuit list is longer
-                edge_permutations = [randstate.permutation(max_len) for _ in edge_set] # Randomize the order in which we place 2Q GST circuits on each edge
-                vertex_permutations = [[] for _ in unused_qubits] 
-                for _ in range(num_batches):
-                    for perm in vertex_permutations:
-                        perm.extend([randstate.permutation(min_len)])
-                vertex_permutations = [mp[:max_len] for mp in vertex_permutations] # Randomize the order in which we place 1Q GST circuits on each isolated qubit
-            else:
-                # 1Q GST circuit list is longer
-                vertex_permutations = [randstate.permutation(max_len) for _ in unused_qubits]
-                edge_permutations = [[] for _ in edge_set]
-                for _ in range(num_batches):
-                    for perm in edge_permutations:
-                        perm.extend([randstate.permutation(min_len)])
-                edge_permutations = [mp[:max_len] for mp in edge_permutations]
-                    
+            if oneq_len > twoq_len:
+                # vertex_permutations = [randstate.permutation(max_len) for _ in unused_qubits]
+                # edge_permutations = [[] for _ in edge_set]
+                # for _ in range(num_batches):
+                #     for perm in edge_permutations:
+                #         perm.extend([randstate.permutation(min_len)])
+                # edge_permutations = [mp[:max_len] for mp in edge_permutations]
+                raise NotImplementedError()
+        
+            # 2Q GST circuit list is longer
+            edge_permutations = [randstate.permutation(max_len) for _ in edge_set] # Randomize the order in which we place 2Q GST circuits on each edge
+            vertex_permutations = [[] for _ in unused_qubits] 
+            for _ in range(num_batches):
+                for perm in vertex_permutations:
+                    perm.extend([randstate.permutation(min_len)])
+            vertex_permutations = [mp[:max_len] for mp in vertex_permutations] # Randomize the order in which we place 1Q GST circuits on each isolated qubit
+            #                           ^ Before this line executes, len(vertex_permutations[i]) == num_batches for all i,
+            #                             and num_batches = ceil(max_len/min_len) <= max_len, so the indexing mp[:max_len] has no effect.
+        
             edge_permutations = np.array(edge_permutations)
             vertex_permutations = np.array(vertex_permutations)
+            # ^ vertex_permutations.shape is either () or (len(unused_qubits), num_batches, min_len)
 
-            for j in range(max_len): # range(max(edge_permutations.shape[1], vertex_permutations.shape[1])): 
+
+            """
+            NOTE: I was able to infer that the twoq_gstdesign.sslabels should really be qubit labels by seeing how (oldq, newq)
+            were in the iterator that zip'd (twoq_gstdesign.sslabels, other_thing).
+            """
+            # for j in range(max_len): # range(max(edge_permutations.shape[1], vertex_permutations.shape[1])): 
+            dim1 = 0 if (edge_permutations.ndim < 2) else edge_permutations.shape[1]
+            dim2 = 0 if (vertex_permutations.ndim < 2) else vertex_permutations.shape[1]
+            for j in range(max(dim1, dim2)): 
                 # Pick the initial subcircuit
                 if len(edge_permutations):
-                    c = twoq_circuits[edge_permutations[0,j]]
-                    map_dict = {oldq: newq for oldq, newq in zip(twoq_gstdesign.sslbls, edge_set[0])}
-                    c = c.map_state_space_labels(map_dict)
+                    c = twoq_circuits.permuted_subcircuitlist( edge_permutations[0,j] )
+                    map_dict = {oldq: newq for oldq, newq in zip(twoq_gstdesign.qubit_labels, edge_set[0])}
+                    c = c.map_line_labels(map_dict)
                     edge_start = 1
                     vertex_start = 0
                 else:
-                    c = oneq_circuits[vertex_permutations[0,j]]
-                    map_dict = {oldq: newq for oldq, newq in zip(twoq_gstdesign.sslbls, (unused_qubits[0],))}
-                    c = c.map_state_space_labels(map_dict)
+                    # The second component of vertex_permutations should range from 
+                    c = oneq_circuits.permuted_subcircuitlist(  vertex_permutations[0,j] )
+                    map_dict = {oldq: newq for oldq, newq in zip(oneq_gstdesign.qubit_labels, (unused_qubits[0],))}
+                    c = c.map_line_labels(map_dict)
                     edge_start = 0
                     vertex_start = 1
                         
                 # Tensor together the other subcircuits
                 for i in range(edge_start, edge_permutations.shape[0]):
-                    c2 = twoq_circuits[edge_permutations[i,j]] # Fix col
-                    map_dict = {oldq: newq for oldq, newq in zip(twoq_gstdesign.sslbls, edge_set[i])}
-                    c2 = c2.map_state_space_labels(map_dict)
-                    c.tensor_circuit_inplace(c2) # c is already a copy due to map_state_space_labels above
+                    c2 = twoq_circuits.permuted_subcircuitlist(  edge_permutations[i,j] )  # Fix col
+                    map_dict = {oldq: newq for oldq, newq in zip(twoq_gstdesign.qubit_labels, edge_set[i])}
+                    c2 = c2.map_line_labels(map_dict)
+                    c = c.tensor_circuits(c2) # c is already a copy due to map_line_labels above
 
                 for i in range(vertex_start, vertex_permutations.shape[0]):
-                    c2 = twoq_circuits[vertex_permutations[i,j]] # Fix col
-                    map_dict = {oldq: newq for oldq, newq in zip(twoq_gstdesign.sslbls, (unused_qubits[i],))}
-                    c2 = c2.map_state_space_labels(map_dict)
-                    c.tensor_circuit_inplace(c2) # c is already a copy due to map_state_space_labels above
+                    c2 = oneq_circuits.permuted_subcircuitlist( vertex_permutations[i,j] ) # Fix col
+                    map_dict = {oldq: newq for oldq, newq in zip(oneq_gstdesign.qubit_labels, (unused_qubits[i],))}
+                    c2 = c2.map_line_labels(map_dict)
+                    c = c.tensor_circuits(c2) # c is already a copy due to map_line_labels above
                     
                 circuit_lists[L].append(c)
 
@@ -120,7 +136,7 @@ def stitch_circuits_by_germ_power_only(color_patches: dict, vertices: list,
     return circuit_lists, aux_info
 
 
-class CrosstalkFreeExperimentDesign(CircuitListsDesign, HasProcessorSpec):
+class CrosstalkFreeExperimentDesign(CircuitListsDesign):
     '''
     This class initializes a crosstalk-free GST experiment design by combining 
     1Q and 2Q GST designs based on a specified edge coloring. It assumes that 
@@ -145,9 +161,8 @@ class CrosstalkFreeExperimentDesign(CircuitListsDesign, HasProcessorSpec):
 
         TODO: Update the init function so that it handles different circuit stitchers better (i.e., by using stitcher_kwargs, etc.)
         '''
-        HasProcessorSpec.__init__(self, processor_spec)
-         
         randstate = np.random.RandomState(seed)
+        self.processor_spec = processor_spec
         self.oneq_gstdesign = oneq_gstdesign
         self.twoq_gstdesign = twoq_gstdesign
         self.vertices = self.processor_spec.qubit_labels
