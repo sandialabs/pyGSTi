@@ -1829,10 +1829,10 @@ class OpModel(Model):
             already has a prep label this argument will be ignored.
 
         povm_lbl_to_append : Label, optional (default None)
-            Optional user specified prep label to prepend. If not
+            Optional user specified povm label to prepend. If not
             specified will use the default value as given by
             :meth:_default_primitive_prep_layer_lbl. If the circuit
-            already has a prep label this argument will be ignored.
+            already has a povm label this argument will be ignored.
         
         return_split : bool, optional (default False)
             If True we additionally return a list of tuples of the form:
@@ -1859,7 +1859,7 @@ class OpModel(Model):
 
         #precompute unique default povm labels.
         unique_sslbls = set([ckt._line_labels for ckt in circuits])
-        default_povm_labels = {sslbls:(self._default_primitive_povm_layer_lbl(sslbls),) for sslbls in unique_sslbls}
+        default_povm_labels = {sslbls: (self._default_primitive_povm_layer_lbl(sslbls),) for sslbls in unique_sslbls}
 
         comp_circuits = []
         if return_split:
