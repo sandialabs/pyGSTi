@@ -201,31 +201,6 @@ class CircuitList(_NicelySerializable):
         self.__dict__.update(state_dict)
         if 'uuid' not in state_dict:  # backward compatibility
             self.uuid = _uuid.uuid4()  # create a new uuid
-
-    def permuted_subcircuitlist(self, perm, new_name=None):
-        perm = _np.atleast_1d(perm)
-        circuits = (self[i] for i in perm)
-        name = self.name if new_name is None else new_name
-        other = CircuitList(circuits, self.op_label_aliases, self.circuit_rules, self.circuit_weights, name)
-        return other
-
-    def map_line_labels(self, mapper, new_name=None):
-        """
-        Create a CircuitList where the line labels of each constituent circuit are updated according to `mapper`.
-        Parameters
-        ----------
-        mapper : dict or function
-            A dictionary whose keys are the existing self.line_labels values
-            and whose value are the new labels, or a function which takes a
-            single (existing line-label) argument and returns a new line-label.
-        Returns
-        -------
-        CircuitList
-        """
-        circuits = tuple(c.map_state_space_labels(mapper) for c in self._circuits)
-        # ^ The function Circuit.map_state_space_labels actually maps LINE LABELS.
-        other = CircuitList(circuits, name=new_name)
-        return other
     
     def tensor_circuits(self, other_circuitlist, new_name=None):
         assert len(self) == len(other_circuitlist)
