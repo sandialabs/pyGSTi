@@ -991,9 +991,7 @@ class OpModel(Model):
         self._rebuild_paramvec()
 
     def _rebuild_paramvec(self):
-        """ Resizes self._paramvec and updates gpindices & parent members as needed,
-            and will initialize new elements of _paramvec, but does NOT change
-            existing elements of _paramvec (use _update_paramvec for this)"""
+        """ Resizes self._paramvec and updates gpindices & parent members as needed."""
         w = self._model_paramvec_to_ops_paramvec(self._paramvec)
         Np = len(w)  # NOT self.num_params since the latter calls us!
         wl = self._paramlbls
