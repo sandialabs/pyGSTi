@@ -33,7 +33,7 @@ class PermutationOperator(DenseOperator):
 
     @staticmethod
     def pp_braiding_operators(subsystem_perm):
-        subsystem_perm = _np.atleast_1d(subsystem_perm)
+        subsystem_perm = _np.atleast_1d(subsystem_perm).copy()
         n_qubits = subsystem_perm.size
         labels = _np.array(pp_labels(2**n_qubits))
         braid_labels = _np.array([''.join([ell[i] for i in subsystem_perm]) for ell in labels])

@@ -1177,7 +1177,7 @@ class QubitProcessorSpec(QuditProcessorSpec):
 
         return clifford_ops_on_qubits
 
-        ### TODO: do we still need this?
+    ### TODO: do we still need this?
     @lru_cache(maxsize=100)
     def compute_clifford_2Q_connectivity(self):
         """
@@ -1219,7 +1219,7 @@ class QubitProcessorSpec(QuditProcessorSpec):
             if self.gate_num_qubits(gn) == 2:
                 avail = self.resolved_availability(gn, 'tuple')
                 if len(avail) == 1 and avail[0] is None and gn == '{idle}':
-                    avail = [(0, 1)]
+                    raise ValueError('Availability of the idle gate has not been set.')
                 for sslbls in avail:
                     i = qubit_labels[sslbls[0]]
                     j = qubit_labels[sslbls[1]]
