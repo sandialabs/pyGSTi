@@ -1217,7 +1217,12 @@ class QubitProcessorSpec(QuditProcessorSpec):
         qubit_labels = self.qubit_labels
         for gn in self.gate_names:
             if self.gate_num_qubits(gn) == 2:
-                for sslbls in self.resolved_availability(gn, 'tuple'):
-                    twoQ_connectivity[qubit_labels.index(sslbls[0]), qubit_labels.index(sslbls[1])] = True
+                avail = self.resolved_availability(gn, 'tuple')
+                if len(avail) == 1 and avail[0] is None and gn == '{idle}':
+                    avail = [(0, 1)]
+                for sslbls in avail:
+                    i = qubit_labels[sslbls[0]]
+                    j = qubit_labels[sslbls[1]]
+                    twoQ_connectivity[i, j] = True
 
         return _qgraph.QubitGraph(qubit_labels, twoQ_connectivity)
