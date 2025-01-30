@@ -2,6 +2,7 @@ import numpy as np
 from pygsti.protocols import CircuitListsDesign, HasProcessorSpec
 from pygsti.circuits.circuitlist import CircuitList
 from pygsti.circuits.circuit import Circuit
+from pygsti.baseobjs.label import Label
 import copy
 
 
@@ -53,6 +54,18 @@ def stitch_circuits_by_germ_power_only(color_patches: dict, vertices: list,
     '''
 
     circuit_lists = [[] for _ in twoq_gstdesign.circuit_lists]
+    twoq_idle_label = Label(('Gi',) + twoq_gstdesign.qubit_labels)
+    mapper = {twoq_idle_label: twoq_idle_label}
+    for cl in twoq_gstdesign.circuit_lists:
+        # for c in cl:
+        for i in range(len(cl)):
+            c = cl[i]
+            c._static = False
+            mapper.update({k:k for k in c._labels})
+            mapper[Label(())] = twoq_idle_label
+            c.map_names_inplace(mapper)
+            c.done_editing()
+    assert Label(()) not in mapper.values()
     aux_info = {}
 
     num_lines = -1
@@ -89,8 +102,8 @@ def stitch_circuits_by_germ_power_only(color_patches: dict, vertices: list,
             node_perms = np.array(node_perms)
         
             # Check invariants
-            edge_line_contributions   = 2*edge_perms.shape[0] if edge_perms.size > 0 else 0
-            node_line_contributions = node_perms.shape[0] if node_perms.size > 0 else 0
+            edge_line_contributions = 2*edge_perms.shape[0] if edge_perms.size > 0 else 0
+            node_line_contributions =   node_perms.shape[0] if node_perms.size > 0 else 0
             curr_num_lines = edge_line_contributions + node_line_contributions
             if num_lines < 0:
                 num_lines = curr_num_lines
@@ -107,13 +120,20 @@ def stitch_circuits_by_germ_power_only(color_patches: dict, vertices: list,
                 # Pick the initial subcircuit
                 if len(edge_perms):
                     c = twoq_circuits[edge_perms[0,j]]
+                    c._static = False
+                    c._labels = [mapper[ell].copy() for ell in c._labels]
+                    c.done_editing()
+                    assert Label(()) not in c._labels
                     map_dict = {oldq: newq for oldq, newq in zip(twoq_gstdesign.qubit_labels, edge_set[0])}
                     c = c.map_state_space_labels(map_dict)
                     edge_start = 1
                     node_start = 0
                 else:
-                    # The second component of node_perms should range from 
                     c = oneq_circuits[node_perms[0,j]]
+                    c._static = False
+                    c._labels = [mapper[ell].copy() for ell in c._labels]
+                    c.done_editing()
+                    assert Label(()) not in c._labels
                     map_dict = {oldq: newq for oldq, newq in zip(oneq_gstdesign.qubit_labels, (unused_qubits[0],))}
                     c = c.map_state_space_labels(map_dict)
                     edge_start = 0
@@ -122,16 +142,24 @@ def stitch_circuits_by_germ_power_only(color_patches: dict, vertices: list,
                 # Tensor together the other subcircuits
                 for i in range(edge_start, edge_perms.shape[0]):
                     c2 = twoq_circuits[ edge_perms[i,j] ]  # Fix col
+                    c2._static = False
+                    c2._labels = [mapper[ell].copy() for ell in c2._labels]
+                    c2.done_editing()
+                    assert Label(()) not in c2._labels
                     map_dict = {oldq: newq for oldq, newq in zip(twoq_gstdesign.qubit_labels, edge_set[i])}
                     c2 = c2.map_state_space_labels(map_dict)
                     c = c.tensor_circuit(c2) # c is already a copy due to map_line_labels above
 
                 for i in range(node_start, node_perms.shape[0]):
                     c2 = oneq_circuits[ node_perms[i,j] ] # Fix col
+                    c2._static = False
+                    c2._labels = [mapper[ell].copy() for ell in c2._labels]
+                    c2.done_editing()
                     map_dict = {oldq: newq for oldq, newq in zip(oneq_gstdesign.qubit_labels, (unused_qubits[i],))}
                     c2 = c2.map_state_space_labels(map_dict)
                     c = c.tensor_circuit(c2) # c is already a copy due to map_line_labels above
-                    
+                
+                assert Label(()) not in c._labels
                 # By this point, should have len(c._line_labels) == [some constant, number of ]
                 circuit_lists[L].append(c)
 
@@ -166,6 +194,7 @@ class CrosstalkFreeExperimentDesign(CircuitListsDesign):
 
         TODO: Update the init function so that it handles different circuit stitchers better (i.e., by using stitcher_kwargs, etc.)
         '''
+        # TODO: make sure idle gates are explicit.
         randstate = np.random.RandomState(seed)
         self.processor_spec = processor_spec
         self.oneq_gstdesign = oneq_gstdesign

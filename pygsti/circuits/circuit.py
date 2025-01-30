@@ -4459,6 +4459,8 @@ class Circuit(object):
                                   else _Label(layer_lbl) for layer_lbl in self._labels])
         self._hashable_tup = self.tup
         self._hash = hash(self._hashable_tup)
+        self._str = None
+        self._str = self.str # this accessor recomputes the value of self._str
 
 class CompressedCircuit(object):
     """

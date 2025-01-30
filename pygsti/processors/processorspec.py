@@ -1219,7 +1219,11 @@ class QubitProcessorSpec(QuditProcessorSpec):
             if self.gate_num_qubits(gn) == 2:
                 avail = self.resolved_availability(gn, 'tuple')
                 if len(avail) == 1 and avail[0] is None and gn == '{idle}':
-                    raise ValueError('Availability of the idle gate has not been set.')
+                    avail = [qubit_labels]
+                    # if qubit_labels.size == 2:
+                    #     avail = [qubit_labels]
+                    # else:
+                    #     raise ValueError('Availability of the idle gate has not been set.')
                 for sslbls in avail:
                     i = qubit_labels[sslbls[0]]
                     j = qubit_labels[sslbls[1]]

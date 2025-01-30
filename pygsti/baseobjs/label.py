@@ -13,6 +13,7 @@ Defines the Label class
 import itertools as _itertools
 import numbers as _numbers
 import sys as _sys
+import copy as _copy
 
 
 class Label(object):
@@ -196,6 +197,8 @@ class Label(object):
 
         return self.IS_SIMPLE
 
+    def copy(self):
+        return _copy.deepcopy(self)
 
 
 class LabelTup(Label, tuple):
