@@ -4,8 +4,11 @@ import itertools as _itertools
 import copy as _copy
 import warnings as _warnings
 
-from ..errorgenpropagation import propagatableerrorgen as _peg
-from ..errorgenpropagation import errorpropagator as _ep
+# from ..errorgenpropagation import propagatableerrorgen as _peg
+from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel
+from pygsti.errorgenpropagation.errorpropagator_dev import ErrorGeneratorPropagator
+
+# from ..errorgenpropagation import errorpropagator as _ep
 
 from tensorflow import unique
 import tensorflow as _tf
@@ -157,7 +160,7 @@ def paulistring_to_index(ps, num_qubits):
     {'I', 'X', 'Y', 'Z'}) to an integer.  It uses the most conventional mapping, whereby, e.g.,
     if `num_qubits` is 2, then 'II' -> 0, and 'IX' -> 1, and 'ZZ' -> 15.
 
-    ps: str, list, or tuple.
+    ps: str, list, or tuple. 
 
     num_qubits: int
 
@@ -333,6 +336,10 @@ def index_to_error_gen(i, n):
     return typ, paulis
 
 
+
+
+
+
 def create_error_propagation_matrix(c, error_gens, stim_dict = None):
     """
     Computes how the errors in error_gens propogate through the circuit c.
@@ -342,14 +349,30 @@ def create_error_propagation_matrix(c, error_gens, stim_dict = None):
     error_gens: a list specifying the error generators to insert after each circuit
         layer and propagate through the circuit. These primative error generators 
     """
-    error_gen_objs = [_peg.propagatableerrorgen(egen[0], egen[1], 1) for egen in error_gens]
-    propagated_errors = _ep.ErrorPropagator(c, error_gen_objs, NonMarkovian=True, ErrorLayerDef=True, stim_dict = stim_dict)
-    
-    indices, signs = [], []
+    # error_gen_objs = [_peg.propagatableerrorgen(egen[0], egen[1], 1) for egen in error_gens]
+
+    error_propagator = ErrorGeneratorPropagator(None)
+    stim_layers = error_propagator.construct_stim_layers(c, None, drop_first_layer=True)
+    propagation_layers = error_propagator.construct_propagation_layers(stim_layers)
+    error_gen_objs = {LocalStimErrorgenLabel.cast(lbl):1 for lbl in error_gens} # dict to iterate over
+
+    errorgen_layers = [error_gen_objs] * (len(c) - 0) # could be 1, tbd
+
+    propagated_errorgen_layers = error_propagator._propagate_errorgen_layers(errorgen_layers, propagation_layers, include_spam=False) # list of dicts of error generators
+
+    # propagated_errors = _ep.ErrorPropagator(c, error_gen_objs, NonMarkovian=True, ErrorLayerDef=True, stim_dict = stim_dict)
+
+    # print(propagated_errorgen_layers)
+
+    # indices references error generators
+    # create matrix same shape and indices and signs and populate with alpha calculations for each index. this is bitstring dependent. for small qubits, can go ahead and precompute 2**n bitstrings
+    # with signs and alphas, can convert to signed_alphas
+    # use signed alphas as elementwise product in second half of NN
+    indices, signs = [], [] # in separate function go and compute 
     for l in range(c.depth):
-        indices.append([error_gen_to_index(err.errorgen_type, err.basis_element_labels) 
-                        for err in propagated_errors[l][0]])
-        signs.append([_np.sign(err.error_rate.real) for err in propagated_errors[l][0]])
+        indices.append([error_gen_to_index(err.errorgen_type, err.bel_to_strings()) 
+                        for err in propagated_errorgen_layers[l]])
+        signs.append([_np.sign(val) for val in propagated_errorgen_layers[l].values()])
 
     indices = _np.array(indices)
     signs = _np.array(signs)
