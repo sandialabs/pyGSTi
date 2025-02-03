@@ -49,7 +49,7 @@ class CircuitErrorVec(_keras.Model):
         self.dense_units = dense_units
         self.layer_snipper = layer_snipper
         self.layer_snipper_args = layer_snipper_args
-        self.input_layer = _keras.layers.InputLayer(shape=input_shape)
+        # self.input_layer = _keras.layers.InputLayer(shape=input_shape)
         self.hamiltonian_mask = tf.constant([1 if error[0] == 'H' else 0 for error in tracked_error_gens], tf.int32)
         self.stochastic_mask = tf.constant([1 if error[0] == 'S' else 0 for error in tracked_error_gens], tf.int32)
 
