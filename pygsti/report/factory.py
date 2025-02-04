@@ -84,6 +84,21 @@ def _add_new_estimate_labels(running_lbls, estimates, combine_robust):
     return running_lbls
 
 
+#def _robust_estimate_has_same_models(estimates, est_lbl):
+#    lbl_robust = est_lbl+ROBUST_SUFFIX
+#    if lbl_robust not in estimates: return False #no robust estimate
+#
+#    for mdl_lbl in list(estimates[est_lbl].goparameters.keys()) \
+#        + ['final iteration estimate']:
+#        if mdl_lbl not in estimates[lbl_robust].models:
+#            return False #robust estimate is missing mdl_lbl!
+#
+#        mdl = estimates[lbl_robust].models[mdl_lbl]
+#        if estimates[est_lbl].models[mdl_lbl].frobeniusdist(mdl) > 1e-8:
+#            return False #model mismatch!
+#
+#    return True
+
 def _get_viewable_crf(est, est_lbl, mdl_lbl, verbosity=0):
     printer = _VerbosityPrinter.create_printer(verbosity)
 
@@ -184,8 +199,7 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
     Ls = None
 
     for results in results_dict.values():
-        est_labels = _add_new_estimate_labels(est_labels, results.estimates,
-                                              combine_robust)
+        est_labels = _add_new_estimate_labels(est_labels, results.estimates, combine_robust)
         loc_Ls = results.circuit_lists['final'].xs \
             if isinstance(results.circuit_lists['final'], _PlaquetteGridCircuitStructure) else [0]
         Ls = _add_new_labels(Ls, loc_Ls)
@@ -305,10 +319,8 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
             else:
                 est_modvi = est
 
-            switchBd.objfn_builder[d, i] = est.parameters.get(
-                'final_objfn_builder', _objfns.ObjectiveFunctionBuilder.create_from('logl'))
-            switchBd.objfn_builder_modvi[d, i] = est_modvi.parameters.get(
-                'final_objfn_builder', _objfns.ObjectiveFunctionBuilder.create_from('logl'))
+            switchBd.objfn_builder[d, i] = est.parameters.get('final_objfn_builder', _objfns.ObjectiveFunctionBuilder.create_from('logl'))
+            switchBd.objfn_builder_modvi[d, i] = _objfns.ObjectiveFunctionBuilder.create_from('logl')
             switchBd.params[d, i] = est.parameters
 
             switchBd.clifford_compilation[d, i] = est.parameters.get("clifford compilation", 'auto')
@@ -1172,6 +1184,32 @@ def construct_standard_report(results, title="auto",
         - idt_idle_oplabel : Label, optional
             The label identifying the idle gate (for use with idle tomography).
 
+        - skip_sections : tuple[str], optional
+             Contains names of standard report sections that should be skipped
+             in this particular report. Strings will be cast to lowercase, 
+             stripped of white space, and then mapped to omitted Section classes
+             as follows
+
+                {
+                    'summary'         : SummarySection,
+                    'goodness'        : GoodnessSection,
+                    'colorbox'        : GoodnessColorBoxPlotSection,
+                    'invariantgates'  : GaugeInvariantsGatesSection,
+                    'invariantgerms'  : GaugeInvariantsGermsSection,
+                    'variant'         : GaugeVariantSection,
+                    'variantraw'      : GaugeVariantsRawSection,
+                    'variantdecomp'   : GaugeVariantsDecompSection,
+                    'varianterrorgen' : GaugeVariantsErrorGenSection,
+                    'input'           : InputSection,
+                    'meta'            : MetaSection,
+                    'help'            : HelpSection
+                }
+            
+            A KeyError will be raised if skip_sections contains a string
+            that is not in the keys of the above dict (after casting to
+            lower case and stripping white space).
+
+
     verbosity : int, optional
         How much detail to send to stdout.
 
@@ -1240,20 +1278,30 @@ def construct_standard_report(results, title="auto",
         flags.add('CombineRobust')
 
     # build section list
-    sections = [
-        _section.SummarySection(),
-        _section.GoodnessSection(),
-        _section.GoodnessColorBoxPlotSection(),
-        _section.GaugeInvariantsGatesSection(),
-        _section.GaugeInvariantsGermsSection(),
-        _section.GaugeVariantSection(),
-        _section.GaugeVariantsRawSection(),
-        _section.GaugeVariantsDecompSection(),
-        _section.GaugeVariantsErrorGenSection(),
-        _section.InputSection(),
-        _section.MetaSection(),
-        _section.HelpSection()
-    ]
+    possible_sections = {
+        'summary'         : _section.SummarySection(),
+        'goodness'        : _section.GoodnessSection(),
+        'colorbox'        : _section.GoodnessColorBoxPlotSection(),
+        'invariantgates'  : _section.GaugeInvariantsGatesSection(),
+        'invariantgerms'  : _section.GaugeInvariantsGermsSection(),
+        'variant'         : _section.GaugeVariantSection(),
+        'variantraw'      : _section.GaugeVariantsRawSection(),
+        'variantdecomp'   : _section.GaugeVariantsDecompSection(),
+        'varianterrorgen' : _section.GaugeVariantsErrorGenSection(),
+        'input'           : _section.InputSection(),
+        'meta'            : _section.MetaSection(),
+        'help'            : _section.HelpSection()
+    }
+
+    skip_sections = advanced_options.get('skip_sections', tuple())
+    if skip_sections:
+        if isinstance(skip_sections, str):
+            skip_sections = [skip_sections]
+        skip_sections = [s.lower().replace(' ','') for s in skip_sections]
+        for s in skip_sections:
+            possible_sections.pop(s)
+    sections = list(possible_sections.values())
+    # ^ This whole process won't affect ordering of objects in "sections".
 
     if 'ShowScaling' in flags:
         sections.append(_section.GoodnessScalingSection())
