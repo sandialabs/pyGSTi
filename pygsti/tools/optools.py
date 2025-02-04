@@ -325,19 +325,25 @@ def diamonddist(a, b, mx_basis='pp', return_x=False):
     J = JBstd - JAstd
     prob, vars = _diamond_norm_model(dim, smallDim, J)
 
-    try:
-        prob.solve(solver='CVXOPT')
-    except _cvxpy.error.SolverError as e:
-        _warnings.warn("CVXPY failed: %s - diamonddist returning -2!" % str(e))
-        return (-2, _np.zeros((dim, dim))) if return_x else -2
-    except:
-        _warnings.warn("CVXOPT failed (unknown err) - diamonddist returning -2!")
-        return (-2, _np.zeros((dim, dim))) if return_x else -2
+    solvers = ['CLARABEL', 'CVXOPT']
+    if 'MOSEK' in _cvxpy.installed_solvers():
+        solvers = ['MOSEK'] + solvers
 
-    if return_x:
-        return prob.value, vars[0].value
-    else:
-        return prob.value
+    zeros = _np.zeros((dim, dim))
+    for solver in solvers:
+        try:
+            prob.solve(solver=solver)
+            out = (prob.value, vars[0].value) if return_x else prob.value 
+            return out
+        except _cvxpy.error.SolverError as e:
+            _warnings.warn(f"Calling {solver} with CVXPY failed: {str(e)}.")
+            continue
+        except:
+            _warnings.warn("CVXPY failed (unknown err) - diamonddist returning -2!")
+            return (-2, zeros) if return_x else -2
+
+    _warnings.warn(f"Calling all solvers with CVXPY failed: {str(e)} - diamonddist returning -2!")
+    return (-2, zeros) if return_x else -2
 
 
 def _diamond_norm_model(dim, smallDim, J):
