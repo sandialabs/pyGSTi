@@ -55,20 +55,23 @@ def stitch_circuits_by_germ_power_only(color_patches: dict, vertices: list,
 
     circuit_lists = [[] for _ in twoq_gstdesign.circuit_lists]
     twoq_idle_label = Label(('Gi',) + twoq_gstdesign.qubit_labels)
-    mapper = {twoq_idle_label: twoq_idle_label}
+    oneq_idle_label = Label(('Gi',) + oneq_gstdesign.qubit_labels)
+    mapper_2q = {twoq_idle_label: twoq_idle_label}
+    mapper_1q = {oneq_idle_label: oneq_idle_label}
     for cl in twoq_gstdesign.circuit_lists:
-        # for c in cl:
-        for i in range(len(cl)):
-            c = cl[i]
-            c._static = False
-            mapper.update({k:k for k in c._labels})
-            mapper[Label(())] = twoq_idle_label
-            c.map_names_inplace(mapper)
-            c.done_editing()
-    assert Label(()) not in mapper.values()
+        for c in cl:
+            mapper_2q.update({k:k for k in c._labels})
+            mapper_2q[Label(())] = twoq_idle_label
+    for cl in oneq_gstdesign.circuit_lists:
+        for c in cl:
+            mapper_1q.update({k:k for k in c._labels})
+            mapper_1q[Label(())] = oneq_idle_label
+    assert Label(()) not in mapper_2q.values()
+    assert Label(()) not in mapper_1q.values()
     aux_info = {}
 
     num_lines = -1
+    global_line_order = None
     for patch, edge_set in color_patches.items():
         # This might be broken when edge_set is empty.
         used_qubits = np.array(edge_set).ravel()
@@ -107,6 +110,7 @@ def stitch_circuits_by_germ_power_only(color_patches: dict, vertices: list,
             curr_num_lines = edge_line_contributions + node_line_contributions
             if num_lines < 0:
                 num_lines = curr_num_lines
+                global_line_order = tuple(range(num_lines))
 
             assert num_lines == curr_num_lines
             if edge_perms.size > 0 and node_perms.size > 0:
@@ -121,7 +125,7 @@ def stitch_circuits_by_germ_power_only(color_patches: dict, vertices: list,
                 if len(edge_perms):
                     c = twoq_circuits[edge_perms[0,j]]
                     c._static = False
-                    c._labels = [mapper[ell].copy() for ell in c._labels]
+                    c._labels = [mapper_2q[ell].copy() for ell in c._labels]
                     c.done_editing()
                     assert Label(()) not in c._labels
                     map_dict = {oldq: newq for oldq, newq in zip(twoq_gstdesign.qubit_labels, edge_set[0])}
@@ -131,7 +135,7 @@ def stitch_circuits_by_germ_power_only(color_patches: dict, vertices: list,
                 else:
                     c = oneq_circuits[node_perms[0,j]]
                     c._static = False
-                    c._labels = [mapper[ell].copy() for ell in c._labels]
+                    c._labels = [mapper_1q[ell].copy() for ell in c._labels]
                     c.done_editing()
                     assert Label(()) not in c._labels
                     map_dict = {oldq: newq for oldq, newq in zip(oneq_gstdesign.qubit_labels, (unused_qubits[0],))}
@@ -143,7 +147,7 @@ def stitch_circuits_by_germ_power_only(color_patches: dict, vertices: list,
                 for i in range(edge_start, edge_perms.shape[0]):
                     c2 = twoq_circuits[ edge_perms[i,j] ]  # Fix col
                     c2._static = False
-                    c2._labels = [mapper[ell].copy() for ell in c2._labels]
+                    c2._labels = [mapper_2q[ell].copy() for ell in c2._labels]
                     c2.done_editing()
                     assert Label(()) not in c2._labels
                     map_dict = {oldq: newq for oldq, newq in zip(twoq_gstdesign.qubit_labels, edge_set[i])}
@@ -153,15 +157,16 @@ def stitch_circuits_by_germ_power_only(color_patches: dict, vertices: list,
                 for i in range(node_start, node_perms.shape[0]):
                     c2 = oneq_circuits[ node_perms[i,j] ] # Fix col
                     c2._static = False
-                    c2._labels = [mapper[ell].copy() for ell in c2._labels]
+                    c2._labels = [mapper_1q[ell].copy() for ell in c2._labels]
                     c2.done_editing()
+                    assert Label(()) not in c2._labels
                     map_dict = {oldq: newq for oldq, newq in zip(oneq_gstdesign.qubit_labels, (unused_qubits[i],))}
                     c2 = c2.map_state_space_labels(map_dict)
                     c = c.tensor_circuit(c2) # c is already a copy due to map_line_labels above
                 
                 assert Label(()) not in c._labels
                 # By this point, should have len(c._line_labels) == [some constant, number of ]
-                circuit_lists[L].append(c)
+                circuit_lists[L].append(c.reorder_lines(global_line_order))
 
 
                 aux_info[c] = {'edges': edge_set, 'vertices': unused_qubits} #YOLO
@@ -383,7 +388,22 @@ def rotate_fan(fan: list, u: int, edge_colors: dict, free_colors: dict, color_pa
         color_patches[next_color].remove(order(u, next_vertex))
 
     return edge_colors, free_colors, color_patches
-    
+
+
+def check_valid_edge_coloring(color_patches):
+    """
+    color_patches (dict): A dictionary mapping each color to a list of edges colored with that color.
+                          Unlike with edges, the items in color_patches are NOT symmetric [i.e., it only contains (v1, v2) for v1 < v2]
+    """
+    for c, patch in color_patches.items():
+        in_patch = set()
+        for pair in patch:
+            in_patch.add(pair[0])
+            in_patch.add(pair[1])
+        if len(in_patch) != 2*len(patch):
+            raise ValueError()
+    return
+
 
 def find_edge_coloring(deg: int, vertices: list, edges: list, neighbors: dict) -> dict:
     '''
@@ -468,6 +488,8 @@ def find_edge_coloring(deg: int, vertices: list, edges: list, neighbors: dict) -
             free_colors[u].remove(d)
         if d in free_colors[w]:
             free_colors[w].remove(d)
+
+        check_valid_edge_coloring(color_patches)
 
     return color_patches
         
