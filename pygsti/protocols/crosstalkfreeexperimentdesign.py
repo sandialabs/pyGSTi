@@ -30,7 +30,7 @@ def find_neighbors(vertices: list, edges: list) -> dict:
 
 def stitch_circuits_by_germ_power_only(color_patches: dict, vertices: list, 
                                        oneq_gstdesign, twoq_gstdesign, randstate: int) -> tuple:
-    '''
+    """
     Generate crosstalk-free GST circuits by stitching together 1Q and 2Q GST circuits for 
     each color patch.
 
@@ -51,7 +51,7 @@ def stitch_circuits_by_germ_power_only(color_patches: dict, vertices: list,
     tuple: A tuple containing:
         - circuit_lists (list): A list of crosstalk-free GST circuits for each germ power.
         - aux_info (dict): Auxiliary information mapping circuits to their corresponding edges and vertices.
-    '''
+    """
 
     circuit_lists = [[] for _ in twoq_gstdesign.circuit_lists]
     twoq_idle_label = Label(('Gi',) + twoq_gstdesign.qubit_labels)
@@ -175,7 +175,7 @@ def stitch_circuits_by_germ_power_only(color_patches: dict, vertices: list,
 
 
 class CrosstalkFreeExperimentDesign(CircuitListsDesign):
-    '''
+    """
     This class initializes a crosstalk-free GST experiment design by combining 
     1Q and 2Q GST designs based on a specified edge coloring. It assumes that 
     the GST designs share the same germ powers (Ls) and utilizes a specified 
@@ -191,14 +191,14 @@ class CrosstalkFreeExperimentDesign(CircuitListsDesign):
 
     circuit_lists (list): The generated list of stitched circuits.
     aux_info (dict): Auxiliary information mapping circuits to their corresponding edges and vertices.
-    '''
+    """
     def __init__(self, processor_spec, oneq_gstdesign, twoq_gstdesign, edge_coloring, 
                  circuit_stitcher = stitch_circuits_by_germ_power_only, seed = None):
-        '''
+        """
         Assume that the GST designs have the same Ls.
 
         TODO: Update the init function so that it handles different circuit stitchers better (i.e., by using stitcher_kwargs, etc.)
-        '''
+        """
         # TODO: make sure idle gates are explicit.
         randstate = np.random.RandomState(seed)
         self.processor_spec = processor_spec
@@ -219,9 +219,9 @@ class CrosstalkFreeExperimentDesign(CircuitListsDesign):
         CircuitListsDesign.__init__(self, self.circuit_lists, qubit_labels=self.vertices)
 
 
-'''
+"""
 Everything below is used to find an edge coloring of a graph.
-'''
+"""
 
 def order(u, v):
     """
@@ -242,7 +242,7 @@ def order(u, v):
 
 
 def find_fan_candidates(fan: list, u: int, vertices: list, edge_colors: dict, free_colors: dict) -> list:
-    '''
+    """
     Selects candidate vertices to be added to a fan.
 
     This function returns vertices connected to the anchor vertex `u` 
@@ -259,7 +259,7 @@ def find_fan_candidates(fan: list, u: int, vertices: list, edge_colors: dict, fr
     Returns:
     list: A list of candidate vertices that can be colored with free colors 
           available to the last vertex in the fan.
-    '''
+    """
     last_vertex = fan[-1]
     free_vertex_colors = free_colors[last_vertex]
     return [v for v in vertices if edge_colors[(u, v)] in free_vertex_colors]
@@ -267,7 +267,7 @@ def find_fan_candidates(fan: list, u: int, vertices: list, edge_colors: dict, fr
 
 def build_maximal_fan(u: int, v: int, vertex_neighbors: dict, 
                       free_colors: dict, edge_colors: dict) -> list:
-    '''
+    """
     Construct a maximal fan of vertex u starting with vertex v.
 
     A fan is a sequence of distinct neighbors of u that satisfies the following:
@@ -283,7 +283,7 @@ def build_maximal_fan(u: int, v: int, vertex_neighbors: dict,
 
     Returns:
     list: A list representing the maximal fan of vertex u.
-    '''
+    """
     u_neighbors = copy.deepcopy(vertex_neighbors[u])
     fan = [v]
     u_neighbors.remove(v)
@@ -297,7 +297,7 @@ def build_maximal_fan(u: int, v: int, vertex_neighbors: dict,
 
 
 def find_next_path_vertex(current_vertex: int, color: int, neighbors: dict, edge_colors: dict):
-    '''
+    """
     Finds, if it exists, the next vertex in a cd_u path. It does so by finding the neighbor 
     of the current vertex which is attached by an edge of the right color.
 
@@ -310,7 +310,7 @@ def find_next_path_vertex(current_vertex: int, color: int, neighbors: dict, edge
     Returns: 
     int or None: The next vertex in the cd_u path that is connected by an edge of the specified color, 
                  or None if no such vertex exists.
-    '''
+    """
     
     for vertex in neighbors[current_vertex]:
         if edge_colors[(current_vertex, vertex)] == color:
@@ -319,7 +319,7 @@ def find_next_path_vertex(current_vertex: int, color: int, neighbors: dict, edge
     
 
 def find_color_path(u: int, v: int, c: int, d: int, neighbors: dict, edge_colors: dict) -> list:
-    '''
+    """
     Finds the cd_u path.
 
     The cd_u path is a path passing through u of edges whose colors alternate between c and d.
@@ -336,7 +336,7 @@ def find_color_path(u: int, v: int, c: int, d: int, neighbors: dict, edge_colors
 
     Returns:
     list: A list of tuples representing the edges in the cd_u path.
-    '''
+    """
     cdu_path = []
     current_color = d
     current_vertex = u
@@ -352,7 +352,7 @@ def find_color_path(u: int, v: int, c: int, d: int, neighbors: dict, edge_colors
 
 
 def rotate_fan(fan: list, u: int, edge_colors: dict, free_colors: dict, color_patches: dict):
-    '''
+    """
     Rotate the colors in a fan of vertices connected to a specified vertex.
 
     This function shifts the colors in the fan over by one position, updating the 
@@ -370,7 +370,7 @@ def rotate_fan(fan: list, u: int, edge_colors: dict, free_colors: dict, color_pa
 
     Returns:
     tuple: Updated dictionaries for edge_colors, free_colors, and color_patches after rotation.
-    '''
+    """
     for i in range(len(fan) - 1):
         curr_vertex = fan[i]
         next_vertex = fan[i+1]
@@ -406,7 +406,7 @@ def check_valid_edge_coloring(color_patches):
 
 
 def find_edge_coloring(deg: int, vertices: list, edges: list, neighbors: dict) -> dict:
-    '''
+    """
     Implements Misra & Gries' edge coloring algorithm for a simple undirected graph.
 
     This function colors the edges of a simple undirected graph using at most 
@@ -423,7 +423,7 @@ def find_edge_coloring(deg: int, vertices: list, edges: list, neighbors: dict) -
     Returns:
     color_patches (dict): A dictionary mapping each color to a list of edges colored with that color.
                           Unlike with edges, the items in color_patches are NOT symmetric [i.e., it only contains (v1, v2) for v1 < v2]
-    '''
+    """
 
     edges = copy.deepcopy(edges)
     free_colors = {u: [i for i in range(deg+1)] for u in vertices} # Keeps track of which colors are free on each vertex
