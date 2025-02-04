@@ -353,7 +353,7 @@ def rel_circuit_eigenvalues(model_a, model_b, circuit):
     """
     A = model_a.sim.product(circuit)  # "gate"
     B = model_b.sim.product(circuit)  # "target gate"
-    rel_op = _np.dot(_np.linalg.inv(B), A)  # "relative gate" == target^{-1} * gate
+    rel_op = _np.dot(_np.linalg.pinv(B), A)  # "relative gate" == target^{-1} * gate
     return _np.linalg.eigvals(rel_op)
 
 
@@ -1290,7 +1290,7 @@ def std_unitarity(a, b, mx_basis):
     -------
     float
     """
-    Lambda = _np.dot(a, _np.linalg.inv(b))
+    Lambda = _np.dot(a, _np.linalg.pinv(b))
     return _tools.unitarity(Lambda, mx_basis)
 
 
@@ -1310,10 +1310,13 @@ def eigenvalue_unitarity(a, b):
     -------
     float
     """
-    Lambda = _np.dot(a, _np.linalg.inv(b))
-    d2 = Lambda.shape[0]
-    lmb = _np.linalg.eigvals(Lambda)
-    return float(_np.real(_np.linalg.norm(lmb)**2) - 1.0) / (d2 - 1.0)
+    try:
+        Lambda = _np.dot(a, _np.linalg.pinv(b))
+        d2 = Lambda.shape[0]
+        lmb = _np.linalg.eigvals(Lambda)
+        return float(_np.real(_np.linalg.norm(lmb)**2) - 1.0) / (d2 - 1.0)
+    except _np.linalg.LinAlgError:
+        return -1
 
 
 def nonunitary_entanglement_infidelity(a, b, mx_basis):
@@ -1641,7 +1644,7 @@ def rel_eigenvalues(a, b, mx_basis):
     -------
     numpy.ndarray
     """
-    target_op_inv = _np.linalg.inv(b)
+    target_op_inv = _np.linalg.pinv(b)
     rel_op = _np.dot(target_op_inv, a)
     return _np.linalg.eigvals(rel_op).astype("complex")  # since they generally *can* be complex
 
@@ -1750,7 +1753,7 @@ def rel_gate_eigenvalues(a, b, mx_basis):  # DUPLICATE of rel_eigenvalues TODO
     -------
     numpy.ndarray
     """
-    rel_op = _np.dot(_np.linalg.inv(b), a)  # "relative gate" == target^{-1} * gate
+    rel_op = _np.dot(_np.linalg.pinv(b), a)  # "relative gate" == target^{-1} * gate
     return _np.linalg.eigvals(rel_op).astype("complex")  # since they generally *can* be complex
 
 
