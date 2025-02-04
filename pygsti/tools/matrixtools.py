@@ -894,8 +894,9 @@ def real_matrix_log(m, action_if_imaginary="raise", tol=1e-8):
             pass
         else:
             assert(False), "Invalid 'action_if_imaginary' argument: %s" % action_if_imaginary
-    else:
-        assert(imMag <= tol), "real_matrix_log failed to construct a real logarithm!"
+    elif imMag <= tol:
+        import warnings
+        warnings.warn("real_matrix_log failed to construct a real logarithm!")
         logM = _np.real(logM)
 
     return logM
