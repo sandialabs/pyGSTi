@@ -46,6 +46,31 @@ from pygsti.tools import listtools as _lt
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
 
 
+class Roster:
+    def __init__(self, arg):
+        if isinstance(arg, str) and arg == 'all':
+            self.trivial = True
+            self.collection = None
+        else:
+            self.trivial = False
+            self.collection = arg
+    def __contains__(self, item):
+        return self.trivial or (item in self.collection)
+
+
+class ModelView:
+    @staticmethod
+    def cast(arg):
+        return arg if arg is not None else ModelView()
+    def __init__(self):
+        self.operations  = _collections.defaultdict(lambda: None)
+        self.preps       = _collections.defaultdict(lambda: None)
+        self.povms       = _collections.defaultdict(lambda: None)
+        self.instruments = _collections.defaultdict(lambda: None)
+        self.factories   = _collections.defaultdict(lambda: None)
+
+
+
 class ExplicitOpModel(_mdl.OpModel):
     """
     Encapsulates a set of gate, state preparation, and POVM effect operations.
@@ -329,32 +354,55 @@ class ExplicitOpModel(_mdl.OpModel):
         else:
             raise KeyError("Key %s has an invalid prefix" % label)
 
-    def convert_members_inplace(self, to_type, categories_to_convert='all', labels_to_convert='all',
-                                ideal_model=None, flatten_structure=False, set_default_gauge_group=False, cptp_truncation_tol= 1e-6):
+    def convert_members_inplace(self, to_type,
+            categories_to_convert='all', labels_to_convert='all',
+            ideal_model=None, flatten_structure=False, set_default_gauge_group=False,
+            cptp_truncation_tol= 1e-6, allow_smaller_pp_basis=False
+        ):
         """
         TODO: docstring -- like set_all_parameterizations but doesn't set default gauge group by default
+
+        allow_smaller_pp_basis : bool
+
+            Setting allow_smaller_pp_basis=True allows dimension mismatches between
+            this ExplicitOpModel's operations and the dimensions we'd expect for
+            operations based on the properties of self.basis.
+            
+            We can ONLY handle mismatches when self.basis.name indicates a Pauli product basis
+            or a tensor product thereof. We handle a failed conversion by trying a second time,
+            passing in the string literal `pp` instead of `self.basis` to _op.convert(...).
+    
         """
         if isinstance(categories_to_convert, str): categories_to_convert = (categories_to_convert,)
+        fallback_basis = '' if not allow_smaller_pp_basis else self.basis.name.replace('pp','').replace('*','') + 'pp'
+        ideal_model = ModelView.cast(ideal_model)
+        roster = Roster(labels_to_convert)
         if any([c in categories_to_convert for c in ('all', 'ops', 'operations')]):
-            for lbl, gate in self.operations.items():
-                if labels_to_convert == 'all' or lbl in labels_to_convert:
-                    ideal = ideal_model.operations.get(lbl, None) if (ideal_model is not None) else None
-                    self.operations[lbl] = _op.convert(gate, to_type, self.basis, ideal, flatten_structure, cptp_truncation_tol)
+            op_items = [(k,v) for (k,v) in self.operations.items() if k in roster]
+            for lbl, gate in op_items:
+                ideal = ideal_model.operations[lbl]
+                try:
+                    op = _op.convert(gate, to_type, self.basis, ideal, flatten_structure, cptp_truncation_tol)
+                except ValueError as e:
+                    if not fallback_basis == 'pp':
+                        raise e
+                    op = _op.convert(gate, to_type, 'pp', ideal, flatten_structure, cptp_truncation_tol)
+                self.operations[lbl] = op
         if any([c in categories_to_convert for c in ('all', 'instruments')]):
-            for lbl, inst in self.instruments.items():
-                if labels_to_convert == 'all' or lbl in labels_to_convert:
-                    ideal = ideal_model.instruments.get(lbl, None) if (ideal_model is not None) else None
-                    self.instruments[lbl] = _instrument.convert(inst, to_type, self.basis, ideal, flatten_structure)
+            inst_items = [(k,v) for (k,v) in self.instruments.items() if k in roster]
+            for lbl, inst in inst_items:
+                ideal = ideal_model.instruments[lbl]
+                self.instruments[lbl] = _instrument.convert(inst, to_type, self.basis, ideal, flatten_structure)
         if any([c in categories_to_convert for c in ('all', 'preps')]):
-            for lbl, prep in self.preps.items():
-                if labels_to_convert == 'all' or lbl in labels_to_convert:
-                    ideal = ideal_model.preps.get(lbl, None) if (ideal_model is not None) else None
-                    self.preps[lbl] = _state.convert(prep, to_type, self.basis, ideal, flatten_structure)
+            prep_items = [(k,v) for (k,v) in self.preps.items() if k in roster]
+            for lbl, prep in prep_items:
+                ideal = ideal_model.preps[lbl]
+                self.preps[lbl] = _state.convert(prep, to_type, self.basis, ideal, flatten_structure)
         if any([c in categories_to_convert for c in ('all', 'povms')]):
-            for lbl, povm in self.povms.items():
-                if labels_to_convert == 'all' or lbl in labels_to_convert:
-                    ideal = ideal_model.povms.get(lbl, None) if (ideal_model is not None) else None
-                    self.povms[lbl] = _povm.convert(povm, to_type, self.basis, ideal, flatten_structure)
+            povm_items = [(k,v) for (k,v) in self.povms.items() if k in roster]
+            for lbl, povm in povm_items:
+                ideal = ideal_model.povms[lbl]
+                self.povms[lbl] = _povm.convert(povm, to_type, self.basis, ideal, flatten_structure)
 
         self._clean_paramvec()  # param indices were probabaly updated
         if set_default_gauge_group:
