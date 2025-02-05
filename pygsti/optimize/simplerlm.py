@@ -522,6 +522,11 @@ def simplish_leastsq(
     f = obj_fn(global_x)  # 'E'-type array
     norm_f = ari.norm2_f(f)
     if not _np.isfinite(norm_f):
+        # TODO: this path can be hit when f contains NaNs. We should
+        # really have a separate error message for that. Performing
+        # the check will require updating our ArraysInterface API
+        # (which isn't hard but is beside the point as I'm writing this)
+        #   -Riley.
         msg = "Infinite norm of objective function at initial point!"
 
     if len(global_x) == 0:  # a model with 0 parameters - nothing to optimize
