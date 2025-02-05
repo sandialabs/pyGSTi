@@ -335,7 +335,7 @@ class ModelMember(ModelChild, _NicelySerializable):
         None
         """
         for subm in self.submembers():
-            subm.unlink_parent()
+            subm.unlink_parent(force)
 
         if (self.parent is not None) and (force or self.parent._obj_refcount(self) == 0):
             self._parent = None
