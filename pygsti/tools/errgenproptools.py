@@ -6021,7 +6021,7 @@ def errorgen_layer_to_matrix(errorgen_layer, num_qubits, errorgen_matrix_dict=No
     return mat
 
 
-#Helper function for doing numeric commutators and compositions.
+#Helper functions for doing numeric commutators and compositions.
 
 def error_generator_commutator_numerical(errorgen1, errorgen2, errorgen_matrix_dict=None, num_qubits=None):
     """
@@ -6366,20 +6366,21 @@ def pauli_phase_update(pauli, bitstring, dual=False):
     return overall_phase, output_bitstring
 
 #TODO: This function needs a more evocative name
-def phi(tableau, desired_bitstring, P, Q, debug = False):
+def phi(tableau, desired_bitstring, P, Q):
     """
     This function computes a quantity whose value is used in expression for the sensitivity of probabilities to error generators.
     
     Parameters
     ----------
     tableau : stim.Tableau
-        A stim Tableau corresponding to the input stabilizer state.
-        
+        A stim Tableau corresponding to the input stabilizer state. 
+
     desired_bitstring : str
         A string of zeros and ones corresponding to the bit string being measured.
-        
+
     P : str or stim.PauliString
         The first pauli string index.
+
     Q : str or stim.PauliString
         The second pauli string index.
         
@@ -6390,8 +6391,6 @@ def phi(tableau, desired_bitstring, P, Q, debug = False):
     
     #start by getting the pauli string which maps the all-zeros string to the target bitstring.
     initial_pauli_string = stim.PauliString(''.join(['I' if bit=='0' else 'X' for bit in desired_bitstring]))
-    if debug:
-        print(f'{initial_pauli_string=}')
     #map P and Q to stim.PauliString if needed.
     if isinstance(P, str):
         P = stim.PauliString(P)
@@ -6401,28 +6400,16 @@ def phi(tableau, desired_bitstring, P, Q, debug = False):
     #combine this initial pauli string with the two input paulis
     eff_P = initial_pauli_string*P
     eff_Q = Q*initial_pauli_string
-    if debug:
-        print(f'{eff_P=}')
-        print(f'{eff_Q=}')
+
     #now get the bit strings which need their amplitudes extracted from the input stabilizer state and get
     #the corresponding phase corrections.
     all_zeros = '0'*len(eff_P)
     phase1, bitstring1 = pauli_phase_update(eff_P, all_zeros, dual=True)
     phase2, bitstring2 = pauli_phase_update(eff_Q, all_zeros)
-    if debug:
-        print(f'{phase1=}')
-        print(f'{phase2=}')
-    
-        print(f'{bitstring1=}')
-        print(f'{bitstring2=}')
-        
+
     #get the amplitude of these two bitstrings in the stabilizer state.
     amp1 = amplitude_of_state(tableau, bitstring1)
     amp2 = amplitude_of_state(tableau, bitstring2).conjugate()  #The second amplitude also needs a complex conjugate applied
-    
-    if debug:
-        print(f'{amp1=}')
-        print(f'{amp2=}')
         
     #now apply the phase corrections. 
     amp1*=phase1
@@ -6502,7 +6489,7 @@ def phi_numerical(tableau, desired_bitstring, P, Q):
 
     return phi*scale
 
-def alpha(errorgen, tableau, desired_bitstring, debug=False):
+def alpha(errorgen, tableau, desired_bitstring):
     """
     First-order error generator sensitivity function for probability.
     
@@ -6528,28 +6515,15 @@ def alpha(errorgen, tableau, desired_bitstring, debug=False):
     
     if errgen_type == 'H':
         sensitivity = 2*phi(tableau, desired_bitstring, basis_element_labels[0], identity_pauli).imag
-        
     elif errgen_type == 'S':
         sensitivity = (phi(tableau, desired_bitstring, basis_element_labels[0], basis_element_labels[0]) \
                     - phi(tableau, desired_bitstring, identity_pauli, identity_pauli)).real
-    elif errgen_type == 'C': #TODO simplify this logic
-        if debug:
-            print(f'{2*phi(tableau, desired_bitstring, basis_element_labels[0], basis_element_labels[1])=}')
+    elif errgen_type == 'C': 
         first_term = 2*phi(tableau, desired_bitstring, basis_element_labels[0], basis_element_labels[1])
-        #print(f'C: ({basis_element_labels[0], basis_element_labels[1]}) {phi(tableau, desired_bitstring, basis_element_labels[0], basis_element_labels[1])=}', flush=True)
         sensitivity = first_term.real
         if basis_element_labels[0].commutes(basis_element_labels[1]):
-            #print(f'C: ({basis_element_labels[0], basis_element_labels[1]}) {phi(tableau, desired_bitstring, basis_element_labels[0]*basis_element_labels[1], identity_pauli)=}', flush=True)
             second_term = 2*phi(tableau, desired_bitstring, basis_element_labels[0]*basis_element_labels[1], identity_pauli)
-            if debug:
-                print(f'{2*phi(tableau, desired_bitstring, basis_element_labels[0]*basis_element_labels[1], identity_pauli)=}')
             sensitivity -= second_term.real
-        
-        #first_term = 2*phi(tableau, desired_bitstring, basis_element_labels[0], basis_element_labels[1])
-        #second_term = phi(tableau, desired_bitstring, basis_element_labels[0]*basis_element_labels[1], identity_pauli) \
-        #            + phi(tableau, desired_bitstring, basis_element_labels[1]*basis_element_labels[0], identity_pauli)
-        #test_sensitivity =  first_term.real - second_term.real
-        #assert abs(sensitivity-test_sensitivity)<1e-10
     else: #A
         first_term = phi(tableau, desired_bitstring, basis_element_labels[1], basis_element_labels[0])
         if not basis_element_labels[0].commutes(basis_element_labels[1]):
@@ -6579,7 +6553,6 @@ def alpha_numerical(errorgen, tableau, desired_bitstring):
     
     #get the stabilizer state corresponding to the tableau.
     stabilizer_state = tableau.to_state_vector(endian='big')
-    #print(f'{stabilizer_state=}')
     stabilizer_state_dmvec = state_to_dmvec(stabilizer_state)
     stabilizer_state_dmvec.reshape((len(stabilizer_state_dmvec),1))
     #also get the superoperator (in the standard basis) corresponding to the elementary error generator
@@ -6618,42 +6591,6 @@ def _bitstring_to_int(bitstring) -> int:
         return int(''.join(bitstring), 2)
     else:
         raise ValueError("Input must be either a string or a tuple of '0's and '1's")
-
-def first_order_probability_correction(errorgen_dict, tableau, desired_bitstring):
-    """
-    Compute the first-order correction to the probability of the specified bit string.
-    
-    Parameters
-    ----------
-    errorgen_dict : dict
-        Dictionary whose keys are `LocalStimErrorgenLabel` and whose values are corresponding
-        rates.
-    
-    tableau : stim.Tableau
-        Stim tableau corresponding to a particular stabilizer state being measured.
-        
-    desired_bitstring : str
-        String of 0's and 1's corresponding to the output bitstring being measured.
-    
-    Returns
-    -------
-    correction : float
-        float corresponding to the correction to the output probability for the
-        desired bitstring induced by the error generator (to first order).
-    """
-    
-    num_random = random_support(tableau)
-    scale = 1/2**(num_random) #TODO: This might overflow
-    
-    #now get the sum over the alphas and the error generator rate products needed.
-    alpha_errgen_prods = [0]*len(errorgen_dict)
-    
-    for i, (lbl, rate) in enumerate(errorgen_dict.items()):
-        alpha_errgen_prods[i] = alpha(lbl, tableau, desired_bitstring)*rate
-    
-    #print(f'{alpha_errgen_prods=}')
-    correction = scale*sum(alpha_errgen_prods)
-    return correction
 
 def stabilizer_probability_correction(errorgen_dict, tableau, desired_bitstring, order = 1, truncation_threshold = 1e-14):
     """
@@ -6697,23 +6634,18 @@ def stabilizer_probability_correction(errorgen_dict, tableau, desired_bitstring,
     for i, (lbl, rate) in enumerate(errorgen_dict.items()):
         if abs(rate) > truncation_threshold:
             alpha_errgen_prods[i] = alpha(lbl, tableau, desired_bitstring)*rate
-    #print(f'{alpha_errgen_prods=}')
     correction = scale*_np.sum(alpha_errgen_prods)
-    #print(f'{correction=}')
     if order > 1:
         #The order of the approximation determines the combinations of error generators
         #which need to be composed. (given by cartesian products of labels in errorgen_dict).
         labels_by_order = [list(product(errorgen_dict.keys(), repeat = i+1)) for i in range(1,order)]
         #Get a similar structure for the corresponding rates
         rates_by_order = [list(product(errorgen_dict.values(), repeat = i+1)) for i in range(1,order)]
-        #print(f'{labels_by_order=}')
-        #print(f'{rates_by_order=}')
         for current_order, (current_order_labels, current_order_rates) in enumerate(zip(labels_by_order, rates_by_order), start=2):
             current_order_scale = 1/factorial(current_order)
             composition_results = []
             for label_tup, rate_tup in zip(current_order_labels, current_order_rates):
                 composition_results.extend(iterative_error_generator_composition(label_tup, rate_tup))
-            #print(f'{composition_results=}')
             #aggregate together any overlapping terms in composition_results
             composition_results_dict = dict()
             for lbl, rate in composition_results:
@@ -6721,16 +6653,11 @@ def stabilizer_probability_correction(errorgen_dict, tableau, desired_bitstring,
                     composition_results_dict[lbl] = rate
                 else:
                     composition_results_dict[lbl] += rate
-            #print(f'{composition_results_dict=}')
             alpha_errgen_prods = _np.zeros(len(composition_results_dict))
             for i, (lbl, rate) in enumerate(composition_results_dict.items()):
                 if current_order_scale*abs(rate) > truncation_threshold:
                     sensitivity = alpha(lbl, tableau, desired_bitstring)
-                    #print(f'{lbl}: alpha(lbl, tableau, desired_bitstring)= {sensitivity}')
                     alpha_errgen_prods[i] = _np.real_if_close(sensitivity*rate)
-            #print(f'{alpha_errgen_prods=}')
-            #print(f'{_np.sum(alpha_errgen_prods)=}')
-            #print(f'{current_order_scale*scale*_np.sum(alpha_errgen_prods)=}')
             correction += current_order_scale*scale*_np.sum(alpha_errgen_prods)
 
     return correction
@@ -6774,11 +6701,8 @@ def iterative_error_generator_composition(errorgen_labels, rates):
             #grab the last two elements of each of these and do the composition.
             new_labels_and_rates = error_generator_composition(label_tup[-2], label_tup[-1], rate_tup[-2]*rate_tup[-1])
             for new_label_rate_tup in new_labels_and_rates:
-                #print(f'{new_label_rate_tup=}')
                 new_label_tup = label_tup[:-2] + (new_label_rate_tup[0],)
                 new_rate_tup = rate_tup[:-2] + (new_label_rate_tup[1],)
-                #print(f'{new_label_tup=}')
-                #print(f'{new_rate_tup=}')
 
                 if len(new_label_tup) == 1:
                     fully_processed_labels.append(new_label_rate_tup)
@@ -6858,8 +6782,8 @@ def approximate_stabilizer_probability(errorgen_dict, circuit, desired_bitstring
         errorgen_dict = {_LSE.cast(lbl):val for lbl,val in errorgen_dict.items()}
 
     ideal_prob = stabilizer_probability(tableau, desired_bitstring)
-    first_order_correction = stabilizer_probability_correction(errorgen_dict, tableau, desired_bitstring, order, truncation_threshold)
-    return ideal_prob + first_order_correction
+    correction = stabilizer_probability_correction(errorgen_dict, tableau, desired_bitstring, order, truncation_threshold)
+    return ideal_prob + correction
 
 def approximate_stabilizer_probabilities(errorgen_dict, circuit, order=1, truncation_threshold=1e-14):
     """
@@ -6949,14 +6873,11 @@ def error_generator_taylor_expansion(errorgen_dict, order = 1, truncation_thresh
         labels_by_order = [list(product(errorgen_dict.keys(), repeat = i+1)) for i in range(1,order)]
         #Get a similar structure for the corresponding rates
         rates_by_order = [list(product(errorgen_dict.values(), repeat = i+1)) for i in range(1,order)]
-        #print(f'{labels_by_order=}')
-        #print(f'{rates_by_order=}')
         for current_order, (current_order_labels, current_order_rates) in enumerate(zip(labels_by_order, rates_by_order), start=2):
             order_scale = 1/factorial(current_order)
             composition_results = []
             for label_tup, rate_tup in zip(current_order_labels, current_order_rates):
                 composition_results.extend(iterative_error_generator_composition(label_tup, rate_tup))
-            #print(f'{composition_results=}')
             #aggregate together any overlapping terms in composition_results
             composition_results_dict = dict()
             for lbl, rate in composition_results:
@@ -6964,7 +6885,6 @@ def error_generator_taylor_expansion(errorgen_dict, order = 1, truncation_thresh
                     composition_results_dict[lbl] = rate
                 else:
                     composition_results_dict[lbl] += rate
-            #print(f'{composition_results_dict=}')
             for lbl, rate in composition_results_dict.items():
                 if order_scale*abs(rate) > truncation_threshold:
                     taylor_order_terms[current_order-1][lbl] = order_scale*rate
