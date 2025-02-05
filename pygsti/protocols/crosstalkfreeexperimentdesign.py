@@ -54,7 +54,7 @@ def stitch_circuits_by_germ_power_only(color_patches: dict, vertices: list,
     """
 
     circuit_lists = [[] for _ in twoq_gstdesign.circuit_lists]
-    twoq_idle_label = Label(('Gi',) + twoq_gstdesign.qubit_labels)
+    twoq_idle_label = Label(('Gii',) + twoq_gstdesign.qubit_labels)
     oneq_idle_label = Label(('Gi',) + oneq_gstdesign.qubit_labels)
     mapper_2q = {twoq_idle_label: twoq_idle_label}
     mapper_1q = {oneq_idle_label: oneq_idle_label}
