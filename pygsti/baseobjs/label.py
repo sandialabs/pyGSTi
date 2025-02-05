@@ -128,13 +128,13 @@ class Label(object):
 
         #print(" -> preproc with name=", name, "sslbls=", state_space_labels, "t=", time, "args=", args)
         if state_space_labels is None or state_space_labels in ((), (None,)):
-            if args:
+            if args is not None:
                 return LabelTupWithArgs.init(name, (), time, args)  # just use empty sslbls
             else:
                 return LabelStr.init(name, time)
 
         else:
-            if args: return LabelTupWithArgs.init(name, state_space_labels, time, args)
+            if args is not None: return LabelTupWithArgs.init(name, state_space_labels, time, args)
             else:
                 if time == 0.0:
                     return LabelTup.init(name, state_space_labels)
