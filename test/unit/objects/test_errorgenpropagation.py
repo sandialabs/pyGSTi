@@ -6,12 +6,11 @@ from pygsti.models.modelconstruction import create_crosstalk_free_model
 from pygsti.baseobjs import Label, BuiltinBasis, QubitSpace, CompleteElementaryErrorgenBasis
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel, LocalElementaryErrorgenLabel
 from pygsti.tools import errgenproptools as _eprop
-from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel
+from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE
 from pygsti.tools.matrixtools import print_mx
 from itertools import product
-
-
 import numpy as np
+import stim
 
 
 class ErrorgenPropTester(BaseCase):
@@ -58,48 +57,34 @@ class ErrorgenPropTester(BaseCase):
         self.assertTrue(np.linalg.norm(probabilities_BCH_order_3 - probabilities_forward_simulation, ord=1) < 1e-2)
         self.assertTrue(np.linalg.norm(probabilities_BCH_order_4 - probabilities_forward_simulation, ord=1) < 1e-2)
 
-    def test_errorgen_commutators(self):
-        #confirm we get the correct analytic commutators by comparing to numerics.
+    
+class LocalStimErrorgenLabelTester(BaseCase):
+    def setUp(self):
+        self.local_eel = LocalElementaryErrorgenLabel('C', ['XX', 'YY'])
+        self.global_eel = GlobalElementaryErrorgenLabel('C', ['XX', 'YY'], (0,1))
+        self.sslbls = [0,1]
+        self.tableau = stim.PauliString('XI').to_tableau()
 
-        #create an error generator basis.
-        errorgen_basis = CompleteElementaryErrorgenBasis('PP', QubitSpace(2), default_label_type='local')
+    def test_cast(self):
+        correct_lse = _LSE('C', [stim.PauliString('XX'), stim.PauliString('YY')])
 
-        #use this basis to construct a dictionary from error generator labels to their
-        #matrices.
-        errorgen_lbls = errorgen_basis.labels
-        errorgen_lbl_matrix_dict = {lbl: mat for lbl, mat in zip(errorgen_lbls, errorgen_basis.elemgen_matrices)}
+        self.assertEqual(correct_lse, _LSE.cast(self.local_eel))
+        self.assertEqual(correct_lse, _LSE.cast(self.global_eel, self.sslbs))
 
-        #loop through all of the pairs of indices.
-        errorgen_label_pairs = list(product(errorgen_lbls, repeat=2))
+    def test_to_local_global_eel(self):
+        lse = _LSE('C', [stim.PauliString('XX'), stim.PauliString('YY')])
 
-        #also get a version of this list where the labels are local stim ones
-        local_stim_errorgen_lbls = [LocalStimErrorgenLabel.cast(lbl) for lbl in errorgen_lbls]
-        stim_errorgen_label_pairs = list(product(local_stim_errorgen_lbls, repeat=2))
-
-        #for each pair compute the commutator directly and compute it analytically (then converting it to
-        #a numeric array) and see how they compare.
-        for pair1, pair2 in zip(errorgen_label_pairs, stim_errorgen_label_pairs):
-            numeric_commutator = error_generator_commutator_numerical(pair1[0], pair1[1], errorgen_lbl_matrix_dict)
-            analytic_commutator = _eprop.error_generator_commutator(pair2[0], pair2[1])
-            analytic_commutator_mat = comm_list_to_matrix(analytic_commutator, errorgen_lbl_matrix_dict, 2)        
-
-            norm_diff = np.linalg.norm(numeric_commutator-analytic_commutator_mat)
-            if norm_diff > 1e-10:
-                print(f'Difference in commutators for pair {pair1} is greater than 1e-10.')
-                print(f'{np.linalg.norm(numeric_commutator-analytic_commutator_mat)=}')
-                print('numeric_commutator=')
-                print_mx(numeric_commutator)
-                
-                #Decompose the numerical commutator into rates.
-                for lbl, dual in zip(errorgen_lbls, errorgen_basis.elemgen_dual_matrices):
-                    rate = np.trace(dual.conj().T@numeric_commutator)
-                    if abs(rate) >1e-3:
-                        print(f'{lbl}: {rate}')
-                
-                print(f'{analytic_commutator=}')
-                print('analytic_commutator_mat=')
-                print_mx(analytic_commutator_mat)
-                raise ValueError()
+        self.assertEqual(lse.to_local_eel(), self.local_eel)
+        self.assertEqual(lse.to_global_eel(), self.global_eel)
+    
+    def test_propagate_error_gen_tableau(self):
+        lse = _LSE('C', [stim.PauliString('XX'), stim.PauliString('YY')])
+        propagated_lse = lse.propagate_error_gen_tableau(self.tableau, 1)
+        self.assertEqual(propagated_lse, (_LSE('C', [stim.PauliString('XX'), stim.PauliString('YY')]), -1))
+        
+        lse = _LSE('S', [stim.PauliString('ZI')])
+        propagated_lse = lse.propagate_error_gen_tableau(self.tableau, 1)
+        self.assertEqual(propagated_lse, (_LSE('S', [stim.PauliString('ZI')]), 1))
 
 #Helper Functions:
 def probabilities_errorgen_prop(error_propagator, target_model, circuit, use_bch=False, bch_order=1, truncation_threshold=1e-14):
@@ -219,4 +204,6 @@ def comm_list_to_matrix(comm_list, errorgen_matrix_dict, num_qubits):
 
 def error_generator_commutator_numerical(errorgen_1, errorgen_2, errorgen_matrix_dict):
     return errorgen_matrix_dict[errorgen_1]@errorgen_matrix_dict[errorgen_2] - errorgen_matrix_dict[errorgen_2]@errorgen_matrix_dict[errorgen_1]
-        
+
+
+

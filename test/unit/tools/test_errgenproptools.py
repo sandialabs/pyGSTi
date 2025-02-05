@@ -14,7 +14,7 @@ import stim
 from pygsti.processors import QubitProcessorSpec
 from pygsti.errorgenpropagation.errorpropagator_dev import ErrorGeneratorPropagator
 
-#TODO: BCH approximation, errorgen_layer_to_matrix, stim_pauli_string_less_than 
+#TODO: BCH approximation, errorgen_layer_to_matrix, stim_pauli_string_less_than, iterative_error_generator_composition
 
 class ErrgenCompositionCommutationTester(BaseCase):
 
