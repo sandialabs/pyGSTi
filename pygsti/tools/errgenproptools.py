@@ -6530,8 +6530,8 @@ def alpha(errorgen, tableau, desired_bitstring, debug=False):
         sensitivity = 2*phi(tableau, desired_bitstring, basis_element_labels[0], identity_pauli).imag
         
     elif errgen_type == 'S':
-        sensitivity = phi(tableau, desired_bitstring, basis_element_labels[0], basis_element_labels[0]) \
-                    - phi(tableau, desired_bitstring, identity_pauli, identity_pauli)
+        sensitivity = (phi(tableau, desired_bitstring, basis_element_labels[0], basis_element_labels[0]) \
+                    - phi(tableau, desired_bitstring, identity_pauli, identity_pauli)).real
     elif errgen_type == 'C': #TODO simplify this logic
         if debug:
             print(f'{2*phi(tableau, desired_bitstring, basis_element_labels[0], basis_element_labels[1])=}')
