@@ -942,6 +942,59 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
         if add_default_protocol:
             self.add_default_protocol(RB(name='RB', datatype='adjusted_success_probabilities', defaultfit='A-fixed'))
 
+    def merge_with(self, other_edesign, sort_depths=False):
+        """
+        Merge this MRB experiment design with another one and return the result.
+
+        The returned design will contain the union of the circuits in the two
+        experiment designs being merged, and will contain depth, ideal-output,
+        etc. metadata that is updated appropriately.
+
+        Parameters
+        ----------
+        other_edesign: MirrorRBDesign
+            The other experiment design to merge
+
+        Returns
+        -------
+        MirrorRBDesign
+        """
+        # "Merge" easy attributes that are not per-circuit
+        assert self.qubit_labels == other_edesign.qubit_labels, "To merge, qubit_labels must be equal"
+        assert self.circuit_type == other_edesign.circuit_type, "To merge, MRB designs must have the same `circuit_type`"
+        assert self.localclifford == other_edesign.localclifford, "To merge, MRB designs must have the same `localclifford`"
+        assert self.paulirandomize == other_edesign.paulirandomize, "To merge, MRB designs must have the same `paulirandomize`"
+
+        if self.sampler == other_edesign.sampler:
+            sampler = self.sampler
+            if self.samplerargs == other_edesign.samplerargs:
+                samplerargs = self.samplerargs
+            else:
+                samplerargs = "mixed"
+        else:
+            sampler = "mixed"
+            samplerargs = "mixed"
+
+        if self.descriptor == other_edesign.descriptor:
+            descriptor = self.descriptor
+        else:
+            descriptor = f"MERGED({self.descriptor}, {other_edesign.descriptor}"
+
+        # Merge the underlying BenchmarkingDesign data
+        depths, circuits_by_depth, paired_attrs_by_depth = self._merge_data(other_edesign, sort_depths)
+
+        circuit_lists = [circuits_by_depth[d] for d in depths]
+        idealouts_per_depth = paired_attrs_by_depth.pop('idealout_lists')
+        ideal_outs = [idealouts_per_depth[d] for d in depths]
+        circuits_per_depth = [len(cl) for cl in circuit_lists]
+
+        cls = self.__class__
+        ret = cls.__new__(cls)
+        ret._init_foundation(depths, circuit_lists, ideal_outs, circuits_per_depth, self.qubit_labels,
+                             self.circuit_type, sampler, samplerargs, self.localclifford, self.paulirandomize,
+                             descriptor, add_default_protocol=False)
+        return ret
+
     def map_qubit_labels(self, mapper):
         """
         Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
