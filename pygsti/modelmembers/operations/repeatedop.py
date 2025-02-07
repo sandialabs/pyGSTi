@@ -45,7 +45,7 @@ class RepeatedOp(_LinearOperator):
 
         if evotype == "auto":
             evotype = op_to_repeat._evotype
-        evotype = _Evotype.cast(evotype)
+        evotype = _Evotype.cast(evotype, state_space=state_space)
         rep = evotype.create_repeated_rep(self.repeated_op._rep, self.num_repetitions, state_space)
         _LinearOperator.__init__(self, rep, evotype)
         self.init_gpindices()  # initialize our gpindices based on sub-members
@@ -112,29 +112,6 @@ class RepeatedOp(_LinearOperator):
         """
         op = self.repeated_op.to_dense(on_space)
         return _np.linalg.matrix_power(op, self.num_repetitions)
-
-    #def torep(self):
-    #    """
-    #    Return a "representation" object for this operation.
-    #
-    #    Such objects are primarily used internally by pyGSTi to compute
-    #    things like probabilities more efficiently.
-    #
-    #    Returns
-    #    -------
-    #    OpRep
-    #    """
-    #    if self._evotype == "densitymx":
-    #        return replib.DMOpRepExponentiated(self.repeated_op.torep(), self.power, self.dim)
-    #    elif self._evotype == "statevec":
-    #        return replib.SVOpRepExponentiated(self.repeated_op.torep(), self.power, self.dim)
-    #    elif self._evotype == "stabilizer":
-    #        nQubits = int(round(_np.log2(self.dim)))  # "stabilizer" is a unitary-evolution type mode
-    #        return replib.SVOpRepExponentiated(self.repeated_op.torep(), self.power, nQubits)
-    #    assert(False), "Invalid internal _evotype: %s" % self._evotype
-
-    #FUTURE: term-related functions (maybe base off of ComposedOp or use a composedop to generate them?)
-    # e.g. ComposedOp([self.repeated_op] * power, dim, evotype)
 
     @property
     def parameter_labels(self):

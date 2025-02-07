@@ -1483,12 +1483,6 @@ class SimultaneousExperimentDesign(ExperimentDesign):
         else:
             raise ValueError("Cannot convert a %s to a %s!" % (str(type(edesign)), str(cls)))
 
-    #@classmethod
-    #def from_tensored_circuits(cls, circuits, template_edesign, qubit_labels_per_edesign):
-    #    pass #Useful??? - need to break each circuit into different parts
-    # based on qubits, then copy (?) template edesign and just replace itself
-    # all_circuits_needing_data member?
-
     def __init__(self, edesigns, tensored_circuits=None, qubit_labels=None):
         """
         Create a new SimultaneousExperimentDesign object.
@@ -1977,9 +1971,6 @@ class ProtocolData(_TreeNode, _MongoSerializable):
         bool
         """
         return isinstance(self.dataset, (_data.MultiDataSet, dict))
-
-    #def underlying_tree_paths(self):
-    #    return self.edesign.get_tree_paths()
 
     def prune_tree(self, paths, paths_are_sorted=False):
         """

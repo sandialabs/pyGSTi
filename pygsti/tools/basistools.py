@@ -201,37 +201,6 @@ def change_basis(mx, from_basis, to_basis):
                          (_mt.safe_norm(ret, 'imag'), from_basis, to_basis, ret))
     return ret.real
 
-#def transform_matrix(from_basis, to_basis, dim_or_block_dims=None, sparse=False):
-#    '''
-#    Compute the transformation matrix between two bases
-#
-#    Parameters
-#    ----------
-#    from_basis : Basis or str
-#        Basis being converted from
-#
-#    to_basis : Basis or str
-#        Basis being converted to
-#
-#    dim_or_block_dims : int or list of ints
-#        if strings provided as bases, the dimension of basis to use.
-#
-#    sparse : bool, optional
-#        Whether to construct a sparse or dense transform matrix
-#        when this isn't specified already by `from_basis` or
-#        `to_basis` (e.g. when these are both strings).
-#
-#    Returns
-#    -------
-#    Basis
-#        the composite basis created
-#    '''
-#    if dim_or_block_dims is None:
-#        assert isinstance(from_basis, Basis)
-#    else:
-#        from_basis = Basis(from_basis, dim_or_block_dims, sparse=sparse)
-#    return from_basis.transform_matrix(to_basis)
-
 
 def create_basis_pair(mx, from_basis, to_basis):
     """

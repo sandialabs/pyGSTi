@@ -549,6 +549,24 @@ class Circuit(object):
 
         return self
     
+    #pickle management functions
+    def __getstate__(self):
+        state_dict = self.__dict__
+        #if state_dict.get('_hash', None) is not None:
+        #    del state_dict['_hash'] #don't store the hash, recompute at unpickling time
+        return state_dict
+
+    def __setstate__(self, state_dict):
+        for k, v in state_dict.items():
+            self.__dict__[k] = v
+        if self.__dict__['_static']:
+            #reinitialize the hash
+            if self.__dict__.get('_hashable_tup', None) is not None:
+                self._hash = hash(self._hashable_tup)
+            else: #legacy support
+                self._hashable_tup = self.tup
+                self._hash = hash(self._hashable_tup)
+
 
     def to_label(self, nreps=1):
         """
@@ -636,7 +654,6 @@ class Circuit(object):
         if self._static:
             return self._labels
         else:
-            #return tuple([to_label(layer_lbl) for layer_lbl in self._labels])
             return tuple([layer_lbl if isinstance(layer_lbl, _Label) 
                           else _Label(layer_lbl) for layer_lbl in self._labels])
     @property
@@ -2650,7 +2667,6 @@ class Circuit(object):
                 layers = layers[:i] + c._labels + layers[i + 1:]
         return Circuit._fastinit(layers, self._line_labels, editable=False, occurrence=self._occurrence_id)
 
-
     def change_gate_library(self, compilation, allowed_filter=None, allow_unchanged_gates=False, depth_compression=True,
                             one_q_gate_relations=None):
         """
@@ -3539,7 +3555,6 @@ class Circuit(object):
 
         return sum([cnt(layer_lbl) for layer_lbl in self._labels])
     
-
     def _togrid(self, identity_name):
         """ return a list-of-lists rep? """
         d = self.num_layers
