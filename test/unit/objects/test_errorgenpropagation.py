@@ -1,6 +1,6 @@
 from ..util import BaseCase
 from pygsti.algorithms.randomcircuit import create_random_circuit
-from pygsti.errorgenpropagation.errorpropagator_dev import ErrorGeneratorPropagator
+from pygsti.errorgenpropagation.errorpropagator import ErrorGeneratorPropagator
 from pygsti.processors import QubitProcessorSpec
 from pygsti.models.modelconstruction import create_crosstalk_free_model
 from pygsti.baseobjs import Label, BuiltinBasis, QubitSpace, CompleteElementaryErrorgenBasis

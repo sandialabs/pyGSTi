@@ -1,5 +1,6 @@
 import numpy as np
-from pygsti.baseobjs import Label, QubitSpace
+from scipy.linalg import logm
+from pygsti.baseobjs import Label, QubitSpace, BuiltinBasis
 from pygsti.baseobjs.errorgenbasis import CompleteElementaryErrorgenBasis
 from pygsti.algorithms.randomcircuit import create_random_circuit
 from pygsti.models.modelconstruction import create_crosstalk_free_model
@@ -12,11 +13,25 @@ from itertools import product
 import random
 import stim
 from pygsti.processors import QubitProcessorSpec
-from pygsti.errorgenpropagation.errorpropagator_dev import ErrorGeneratorPropagator
+from pygsti.errorgenpropagation.errorpropagator import ErrorGeneratorPropagator
 
 #TODO: BCH approximation, errorgen_layer_to_matrix, stim_pauli_string_less_than, iterative_error_generator_composition
 
 class ErrgenCompositionCommutationTester(BaseCase):
+
+    def setUp(self):
+        num_qubits = 4
+        gate_names = ['Gcphase', 'Gxpi2', 'Gypi2']
+        availability = {'Gcphase':[(0,1), (1,2), (2,3), (3,0)]}
+        pspec = QubitProcessorSpec(num_qubits, gate_names, availability=availability)
+        self.target_model = create_crosstalk_free_model(processor_spec = pspec)
+        self.circuit = create_random_circuit(pspec, 4, sampler='edgegrab', samplerargs=[0.4,], rand_state=12345)
+        max_strengths = {1: {'S': 0, 'H': .0001},
+                         2: {'S': 0, 'H': .0001}}
+        error_rates_dict = sample_error_rates_dict(pspec, max_strengths, seed=12345)
+        self.error_model = create_crosstalk_free_model(pspec, lindblad_error_coeffs=error_rates_dict)
+        self.errorgen_propagator = ErrorGeneratorPropagator(self.error_model.copy())
+        self.propagated_errorgen_layers = self.errorgen_propagator.propagate_errorgens(self.circuit)
 
     def test_errorgen_commutators(self):
         #confirm we get the correct analytic commutators by comparing to numerics.
@@ -141,7 +156,59 @@ class ErrgenCompositionCommutationTester(BaseCase):
                 print_mx(analytic_composition_mat)
                 raise ValueError('Numeric and analytic error generator compositions were not found to be identical!')    
     
+    def test_iterative_error_generator_composition(self):
+        test_labels = [(_LSE('H', [stim.PauliString('X')]), _LSE('H', [stim.PauliString('X')]), _LSE('H', [stim.PauliString('X')])), 
+                       (_LSE('H', [stim.PauliString('IX')]), _LSE('H', [stim.PauliString('IX')]), _LSE('H', [stim.PauliString('XI')])),
+                       (_LSE('S', [stim.PauliString('YY')]), _LSE('H', [stim.PauliString('IX')]), _LSE('H', [stim.PauliString('XI')]))]
+        rates = [(1,1,1), (1,1,1), (1,1,1)]
+    
+        correct_iterative_compositions = [[(_LSE('H', (stim.PauliString("+X"),)), (-2-0j)), (_LSE('H', (stim.PauliString("+X"),)), -2)],
+                                          [(_LSE('H', (stim.PauliString("+X_"),)), (-1+0j)), (_LSE('A', (stim.PauliString("+_X"), stim.PauliString("+XX"))), (1+0j)),
+                                           (_LSE('A', (stim.PauliString("+_X"), stim.PauliString("+XX"))), (1+0j)), (_LSE('H', (stim.PauliString("+X_"),)), (-1+0j))],
+                                          [(_LSE('C', (stim.PauliString("+X_"), stim.PauliString("+YZ"))), (-1+0j)), (_LSE('C', (stim.PauliString("+_X"), stim.PauliString("+ZY"))), (-1+0j)),
+                                           (_LSE('A', (stim.PauliString("+XX"), stim.PauliString("+YY"))), (-1+0j)), (_LSE('H', (stim.PauliString("+ZZ"),)), (1+0j))]                                          
+                                        ]
+        
+        for lbls, rates, correct_lbls in zip(test_labels, rates, correct_iterative_compositions):
+            iterated_composition = _eprop.iterative_error_generator_composition(lbls, rates)
+            self.assertEqual(iterated_composition, correct_lbls)
 
+    def test_bch_approximation(self):
+        first_order_bch_numerical = _eprop.bch_numerical(self.propagated_errorgen_layers, self.errorgen_propagator, bch_order=1)
+        propagated_errorgen_layers_bch_order_1 = self.errorgen_propagator.propagate_errorgens_bch(self.circuit, bch_order=1)
+        first_order_bch_analytical = self.errorgen_propagator.errorgen_layer_dict_to_errorgen(propagated_errorgen_layers_bch_order_1,mx_basis='pp', return_dense=True)
+        assert np.linalg.norm(first_order_bch_analytical-first_order_bch_numerical) < 1e-14
+        
+        propagated_errorgen_layers_bch_order_2 = self.errorgen_propagator.propagate_errorgens_bch(self.circuit, bch_order=2)
+        second_order_bch_numerical = _eprop.bch_numerical(self.propagated_errorgen_layers, self.errorgen_propagator, bch_order=2)
+        second_order_bch_analytical = self.errorgen_propagator.errorgen_layer_dict_to_errorgen(propagated_errorgen_layers_bch_order_2, mx_basis='pp', return_dense=True)
+        assert np.linalg.norm(second_order_bch_analytical-second_order_bch_numerical) < 1e-14
+
+        third_order_bch_numerical = _eprop.bch_numerical(self.propagated_errorgen_layers, self.errorgen_propagator, bch_order=3)
+        propagated_errorgen_layers_bch_order_3 = self.errorgen_propagator.propagate_errorgens_bch(self.circuit, bch_order=3)
+        third_order_bch_analytical = self.errorgen_propagator.errorgen_layer_dict_to_errorgen(propagated_errorgen_layers_bch_order_3, mx_basis='pp', return_dense=True)
+        assert np.linalg.norm(third_order_bch_analytical-third_order_bch_numerical) < 1e-14
+
+        fourth_order_bch_numerical = _eprop.bch_numerical(self.propagated_errorgen_layers, self.errorgen_propagator, bch_order=4)
+        propagated_errorgen_layers_bch_order_4 = self.errorgen_propagator.propagate_errorgens_bch(self.circuit, bch_order=4)
+        fourth_order_bch_analytical = self.errorgen_propagator.errorgen_layer_dict_to_errorgen(propagated_errorgen_layers_bch_order_4, mx_basis='pp', return_dense=True)
+        assert np.linalg.norm(fourth_order_bch_analytical-fourth_order_bch_numerical) < 1e-14
+
+        fifth_order_bch_numerical = _eprop.bch_numerical(self.propagated_errorgen_layers, self.errorgen_propagator, bch_order=5)
+        propagated_errorgen_layers_bch_order_5 = self.errorgen_propagator.propagate_errorgens_bch(self.circuit, bch_order=5, truncation_threshold=0)
+        fifth_order_bch_analytical = self.errorgen_propagator.errorgen_layer_dict_to_errorgen(propagated_errorgen_layers_bch_order_5, mx_basis='pp', return_dense=True)
+        assert np.linalg.norm(fifth_order_bch_analytical-fifth_order_bch_numerical) < 1e-14
+
+        exact_errorgen = logm(self.errorgen_propagator.eoc_error_channel(self.circuit))
+        exact_vs_first_order_norm  = np.linalg.norm(first_order_bch_analytical-exact_errorgen)
+        exact_vs_second_order_norm = np.linalg.norm(second_order_bch_analytical-exact_errorgen)
+        exact_vs_third_order_norm  = np.linalg.norm(third_order_bch_analytical-exact_errorgen)
+        exact_vs_fourth_order_norm = np.linalg.norm(fourth_order_bch_analytical-exact_errorgen)
+        exact_vs_fifth_order_norm  = np.linalg.norm(fifth_order_bch_analytical-exact_errorgen)
+        
+        self.assertTrue((exact_vs_first_order_norm > exact_vs_second_order_norm) and (exact_vs_second_order_norm > exact_vs_third_order_norm)
+                        and (exact_vs_third_order_norm > exact_vs_fourth_order_norm) and (exact_vs_fourth_order_norm > exact_vs_fifth_order_norm))
+        
 class ApproxStabilizerProbTester(BaseCase):
     def setUp(self):
         num_qubits = 4
@@ -161,7 +228,7 @@ class ApproxStabilizerProbTester(BaseCase):
         self.circuit_tableau_alt = self.circuit_alt.convert_to_stim_tableau()
 
         #also create a 3-qubit pspec for making some tests faster.
-        num_qubits = 4
+        num_qubits = 3
         gate_names = ['Gcphase', 'Gxpi2', 'Gypi2']
         availability = {'Gcphase':[(0,1), (1,2)]}
         pspec = QubitProcessorSpec(num_qubits, gate_names, availability=availability)
@@ -265,15 +332,6 @@ class ApproxStabilizerProbTester(BaseCase):
         for bitstring in bitstrings:
             for order in orders:
                 _eprop.stabilizer_probability_correction(self.propagated_errorgen_layer, self.circuit_tableau, bitstring, order)
-
-    #def test_iterative_error_generator_composition(self):
-    #    test_labels = [(_LSE('H', [stim.PauliString('X')]), _LSE('H', [stim.PauliString('X')]), _LSE('H', [stim.PauliString('X')])), 
-    #                   (_LSE('H', [stim.PauliString('IX')]), _LSE('H', [stim.PauliString('IX')]), _LSE('H', [stim.PauliString('XI')])),
-    #                   (_LSE('S', [stim.PauliString('YY')]), _LSE('H', [stim.PauliString('IX')]), _LSE('H', [stim.PauliString('XI')]))]
-    #    rates = [(1,1,1), (1,1,1), (1,1,1)]
-    #
-    #    correct_iterative_compositions = [ [], {_LSE('A', [stim.PauliString('IX'), stim.PauliString('XX')])}
-    #    ]
 
     def test_approximate_stabilizer_probability(self):
         exact_prop_probs = probabilities_errorgen_prop(self.error_propagator, self.target_model, 

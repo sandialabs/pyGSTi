@@ -15,7 +15,7 @@ import numpy as _np
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GEEL, LocalElementaryErrorgenLabel as _LEEL
 from pygsti.baseobjs import QubitSpace as _QubitSpace
 from pygsti.baseobjs.basis import BuiltinBasis as _BuiltinBasis
-from pygsti.baseobjs.errorgenbasis import CompleteElementaryErrorgenBasis as _CompleteElementaryErrorgenBasis
+from pygsti.baseobjs.errorgenbasis import CompleteElementaryErrorgenBasis as _CompleteElementaryErrorgenBasis, ExplicitElementaryErrorgenBasis as _ExplicitElementaryErrorgenBasis
 from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE
 from pygsti.modelmembers.operations import LindbladErrorgen as _LinbladErrorgen
 from pygsti.circuits import Circuit as _Circuit
@@ -6023,7 +6023,7 @@ def errorgen_layer_to_matrix(errorgen_layer, num_qubits, errorgen_matrix_dict=No
     return mat
 
 
-#Helper functions for doing numeric commutators and compositions.
+#Helper functions for doing numeric commutators, compositions and BCH.
 
 def error_generator_commutator_numerical(errorgen1, errorgen2, errorgen_matrix_dict=None, num_qubits=None):
     """
@@ -6131,6 +6131,99 @@ def error_generator_composition_numerical(errorgen1, errorgen2, errorgen_matrix_
             comp = errorgen_matrix_dict[_LSE.cast(errorgen1)]@errorgen_matrix_dict[_LSE.cast(errorgen2)]
     return comp
 
+def bch_numerical(propagated_errorgen_layers, error_propagator, bch_order=1):
+    """
+    Iteratively compute effective error generator layer produced by applying the BCH approximation
+    to the list of input error generator matrices. Note this is primarily intended
+    as part of testing and validation infrastructure.
+
+    Parameters
+    ----------
+    propagated_errorgen_layers : list of numpy.ndarrays
+        List of the error generator layers to combine using the BCH approximation (in circuit ordering)
+
+    error_propagator : `ErrorGeneratorPropagator`
+        An `ErrorGeneratorPropagator` instance to use as part of the BCH calculation.
+
+    bch_order : int, optional (default 1)
+        Order of the BCH approximation to apply (up to 5 is supported currently).
+
+    Returns
+    -------
+    numpy.ndarray
+        A dense numpy array corresponding to the result of the iterative application of the BCH
+        approximation.
+    """
+    #Need to build an appropriate basis for getting the error generator matrices.
+    #accumulate the error generator coefficients needed.
+    collected_coeffs = []
+    for layer in propagated_errorgen_layers:
+        for coeff in layer.keys():
+            collected_coeffs.append(coeff.to_local_eel())
+    #only want the unique ones.
+    unique_coeffs = list(set(collected_coeffs))
+    
+    num_qubits = len(error_propagator.model.state_space.qubit_labels)
+    
+    errorgen_basis = _ExplicitElementaryErrorgenBasis(_QubitSpace(num_qubits), unique_coeffs, basis_1q=_BuiltinBasis('PP', 4))
+    errorgen_lbl_matrix_dict = {lbl:mat for lbl,mat in zip(errorgen_basis.labels, errorgen_basis.elemgen_matrices)}
+    
+    #iterate through each of the propagated error generator layers and turn these into dense numpy arrays
+    errorgen_layer_mats = []
+    for layer in propagated_errorgen_layers:
+        errorgen_layer_mats.append(error_propagator.errorgen_layer_dict_to_errorgen(layer, mx_basis='pp', return_dense=True))
+    
+    #initialize a matrix for storing the result of doing BCH.
+    bch_result = _np.zeros((4**num_qubits, 4**num_qubits), dtype=_np.complex128)
+    
+    if len(errorgen_layer_mats)==1:
+        return errorgen_layer_mats[0]
+        
+    #otherwise iterate through in reverse order (the propagated layers are
+    #in circuit ordering and not matrix multiplication ordering at the moment)
+    #and combine the terms pairwise
+    combined_err_layer = errorgen_layer_mats[-1]
+    for i in range(len(errorgen_layer_mats)-2, -1, -1):
+        combined_err_layer = pairwise_bch_numerical(combined_err_layer, errorgen_layer_mats[i], order=bch_order)
+        
+    return combined_err_layer  
+
+def pairwise_bch_numerical(mat1, mat2, order=1):
+    """
+    Helper function for doing the numerical BCH in a pairwise fashion. Note this function is primarily intended
+    for numerical validations as part of testing infrastructure.
+    """
+    bch_result = _np.zeros(mat1.shape, dtype=_np.complex128)
+    if order >= 1:
+        bch_result += mat1 + mat2
+    if order >= 2:
+        commutator12 = _matrix_commutator(mat1, mat2)
+        bch_result += .5*commutator12
+    if order >= 3:
+        commutator112 = _matrix_commutator(mat1, commutator12)
+        commutator212 = _matrix_commutator(mat2, commutator12)
+        bch_result += (1/12)*(commutator112-commutator212)
+    if order >= 4:
+        commutator2112 = _matrix_commutator(mat2, commutator112)
+        bch_result += (-1/24)*commutator2112
+    if order >= 5:
+        commutator1112 = _matrix_commutator(mat1, commutator112)
+        commutator2212 = _matrix_commutator(mat2, commutator212)
+        
+        commutator22212 = _matrix_commutator(mat2, commutator2212)
+        commutator11112 = _matrix_commutator(mat1, commutator1112)
+        commutator12212 = _matrix_commutator(mat1, commutator2212)
+        commutator21112 = _matrix_commutator(mat2, commutator1112)
+        commutator21212 = _matrix_commutator(mat2, _matrix_commutator(mat1, commutator212))
+        commutator12112 = _matrix_commutator(mat1, commutator2112)
+        
+        bch_result += (-1/720)*(commutator11112 - commutator22212)
+        bch_result += (1/360)*(commutator21112 - commutator12212)
+        bch_result += (1/120)*(commutator21212 - commutator12112)
+    return bch_result
+
+def _matrix_commutator(mat1, mat2):
+    return mat1@mat2 - mat2@mat1
 
 #-----------First-Order Approximate Error Generator Probabilities---------------#
 
