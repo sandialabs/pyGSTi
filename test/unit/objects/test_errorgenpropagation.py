@@ -48,16 +48,39 @@ class ErrorgenPropTester(BaseCase):
         probabilities_BCH_order_2 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=2)
         probabilities_BCH_order_3 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=3)
         probabilities_BCH_order_4 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=4)
-
+        probabilities_BCH_order_5 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=5)
         probabilities_forward_simulation = probabilities_fwdsim(self.error_model, self.circuit)
 
         #use a much looser constraint on the agreement between the BCH results and forward simulation. Mostly testing to catch things exploding.
-        self.assertTrue(np.linalg.norm(probabilities_BCH_order_1 - probabilities_forward_simulation, ord=1) < 1e-2)
-        self.assertTrue(np.linalg.norm(probabilities_BCH_order_2 - probabilities_forward_simulation, ord=1) < 1e-2)
-        self.assertTrue(np.linalg.norm(probabilities_BCH_order_3 - probabilities_forward_simulation, ord=1) < 1e-2)
-        self.assertTrue(np.linalg.norm(probabilities_BCH_order_4 - probabilities_forward_simulation, ord=1) < 1e-2)
+        TVD_order_1 = np.linalg.norm(probabilities_BCH_order_1 - probabilities_forward_simulation, ord=1)
+        TVD_order_2 = np.linalg.norm(probabilities_BCH_order_2 - probabilities_forward_simulation, ord=1)
+        TVD_order_3 = np.linalg.norm(probabilities_BCH_order_3 - probabilities_forward_simulation, ord=1)
+        TVD_order_4 = np.linalg.norm(probabilities_BCH_order_4 - probabilities_forward_simulation, ord=1)
+        TVD_order_5 = np.linalg.norm(probabilities_BCH_order_5 - probabilities_forward_simulation, ord=1)
+        
+        #loose bound is just to make sure nothing exploded.
+        self.assertTrue(TVD_order_1 < 1e-2)
+        self.assertTrue(TVD_order_2 < 1e-2)
+        self.assertTrue(TVD_order_3 < 1e-2)
+        self.assertTrue(TVD_order_4 < 1e-2)
+        self.assertTrue(TVD_order_5 < 1e-2)
 
-    
+        #also assert that the TVDs get smaller in general as you go up in order.
+        self.assertTrue((TVD_order_1>TVD_order_2) and (TVD_order_2>TVD_order_3) and (TVD_order_3>TVD_order_4) and (TVD_order_4>TVD_order_5))
+        
+    def test_eoc_error_channel(self):
+        error_propagator = ErrorGeneratorPropagator(self.error_model.copy())
+        eoc_error_channel = error_propagator.eoc_error_channel(self.circuit)
+
+        #manually compute end-of-circuit error generator
+        ideal_channel = self.target_model.sim.product(self.circuit)
+        noisy_channel_exact = self.error_model.sim.product(self.circuit)
+        eoc_error_channel_exact = noisy_channel_exact@ideal_channel.conj().T  
+
+        assert np.linalg.norm(eoc_error_channel - eoc_error_channel_exact) < 1e-10
+
+            
+
 class LocalStimErrorgenLabelTester(BaseCase):
     def setUp(self):
         self.local_eel = LocalElementaryErrorgenLabel('C', ['XX', 'YY'])
