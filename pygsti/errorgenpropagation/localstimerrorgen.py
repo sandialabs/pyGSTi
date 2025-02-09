@@ -147,7 +147,7 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
             self._hashable_string_rep = self.errorgen_type.join(pauli_str_reps)
         else:
             self._hashable_basis_element_labels = self.bel_to_strings()
-            self._hashable_string_rep = self.errorgen_type.join(self.bel_to_strings())
+            self._hashable_string_rep = self.errorgen_type.join(self._hashable_basis_element_labels)
 
         #additionally store a copy of the value of the original error generator label which will remain unchanged
         #during the course of propagation for later bookkeeping purposes.
@@ -165,7 +165,7 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
         """
         Convert the elements of `basis_element_labels` to python strings
         (from stim.PauliString(s)) and return as a tuple. 
-        """
+        """       
         return tuple([str(ps)[1:].replace('_',"I") for ps in self.basis_element_labels])
 
 
