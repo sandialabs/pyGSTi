@@ -180,9 +180,8 @@ def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1, truncation_th
             #this at higher order if needed.
             commuted_errgen_list_1 = []
             commuted_errgen_list_2 = []
-            for (error1a, error1a_val), (error1b, error1b_val) in zip(errgen_layer_1.items(), errgen_layer_2.items()):
+            for error1a, error1a_val in errgen_layer_1.items():
                 for error2, error2_val in second_order_comm_dict.items():
-                    
                     #only need a factor of 1/6 because new_errorgen_layer[1] is 1/2 the commutator 
                     weighta = (1/6)*error1a_val*error2_val
 
@@ -191,13 +190,16 @@ def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1, truncation_th
                         commuted_errgen_sublist = error_generator_commutator(error1a, error2, 
                                                                              weight=weighta, identity=identity)
                         commuted_errgen_list_1.extend(commuted_errgen_sublist)
-                    
+
+            for error1b, error1b_val in errgen_layer_2.items():
+                for error2, error2_val in second_order_comm_dict.items():
                     #only need a factor of -1/6 because new_errorgen_layer[1] is 1/2 the commutator 
                     weightb = -(1/6)*error1b_val*error2_val
                     if not abs(weightb) < truncation_threshold:                    
                         commuted_errgen_sublist = error_generator_commutator(error1b, error2, 
                                                                              weight=weightb, identity=identity)
-                        commuted_errgen_list_2.extend(commuted_errgen_sublist)   
+                        commuted_errgen_list_2.extend(commuted_errgen_sublist)              
+
 
             #turn the two new commuted error generator lists into dictionaries.
             #loop through all of the elements of commuted_errorgen_list and instantiate a dictionary with the requisite keys.
@@ -264,9 +266,9 @@ def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1, truncation_th
         # This gives 9 new commutators to calculate (7 if you used linearity, and even fewer would be needed
         # using the result from the paper above, but we won't here atm).
         elif curr_order == 4:
-            B = third_order_comm_dict_1
-            C = third_order_comm_dict_2
-            D = fourth_order_comm_dict
+            B = third_order_comm_dict_1 #has a factor of 1/12 folded in already.
+            C = third_order_comm_dict_2 #has a factor of -1/12 folded in already.
+            D = fourth_order_comm_dict  #has a factor of -1/24 folded in already.
             #Compute the new commutators E, F and G as defined above.
             #Start with E:
             commuted_errgen_list_E = []
@@ -326,7 +328,7 @@ def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1, truncation_th
             #We also need the following weight factors. F has a leading factor of (1/12)
             #E and G have a leading factor of (-1/12). D has a leading factor of (-1/24) 
             #This gives the following additional weight multipliers:
-            #[X,F] = (-1/60); [Y,E] = (1/60); [Y,F]= (1/30); [X,E]= (1/30); [Y,G] = (-1/10); [X,D] = (1/5)
+            #[X,F] = (-1/60); [Y,E] = (-1/60); [Y,F]= (1/30); [X,E]= (1/30); [Y,G] = (-1/10); [X,D] = (1/5)
 
             #[X,F]:
             commuted_errgen_list_XF = []
@@ -344,7 +346,7 @@ def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1, truncation_th
             for error1, error1_val in errgen_layer_2.items():
                 for error2, error2_val in E_comm_dict.items():
                     #Won't add any weight adjustments at this stage, will do that for next commutator.
-                    weight = (1/60)*error1_val*error2_val
+                    weight = -(1/60)*error1_val*error2_val
                     if abs(weight) < truncation_threshold:
                         continue
                     commuted_errgen_sublist = error_generator_commutator(error1, error2, 
