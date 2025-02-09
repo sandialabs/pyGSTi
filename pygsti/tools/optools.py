@@ -1649,9 +1649,44 @@ def elementary_errorgens_dual(dim, typ, basis):
     return elem_errgens
 
 
-def extract_elementary_errorgen_coefficients(errorgen, elementary_errorgen_labels, elementary_errorgen_basis='pp',
+def extract_elementary_errorgen_coefficients(errorgen, elementary_errorgen_labels, elementary_errorgen_basis='PP',
                                              errorgen_basis='pp', return_projected_errorgen=False):
-    """ TODO: docstring """
+    """ 
+    Extract a dictionary of elemenary error generator coefficients and rates fromt he specified dense error generator
+    matrix.
+
+    Parameters
+    ----------
+    errorgen : numpy.ndarray
+        Error generator matrix
+    
+    elementary_errorgen_labels : list of `ElementaryErrorgenLabel`s
+        A list of `ElementaryErrorgenLabel`s corresponding to the coefficients
+        to extract from the input error generator.
+
+    elementary_errorgen_basis : str or `Basis`, optional (default 'PP')
+        Basis used in construction of elementary error generator dual matrices.
+
+    errorgen_basis : str or `Basis`, optional (default 'pp')
+        Basis of the input matrix specified in `errorgen`.
+
+    return_projected_errorgen : bool, optional (default False)
+        If True return a new dense error generator matrix which has been
+        projected onto the subspace of error generators spanned by
+        `elementary_errorgen_labels`.
+
+    Returns
+    -------
+    projections : dict
+        Dictionary whose keys are the coefficients specified in `elementary_errorgen_labels`
+        (cast to `LocalElementaryErrorgenLabel`), and values are corresponding rates.
+
+    projected_errorgen : np.ndarray
+        Returned if return_projected_errorgen is True, a new dense error generator matrix which has been
+        projected onto the subspace of error generators spanned by
+        `elementary_errorgen_labels`.
+
+    """
     # the same as decompose_errorgen but given a dict/list of elementary errorgens directly instead of a basis and type
     if isinstance(errorgen_basis, _Basis):
         errorgen_std = _bt.change_basis(errorgen, errorgen_basis, errorgen_basis.create_equivalent('std'))
@@ -1678,7 +1713,7 @@ def extract_elementary_errorgen_coefficients(errorgen, elementary_errorgen_label
         bmx0 = elementary_errorgen_basis[bel_lbls[0]]
         bmx1 = elementary_errorgen_basis[bel_lbls[1]] if (len(bel_lbls) > 1) else None
         flat_projector = _lt.create_elementary_errorgen_dual(key.errorgen_type, bmx0, bmx1, sparse=False).flatten()
-        projections[key] = _np.real_if_close(_np.vdot(flat_projector, flat_errorgen_std), tol=1000)
+        projections[key] = _np.real_if_close(_np.vdot(flat_projector, flat_errorgen_std), tol=1000).item()
         if return_projected_errorgen:
             space_projector[:, i] = flat_projector
 

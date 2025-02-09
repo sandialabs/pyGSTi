@@ -7,13 +7,15 @@ from numpy.linalg import multi_dot
 from scipy.linalg import expm
 from pygsti.tools.internalgates import standard_gatenames_stim_conversions
 import copy as _copy
-from pygsti.baseobjs import Label, ExplicitElementaryErrorgenBasis as _ExplicitElementaryErrorgenBasis
+from pygsti.baseobjs import Label, ExplicitElementaryErrorgenBasis as _ExplicitElementaryErrorgenBasis, BuiltinBasis as _BuiltinBasis
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LocalElementaryErrogenLabel 
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GlobalElementaryErrorgenLabel
 import pygsti.tools.errgenproptools as _eprop
 import pygsti.tools.basistools as _bt
 import pygsti.tools.matrixtools as _mt
+import pygsti.tools.optools as _ot
 from pygsti.modelmembers.operations import LindbladErrorgen as _LindbladErrorgen
+from itertools import islice
 
 class ErrorGeneratorPropagator:
 
@@ -161,8 +163,8 @@ class ErrorGeneratorPropagator:
             for j in range(i+1):
                 if i==j:
                     #<L_s> term:
-
-                    prop_contrib = amam
+                    pass
+                    #prop_contrib = amam
                 else:
                     pass
         
@@ -587,49 +589,30 @@ class ErrorGeneratorPropagator:
         #the elements necessary for the construction of the error generator matrix.
 
         #Construct a list of new errorgen coefficients by looping through the keys of errorgen_layer
-        #and converting them to LocalElementaryErrorgenLabels.
+        #and converting them to LocalElementaryErrorgenLabels.      
+        local_errorgen_coeffs = [coeff_lbl.to_local_eel() for coeff_lbl in errorgen_layer.keys()]
+        eg_types = [lbl.errorgen_type for lbl in local_errorgen_coeffs]
+        eg_bels = [lbl.basis_element_labels for lbl in local_errorgen_coeffs]
+        basis_1q = _BuiltinBasis('PP', 4)
+        num_qubits = len(self.model.state_space.qubit_labels)
+        errorgen = _np.zeros((4**num_qubits, 4**num_qubits), dtype=complex128)
+        #do this in blocks of 1000 to reduce memory requirements.
+        for eg_typ_batch, eg_bels_batch, eg_rates_batch in zip(_batched(eg_types, 1000), _batched(eg_bels, 1000), _batched(errorgen_layer.values(), 1000)):
+            elemgen_matrices = _ot.bulk_create_elementary_errorgen_nqudit(eg_typ_batch, eg_bels_batch, basis_1q, normalize=False,
+                                                                        sparse=False, tensorprod_basis=False)
+
+            #Stack the arrays and then use broadcasting to weight them according to the rates
+            elemgen_matrices_array = _np.stack(elemgen_matrices, axis=-1)
+            weighted_elemgen_matrices_array = _np.array(eg_rates_batch)*elemgen_matrices_array
+            weighted_elemgen_matrices_array = _np.real_if_close(weighted_elemgen_matrices_array)
+            #The error generator is then just the sum of weighted_elemgen_matrices_array along the third axis.
+            errorgen += _np.sum(weighted_elemgen_matrices_array, axis = 2)
         
-        #TODO: Debug this implementation, something weird is going on with the basis management and is only
-        #getting picked up for two or more qubits.
-        #local_errorgen_coeffs = [coeff_lbl.to_local_eel() for coeff_lbl in errorgen_layer.keys()]
-        #
-        #errorgen_basis = _ExplicitElementaryErrorgenBasis(self.model.state_space, local_errorgen_coeffs, basis_1q='PP', elemgen_basis='pp')
-        #print(f'{errorgen_basis.elemgen_matrices=}')
-        ##Stack the arrays and then use broadcasting to weight them according to the rates
-        #elemgen_matrices_array = _np.stack(errorgen_basis.elemgen_matrices, axis=-1)
-        #weighted_elemgen_matrices_array = _np.fromiter(errorgen_layer.values(), dtype=_np.double)*elemgen_matrices_array
-        #weighted_elemgen_matrices_array = _np.real_if_close(weighted_elemgen_matrices_array)
-        ##The error generator is then just the sum of weighted_elemgen_matrices_array along the third axis.
-        #errorgen = _np.sum(weighted_elemgen_matrices_array, axis = 2)
-        ##print(f'{errorgen=}')
-        #
-        ##finally need to change from the standard basis (which is what the error generator is currently in)
-        ##to the pauli basis.
-        #try:
-        #    errorgen = _bt.change_basis(errorgen, from_basis='std', to_basis=mx_basis)#, expect_real=False)
-        #except ValueError as err:
-        #    print(f'{local_errorgen_coeffs=}')
-        #    print(f'{errorgen_basis.labels=}')
-        #    print(f'{_mt.is_hermitian(errorgen)=}')
-        #    print(f'{errorgen_layer=}')
-        #    _mt.print_mx(errorgen)
-        #    raise err 
-
-        #if the model's basis is already the same as mx_basis then reuse the one from the model
-        if isinstance(mx_basis, str):
-            if set(self.model.basis.name.split('*')) == set([mx_basis]) or self.model.basis.name==mx_basis:
-                mx_basis = self.model.basis
-        global_errorgen_coeffs = [coeff_lbl.to_global_eel() for coeff_lbl in errorgen_layer.keys()]
-        coeff_dict = {lbl:_np.real_if_close(val) for lbl, val in zip(global_errorgen_coeffs, errorgen_layer.values())}
-
-        errorgen = _LindbladErrorgen.from_elementary_errorgens(coeff_dict, parameterization='GLND', state_space=self.model.state_space,
-                                                               mx_basis=mx_basis)
-
-        if return_dense:
-            return errorgen.to_dense()
-        else:
-            return errorgen
-
+        #finally need to change from the standard basis (which is what the error generator is currently in)
+        #to the pauli basis.
+        errorgen = _bt.change_basis(errorgen, from_basis='std', to_basis=mx_basis)#, expect_real=False)
+        
+        return errorgen
 
 
 def ErrorPropagatorAnalytic(circ,errorModel,ErrorLayerDef=False,startingErrors=None):
@@ -735,3 +718,23 @@ def error_stitcher(first_error,second_error):
     for layer in second_error:
         new_errors.append(layer)
     return new_errors
+
+        
+
+def _batched(iterable, n):
+    """
+    Yield successive n-sized batches from an iterable.
+
+    Parameters:
+    iterable (iterable): The iterable to divide into batches.
+    n (int): The batch size.
+
+    Yields:
+    iterable: An iterable containing the next batch of items.
+    """
+    it = iter(iterable)
+    while True:
+        batch = list(islice(it, n))
+        if not batch:
+            break
+        yield batch

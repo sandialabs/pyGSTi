@@ -105,7 +105,7 @@ class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
         elif isinstance(basis_1q, str):
             self._basis_1q = _Basis.cast(basis_1q, 4)
         else:
-            self._basis_1q = _Basis.cast('pp', 4)
+            self._basis_1q = _Basis.cast('PP', 4)
 
         self.state_space = state_space
         assert(self.state_space.is_entirely_qubits), "FOGI only works for models containing just qubits (so far)"

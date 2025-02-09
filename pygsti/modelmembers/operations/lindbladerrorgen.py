@@ -348,6 +348,7 @@ class LindbladErrorgen(_LinearOperator):
 
         return cls(blocks, "auto", mx_basis, evotype, state_space)
 
+    #TODO: Need to make the construction robust to empty elementary_errorgens dictionaries.
     @classmethod
     def from_elementary_errorgens(cls, elementary_errorgens, parameterization='auto', elementary_errorgen_basis='PP',
                                   mx_basis="pp", truncate=True, evotype="default", state_space=None):
@@ -357,15 +358,16 @@ class LindbladErrorgen(_LinearOperator):
         basis = _Basis.cast(elementary_errorgen_basis, dim)
 
         #check the first key, if local then no need to convert, otherwise convert from global.
-        first_key = next(iter(elementary_errorgens))
-        if isinstance(first_key, (_GlobalElementaryErrorgenLabel, tuple)):
-            #convert keys to local elementary errorgen labels (the same as those used by the coefficient blocks):
-            identity_label_1Q = 'I'  # maybe we could get this from a 1Q basis somewhere?
-            sslbls = state_space.sole_tensor_product_block_labels  # take first TPB labels as all labels
-            elementary_errorgens = {_LocalElementaryErrorgenLabel.cast(k, sslbls, identity_label_1Q): v
-                                    for k, v in elementary_errorgens.items()}
-        else:
-            assert isinstance(first_key, _LocalElementaryErrorgenLabel), 'Unsupported error generator label type as key.'
+        if elementary_errorgens:
+            first_key = next(iter(elementary_errorgens))
+            if isinstance(first_key, (_GlobalElementaryErrorgenLabel, tuple)):
+                #convert keys to local elementary errorgen labels (the same as those used by the coefficient blocks):
+                identity_label_1Q = 'I'  # maybe we could get this from a 1Q basis somewhere?
+                sslbls = state_space.sole_tensor_product_block_labels  # take first TPB labels as all labels
+                elementary_errorgens = {_LocalElementaryErrorgenLabel.cast(k, sslbls, identity_label_1Q): v
+                                        for k, v in elementary_errorgens.items()}
+            else:
+                assert isinstance(first_key, _LocalElementaryErrorgenLabel), 'Unsupported error generator label type as key.'
         
         parameterization = LindbladParameterization.minimal_from_elementary_errorgens(elementary_errorgens) \
             if parameterization == "auto" else LindbladParameterization.cast(parameterization)
