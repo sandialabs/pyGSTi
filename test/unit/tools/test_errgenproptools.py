@@ -209,7 +209,7 @@ class ErrgenCompositionCommutationTester(BaseCase):
         self.assertTrue((exact_vs_first_order_norm > exact_vs_second_order_norm) and (exact_vs_second_order_norm > exact_vs_third_order_norm)
                         and (exact_vs_third_order_norm > exact_vs_fourth_order_norm) and (exact_vs_fourth_order_norm > exact_vs_fifth_order_norm))
         
-class ApproxStabilizerProbTester(BaseCase):
+class ApproxStabilizerMethodTester(BaseCase):
     def setUp(self):
         num_qubits = 4
         gate_names = ['Gcphase', 'Gxpi2', 'Gypi2']

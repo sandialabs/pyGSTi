@@ -61,7 +61,6 @@ def _all_elements_same_type(lst):
             return False
     return True
 
-#TODO: Unit Testing
 class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
     """
     This basis object contains the information  necessary for building, 
@@ -222,17 +221,33 @@ class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
             one of these qudits) in order to be included in this subbasis.
 
         """
-        sub_sslbls = set(sslbl_overlap)
+        #need different logic for LocalElementaryErrorgenLabels
+        if isinstance(self.labels[0], _GlobalElementaryErrorgenLabel):
+            sub_sslbls = set(sslbl_overlap)
+            def overlaps(sslbls):
+                ret = len(set(sslbls).intersection(sslbl_overlap)) > 0
+                if ret: sub_sslbls.update(sslbls)  # keep track of all overlaps
+                return ret
 
-        def overlaps(sslbls):
-            ret = len(set(sslbls).intersection(sslbl_overlap)) > 0
-            if ret: sub_sslbls.update(sslbls)  # keep track of all overlaps
-            return ret
+            sub_labels, sub_indices = zip(*[(lbl, i) for i, lbl in enumerate(self._labels)
+                                            if overlaps(lbl[0])])
+            sub_state_space = self.state_space.create_subspace(sub_sslbls)
+        else:
+            sub_labels = []
+            for lbl in self.labels:
+                non_trivial_bel_indices = []
+                for bel in lbl.basis_element_labels:
+                    for i,subbel in enumerate(bel):
+                        if subbel != 'I':
+                            non_trivial_bel_indices.append(i)
+                non_trivial_bel_indices = set(non_trivial_bel_indices)
+                for sslbl in sslbl_overlap:
+                    if sslbl in non_trivial_bel_indices:
+                        sub_labels.append(lbl)
+                        break
+            #since using local labels keep the full original state space (the labels won't have gotten any shorter).
+            sub_state_space = self.state_space.copy()    
 
-        sub_labels, sub_indices = zip(*[(lbl, i) for i, lbl in enumerate(self._labels)
-                                        if overlaps(lbl[0])])
-
-        sub_state_space = self.state_space.create_subspace(sub_sslbls)
         return ExplicitElementaryErrorgenBasis(sub_state_space, sub_labels, self._basis_1q)
 
     def union(self, other_basis):
