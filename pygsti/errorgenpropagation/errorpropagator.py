@@ -2,7 +2,7 @@ import stim
 import numpy as _np
 import scipy.linalg as _spl
 from .localstimerrorgen import LocalStimErrorgenLabel as _LSE
-from numpy import abs,zeros, complex128
+from numpy import zeros, complex128
 from numpy.linalg import multi_dot
 from scipy.linalg import expm
 from pygsti.tools.internalgates import standard_gatenames_stim_conversions
@@ -167,10 +167,7 @@ class ErrorGeneratorPropagator:
                     #prop_contrib = amam
                 else:
                     pass
-        
-        
-        
-        
+              
         
         #loop though the propagated error generator layers and construct their error generators.
         #Then exponentiate

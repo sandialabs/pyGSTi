@@ -78,8 +78,7 @@ class ErrorgenPropTester(BaseCase):
         eoc_error_channel_exact = noisy_channel_exact@ideal_channel.conj().T  
 
         assert np.linalg.norm(eoc_error_channel - eoc_error_channel_exact) < 1e-10
-
-            
+        
 
 class LocalStimErrorgenLabelTester(BaseCase):
     def setUp(self):
