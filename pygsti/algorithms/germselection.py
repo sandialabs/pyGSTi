@@ -502,31 +502,44 @@ def _get_model_params(model_list, printer=None):
     
     if printer is not None:
         printer.log('Calculating number of gauge and non-gauge parameters', 1)
-    
+
+    FOGI = model_list[0].param_interposer != None
     # We don't care about SPAM, since it can't be amplified.
-    reducedModelList = [_remove_spam_vectors(model)
-                        for model in model_list]
+    #Check if the model is FOGI, this assumes param interposer
+    #is only used within FOGI models.
+    if FOGI:
+       
+        reducedModelList = [_remove_spam_FOGI(model)
+                            for model in model_list]
+        numGaugeParamsList = [0 for model in model_list]
+        numGaugeParams = 0
+        numNonGaugeParamsList = [reducedModel.num_params
+                                for reducedModel in reducedModelList]
+    
+    else:
+        reducedModelList = [_remove_spam_vectors(model)
+                            for model in model_list]
+        # All the models should have the same number of parameters and gates, but
+        # let's be paranoid here for the time being and make sure.
+        numGaugeParamsList = [reducedModel.num_gauge_params
+                            for reducedModel in reducedModelList]
+        numGaugeParams = numGaugeParamsList[0]
+        if not all([numGaugeParams == otherNumGaugeParams
+                    for otherNumGaugeParams in numGaugeParamsList[1:]]):
+            raise ValueError("All models must have the same number of gauge "
+                            "parameters!")
 
-    # All the models should have the same number of parameters and gates, but
-    # let's be paranoid here for the time being and make sure.
-    numGaugeParamsList = [reducedModel.num_gauge_params
-                          for reducedModel in reducedModelList]
-    numGaugeParams = numGaugeParamsList[0]
-    if not all([numGaugeParams == otherNumGaugeParams
-                for otherNumGaugeParams in numGaugeParamsList[1:]]):
-        raise ValueError("All models must have the same number of gauge "
-                         "parameters!")
-
-    numNonGaugeParamsList = [reducedModel.num_nongauge_params
-                             for reducedModel in reducedModelList]
+        numNonGaugeParamsList = [reducedModel.num_nongauge_params
+                                for reducedModel in reducedModelList]
+        
     numNonGaugeParams = numNonGaugeParamsList[0]
     if not all([numNonGaugeParams == otherNumNonGaugeParams
                 for otherNumNonGaugeParams in numNonGaugeParamsList[1:]]):
         raise ValueError("All models must have the same number of non-gauge "
-                         "parameters!")
+                        "parameters!")
 
     numOpsList = [len(reducedModel.operations)
-                  for reducedModel in reducedModelList]
+                for reducedModel in reducedModelList]
     numOps = numOpsList[0]
     if not all([numOps == otherNumOps
                 for otherNumOps in numOpsList[1:]]):
@@ -650,8 +663,13 @@ def compute_composite_germ_set_score(score_fn, threshold_ac=1e6, init_n=1,
         if model is None:
             raise ValueError("Must provide either num_nongauge_params or model!")
         else:
-            reduced_model = _remove_spam_vectors(model)
-            num_nongauge_params = reduced_model.num_params - reduced_model.num_gauge_params
+            FOGI = model.param_interposer != None
+            if FOGI:
+                reduced_model = _remove_spam_FOGI(model)
+                num_nongauge_params = model.num_params
+            else:              
+                reduced_model = _remove_spam_vectors(model)
+                num_nongauge_params = reduced_model.num_params - reduced_model.num_gauge_params
 
     # Calculate penalty scores
     if partial_deriv_dagger_deriv is None:
@@ -982,6 +1000,36 @@ def test_germs_list_completeness(model_list, germs_list, score_func, threshold, 
     return -1
 
 
+def _remove_spam_FOGI(model):
+
+    model = model.copy()
+    if not hasattr(model.param_interposer, 'full_span_inv_transform_matrix'):
+        model.param_interposer.full_span_inv_transform_matrix = model.param_interposer.inv_transform_matrix
+        model.param_interposer.inv_transform_matrix_projector = _np.eye(model.num_params)
+    to_be_removed = []
+    for i, label in enumerate(model.parameter_labels):
+        if 'rho' in label or 'Mdefault' in label:
+            to_be_removed.append(i)
+    
+    for param in to_be_removed[::-1]:
+
+        projector_matrix = _np.delete(model.param_interposer.projector_matrix, param, axis=1)
+        model.param_interposer.transform_matrix = model.param_interposer.full_span_transform_matrix @ projector_matrix
+        model.param_interposer.projector_matrix = projector_matrix
+        reduced_inv_matrix = _np.delete(model.param_interposer.inv_transform_matrix, param, axis=0)
+
+        model.param_interposer.inv_transform_matrix = reduced_inv_matrix
+        model.param_interposer.num_params += -1
+
+        model._paramvec = _np.delete(model._paramvec, param)
+        model.from_vector(model._paramvec)
+
+        model._need_to_rebuild = True
+        model._clean_paramvec()
+
+    return model
+
+
 def _remove_spam_vectors(model):
     """
     Returns a copy of `model` with state preparations and effects removed.
@@ -1280,7 +1328,12 @@ def _bulk_twirled_deriv(model, circuits, eps=1e-6, check=False, comm=None, float
         An array of shape (num_simplified_circuits, op_dim^2, num_model_params)
     """
     if len(model.preps) > 0 or len(model.povms) > 0:
-        model = _remove_spam_vectors(model)
+        FOGI = model.param_interposer != None
+        if FOGI:
+            model = _remove_spam_FOGI(model)
+        else:              
+            model = _remove_spam_vectors(model)
+        
         # This function assumes model has no spam elements so `lookup` below
         #  gives indexes into products computed by evalTree.
 
@@ -1354,7 +1407,13 @@ def test_germ_set_finitel(model, germs_to_test, length, weights=None,
     # Remove any SPAM vectors from model since we only want
     # to consider the set of *gate* parameters for amplification
     # and this makes sure our parameter counting is correct
-    model = _remove_spam_vectors(model)
+    FOGI = model.param_interposer != None
+    if FOGI:
+       
+        model = _remove_spam_FOGI(model)
+
+    else:              
+        model = _remove_spam_vectors(model)
 
     nGerms = len(germs_to_test)
     germToPowL = [germ * length for germ in germs_to_test]
@@ -1439,8 +1498,12 @@ def test_germ_set_infl(model, germs_to_test, score_func='all', weights=None,
     # Remove any SPAM vectors from model since we only want
     # to consider the set of *gate* parameters for amplification
     # and this makes sure our parameter counting is correct
-    model = _remove_spam_vectors(model)
-    Np= model.num_params
+    FOGI = model.param_interposer != None
+    if FOGI:
+        model = _remove_spam_FOGI(model)
+    else:              
+        model = _remove_spam_vectors(model)
+    Np = model.num_params
     
     germLengths = _np.array([len(germ) for germ in germs_to_test], _np.int64)
     #twirledDerivDaggerDeriv = _compute_bulk_twirled_ddd(model, germs_to_test,
@@ -1477,6 +1540,7 @@ def test_germ_set_infl(model, germs_to_test, score_func='all', weights=None,
     if nGaugeParams is None:
         nGaugeParams = model.num_gauge_params
     observableEigenvals = sortedEigenvals[nGaugeParams:]
+    print(observableEigenvals)
 
     bSuccess = bool(_scoring.list_score(observableEigenvals, score_func)
                     < threshold)

@@ -65,6 +65,7 @@ class LinearInterposer(ModelParamsInterposer):
     def __init__(self, transform_matrix):
         self.transform_matrix = transform_matrix  # cols specify a model parameter in terms of op params.
         self.inv_transform_matrix = _np.linalg.pinv(self.transform_matrix)
+        self.inv_transform_matrix[_np.abs(self.inv_transform_matrix) < 1e-10] = 0
         self.projector_matrix = _np.eye(self.transform_matrix.shape[1])
         self.full_span_transform_matrix = self.transform_matrix.copy()
         super().__init__(transform_matrix.shape[1], transform_matrix.shape[0])
