@@ -235,12 +235,7 @@ class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
         else:
             sub_labels = []
             for lbl in self.labels:
-                non_trivial_bel_indices = []
-                for bel in lbl.basis_element_labels:
-                    for i,subbel in enumerate(bel):
-                        if subbel != 'I':
-                            non_trivial_bel_indices.append(i)
-                non_trivial_bel_indices = set(non_trivial_bel_indices)
+                non_trivial_bel_indices = lbl.support_indices()
                 for sslbl in sslbl_overlap:
                     if sslbl in non_trivial_bel_indices:
                         sub_labels.append(lbl)
