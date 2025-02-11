@@ -386,11 +386,7 @@ class LindbladErrorgen(_LinearOperator):
         Parameters
         ----------
         elementary_errorgens : dict
-            a square 2D array that gives the full error generator. The shape of
-            this array sets the dimension of the operator. The projections of
-            this quantity onto the `ham_basis` and `nonham_basis` are closely
-            related to the parameters of the error generator (they may not be
-            exactly equal if, e.g `cptp=True`).
+            A dictionary whose keys are `ElementaryErrogenLabel`s and whose values are corresponding error generator rates.
 
         parameterization: `LindbladParameterization` or str castable to `LindbladParameterization`, optional (default 'auto')
             Either an instance of `LindbladParameterization` or a string castable to a
@@ -439,6 +435,8 @@ class LindbladErrorgen(_LinearOperator):
         -------
         `LindbladErrorgen`
         """
+        if state_space is None:
+            raise ValueError('Must specify a state space when using `from_elementary_errorgens`.')
         state_space = _statespace.StateSpace.cast(state_space)
         dim = state_space.dim  # Store superop dimension
         basis = _Basis.cast(elementary_errorgen_basis, dim)

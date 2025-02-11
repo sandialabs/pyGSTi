@@ -3,7 +3,7 @@ import scipy.sparse as sps
 
 from pygsti.tools import lindbladtools as lt
 from pygsti.modelmembers.operations import LindbladErrorgen
-from pygsti.baseobjs import Basis
+from pygsti.baseobjs import Basis, QubitSpace
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel, LocalElementaryErrorgenLabel
 from ..util import BaseCase
 
@@ -94,14 +94,14 @@ class LindbladToolsTester(BaseCase):
 class RandomErrorgenRatesTester(BaseCase):
 
     def test_default_settings(self):
-        random_errorgen_rates = lt.random_error_generator_rates(num_qubits=2, seed=1234)
+        random_errorgen_rates = lt.random_error_generator_rates(num_qubits=2, seed=1234, label_type='local')
 
         #make sure that we get the expected number of rates:
         self.assertEqual(len(random_errorgen_rates), 240)
 
         #also make sure this is CPTP, do so by constructing an error generator and confirming it doesn't fail
         #with CPTP parameterization. This should fail if the error generator dictionary is not CPTP.
-        errorgen = LindbladErrorgen.from_elementary_errorgens(random_errorgen_rates, parameterization='CPTPLND', truncate=False)
+        errorgen = LindbladErrorgen.from_elementary_errorgens(random_errorgen_rates, parameterization='CPTPLND', truncate=False, state_space=QubitSpace(2))
 
     def test_sector_restrictions(self):
         #H-only:
@@ -110,7 +110,7 @@ class RandomErrorgenRatesTester(BaseCase):
         self.assertEqual(len(random_errorgen_rates), 15)
         #also make sure this is CPTP, do so by constructing an error generator and confirming it doesn't fail
         #with CPTP parameterization. This should fail if the error generator dictionary is not CPTP.
-        errorgen = LindbladErrorgen.from_elementary_errorgens(random_errorgen_rates, parameterization='CPTPLND', truncate=False)
+        errorgen = LindbladErrorgen.from_elementary_errorgens(random_errorgen_rates, parameterization='CPTPLND', truncate=False, state_space=QubitSpace(2))
 
         #S-only
         random_errorgen_rates = lt.random_error_generator_rates(num_qubits=2, errorgen_types=('S',), seed=1234)
@@ -118,15 +118,15 @@ class RandomErrorgenRatesTester(BaseCase):
         self.assertEqual(len(random_errorgen_rates), 15)
         #also make sure this is CPTP, do so by constructing an error generator and confirming it doesn't fail
         #with CPTP parameterization. This should fail if the error generator dictionary is not CPTP.
-        errorgen = LindbladErrorgen.from_elementary_errorgens(random_errorgen_rates, parameterization='CPTPLND', truncate=False)
+        errorgen = LindbladErrorgen.from_elementary_errorgens(random_errorgen_rates, parameterization='CPTPLND', truncate=False, state_space=QubitSpace(2))
 
         #H+S
         random_errorgen_rates = lt.random_error_generator_rates(num_qubits=2, errorgen_types=('H','S'), seed=1234)
         #make sure that we get the expected number of rates:
-        self.assertEqual(len(random_errorgen_rates), 15)
+        self.assertEqual(len(random_errorgen_rates), 30)
         #also make sure this is CPTP, do so by constructing an error generator and confirming it doesn't fail
         #with CPTP parameterization. This should fail if the error generator dictionary is not CPTP.
-        errorgen = LindbladErrorgen.from_elementary_errorgens(random_errorgen_rates, parameterization='CPTPLND', truncate=False)
+        errorgen = LindbladErrorgen.from_elementary_errorgens(random_errorgen_rates, parameterization='CPTPLND', truncate=False, state_space=QubitSpace(2))
 
         #H + S + A
         random_errorgen_rates = lt.random_error_generator_rates(num_qubits=2, errorgen_types=('H','S', 'A'), seed=1234)
@@ -134,7 +134,7 @@ class RandomErrorgenRatesTester(BaseCase):
         self.assertEqual(len(random_errorgen_rates), 135)
         #also make sure this is CPTP, do so by constructing an error generator and confirming it doesn't fail
         #with CPTP parameterization. This should fail if the error generator dictionary is not CPTP.
-        errorgen = LindbladErrorgen.from_elementary_errorgens(random_errorgen_rates, parameterization='CPTPLND', truncate=False)
+        errorgen = LindbladErrorgen.from_elementary_errorgens(random_errorgen_rates, parameterization='CPTPLND', truncate=False, state_space=QubitSpace(2))
 
     def test_error_metric_restrictions(self):
         #test generator_infidelity
@@ -143,7 +143,7 @@ class RandomErrorgenRatesTester(BaseCase):
                                                                 error_metric_value=.99, seed=1234)
         #confirm this has the correct generator infidelity.
         gen_infdl = 0
-        for coeff, rate in random_errorgen_rates:
+        for coeff, rate in random_errorgen_rates.items():
             if coeff.errorgen_type == 'H':
                 gen_infdl+=rate**2
             elif coeff.errorgen_type == 'S':
@@ -153,11 +153,11 @@ class RandomErrorgenRatesTester(BaseCase):
 
         #test generator_error
         random_errorgen_rates = lt.random_error_generator_rates(num_qubits=2, errorgen_types=('H','S'), 
-                                                                error_metric= 'generator_error', 
+                                                                error_metric= 'total_generator_error', 
                                                                 error_metric_value=.99, seed=1234)
         #confirm this has the correct generator infidelity.
         gen_error = 0
-        for coeff, rate in random_errorgen_rates:
+        for coeff, rate in random_errorgen_rates.items():
             if coeff.errorgen_type == 'H':
                 gen_error+=abs(rate)
             elif coeff.errorgen_type == 'S':
@@ -173,7 +173,7 @@ class RandomErrorgenRatesTester(BaseCase):
         #confirm this has the correct generator infidelity contributions.
         gen_infdl_H = 0
         gen_infdl_S = 0
-        for coeff, rate in random_errorgen_rates:
+        for coeff, rate in random_errorgen_rates.items():
             if coeff.errorgen_type == 'H':
                 gen_infdl_H+=rate**2
             elif coeff.errorgen_type == 'S':
@@ -182,13 +182,13 @@ class RandomErrorgenRatesTester(BaseCase):
         assert abs(gen_infdl_S - gen_infdl_H)<1e-5
 
         random_errorgen_rates = lt.random_error_generator_rates(num_qubits=2, errorgen_types=('H','S'), 
-                                                                error_metric= 'generator_error', 
+                                                                error_metric= 'total_generator_error', 
                                                                 error_metric_value=.99, 
                                                                 relative_HS_contribution=(.5, .5), seed=1234)
         #confirm this has the correct generator error contributions.
         gen_error_H = 0
         gen_error_S = 0
-        for coeff, rate in random_errorgen_rates:
+        for coeff, rate in random_errorgen_rates.items():
             if coeff.errorgen_type == 'H':
                 gen_error_H+=abs(rate)
             elif coeff.errorgen_type == 'S':

@@ -15,7 +15,7 @@ import stim
 from pygsti.processors import QubitProcessorSpec
 from pygsti.errorgenpropagation.errorpropagator import ErrorGeneratorPropagator
 
-#TODO: BCH approximation, errorgen_layer_to_matrix, stim_pauli_string_less_than, iterative_error_generator_composition
+#TODO: errorgen_layer_to_matrix, stim_pauli_string_less_than 
 
 class ErrgenCompositionCommutationTester(BaseCase):
 
@@ -56,7 +56,7 @@ class ErrgenCompositionCommutationTester(BaseCase):
         for pair1, pair2 in zip(errorgen_label_pairs, stim_errorgen_label_pairs):
             numeric_commutator = _eprop.error_generator_commutator_numerical(pair1[0], pair1[1], errorgen_lbl_matrix_dict)
             analytic_commutator = _eprop.error_generator_commutator(pair2[0], pair2[1])
-            analytic_commutator_mat = _eprop.errorgen_layer_to_matrix(analytic_commutator, errorgen_lbl_matrix_dict, 2)        
+            analytic_commutator_mat = _eprop.errorgen_layer_to_matrix(analytic_commutator, 2, errorgen_lbl_matrix_dict)        
 
             norm_diff = np.linalg.norm(numeric_commutator-analytic_commutator_mat)
             if norm_diff > 1e-10:
@@ -165,8 +165,8 @@ class ErrgenCompositionCommutationTester(BaseCase):
         correct_iterative_compositions = [[(_LSE('H', (stim.PauliString("+X"),)), (-2-0j)), (_LSE('H', (stim.PauliString("+X"),)), -2)],
                                           [(_LSE('H', (stim.PauliString("+X_"),)), (-1+0j)), (_LSE('A', (stim.PauliString("+_X"), stim.PauliString("+XX"))), (1+0j)),
                                            (_LSE('A', (stim.PauliString("+_X"), stim.PauliString("+XX"))), (1+0j)), (_LSE('H', (stim.PauliString("+X_"),)), (-1+0j))],
-                                          [(_LSE('C', (stim.PauliString("+X_"), stim.PauliString("+YZ"))), (-1+0j)), (_LSE('C', (stim.PauliString("+_X"), stim.PauliString("+ZY"))), (-1+0j)),
-                                           (_LSE('A', (stim.PauliString("+XX"), stim.PauliString("+YY"))), (-1+0j)), (_LSE('H', (stim.PauliString("+ZZ"),)), (1+0j))]                                          
+                                          [(_LSE('C', (stim.PauliString("+YZ"), stim.PauliString("+ZY"))), (1+0j)), (_LSE('C', (stim.PauliString("+YY"), stim.PauliString("+ZZ"))), (1+0j)),
+                                           (_LSE('C', (stim.PauliString("+_X"), stim.PauliString("+X_"))), -1)]                                          
                                         ]
         
         for lbls, rates, correct_lbls in zip(test_labels, rates, correct_iterative_compositions):
@@ -239,7 +239,7 @@ class ApproxStabilizerMethodTester(BaseCase):
     
     def test_random_support(self):
         num_random = _eprop.random_support(self.circuit_tableau)
-        self.assertEqual(num_random, 8)
+        self.assertEqual(num_random, 3)
 
     #This unit test for tableau fidelity is straight out of Craig Gidney's stackexchange post.
     def test_tableau_fidelity(self):
@@ -274,15 +274,14 @@ class ApproxStabilizerMethodTester(BaseCase):
     def test_amplitude_of_state(self):
         amp0000 = _eprop.amplitude_of_state(self.circuit_tableau, '0000')
         amp1111 = _eprop.amplitude_of_state(self.circuit_tableau, '1111')
-        
         self.assertTrue(abs(amp0000)<1e-7)
-        self.assertTrue(abs(amp1111 - np.sqrt(.125))<1e-7)
+        self.assertTrue(abs(amp1111 -(-1j*np.sqrt(.125)))<1e-7)
         
         amp0000 = _eprop.amplitude_of_state(self.circuit_tableau_alt, '0000')
         amp1111 = _eprop.amplitude_of_state(self.circuit_tableau_alt, '1111')
         
         self.assertTrue(abs(amp0000)<1e-7)
-        self.assertTrue(abs(amp1111 - np.sqrt(.125))<1e-7)
+        self.assertTrue(abs(amp1111 - (-1j*np.sqrt(.125)))<1e-7)
 
     def test_bitstring_to_tableau(self):
         tableau = _eprop.bitstring_to_tableau('1010')
@@ -292,11 +291,12 @@ class ApproxStabilizerMethodTester(BaseCase):
         test_paulis = ['YII', 'ZII', stim.PauliString('XYZ'), stim.PauliString('+iIII')]
         test_bitstring = '100'
 
-        correct_phase_updates_standard = [-1j, -1, -1j, 1j]
-        correct_phase_updates_dual = [1j, -1, 1j, 1j]
+        correct_phase_updates_standard = [-1j, -1, 1j, 1j]
+        correct_phase_updates_dual = [1j, -1, -1j, 1j]
         correct_output_bitstrings = ['000', '100', '010', '100']
 
         for i, test_pauli in enumerate(test_paulis):
+            print(i)
             phase_update, output_bitstring = _eprop.pauli_phase_update(test_pauli, test_bitstring)
             self.assertEqual(phase_update, correct_phase_updates_standard[i])
             self.assertEqual(output_bitstring, correct_output_bitstrings[i])

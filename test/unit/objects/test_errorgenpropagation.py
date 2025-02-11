@@ -91,7 +91,7 @@ class LocalStimErrorgenLabelTester(BaseCase):
         correct_lse = _LSE('C', [stim.PauliString('XX'), stim.PauliString('YY')])
 
         self.assertEqual(correct_lse, _LSE.cast(self.local_eel))
-        self.assertEqual(correct_lse, _LSE.cast(self.global_eel, self.sslbs))
+        self.assertEqual(correct_lse, _LSE.cast(self.global_eel, self.sslbls))
 
     def test_to_local_global_eel(self):
         lse = _LSE('C', [stim.PauliString('XX'), stim.PauliString('YY')])
