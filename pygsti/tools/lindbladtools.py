@@ -568,7 +568,7 @@ def random_error_generator_rates(num_qubits, errorgen_types=('H', 'S', 'C', 'A')
         one of these qudits) in order to be included in this basis.
         
     fixed_errorgen_rates : dict, optional (default None)
-        An optional dictionary whose keys are `GlobalElementaryErrorgenLabel`
+        An optional dictionary whose keys are `LocalElementaryErrorgenLabel`
         objects, and whose values are error generator rates. When specified, the
         rates in this dictionary will override any randomly selected values in the
         final returned error generator rate dictionary. The inclusion of these
@@ -600,9 +600,9 @@ def random_error_generator_rates(num_qubits, errorgen_types=('H', 'S', 'C', 'A')
             raise ValueError('Unsupported error metric type. Currently supported options are generator_infidelity and total_generator_error')
         #Add a check that the desired error metric value is attainable given the values of fixed_errorgen_rates.
         if fixed_errorgen_rates:
-            #verify that all of the keys are GlobalElementaryErrorgenLabel objects.
-            msg = 'All keys of fixed_errorgen_rates must be GlobalElementaryErrorgenLabel.'
-            assert all([isinstance(key, _GlobalElementaryErrorgenLabel) for key in fixed_errorgen_rates.keys()]), msg
+            #verify that all of the keys are LocalElementaryErrorgenLabel objects.
+            msg = 'All keys of fixed_errorgen_rates must be LocalElementaryErrorgenLabel.'
+            assert all([isinstance(key, _LocalElementaryErrorgenLabel) for key in fixed_errorgen_rates.keys()]), msg
             
             #get the H and S rates from the dictionary.
             fixed_H_rates = _np.array([val for key, val in fixed_errorgen_rates.items() if key.errorgen_type == 'H'])
@@ -626,8 +626,7 @@ def random_error_generator_rates(num_qubits, errorgen_types=('H', 'S', 'C', 'A')
         else:
             fixed_H_contribution = 0
             fixed_S_contribution = 0
-            
-            
+                      
     if relative_HS_contribution is not None:
         assert ('H' in errorgen_types and 'S' in errorgen_types), 'Invalid relative_HS_contribution, one of either H or S is not in errorgen_types.'
         if error_metric is None:
@@ -637,22 +636,45 @@ def random_error_generator_rates(num_qubits, errorgen_types=('H', 'S', 'C', 'A')
         
     if max_weights is not None:
         assert max_weights['C'] <= max_weights['S'] and max_weights['A'] <= max_weights['S'], 'The maximum weight of the C and A terms should be less than or equal to the maximum weight of S.'
-        
+        assert max_weights['C'] == max_weights['A'], 'Maximum weight and C of A terms must be the same at present.'
     rng = _np.random.default_rng(seed)
+
+    if 'C' in errorgen_types or 'A' in errorgen_types:
+        assert 'C' in errorgen_types and 'A' in errorgen_types, 'Support only currently available for random C and A terms if both sectors present.'
         
     #create a state space with this dimension.
     state_space = _QubitSpace.cast(num_qubits)
     
     #create an error generator basis according the our weight specs
-    errorgen_basis = _bo.CompleteElementaryErrorgenBasis('pp', state_space, elementary_errorgen_types=errorgen_types,
-                                                     max_weights=max_weights, sslbl_overlap=sslbl_overlap)
+    errorgen_basis = _bo.CompleteElementaryErrorgenBasis('PP', state_space, elementary_errorgen_types=errorgen_types,
+                                                         max_weights=max_weights, sslbl_overlap=sslbl_overlap, default_label_type='local')
     
     #Get the labels, broken out by sector, of each of the error generators in this basis.
-    errgen_labels_H = errorgen_basis.sublabels('H')
-    errgen_labels_S = errorgen_basis.sublabels('S')
-    errgen_labels_C = errorgen_basis.sublabels('C')
-    errgen_labels_A = errorgen_basis.sublabels('A')
+    errgen_labels_H = _sort_errorgen_labels(errorgen_basis.sublabels('H'))
+    errgen_labels_S = _sort_errorgen_labels(errorgen_basis.sublabels('S'))
+    errgen_labels_C = _sort_errorgen_labels(errorgen_basis.sublabels('C'))
+    errgen_labels_A = _sort_errorgen_labels(errorgen_basis.sublabels('A'))
     
+    #filter out any C or A terms which can't be present with CP constraints due to lack of correct S term.
+    filtered_errgen_labels_C = []
+    for lbl in errgen_labels_C:
+        first_label = _LocalElementaryErrorgenLabel('S', (lbl.basis_element_labels[0],))
+        second_label = _LocalElementaryErrorgenLabel('S', (lbl.basis_element_labels[1],))
+        if first_label not in errgen_labels_S or second_label not in errgen_labels_S:
+            continue
+        else:
+            filtered_errgen_labels_C.append(lbl)
+    filtered_errgen_labels_A = []
+    for lbl in errgen_labels_A:
+        first_label = _LocalElementaryErrorgenLabel('S', (lbl.basis_element_labels[0],))
+        second_label = _LocalElementaryErrorgenLabel('S', (lbl.basis_element_labels[1],))
+        if first_label not in errgen_labels_S or second_label not in errgen_labels_S:
+            continue
+        else:
+            filtered_errgen_labels_A.append(lbl)
+    errgen_labels_C = filtered_errgen_labels_C
+    errgen_labels_A = filtered_errgen_labels_A
+
     #Get the number of H and S error generators. These are stored in HSCA order in the labels 
     num_H_rates = len(errgen_labels_H)
     num_S_rates = len(errgen_labels_S)
@@ -663,15 +685,32 @@ def random_error_generator_rates(num_qubits, errorgen_types=('H', 'S', 'C', 'A')
     
     #Create a random matrix with complex gaussian entries which will be used to generator a PSD matrix for the SCA rates.
     random_SCA_gen_mat = rng.normal(loc=SCA_params[0], scale=SCA_params[1], size=(num_S_rates, num_S_rates)) + \
-                         1j* rng.normal(loc=SCA_params[0], scale=SCA_params[1], size=(num_S_rates, num_S_rates))
+                        1j* rng.normal(loc=SCA_params[0], scale=SCA_params[1], size=(num_S_rates, num_S_rates))
+   
     random_SCA_mat = random_SCA_gen_mat @ random_SCA_gen_mat.conj().T
     #The random S rates are just the diagonal of random_SCA_mat.
     random_rates_dicts['S'] = {lbl: val for lbl,val in zip(errgen_labels_S,  _np.real(_np.diag(random_SCA_mat)).copy())}
-    
     #The random C rates are the real part of the off diagonal entries, and the A rates the imaginary part.
     random_rates_dicts['C'] =  {lbl: val for lbl,val in zip(errgen_labels_C, random_SCA_mat[_np.triu_indices_from(random_SCA_mat, k=1)].real)}
     random_rates_dicts['A'] =  {lbl: val for lbl,val in zip(errgen_labels_A, random_SCA_mat[_np.triu_indices_from(random_SCA_mat, k=1)].imag)}
-    
+    #manually check conditions on C and A
+    for lbl, rate in random_rates_dicts['C'].items():
+        first_S_rate = random_rates_dicts['S'][_LocalElementaryErrorgenLabel('S', (lbl.basis_element_labels[0],))]
+        second_S_rate = random_rates_dicts['S'][_LocalElementaryErrorgenLabel('S', (lbl.basis_element_labels[1],))]
+
+        if not (abs(rate) <= _np.sqrt(first_S_rate*second_S_rate)):
+            print(f'{lbl}: {rate}')
+            raise ValueError('Invalid C rate')
+        
+    #manually check conditions on C and A
+    for lbl, rate in random_rates_dicts['A'].items():
+        first_S_rate = random_rates_dicts['S'][_LocalElementaryErrorgenLabel('S', (lbl.basis_element_labels[0],))]
+        second_S_rate = random_rates_dicts['S'][_LocalElementaryErrorgenLabel('S', (lbl.basis_element_labels[1],))]
+
+        if not (abs(rate) <= _np.sqrt(first_S_rate*second_S_rate)):
+            print(f'{lbl}: {rate}')
+            raise ValueError('Invalid A rate')
+
     #Add in/override the fixed rates for each of the sectors.
     H_fixed_keys = []
     S_fixed_keys = []
@@ -762,9 +801,30 @@ def random_error_generator_rates(num_qubits, errorgen_types=('H', 'S', 'C', 'A')
     if label_type not in ['global', 'local']:
         raise ValueError('Unsupported label type {label_type}.')
 
-    if label_type == 'local':
-        errorgen_rates_dict = {_LocalElementaryErrorgenLabel.cast(lbl, state_space.state_space_labels): val 
+    if label_type == 'global':
+        errorgen_rates_dict = {_GlobalElementaryErrorgenLabel.cast(lbl, sslbls=state_space.state_space_labels): val 
                                for lbl, val in  errorgen_rates_dict.items()}
 
     return errorgen_rates_dict
+
+def _sort_errorgen_labels(errgen_labels):
+    """
+    This function sorts error generator coefficients in canonical way.
+    Helper function for random error generator rate construction. 
+    """
+    if not errgen_labels:
+        return []
+    
+    assert isinstance(errgen_labels[0], _LocalElementaryErrorgenLabel), 'Can only sort local labels at the moment'
+
+    errorgen_types = [lbl.errorgen_type for lbl in errgen_labels]
+    assert len(set(errorgen_types))==1, 'only one error generator type at a time is supported presently'
+
+    errorgen_type = errorgen_types[0]
+    if errorgen_type in ('H', 'S'):
+        sorted_errgen_labels = sorted(errgen_labels, key= lambda lbl:lbl.basis_element_labels[0])
+    else:
+        sorted_errgen_labels = sorted(errgen_labels, key= lambda lbl:(lbl.basis_element_labels[0], lbl.basis_element_labels[1]))
+
+    return sorted_errgen_labels
 

@@ -128,14 +128,6 @@ class RandomErrorgenRatesTester(BaseCase):
         #with CPTP parameterization. This should fail if the error generator dictionary is not CPTP.
         errorgen = LindbladErrorgen.from_elementary_errorgens(random_errorgen_rates, parameterization='CPTPLND', truncate=False, state_space=QubitSpace(2))
 
-        #H + S + A
-        random_errorgen_rates = lt.random_error_generator_rates(num_qubits=2, errorgen_types=('H','S', 'A'), seed=1234)
-        #make sure that we get the expected number of rates:
-        self.assertEqual(len(random_errorgen_rates), 135)
-        #also make sure this is CPTP, do so by constructing an error generator and confirming it doesn't fail
-        #with CPTP parameterization. This should fail if the error generator dictionary is not CPTP.
-        errorgen = LindbladErrorgen.from_elementary_errorgens(random_errorgen_rates, parameterization='CPTPLND', truncate=False, state_space=QubitSpace(2))
-
     def test_error_metric_restrictions(self):
         #test generator_infidelity
         random_errorgen_rates = lt.random_error_generator_rates(num_qubits=2, errorgen_types=('H','S'), 
@@ -216,4 +208,28 @@ class RandomErrorgenRatesTester(BaseCase):
                                                                 seed=1234)
         for coeff in random_errorgen_rates:
             assert 0 in coeff.sslbls
+
+    def test_weight_restrictions(self):
+        random_errorgen_rates = lt.random_error_generator_rates(num_qubits=2, errorgen_types=('H','S','C','A'), 
+                                                                label_type='local', seed=1234,
+                                                                max_weights={'H':1, 'S':1, 'C':1, 'A':1})
+        assert len(random_errorgen_rates) == 24
+        #confirm still CPTP
+        errorgen = LindbladErrorgen.from_elementary_errorgens(random_errorgen_rates, parameterization='CPTPLND', truncate=False, state_space=QubitSpace(2))
+
+        random_errorgen_rates = lt.random_error_generator_rates(num_qubits=2, errorgen_types=('H','S','C','A'), 
+                                                                label_type='local', seed=1234,
+                                                                max_weights={'H':2, 'S':2, 'C':1, 'A':1})
+        assert len(random_errorgen_rates) == 42
+        errorgen = LindbladErrorgen.from_elementary_errorgens(random_errorgen_rates, parameterization='CPTPLND', truncate=False, state_space=QubitSpace(2))
+
+    def test_global_labels(self):
+        random_errorgen_rates = lt.random_error_generator_rates(num_qubits=2, seed=1234, label_type='global')
+
+        #make sure that we get the expected number of rates:
+        self.assertEqual(len(random_errorgen_rates), 240)
+
+        #also make sure this is CPTP, do so by constructing an error generator and confirming it doesn't fail
+        #with CPTP parameterization. This should fail if the error generator dictionary is not CPTP.
+        errorgen = LindbladErrorgen.from_elementary_errorgens(random_errorgen_rates, parameterization='CPTPLND', truncate=False, state_space=QubitSpace(2))
 
