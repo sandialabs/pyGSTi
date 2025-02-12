@@ -59,6 +59,14 @@ def create_elementary_errorgen_dual(typ, p, q=None, sparse=False, normalization_
     sparse : bool, optional
         Whether to construct a sparse or dense (the default) matrix.
 
+    normalization_factor : str or float, optional (default 'auto')
+        String or float specifying the normalization factor to apply. If
+        a string the options are 'auto' and 'auto_return', which both use
+        the corresponding (primal) elementary error generator to calculate
+        this automatically and only differ in whether they return this 
+        normalization factor. If a float, the reciprocal of the input value
+        is used directly.
+
     Returns
     -------
     ndarray or Scipy CSR matrix
@@ -76,18 +84,36 @@ def create_elementary_errorgen_dual(typ, p, q=None, sparse=False, normalization_
     assert((typ in 'HS' and q is None) or (typ in 'CA' and q is not None)), \
         "Wrong number of basis elements provided for %s-type elementary errorgen!" % typ
 
-    # Loop through the standard basis as all possible input density matrices
-    for i, rho0 in enumerate(basis_matrices('std', d2)):  # rho0 == input density mx
-        # Only difference between H/S/C/A is how they transform input density matrices
-        if typ == 'H':
-            rho1 = -1j * (p @ rho0 - rho0 @ p)  # -1j / (2 * d2) *
-        elif typ == 'S':
-            rho1 = (p @ rho0 @ pdag)  # 1 / d2 *
-        elif typ == 'C':
-            rho1 = (p @ rho0 @ qdag + q @ rho0 @ pdag)  # 1 / (2 * d2) *
-        elif typ == 'A':
-            rho1 = 1j * (p @ rho0 @ qdag - q @ rho0 @ pdag)  # 1j / (2 * d2)
-        elem_errgen[:, i] = rho1.flatten()[:, None] if sparse else rho1.flatten()
+    #if p or q is a sparse matrix fall back to original implementation
+    if not isinstance(p, _np.ndarray) or (q is not None and not isinstance(q, _np.ndarray)):
+        for i, rho0 in enumerate(basis_matrices('std', d2)):  # rho0 == input density mx
+            # Only difference between H/S/C/A is how they transform input density matrices
+            if typ == 'H':
+                rho1 = -1j * (p @ rho0 - rho0 @ p)  # -1j / (2 * d2) *
+            elif typ == 'S':
+                rho1 = (p @ rho0 @ pdag)  # 1 / d2 *
+            elif typ == 'C':
+                rho1 = (p @ rho0 @ qdag + q @ rho0 @ pdag)  # 1 / (2 * d2) *
+            elif typ == 'A':
+                rho1 = 1j * (p @ rho0 @ qdag - q @ rho0 @ pdag)  # 1j / (2 * d2)
+            elem_errgen[:, i] = rho1.flatten()[:, None] if sparse else rho1.flatten()
+    else:
+        # Loop through the standard basis as all possible input density matrices
+        for i in range(d):  # rho0 == input density mx
+            for j in range(d):
+                # Only difference between H/S/C/A is how they transform input density matrices
+                if typ == 'H':
+                    rho1 = _np.zeros((d,d), dtype=_np.complex128)
+                    rho1[:, j] = -1j*p[:, i]
+                    rho1[i, :] += 1j*p[j, :]
+                elif typ == 'S':
+                    rho1 = p[:,i].reshape((d,1))@pdag[j,:].reshape((1,d))
+                elif typ == 'C':
+                    rho1 = p[:,i].reshape((d,1))@qdag[j,:].reshape((1,d)) + q[:,i].reshape((d,1))@pdag[j,:].reshape((1,d))
+                elif typ == 'A':
+                    rho1 = 1j*(p[:,i].reshape((d,1))@ qdag[j,:].reshape((1,d))) - 1j*(q[:,i].reshape((d,1))@pdag[j,:].reshape((1,d)))
+
+                elem_errgen[:, d*i+j] = rho1.flatten()[:, None] if sparse else rho1.flatten()
 
     return_normalization = bool(normalization_factor == 'auto_return')
     if normalization_factor in ('auto', 'auto_return'):
@@ -97,11 +123,119 @@ def create_elementary_errorgen_dual(typ, p, q=None, sparse=False, normalization_
         else:
             normalization_factor = _np.vdot(elem_errgen.flatten(), primal.flatten())
     elem_errgen *= _np.real_if_close(1 / normalization_factor).item()  # item() -> scalar
-
     if sparse: elem_errgen = elem_errgen.tocsr()
     return (elem_errgen, normalization_factor) if return_normalization else elem_errgen
 
+#TODO: Should be able to leverage the structure of the paulis as generalized permutation
+#matrices to avoid explicitly doing outer products
+def create_elementary_errorgen_dual_pauli(typ, p, q=None, sparse=False):
+    """
+    Construct a "dual" elementary error generator matrix in the "standard" (matrix-unit) basis.
+    Specialized to p and q being elements of the (unnormalized) pauli basis.
 
+    The elementary error generator that is dual to the one computed by calling
+    :func:`create_elementary_errorgen` with the same argument.  This dual element
+    can be used to find the coefficient of the original, or "primal" elementary generator.
+    For example, if `A = sum(c_i * E_i)`, where `E_i` are the elementary error generators given
+    by :func:`create_elementary_errorgen`), then `c_i = dot(D_i.conj(), A)` where `D_i`
+    is the dual to `E_i`.
+
+    There are four different types of dual elementary error generators: 'H' (Hamiltonian),
+    'S' (stochastic), 'C' (correlation), and 'A' (active).  See arxiv:2103.01928.
+    Each type transforms an input density matrix differently.  The action of an elementary
+    error generator `L` on an input density matrix `rho` is given by:
+
+    Hamiltonian:  `L(rho) = -1j/(2d^2) * [ p, rho ]`
+    Stochastic:   `L(rho) = 1/(d^2) p * rho * p`
+    Correlation:  `L(rho) = 1/(2d^2) ( p * rho * q + q * rho * p)`
+    Active:       `L(rho) = 1j/(2d^2) ( p * rho * q - q * rho * p)`
+
+    where `d` is the dimension of the Hilbert space, e.g. 2 for a single qubit.  Square
+    brackets denotes the commutator and curly brackets the anticommutator.
+    `L` is returned as a superoperator matrix that acts on vectorized density matrices.
+
+    Parameters
+    ----------
+    typ : {'H','S','C','A'}
+        The type of dual error generator to construct.
+
+    p : numpy.ndarray
+        d-dimensional basis matrix.
+
+    q : numpy.ndarray, optional
+        d-dimensional basis matrix; must be non-None if and only if `typ` is `'C'` or `'A'`.
+
+    sparse : bool, optional
+        Whether to construct a sparse or dense (the default) matrix.
+
+    Returns
+    -------
+    ndarray or Scipy CSR matrix
+    """
+    d = p.shape[0]; d2 = d**2
+
+    if sparse:
+        elem_errgen = _sps.lil_matrix((d2, d2), dtype=p.dtype)
+    else:
+        elem_errgen = _np.empty((d2, d2), dtype=p.dtype)
+
+    assert(typ in ('H', 'S', 'C', 'A')), "`typ` must be one of 'H', 'S', 'C', or 'A'"
+    assert((typ in 'HS' and q is None) or (typ in 'CA' and q is not None)), \
+        "Wrong number of basis elements provided for %s-type elementary errorgen!" % typ
+
+    #if p or q is a sparse matrix fall back to original implementation
+    if not isinstance(p, _np.ndarray) or (q is not None and not isinstance(q, _np.ndarray)):
+        for i, rho0 in enumerate(basis_matrices('std', d2)):  # rho0 == input density mx
+            # Only difference between H/S/C/A is how they transform input density matrices
+            if typ == 'H':
+                rho1 = -1j * (p @ rho0 - rho0 @ p)  # -1j / (2 * d2) *
+            elif typ == 'S':
+                rho1 = (p @ rho0 @ p)  # 1 / d2 *
+            elif typ == 'C':
+                rho1 = (p @ rho0 @ q + q @ rho0 @ p)  # 1 / (2 * d2) *
+            elif typ == 'A':
+                rho1 = 1j * (p @ rho0 @ q - q @ rho0 @ p)  # 1j / (2 * d2)
+            elem_errgen[:, i] = rho1.flatten()[:, None] if sparse else rho1.flatten()
+    else:
+        if typ == 'H':
+            # Loop through the standard basis as all possible input density matrices
+            for i in range(d): 
+                for j in range(d):
+                    rho1 = _np.zeros((d,d), dtype=_np.complex128)
+                    rho1[:, j] = -1j*p[:, i]
+                    rho1[i, :] += 1j*p[j, :]
+                    elem_errgen[:, d*i+j] = rho1.flatten()[:, None] if sparse else rho1.flatten()
+        elif typ == 'S':
+            # Loop through the standard basis as all possible input density matrices
+            for i in range(d):
+                for j in range(d):
+                    rho1 = p[:,i].reshape((d,1))@p[j,:].reshape((1,d))
+                    elem_errgen[:, d*i+j] = rho1.flatten()[:, None] if sparse else rho1.flatten()
+        elif typ == 'C':
+            # Loop through the standard basis as all possible input density matrices
+            for i in range(d): 
+                for j in range(d):
+                    rho1 = p[:,i].reshape((d,1))@q[j,:].reshape((1,d)) + q[:,i].reshape((d,1))@p[j,:].reshape((1,d))
+                    elem_errgen[:, d*i+j] = rho1.flatten()[:, None] if sparse else rho1.flatten()
+        else:
+            # Loop through the standard basis as all possible input density matrices
+            for i in range(d):  
+                for j in range(d):
+                    rho1 = 1j*(p[:,i].reshape((d,1))@ q[j,:].reshape((1,d))) - 1j*(q[:,i].reshape((d,1))@p[j,:].reshape((1,d)))
+                    elem_errgen[:, d*i+j] = rho1.flatten()[:, None] if sparse else rho1.flatten()
+
+    if typ in 'HCA':
+        normalization_factor = 1/(2*d2)
+    else:
+        normalization_factor = 1/d2
+
+    elem_errgen *= normalization_factor
+    if sparse: elem_errgen = elem_errgen.tocsr()
+    return elem_errgen
+
+
+#TODO: The construction can be made a bit more efficient if we know we will be constructing multiple
+#error generators with overlapping indices by reusing intermediate results.
 def create_elementary_errorgen(typ, p, q=None, sparse=False):
     """
     Construct an elementary error generator as a matrix in the "standard" (matrix-unit) basis.
@@ -137,7 +271,8 @@ def create_elementary_errorgen(typ, p, q=None, sparse=False):
     -------
     ndarray or Scipy CSR matrix
     """
-    d = p.shape[0]; d2 = d**2
+    d = p.shape[0] 
+    d2 = d**2
     if sparse:
         elem_errgen = _sps.lil_matrix((d2, d2), dtype=p.dtype)
     else:
@@ -154,23 +289,155 @@ def create_elementary_errorgen(typ, p, q=None, sparse=False):
         pq_plus_qp = pdag @ q + qdag @ p
         pq_minus_qp = pdag @ q - qdag @ p
 
-    # Loop through the standard basis as all possible input density matrices
-    for i, rho0 in enumerate(basis_matrices('std', d2)):  # rho0 == input density mx
-        # Only difference between H/S/C/A is how they transform input density matrices
-        if typ == 'H':
-            rho1 = -1j * (p @ rho0 - rho0 @ p)  # Add "/2" to have PP ham gens match previous versions of pyGSTi
-        elif typ == 'S':
-            pdag_p = (pdag @ p)
-            rho1 = p @ rho0 @ pdag - 0.5 * (pdag_p @ rho0 + rho0 @ pdag_p)
-        elif typ == 'C':
-            rho1 = p @ rho0 @ qdag + q @ rho0 @ pdag - 0.5 * (pq_plus_qp @ rho0 + rho0 @ pq_plus_qp)
-        elif typ == 'A':
-            rho1 = 1j * (p @ rho0 @ qdag - q @ rho0 @ pdag + 0.5 * (pq_minus_qp @ rho0 + rho0 @ pq_minus_qp))
+    #if p or q is a sparse matrix fall back to original implementation
+    if not isinstance(p, _np.ndarray) or (q is not None and not isinstance(q, _np.ndarray)):
+        # Loop through the standard basis as all possible input density matrices
+        for i, rho0 in enumerate(basis_matrices('std', d2)):  # rho0 == input density mx
+            # Only difference between H/S/C/A is how they transform input density matrices
+            if typ == 'H':
+                rho1 = -1j * (p @ rho0 - rho0 @ p)  # Add "/2" to have PP ham gens match previous versions of pyGSTi
+            elif typ == 'S':
+                pdag_p = (pdag @ p)
+                rho1 = p @ rho0 @ pdag - 0.5 * (pdag_p @ rho0 + rho0 @ pdag_p)
+            elif typ == 'C':
+                rho1 = p @ rho0 @ qdag + q @ rho0 @ pdag - 0.5 * (pq_plus_qp @ rho0 + rho0 @ pq_plus_qp)
+            elif typ == 'A':
+                rho1 = 1j * (p @ rho0 @ qdag - q @ rho0 @ pdag + 0.5 * (pq_minus_qp @ rho0 + rho0 @ pq_minus_qp))
+            elem_errgen[:, i] = rho1.flatten()[:, None] if sparse else rho1.flatten()
+    else:
+        # Loop through the standard basis as all possible input density matrices
+        for i in range(d): 
+            for j in range(d):
+                # Only difference between H/S/C/A is how they transform input density matrices
+                if typ == 'H':
+                    rho1 = _np.zeros((d,d), dtype=_np.complex128)
+                    rho1[:, j] = -1j*p[:, i]
+                    rho1[i, :] += 1j*p[j, :]
+                elif typ == 'S':
+                    pdag_p = (pdag @ p)
+                    rho1 = p[:,i].reshape((d,1))@pdag[j,:].reshape((1,d))
+                    rho1[:, j] += -.5*pdag_p[:, i]
+                    rho1[i, :] += -.5*pdag_p[j, :]
+                elif typ == 'C':
+                    rho1 = p[:,i].reshape((d,1))@qdag[j,:].reshape((1,d)) + q[:,i].reshape((d,1))@pdag[j,:].reshape((1,d))
+                    rho1[:, j] += -.5*pq_plus_qp[:, i]
+                    rho1[i, :] += -.5*pq_plus_qp[j, :]
+                elif typ == 'A':
+                    rho1 = 1j*(p[:,i].reshape((d,1))@ qdag[j,:].reshape((1,d))) - 1j*(q[:,i].reshape((d,1))@pdag[j,:].reshape((1,d)))
+                    rho1[:, j] += 1j*.5*pq_minus_qp[:, i]
+                    rho1[i, :] += 1j*.5*pq_minus_qp[j, :]
 
-        elem_errgen[:, i] = rho1.flatten()[:, None] if sparse else rho1.flatten()
+                elem_errgen[:, d*i+j] = rho1.flatten()[:, None] if sparse else rho1.flatten()
 
     if sparse: elem_errgen = elem_errgen.tocsr()
     return elem_errgen
+
+#TODO: Should be able to leverage the structure of the paulis as generalized permutation
+#matrices to avoid explicitly doing outer products
+def create_elementary_errorgen_pauli(typ, p, q=None, sparse=False):
+    """
+    Construct an elementary error generator as a matrix in the "standard" (matrix-unit) basis.
+    Specialized to the case where p and q are elements of the (unnormalized) pauli basis.
+
+    There are four different types of elementary error generators: 'H' (Hamiltonian),
+    'S' (stochastic), 'C' (correlation), and 'A' (active).  See arxiv:2103.01928.
+    Each type transforms an input density matrix differently.  The action of an elementary
+    error generator `L` on an input density matrix `rho` is given by:
+
+    Hamiltonian:  `L(rho) = -1j * [ p, rho ]`
+    Stochastic:   `L(rho) = p * rho * p - rho`
+    Correlation:  `L(rho) = p * rho * q + q * rho * p - 0.5 {{p,q}, rho}`
+    Active:       `L(rho) = 1j( p * rho * q - q * rho * p + 0.5 {[p,q], rho} )`
+
+    Square brackets denotes the commutator and curly brackets the anticommutator.
+    `L` is returned as a superoperator matrix that acts on vectorized density matrices.
+
+    Parameters
+    ----------
+    typ : {'H','S','C','A'}
+        The type of error generator to construct.
+
+    p : numpy.ndarray
+        d-dimensional basis matrix.
+
+    q : numpy.ndarray, optional
+        d-dimensional basis matrix; must be non-None if and only if `typ` is `'C'` or `'A'`.
+
+    sparse : bool, optional
+        Whether to construct a sparse or dense (the default) matrix.
+
+    Returns
+    -------
+    ndarray or Scipy CSR matrix
+    """
+    d = p.shape[0] 
+    d2 = d**2
+    if sparse:
+        elem_errgen = _sps.lil_matrix((d2, d2), dtype=p.dtype)
+    else:
+        elem_errgen = _np.empty((d2, d2), dtype=p.dtype)
+
+    assert(typ in ('H', 'S', 'C', 'A')), "`typ` must be one of 'H', 'S', 'C', or 'A'"
+    assert((typ in 'HS' and q is None) or (typ in 'CA' and q is not None)), \
+        "Wrong number of basis elements provided for %s-type elementary errorgen!" % typ
+
+    #should be able to get away with just doing one product here.
+    if typ in 'CA':
+        pq = p@q
+        qp = q@p
+        pq_plus_qp = pq + qp
+        pq_minus_qp = pq - qp
+
+    #if p or q is a sparse matrix fall back to original implementation
+    if not isinstance(p, _np.ndarray) or (q is not None and not isinstance(q, _np.ndarray)):
+        # Loop through the standard basis as all possible input density matrices
+        for i, rho0 in enumerate(basis_matrices('std', d2)):  # rho0 == input density mx
+            # Only difference between H/S/C/A is how they transform input density matrices
+            if typ == 'H':
+                rho1 = -1j * (p @ rho0 - rho0 @ p)  # Add "/2" to have PP ham gens match previous versions of pyGSTi
+            elif typ == 'S':
+                rho1 = p @ rho0 @ p - rho0
+            elif typ == 'C':
+                rho1 = p @ rho0 @ q + q @ rho0 @ p - 0.5 * (pq_plus_qp @ rho0 + rho0 @ pq_plus_qp)
+            elif typ == 'A':
+                rho1 = 1j * (p @ rho0 @ q - q @ rho0 @ p + 0.5 * (pq_minus_qp @ rho0 + rho0 @ pq_minus_qp))
+            elem_errgen[:, i] = rho1.flatten()[:, None] if sparse else rho1.flatten()
+    else:
+        if typ == 'H':
+            # Loop through the standard basis as all possible input density matrices
+            for i in range(d):  
+                for j in range(d):
+                    rho1 = _np.zeros((d,d), dtype=_np.complex128)
+                    rho1[:, j] = -1j*p[:, i]
+                    rho1[i, :] += 1j*p[j, :]
+                    elem_errgen[:, d*i+j] = rho1.flatten()[:, None] if sparse else rho1.flatten()
+        elif typ == 'S':
+            # Loop through the standard basis as all possible input density matrices
+            for i in range(d): 
+                for j in range(d):
+                    rho1 = p[:,i].reshape((d,1))@p[j,:].reshape((1,d))
+                    rho1[i,j] += -1
+                    elem_errgen[:, d*i+j] = rho1.flatten()[:, None] if sparse else rho1.flatten()
+        elif typ == 'C':
+            # Loop through the standard basis as all possible input density matrices
+            for i in range(d): 
+                for j in range(d):
+                    rho1 = p[:,i].reshape((d,1))@q[j,:].reshape((1,d)) + q[:,i].reshape((d,1))@p[j,:].reshape((1,d))
+                    rho1[:, j] += -.5*pq_plus_qp[:, i]
+                    rho1[i, :] += -.5*pq_plus_qp[j, :]
+                    elem_errgen[:, d*i+j] = rho1.flatten()[:, None] if sparse else rho1.flatten()
+        else:
+            # Loop through the standard basis as all possible input density matrices
+            for i in range(d): 
+                for j in range(d):
+                    rho1 = 1j*(p[:,i].reshape((d,1))@ q[j,:].reshape((1,d))) - 1j*(q[:,i].reshape((d,1))@p[j,:].reshape((1,d)))
+                    rho1[:, j] += 1j*.5*pq_minus_qp[:, i]
+                    rho1[i, :] += 1j*.5*pq_minus_qp[j, :]
+                    elem_errgen[:, d*i+j] = rho1.flatten()[:, None] if sparse else rho1.flatten()
+
+    if sparse: elem_errgen = elem_errgen.tocsr()
+    return elem_errgen
+
 
 def create_lindbladian_term_errorgen(typ, Lm, Ln=None, sparse=False):  # noqa N803
     """

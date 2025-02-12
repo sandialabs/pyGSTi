@@ -10,7 +10,7 @@ Utility functions for working with Basis objects
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from functools import partial
+from functools import partial, lru_cache
 
 import numpy as _np
 
@@ -18,7 +18,7 @@ from pygsti.baseobjs.basisconstructors import _basis_constructor_dict
 # from ..baseobjs.basis import Basis, BuiltinBasis, DirectSumBasis
 from pygsti.baseobjs import basis as _basis
 
-
+@lru_cache(maxsize=1)
 def basis_matrices(name_or_basis, dim, sparse=False):
     """
     Get the elements of the specifed basis-type which spans the density-matrix space given by `dim`.

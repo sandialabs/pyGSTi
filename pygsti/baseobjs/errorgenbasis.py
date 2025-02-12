@@ -105,7 +105,7 @@ class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
         elif isinstance(basis_1q, str):
             self._basis_1q = _Basis.cast(basis_1q, 4)
         else:
-            self._basis_1q = _Basis.cast('pp', 4)
+            self._basis_1q = _Basis.cast('PP', 4)
 
         self.state_space = state_space
         assert(self.state_space.is_entirely_qubits), "FOGI only works for models containing just qubits (so far)"
@@ -150,10 +150,12 @@ class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
         in this basis, returned in the same order as they appear in `labels`.
         """
         if self._cached_dual_matrices is None:
-            self._cached_dual_matrices = tuple([_ot.create_elementary_errorgen_nqudit_dual(
-                           elemgen_label.errorgen_type, elemgen_label.basis_element_labels,
-                           self._basis_1q, normalize=False, sparse=False,
-                           tensorprod_basis=True) for elemgen_label in self._labels])
+            elemgen_types = [elemgen_label.errorgen_type for elemgen_label in self._labels]
+            elemgen_labels = [elemgen_label.basis_element_labels for elemgen_label in self._labels]
+            self._cached_dual_matrices = tuple(_ot.bulk_create_elementary_errorgen_nqudit_dual(
+                                            elemgen_types, elemgen_labels,
+                                            self._basis_1q, normalize=False, sparse=False,
+                                            tensorprod_basis=True))
         return self._cached_dual_matrices
     
     @property
@@ -164,10 +166,12 @@ class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
         in this basis, returned in the same order as they appear in `labels`.
         """
         if self._cached_matrices is None:
-            self._cached_matrices = tuple([_ot.create_elementary_errorgen_nqudit(
-                           elemgen_label.errorgen_type, elemgen_label.basis_element_labels,
-                           self._basis_1q, normalize=False, sparse=False,
-                           tensorprod_basis=True) for elemgen_label in self._labels])
+            elemgen_types = [elemgen_label.errorgen_type for elemgen_label in self._labels]
+            elemgen_labels = [elemgen_label.basis_element_labels for elemgen_label in self._labels]
+            self._cached_matrices = tuple(_ot.bulk_create_elementary_errorgen_nqudit(
+                                            elemgen_types, elemgen_labels,
+                                            self._basis_1q, normalize=False, sparse=False,
+                                            tensorprod_basis=True))
         return self._cached_matrices
 
     @property
@@ -668,10 +672,12 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
         in this basis, returned in the same order as they appear in `labels`.
         """
         if self._cached_dual_matrices is None:
-            self._cached_dual_matrices = tuple([_ot.create_elementary_errorgen_nqudit_dual(
-                           elemgen_label.errorgen_type, elemgen_label.basis_element_labels,
-                           self._basis_1q, normalize=False, sparse=False,
-                           tensorprod_basis=True) for elemgen_label in self.labels])
+            elemgen_types = [elemgen_label.errorgen_type for elemgen_label in self.labels]
+            elemgen_labels = [elemgen_label.basis_element_labels for elemgen_label in self.labels]
+            self._cached_dual_matrices = tuple(_ot.bulk_create_elementary_errorgen_nqudit_dual(
+                                            elemgen_types, elemgen_labels,
+                                            self._basis_1q, normalize=False, sparse=False,
+                                            tensorprod_basis=True))
         return self._cached_dual_matrices
     
     @property
@@ -682,10 +688,12 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
         in this basis, returned in the same order as they appear in `labels`.
         """
         if self._cached_matrices is None:
-            self._cached_matrices = tuple([_ot.create_elementary_errorgen_nqudit(
-                           elemgen_label.errorgen_type, elemgen_label.basis_element_labels,
-                           self._basis_1q, normalize=False, sparse=False,
-                           tensorprod_basis=True) for elemgen_label in self.labels])
+            elemgen_types = [elemgen_label.errorgen_type for elemgen_label in self.labels]
+            elemgen_labels = [elemgen_label.basis_element_labels for elemgen_label in self.labels]
+            self._cached_matrices = tuple(_ot.bulk_create_elementary_errorgen_nqudit(
+                                            elemgen_types, elemgen_labels,
+                                            self._basis_1q, normalize=False, sparse=False,
+                                            tensorprod_basis=True))
         return self._cached_matrices
 
     @property

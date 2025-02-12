@@ -1,6 +1,5 @@
 from pygsti.baseobjs.errorgenlabel import ElementaryErrorgenLabel as _ElementaryErrorgenLabel, GlobalElementaryErrorgenLabel as _GEEL,\
 LocalElementaryErrorgenLabel as _LEEL
-from .utilspygstistimtranslator import *
 import stim
 import numpy as _np
 from pygsti.tools import change_basis
