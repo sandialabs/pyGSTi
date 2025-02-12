@@ -2360,14 +2360,14 @@ def _compute_wildcard_budget_1d_model(estimate, objfn_cache, mdc_objfn, paramete
         primitive_ops = list(ref.keys())
         if sum([v**2 for v in ref.values()]) < 1e-4:
             _warnings.warn("Reference values for 1D wildcard budget are all near-zero!"
-                           "This usually indicates an incorrect target model and will likely cause problems computing alpha.")
+                           " This usually indicates an incorrect target model and will likely cause problems computing alpha.")
 
     else:
         gaugeopt_labels = gaugeopt_suite.gaugeopt_suite_names
         primitive_ops = list(ref[list(gaugeopt_labels)[0]].keys())
         if sum([v**2 for v in ref[list(gaugeopt_labels)[0]].values()]) < 1e-4:
             _warnings.warn("Reference values for 1D wildcard budget are all near-zero!"
-                           "This usually indicates an incorrect target model and will likely cause problems computing alpha.")
+                           " This usually indicates an incorrect target model and will likely cause problems computing alpha.")
 
     if gaugeopt_labels is None:
         wcm = _wild.PrimitiveOpsSingleScaleWildcardBudget(primitive_ops, [ref[k] for k in primitive_ops],
@@ -2435,6 +2435,8 @@ def _compute_1d_reference_values_and_name(estimate, badfit_options, gaugeopt_sui
                 preps_dict = gaugeopt_model.prep_blks['layers']
                 targetpreps_dict = target_model.prep_blks['layers']
                 povmops_dict = {}  # HACK - need to rewrite povm_diamonddist below to work
+                insts_dict = gaugeopt_model.instrument_blks['layers']
+                targetinsts_dict = target_model.instrument_blks['layers']
 
             dd = {}
             for key, op in operations_dict.items():
