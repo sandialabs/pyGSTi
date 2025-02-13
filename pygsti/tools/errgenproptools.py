@@ -436,7 +436,9 @@ def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1, truncation_th
 
     #Finally accumulate all of the dictionaries in new_errorgen_layer into a single one, summing overlapping terms.   
     errorgen_labels_by_order = [{key: None for key in order_dict} for order_dict in new_errorgen_layer]
-    complete_errorgen_labels = reduce(lambda a, b: a|b, errorgen_labels_by_order)
+    complete_errorgen_labels = errorgen_labels_by_order[0]
+    for order_dict in errorgen_labels_by_order[1:]:
+        complete_errorgen_labels.update(order_dict)
 
     #initialize a dictionary with requisite keys
     new_errorgen_layer_dict = {lbl: 0 for lbl in complete_errorgen_labels}
