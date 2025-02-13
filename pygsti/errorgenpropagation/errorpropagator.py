@@ -21,7 +21,7 @@ from itertools import islice
 
 class ErrorGeneratorPropagator:
 
-    def __init__(self, model, state_space=None):
+    def __init__(self, model):
         """
         Initialize an instance of `ErrorGeneratorPropagator`. This class is instantiated with a noise model
         and manages operations related to propagating error generators through circuits, and constructing
@@ -29,34 +29,11 @@ class ErrorGeneratorPropagator:
 
         Parameters
         ----------
-        model: `OpModel` or dict
-            If an `OpModel` this model is used to construct error generators for each layer of a circuit
-            through which error generators are to be propagated. If a dictionary is passed in then this
-            dictionary should be an error generator coefficient dictionary, with keys that are 
-            `ElementaryErrorgenLabel`s and values that are rates. This dictionary is then used as the
-            fixed per-circuit error generator independent of the circuit layers. (Dictionary support in development).
-        
-        state_space: `StateSpace`, optional (default None)
-            Only used if specifying a dictionary for `model` whose keys are 
-            `GlobalElementaryErrorgenLabel`s.      
-        """
-        if isinstance(model, dict):
-            #convert this to one where the keys are `LocalStimErrorgenLabel`s. 
-            if isinstance(next(iter(model)), _GlobalElementaryErrorgenLabel):
-                if state_space is None:
-                    msg = 'When specifying a fixed error generator dictionary as the noise model using keys which are'\
-                        + '`GlobalElementaryErrorgenLabel` a corresponding `StateSpace` much be specified too.'
-                    raise ValueError(msg)
-                else:
-                    sslbls = state_space.qubit_labels
-                    lse_dict = {_LSE.cast(lbl, sslbls): rate for lbl, rate in model.items()}
-            elif isinstance(next(iter(model)), _LocalElementaryErrorgenLabel):
-                lse_dict = {_LSE.cast(lbl): rate for lbl, rate in model.items()}
-            else:
-                lse_dict = model  
-            self.model = lse_dict
-        else:              
-            self.model = model
+        model: `OpModel` 
+            This model is used to construct error generators for each layer of a circuit
+            through which error generators are to be propagated.   
+        """   
+        self.model = model
 
     def eoc_error_channel(self, circuit, include_spam=True, use_bch=False,
                           bch_kwargs=None, mx_basis='pp'):

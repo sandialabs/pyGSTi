@@ -87,6 +87,28 @@ class ErrorgenPropTester(BaseCase):
         error_propagator.propagate_errorgens(empty_circuit, include_spam=True)
         error_propagator.propagate_errorgens(empty_circuit, include_spam=False)
 
+    def test_errorgen_transform_map(self):
+        error_propagator = ErrorGeneratorPropagator(self.error_model.copy())
+        errorgen_input_output_map = error_propagator.errorgen_transform_map(self.circuit, include_spam=True)
+
+        assert errorgen_input_output_map[(_LSE('H', (stim.PauliString("+___X"),)), 1)] == (_LSE('H', (stim.PauliString("+__ZY"),)), 1.0)
+        assert errorgen_input_output_map[(_LSE('S', (stim.PauliString("+X___"),)), 2)] == (_LSE('S', (stim.PauliString("+Z___"),)),  1.0)
+        assert errorgen_input_output_map[(_LSE('H', (stim.PauliString("+X___"),)), 3)] == (_LSE('H', (stim.PauliString("+Z___"),)), -1.0)
+
+    def test_errorgen_gate_contributors(self):
+        error_propagator = ErrorGeneratorPropagator(self.error_model.copy())
+        test_1 = error_propagator.errorgen_gate_contributors(LocalElementaryErrorgenLabel('H', ['XIII']), self.circuit, 1, include_spam=True) 
+        assert test_1 == [Label(('Gypi2', 0))]
+    
+        test_2 = error_propagator.errorgen_gate_contributors(LocalElementaryErrorgenLabel('H', ['IYII']), self.circuit, 2, include_spam=False) 
+        assert test_2 == [Label(('Gypi2', 1))]
+
+        test_3 = error_propagator.errorgen_gate_contributors(LocalElementaryErrorgenLabel('H', ['IIIX']), self.circuit, 3, include_spam=True) 
+        assert test_3 == [Label(('Gxpi2', 3))]
+
+        test_4 = error_propagator.errorgen_gate_contributors(LocalElementaryErrorgenLabel('H', ['IIYX']), self.circuit, 4, include_spam=True) 
+        assert test_4 == [Label(('Gcphase', 2, 3))]
+
 class LocalStimErrorgenLabelTester(BaseCase):
     def setUp(self):
         self.local_eel = LocalElementaryErrorgenLabel('C', ['XX', 'YY'])

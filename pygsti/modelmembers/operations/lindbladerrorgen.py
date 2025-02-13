@@ -471,7 +471,6 @@ class LindbladErrorgen(_LinearOperator):
                 blk = _LindbladCoefficientBlock(blk_type, basis, bels, param_mode=blk_param_mode)
                 blk.set_elementary_errorgens(relevant_eegs, truncate=truncate)
                 blocks.append(blk)
-        print(blocks)
         return cls(blocks, basis, mx_basis, evotype, state_space)
 
     def __init__(self, lindblad_coefficient_blocks, elementary_errorgen_basis='auto', mx_basis='pp',
@@ -561,12 +560,6 @@ class LindbladErrorgen(_LinearOperator):
             blk.create_lindblad_term_superoperators(self.matrix_basis, sparse_bases, include_1norms=True, flat=True)
             for blk in lindblad_coefficient_blocks]
 
-        #print(f'{lindblad_coefficient_blocks=}')
-        #print(f'{len(self.lindblad_term_superops_and_1norms)=}')
-        #print(f'{self.lindblad_term_superops_and_1norms=}')
-
-        #for (Lterm_superops, _) in self.lindblad_term_superops_and_1norms:
-        #    print(Lterm_superops.shape) 
         #combine all of the linblad term superoperators across the blocks to a single concatenated tensor.
         self.combined_lindblad_term_superops = _np.concatenate([Lterm_superops for (Lterm_superops, _) in 
                                                                 self.lindblad_term_superops_and_1norms], axis=0)
@@ -1565,7 +1558,6 @@ class LindbladParameterization(_NicelySerializable):
             parameterization = "CPTPLND"
         else:
             parameterization = '+'.join(paramtypes)
-            print(f'{parameterization=}')
         return cls.cast(parameterization)
 
     @classmethod
