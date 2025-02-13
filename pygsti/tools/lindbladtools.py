@@ -271,7 +271,7 @@ def create_elementary_errorgen(typ, p, q=None, sparse=False):
     -------
     ndarray or Scipy CSR matrix
     """
-    d = p.shape[0] 
+    d = p.shape[0]
     d2 = d**2
     if sparse:
         elem_errgen = _sps.lil_matrix((d2, d2), dtype=p.dtype)
@@ -330,6 +330,7 @@ def create_elementary_errorgen(typ, p, q=None, sparse=False):
                 elem_errgen[:, d*i+j] = rho1.flatten()[:, None] if sparse else rho1.flatten()
 
     if sparse: elem_errgen = elem_errgen.tocsr()
+
     return elem_errgen
 
 #TODO: Should be able to leverage the structure of the paulis as generalized permutation
@@ -496,9 +497,12 @@ def create_lindbladian_term_errorgen(typ, Lm, Ln=None, sparse=False):  # noqa N8
         elif typ == 'O':
             rho1 = Ln @ rho0 @ Lm_dag - 0.5 * (Lmdag_Ln @ rho0 + rho0 @ Lmdag_Ln)
         else: raise ValueError("Invalid lindblad term errogen type!")
-        lind_errgen[:, i] = rho1.flatten()[:, None] if sparse else rho1.flatten()
+        lind_errgen[:, i] = rho1.ravel()
+        # ^ That line used to branch based on the value of sparse, but both branches
+        #   produced the same result.
 
-    if sparse: lind_errgen = lind_errgen.tocsr()
+    if sparse:
+        lind_errgen = lind_errgen.tocsr()
     return lind_errgen
 
 

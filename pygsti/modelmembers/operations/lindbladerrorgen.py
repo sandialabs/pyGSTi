@@ -474,6 +474,33 @@ class LindbladErrorgen(_LinearOperator):
 
     def __init__(self, lindblad_coefficient_blocks, elementary_errorgen_basis='auto', mx_basis='pp',
                  evotype="default", state_space=None):
+        
+        """
+        Initialize a LindbladErrorgen object.
+
+        Parameters
+        ----------
+        lindblad_coefficient_blocks : list of LindbladCoefficientBlock
+            A list of Lindblad coefficient blocks that define the error generator.
+
+        lindblad_basis : {'auto', 'PP', 'std', 'gm', 'qt'} or Basis object, optional
+            The basis used for Lindblad terms. If 'auto', the basis is inferred from the coefficient blocks.
+            Default is 'auto'.
+
+        mx_basis : {'std', 'gm', 'pp', 'qt'} or Basis object, optional
+            The basis for this error generator's linear mapping. Default is 'pp'.
+
+        evotype : {"default", "densitymx", "svterm", "cterm"}, optional
+            The evolution type of the error generator being constructed. Default is "default".
+
+        state_space : StateSpace, optional
+            The state space for the error generator. Default is None.
+
+        Raises
+        ------
+        ValueError
+            If the provided evotype does not support any of the required representations for a LindbladErrorgen.
+        """
 
         if isinstance(lindblad_coefficient_blocks, dict):  # backward compat warning
             _warnings.warn(("You're trying to create a LindbladErrorgen object using a dictionary.  This"
@@ -482,10 +509,10 @@ class LindbladErrorgen(_LinearOperator):
                             " a LindbladErrorgen.from_elementary_errorgens(...) instead."))
 
         state_space = _statespace.StateSpace.cast(state_space)
-
+        dim = state_space.dim  # Store superop dimension
         #Decide on our rep-type ahead of time so we know whether to make bases sparse
         # (a LindbladErrorgen with a sparse rep => sparse bases and similar with dense rep)
-        evotype = _Evotype.cast(evotype)
+        evotype = _Evotype.cast(evotype, state_space=state_space)
         reptype_preferences = ('lindblad errorgen', 'dense superop', 'sparse superop') \
             if evotype.prefer_dense_reps else ('lindblad errorgen', 'sparse superop', 'dense superop')
         for reptype in reptype_preferences:
@@ -493,7 +520,7 @@ class LindbladErrorgen(_LinearOperator):
                 self._rep_type = reptype; break
         else:
             raise ValueError("Evotype doesn't support any of the representations a LindbladErrorgen requires.")
-        sparse_bases = bool(self._rep_type == 'sparse superop')  # we use sparse bases iff we have a sparse rep
+        sparse_bases = bool(self._rep_type == 'sparse superop')  # we use sparse bases iff we have a sparse rep        
 
         state_space = _statespace.StateSpace.cast(state_space)
         dim = state_space.dim  # Store superop dimension
@@ -532,6 +559,9 @@ class LindbladErrorgen(_LinearOperator):
             blk.create_lindblad_term_superoperators(self.matrix_basis, sparse_bases, include_1norms=True, flat=True)
             for blk in lindblad_coefficient_blocks]
 
+        #combine all of the linblad term superoperators across the blocks to a single concatenated tensor.
+        self.combined_lindblad_term_superops = _np.concatenate([Lterm_superops for (Lterm_superops, _) in self.lindblad_term_superops_and_1norms], axis=0)
+
         #Create a representation of the type chosen above:
         if self._rep_type == 'lindblad errorgen':
             rep = evotype.create_lindblad_errorgen_rep(lindblad_coefficient_blocks, state_space)
@@ -565,7 +595,6 @@ class LindbladErrorgen(_LinearOperator):
         self._paramlbls = _np.array(list(_itertools.chain.from_iterable(
             [blk.param_labels for blk in self.coefficient_blocks])), dtype=object)
         assert(self._onenorm_upbound is not None)  # _update_rep should set this
-        #Done with __init__(...)
 
     def _init_terms(self, coefficient_blocks, max_polynomial_vars):
 
@@ -651,11 +680,12 @@ class LindbladErrorgen(_LinearOperator):
             # __init__, so we just update the *data* array).
             self._rep.data[:] = data.real
 
-        else:  # dense matrices
-            lnd_error_gen = sum([_np.tensordot(blk.block_data.flat, Lterm_superops, (0, 0)) for blk, (Lterm_superops, _)
-                                 in zip(self.coefficient_blocks, self.lindblad_term_superops_and_1norms)])
-
-            assert(_np.isclose(_np.linalg.norm(lnd_error_gen.imag), 0)), \
+        else:  # dense matrices            
+            comb_blk_datas = _np.concatenate([blk.block_data.ravel() for blk in self.coefficient_blocks])
+            lnd_error_gen = _np.einsum('i,ijk->jk', comb_blk_datas, self.combined_lindblad_term_superops)
+            
+            #This test has been previously commented out in the sparse case, should we do the same for this one?
+            assert(_np.linalg.norm(lnd_error_gen.imag)<1e-10), \
                 "Imaginary error gen norm: %g" % _np.linalg.norm(lnd_error_gen.imag)
             self._rep.base[:, :] = lnd_error_gen.real
 
@@ -679,10 +709,10 @@ class LindbladErrorgen(_LinearOperator):
         """
         if self._rep_type == 'lindblad errorgen':
             assert(on_space in ('minimal', 'HilbertSchmidt'))
-            lnd_error_gen = sum([_np.tensordot(blk.block_data.flat, Lterm_superops, (0, 0)) for blk, (Lterm_superops, _)
-                                 in zip(self.coefficient_blocks, self.lindblad_term_superops_and_1norms)])
+            comb_blk_datas = _np.concatenate([blk.block_data.ravel() for blk in self.coefficient_blocks])
+            lnd_error_gen = _np.einsum('i,ijk->jk', comb_blk_datas, self.combined_lindblad_term_superops)
 
-            assert(_np.isclose(_np.linalg.norm(lnd_error_gen.imag), 0)), \
+            assert(_np.linalg.norm(lnd_error_gen.imag)<1e-10), \
                 "Imaginary error gen norm: %g" % _np.linalg.norm(lnd_error_gen.imag)
             return lnd_error_gen.real
 
@@ -755,11 +785,6 @@ class LindbladErrorgen(_LinearOperator):
             Lblocks = self._rep.lindblad_coefficient_blocks
             self._rep.Lterms, self._rep.Lterm_coeffs = self._init_terms(Lblocks, max_polynomial_vars)
         return self._rep.Lterms  # terms with local-index polynomial coefficients
-
-    #def get_direct_order_terms(self, order): # , order_base=None - unused currently b/c order is always 0...
-    #    v = self.to_vector()
-    #    poly_terms = self.get_taylor_order_terms(order)
-    #    return [ term.evaluate_coeff(v) for term in poly_terms ]
 
     @property
     def total_term_magnitude(self):
@@ -1235,6 +1260,11 @@ class LindbladErrorgen(_LinearOperator):
         for those coefficients. Note that weight != rate! These weights are used in conjunction
         with certain penalty factor options available in the construction of objective functions
         for parameters estimation purposes, and are not generally used outside of that setting.
+
+        Parameters
+        ----------
+        weights : dict
+            A dictionary where keys are coefficient labels and values are the corresponding weights to set.
         """
         coeff_labels = self.coefficient_labels()
         ilbl_lookup = {lbl: i for i, lbl in enumerate(coeff_labels)}
@@ -1270,7 +1300,7 @@ class LindbladErrorgen(_LinearOperator):
 
             #conjugate Lindbladian exponent by U:
             err_gen_mx = self.to_sparse() if self._rep_type == 'sparse superop' else self.to_dense()
-            err_gen_mx = _mt.safe_dot(Uinv, _mt.safe_dot(err_gen_mx, U))
+            err_gen_mx = Uinv  @ (err_gen_mx @ U)
             trunc = 1e-6 if isinstance(s, _gaugegroup.UnitaryGaugeGroupElement) else False
             self._set_params_from_matrix(err_gen_mx, truncate=trunc)
             self.dirty = True
@@ -1285,7 +1315,7 @@ class LindbladErrorgen(_LinearOperator):
             raise ValueError("Invalid transform for this LindbladErrorgen: type %s"
                              % str(type(s)))
 
-    
+
     def deriv_wrt_params(self, wrt_filter=None):
         """
         The element-wise derivative this operation.
@@ -1307,8 +1337,6 @@ class LindbladErrorgen(_LinearOperator):
             Array of derivatives, shape == (dimension^2, num_params)
         """
         if self._rep_type == 'sparse superop':
-            #raise NotImplementedError(("LindbladErrorgen.deriv_wrt_params(...) can only be called "
-            #                           "when using *dense* basis elements!"))
             _warnings.warn("Using finite differencing to compute LindbladErrorGen derivative!")
             return super(LindbladErrorgen, self).deriv_wrt_params(wrt_filter)
 
@@ -1423,6 +1451,10 @@ class LindbladErrorgen(_LinearOperator):
         mm_dict['rep_type'] = self._rep_type
         mm_dict['matrix_basis'] = self.matrix_basis.to_nice_serialization()
         mm_dict['coefficient_blocks'] = [blk.to_nice_serialization() for blk in self.coefficient_blocks]
+        #serialize the paramval attribute. Rederiving this from the block data has been leading to sign
+        #ambiguity on deserialization.
+        mm_dict['paramvals'] = self._encodemx(self.paramvals)
+
         return mm_dict
 
     @classmethod
@@ -1432,7 +1464,11 @@ class LindbladErrorgen(_LinearOperator):
         coeff_blocks = [_LindbladCoefficientBlock.from_nice_serialization(blk)
                         for blk in mm_dict['coefficient_blocks']]
 
-        return cls(coeff_blocks, 'auto', mx_basis, mm_dict['evotype'], state_space)
+        ret = cls(coeff_blocks, 'auto', mx_basis, mm_dict['evotype'], state_space)
+        #reinitialize the paramvals attribute from memoized dict. Rederiving this from the block data has 
+        #been leading to sign ambiguity on deserialization.
+        ret.paramvals = ret._decodemx(mm_dict['paramvals'])
+        return ret
 
     def _is_similar(self, other, rtol, atol):
         """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
@@ -1499,7 +1535,7 @@ class LindbladParameterization(_NicelySerializable):
         errs : dict
             Error dictionary with keys as `(termType, basisLabel)` tuples, where
             `termType` can be `"H"` (Hamiltonian), `"S"` (Stochastic), or `"A"`
-            (Affine), and `basisLabel` is a string of I, X, Y, or Z to describe a
+            (Active), and `basisLabel` is a string of I, X, Y, or Z, or to describe a
             Pauli basis element appropriate for the gate (i.e. having the same
             number of letters as there are qubits in the gate).  For example, you
             could specify a 0.01-radian Z-rotation error and 0.05 rate of Pauli-

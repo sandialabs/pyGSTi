@@ -128,12 +128,6 @@ class ModelTest(_proto.Protocol):
         self.circuit_weights = None
         self.unreliable_ops = ('Gcnot', 'Gcphase', 'Gms', 'Gcn', 'Gcx', 'Gcz')
 
-    #def run_using_germs_and_fiducials(self, model, dataset, target_model, prep_fiducials,
-    #                                  meas_fiducials, germs, maxLengths):
-    #    from .gst import StandardGSTDesign as _StandardGSTDesign
-    #    design = _StandardGSTDesign(target_model, prep_fiducials, meas_fiducials, germs, maxLengths)
-    #    return self.run(_proto.ProtocolData(design, dataset))
-
     def run(self, data, memlimit=None, comm=None, checkpoint=None, checkpoint_path=None, disable_checkpointing=False,
             simulator: Optional[ForwardSimulator.Castable]=None):
         """

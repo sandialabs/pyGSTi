@@ -29,6 +29,7 @@ from pygsti.baseobjs.basis import Basis as _Basis, DirectSumBasis as _DirectSumB
 from pygsti.baseobjs.label import Label as _Lbl
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LEEL
 from pygsti.modelmembers.operations.lindbladcoefficients import LindbladCoefficientBlock as _LindbladCoefficientBlock
+from pygsti.models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
 
 
 _CVXPY_AVAILABLE = pkgutil.find_loader('cvxpy') is not None
@@ -121,7 +122,8 @@ def spam_dotprods(rho_vecs, povms):
         for povm in povms:
             for EVec in povm.values():
                 ret[i, j] = _np.vdot(EVec.to_dense(on_space='HilbertSchmidt'),
-                                     rhoVec.to_dense(on_space='HilbertSchmidt')); j += 1
+                                     rhoVec.to_dense(on_space='HilbertSchmidt'))
+                j += 1
                 # to_dense() gives a 1D array, so no need to transpose EVec
     return ret
 
@@ -330,13 +332,6 @@ class CircuitEigenvalues(_modf.ModelFunction):
     # ref for eigenvalue derivatives: https://www.win.tue.nl/casa/meetings/seminar/previous/_abstract051019_files/Presentation.pdf                              # noqa
 
 
-#def circuit_eigenvalues(model, circuit):
-#    return _np.array(sorted(_np.linalg.eigvals(model.sim.product(circuit)),
-#                            key=lambda ev: abs(ev), reverse=True))
-#CircuitEigenvalues = _modf.modelfn_factory(circuit_eigenvalues)
-## init args == (model, circuit)
-
-
 def rel_circuit_eigenvalues(model_a, model_b, circuit):
     """
     Eigenvalues of dot(productB(circuit)^-1, productA(circuit))
@@ -540,13 +535,6 @@ if _CVXPY_AVAILABLE:
             J = JBstd - JAstd
             val = 0.5 * (_np.vdot(J.real, self.W.real) + _np.vdot(J.imag, self.W.imag))
             return val
-
-    #def circuit_half_diamond_norm(model_a, model_b, circuit):
-    #    A = model_a.sim.product(circuit) # "gate"
-    #    B = model_b.sim.product(circuit) # "target gate"
-    #    return half_diamond_norm(A, B, model_b.basis)
-    #CircuitHalfDiamondNorm = _modf.modelfn_factory(circuit_half_diamond_norm)
-    #  # init args == (model_a, model_b, circuit)
 
 else:
     circuit_half_diamond_norm = None
@@ -1203,7 +1191,10 @@ if _CVXPY_AVAILABLE:
 
         def __init__(self, model_a, model_b, oplabel):
             self.oplabel = oplabel
-            self.B = model_b.operations[oplabel].to_dense(on_space='HilbertSchmidt')
+            if isinstance(model_b, _ExplicitOpModel):
+                self.B = model_b.operations[oplabel].to_dense(on_space='HilbertSchmidt')
+            else:
+                self.B = model_b.operation_blks['gates'][oplabel].to_dense(on_space='HilbertSchmidt')
             self.d = int(round(_np.sqrt(model_a.dim)))
             _modf.ModelFunction.__init__(self, model_a, [("gate", oplabel)])
 
@@ -1221,8 +1212,13 @@ if _CVXPY_AVAILABLE:
             float
             """
             gl = self.oplabel
-            dm, W = _tools.diamonddist(model.operations[gl].to_dense(on_space='HilbertSchmidt'),
-                                       self.B, model.basis, return_x=True)
+            if isinstance(model, _ExplicitOpModel):
+                dm, W = _tools.diamonddist(model.operations[gl].to_dense(on_space='HilbertSchmidt'),
+                                           self.B, model.basis, return_x=True)
+            else:
+                dm, W = _tools.diamonddist(model.operation_blks['gates'][gl].to_dense(on_space='HilbertSchmidt'),
+                                           self.B, 'pp', return_x=True)  # HACK - need to get basis from model 'pp' HARDCODED for now
+
             self.W = W
             return 0.5 * dm
 
@@ -1240,7 +1236,11 @@ if _CVXPY_AVAILABLE:
             float
             """
             mxBasis = nearby_model.basis
-            A = nearby_model.operations[self.oplabel].to_dense(on_space='HilbertSchmidt')
+            if isinstance(nearby_model, _ExplicitOpModel):
+                A = nearby_model.operations[self.oplabel].to_dense(on_space='HilbertSchmidt')
+            else:
+                A = nearby_model.operation_blks['gates'][self.oplabel].to_dense(on_space='HilbertSchmidt')
+                mxBasis = 'pp'  # HACK need to set mxBasis based on model but not the full model basis
             JAstd = self.d * _tools.fast_jamiolkowski_iso_std(A, mxBasis)
             JBstd = self.d * _tools.fast_jamiolkowski_iso_std(self.B, mxBasis)
             J = JBstd - JAstd
@@ -1313,7 +1313,7 @@ def eigenvalue_unitarity(a, b):
     Lambda = _np.dot(a, _np.linalg.inv(b))
     d2 = Lambda.shape[0]
     lmb = _np.linalg.eigvals(Lambda)
-    return float(_np.real(_np.vdot(lmb, lmb)) - 1.0) / (d2 - 1.0)
+    return float(_np.real(_np.linalg.norm(lmb)**2) - 1.0) / (d2 - 1.0)
 
 
 def nonunitary_entanglement_infidelity(a, b, mx_basis):
@@ -1778,7 +1778,6 @@ def errorgen_and_projections(errgen, mx_basis):
         'stochastic', and 'affine'.
     """
     ret = {}
-    #egnorm = _np.linalg.norm(errgen.flatten())
     ret['error generator'] = errgen
 
     if set(mx_basis.name.split('*')) == set(['pp']):
@@ -2021,7 +2020,7 @@ def robust_log_gti_and_projections(model_a, model_b, synthetic_idle_circuits):
         for i, gl in enumerate(opLabels):
             for k, errOnGate in enumerate(error_superops):
                 noise = first_order_noise(opstr, errOnGate, gl)
-                jac[:, i * nSuperOps + k] = [_np.vdot(errOut.flatten(), noise.flatten()) for errOut in error_superops]
+                jac[:, i * nSuperOps + k] = [_np.vdot(errOut, noise) for errOut in error_superops]
 
                 # DEBUG CHECK
                 check = []
@@ -2161,10 +2160,11 @@ def general_decomposition(model_a, model_b):
             if gl == gl_other or abs(rotnAngle) < 1e-4 or abs(rotnAngle_other) < 1e-4:
                 decomp[str(gl) + "," + str(gl_other) + " axis angle"] = 10000.0  # sentinel for irrelevant angle
 
-            real_dot = _np.clip(
-                _np.real(_np.dot(decomp[str(gl) + ' axis'].flatten(),
-                                 decomp[str(gl_other) + ' axis'].flatten())),
-                -1.0, 1.0)
+            arg1 = decomp[str(gl) + ' axis']
+            arg2 = decomp[str(gl_other) + ' axis']
+            # ^ assert not (_np.iscomplexobj(arg1) or _np.iscomplexobj(arg2) or arg1.ndim > 1 or arg2.ndim > 1)
+            real_dot = arg1 @ arg2
+            real_dot = _np.clip(real_dot, -1.0, 1.0)
             angle = _np.arccos(real_dot) / _np.pi
             decomp[str(gl) + "," + str(gl_other) + " axis angle"] = angle
 

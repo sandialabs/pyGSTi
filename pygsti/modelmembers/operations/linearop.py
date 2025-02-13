@@ -128,28 +128,6 @@ class LinearOperator(_modelmember.ModelMember):
         """
         pass
 
-    #def rep_at_time(self, t):
-    #    """
-    #    Retrieves a representation of this operator at time `t`.
-    #
-    #    This is operationally equivalent to calling `self.set_time(t)` and
-    #    then retrieving `self._rep`.  However, what is returned from this function
-    #    need not be the same rep object for different times, allowing the
-    #    operator object to cache many reps for different times to increase performance
-    #    (this avoids having to initialize the same rep at a given time).
-    #
-    #    Parameters
-    #    ----------
-    #    t : float
-    #        The time.
-    #
-    #    Returns
-    #    -------
-    #    object
-    #    """
-    #    self.set_time(t)
-    #    return self._rep
-
     def to_dense(self, on_space='minimal'):
         """
         Return this operation as a dense matrix.
@@ -483,12 +461,14 @@ class LinearOperator(_modelmember.ModelMember):
         numpy.ndarray
             A 1D-array of size equal to that of the flattened operation matrix.
         """
-        if transform is None and inv_transform is None:
-            return _ot.residuals(self.to_dense(on_space='minimal'), other_op.to_dense(on_space='minimal'))
+        dense_self = self.to_dense(on_space='minimal')
+        if transform is not None:
+            assert inv_transform is not None
+            dense_self = inv_transform @ (dense_self @ transform)
         else:
-            return _ot.residuals(_np.dot(
-                inv_transform, _np.dot(self.to_dense(on_space='minimal'), transform)),
-                other_op.to_dense(on_space='minimal'))
+            assert inv_transform is None
+        return (dense_self - other_op.to_dense(on_space='minimal')).ravel()
+
 
     def jtracedist(self, other_op, transform=None, inv_transform=None):
         """

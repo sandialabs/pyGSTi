@@ -143,11 +143,6 @@ class WildcardBudget(_NicelySerializable):
         """
         raise NotImplementedError("Derived classes must implement `description`")
 
-    #def compute_circuit_wildcard_budget(c, w_vec):
-    #    #raise NotImplementedError("TODO!!!")
-    #    #for now, assume w_vec is a length-1 vector
-    #    return abs(w_vec[0]) * len(c)
-
     def precompute_for_same_circuits(self, circuits):
         """
         Compute a pre-computed quantity for speeding up circuit calculations.

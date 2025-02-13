@@ -87,7 +87,7 @@ class LindbladToolsTester(BaseCase):
             dot_mx = np.empty((len(duals), len(primals)), complex)
             for i, dual in enumerate(duals):
                 for j, primal in enumerate(primals):
-                    dot_mx[i,j] = np.vdot(dual.flatten(), primal.flatten())
+                    dot_mx[i,j] = np.vdot(dual, primal)
 
             self.assertTrue(np.allclose(dot_mx, np.identity(len(lbls), 'd')))
 

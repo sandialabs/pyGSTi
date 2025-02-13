@@ -549,6 +549,24 @@ class Circuit(object):
 
         return self
     
+    #pickle management functions
+    def __getstate__(self):
+        state_dict = self.__dict__
+        #if state_dict.get('_hash', None) is not None:
+        #    del state_dict['_hash'] #don't store the hash, recompute at unpickling time
+        return state_dict
+
+    def __setstate__(self, state_dict):
+        for k, v in state_dict.items():
+            self.__dict__[k] = v
+        if self.__dict__['_static']:
+            #reinitialize the hash
+            if self.__dict__.get('_hashable_tup', None) is not None:
+                self._hash = hash(self._hashable_tup)
+            else: #legacy support
+                self._hashable_tup = self.tup
+                self._hash = hash(self._hashable_tup)
+
 
     def to_label(self, nreps=1):
         """
@@ -636,7 +654,6 @@ class Circuit(object):
         if self._static:
             return self._labels
         else:
-            #return tuple([to_label(layer_lbl) for layer_lbl in self._labels])
             return tuple([layer_lbl if isinstance(layer_lbl, _Label) 
                           else _Label(layer_lbl) for layer_lbl in self._labels])
     @property
@@ -1095,13 +1112,12 @@ class Circuit(object):
     def _proc_key_arg(self, key):
         """ Pre-process the key argument used by many methods """
         if isinstance(key, tuple):
-            if len(key) != 2: return IndexError("Index must be of the form <layerIndex>,<lineIndex>")
-            layers = key[0]
-            lines = key[1]
+            if len(key) != 2: 
+                return IndexError("Index must be of the form <layerIndex>,<lineIndex>")
+            else:
+                return key[0], key[1]
         else:
-            layers = key
-            lines = None
-        return layers, lines
+            return key, None
 
     def _layer_components(self, ilayer):
         """ Get the components of the `ilayer`-th layer as a list/tuple. """
@@ -1191,22 +1207,41 @@ class Circuit(object):
             `layers` is a single integer and as a `Circuit` otherwise.
             Note: if you want a `Circuit` when only selecting one layer,
             set `layers` to a slice or tuple containing just a single index.
+            Note that the returned circuit doesn't retain any original
+            metadata, such as the compilable layer indices or occurence id.
         """
         nonint_layers = not isinstance(layers, int)
 
         #Shortcut for common case when lines == None and when we're only taking a layer slice/index
-        if lines is None:
-            assert(layers is not None)
-            if nonint_layers is False: return self.layertup[layers]
-            if isinstance(layers, slice) and strict is True:  # if strict=False, then need to recompute line labels
-                return Circuit._fastinit(self._labels[layers], self._line_labels, not self._static)
+        if lines is None and layers is not None:
+            if self._static:
+                if not nonint_layers:
+                    return self._labels[layers]
+                if isinstance(layers, slice) and strict is True:  # if strict=False, then need to recompute line labels
+                    #can speed this up a measurably by manually computing the new hashable tuple value and hash
+                    if not self._line_labels in (('*',), ()):
+                        new_hashable_tup = self._labels[layers] + ('@',) + self._line_labels
+                    else:
+                        new_hashable_tup = self._labels[layers]
+                    ret = Circuit.__new__(Circuit)
+                    return ret._copy_init(self._labels[layers], self._line_labels, not self._static, hashable_tup= new_hashable_tup, precomp_hash=hash(new_hashable_tup))
+            else:
+                if not nonint_layers:
+                    return self.layertup[layers]
+                if isinstance(layers, slice) and strict is True:  # if strict=False, then need to recompute line labels
+                    return Circuit._fastinit(self._labels[layers], self._line_labels, not self._static)
+        #otherwise assert both are not None:
+
 
         layers = self._proc_layers_arg(layers)
         lines = self._proc_lines_arg(lines)
         if len(layers) == 0 or len(lines) == 0:
-            return Circuit._fastinit(() if self._static else [],
-                                     tuple(lines) if self._static else lines,
-                                     not self._static) if nonint_layers else None  # zero-area region
+            if self._static:
+                return Circuit._fastinit((), tuple(lines), False)  # zero-area region
+            else:
+                return Circuit._fastinit(() if self._static else [],
+                                        tuple(lines) if self._static else lines,
+                                        not self._static)  # zero-area region
 
         ret = []
         if self._static:
@@ -2632,7 +2667,6 @@ class Circuit(object):
                 layers = layers[:i] + c._labels + layers[i + 1:]
         return Circuit._fastinit(layers, self._line_labels, editable=False, occurrence=self._occurrence_id)
 
-
     def change_gate_library(self, compilation, allowed_filter=None, allow_unchanged_gates=False, depth_compression=True,
                             one_q_gate_relations=None):
         """
@@ -3521,7 +3555,6 @@ class Circuit(object):
 
         return sum([cnt(layer_lbl) for layer_lbl in self._labels])
     
-
     def _togrid(self, identity_name):
         """ return a list-of-lists rep? """
         d = self.num_layers
@@ -4312,6 +4345,9 @@ class Circuit(object):
             # Include a delay instruction
             openqasm += 'opaque delay(t) q;\n\n'
 
+        # Add a template for ECR commands that we will replace/remove later
+        openqasm += "ECRPLACEHOLDER"
+
         openqasm += 'qreg q[{0}];\n'.format(str(num_qubits))
         # openqasm += 'creg cr[{0}];\n'.format(str(num_qubits))
         openqasm += 'creg cr[{0}];\n'.format(str(num_qubits + num_IMs))
@@ -4411,6 +4447,13 @@ class Circuit(object):
             # openqasm += "measure q[{0}] -> cr[{1}];\n".format(str(qubit_conversion[q]), str(qubit_conversion[q]))
             openqasm += "measure q[{0}] -> cr[{1}];\n".format(str(qubit_conversion[q]),
                                                               str(num_IMs_used + qubit_conversion[q]))
+        
+        # Replace ECR placeholder
+        ecr_replace_str = ""
+        if 'ecr' in openqasm:
+            ecr_replace_str = "gate rzx(param0) q0,q1 { h q1; cx q0,q1; rz(param0) q1; cx q0,q1; h q1; }\n"
+            ecr_replace_str += "gate ecr q0,q1 { rzx(pi/4) q0,q1; x q0; rzx(-pi/4) q0,q1; }\n\n"
+        openqasm = openqasm.replace("ECRPLACEHOLDER", ecr_replace_str)
 
         return openqasm
     
@@ -4482,107 +4525,6 @@ class Circuit(object):
                                   else _Label(layer_lbl) for layer_lbl in self._labels])
         self._hashable_tup = self.tup
         self._hash = hash(self._hashable_tup)
-
-    def expand_instruments_and_separate_povm(self, model, observed_outcomes=None):
-        """
-        Creates a dictionary of :class:`SeparatePOVMCircuit` objects from expanding the instruments of this circuit.
-
-        Each key of the returned dictionary replaces the instruments in this circuit with a selection
-        of their members.  (The size of the resulting dictionary is the product of the sizes of
-        each instrument appearing in this circuit when `observed_outcomes is None`).  Keys are stored
-        as :class:`SeparatePOVMCircuit` objects so it's easy to keep track of which POVM outcomes (effects)
-        correspond to observed data.  This function is, for the most part, used internally to process
-        a circuit before computing its outcome probabilities.
-
-        Parameters
-        ----------
-        model : Model
-            The model used to provide necessary details regarding the expansion, including:
-
-            - default SPAM layers
-            - definitions of instrument-containing layers
-            - expansions of individual instruments and POVMs
-
-        Returns
-        -------
-        OrderedDict
-            A dict whose keys are :class:`SeparatePOVMCircuit` objects and whose
-            values are tuples of the outcome labels corresponding to this circuit,
-            one per POVM effect held in the key.
-        """
-        complete_circuit = model.complete_circuit(self)
-        expanded_circuit_outcomes = _collections.OrderedDict()
-        povm_lbl = complete_circuit[-1]  # "complete" circuits always end with a POVM label
-        circuit_without_povm = complete_circuit[0:len(complete_circuit) - 1]
-
-        def create_tree(lst):
-            subs = _collections.OrderedDict()
-            for el in lst:
-                if len(el) > 0:
-                    if el[0] not in subs: subs[el[0]] = []
-                    subs[el[0]].append(el[1:])
-            return _collections.OrderedDict([(k, create_tree(sub_lst)) for k, sub_lst in subs.items()])
-
-        def add_expanded_circuit_outcomes(circuit, running_outcomes, ootree, start):
-            """
-            """
-            cir = circuit if start == 0 else circuit[start:]  # for performance, avoid uneeded slicing
-            for k, layer_label in enumerate(cir, start=start):
-                components = layer_label.components
-                #instrument_inds = _np.nonzero([model._is_primitive_instrument_layer_lbl(component)
-                #                               for component in components])[0]  # SLOWER than statement below
-                instrument_inds = _np.array([i for i, component in enumerate(components)
-                                             if model._is_primitive_instrument_layer_lbl(component)])
-                if instrument_inds.size > 0:
-                    # This layer contains at least one instrument => recurse with instrument(s) replaced with
-                    #  all combinations of their members.
-                    component_lookup = {i: comp for i, comp in enumerate(components)}
-                    instrument_members = [model._member_labels_for_instrument(components[i])
-                                          for i in instrument_inds]  # also components of outcome labels
-                    for selected_instrmt_members in _itertools.product(*instrument_members):
-                        expanded_layer_lbl = component_lookup.copy()
-                        expanded_layer_lbl.update({i: components[i] + "_" + sel
-                                                   for i, sel in zip(instrument_inds, selected_instrmt_members)})
-                        expanded_layer_lbl = _Label([expanded_layer_lbl[i] for i in range(len(components))])
-
-                        if ootree is not None:
-                            new_ootree = ootree
-                            for sel in selected_instrmt_members:
-                                new_ootree = new_ootree.get(sel, {})
-                            if len(new_ootree) == 0: continue  # no observed outcomes along this outcome-tree path
-                        else:
-                            new_ootree = None
-
-                        add_expanded_circuit_outcomes(circuit[0:k] + Circuit((expanded_layer_lbl,)) + circuit[k + 1:],
-                                                      running_outcomes + selected_instrmt_members, new_ootree, k + 1)
-                    break
-
-            else:  # no more instruments to process: `cir` contains no instruments => add an expanded circuit
-                assert(circuit not in expanded_circuit_outcomes)  # shouldn't be possible to generate duplicates...
-                elabels = model._effect_labels_for_povm(povm_lbl) if (observed_outcomes is None) \
-                    else tuple(ootree.keys())
-                outcomes = tuple((running_outcomes + (elabel,) for elabel in elabels))
-                expanded_circuit_outcomes[SeparatePOVMCircuit(circuit, povm_lbl, elabels)] = outcomes
-
-        ootree = create_tree(observed_outcomes) if observed_outcomes is not None else None  # tree of observed outcomes
-        # e.g. [('0','00'), ('0','01'), ('1','10')] ==> {'0': {'00': {}, '01': {}}, '1': {'10': {}}}
-
-        if model._has_instruments():
-            add_expanded_circuit_outcomes(circuit_without_povm, (), ootree, start=0)
-        else:
-            # It may be helpful to cache the set of elabels for a POVM (maybe within the model?) because
-            # currently the call to _effect_labels_for_povm may be a bottleneck.  It's needed, even when we have
-            # observed outcomes, because there may be some observed outcomes that aren't modeled (e.g. leakage states)
-            if observed_outcomes is None:
-                elabels = model._effect_labels_for_povm(povm_lbl)
-            else:
-                possible_lbls = set(model._effect_labels_for_povm(povm_lbl))
-                elabels = tuple([oo for oo in ootree.keys() if oo in possible_lbls])
-            outcomes = tuple(((elabel,) for elabel in elabels))
-            expanded_circuit_outcomes[SeparatePOVMCircuit(circuit_without_povm, povm_lbl, elabels)] = outcomes
-
-        return expanded_circuit_outcomes
-
 
 class CompressedCircuit(object):
     """

@@ -34,12 +34,14 @@ IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 def _flat_mut_blks(i, j, block_dims):
     # like _mut(i,j,dim).flatten() but works with basis *blocks*
     N = sum(block_dims)
-    mx = _np.zeros((N, N), 'd'); mx[i, j] = 1.0
+    mx = _np.zeros((N, N), 'd')
+    mx[i, j] = 1.0
     ret = _np.zeros(sum([d**2 for d in block_dims]), 'd')
     i = 0; off = 0
     for d in block_dims:
-        ret[i:i + d**2] = mx[off:off + d, off:off + d].flatten()
-        i += d**2; off += d
+        ret[i:i + d**2] = mx[off:off + d, off:off + d].ravel()
+        i += d**2
+        off += d
     return ret
 
 
@@ -219,26 +221,6 @@ def frobeniusdist_squared(a, b):
         The resulting frobenius distance.
     """
     return frobeniusdist(a, b)**2
-
-
-def residuals(a, b):
-    """
-    Calculate residuals between the elements of two matrices
-
-    Parameters
-    ----------
-    a : numpy array
-        First matrix.
-
-    b : numpy array
-        Second matrix.
-
-    Returns
-    -------
-    np.array
-        residuals
-    """
-    return (a - b).flatten()
 
 
 def tracenorm(a):
@@ -987,6 +969,64 @@ def povm_diamonddist(model, target_model, povmlbl):
     target_povm_mx = compute_povm_map(target_model, povmlbl)
     return diamonddist(povm_mx, target_povm_mx, target_model.basis)
 
+def instrument_infidelity(a, b, mx_basis):
+    """
+    Infidelity between instruments a and b
+
+    Parameters
+    ----------
+    a : Instrument
+        The first instrument.
+
+    b : Instrument
+        The second instrument.
+
+    mx_basis : Basis or {'pp', 'gm', 'std'}
+        the basis that `a` and `b` are in.
+
+    Returns
+    -------
+    float
+    """
+    sqrt_component_fidelities = [_np.sqrt(entanglement_fidelity(a[l], b[l], mx_basis))
+                                 for l in a.keys()]
+    return 1 - sum(sqrt_component_fidelities)**2
+
+
+def instrument_diamonddist(a, b, mx_basis):
+    """
+    The diamond distance between instruments a and b.
+
+    Parameters
+    ----------
+    a : Instrument
+        The first instrument.
+
+    b : Instrument
+        The second instrument.
+
+    mx_basis : Basis or {'pp', 'gm', 'std'}
+        the basis that `a` and `b` are in.
+
+    Returns
+    -------
+    float
+    """
+    #Turn instrument into a CPTP map on qubit + classical space.
+    adim = a.state_space.dim
+    mx_basis = _Basis.cast(mx_basis, dim=adim)
+    nComps = len(a.keys())
+    sumbasis = _DirectSumBasis([mx_basis] * nComps)
+    composite_op = _np.zeros((adim * nComps, adim * nComps), 'd')
+    composite_top = _np.zeros((adim * nComps, adim * nComps), 'd')
+    for i, clbl in enumerate(a.keys()):
+        aa, bb = i * adim, (i + 1) * adim
+        for j in range(nComps):
+            cc, dd = j * adim, (j + 1) * adim
+            composite_op[aa:bb, cc:dd] = a[clbl].to_dense(on_space='HilbertSchmidt')
+            composite_top[aa:bb, cc:dd] = b[clbl].to_dense(on_space='HilbertSchmidt')
+    return diamonddist(composite_op, composite_top, sumbasis)
+
 
 #decompose operation matrix into axis of rotation, etc
 def decompose_gate_matrix(operation_mx):
@@ -1181,8 +1221,8 @@ def state_to_dmvec(psi):
         The vectorized density matrix.
     """
     psi = psi.reshape((psi.size, 1))  # convert to (N,1) shape if necessary
-    dm = _np.dot(psi, _np.conjugate(psi.T))
-    return dm.flatten()
+    dm = psi @ psi.conj().T
+    return dm.ravel()
 
 
 def dmvec_to_state(dmvec, tol=1e-6):
@@ -1696,7 +1736,7 @@ def extract_elementary_errorgen_coefficients(errorgen, elementary_errorgen_label
                                          errorgen_basis.create_simple_equivalent('std'))
     else:
         errorgen_std = _bt.change_basis(errorgen, errorgen_basis, "std")
-    flat_errorgen_std = errorgen_std.toarray().flatten() if _sps.issparse(errorgen_std) else errorgen_std.flatten()
+    flat_errorgen_std = errorgen_std.toarray().ravel() if _sps.issparse(errorgen_std) else errorgen_std.ravel()
 
     d2 = errorgen_std.shape[0]
     d = int(_np.sqrt(d2))
@@ -1712,8 +1752,9 @@ def extract_elementary_errorgen_coefficients(errorgen, elementary_errorgen_label
         bel_lbls = key.basis_element_labels
         bmx0 = elementary_errorgen_basis[bel_lbls[0]]
         bmx1 = elementary_errorgen_basis[bel_lbls[1]] if (len(bel_lbls) > 1) else None
-        flat_projector = _lt.create_elementary_errorgen_dual(key.errorgen_type, bmx0, bmx1, sparse=False).flatten()
+        flat_projector = _lt.create_elementary_errorgen_dual(key.errorgen_type, bmx0, bmx1, sparse=False).ravel()
         projections[key] = _np.real_if_close(_np.vdot(flat_projector, flat_errorgen_std), tol=1000).item()
+
         if return_projected_errorgen:
             space_projector[:, i] = flat_projector
 
@@ -1792,7 +1833,7 @@ def project_errorgen(errorgen, elementary_errorgen_type, elementary_errorgen_bas
                                          errorgen_basis.create_simple_equivalent('std'))
     else:
         errorgen_std = _bt.change_basis(errorgen, errorgen_basis, "std")
-    flat_errorgen_std = errorgen_std.toarray().flatten() if _sps.issparse(errorgen_std) else errorgen_std.flatten()
+    flat_errorgen_std = errorgen_std.toarray().ravel() if _sps.issparse(errorgen_std) else errorgen_std.ravel()
 
     d2 = errorgen_std.shape[0]
     d = int(_np.sqrt(d2))
@@ -1806,7 +1847,7 @@ def project_errorgen(errorgen, elementary_errorgen_type, elementary_errorgen_bas
         space_projector = _np.empty((d2 * d2, len(projectors)), complex)
 
     for i, (lbl, projector) in enumerate(projectors.items()):
-        flat_projector = projector.flatten()
+        flat_projector = projector.ravel()
         proj = _np.real_if_close(_np.vdot(flat_projector, flat_errorgen_std), tol=1000)
         if return_projected_errorgen:
             space_projector[:, i] = flat_projector

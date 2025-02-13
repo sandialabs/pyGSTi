@@ -64,7 +64,7 @@ class ComposedErrorgen(_LinearOperator):
 
         if evotype == "auto":
             evotype = errgens_to_compose[0]._evotype
-        evotype = _Evotype.cast(evotype)
+        evotype = _Evotype.cast(evotype, state_space=state_space)
         assert(all([evotype == eg._evotype for eg in errgens_to_compose])), \
             "All error generators must have the same evolution type (%s expected)!" % evotype
 
