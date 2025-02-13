@@ -1,4 +1,5 @@
 from ..util import BaseCase
+from pygsti.circuits import Circuit
 from pygsti.algorithms.randomcircuit import create_random_circuit
 from pygsti.errorgenpropagation.errorpropagator import ErrorGeneratorPropagator
 from pygsti.processors import QubitProcessorSpec
@@ -22,7 +23,7 @@ class ErrorgenPropTester(BaseCase):
         pspec = QubitProcessorSpec(num_qubits, gate_names, availability=availability)
         self.target_model = create_crosstalk_free_model(processor_spec = pspec)
         self.circuit = create_random_circuit(pspec, 4, sampler='edgegrab', samplerargs=[0.4,], rand_state=12345)
-
+        self.circuit_length_1 = create_random_circuit(pspec, 1, sampler='edgegrab', samplerargs=[0.4,], rand_state=12345)
         typ = 'H'
         max_stochastic = {'S': .0005, 'H': 0, 'H+S': .0001}
         max_hamiltonian = {'S': 0, 'H': .00005, 'H+S': .0001}
@@ -78,7 +79,13 @@ class ErrorgenPropTester(BaseCase):
         eoc_error_channel_exact = noisy_channel_exact@ideal_channel.conj().T  
 
         assert np.linalg.norm(eoc_error_channel - eoc_error_channel_exact) < 1e-10
-        
+    
+    def test_propagation_length_zero_one(self):
+        error_propagator = ErrorGeneratorPropagator(self.error_model.copy())
+        empty_circuit = Circuit([], line_labels=(0,1,2,3))
+        error_propagator.propagate_errorgens(self.circuit_length_1)
+        error_propagator.propagate_errorgens(empty_circuit, include_spam=True)
+        error_propagator.propagate_errorgens(empty_circuit, include_spam=False)
 
 class LocalStimErrorgenLabelTester(BaseCase):
     def setUp(self):
