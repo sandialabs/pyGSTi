@@ -83,7 +83,8 @@ extras = {
         'notebook',
         'ipython',
         'jupyter_server',
-        'torch'
+        'torch',
+        'stim'
     ]
 }
 
@@ -276,7 +277,8 @@ def setup_with_extensions(extensions=None):
             'scipy',
             'plotly',
             'pandas',
-            'networkx'
+            'networkx',
+            'stim'
         ],
         extras_require=extras,
         python_requires='>=3.8',
