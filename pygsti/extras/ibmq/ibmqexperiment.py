@@ -306,7 +306,8 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
                 labeled_counts = to_labeled_counts(batch_result[i].data.cr.get_counts(), ordered_target_indices, num_qubits_in_pspec)
                 outcome_labels = labeled_counts[0]
                 counts_data = labeled_counts[1]
-                ds.add_count_list(circ, outcome_labels, counts_data)
+                count_dict = {ol:c for ol,c in zip(outcome_labels, counts_data)}
+                ds.add_count_dict(circ, count_dict)
 
 
         self.data = _ProtocolData(self.edesign, ds)
