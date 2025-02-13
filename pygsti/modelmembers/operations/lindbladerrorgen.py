@@ -465,11 +465,13 @@ class LindbladErrorgen(_LinearOperator):
         blocks = []
         for blk_type, blk_param_mode in zip(parameterization.block_types, parameterization.param_modes):
             relevant_eegs = eegs_by_typ[blk_type]  # KeyError => unrecognized block type!
-            bels = sorted(set(_itertools.chain(*[lbl.basis_element_labels for lbl in relevant_eegs.keys()])))
-            blk = _LindbladCoefficientBlock(blk_type, basis, bels, param_mode=blk_param_mode)
-            blk.set_elementary_errorgens(relevant_eegs, truncate=truncate)
-            blocks.append(blk)
-
+            #only add block type is relevant_eegs is not empty.
+            if relevant_eegs:
+                bels = sorted(set(_itertools.chain(*[lbl.basis_element_labels for lbl in relevant_eegs.keys()])))
+                blk = _LindbladCoefficientBlock(blk_type, basis, bels, param_mode=blk_param_mode)
+                blk.set_elementary_errorgens(relevant_eegs, truncate=truncate)
+                blocks.append(blk)
+        print(blocks)
         return cls(blocks, basis, mx_basis, evotype, state_space)
 
     def __init__(self, lindblad_coefficient_blocks, elementary_errorgen_basis='auto', mx_basis='pp',
@@ -559,8 +561,15 @@ class LindbladErrorgen(_LinearOperator):
             blk.create_lindblad_term_superoperators(self.matrix_basis, sparse_bases, include_1norms=True, flat=True)
             for blk in lindblad_coefficient_blocks]
 
+        #print(f'{lindblad_coefficient_blocks=}')
+        #print(f'{len(self.lindblad_term_superops_and_1norms)=}')
+        #print(f'{self.lindblad_term_superops_and_1norms=}')
+
+        #for (Lterm_superops, _) in self.lindblad_term_superops_and_1norms:
+        #    print(Lterm_superops.shape) 
         #combine all of the linblad term superoperators across the blocks to a single concatenated tensor.
-        self.combined_lindblad_term_superops = _np.concatenate([Lterm_superops for (Lterm_superops, _) in self.lindblad_term_superops_and_1norms], axis=0)
+        self.combined_lindblad_term_superops = _np.concatenate([Lterm_superops for (Lterm_superops, _) in 
+                                                                self.lindblad_term_superops_and_1norms], axis=0)
 
         #Create a representation of the type chosen above:
         if self._rep_type == 'lindblad errorgen':
@@ -1556,6 +1565,7 @@ class LindbladParameterization(_NicelySerializable):
             parameterization = "CPTPLND"
         else:
             parameterization = '+'.join(paramtypes)
+            print(f'{parameterization=}')
         return cls.cast(parameterization)
 
     @classmethod
