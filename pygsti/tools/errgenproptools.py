@@ -6944,7 +6944,7 @@ def alpha_pauli(errorgen, tableau, pauli):
         if pauli_bel_0_comm is not None:
             sign = -1j*pauli_bel_0_comm[0]
             expectation  = sim.peek_observable_expectation(pauli_bel_0_comm[1])
-            return sign*expectation
+            return _np.real_if_close(sign*expectation)
         else: 
             return 0 
     elif errgen_type == 'S':
@@ -6952,7 +6952,7 @@ def alpha_pauli(errorgen, tableau, pauli):
             return 0
         else:
             expectation  = sim.peek_observable_expectation(pauli)
-            return -2*expectation
+            return _np.real_if_close(-2*expectation)
     elif errgen_type == 'C': 
         A = basis_element_labels[0]
         B = basis_element_labels[1]
@@ -6967,7 +6967,7 @@ def alpha_pauli(errorgen, tableau, pauli):
                 else:
                     ABP = pauli_product(A*B, pauli)
                     expectation = ABP[0]*sim.peek_observable_expectation(ABP[1])
-                    return -4*expectation
+                    return _np.real_if_close(-4*expectation)
         else: #{A,B} = 0
             if com_AP:
                 if com_BP:
@@ -6975,12 +6975,12 @@ def alpha_pauli(errorgen, tableau, pauli):
                 else:
                     ABP = pauli_product(A*B, pauli)
                     expectation = ABP[0]*sim.peek_observable_expectation(ABP[1])
-                    return -2*expectation
+                    return _np.real_if_close(-2*expectation)
             else:
                 if com_BP:
                     ABP = pauli_product(A*B, pauli)
                     expectation = ABP[0]*sim.peek_observable_expectation(ABP[1])
-                    return 2*expectation
+                    return _np.real_if_close(2*expectation)
                 else:
                     return 0
     else: #A
@@ -6995,12 +6995,12 @@ def alpha_pauli(errorgen, tableau, pauli):
                 else:
                     ABP = pauli_product(A*B, pauli)
                     expectation = ABP[0]*sim.peek_observable_expectation(ABP[1])
-                    return 1j*2*expectation
+                    return _np.real_if_close(1j*2*expectation)
             else:
                 if com_BP:
                     ABP = pauli_product(A*B, pauli)
                     expectation = ABP[0]*sim.peek_observable_expectation(ABP[1])
-                    return -1j*2*expectation
+                    return _np.real_if_close(-1j*2*expectation)
                 else:
                     return 0
         else: #{A,B} = 0
@@ -7012,7 +7012,7 @@ def alpha_pauli(errorgen, tableau, pauli):
                 else:
                     ABP = pauli_product(A*B, pauli)
                     expectation = ABP[0]*sim.peek_observable_expectation(ABP[1])
-                    return 1j*4*expectation
+                    return _np.real_if_close(1j*4*expectation)
 
 def alpha_pauli_numerical(errorgen, tableau, pauli):
     """
@@ -7181,6 +7181,8 @@ def stabilizer_pauli_expectation_correction(errorgen_dict, tableau, pauli, order
     
     for i, (lbl, rate) in enumerate(errorgen_dict.items()):
         if abs(rate) > truncation_threshold:
+            #print(f'{alpha_pauli(lbl, tableau, pauli)=}')
+            #print(f'{alpha_pauli_numerical(lbl, tableau, pauli)=}')
             alpha_errgen_prods[i] = alpha_pauli(lbl, tableau, pauli)*rate
     correction = _np.sum(alpha_errgen_prods)
     if order > 1:

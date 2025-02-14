@@ -125,7 +125,7 @@ def change_basis(mx, from_basis, to_basis, expect_real=True):
     Parameters
     ----------
     mx : numpy array
-        The operation matrix (a 2D square array) in the `from_basis` basis.
+        The operation matrix (a 2D square array or 1D vector) in the `from_basis` basis.
 
     from_basis: {'std', 'gm', 'pp', 'qt'} or Basis object
         The source basis.  Allowed values are Matrix-unit (std), Gell-Mann (gm),
