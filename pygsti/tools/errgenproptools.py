@@ -6460,7 +6460,7 @@ def pairwise_bch_numerical(mat1, mat2, order=1):
 def _matrix_commutator(mat1, mat2):
     return mat1@mat2 - mat2@mat1
 
-#-----------First-Order Approximate Error Generator Probabilities---------------#
+#-----------First-Order Approximate Error Generator Probabilities and Expectation Values---------------#
 
 def random_support(tableau, return_support=False):
     """ 
@@ -6912,6 +6912,155 @@ def alpha_numerical(errorgen, tableau, desired_bitstring):
     
     return alpha
 
+def alpha_pauli(errorgen, tableau, pauli):
+    """
+    First-order error generator sensitivity function for pauli expectations.
+    
+    Parameters
+    ----------
+    errorgen : `ElementaryErrorgenLabel`
+        Error generator label for which to calculate sensitivity.
+    
+    tableau : stim.Tableau
+        Stim Tableau corresponding to the stabilizer state to calculate the sensitivity for.
+        
+    pauli : stim.PauliString
+        Pauli to calculate the sensitivity for.
+    """
+    
+    sim = stim.TableauSimulator()
+    sim.set_inverse_tableau(tableau**-1)
+    
+    errgen_type = errorgen.errorgen_type
+    basis_element_labels = errorgen.basis_element_labels
+    
+    if not isinstance(basis_element_labels[0], stim.PauliString):
+        basis_element_labels = tuple([stim.PauliString(lbl) for lbl in basis_element_labels])
+    
+    identity_pauli = stim.PauliString('I'*len(basis_element_labels[0]))
+    
+    if errgen_type == 'H':
+        pauli_bel_0_comm = com(pauli, basis_element_labels[0])
+        if pauli_bel_0_comm is not None:
+            sign = -1j*pauli_bel_0_comm[0]
+            expectation  = sim.peek_observable_expectation(pauli_bel_0_comm[1])
+            return sign*expectation
+        else: 
+            return 0 
+    elif errgen_type == 'S':
+        if pauli.commutes(basis_element_labels[0]):
+            return 0
+        else:
+            expectation  = sim.peek_observable_expectation(pauli)
+            return -2*expectation
+    elif errgen_type == 'C': 
+        A = basis_element_labels[0]
+        B = basis_element_labels[1]
+        com_AP = A.commutes(pauli)
+        com_BP = B.commutes(pauli) #TODO: can skip computing this in some cases for minor performance boost.
+        if A.commutes(B):
+            if com_AP:
+                return 0
+            else:
+                if com_BP:
+                    return 0
+                else:
+                    ABP = pauli_product(A*B, pauli)
+                    expectation = ABP[0]*sim.peek_observable_expectation(ABP[1])
+                    return -4*expectation
+        else: #{A,B} = 0
+            if com_AP:
+                if com_BP:
+                    return 0
+                else:
+                    ABP = pauli_product(A*B, pauli)
+                    expectation = ABP[0]*sim.peek_observable_expectation(ABP[1])
+                    return -2*expectation
+            else:
+                if com_BP:
+                    ABP = pauli_product(A*B, pauli)
+                    expectation = ABP[0]*sim.peek_observable_expectation(ABP[1])
+                    return 2*expectation
+                else:
+                    return 0
+    else: #A
+        A = basis_element_labels[0]
+        B = basis_element_labels[1]
+        com_AP = A.commutes(pauli)
+        com_BP = B.commutes(pauli) #TODO: can skip computing this in some cases for minor performance boost.
+        if A.commutes(B):
+            if com_AP:
+                if com_BP:
+                    return 0
+                else:
+                    ABP = pauli_product(A*B, pauli)
+                    expectation = ABP[0]*sim.peek_observable_expectation(ABP[1])
+                    return 1j*2*expectation
+            else:
+                if com_BP:
+                    ABP = pauli_product(A*B, pauli)
+                    expectation = ABP[0]*sim.peek_observable_expectation(ABP[1])
+                    return -1j*2*expectation
+                else:
+                    return 0
+        else: #{A,B} = 0
+            if com_AP:
+                return 0
+            else:
+                if com_BP:
+                    return 0
+                else:
+                    ABP = pauli_product(A*B, pauli)
+                    expectation = ABP[0]*sim.peek_observable_expectation(ABP[1])
+                    return 1j*4*expectation
+
+def alpha_pauli_numerical(errorgen, tableau, pauli):
+    """
+    First-order error generator sensitivity function for pauli expectatons. This implementation calculates
+    this quantity numerically, and as such is primarily intended for used as parting of testing
+    infrastructure. 
+    
+    Parameters
+    ----------
+    errorgen : `ElementaryErrorgenLabel`
+        Error generator label for which to calculate sensitivity.
+    
+    tableau : stim.Tableau
+        Stim Tableau corresponding to the stabilizer state to calculate the sensitivity for.
+        
+    pauli : stim.PauliString
+        Pauli to calculate the sensitivity for.
+    """
+    
+    #get the stabilizer state corresponding to the tableau.
+    stabilizer_state = tableau.to_state_vector(endian='big')
+    stabilizer_state_dmvec = state_to_dmvec(stabilizer_state)
+    stabilizer_state_dmvec.reshape((len(stabilizer_state_dmvec),1))
+    #also get the superoperator (in the standard basis) corresponding to the elementary error generator
+    if isinstance(errorgen, _LSE):
+        local_eel = errorgen.to_local_eel()
+    elif isinstance(errorgen, _GEEL):
+        local_eel = _LEEL.cast(errorgen)
+    else:
+        local_eel = errorgen
+    
+    errgen_type = local_eel.errorgen_type
+    basis_element_labels = local_eel.basis_element_labels
+    basis_1q = _BuiltinBasis('PP', 4)
+    errorgen_superop = create_elementary_errorgen_nqudit(errgen_type, basis_element_labels, basis_1q, normalize=False, sparse=False,
+                                                         tensorprod_basis=False)
+    
+    #finally need the superoperator for the selected pauli.
+    pauli_unitary = pauli.to_unitary_matrix(endian='big')
+    #flatten this row-wise
+    pauli_vec = _np.ravel(pauli_unitary)
+    pauli_vec.reshape((len(pauli_vec),1))
+    
+    #compute the needed trace inner product.
+    alpha = _np.real_if_close(pauli_vec.conj().T@errorgen_superop@stabilizer_state_dmvec).item()
+    
+    return alpha
+
 def _bitstring_to_int(bitstring) -> int:
     if isinstance(bitstring, str):
         # If the input is a string, convert it directly
@@ -6992,6 +7141,75 @@ def stabilizer_probability_correction(errorgen_dict, tableau, desired_bitstring,
 
     return correction
 
+#TODO: The implementations for the pauli expectation value correction and probability correction
+#are basically identical modulo some additional scale factors and the alpha function used. Should be able to combine
+#the implementations into one function.
+def stabilizer_pauli_expectation_correction(errorgen_dict, tableau, pauli, order = 1, truncation_threshold = 1e-14):
+    """
+    Compute the kth-order correction to the expectation value of the specified pauli.
+    
+    Parameters
+    ----------
+    errorgen_dict : dict
+        Dictionary whose keys are `LocalStimErrorgenLabel` and whose values are corresponding
+        rates.
+    
+    tableau : stim.Tableau
+        Stim tableau corresponding to a particular stabilizer state being measured.
+        
+    pauli : stim.PauliString
+        Pauli operator to compute expectation value correction for.
+
+    order : int, optional (default 1)
+        Order of the correction (i.e. order of the taylor series expansion for
+        the exponentiated error generator) to compute.
+    
+    truncation_threshold : float, optional (default 1e-14)
+        Optional threshold used to truncate corrections whose corresponding rates
+        are below this value.
+
+    Returns
+    -------
+    correction : float
+        float corresponding to the correction to the expectation value for the
+        selected pauli operator induced by the error generator (to specified order).
+    """
+    
+    #do the first order correction separately since it doesn't require composition logic:
+    #now get the sum over the alphas and the error generator rate products needed.
+    alpha_errgen_prods = _np.zeros(len(errorgen_dict))
+    
+    for i, (lbl, rate) in enumerate(errorgen_dict.items()):
+        if abs(rate) > truncation_threshold:
+            alpha_errgen_prods[i] = alpha_pauli(lbl, tableau, pauli)*rate
+    correction = _np.sum(alpha_errgen_prods)
+    if order > 1:
+        #The order of the approximation determines the combinations of error generators
+        #which need to be composed. (given by cartesian products of labels in errorgen_dict).
+        labels_by_order = [list(product(errorgen_dict.keys(), repeat = i+1)) for i in range(1,order)]
+        #Get a similar structure for the corresponding rates
+        rates_by_order = [list(product(errorgen_dict.values(), repeat = i+1)) for i in range(1,order)]
+        for current_order, (current_order_labels, current_order_rates) in enumerate(zip(labels_by_order, rates_by_order), start=2):
+            current_order_scale = 1/factorial(current_order)
+            composition_results = []
+            for label_tup, rate_tup in zip(current_order_labels, current_order_rates):
+                composition_results.extend(iterative_error_generator_composition(label_tup, rate_tup))
+            #aggregate together any overlapping terms in composition_results
+            composition_results_dict = dict()
+            for lbl, rate in composition_results:
+                if composition_results_dict.get(lbl,None) is None:
+                    composition_results_dict[lbl] = rate
+                else:
+                    composition_results_dict[lbl] += rate
+            alpha_errgen_prods = _np.zeros(len(composition_results_dict))
+            for i, (lbl, rate) in enumerate(composition_results_dict.items()):
+                if current_order_scale*abs(rate) > truncation_threshold:
+                    sensitivity = alpha_pauli(lbl, tableau, pauli)
+                    alpha_errgen_prods[i] = _np.real_if_close(sensitivity*rate)
+            correction += current_order_scale*_np.sum(alpha_errgen_prods)
+
+    return correction
+
 
 def iterative_error_generator_composition(errorgen_labels, rates):
     """
@@ -7068,6 +7286,35 @@ def stabilizer_probability(tableau, desired_bitstring):
     #compute what Gidney calls the tableau fidelity (which in this case gives the probability).
     return tableau_fidelity(tableau, bitstring_to_tableau(desired_bitstring))
 
+def stabilizer_pauli_expectation(tableau, pauli):
+    """
+    Calculate the output probability for the specifed output bitstring.
+      
+    Parameters
+    ----------
+    tableau : stim.Tableau
+        Stim tableau for the stabilizer state being measured.
+        
+    pauli : stim.PauliString
+        Pauli operator to compute expectation value for.
+    
+    Returns
+    -------
+    expected_value : float
+        Expectation value of specified pauli
+    """
+    if pauli.sign != 1:
+        pauli_sign = pauli.sign
+        unsigned_pauli = pauli/pauli_sign  
+    else:
+        pauli_sign = 1
+        unsigned_pauli = pauli
+        
+    sim = stim.TableauSimulator()
+    sim.set_inverse_tableau(tableau**-1)
+    expectation  = pauli_sign*sim.peek_observable_expectation(unsigned_pauli)
+    return expectation
+
 def approximate_stabilizer_probability(errorgen_dict, circuit, desired_bitstring, order=1, truncation_threshold=1e-14):
     """
     Calculate the approximate probability of a desired bit string using a first-order approximation.
@@ -7114,6 +7361,53 @@ def approximate_stabilizer_probability(errorgen_dict, circuit, desired_bitstring
     ideal_prob = stabilizer_probability(tableau, desired_bitstring)
     correction = stabilizer_probability_correction(errorgen_dict, tableau, desired_bitstring, order, truncation_threshold)
     return ideal_prob + correction
+
+def approximate_stabilizer_pauli_expectation(errorgen_dict, circuit, pauli, order=1, truncation_threshold=1e-14):
+    """
+    Calculate the approximate probability of a desired bit string using a first-order approximation.
+    
+    Parameters
+    ----------
+    errorgen_dict : dict
+        Dictionary whose keys are `ElementaryErrorgenLabel` and whose values are corresponding
+        rates.
+    
+    circuit : `Circuit` or `stim.Tableau`
+        A pygsti `Circuit` or a stim.Tableau to compute the output probability for. In either
+        case this should be a Clifford circuit and convertable to a stim.Tableau.
+        
+    pauli : stim.PauliString
+        Pauli operator to compute expectation value for.
+    
+    order : int, optional (default 1)
+        Order of the correction (i.e. order of the taylor series expansion for
+        the exponentiated error generator) to compute.
+    
+    truncation_threshold : float, optional (default 1e-14)
+        Optional threshold used to truncate corrections whose corresponding error generator rates
+        are below this value. (Used internally in computation of probability corrections)
+    
+    Returns
+    -------
+    p : float
+        Approximate output probability for desired bitstring.
+    """
+    
+    if isinstance(circuit, _Circuit):
+        tableau = circuit.convert_to_stim_tableau()
+    elif isinstance(circuit, stim.Tableau):
+        tableau = circuit
+    else:
+        raise ValueError('`circuit` should either be a pygsti `Circuit` or a stim.Tableau.')
+
+    #recast keys to local stim ones if needed.
+    first_lbl = next(iter(errorgen_dict))
+    if isinstance(first_lbl, (_GEEL, _LEEL)):
+        errorgen_dict = {_LSE.cast(lbl):val for lbl,val in errorgen_dict.items()}
+
+    ideal_expectation = stabilizer_pauli_expectation(tableau, pauli)
+    correction = stabilizer_pauli_expectation_correction(errorgen_dict, tableau, pauli, order, truncation_threshold)
+    return ideal_expectation + correction
 
 def approximate_stabilizer_probabilities(errorgen_dict, circuit, order=1, truncation_threshold=1e-14):
     """
