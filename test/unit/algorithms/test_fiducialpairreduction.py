@@ -41,12 +41,12 @@ class FiducialPairReductionStdData(object):
         Circuit([Label('Gxpi2',0), Label('Gxpi2',0), Label('Gypi2',0)], line_labels=(0,)): [(0, 0), (0, 1), (0, 2), (1, 0), (1, 1)]}
 
         # And the macos-latest shifted to the M1 chips and we have another set of difference
-        self.fiducial_pairs_per_germ_alt_mac = {Circuit([("Gxpi2", 0)]): [(0, 0), (0, 1), (5, 2)],
+        self.fiducial_pairs_per_germ_random_alt_mac = {Circuit([("Gxpi2", 0)]): [(0, 0), (0, 1), (5, 2)],
         Circuit([("Gypi2", 0)]): [(2, 3), (5, 1), (5, 2)],
         Circuit([("Gxpi2", 0), ("Gypi2", 0)]): [(0, 2), (0, 4), (0, 5), (2, 5), (5, 2)],
         Circuit([("Gxpi2", 0), ("Gxpi2", 0), ("Gypi2", 0)]): [(2, 0), (2, 5), (3, 4), (4, 4), (4, 5)]}
 
-        self.fiducial_pairs_per_germ_random_alt_mac = {Circuit([("Gxpi2", 0)]): [(0, 0), (0, 1), (2, 2)],
+        self.fiducial_pairs_per_germ_alt_mac = {Circuit([("Gxpi2", 0)]): [(0, 0), (0, 1), (2, 2)],
         Circuit([("Gypi2", 0)]): [(0, 0), (0, 1), (0, 2)],
         Circuit([("Gxpi2", 0), ("Gypi2", 0)]): [(0, 0), (0, 1), (0, 2), (0, 3), (0, 4)],
         Circuit([("Gxpi2", 0), ("Gxpi2", 0), ("Gypi2", 0)]): [(0, 0), (0, 1), (0, 2), (1, 0), (1, 1)]}
@@ -61,7 +61,7 @@ class FindSufficientFiducialPairsBase(object):
             search_mode='sequential', minimum_pairs=4,
             test_lengths = (64, 512), tol = .5
         )
-        print(fiducial_pairs)
+
         self.assertTrue(fiducial_pairs == self.fiducial_pairs_global)
 
     def test_find_sufficient_fiducial_pairs_random(self):
