@@ -7238,32 +7238,89 @@ def iterative_error_generator_composition(errorgen_labels, rates):
     if len(errorgen_labels) == 1:
         return [(errorgen_labels[0], rates[0])]
     else:
-        labels_to_process = [errorgen_labels]
-        rates_to_process = [rates]
+        label_tuples_to_process = [errorgen_labels]
+        rate_tuples_to_process = [rates]
     
-    fully_processed_labels = []
-    
-    while labels_to_process:
-        new_labels_to_process = []
-        new_rates_to_process = []
-        #loop through the labels to process
-        for label_tup, rate_tup in zip(labels_to_process, rates_to_process):
+    fully_processed_label_rate_tuples = []    
+    while label_tuples_to_process:
+        new_label_tuples_to_process = []
+        new_rate_tuples_to_process = []
+
+        for label_tup, rate_tup in zip(label_tuples_to_process, rate_tuples_to_process):
             #grab the last two elements of each of these and do the composition.
             new_labels_and_rates = error_generator_composition(label_tup[-2], label_tup[-1], rate_tup[-2]*rate_tup[-1])
-            for new_label_rate_tup in new_labels_and_rates:
-                new_label_tup = label_tup[:-2] + (new_label_rate_tup[0],)
-                new_rate_tup = rate_tup[:-2] + (new_label_rate_tup[1],)
 
-                if len(new_label_tup) == 1:
-                    fully_processed_labels.append(new_label_rate_tup)
+            #if the new labels and rates sum to zero overall then we can kill this branch of the tree.
+            aggregated_labels_and_rates_dict = dict()
+            for lbl, rate in new_labels_and_rates:
+                if aggregated_labels_and_rates_dict.get(lbl, None) is None:
+                    aggregated_labels_and_rates_dict[lbl] = rate
                 else:
-                    new_labels_to_process.append(new_label_tup)
-                    new_rates_to_process.append(new_rate_tup)
-        
-        labels_to_process = new_labels_to_process
-        rates_to_process = new_rates_to_process    
+                    aggregated_labels_and_rates_dict[lbl] += rate
+            if all([abs(val)<1e-15 for val in aggregated_labels_and_rates_dict.values()]):
+                continue
+
+            label_tup_remainder = label_tup[:-2]
+            rate_tup_remainder = rate_tup[:-2]
+            if label_tup_remainder:
+                for new_label, new_rate in aggregated_labels_and_rates_dict.items():
+                    new_label_tup = label_tup_remainder + (new_label,)
+                    new_rate_tup = rate_tup_remainder + (new_rate,)
+                    new_label_tuples_to_process.append(new_label_tup)
+                    new_rate_tuples_to_process.append(new_rate_tup)
+            else:
+                for new_label_rate_tup in aggregated_labels_and_rates_dict.items():
+                    fully_processed_label_rate_tuples.append(new_label_rate_tup)
+        label_tuples_to_process = new_label_tuples_to_process
+        rate_tuples_to_process = new_rate_tuples_to_process  
     
-    return fully_processed_labels
+    return fully_processed_label_rate_tuples
+
+def iterative_error_generator_composition_numeric(errorgen_labels, rates, errorgen_matrix_dict=None, num_qubits=None):
+    """
+    Iteratively compute error generator compositions. The function computes a dense representation of this composition
+    numerically and is primarily intended as part of testing infrastructure.
+    
+    Parameters
+    ----------
+    errorgen_labels : tuple of `LocalStimErrorgenLabel`
+        A tuple of the elementary error generator labels to be composed.
+    
+    rates : tuple of float
+        A tuple of corresponding error generator rates of the same length as the tuple
+        of error generator labels.
+        
+    errorgen_matrix_dict : dict, optional (default None)
+        An optional dictionary mapping `ElementaryErrorgenLabel`s to numpy arrays for their dense representation.
+        If not specified this will be constructed from scratch each call, so specifying this can provide a performance
+        benefit.
+
+    num_qubits : int, optional (default None)
+        Number of qubits for the error generator commutator being computed. Only required if `errorgen_matrix_dict` is None.
+
+    Returns
+    -------
+    numpy.ndarray
+        Dense numpy array representation of the super operator corresponding to the iterated composition written in 
+        the standard basis.
+    """
+    
+    if errorgen_matrix_dict is None:
+        #create an error generator basis.
+        errorgen_basis = _CompleteElementaryErrorgenBasis('PP', _QubitSpace(num_qubits), default_label_type='local')
+        
+        #use this basis to construct a dictionary from error generator labels to their
+        #matrices.
+        errorgen_lbls = errorgen_basis.labels
+        errorgen_matrix_dict = {lbl: mat for lbl, mat in zip(errorgen_lbls, errorgen_basis.elemgen_matrices)}
+
+    composition = errorgen_matrix_dict[errorgen_labels[0]]
+    for lbl in errorgen_labels[1:]:
+        composition = composition@errorgen_matrix_dict[lbl]
+    composition *= _np.prod(rates)
+    return composition
+        
+
 
 def stabilizer_probability(tableau, desired_bitstring):
     """

@@ -1,15 +1,17 @@
 from ..util import BaseCase
 from pygsti.circuits import Circuit
-from pygsti.algorithms.randomcircuit import create_random_circuit
+from pygsti.algorithms.randomcircuit import create_random_circuit, find_all_sets_of_compatible_two_q_gates
 from pygsti.errorgenpropagation.errorpropagator import ErrorGeneratorPropagator
 from pygsti.processors import QubitProcessorSpec
-from pygsti.models.modelconstruction import create_crosstalk_free_model
-from pygsti.baseobjs import Label, BuiltinBasis, QubitSpace, CompleteElementaryErrorgenBasis
+from pygsti.models.modelconstruction import create_crosstalk_free_model, create_cloud_crosstalk_model
+from pygsti.baseobjs import Label, BuiltinBasis, QubitSpace, CompleteElementaryErrorgenBasis, QubitGraph
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel, LocalElementaryErrorgenLabel
 from pygsti.tools import errgenproptools as _eprop
 from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE
 from pygsti.tools.matrixtools import print_mx
 from itertools import product
+from math import floor
+from pygsti.modelpacks import smq2Q_XYCPHASE
 import numpy as np
 import stim
 
@@ -108,6 +110,37 @@ class ErrorgenPropTester(BaseCase):
 
         test_4 = error_propagator.errorgen_gate_contributors(LocalElementaryErrorgenLabel('H', ['IIYX']), self.circuit, 4, include_spam=True) 
         assert test_4 == [Label(('Gcphase', 2, 3))]
+
+    def test_explicit_model(self):
+        
+        target_model = smq2Q_XYCPHASE.target_model('full TP')
+        noisy_model = target_model.copy()
+        noisy_model = noisy_model.rotate(max_rotate = .01)
+        noisy_model.set_all_parameterizations('GLND')
+        errorgen_propagator = ErrorGeneratorPropagator(noisy_model)
+        circuit_2Q = list(smq2Q_XYCPHASE.create_gst_experiment_design(4).all_circuits_needing_data)[-1]
+
+        #make sure that the various methods don't die.
+        propagated_errorgens = errorgen_propagator.propagate_errorgens(circuit_2Q)
+        gate_contributors = errorgen_propagator.errorgen_gate_contributors(LocalElementaryErrorgenLabel('H', ['XI']), circuit_2Q, 1, include_spam=True) 
+
+    def test_cloud_crosstalk_model(self):
+        oq=['Gxpi2','Gypi2','Gzpi2']
+        qbts=4
+        gate_names=oq+['Gcphase']
+        max_strengths = {1: {'S': 10**(-3), 'H': 10**(-2)},
+                        2: {'S': (1/6)*10**(-2), 'H': 2*10**(-3)}
+                        }
+
+        #Build circuit models
+        qubit_labels =range(qbts)
+        gate_names = ['Gxpi2','Gzpi2','Gcphase','Gypi2']
+        ps = QubitProcessorSpec(qbts, gate_names,availability= {'Gcphase':[(i,(i+1)%qbts) for i in range(qbts)]} , qubit_labels=qubit_labels)
+        lindblad_error_coeffs=sample_error_rates_cloud_crosstalk(max_strengths,4,gate_names)
+        mdl_cloudnoise = create_cloud_crosstalk_model(ps, lindblad_error_coeffs=lindblad_error_coeffs, errcomp_type="errorgens")
+        errorgen_prop=ErrorGeneratorPropagator(mdl_cloudnoise)
+        propagated_errorgens = errorgen_prop.propagate_errorgens(self.circuit)
+        gate_contributors = errorgen_prop.errorgen_gate_contributors(LocalElementaryErrorgenLabel('H', ['IZZI']), self.circuit, 1, include_spam=True) 
 
 class LocalStimErrorgenLabelTester(BaseCase):
     def setUp(self):
@@ -257,4 +290,61 @@ def error_generator_commutator_numerical(errorgen_1, errorgen_2, errorgen_matrix
     return errorgen_matrix_dict[errorgen_1]@errorgen_matrix_dict[errorgen_2] - errorgen_matrix_dict[errorgen_2]@errorgen_matrix_dict[errorgen_1]
 
 
+#--------- Cloud crosstalk helper functions---------------------#
+def sample_error_rates_cloud_crosstalk(strengths,qbts, gates):
+    error_rates_dict = {}
+    for gate in gates:
+        if not gate =='Gcphase':
+            for el in range(qbts):
+                stochastic_strength = strengths[1]['S']*np.random.random()
+                hamiltonian_strength = 2*strengths[1]['H']*np.random.random()-strengths[1]['H']        
+                paulis=['X','Y','Z']
+                error_rates_dict[(gate,el)]=dict()
+                for pauli_label in paulis:
+                    if (gate=='Gxpi2' and pauli_label=='X') or (gate=='Gypi2' and pauli_label=='Y') or (gate=='Gzpi2' and pauli_label=='Z'):
+                        error_rates_dict[(gate,el)].update({('H', pauli_label+':'+str(el)):hamiltonian_strength})
+                        error_rates_dict[(gate,el)].update({('S', pauli_label+':'+str(el)): stochastic_strength})
+                    else:
+                        error_rates_dict[(gate,el)].update({('H', pauli_label+':'+str(el)):0.0})
+                        error_rates_dict[(gate,el)].update({('S', pauli_label+':'+str(el)): 0.0})
+        else:
+            for qbt in range(qbts):
+                
+                gate_lbl=('Gcphase',qbt,(qbt+1)%4)
+                error_rates_dict[gate_lbl]=dict()
+                for qbt1 in range(qbts):
+                    for qbt2 in range(qbts):
+                        if qbt1 < qbt2:
+                            hamiltonian_strength = 2*strengths[2]['H']*np.random.random()-strengths[2]['H']
+                            for pauli in two_qbt_pauli_str():
+                                if pauli =='ZZ':
+                                    error_rates_dict[gate_lbl].update({('H',pauli+':'+str(qbt1)+','+str(qbt2)):hamiltonian_strength})
+                                else:
+                                    error_rates_dict[gate_lbl].update({('H',pauli+':'+str(qbt1)+','+str(qbt2)):0.0})
+                
+                for qbt1 in range(qbts):
+                    hamiltonian_strength = 2*strengths[2]['H']*np.random.random()-strengths[2]['H']
+                    for pauli in ['X','Y','Z']:
+                        if pauli=='Z':
+                            error_rates_dict[gate_lbl].update({('H',pauli+':'+str(qbt1)):hamiltonian_strength})
+                        else:
+                            error_rates_dict[gate_lbl].update({('H',pauli+':'+str(qbt1)):0.0})
 
+
+                stochastic_strength = strengths[2]['S']*np.random.random()
+                error_rates_dict[gate_lbl].update({('S', 'ZZ:'+str(gate_lbl[1])+','+str(gate_lbl[2])): stochastic_strength})
+                stochastic_strength = strengths[2]['S']*np.random.random()
+                error_rates_dict[gate_lbl].update({('S', 'Z:'+str(gate_lbl[1])): stochastic_strength})
+                stochastic_strength = strengths[2]['S']*np.random.random()
+                error_rates_dict[gate_lbl].update({('S', 'Z:'+str(gate_lbl[2])): stochastic_strength})
+
+    return error_rates_dict
+
+def two_qbt_pauli_str():
+    paulis=['I','X','Y','Z']
+    pauli_strs=[]
+    for p1 in paulis:
+        for p2 in paulis:
+            pauli_strs.append(p1+p2)
+    pauli_strs.remove('II')
+    return pauli_strs

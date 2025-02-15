@@ -8,6 +8,7 @@ from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as LEEL
 from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE
 from pygsti.tools import errgenproptools as _eprop
 from pygsti.tools.matrixtools import print_mx
+from pygsti.tools.basistools import change_basis
 from ..util import BaseCase
 from itertools import product
 import random
@@ -162,9 +163,8 @@ class ErrgenCompositionCommutationTester(BaseCase):
                        (_LSE('S', [stim.PauliString('YY')]), _LSE('H', [stim.PauliString('IX')]), _LSE('H', [stim.PauliString('XI')]))]
         rates = [(1,1,1), (1,1,1), (1,1,1)]
     
-        correct_iterative_compositions = [[(_LSE('H', (stim.PauliString("+X"),)), (-2-0j)), (_LSE('H', (stim.PauliString("+X"),)), -2)],
-                                          [(_LSE('H', (stim.PauliString("+X_"),)), (-1+0j)), (_LSE('A', (stim.PauliString("+_X"), stim.PauliString("+XX"))), (1+0j)),
-                                           (_LSE('A', (stim.PauliString("+_X"), stim.PauliString("+XX"))), (1+0j)), (_LSE('H', (stim.PauliString("+X_"),)), (-1+0j))],
+        correct_iterative_compositions = [[(_LSE('H', (stim.PauliString("+X"),)), (-4-0j))],
+                                          [(_LSE('H', (stim.PauliString("+X_"),)), (-2+0j)), (_LSE('A', (stim.PauliString("+_X"), stim.PauliString("+XX"))), (2+0j))],
                                           [(_LSE('C', (stim.PauliString("+YZ"), stim.PauliString("+ZY"))), (1+0j)), (_LSE('C', (stim.PauliString("+YY"), stim.PauliString("+ZZ"))), (1+0j)),
                                            (_LSE('C', (stim.PauliString("+_X"), stim.PauliString("+X_"))), -1)]                                          
                                         ]
@@ -172,6 +172,9 @@ class ErrgenCompositionCommutationTester(BaseCase):
         for lbls, rates, correct_lbls in zip(test_labels, rates, correct_iterative_compositions):
             iterated_composition = _eprop.iterative_error_generator_composition(lbls, rates)
             self.assertEqual(iterated_composition, correct_lbls)
+
+        _compare_analytic_numeric_iterative_composition(2)
+        
 
     def test_bch_approximation(self):
         first_order_bch_numerical = _eprop.bch_numerical(self.propagated_errorgen_layers, self.errorgen_propagator, bch_order=1)
@@ -324,6 +327,30 @@ class ApproxStabilizerMethodTester(BaseCase):
                 alpha_num = _eprop.alpha_numerical(lbl, self.circuit_tableau_3Q, bit_string)
                 assert abs(alpha_num - _eprop.alpha(lbl, self.circuit_tableau_3Q, bit_string)) <1e-4
 
+    def test_alpha_pauli(self):
+        from pygsti.modelpacks import smq2Q_XYCPHASE
+        pspec_2Q = smq2Q_XYCPHASE.processor_spec()
+        random_circuits_2Q = [create_random_circuit(pspec_2Q, 4, sampler='edgegrab', samplerargs=[0.4,], rand_state=12345+i) for i in range(5)]
+        random_circuit_tableaus_2Q = [ckt.convert_to_stim_tableau() for ckt in random_circuits_2Q]
+        def _compare_alpha_pauli_analytic_numeric(num_qubits, tableau):
+            #loop through all error generators and all paulis
+            errorgen_basis = CompleteElementaryErrorgenBasis('PP', QubitSpace(num_qubits), default_label_type='local')
+            errorgen_labels = [_LSE.cast(lbl) for lbl in errorgen_basis.labels]
+            pauli_list = list(stim.PauliString.iter_all(num_qubits))
+            for lbl in errorgen_labels:
+                for pauli in pauli_list:
+                    alpha_analytic = _eprop.alpha_pauli(lbl, tableau, pauli)
+                    alpha_numerical = _eprop.alpha_pauli_numerical(lbl, tableau, pauli)
+                    
+                    if abs(alpha_analytic - alpha_numerical)>1e-5:
+                        print(f'{alpha_analytic=}')
+                        print(f'{alpha_numerical=}')
+                        print(f'error generator label: {lbl}')
+                        print(f'pauli: {pauli}')
+                        raise ValueError('Analytic and numerically computed alpha pauli values differ by more than 1e-5')
+        for ckt_tableau in random_circuit_tableaus_2Q:
+            _compare_alpha_pauli_analytic_numeric(2, ckt_tableau)
+
     def test_stabilizer_probability_correction(self):
         #The corrections testing here will just be integration testing, we'll
         #check for correctness with the probability functions instead.
@@ -332,6 +359,15 @@ class ApproxStabilizerMethodTester(BaseCase):
         for bitstring in bitstrings:
             for order in orders:
                 _eprop.stabilizer_probability_correction(self.propagated_errorgen_layer, self.circuit_tableau, bitstring, order)
+
+    def test_stabilizer_pauli_expectation_correction(self):
+        #The corrections testing here will just be integration testing, we'll
+        #check for correctness with the full expecation functions instead.
+        paulis = [stim.PauliString('XXXX'), stim.PauliString('ZIII')]
+        orders = [1,2,3]
+        for pauli in paulis:
+            for order in orders:
+                _eprop.stabilizer_pauli_expectation_correction(self.propagated_errorgen_layer, self.circuit_tableau, pauli, order)
 
     def test_approximate_stabilizer_probability(self):
         exact_prop_probs = probabilities_errorgen_prop(self.error_propagator, self.target_model, 
@@ -370,6 +406,30 @@ class ApproxStabilizerMethodTester(BaseCase):
         tvd_order_2 = np.linalg.norm(exact_prop_probs-approx_stab_prob_vec_order_2, ord=1)
 
         assert tvd_order_1 > tvd_order_2
+
+    def test_approximate_stabilizer_pauli_expectation(self):
+        rng = np.random.default_rng(seed=12345)
+        paulis_4Q = list(stim.PauliString.iter_all(4))
+        #random_4Q_pauli_indices = rng.choice(len(paulis_4Q), 10, replace=False)
+        #random_4Q_paulis = [paulis_4Q[idx] for idx in random_4Q_pauli_indices]
+
+        for pauli in paulis_4Q:#random_4Q_paulis:
+            exact_pauli_expectation = pauli_expectation_errorgen_prop(self.error_propagator, self.target_model, 
+                                                                      self.circuit, pauli, use_bch=True, bch_order=1)
+            first_order_diff  = exact_pauli_expectation - _eprop.approximate_stabilizer_pauli_expectation(self.propagated_errorgen_layer, self.circuit_tableau, pauli, order=1)
+            second_order_diff = exact_pauli_expectation - _eprop.approximate_stabilizer_pauli_expectation(self.propagated_errorgen_layer, self.circuit_tableau, pauli, order=2)
+            third_order_diff  = exact_pauli_expectation - _eprop.approximate_stabilizer_pauli_expectation(self.propagated_errorgen_layer, self.circuit_tableau, pauli, order=3)
+
+            if abs(first_order_diff) < abs(second_order_diff):
+                print(f'{first_order_diff=}')
+                print(f'{second_order_diff=}')
+                print(f'{pauli=}')
+                raise ValueError('Going to higher order made the expectation value worse!')
+            if abs(second_order_diff) < abs(third_order_diff):
+                print(f'{second_order_diff=}')
+                print(f'{third_order_diff=}')
+                print(f'{pauli=}')
+                raise ValueError('Going to higher order made the expectation value worse!')
 
     def test_error_generator_taylor_expansion(self):
         #this is just an integration test atm.
@@ -487,3 +547,82 @@ def probabilities_errorgen_prop(error_propagator, target_model, circuit, use_bch
         dense_prep = ideal_prep.to_dense().copy()
         prob_vec[i] = np.linalg.multi_dot([dense_effect.reshape((1,len(dense_effect))), eoc_channel, ideal_channel, dense_prep.reshape((len(dense_prep),1))])
     return prob_vec
+
+def pauli_expectation_errorgen_prop(error_propagator, target_model, circuit, pauli, use_bch=False, bch_order=1, truncation_threshold=1e-14):
+    #get the eoc error channel, and the process matrix for the ideal circuit:
+    if use_bch:
+        eoc_channel = error_propagator.eoc_error_channel(circuit, include_spam=True, use_bch=use_bch,
+                                                        bch_kwargs={'bch_order':bch_order,
+                                                                    'truncation_threshold':truncation_threshold})
+    else:
+        eoc_channel = error_propagator.eoc_error_channel(circuit, include_spam=True)
+    ideal_channel = target_model.sim.product(circuit)
+    #also get the ideal state prep and povm:
+    ideal_prep = target_model.circuit_layer_operator(Label('rho0'), typ='prep').copy()
+    
+    #finally need the superoperator for the selected pauli.
+    pauli_unitary = pauli.to_unitary_matrix(endian='big')
+    #flatten this row-wise
+    pauli_vec = np.ravel(pauli_unitary)
+    pauli_vec.reshape((len(pauli_vec),1))
+    #put this in pp basis (since these are paulis themselves I could just read this off directly).
+    pauli_vec = change_basis(pauli_vec, 'std', 'pp')
+    #print(pauli_vec)
+    dense_prep = ideal_prep.to_dense().copy()
+    expectation = np.linalg.multi_dot([pauli_vec.reshape((1,len(pauli_vec))), eoc_channel, ideal_channel, dense_prep.reshape((len(dense_prep),1))]).item()
+    return expectation
+
+#helper function for iterative composition testing
+def _compare_analytic_numeric_iterative_composition(num_qubits):
+    #create an error generator basis.
+    complete_errorgen_basis = CompleteElementaryErrorgenBasis('PP', QubitSpace(num_qubits), default_label_type='local')
+    complete_errorgen_lbls = complete_errorgen_basis.labels
+    complete_errorgen_lbl_matrix_dict = {lbl: mat for lbl, mat in zip(complete_errorgen_lbls, complete_errorgen_basis.elemgen_matrices)}
+
+    #loop through all triples.
+    errorgen_label_triples = list(product(complete_errorgen_lbls,repeat=3))
+    
+    #select a random subset of these
+    rng = np.random.default_rng(seed=1234)
+    random_indices = rng.choice(len(errorgen_label_triples), 10000)
+    random_triples = [errorgen_label_triples[idx] for idx in random_indices]
+    
+    #create local stim error gen label versions:
+    random_triples_stim = [(_LSE.cast(a), _LSE.cast(b), _LSE.cast(c)) for a,b,c in random_triples]
+    
+    #for each triple compute the composition directly and compute it analytically (then converting it to
+    #a numeric array) and see how they compare.
+    for i, (triple_1, triple_2) in enumerate(zip(random_triples, random_triples_stim)):
+        numeric_composition = _eprop.iterative_error_generator_composition_numeric(triple_1, (1,1,1), complete_errorgen_lbl_matrix_dict)
+        analytic_composition = _eprop.iterative_error_generator_composition(triple_2, (1,1,1))
+        analytic_composition_dict = dict()
+        for lbl, rate in analytic_composition:
+            local_lbl = lbl.to_local_eel()
+            if analytic_composition_dict.get(local_lbl, None) is None:
+                analytic_composition_dict[local_lbl] = rate
+            else:
+                analytic_composition_dict[local_lbl] += rate
+        analytic_composition = analytic_composition_dict
+        try:
+            analytic_composition_mat = _eprop.errorgen_layer_to_matrix(analytic_composition, num_qubits, errorgen_matrix_dict = complete_errorgen_lbl_matrix_dict)        
+        except KeyError:
+            print(f'{analytic_composition=}')
+        norm_diff = np.linalg.norm(numeric_composition-analytic_composition_mat)
+        if norm_diff > 1e-10:
+            print(f'Difference in compositions for triple {triple_1} is greater than 1e-10.')
+            print(f'{triple_2=}')
+            print(f'Error encountered on iteration {i}')
+            print(f'{np.linalg.norm(numeric_composition-analytic_composition_mat)=}')
+            print('numeric_composition=')
+            print_mx(numeric_composition)
+            
+            #Decompose the numerical composition into rates.
+            for lbl, dual in zip(complete_errorgen_basis.labels, complete_errorgen_basis.elemgen_dual_matrices):
+                rate = np.trace(dual.conj().T@numeric_composition)
+                if abs(rate) >1e-3:
+                    print(f'{lbl}: {rate}')
+            
+            print(f'{analytic_composition=}')
+            print('analytic_composition_mat=')
+            print_mx(analytic_composition_mat)
+            raise ValueError('Numeric and analytic error generator compositions were not found to be identical!')
