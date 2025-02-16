@@ -7287,13 +7287,6 @@ def stabilizer_pauli_expectation_correction(errorgen_dict, tableau, pauli, order
     
     for i, (lbl, rate) in enumerate(errorgen_dict.items()):
         if abs(rate) > truncation_threshold:
-            #print(f'{alpha_pauli(lbl, tableau, pauli)=}')
-            #print(f'{alpha_pauli_numerical(lbl, tableau, pauli)=}')
-            alpha_numerical = alpha_pauli_numerical(lbl, tableau, pauli)
-            alpha_analytical = alpha_pauli(lbl, tableau, pauli)
-            if abs(alpha_numerical-alpha_analytical)>1e-6:
-                print(f'{alpha_pauli(lbl, tableau, pauli)=}')
-                print(f'{alpha_pauli_numerical(lbl, tableau, pauli)=}')
             alpha_errgen_prods[i] = alpha_pauli(lbl, tableau, pauli)*rate
     correction = _np.sum(alpha_errgen_prods)
     if order > 1:
@@ -7317,11 +7310,6 @@ def stabilizer_pauli_expectation_correction(errorgen_dict, tableau, pauli, order
             alpha_errgen_prods = _np.zeros(len(composition_results_dict))
             for i, (lbl, rate) in enumerate(composition_results_dict.items()):
                 if current_order_scale*abs(rate) > truncation_threshold:
-                    alpha_numerical = alpha_pauli_numerical(lbl, tableau, pauli)
-                    alpha_analytical = alpha_pauli(lbl, tableau, pauli)
-                    if abs(alpha_numerical-alpha_analytical)>1e-6:
-                        print(f'{alpha_pauli(lbl, tableau, pauli)=}')
-                        print(f'{alpha_pauli_numerical(lbl, tableau, pauli)=}')
                     sensitivity = alpha_pauli(lbl, tableau, pauli)
                     alpha_errgen_prods[i] = _np.real_if_close(sensitivity*rate)
             correction += current_order_scale*_np.sum(alpha_errgen_prods)
