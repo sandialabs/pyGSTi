@@ -509,7 +509,7 @@ def create_lindbladian_term_errorgen(typ, Lm, Ln=None, sparse=False):  # noqa N8
 def random_error_generator_rates(num_qubits, errorgen_types=('H', 'S', 'C', 'A'), max_weights=None,
                                  H_params=(0.,.01), SCA_params=(0.,.01), error_metric=None, error_metric_value=None, 
                                  relative_HS_contribution=None, fixed_errorgen_rates=None, sslbl_overlap=None, 
-                                 label_type='global', seed = None):
+                                 label_type='global', seed=None, qubit_labels=None):
     """
     Function for generating a random set of CPTP error generator rates.
     
@@ -588,6 +588,10 @@ def random_error_generator_rates(num_qubits, errorgen_types=('H', 'S', 'C', 'A')
 
     seed : int, optional (default None)
         An optional integer used in seeding the RNG.
+
+    qubit_labels : list or int or str, optional (default None)
+        An optional list of qubit labels upon which the error generator should act.
+        Only utilized when returning global labels.
     
     Returns
     -------
@@ -808,7 +812,9 @@ def random_error_generator_rates(num_qubits, errorgen_types=('H', 'S', 'C', 'A')
     if label_type == 'global':
         errorgen_rates_dict = {_GlobalElementaryErrorgenLabel.cast(lbl, sslbls=state_space.state_space_labels): val 
                                for lbl, val in  errorgen_rates_dict.items()}
-
+        if qubit_labels is not None:
+            mapper= {i:lbl for i,lbl in enumerate(qubit_labels)} 
+            errorgen_rates_dict = {lbl.map_state_space_labels(mapper):val for lbl,val in errorgen_rates_dict.items()}
     return errorgen_rates_dict
 
 def _sort_errorgen_labels(errgen_labels):

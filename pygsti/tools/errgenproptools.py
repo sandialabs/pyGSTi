@@ -445,7 +445,7 @@ def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1, truncation_th
 
     for order_dict in new_errorgen_layer:
         for lbl, rate in order_dict.items():
-            new_errorgen_layer_dict[lbl] += rate
+            new_errorgen_layer_dict[lbl] += rate.real
 
     #Future: Possibly do one last truncation pass in case any of the different order cancel out when aggregated?
 
@@ -7316,7 +7316,6 @@ def stabilizer_pauli_expectation_correction(errorgen_dict, tableau, pauli, order
 
     return correction
 
-
 def stabilizer_pauli_expectation_correction_numerical(errorgen_dict, errorgen_propagator, circuit, pauli, order = 1):
     """
     Compute the kth-order correction to the expectation value of the specified pauli.
@@ -7419,7 +7418,7 @@ def stabilizer_pauli_expectation(tableau, pauli):
 
 def approximate_stabilizer_probability(errorgen_dict, circuit, desired_bitstring, order=1, truncation_threshold=1e-14):
     """
-    Calculate the approximate probability of a desired bit string using a first-order approximation.
+    Calculate the approximate probability of a desired bit string using an nth-order taylor series approximation.
     
     Parameters
     ----------
@@ -7478,7 +7477,7 @@ def approximate_stabilizer_pauli_expectation(errorgen_dict, circuit, pauli, orde
         A pygsti `Circuit` or a stim.Tableau to compute the output probability for. In either
         case this should be a Clifford circuit and convertable to a stim.Tableau.
         
-    pauli : stim.PauliString
+    pauli : str or stim.PauliString
         Pauli operator to compute expectation value for.
     
     order : int, optional (default 1)
@@ -7501,6 +7500,9 @@ def approximate_stabilizer_pauli_expectation(errorgen_dict, circuit, pauli, orde
         tableau = circuit
     else:
         raise ValueError('`circuit` should either be a pygsti `Circuit` or a stim.Tableau.')
+
+    if isinstance(pauli, str):
+        pauli = stim.PauliString(pauli)
 
     #recast keys to local stim ones if needed.
     first_lbl = next(iter(errorgen_dict))
