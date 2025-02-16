@@ -27,8 +27,8 @@ jobs:
       python-version: ${{ matrix.python-version }}
       use-cython: 'true' # Only test environment with Cython
       run-unit-tests: 'true'
-      run-extra-tests: 'false' # No integration tests
-      run-notebook-tests: 'false' # No notebook tests 
+      run-extra-tests: 'true' # No integration tests # TEMP: Try integration tests
+      run-notebook-tests: 'true' # No notebook tests # TEMP: Try notebook tests
 
 
 
