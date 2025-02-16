@@ -73,7 +73,7 @@ class ErrorGeneratorPropagator:
             #should return a single dictionary of error generator rates
             propagated_error_generator = self.propagate_errorgens_bch(circuit, **bch_kwargs)
             #convert this to a process matrix
-            return _spl.expm(self.errorgen_layer_dict_to_errorgen(propagated_error_generator, mx_basis='pp', return_dense=True))
+            return _spl.expm(self.errorgen_layer_dict_to_errorgen(propagated_error_generator, mx_basis='pp'))
             
         else:
             propagated_error_generators = self.propagate_errorgens(circuit, include_spam)
@@ -84,7 +84,7 @@ class ErrorGeneratorPropagator:
                 if err_gen_layer: #if not empty.
                     #Keep the error generator in the standard basis until after the end-of-circuit
                     #channel is constructed so we can reduce the overhead of changing basis.
-                    exp_error_generators.append(_spl.expm(self.errorgen_layer_dict_to_errorgen(err_gen_layer, mx_basis='pp', return_dense=True)))
+                    exp_error_generators.append(_spl.expm(self.errorgen_layer_dict_to_errorgen(err_gen_layer, mx_basis='pp')))
             #Next take the product of these exponentiated error generators.
             #These are in circuit ordering, so reverse for matmul.
             exp_error_generators.reverse()
@@ -610,7 +610,7 @@ class ErrorGeneratorPropagator:
         return fully_propagated_layers
     
     
-    def errorgen_layer_dict_to_errorgen(self, errorgen_layer, mx_basis='pp', return_dense=False):
+    def errorgen_layer_dict_to_errorgen(self, errorgen_layer, mx_basis='pp'):
         """
         Helper method for converting from an error generator dictionary in the format
         utilized in the `errorgenpropagation` module into a numpy array.

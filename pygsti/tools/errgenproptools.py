@@ -6257,6 +6257,68 @@ def errorgen_layer_to_matrix(errorgen_layer, num_qubits, errorgen_matrix_dict=No
     
     return mat
 
+def iterative_error_generator_composition(errorgen_labels, rates):
+    """
+    Iteratively compute error generator compositions. Each error generator
+    composition in general returns a list of multiple new error generators,
+    so this function manages the distribution and recursive application
+    of the compositions for two-or-more error generator labels.
+    
+    Parameters
+    ----------
+    errorgen_labels : tuple of `LocalStimErrorgenLabel`
+        A tuple of the elementary error generator labels to be composed.
+    
+    rates : tuple of float
+        A tuple of corresponding error generator rates of the same length as the tuple
+        of error generator labels.
+
+    Returns
+    -------
+    List of tuples, the first element of each tuple is a `LocalStimErrorgenLabel`.
+    The second element of each tuple is the final rate for that term.
+    """
+
+    if len(errorgen_labels) == 1:
+        return [(errorgen_labels[0], rates[0])]
+    else:
+        label_tuples_to_process = [errorgen_labels]
+        rate_tuples_to_process = [rates]
+    
+    fully_processed_label_rate_tuples = []    
+    while label_tuples_to_process:
+        new_label_tuples_to_process = []
+        new_rate_tuples_to_process = []
+
+        for label_tup, rate_tup in zip(label_tuples_to_process, rate_tuples_to_process):
+            #grab the last two elements of each of these and do the composition.
+            new_labels_and_rates = error_generator_composition(label_tup[-2], label_tup[-1], rate_tup[-2]*rate_tup[-1])
+
+            #if the new labels and rates sum to zero overall then we can kill this branch of the tree.
+            aggregated_labels_and_rates_dict = dict()
+            for lbl, rate in new_labels_and_rates:
+                if aggregated_labels_and_rates_dict.get(lbl, None) is None:
+                    aggregated_labels_and_rates_dict[lbl] = rate
+                else:
+                    aggregated_labels_and_rates_dict[lbl] += rate
+            if all([abs(val)<1e-15 for val in aggregated_labels_and_rates_dict.values()]):
+                continue
+
+            label_tup_remainder = label_tup[:-2]
+            rate_tup_remainder = rate_tup[:-2]
+            if label_tup_remainder:
+                for new_label, new_rate in aggregated_labels_and_rates_dict.items():
+                    new_label_tup = label_tup_remainder + (new_label,)
+                    new_rate_tup = rate_tup_remainder + (new_rate,)
+                    new_label_tuples_to_process.append(new_label_tup)
+                    new_rate_tuples_to_process.append(new_rate_tup)
+            else:
+                for new_label_rate_tup in aggregated_labels_and_rates_dict.items():
+                    fully_processed_label_rate_tuples.append(new_label_rate_tup)
+        label_tuples_to_process = new_label_tuples_to_process
+        rate_tuples_to_process = new_rate_tuples_to_process  
+    
+    return fully_processed_label_rate_tuples
 
 #Helper functions for doing numeric commutators, compositions and BCH.
 
@@ -6459,6 +6521,50 @@ def pairwise_bch_numerical(mat1, mat2, order=1):
 
 def _matrix_commutator(mat1, mat2):
     return mat1@mat2 - mat2@mat1
+
+def iterative_error_generator_composition_numerical(errorgen_labels, rates, errorgen_matrix_dict=None, num_qubits=None):
+    """
+    Iteratively compute error generator compositions. The function computes a dense representation of this composition
+    numerically and is primarily intended as part of testing infrastructure.
+    
+    Parameters
+    ----------
+    errorgen_labels : tuple of `LocalStimErrorgenLabel`
+        A tuple of the elementary error generator labels to be composed.
+    
+    rates : tuple of float
+        A tuple of corresponding error generator rates of the same length as the tuple
+        of error generator labels.
+        
+    errorgen_matrix_dict : dict, optional (default None)
+        An optional dictionary mapping `ElementaryErrorgenLabel`s to numpy arrays for their dense representation.
+        If not specified this will be constructed from scratch each call, so specifying this can provide a performance
+        benefit.
+
+    num_qubits : int, optional (default None)
+        Number of qubits for the error generator commutator being computed. Only required if `errorgen_matrix_dict` is None.
+
+    Returns
+    -------
+    numpy.ndarray
+        Dense numpy array representation of the super operator corresponding to the iterated composition written in 
+        the standard basis.
+    """
+    
+    if errorgen_matrix_dict is None:
+        #create an error generator basis.
+        errorgen_basis = _CompleteElementaryErrorgenBasis('PP', _QubitSpace(num_qubits), default_label_type='local')
+        
+        #use this basis to construct a dictionary from error generator labels to their
+        #matrices.
+        errorgen_lbls = errorgen_basis.labels
+        errorgen_matrix_dict = {lbl: mat for lbl, mat in zip(errorgen_lbls, errorgen_basis.elemgen_matrices)}
+
+    composition = errorgen_matrix_dict[errorgen_labels[0]]
+    for lbl in errorgen_labels[1:]:
+        composition = composition@errorgen_matrix_dict[lbl]
+    composition *= _np.prod(rates)
+    return composition
 
 #-----------First-Order Approximate Error Generator Probabilities and Expectation Values---------------#
 
@@ -7183,6 +7289,11 @@ def stabilizer_pauli_expectation_correction(errorgen_dict, tableau, pauli, order
         if abs(rate) > truncation_threshold:
             #print(f'{alpha_pauli(lbl, tableau, pauli)=}')
             #print(f'{alpha_pauli_numerical(lbl, tableau, pauli)=}')
+            alpha_numerical = alpha_pauli_numerical(lbl, tableau, pauli)
+            alpha_analytical = alpha_pauli(lbl, tableau, pauli)
+            if abs(alpha_numerical-alpha_analytical)>1e-6:
+                print(f'{alpha_pauli(lbl, tableau, pauli)=}')
+                print(f'{alpha_pauli_numerical(lbl, tableau, pauli)=}')
             alpha_errgen_prods[i] = alpha_pauli(lbl, tableau, pauli)*rate
     correction = _np.sum(alpha_errgen_prods)
     if order > 1:
@@ -7206,6 +7317,11 @@ def stabilizer_pauli_expectation_correction(errorgen_dict, tableau, pauli, order
             alpha_errgen_prods = _np.zeros(len(composition_results_dict))
             for i, (lbl, rate) in enumerate(composition_results_dict.items()):
                 if current_order_scale*abs(rate) > truncation_threshold:
+                    alpha_numerical = alpha_pauli_numerical(lbl, tableau, pauli)
+                    alpha_analytical = alpha_pauli(lbl, tableau, pauli)
+                    if abs(alpha_numerical-alpha_analytical)>1e-6:
+                        print(f'{alpha_pauli(lbl, tableau, pauli)=}')
+                        print(f'{alpha_pauli_numerical(lbl, tableau, pauli)=}')
                     sensitivity = alpha_pauli(lbl, tableau, pauli)
                     alpha_errgen_prods[i] = _np.real_if_close(sensitivity*rate)
             correction += current_order_scale*_np.sum(alpha_errgen_prods)
@@ -7213,114 +7329,53 @@ def stabilizer_pauli_expectation_correction(errorgen_dict, tableau, pauli, order
     return correction
 
 
-def iterative_error_generator_composition(errorgen_labels, rates):
+def stabilizer_pauli_expectation_correction_numerical(errorgen_dict, errorgen_propagator, circuit, pauli, order = 1):
     """
-    Iteratively compute error generator compositions. Each error generator
-    composition in general returns a list of multiple new error generators,
-    so this function manages the distribution and recursive application
-    of the compositions for two-or-more error generator labels.
+    Compute the kth-order correction to the expectation value of the specified pauli.
     
     Parameters
     ----------
-    errorgen_labels : tuple of `LocalStimErrorgenLabel`
-        A tuple of the elementary error generator labels to be composed.
+    errorgen_dict : dict
+        Dictionary whose keys are `LocalStimErrorgenLabel` and whose values are corresponding
+        rates.
     
-    rates : tuple of float
-        A tuple of corresponding error generator rates of the same length as the tuple
-        of error generator labels.
+    errorgen_propagator : `ErrorGeneratorPropagator`
+        Error generator propagator used for constructing dense representation of the error generator dictionary.
+    
+    circuit : `Circuit`
+        Circuit the expectation value is being measured against.
+        
+    pauli : stim.PauliString
+        Pauli operator to compute expectation value correction for.
+
+    order : int, optional (default 1)
+        Order of the correction (i.e. order of the taylor series expansion for
+        the exponentiated error generator) to compute.
 
     Returns
     -------
-    List of tuples, the first element of each tuple is a `LocalStimErrorgenLabel`.
-    The second element of each tuple is the final rate for that term.
+    correction : float
+        float corresponding to the correction to the expectation value for the
+        selected pauli operator induced by the error generator (to specified order).
     """
-
-    if len(errorgen_labels) == 1:
-        return [(errorgen_labels[0], rates[0])]
-    else:
-        label_tuples_to_process = [errorgen_labels]
-        rate_tuples_to_process = [rates]
+    tableau = circuit.convert_to_stim_tableau()
     
-    fully_processed_label_rate_tuples = []    
-    while label_tuples_to_process:
-        new_label_tuples_to_process = []
-        new_rate_tuples_to_process = []
-
-        for label_tup, rate_tup in zip(label_tuples_to_process, rate_tuples_to_process):
-            #grab the last two elements of each of these and do the composition.
-            new_labels_and_rates = error_generator_composition(label_tup[-2], label_tup[-1], rate_tup[-2]*rate_tup[-1])
-
-            #if the new labels and rates sum to zero overall then we can kill this branch of the tree.
-            aggregated_labels_and_rates_dict = dict()
-            for lbl, rate in new_labels_and_rates:
-                if aggregated_labels_and_rates_dict.get(lbl, None) is None:
-                    aggregated_labels_and_rates_dict[lbl] = rate
-                else:
-                    aggregated_labels_and_rates_dict[lbl] += rate
-            if all([abs(val)<1e-15 for val in aggregated_labels_and_rates_dict.values()]):
-                continue
-
-            label_tup_remainder = label_tup[:-2]
-            rate_tup_remainder = rate_tup[:-2]
-            if label_tup_remainder:
-                for new_label, new_rate in aggregated_labels_and_rates_dict.items():
-                    new_label_tup = label_tup_remainder + (new_label,)
-                    new_rate_tup = rate_tup_remainder + (new_rate,)
-                    new_label_tuples_to_process.append(new_label_tup)
-                    new_rate_tuples_to_process.append(new_rate_tup)
-            else:
-                for new_label_rate_tup in aggregated_labels_and_rates_dict.items():
-                    fully_processed_label_rate_tuples.append(new_label_rate_tup)
-        label_tuples_to_process = new_label_tuples_to_process
-        rate_tuples_to_process = new_rate_tuples_to_process  
+    stabilizer_state = tableau.to_state_vector(endian='big')
+    stabilizer_state_dmvec = state_to_dmvec(stabilizer_state)
+    stabilizer_state_dmvec.reshape((len(stabilizer_state_dmvec),1))
     
-    return fully_processed_label_rate_tuples
-
-def iterative_error_generator_composition_numeric(errorgen_labels, rates, errorgen_matrix_dict=None, num_qubits=None):
-    """
-    Iteratively compute error generator compositions. The function computes a dense representation of this composition
-    numerically and is primarily intended as part of testing infrastructure.
+    #also get the superoperator (in the standard basis) corresponding to the taylor series
+    #expansion of the specified error generator dictionary.
+    taylor_expanded_errorgen = error_generator_taylor_expansion_numerical(errorgen_dict, errorgen_propagator, order=order, mx_basis='std')
     
-    Parameters
-    ----------
-    errorgen_labels : tuple of `LocalStimErrorgenLabel`
-        A tuple of the elementary error generator labels to be composed.
+    #finally need the superoperator for the selected pauli.
+    pauli_unitary = pauli.to_unitary_matrix(endian='big')
+    #flatten this row-wise
+    pauli_vec = _np.ravel(pauli_unitary)
+    pauli_vec.reshape((len(pauli_vec),1))
     
-    rates : tuple of float
-        A tuple of corresponding error generator rates of the same length as the tuple
-        of error generator labels.
-        
-    errorgen_matrix_dict : dict, optional (default None)
-        An optional dictionary mapping `ElementaryErrorgenLabel`s to numpy arrays for their dense representation.
-        If not specified this will be constructed from scratch each call, so specifying this can provide a performance
-        benefit.
-
-    num_qubits : int, optional (default None)
-        Number of qubits for the error generator commutator being computed. Only required if `errorgen_matrix_dict` is None.
-
-    Returns
-    -------
-    numpy.ndarray
-        Dense numpy array representation of the super operator corresponding to the iterated composition written in 
-        the standard basis.
-    """
-    
-    if errorgen_matrix_dict is None:
-        #create an error generator basis.
-        errorgen_basis = _CompleteElementaryErrorgenBasis('PP', _QubitSpace(num_qubits), default_label_type='local')
-        
-        #use this basis to construct a dictionary from error generator labels to their
-        #matrices.
-        errorgen_lbls = errorgen_basis.labels
-        errorgen_matrix_dict = {lbl: mat for lbl, mat in zip(errorgen_lbls, errorgen_basis.elemgen_matrices)}
-
-    composition = errorgen_matrix_dict[errorgen_labels[0]]
-    for lbl in errorgen_labels[1:]:
-        composition = composition@errorgen_matrix_dict[lbl]
-    composition *= _np.prod(rates)
-    return composition
-        
-
+    expectation_correction = _np.linalg.multi_dot([pauli_vec.conj().T, taylor_expanded_errorgen,stabilizer_state_dmvec]).item()
+    return expectation_correction
 
 def stabilizer_probability(tableau, desired_bitstring):
     """
@@ -7448,8 +7503,8 @@ def approximate_stabilizer_pauli_expectation(errorgen_dict, circuit, pauli, orde
     
     Returns
     -------
-    p : float
-        Approximate output probability for desired bitstring.
+    expectation_value : float
+        Approximate expectation value for desired pauli.
     """
     
     if isinstance(circuit, _Circuit):
@@ -7466,6 +7521,52 @@ def approximate_stabilizer_pauli_expectation(errorgen_dict, circuit, pauli, orde
 
     ideal_expectation = stabilizer_pauli_expectation(tableau, pauli)
     correction = stabilizer_pauli_expectation_correction(errorgen_dict, tableau, pauli, order, truncation_threshold)
+    return ideal_expectation + correction
+
+def approximate_stabilizer_pauli_expectation_numerical(errorgen_dict, errorgen_propagator, circuit, pauli, order=1):
+    """
+    Calculate the approximate probability of a desired bit string using a first-order approximation.
+    This function performs the corrections numerically and so it primarily intended for testing
+    infrastructure.
+    
+    Parameters
+    ----------
+    errorgen_dict : dict
+        Dictionary whose keys are `ElementaryErrorgenLabel` and whose values are corresponding
+        rates.
+
+    errorgen_propagator : `ErrorGeneratorPropagator`
+        Error generator propagator used for constructing dense representation of the error generator dictionary.
+    
+    circuit : `Circuit`
+        A pygsti `Circuit` or a stim.Tableau to compute the output pauli expectation value for.
+        
+    pauli : stim.PauliString
+        Pauli operator to compute expectation value for.
+    
+    order : int, optional (default 1)
+        Order of the correction (i.e. order of the taylor series expansion for
+        the exponentiated error generator) to compute.
+    
+    truncation_threshold : float, optional (default 1e-14)
+        Optional threshold used to truncate corrections whose corresponding error generator rates
+        are below this value. (Used internally in computation of probability corrections)
+    
+    Returns
+    -------
+    expectation_value : float
+        Approximate expectation value for desired pauli.
+    """
+    
+    tableau = circuit.convert_to_stim_tableau()
+
+    #recast keys to local stim ones if needed.
+    first_lbl = next(iter(errorgen_dict))
+    if isinstance(first_lbl, (_GEEL, _LEEL)):
+        errorgen_dict = {_LSE.cast(lbl):val for lbl,val in errorgen_dict.items()}
+
+    ideal_expectation = stabilizer_pauli_expectation(tableau, pauli)
+    correction = stabilizer_pauli_expectation_correction_numerical(errorgen_dict, errorgen_propagator, circuit, pauli, order)
     return ideal_expectation + correction
 
 def approximate_stabilizer_probabilities(errorgen_dict, circuit, order=1, truncation_threshold=1e-14):
@@ -7573,3 +7674,38 @@ def error_generator_taylor_expansion(errorgen_dict, order = 1, truncation_thresh
                     taylor_order_terms[current_order-1][lbl] = order_scale*rate
 
     return taylor_order_terms
+
+def error_generator_taylor_expansion_numerical(errorgen_dict, errorgen_propagator, order = 1, mx_basis = 'pp'):
+    """
+    Compute the nth-order taylor expansion for the exponentiation of the error generator described by the input
+    error generator dictionary. (Excluding the zeroth-order identity). This function computes a dense representation
+    of this taylor expansion as a numpy array and is primarily intended for testing infrastructure.
+    
+    Parameters
+    ----------
+    errorgen_dict : dict
+        Dictionary whose keys are `LocalStimErrorgenLabel` and whose values are corresponding
+        rates.
+
+    errorgen_propagator : `ErrorGeneratorPropagator`
+        Error generator propagator used for constructing dense representation of the error generator dictionary.
+    
+    order : int, optional (default 1)
+        Order of the correction (i.e. order of the taylor series expansion for
+        the exponentiated error generator) to compute.
+
+    mx_basis : `Basis` or str, optional (default 'pp')
+        Basis in which to return the matrix.
+
+    Returns
+    -------
+    numpy.ndarray
+        A dense numpy array corresponding to the nth order taylor expansion of the specified error generator.
+    """
+       
+    errorgen_mat = errorgen_propagator.errorgen_layer_dict_to_errorgen(errorgen_dict, mx_basis)
+    taylor_expansion = _np.zeros(errorgen_mat.shape, dtype=_np.complex128)
+    for i in range(1, order+1):
+        taylor_expansion += 1/factorial(i)*_np.linalg.matrix_power(errorgen_mat, i)
+
+    return taylor_expansion

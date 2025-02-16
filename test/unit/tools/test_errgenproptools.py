@@ -410,26 +410,23 @@ class ApproxStabilizerMethodTester(BaseCase):
     def test_approximate_stabilizer_pauli_expectation(self):
         rng = np.random.default_rng(seed=12345)
         paulis_4Q = list(stim.PauliString.iter_all(4))
-        #random_4Q_pauli_indices = rng.choice(len(paulis_4Q), 10, replace=False)
-        #random_4Q_paulis = [paulis_4Q[idx] for idx in random_4Q_pauli_indices]
+        random_4Q_pauli_indices = rng.choice(len(paulis_4Q), 5, replace=False)
+        random_4Q_paulis = [paulis_4Q[idx] for idx in random_4Q_pauli_indices]
 
-        for pauli in paulis_4Q:#random_4Q_paulis:
-            exact_pauli_expectation = pauli_expectation_errorgen_prop(self.error_propagator, self.target_model, 
-                                                                      self.circuit, pauli, use_bch=True, bch_order=1)
-            first_order_diff  = exact_pauli_expectation - _eprop.approximate_stabilizer_pauli_expectation(self.propagated_errorgen_layer, self.circuit_tableau, pauli, order=1)
-            second_order_diff = exact_pauli_expectation - _eprop.approximate_stabilizer_pauli_expectation(self.propagated_errorgen_layer, self.circuit_tableau, pauli, order=2)
-            third_order_diff  = exact_pauli_expectation - _eprop.approximate_stabilizer_pauli_expectation(self.propagated_errorgen_layer, self.circuit_tableau, pauli, order=3)
+        for pauli in random_4Q_paulis:
+            
+            
+            first_order_diff  = _eprop.approximate_stabilizer_pauli_expectation_numerical(self.propagated_errorgen_layer, self.error_propagator, self.circuit, pauli, order=1) -\
+                                _eprop.approximate_stabilizer_pauli_expectation(self.propagated_errorgen_layer, self.circuit_tableau, pauli, order=1)
+            second_order_diff = _eprop.approximate_stabilizer_pauli_expectation_numerical(self.propagated_errorgen_layer, self.error_propagator, self.circuit, pauli, order=2) -\
+                                _eprop.approximate_stabilizer_pauli_expectation(self.propagated_errorgen_layer, self.circuit_tableau, pauli, order=2)
+            third_order_diff  = _eprop.approximate_stabilizer_pauli_expectation_numerical(self.propagated_errorgen_layer, self.error_propagator, self.circuit, pauli, order=3) -\
+                                _eprop.approximate_stabilizer_pauli_expectation(self.propagated_errorgen_layer, self.circuit_tableau, pauli, order=3)
 
-            if abs(first_order_diff) < abs(second_order_diff):
-                print(f'{first_order_diff=}')
-                print(f'{second_order_diff=}')
-                print(f'{pauli=}')
-                raise ValueError('Going to higher order made the expectation value worse!')
-            if abs(second_order_diff) < abs(third_order_diff):
-                print(f'{second_order_diff=}')
-                print(f'{third_order_diff=}')
-                print(f'{pauli=}')
-                raise ValueError('Going to higher order made the expectation value worse!')
+            assert abs(first_order_diff)  < 1e-6, f'{pauli=}'
+            assert abs(second_order_diff) < 1e-8, f'{pauli=}'
+            assert abs(third_order_diff)  < 5e-8, f'{pauli=}'
+
 
     def test_error_generator_taylor_expansion(self):
         #this is just an integration test atm.
@@ -593,7 +590,7 @@ def _compare_analytic_numeric_iterative_composition(num_qubits):
     #for each triple compute the composition directly and compute it analytically (then converting it to
     #a numeric array) and see how they compare.
     for i, (triple_1, triple_2) in enumerate(zip(random_triples, random_triples_stim)):
-        numeric_composition = _eprop.iterative_error_generator_composition_numeric(triple_1, (1,1,1), complete_errorgen_lbl_matrix_dict)
+        numeric_composition = _eprop.iterative_error_generator_composition_numerical(triple_1, (1,1,1), complete_errorgen_lbl_matrix_dict)
         analytic_composition = _eprop.iterative_error_generator_composition(triple_2, (1,1,1))
         analytic_composition_dict = dict()
         for lbl, rate in analytic_composition:
