@@ -145,57 +145,6 @@ class ForwardSimulator(_NicelySerializable):
             `evotype` will be `None` when the current model is None"""
         pass
 
-    #def to_vector(self):
-    #    """
-    #    Returns the parameter vector of the associated Model.
-    #
-    #    Returns
-    #    -------
-    #    numpy array
-    #        The vectorized model parameters.
-    #    """
-    #    return self.paramvec
-    #
-    #def from_vector(self, v, close=False, nodirty=False):
-    #    """
-    #    The inverse of to_vector.
-    #
-    #    Initializes the Model-like members of this
-    #    calculator based on `v`. Used for computing finite-difference derivatives.
-    #
-    #    Parameters
-    #    ----------
-    #    v : numpy.ndarray
-    #        The parameter vector.
-    #
-    #    close : bool, optional
-    #        Set to `True` if `v` is close to the current parameter vector.
-    #        This can make some operations more efficient.
-    #
-    #    nodirty : bool, optional
-    #        If True, the framework for marking and detecting when operations
-    #        have changed and a Model's parameter-vector needs to be updated
-    #        is disabled.  Disabling this will increases the speed of the call.
-    #
-    #    Returns
-    #    -------
-    #    None
-    #    """
-    #    #Note: this *will* initialize the parent Model's objects too,
-    #    # since only references to preps, effects, and gates are held
-    #    # by the calculator class.  ORDER is important, as elements of
-    #    # POVMs and Instruments rely on a fixed from_vector ordering
-    #    # of their simplified effects/gates.
-    #    self.paramvec = v.copy()  # now self.paramvec is *not* the same as the Model's paramvec
-    #    self.sos.from_vector(v, close, nodirty)  # so don't always want ", nodirty=True)" - we
-    #    # need to set dirty flags so *parent* will re-init it's paramvec...
-    #
-    #    #Re-init reps for computation
-    #    #self.operationreps = { i:self.operations[lbl].torep() for lbl,i in self.operation_lookup.items() }
-    #    #self.operationreps = { lbl:g.torep() for lbl,g in gates.items() }
-    #    #self.prepreps = { lbl:p.torep('prep') for lbl,p in preps.items() }
-    #    #self.effectreps = { lbl:e.torep('effect') for lbl,e in effects.items() }
-
     def _compute_circuit_outcome_probabilities(self, array_to_fill, circuit, outcomes, resource_alloc, time=None):
         raise NotImplementedError("Derived classes should implement this!")
 

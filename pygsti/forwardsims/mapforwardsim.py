@@ -313,13 +313,6 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
                                                   layout._param_dimensions, (loc_nparams1, loc_nparams2),
                                                   (blk1, blk2), max_atom_cachesize, self.model.dim)
 
-            #def approx_mem_estimate(nc, np1, np2):
-            #    approx_cachesize = (num_circuits / nc) * 1.3  # inflate expected # of circuits per atom => cache_size
-            #    return _bytes_for_array_types(array_types, num_elements, num_elements / nc,
-            #                                  num_circuits, num_circuits / nc,
-            #                                  (num_params, num_params), (num_params / np1, num_params / np2),
-            #                                  approx_cachesize, self.model.dim)
-
             GB = 1.0 / 1024.0**3
             if mem_estimate > mem_limit:
                 raise MemoryError("Not enough memory for desired layout! (limit=%.1fGB, required=%.1fGB)" % (

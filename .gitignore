@@ -145,3 +145,4 @@ scripts/profiling/data
 ############################
 local
 pygsti/_version.py
+1_1.profile/0.prof

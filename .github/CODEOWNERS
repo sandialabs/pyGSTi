@@ -37,7 +37,6 @@ pygsti/algorithms/compilers.py @sandialabs/pygsti-rb @sandialabs/pygsti-gatekeep
 pygsti/algorithms/mirroring.py @sandialabs/pygsti-rb @sandialabs/pygsti-gatekeepers
 pygsti/algorithms/randomcircuit.py @sandialabs/pygsti-rb @sandialabs/pygsti-gatekeepers
 pygsti/algorithms/rbfit.py @sandialabs/pygsti-rb @sandialabs/pygsti-gatekeepers
-pygsti/extras/rb.py @sandialabs/pygsti-rb @sandialabs/pygsti-gatekeepers # Should this just be deprecated and removed?
 pygsti/protocols/rb.py @sandialabs/pygsti-rb @sandialabs/pygsti-gatekeepers
 pygsti/tools/rbtheory.py @sandialabs/pygsti-rb @sandialabs/pygsti-gatekeepers
 pygsti/tools/rbtools.py @sandialabs/pygsti-rb @sandialabs/pygsti-gatekeepers

@@ -253,13 +253,6 @@ class HypothesisTest(object):
                 self.passing_graph[hind, :] = _np.ones(len(self.hypotheses), float) / (len(self.hypotheses) - 1)
                 self.passing_graph[hind, hind] = 0.
 
-    # def _check_permissible(self):
-    #     """
-    #     Todo
-    #     """
-    #     # Todo : test that the graph is acceptable.
-    #     return True
-
     def add_pvalues(self, pvalues):
         """
         Insert the p-values for the hypotheses.

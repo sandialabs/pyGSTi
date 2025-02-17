@@ -810,7 +810,6 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                 reject_msg = ""
                 if profiler: profiler.memory_check("custom_leastsq: after linsolve")
                 if success:  # linear solve succeeded
-                    #dx = _hack_dx(obj_fn, x, dx, Jac, JTJ, JTf, f, norm_f)
 
                     if damping_mode != 'adaptive':
                         new_x[:] = x + dx
@@ -1125,13 +1124,22 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                                 printer.log("      Accepted%s! gain ratio=%g  mu * %g => %g"
                                             % (" UPHILL" if uphill_ok else "", dF / dL, mu_factor, mu), 2)
                                 last_accepted_dx = dx.copy()
-                                if new_x_is_known_inbounds and norm_f < min_norm_f:
-                                    min_norm_f = norm_f
-                                    best_x[:] = x[:]
-                                    best_x_state = (mu, nu, norm_f, f.copy(), spow, None)
-                                    #Note: we use rawJTJ=None above because the current `JTJ` was evaluated
-                                    # at the *last* x-value -- we need to wait for the next outer loop
-                                    # to compute the JTJ for this best_x_state
+                                if norm_f < min_norm_f:
+                                    if not new_x_is_known_inbounds:
+                                        try:
+                                            _ = obj_fn(global_x, oob_check=True)
+                                            # ^ Dead-store the return value.
+                                            new_x_is_known_inbounds = True
+                                        except ValueError:
+                                            # Then we keep new_x_is_known_inbounds==False.
+                                            pass
+                                    if new_x_is_known_inbounds:
+                                        min_norm_f = norm_f
+                                        best_x[:] = x[:]
+                                        best_x_state = (mu, nu, norm_f, f.copy(), spow, None)
+                                        # ^ Note: we use rawJTJ=None above because the current `JTJ` was evaluated
+                                        #   at the *last* x-value -- we need to wait for the next outer loop
+                                        #   to compute the JTJ for this best_x_state
 
                                 #assert(_np.isfinite(x).all()), "Non-finite x!" # NaNs tracking
                                 #assert(_np.isfinite(f).all()), "Non-finite f!" # NaNs tracking
@@ -1230,239 +1238,127 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
     #return solution
 
 
-def _hack_dx(obj_fn, x, dx, jac, jtj, jtf, f, norm_f):
-    #HACK1
-    #if nRejects >= 2:
-    #    dx = -(10.0**(1-nRejects))*x
-    #    print("HACK - setting dx = -%gx!" % 10.0**(1-nRejects))
-    #    return dx
+"""
+def custom_leastsq_wikip(obj_fn, jac_fn, x0, f_norm_tol=1e-6, jac_norm_tol=1e-6,
+                  rel_tol=1e-6, max_iter=100, comm=None, verbosity=0, profiler=None):
+    #
+    # Wikipedia-version of LM algorithm, testing mu and mu/nu damping params and taking
+    # mu/nu => new_mu if acceptable...  This didn't seem to perform well, but maybe just
+    # needs some tweaking, so leaving it commented here for reference
+    #
+    msg = ""
+    converged = False
+    x = x0
+    f = obj_fn(x)
+    norm_f = _np.linalg.norm(f)
+    tau = 1e-3 #initial mu
+    nu = 1.3
+    my_cols_slice = None
 
-    #HACK2
-    if True:
-        print("HACK2 - trying to find a good dx by iteratively stepping in each direction...")
 
-        test_f = obj_fn(x + dx); cmp_normf = _np.dot(test_f, test_f)
-        print("Compare with suggested step => ", cmp_normf)
-        STEP = 0.0001
+    if not _np.isfinite(norm_f):
+        msg = "Infinite norm of objective function at initial point!"
 
-        #import bpdb; bpdb.set_trace()
-        #gradient = -jtf
-        test_dx = _np.zeros(len(dx), 'd')
-        last_normf = norm_f
-        for ii in range(len(dx)):
+    for k in range(max_iter): #outer loop
+        # assume x, f, fnorm hold valid values
 
-            #Try adding
-            while True:
-                test_dx[ii] += STEP
-                test_f = obj_fn(x + test_dx); test_normf = _np.dot(test_f, test_f)
-                if test_normf < last_normf:
-                    last_normf = test_normf
+        if len(msg) > 0:
+            break #exit outer loop if an exit-message has been set
+
+        if norm_f < f_norm_tol:
+            msg = "norm(objectivefn) is small"
+            converged = True; break
+
+        if verbosity > 0:
+            print("--- Outer Iter %d: norm_f = %g" % (k,norm_f))
+
+        if profiler: profiler.mem_check("custom_leastsq: begin outer iter *before de-alloc*")
+        jac = None; jtj = None; jtf = None
+
+        if profiler: profiler.mem_check("custom_leastsq: begin outer iter")
+        jac = jac_fn(x)
+        if profiler: profiler.mem_check("custom_leastsq: after jacobian:"
+                                        + "shape=%s, GB=%.2f" % (str(jac.shape),
+                                                        jac.nbytes/(1024.0**3)) )
+
+        tm = _time.time()
+        if my_cols_slice is None:
+            my_cols_slice = _mpit.distribute_for_dot(jac.shape[0], comm)
+        jtj = _mpit.mpidot(jac.T,jac,my_cols_slice,comm)   #_np.dot(jac.T,jac)
+        jtf = _np.dot(jac.T,f)
+        if profiler: profiler.add_time("custom_leastsq: dotprods",tm)
+
+        idiag = _np.diag_indices_from(jtj)
+        norm_JTf = _np.linalg.norm(jtf) #, ord='inf')
+        norm_x = _np.linalg.norm(x)
+        undampled_JTJ_diag = jtj.diagonal().copy()
+
+        if norm_JTf < jac_norm_tol:
+            msg = "norm(jacobian) is small"
+            converged = True; break
+
+        if k == 0:
+            mu = tau #* _np.max(undampled_JTJ_diag) # initial damping element
+        #mu = tau #* _np.max(undampled_JTJ_diag) # initial damping element
+
+        #determing increment using adaptive damping
+        while True:  #inner loop
+
+            ### Evaluate with mu' = mu / nu
+            mu = mu / nu
+            if profiler: profiler.mem_check("custom_leastsq: begin inner iter")
+            jtj[idiag] *= (1.0 + mu) # augment normal equations
+            #jtj[idiag] += mu # augment normal equations
+
+            try:
+                if profiler: profiler.mem_check("custom_leastsq: before linsolve")
+                tm = _time.time()
+                success = True
+                dx = _np.linalg.solve(jtj, -jtf)
+                if profiler: profiler.add_time("custom_leastsq: linsolve",tm)
+            except _np.linalg.LinAlgError:
+                success = False
+
+            if profiler: profiler.mem_check("custom_leastsq: after linsolve")
+            if success: #linear solve succeeded
+                new_x = x + dx
+                norm_dx = _np.linalg.norm(dx)
+
+                #if verbosity > 1:
+                #    print("--- Inner Loop: mu=%g, norm_dx=%g" % (mu,norm_dx))
+
+                if norm_dx < rel_tol*norm_x: #use squared qtys instead (speed)?
+                    msg = "relative change in x is small"
+                    converged = True; break
+
+                if norm_dx > (norm_x+rel_tol)/_MACH_PRECISION:
+                    msg = "(near-)singular linear system"; break
+
+                new_f = obj_fn(new_x)
+                if profiler: profiler.mem_check("custom_leastsq: after obj_fn")
+                norm_new_f = _np.linalg.norm(new_f)
+                if not _np.isfinite(norm_new_f): # avoid infinite loop...
+                    msg = "Infinite norm of objective function!"; break
+
+                dF = norm_f - norm_new_f
+                if dF > 0: #accept step
+                    #print("      Accepted!")
+                    x,f, norm_f = new_x, new_f, norm_new_f
+                    nu = 1.3
+                    break # exit inner loop normally
                 else:
-                    test_dx[ii] -= STEP
-                    break
-
-            if test_dx[ii] == 0:  # then try subtracting
-                while True:
-                    test_dx[ii] -= STEP
-                    test_f = obj_fn(x + test_dx); test_normf = _np.dot(test_f, test_f)
-                    if test_normf < last_normf:
-                        last_normf = test_normf
-                    else:
-                        test_dx[ii] += STEP
-                        break
-
-            if abs(test_dx[ii]) > 1e-6:
-                test_prediction = norm_f + _np.dot(-2 * jtf, test_dx)
-                tp2_f = f + _np.dot(jac, test_dx)
-                test_prediction2 = _np.dot(tp2_f, tp2_f)
-                cmp_dx = dx  # -jtf
-                print(" -> Adjusting index ", ii, ":", x[ii], "+", test_dx[ii], " => ", last_normf, "(cmp w/dx: ",
-                      cmp_dx[ii], test_prediction, test_prediction2, ") ",
-                      "YES" if test_dx[ii] * cmp_dx[ii] > 0 else "NO")
-
-        if _np.linalg.norm(test_dx) > 0 and last_normf < cmp_normf:
-            print("FOUND HACK dx w/norm = ", _np.linalg.norm(test_dx))
-            return test_dx
-        else:
-            print("KEEPING ORIGINAL dx")
-
-    #HACK3
-    if False:
-        print("HACK3 - checking if there's a simple dx that is better...")
-        test_f = obj_fn(x + dx); cmp_normf = _np.dot(test_f, test_f)
-        orig_prediction = norm_f + _np.dot(2 * jtf, dx)
-        Jdx = _np.dot(jac, dx)
-        op2_f = f + Jdx
-        orig_prediction2 = _np.dot(op2_f, op2_f)
-        # main objective = fT*f = norm_f
-        # at new x => (f+J*dx)T * (f+J*dx) = norm_f + JdxT*f + fT*Jdx
-        #                                  = norm_f + 2*(fT*J)dx (b/c transpose of real# does nothing)
-        #                                  = norm_f + 2*dxT*(JT*f)
-        # prediction 2 also includes (J*dx)T * (J*dx) term = dxT * (jtj) * dx
-        orig_prediction3 = orig_prediction + _np.dot(Jdx, Jdx)
-        norm_dx = _np.linalg.norm(dx)
-        print("Compare with suggested |dx| = ", norm_dx, " => ", cmp_normf,
-              "(predicted: ", orig_prediction, orig_prediction2, orig_prediction3)
-        STEP = norm_dx  # 0.0001
-
-        #import bpdb; bpdb.set_trace()
-        test_dx = _np.zeros(len(dx), 'd')
-        best_ii = -1; best_normf = norm_f; best_dx = 0
-        for ii in range(len(dx)):
-
-            #Try adding a small amount
-            test_dx[ii] = STEP
-            test_f = obj_fn(x + test_dx); test_normf = _np.dot(test_f, test_f)
-            if test_normf < best_normf:
-                best_normf = test_normf
-                best_dx = STEP
-                best_ii = ii
+                    mu *= nu #increase mu
             else:
-                test_dx[ii] = -STEP
-                test_f = obj_fn(x + test_dx); test_normf = _np.dot(test_f, test_f)
-                if test_normf < best_normf:
-                    best_normf = test_normf
-                    best_dx = -STEP
-                    best_ii = ii
-            test_dx[ii] = 0
+                #Linear solve failed:
+                mu *= nu #increase mu
+                nu = 2*nu
 
-        test_dx[best_ii] = best_dx
-        test_prediction = norm_f + _np.dot(2 * jtf, test_dx)
-        tp2_f = f + _np.dot(jac, test_dx)
-        test_prediction2 = _np.dot(tp2_f, tp2_f)
+            jtj[idiag] = undampled_JTJ_diag #restore diagonal for next inner loop iter
+        #end of inner loop
+    #end of outer loop
+    else:
+        #if no break stmt hit, then we've exceeded max_iter
+        msg = "Maximum iterations (%d) exceeded" % max_iter
 
-        jj = _np.argmax(_np.abs(dx))
-        print("Best decrease = index", best_ii, ":", x[best_ii], '+', best_dx, "==>",
-              best_normf, " (predictions: ", test_prediction, test_prediction2, ")")
-        print(" compare with original dx[", best_ii, "]=", dx[best_ii],
-              "YES" if test_dx[best_ii] * dx[best_ii] > 0 else "NO")
-        print(" max of abs(dx) is index ", jj, ":", dx[jj], "yes" if jj == best_ii else "no")
-
-        if _np.linalg.norm(test_dx) > 0 and best_normf < cmp_normf:
-            print("FOUND HACK dx w/norm = ", _np.linalg.norm(test_dx))
-            return test_dx
-        else:
-            print("KEEPING ORIGINAL dx")
-    return dx
-
-
-#Wikipedia-version of LM algorithm, testing mu and mu/nu damping params and taking
-# mu/nu => new_mu if acceptable...  This didn't seem to perform well, but maybe just
-# needs some tweaking, so leaving it commented here for reference
-#def custom_leastsq_wikip(obj_fn, jac_fn, x0, f_norm_tol=1e-6, jac_norm_tol=1e-6,
-#                   rel_tol=1e-6, max_iter=100, comm=None, verbosity=0, profiler=None):
-#    msg = ""
-#    converged = False
-#    x = x0
-#    f = obj_fn(x)
-#    norm_f = _np.linalg.norm(f)
-#    tau = 1e-3 #initial mu
-#    nu = 1.3
-#    my_cols_slice = None
-#
-#
-#    if not _np.isfinite(norm_f):
-#        msg = "Infinite norm of objective function at initial point!"
-#
-#    for k in range(max_iter): #outer loop
-#        # assume x, f, fnorm hold valid values
-#
-#        if len(msg) > 0:
-#            break #exit outer loop if an exit-message has been set
-#
-#        if norm_f < f_norm_tol:
-#            msg = "norm(objectivefn) is small"
-#            converged = True; break
-#
-#        if verbosity > 0:
-#            print("--- Outer Iter %d: norm_f = %g" % (k,norm_f))
-#
-#        if profiler: profiler.mem_check("custom_leastsq: begin outer iter *before de-alloc*")
-#        jac = None; jtj = None; jtf = None
-#
-#        if profiler: profiler.mem_check("custom_leastsq: begin outer iter")
-#        jac = jac_fn(x)
-#        if profiler: profiler.mem_check("custom_leastsq: after jacobian:"
-#                                        + "shape=%s, GB=%.2f" % (str(jac.shape),
-#                                                        jac.nbytes/(1024.0**3)) )
-#
-#        tm = _time.time()
-#        if my_cols_slice is None:
-#            my_cols_slice = _mpit.distribute_for_dot(jac.shape[0], comm)
-#        jtj = _mpit.mpidot(jac.T,jac,my_cols_slice,comm)   #_np.dot(jac.T,jac)
-#        jtf = _np.dot(jac.T,f)
-#        if profiler: profiler.add_time("custom_leastsq: dotprods",tm)
-#
-#        idiag = _np.diag_indices_from(jtj)
-#        norm_JTf = _np.linalg.norm(jtf) #, ord='inf')
-#        norm_x = _np.linalg.norm(x)
-#        undampled_JTJ_diag = jtj.diagonal().copy()
-#
-#        if norm_JTf < jac_norm_tol:
-#            msg = "norm(jacobian) is small"
-#            converged = True; break
-#
-#        if k == 0:
-#            mu = tau #* _np.max(undampled_JTJ_diag) # initial damping element
-#        #mu = tau #* _np.max(undampled_JTJ_diag) # initial damping element
-#
-#        #determing increment using adaptive damping
-#        while True:  #inner loop
-#
-#            ### Evaluate with mu' = mu / nu
-#            mu = mu / nu
-#            if profiler: profiler.mem_check("custom_leastsq: begin inner iter")
-#            jtj[idiag] *= (1.0 + mu) # augment normal equations
-#            #jtj[idiag] += mu # augment normal equations
-#
-#            try:
-#                if profiler: profiler.mem_check("custom_leastsq: before linsolve")
-#                tm = _time.time()
-#                success = True
-#                dx = _np.linalg.solve(jtj, -jtf)
-#                if profiler: profiler.add_time("custom_leastsq: linsolve",tm)
-#            except _np.linalg.LinAlgError:
-#                success = False
-#
-#            if profiler: profiler.mem_check("custom_leastsq: after linsolve")
-#            if success: #linear solve succeeded
-#                new_x = x + dx
-#                norm_dx = _np.linalg.norm(dx)
-#
-#                #if verbosity > 1:
-#                #    print("--- Inner Loop: mu=%g, norm_dx=%g" % (mu,norm_dx))
-#
-#                if norm_dx < rel_tol*norm_x: #use squared qtys instead (speed)?
-#                    msg = "relative change in x is small"
-#                    converged = True; break
-#
-#                if norm_dx > (norm_x+rel_tol)/_MACH_PRECISION:
-#                    msg = "(near-)singular linear system"; break
-#
-#                new_f = obj_fn(new_x)
-#                if profiler: profiler.mem_check("custom_leastsq: after obj_fn")
-#                norm_new_f = _np.linalg.norm(new_f)
-#                if not _np.isfinite(norm_new_f): # avoid infinite loop...
-#                    msg = "Infinite norm of objective function!"; break
-#
-#                dF = norm_f - norm_new_f
-#                if dF > 0: #accept step
-#                    #print("      Accepted!")
-#                    x,f, norm_f = new_x, new_f, norm_new_f
-#                    nu = 1.3
-#                    break # exit inner loop normally
-#                else:
-#                    mu *= nu #increase mu
-#            else:
-#                #Linear solve failed:
-#                mu *= nu #increase mu
-#                nu = 2*nu
-#
-#            jtj[idiag] = undampled_JTJ_diag #restore diagonal for next inner loop iter
-#        #end of inner loop
-#    #end of outer loop
-#    else:
-#        #if no break stmt hit, then we've exceeded max_iter
-#        msg = "Maximum iterations (%d) exceeded" % max_iter
-#
-#    return x, converged, msg
+    return x, converged, msg
+"""

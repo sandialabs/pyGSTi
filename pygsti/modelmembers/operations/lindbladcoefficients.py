@@ -854,7 +854,6 @@ class LindbladCoefficientBlock(_NicelySerializable):
         else:
             raise ValueError("Internal error: invalid block type!")
 
-    #def paramvals_to_coefficients_deriv(self, parameter_values, cache_mx=None):
     def deriv_wrt_params(self, v=None):
         """
         Construct derivative of Lindblad coefficients (for this block) from a set of parameter values.

@@ -117,7 +117,7 @@ class IdleTomographyObservedRatesTable(_ws.WorkspaceTable):
         table = _reporttable.ReportTable(colHeadings, (None,) * len(colHeadings))
         for typ, fidpair, obsOrOutcome, jac_row, _ in obs_rate_specs:
             fig = IdleTomographyObservedRatePlot(self.ws, idtresults, typ,
-                                                 fidpair, obsOrOutcome, title="auto",
+                                                 fidpair, obsOrOutcome, title={'text': "auto"},
                                                  mdl_simulator=mdl_simulator)
             intrinsic_reln = ""
             for i, el in enumerate(jac_row):
@@ -465,13 +465,13 @@ class IdleTomographyObservedRatePlot(_ws.WorkspacePlot):
         layout = go.Layout(
             width=700 * scale,
             height=400 * scale,
-            title=title,
+            title=dict(text=title),
             font=dict(size=10),
             xaxis=dict(
-                title=xlabel,
+                title=dict(text=xlabel),
             ),
             yaxis=dict(
-                title=ylabel,
+                title=dict(text=ylabel),
             ),
         )
 
