@@ -184,8 +184,7 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
     Ls = None
 
     for results in results_dict.values():
-        est_labels = _add_new_estimate_labels(est_labels, results.estimates,
-                                              combine_robust)
+        est_labels = _add_new_estimate_labels(est_labels, results.estimates, combine_robust)
         loc_Ls = results.circuit_lists['final'].xs \
             if isinstance(results.circuit_lists['final'], _PlaquetteGridCircuitStructure) else [0]
         Ls = _add_new_labels(Ls, loc_Ls)
@@ -305,10 +304,9 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
             else:
                 est_modvi = est
 
-            switchBd.objfn_builder[d, i] = est.parameters.get(
-                'final_objfn_builder', _objfns.ObjectiveFunctionBuilder.create_from('logl'))
-            switchBd.objfn_builder_modvi[d, i] = est_modvi.parameters.get(
-                'final_objfn_builder', _objfns.ObjectiveFunctionBuilder.create_from('logl'))
+            switchBd.objfn_builder[d, i] =  _objfns.ObjectiveFunctionBuilder.create_from('logl') # est.parameters.get('final_objfn_builder', _objfns.ObjectiveFunctionBuilder.create_from('logl'))
+            switchBd.objfn_builder_modvi[d, i] = _objfns.ObjectiveFunctionBuilder.create_from('logl')
+                # est_modvi.parameters.get('final_objfn_builder', _objfns.ObjectiveFunctionBuilder.create_from('logl'))
             switchBd.params[d, i] = est.parameters
 
             switchBd.clifford_compilation[d, i] = est.parameters.get("clifford compilation", 'auto')
@@ -1283,6 +1281,8 @@ def construct_standard_report(results, title="auto",
 
     skip_sections = advanced_options.get('skip_sections', tuple())
     if skip_sections:
+        if isinstance(skip_sections, str):
+            skip_sections = [skip_sections]
         skip_sections = [s.lower().replace(' ','') for s in skip_sections]
         for s in skip_sections:
             possible_sections.pop(s)

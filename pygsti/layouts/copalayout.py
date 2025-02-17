@@ -207,12 +207,16 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
 
         self._outcomes = dict()
         self._element_indices = dict()
+        self._element_inditer = dict()
+        ind_array = _np.arange(self._size)
         sort_idx_func = lambda x: x[0]
         for i_unique, tuples in elindex_outcome_tuples.items():
             sorted_tuples = sorted(tuples, key=sort_idx_func)  # sort by element index
             elindices, outcomes = zip(*sorted_tuples)  # sorted by elindex so we make slices whenever possible
             self._outcomes[i_unique] = tuple(outcomes)
-            self._element_indices[i_unique] = _slct.list_to_slice(elindices, array_ok=True)
+            s = _slct.list_to_slice(elindices, array_ok=True)
+            self._element_indices[i_unique] = s
+            self._element_inditer[i_unique] = ind_array[s]
 
 #    def hotswap_circuits(self, circuits, unique_complete_circuits=None):
 #        self.circuits = circuits if isinstance(circuits, _CircuitList) else _CircuitList(circuits)
@@ -744,7 +748,11 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
 
     def __iter__(self):
         for circuit, i in self._unique_circuit_index.items():
-            for element_index, outcome in zip(self._element_indices[i], self._outcomes[i]):
+            try:
+                iterator = zip(self._element_indices[i], self._outcomes[i])
+            except TypeError:
+                iterator = zip(self._element_inditer[i], self._outcomes[i])
+            for element_index, outcome in iterator:
                 yield element_index, circuit, outcome
 
     def iter_unique_circuits(self):
