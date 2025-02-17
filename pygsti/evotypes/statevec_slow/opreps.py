@@ -107,11 +107,6 @@ class OpRepStandard(OpRepDenseUnitary):
         super(OpRepStandard, self).__init__(U, basis, state_space)
 
 
-#class OpRepStochastic(OpRepDense):
-# - maybe we could add this, but it wouldn't be a "dense" op here,
-#   perhaps we need to change API?
-
-
 class OpRepComposed(OpRep):
     # exactly the same as densitymx case
     def __init__(self, factor_op_reps, state_space):

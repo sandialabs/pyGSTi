@@ -113,9 +113,6 @@ def _objfn(objfn_cls, model, dataset, circuits=None,
 
     return ofn
 
-    #def __len__(self):
-    #    return len(self.circuits)
-
 
 class ObjectiveFunctionBuilder(_NicelySerializable):
     """
@@ -926,8 +923,8 @@ class ModelDatasetCircuitsStore(object):
             assert(self.global_nparams is None or self.global_nparams == self.model.num_params)
         else:
             self.global_nelements = self.host_nelements = self.nelements = len(self.layout)
-            self.global_nparams = self.host_nparams = self.nparams = self.model.num_params
-            self.global_nparams2 = self.host_nparams2 = self.nparams2 = self.model.num_params
+            self.global_nparams = self.host_nparams = self.nparams = self.model.num_params if self.model else 0
+            self.global_nparams2 = self.host_nparams2 = self.nparams2 = self.model.num_params if self.model else 0
 
     @property
     def opBasis(self):
@@ -1574,7 +1571,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
                                  len(layout.atoms), atom.num_elements))
                         _sys.stdout.flush(); k += 1
 
-                    hessian_blk = self._hessian_from_block(hprobs, dprobs12, probs, atom_counts,
+                    hessian_blk = self._hessian_from_block(hprobs, dprobs12, probs, atom.element_slice, atom_counts,
                                                            atom_total_counts, freqs, param2_resource_alloc)
                     #NOTE: _hessian_from_hprobs MAY modify hprobs and dprobs12
                     #NOTE2: we don't account for memory within _hessian_from_block - maybe we should?
@@ -1589,7 +1586,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
 
         return atom_hessian  # (my_nparams1, my_nparams2)
 
-    def _hessian_from_block(self, hprobs, dprobs12, probs, counts, total_counts, freqs, resource_alloc):
+    def _hessian_from_block(self, hprobs, dprobs12, probs, element_slice, counts, total_counts, freqs, resource_alloc):
         raise NotImplementedError("Derived classes should implement this!")
 
     def _gather_hessian(self, local_hessian):
@@ -2709,6 +2706,7 @@ The objective function computes the negative log(Likelihood) as a vector of leas
 
 See LikelihoodFunction.py for details on patching
 """
+
 class RawPoissonPicDeltaLogLFunction(RawObjectiveFunction):
     """
     The function `N*f*log(f/p) - N*(f-p)`.
@@ -4406,9 +4404,6 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
                     terms[self.nelements:] = self._terms_penalty(paramvec)
 
         if self.firsts is not None and shared_mem_leader:
-            """TODO: remove this comment, probably.
-            Logic formerly handled by self._update_terms_for_omitted_probs(...), which called self._omitted_prob_first_terms(...).
-            """
             omitted_probs = 1.0 - _np.array([self.probs[self.layout.indices_for_index(i)].sum() for i in self.indicesOfCircuitsWithOmittedData])
             omitted_probs_firsts_terms = self.raw_objfn.zero_freq_terms(self.total_counts[self.firsts], omitted_probs)
             terms[self.firsts] += omitted_probs_firsts_terms
@@ -4510,7 +4505,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         if self.regularize_factor > 0:
             n = len(paramvec)
             terms_jac[off:off + n, :] = _np.diag([(self.regularize_factor * _np.sign(x) if abs(x) > 1.0 else 0.0) for x in paramvec[wrtslice]])  # (N,N)
-            paramvec_norm = self.regularize_factor * _np.array([max(0, absx - 1.0) for absx in map(abs, paramvec)], 'd')
+            paramvec_norm = _paramvec_norm_penalty(self.regularize_factor, paramvec)
             terms_jac[off:off + n, :] *= 2*paramvec_norm[:, None]
             off += n
 
@@ -4544,7 +4539,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             blocks.append(forcefn_penalty)
 
         if self.regularize_factor != 0:
-            paramvec_norm = self.regularize_factor * _np.array([max(0, absx - 1.0) for absx in map(abs, paramvec)], 'd')
+            paramvec_norm = _paramvec_norm_penalty(self.regularize_factor, paramvec)
             paramvec_norm **= 2
             blocks.append(paramvec_norm)
 
@@ -4710,7 +4705,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         if paramvec is not None: self.model.from_vector(paramvec)
         return self._gather_hessian(self._construct_hessian(self.counts, self.total_counts, self.prob_clip_interval))
 
-    def _hessian_from_block(self, hprobs, dprobs12, probs, counts, total_counts, freqs, resource_alloc):
+    def _hessian_from_block(self, hprobs, dprobs12, probs, element_slice, counts, total_counts, freqs, resource_alloc):
         """ Factored-out computation of hessian from raw components """
 
         # Note: hprobs, dprobs12, probs are sometimes shared memory, but the caller (e.g. _construct_hessian)
@@ -4729,18 +4724,23 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         hprobs_coeffs = self.raw_objfn.dterms(probs, counts, total_counts, freqs)
 
         if self.firsts is not None:
+            # iel = element index (of self.layout), ic = circuit index
+            firsts, indicesWithOmitted = zip(*([(iel - element_slice.start, ic) for (iel, ic)
+                                                in zip(self.firsts, self.indicesOfCircuitsWithOmittedData)
+                                                if element_slice.start <= iel < element_slice.stop]))
+
             #Allocate these above?  Need to know block sizes of dprobs12 & hprobs...
-            dprobs12_omitted_rowsum = _np.empty((len(self.firsts),) + dprobs12.shape[1:], 'd')
-            hprobs_omitted_rowsum = _np.empty((len(self.firsts),) + hprobs.shape[1:], 'd')
+            dprobs12_omitted_rowsum = _np.empty((len(firsts),) + dprobs12.shape[1:], 'd')
+            hprobs_omitted_rowsum = _np.empty((len(firsts),) + hprobs.shape[1:], 'd')
 
             omitted_probs = 1.0 - _np.array([_np.sum(probs[self.layout.indices_for_index(i)])
-                                             for i in self.indicesOfCircuitsWithOmittedData])
-            for ii, i in enumerate(self.indicesOfCircuitsWithOmittedData):
+                                             for i in indicesWithOmitted])
+            for ii, i in enumerate(indicesWithOmitted):
                 dprobs12_omitted_rowsum[ii, :, :] = _np.sum(dprobs12[self.layout.indices_for_index(i), :, :], axis=0)
                 hprobs_omitted_rowsum[ii, :, :] = _np.sum(hprobs[self.layout.indices_for_index(i), :, :], axis=0)
 
-            dprobs12_omitted_coeffs = -self.raw_objfn.zero_freq_hterms(total_counts[self.firsts], omitted_probs)
-            hprobs_omitted_coeffs = -self.raw_objfn.zero_freq_dterms(total_counts[self.firsts], omitted_probs)
+            dprobs12_omitted_coeffs = -self.raw_objfn.zero_freq_hterms(total_counts[firsts], omitted_probs)
+            hprobs_omitted_coeffs = -self.raw_objfn.zero_freq_dterms(total_counts[firsts], omitted_probs)
 
         # hessian = hprobs_coeffs * hprobs + dprobs12_coeff * dprobs12
         #  but re-using dprobs12 and hprobs memory (which is overwritten!)
@@ -4748,8 +4748,10 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             hprobs *= hprobs_coeffs[:, None, None]
             dprobs12 *= dprobs12_coeffs[:, None, None]
             if self.firsts is not None:
-                hprobs[self.firsts, :, :] += hprobs_omitted_coeffs[:, None, None] * hprobs_omitted_rowsum
-                dprobs12[self.firsts, :, :] += dprobs12_omitted_coeffs[:, None, None] * dprobs12_omitted_rowsum
+                firsts = [(iel - element_slice.start) for iel in self.firsts
+                      if element_slice.start <= iel < element_slice.stop]
+                hprobs[firsts, :, :] += hprobs_omitted_coeffs[:, None, None] * hprobs_omitted_rowsum
+                dprobs12[firsts, :, :] += dprobs12_omitted_coeffs[:, None, None] * dprobs12_omitted_rowsum
             hessian = dprobs12; hessian += hprobs
         else:
             hessian = dprobs12
@@ -5935,6 +5937,11 @@ def _errorgen_penalty(mdl, prefactor):
     return prefactor * _np.array([_np.sqrt(val)], 'd')
 
 
+def _paramvec_norm_penalty(reg_factor, paramvec):
+    out = reg_factor * _np.array([max(0, absx - 1.0) for absx in map(abs, paramvec)], 'd')
+    return out
+
+
 def _cptp_penalty_jac_fill(cp_penalty_vec_grad_to_fill, mdl, prefactor, op_basis, wrt_slice):
     """
     Helper function - jacobian of CPTP penalty (sum of tracenorms of gates)
@@ -6164,10 +6171,6 @@ class LogLWildcardFunction(ObjectiveFunction):
         #assumes self.logl_objfn.fn(...) was called to initialize the members of self.logl_objfn
         self.logl_objfn.resource_alloc.add_tracked_memory(self.logl_objfn.probs.size)
         self.probs = self.logl_objfn.probs.copy()
-
-    #def _default_evalpt(self):
-    #    """The default point to evaluate functions at """
-    #    return self.wildcard_budget.to_vector()
 
     #Mimic the underlying LogL objective
     def __getattr__(self, attr):

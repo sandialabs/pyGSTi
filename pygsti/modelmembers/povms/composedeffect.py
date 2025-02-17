@@ -44,9 +44,6 @@ class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
 
     def __init__(self, static_effect, errormap):
         evotype = errormap._evotype
-        #from .operation import LindbladOp as _LPGMap
-        #assert(evotype in ("densitymx", "svterm", "cterm")), \
-        #    "Invalid evotype: %s for %s" % (evotype, self.__class__.__name__)
 
         if not isinstance(static_effect, _POVMEffect):
             # UNSPECIFIED BASIS -- should be able to use static_effect._rep.basis once we get std attribute setup

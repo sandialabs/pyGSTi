@@ -18,7 +18,6 @@ import scipy.sparse as _sps
 
 from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
 from pygsti.modelmembers import modelmember as _modelmember
-from pygsti.baseobjs.basis import EmbeddedBasis as _EmbeddedBasis
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 
 

@@ -360,7 +360,6 @@ class LabelTup(Label, tuple):
             mapped_sslbls = [mapper(sslbl) for sslbl in self.sslbls]
         return Label(self.name, mapped_sslbls)
 
-
     def __str__(self):
         """
         Defines how a Label is printed out, e.g. Gx:0 or Gcnot:1:2
@@ -818,6 +817,10 @@ class LabelStr(Label, str):
         # Need to tell serialization logic how to create a new Label since it's derived
         # from the immutable tuple type (so cannot have its state set after creation)
         return (LabelStr, (str(self), self.time), None)
+    
+    def __contains__(self, x):
+        #need to get a string rep of the tested label.
+        return str(x) in str(self)
 
     def to_native(self):
         """

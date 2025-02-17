@@ -16,7 +16,6 @@ import itertools as _itertools
 import uuid as _uuid
 import warnings as _warnings
 import collections as _collections
-
 import numpy as _np
 
 from pygsti.baseobjs import statespace as _statespace
@@ -27,6 +26,7 @@ from pygsti.evotypes import Evotype as _Evotype
 from pygsti.forwardsims import forwardsim as _fwdsim
 from pygsti.modelmembers import modelmember as _gm
 from pygsti.modelmembers import operations as _op
+from pygsti.modelmembers.povms import POVM as _POVM, POVMEffect as _POVMEffect
 from pygsti.baseobjs.basis import Basis as _Basis, TensorProdBasis as _TensorProdBasis
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
@@ -467,9 +467,9 @@ class OpModel(Model):
         """
         Creates a new OpModel.  Rarely used except from derived classes `__init__` functions.
         """
-        self._evotype = _Evotype.cast(evotype)
         self._set_state_space(state_space, basis)
         #sets self._state_space, self._basis
+        self._evotype = _Evotype.cast(evotype, state_space=self.state_space)
 
         super(OpModel, self).__init__(self.state_space)  # do this as soon as possible
 
@@ -481,6 +481,8 @@ class OpModel(Model):
         self._param_interposer = None
         self._reinit_opcaches()
         self.fogi_store = None
+        self._index_mm_map = None
+        self._index_mm_label_map = None
 
     def __setstate__(self, state_dict):
         self.__dict__.update(state_dict)
@@ -655,6 +657,56 @@ class OpModel(Model):
         self._clean_paramvec()
         return Model.num_modeltest_params.fget(self)
 
+    @property
+    def parameter_labels(self):
+        """
+        A list of labels, usually of the form `(op_label, string_description)` describing this model's parameters.
+        """
+        self._clean_paramvec()
+        return self._ops_paramlbls_to_model_paramlbls(self._paramlbls)
+    
+    def set_parameter_label(self, index, label):
+        """
+        Set the label of a single model parameter.
+
+        Parameters
+        ----------
+        index : int
+            The index of the paramter whose label should be set.
+
+        label : object
+            An object that serves to label this parameter.  Often a string.
+
+        Returns
+        -------
+        None
+        """
+        self._clean_paramvec()
+        self._paramlbls[index] = label
+    
+    @property
+    def parameter_bounds(self):
+        """ Upper and lower bounds on the values of each parameter, utilized by optimization routines """
+        self._clean_paramvec()
+        return self._param_bounds
+    
+    @property
+    def num_modeltest_params(self):
+        """
+        The parameter count to use when testing this model against data.
+
+        Often times, this is the same as :meth:`num_params`, but there are times
+        when it can convenient or necessary to use a parameter count different than
+        the actual number of parameters in this model.
+
+        Returns
+        -------
+        int
+            the number of model parameters.
+        """
+        self._clean_paramvec()
+        return Model.num_modeltest_params.fget(self)
+
     def _iter_parameterized_objs(self):
         raise NotImplementedError("Derived Model classes should implement _iter_parameterized_objs")
         #return # default is to have no parameterized objects
@@ -697,10 +749,6 @@ class OpModel(Model):
         #    Whether this operation should refrain from setting it's dirty
         #    flag as a result of this call.  `False` is the safe option, as
         #    this call potentially changes this operation's parameters.
-
-        #print("Cleaning Paramvec (dirty=%s, rebuild=%s)" % (self.dirty, self._need_to_rebuild))
-        #import inspect, pprint
-        #pprint.pprint([(x.filename,x.lineno,x.function) for x in inspect.stack()[0:7]])
 
         if self._need_to_rebuild:
             self._rebuild_paramvec()
@@ -1098,6 +1146,10 @@ class OpModel(Model):
         self._paramlbls = wl
         self._param_bounds = wb if _param_bounds_are_nontrivial(wb) else None
         if debug: print("DEBUG: Done rebuild: %d op params" % len(w))
+        
+        #rebuild the model index to model member map if needed.
+        self._build_index_mm_map()
+
 
     def _init_virtual_obj(self, obj):
         """
@@ -1124,6 +1176,34 @@ class OpModel(Model):
         for _, o in self._iter_parameterized_objs():
             cnt += o._obj_refcount(obj)
         return cnt
+    
+    def _build_index_mm_map(self):
+        """
+        Build a map between indices into a model's parameter vector and the corresponding children.
+        The map is a list whose indices are indexes into the model's parameter vector and whose values are
+        lists (because there can be more than one with parameter collection) of references to the 
+        corresponding child model members who's gpindices correspond it.
+        """
+
+        #Mapping between the model index and the corresponding model members will be more complicated
+        #when there is a parameter interposer, so table implementing this for that case.
+        if self.param_interposer is not None:
+            self._index_mm_map = None
+            self._index_mm_label_map = None
+        else:
+            index_mm_map = [[] for _ in range(len(self._paramvec))]
+            index_mm_label_map = [[] for _ in range(len(self._paramvec))]
+            
+            for lbl, obj in self._iter_parameterized_objs():
+                #if the gpindices are a slice then convert to a list of indices.
+                gpindices = _slct.indices(obj.gpindices) if isinstance(obj.gpindices, slice) else obj.gpindices
+                for gpidx in gpindices:
+                    index_mm_map[gpidx].append(obj)
+                    index_mm_label_map[gpidx].append(lbl)
+            self._index_mm_map = index_mm_map
+            self._index_mm_label_map = index_mm_label_map
+        #Note to future selves. If we add a flag indicating the presence of collected parameters
+        #then we can improve the performance of this by using a simpler structure when no collected
 
     def to_vector(self):
         """
@@ -1172,6 +1252,105 @@ class OpModel(Model):
 
         if OpModel._pcheck: self._check_paramvec()
 
+    def set_parameter_value(self, index, val, close=False):
+        """
+        This method allows for updating the value of a single model parameter at the
+        specified parameter index.
+
+        Parameters
+        ----------
+        index : int or tuple
+            Index of the parameter value in the model's parameter vector to update.
+            If a tuple this instead indexes by the corresponding parameter label.
+        
+        val : float
+            Updated parameter value.
+
+        close : bool, optional
+            Set to `True` if val is close to the current parameter vector.
+            This can make some operations more efficient.  
+
+        Returns
+        -------
+        None
+        """
+        
+        self.set_parameter_values([index], [val], close)
+        
+        
+
+    def set_parameter_values(self, indices, values, close=False):
+        """
+        This method allows for updating the values of multiple model parameter at the
+        specified parameter indices.
+
+        Parameters
+        ----------
+        indices : list of ints or tuples
+            Indices of the parameter values in the model's parameter vector to update.
+            If tuples this instead indexes by the corresponding parameter label.
+            Mixing integer indices and parameter label tuples is not supported.
+            Note: In the event that the parameter labels vector for this model contains
+            duplicates the update may only apply to the first instance.
+        
+        values : list or tuple of floats
+            Updated parameter values.
+
+        close : bool, optional
+            Set to `True` if values are close to the current parameter vector.
+            This can make some operations more efficient.  
+
+        Returns
+        -------
+        None
+        """
+
+        if isinstance(indices[0], tuple):
+            #parse the strings into integer indices.
+            param_labels_list = self.parameter_labels.tolist()
+            indices = [param_labels_list.index(lbl) for lbl in indices]
+                        
+        for idx, val in zip(indices, values):
+            self._paramvec[idx] = val
+
+        if self._param_interposer is not None or self._index_mm_map is None:
+            #fall back to standard from_vector call.
+            self.from_vector(self._paramvec)
+        else:
+            #get all of the model members which need to be be updated and loop through them to update their
+            #parameters.
+            unique_mms = {lbl:val for idx in indices for lbl, val in zip(self._index_mm_label_map[idx], self._index_mm_map[idx])}
+            for obj in unique_mms.values():
+                obj.from_vector(self._paramvec[obj.gpindices].copy(), close, dirty_value=False)
+            
+            #go through the model members which have been updated and identify whether any of them have children
+            #which may be present in the _opcaches which have already been updated by the parents. I think the
+            #conditions under which this should be safe are: a) the layer rules are ExplicitLayerRules,
+            #b) The parent is a POVM (it should be safe to assume that POVMs update their children, 
+            #and c) the effect is a child of that POVM.
+            
+            if isinstance(self._layer_rules, _ExplicitLayerRules):
+                updated_children = []
+                for obj in unique_mms.values():
+                    if isinstance(obj, _POVM):
+                        updated_children.extend(obj.values())
+            else:
+                updated_children = None
+
+            # Call from_vector on elements of the cache
+            if self._call_fromvector_on_cache:
+                #print(f'{self._opcaches=}')
+                for opcache in self._opcaches.values():
+                    for obj in opcache.values():
+                        opcache_elem_gpindices = _slct.indices(obj.gpindices) if isinstance(obj.gpindices, slice) else obj.gpindices
+                        if any([idx in opcache_elem_gpindices for idx in indices]):
+                            #check whether we have already updated this object.
+                            if updated_children is not None and any([child is obj for child in updated_children]):
+                                continue
+                            obj.from_vector(self._paramvec[opcache_elem_gpindices], close, dirty_value=False)
+
+            if OpModel._pcheck: self._check_paramvec()
+
     @property
     def param_interposer(self):
         return self._param_interposer
@@ -1196,6 +1375,8 @@ class OpModel(Model):
     def _ops_paramlbls_to_model_paramlbls(self, w):
         return self.param_interposer.ops_paramlbls_to_model_paramlbls(w) \
             if (self.param_interposer is not None) else w
+
+#------Model-Specific Circuit Operations------------#
 
     def circuit_outcomes(self, circuit):
         """
@@ -1721,6 +1902,91 @@ class OpModel(Model):
         else:
             return comp_circuits
         
+    def circuit_parameter_dependence(self, circuits, return_param_circ_map = False):
+        """
+        Calculate the which model parameters each of the input circuits depends upon.
+        Return this result in the the form of a dictionary whose keys are circuits,
+        and whose values are lists of parameters upon which that circuit depends.
+        Optionally a reverse mapping from model parameters to the input circuits
+        which depend on that parameter.
+
+        Note: This methods does not work with models using parameter interposers presently.
+
+        Parameters
+        ----------
+        circuits : list of Circuits
+            List of circuits to determine parameter dependence for.
+        
+        return_param_circ_map : bool, optional (default False)
+            A flag indicating whether to return a reverse mapping from parameters
+            to circuits depending on those parameters.
+        
+        Returns
+        -------
+        circuit_parameter_map : dict
+            Dictionary with keys given by Circuits and values giving the list of
+            model parameter indices upon which that circuit depends.
+
+        param_to_circuit_map : dict, optional
+            Dictionary with keys given by model parameter indices, and values
+            giving the list of input circuits dependent upon that parameter.
+        """
+
+        if self.param_interposer is not None:
+            msg = 'Circuit parameter dependence evaluation is not currently implemented for models with parameter interposers.'
+            raise NotImplementedError(msg)
+        #start by completing the model:
+        #Here we want to do this for all of the different primitive prep and
+        #measurement layers present.
+        circuit_parameter_map = {}
+        
+        completed_circuits_by_prep_povm = []
+        prep_povm_pairs = list(_itertools.product(self.primitive_prep_labels, self.primitive_povm_labels))
+        for prep_lbl, povm_lbl in prep_povm_pairs:
+            completed_circuits_by_prep_povm.append(self.complete_circuits(circuits, prep_lbl_to_prepend=prep_lbl, povm_lbl_to_append=povm_lbl))
+        
+        #we should now have in completed_circuits_by_prep_povm a list of completed circuits
+        #for each prep, povm pair. Unique layers by circuit will then be the union of these
+        #accross each of the sublists.
+
+        unique_layers_by_circuit = []
+        for circuits_by_prep_povm in zip(*completed_circuits_by_prep_povm):    
+            #Take the complete set of circuits and get the unique layers which appear accross all of them
+            #then use this to pre-compute circuit_layer_operators and gpindices.
+            unique_layers_by_circuit.append(set(sum([ckt.layertup for ckt in circuits_by_prep_povm], ())))
+
+        #then aggregate these:
+        unique_layers = set()
+        unique_layers = unique_layers.union(*unique_layers_by_circuit)
+
+        #Now pre-compute the gpindices for all of these unique layers
+        unique_layers_gpindices_dict = {layer:_slct.indices(self.circuit_layer_operator(layer).gpindices) for layer in unique_layers}
+        
+        #loop through the circuit layers and get the circuit layer operators.
+        #from each of the circuit layer operators we'll get their gpindices. 
+        
+        for circuit, ckt_layer_set in zip(circuits, unique_layers_by_circuit):
+            seen_gpindices = []
+            for layer in ckt_layer_set:
+                gpindices_for_layer = unique_layers_gpindices_dict[layer]
+                seen_gpindices.extend(gpindices_for_layer)
+                    
+            seen_gpindices = sorted(set(seen_gpindices))
+
+            circuit_parameter_map[circuit] = seen_gpindices
+        
+        #We can also optionally compute the reverse map, from parameters to circuits which touch that parameter.
+        #it would be more efficient to do this in parallel with the other maps construction, so refactor this later.
+        if return_param_circ_map:
+            param_to_circuit_map = [[] for _ in range(self.num_params)]
+            #keys in circuit_parameter_map should be in the same order as in circuits.
+            for param_list in circuit_parameter_map.values():
+                for param_idx in param_list:
+                    param_to_circuit_map[param_idx].append(circuit)
+
+            return circuit_parameter_map, param_to_circuit_map
+        else:
+            return circuit_parameter_map
 
     # ---- Operation container interface ----
     # These functions allow oracle access to whether a label of a given type
@@ -2723,3 +2989,6 @@ def _default_param_bounds(num_params):
 def _param_bounds_are_nontrivial(param_bounds):
     """Checks whether a parameter-bounds array holds any actual bounds, or if all are just +-inf """
     return _np.any(param_bounds[:, 0] != -_np.inf) or _np.any(param_bounds[:, 1] != _np.inf)
+
+#stick this on the bottom to resolve a circular import issue:
+from pygsti.models.explicitmodel import ExplicitLayerRules as _ExplicitLayerRules

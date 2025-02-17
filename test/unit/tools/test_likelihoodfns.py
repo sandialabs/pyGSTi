@@ -68,11 +68,6 @@ class LogLTester(LikelihoodFunctionsBase):
         maxL2 = lfn.logl_max(self.model, self.ds, self.circuits, poisson_picture=False)
         # TODO assert correctness
 
-    #Removed this function
-    #def test_cptp_penalty(self):
-    #    lfn.cptp_penalty(self.model, include_spam_penalty=True)
-    #    # TODO assert correctness
-
     def test_two_delta_logl(self):
         twoDelta1 = lfn.two_delta_logl_term(n=100, p=0.5, f=0.6, min_prob_clip=1e-6, poisson_picture=True)
         twoDelta2 = lfn.two_delta_logl_term(n=100, p=0.5, f=0.6, min_prob_clip=1e-6, poisson_picture=False)
