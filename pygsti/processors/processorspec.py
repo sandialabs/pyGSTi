@@ -310,6 +310,7 @@ class QuditProcessorSpec(ProcessorSpec):
         nonstd_preps = {k: _serialize_state(obj) for k, obj in self.nonstd_preps.items()}
         nonstd_povms = {k: _serialize_povm(obj) for k, obj in self.nonstd_povms.items()}
         nonstd_instruments = {':'.join(k): _serialize_instrument(obj) for k, obj in self.nonstd_instruments.items()}
+
         state.update({'qudit_labels': list(self.qudit_labels),
                       'qudit_udims': list(self.qudit_udims),
                       'gate_names': list(self.gate_names),  # Note: not labels, just strings, so OK
@@ -399,6 +400,7 @@ class QuditProcessorSpec(ProcessorSpec):
 
         availability = {k: _tuplize(v) for k, v in state['availability'].items()}
         geometry = _qgraph.QubitGraph.from_nice_serialization(state['geometry'])
+
         return cls(state['qudit_labels'], state['qudit_udims'], state['gate_names'], nonstd_gate_unitaries,
                    availability, geometry, state['prep_names'], state['povm_names'],
                    [tuple(iname) for iname in state['instrument_names']],
@@ -1017,11 +1019,10 @@ class QubitProcessorSpec(QuditProcessorSpec):
             _warnings.warn(("Loading an old-format QubitProcessorSpec that doesn't contain SPAM information."
                             " You should check to make sure you don't want/need to add this information and"
                             " then re-save this processor spec."))
-        instrument_names = state.get('instrument_names', [])
-        instrument_names = [tuple(name) if isinstance(name,list) else name for name in instrument_names]
+
         return cls(len(state['qubit_labels']), state['gate_names'], nonstd_gate_unitaries, availability,
                    geometry, state['qubit_labels'], symplectic_reps, state.get('prep_names', []),
-                   state.get('povm_names', []), instrument_names, nonstd_preps, nonstd_povms,
+                   state.get('povm_names', []), state.get('instrument_names', []), nonstd_preps, nonstd_povms,
                    nonstd_instruments, state['aux_info'])
 
     @property
