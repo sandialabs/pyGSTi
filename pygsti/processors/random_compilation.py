@@ -2,14 +2,19 @@ import numpy as _np
 
 from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.baseobjs.label import Label as _Label
+from pygsti.baseobjs.unitarygatefunction import UnitaryGateFunction as _UnitaryGateFunction
+from pygsti.tools.internalgates import standard_gatename_unitaries as _standard_gatename_unitaries
 
 #TODO: OOP-ify this code?
 
 class RandomCompilation(object):
-    def __init__(self, rc_strategy, rand_state): #pauli_rc, central_pauli are currently the supported options
+    def __init__(self, rc_strategy=None, return_bs=False, testing=False, rand_state=None): #pauli_rc, central_pauli are currently the supported options
         # do I need to call super().__init__?
         # is this even the right class to inherit from?
         self.rc_strategy = rc_strategy if rc_strategy is not None else "pauli_rc"
+        self.return_bs = return_bs
+        self.testing = testing
+
 
         if isinstance(rand_state, _np.random.RandomState):
             self.rand_state = rand_state
@@ -19,13 +24,23 @@ class RandomCompilation(object):
             self.rand_state = _np.random.RandomState()
 
 
-    def compile(self, circ: _Circuit): # may need to a kwarg dict parameter to this function to allow for things to be passed to a given vompilation choice
+    def compile(self, circ: _Circuit, test_layers=None): # may need to a kwarg dict parameter to this function to allow for things to be passed to a given vompilation choice
         # d = circ.depth
         # n = circ.width
         # framedata = {}
 
         if self.rc_strategy == 'pauli_rc':
-            return pauli_randomize_circuit(circ=circ, rand_state=self.rand_state, return_target_pauli=False)
+            return_bs = False
+            return_target_pauli = False
+            insert_test_layers = False
+            if self.return_bs:
+                return_bs = True
+            if self.testing:
+                insert_test_layers = True
+                return_target_pauli = True
+                return_bs = True
+
+            return pauli_randomize_circuit(circ=circ, rand_state=self.rand_state, return_bs=return_bs, return_target_pauli=return_target_pauli, insert_test_layers=insert_test_layers, test_layers=test_layers)
         elif self.rc_strategy == 'central_pauli':
             return randomize_central_pauli(circ=circ, rand_state=self.rand_state)
         else:
@@ -33,17 +48,38 @@ class RandomCompilation(object):
 
 
 
-def pauli_randomize_circuit(circ, rand_state=None, return_target_pauli=False):
+def pauli_randomize_circuit(circ, rand_state=None, return_bs=False, return_target_pauli=False, insert_test_layers=False, test_layers=None):
     if rand_state is None:
         rand_state = _np.random.RandomState()
 
     d = circ.depth
     n = circ.width
     p = _np.zeros(2*n, int)
+    # q = _np.zeros(2*n, int) # fixes a bug that occurs if there are no U3 layers in the entire circuit (but tbh this should be fixed a different way)
+
+    return_0_bs = False
+
+    if insert_test_layers:
+        num_u3_layers = 0
+        for i in range(d):
+            layer = circ.layer_label(i).components
+            if layer[0].name == 'Gu3':
+                num_u3_layers += 1
+        # print(len(test_layers))
+        # print(num_u3_layers)
+        assert len(test_layers) == num_u3_layers, f'expected {num_u3_layers} Pauli vectors but got {len(test_layers)} instead'
+
+    if return_bs:
+        layer_0 = circ.layer_label(0).components
+        if layer_0[0].name == 'Gcnot':
+            return_0_bs = True
+
 
     qubits = circ.line_labels
 
     layers = []
+
+    last_layer_u3 = False
 
     for i in range(d):
 
@@ -54,12 +90,19 @@ def pauli_randomize_circuit(circ, rand_state=None, return_target_pauli=False):
             layers.append(layer)
 
         elif len(layer) == 0 or layer[0].name == 'Gu3':
-            q = 2 * rand_state.randint(0, 2, 2*n)
+            if insert_test_layers:
+                q = test_layers.pop(0)
+                if len(q) != 2*n:
+                    raise ValueError(f"test layer {q} should have length {2*n} but has length {len(q)} instead")
+
+            else:
+                q = 2 * rand_state.randint(0, 2, 2*n)
             # update_u3_parameters now twirls/adds label for empty qubits, so don't prepad for speed
             #padded_layer = pad_layer(layer, qubits)
             rc_layer = update_u3_parameters(layer, p, q, qubits)
             layers.append(rc_layer)
             p = q
+            last_layer_u3 = True
             
         else:
             layers.append(layer)
@@ -68,18 +111,32 @@ def pauli_randomize_circuit(circ, rand_state=None, return_target_pauli=False):
                     (control, target) = g.qubits
                     p[qubits.index(control)] = (p[qubits.index(control)] + p[qubits.index(target)]) % 4
                     p[n + qubits.index(target)] = (p[n + qubits.index(control)] + p[n + qubits.index(target)]) % 4
+                    # q = p
                 else:
                     raise ValueError("Circuit can only contain Gcnot, Gu3, and Gi gates in separate layers!")
+            last_layer_u3 = False
 
-    bs = ''.join([str(b // 2) for b in q[n:]])
+    # if last_layer_u3 == False:
+    #     final_layer = pauli_vector_to_u3_layer(p, qubits)
+    #     layers.append(final_layer)
+
+
+    if return_0_bs:
+        bs = '0'*n
+    else:
+        bs = ''.join([str(b // 2) for b in p[n:]])
 
     # Avoid checks for speed
     rc_circ = _Circuit(layers, line_labels=circ.line_labels, check=False, expand_subcircuits=False)
 
-    if not return_target_pauli:
-        return rc_circ, bs
-    else:
-        return rc_circ, bs, q
+    out = [rc_circ]
+
+    if return_bs:
+        out.append(bs)
+    if return_target_pauli:
+        out.append(q)
+
+    return out
     
 
 # def central_pauli_mirror_circuit(self, circ: _Circuit): #want this function to stay backwards compatible, but it does need modified (or another function needs created)
@@ -151,7 +208,7 @@ def randomize_central_pauli(circ: _Circuit, rand_state=None):
     central_pauli_layer = pauli_vector_to_u3_layer(central_pauli, qubits)
     q = central_pauli.copy()
 
-    layers = [central_pauli_layer]
+    layers = []
 
     for i in range(d):
 
@@ -406,3 +463,20 @@ def pad_layer(layer, qubits):
             padded_layer.append(_Label('Gu3', (q,), args=(0.0, 0.0, 0.0)))
 
     return padded_layer
+
+class Gu3(_UnitaryGateFunction):
+    shape = (2,2)
+    def __call__(self, arg):
+        theta, phi, lamb = (float(arg[0]), float(arg[1]), float(arg[2]))
+        return _np.array([[_np.cos(theta/2), -_np.exp(1j*lamb)*_np.sin(theta/2)],
+                         [_np.exp(1j*phi)*_np.sin(theta/2), _np.exp(1j*(phi + lamb))*_np.cos(theta/2)]])
+
+def get_clifford_from_unitary(U):
+    clifford_unitaries = {k: v for k, v in _standard_gatename_unitaries().items()
+                          if 'Gc' in k and v.shape == (2, 2)}
+    for k,v in clifford_unitaries.items():
+        for phase in [1, -1, 1j, -1j]:
+            if _np.allclose(U, phase*v):
+                return k
+            
+    raise RuntimeError(f'Failed to look up Clifford for unitary:\n{U}')
