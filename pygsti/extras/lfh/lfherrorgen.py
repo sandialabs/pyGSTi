@@ -10,7 +10,7 @@ support for fluctuating Hamiltonian parameters.
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
-
+'''
 import numpy as _np
 import collections as _collections
 import itertools as _itertools
@@ -209,3 +209,5 @@ class LFHLindbladErrorgen(_LindbladErrorgen):
             off += blk.num_params
         self._update_rep()
         #self.dirty = dirty_value
+
+'''

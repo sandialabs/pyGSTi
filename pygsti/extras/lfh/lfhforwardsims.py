@@ -10,7 +10,7 @@ fluctuating Hamiltonian parameters.
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
-
+'''
 
 import numpy as _np
 import collections as _collections
@@ -923,3 +923,4 @@ class LFHSigmaForwardSimulator(_ForwardSimulator):
             self.bulk_fill_dprobs(dprobs2, layout)
             array_to_fill[:, i, :] = (dprobs2 - dprobs) / eps
         self.model.from_vector(orig_vec, close=True)
+'''
