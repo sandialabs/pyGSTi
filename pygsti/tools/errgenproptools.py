@@ -6468,7 +6468,7 @@ def bch_numerical(propagated_errorgen_layers, error_propagator, bch_order=1):
     #iterate through each of the propagated error generator layers and turn these into dense numpy arrays
     errorgen_layer_mats = []
     for layer in propagated_errorgen_layers:
-        errorgen_layer_mats.append(error_propagator.errorgen_layer_dict_to_errorgen(layer, mx_basis='pp', return_dense=True))
+        errorgen_layer_mats.append(error_propagator.errorgen_layer_dict_to_errorgen(layer, mx_basis='pp'))
     
     #initialize a matrix for storing the result of doing BCH.
     bch_result = _np.zeros((4**num_qubits, 4**num_qubits), dtype=_np.complex128)
