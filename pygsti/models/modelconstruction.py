@@ -906,6 +906,8 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
                             bydigit_index = spec
                             assert (len(bydigit_index) == num_qudits), \
                                 "Wrong number of qudits in '%s': expected %d" % (spec, num_qudits)
+                            #Map a (possibly possibly mixed-base) string qudit state specifiers to a
+                            #integer mapping into the corresponding standard basis state.
                             v = _np.zeros(state_space.udim)
                             inc = _np.flip(_np.cumprod(list(reversed(processor_spec.qudit_udims[1:] + (1,)))))
                             index = _np.dot(inc, list(map(int, bydigit_index)))
