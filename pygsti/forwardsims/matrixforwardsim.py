@@ -738,6 +738,9 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         eval_tree = layout_atom_tree
         cacheSize = len(eval_tree)
         prodCache = _np.zeros((cacheSize, dim, dim), 'd')
+        # ^ This assumes assignments prodCache[i] = <2d numpy array>.
+        #   It would be better for this to be a dict (mapping _most likely_
+        #   to ndarrays) if we don't need slicing or other axis indexing.
         scaleCache = _np.zeros(cacheSize, 'd')
 
         for iDest, iRight, iLeft in eval_tree:
@@ -751,7 +754,10 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
                 else:
                     gate = self.model.circuit_layer_operator(opLabel, 'op').to_dense(on_space='minimal')
                     nG = max(_nla.norm(gate), 1.0)
+                    # ^ This indicates a need to compute norms of the operation matrices. Can't do this
+                    #   with scipy.linalg if gate is represented implicitly. 
                     prodCache[iDest] = gate / nG
+                    # ^ Indicates a need to overload division by scalars.
                     scaleCache[iDest] = _np.log(nG)
                 continue
 
@@ -764,10 +770,14 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             scaleCache[iDest] = scaleCache[iLeft] + scaleCache[iRight]
 
             if prodCache[iDest].max() < _PSMALL and prodCache[iDest].min() > -_PSMALL:
-                nL, nR = max(_nla.norm(L), _np.exp(-scaleCache[iLeft]),
-                             1e-300), max(_nla.norm(R), _np.exp(-scaleCache[iRight]), 1e-300)
+                nL = max(_nla.norm(L), _np.exp(-scaleCache[iLeft]),  1e-300)
+                nR = max(_nla.norm(R), _np.exp(-scaleCache[iRight]), 1e-300)
+                # ^ I want to allow L,R to be tensor product operators. That precludes
+                #   calling _nla.norm.
                 sL, sR = L / nL, R / nR
-                prodCache[iDest] = _np.dot(sL, sR); scaleCache[iDest] += _np.log(nL) + _np.log(nR)
+                # ^ Again, shows the need to overload division by scalars.
+                prodCache[iDest] = sL @ sR
+                scaleCache[iDest] += _np.log(nL) + _np.log(nR)
 
         nanOrInfCacheIndices = (~_np.isfinite(prodCache)).nonzero()[0]  # may be duplicates (a list, not a set)
         # since all scaled gates start with norm <= 1, products should all have norm <= 1
@@ -838,6 +848,8 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
         tSerialStart = _time.time()
         dProdCache = _np.zeros((cacheSize,) + deriv_shape)
+        # ^ I think that deriv_shape will be a tuple of length > 2.
+        #   (Based on how swapaxes is used in the loop below ...)
         wrtIndices = _slct.indices(wrt_slice) if (wrt_slice is not None) else None
 
         for iDest, iRight, iLeft in eval_tree:
@@ -851,6 +863,9 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
                     #doperation = self.dproduct( (opLabel,) , wrt_filter=wrtIndices)
                     doperation = self._doperation(opLabel, wrt_filter=wrtIndices)
                     dProdCache[iDest] = doperation / _np.exp(scale_cache[iDest])
+                    # ^ Need a way to track tensor product structure in whatever's 
+                    #   being returned by self._doperation (presumably it's a tensor ...)
+
                 continue
 
             tm = _time.time()
@@ -861,8 +876,18 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             # since then matrixOf(circuit[i]) = matrixOf(circuit[iLeft]) * matrixOf(circuit[iRight])
             L, R = prod_cache[iLeft], prod_cache[iRight]
             dL, dR = dProdCache[iLeft], dProdCache[iRight]
-            dProdCache[iDest] = _np.dot(dL, R) + \
-                _np.swapaxes(_np.dot(L, dR), 0, 1)  # dot(dS, T) + dot(S, dT)
+            term1 = _np.dot(dL, R)
+            term2 = _np.swapaxes(_np.dot(L, dR), 0, 1) 
+            # ^ From the numpy docs on .dot :
+            #
+            #   If a is an N-D array and b is an M-D array (where M>=2),
+            #   it is a sum product over the last axis of a and the second-to-last axis of b:
+            #
+            #       dot(a, b)[i,j,k,m] = sum(a[i,j,:] * b[k,:,m])
+            #
+            dProdCache[iDest] = term1 +  term2  # dot(dS, T) + dot(S, dT)
+            # ^ We need addition of tensor-product-structured "doperators."
+
             profiler.add_time("compute_dproduct_cache: dots", tm)
             profiler.add_count("compute_dproduct_cache: dots")
 
@@ -870,9 +895,12 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             if abs(scale) > 1e-8:  # _np.isclose(scale,0) is SLOW!
                 dProdCache[iDest] /= _np.exp(scale)
                 if dProdCache[iDest].max() < _DSMALL and dProdCache[iDest].min() > -_DSMALL:
+                    # ^ Need the tensor-product-structured "doperators" to have .max() and .min()
+                    #   methods.
                     _warnings.warn("Scaled dProd small in order to keep prod managable.")
             elif (_np.count_nonzero(dProdCache[iDest]) and dProdCache[iDest].max() < _DSMALL
                   and dProdCache[iDest].min() > -_DSMALL):
+                # ^ Need to bypass the call to _np.count_nonzero(...).
                 _warnings.warn("Would have scaled dProd but now will not alter scale_cache.")
 
         #profiler.print_mem("DEBUGMEM: POINT2"); profiler.comm.barrier()
