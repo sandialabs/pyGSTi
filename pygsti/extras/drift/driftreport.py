@@ -192,8 +192,8 @@ class PowerSpectraPlot(_ws.WorkspacePlot):
         data.append(text)
 
         layout = go.Layout(width=800 * scale, height=400 * scale,
-                           xaxis=dict(title="Frequency (Hz)", titlefont=dict(size=14), range=xlim,),
-                           yaxis=dict(title="Spectral Power", titlefont=dict(size=14), range=ylim,),
+                           xaxis=dict(title=dict(text="Frequency (Hz)", font=dict(size=14)), range=xlim,),
+                           yaxis=dict(title=dict(text="Spectral Power", font=dict(size=14)), range=ylim,),
                            legend=dict(
                                traceorder='normal',
                                font=dict(
@@ -342,10 +342,10 @@ class ProbTrajectoriesPlot(_ws.WorkspacePlot):
             ylim = [-0.1, 1.1]
             xlim = [min(xdata), max(xdata)]
 
-            layout = go.Layout(width=800 * scale, height=400 * scale, title=None, titlefont=dict(size=16),
+            layout = go.Layout(width=800 * scale, height=400 * scale, title=dict(font=dict(size=16)),
                                # , rangeslider=dict(visible = True)),
-                               xaxis=dict(title="Time (seconds)", titlefont=dict(size=14), range=xlim),
-                               yaxis=dict(title="Probability", titlefont=dict(size=14), range=ylim),
+                               xaxis=dict(title=dict(text="Time (seconds)", font=dict(size=14)), range=xlim),
+                               yaxis=dict(title=dict("Probability", font=dict(size=14)), range=ylim),
                                legend=dict(
                 #                    x=0.05,
                 #                    y=1.05,
@@ -404,11 +404,11 @@ class ProbTrajectoriesPlot(_ws.WorkspacePlot):
             ])
 
             layout = dict(width=800 * scale, height=500 * scale,
-                          #title='Probability Trajectory',
-                          xaxis=dict(title="Time (seconds)",),
+                          #title=dict(text='Probability Trajectory'),
+                          xaxis=dict(title=dict(text="Time (seconds)"),),
                           #                    rangeslider=dict(visible = True),
                           #               ),
-                          yaxis=dict(title="Probability", titlefont=dict(size=14), range=[0, 1]),
+                          yaxis=dict(title=dict(text="Probability", font=dict(size=14)), range=[0, 1]),
                           updatemenus=updatemenus,
                           legend=dict(
                               x=0.5,
@@ -577,7 +577,7 @@ def _create_drift_switchboard(ws, results):
 
 
 # TODO deprecate in favor of `report.factory.create_drift_report`
-def create_drift_report(results, circuits, filename, title="auto",
+def create_drift_report(results, circuits, filename, title={'text': "auto"},
                         ws=None, auto_open=False, link_to=None,
                         brevity=0, advanced_options=None, verbosity=1):
     """
