@@ -406,7 +406,19 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
         raise ValueError("'{}' is not a valid algorithm "
                          "identifier.".format(algorithm))
 
-    return germList
+    #force the line labels on each circuit to match the state space labels for the target model.
+    #this is suboptimal for many-qubit models, so will probably want to revisit this. #TODO
+    finalGermList = []
+    for ckt in germList:
+        if ckt._static:
+            new_ckt = ckt.copy(editable=True)
+            new_ckt.line_labels = target_model.state_space.state_space_labels
+            new_ckt.done_editing()
+            finalGermList.append(new_ckt)
+        else:
+            ckt.line_labels = target_model.state_space.state_space_labels
+            finalGermList.append(ckt)
+    return finalGermList
 
 
 def compute_germ_set_score(germs, target_model=None, neighborhood=None,

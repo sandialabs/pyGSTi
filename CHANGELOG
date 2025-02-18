@@ -1,5 +1,41 @@
 # CHANGELOG
 
+## [0.9.13] - 2025-01-16
+
+### Added
+* PyTorch-backed forward simulation (#390)
+* Support for ECR gates in QASM translation (#440, #457)
+* Interleaved RB (#296, #468)
+* Pared-down Levenberg-Marquardt for nonlinear least-squares (#500)
+* Fisher information for quantum instruments (#464, #503)
+* Wildcard and Hessians for non-ExplicitOpModels (#511)
+
+### Fixed
+* Kraus operator decomposition with degenerate Choi matrix bugfix (#423)
+* NumPy improvements and fixes (#430, #431, #451, #458, #470, #518)
+* Model parameter desync bugfix (#456, #482)
+* FOGI parameter label accumulation bugfix (#486, #488)
+* Guarding `signal` to allow PyGSTi usage with Dask (#489)
+* Docstring escape and mismatch bugfixes (#502, #504)
+* CPTP deserialization sign flip bugfix (#341, #509)
+* LindbladErrorgen Hessian with dense representation bugfix (#512)
+* Test file updates (#510)
+* ProcessorSpec state space label bugfix (#474, #521)
+
+### Changed
+* Circuit primitive performance upgrades (#445)
+* Refactors for matrixtools.py and the Basis class (#429, #442, #493)
+* Layout and MDCStore creation performance upgrades (#448)
+* Major 2Q GST performance improvements (#496, #517)
+
+### Deprecated
+* We are deprecating the CVXOPT backend for CVXPY in favor of Clarabel (#437). Although pyGSTi will not warn you if you continue to use the CVXOPT backend, this change will occur with no additional warning in a future release.
+
+### Removed
+* Removed explicit dependency on CVXOPT for wildcard optimization (#444)
+* Removed deprecated QIBO interface (#262, #490)
+* Large "spring cleaning" of unused/commented out code (#424, #452)
+
 ## [0.9.12.3] - 2024-06-11
 
 ### Added
