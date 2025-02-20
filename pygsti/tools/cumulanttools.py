@@ -58,7 +58,7 @@ def cumulant_expansion(errorgen_layers, cov_func, cumulant_order=2, truncation_t
     for i in range(1, len(errorgen_layers)+1):
         current_errorgen_layers = errorgen_layers[:i]
         nm_error_generators.append(nonmarkovian_generator(current_errorgen_layers, cov_func, cumulant_order, truncation_threshold))
-        
+    return nm_error_generators
 
 def nonmarkovian_generator(errorgen_layers, cov_func, cumulant_order=2, truncation_threshold=1e-14):
     """

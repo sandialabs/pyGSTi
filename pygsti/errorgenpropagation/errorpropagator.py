@@ -11,6 +11,7 @@ from pygsti.baseobjs import Label, ExplicitElementaryErrorgenBasis as _ExplicitE
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LocalElementaryErrorgenLabel 
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GlobalElementaryErrorgenLabel
 import pygsti.tools.errgenproptools as _eprop
+import pygsti.tools.cumulanttools as _cumul
 import pygsti.tools.basistools as _bt
 import pygsti.tools.matrixtools as _mt
 import pygsti.tools.optools as _ot
@@ -156,7 +157,7 @@ class ErrorGeneratorPropagator:
     #    return eoc_error_channel
 #
 
-    def propagate_errorgens(self, circuit, include_spam=True):
+    def propagate_errorgens(self, circuit, include_spam=True, include_circuit_time=False):
         """
         Propagate all of the error generators for each circuit layer to the end without
         any recombinations or averaging.
@@ -169,6 +170,10 @@ class ErrorGeneratorPropagator:
         include_spam : bool, optional (default True)
             If True then we include in the propagation the error generators associated
             with state preparation and measurement.
+
+        include_circuit_time : bool, optional (default False)
+            If True then include as part of the error generator coefficient labels the circuit
+            time from which that error generator arose.
 
         Returns
         -------
@@ -192,7 +197,7 @@ class ErrorGeneratorPropagator:
         #to the error generators for a particular gate layer.
         #TODO: Add proper inferencing for number of qubits:
         assert circuit.line_labels is not None and circuit.line_labels != ('*',)
-        errorgen_layers = self.construct_errorgen_layers(circuit, len(circuit.line_labels), include_spam)
+        errorgen_layers = self.construct_errorgen_layers(circuit, len(circuit.line_labels), include_spam, include_circuit_time=include_circuit_time)
         #propagate the errorgen_layers through the propagation_layers to get a list
         #of end of circuit error generator dictionaries.
         propagated_errorgen_layers = self._propagate_errorgen_layers(errorgen_layers, propagation_layers, include_spam)
@@ -239,54 +244,41 @@ class ErrorGeneratorPropagator:
         return combined_err_layer
         
         
-#    def propagate_errorgens_nonmarkovian(self, circuit, include_spam=True):
-#        """
-#        Propagate all of the error generators for each circuit layer to the end without
-#        any recombinations or averaging. This version also only track the overall modifier/weighting
-#        factor picked up by each of the final error generators over the course of the optimization,
-#        with the actual rates introduced in subsequent stages.
-#
-#        Parameters
-#        ----------
-#        circuit : `Circuit`
-#            Circuit to construct a set of post gate error generators for.
-#
-#        include_spam : bool, optional (default True)
-#            If True then we include in the propagation the error generators associated
-#            with state preparation and measurement.
-#
-#        Returns
-#        -------
-#        propagated_errorgen_layers : list of lists of dictionaries
-#            A list of lists of dictionaries, each corresponding to the result of propagating
-#            an error generator layer through to the end of the circuit.
-#
-#        """
-#        #start by converting the input circuit into a list of stim Tableaus with the 
-#        #first element dropped.
-#        stim_layers = self.construct_stim_layers(circuit, drop_first_layer = not include_spam)
-#        
-#        #We next want to construct a new set of Tableaus corresponding to the cumulative products
-#        #of each of the circuit layers with those that follow. These Tableaus correspond to the
-#        #clifford operations each error generator will be propagated through in order to reach the
-#        #end of the circuit.
-#        propagation_layers = self.construct_propagation_layers(stim_layers)
-#
-#        #Next we take the input circuit and construct a list of dictionaries, each corresponding
-#        #to the error generators for a particular gate layer.
-#        #TODO: Add proper inferencing for number of qubits:
-#        assert circuit.line_labels is not None and circuit.line_labels != ('*',)
-#        errorgen_layers = self.construct_errorgen_layers(circuit, len(circuit.line_labels), include_spam, 
-#                                                         include_circuit_time=True, fixed_rate=1)
-#        #propagate the errorgen_layers through the propagation_layers to get a list
-#        #of end of circuit error generator dictionaries.
-#        propagated_errorgen_layers = self._propagate_errorgen_layers(errorgen_layers, propagation_layers, include_spam)
-#
-#        #in the context of doing propagation for nonmarkovianity we won't be using BCH, so do a partial flattening
-#        #of this data structure.
-#        propagated_errorgen_layers = [errorgen_layers[0] for errorgen_layers in propagated_errorgen_layers]
-#
-#        return propagated_errorgen_layers
+    def propagate_errorgens_nonmarkovian(self, circuit, include_spam=True, cumulant_order=2, cov_func=None):
+        """
+        Propagate all of the error generators for each circuit layer to the end without
+        any recombinations or averaging. This version also only track the overall modifier/weighting
+        factor picked up by each of the final error generators over the course of the optimization,
+        with the actual rates introduced in subsequent stages.
+
+        Parameters
+        ----------
+        circuit : `Circuit`
+            Circuit to construct a set of post gate error generators for.
+
+        include_spam : bool, optional (default True)
+            If True then we include in the propagation the error generators associated
+            with state preparation and measurement.
+
+        cumulant_order : int, optional (default 2)
+            Order of the cumulant expansion to apply in constructing nonmarkovian
+            error generators.
+
+        Returns
+        -------
+        propagated_errorgen_layers : list of lists of dictionaries
+            A list of lists of dictionaries, each corresponding to the result of propagating
+            an error generator layer through to the end of the circuit.
+
+        """
+        #propagate the errorgen_layers through the propagation_layers to get a list
+        #of end of circuit error generator dictionaries.
+        propagated_errorgen_layers = self.propagate_errorgens(circuit, include_spam=include_spam, include_circuit_time=True)
+        
+        #now get the nonmarkovian error generators by applying the cumulant expansion
+        nonmarkovian_generators = _cumul.cumulant_expansion(propagated_errorgen_layers, cov_func, cumulant_order)
+
+        return nonmarkovian_generators
 
 
     def errorgen_transform_map(self, circuit, include_spam=True):
