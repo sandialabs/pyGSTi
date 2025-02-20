@@ -6,7 +6,7 @@ import warnings as _warnings
 
 # from ..errorgenpropagation import propagatableerrorgen as _peg
 from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel
-from pygsti.errorgenpropagation.errorpropagator_dev import ErrorGeneratorPropagator
+from pygsti.errorgenpropagation.errorpropagator import ErrorGeneratorPropagator
 
 # from ..errorgenpropagation import errorpropagator as _ep
 
