@@ -71,7 +71,7 @@ class ModelBase(object):
 
         self.assertTrue(isinstance(self.model['Gi'], LinearOperator))
 
-
+#TODO: Add tests between more combinations of parameterizations
 class FullModelBase(ModelBase):
     """Base class for test cases using a full-parameterized model"""
     build_options = {'gate_type': 'full'}
