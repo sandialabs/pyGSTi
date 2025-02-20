@@ -199,6 +199,7 @@ def find_all_sets_of_compatible_two_q_gates(edgelist, n, gatename='Gcnot', aslab
 
 
 def sample_circuit_layer_by_edgegrab(pspec, qubit_labels=None, two_q_gate_density=0.25, one_q_gate_names=None,
+                                    one_q_gate_distribution=None,
                                      gate_args_lists=None, rand_state=None):
     """
     TODO: docstring
@@ -277,15 +278,21 @@ def sample_circuit_layer_by_edgegrab(pspec, qubit_labels=None, two_q_gate_densit
             for q in edge:
                 del unusedqubits[unusedqubits.index(q)]
 
+    if one_q_gate_distribution is not None:
+        assert(one_q_gate_names is not None)
     if one_q_gate_names is None or len(one_q_gate_names) > 0:
         for q in unusedqubits:
             if one_q_gate_names is None:
                 possibleops = ops_on_qubits[(q,)]
             else:
                 possibleops = [gate_lbl for gate_lbl in ops_on_qubits[(q,)] if gate_lbl.name in one_q_gate_names]
-            gate_label = possibleops[rand_state.randint(0, len(possibleops))]
+            if one_q_gate_distribution is None:
+                gate_label = possibleops[rand_state.randint(0, len(possibleops))]
+            else:
+                random_index = rand_state.choice(list(range(len(one_q_gate_names))), size=1, p=one_q_gate_distribution)[0]
+                gate_name = one_q_gate_names[random_index]
+                gate_label = _lbl.Label(gate_name, q)
             sampled_layer.append(gate_label)
-
     return sampled_layer
 
 
@@ -1728,9 +1735,7 @@ def create_random_germ(pspec, depths, interacting_qs_density, qubit_labels, rand
     if interacting_qs_density > 0:
 
         assert(germ_depth * width * interacting_qs_density >= 2)
-        #print(len(qubits))
         num2Qtoadd = int(_np.floor(germ_depth * width * interacting_qs_density / 2))
-        #print(num2Qtoadd)
 
         edgelistdict = {}
         clifford_qubit_graph = pspec.compute_clifford_2Q_connectivity()
@@ -2202,7 +2207,7 @@ def _sample_stabilizer(pauli, sign, absolute_compilation, qubit_labels):
                  'Z': 'C0'}
     
     x_layer = [symp_reps['I'] if zvals[i] == 0 else symp_reps['X'] for i in range(len(zvals))]
-    circ_layer = [circ_dict[i] if i in circ_dict.keys() else 'C'+str(_np.random.randint(24)) for i in pauli]
+    circ_layer = [circ_dict[i] if i in circ_dict.keys() else 'C'+str(0) for i in pauli]
 
     init_layer = [symp_reps[circ_layer[i]] for i in range(len(pauli))]
     
