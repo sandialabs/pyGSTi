@@ -429,7 +429,7 @@ def convert(povm, to_type, basis, cptp_penalty=1e-7, ideal_povm=None, flatten_st
     
                         errgen = _LindbladErrorgen.from_error_generator(povm.state_space.dim, parameterization=to_type)
                         if degrees_of_freedom > errgen.num_params:
-                            warnings.warn("POVM has more degrees of freedom than the available number of parameters, representation in this parameterization is not guaranteed", warnings.UserWarning)
+                            warnings.warn("POVM has more degrees of freedom than the available number of parameters, representation in this parameterization is not guaranteed")
                         exp_errgen = _ExpErrorgenOp(errgen)
                         
                         num_errgens = errgen.num_params
