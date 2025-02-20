@@ -91,68 +91,49 @@ class StaticModelBase(ModelBase):
 # Method base classes, controlling which methods will be tested
 #
 class GeneralMethodBase(object):
-    def _assert_model_params(self, nOperations, nSPVecs, nEVecs, nParamsPerGate, nParamsPerSP):
-        nParams = nOperations * nParamsPerGate + nSPVecs * nParamsPerSP + nEVecs * 4
-        print("num params = ", self.model.num_params)
-        self.assertEqual(self.model.num_params, nParams)
-        # TODO does this actually assert correctness?
 
     def _assert_model_ops(self, oldModel):
-
         #test operations
-        for (_, gate),(_,gate2) in zip(self.operations.items(),oldModel.operations.items() ):
-            assert np.allclose(gate.to_dense(), gate2.to_dense()), "Discrepancy in process matrices when converting parameterizations"
+        for (_, gate),(_,gate2) in zip(self.model.operations.items(), oldModel.operations.items() ):
+            assert np.allclose(gate.to_dense(), gate2.to_dense()), "Discrepancy in operation process matrices when converting parameterizations"
 
+    def _assert_model_SPAM(self, oldModel):
+        for (_, povm1), (_, povm2) in zip(self.model.povms.items(), oldModel.povms.items()):
+            for element1, element2 in zip(povm1.items(), povm2.items()):
+                assert np.allclose(element1[1].to_dense(), element2[1].to_dense()), "Discrepancy in POVM superbra when converting parameterizations"
+        
+        for (_, prep1), (_, prep2) in zip(self.model.preps.items(), oldModel.preps.items()):
+            assert np.allclose(prep1.to_dense(), prep2.to_dense()), "Discrepancy in state prep superket when converting parameterizations"
+    #def _assert_model_SPAM(self, old_model):
     def test_set_all_parameterizations_full(self):
+        model_copy = self.model.copy()
         self.model.set_all_parameterizations("full")        
-        self._assert_model_params(
-            nOperations=3,
-            nSPVecs=1,
-            nEVecs=2,
-            nParamsPerGate=16,
-            nParamsPerSP=4
-        )
+        self._assert_model_ops(model_copy)
+        self._assert_model_SPAM(model_copy)
 
     def test_set_all_parameterizations_TP(self):
+        model_copy = self.model.copy()
         self.model.set_all_parameterizations("full TP")
-        self._assert_model_params(
-            nOperations=3,
-            nSPVecs=1,
-            nEVecs=1,
-            nParamsPerGate=12,
-            nParamsPerSP=3
-        )
+        self._assert_model_ops(model_copy)
+        self._assert_model_SPAM(model_copy)
 
     def test_set_all_parameterizations_static(self):
+        model_copy = self.model.copy()
         self.model.set_all_parameterizations("static")
-        self._assert_model_params(
-            nOperations=0,
-            nSPVecs=0,
-            nEVecs=0,
-            nParamsPerGate=12,
-            nParamsPerSP=3
-        )
+        self._assert_model_ops(model_copy)
+        self._assert_model_SPAM(model_copy)
 
     def test_set_all_parameterizations_HS(self):
+        model_copy = self.model.copy()
         self.model.set_all_parameterizations("H+S")
-        self._assert_model_params(
-            nOperations=3,
-            nSPVecs=2,
-            nEVecs=0,
-            nParamsPerGate=6,
-            nParamsPerSP=6
-        )
+        self._assert_model_ops(model_copy)
+        self._assert_model_SPAM(model_copy)
     
     def test_set_all_parameterizations_GLND(self):
+        model_copy = self.model.copy()
         self.model.set_all_parameterizations("GLND")
-        #self._assert_model_params(
-        #    nOperations=3,
-        #    nSPVecs=?   ,
-        #    nEVecs=?,
-        #    nParamsPerGate=12,
-        #    nParamsPerSP=12
-        #) 
-        #TODO: Figure out what are nSPVecs and nEVecs
+        self._assert_model_ops(model_copy)
+        self._assert_model_SPAM(model_copy)
 
     def test_element_accessors(self):
         # XXX what does this test cover and is it useful?  EGN: covers the __getitem__/__setitem__ functions of model
