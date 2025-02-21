@@ -86,7 +86,9 @@ class StaticModelBase(ModelBase):
     """Base class for test cases using a static-parameterized model"""
     build_options = {'gate_type': 'static'}
 
-
+class GLNDModelBase(ModelBase):
+    """Base class for test cases using a static-parameterized model"""
+    build_options = {'gate_type': 'GLND'}
 ##
 # Method base classes, controlling which methods will be tested
 #
@@ -154,7 +156,7 @@ class GeneralMethodBase(object):
         self._assert_model_ops(model_copy)
         self._assert_model_SPAM(model_copy)
         assert self.model.num_params == 6 * (3 + 1 + 1)
-        
+
     def test_set_all_parameterizations_GLND(self):
         model_copy = self.model.copy()
         self.model.set_all_parameterizations("GLND")
@@ -740,7 +742,8 @@ class StaticModelTester(StaticModelBase, StandardMethodBase, BaseCase):
     def test_iter_hprobs_by_rectangle(self):
         self.skipTest("TODO should probably warn user?")
 
-
+class LinbladModelTester(GLNDModelBase, StandardMethodBase, BaseCase):
+    pass
 class FullMapSimMethodTester(FullModelBase, SimMethodBase, BaseCase):
     def setUp(self):
         super(FullMapSimMethodTester, self).setUp()
