@@ -29,6 +29,7 @@ from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _Local
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
+DIAMOND_NORM_SOLVE_VERBOSE = False
 
 
 def _flat_mut_blks(i, j, block_dims):
@@ -332,7 +333,7 @@ def diamonddist(a, b, mx_basis='pp', return_x=False):
     zeros = _np.zeros((dim, dim))
     for solver in solvers:
         try:
-            prob.solve(solver=solver)
+            prob.solve(solver=solver, verbose=DIAMOND_NORM_SOLVE_VERBOSE)
             out = (prob.value, vars[0].value) if return_x else prob.value 
             return out
         except _cvxpy.error.SolverError as e:
