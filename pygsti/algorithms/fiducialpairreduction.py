@@ -19,22 +19,20 @@ import scipy.special as _spspecial
 import scipy.linalg as _sla
 
 from math import ceil
-import time
 
 from pygsti import baseobjs as _baseobjs
 from pygsti import circuits as _circuits
 
 from pygsti.circuits import circuitconstruction as _gsc
 from pygsti.modelmembers.operations import EigenvalueParamDenseOp as _EigenvalueParamDenseOp
-from pygsti.tools import apply_aliases_to_circuits as _apply_aliases_to_circuits
 from pygsti.tools import remove_duplicates as _remove_duplicates
 from pygsti.tools import slicetools as _slct
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
+from pygsti.forwardsims import MatrixForwardSimulator as _MatrixForwardSimulator
 
-from pygsti.algorithms.germselection import construct_update_cache, minamide_style_inverse_trace, compact_EVD, compact_EVD_via_SVD, germ_set_spanning_vectors
+from pygsti.algorithms.germselection import construct_update_cache, minamide_style_inverse_trace, compact_EVD, germ_set_spanning_vectors
 from pygsti.algorithms import scoring as _scoring
 
-from pygsti.tools.matrixtools import print_mx
 
 import warnings
 
@@ -1657,6 +1655,10 @@ def find_sufficient_fiducial_pairs_per_germ_global(target_model, prep_fiducials,
         list of fiducial pairs for a particular germ (indices are into
         `prep_fiducials` and `meas_fiducials`).
     """
+
+    if not isinstance(target_model.sim, _MatrixForwardSimulator):
+        target_model = target_model.copy()
+        target_model.sim = 'matrix'
 
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
 
