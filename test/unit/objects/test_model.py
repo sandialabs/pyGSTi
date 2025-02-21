@@ -153,25 +153,14 @@ class GeneralMethodBase(object):
         self.model.set_all_parameterizations("H+S")
         self._assert_model_ops(model_copy)
         self._assert_model_SPAM(model_copy)
-        self._assert_model_params(
-            nOperations=3,
-            nSPVecs=2,
-            nEVecs=0,
-            nParamsPerGate=6,
-            nParamsPerSP=6
-        )
+        assert self.model.num_params == 6 * (3 + 1 + 1)
+        
     def test_set_all_parameterizations_GLND(self):
         model_copy = self.model.copy()
         self.model.set_all_parameterizations("GLND")
         self._assert_model_ops(model_copy)
         self._assert_model_SPAM(model_copy)
-        self._assert_model_params(
-            nOperations=3,
-            nSPVecs=2,
-            nEVecs=0,
-            nParamsPerGate=12,
-            nParamsPerSP=12
-        )
+        assert self.model.num_params == 12 * (3 + 1 + 1)
 
     def test_element_accessors(self):
         # XXX what does this test cover and is it useful?  EGN: covers the __getitem__/__setitem__ functions of model
