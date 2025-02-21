@@ -1689,11 +1689,11 @@ def find_sufficient_fiducial_pairs_per_germ_global(target_model, prep_fiducials,
     #if precomputed_jacobians is None then make sure we pass in None for each germ
     #hack this in without branching by constructing a dictionary of Nones.
     if precomputed_jacobians is None:
-        precomputed_jacobians = {germ:None for germ in germ_vector_spanning_set.keys()}
+        precomputed_jacobians = {germ:None for germ in germ_vector_spanning_set[0].keys()}
     
     printer.log("------  Per Germ Global Fiducial Pair Reduction --------")
     with printer.progress_logging(1):
-        for i, (germ, germ_vector_list) in enumerate(germ_vector_spanning_set.items()):
+        for i, (germ, germ_vector_list) in enumerate(germ_vector_spanning_set[0].items()):
             candidate_solution_list, best_score = get_per_germ_fid_pairs_global(prep_fiducials, meas_fiducials, prep_povm_tuples,
                                                                     target_model, germ, germ_vector_list, mem_limit,
                                                                     printer, dof_per_povm, inv_trace_tol, 
