@@ -66,7 +66,7 @@ class ModelBase(object):
         self.assertEqual(list(self.model.povms.keys()), ["Mdefault"])
 
         # Test default prep/effects
-        self.assertArraysAlmostEqual(self.model.prep, self.model.preps["rho0"])
+        self.assertArraysAlmostEqual(self.model.prep.to_dense(), self.model.preps["rho0"].to_dense())
         self.assertEqual(set(self.model.effects.keys()), set(['0', '1']))
 
         self.assertTrue(isinstance(self.model['Gi'], LinearOperator))
@@ -169,7 +169,7 @@ class GeneralMethodBase(object):
         v = np.array([[1.0 / np.sqrt(2)], [0], [0], [1.0 / np.sqrt(2)]], 'd')
         self.model['rho1'] = v
         w = self.model['rho1']
-        self.assertArraysAlmostEqual(w, v)
+        self.assertArraysAlmostEqual(w.to_dense(), v.T)
 
         del self.model.preps['rho1']
         # TODO assert correctness
@@ -178,17 +178,6 @@ class GeneralMethodBase(object):
         self.model["Iz"] = Iz  # set an instrument
         Iz2 = self.model["Iz"]  # get an instrument
         # TODO assert correctness if needed (can the underlying model even mutate this?)
-
-    def test_set_operation_matrix(self):
-        # TODO no random
-        Gi_test_matrix = np.random.random((4, 4))
-        Gi_test_matrix[0, :] = [1, 0, 0, 0]  # so TP mode works
-        self.model["Gi"] = Gi_test_matrix  # set operation matrix
-        self.assertArraysAlmostEqual(self.model['Gi'], Gi_test_matrix)
-
-        Gi_test_dense_op = FullArbitraryOp(Gi_test_matrix)
-        self.model["Gi"] = Gi_test_dense_op  # set gate object
-        self.assertArraysAlmostEqual(self.model['Gi'], Gi_test_matrix)
 
     def test_strdiff(self):
         other = models.create_explicit_model_from_expressions(
@@ -354,14 +343,14 @@ class ThresholdMethodBase(object):
 
     def test_product(self):
         circuit = ('Gx', 'Gy')
-        p1 = np.dot(self.model['Gy'], self.model['Gx'])
+        p1 = np.dot(self.model['Gy'].to_dense(), self.model['Gx'].to_dense())
         p2 = self.model.sim.product(circuit, scale=False)
         p3, scale = self.model.sim.product(circuit, scale=True)
         self.assertArraysAlmostEqual(p1, p2)
         self.assertArraysAlmostEqual(p1, scale * p3)
 
         circuit = ('Gx', 'Gy', 'Gy')
-        p1 = np.dot(self.model['Gy'], np.dot(self.model['Gy'], self.model['Gx']))
+        p1 = np.dot(self.model['Gy'].to_dense(), np.dot(self.model['Gy'].to_dense(), self.model['Gx'].to_dense()))
         p2 = self.model.sim.product(circuit, scale=False)
         p3, scale = self.model.sim.product(circuit, scale=True)
         self.assertArraysAlmostEqual(p1, p2)
@@ -372,8 +361,8 @@ class ThresholdMethodBase(object):
         gatestring2 = ('Gx', 'Gy', 'Gy')
         circuits = [gatestring1, gatestring2]
 
-        p1 = np.dot(self.model['Gy'], self.model['Gx'])
-        p2 = np.dot(self.model['Gy'], np.dot(self.model['Gy'], self.model['Gx']))
+        p1 = np.dot(self.model['Gy'].to_dense(), self.model['Gx'].to_dense())
+        p2 = np.dot(self.model['Gy'].to_dense(), np.dot(self.model['Gy'].to_dense(), self.model['Gx'].to_dense()))
 
         bulk_prods = self.model.sim.bulk_product(circuits)
         bulk_prods_scaled, scaleVals = self.model.sim.bulk_product(circuits, scale=True)
@@ -425,15 +414,15 @@ class SimMethodBase(object):
         cls.gatestring1 = ('Gx', 'Gy')
         cls.gatestring2 = ('Gx', 'Gy', 'Gy')
         cls._expected_probs = {
-            cls.gatestring1: np.dot(np.transpose(cls._model.povms['Mdefault']['0']),
-                                    np.dot(cls._model['Gy'],
-                                           np.dot(cls._model['Gx'],
-                                                  cls._model.preps['rho0']))).reshape(-1)[0],
-            cls.gatestring2: np.dot(np.transpose(cls._model.povms['Mdefault']['0']),
-                                    np.dot(cls._model['Gy'],
-                                           np.dot(cls._model['Gy'],
-                                                  np.dot(cls._model['Gx'],
-                                                         cls._model.preps['rho0'])))).reshape(-1)[0]
+            cls.gatestring1: np.dot(np.transpose(cls._model.povms['Mdefault']['0'].to_dense()),
+                                    np.dot(cls._model['Gy'].to_dense(),
+                                           np.dot(cls._model['Gx'].to_dense(),
+                                                  cls._model.preps['rho0'].to_dense()))).reshape(-1)[0],
+            cls.gatestring2: np.dot(np.transpose(cls._model.povms['Mdefault']['0'].to_dense()),
+                                    np.dot(cls._model['Gy'].to_dense(),
+                                           np.dot(cls._model['Gy'].to_dense(),
+                                                  np.dot(cls._model['Gx'].to_dense(),
+                                                         cls._model.preps['rho0'].to_dense())))).reshape(-1)[0]
         }
         # TODO expected dprobs & hprobs
 
@@ -723,6 +712,16 @@ class FullModelTester(FullModelBase, StandardMethodBase, BaseCase):
 class TPModelTester(TPModelBase, StandardMethodBase, BaseCase):
     def test_tp_dist(self):
         self.assertAlmostEqual(self.model._tpdist(), 3.52633900335e-16, 5)
+    def test_set_operation_matrix(self):
+        # TODO no random
+        Gi_test_matrix = np.random.random((4, 4))
+        Gi_test_matrix[0, :] = [1, 0, 0, 0]  # so TP mode works
+        self.model["Gi"] = Gi_test_matrix  # set operation matrix
+        self.assertArraysAlmostEqual(self.model['Gi'], Gi_test_matrix)
+
+        Gi_test_dense_op = FullArbitraryOp(Gi_test_matrix)
+        self.model["Gi"] = Gi_test_dense_op  # set gate object
+        self.assertArraysAlmostEqual(self.model['Gi'], Gi_test_matrix)
 
 
 class StaticModelTester(StaticModelBase, StandardMethodBase, BaseCase):
