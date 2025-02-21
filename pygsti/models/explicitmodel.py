@@ -374,6 +374,7 @@ class ExplicitOpModel(_mdl.OpModel):
     
         """
         if isinstance(categories_to_convert, str): categories_to_convert = (categories_to_convert,)
+        assert all(c in ['all', 'ops', 'operations', 'instruments', 'preps', 'povms'] for c in categories_to_convert)
         fallback_basis = '' if not allow_smaller_pp_basis else self.basis.name.replace('pp','').replace('*','') + 'pp'
         ideal_model = ModelView.cast(ideal_model)
         roster = Roster(labels_to_convert)
