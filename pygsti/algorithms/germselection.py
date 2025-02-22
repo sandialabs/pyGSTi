@@ -4533,6 +4533,10 @@ def germ_set_spanning_vectors(target_model, germ_list, assume_real=False, float_
         amplificational properties of the reduced vector set. 
     """
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
+
+    if not isinstance(target_model.sim, _MatrixForwardSimulator):
+        target_model = target_model.copy()
+        target_model.sim = 'matrix'
     
     #Add some checks related to the option to switch up data types:
     if not assume_real:
