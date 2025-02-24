@@ -1,17 +1,8 @@
-import tensorflow as _tf
+import tensorflow as tf
 import keras as _keras
 import numpy as _np
 import copy as _copy
 import warnings
-
-import tensorflow as tf
-from tensorflow import keras as _keras
-import copy as _copy
-
-
-import tensorflow as tf
-from tensorflow import keras as _keras
-import copy as _copy
 
 
 @_keras.utils.register_keras_serializable(package='Blah1')
@@ -221,4 +212,96 @@ def layer_snipper_from_qubit_graph(error_gen, num_qubits, num_channels, qubit_gr
     indices_for_error = _np.concatenate([[num_channels * q + i for i in range(num_channels)] for q in relevant_qubits])
 
     return indices_for_error
-  
+
+
+@_keras.utils.register_keras_serializable(package='Blah1')
+class CircuitErrorVecMap(_keras.Model):
+    def __init__(self, num_qubits: int, num_channels: int, tracked_error_gens: list, 
+                 layer_snipper, layer_snipper_args: list,
+                 dense_units=[30, 20, 10, 5, 5], **kwargs):
+        """
+        num_qubits: int
+            The number of qubits that this neural network models.
+
+        num_channels: int
+            The number of gate channels in the tensor encoding of the circuits whose fidelity this network
+            predicts.
+
+        tracked_error_gens: list
+            The primitive error generators that this neural network internally models.
+
+        layer_snipper: func
+            A function that takes a primitive error generator and maps it to a list that encodes which parts
+            of a circuit layer to `snip out` as input to dense neural network that predicts the error rate
+            of that primitive error generator.
+
+        
+        dense_units: list
+        """
+        super().__init__()
+        self.num_qubits = num_qubits
+        self.tracked_error_gens = _copy.deepcopy(tracked_error_gens)
+        self.num_tracked_error_gens = len(self.tracked_error_gens)
+        self.num_channels = num_channels
+        self.len_gate_encoding = self.num_qubits * self.num_channels
+        self.dense_units = dense_units
+        self.layer_snipper = layer_snipper
+        self.layer_snipper_args = layer_snipper_args
+        # self.hamiltonian_mask = tf.constant([1 if error[0] == 'H' else 0 for error in tracked_error_gens], tf.int32)
+        # self.stochastic_mask = tf.constant([1 if error[0] == 'S' else 0 for error in tracked_error_gens], tf.int32)
+
+    def get_config(self):
+        config = super(CircuitErrorVec, self).get_config()
+        config.update({
+            'num_qubits': self.num_qubits,
+            'tracked_error_gens': self.tracked_error_gens,
+            'num_channels': self.num_channels,
+            'dense_units': self.dense_units,
+            'layer_snipper': _keras.utils.serialize_keras_object(self.layer_snipper),
+            'layer_snipper_args': self.layer_snipper_args,
+        })
+        return config
+
+    def build(self):
+        self.local_dense = LocalizedDenseToErrVec(self.layer_snipper, self.layer_snipper_args, self.tracked_error_gens, self.dense_units)
+    
+    # @tf.function
+    def calc_end_of_circ_error_rates(self, M, P, S):
+        """
+        A function that maps the error rates (M) to an end-of-circuit error generator
+        using the permutation matrix P.
+        """
+        signed_M = tf.math.multiply(S, M) # mult alpha by M, assuming correct organization of alpha
+        flat_signed_M, flat_P = tf.reshape(signed_M, [-1]), tf.reshape(P, [-1])
+        unique_P, idx = tf.unique(flat_P) # unique_P values [0, num_error_generators=509]
+        num_segments = tf.reduce_max(idx)+1
+        return tf.math.unsorted_segment_sum(flat_signed_M, idx, num_segments), unique_P 
+    
+    # @tf.function
+    def circuit_to_probability(self, input): # will replace this with circ to probability dist
+        """
+        A function that maps a single circuit to the prediction of a 1st order approximate probability vector for each of 2^Q bitstrings.
+        """        
+        circuit_encoding = input[:, :44] # circuit
+        P = tf.cast(input[:, 44:44+132], tf.int32) # permutation matrix
+        S = tf.cast(input[:, 44+132:44+132+132], tf.float32) # sign matrix
+        
+        scaled_alpha_matrix = input[:16, 308:-1] # alphas (shape is number of tracked error gens, typically 132. Very sparse, could use sparse LA at a later time)
+        Px_ideal = input[:16, -1] # ideal (no error) probabilities
+
+        print('circuit_encoding', circuit_encoding.shape, 'P', P.shape, 'S', S.shape, 'scaled_alpha_matrix', scaled_alpha_matrix.shape, 'Px_ideal', Px_ideal.shape)
+
+        epsilon_matrix = self.local_dense(circuit_encoding) # depth * num_tracked_error
+        error_rates, unique_P = self.calc_end_of_circ_error_rates(epsilon_matrix, P, S)
+
+        gathered_alpha = tf.gather(scaled_alpha_matrix, unique_P, axis=1)
+        first_order_correction = gathered_alpha*error_rates
+
+        Px_approximate = tf.reduce_sum(first_order_correction, 1) + Px_ideal
+        
+        return Px_approximate
+
+    # @tf.function
+    def call(self, inputs):
+        return tf.map_fn(self.circuit_to_probability, inputs) # will try to further optimize this with batching rather than slow map_fn / vectorize_map
+        

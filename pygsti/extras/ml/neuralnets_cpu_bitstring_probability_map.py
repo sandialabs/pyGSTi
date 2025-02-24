@@ -1,4 +1,4 @@
-import tensorflow as _tf
+import tensorflow as tf
 import keras as _keras
 import numpy as _np
 import copy as _copy
@@ -88,7 +88,7 @@ class CircuitErrorVec(_keras.Model):
         
         scaled_alpha_matrix = input[3] # alphas (shape is number of tracked error gens, typically 132. Very sparse, could use sparse LA at a later time)
         Px_ideal = input[4] # ideal (no error) probabilities   
-
+        print('circuit_encoding', circuit_encoding.shape, 'P', P.shape, 'S', S.shape, 'scaled_alpha_matrix', scaled_alpha_matrix.shape, 'Px_ideal', Px_ideal.shape)
         epsilon_matrix = self.local_dense(circuit_encoding) # depth * num_tracked_error
         error_rates, unique_P = self.calc_end_of_circ_error_rates(epsilon_matrix, P, S)
 
@@ -256,8 +256,6 @@ class CircuitErrorVecMap(_keras.Model):
         self.dense_units = dense_units
         self.layer_snipper = layer_snipper
         self.layer_snipper_args = layer_snipper_args
-        # self.hamiltonian_mask = tf.constant([1 if error[0] == 'H' else 0 for error in tracked_error_gens], tf.int32)
-        # self.stochastic_mask = tf.constant([1 if error[0] == 'S' else 0 for error in tracked_error_gens], tf.int32)
 
     def get_config(self):
         config = super(CircuitErrorVec, self).get_config()
@@ -292,18 +290,19 @@ class CircuitErrorVecMap(_keras.Model):
         A function that maps a single circuit to the prediction of a 1st order approximate probability vector for each of 2^Q bitstrings.
         """        
         circuit_encoding = input[:, :12] # circuit
-        P = tf.cast(input[:, 12:12+72], tf.int32) # permutation matrix
-        S = tf.cast(input[:, 12+72:12+72+72], tf.float32) # sign matrix
+        S = tf.cast(input[:, 12:12+72], tf.float32) # sign matrix
+        P = tf.cast(input[:, 12+72:12+72+72], tf.int32) # permutation matrix
         
         scaled_alpha_matrix = input[:8, -129:-1] # alphas (shape is number of tracked error gens, typically 132. Very sparse, could use sparse LA at a later time)
-        Px_ideal = input[:16, -1] # ideal (no error) probabilities
+        Px_ideal = input[:8, -1] # ideal (no error) probabilities
 
         print('circuit_encoding', circuit_encoding.shape, 'P', P.shape, 'S', S.shape, 'scaled_alpha_matrix', scaled_alpha_matrix.shape, 'Px_ideal', Px_ideal.shape)
 
         epsilon_matrix = self.local_dense(circuit_encoding) # depth * num_tracked_error
         error_rates, unique_P = self.calc_end_of_circ_error_rates(epsilon_matrix, P, S)
-
         gathered_alpha = tf.gather(scaled_alpha_matrix, unique_P, axis=1)
+        print('epsilon_matrix', epsilon_matrix.shape, 'error_rates', error_rates.shape, 'gathered_alpha', gathered_alpha.shape)
+
         first_order_correction = gathered_alpha*error_rates
 
         Px_approximate = tf.reduce_sum(first_order_correction, 1) + Px_ideal
