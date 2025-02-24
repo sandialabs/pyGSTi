@@ -3795,6 +3795,12 @@ class Circuit(object):
             circuit_layers = [layer.components for layer in self._labels]
         else:
             circuit_layers = self._labels
+
+        #cannot convert if qubit labels are strings.
+        msg = 'Cannot convert circuit two stim Tableaus when using qubit labels that are strings.'\
+              +' Please first convert qubit labels to integers, see `map_state_space_labels` for more.'
+        assert not any([isinstance(sub_lbl.qubits, str) for lbl in circuit_layers for sub_lbl in lbl]), msg
+
         empty_tableau = stim.Tableau(num_qubits)
         for layer in circuit_layers:
             stim_layer = empty_tableau.copy()

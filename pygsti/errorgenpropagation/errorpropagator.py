@@ -98,64 +98,58 @@ class ErrorGeneratorPropagator:
                 eoc_error_channel = _bt.change_basis(eoc_error_channel, from_basis='pp', to_basis=mx_basis)
 
         return eoc_error_channel
-    #
-    #def averaged_eoc_error_channel(self, circuit, include_spam=True, mx_basis='pp'):
-    #    """
-    #    Propagate all of the error generators for each circuit layer to the end of the circuit,
-    #    then apply a second order cumulant expansion to approximate the average of the end of circuit
-    #    error channel over the values error generator rates that are stochastic processes.
-#
-    #    Parameters
-    #    ----------
-    #    circuit : `Circuit`
-    #        Circuit to construct a set of post gate error generators for.
-#
-    #    include_spam : bool, optional (default True)
-    #        If True then we include in the propagation the error generators associated
-    #        with state preparation and measurement.
-#
-    #    mx_basis : Basis or str, optional (default 'pp')
-    #        Either a `Basis` object, or a string which can be cast to a `Basis`, specifying the
-    #        basis in which to return the process matrix for the error channel.
-#
-    #    Returns
-    #    -------
-    #    avg_eoc_error_channel : numpy.ndarray
-    #        A numpy array corresponding to the end-of-circuit error channel resulting
-    #        from the propagated error generators and averaging over the stochastic processes
-    #        for the error generator rates using a second order cumulant approximation.
-    #    """
-#
-    #    #propagate_errorgens_nonmarkovian returns a list of list of 
-    #    propagated_error_generators = self.propagate_errorgens_nonmarkovian(circuit, include_spam)
-    #    
-    #    #construct the nonmarkovian propagators
-    #    for i in range(len(propagated_error_generators)):
-    #        for j in range(i+1):
-    #            if i==j:
-    #                #<L_s> term:
-    #                pass
-    #                #prop_contrib = amam
-    #            else:
-    #                pass
-    #          
-    #    
-    #    #loop though the propagated error generator layers and construct their error generators.
-    #    #Then exponentiate
-    #    exp_error_generators = []
-    #    for err_gen_layer_list in propagated_error_generators:
-    #        if err_gen_layer_list: #if not empty. Should be length one if not empty.
-    #            #Keep the error generator in the standard basis until after the end-of-circuit
-    #            #channel is constructed so we can reduce the overhead of changing basis.
-    #            exp_error_generators.append(_spl.expm(self.errorgen_layer_dict_to_errorgen(err_gen_layer_list[0], mx_basis='std')))
-    #    #Next take the product of these exponentiated error generators.
-    #    #These are in circuit ordering, so reverse for matmul.
-    #    exp_error_generators.reverse()
-    #    eoc_error_channel = _np.linalg.multi_dot(exp_error_generators)
-    #    eoc_error_channel = _bt.change_basis(eoc_error_channel, from_basis='std', to_basis='pp')
-#
-    #    return eoc_error_channel
-#
+    
+    def averaged_eoc_error_channel(self, circuit, include_spam=True, mx_basis='pp', cov_func=None):
+        """
+       Propagate all of the error generators for each circuit layer to the end of the circuit,
+       then apply a second order cumulant expansion to approximate the average of the end of circuit
+       error channel over the values error generator rates that are stochastic processes.
+
+        Parameters
+        ----------
+        circuit : `Circuit`
+            Circuit to construct a set of post gate error generators for.
+
+        include_spam : bool, optional (default True)
+            If True then we include in the propagation the error generators associated
+            with state preparation and measurement.
+
+        mx_basis : Basis or str, optional (default 'pp')
+            Either a `Basis` object, or a string which can be cast to a `Basis`, specifying the
+            basis in which to return the process matrix for the error channel.
+
+        Returns
+        -------
+        avg_eoc_error_channel : numpy.ndarray
+            A numpy array corresponding to the end-of-circuit error channel resulting
+            from the propagated error generators and averaging over the stochastic processes
+            for the error generator rates using a second order cumulant approximation.
+        """
+
+        #propagate_errorgens_nonmarkovian returns a list of list of 
+        propagated_error_generators = self.propagate_errorgens_nonmarkovian(circuit, include_spam, cov_func=cov_func)
+        
+        #loop though the propagated error generator layers and construct their error generators.
+        #Then exponentiate
+        exp_error_generators = []
+        for err_gen_layer in propagated_error_generators:
+            if err_gen_layer: #if not empty.
+                #Keep the error generator in the standard basis until after the end-of-circuit
+                #channel is constructed so we can reduce the overhead of changing basis.
+                exp_error_generators.append(_spl.expm(self.errorgen_layer_dict_to_errorgen(err_gen_layer, mx_basis='pp')))
+        #Next take the product of these exponentiated error generators.
+        #These are in circuit ordering, so reverse for matmul.
+        exp_error_generators.reverse()
+        if len(exp_error_generators)>1:
+            eoc_error_channel = _np.linalg.multi_dot(exp_error_generators)
+        else:
+            eoc_error_channel = exp_error_generators[0]
+        
+        if mx_basis != 'pp':
+            eoc_error_channel = _bt.change_basis(eoc_error_channel, from_basis='pp', to_basis=mx_basis)
+
+        return eoc_error_channel
+
 
     def propagate_errorgens(self, circuit, include_spam=True, include_circuit_time=False):
         """
@@ -274,7 +268,7 @@ class ErrorGeneratorPropagator:
         #propagate the errorgen_layers through the propagation_layers to get a list
         #of end of circuit error generator dictionaries.
         propagated_errorgen_layers = self.propagate_errorgens(circuit, include_spam=include_spam, include_circuit_time=True)
-        
+        #print(propagated_errorgen_layers)
         #now get the nonmarkovian error generators by applying the cumulant expansion
         nonmarkovian_generators = _cumul.cumulant_expansion(propagated_errorgen_layers, cov_func, cumulant_order)
 
@@ -460,7 +454,8 @@ class ErrorGeneratorPropagator:
             propagation_layers = []
         return propagation_layers
     
-    def construct_errorgen_layers(self, circuit, num_qubits, include_spam=True, include_circuit_time=False, fixed_rate=None):
+    #TODO: Once we have modelmembers for the covariances use this to control whether zero rates are dropped.
+    def construct_errorgen_layers(self, circuit, num_qubits, include_spam=True, include_circuit_time=False, fixed_rate=None, drop_zero_rates=False):
         """
         Construct a nested list of lists of dictionaries corresponding to the error generators for each circuit layer.
         This is currently (as implemented) only well defined for `ExplicitOpModels` where each layer corresponds
@@ -525,14 +520,11 @@ class ErrorGeneratorPropagator:
             if layer_errorgen_coeff_dict is None:
                 layer_errorgen_coeff_dict = self.model.circuit_layer_operator(circuit_layer).errorgen_coefficients(label_type='local') #get the errors for the gate
                 circuit_layer_errorgen_cache[circuit_layer] = layer_errorgen_coeff_dict
-            
             for errgen_coeff_lbl, rate in layer_errorgen_coeff_dict.items(): #for an error in the accompanying error dictionary 
                 #only track this error generator if its rate is not exactly zero. #TODO: Add more flexible initial truncation logic.
-                if rate !=0 or fixed_rate is not None:
-                    #if isinstance(errgen_coeff_lbl, _LocalElementaryErrorgenLabel):
+                if (rate !=0 or not drop_zero_rates) or fixed_rate is not None:
                     initial_label = errgen_coeff_lbl
-                    #else:
-                    #    initial_label = None
+
                     #TODO: Can probably replace this function call with `padded_basis_element_labels` method of `GlobalElementaryErrorgenLabel`
                     paulis = _eprop.errgen_coeff_label_to_stim_pauli_strs(errgen_coeff_lbl, num_qubits)
                     pauli_strs = errgen_coeff_lbl.basis_element_labels #get the original python string reps from local labels
@@ -543,6 +535,7 @@ class ErrorGeneratorPropagator:
                     else:
                         errorgen_layer[_LSE(errgen_coeff_lbl.errorgen_type, paulis, initial_label=initial_label, 
                                             pauli_str_reps=pauli_strs)] = rate if fixed_rate is None else fixed_rate
+           
             error_gen_dicts_by_layer.append(errorgen_layer)
         return error_gen_dicts_by_layer
     
@@ -600,7 +593,6 @@ class ErrorGeneratorPropagator:
         #add the final layers which didn't require actual propagation (since they were already at the end).
         fully_propagated_layers.extend(errorgen_layers[stopping_idx:])
         return fully_propagated_layers
-    
     
     def errorgen_layer_dict_to_errorgen(self, errorgen_layer, mx_basis='pp'):
         """

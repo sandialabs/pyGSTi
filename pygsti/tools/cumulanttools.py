@@ -96,7 +96,7 @@ def nonmarkovian_generator(errorgen_layers, cov_func, cumulant_order=2, truncati
     for starting_index in range(num_layers):
         current_layer = errorgen_layers[starting_index]
         cumulants.extend(error_generator_cumulant(final_layer, current_layer, cov_func, cumulant_order, truncation_threshold))
-        
+    #print(f'{cumulants=}')
     #The contents of cumulants needs to get added to the first-order cumulant of the final layer, which is just the value
     #of final_layer.
     complete_coeff_set = set([tup[0] for tup in cumulants])
@@ -151,13 +151,13 @@ def error_generator_cumulant(errgen_layer_1, errgen_layer_2, cov_func, order=2, 
     cumulant_coeff_list = [] #for accumulating the tuples of weights and 
     #compute the 
     #loop through error generator pairs in each of the dictionaries.
-    for rate1, errgen1 in errgen_layer_1.items():
-        for rate2, errgen2 in errgen_layer_2.items():
-            combined_rate = rate1*rate2
+    for errgen1, rate1 in errgen_layer_1.items():
+        for errgen2, rate2 in errgen_layer_2.items():
+            #combined_rate = rate1*rate2
             cov_val = cov_func(errgen1, errgen2) #can this be negative?
             if abs(cov_val) > 0:
-                combined_cov_rate = combined_rate*cov_val #TODO: revisit this
-                cumulant_coeff_list.append(_eprop.error_generator_composition(errgen1, errgen2, weight=combined_cov_rate, identity=identity))
+                #combined_cov_rate = combined_rate*cov_val #TODO: revisit this
+                cumulant_coeff_list.extend(_eprop.error_generator_composition(errgen1, errgen2, weight=cov_val, identity=identity))
     
     return cumulant_coeff_list
     #accumulate terms:
