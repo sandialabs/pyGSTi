@@ -403,35 +403,6 @@ class LocalNoiseModel(_ImplicitOpModel):
 
         return op_coeffs
 
-    def create_explicit(self, reparamerize_to=None):
-        from pygsti.models import ExplicitOpModel
-
-        state = self.__getstate__()
-        state['povms'] = state['povm_blks']['layers']
-        state['preps'] = state['prep_blks']['layers']
-        opdict = _OrderedMemberDict(None, reparamerize_to, None, dict())
-        opdict.update(state['_opcaches']['complete-layers'])
-        state['operations'] = opdict
-
-        for v in state['operations'].values():
-            v.unlink_parent(force=True)
-        for v in state['povms'].values():
-            v.unlink_parent(force=True)
-        for v in state['preps'].values():
-            v.unlink_parent(force=True)
-
-        eom = ExplicitOpModel(self.state_space)
-        eom.preps.update(state['preps'])
-        eom.povms.update(state['povms'])
-        eom.operations.update(state['operations'])
-        if reparamerize_to is None:
-            return eom
-
-        assert isinstance(reparamerize_to, str)
-        eom.convert_members_inplace(reparamerize_to, allow_smaller_pp_basis=True)
-        eom._rebuild_paramvec()
-        return eom
-
 
 class _SimpleCompLayerRules(_LayerRules):
 

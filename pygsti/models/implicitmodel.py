@@ -20,6 +20,7 @@ from pygsti.modelmembers import operations as _op
 from pygsti.modelmembers import povms as _povm
 from pygsti.modelmembers.modelmembergraph import ModelMemberGraph as _MMGraph
 from pygsti.baseobjs.label import Label as _Label
+from pygsti.models.memberdict import OrderedMemberDict as _OrderedMemberDict
 
 from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
@@ -369,6 +370,36 @@ class ImplicitOpModel(_mdl.OpModel):
             root_dicts[root_key][sub_key].update(mm_dict)  # Note: sub_keys should already be created
         return mdl
 
+    def create_explicit(self, reparamerize_to=None):
+        from pygsti.models import ExplicitOpModel
+
+        state = self.__getstate__()
+        state['povms'] = state['povm_blks']['layers']
+        state['preps'] = state['prep_blks']['layers']
+        opdict = _OrderedMemberDict(None, reparamerize_to, None, dict())
+        opdict.update(state['_opcaches']['complete-layers'])
+        state['operations'] = opdict
+
+        for v in state['operations'].values():
+            v.unlink_parent(force=True)
+        for v in state['povms'].values():
+            v.unlink_parent(force=True)
+        for v in state['preps'].values():
+            v.unlink_parent(force=True)
+
+        eom = ExplicitOpModel(self.state_space)
+        eom.preps.update(state['preps'])
+        eom.povms.update(state['povms'])
+        eom.operations.update(state['operations'])
+        if reparamerize_to is None:
+            return eom
+
+        assert isinstance(reparamerize_to, str)
+        eom.convert_members_inplace(
+            reparamerize_to, allow_smaller_pp_basis=True
+        )
+        eom._rebuild_paramvec()
+        return eom
 
 def _init_spam_layers(model, prep_layers, povm_layers):
     """ Helper function for initializing the .prep_blks and .povm_blks elements of an implicit model"""

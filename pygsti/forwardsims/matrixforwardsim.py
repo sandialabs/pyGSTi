@@ -695,8 +695,9 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         return super()._array_types_for_method(method_name)
 
     def __init__(self, model=None, distribute_by_timestamp=False, num_atoms=None, processor_grid=None,
-                 param_blk_sizes=None):
+                 param_blk_sizes=None, cache_doperations=True):
         super().__init__(model, num_atoms, processor_grid, param_blk_sizes)
+        self._cache_dops = cache_doperations
         self._mode = "distribute_by_timestamp" if distribute_by_timestamp else "time_independent"
 
     def _to_nice_serialization(self):
@@ -1518,6 +1519,32 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         _np.seterr(**old_err)
 
     def _bulk_fill_dprobs_atom(self, array_to_fill, dest_param_slice, layout_atom, param_slice, resource_alloc):
+        if not self._cache_dops:
+            # This call errors because it tries to compute layout_atom.as_layout(resource_alloc),
+            # which isn't implemented. Looking at how layout_atom is used in the other branch
+            # of this if-statement it isn't clear how to work around this. Can look at 
+            # MapForwardSimulator._bulk_fill_dprobs_atom(...).
+            # 
+            # Verbatim contents:
+            #
+            #       resource_alloc.check_can_allocate_memory(layout_atom.cache_size * self.model.dim * _slct.length(param_slice))
+            #       self.calclib.mapfill_dprobs_atom(self, array_to_fill, slice(0, array_to_fill.shape[0]), dest_param_slice,
+            #                                  layout_atom, param_slice, resource_alloc, self.derivative_eps)
+            #
+            # where
+            #
+            #       self.calclib = _importlib.import_module("pygsti.forwardsims.mapforwardsim_calc_" + evotype.name).
+            # 
+            # and an implementation can be found at
+            #
+            #       /Users/rjmurr/Documents/pg-xfgst/repo/pygsti/forwardsims/mapforwardsim_calc_generic.py.
+            #
+            # Specifically, in mapfill_probs_atom. But that doesn't do anything like layout_atom.as_layout(resource_alloc) .... :(
+            # 
+
+            _DistributableForwardSimulator._bulk_fill_dprobs_atom(self, array_to_fill, dest_param_slice, layout_atom, param_slice, resource_alloc)
+            return
+        
         dim = self.model.evotype.minimal_dim(self.model.state_space)
         resource_alloc.check_can_allocate_memory(layout_atom.cache_size * dim * dim * _slct.length(param_slice))
         prodCache, scaleCache = self._compute_product_cache(layout_atom.tree, resource_alloc)
