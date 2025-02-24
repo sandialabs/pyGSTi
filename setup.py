@@ -83,7 +83,8 @@ extras = {
         'notebook',
         'ipython',
         'jupyter_server',
-        'torch'
+        'torch',
+        'stim'
     ]
 }
 
@@ -148,6 +149,7 @@ def setup_with_extensions(extensions=None):
             'pygsti.circuits.circuitparser',
             'pygsti.data',
             'pygsti.drivers',
+            'pygsti.errorgenpropagation',
             'pygsti.evotypes',
             'pygsti.evotypes.densitymx',
             'pygsti.evotypes.densitymx_slow',
@@ -164,6 +166,7 @@ def setup_with_extensions(extensions=None):
             'pygsti.extras.interpygate',
             'pygsti.extras.crosstalk',
             'pygsti.extras.devices',
+            'pygsti.extras.lfh',
             'pygsti.forwardsims',
             'pygsti.io',
             'pygsti.layouts',
@@ -274,7 +277,8 @@ def setup_with_extensions(extensions=None):
             'scipy',
             'plotly',
             'pandas',
-            'networkx'
+            'networkx',
+            'stim'
         ],
         extras_require=extras,
         python_requires='>=3.8',
