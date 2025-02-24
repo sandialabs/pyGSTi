@@ -370,13 +370,18 @@ class ImplicitOpModel(_mdl.OpModel):
             root_dicts[root_key][sub_key].update(mm_dict)  # Note: sub_keys should already be created
         return mdl
 
-    def create_explicit(self, reparamerize_to=None):
+    def create_explicit(self, composedops_as_views=False, spam_type='full TP', op_type='CPTPLND'):
         from pygsti.models import ExplicitOpModel
-
+        if isinstance(composedops_as_views, str):
+            # Old positional argument behavior.
+            spam_type = composedops_as_views
+            op_type = composedops_as_views
+            composedops_as_views = False
+        
         state = self.__getstate__()
         state['povms'] = state['povm_blks']['layers']
         state['preps'] = state['prep_blks']['layers']
-        opdict = _OrderedMemberDict(None, reparamerize_to, None, dict())
+        opdict = _OrderedMemberDict(None, spam_type, None, dict())
         opdict.update(state['_opcaches']['complete-layers'])
         state['operations'] = opdict
 
@@ -391,14 +396,24 @@ class ImplicitOpModel(_mdl.OpModel):
         eom.preps.update(state['preps'])
         eom.povms.update(state['povms'])
         eom.operations.update(state['operations'])
-        if reparamerize_to is None:
-            return eom
 
-        assert isinstance(reparamerize_to, str)
         eom.convert_members_inplace(
-            reparamerize_to, allow_smaller_pp_basis=True
+            to_type=spam_type, categories_to_convert=('preps', 'povms'),
+            allow_smaller_pp_basis=True, flatten_structure=True
         )
-        eom._rebuild_paramvec()
+        eom.convert_members_inplace(
+            to_type=op_type, categories_to_convert=('operations',),
+            allow_smaller_pp_basis=True
+        )
+        if composedops_as_views:
+            from pygsti.modelmembers.operations import ComposedOp
+            allop_keys = eom.operations.keys()
+            for k in allop_keys:
+                curr_op = eom[k]
+                if isinstance(curr_op, ComposedOp) and all([subk in allop_keys for subk in k]):
+                    view_op = ComposedOp([eom[subk] for subk in k])
+                    eom[k] = view_op
+            eom._rebuild_paramvec()
         return eom
 
 def _init_spam_layers(model, prep_layers, povm_layers):
