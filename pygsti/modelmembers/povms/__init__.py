@@ -12,7 +12,7 @@ Sub-package holding model POVM and POVM effect objects.
 import _collections
 import functools as _functools
 import itertools as _itertools
-
+import warnings
 import numpy as _np
 import scipy.linalg as _spl
 import scipy.optimize as _spo
@@ -37,6 +37,8 @@ from .unconstrainedpovm import UnconstrainedPOVM
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.tools import basistools as _bt
 from pygsti.tools import optools as _ot
+from pygsti.tools import sum_of_negative_choi_eigenvalues_gate
+from pygsti.baseobjs import Basis
 
 # Avoid circular import
 import pygsti.modelmembers as _mm
@@ -297,7 +299,7 @@ def povm_type_from_op_type(op_type):
     return povm_type_preferences
 
 
-def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False):
+def convert(povm, to_type, basis, cp_penalty=1e-7, ideal_povm=None, flatten_structure=False):
     """
     TODO: update docstring
     Convert a POVM to a new type of parameterization.
@@ -329,6 +331,14 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False):
         are separately converted, leaving the original POVM's structure
         unchanged.  When `True`, composed and embedded operations are "flattened"
         into a single POVM of the requested `to_type`.
+    
+    cp_penalty : float, optional (default 1e-7)
+            Converting SPAM operations to an error generator representation may 
+            introduce trivial gauge degrees of freedom. These gauge degrees of freedom 
+            are called trivial because they quite literally do not change the dense representation 
+            (i.e. Hilbert-Schmidt vectors) at all. Despite being trivial, error generators along 
+            this trivial gauge orbit may be non-CP, so this cptp penalty is used to favor channels 
+            within this gauge orbit which are CPTP.
 
     Returns
     -------
@@ -368,6 +378,7 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False):
                 from ..operations import LindbladParameterization as _LindbladParameterization
                 lndtype = _LindbladParameterization.cast(to_type)
 
+                
                 #Construct a static "base" POVM
                 if isinstance(povm, ComputationalBasisPOVM):  # special easy case
                     base_povm = ComputationalBasisPOVM(povm.state_space.num_qubits, povm.evotype)  # just copy it?
@@ -381,6 +392,7 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False):
                             raise RuntimeError('Evotype must be compatible with Hilbert ops to use pure effects')
                     except RuntimeError:  # try static mixed states next:
                         #if idl.get(lbl,None) is not None:
+                        
                         base_items = []
                         for lbl, vec in povm.items():
                             ideal_effect = idl.get(lbl,None)
@@ -393,8 +405,8 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False):
                 proj_basis = 'PP' if povm.state_space.is_entirely_qubits else basis
                 errorgen = _LindbladErrorgen.from_error_generator(povm.state_space.dim, lndtype, proj_basis,
                                                                   basis, truncate=True, evotype=povm.evotype)
-            
-                #Need to set errorgen so exp(errorgen)|st> == |state>
+                    
+                #Collect all ideal effects
                 base_dense_effects = []
                 for item in base_items:
                     dense_effect = item[1].to_dense()
@@ -402,51 +414,75 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False):
 
                 dense_ideal_povm = _np.concatenate(base_dense_effects, axis=0)
 
+                #Collect all noisy effects
                 dense_effects = []
                 for effect in povm.values():
                     dense_effect = effect.to_dense()
                     dense_effects.append(dense_effect.reshape((1,len(dense_effect))))
 
-                dense_ideal_povm = _np.concatenate(base_dense_effects, axis=0)
                 dense_povm = _np.concatenate(dense_effects, axis=0)
+                degrees_of_freedom = (dense_ideal_povm.shape[0] - 1) * dense_ideal_povm.shape[1]
 
+                #It is often the case that there are more error generators than physical degrees of freedom in the POVM
+                #We define a function which finds linear comb. of errgens that span these degrees of freedom.
+                #This has been called "the trivial gauge", and this function is meant to avoid it
                 def calc_physical_subspace(dense_ideal_povm, epsilon = 1e-9):
-	
-                        errgen = _LindbladErrorgen.from_error_generator(4, parameterization="GLND")
-                        exp_errgen = _ExpErrorgenOp(errgen)
-                        ideal_vec = _np.zeros(12)
-                        J = _np.zeros((dense_ideal_povm.shape[0]*dense_ideal_povm.shape[1],12))
+    
+                    errgen = _LindbladErrorgen.from_error_generator(povm.state_space.dim, parameterization=to_type)
+                    if degrees_of_freedom > errgen.num_params:
+                        warnings.warn("POVM has more degrees of freedom than the available number of parameters, representation in this parameterization is not guaranteed")
+                    exp_errgen = _ExpErrorgenOp(errgen)
+                    
+                    num_errgens = errgen.num_params
+                    #TODO: Maybe we can use the num of params instead of number of matrix entries, as some of them are linearly dependent.
+                    #i.e E0 completely determines E1 if those are the only two povm elements (E0 + E1 = Identity)
+                    num_entries = dense_ideal_povm.shape[0]*dense_ideal_povm.shape[1]
+                    #assert num_errgens >= povm.num_params, "POVM has too many elements, error generator parameterization is not possible"
+
+                    ideal_vec = _np.zeros(num_errgens)
+
+                    #Compute the jacobian with respect to the error generators. This will allow us to see which
+                    #error generators change the POVM entries
+                    J = _np.zeros((num_entries,num_errgens))
+                    
+                    for i in range(len(ideal_vec)):
+                        new_vec = ideal_vec.copy()
+                        new_vec[i] = epsilon
+                        exp_errgen.from_vector(new_vec)
+                        vectorized_povm = _np.zeros(num_entries)
+                        perturbed_povm = (dense_ideal_povm @ exp_errgen.to_dense() - dense_ideal_povm)/epsilon 
+
+                        perturbed_povm_t = perturbed_povm.transpose()
+                        for j, column in enumerate(perturbed_povm_t):
+                            vectorized_povm[j*len(perturbed_povm_t[0]):(j+1)*len(perturbed_povm_t[0])] = column
                         
-                        for i in range(len(ideal_vec)):
-                            new_vec = ideal_vec.copy()
-                            new_vec[i] = epsilon
-                            exp_errgen.from_vector(new_vec)
-                            vectorized_povm = _np.zeros(dense_ideal_povm.shape[0]*dense_ideal_povm.shape[1])
-                            perturbed_povm = (dense_ideal_povm @ exp_errgen.to_dense() - dense_ideal_povm)/epsilon
+                        J[:,i] = vectorized_povm.transpose()
 
-                            perturbed_povm_t = perturbed_povm.transpose()
-                            for j, column in enumerate(perturbed_povm_t):
-                                vectorized_povm[j*len(perturbed_povm_t[0]):(j+1)*len(perturbed_povm_t[0])] = column
-                            
-                            J[:,i] = vectorized_povm.transpose()
-
-                        _,S,V = _np.linalg.svd(J)
-                        return V[:len(S),]
+                    _,S,V = _np.linalg.svd(J)
+                    return V[:len(S),]
                 
                 phys_directions = calc_physical_subspace(dense_ideal_povm)
 
-                
+                #We use optimization to find the best error generator representation
+                #we only vary physical directions, not independent error generators
                 def _objfn(v):
+
+                    #For some reason adding the sum_of_negative_choi_eigenvalues_gate term
+                    #resulted in minimize() sometimes choosing NaN values for v. There are
+                    #two stack exchange issues showing this problem with no solution.
+                    if _np.isnan(v).any():
+                        v = _np.zeros(len(v))
+
                     L_vec = _np.zeros(len(phys_directions[0]))
                     for coeff, phys_direction in zip(v,phys_directions):
                         L_vec += coeff * phys_direction
                     errorgen.from_vector(L_vec)
-                    return _np.linalg.norm(dense_povm - dense_ideal_povm @ _spl.expm(errorgen.to_dense()))
+                    proc_matrix = _spl.expm(errorgen.to_dense())
+                    
+                    return _np.linalg.norm(dense_povm - dense_ideal_povm @ proc_matrix) + cp_penalty * sum_of_negative_choi_eigenvalues_gate(proc_matrix, basis)
                 
-                #def callback(x): print("callbk: ",_np.linalg.norm(x),_objfn(x))  # REMOVE
                 soln = _spo.minimize(_objfn, _np.zeros(len(phys_directions), 'd'), method="Nelder-Mead", options={},
                                         tol=1e-13)  # , callback=callback)
-                #print("DEBUG: opt done: ",soln.success, soln.fun, soln.x)  # REMOVE
                 if not soln.success and soln.fun > 1e-6:  # not "or" because success is often not set correctly
                     raise ValueError("Failed to find an errorgen such that <ideal|exp(errorgen) = <effect|")
                 errgen_vec = _np.linalg.pinv(phys_directions)  @ soln.x

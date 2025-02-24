@@ -306,9 +306,6 @@ def diamonddist(a, b, mx_basis='pp', return_x=False):
 
     # currently cvxpy is only needed for this function, so don't import until here
     import cvxpy as _cvxpy
-    old_cvxpy = bool(tuple(map(int, _cvxpy.__version__.split('.'))) < (1, 0))
-    if old_cvxpy:
-        raise RuntimeError('CVXPY 0.4 is no longer supported. Please upgrade to CVXPY 1.0 or higher.')
 
     # _jam code below assumes *un-normalized* Jamiol-isomorphism.
     # It will convert a & b to a "single-block" basis representation
