@@ -11,7 +11,9 @@ Covariance function specialized to the case of an Ornstein-Uhlenbeck (OU) proces
 #***************************************************************************************************
 
 from pygsti.modelmembers.covariances.covariancefunc import CovarianceFunction as _CovarianceFunction
+from pygsti.modelmembers import ModelMember as _ModelMember
 from pygsti.baseobjs.errorgenlabel import ElementaryErrorgenLabel as _ElementaryErrorgenLabel
+import numpy as _np
 
 class OUCovarianceFunction(_CovarianceFunction):
 
@@ -28,7 +30,7 @@ class OUCovarianceFunction(_CovarianceFunction):
         Initialize an instance of an Ornstein-Uhlenbeck covariance function.
         The covariance function of an OU process is given by:
 
-        cov(x_s, x_t) = (sigma^2 * t_c/2) * exp(-t_c*abs(s-t))
+        cov(x_s, x_t) = (sigma^2 * t_c/2) * exp(-abs(s-t)/t_c)
 
         Where t_c is the characteristic correlation time for the process,
         and sigma^2 is the characteristic variance scale for the process.
@@ -52,32 +54,78 @@ class OUCovarianceFunction(_CovarianceFunction):
 
         """
 
+        _ModelMember.__init__(self, None, None)
+
         #assert that all of the keys/list tuples are error generator labels.
         for label_tup in error_generator_labels:
             for lbl in label_tup:
                 assert isinstance(lbl, _ElementaryErrorgenLabel), 'All keys must be `ElementaryErrorgenLabel`s.'
 
-        if isinstance(error_generator_labels, list):
-            msg = 'When specifying a list for `error_generator_labels` the values should be tuple with the format specified in the docstring.'
-            assert isinstance(error_generator_labels[0], tuple), msg
+        #need a mapping between error generator labels and parameter indices
+        self._errgen_label_to_param_idx = dict()
+        for i, label_tup in enumerate(error_generator_labels):
+            if len(label_tup) == 1:
+                self._errgen_label_to_param_idx[(label_tup[0], label_tup[0])] = i
+            elif len(label_tup) == 2:
+                self._errgen_label_to_param_idx[label_tup] = i
+                #also make sure the other direction maps to the same index
+                self._errgen_label_to_param_idx[(label_tup[1], label_tup[0])] = i
+            else:
+                raise ValueError('Too many error generator labels to unpack. Length of tuple of errorgen labels should be either 1 or 2.')
 
+        #allocate arrays to internally store the correlation time and variance scale separately.
+        self.correlation_times = _np.zeros(len(error_generator_labels))
+        self.variances = _np.zeros(len(error_generator_labels))
 
+        #if a dictionary initialize these values to those values.
+        if isinstance(error_generator_labels, dict):
+            for i, (corr_time, var) in enumerate(error_generator_labels.values()):
+                self.correlation_times[i] = corr_time
+                self.variances[i] = var
 
-            #need a mapping between error generator labels and parameter indices
-            self._errgen_label_to_param_idx = dict()
+        #Concatenate the correlation time and variance vectors.
+        self._paramvals = _np.concatenate([self.correlation_times, self.variances])
+        
+        #label parameters as either correlation times or variances.
+        self._paramlbls = []
+        for lbl_tup in self._errgen_label_to_param_idx.keys():
+            self._paramlbls.append(f'Correlation Time for {lbl_tup}')
+        for lbl_tup in self._errgen_label_to_param_idx.keys():
+            self._paramlbls.append(f'Covariance for {lbl_tup}')
+        self._paramlbls = _np.array(self._paramlbls, dtype=object)      
 
-            for label_tup in error_generator_labels:
-                if len()
-
-
-    def to_vector():
-        pass
+    def to_vector(self):
+        return self._paramvals
 
     def from_vector(self, v, close=False, dirty_value=True):
-        return super().from_vector(v, close, dirty_value)
+        self._paramvals[:] = v
+        n = len(self.correlation_times)
+        self.correlation_times[0:n] = self._paramvals[:n]
+        self.variances[n:] = self._paramvals[n:]
+        self.dirty = dirty_value
     
-    def __call__(self):
-        pass
+    #TODO: Add logic for handling different error generator label types.
+    def __call__(self, errorgen1, time1, errorgen2, time2):
+        """
+        Computes the correlation function. Takes as input two error generator labels and two times.
+        Returns 0 if both error generator labels are not present in this covariance function.
+        """
+        idx = self._errgen_label_to_param_idx.get((errorgen1, errorgen2), None)
 
+        if idx is None:
+            return 0
+        else:
+            cov_val = .5*self.variances[idx]*self.correlation_times[idx]*_np.exp(-abs(time1-time2)/self.correlation_times[idx])
+            return cov_val
 
-    
+    @property
+    def num_params(self):
+        """
+        Get the number of independent parameters which specify this operation.
+
+        Returns
+        -------
+        int
+            the number of independent parameters.
+        """
+        return 2*len(self.correlation_times)

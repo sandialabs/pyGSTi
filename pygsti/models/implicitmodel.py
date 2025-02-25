@@ -26,6 +26,9 @@ from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from pygsti.models.layerrules import LayerRules as _LayerRules
 from pygsti.forwardsims.forwardsim import ForwardSimulator as _FSim
 
+from typing import Dict
+ordereddict = Dict
+
 
 class ImplicitOpModel(_mdl.OpModel):
     """
@@ -64,11 +67,12 @@ class ImplicitOpModel(_mdl.OpModel):
                  basis="pp",
                  simulator="auto",
                  evotype="densitymx"):
-        self.prep_blks = _collections.OrderedDict()
-        self.povm_blks = _collections.OrderedDict()
-        self.operation_blks = _collections.OrderedDict()
-        self.instrument_blks = _collections.OrderedDict()
-        self.factories = _collections.OrderedDict()
+        self.prep_blks: ordereddict = dict()
+        self.povm_blks: ordereddict = dict()
+        self.operation_blks: ordereddict = dict()
+        self.instrument_blks: ordereddict = dict()
+        self.factories: ordereddict = dict()
+        self.covariance_function = None
 
         super(ImplicitOpModel, self).__init__(state_space, basis, evotype, layer_rules, simulator)
 
@@ -83,8 +87,7 @@ class ImplicitOpModel(_mdl.OpModel):
     @property
     def _primitive_op_label_dict(self):
         # don't include 'implied' ops as primitive ops -- FUTURE - maybe should include empty layer ([])?
-        return _collections.OrderedDict([(k, None) for k in self.operation_blks['layers']
-                                         if not (k.name.startswith('{') and k.name.endswith('}'))])
+        return {k: None for k in self.operation_blks['layers'] if not (k.name.startswith('{') and k.name.endswith('}'))}
 
     @property
     def _primitive_instrument_label_dict(self):
@@ -97,9 +100,12 @@ class ImplicitOpModel(_mdl.OpModel):
                                                  self.povm_blks.items(),
                                                  self.operation_blks.items(),
                                                  self.instrument_blks.items(),
-                                                 self.factories.items()):
+                                                 self.factories.items(),
+                                                 self.covariance_functions.items()):
             for lbl, obj in objdict.items():
                 yield (_Label(dictlbl + ":" + lbl.name, lbl.sslbls), obj)
+        if self.covariance_function is not None:
+            yield ('Covariance Function', self.covariance_function)
 
     def _init_copy(self, copy_into, memo):
         """
@@ -109,17 +115,13 @@ class ImplicitOpModel(_mdl.OpModel):
         # Copy special base class members first
         super(ImplicitOpModel, self)._init_copy(copy_into, memo)
 
+        #wasn't able to add type annotation here, but order matters for these dictionaries.
         # Copy our "tricky" members
-        copy_into.prep_blks = _collections.OrderedDict([(lbl, prepdict.copy(copy_into, memo))
-                                                       for lbl, prepdict in self.prep_blks.items()])
-        copy_into.povm_blks = _collections.OrderedDict([(lbl, povmdict.copy(copy_into, memo))
-                                                       for lbl, povmdict in self.povm_blks.items()])
-        copy_into.operation_blks = _collections.OrderedDict([(lbl, opdict.copy(copy_into, memo))
-                                                            for lbl, opdict in self.operation_blks.items()])
-        copy_into.instrument_blks = _collections.OrderedDict([(lbl, idict.copy(copy_into, memo))
-                                                             for lbl, idict in self.instrument_blks.items()])
-        copy_into.factories = _collections.OrderedDict([(lbl, fdict.copy(copy_into, memo))
-                                                       for lbl, fdict in self.factories.items()])
+        copy_into.prep_blks= {lbl: prepdict.copy(copy_into, memo) for lbl, prepdict in self.prep_blks.items()}
+        copy_into.povm_blks = {lbl: povmdict.copy(copy_into, memo) for lbl, povmdict in self.povm_blks.items()}
+        copy_into.operation_blks = {lbl: opdict.copy(copy_into, memo) for lbl, opdict in self.operation_blks.items()}
+        copy_into.instrument_blks = {lbl: idict.copy(copy_into, memo) for lbl, idict in self.instrument_blks.items()}
+        copy_into.factories = {lbl: fdict.copy(copy_into, memo) for lbl, fdict in self.factories.items()}
 
         copy_into._state_space = self.state_space.copy()  # needed by simplifier helper
 
@@ -129,7 +131,7 @@ class ImplicitOpModel(_mdl.OpModel):
             self.uuid = _uuid.uuid4()  # create a new uuid
 
         if 'factories' not in state_dict:
-            self.factories = _collections.OrderedDict()  # backward compatibility (temporary)
+            self.factories: ordereddict = dict()  # backward compatibility (temporary)
 
         #Additionally, must re-connect this model as the parent
         # of relevant OrderedDict-derived classes, which *don't*
@@ -298,18 +300,17 @@ class ImplicitOpModel(_mdl.OpModel):
         self._opcaches.clear()
 
         # Add expanded instrument and POVM operations to cache so these are accessible to circuit calcs
-        simplified_effect_blks = _collections.OrderedDict()
+        simplified_effect_blks: ordereddict = dict()
         for povm_dict_lbl, povmdict in self.povm_blks.items():
-            simplified_effect_blks['povm-' + povm_dict_lbl] = _collections.OrderedDict(
-                [(k, e) for povm_lbl, povm in povmdict.items()
-                 for k, e in povm.simplify_effects(povm_lbl).items()])
+            simplified_effect_blks['povm-' + povm_dict_lbl] = {k: e for povm_lbl, povm in povmdict.items()
+                                                               for k, e in povm.simplify_effects(povm_lbl).items()}
 
-        simplified_op_blks = _collections.OrderedDict()
+        simplified_op_blks: ordereddict = dict()
         for op_dict_lbl in self.operation_blks:
             simplified_op_blks['op-' + op_dict_lbl] = {}  # create *empty* caches corresponding to op categories
         for inst_dict_lbl, instdict in self.instrument_blks.items():
             if 'op-' + inst_dict_lbl not in simplified_op_blks:  # only create when needed
-                simplified_op_blks['op-' + inst_dict_lbl] = _collections.OrderedDict()
+                simplified_op_blks['op-' + inst_dict_lbl] = dict()
             for inst_lbl, inst in instdict.items():
                 for k, g in inst.simplify_operations(inst_lbl).items():
                     simplified_op_blks['op-' + inst_dict_lbl][k] = g

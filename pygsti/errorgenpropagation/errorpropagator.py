@@ -19,6 +19,7 @@ from pygsti.models.model import OpModel as _OpModel
 from pygsti.models import ExplicitOpModel as _ExplicitOpModel, ImplicitOpModel as _ImplicitOpModel
 from pygsti.modelmembers.operations import LindbladErrorgen as _LindbladErrorgen
 from itertools import islice
+import warnings as _warnings
 
 class ErrorGeneratorPropagator:
 
@@ -99,7 +100,7 @@ class ErrorGeneratorPropagator:
 
         return eoc_error_channel
     
-    def averaged_eoc_error_channel(self, circuit, include_spam=True, mx_basis='pp', cov_func=None):
+    def averaged_eoc_error_channel(self, circuit, include_spam=True, mx_basis='pp'):
         """
        Propagate all of the error generators for each circuit layer to the end of the circuit,
        then apply a second order cumulant expansion to approximate the average of the end of circuit
@@ -127,7 +128,7 @@ class ErrorGeneratorPropagator:
         """
 
         #propagate_errorgens_nonmarkovian returns a list of list of 
-        propagated_error_generators = self.propagate_errorgens_nonmarkovian(circuit, include_spam, cov_func=cov_func)
+        propagated_error_generators = self.propagate_errorgens_nonmarkovian(circuit, include_spam)
         
         #loop though the propagated error generator layers and construct their error generators.
         #Then exponentiate
@@ -238,7 +239,7 @@ class ErrorGeneratorPropagator:
         return combined_err_layer
         
         
-    def propagate_errorgens_nonmarkovian(self, circuit, include_spam=True, cumulant_order=2, cov_func=None):
+    def propagate_errorgens_nonmarkovian(self, circuit, include_spam=True, cumulant_order=2):
         """
         Propagate all of the error generators for each circuit layer to the end without
         any recombinations or averaging. This version also only track the overall modifier/weighting
@@ -265,6 +266,11 @@ class ErrorGeneratorPropagator:
             an error generator layer through to the end of the circuit.
 
         """
+        cov_func = self.model.covariance_function
+        if cov_func is None:
+            _warnings.warn('Model does not contain a covariance function. Will default to all-zero covariance function.')
+            cov_func = lambda a, b, c, d: 0
+
         #propagate the errorgen_layers through the propagation_layers to get a list
         #of end of circuit error generator dictionaries.
         propagated_errorgen_layers = self.propagate_errorgens(circuit, include_spam=include_spam, include_circuit_time=True)

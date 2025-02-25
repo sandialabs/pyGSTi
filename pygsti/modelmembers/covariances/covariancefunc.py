@@ -19,6 +19,6 @@ class CovarianceFunction(_modelmember.ModelMember):
     """
 
 def __init__(self):
-    pass
+    super().__init__(None, None)
 
 #TODO: Add handling to account for the fact that we don't actually need a state space

@@ -134,9 +134,10 @@ class ExplicitOpModel(_mdl.OpModel):
         self.operations = _OrderedMemberDict(self, default_gate_type, gate_prefix, flagfn("operation"))
         self.instruments = _OrderedMemberDict(self, default_instrument_type, instrument_prefix, flagfn("instrument"))
         self.factories = _OrderedMemberDict(self, default_gate_type, gate_prefix, flagfn("factory"))
+        self.covariance_function = None
         self.effects_prefix = effect_prefix
         self._default_gauge_group = None
-
+        
         super(ExplicitOpModel, self).__init__(state_space, basis, evotype, ExplicitLayerRules(), simulator)
 
     @property
@@ -166,6 +167,8 @@ class ExplicitOpModel(_mdl.OpModel):
                                          self.instruments.items(),
                                          self.factories.items()):
             yield (lbl, obj)
+        if self.covariance_function is not None:
+            yield ('Covariance Function', self.covariance_function)
 
     def _excalc(self):
         """ Create & return a special explicit-model calculator for this model """
@@ -490,6 +493,7 @@ class ExplicitOpModel(_mdl.OpModel):
         for o in self.operations.values(): o.relink_parent(self)
         for o in self.instruments.values(): o.relink_parent(self)
         for o in self.factories.values(): o.relink_parent(self)
+        self.covariance_function.relink_parent(self)
 
     @property
     def num_elements(self):
