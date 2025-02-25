@@ -644,12 +644,8 @@ def random_error_generator_rates(num_qubits, errorgen_types=('H', 'S', 'C', 'A')
         
     if max_weights is not None:
         assert max_weights['C'] <= max_weights['S'] and max_weights['A'] <= max_weights['S'], 'The maximum weight of the C and A terms should be less than or equal to the maximum weight of S.'
-        assert max_weights['C'] == max_weights['A'], 'Maximum weight and C of A terms must be the same at present.'
     rng = _np.random.default_rng(seed)
-
-    if 'C' in errorgen_types or 'A' in errorgen_types:
-        assert 'C' in errorgen_types and 'A' in errorgen_types, 'Support only currently available for random C and A terms if both sectors present.'
-        
+ 
     #create a state space with this dimension.
     state_space = _QubitSpace.cast(num_qubits)
     
@@ -692,15 +688,17 @@ def random_error_generator_rates(num_qubits, errorgen_types=('H', 'S', 'C', 'A')
     random_rates_dicts['H'] = {lbl: val for lbl,val in zip(errgen_labels_H, rng.normal(loc=H_params[0], scale=H_params[1], size = num_H_rates))}
     
     #Create a random matrix with complex gaussian entries which will be used to generator a PSD matrix for the SCA rates.
-    random_SCA_gen_mat = rng.normal(loc=SCA_params[0], scale=SCA_params[1], size=(num_S_rates, num_S_rates)) + \
-                        1j* rng.normal(loc=SCA_params[0], scale=SCA_params[1], size=(num_S_rates, num_S_rates))
-   
-    random_SCA_mat = random_SCA_gen_mat @ random_SCA_gen_mat.conj().T
-    #The random S rates are just the diagonal of random_SCA_mat.
-    random_rates_dicts['S'] = {lbl: val for lbl,val in zip(errgen_labels_S,  _np.real(_np.diag(random_SCA_mat)).copy())}
+    random_SC_gen_mat = rng.normal(loc=SCA_params[0], scale=SCA_params[1], size=(num_S_rates, num_S_rates))    
+    random_SA_gen_mat = rng.normal(loc=SCA_params[0], scale=SCA_params[1], size=(num_S_rates, num_S_rates))    
+    random_SC_mat = random_SC_gen_mat @ random_SC_gen_mat.T
+    random_SA_mat = random_SA_gen_mat @ random_SA_gen_mat.T
+    random_S_rates = _np.real(_np.diag(random_SC_mat) + _np.diag(random_SA_mat))
+
+    #The random S rates are just the sum of the diagonals of random SC and SA mats.
+    random_rates_dicts['S'] = {lbl: val for lbl,val in zip(errgen_labels_S,  random_S_rates)}
     #The random C rates are the real part of the off diagonal entries, and the A rates the imaginary part.
-    random_rates_dicts['C'] =  {lbl: val for lbl,val in zip(errgen_labels_C, random_SCA_mat[_np.triu_indices_from(random_SCA_mat, k=1)].real)}
-    random_rates_dicts['A'] =  {lbl: val for lbl,val in zip(errgen_labels_A, random_SCA_mat[_np.triu_indices_from(random_SCA_mat, k=1)].imag)}
+    random_rates_dicts['C'] =  {lbl: val for lbl,val in zip(errgen_labels_C, random_SC_mat[_np.triu_indices_from(random_SC_mat, k=1)])}
+    random_rates_dicts['A'] =  {lbl: val for lbl,val in zip(errgen_labels_A, random_SA_mat[_np.triu_indices_from(random_SA_mat, k=1)])}
     #manually check conditions on C and A
     for lbl, rate in random_rates_dicts['C'].items():
         first_S_rate = random_rates_dicts['S'][_LocalElementaryErrorgenLabel('S', (lbl.basis_element_labels[0],))]
