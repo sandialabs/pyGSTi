@@ -641,9 +641,12 @@ def random_error_generator_rates(num_qubits, errorgen_types=('H', 'S', 'C', 'A')
             _warnings.warn('The relative_HS_contribution kwarg is only utilized when error_metric is not None, the specified value is ignored otherwise.')
         else:
             assert abs(1-sum(relative_HS_contribution))<=1e-7, 'The relative_HS_contribution should sum to 1.'
-        
+    
+    if 'C' in errorgen_types or 'A' in errorgen_types:
+        assert 'S' in errorgen_types, 'Must include S terms when C and A present. Cannot have a CP error generator otherwise.'
+
     if max_weights is not None:
-        assert max_weights['C'] <= max_weights['S'] and max_weights['A'] <= max_weights['S'], 'The maximum weight of the C and A terms should be less than or equal to the maximum weight of S.'
+        assert max_weights.get('C', 0) <= max_weights.get('S', 0) and max_weights.get('A', 0) <= max_weights.get('S', 0), 'The maximum weight of the C and A terms should be less than or equal to the maximum weight of S.'
     rng = _np.random.default_rng(seed)
  
     #create a state space with this dimension.
