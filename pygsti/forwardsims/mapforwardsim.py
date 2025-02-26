@@ -1,5 +1,5 @@
 """
-Defines the MapForwardSimulator calculator class
+Defines the MapForwardSimulator class
 """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
