@@ -37,6 +37,8 @@ class ErrorGeneratorPropagator:
         """   
         self.model = model
 
+        self._errorgen_matrix_cache = dict()
+
     def eoc_error_channel(self, circuit, include_spam=True, use_bch=False,
                           bch_kwargs=None, mx_basis='pp'):
         """
@@ -618,7 +620,7 @@ class ErrorGeneratorPropagator:
         fully_propagated_layers.extend(errorgen_layers[stopping_idx:])
         return fully_propagated_layers
     
-    def errorgen_layer_dict_to_errorgen(self, errorgen_layer, mx_basis='pp'):
+    def errorgen_layer_dict_to_errorgen(self, errorgen_layer, mx_basis='pp', cache_errorgen_matrices=True):
         """
         Helper method for converting from an error generator dictionary in the format
         utilized in the `errorgenpropagation` module into a numpy array.
@@ -636,6 +638,8 @@ class ErrorGeneratorPropagator:
         return_dense : bool, optional (default False)
             If True return the error generator as a dense numpy array.
 
+        cache_errorgen_matrices
+
         Returns
         -------
         errorgen : numpy.ndarray
@@ -648,22 +652,31 @@ class ErrorGeneratorPropagator:
         #Construct a list of new errorgen coefficients by looping through the keys of errorgen_layer
         #and converting them to LocalElementaryErrorgenLabels.      
         local_errorgen_coeffs = [coeff_lbl.to_local_eel() for coeff_lbl in errorgen_layer.keys()]
-        eg_types = [lbl.errorgen_type for lbl in local_errorgen_coeffs]
-        eg_bels = [lbl.basis_element_labels for lbl in local_errorgen_coeffs]
+        eg_types = tuple([lbl.errorgen_type for lbl in local_errorgen_coeffs])
+        eg_bels = tuple([lbl.basis_element_labels for lbl in local_errorgen_coeffs])
         basis_1q = _BuiltinBasis('PP', 4)
-        num_qubits = len(self.model.state_space.qubit_labels)
+        num_qubits = len(self.model.state_space.qubit_labels) #TODO: ExplicitStateSpace compatibility.
         errorgen = _np.zeros((4**num_qubits, 4**num_qubits), dtype=complex128)
         #do this in blocks of 1000 to reduce memory requirements.
-        for eg_typ_batch, eg_bels_batch, eg_rates_batch in zip(_batched(eg_types, 1000), _batched(eg_bels, 1000), _batched(errorgen_layer.values(), 1000)):
-            elemgen_matrices = _ot.bulk_create_elementary_errorgen_nqudit(eg_typ_batch, eg_bels_batch, basis_1q, normalize=False,
-                                                                        sparse=False, tensorprod_basis=False)
-
-            #Stack the arrays and then use broadcasting to weight them according to the rates
-            elemgen_matrices_array = _np.stack(elemgen_matrices, axis=-1)
-            weighted_elemgen_matrices_array = _np.array(eg_rates_batch)*elemgen_matrices_array
-            weighted_elemgen_matrices_array = _np.real_if_close(weighted_elemgen_matrices_array)
-            #The error generator is then just the sum of weighted_elemgen_matrices_array along the third axis.
-            errorgen += _np.sum(weighted_elemgen_matrices_array, axis = 2)
+        #for eg_typ_batch, eg_bels_batch, eg_rates_batch in zip(_batched(eg_types, 1000), _batched(eg_bels, 1000), _batched(errorgen_layer.values(), 1000)):
+        if self._errorgen_matrix_cache:
+            elemgen_matrices = self._errorgen_matrix_cache.get((eg_types, eg_bels), None)
+            if elemgen_matrices is None:
+                elemgen_matrices = _ot.bulk_create_elementary_errorgen_nqudit(eg_types, eg_bels, basis_1q, normalize=False,
+                                                                              sparse=False, tensorprod_basis=False)
+                if cache_errorgen_matrices:
+                    self._errorgen_matrix_cache[(eg_types,eg_bels)] = elemgen_matrices
+        else: 
+            elemgen_matrices = _ot.bulk_create_elementary_errorgen_nqudit(eg_types, eg_bels, basis_1q, normalize=False,
+                                                                            sparse=False, tensorprod_basis=False)
+            if cache_errorgen_matrices:
+                self._errorgen_matrix_cache[(eg_types,eg_bels)] = elemgen_matrices
+        #Stack the arrays and then use broadcasting to weight them according to the rates
+        elemgen_matrices_array = _np.stack(elemgen_matrices, axis=-1)
+        weighted_elemgen_matrices_array = _np.fromiter(errorgen_layer.values(), dtype=_np.complex128)*elemgen_matrices_array
+        weighted_elemgen_matrices_array = _np.real_if_close(weighted_elemgen_matrices_array)
+        #The error generator is then just the sum of weighted_elemgen_matrices_array along the third axis.
+        errorgen += _np.sum(weighted_elemgen_matrices_array, axis = 2)
         
         #finally need to change from the standard basis (which is what the error generator is currently in)
         #to the pauli basis.

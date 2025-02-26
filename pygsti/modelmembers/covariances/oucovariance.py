@@ -132,7 +132,12 @@ class OUCovarianceFunction(_CovarianceFunction):
         if idx is None:
             return 0
         else:
-            cov_val = .5*self.variances[idx]*self.correlation_times[idx]*_np.exp(-abs(time1-time2)/self.correlation_times[idx])
+            corr_time = self.correlation_times[idx]
+            var = self.variances[idx]
+            if corr_time < 1e-14 or var < 1e-14: #HARDCODED
+                return 0
+            else:
+                cov_val = .5*var*corr_time*_np.exp(-abs(time1-time2)/corr_time)
             return cov_val
 
     @property

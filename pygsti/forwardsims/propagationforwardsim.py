@@ -97,7 +97,7 @@ class SimplePropagationForwardSimulator(_ForwardSimulator):
 
         super().__init__(model)
 
-    def bulk_probs(self, circuits, clip=False):
+    def bulk_probs(self, circuits, clip=False, resource_alloc=None, smartc=None):
         """
         Construct a dictionary containing the probabilities for an entire list of circuits.
 

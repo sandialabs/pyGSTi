@@ -493,7 +493,8 @@ class ExplicitOpModel(_mdl.OpModel):
         for o in self.operations.values(): o.relink_parent(self)
         for o in self.instruments.values(): o.relink_parent(self)
         for o in self.factories.values(): o.relink_parent(self)
-        self.covariance_function.relink_parent(self)
+        if self.covariance_function is not None:
+            self.covariance_function.relink_parent(self)
 
     @property
     def num_elements(self):
