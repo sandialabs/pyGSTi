@@ -37,8 +37,9 @@ class OUCovarianceFunction(_CovarianceFunction):
 
         Parameters
         ----------
-        error_generator_labels : dict, or list of tuples
-            Either a dictionary or a list of tuples which specifies the pairs of
+        error_generator_labels : dict
+            A nested dictionary whose keys are gate labels and whose values are either a
+            dictionary or a list of tuples which specifies the pairs of
             elementary error generators with non-trivial covariances. If a dictionary
             the keys should be tuples containing either one or two error generator labels.
             If length one then this is interpreted to mean the autocorrelation between this error
@@ -57,32 +58,48 @@ class OUCovarianceFunction(_CovarianceFunction):
         _ModelMember.__init__(self, None, None)
 
         #assert that all of the keys/list tuples are error generator labels.
-        for label_tup in error_generator_labels:
-            for lbl in label_tup:
-                assert isinstance(lbl, _ElementaryErrorgenLabel), 'All keys must be `ElementaryErrorgenLabel`s.'
+        for cov_spec in error_generator_labels.values():
+            for label_tup in cov_spec:
+                for lbl in label_tup:
+                    assert isinstance(lbl, _ElementaryErrorgenLabel), 'All keys must be `ElementaryErrorgenLabel`s.'
 
         #need a mapping between error generator labels and parameter indices
         self._errgen_label_to_param_idx = dict()
-        for i, label_tup in enumerate(error_generator_labels):
-            if len(label_tup) == 1:
-                self._errgen_label_to_param_idx[(label_tup[0], label_tup[0])] = i
-            elif len(label_tup) == 2:
-                self._errgen_label_to_param_idx[label_tup] = i
-                #also make sure the other direction maps to the same index
-                self._errgen_label_to_param_idx[(label_tup[1], label_tup[0])] = i
+        i=0
+        for gate_label, cov_spec in error_generator_labels.items():
+            if len(gate_label)==1:
+                gate_label_tups = [(gate_label[0], gate_label[0])]
+            elif len(gate_label)==2:
+                gate_label_tups = [(gate_label[0], gate_label[1]), (gate_label[1], gate_label[0])]
             else:
-                raise ValueError('Too many error generator labels to unpack. Length of tuple of errorgen labels should be either 1 or 2.')
+                raise ValueError('Too many gate labels, only correlations between at most 2 gates currently supported.')
 
+            for label_tup in cov_spec:
+                if len(label_tup) == 1:
+                    for gate_label_tup in gate_label_tups:
+                        self._errgen_label_to_param_idx[(gate_label_tup[0], label_tup[0], gate_label_tup[1], label_tup[0])] = i
+                elif len(label_tup) == 2:
+                    for gate_label_tup in gate_label_tups:
+                        self._errgen_label_to_param_idx[(gate_label_tup[0], label_tup[0], gate_label_tup[1], label_tup[1])] = i
+                    #also make sure the other direction maps to the same index
+                    for gate_label_tup in gate_label_tups:
+                        self._errgen_label_to_param_idx[(gate_label_tup[0], label_tup[1], gate_label_tup[1], label_tup[0])] = i
+                else:
+                    raise ValueError('Too many error generator labels to unpack. Length of tuple of errorgen labels should be either 1 or 2.')
+                i+=1
         #allocate arrays to internally store the correlation time and variance scale separately.
-        self.correlation_times = _np.zeros(len(error_generator_labels))
-        self.variances = _np.zeros(len(error_generator_labels))
+        total_num_values = sum([len(lbls_for_gate) for lbls_for_gate in error_generator_labels.values()])
+        self.correlation_times = _np.zeros(total_num_values)
+        self.variances = _np.zeros(total_num_values)
 
         #if a dictionary initialize these values to those values.
         if isinstance(error_generator_labels, dict):
-            for i, (corr_time, var) in enumerate(error_generator_labels.values()):
-                self.correlation_times[i] = corr_time
-                self.variances[i] = var
-
+            i=0
+            for cov_spec in error_generator_labels.values():
+                for corr_time, var in cov_spec.values():
+                    self.correlation_times[i] = corr_time
+                    self.variances[i] = var
+                    i+=1
         #Concatenate the correlation time and variance vectors.
         self._paramvals = _np.concatenate([self.correlation_times, self.variances])
         
@@ -100,17 +117,17 @@ class OUCovarianceFunction(_CovarianceFunction):
     def from_vector(self, v, close=False, dirty_value=True):
         self._paramvals[:] = v
         n = len(self.correlation_times)
-        self.correlation_times[0:n] = self._paramvals[:n]
-        self.variances[n:] = self._paramvals[n:]
+        self.correlation_times = self._paramvals[:n]
+        self.variances = self._paramvals[n:]
         self.dirty = dirty_value
     
     #TODO: Add logic for handling different error generator label types.
-    def __call__(self, errorgen1, time1, errorgen2, time2):
+    def __call__(self, errorgen1, gate_label1, time1, errorgen2, gate_label2, time2):
         """
         Computes the correlation function. Takes as input two error generator labels and two times.
         Returns 0 if both error generator labels are not present in this covariance function.
         """
-        idx = self._errgen_label_to_param_idx.get((errorgen1, errorgen2), None)
+        idx = self._errgen_label_to_param_idx.get((gate_label1, errorgen1, gate_label2, errorgen2), None)
 
         if idx is None:
             return 0

@@ -152,7 +152,7 @@ class ErrorGeneratorPropagator:
         return eoc_error_channel
 
 
-    def propagate_errorgens(self, circuit, include_spam=True, include_circuit_time=False):
+    def propagate_errorgens(self, circuit, include_spam=True, include_circuit_time=False, include_gate_label=False):
         """
         Propagate all of the error generators for each circuit layer to the end without
         any recombinations or averaging.
@@ -169,6 +169,10 @@ class ErrorGeneratorPropagator:
         include_circuit_time : bool, optional (default False)
             If True then include as part of the error generator coefficient labels the circuit
             time from which that error generator arose.
+
+        include_gate_label : bool, optional (default False)
+            Whether to include the originating gate label with the error generator metadata. Note this can only
+            be set to True when using an `ExplicitOpModel` at present.
 
         Returns
         -------
@@ -192,7 +196,8 @@ class ErrorGeneratorPropagator:
         #to the error generators for a particular gate layer.
         #TODO: Add proper inferencing for number of qubits:
         assert circuit.line_labels is not None and circuit.line_labels != ('*',)
-        errorgen_layers = self.construct_errorgen_layers(circuit, len(circuit.line_labels), include_spam, include_circuit_time=include_circuit_time)
+        errorgen_layers = self.construct_errorgen_layers(circuit, len(circuit.line_labels), include_spam, include_circuit_time=include_circuit_time, 
+                                                         include_gate_label=include_gate_label)
         #propagate the errorgen_layers through the propagation_layers to get a list
         #of end of circuit error generator dictionaries.
         propagated_errorgen_layers = self._propagate_errorgen_layers(errorgen_layers, propagation_layers, include_spam)
@@ -273,7 +278,7 @@ class ErrorGeneratorPropagator:
 
         #propagate the errorgen_layers through the propagation_layers to get a list
         #of end of circuit error generator dictionaries.
-        propagated_errorgen_layers = self.propagate_errorgens(circuit, include_spam=include_spam, include_circuit_time=True)
+        propagated_errorgen_layers = self.propagate_errorgens(circuit, include_spam=include_spam, include_circuit_time=True, include_gate_label=True)
         #print(propagated_errorgen_layers)
         #now get the nonmarkovian error generators by applying the cumulant expansion
         nonmarkovian_generators = _cumul.cumulant_expansion(propagated_errorgen_layers, cov_func, cumulant_order)
@@ -461,7 +466,8 @@ class ErrorGeneratorPropagator:
         return propagation_layers
     
     #TODO: Once we have modelmembers for the covariances use this to control whether zero rates are dropped.
-    def construct_errorgen_layers(self, circuit, num_qubits, include_spam=True, include_circuit_time=False, fixed_rate=None, drop_zero_rates=False):
+    def construct_errorgen_layers(self, circuit, num_qubits, include_spam=True, include_circuit_time=False, fixed_rate=None, 
+                                  drop_zero_rates=False, include_gate_label=False):
         """
         Construct a nested list of lists of dictionaries corresponding to the error generators for each circuit layer.
         This is currently (as implemented) only well defined for `ExplicitOpModels` where each layer corresponds
@@ -487,6 +493,13 @@ class ErrorGeneratorPropagator:
         fixed_rate : float, optional (default None)
             If specified this rate is used for all of the error generator coefficients, overriding the
             value currently found in the model.
+
+        drop_zero_rates : bool, optional (default False)
+            If True then all rates which are detected to be zero are dropped from each error generator layer.
+
+        include_gate_label : bool, optional (default False)
+            Whether to include the originating gate label with the error generator metadata. Note this can only
+            be set to True when using an `ExplicitOpModel` at present.
         Returns
         -------
         List of dictionaries, each one containing the error generator coefficients and rates for a circuit layer,
@@ -496,6 +509,9 @@ class ErrorGeneratorPropagator:
         #If including spam then start by completing the circuit (i.e. adding in the explicit SPAM labels).
         if include_spam:
             circuit = self.model.complete_circuit(circuit)
+
+        if include_gate_label:
+            assert isinstance(self.model, _ExplicitOpModel), 'Gate labels only supported when using an explicit model at present.'
 
         #TODO: Infer the number of qubits from the model and/or the circuit somehow.
         #Pull out the error generator dictionaries for each operation (may need to generalize this for implicit models):
@@ -537,10 +553,12 @@ class ErrorGeneratorPropagator:
                     if include_circuit_time:
                         #TODO: Refactor the fixed rate stuff to reduce the number of if statement evaluations.
                         errorgen_layer[_LSE(errgen_coeff_lbl.errorgen_type, paulis, circuit_time=j, 
-                                            initial_label=initial_label, pauli_str_reps=pauli_strs)] = rate if fixed_rate is None else fixed_rate
+                                            initial_label=initial_label, pauli_str_reps=pauli_strs, 
+                                            gate_label=circuit_layer if include_gate_label else None)] = rate if fixed_rate is None else fixed_rate
                     else:
                         errorgen_layer[_LSE(errgen_coeff_lbl.errorgen_type, paulis, initial_label=initial_label, 
-                                            pauli_str_reps=pauli_strs)] = rate if fixed_rate is None else fixed_rate
+                                            pauli_str_reps=pauli_strs,
+                                            gate_label=circuit_layer if include_gate_label else None)] = rate if fixed_rate is None else fixed_rate
            
             error_gen_dicts_by_layer.append(errorgen_layer)
         return error_gen_dicts_by_layer

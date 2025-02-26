@@ -154,7 +154,7 @@ def error_generator_cumulant(errgen_layer_1, errgen_layer_2, cov_func, order=2, 
     for errgen1, rate1 in errgen_layer_1.items():
         for errgen2, rate2 in errgen_layer_2.items():
             #combined_rate = rate1*rate2
-            cov_val = cov_func(errgen1.initial_label, errgen1.circuit_time, errgen2.initial_label, errgen2.circuit_time) #can this be negative?
+            cov_val = cov_func(errgen1.initial_label, errgen1.gate_label, errgen1.circuit_time, errgen2.initial_label, errgen1.gate_label, errgen2.circuit_time) #can this be negative?
             if abs(cov_val) > 0:
                 #combined_cov_rate = combined_rate*cov_val #TODO: revisit this
                 cumulant_coeff_list.extend(_eprop.error_generator_composition(errgen1, errgen2, weight=cov_val, identity=identity))

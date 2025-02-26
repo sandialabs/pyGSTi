@@ -91,7 +91,7 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
 
 
     def __init__(self, errorgen_type, basis_element_labels, circuit_time=None, initial_label=None,
-                 label=None, pauli_str_reps=None):
+                 label=None, pauli_str_reps=None, gate_label=None):
         """
         Create a new instance of  `LocalStimErrorgenLabel`
 
@@ -143,6 +143,8 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
             self.initial_label = initial_label
         else:
             self.initial_label = self.to_local_eel()
+        
+        self.gate_label = gate_label
     #TODO: Update various methods to account for additional metadata that has been added.
 
     def __hash__(self):
@@ -218,7 +220,7 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
                 temp = temp*temp_sign
                 new_basis_labels.append(temp)
         
-        return (LocalStimErrorgenLabel(self.errorgen_type, new_basis_labels, initial_label=self.initial_label, circuit_time=self.circuit_time), 
+        return (LocalStimErrorgenLabel(self.errorgen_type, new_basis_labels, initial_label=self.initial_label, circuit_time=self.circuit_time, gate_label=self.gate_label), 
                 weightmod*weight)
     
     def to_global_eel(self, sslbls = None):
@@ -251,4 +253,65 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
         """
         return _LEEL(self.errorgen_type, self._hashable_basis_element_labels)
 
+
+class NMLocalStimErrorgenLabel(LocalStimErrorgenLabel):
+    """
+    Subclass of `LocalStimErrorgenLabel` containing additional metadata relevant to non-Markovian
+    simulation applications.
+    """
+
+    def __init__(self, errorgen_type, basis_element_labels, circuit_time=None, initial_label=None,
+                 label=None, pauli_str_reps=None):
+        """
+        Create a new instance of  `LocalStimErrorgenLabel`
+
+        Parameters
+        ----------
+        errorgen_type : str
+            A string corresponding to the error generator sector this error generator label is
+            an element of. Allowed values are 'H', 'S', 'C' and 'A'.
+
+        basis_element_labels : tuple or list
+            A list or tuple of stim.PauliString labeling basis elements used to label this error generator.
+            This is either length-1 for 'H' and 'S' type error generators, or length-2 for 'C' and 'A'
+            type.
+
+        circuit_time : float, optional (default None)
+            An optional value which associates this error generator with a particular circuit time at
+            which it arose. This is primarily utilized in the context of non-Markovian simulations and
+            estimation where an error generator may notionally be associated with a stochastic process.
+
+        initial_label : `ElementaryErrorgenLabel`, optional (default None)
+            If not None, then this `ElementaryErrorgenLabel` is stored within this label and is interpreted
+            as being the 'initial' value of this error generator, prior to any propagation or transformation
+            during the course of its use. If None, then this is initialized to a `LocalElementaryErrorgenLabel`
+            matching the `errorgen_type` and `basis_element_labels` of this label.
+
+        label : str, optional (default None)
+            An optional label string which is included when printing the string representation of this
+            label.
+
+        pauli_str_reps : tuple of str, optional (default None)
+            Optional tuple of python strings corresponding to the stim.PauliStrings in basis_element_labels.
+            When specified can speed up construction of hashable label representations.
+        """
+        self.errorgen_type = errorgen_type
+        self.basis_element_labels = tuple(basis_element_labels) 
+        self.label = label
+        self.circuit_time = circuit_time
+
+        if pauli_str_reps is not None:
+            self._hashable_basis_element_labels = pauli_str_reps
+            self._hashable_string_rep = self.errorgen_type.join(pauli_str_reps)
+        else:
+            self._hashable_basis_element_labels = self.bel_to_strings()
+            self._hashable_string_rep = self.errorgen_type.join(self._hashable_basis_element_labels)
+
+        #additionally store a copy of the value of the original error generator label which will remain unchanged
+        #during the course of propagation for later bookkeeping purposes.
+        if initial_label is not None:
+            self.initial_label = initial_label
+        else:
+            self.initial_label = self.to_local_eel()
+    #TODO: Update various methods to account for additional metadata that has been added.
 
