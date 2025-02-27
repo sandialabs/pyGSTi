@@ -86,11 +86,11 @@ class CircuitErrorVec(_keras.Model):
         A function that maps the error rates (M) to an end-of-circuit error generator
         using the permutation matrix P.
         """
-        # print('S, M', S.shape, M.shape)
+        print('S, M, P', S.shape, M.shape, P.shape)
         signed_M = tf.math.multiply(S, M) # mult alpha by M, assuming correct organization of alpha
         final_stochastic_error_rates = self.calc_masked_err_rates(signed_M, P, self.stochastic_mask)
         final_hamiltonian_error_rates = self.calc_masked_err_rates(signed_M, P, self.hamiltonian_mask)
-        # print(final_stochastic_error_rates.shape, final_hamiltonian_error_rates.shape)
+        print(final_stochastic_error_rates.shape, final_hamiltonian_error_rates.shape)
         return tf.reduce_sum(final_stochastic_error_rates) + tf.reduce_sum(tf.square(final_hamiltonian_error_rates))
     
     # @tf.function
@@ -101,11 +101,11 @@ class CircuitErrorVec(_keras.Model):
         # print('l', input)
         # C, P, S = input
 
-        # print(C.shape, P.shape, S.shape)
         C = input[:, 0:self.len_gate_encoding]
         P = tf.cast(input[:, self.len_gate_encoding:self.len_gate_encoding + self.num_tracked_error_gens], tf.int32)
         S = input[:, self.len_gate_encoding + self.num_tracked_error_gens:self.len_gate_encoding + 2 * self.num_tracked_error_gens]
-        
+        print(C.shape, P.shape, S.shape)
+
         M = self.local_dense(C)  # 
         
         return self.calc_end_of_circ_error(M, P, S)
