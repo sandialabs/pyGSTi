@@ -26,7 +26,7 @@ from math import factorial
 from pygsti.tools import errgenproptools as _eprop
 
 
-def cumulant_expansion(errorgen_layers, cov_func, cumulant_order=2, truncation_threshold=1e-14):
+def cumulant_expansion(errorgen_layers, errorgen_transform_maps, cov_func, cumulant_order=2, truncation_threshold=1e-14):
     """
     Function for computing the nth-order cumulant expansion for a set of error generator layers.
 
@@ -35,6 +35,11 @@ def cumulant_expansion(errorgen_layers, cov_func, cumulant_order=2, truncation_t
     errorgen_layers : list of dicts
         List of dictionaries of the error generator coefficients and rates for a circuit layer. 
         The error generator coefficients are represented using LocalStimErrorgenLabel.
+
+    errorgen_transform_maps : dict
+        Map giving the relationship between input error generators and their final
+        value following propagation through the circuit. Needed to track any sign updates
+        for terms with zero mean but nontrivial covariance.
 
     cov_func : 
         A function which maps tuples of elementary error generator labels at multiple times to
@@ -57,10 +62,11 @@ def cumulant_expansion(errorgen_layers, cov_func, cumulant_order=2, truncation_t
     #TODO: See if I can't do this in a way that reuses computations across the nonmarkovian generators.
     for i in range(1, len(errorgen_layers)+1):
         current_errorgen_layers = errorgen_layers[:i]
-        nm_error_generators.append(nonmarkovian_generator(current_errorgen_layers, cov_func, cumulant_order, truncation_threshold))
+        current_errorgen_sign_correction_maps = errorgen_transform_maps[:i]
+        nm_error_generators.append(nonmarkovian_generator(current_errorgen_layers, current_errorgen_sign_correction_maps, cov_func, cumulant_order, truncation_threshold))
     return nm_error_generators
 
-def nonmarkovian_generator(errorgen_layers, cov_func, cumulant_order=2, truncation_threshold=1e-14):
+def nonmarkovian_generator(errorgen_layers, errorgen_transform_maps, cov_func, cumulant_order=2, truncation_threshold=1e-14):
     """
     Compute a particular non-Markovian error generator from the specified error generator layers.
 
@@ -69,6 +75,11 @@ def nonmarkovian_generator(errorgen_layers, cov_func, cumulant_order=2, truncati
     errorgen_layers : list of dicts
         List of dictionaries of the error generator coefficients and rates for a circuit layer. 
         The error generator coefficients are represented using LocalStimErrorgenLabel.
+
+    errorgen_transform_map : dict
+        Maps giving the relationship between input error generators and their final
+        value following propagation through the circuit. Needed to track any sign updates
+        for terms with zero mean but nontrivial covariance.
 
     cov_func : 
         A function which maps tuples of elementary error generator labels at multiple times to
@@ -92,10 +103,12 @@ def nonmarkovian_generator(errorgen_layers, cov_func, cumulant_order=2, truncati
     num_layers = len(errorgen_layers)
 
     final_layer = errorgen_layers[-1]
+    final_layer_sign_map = errorgen_transform_maps[-1]
     cumulants = []
     for starting_index in range(num_layers):
         current_layer = errorgen_layers[starting_index]
-        cumulants.extend(error_generator_cumulant(final_layer, current_layer, cov_func, cumulant_order, truncation_threshold))
+        current_sign_map = errorgen_transform_maps[starting_index]
+        cumulants.extend(error_generator_cumulant(final_layer, current_layer, final_layer_sign_map, current_sign_map, cov_func, cumulant_order, truncation_threshold))
     #print(f'{cumulants=}')
     #The contents of cumulants needs to get added to the first-order cumulant of the final layer, which is just the value
     #of final_layer.
@@ -108,7 +121,7 @@ def nonmarkovian_generator(errorgen_layers, cov_func, cumulant_order=2, truncati
     return accumulated_nonmarkovian_generator
 
 
-def error_generator_cumulant(errgen_layer_1, errgen_layer_2, cov_func, order=2, truncation_threshold=1e-14):
+def error_generator_cumulant(errgen_layer_1, errgen_layer_2, sign_map1, sign_map2, cov_func, order=2, truncation_threshold=1e-14, identity=None):
     """
     Function for computing the correlation function of two error generators
     represented as dictionaries of elementary error generator rates.
@@ -152,12 +165,14 @@ def error_generator_cumulant(errgen_layer_1, errgen_layer_2, cov_func, order=2, 
     #compute the 
     #loop through error generator pairs in each of the dictionaries.
     for errgen1, rate1 in errgen_layer_1.items():
+        sign_correction_1 = sign_map1[errgen1.initial_label]
         for errgen2, rate2 in errgen_layer_2.items():
-            #combined_rate = rate1*rate2
+            sign_correction_2 = sign_map2[errgen2.initial_label]
             cov_val = cov_func(errgen1.initial_label, errgen1.gate_label, errgen1.circuit_time, errgen2.initial_label, errgen1.gate_label, errgen2.circuit_time) #can this be negative?
             if abs(cov_val) > 0:
                 #combined_cov_rate = combined_rate*cov_val #TODO: revisit this
-                cumulant_coeff_list.extend(_eprop.error_generator_composition(errgen1, errgen2, weight=cov_val, identity=identity))
+                #print(f'total_sign_correction={sign_correction_1*sign_correction_2}')
+                cumulant_coeff_list.extend(_eprop.error_generator_composition(errgen1, errgen2, weight=sign_correction_1*sign_correction_2*cov_val, identity=identity))
     
     return cumulant_coeff_list
     #accumulate terms:

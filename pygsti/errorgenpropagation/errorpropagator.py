@@ -142,12 +142,15 @@ class ErrorGeneratorPropagator:
                 exp_error_generators.append(_spl.expm(self.errorgen_layer_dict_to_errorgen(err_gen_layer, mx_basis='pp')))
         #Next take the product of these exponentiated error generators.
         #These are in circuit ordering, so reverse for matmul.
-        exp_error_generators.reverse()
-        if len(exp_error_generators)>1:
-            eoc_error_channel = _np.linalg.multi_dot(exp_error_generators)
+        if exp_error_generators:
+            exp_error_generators.reverse()
+            if len(exp_error_generators)>1:
+                eoc_error_channel = _np.linalg.multi_dot(exp_error_generators)
+            else:
+                eoc_error_channel = exp_error_generators[0]
         else:
-            eoc_error_channel = exp_error_generators[0]
-        
+            return _np.eye(4**len(circuit.line_labels))
+
         if mx_basis != 'pp':
             eoc_error_channel = _bt.change_basis(eoc_error_channel, from_basis='pp', to_basis=mx_basis)
 
@@ -282,8 +285,11 @@ class ErrorGeneratorPropagator:
         #of end of circuit error generator dictionaries.
         propagated_errorgen_layers = self.propagate_errorgens(circuit, include_spam=include_spam, include_circuit_time=True, include_gate_label=True)
         #print(propagated_errorgen_layers)
+        #we also need to compute the error generator transform map because we need to pick up any sign corrections which
+        #might get missed for error generators with zero mean but nontrivial covariance.
+        errorgen_transform_maps = self.errorgen_transform_maps(circuit, include_spam=include_spam) #TODO: This is require twice the propagation atm, figure out how to combine these.
         #now get the nonmarkovian error generators by applying the cumulant expansion
-        nonmarkovian_generators = _cumul.cumulant_expansion(propagated_errorgen_layers, cov_func, cumulant_order)
+        nonmarkovian_generators = _cumul.cumulant_expansion(propagated_errorgen_layers, errorgen_transform_maps, cov_func, cumulant_order)
 
         return nonmarkovian_generators
 
@@ -332,6 +338,54 @@ class ErrorGeneratorPropagator:
 
         return input_output_errgen_map
     
+    #TODO: Combine this and the above into one function.
+    #TODO: Fix docstring, this does something slightly different than the other version.
+    def errorgen_transform_maps(self, circuit, include_spam=True):
+        """
+        Construct a map giving the relationship between input error generators and their final
+        value following propagation through the circuit.  
+
+        Parameters
+        ----------
+        circuit : `Circuit`
+            Circuit to construct error generator transform map for.
+
+        include_spam : bool, optional (default True)
+            If True then we include in the propagation the error generators associated
+            with state preparation and measurement.
+        """
+        #start by converting the input circuit into a list of stim Tableaus with the 
+        #first element dropped.
+        stim_layers = self.construct_stim_layers(circuit, drop_first_layer = not include_spam)
+        
+        #We next want to construct a new set of Tableaus corresponding to the cumulative products
+        #of each of the circuit layers with those that follow. These Tableaus correspond to the
+        #clifford operations each error generator will be propagated through in order to reach the
+        #end of the circuit.
+        propagation_layers = self.construct_propagation_layers(stim_layers)
+
+        #Next we take the input circuit and construct a list of dictionaries, each corresponding
+        #to the error generators for a particular gate layer.
+        #TODO: Add proper inferencing for number of qubits:
+        assert circuit.line_labels is not None and circuit.line_labels != ('*',)
+        errorgen_layers = self.construct_errorgen_layers(circuit, len(circuit.line_labels), include_spam, fixed_rate=1)
+        #propagate the errorgen_layers through the propagation_layers to get a list
+        #of end of circuit error generator dictionaries.
+        propagated_errorgen_layers = self._propagate_errorgen_layers(errorgen_layers, propagation_layers, include_spam)
+
+        #there should be a one-to-one mapping between the index into propagated_errorgen_layers and the
+        #index of the circuit layer where the error generators in that propagated layer originated.
+        #Moreover, LocalStimErrorgenLabels remember who they were at instantiation.
+        input_output_errgen_maps = []
+        for i, output_layer in enumerate(propagated_errorgen_layers):
+            io_errgen_map = dict()
+            for output_label, output_rate in output_layer.items():
+                original_label = output_label.initial_label
+                io_errgen_map[original_label] = output_rate
+            input_output_errgen_maps.append(io_errgen_map)
+
+        return input_output_errgen_maps
+
     def errorgen_gate_contributors(self, errorgen, circuit, layer_idx, include_spam=True):
         """
         Walks through the gates in the specified circuit layer and query the parent 

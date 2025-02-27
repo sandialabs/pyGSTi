@@ -16,6 +16,7 @@ from pygsti.forwardsims import ForwardSimulator as _ForwardSimulator
 from pygsti.errorgenpropagation import ErrorGeneratorPropagator
 from pygsti.baseobjs import Label
 import pygsti.tools.errgenproptools as _eprop
+import scipy.linalg as _spl
 
 
 class SimplePropagationForwardSimulator(_ForwardSimulator):
@@ -150,13 +151,33 @@ class SimplePropagationForwardSimulator(_ForwardSimulator):
                                                                             bch_kwargs={'bch_order':self.bch_order,
                                                                                         'truncation_threshold':self.truncation_threshold})
                 else:
-                    eoc_channel = self.errorgen_propagator.averaged_eoc_error_channel(ckt, include_spam=True)
-                
-                ideal_channel = self.ideal_model.sim.product(ckt)
+                    #propagate_errorgens_nonmarkovian returns a list of list of 
+                    propagated_error_generators = self.errorgen_propagator.propagate_errorgens_nonmarkovian(ckt, include_spam=True)
+                    
+                    #loop though the propagated error generator layers and construct their error generators.
+                    #Then exponentiate
+                    exp_error_generators = []
+                    for err_gen_layer in propagated_error_generators:
+                        if err_gen_layer: #if not empty.
+                            #Keep the error generator in the standard basis until after the end-of-circuit
+                            #channel is constructed so we can reduce the overhead of changing basis.
+                            exp_error_generators.append(_spl.expm(self.errorgen_propagator.errorgen_layer_dict_to_errorgen(err_gen_layer, mx_basis='pp')))
+                    #Next take the product of these exponentiated error generators.
+                    #These are in circuit ordering, so reverse for matmul.
+                    #exp_error_generators.reverse()
+                    
+                    #print(f'{eoc_channel=}')
+                    ideal_channel = self.ideal_model.sim.product(ckt)
+                    #print(f'{ideal_channel=}')
+                    #print(f'{ideal_channel@dense_prep=}')
                 #calculate the probabilities.
                 prob_vec = _np.zeros(len(ideal_meas))
+                propagated_state = dense_prep.copy()
+                for operation in [ideal_channel] + exp_error_generators:
+                    propagated_state = operation@propagated_state
+
                 for i, effect in enumerate(dense_effects):
-                    prob_vec[i] = _np.linalg.multi_dot([effect, eoc_channel, ideal_channel, dense_prep])
+                    prob_vec[i] = effect@propagated_state
                 
                 prob_dict[ckt] = {olbl: prob for olbl, prob in zip(circuit_outcomes, prob_vec)}
         
