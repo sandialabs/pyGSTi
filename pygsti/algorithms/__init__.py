@@ -22,3 +22,4 @@ from .gaugeopt import *
 from .germselection import *
 from .grammatrix import *
 from .mirroring import *
+from .linearizedgst import *
