@@ -296,12 +296,12 @@ class CircuitErrorVecMap(_keras.Model):
         scaled_alpha_matrix = input[:8, -129:-1] # alphas (shape is number of tracked error gens, typically 132. Very sparse, could use sparse LA at a later time)
         Px_ideal = input[:8, -1] # ideal (no error) probabilities
 
-        print('circuit_encoding', circuit_encoding.shape, 'P', P.shape, 'S', S.shape, 'scaled_alpha_matrix', scaled_alpha_matrix.shape, 'Px_ideal', Px_ideal.shape)
+        # print('circuit_encoding', circuit_encoding.shape, 'P', P.shape, 'S', S.shape, 'scaled_alpha_matrix', scaled_alpha_matrix.shape, 'Px_ideal', Px_ideal.shape)
 
         epsilon_matrix = self.local_dense(circuit_encoding) # depth * num_tracked_error
         error_rates, unique_P = self.calc_end_of_circ_error_rates(epsilon_matrix, P, S)
         gathered_alpha = tf.gather(scaled_alpha_matrix, unique_P, axis=1)
-        print('epsilon_matrix', epsilon_matrix.shape, 'error_rates', error_rates.shape, 'gathered_alpha', gathered_alpha.shape)
+        # print('epsilon_matrix', epsilon_matrix.shape, 'error_rates', error_rates.shape, 'gathered_alpha', gathered_alpha.shape)
 
         first_order_correction = gathered_alpha*error_rates
 

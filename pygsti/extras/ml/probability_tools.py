@@ -2,6 +2,7 @@ import stim
 import numpy as np
 from pygsti.circuits import Circuit
 from itertools import product
+from pygsti.extras.ml.tools import create_error_propagation_matrix, index_to_error_gen, error_gen_to_index
 
 
 def uniform_support(tableau, return_support=False):
@@ -98,13 +99,14 @@ def first_order_probability_correction(errorgen_dict, tableau, desired_bitstring
     scale = 1/2**(num_random) #TODO: This might overflow
     
     #now get the sum over the alphas and the error generator rate products needed.
+    # print(len(errorgen_dict))
     alpha_errgen_prods = [0]*len(errorgen_dict)
     
     for i, (lbl, rate) in enumerate(errorgen_dict.items()):
-        alpha_errgen_prods[i] = alpha(lbl, tableau, desired_bitstring)*rate
+        alpha_errgen_prods[i] = np.float64(scale*alpha(lbl, tableau, desired_bitstring)*rate)
     
-    correction = scale*sum(alpha_errgen_prods)
-    return correction
+    correction = sum(alpha_errgen_prods)
+    return correction.real
 
 def alpha_generator(errorgen_dict, circuit, desired_bitstring, num_qubits):
 
@@ -116,22 +118,32 @@ def alpha_generator(errorgen_dict, circuit, desired_bitstring, num_qubits):
     num_random = uniform_support(tableau)
     scale = 1/2**(num_random) #TODO: This might overflow
     
-    #now get the sum over the alphas and the error generator rate products needed.
     num_errgens = 2*4**(num_qubits)
-    # print('num_errgens', num_errgens)
-    scaled_alpha_errgen = np.zeros(num_errgens)
-    # print(errorgen_dict)
+    scaled_alpha_errgen = np.zeros(num_errgens, dtype=np.float64)
+    # scaled_alpha_errgen = []
 
     for _, (lbl, rate) in enumerate(errorgen_dict.items()):
-        # print(lbl, rate)
-        tup = (lbl.errorgen_type, lbl.bel_to_strings()[0])
-        index = find_tuple_index(tup, num_qubits)
-        if index + 1 > num_errgens:
-            raise ValueError(f"Index {index + 1} exceeds the number of error generators ({num_errgens}).") 
-        # print(index)
-        scaled_alpha_errgen[index] = scale*alpha(lbl, tableau, desired_bitstring)
-        # print(lbl)
+        index = error_gen_to_index(lbl.errorgen_type, lbl.bel_to_strings())
+        # if index + 1 > num_errgens:
+        #     raise ValueError(f"Index {index + 1} exceeds the number of error generators ({num_errgens}).") 
+        scaled_alpha_errgen[index] = np.float64(scale*alpha(lbl, tableau, desired_bitstring).real)
+        # scaled_alpha_errgen.append((scale*alpha(lbl, tableau, desired_bitstring)).real)
     return scaled_alpha_errgen
+
+
+def rate_generator(errorgen_dict, circuit, num_qubits):
+    num_errgens = 2*4**(num_qubits)
+    rates = np.zeros(num_errgens, dtype=np.float64)
+    # rates = []
+
+    for _, (lbl, rate) in enumerate(errorgen_dict.items()):
+        index = error_gen_to_index(lbl.errorgen_type, lbl.bel_to_strings())
+        # if index + 1 > num_errgens:
+        #     raise ValueError(f"Index {index + 1} exceeds the number of error generators ({num_errgens}).") 
+        rates[index] = np.float64(rate)
+        # rates.append(rate)
+        
+    return rates
 
 
 
@@ -452,7 +464,7 @@ def approximate_stabilizer_probability(errorgen_dict, circuit, desired_bitstring
         
     ideal_prob = stabilizer_probability(tableau, desired_bitstring)
     first_order_correction = first_order_probability_correction(errorgen_dict, tableau, desired_bitstring)
-    return ideal_prob, ideal_prob + np.round(first_order_correction.real, 4)
+    return ideal_prob, ideal_prob + first_order_correction
 
 
 def probabilities_errorgen_prop(error_propagator, target_model, circuit, use_bch=False, bch_order=1, truncation_threshold=1e-14):
@@ -483,8 +495,9 @@ def calculate_probability(circuit, bitstring, target_model, errorgen_propagator,
         del propagated_errorgen_layer[key]
 
     
-    rate_values = np.array([rate_[1] for rate_ in propagated_errorgen_layer.items()])
-    probabilities = np.array([approximate_stabilizer_probability(propagated_errorgen_layer, circuit, bit) for bit in bitstring]).clip(0, 1).T
+    # rate_values = np.array([rate_[1] for rate_ in propagated_errorgen_layer.items()])
+    rate_values = rate_generator(propagated_errorgen_layer, circuit, num_qubits)
+    probabilities = np.array([approximate_stabilizer_probability(propagated_errorgen_layer, circuit, bit) for bit in bitstring]).T
     alpha_values = [alpha_generator(propagated_errorgen_layer, circuit, bit, num_qubits) for bit in bitstring]
     ideal_probabilities = probabilities[0]
     approximate_probabilities = probabilities[1]
@@ -495,31 +508,3 @@ def calculate_probability(circuit, bitstring, target_model, errorgen_propagator,
                   'rate_values' : rate_values}
     
     return return_dict
-
-
-def generate_all_possible_tuples(num_qubits):
-    # Define the possible values for each element
-    first_element_values = ['S', 'H']
-    second_element_characters = ['X', 'Y', 'Z', 'I']
-
-    # Generate all possible strings of length 4 from the characters 'X', 'Y', 'Z', '_'
-    second_element_combinations = [''.join(p) for p in product(second_element_characters, repeat=num_qubits)]
-
-    # Generate all possible tuples
-    all_possible_tuples = [(first, second) for first in first_element_values for second in second_element_combinations]
-    
-    return all_possible_tuples
-
-
-def find_tuple_index(input_tuple, num_qubits):
-    # Generate all possible tuples
-    all_possible_tuples = generate_all_possible_tuples(num_qubits)
-    # all_possible_tuples.pop(len(all_possible_tuples)//2-1)
-    # all_possible_tuples.pop(-1)
-    
-    
-    # Find the index of the input tuple in the list of all possible tuples
-    if input_tuple in all_possible_tuples:
-        return all_possible_tuples.index(input_tuple)
-    else:
-        'bad'
