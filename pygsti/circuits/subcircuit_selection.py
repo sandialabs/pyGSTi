@@ -12,7 +12,7 @@ import networkx as _nx
 import numpy as _np
 import json as _json
 
-from pytket.architecture import Architecture
+# from pytket.architecture import Architecture
 from qiskit.providers.models import BackendProperties, BackendConfiguration
 
 from pygsti.circuits.circuit import Circuit as _Circuit
