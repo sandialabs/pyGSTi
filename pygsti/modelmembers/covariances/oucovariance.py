@@ -151,3 +151,38 @@ class OUCovarianceFunction(_CovarianceFunction):
             the number of independent parameters.
         """
         return 2*len(self.correlation_times)
+    
+class CVOUCovarianceFunction(OUCovarianceFunction):
+
+    """
+    Variation on the Ornstein-Uhlenbeck process which shares its exponentially
+    decaying correlations in time, but has a constant volativity parameter.
+
+    The covariance function of process is given by:
+
+        cov(x_s, x_t) = (sigma^2) * exp(-abs(s-t)/t_c)
+
+        Where t_c is the characteristic correlation time for the process,
+        and sigma^2 is the characteristic variance scale for the process.
+    """
+
+    def __init__(self, error_generator_labels):
+        super().__init__(error_generator_labels)
+
+    def __call__(self, errorgen1, gate_label1, time1, errorgen2, gate_label2, time2):
+        """
+        Computes the correlation function. Takes as input two error generator labels and two times.
+        Returns 0 if both error generator labels are not present in this covariance function.
+        """
+        idx = self._errgen_label_to_param_idx.get((gate_label1, errorgen1, gate_label2, errorgen2), None)
+
+        if idx is None:
+            return 0
+        else:
+            corr_time = self.correlation_times[idx]
+            var = self.variances[idx]
+            if corr_time < 1e-10: 
+                return 0
+            else:
+                cov_val = var*_np.exp(-abs(time1-time2)/corr_time)
+            return cov_val

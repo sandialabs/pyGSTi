@@ -22,3 +22,12 @@ def __init__(self):
     super().__init__(None, None)
 
 #TODO: Add handling to account for the fact that we don't actually need a state space
+
+
+class DenseCovarianceFunction(CovarianceFunction):
+    """
+    Class for modeling densely parameterized covariance function.
+    I.e. covariance function defined in a Piecewise constant fashion.
+    """
+
+    pass

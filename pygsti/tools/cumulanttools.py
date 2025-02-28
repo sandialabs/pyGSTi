@@ -11,18 +11,7 @@ Tools for approximate non-Markovian simulation using cumulant expansion methods.
 #***************************************************************************************************
 
 import stim
-import numpy as _np
-from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GEEL, LocalElementaryErrorgenLabel as _LEEL
-from pygsti.baseobjs import QubitSpace as _QubitSpace
-from pygsti.baseobjs.basis import BuiltinBasis as _BuiltinBasis
-from pygsti.baseobjs.errorgenbasis import CompleteElementaryErrorgenBasis as _CompleteElementaryErrorgenBasis, ExplicitElementaryErrorgenBasis as _ExplicitElementaryErrorgenBasis
-from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE
-from pygsti.modelmembers.operations import LindbladErrorgen as _LinbladErrorgen
-from pygsti.circuits import Circuit as _Circuit
-from pygsti.tools.optools import create_elementary_errorgen_nqudit, state_to_dmvec
-from functools import reduce
-from itertools import chain, product
-from math import factorial
+from itertools import chain 
 from pygsti.tools import errgenproptools as _eprop
 
 
@@ -58,15 +47,24 @@ def cumulant_expansion(errorgen_layers, errorgen_transform_maps, cov_func, cumul
         A dictionary with the same general structure as those in `errorgen_layers`, but with the
         rates combined according to the selected order of the cumulant expansion.
     """
+    #predefine the identity pauli to reduce number of instantiations.
+    for layer in errorgen_layers:
+        if layer:
+            identity = stim.PauliString('I'*len(next(iter(layer)).basis_element_labels[0]))
+            break
+    else:
+        identity = None
+
     nm_error_generators = []
     #TODO: See if I can't do this in a way that reuses computations across the nonmarkovian generators.
     for i in range(1, len(errorgen_layers)+1):
         current_errorgen_layers = errorgen_layers[:i]
         current_errorgen_sign_correction_maps = errorgen_transform_maps[:i]
-        nm_error_generators.append(nonmarkovian_generator(current_errorgen_layers, current_errorgen_sign_correction_maps, cov_func, cumulant_order, truncation_threshold))
+        nm_error_generators.append(nonmarkovian_generator(current_errorgen_layers, current_errorgen_sign_correction_maps, cov_func, 
+                                                          cumulant_order, truncation_threshold, identity))
     return nm_error_generators
 
-def nonmarkovian_generator(errorgen_layers, errorgen_transform_maps, cov_func, cumulant_order=2, truncation_threshold=1e-14):
+def nonmarkovian_generator(errorgen_layers, errorgen_transform_maps, cov_func, cumulant_order=2, truncation_threshold=1e-14, identity=None):
     """
     Compute a particular non-Markovian error generator from the specified error generator layers.
 
@@ -91,6 +89,10 @@ def nonmarkovian_generator(errorgen_layers, errorgen_transform_maps, cov_func, c
     truncation_threshold : float, optional (default 1e-14)
         Threshold for which any error generators with magnitudes below this value
         are truncated.
+
+    identity : stim.PauliString, optional (default None)
+        Optional pauli string corresponding to the all identity string with the correct number
+        of qubits (can reduce overhead of many stim.PauliString instantations).
         
     Returns
     -------
@@ -105,11 +107,15 @@ def nonmarkovian_generator(errorgen_layers, errorgen_transform_maps, cov_func, c
     final_layer = errorgen_layers[-1]
     final_layer_sign_map = errorgen_transform_maps[-1]
     cumulants = []
-    for starting_index in range(num_layers):
+    for starting_index in range(num_layers-1):
         current_layer = errorgen_layers[starting_index]
         current_sign_map = errorgen_transform_maps[starting_index]
-        cumulants.extend(error_generator_cumulant(final_layer, current_layer, final_layer_sign_map, current_sign_map, cov_func, cumulant_order, truncation_threshold))
-    #print(f'{cumulants=}')
+        cumulants.extend(error_generator_cumulant(final_layer, current_layer, final_layer_sign_map, current_sign_map, cov_func, cumulant_order, 
+                                                  truncation_threshold, identity=identity))
+    #add in the final layer with itself:
+    cumulants.extend(error_generator_cumulant(final_layer, final_layer, final_layer_sign_map, final_layer_sign_map, cov_func, cumulant_order, 
+                                              truncation_threshold, addl_scale=.5, identity=identity))
+    
     #The contents of cumulants needs to get added to the first-order cumulant of the final layer, which is just the value
     #of final_layer.
     complete_coeff_set = set([tup[0] for tup in cumulants])
@@ -121,7 +127,8 @@ def nonmarkovian_generator(errorgen_layers, errorgen_transform_maps, cov_func, c
     return accumulated_nonmarkovian_generator
 
 
-def error_generator_cumulant(errgen_layer_1, errgen_layer_2, sign_map1, sign_map2, cov_func, order=2, truncation_threshold=1e-14, identity=None):
+def error_generator_cumulant(errgen_layer_1, errgen_layer_2, phase_update_map_1, phase_update_map_2, cov_func, 
+                             order=2, truncation_threshold=1e-14, addl_scale=1.0, identity=None):
     """
     Function for computing the correlation function of two error generators
     represented as dictionaries of elementary error generator rates.
@@ -135,7 +142,16 @@ def error_generator_cumulant(errgen_layer_1, errgen_layer_2, sign_map1, sign_map
     errgen_layer_2 : list of dicts
         See errgen_layer_1.
 
-    cov_func : 
+    phase_update_map_1 : dict
+        Dictionary whose keys are error generator coefficients corresponding to the original
+        (pre-propagation) error generators which gave rise to the elements of errgen_layer_1
+        and whose values correspond to the sign that error generator's rate has picked up as a
+        result of propagation.
+
+    phase_update_map_2 : dict
+        See phase_update_map_1.
+
+    cov_func : `CovarianceFunction`
         A function which maps tuples of elementary error generator labels at multiple times to
         a scalar quantity corresponding to the value of the covariance for that pair.
 
@@ -146,8 +162,17 @@ def error_generator_cumulant(errgen_layer_1, errgen_layer_2, sign_map1, sign_map
         Threshold for which any error generators with magnitudes below this value
         are truncated.
 
+    addl_scale : float, optional (default 1.0)
+        Additional scaling to apply to cumulant.
+
+    identity : stim.PauliString, optional (default None)
+        Optional stim.PauliString corresponding to the all identity string with the correct number
+        of qubits (can reduce overhead of many stim.PauliString instantations).
+
     Returns
     -------
+    list of tuples
+        A list of tuples 
 
 
     """
@@ -159,22 +184,19 @@ def error_generator_cumulant(errgen_layer_1, errgen_layer_2, sign_map1, sign_map
         return dict()
 
     #avoid generating more stim PauliStrings than needed in composition.
-    identity = stim.PauliString('I'*len(next(iter(errgen_layer_1)).basis_element_labels[0]))
+    if identity is None:
+        identity = stim.PauliString('I'*len(next(iter(errgen_layer_1)).basis_element_labels[0]))
 
     cumulant_coeff_list = [] #for accumulating the tuples of weights and 
-    #compute the 
     #loop through error generator pairs in each of the dictionaries.
-    for errgen1, rate1 in errgen_layer_1.items():
-        sign_correction_1 = sign_map1[errgen1.initial_label]
-        for errgen2, rate2 in errgen_layer_2.items():
-            sign_correction_2 = sign_map2[errgen2.initial_label]
-            cov_val = cov_func(errgen1.initial_label, errgen1.gate_label, errgen1.circuit_time, errgen2.initial_label, errgen1.gate_label, errgen2.circuit_time) #can this be negative?
-            if abs(cov_val) > 0:
-                #combined_cov_rate = combined_rate*cov_val #TODO: revisit this
-                #print(f'total_sign_correction={sign_correction_1*sign_correction_2}')
-                cumulant_coeff_list.extend(_eprop.error_generator_composition(errgen1, errgen2, weight=sign_correction_1*sign_correction_2*cov_val, identity=identity))
+    for errgen1 in errgen_layer_1:
+        sign_correction_1 = phase_update_map_1[errgen1.initial_label]
+        for errgen2 in errgen_layer_2:
+            sign_correction_2 = phase_update_map_2[errgen2.initial_label]
+            cov_val = cov_func(errgen1.initial_label, errgen1.gate_label, errgen1.circuit_time, errgen2.initial_label, 
+                               errgen1.gate_label, errgen2.circuit_time) #can this be negative? Not for gaussian processes I don't think.
+            if abs(cov_val) > truncation_threshold:
+                cumulant_coeff_list.extend(_eprop.error_generator_composition(errgen1, errgen2, weight=addl_scale*sign_correction_1*sign_correction_2*cov_val, 
+                                                                              identity=identity))
     
     return cumulant_coeff_list
-    #accumulate terms:
-    #accumulated_cumulant = 
-    #for 

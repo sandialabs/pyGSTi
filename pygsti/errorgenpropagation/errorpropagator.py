@@ -284,12 +284,11 @@ class ErrorGeneratorPropagator:
         #propagate the errorgen_layers through the propagation_layers to get a list
         #of end of circuit error generator dictionaries.
         propagated_errorgen_layers = self.propagate_errorgens(circuit, include_spam=include_spam, include_circuit_time=True, include_gate_label=True)
-        #print(propagated_errorgen_layers)
         #we also need to compute the error generator transform map because we need to pick up any sign corrections which
         #might get missed for error generators with zero mean but nontrivial covariance.
-        errorgen_transform_maps = self.errorgen_transform_maps(circuit, include_spam=include_spam) #TODO: This is require twice the propagation atm, figure out how to combine these.
+        errorgen_phase_corrections = self.errorgen_transform_phases(circuit, include_spam=include_spam) #TODO: This is requires twice the propagation atm, figure out how to combine these.
         #now get the nonmarkovian error generators by applying the cumulant expansion
-        nonmarkovian_generators = _cumul.cumulant_expansion(propagated_errorgen_layers, errorgen_transform_maps, cov_func, cumulant_order)
+        nonmarkovian_generators = _cumul.cumulant_expansion(propagated_errorgen_layers, errorgen_phase_corrections, cov_func, cumulant_order)
 
         return nonmarkovian_generators
 
@@ -339,11 +338,11 @@ class ErrorGeneratorPropagator:
         return input_output_errgen_map
     
     #TODO: Combine this and the above into one function.
-    #TODO: Fix docstring, this does something slightly different than the other version.
-    def errorgen_transform_maps(self, circuit, include_spam=True):
+    def errorgen_transform_phases(self, circuit, include_spam=True):
         """
-        Construct a map giving the relationship between input error generators and their final
-        value following propagation through the circuit.  
+        Construct a map which gives a list of maps from input error generators
+        to the overall phase that error generator accrues as a result of propagation through
+        a circuit.
 
         Parameters
         ----------
@@ -353,7 +352,16 @@ class ErrorGeneratorPropagator:
         include_spam : bool, optional (default True)
             If True then we include in the propagation the error generators associated
             with state preparation and measurement.
+
+        Returns
+        -------
+        A list of dictionaries, corresponding one-to-one to original error generator layer
+        for the circuit. The keys of each dictionary are error generator coefficients 
+        corresponding to the original error generators for each circuit layer 
+        (as `LocalElementaryErrorgenLabel`s) and whose values correspond to the overall sign that 
+        error generator's rate has picked up as a result of propagation.
         """
+        
         #start by converting the input circuit into a list of stim Tableaus with the 
         #first element dropped.
         stim_layers = self.construct_stim_layers(circuit, drop_first_layer = not include_spam)

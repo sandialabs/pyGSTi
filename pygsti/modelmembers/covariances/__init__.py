@@ -10,4 +10,4 @@ Sub-package for model members which store and manage covariances.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from .oucovariance import OUCovarianceFunction
+from .oucovariance import OUCovarianceFunction, CVOUCovarianceFunction
