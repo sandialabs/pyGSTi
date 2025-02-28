@@ -174,22 +174,30 @@ class LocalizedDenseToErrVec(_keras.layers.Layer):
         super().build(input_shape)
     
     def call(self, inputs):
+        print('inputs', inputs.shape)
         # Convert the list of indices to a tensor
-        indices_tensor = tf.stack(self.layer_encoding_indices_for_error_gen)
+        self.len_gate_encoding = 36
+        layer_encoding_list = self.layer_encoding_indices_for_error_gen
+        for i in range(len(layer_encoding_list)):
+            layer_encoding = layer_encoding_list[i]
+            if len(layer_encoding) < 36:
+                layer_encoding_list[i] = _np.concatenate([layer_encoding, _np.zeros(36 - len(layer_encoding), dtype=_np.int16)])
+        indices_tensor = tf.stack(layer_encoding_list)
+        print('indices_tensor', indices_tensor.shape)
         
         # Expand dimensions to match the batch size
         batch_size = tf.shape(inputs)[0]
         indices_tiled = tf.tile(tf.expand_dims(indices_tensor, 0), [batch_size, 1, 1])
-
+        print('indices_tiled', indices_tiled.shape)
         # Gather the values based on the indices
         gathered_slices = tf.gather(inputs, indices_tiled, batch_dims=1)
-
+        print('gathered_slices', gathered_slices.shape)
         # Reshape the gathered slices to concatenate along the last axis
         gathered_slices = tf.reshape(gathered_slices, [batch_size, -1])
-        
+        print('gathered_slices', gathered_slices.shape)
         # Pass the concatenated slices through the dense layer
         x = self.dense(gathered_slices)
-
+        print('x', x.shape)
         return x
 
 # @_keras.utils.register_keras_serializable()
@@ -288,13 +296,16 @@ class CircuitErrorVecMap(_keras.Model):
     def circuit_to_probability(self, input): # will replace this with circ to probability dist
         """
         A function that maps a single circuit to the prediction of a 1st order approximate probability vector for each of 2^Q bitstrings.
-        """        
-        circuit_encoding = input[:, :12] # circuit
-        S = tf.cast(input[:, 12:12+72], tf.float32) # sign matrix
-        P = tf.cast(input[:, 12+72:12+72+72], tf.int32) # permutation matrix
+        """  
+        # 8: 2**num_qubits
+        # 12: len_gate_encoding
+        # 72: 
+        circuit_encoding = input[:, :self.len_gate_encoding] # circuit
+        S = tf.cast(input[:, self.len_gate_encoding:self.len_gate_encoding+self.num_tracked_error_gens], tf.float32) # sign matrix
+        P = tf.cast(input[:, self.len_gate_encoding+self.num_tracked_error_gens:self.len_gate_encoding+self.num_tracked_error_gens+self.num_tracked_error_gens], tf.int32) # permutation matrix
         
-        scaled_alpha_matrix = input[:8, -129:-1] # alphas (shape is number of tracked error gens, typically 132. Very sparse, could use sparse LA at a later time)
-        Px_ideal = input[:8, -1] # ideal (no error) probabilities
+        scaled_alpha_matrix = input[:2**self.num_qubits, -1-2*4**self.num_qubits:-1] # alphas (shape is number of tracked error gens, typically 132. Very sparse, could use sparse LA at a later time)
+        Px_ideal = input[:2**self.num_qubits, -1] # ideal (no error) probabilities
 
         # print('circuit_encoding', circuit_encoding.shape, 'P', P.shape, 'S', S.shape, 'scaled_alpha_matrix', scaled_alpha_matrix.shape, 'Px_ideal', Px_ideal.shape)
 
