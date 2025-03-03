@@ -231,10 +231,28 @@ class ErrorGeneratorPropagator:
         #otherwise iterate through in reverse order (the propagated layers are
         #in circuit ordering and not matrix multiplication ordering at the moment)
         #and combine the terms pairwise
-        combined_err_layer = propagated_errorgen_layers[-1]
-        for i in range(len(propagated_errorgen_layers)-2, -1, -1):
-            combined_err_layer = _eprop.bch_approximation(combined_err_layer, propagated_errorgen_layers[i],
-                                                            bch_order=bch_order, truncation_threshold=truncation_threshold)
+        if bch_order == 1.5: #TODO: figure out a more flexible specification for these hybrid strategies.
+            #split the propagated_layers into two halves, combine according to first order BCH then combine the two
+            #halves by second order BCH.
+            mid_index = (len(propagated_errorgen_layers) + 1) // 2  # Calculate the midpoint
+            propagated_errorgen_layers_first_half = propagated_errorgen_layers[:mid_index]  # First half
+            propagated_errorgen_layers_second_half = propagated_errorgen_layers[mid_index:]   # Second half
+            combined_err_layers = []
+            for errgen_sublist in [propagated_errorgen_layers_first_half, propagated_errorgen_layers_second_half]:
+                combined_err_layer = errgen_sublist[-1]
+                for i in range(len(errgen_sublist)-2, -1, -1):
+                    combined_err_layer = _eprop.bch_approximation(combined_err_layer, errgen_sublist[i],
+                                                                    bch_order=1, truncation_threshold=truncation_threshold)
+                combined_err_layers.append(combined_err_layer)
+            #finally combine these two with second order.
+            combined_err_layer = _eprop.bch_approximation(combined_err_layers[1], combined_err_layers[0],
+                                                                    bch_order=2, truncation_threshold=truncation_threshold)
+
+        else:
+            combined_err_layer = propagated_errorgen_layers[-1]
+            for i in range(len(propagated_errorgen_layers)-2, -1, -1):
+                combined_err_layer = _eprop.bch_approximation(combined_err_layer, propagated_errorgen_layers[i],
+                                                                bch_order=bch_order, truncation_threshold=truncation_threshold)
 
         return combined_err_layer
         
