@@ -190,23 +190,49 @@ class LocalizedDenseToErrVec(_keras.layers.Layer):
         # self.dense = {error_gen_idx: DenseSubNetwork(1, self.dense_units) for error_gen_idx in range(self.num_tracked_error_gens)}
         self.dense = DenseSubNetwork(self.dense_units)
         super().build(input_shape)
+    # def call(self, inputs):
+    #     # Convert the list of indices to a tensor
+    #     indices_tensor = tf.stack(self.layer_encoding_indices_for_error_gen)
+        
+    #     # Expand dimensions to match the batch size
+    #     batch_size = tf.shape(inputs)[0]
+    #     indices_tiled = tf.tile(tf.expand_dims(indices_tensor, 0), [batch_size, 1, 1])
+
+    #     # Gather the values based on the indices
+    #     gathered_slices = tf.gather(inputs, indices_tiled, batch_dims=1)
+
+    #     # Reshape the gathered slices to concatenate along the last axis
+    #     gathered_slices = tf.reshape(gathered_slices, [batch_size, -1])
+        
+    #     # Pass the concatenated slices through the dense layer
+    #     x = self.dense(gathered_slices)
+
+    #     return x
     def call(self, inputs):
+        # print('inputs', inputs.shape)
         # Convert the list of indices to a tensor
-        indices_tensor = tf.stack(self.layer_encoding_indices_for_error_gen)
+        layer_encoding_list = self.layer_encoding_indices_for_error_gen
+        max_len_gate_encoding = max([len(layer_encoding) for layer_encoding in layer_encoding_list])
+        for i in range(len(layer_encoding_list)):
+            layer_encoding = layer_encoding_list[i]
+            if len(layer_encoding) < max_len_gate_encoding:
+                layer_encoding_list[i] = _np.concatenate([layer_encoding, _np.zeros(max_len_gate_encoding - len(layer_encoding), dtype=_np.int16)])
+        indices_tensor = tf.stack(layer_encoding_list)
+        # print('indices_tensor', indices_tensor.shape)
         
         # Expand dimensions to match the batch size
         batch_size = tf.shape(inputs)[0]
         indices_tiled = tf.tile(tf.expand_dims(indices_tensor, 0), [batch_size, 1, 1])
-
+        # print('indices_tiled', indices_tiled.shape)
         # Gather the values based on the indices
         gathered_slices = tf.gather(inputs, indices_tiled, batch_dims=1)
-
+        # print('gathered_slices', gathered_slices.shape)
         # Reshape the gathered slices to concatenate along the last axis
         gathered_slices = tf.reshape(gathered_slices, [batch_size, -1])
-        
+        # print('gathered_slices', gathered_slices.shape)
         # Pass the concatenated slices through the dense layer
         x = self.dense(gathered_slices)
-
+        # print('x', x.shape)
         return x
 
 # @_keras.utils.register_keras_serializable()
