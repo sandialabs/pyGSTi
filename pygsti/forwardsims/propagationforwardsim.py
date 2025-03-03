@@ -98,7 +98,7 @@ class SimplePropagationForwardSimulator(_ForwardSimulator):
 
         super().__init__(model)
 
-    def bulk_probs(self, circuits, clip=False, resource_alloc=None, smartc=None):
+    def bulk_probs(self, circuits, clip=False, resource_alloc=None, smartc=None, precomp_ideals=None):
         """
         Construct a dictionary containing the probabilities for an entire list of circuits.
 
@@ -110,6 +110,9 @@ class SimplePropagationForwardSimulator(_ForwardSimulator):
 
         clip : bool, optional (default False)
             If true clip the probabilities to the interval [0,1].
+
+        precomp_ideals : list of numpy ndarrays
+            A precomputed list of the ideal (noise-free) process matrices for each circuit.
 
         Returns
         -------
@@ -126,6 +129,9 @@ class SimplePropagationForwardSimulator(_ForwardSimulator):
         circuit_outcomes = self.model.circuit_outcomes(circuits[0])
         prob_dict = dict()
 
+        if precomp_ideals is None:
+            precomp_ideals = [None]*len(circuits)
+
         if self.approximate:
             for ckt in circuits:
                 propagated_errorgen_layer = self.errorgen_propagator.propagate_errorgens_bch(ckt, bch_order=self.bch_order, include_spam=True,
@@ -140,11 +146,12 @@ class SimplePropagationForwardSimulator(_ForwardSimulator):
             ideal_meas = self.ideal_model.circuit_layer_operator(Label('Mdefault'), typ='povm').copy()
             dense_prep = ideal_prep.to_dense()
             dense_prep.reshape((len(dense_prep),1))
+            #print(f'{dense_prep=}')
             dense_effects = [effect.to_dense() for effect in ideal_meas.values()]
             for effect in dense_effects:
                 effect.reshape((1,len(effect)))
-            
-            for ckt in circuits:
+                #print(f'{effect=}')
+            for ckt, ideal_channel in zip(circuits, precomp_ideals):
                 #get the eoc error channel, and the process matrix for the ideal circuit:
                 if self.model.covariance_function is None:
                     eoc_channel = self.errorgen_propagator.eoc_error_channel(ckt, include_spam=True, use_bch=True,
@@ -156,18 +163,19 @@ class SimplePropagationForwardSimulator(_ForwardSimulator):
                     
                     #loop though the propagated error generator layers and construct their error generators.
                     #Then exponentiate
+                    non_empty_errorgen_layers = [err_gen_layer for err_gen_layer in propagated_error_generators if err_gen_layer]
+                    errorgen_layer_arrays = self.errorgen_propagator.errorgen_layer_dicts_to_errorgens(non_empty_errorgen_layers, mx_basis=self.model.basis)
+
                     exp_error_generators = []
-                    for err_gen_layer in propagated_error_generators:
-                        if err_gen_layer: #if not empty.
-                            #Keep the error generator in the standard basis until after the end-of-circuit
-                            #channel is constructed so we can reduce the overhead of changing basis.
-                            exp_error_generators.append(_spl.expm(self.errorgen_propagator.errorgen_layer_dict_to_errorgen(err_gen_layer, mx_basis='pp')))
+                    for err_gen_layer in errorgen_layer_arrays:
+                        exp_error_generators.append(_spl.expm(err_gen_layer))
                     #Next take the product of these exponentiated error generators.
                     #These are in circuit ordering, so reverse for matmul.
                     #exp_error_generators.reverse()
                     
                     #print(f'{eoc_channel=}')
-                    ideal_channel = self.ideal_model.sim.product(ckt)
+                    if ideal_channel is None:
+                        ideal_channel = self.ideal_model.sim.product(ckt)
                     #print(f'{ideal_channel=}')
                     #print(f'{ideal_channel@dense_prep=}')
                 #calculate the probabilities.
@@ -176,8 +184,8 @@ class SimplePropagationForwardSimulator(_ForwardSimulator):
                 for operation in [ideal_channel] + exp_error_generators:
                     propagated_state = operation@propagated_state
 
-                for i, effect in enumerate(dense_effects):
-                    prob_vec[i] = effect@propagated_state
+                for j, effect in enumerate(dense_effects):
+                    prob_vec[j] = effect@propagated_state
                 
                 prob_dict[ckt] = {olbl: prob for olbl, prob in zip(circuit_outcomes, prob_vec)}
         
@@ -208,7 +216,9 @@ class SimplePropagationForwardSimulator(_ForwardSimulator):
         if self.errorgen_propagator is None:
             self.errorgen_propagator = ErrorGeneratorPropagator(self.model)
 
-        probs = self.bulk_probs(circuits)
+        precomp_ideals = [self.ideal_model.sim.product(ckt) for ckt in circuits]
+
+        probs = self.bulk_probs(circuits, precomp_ideals=precomp_ideals)
         orig_vec = self.model.to_vector().copy()
 
         circuit_outcomes = self.model.circuit_outcomes(circuits[0])
@@ -221,7 +231,7 @@ class SimplePropagationForwardSimulator(_ForwardSimulator):
             vec = orig_vec.copy()
             vec[i] += eps
             self.model.from_vector(vec, close=True)
-            probs2 = self.bulk_probs(circuits)
+            probs2 = self.bulk_probs(circuits, precomp_ideals= precomp_ideals)
             
             #need to parse this and construct the corresponding entries of the dprobs dict.
         
@@ -236,11 +246,11 @@ class SimplePropagationForwardSimulator(_ForwardSimulator):
     
 
     #TODO: make this more efficient and less duct tapey.
-    def bulk_fill_probs(self, array_to_fill, layout):
+    def bulk_fill_probs(self, array_to_fill, layout, precomp_ideals=None):
         if self.errorgen_propagator is None:
             self.errorgen_propagator = ErrorGeneratorPropagator(self.model)
 
-        probs = self.bulk_probs(layout._unique_circuits)
+        probs = self.bulk_probs(layout._unique_circuits, precomp_ideals=precomp_ideals)
 
         for element_indices, circuit, _ in layout.iter_unique_circuits():
             array_to_fill[element_indices] = _np.fromiter(probs[circuit].values(), dtype=_np.double)
@@ -250,11 +260,13 @@ class SimplePropagationForwardSimulator(_ForwardSimulator):
         if self.errorgen_propagator is None:
             self.errorgen_propagator = ErrorGeneratorPropagator(self.model)
         
+        precomp_ideals = [self.ideal_model.sim.product(ckt) for _, ckt, _ in layout.iter_unique_circuits()]
+
         if pr_array_to_fill is not None:
-            self.bulk_fill_probs(pr_array_to_fill, layout)
+            self.bulk_fill_probs(pr_array_to_fill, layout, precomp_ideals=precomp_ideals)
 
         probs = _np.empty(len(layout), 'd')
-        self.bulk_fill_probs(probs, layout)
+        self.bulk_fill_probs(probs, layout, precomp_ideals=precomp_ideals)
         
         eps= 1e-7
         probs2 = _np.empty(len(layout), 'd')
@@ -263,6 +275,6 @@ class SimplePropagationForwardSimulator(_ForwardSimulator):
             vec = orig_vec.copy() 
             vec[i] += eps
             self.model.from_vector(vec, close=True)
-            self.bulk_fill_probs(probs2, layout)
+            self.bulk_fill_probs(probs2, layout, precomp_ideals=precomp_ideals)
             array_to_fill[:, i] = (probs2 - probs) / eps
         self.model.from_vector(orig_vec, close=True)
