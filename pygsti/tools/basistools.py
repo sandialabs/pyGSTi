@@ -145,13 +145,46 @@ def change_basis(mx, from_basis, to_basis, expect_real=True):
         The given operation matrix converted to the `to_basis` basis.
         Array size is the same as `mx`.
     """
-    if len(mx.shape) not in (1, 2):
-        raise ValueError("Invalid dimension of object - must be 1 or 2, i.e. a vector or matrix")
+    return bulk_change_basis([mx], from_basis, to_basis, expect_real)[0]
+
+def bulk_change_basis(mxs, from_basis, to_basis, expect_real=True):
+    """
+    Convert a list of operation matrices from one basis of a density matrix space to another.
+
+    Parameters
+    ----------
+    mxs : list of numpy arrays
+        List of operation matrices (a 2D square array or 1D vector) in the `from_basis` basis.
+
+    from_basis: {'std', 'gm', 'pp', 'qt'} or Basis object
+        The source basis.  Allowed values are Matrix-unit (std), Gell-Mann (gm),
+        Pauli-product (pp), and Qutrit (qt) (or a custom basis object).
+
+    to_basis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The destination basis.  Allowed values are Matrix-unit (std), Gell-Mann
+        (gm), Pauli-product (pp), and Qutrit (qt) (or a custom basis object).
+    
+    expect_real : bool, optional (default True)
+        Optional flag specifying whether it is expected that the returned
+        array in the new basis is real valued. Default is True.
+
+    Returns
+    -------
+    numpy array
+        The given operation matrix converted to the `to_basis` basis.
+        Array size is the same as `mx`.
+    """
+    for mx in mxs:
+        if len(mx.shape) not in (1, 2):
+            raise ValueError("Invalid dimension of object - must be 1 or 2, i.e. a vector or matrix")
 
     #Build Basis objects from to_basis and from_basis as needed.
     from_is_basis = isinstance(from_basis, _basis.Basis)
     to_is_basis = isinstance(to_basis, _basis.Basis)
-    dim = mx.shape[0]
+    dims = [mx.shape[0] for mx in mxs]
+    assert all([dim == dims[0] for dim in dims]), 'All arrays must have the same shape'
+    dim = dims[0]
+
     if not from_is_basis and not to_is_basis:
         #Case1: no Basis objects, so just construct builtin bases based on `mx` dim
         if from_basis == to_basis: return mx.copy()  # (shortcut)
@@ -184,27 +217,32 @@ def change_basis(mx, from_basis, to_basis, expect_real=True):
         raise ValueError('Automatic basis expanding/contracting is disabled: use flexible_change_basis')
 
     if from_basis == to_basis:
-        return mx.copy()
+        return [mx.copy() for mx in mxs]
 
     toMx = from_basis.create_transform_matrix(to_basis)
     fromMx = to_basis.create_transform_matrix(from_basis)
 
-    isMx = len(mx.shape) == 2 and mx.shape[0] == mx.shape[1]
-    if isMx:
-        # want ret = toMx.dot( _np.dot(mx, fromMx)) but need to deal
-        # with some/all args being sparse:
-        ret = toMx @ (mx @ fromMx)
-    else:  # isVec
-        ret = toMx @ mx
+    isMx = len(mxs[0].shape) == 2 and mxs[0].shape[0] == mxs[0].shape[1]
+    
+    ret_mxs = []
+    for mx in mxs:
+        if isMx:
+            # want ret = toMx.dot( _np.dot(mx, fromMx)) but need to deal
+            # with some/all args being sparse:
+            ret = toMx @ (mx @ fromMx)
+        else:  # isVec
+            ret = toMx @ mx
 
-    if not to_basis.real:
-        return ret
+        if not to_basis.real:
+            ret_mxs.append(ret)
 
-    if expect_real and _mt.safe_norm(ret, 'imag') > 1e-8:
-        raise ValueError("Array has non-zero imaginary part (%g) after basis change (%s to %s)!\n%s" %
-                         (_mt.safe_norm(ret, 'imag'), from_basis, to_basis, ret))
-    return ret.real
+        elif expect_real and _mt.safe_norm(ret, 'imag') > 1e-8:
+            raise ValueError("Array has non-zero imaginary part (%g) after basis change (%s to %s)!\n%s" %
+                            (_mt.safe_norm(ret, 'imag'), from_basis, to_basis, ret))
+        else:
+            ret_mxs.append(ret.real)
 
+    return ret_mxs
 
 def create_basis_pair(mx, from_basis, to_basis):
     """
