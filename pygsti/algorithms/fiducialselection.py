@@ -712,8 +712,8 @@ def create_meas_cache(model, available_meas_fid_list, circuit_cache=None):
     if circuit_cache is not None:
         for povm in model.povms.values():
             for E in povm.values():
-                if isinstance(E, _ComplementPOVMEffect): continue  # complement is dependent on others
-                new_povm_effect_key_pair= (povm.to_vector().tobytes(), E.to_vector().tobytes())
+                #if isinstance(E, _ComplementPOVMEffect): continue  # complement is dependent on others
+                new_povm_effect_key_pair= (povm.to_vector().tobytes(), E.to_dense().tobytes())
                 keypairlist.append(new_povm_effect_key_pair)
                 for measFid in available_meas_fid_list:
                     meas_cache[(new_povm_effect_key_pair[0],new_povm_effect_key_pair[1],measFid.str)] = _np.dot(E.to_dense(), circuit_cache[measFid.str])    
@@ -721,8 +721,8 @@ def create_meas_cache(model, available_meas_fid_list, circuit_cache=None):
     else:
         for povm in model.povms.values():
             for E in povm.values():
-                if isinstance(E, _ComplementPOVMEffect): continue  # complement is dependent on others
-                new_povm_effect_key_pair= (povm.to_vector().tobytes(), E.to_vector().tobytes())
+                #if isinstance(E, _ComplementPOVMEffect): continue  # complement is dependent on others
+                new_povm_effect_key_pair= (povm.to_vector().tobytes(), E.to_dense().tobytes())
                 keypairlist.append(new_povm_effect_key_pair)
                 for measFid in available_meas_fid_list:
                     meas_cache[(new_povm_effect_key_pair[0],new_povm_effect_key_pair[1],measFid.str)] = _np.dot(E.to_dense(), model.sim.product(measFid))
@@ -832,9 +832,9 @@ def create_meas_mxs(model, meas_fid_list, meas_cache=None):
                 #Actually, this is slowing things down a good amount, let's just print a
                 #descriptive error message if the key is missing 
                 try:
-                    outputMat[:, i] = meas_cache[0][(povm_key, E_key,measFid.str)] 
+                    outputMat[:, i] = meas_cache[0][(povm_key, E_key, measFid.str)] 
                 except KeyError as err:
-                    print('A (POVM, Effect, Circuit) pair is missing from the cache, all such pairs should be available is using the caching option.')
+                    print('A (POVM, Effect, Circuit) pair is missing from the cache, all such pairs should be available if using the caching option.')
                     raise err
                     #outputMat[:, i] = _np.dot(E.to_dense(), model.sim.product(measFid))
             outputMatList.append(outputMat)
@@ -842,7 +842,7 @@ def create_meas_mxs(model, meas_fid_list, meas_cache=None):
     else:
         for povm in model.povms.values():
             for E in povm.values():
-                if isinstance(E, _ComplementPOVMEffect): continue  # complement is dependent on others
+                #if isinstance(E, _ComplementPOVMEffect): continue  # complement is dependent on others
                 outputMat = _np.zeros([dimE, numFid], float)
                 for i, measFid in enumerate(meas_fid_list):
                     outputMat[:, i] = _np.dot(E.to_dense(), model.sim.product(measFid))
