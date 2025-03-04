@@ -498,7 +498,12 @@ def create_probability_data(circs:list,
     x_alpha = _np.array(alpha_values)
     x_px = _np.array(ideal_probabilities)
     if return_separate:
-        return x_circs, x_signs, x_indices, x_alpha, x_px, y
+        xc_reshaped = _np.zeros((x_circs.shape[0], x_circs.shape[2], x_circs.shape[1] * x_circs.shape[3]), float)
+        for qi in range(num_qubits): 
+            for ci in range(num_channels): 
+                xc_reshaped[:, :, qi * num_channels + ci] = x_circs[:, qi, :, ci].copy()
+            
+        return xc_reshaped, x_signs, x_indices, x_alpha, x_px, y
 
     else:
         len_gate_encoding = num_qubits * num_channels
