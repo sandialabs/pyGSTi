@@ -11,3 +11,4 @@ Sub-package for model members which store and manage covariances.
 #***************************************************************************************************
 
 from .oucovariance import OUCovarianceFunction, CVOUCovarianceFunction
+from .quasistaticcovariance import QuasistaticDCCovarianceFunction

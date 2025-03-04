@@ -1,5 +1,5 @@
 """
-Covariance function specialized to the case of an Ornstein-Uhlenbeck (OU) process.
+Covariance function specialized to the case of a quasistatic DC noise process.
 """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -15,10 +15,10 @@ from pygsti.modelmembers import ModelMember as _ModelMember
 from pygsti.baseobjs.errorgenlabel import ElementaryErrorgenLabel as _ElementaryErrorgenLabel
 import numpy as _np
 
-class OUCovarianceFunction(_CovarianceFunction):
+class QuasistaticDCCovarianceFunction(_CovarianceFunction):
 
     """
-    Covariance function based on the Ornstein-Uhlenbeck process.
+    Covariance function based on a quasistatic DC process.
     """
 
     @classmethod
@@ -27,13 +27,12 @@ class OUCovarianceFunction(_CovarianceFunction):
 
     def __init__(self, error_generator_labels):
         """
-        Initialize an instance of an Ornstein-Uhlenbeck covariance function.
-        The covariance function of an OU process is given by:
+        Initialize an instance of a quasistatic DC covariance function.
+        The covariance function of a quasistatic DC process is given by:
 
-        cov(x_s, x_t) = (sigma^2 * t_c/2) * exp(-abs(s-t)/t_c)
+        cov(x_s, x_t) = sigma^2
 
-        Where t_c is the characteristic correlation time for the process,
-        and sigma^2 is the characteristic variance scale for the process.
+        Where sigma^2 is the characteristic variance scale for the process.
 
         Parameters
         ----------
@@ -45,8 +44,8 @@ class OUCovarianceFunction(_CovarianceFunction):
             If length one then this is interpreted to mean the autocorrelation between this error
             with itself at different times. If length two then this is interpreted to be a
             cross-correlation between two different elementary error generators at different times.
-            The values of this dictionary are tuple corresponding to the initial values of
-            t_c and sigma^2 for this covariance function, respectively.
+            The values of this dictionary are the initial values of
+            sigma^2 for this covariance function, respectively.
 
             If a list of tuples, these tuples have the same format/interpretation as desribed above, but are
             instantiated with t_c and sigma^2 values of zero.    
@@ -92,24 +91,20 @@ class OUCovarianceFunction(_CovarianceFunction):
                 i+=1
         #allocate arrays to internally store the correlation time and variance scale separately.
         total_num_values = sum([len(lbls_for_gate) for lbls_for_gate in error_generator_labels.values()])
-        self.correlation_times = _np.zeros(total_num_values)
         self.variances = _np.zeros(total_num_values)
 
         #if a dictionary initialize these values to those values.
         if isinstance(error_generator_labels, dict):
             i=0
             for cov_spec in error_generator_labels.values():
-                for corr_time, var in cov_spec.values():
-                    self.correlation_times[i] = corr_time
+                for var in cov_spec.values():
                     self.variances[i] = var
                     i+=1
         #Concatenate the correlation time and variance vectors.
-        self._paramvals = _np.concatenate([self.correlation_times, self.variances])
+        self._paramvals = self.variances
         
         #label parameters as either correlation times or variances.
         self._paramlbls = []
-        for lbl_tup in self._errgen_label_to_param_idx.keys():
-            self._paramlbls.append(f'Correlation Time for {lbl_tup}')
         for lbl_tup in self._errgen_label_to_param_idx.keys():
             self._paramlbls.append(f'Covariance for {lbl_tup}')
         self._paramlbls = _np.array(self._paramlbls, dtype=object)      
@@ -119,12 +114,11 @@ class OUCovarianceFunction(_CovarianceFunction):
 
     def from_vector(self, v, close=False, dirty_value=True):
         self._paramvals[:] = v
-        n = len(self.correlation_times)
-        self.correlation_times = self._paramvals[:n]
-        self.variances = self._paramvals[n:]
+        self.variances = self._paramvals
         self.dirty = dirty_value
     
     #TODO: Add logic for handling different error generator label types.
+    #leave the time arguments for API consistency (i.e. so I don't need to branch on the covariance type).
     def __call__(self, errorgen1, gate_label1, time1, errorgen2, gate_label2, time2):
         """
         Computes the correlation function. Takes as input two error generator labels and two times.
@@ -135,13 +129,8 @@ class OUCovarianceFunction(_CovarianceFunction):
         if idx is None:
             return 0
         else:
-            corr_time = self.correlation_times[idx]
             var = self.variances[idx]
-            if corr_time < 1e-14 or var < 1e-14: #HARDCODED
-                return 0
-            else:
-                cov_val = .5*var*corr_time*_np.exp(-abs(time1-time2)/corr_time)
-            return cov_val
+            return var
 
     @property
     def num_params(self):
@@ -153,39 +142,4 @@ class OUCovarianceFunction(_CovarianceFunction):
         int
             the number of independent parameters.
         """
-        return 2*len(self.correlation_times)
-    
-class CVOUCovarianceFunction(OUCovarianceFunction):
-
-    """
-    Variation on the Ornstein-Uhlenbeck process which shares its exponentially
-    decaying correlations in time, but has a constant volatility parameter.
-
-    The covariance function of process is given by:
-
-        cov(x_s, x_t) = (sigma^2) * exp(-abs(s-t)/t_c)
-
-        Where t_c is the characteristic correlation time for the process,
-        and sigma^2 is the characteristic variance scale for the process.
-    """
-
-    def __init__(self, error_generator_labels):
-        super().__init__(error_generator_labels)
-
-    def __call__(self, errorgen1, gate_label1, time1, errorgen2, gate_label2, time2):
-        """
-        Computes the correlation function. Takes as input two error generator labels and two times.
-        Returns 0 if both error generator labels are not present in this covariance function.
-        """
-        idx = self._errgen_label_to_param_idx.get((gate_label1, errorgen1, gate_label2, errorgen2), None)
-
-        if idx is None:
-            return 0
-        else:
-            corr_time = self.correlation_times[idx]
-            var = self.variances[idx]
-            if corr_time < 1e-10: 
-                return 0
-            else:
-                cov_val = var*_np.exp(-abs(time1-time2)/corr_time)
-            return cov_val
+        return len(self.variances)
