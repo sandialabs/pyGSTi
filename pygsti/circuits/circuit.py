@@ -2667,7 +2667,6 @@ class Circuit(object):
                 layers = layers[:i] + c._labels + layers[i + 1:]
         return Circuit._fastinit(layers, self._line_labels, editable=False, occurrence=self._occurrence_id)
 
-
     def change_gate_library(self, compilation, allowed_filter=None, allow_unchanged_gates=False, depth_compression=True,
                             one_q_gate_relations=None):
         """
@@ -3556,7 +3555,6 @@ class Circuit(object):
 
         return sum([cnt(layer_lbl) for layer_lbl in self._labels])
     
-
     def _togrid(self, identity_name):
         """ return a list-of-lists rep? """
         d = self.num_layers

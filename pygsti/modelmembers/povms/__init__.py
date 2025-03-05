@@ -9,7 +9,6 @@ Sub-package holding model POVM and POVM effect objects.
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
-import _collections
 import functools as _functools
 import itertools as _itertools
 import warnings
@@ -46,10 +45,40 @@ import pygsti.modelmembers as _mm
 
 def create_from_pure_vectors(pure_vectors, povm_type, basis='pp', evotype='default', state_space=None,
                              on_construction_error='warn'):
-    """ TODO: docstring -- create a POVM from a list/dict of (key, pure-vector) pairs """
+    """
+    Creates a Positive Operator-Valued Measure (POVM) from a list or dictionary of (key, pure-vector) pairs.
+
+    Parameters
+    ----------
+    pure_vectors : list or dict
+        A list of (key, pure-vector) pairs or a dictionary where keys are labels and values are pure state vectors.
+        
+    povm_type : str or tuple
+        The type of POVM to create. This can be a single string or a tuple of strings indicating the preferred types.
+        Supported types include 'computational', 'static pure', 'full pure', 'static', 'full', 'full TP', and any valid
+        Lindblad parameterization type.
+
+    basis : str, optional
+        The basis in which the pure vectors are expressed. Default is 'pp'.
+
+    evotype : str, optional
+        The evolution type. Default is 'default'.
+
+    state_space : StateSpace, optional
+        The state space in which the POVM operates. Default is None.
+
+    on_construction_error : str, optional
+        Specifies the behavior when an error occurs during POVM construction. Options are 'raise' to raise the error,
+        'warn' to print a warning message, or any other value to silently ignore the error. Default is 'warn'.
+
+    Returns
+    -------
+    POVM
+        The constructed POVM object.
+    """
     povm_type_preferences = (povm_type,) if isinstance(povm_type, str) else povm_type
     if not isinstance(pure_vectors, dict):  # then assume it's a list of (key, value) pairs
-        pure_vectors = _collections.OrderedDict(pure_vectors)
+        pure_vectors = dict(pure_vectors)
     if state_space is None:
         state_space = _statespace.default_space_for_udim(len(next(iter(pure_vectors.values()))))
 
@@ -98,10 +127,41 @@ def create_from_pure_vectors(pure_vectors, povm_type, basis='pp', evotype='defau
 
 def create_from_dmvecs(superket_vectors, povm_type, basis='pp', evotype='default', state_space=None,
                        on_construction_error='warn'):
-    """ TODO: docstring -- create a POVM from a list/dict of (key, pure-vector) pairs """
+    """ 
+    Creates a Positive Operator-Valued Measure (POVM) from a list or dictionary of (key, superket) pairs.
+
+    Parameters
+    ----------
+    superket_vectors : list or dict
+        A list of (key, pure-vector) pairs or a dictionary where keys are labels and values are superket vectors.
+        i.e. vectorized density matrices.
+        
+    povm_type : str or tuple
+        The type of POVM to create. This can be a single string or a tuple of strings indicating the preferred types.
+        Supported types include 'full', 'static', 'full TP', 'computational', 'static pure', 'full pure', and any valid
+        Lindblad parameterization type.
+
+    basis : str or `Basis`, optional
+        The basis in which the density matrix vectors are expressed. Default is 'pp'.
+
+    evotype : str, optional
+        The evolution type. Default is 'default'.
+
+    state_space : StateSpace, optional
+        The state space in which the POVM operates. Default is None.
+
+    on_construction_error : str, optional
+        Specifies the behavior when an error occurs during POVM construction. Options are 'raise' to raise the error,
+        'warn' to print a warning message, or any other value to silently ignore the error. Default is 'warn'.
+
+    Returns
+    -------
+    POVM
+        The constructed POVM object. 
+    """
     povm_type_preferences = (povm_type,) if isinstance(povm_type, str) else povm_type
     if not isinstance(superket_vectors, dict):  # then assume it's a list of (key, value) pairs
-        superket_vectors = _collections.OrderedDict(superket_vectors)
+        superket_vectors = dict(superket_vectors)
 
     for typ in povm_type_preferences:
         try:
@@ -144,12 +204,42 @@ def create_from_dmvecs(superket_vectors, povm_type, basis='pp', evotype='default
                 print('Failed to construct povm with type "{}" with error: {}'.format(typ, str(err)))
             pass  # move on to next type
 
-    raise ValueError("Could not create a POVM of type(s) %s from the given pure vectors!" % (str(povm_type)))
+    raise ValueError("Could not create a POVM of type(s) %s from the given density matrix vectors!" % (str(povm_type)))
 
 
 def create_effect_from_pure_vector(pure_vector, effect_type, basis='pp', evotype='default', state_space=None,
                                    on_construction_error='warn'):
-    """ TODO: docstring -- create a State from a state vector """
+    """
+    Creates a POVM effect from a pure state vector.
+
+    Parameters
+    ----------
+    pure_vector : array-like
+        The pure state vector from which to create the POVM effect.
+        
+    effect_type : str or tuple
+        The type of effect to create. This can be a single string or a tuple of strings indicating the preferred types.
+        Supported types include 'computational', 'static pure', 'full pure', 'static', 'full', 'static clifford', and
+        any valid Lindblad parameterization type.
+
+    basis : str or `Basis` optional
+        The basis in which the pure vector is expressed. Default is 'pp'.
+
+    evotype : str, optional
+        The evolution type. Default is 'default'.
+
+    state_space : StateSpace, optional
+        The state space in which the effect operates. Default is None.
+
+    on_construction_error : str, optional
+        Specifies the behavior when an error occurs during effect construction. Options are 'raise' to raise the error,
+        'warn' to print a warning message, or any other value to silently ignore the error. Default is 'warn'.
+
+    Returns
+    -------
+    POVMEffect
+        The constructed POVM effect object.
+    """
     effect_type_preferences = (effect_type,) if isinstance(effect_type, str) else effect_type
     if state_space is None:
         state_space = _statespace.default_space_for_udim(len(pure_vector))
@@ -200,6 +290,38 @@ def create_effect_from_pure_vector(pure_vector, effect_type, basis='pp', evotype
 
 def create_effect_from_dmvec(superket_vector, effect_type, basis='pp', evotype='default', state_space=None,
                              on_construction_error='warn'):
+    """
+    Creates a POVM effect from a density matrix vector (superket).
+
+    Parameters
+    ----------
+    superket_vector : array-like
+        The density matrix vector (superket) from which to create the POVM effect.
+        
+    effect_type : str or tuple
+        The type of effect to create. This can be a single string or a tuple of strings indicating the preferred types.
+        Supported types include 'static', 'full', and any valid Lindblad parameterization type. For other types
+        we first try to convert to a pure state vector and then utilize `create_effect_from_pure_vector`
+
+    basis : str or `Basis` optional
+        The basis in which the superket vector is expressed. Default is 'pp'.
+
+    evotype : str, optional
+        The evolution type. Default is 'default'.
+
+    state_space : StateSpace, optional
+        The state space in which the effect operates. Default is None.
+
+    on_construction_error : str, optional
+        Specifies the behavior when an error occurs during effect construction. Options are 'raise' to raise the error,
+        'warn' to print a warning message, or any other value to silently ignore the error. Default is 'warn'.
+
+    Returns
+    -------
+    POVMEffect
+        The constructed POVM effect object.
+    """
+
     effect_type_preferences = (effect_type,) if isinstance(effect_type, str) else effect_type
     if state_space is None:
         state_space = _statespace.default_space_for_dim(len(superket_vector))
@@ -245,7 +367,8 @@ def create_effect_from_dmvec(superket_vector, effect_type, basis='pp', evotype='
 
 
 def povm_type_from_op_type(op_type):
-    """Decode an op type into an appropriate povm type.
+    """
+    Decode an op type into an appropriate povm type.
 
     Parameters:
     -----------

@@ -186,16 +186,6 @@ class ExplicitOpModel(_mdl.OpModel):
         return _explicitcalc.ExplicitOpModelCalc(self.state_space.dim, simplified_preps, simplified_ops,
                                                  simplified_effects, self.num_params, self._param_interposer)
 
-    #Unneeded - just use string processing & rely on effect labels *not* having underscores in them
-    #def simplify_spamtuple_to_outcome_label(self, simplified_spamTuple):
-    #    #TODO: make this more efficient (prep lbl isn't even used!)
-    #    for prep_lbl in self.preps:
-    #        for povm_lbl in self.povms:
-    #            for elbl in self.povms[povm_lbl]:
-    #                if simplified_spamTuple == (prep_lbl, povm_lbl + "_" + elbl):
-    #                    return (elbl,) # outcome "label" (a tuple)
-    #    raise ValueError("No outcome label found for simplified spam_tuple: ", simplified_spamTuple)
-
     def _embed_operation(self, op_target_labels, op_val, force=False):
         """
         Called by OrderedMemberDict._auto_embed to create an embedded-gate
@@ -916,7 +906,7 @@ class ExplicitOpModel(_mdl.OpModel):
         for lbl, inst in self.instruments.items():
             s += "%s = " % str(lbl) + str(inst) + "\n"
         for lbl, factory in self.factories.items():
-            s += "%s = (factory)" % lbl + '\n'
+            s += "%s = (factory)" % str(lbl) + '\n'
         s += "\n"
 
         return s

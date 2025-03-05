@@ -360,7 +360,6 @@ class LabelTup(Label, tuple):
             mapped_sslbls = [mapper(sslbl) for sslbl in self.sslbls]
         return Label(self.name, mapped_sslbls)
 
-
     def __str__(self):
         """
         Defines how a Label is printed out, e.g. Gx:0 or Gcnot:1:2

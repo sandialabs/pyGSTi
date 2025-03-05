@@ -966,6 +966,64 @@ def povm_diamonddist(model, target_model, povmlbl):
     target_povm_mx = compute_povm_map(target_model, povmlbl)
     return diamonddist(povm_mx, target_povm_mx, target_model.basis)
 
+def instrument_infidelity(a, b, mx_basis):
+    """
+    Infidelity between instruments a and b
+
+    Parameters
+    ----------
+    a : Instrument
+        The first instrument.
+
+    b : Instrument
+        The second instrument.
+
+    mx_basis : Basis or {'pp', 'gm', 'std'}
+        the basis that `a` and `b` are in.
+
+    Returns
+    -------
+    float
+    """
+    sqrt_component_fidelities = [_np.sqrt(entanglement_fidelity(a[l], b[l], mx_basis))
+                                 for l in a.keys()]
+    return 1 - sum(sqrt_component_fidelities)**2
+
+
+def instrument_diamonddist(a, b, mx_basis):
+    """
+    The diamond distance between instruments a and b.
+
+    Parameters
+    ----------
+    a : Instrument
+        The first instrument.
+
+    b : Instrument
+        The second instrument.
+
+    mx_basis : Basis or {'pp', 'gm', 'std'}
+        the basis that `a` and `b` are in.
+
+    Returns
+    -------
+    float
+    """
+    #Turn instrument into a CPTP map on qubit + classical space.
+    adim = a.state_space.dim
+    mx_basis = _Basis.cast(mx_basis, dim=adim)
+    nComps = len(a.keys())
+    sumbasis = _DirectSumBasis([mx_basis] * nComps)
+    composite_op = _np.zeros((adim * nComps, adim * nComps), 'd')
+    composite_top = _np.zeros((adim * nComps, adim * nComps), 'd')
+    for i, clbl in enumerate(a.keys()):
+        aa, bb = i * adim, (i + 1) * adim
+        for j in range(nComps):
+            cc, dd = j * adim, (j + 1) * adim
+            composite_op[aa:bb, cc:dd] = a[clbl].to_dense(on_space='HilbertSchmidt')
+            composite_top[aa:bb, cc:dd] = b[clbl].to_dense(on_space='HilbertSchmidt')
+    return diamonddist(composite_op, composite_top, sumbasis)
+
 
 #decompose operation matrix into axis of rotation, etc
 def decompose_gate_matrix(operation_mx):

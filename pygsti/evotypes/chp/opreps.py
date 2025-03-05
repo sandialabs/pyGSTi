@@ -49,11 +49,6 @@ class OpRep(_basereps.OpRep):
     def _chp_ops(self, seed_or_state=None):
         return self.base_chp_ops
 
-    #def chp_str(self, seed_or_state=None):
-    #    op_str = '\n'.join(self.chp_ops(seed_or_state=seed_or_state))
-    #    if len(op_str) > 0: op_str += '\n'
-    #    return op_str
-
     def to_dense(self, on_space):
         try:
             str_ops = str(self._chp_ops())
@@ -217,63 +212,7 @@ class OpRepStochastic(OpRepRandomUnitary):
 
         super(OpRepStochastic, self).__init__(basis, _np.array(rates, 'd'), reps, seed_or_state, state_space)
 
-        #OLD
-        #self.basis = basis
-        #assert (basis.name == 'pp'), "Only Pauli basis is allowed for 'chp' evotype"
-        #
-        #if isinstance(seed_or_state, _RandomState):
-        #    self.rand_state = seed_or_state
-        #else:
-        #    self.rand_state = _RandomState(seed_or_state)
-        #
-        ##TODO: need to fix this: `basis` above functions as basis to make superoperators out of, but here we have
-        ## a CHP stochastic op which is given a basis for the space - e.g. a dim=2 vector space for 1 qubit, so
-        ## we need to distinguish/specify the basis better for this... and what about rate_poly_dicts (see svterm)
-        #nqubits = state_space.num_qubits
-        #assert(self.basis.dim == 4**nqubits), "Must have an integral number of qubits"
-        #
-        #std_chp_ops = _itgs.standard_gatenames_chp_conversions()
-        #
-        ## For CHP, need to make a Composed + EmbeddedOp for the super operators
-        ## For lower overhead, make this directly using the rep instead of with objects
-        #self.stochastic_superop_reps = []
-        #for label in self.basis.labels[1:]:
-        #    combined_chp_ops = []
-        #
-        #    for i, pauli in enumerate(label):
-        #        name = 'Gi' if pauli == "I" else 'G%spi' % pauli.lower()
-        #        chp_op = std_chp_ops[name]
-        #        chp_op_targeted = [op.replace('0', str(i)) for op in chp_op]
-        #        combined_chp_ops.extend(chp_op_targeted)
-        #
-        #    sub_rep = OpRep(combined_chp_ops, state_space)
-        #    self.stochastic_superop_reps.append(sub_rep)
-        #self.rates = initial_rates
-        #super(OpRepStochastic, self).__init__([], state_space)  # don't store any chp_ops in base
-
     def update_rates(self, rates):
         unitary_rates = [1 - sum(rates)] + list(rates)
         self.rates[:] = rates
         self.update_unitary_rates(unitary_rates)
-
-    #TODO REMOVE - covered by OpRepRandomUnitary
-    #def chp_ops(self, seed_or_state=None):
-    #    # Optionally override RNG for this call
-    #    if seed_or_state is not None:
-    #        if isinstance(seed_or_state, _np.random.RandomState):
-    #            rand_state = seed_or_state
-    #        else:
-    #            rand_state = _np.random.RandomState(seed_or_state)
-    #    else:
-    #        rand_state = self.rand_state
-    #
-    #    rates = self.rates
-    #    all_rates = [*rates, 1.0 - sum(rates)]  # Include identity so that probabilities are 1
-    #    index = rand_state.choice(self.basis.size, p=all_rates)
-    #
-    #    # If final entry, no operation selected
-    #    if index == self.basis.size - 1:
-    #        return []
-    #
-    #    rep = self.stochastic_superop_reps[index]
-    #    return rep._chp_ops()
