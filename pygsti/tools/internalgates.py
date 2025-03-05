@@ -405,6 +405,10 @@ def standard_gatenames_stim_conversions():
     'Gswap' : stim.Tableau.from_named_gate('SWAP'),
     'Gcphase' : stim.Tableau.from_named_gate('CZ')
     }
+    ecr_unitary = _np.array([[0, 1, 0., 1j], [1., 0, -1j, 0.],
+                             [0., 1j, 0, 1], [-1j, 0., 1, 0]], complex)/_np.sqrt(2)
+    gate_dict['Gecres'] = stim.Tableau.from_unitary_matrix(ecr_unitary, endian='big')
+
     return gate_dict
 
 def standard_gatenames_cirq_conversions():
