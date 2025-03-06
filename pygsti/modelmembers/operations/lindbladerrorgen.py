@@ -1111,6 +1111,7 @@ class LindbladErrorgen(_LinearOperator):
         """
         return self.coefficients(return_basis=False, logscale_nonham=True, label_type=label_type)
 
+    #TODO: Add unit testing, this had an uncaught bug.
     def set_coefficients(self, elementary_errorgens, action="update", logscale_nonham=False, truncate=True):
         """
         Sets the coefficients of elementary error generator terms in this error generator.
@@ -1171,7 +1172,7 @@ class LindbladErrorgen(_LinearOperator):
                 for k in blk_elem_errorgens:
                     blk_elem_errorgens[k] = 0.0
 
-            for k, v in elem_errorgens.items():
+            for k, v in blk_elem_errorgens.items():
                 if logscale_nonham and k.errorgen_type == "S":
                     # treat the value being set in lindblad_term_dict as the *channel* stochastic error rate, and
                     # set the errgen coefficient to the value that would, in a depolarizing channel, give
