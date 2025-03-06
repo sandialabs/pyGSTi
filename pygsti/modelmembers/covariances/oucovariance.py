@@ -104,7 +104,7 @@ class OUCovarianceFunction(_CovarianceFunction):
                     self.variances[i] = var
                     i+=1
         #Concatenate the correlation time and variance vectors.
-        self._paramvals = _np.concatenate([self.correlation_times, self.variances])
+        self._paramvals = _np.concatenate([self.correlation_times/10000, self.variances]) #rescale the correlation times in the parameter value vector.
         
         #label parameters as either correlation times or variances.
         self._paramlbls = []
@@ -112,7 +112,17 @@ class OUCovarianceFunction(_CovarianceFunction):
             self._paramlbls.append(f'Correlation Time for {lbl_tup}')
         for lbl_tup in self._errgen_label_to_param_idx.keys():
             self._paramlbls.append(f'Covariance for {lbl_tup}')
-        self._paramlbls = _np.array(self._paramlbls, dtype=object)      
+        self._paramlbls = _np.array(self._paramlbls, dtype=object)
+
+        #determine whether the covariance function is "diagonal."
+        #i.e. only correlations between the same gates and same error generators on a said gate.
+        self.is_diagonal = True
+        for gate_label_1, errgen_lbl_1, gate_label_2, errgen_lbl_2 in self._errgen_label_to_param_idx.keys():
+            if (gate_label_1 == gate_label_2) and (errgen_lbl_1==errgen_lbl_2):
+                continue
+            else:
+                self.is_diagonal = False
+                break
 
     def to_vector(self):
         return self._paramvals
@@ -120,8 +130,8 @@ class OUCovarianceFunction(_CovarianceFunction):
     def from_vector(self, v, close=False, dirty_value=True):
         self._paramvals[:] = v
         n = len(self.correlation_times)
-        self.correlation_times = self._paramvals[:n]
-        self.variances = self._paramvals[n:]
+        self.correlation_times = _np.abs(self._paramvals[:n]*10000) #HACK: Fix this bounding issue properly.
+        self.variances = _np.abs(self._paramvals[n:]) #HACK: Fix this bounding issue properly.
         self.dirty = dirty_value
     
     #TODO: Add logic for handling different error generator label types.
@@ -130,6 +140,10 @@ class OUCovarianceFunction(_CovarianceFunction):
         Computes the correlation function. Takes as input two error generator labels and two times.
         Returns 0 if both error generator labels are not present in this covariance function.
         """
+        if self.is_diagonal:
+            if (gate_label1 != gate_label2) or (errorgen1 != errorgen2):
+                return 0
+
         idx = self._errgen_label_to_param_idx.get((gate_label1, errorgen1, gate_label2, errorgen2), None)
 
         if idx is None:
@@ -137,7 +151,7 @@ class OUCovarianceFunction(_CovarianceFunction):
         else:
             corr_time = self.correlation_times[idx]
             var = self.variances[idx]
-            if corr_time < 1e-14 or var < 1e-14: #HARDCODED
+            if corr_time < 1e-14 or var < 1e-14: #HARDCODED (Check this more carefully)
                 return 0
             else:
                 cov_val = .5*var*corr_time*_np.exp(-abs(time1-time2)/corr_time)
@@ -177,6 +191,10 @@ class CVOUCovarianceFunction(OUCovarianceFunction):
         Computes the correlation function. Takes as input two error generator labels and two times.
         Returns 0 if both error generator labels are not present in this covariance function.
         """
+        if self.is_diagonal:
+            if (gate_label1 != gate_label2) or (errorgen1 != errorgen2):
+                return 0
+
         idx = self._errgen_label_to_param_idx.get((gate_label1, errorgen1, gate_label2, errorgen2), None)
 
         if idx is None:
@@ -184,8 +202,11 @@ class CVOUCovarianceFunction(OUCovarianceFunction):
         else:
             corr_time = self.correlation_times[idx]
             var = self.variances[idx]
-            if corr_time < 1e-10: 
-                return 0
+            if corr_time < 1e-10:
+                if time1 == time2:
+                    return var
+                else: 
+                    return 0
             else:
                 cov_val = var*_np.exp(-abs(time1-time2)/corr_time)
             return cov_val
