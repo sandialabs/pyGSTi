@@ -118,8 +118,8 @@ def nonmarkovian_generator(errorgen_layers, errorgen_transform_maps, cov_func, c
     
     #The contents of cumulants needs to get added to the first-order cumulant of the final layer, which is just the value
     #of final_layer.
-    complete_coeff_set = set([tup[0] for tup in cumulants])
-    complete_coeff_set.update(final_layer.keys())
+    complete_coeff_set = {tup[0]:None for tup in cumulants}
+    complete_coeff_set.update({key:None for key in final_layer.keys()})
     accumulated_nonmarkovian_generator = {key: 0 for key in complete_coeff_set} #make a copy of final_layer
     for coeff, rate in chain(cumulants, final_layer.items()):
         accumulated_nonmarkovian_generator[coeff] += rate
