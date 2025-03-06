@@ -187,7 +187,7 @@ def state_type_from_op_type(op_type):
     return state_type_preferences
 
 
-def convert(state, to_type, basis, cp_penalty=1e-7, ideal_state=None, flatten_structure=False):
+def convert(state, to_type, basis, cptp_penalty=1e-7, ideal_state=None, flatten_structure=False):
     """
     TODO: update docstring
     Convert SPAM vector to a new type of parameterization.
@@ -220,7 +220,7 @@ def convert(state, to_type, basis, cp_penalty=1e-7, ideal_state=None, flatten_st
         unchanged.  When `True`, composed and embedded operations are "flattened"
         into a single state of the requested `to_type`.
     
-    cp_penalty : float, optional
+    cptp_penalty : float, optional
         CPTP penalty that gets factored into the optimization to find the resulting model
         when converting to an error-generator type.
 
@@ -269,7 +269,7 @@ def convert(state, to_type, basis, cp_penalty=1e-7, ideal_state=None, flatten_st
                     errgen = _LindbladErrorgen.from_error_generator(2**(2*num_qubits), parameterization=to_type)
                     num_errgens = errgen.num_params
 
-                    #GLND for states suffers from "trivial gauge" freedom. This function identifies
+                    #GLND for states suffers from "dumb gauge" freedom. This function identifies
                     #the physical directions to avoid this gauge.
                     def calc_physical_subspace(ideal_prep, epsilon = 1e-9):
 	
@@ -293,13 +293,16 @@ def convert(state, to_type, basis, cp_penalty=1e-7, ideal_state=None, flatten_st
     
                     #We use optimization to find the best error generator representation
                     #we only vary physical directions, not independent error generators
+
                     def _objfn(v):
                         L_vec = _np.zeros(len(phys_directions[0]))
                         for coeff, phys_direction in zip(v,phys_directions):
                             L_vec += coeff * phys_direction
                         errorgen.from_vector(L_vec)
                         proc_matrix = _spl.expm(errorgen.to_dense())
-                        return _np.linalg.norm(proc_matrix @ dense_st - dense_state) + cp_penalty * sum_of_negative_choi_eigenvalues_gate(proc_matrix, basis)
+                        #basis of to_dense() CHECK if always pp
+                        dense_basis = Basis.cast('pp', (2**num_qubits)**2)
+                        return _np.linalg.norm(proc_matrix @ dense_st - dense_state) + cptp_penalty * sum_of_negative_choi_eigenvalues_gate(proc_matrix, dense_basis)
                     
                     soln = _spo.minimize(_objfn, _np.zeros(len(phys_directions), 'd'), method="Nelder-Mead", options={},
                                          tol=1e-13)  # , callback=callback)
