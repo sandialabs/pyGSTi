@@ -254,7 +254,7 @@ class ErrorGeneratorPropagator:
         return combined_err_layer
         
         
-    def propagate_errorgens_nonmarkovian(self, circuit, include_spam=True, cumulant_order=2):
+    def propagate_errorgens_nonmarkovian(self, circuit, include_spam=True, cumulant_order=2, errorgen_phase_corrections=None):
         """
         Propagate all of the error generators for each circuit layer to the end without
         any recombinations or averaging. This version also only track the overall modifier/weighting
@@ -274,6 +274,11 @@ class ErrorGeneratorPropagator:
             Order of the cumulant expansion to apply in constructing nonmarkovian
             error generators.
 
+        errorgen_phase_corrections : list of dicts, optional (default None)
+            A list of dictionaries which give the layer by layer mappings associating
+            input error generators to the overall phase they accrue as a result of propagation
+            through the circuit. This is the same dictionary returned by `errorgen_transform_phases`.
+
         Returns
         -------
         propagated_errorgen_layers : list of lists of dictionaries
@@ -291,7 +296,8 @@ class ErrorGeneratorPropagator:
         propagated_errorgen_layers = self.propagate_errorgens(circuit, include_spam=include_spam, include_circuit_time=True, include_gate_label=True)
         #we also need to compute the error generator transform map because we need to pick up any sign corrections which
         #might get missed for error generators with zero mean but nontrivial covariance.
-        errorgen_phase_corrections = self.errorgen_transform_phases(circuit, include_spam=include_spam) #TODO: This is requires twice the propagation atm, figure out how to combine these.
+        if errorgen_phase_corrections is None:
+            errorgen_phase_corrections = self.errorgen_transform_phases(circuit, include_spam=include_spam) #TODO: This is requires twice the propagation atm, figure out how to combine these.
         #now get the nonmarkovian error generators by applying the cumulant expansion
         nonmarkovian_generators = _cumul.cumulant_expansion(propagated_errorgen_layers, errorgen_phase_corrections, cov_func, cumulant_order)
 
