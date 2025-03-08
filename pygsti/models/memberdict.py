@@ -45,6 +45,18 @@ class _PrefixOrderedDict(_collections.OrderedDict):
                            "beginning with the prefix '%s'" % self._prefix)
         super(_PrefixOrderedDict, self).__setitem__(key, val)
 
+    #Handled by derived classes
+    #def __reduce__(self):
+    #    items = [(k,v) for k,v in self.iteritems()]
+    #    return (_PrefixOrderedDict, (self._prefix, items), None)
+
+    """
+    An ordered dictionary whose keys must begin with a given prefix,
+    and which holds LinearOperator objects.  This class ensures that every value is a
+    :class:`LinearOperator`-derived object by converting any non-`LinearOperator` values into
+    `LinearOperator`s upon assignment and raising an error if this is not possible.
+    """
+
 
 class OrderedMemberDict(_PrefixOrderedDict, _mm.ModelChild):
     """

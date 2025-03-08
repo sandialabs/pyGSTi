@@ -198,6 +198,139 @@ def find_all_sets_of_compatible_two_q_gates(edgelist, n, gatename='Gcnot', aslab
     return co2Qgates
 
 
+# TJP: I am not aware this is ever used anymore, and it's functionality is possibly even included in the
+# other samplers.
+# def sample_circuit_layer_by_pairing_qubits(pspec, qubit_labels=None, two_q_prob=0.5, one_q_gate_names='all',
+#                                            two_q_gate_names='all', modelname='clifford', rand_state=None):
+#     """
+#     Creates a circuit by randomply placing 2-qubit gates on qubit pairs.
+
+#     Samples a random circuit layer by pairing up qubits and picking a two-qubit gate for a pair
+#     with the specificed probability. This sampler *assumes* all-to-all connectivity, and does
+#     not check that this condition is satisfied (more generally, it assumes that all gates can be
+#     applied in parallel in any combination that would be well-defined).
+
+#     The sampler works as follows: If there are an odd number of qubits, one qubit is chosen at
+#     random to have a uniformly random 1-qubit gate applied to it (from all possible 1-qubit gates,
+#     or those in `one_q_gate_names` if not None). Then, the remaining qubits are paired up, uniformly
+#     at random. A uniformly random 2-qubit gate is then chosen for a pair with probability `two_q_prob`
+#     (from all possible 2-qubit gates, or those in `two_q_gate_names` if not None). If a 2-qubit gate
+#     is not chosen to act on a pair, then each qubit is independently and uniformly randomly assigned
+#     a 1-qubit gate.
+
+#     Parameters
+#     ----------
+#     pspec : QubitProcessorSpec
+#         The QubitProcessorSpec for the device that the circuit layer is being sampled for. This
+#         function assumes all-to-all connectivity, but does not check this is satisfied. Unless
+#         `qubit_labels` is not None, a circuit layer is sampled over all the qubits in `pspec`.
+
+#     qubit_labels : list, optional
+#         If not None, a list of the qubits to sample the circuit layer for. This is a subset of
+#         `pspec.qubit_labels`. If None, the circuit layer is sampled to acton all the qubits
+#         in `pspec`.
+
+#     two_q_prob : float, optional
+#         A probability for a two-qubit gate to be applied to a pair of qubits. So, the expected
+#         number of 2-qubit gates in the sampled layer is two_q_prob*floor(n/2).
+
+#     one_q_gate_names : 'all' or list, optional
+#         If not 'all', a list of the names of the 1-qubit gates to be sampled from when applying
+#         a 1-qubit gate to a qubit. If this is 'all', the full set of 1-qubit gate names is extracted
+#         from the QubitProcessorSpec.
+
+#     two_q_gate_names : 'all' or list, optional
+#         If not 'all', a list of the names of the 2-qubit gates to be sampled from when applying
+#         a 2-qubit gate to a pair of qubits. If this is 'all', the full set of 2-qubit gate names is
+#         extracted from the QubitProcessorSpec.
+
+#     modelname : str, optional
+#         Only used if one_q_gate_names or two_q_gate_names is None. Specifies which of the
+#         `pspec.models` to use to extract the gate-set. The `clifford` default is suitable
+#         for Clifford or direct RB, but will not use any non-Clifford gates in the gate-set.
+
+#     rand_state: RandomState, optional
+#         A np.random.RandomState object for seeding RNG
+
+#     Returns
+#     -------
+#     list of Labels
+#         A list of gate Labels that defines a "complete" circuit layer (there is one and only
+#         one gate acting on each qubit in `pspec` or `qubit_labels`).
+#     """
+#     if rand_state is None:
+#         rand_state = _np.random.RandomState()
+
+#     if qubit_labels is None: n = pspec.num_qubits
+#     else:
+#         assert(isinstance(qubit_labels, list) or isinstance(qubit_labels, tuple)), \
+#             "SubsetQs must be a list or a tuple!"
+#         n = len(qubit_labels)
+
+#     # If the one qubit and/or two qubit gate names are only specified as 'all', construct them.
+#     if (one_q_gate_names == 'all') or (two_q_gate_names == 'all'):
+#         if one_q_gate_names == 'all':
+#             oneQpopulate = True
+#             one_q_gate_names = []
+#         else:
+#             oneQpopulate = False
+#         if two_q_gate_names == 'all':
+#             twoQpopulate = True
+#             two_q_gate_names = []
+#         else:
+#             twoQpopulate = False
+
+#         operationlist = pspec.models[modelname].primitive_op_labels
+#         for gate in operationlist:
+#             if oneQpopulate:
+#                 if (gate.num_qubits == 1) and (gate.name not in one_q_gate_names):
+#                     one_q_gate_names.append(gate.name)
+#             if twoQpopulate:
+#                 if (gate.num_qubits == 2) and (gate.name not in two_q_gate_names):
+#                     two_q_gate_names.append(gate.name)
+
+#     # Basic variables required for sampling the circuit layer.
+#     if qubit_labels is None:
+#         qubits = list(pspec.qubit_labels[:])  # copy this list
+#     else:
+#         qubits = list(qubit_labels[:])  # copy this list
+#     sampled_layer = []
+#     num_oneQgatenames = len(one_q_gate_names)
+#     num_twoQgatenames = len(two_q_gate_names)
+
+#     # If there is an odd number of qubits, begin by picking one to have a 1-qubit gate.
+#     if n % 2 != 0:
+#         q = qubits[rand_state.randint(0, n)]
+#         name = one_q_gate_names[rand_state.randint(0, num_oneQgatenames)]
+#         del qubits[q]  # XXX is this correct?
+#         sampled_layer.append(_lbl.Label(name, q))
+
+#     # Go through n//2 times until all qubits have been paired up and gates on them sampled
+#     for i in range(n // 2):
+
+#         # Pick two of the remaining qubits : each qubit that is picked is deleted from the list.
+#         index = rand_state.randint(0, len(qubits))
+#         q1 = qubits[index]
+#         del qubits[index]
+#         index = rand_state.randint(0, len(qubits))
+#         q2 = qubits[index]
+#         del qubits[index]
+
+#         # Flip a coin to decide whether to act a two-qubit gate on that qubit
+#         if rand_state.binomial(1, two_q_prob) == 1:
+#             # If there is more than one two-qubit gate on the pair, pick a uniformly random one.
+#             name = two_q_gate_names[rand_state.randint(0, num_twoQgatenames)]
+#             sampled_layer.append(_lbl.Label(name, (q1, q2)))
+#         else:
+#             # Independently, pick uniformly random 1-qubit gates to apply to each qubit.
+#             name1 = one_q_gate_names[rand_state.randint(0, num_oneQgatenames)]
+#             name2 = one_q_gate_names[rand_state.randint(0, num_oneQgatenames)]
+#             sampled_layer.append(_lbl.Label(name1, q1))
+#             sampled_layer.append(_lbl.Label(name2, q2))
+
+#     return sampled_layer
+
+
 def sample_circuit_layer_by_edgegrab(pspec, qubit_labels=None, two_q_gate_density=0.25, one_q_gate_names=None,
                                      gate_args_lists=None, rand_state=None):
     """
@@ -775,6 +908,446 @@ def create_random_circuit(pspec, length, qubit_labels=None, sampler='Qeliminatio
     circuit.done_editing()
     return circuit
 
+#### Commented out as this code has not been tested since a much older version of pyGSTi and it is probably
+#### not being used.
+# def sample_simultaneous_random_circuit(pspec, length, structure='1Q', sampler='Qelimination', samplerargs=[],
+#                                        addlocal=False, lsargs=[]):
+#     """
+#     Generates a random circuit of the specified length.
+
+#     Parameters
+#     ----------
+#     pspec : QubitProcessorSpec
+#         The QubitProcessorSpec for the device that the circuit is being sampled for, which defines the
+#         "native" gate-set and the connectivity of the device. The returned circuit will be over
+#         the gates in `pspec`, and will respect the connectivity encoded by `pspec`. Note that `pspec`
+#         is always handed to the sampler, as the first argument of the sampler function (this is only
+#         of importance when not using an in-built sampler).
+
+#     length : int
+#         The length of the circuit. Todo: update for varying length in different subsets.
+
+#     structure : str or tuple, optional
+#         todo.
+
+#     sampler : str or function, optional
+#         If a string, this should be one of: {'pairingQs', 'Qelimination', 'co2Qgates', 'local'}.
+#         Except for 'local', this corresponds to sampling layers according to the sampling function
+#         in rb.sampler named circuit_layer_by* (with * replaced by 'sampler'). For 'local', this
+#         corresponds to sampling according to rb.sampler.circuit_layer_of_oneQgates.
+#         If `sampler` is a function, it should be a function that takes as the first argument a
+#         QubitProcessorSpec, and returns a random circuit layer as a list of gate Label objects. Note that
+#         the default 'Qelimination' is not necessarily the most useful in-built sampler, but it is
+#         the only sampler that requires no parameters beyond the QubitProcessorSpec *and* works for arbitrary
+#         connectivity devices. See the docstrings for each of these samplers for more information.
+
+#     samplerargs : list, optional
+#         A list of arguments that are handed to the sampler function, specified by `sampler`.
+#         The first argument handed to the sampler is `pspec`, the second argument is `qubit_labels`,
+#         and `samplerargs` lists the remaining arguments handed to the sampler. This is not
+#         optional for some choices of `sampler`.
+
+#     addlocal : bool, optional
+#         Whether to follow each layer in the circuit, sampled according to `sampler` with
+#         a layer of 1-qubit gates. If this is True then the length of the circuit is double
+#         the requested length.
+
+#     lsargs : list, optional
+#         Only used if addlocal is True. A list of optional arguments handed to the 1Q gate
+#         layer sampler circuit_layer_by_oneQgate(). Specifies how to sample 1Q-gate layers.
+
+#     Returns
+#     -------
+#     Circuit
+#         A random circuit sampled as specified.
+#     Tuple
+#         A length-n tuple of floats in [0,1], corresponding to the error-free *marginalized* probabilities
+#         for the "1" outcome of a computational basis measurement at the end of this circuit, with the standard
+#         input state (with the outcomes ordered to be the same as the wires in the circuit).
+#     """
+#     if isinstance(structure, str):
+#         assert(structure == '1Q'), "The only default `structure` option is the string '1Q'"
+#         structure = tuple([(q,) for q in pspec.qubit_labels])
+#         n = pspec.num_qubits
+#     else:
+#         assert(isinstance(structure, list) or isinstance(structure, tuple)
+#                ), "If not a string, `structure` must be a list or tuple."
+#         qubits_used = []
+#         for qubit_labels in structure:
+#             assert(isinstance(qubit_labels, list) or isinstance(
+#                 qubit_labels, tuple)), "SubsetQs must be a list or a tuple!"
+#             qubits_used = qubits_used + list(qubit_labels)
+#             assert(len(set(qubits_used)) == len(qubits_used)
+#                    ), "The qubits in the tuples/lists of `structure must all be unique!"
+
+#         assert(set(qubits_used).issubset(set(pspec.qubit_labels))
+#                ), "The qubits to benchmark must all be in the QubitProcessorSpec `pspec`!"
+#         n = len(qubits_used)
+
+#     # Creates a empty circuit over no wires
+#     circuit = _cir.Circuit(num_lines=0, editable=True)
+
+#     s_rc_dict = {}
+#     p_rc_dict = {}
+#     circuit_dict = {}
+
+#     if isinstance(length, _np.int64):
+#         length_per_subset = [length for i in range(len(structure))]
+#     else:
+#         length_per_subset = length
+#         assert(len(length) == len(structure)), "If `length` is a list it must be the same length as `structure`"
+
+#     for ssQs_ind, qubit_labels in enumerate(structure):
+#         qubit_labels = tuple(qubit_labels)
+#         # Sample a random circuit of "native gates" over this set of qubits, with the
+#         # specified sampling.
+#         subset_circuit = create_random_circuit(pspec=pspec, length=length_per_subset[ssQs_ind],
+#                                                qubit_labels=qubit_labels, sampler=sampler, samplerargs=samplerargs,
+#                                                addlocal=addlocal, lsargs=lsargs)
+#         circuit_dict[qubit_labels] = subset_circuit
+#         # find the symplectic matrix / phase vector this circuit implements.
+#         s_rc_dict[qubit_labels], p_rc_dict[qubit_labels] = _symp.symplectic_rep_of_clifford_circuit(
+#             subset_circuit, pspec=pspec)
+#         # Tensors this circuit with the current circuit
+#         circuit.tensor_circuit_inplace(subset_circuit)
+
+#     circuit.done_editing()
+
+#     # Find the expected outcome of the circuit.
+#     s_out, p_out = _symp.symplectic_rep_of_clifford_circuit(circuit, pspec=pspec)
+#     s_inputstate, p_inputstate = _symp.prep_stabilizer_state(n, zvals=None)
+#     s_outstate, p_outstate = _symp.apply_clifford_to_stabilizer_state(s_out, p_out, s_inputstate, p_inputstate)
+#     idealout = []
+#     for qubit_labels in structure:
+#         subset_idealout = []
+#         for q in qubit_labels:
+#             qind = circuit.line_labels.index(q)
+#             measurement_out = _symp.pauli_z_measurement(s_outstate, p_outstate, qind)
+#             subset_idealout.append(measurement_out[1])
+#         idealout.append(tuple(subset_idealout))
+#     idealout = tuple(idealout)
+
+#     return circuit, idealout
+
+
+# def _get_setting(l, circuitindex, substructure, depths, circuits_per_length, structure):
+
+#     lind = depths.index(l)
+#     settingDict = {}
+
+#     for s in structure:
+#         if s in substructure:
+#             settingDict[s] = len(depths) + lind * circuits_per_length + circuitindex
+#         else:
+#             settingDict[s] = lind
+
+#     return settingDict
+
+
+# def create_simultaneous_random_circuits_experiment(pspec, depths, circuits_per_length, structure='1Q',
+#                                                    sampler='Qelimination', samplerargs=[], addlocal=False,
+#                                                    lsargs=[], set_isolated=True, setcomplement_isolated=False,
+#                                                    descriptor='A set of simultaneous random circuits', verbosity=1):
+#     """
+#     Generates a set of simultaneous random circuits of the specified depths.
+
+#     Parameters
+#     ----------
+#     pspec : QubitProcessorSpec
+#         The QubitProcessorSpec for the device that the circuit is being sampled for, which defines the
+#         "native" gate-set and the connectivity of the device. The returned circuit will be over
+#         the gates in `pspec`, and will respect the connectivity encoded by `pspec`. Note that `pspec`
+#         is always handed to the sampler, as the first argument of the sampler function (this is only
+#         of importance when not using an in-built sampler).
+
+#     depths : int
+#         Todo : update (needs to include list option)
+#         The set of depths for the circuits.
+
+#     circuits_per_length : int
+#         The number of (possibly) different circuits sampled at each length.
+
+#     structure : str or tuple.
+#         Defines the "structure" of the simultaneous circuit. TODO : more details.
+
+#     sampler : str or function, optional
+#         If a string, this should be one of: {'pairingQs', 'Qelimination', 'co2Qgates', 'local'}.
+#         Except for 'local', this corresponds to sampling layers according to the sampling function
+#         in rb.sampler named circuit_layer_by* (with * replaced by 'sampler'). For 'local', this
+#         corresponds to sampling according to rb.sampler.circuit_layer_of_oneQgates.
+#         If `sampler` is a function, it should be a function that takes as the first argument a
+#         QubitProcessorSpec, and returns a random circuit layer as a list of gate Label objects. Note that
+#         the default 'Qelimination' is not necessarily the most useful in-built sampler, but it is the
+#         only sampler that requires no parameters beyond the QubitProcessorSpec *and* works for arbitrary
+#         connectivity devices. See the docstrings for each of these samplers for more information.
+
+#     samplerargs : list, optional
+#         A list of arguments that are handed to the sampler function, specified by `sampler`.
+#         The first argument handed to the sampler is `pspec`, the second argument is `qubit_labels`,
+#         and `samplerargs` lists the remaining arguments handed to the sampler. This is not
+#         optional for some choices of `sampler`.
+
+#     addlocal : bool, optional
+#         Whether to follow each layer in the "core" circuits, sampled according to `sampler` with
+#         a layer of 1-qubit gates.
+
+#     lsargs : list, optional
+#         Only used if addlocal is True. A list of optional arguments handed to the 1Q gate
+#         layer sampler circuit_layer_by_oneQgate(). Specifies how to sample 1Q-gate layers.
+
+#     set_isolated : bool, optional
+#         Todo
+
+#     setcomplement_isolated : bool, optional
+#         Todo
+
+#     descriptor : str, optional
+#         A description of the experiment being generated. Stored in the output dictionary.
+
+#     verbosity : int, optional
+#         If > 0 the number of circuits generated so far is shown.
+
+#     Returns
+#     -------
+#     dict
+#         A dictionary containing the generated random circuits, the error-free outputs of the circuit,
+#         and the specification used to generate the circuits. The keys are:
+
+#         - 'circuits'. A dictionary of the sampled circuits. The circuit with key(l,k) is the kth circuit
+#         at length l.
+
+#         - 'probs'. A dictionary of the error-free *marginalized* probabilities for the "1" outcome of
+#         a computational basis measurement at the end of each circuit, with the standard input state.
+#         The ith element of this tuple corresponds to this probability for the qubit on the ith wire of
+#         the output circuit.
+
+#         - 'qubitordering'. The ordering of the qubits in the 'target' tuples.
+
+#         - 'spec'. A dictionary containing all of the parameters handed to this function, except `pspec`.
+#         This then specifies how the circuits where generated.
+#     """
+#     experiment_dict = {}
+#     experiment_dict['spec'] = {}
+#     experiment_dict['spec']['depths'] = depths
+#     experiment_dict['spec']['circuits_per_length'] = circuits_per_length
+#     experiment_dict['spec']['sampler'] = sampler
+#     experiment_dict['spec']['samplerargs'] = samplerargs
+#     experiment_dict['spec']['addlocal'] = addlocal
+#     experiment_dict['spec']['lsargs'] = lsargs
+#     experiment_dict['spec']['descriptor'] = descriptor
+#     experiment_dict['spec']['createdby'] = 'extras.rb.sample.simultaneous_random_circuits_experiment'
+
+#     if isinstance(structure, str):
+#         assert(structure == '1Q'), "The only default `structure` option is the string '1Q'"
+#         structure = tuple([(q,) for q in pspec.qubit_labels])
+#     else:
+#         assert(isinstance(structure, list) or isinstance(structure, tuple)), \
+#             "If not a string, `structure` must be a list or tuple."
+#         qubits_used = []
+#         for qubit_labels in structure:
+#             assert(isinstance(qubit_labels, list) or isinstance(
+#                 qubit_labels, tuple)), "SubsetQs must be a list or a tuple!"
+#             qubits_used = qubits_used + list(qubit_labels)
+#             assert(len(set(qubits_used)) == len(qubits_used)), \
+#                 "The qubits in the tuples/lists of `structure must all be unique!"
+
+#         assert(set(qubits_used).issubset(set(pspec.qubit_labels))), \
+#             "The qubits to benchmark must all be in the QubitProcessorSpec `pspec`!"
+
+#     experiment_dict['spec']['structure'] = structure
+#     experiment_dict['circuits'] = {}
+#     experiment_dict['probs'] = {}
+#     experiment_dict['settings'] = {}
+
+#     for lnum, l in enumerate(depths):
+#         if verbosity > 0:
+#             print('- Sampling {} circuits at length {} ({} of {} depths)'.format(circuits_per_length, l,
+#                                                                                  lnum + 1, len(depths)))
+#             print('  - Number of circuits sampled = ', end='')
+#         for j in range(circuits_per_length):
+#             circuit, idealout = sample_simultaneous_random_circuit(pspec, l, structure=structure, sampler=sampler,
+#                                                                    samplerargs=samplerargs, addlocal=addlocal,
+#                                                                    lsargs=lsargs)
+
+#             if (not set_isolated) and (not setcomplement_isolated):
+#                 experiment_dict['circuits'][l, j] = circuit
+#                 experiment_dict['probs'][l, j] = idealout
+#                 experiment_dict['settings'][l, j] = {
+#                     s: len(depths) + lnum * circuits_per_length + j for s in tuple(structure)}
+#             else:
+#                 experiment_dict['circuits'][l, j] = {}
+#                 experiment_dict['probs'][l, j] = {}
+#                 experiment_dict['settings'][l, j] = {}
+#                 experiment_dict['circuits'][l, j][tuple(structure)] = circuit
+#                 experiment_dict['probs'][l, j][tuple(structure)] = idealout
+#                 experiment_dict['settings'][l, j][tuple(structure)] = _get_setting(l, j, structure, depths,
+#                                                                                    circuits_per_length, structure)
+#             if set_isolated:
+#                 for subset_ind, subset in enumerate(structure):
+#                     subset_circuit = circuit.copy(editable=True)
+#                     #print(subset)
+#                     for q in circuit.line_labels:
+#                         if q not in subset:
+#                             #print(subset_circuit, q)
+#                             subset_circuit.replace_with_idling_line_inplace(q)
+#                     subset_circuit.done_editing()
+#                     experiment_dict['circuits'][l, j][(tuple(subset),)] = subset_circuit
+#                     experiment_dict['probs'][l, j][(tuple(subset),)] = idealout[subset_ind]
+#                     # setting = {}
+#                     # for s in structure:
+#                     #     if s in subset:
+#                     #         setting[s] =  len(depths) + lnum*circuits_per_length + j
+#                     #     else:
+#                     #         setting[s] =  lnum
+#                     experiment_dict['settings'][l, j][(tuple(subset),)] = _get_setting(l, j, (tuple(subset),), depths,
+#                                                                                        circuits_per_length, structure)
+#                     # print(subset)
+#                     # print(_get_setting(l, j, subset, depths, circuits_per_length, structure))
+
+#             if setcomplement_isolated:
+#                 for subset_ind, subset in enumerate(structure):
+#                     subsetcomplement_circuit = circuit.copy(editable=True)
+#                     for q in circuit.line_labels:
+#                         if q in subset:
+#                             subsetcomplement_circuit.replace_with_idling_line_inplace(q)
+#                     subsetcomplement_circuit.done_editing()
+#                     subsetcomplement = list(_copy.copy(structure))
+#                     subsetcomplement_idealout = list(_copy.copy(idealout))
+#                     del subsetcomplement[subset_ind]
+#                     del subsetcomplement_idealout[subset_ind]
+#                     subsetcomplement = tuple(subsetcomplement)
+#                     subsetcomplement_idealout = tuple(subsetcomplement_idealout)
+#                     experiment_dict['circuits'][l, j][subsetcomplement] = subsetcomplement_circuit
+#                     experiment_dict['probs'][l, j][subsetcomplement] = subsetcomplement_idealout
+
+#                     # for s in structure:
+#                     #     if s in subsetcomplement:
+#                     #         setting[s] =  len(depths) + lnum*circuits_per_length + j
+#                     #     else:
+#                     #         setting[s] =  lnum
+#                     experiment_dict['settings'][l, j][subsetcomplement] = _get_setting(l, j, subsetcomplement, depths,
+#                                                                                        circuits_per_length, structure)
+
+#             if verbosity > 0: print(j + 1, end=',')
+#         if verbosity > 0: print('')
+
+#     return experiment_dict
+
+
+# def create_exhaustive_independent_random_circuits_experiment(pspec, allowed_depths, circuits_per_subset,
+#                                                              structure='1Q',
+#                                                              sampler='Qelimination', samplerargs=[], descriptor='',
+#                                                              verbosity=1, seed=None):
+#     """
+#     Todo
+
+#     Parameters
+#     ----------
+#     pspec : QubitProcessorSpec
+#         The QubitProcessorSpec for the device that the circuit is being sampled for, which defines the
+#         "native" gate-set and the connectivity of the device. The returned circuit will be over
+#         the gates in `pspec`, and will respect the connectivity encoded by `pspec`. Note that `pspec`
+#         is always handed to the sampler, as the first argument of the sampler function (this is only
+#         of importance when not using an in-built sampler).
+
+#     allowed_depths : <TODO typ>
+#         <TODO description>
+
+#     circuits_per_subset : <TODO typ>
+#         <TODO description>
+
+#     structure : str or tuple.
+#         Defines the "structure" of the simultaneous circuit. TODO : more details.
+
+#     sampler : str or function, optional
+#         If a string, this should be one of: {'pairingQs', 'Qelimination', 'co2Qgates', 'local'}.
+#         Except for 'local', this corresponds to sampling layers according to the sampling function
+#         in rb.sampler named circuit_layer_by* (with * replaced by 'sampler'). For 'local', this
+#         corresponds to sampling according to rb.sampler.circuit_layer_of_oneQgates.
+#         If `sampler` is a function, it should be a function that takes as the first argument a
+#         QubitProcessorSpec, and returns a random circuit layer as a list of gate Label objects. Note that
+#         the default 'Qelimination' is not necessarily the most useful in-built sampler, but it is the
+#         only sampler that requires no parameters beyond the QubitProcessorSpec *and* works for arbitrary
+#         connectivity devices. See the docstrings for each of these samplers for more information.
+
+#     samplerargs : list, optional
+#         A list of arguments that are handed to the sampler function, specified by `sampler`.
+#         The first argument handed to the sampler is `pspec`, the second argument is `qubit_labels`,
+#         and `samplerargs` lists the remaining arguments handed to the sampler. This is not
+#         optional for some choices of `sampler`.
+
+#     descriptor : str, optional
+#         A description of the experiment being generated. Stored in the output dictionary.
+
+#     verbosity : int, optional
+#         How much output to sent to stdout.
+
+#     seed : int, optional
+#         Seed for RNG
+
+#     Returns
+#     -------
+#     dict
+#     """
+#     experiment_dict = {}
+#     experiment_dict['spec'] = {}
+#     experiment_dict['spec']['allowed_depths'] = allowed_depths
+#     experiment_dict['spec']['circuits_per_subset'] = circuits_per_subset
+#     experiment_dict['spec']['sampler'] = sampler
+#     experiment_dict['spec']['samplerargs'] = samplerargs
+#     experiment_dict['spec']['descriptor'] = descriptor
+
+#     if isinstance(structure, str):
+#         assert(structure == '1Q'), "The only default `structure` option is the string '1Q'"
+#         structure = tuple([(q,) for q in pspec.qubit_labels])
+#     else:
+#         assert(isinstance(structure, list) or isinstance(structure, tuple)), \
+#             "If not a string, `structure` must be a list or tuple."
+#         qubits_used = []
+#         for qubit_labels in structure:
+#             assert(isinstance(qubit_labels, list) or isinstance(
+#                 qubit_labels, tuple)), "SubsetQs must be a list or a tuple!"
+#             qubits_used = qubits_used + list(qubit_labels)
+#             assert(len(set(qubits_used)) == len(qubits_used)), \
+#                 "The qubits in the tuples/lists of `structure must all be unique!"
+
+#         assert(set(qubits_used).issubset(set(pspec.qubit_labels))), \
+#             "The qubits to benchmark must all be in the QubitProcessorSpec `pspec`!"
+
+#     rand_state = _np.random.RandomState(seed)  # OK if seed is None
+
+#     experiment_dict['spec']['structure'] = structure
+#     experiment_dict['circuits'] = {}
+#     experiment_dict['probs'] = {}
+
+#     if circuits_per_subset**len(structure) >> 10000:
+#         print("Warning: {} circuits are going to be generated by this function!".format(
+#             circuits_per_subset**len(structure)))
+
+#     circuits = {}
+
+#     for ssQs_ind, qubit_labels in enumerate(structure):
+#         circuits[qubit_labels] = []
+#         for i in range(circuits_per_subset):
+#             l = allowed_depths[rand_state.randint(len(allowed_depths))]
+#             circuits[qubit_labels].append(create_random_circuit(pspec, l, qubit_labels=qubit_labels,
+#                                                                 sampler=sampler, samplerargs=samplerargs))
+
+#     experiment_dict['subset_circuits'] = circuits
+
+#     parallel_circuits = {}
+#     it = [range(circuits_per_subset) for i in range(len(structure))]
+#     for setting_comb in _itertools.product(*it):
+#         pcircuit = _cir.Circuit(num_lines=0, editable=True)
+#         for ssQs_ind, qubit_labels in enumerate(structure):
+#             pcircuit.tensor_circuit_inplace(circuits[qubit_labels][setting_comb[ssQs_ind]])
+#             pcircuit.done_editing()  # TIM: is this indented properly?
+#             parallel_circuits[setting_comb] = pcircuit
+
+#     experiment_dict['circuits'] = parallel_circuits
+
+#     return experiment_dict
+
 
 def create_direct_rb_circuit(pspec, clifford_compilations, length, qubit_labels=None, sampler='Qelimination',
                              samplerargs=None, addlocal=False, lsargs=None, randomizeout=True, cliffordtwirl=True,
@@ -1005,6 +1578,564 @@ def create_direct_rb_circuit(pspec, clifford_compilations, length, qubit_labels=
 
     return outcircuit, idealout
 
+#### Commented out as all of this functionality should be reproducable using simulataneous experiment designs applied
+#### to DirectRB experiment designs.
+# def sample_simultaneous_direct_rb_circuit(pspec, clifford_compilations, length, structure='1Q',
+#                                           sampler='Qelimination',
+#                                           samplerargs=[], addlocal=False, lsargs=[], randomizeout=True,
+#                                           cliffordtwirl=True, conditionaltwirl=True, citerations=20, compilerargs=[],
+#                                           partitioned=False, seed=1234):
+#     """
+#     Generates a simultaneous "direct randomized benchmarking" (DRB) circuit.
+
+#     DRB is the protocol introduced in arXiv:1807.07975 (2018). An n-qubit DRB circuit consists of
+#     (1) a circuit the prepares a uniformly random stabilizer state; (2) a length-l circuit
+#     (specified by `length`) consisting of circuit layers sampled according to some user-specified
+#     distribution (specified by `sampler`), (3) a circuit that maps the output of the preceeding
+#     circuit to a computational basis state. See arXiv:1807.07975 (2018) for further details. Todo :
+#     what SDRB is.
+
+#     Parameters
+#     ----------
+#     pspec : QubitProcessorSpec
+#         The QubitProcessorSpec for the device that the circuit is being sampled for, which defines the
+#         "native" gate-set and the connectivity of the device. The returned DRB circuit will be over
+#         the gates in `pspec`, and will respect the connectivity encoded by `pspec`. Note that `pspec`
+#         is always handed to the sampler, as the first argument of the sampler function (this is only
+#         of importance when not using an in-built sampler for the "core" of the DRB circuit). Unless
+#         `qubit_labels` is not None, the circuit is sampled over all the qubits in `pspec`.
+
+#     clifford_compilations : dict
+#         A dictionary with the potential keys `'absolute'` and `'paulieq'` and corresponding
+#         :class:`CompilationRules` values.  These compilation rules specify how to compile the
+#         "native" gates of `pspec` into Clifford gates.
+
+#     length : int
+#         The "direct RB length" of the circuit, which is closely related to the circuit depth. It
+#         must be an integer >= 0. Unless `addlocal` is True, it is the depth of the "core" random
+#         circuit, sampled according to `sampler`, specified in step (2) above. If `addlocal` is True,
+#         each layer in the "core" circuit sampled according to "sampler` is followed by a layer of
+#         1-qubit gates, with sampling specified by `lsargs` (and the first layer is proceeded by a
+#         layer of 1-qubit gates), and so the circuit of step (2) is length 2*`length` + 1.
+
+#     structure : str or tuple, optional
+#         todo.
+
+#     sampler : str or function, optional
+#         If a string, this should be one of: {'pairingQs', 'Qelimination', 'co2Qgates', 'local'}.
+#         Except for 'local', this corresponds to sampling layers according to the sampling function
+#         in rb.sampler named circuit_layer_by* (with * replaced by 'sampler'). For 'local', this
+#         corresponds to sampling according to rb.sampler.circuit_layer_of_oneQgates [which is not
+#         a valid form of sampling for n-qubit DRB, but is not explicitly forbidden in this function].
+#         If `sampler` is a function, it should be a function that takes as the first argument a
+#         QubitProcessorSpec, and returns a random circuit layer as a list of gate Label objects. Note that
+#         the default 'Qelimination' is not necessarily the most useful in-built sampler, but it is
+#         the only sampler that requires no parameters beyond the QubitProcessorSpec *and* works for arbitrary
+#         connectivity devices. See the docstrings for each of these samplers for more information.
+
+#     samplerargs : list, optional
+#         A list of arguments that are handed to the sampler function, specified by `sampler`.
+#         The first argument handed to the sampler is `pspec`, the second argument is `qubit_labels`,
+#         and `samplerargs` lists the remaining arguments handed to the sampler. This is not
+#         optional for some choices of `sampler`.
+
+#     addlocal : bool, optional
+#         Whether to follow each layer in the "core" circuit, sampled according to `sampler` with
+#         a layer of 1-qubit gates.
+
+#     lsargs : list, optional
+#         Only used if addlocal is True. A list of optional arguments handed to the 1Q gate
+#         layer sampler circuit_layer_by_oneQgate(). Specifies how to sample 1Q-gate layers.
+
+#     randomizeout : bool, optional
+#         If False, the ideal output of the circuit (the "success" or "survival" outcome) is the all-zeros
+#         bit string. If True, the ideal output of the circuit is randomized to a uniformly random bit-string.
+#         This setting is useful for, e.g., detecting leakage/loss/measurement-bias etc.
+
+#     cliffordtwirl : bool, optional
+#         Wether to begin the circuit with a sequence that generates a random stabilizer state. For
+#         standard DRB this should be set to True. There are a variety of reasons why it is better
+#         to have this set to True.
+
+#     conditionaltwirl : bool, optional
+#         DRB only requires that the initial/final sequences of step (1) and (3) create/measure
+#         a uniformly random / particular stabilizer state, rather than implement a particular unitary.
+#         step (1) and (3) can be achieved by implementing a uniformly random Clifford gate and the
+#         unique inversion Clifford, respectively. This is implemented if `conditionaltwirl` is False.
+#         However, steps (1) and (3) can be implemented much more efficiently than this: the sequences
+#         of (1) and (3) only need to map a particular input state to a particular output state,
+#         if `conditionaltwirl` is True this more efficient option is chosen -- this is option corresponds
+#         to "standard" DRB. (the term "conditional" refers to the fact that in this case we essentially
+#         implementing a particular Clifford conditional on a known input).
+
+#     citerations : int, optional
+#         Some of the stabilizer state / Clifford compilation algorithms in pyGSTi (including the default
+#         algorithms) are  randomized, and the lowest-cost circuit is chosen from all the circuit generated
+#         in the iterations of the algorithm. This is the number of iterations used. The time required to
+#         generate a DRB circuit is linear in `citerations`. Lower-depth / lower 2-qubit gate count
+#         compilations of steps (1) and (3) are important in order to successfully implement DRB on as many
+#         qubits as possible.
+
+#     compilerargs : list, optional
+#         A list of arguments that are handed to the compile_stabilier_state/measurement()functions (or the
+#         compile_clifford() function if `conditionaltwirl `is False). This includes all the optional
+#         arguments of these functions *after* the `iterations` option (set by `citerations`). For most
+#         purposes the default options will be suitable (or at least near-optimal from the compilation methods
+#         in-built into pyGSTi). See the docstrings of these functions for more information.
+
+#     partitioned : bool, optional
+#         If False, a single circuit is returned consisting of the full circuit. If True, three circuits
+#         are returned in a list consisting of: (1) the stabilizer-prep circuit, (2) the core random circuit,
+#         (3) the pre-measurement circuit. In that case the full circuit is obtained by appended (2) to (1)
+#         and then (3) to (1).
+
+#     seed: int, optional
+#         Seed for RNG
+
+#     Returns
+#     -------
+#     Circuit or list of Circuits
+#         If partioned is False, a random DRB circuit sampled as specified. If partioned is True, a list of
+#         three circuits consisting of (1) the stabilizer-prep circuit, (2) the core random circuit,
+#         (3) the pre-measurement circuit. In that case the full circuit is obtained by appended (2) to (1)
+#         and then (3) to (1) [except in the case of cliffordtwirl=False, when it is a list of two circuits].
+#     Tuple
+#         A length-n tuple of integers in [0,1], corresponding to the error-free outcome of the
+#         circuit. Always all zeros if `randomizeout` is False. The ith element of the tuple
+#         corresponds to the error-free outcome for the qubit labelled by: the ith element of
+#         `qubit_labels`, if `qubit_labels` is not None; the ith element of `pspec.qubit_labels`, otherwise.
+#         In both cases, the ith element of the tuple corresponds to the error-free outcome for the
+#         qubit on the ith wire of the output circuit.
+#     """
+#     if isinstance(structure, str):
+#         assert(structure == '1Q'), "The only default `structure` option is the string '1Q'"
+#         structure = tuple([(q,) for q in pspec.qubit_labels])
+#         n = pspec.num_qubits
+#     else:
+#         assert(isinstance(structure, list) or isinstance(structure, tuple)
+#                ), "If not a string, `structure` must be a list or tuple."
+#         qubits_used = []
+#         for qubit_labels in structure:
+#             assert(isinstance(qubit_labels, list) or isinstance(
+#                 qubit_labels, tuple)), "SubsetQs must be a list or a tuple!"
+#             qubits_used = qubits_used + list(qubit_labels)
+#             assert(len(set(qubits_used)) == len(qubits_used)
+#                    ), "The qubits in the tuples/lists of `structure must all be unique!"
+
+#         assert(set(qubits_used).issubset(set(pspec.qubit_labels))
+#                ), "The qubits to benchmark must all be in the QubitProcessorSpec `pspec`!"
+#         n = len(qubits_used)
+
+#     for qubit_labels in structure:
+#         subgraph = pspec.qubit_graph.subgraph(list(qubit_labels))  # or pspec.compute_clifford_2Q_connectivity?
+#         assert(subgraph.is_connected_graph()), "Each subset of qubits in `structure` must be connected!"
+
+#     rand_state = _np.random.RandomState(seed)  # OK if seed is None
+
+#     # Creates a empty circuit over no wires
+#     circuit = _cir.Circuit(num_lines=0, editable=True)
+
+#     s_rc_dict = {}
+#     p_rc_dict = {}
+#     circuit_dict = {}
+
+#     for qubit_labels in structure:
+#         qubit_labels = tuple(qubit_labels)
+#         # Sample a random circuit of "native gates" over this set of qubits, with the
+#         # specified sampling.
+#         subset_circuit = create_random_circuit(pspec=pspec, length=length, qubit_labels=qubit_labels, sampler=sampler,
+#                                                samplerargs=samplerargs, addlocal=addlocal, lsargs=lsargs,
+#                                                rand_state=rand_state)
+#         circuit_dict[qubit_labels] = subset_circuit
+#         # find the symplectic matrix / phase vector this circuit implements.
+#         s_rc_dict[qubit_labels], p_rc_dict[qubit_labels] = _symp.symplectic_rep_of_clifford_circuit(
+#             subset_circuit, pspec=pspec)
+#         # Tensors this circuit with the current circuit
+#         circuit.tensor_circuit_inplace(subset_circuit)
+
+#     # Creates empty circuits over no wires
+#     inversion_circuit = _cir.Circuit(num_lines=0, editable=True)
+#     if cliffordtwirl:
+#         initial_circuit = _cir.Circuit(num_lines=0, editable=True)
+
+#     for qubit_labels in structure:
+#         qubit_labels = tuple(qubit_labels)
+#         subset_n = len(qubit_labels)
+#         # If we are clifford twirling, we do an initial random circuit that is either a uniformly random
+#         # cliffor or creates a uniformly random stabilizer state from the standard input.
+#         if cliffordtwirl:
+
+#             # Sample a uniformly random Clifford.
+#             s_initial, p_initial = _symp.random_clifford(subset_n, rand_state=rand_state)
+#             # Find the composite action of this uniformly random clifford and the random circuit.
+#             s_composite, p_composite = _symp.compose_cliffords(s_initial, p_initial, s_rc_dict[qubit_labels],
+#                                                                p_rc_dict[qubit_labels])
+
+#             # If conditionaltwirl we do a stabilizer prep (a conditional Clifford).
+#             if conditionaltwirl:
+#                 subset_initial_circuit = _cmpl.compile_stabilizer_state(s_initial, p_initial, pspec,
+#                                                                         clifford_compilations.get('absolute', None),
+#                                                                         clifford_compilations.get('paulieq', None),
+#                                                                         qubit_labels,
+#                                                                         citerations, *compilerargs,
+#                                                                         rand_state=rand_state)
+#             # If not conditionaltwirl, we do a full random Clifford.
+#             else:
+#                 subset_initial_circuit = _cmpl.compile_clifford(s_initial, p_initial, pspec,
+#                                                                 clifford_compilations.get('absolute', None),
+#                                                                 clifford_compilations.get('paulieq', None),
+#                                                                 qubit_labels, citerations,
+#                                                                 *compilerargs, rand_state=rand_state)
+
+#             initial_circuit.tensor_circuit_inplace(subset_initial_circuit)
+
+#         # If we are not Clifford twirling, we just copy the effect of the random circuit as the effect
+#         # of the "composite" prep + random circuit (as here the prep circuit is the null circuit).
+#         else:
+#             s_composite = _copy.deepcopy(s_rc_dict[qubit_labels])
+#             p_composite = _copy.deepcopy(p_rc_dict[qubit_labels])
+
+#         if conditionaltwirl:
+#             # If we want to randomize the expected output then randomize the p vector, otherwise
+#             # it is left as p. Note that, unlike with compile_clifford, we don't invert (s,p)
+#             # before handing it to the stabilizer measurement function.
+#             if randomizeout: p_for_measurement = _symp.random_phase_vector(s_composite, subset_n,
+#                                                                            rand_state=rand_state)
+#             else: p_for_measurement = p_composite
+#             subset_inversion_circuit = _cmpl.compile_stabilizer_measurement(
+#                 s_composite, p_for_measurement, pspec,
+#                 clifford_compilations.get('absolute', None),
+#                 clifford_compilations.get('paulieq', None),
+#                 qubit_labels, citerations, *compilerargs,
+#                 rand_state=rand_state)
+#         else:
+#             # Find the Clifford that inverts the circuit so far. We
+#             s_inverse, p_inverse = _symp.inverse_clifford(s_composite, p_composite)
+#             # If we want to randomize the expected output then randomize the p_inverse vector, otherwise
+#             # do not.
+#             if randomizeout: p_for_inversion = _symp.random_phase_vector(s_inverse, subset_n, rand_state=rand_state)
+#             else: p_for_inversion = p_inverse
+#             # Compile the Clifford.
+#             subset_inversion_circuit = _cmpl.compile_clifford(s_inverse, p_for_inversion, pspec,
+#                                                               clifford_compilations.get('absolute', None),
+#                                                               clifford_compilations.get('paulieq', None),
+#                                                               qubit_labels, citerations, *compilerargs,
+#                                                               rand_state=rand_state)
+
+#         inversion_circuit.tensor_circuit_inplace(subset_inversion_circuit)
+
+#     inversion_circuit.done_editing()
+
+#     if cliffordtwirl:
+#         full_circuit = initial_circuit.copy(editable=True)
+#         full_circuit.append_circuit_inplace(circuit)
+#         full_circuit.append_circuit_inplace(inversion_circuit)
+#     else:
+#         full_circuit = _copy.deepcopy(circuit)
+#         full_circuit.append_circuit_inplace(inversion_circuit)
+
+#     full_circuit.done_editing()
+
+#     # Find the expected outcome of the circuit.
+#     s_out, p_out = _symp.symplectic_rep_of_clifford_circuit(full_circuit, pspec=pspec)
+#     if conditionaltwirl:  # s_out is not always the identity with a conditional twirl,
+#         # only conditional on prep/measure.
+#         assert(_np.array_equal(s_out[:n, n:], _np.zeros((n, n), _np.int64))), "Compiler has failed!"
+#     else: assert(_np.array_equal(s_out, _np.identity(2 * n, _np.int64))), "Compiler has failed!"
+
+#     # Find the ideal output of the circuit.
+#     s_inputstate, p_inputstate = _symp.prep_stabilizer_state(n, zvals=None)
+#     s_outstate, p_outstate = _symp.apply_clifford_to_stabilizer_state(s_out, p_out, s_inputstate, p_inputstate)
+#     idealout = []
+#     for qubit_labels in structure:
+#         subset_idealout = []
+#         for q in qubit_labels:
+#             qind = circuit.line_labels.index(q)
+#             measurement_out = _symp.pauli_z_measurement(s_outstate, p_outstate, qind)
+#             bit = measurement_out[1]
+#             assert(bit == 0 or bit == 1), "Ideal output is not a computational basis state!"
+#             if not randomizeout:
+#                 assert(bit == 0), "Ideal output is not the all 0s computational basis state!"
+#             subset_idealout.append(int(bit))
+#         idealout.append(tuple(subset_idealout))
+#     idealout = tuple(idealout)
+
+#     if not partitioned: outcircuit = full_circuit
+#     else:
+#         if cliffordtwirl: outcircuit = [initial_circuit, circuit, inversion_circuit]
+#         else: outcircuit = [circuit, inversion_circuit]
+
+#     return outcircuit, idealout
+
+
+# def create_simultaneous_direct_rb_experiment(pspec, depths, circuits_per_length, structure='1Q',
+#                                              sampler='Qelimination',
+#                                              samplerargs=[], addlocal=False, lsargs=[], randomizeout=False,
+#                                              cliffordtwirl=True, conditionaltwirl=True, citerations=20,
+#                                              compilerargs=[],
+#                                              partitioned=False, set_isolated=True, setcomplement_isolated=False,
+#                                              descriptor='A set of simultaneous DRB experiments', verbosity=1,
+#                                              seed=1234):
+#     """
+#     Generates a simultaneous "direct randomized benchmarking" (DRB) experiments (circuits).
+
+#     DRB is the protocol introduced in arXiv:1807.07975 (2018).
+#     An n-qubit DRB circuit consists of (1) a circuit the prepares a uniformly random stabilizer state;
+#     (2) a length-l circuit (specified by `length`) consisting of circuit layers sampled according to
+#     some user-specified distribution (specified by `sampler`), (3) a circuit that maps the output of
+#     the preceeding circuit to a computational basis state. See arXiv:1807.07975 (2018) for further
+#     details. In simultaneous DRB ...... <TODO more description>.
+
+#     Parameters
+#     ----------
+#     pspec : QubitProcessorSpec
+#         The QubitProcessorSpec for the device that the circuit is being sampled for, which defines the
+#         "native" gate-set and the connectivity of the device. The returned DRB circuit will be over
+#         the gates in `pspec`, and will respect the connectivity encoded by `pspec`. Note that `pspec`
+#         is always handed to the sampler, as the first argument of the sampler function (this is only
+#         of importance when not using an in-built sampler for the "core" of the DRB circuit). Unless
+#         `qubit_labels` is not None, the circuit is sampled over all the qubits in `pspec`.
+
+#     depths : int
+#         The set of "direct RB depths" for the circuits. The DRB depths must be integers >= 0.
+#         Unless `addlocal` is True, the DRB length is the depth of the "core" random circuit,
+#         sampled according to `sampler`, specified in step (2) above. If `addlocal` is True,
+#         each layer in the "core" circuit sampled according to "sampler` is followed by a layer of
+#         1-qubit gates, with sampling specified by `lsargs` (and the first layer is proceeded by a
+#         layer of 1-qubit gates), and so the circuit of step (2) is length 2*`length` + 1.
+
+#     circuits_per_length : int
+#         The number of (possibly) different DRB circuits sampled at each length.
+
+#     structure : str or tuple.
+#         Defines the "structure" of the simultaneous DRB experiment. TODO : more details.
+
+#     sampler : str or function, optional
+#         If a string, this should be one of: {'pairingQs', 'Qelimination', 'co2Qgates', 'local'}.
+#         Except for 'local', this corresponds to sampling layers according to the sampling function
+#         in rb.sampler named circuit_layer_by* (with * replaced by 'sampler'). For 'local', this
+#         corresponds to sampling according to rb.sampler.circuit_layer_of_oneQgates [which is not
+#         a valid form of sampling for n-qubit DRB, but is not explicitly forbidden in this function].
+#         If `sampler` is a function, it should be a function that takes as the first argument a
+#         QubitProcessorSpec, and returns a random circuit layer as a list of gate Label objects. Note that
+#         the default 'Qelimination' is not necessarily the most useful in-built sampler, but it is the
+#         only sampler that requires no parameters beyond the QubitProcessorSpec *and* works for arbitrary
+#         connectivity devices. See the docstrings for each of these samplers for more information.
+
+#     samplerargs : list, optional
+#         A list of arguments that are handed to the sampler function, specified by `sampler`.
+#         The first argument handed to the sampler is `pspec`, the second argument is `qubit_labels`,
+#         and `samplerargs` lists the remaining arguments handed to the sampler. This is not
+#         optional for some choices of `sampler`.
+
+#     addlocal : bool, optional
+#         Whether to follow each layer in the "core" circuits, sampled according to `sampler` with
+#         a layer of 1-qubit gates.
+
+#     lsargs : list, optional
+#         Only used if addlocal is True. A list of optional arguments handed to the 1Q gate
+#         layer sampler circuit_layer_by_oneQgate(). Specifies how to sample 1Q-gate layers.
+
+#     randomizeout : bool, optional
+#         If False, the ideal output of the circuits (the "success" or "survival" outcome) is the all-zeros
+#         bit string. If True, the ideal output of each circuit is randomized to a uniformly random bit-string.
+#         This setting is useful for, e.g., detecting leakage/loss/measurement-bias etc.
+
+#     cliffordtwirl : bool, optional
+#         Wether to begin the circuit with a sequence that generates a random stabilizer state. For
+#         standard DRB this should be set to True. There are a variety of reasons why it is better
+#         to have this set to True.
+
+#     conditionaltwirl : bool, optional
+#         DRB only requires that the initial/final sequences of step (1) and (3) create/measure
+#         a uniformly random / particular stabilizer state, rather than implement a particular unitary.
+#         step (1) and (3) can be achieved by implementing a uniformly random Clifford gate and the
+#         unique inversion Clifford, respectively. This is implemented if `conditionaltwirl` is False.
+#         However, steps (1) and (3) can be implemented much more efficiently than this: the sequences
+#         of (1) and (3) only need to map a particular input state to a particular output state,
+#         if `conditionaltwirl` is True this more efficient option is chosen -- this is option corresponds
+#         to "standard" DRB. (the term "conditional" refers to the fact that in this case we essentially
+#         implementing a particular Clifford conditional on a known input).
+
+#     citerations : int, optional
+#         Some of the stabilizer state / Clifford compilation algorithms in pyGSTi (including the default
+#         algorithms) are  randomized, and the lowest-cost circuit is chosen from all the circuits generated
+#         in the iterations of the algorithm. This is the number of iterations used. The time required to
+#         generate a DRB circuit is linear in `citerations`. Lower-depth / lower 2-qubit gate count
+#         compilations of steps (1) and (3) are important in order to successfully implement DRB on as many
+#         qubits as possible.
+
+#     compilerargs : list, optional
+#         A list of arguments that are handed to the compile_stabilier_state/measurement()functions (or the
+#         compile_clifford() function if `conditionaltwirl `is False). This includes all the optional
+#         arguments of these functions *after* the `iterations` option (set by `citerations`). For most
+#         purposes the default options will be suitable (or at least near-optimal from the compilation methods
+#         in-built into pyGSTi). See the docstrings of these functions for more information.
+
+#     partitioned : bool, optional
+#         If False, each circuit is returned as a single full circuit. If True, each circuit is returned as
+#         a list of three circuits consisting of: (1) the stabilizer-prep circuit, (2) the core random circuit,
+#         (3) the pre-measurement circuit. In that case the full circuit is obtained by appended (2) to (1)
+#         and then (3) to (1).
+
+#     set_isolated : bool, optional
+#         Todo
+
+#     setcomplement_isolated : bool, optional
+#         Todo
+
+#     descriptor : str, optional
+#         A description of the experiment being generated. Stored in the output dictionary.
+
+#     verbosity : int, optional
+#         If > 0 the number of circuits generated so far is shown.
+
+#     seed: int, optional
+#         Seed for RNG
+
+#     Returns
+#     -------
+#     Circuit or list of Circuits
+#         If partioned is False, a random DRB circuit sampled as specified. If partioned is True, a list of
+#         three circuits consisting of (1) the stabilizer-prep circuit, (2) the core random circuit,
+#         (3) the pre-measurement circuit. In that case the full circuit is obtained by appended (2) to (1)
+#         and then (3) to (1).
+#     Tuple
+#         A length-n tuple of integers in [0,1], corresponding to the error-free outcome of the
+#         circuit. Always all zeros if `randomizeout` is False. The ith element of the tuple
+#         corresponds to the error-free outcome for the qubit labelled by: the ith element of
+#         `qubit_labels`, if `qubit_labels` is not None; the ith element of `pspec.qubit_labels`, otherwise.
+#         In both cases, the ith element of the tuple corresponds to the error-free outcome for the
+#         qubit on the ith wire of the output circuit.
+#     dict
+#         A dictionary containing the generated RB circuits, the error-free outputs of the circuit,
+#         and the specification used to generate the circuits. The keys are:
+
+#         - 'circuits'. A dictionary of the sampled circuits. The circuit with key(l,k) is the kth circuit
+#         at DRB length l.
+
+#         - 'idealout'. A dictionary of the error-free outputs of the circuits as tuples. The tuple with
+#         key(l,k) is the error-free output of the (l,k) circuit. The ith element of this tuple corresponds
+#         to the error-free outcome for the qubit on the ith wire of the output circuit and/or the ith element
+#         of the list at the key 'qubitordering'. These tuples will all be (0,0,0,...) when `randomizeout` is
+#         False
+
+#         - 'qubitordering'. The ordering of the qubits in the 'idealout' tuples.
+
+#         - 'spec'. A dictionary containing all of the parameters handed to this function, except `pspec`.
+#         This then specifies how the circuits where generated.
+#     """
+
+#     experiment_dict = {}
+#     experiment_dict['spec'] = {}
+#     experiment_dict['spec']['depths'] = depths
+#     experiment_dict['spec']['circuits_per_length'] = circuits_per_length
+#     experiment_dict['spec']['sampler'] = sampler
+#     experiment_dict['spec']['samplerargs'] = samplerargs
+#     experiment_dict['spec']['addlocal'] = addlocal
+#     experiment_dict['spec']['lsargs'] = lsargs
+#     experiment_dict['spec']['randomizeout'] = randomizeout
+#     experiment_dict['spec']['cliffordtwirl'] = cliffordtwirl
+#     experiment_dict['spec']['conditionaltwirl'] = conditionaltwirl
+#     experiment_dict['spec']['citerations'] = citerations
+#     experiment_dict['spec']['compilerargs'] = compilerargs
+#     experiment_dict['spec']['partitioned'] = partitioned
+#     experiment_dict['spec']['descriptor'] = descriptor
+#     experiment_dict['spec']['createdby'] = 'extras.rb.sample.simultaneous_direct_rb_experiment'
+
+#     #rand_state = _np.random.RandomState(seed) # OK if seed is None
+
+#     if isinstance(structure, str):
+#         assert(structure == '1Q'), "The only default `structure` option is the string '1Q'"
+#         structure = tuple([(q,) for q in pspec.qubit_labels])
+#     else:
+#         assert(isinstance(structure, list) or isinstance(structure, tuple)), \
+#             "If not a string, `structure` must be a list or tuple."
+#         qubits_used = []
+#         for qubit_labels in structure:
+#             assert(isinstance(qubit_labels, list) or isinstance(
+#                 qubit_labels, tuple)), "SubsetQs must be a list or a tuple!"
+#             qubits_used = qubits_used + list(qubit_labels)
+#             assert(len(set(qubits_used)) == len(qubits_used)), \
+#                 "The qubits in the tuples/lists of `structure must all be unique!"
+
+#         assert(set(qubits_used).issubset(set(pspec.qubit_labels))), \
+#             "The qubits to benchmark must all be in the QubitProcessorSpec `pspec`!"
+
+#     experiment_dict['spec']['structure'] = structure
+#     experiment_dict['circuits'] = {}
+#     experiment_dict['target'] = {}
+#     experiment_dict['settings'] = {}
+
+#     for qubit_labels in structure:
+#         subgraph = pspec.qubit_graph.subgraph(list(qubit_labels))  # or pspec.compute_clifford_2Q_connectivity?
+#         assert(subgraph.is_connected_graph()), "Each subset of qubits in `structure` must be connected!"
+
+#     for lnum, l in enumerate(depths):
+#         lseed = seed + lnum * circuits_per_length
+#         if verbosity > 0:
+#             print('- Sampling {} circuits at DRB length {} ({} of {} depths) with seed {}'.format(circuits_per_length,
+#                                                                                                   l, lnum + 1,
+#                                                                                                   len(depths), lseed))
+#             print('  - Number of circuits sampled = ', end='')
+#         for j in range(circuits_per_length):
+#             circuit, idealout = sample_simultaneous_direct_rb_circuit(pspec, l, structure=structure, sampler=sampler,
+#                                                                       samplerargs=samplerargs, addlocal=addlocal,
+#                                                                       lsargs=lsargs, randomizeout=randomizeout,
+#                                                                       cliffordtwirl=cliffordtwirl,
+#                                                                       conditionaltwirl=conditionaltwirl,
+#                                                                       citerations=citerations,
+#                                                                       compilerargs=compilerargs,
+#                                                                       partitioned=partitioned,
+#                                                                       seed=lseed + j)
+
+#             if (not set_isolated) and (not setcomplement_isolated):
+#                 experiment_dict['circuits'][l, j] = circuit
+#                 experiment_dict['target'][l, j] = idealout
+
+#             else:
+#                 experiment_dict['circuits'][l, j] = {}
+#                 experiment_dict['target'][l, j] = {}
+#                 experiment_dict['settings'][l, j] = {}
+#                 experiment_dict['circuits'][l, j][tuple(structure)] = circuit
+#                 experiment_dict['target'][l, j][tuple(structure)] = idealout
+#                 experiment_dict['settings'][l, j][tuple(structure)] = _get_setting(l, j, structure, depths,
+#                                                                                    circuits_per_length, structure)
+
+#             if set_isolated:
+#                 for subset_ind, subset in enumerate(structure):
+#                     subset_circuit = circuit.copy(editable=True)
+#                     for q in circuit.line_labels:
+#                         if q not in subset:
+#                             subset_circuit.replace_with_idling_line_inplace(q)
+#                     subset_circuit.done_editing()
+#                     experiment_dict['circuits'][l, j][(tuple(subset),)] = subset_circuit
+#                     experiment_dict['target'][l, j][(tuple(subset),)] = (idealout[subset_ind],)
+#                     experiment_dict['settings'][l, j][(tuple(subset),)] = _get_setting(l, j, (tuple(subset),), depths,
+#                                                                                        circuits_per_length, structure)
+
+#             if setcomplement_isolated:
+#                 for subset_ind, subset in enumerate(structure):
+#                     subsetcomplement_circuit = circuit.copy(editable=True)
+#                     for q in circuit.line_labels:
+#                         if q in subset:
+#                             subsetcomplement_circuit.replace_with_idling_line_inplace(q)
+#                     subsetcomplement_circuit.done_editing()
+#                     subsetcomplement = list(_copy.copy(structure))
+#                     subsetcomplement_idealout = list(_copy.copy(idealout))
+#                     del subsetcomplement[subset_ind]
+#                     del subsetcomplement_idealout[subset_ind]
+#                     subsetcomplement = tuple(subsetcomplement)
+#                     subsetcomplement_idealout = tuple(subsetcomplement_idealout)
+#                     experiment_dict['circuits'][l, j][subsetcomplement] = subsetcomplement_circuit
+#                     experiment_dict['target'][l, j][subsetcomplement] = subsetcomplement_idealout
+#                     experiment_dict['settings'][l, j][subsetcomplement] = _get_setting(l, j, subsetcomplement, depths,
+#                                                                                        circuits_per_length, structure)
+
+#             if verbosity > 0: print(j + 1, end=',')
+#         if verbosity > 0: print('')
+
+#     return experiment_dict
 
 def _sample_clifford_circuit(pspec, clifford_compilations, qubit_labels, citerations,
         compilerargs, exact_compilation_key, srep_cache, rand_state):

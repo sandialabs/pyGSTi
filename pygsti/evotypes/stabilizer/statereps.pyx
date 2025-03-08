@@ -49,6 +49,10 @@ cdef class StateRep(_basereps_cython.StateRep):
     def nqubits(self):
         return self.state_space.num_qubits
 
+    #@property
+    #def dim(self):
+    #    return 2**(self.c_state._n) # assume "unitary evolution"-type mode
+
     def actionable_staterep(self):
         # return a state rep that can be acted on by op reps or mapped to
         # a probability/amplitude by POVM effect reps.

@@ -63,12 +63,9 @@ class ForwardSimBase(object):
             [('Q0',)], ['Gi', 'Gx', 'Gy'],
             ["I(Q0)", "X(pi/8,Q0)", "Y(pi/8,Q0)"]
         )
-        cls.model_matrix = cls.model.copy()
-        cls.model_matrix.sim = 'matrix'
 
     def setUp(self):
         self.fwdsim = self.model.sim
-        self.fwdsim_matrix = self.model_matrix.sim
         self.layout = self.fwdsim.create_layout([('Gx',), ('Gx', 'Gx')], array_types=('e', 'ep', 'epp'))
         self.nP = self.model.num_params
         self.nEls = self.layout.num_elements
@@ -119,13 +116,13 @@ class ForwardSimBase(object):
 
 class MatrixForwardSimTester(ForwardSimBase, BaseCase):
     def test_doperation(self):
-        dg = self.fwdsim_matrix._doperation(L('Gx'), flat=False)
-        dgflat = self.fwdsim_matrix._doperation(L('Gx'), flat=True)
+        dg = self.fwdsim._doperation(L('Gx'), flat=False)
+        dgflat = self.fwdsim._doperation(L('Gx'), flat=True)
         # TODO assert correctness
 
     def test_hoperation(self):
-        hg = self.fwdsim_matrix._hoperation(L('Gx'), flat=False)
-        hgflat = self.fwdsim_matrix._hoperation(L('Gx'), flat=True)
+        hg = self.fwdsim._hoperation(L('Gx'), flat=False)
+        hgflat = self.fwdsim._hoperation(L('Gx'), flat=True)
         # TODO assert correctness
 
 
@@ -133,7 +130,7 @@ class CPTPMatrixForwardSimTester(MatrixForwardSimTester):
     @classmethod
     def setUpClass(cls):
         super(CPTPMatrixForwardSimTester, cls).setUpClass()
-        cls.model = cls.model_matrix.copy()
+        cls.model = cls.model.copy()
         cls.model.set_all_parameterizations("CPTPLND")  # so gates have nonzero hessians
 
 

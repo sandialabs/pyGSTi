@@ -105,6 +105,11 @@ class EffectRepTensorProduct(EffectRep):
         super(EffectRepTensorProduct, self).__init__(state_space)
         self.factor_effects_have_changed()
 
+    #TODO: fix this:
+    #def __reduce__(self):
+    #    return (EffectRepTensorProduct,
+    #            (self.kron_array, self.factor_dims, self.nfactors, self.max_factor_dim, self.dim))
+
     def to_dense(self, on_space, outvec=None):
 
         if on_space not in ('minimal', 'HilbertSchmidt'):
@@ -158,6 +163,22 @@ class EffectRepTensorProduct(EffectRep):
 
     def factor_effects_have_changed(self):
         self._fill_fast_kron()  # updates effect reps
+
+    #def to_dense(self):
+    #    if len(self.factors) == 0: return _np.empty(0, complex if self._evotype == "statevec" else 'd')
+    #        #NOTE: moved a fast version of to_dense to replib - could use that if need a fast to_dense call...
+    #
+    #        factorPOVMs = self.factors
+    #        ret = factorPOVMs[0][self.effectLbls[0]].to_dense()
+    #        for i in range(1, len(factorPOVMs)):
+    #            ret = _np.kron(ret, factorPOVMs[i][self.effectLbls[i]].to_dense())
+    #        return ret
+    #    elif self._evotype == "stabilizer":
+    #        # each factor is a StabilizerEffectVec
+    #        raise ValueError("Cannot convert Stabilizer tensor product effect to an array!")
+    #    # should be using effect.outcomes property...
+    #    else:  # self._evotype in ("svterm","cterm")
+    #        raise NotImplementedError("to_dense() not implemented for %s evolution type" % self._evotype)
 
 
 class EffectRepComposed(EffectRep):

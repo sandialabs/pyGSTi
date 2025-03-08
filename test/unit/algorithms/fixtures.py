@@ -6,8 +6,8 @@ from pygsti.modelpacks import smq1Q_XY as std
 from ..util import Namespace
 
 ns = Namespace()
-ns.fullTP_model = std.target_model('full TP', simulator='matrix')
-ns.model = std.target_model(simulator='matrix')
+ns.fullTP_model = std.target_model('full TP')
+ns.model = std.target_model()
 ns.opLabels = list(ns.model.operations.keys())
 ns.prep_fids = std.prep_fiducials()
 ns.meas_fids = std.meas_fiducials()

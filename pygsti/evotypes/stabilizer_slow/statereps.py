@@ -42,6 +42,10 @@ class StateRep(_basereps.StateRep):
     def nqubits(self):
         return self.sframe.n
 
+    #@property
+    #def dim(self):
+    #    return 2**self.nqubits  # assume "unitary evolution"-type mode
+
     def actionable_staterep(self):
         # return a state rep that can be acted on by op reps or mapped to
         # a probability/amplitude by POVM effect reps.

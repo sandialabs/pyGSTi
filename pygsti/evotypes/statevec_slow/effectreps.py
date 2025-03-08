@@ -180,6 +180,9 @@ class EffectRepComposed(EffectRep):
 
         super(EffectRepComposed, self).__init__(effect_rep.state_space)
 
+    #def __reduce__(self):
+    #    return (EffectRepComposed, (self.op_rep, self.effect_rep, self.op_id, self.state_space))
+
     def probability(self, state):
         state = self.op_rep.acton(state)  # *not* acton_adjoint
         return self.effect_rep.probability(state)

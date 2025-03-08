@@ -745,6 +745,12 @@ class EmbeddedDenseOpTester(OpBase, BaseCase):
         mx = np.identity(state_space.dim, 'd')
         return op.EmbeddedOp(state_space, ['Q0'], op.FullArbitraryOp(mx, evotype=evotype, state_space=None))
 
+    #This is really a state-space unit test
+    #def test_constructor_raises_on_bad_state_space_label(self):
+    #    mx = np.identity(4, 'd')
+    #    with self.assertRaises(ValueError):
+    #        op.EmbeddedOp([('L0', 'foobar')], ['Q0'], op.FullArbitraryOp(mx))
+
     def test_constructor_raises_on_state_space_label_mismatch(self):
         mx = np.identity(4, 'd')
         state_space = statespace.StateSpace.cast([('Q0',), ('Q1',)])

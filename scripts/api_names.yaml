@@ -1261,6 +1261,8 @@ objects:
     Model:  # XXX note dereference to forward simulator methods -- better design?
       __name__: null
       bulk_dprobs: null  # XXX parameter `circuit_list` -> `circuits`
+      bulk_evaltree: null  # XXX parameter `circuit_list` -> `circuits`
+      bulk_evaltree_from_resources: null  # XXX parameter `circuit_list` -> `circuits`
       bulk_fill_dprobs: null  # XXX parameter `eval_tree` -> `evaltree`
       bulk_fill_hprobs: null  # XXX parameter `eval_tree` -> `evaltree`
       bulk_fill_probs: null  # XXX parameter `eval_tree` -> `evaltree`
@@ -1280,6 +1282,8 @@ objects:
       __name__: null
       basis: null
       bulk_dprobs: null  # XXX parameter `circuit_list` -> `circuits`
+      bulk_evaltree: null  # XXX parameter `circuit_list` -> `circuits`
+      bulk_evaltree_from_resources: null  # XXX parameter `circuit_list` -> `circuits`
       bulk_fill_dprobs: null  # XXX parameter `eval_tree` -> `evaltree`
       bulk_fill_hprobs: null  # XXX parameter `eval_tree` -> `evaltree`
       bulk_fill_probs: null  # XXX parameter `eval_tree` -> `evaltree`
@@ -1833,6 +1837,8 @@ objects:
     OplessModel:
       __name__: null
       bulk_dprobs: null  # XXX parameter `circuit_list` -> `circuits`
+      bulk_evaltree: null  # XXX parameter `circuit_list` -> `circuits`
+      bulk_evaltree_from_resources: null  # XXX parameter `circuit_list` -> `circuits`
       bulk_fill_dprobs: null  # XXX parameter `eval_tree` -> `evaltree`
       bulk_fill_probs: null  # XXX parameter `eval_tree` -> `evaltree`
       bulk_probs: null  # XXX parameter `circuit_list` -> `circuits`
@@ -1844,6 +1850,7 @@ objects:
       __name__: null
     SuccessFailModel:
       __name__: null
+      bulk_evaltree: null  # XXX parameter `circuit_list` -> `circuits`
       dprobs: null
       get_num_outcomes: compute_num_outcomes
       poly_probs: polynomial_probs

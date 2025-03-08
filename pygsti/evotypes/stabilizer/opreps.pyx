@@ -40,6 +40,10 @@ cdef class OpRep(_basereps_cython.OpRep):
     def nqubits(self):
         return self.state_space.num_qubits
 
+    #@property
+    #def dim(self):
+    #    return 2**(self.nqubits)  # assume "unitary evolution"-type mode
+
     def acton(self, StateRep state not None):
         cdef INT n = self.c_rep._n
         cdef INT namps = state.c_state._namps

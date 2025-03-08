@@ -219,11 +219,8 @@ class Namespace(object):
         except AttributeError as err:
             if name in self.__ns_props__:
                 return self.__ns_props__[name](self)
-            # else:
-            #     raise err
-            return None
-            # ^ necessary to avoid cursed issues that can arise when a call to pyest.main(...)
-            #   ends up triggering a test which needs the Namespace class.
+            else:
+                raise err
 
     def property(self, fn):
         """Dynamic namespace property"""

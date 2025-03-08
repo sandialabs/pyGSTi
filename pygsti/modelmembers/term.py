@@ -718,6 +718,9 @@ class _HasPolynomialCoefficient(object):
         """
         return _Polynomial.from_rep(self._rep.coeff)
 
+    #def _coeff_copy(self):
+    #    return self.coeff.copy()
+
     def map_indices_inplace(self, mapfn):
         """
         Performs a bulk find & replace on the coefficient polynomial's variable indices.

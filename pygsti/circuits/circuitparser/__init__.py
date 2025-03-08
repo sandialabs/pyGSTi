@@ -116,7 +116,7 @@ class CircuitLexer:
 
     @staticmethod
     def t_GATE(t):                                                                       # noqa
-        r"""
+        """
         ``'G[a-z0-9_]+(;[a-zQ0-9_\./]+)*(:[a-zQ0-9_]+)*(![0-9\.]+)?'``
         """
         
@@ -128,7 +128,7 @@ class CircuitLexer:
 
     @staticmethod
     def t_INSTRMT(t):                                                               # noqa
-        r"""
+        """
         ``'I[a-z0-9_]+(![0-9\.]+)?'``
         """
         #Note: don't need to convert parts[1],etc, to integers (if possible) as Label automatically does this
@@ -138,7 +138,7 @@ class CircuitLexer:
 
     @staticmethod
     def t_PREP(t):                                                                       # noqa
-        r"""
+        """
         ``'rho[a-z0-9_]+(![0-9\.]+)?'``
         """
         #Note: don't need to convert parts[1],etc, to integers (if possible) as Label automatically does this
@@ -148,7 +148,7 @@ class CircuitLexer:
 
     @staticmethod
     def t_POVM(t):                                                                       # noqa
-        r"""
+        """
         ``'M[a-z0-9_]+(![0-9\.]+)?'``
         """
         #Note: don't need to convert parts[1],etc, to integers (if possible) as Label automatically does this
@@ -158,14 +158,14 @@ class CircuitLexer:
 
     @staticmethod
     def t_STRINGIND(t):                                                                  # noqa
-        r"""
+        """
         ``'S(?=\s*\<)'``
         """
         return t
 
     @staticmethod
     def t_REFLBL(t):                                                                     # noqa
-        r"""
+        """
         ``'<\s*[a-zA-Z0-9_]+\s*>'``
         """
         t.value = t.value[1:-1].strip()
@@ -184,7 +184,7 @@ class CircuitLexer:
 
     @staticmethod
     def t_NOP(t):                                                                        # noqa
-        r"""
+        """
         ``'\{\}'``
         """
         t.value = tuple()
@@ -192,7 +192,7 @@ class CircuitLexer:
 
     @staticmethod
     def t_INTEGER(t):                                                                    # noqa
-        r"""
+        """
         ``'\d+'``
         """
         t.value = int(t.value)

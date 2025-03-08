@@ -183,6 +183,10 @@ def repeat_with_max_length(x, max_length, assert_at_least_one_rep=False):
     """
     return repeat(x, repeat_count_with_max_length(x, max_length, assert_at_least_one_rep), assert_at_least_one_rep)
 
+#Useful for anything?
+#def repeat_empty(x,max_length,assert_at_least_one_rep=False):
+#    return ()
+
 
 def repeat_and_truncate(x, n, assert_at_least_one_rep=False):
     """

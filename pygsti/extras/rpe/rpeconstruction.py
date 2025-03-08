@@ -113,6 +113,8 @@ def create_parameterized_rpe_model(alpha_true, epsilon_true, aux_rot, spam_depol
 
     return outputModel
 
+#def make_rpe_alpha_str_lists(k_list,angleStr,rpeconfig_inst):
+
 
 def create_rpe_angle_circuit_lists(k_list, angle_name, rpeconfig_inst):
     """

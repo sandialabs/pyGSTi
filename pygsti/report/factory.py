@@ -84,6 +84,21 @@ def _add_new_estimate_labels(running_lbls, estimates, combine_robust):
     return running_lbls
 
 
+#def _robust_estimate_has_same_models(estimates, est_lbl):
+#    lbl_robust = est_lbl+ROBUST_SUFFIX
+#    if lbl_robust not in estimates: return False #no robust estimate
+#
+#    for mdl_lbl in list(estimates[est_lbl].goparameters.keys()) \
+#        + ['final iteration estimate']:
+#        if mdl_lbl not in estimates[lbl_robust].models:
+#            return False #robust estimate is missing mdl_lbl!
+#
+#        mdl = estimates[lbl_robust].models[mdl_lbl]
+#        if estimates[est_lbl].models[mdl_lbl].frobeniusdist(mdl) > 1e-8:
+#            return False #model mismatch!
+#
+#    return True
+
 def _get_viewable_crf(est, est_lbl, mdl_lbl, verbosity=0):
     printer = _VerbosityPrinter.create_printer(verbosity)
 

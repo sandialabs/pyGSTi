@@ -14,7 +14,6 @@ class InstrumentTestCase(BaseTestCase):
     def setUp(self):
         #Add an instrument to the standard target model
         self.target_model = std.target_model()
-        self.target_model.sim = 'matrix'
         E = self.target_model.povms['Mdefault']['0']
         Erem = self.target_model.povms['Mdefault']['1']
         Gmz_plus = np.dot(E,E.T)
@@ -175,12 +174,17 @@ class InstrumentTestCase(BaseTestCase):
         model = pygsti.models.modelconstruction.create_explicit_model_from_expressions(
             [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"])
-        model.sim= 'matrix'
+        #    prep_labels=["rho0"], prep_expressions=["0"],
+        #    effect_labels=["0","1"], effect_expressions=["0","complement"])
 
         v0 = modelconstruction.create_spam_vector("0", "Q0", "pp")
         v1 = modelconstruction.create_spam_vector("1", "Q0", "pp")
         P0 = np.dot(v0,v0.T)
         P1 = np.dot(v1,v1.T)
+        print("v0 = ",v0)
+        print("P0 = ",P0)
+        print("P1 = ",P0)
+        #print("P0+P1 = ",P0+P1)
 
         model.instruments["Itest"] = pygsti.modelmembers.instruments.Instrument([('0', P0), ('1', P1)])
 

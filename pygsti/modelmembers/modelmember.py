@@ -340,6 +340,23 @@ class ModelMember(ModelChild, _NicelySerializable):
         if (self.parent is not None) and (force or self.parent._obj_refcount(self) == 0):
             self._parent = None
 
+    # UNUSED - as this doesn't mark parameter for reallocation like it used to
+    #def clear_gpindices(self):
+    #    """
+    #    Sets gpindices to None, along with any submembers' gpindices.
+    #
+    #    This essentially marks these members for parameter re-allocation
+    #    (e.g. if the number - not just the value - of parameters they have
+    #    changes).
+    #
+    #    Returns
+    #    -------
+    #    None
+    #    """
+    #    for subm in self.submembers():
+    #        subm.clear_gpindices()
+    #    self._gpindices = None
+
     def set_gpindices(self, gpindices, parent, memo=None):
         """
         Set the parent and indices into the parent's parameter vector that are used by this ModelMember object.

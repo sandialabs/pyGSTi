@@ -128,6 +128,28 @@ class LinearOperator(_modelmember.ModelMember):
         """
         pass
 
+    #def rep_at_time(self, t):
+    #    """
+    #    Retrieves a representation of this operator at time `t`.
+    #
+    #    This is operationally equivalent to calling `self.set_time(t)` and
+    #    then retrieving `self._rep`.  However, what is returned from this function
+    #    need not be the same rep object for different times, allowing the
+    #    operator object to cache many reps for different times to increase performance
+    #    (this avoids having to initialize the same rep at a given time).
+    #
+    #    Parameters
+    #    ----------
+    #    t : float
+    #        The time.
+    #
+    #    Returns
+    #    -------
+    #    object
+    #    """
+    #    self.set_time(t)
+    #    return self._rep
+
     def to_dense(self, on_space='minimal'):
         """
         Return this operation as a dense matrix.

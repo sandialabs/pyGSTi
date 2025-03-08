@@ -525,7 +525,7 @@ class StdInputParser(object):
                         looking_for = "circuit_line"
                         if ignore_zero_count_lines is False and last_circuit is not None:
                             dataset.add_count_list(last_circuit, [], [], aux=last_commentDict,
-                                                   record_zero_counts=record_zero_counts, update_ol=False)
+                                                   record_zero_counts=record_zero_counts, update_ol=False, unsafe=True)
 
                 if looking_for == "circuit_line":
                     if len(dataline) == 0: continue

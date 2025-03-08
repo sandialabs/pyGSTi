@@ -40,6 +40,16 @@ class StateRep(_basereps.StateRep):
     def num_qubits(self):
         return self.state_space.num_qubits
 
+    #REMOVE
+    #def chp_ops(self, seed_or_state=None):
+    #    return self.base_chp_ops
+
+    #REMOVE
+    #def chp_str(self, seed_or_state=None):
+    #    op_str = '\n'.join(self.chp_ops(seed_or_state=seed_or_state))
+    #    if len(op_str) > 0: op_str += '\n'
+    #    return op_str
+
     def copy(self):
         return StateRep(self.chp_ops, self.state_space)
 
@@ -77,3 +87,25 @@ class StateRepComposed(StateRep):
     def actionable_staterep(self):
         state_rep = self.state_rep.actionable_staterep()
         return self.op_rep.acton(state_rep)
+
+#REMOVE
+#    def chp_ops(self, seed_or_state=None):
+#        return self.state_rep.chp_ops(seed_or_state=seed_or_state) \
+#            + self.op_rep.chp_ops(seed_or_state=seed_or_state)
+
+# TODO: Untested, only support computational and composed for now
+#class StateRepTensorProduct(StateRep):
+#    def __init__(self, factor_state_reps, state_space):
+#        self.factor_reps = factor_state_reps
+#        super(StateRepTensorProduct, self).__init__([], state_space)
+#        self.reps_have_changed()
+#
+#    def reps_have_changed(self):
+#        chp_ops = []
+#        current_iqubit = 0
+#        for factor in self.factor_reps:
+#            local_to_tp_index = {str(iloc): str(itp) for iloc, itp in
+#                                 enumerate(range(current_iqubit, current_iqubit + factor.num_qubits))}
+#            chp_ops.extend([_update_chp_op(op, local_to_tp_index) for op in self.chp_ops])
+#            current_iqubit += factor.num_qubits
+#        self.chp_ops = chp_ops

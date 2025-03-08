@@ -409,6 +409,13 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
         return prepFidList, measFidList    
 
 
+#def bool_list_to_ind_list(boolList):
+#    output = _np.array([])
+#    for i, boolVal in boolList:
+#        if boolVal == 1:
+#            output = _np.append(i)
+#    return output
+
 def xor(*args):
     """
     Implements logical xor function for arbitrary number of inputs.

@@ -68,20 +68,17 @@ class TimeDependentTestCase(BaseTestCase):
         ds = pygsti.data.simulate_data(mdl, circuits, num_samples=100,
                                        sample_error='none', seed=1234, times=[0,0.1,0.2])
 
-        dsr = ds[Circuit([Label('Gi',0)], line_labels=(0,))]
-        self.assertArraysEqual(dsr.time, np.array([0.,  0.,  0.1, 0.1, 0.2, 0.2]))
-        self.assertArraysEqual(dsr.reps, np.array([100.,   0.,  95.,   5.,  90.,  10.]))
-        self.assertArraysEqual(dsr.outcomes, [('0',), ('1',), ('0',), ('1',), ('0',), ('1',)])
+        self.assertArraysEqual(ds[Circuit([Label('Gi',0)], line_labels=(0,))].time, np.array([0.,  0.,  0.1, 0.1, 0.2, 0.2]))
+        self.assertArraysEqual(ds[Circuit([Label('Gi',0)], line_labels=(0,))].reps, np.array([100.,   0.,  95.,   5.,  90.,  10.]))
+        self.assertArraysEqual(ds[Circuit([Label('Gi',0)], line_labels=(0,))].outcomes, [('0',), ('1',), ('0',), ('1',), ('0',), ('1',)])
 
         # sparse data
         ds2 = pygsti.data.simulate_data(mdl, circuits, num_samples=100,
                                         sample_error='none', seed=1234, times=[0,0.1,0.2],
                                         record_zero_counts=False)
-        ds2r = ds2[Circuit([Label('Gi',0)], line_labels=(0,))]
-        self.assertArraysEqual(ds2r.time, np.array([0.,  0.1, 0.1, 0.2, 0.2]))
-        self.assertArraysEqual(ds2r.reps, np.array([100.,  95.,   5.,  90.,  10.]))
-        self.assertArraysEqual(ds2r.outcomes, [('0',), ('0',), ('1',), ('0',), ('1',)])
-        return
+        self.assertArraysEqual(ds2[Circuit([Label('Gi',0)], line_labels=(0,))].time, np.array([0.,  0.1, 0.1, 0.2, 0.2]))
+        self.assertArraysEqual(ds2[Circuit([Label('Gi',0)], line_labels=(0,))].reps, np.array([100.,  95.,   5.,  90.,  10.]))
+        self.assertArraysEqual(ds2[Circuit([Label('Gi',0)], line_labels=(0,))].outcomes, [('0',), ('0',), ('1',), ('0',), ('1',)])
 
     def test_time_dependent_gst_staticdata(self):
         

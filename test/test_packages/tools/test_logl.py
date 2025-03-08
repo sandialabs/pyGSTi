@@ -1,7 +1,5 @@
 import os
 import psutil
-import pytest
-import sys
 
 import pygsti
 from pygsti.modelpacks import smq1Q_XY
@@ -85,5 +83,5 @@ class LogLTestCase(BaseTestCase):
                                     poisson_picture=True, comm=comm)
 
             print(L)
-        except (ImportError, RuntimeError):
+        except ImportError:
             self.skipTest('Skipping because failed to import MPI')

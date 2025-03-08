@@ -49,6 +49,11 @@ def _loglikelihood(p_list, n_list):
         output += _xlogy(n_list[i], pVal)
     return output
 
+# Only used by the rectify data function, which is commented out,
+# so this is also commented out.
+# def loglikelihoodRatioObj(alpha,n_list_list,dof):
+#     return _np.abs(dof - _loglikelihood_ratio(alpha*n_list_list))
+
 
 def _loglikelihood_ratio(n_list_list):
     """

@@ -79,6 +79,11 @@ class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
             return None
         return self._label_indices[label]
 
+    #@property
+    #def sslbls(self):
+    #    """ The support of this errorgen space, e.g., the qubits where its elements may be nontrivial """
+    #    return self.sslbls
+
     def create_subbasis(self, must_overlap_with_these_sslbls):
         """
         Create a sub-basis of this basis by including only the elements
@@ -463,9 +468,9 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
                 return None
             else:
                 raise error
-        
-        #TODO: 2 qubit labels returning None when label does exist in self.labels. 
-        #'(support, left_support) not in self._offsets[eetype]' returning True incorrectly
+        """
+        TODO: 2 qubit labels returning None when label does exist in self.labels. 
+        '(support, left_support) not in self._offsets[eetype]' returning True incorrectly
 
 
         support = elemgen_label.sslbls
@@ -498,6 +503,12 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
             raise ValueError("Invalid elementary errorgen type: %s" % str(eetype))
 
         return base + indices[elemgen_label]
+        """
+
+    #@property
+    #def sslbls(self):
+    #    """ The support of this errorgen space, e.g., the qubits where its elements may be nontrivial """
+    #    return self.sslbls
 
     def create_subbasis(self, must_overlap_with_these_sslbls, retain_max_weights=True):
         """
@@ -527,3 +538,125 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
 
     def difference(self, other_basis):
         return self.to_explicit_basis().difference(other_basis)
+
+
+#OLD - maybe not needed?
+#class LowWeightElementaryErrorgenBasis(ElementaryErrorgenBasis):
+#    """
+#    Spanned by the elementary error generators of given type(s) (e.g. "Hamiltonian" and/or "other")
+#    and with elements corresponding to a `Basis`, usually of Paulis.
+#    """
+#
+#    def __init__(self, basis_1q, state_space, other_mode, max_ham_weight=None, max_other_weight=None,
+#                 must_overlap_with_these_sslbls=None):
+#        self._basis_1q = basis_1q
+#        self._other_mode = other_mode
+#        self.state_space = state_space
+#        self._max_ham_weight = max_ham_weight
+#        self._max_other_weight = max_other_weight
+#        self._must_overlap_with_these_sslbls = must_overlap_with_these_sslbls
+#
+#        assert(self.state_space.is_entirely_qubits), "FOGI only works for models containing just qubits (so far)"
+#        sslbls = self.state_space.sole_tensor_product_block_labels  # all the model's state space labels
+#        self.sslbls = sslbls  # the "support" of this space - the qubit labels
+#
+#        self._cached_label_indices = None
+#        self._cached_labels_by_support = None
+#        self._cached_elements = None
+#
+#        #Needed?
+#        # self.dim = len(self.labels)  # TODO - update this so we don't always need to build labels
+#        # # (this defeats lazy building via property below) - we can just compute this, especially if
+#        # # not too fancy
+#
+#    @property
+#    def labels(self):
+#        if self._cached_label_indices is None:
+#
+#            def _basis_el_strs(possible_bels, wt):
+#                for els in _itertools.product(*([possible_bels] * wt)):
+#                    yield ''.join(els)
+#
+#            labels = {}
+#            all_bels = self.basis_1q.labels[1:]  # assume first element is identity
+#            nontrivial_bels = self.basis_1q.labels[1:]  # assume first element is identity
+#
+#            max_weight = self._max_ham_weight if (self._max_ham_weight is not None) else len(self.sslbls)
+#            for weight in range(1, max_weight + 1):
+#                for support in _itertools.combinations(self.sslbls, weight):
+#                    if (self._must_overlap_with_these_sslbls is not None
+#                       and len(self._must_overlap_with_these_sslbls.intersection(support)) == 0):
+#                        continue
+#                    if support not in labels: labels[support] = []  # always True?
+#                    labels[support].extend([('H', bel) for bel in _basis_el_strs(nontrivial_bels, weight)])
+#
+#            max_weight = self._max_other_weight if (self._max_other_weight is not None) else len(self.sslbls)
+#            if self._other_mode != "all":
+#                for weight in range(1, max_weight + 1):
+#                    for support in _itertools.combinations(self.sslbls, weight):
+#                        if (self._must_overlap_with_these_sslbls is not None
+#                           and len(self._must_overlap_with_these_sslbls.intersection(support)) == 0):
+#                            continue
+#                        if support not in labels: labels[support] = []
+#                        labels[support].extend([('S', bel) for bel in _basis_el_strs(nontrivial_bels, weight)])
+#            else:
+#                #This is messy code that relies on basis labels being single characters -- TODO improve(?)
+#                idle_char = self.basis_1q.labels[1:]  # assume first element is identity
+#                assert(len(idle_char) == 1 and all([len(c) == 1 for c in nontrivial_bels])), \
+#                    "All basis el labels must be single chars for other_mode=='all'!"
+#                for support in _itertools.combinations(self.sslbls, max_weight):
+#                    # Loop over all possible basis elements for this max-weight support, computing the actual support
+#                    # of each one individually and appending it to the appropriate list
+#                    for bel1 in _basis_el_strs(all_bels, max_weight):
+#                        nonidle_indices1 = [i for i in range(max_weight) if bel1[i] != idle_char]
+#                        for bel2 in _basis_el_strs(all_bels, max_weight):
+#                            nonidle_indices2 = [i for i in range(max_weight) if bel2[i] != idle_char]
+#                            nonidle_indices = list(sorted(set(nonidle_indices1) + set(nonidle_indices2)))
+#                            bel1 = ''.join([bel1[i] for i in nonidle_indices])  # trim to actual support
+#                            bel2 = ''.join([bel2[i] for i in nonidle_indices])  # trim to actual support
+#                            actual_support = tuple([support[i] for i in nonidle_indices])
+#
+#                            if (self._must_overlap_with_these_sslbls is not None
+#                               and len(self._must_overlap_with_these_sslbls.intersection(actual_support)) == 0):
+#                                continue
+#
+#                            if actual_support not in labels: labels[actual_support] = []
+#                            labels[actual_support].append(('S', bel1, bel2))
+#
+#            self._cached_labels_by_support = labels
+#            self._cached_label_indices = _collections.OrderedDict(((support_lbl, i) for i, support_lbl in enumerate(
+#                ((support, lbl) for support, lst in labels.items() for lbl in lst))))
+#
+#        return tuple(self._cached_label_indices.keys())
+#
+#    @property
+#    def element_supports_and_matrices(self):
+#        if self._cached_elements is None:
+#            self._cached_elements = tuple(
+#                ((support, _ot.lindblad_error_generator(elemgen_label, self.basis_1q, normalize=True, sparse=False))
+#                 for support, elemgen_label in self.labels))
+#        return self._cached_elements
+#
+#    def element_index(self, label):
+#        """
+#        TODO: docstring
+#        """
+#        if self._cached_label_indices is None:
+#            self.labels  # triggers building of labels
+#        return self._cached_label_indices[label]
+#
+#    @property
+#    def sslbls(self):
+#        """ The support of this errorgen space, e.g., the qubits where its elements may be nontrivial """
+#        return self.sslbls
+#
+#    def create_subbasis(self, must_overlap_with_these_sslbls, retain_max_weights=True):
+#        """
+#        Create a sub-basis of this basis by including only the elements
+#        that overlap the given support (state space labels)
+#        """
+#        #Note: can we reduce self.state_space?
+#        return CompleteErrorgenBasis(self._basis_1q, self.state_space, self._other_mode,
+#                                     self._max_ham_weight if retain_max_weights else None,
+#                                     self._max_other_weight if retain_max_weights else None,
+#                                     self._must_overlap_with_these_sslbls)
