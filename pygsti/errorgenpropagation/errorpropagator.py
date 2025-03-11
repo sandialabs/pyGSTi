@@ -213,7 +213,58 @@ class ErrorGeneratorPropagator:
         propagated_errorgen_layers = self._propagate_errorgen_layers(errorgen_layers, propagation_layers, include_spam)
 
         return propagated_errorgen_layers
+
+    def bulk_propagate_errorgens(self, circuits, include_spam=True, include_circuit_time=False, include_gate_label=False):
+        """
+        Propagate all of the error generators for each circuit layer to the end without
+        any recombinations or averaging.
+
+        Parameters
+        ----------
+        circuits : list of `Circuit`s
+            List of circuits to construct a set of post gate error generators for.
+
+        include_spam : bool, optional (default True)
+            If True then we include in the propagation the error generators associated
+            with state preparation and measurement.
+
+        include_circuit_time : bool, optional (default False)
+            If True then include as part of the error generator coefficient labels the circuit
+            time from which that error generator arose.
+
+        include_gate_label : bool, optional (default False)
+            Whether to include the originating gate label with the error generator metadata. Note this can only
+            be set to True when using an `ExplicitOpModel` at present.
+
+        Returns
+        -------
+        propagated_errorgen_layers : lists of lists of lists of dictionaries
+            A list of lists of dictionaries, each corresponding to the result of propagating
+            an error generator layer through to the end of the circuit.
+        """
+        #TODO: Check for proper handling of empty circuit and length 1 circuits.
+
+        #start by converting the input circuit into a list of stim Tableaus with the 
+        #first element dropped.
+        stim_layers_by_circuit = self.bulk_construct_stim_layers(circuits, drop_first_layer = not include_spam)
         
+        #We next want to construct a new set of Tableaus corresponding to the cumulative products
+        #of each of the circuit layers with those that follow. These Tableaus correspond to the
+        #clifford operations each error generator will be propagated through in order to reach the
+        #end of the circuit.
+        propagation_layers_by_circuit = [self.construct_propagation_layers(stim_layer) for stim_layer in stim_layers_by_circuit]
+
+        #Next we take the input circuit and construct a list of dictionaries, each corresponding
+        #to the error generators for a particular gate layer.
+        #TODO: Add proper inferencing for number of qubits:
+        assert circuits[0].line_labels is not None and circuits[0].line_labels != ('*',)
+        errorgen_layers = self.construct_errorgen_layers(circuit, len(circuit.line_labels), include_spam, include_circuit_time=include_circuit_time, 
+                                                         include_gate_label=include_gate_label)
+        #propagate the errorgen_layers through the propagation_layers to get a list
+        #of end of circuit error generator dictionaries.
+        propagated_errorgen_layers = self._propagate_errorgen_layers(errorgen_layers, propagation_layers, include_spam)
+
+        return propagated_errorgen_layers        
 
     def propagate_errorgens_bch(self, circuit, bch_order=1, include_spam=True, truncation_threshold=1e-14):
         """
@@ -503,6 +554,36 @@ class ErrorGeneratorPropagator:
             stim_layers = stim_layers[1:]
         return stim_layers
     
+    def bulk_construct_stim_layers(self, circuits, drop_first_layer=True):
+        """
+        Converts a `Circuit` to a list of stim Tableau objects corresponding to each
+        gate layer.
+
+        Parameters
+        ----------
+        circuits : list of `Circuit`
+            Circuit to construct stim Tableaus for.
+        
+        drop_first_layer : bool, optional (default True)
+            If True the first Tableau for the first gate layer is dropped in the returned output.
+            This default setting is what is primarily used in the context of error generator 
+            propagation.
+
+        Returns
+        -------
+        stim_layers_by_circuit : list of lists of `stim.Tableau`
+            A list of `stim.Tableau` objects, each corresponding to the ideal Clifford operation
+            for each layer of the input pygsti `Circuit`, with the first layer optionally dropped.
+        """
+        stim_dict = standard_gatenames_stim_conversions()
+        stim_layers_by_circuit = []
+        for circuit in circuits:        
+            stim_layers = circuit.convert_to_stim_tableau_layers(gate_name_conversions=stim_dict)
+            if drop_first_layer and len(stim_layers)>0:
+                stim_layers = stim_layers[1:]
+            stim_layers_by_circuit.append(circuit)
+        return stim_layers_by_circuit
+    
     def construct_propagation_layers(self, stim_layers):
         """
         Construct a list of stim Tableau objects corresponding to the Clifford
@@ -538,7 +619,7 @@ class ErrorGeneratorPropagator:
             propagation_layers = stim_layers
         else:
             propagation_layers = []
-        return propagation_layers
+        return propagation_layers   
     
     #TODO: Once we have modelmembers for the covariances use this to control whether zero rates are dropped.
     def construct_errorgen_layers(self, circuit, num_qubits, include_spam=True, include_circuit_time=False, fixed_rate=None, 
