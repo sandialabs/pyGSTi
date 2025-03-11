@@ -501,6 +501,40 @@ def cirq_gatenames_standard_conversions():
     return cirq_to_standard_mapping
 
 
+def qiskit_gatenames_standard_conversions():
+    
+    """
+    A dictionary converting Qiskit gates (based on Instruction.name) to built-in pyGSTi names for these gates. Additional flag in dict value indicates if the gate has params
+    Does not currently support conversion of all cirq gate types.
+    """
+
+    try:
+        import qiskit
+    except ImportError:
+        raise ImportError("Qiskit is required for this operation, and it does not appear to be installed.")
+    
+    qiskit_to_standard_mapping = {}
+
+    qiskit_to_standard_mapping['id'] = ['Gi', False]
+    qiskit_to_standard_mapping['x'] = ['Gxpi', False]
+    qiskit_to_standard_mapping['y'] = ['Gypi', False]
+    qiskit_to_standard_mapping['z'] = ['Gzpi', False]
+    qiskit_to_standard_mapping['sx'] = ['Gxpi2', False]
+    qiskit_to_standard_mapping['t'] = ['Gt', False]
+    qiskit_to_standard_mapping['h'] = ['Gh', False]
+
+    qiskit_to_standard_mapping['rz'] = ['Gzr', True]
+    qiskit_to_standard_mapping['u'] = ['Gu3', True]
+
+    qiskit_to_standard_mapping['cx'] = ['Gcnot', False]
+    qiskit_to_standard_mapping['cz'] = ['Gcphase', False]
+    qiskit_to_standard_mapping['ecr'] = ['Gecres', False]
+    qiskit_to_standard_mapping['swap'] = ['Gswap', False]
+
+
+    return qiskit_to_standard_mapping
+
+
 def standard_gatenames_quil_conversions():
     """
     A dictionary converting the gates with standard names to the QUIL names for these gates.

@@ -3974,6 +3974,159 @@ class Circuit(object):
         else:
             return cls(circuit_layers)        
 
+    @classmethod
+    def from_qiskit(cls, circuit, qubit_conversion=None, qiskit_gate_conversion=None, use_standard_gate_conversion_as_backup=True, allow_different_gates_in_same_layer=True):
+        """
+        Converts and instantiates a pyGSTi Circuit object from a Qiskit QuantumCircuit object.
+
+        Parameters
+        ----------
+        circuit : Qiskit QuantumCircuit
+            The Qiskit QuantumCircuit object to parse into a pyGSTi circuit.
+
+        qubit_conversion : dict, optional (default None)
+            A dictionary specifying a mapping between Qiskit qubit indices and 
+            pyGSTi qubit labels (either integers or strings).
+            If None, then a default mapping is created.
+
+        qiskit_gate_conversion : dict, optional (default None)
+            If specified a dictionary with keys given by Qiskit gate objects,
+            and values given by pyGSTi gate names which overrides the built-in
+            conversion dictionary used by default.
+
+        use_standard_gate_conversion_as_backup : boolean (default True)
+            Determines how the circuit conversion will be handled when the custom
+            Qiskit gate conversion dict does not have an entry for the encountered
+            gate. If True, this method will fall back on the standard conversions
+            found in qiskit_gatenames_standard_conversions(). If False, the method
+            will fail.
+
+        allow_different_gates_in_same_layer: boolean (default True)
+            determines if gates with different names can be in the same layer.
+            For instance, if a CZ gate and CX gate can both fit in the same layer,
+            they will either be placed in the same layer (if True) or split into
+            separate layers (if False).
+
+        Returns
+        -------
+        pygsti_circuit
+            A pyGSTi Circuit instance equivalent to the specified Qiskit one.
+        """
+
+        try:
+            import qiskit
+        except ImportError:
+            raise ImportError("Qiskit is required for this operation, and it does not appear to be installed.")
+        
+        #mapping between cirq gates and pygsti gate names:
+        if qiskit_gate_conversion is not None:
+            if use_standard_gate_conversion_as_backup == True:
+                qiskit_to_gate_name_mapping = _itgs.qiskit_gatenames_standard_conversions()
+                for key, value in qiskit_gate_conversion.items():
+                    qiskit_to_gate_name_mapping[key] = value
+            else:
+                qiskit_to_gate_name_mapping = qiskit_gate_conversion
+        else:
+            qiskit_to_gate_name_mapping = _itgs.qiskit_gatenames_standard_conversions()
+
+        #get all of the qubits in the Qiskit circuit
+        qubits = circuit.qubits
+        qiskit_qubit_indices = []
+        for qubit in qubits:
+            qiskit_qubit_indices.append(qubit._index)
+
+        
+        #ensure all of these have a conversion available.
+        if qubit_conversion is not None:
+            assert set(qiskit_qubit_indices).issubset(set(qubit_conversion.keys())), 'Missing Qiskit to pygsti conversions for some qubit label(s).'
+        #if it is None, build a default mapping.
+        else:
+            #default mapping is the identify mapping: qubit i in the Qiskit circuit maps to qubit i in the pyGSTi circuit
+            qubit_conversion = {i: f'Q{i}' for i in qiskit_qubit_indices}
+            
+        line_labels = tuple(sorted([qubit_conversion[qubit] for qubit in qiskit_qubit_indices]))
+
+        # print(qubit_conversion)
+
+        # print(line_labels)
+        
+
+        layer_indices = {}
+        for line_label in line_labels:
+            layer_indices[line_label] = 0
+
+        instructions = circuit.data
+
+        pygsti_circ_layers = []
+        
+        if allow_different_gates_in_same_layer == False:
+            layer_names = []
+
+        for instruction in instructions:
+            # print(layer_indices)
+            if allow_different_gates_in_same_layer == False:
+                assert len(pygsti_circ_layers) == len(layer_names), "there must be one layer name for each layer!"
+
+            # print(instruction)
+            name = instruction.operation.name
+            num_qubits = instruction.operation.num_qubits
+            instruction_qubit_indices = [qubit._index for qubit in instruction.qubits]
+            params = instruction.operation.params
+            # print(name)
+            # print(num_qubits)
+            # print(params)
+
+            pygsti_qubits = [qubit_conversion[i] for i in instruction_qubit_indices]
+
+            if name == 'measure' or name == 'barrier':
+                _warnings.warn('skipping measure or barrier')
+                continue
+
+            pygsti_gate_name = qiskit_to_gate_name_mapping[name][0]
+
+            label = _Label(pygsti_gate_name, pygsti_qubits, args=params)
+
+            
+            #convert_qiskit_instruction_to_pygsti_label(name, qubits, params)
+
+            next_index = max(layer_indices[qubit] for qubit in pygsti_qubits)
+            # print(f'computed next index for {pygsti_gate_name} gate on lines {pygsti_qubits}: {next_index}')
+
+            if allow_different_gates_in_same_layer == True: #layers are not separated by the type of gate they contain
+
+                if next_index < len(pygsti_circ_layers): #there is an existing layer in the circuit where the gate can be inserted
+                    pygsti_circ_layers[next_index].append(label)
+                    # print(f"inserting {pygsti_gate_name} gate in layer {next_index} on lines {pygsti_qubits}")
+                    for pygsti_qubit in pygsti_qubits: #update where a gate on these qubits can be placed
+                        layer_indices[pygsti_qubit] = next_index + 1
+                else:
+                    # print(f"inserting {pygsti_gate_name} gate at end of circuit, which is layer {len(pygsti_circ_layers)} on lines {pygsti_qubits}")
+                    pygsti_circ_layers.append([label]) #need to append gate at the end of the circuit, thus creating a new layer
+                    for pygsti_qubit in pygsti_qubits:
+                        layer_indices[pygsti_qubit] = len(pygsti_circ_layers)
+
+            else:
+                for i in range(next_index, len(pygsti_circ_layers)): # searching for a layer where the gate can be inserted. Layer name needs to match the name of the gate being inserted
+                    if name == layer_names[i]:
+                        # print(f'inserting gate {name} on qubits {qubits} in layer {i}')
+                        pygsti_circ_layers[i].append(label)
+                        for pygsti_qubit in pygsti_qubits:
+                            layer_indices[pygsti_qubit] = i + 1
+                        break
+
+                else: #no place to put the gate in the existing layers. New layer is added with corresponding name
+                    # print(f'inserting gate {name} on qubits {qubits} in layer {len(pygsti_circ_layers)}')
+                    pygsti_circ_layers.append([label])
+                    layer_names.append(name)
+                    for pygsti_qubit in pygsti_qubits:
+                        layer_indices[pygsti_qubit] = len(pygsti_circ_layers)
+            
+        circuit = cls(pygsti_circ_layers, line_labels=line_labels)
+
+        return circuit
+
+
+
     def convert_to_quil(self,
                         num_qubits=None,
                         gatename_conversion=None,
