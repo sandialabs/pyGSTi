@@ -98,14 +98,23 @@ extras['no_mpi'] = [e for e in extras['complete'] if e != 'mpi4py']
 extras['testing_no_cython'] = [e for e in extras['testing'] if e != 'cython']
 
 
-# Configure setuptools_scm to build the post-release version number
-def custom_version():
-    from setuptools_scm.version import postrelease_version
+# Configure setuptools_scm to build a custom version (for more info,
+# see https://stackoverflow.com/a/78657279 and https://setuptools-scm.readthedocs.io/en/latest/extending)
+# If on a clean release, it uses no local scheme
+# If not on master, appends branch to the local scheme
+# If not clean/, uses default local scheme (node-and-date)
+def custom_version(version):
+    from setuptools_scm.version import get_local_node_and_date
 
-    return {'version_scheme': postrelease_version,
-            'write_to': "pygsti/_version.py",
-            'local_scheme': "no-local-version"  # because pypi doesn't suppport it
-            }
+    b = version.branch if version.branch and version.branch != "master" else None
+
+    local_scheme = "no-local-version"
+    if version.dirty or version.distance:
+        local_scheme = get_local_node_and_date(version) + (f'.{b}' if b else '')
+    elif b:
+        local_scheme = f"+{b}"
+
+    return local_scheme
 
 
 #Create a custom command class that allows us to specify different compiler flags
@@ -132,7 +141,8 @@ class build_ext_compiler_check(build_ext):
 def setup_with_extensions(extensions=None):
     setup(
         name='pygsti',
-        use_scm_version=custom_version,
+        dynamic=["version"],
+        use_scm_version={'version_scheme': 'no-guess-dev', 'local_scheme': custom_version},
         cmdclass={'build_ext': build_ext_compiler_check},
         description='A python implementation of Gate Set Tomography',
         long_description=descriptionTxt,
@@ -268,7 +278,7 @@ def setup_with_extensions(extensions=None):
                 'templates/offline/images/*'
             ]
         },
-        setup_requires=['setuptools_scm'],
+        setup_requires=['setuptools>=61', 'setuptools_scm>=6.2'],
         install_requires=[
             'numpy>=1.15.0',
             'scipy',
