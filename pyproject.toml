@@ -1,7 +1,7 @@
 
 [build-system]
 # see https://github.com/cvxgrp/cvxpy/issues/968 for numpy version
-requires = ["setuptools>=45", "wheel", "setuptools_scm>=6.2", "cython", "numpy>=1.16.0"]
+requires = ["setuptools>=61", "wheel", "setuptools_scm>=6.2", "cython", "numpy>=1.16.0"]
 
 [tool.setuptools_scm]
 write_to = "pygsti/_version.py"
