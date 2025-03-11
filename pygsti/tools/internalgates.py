@@ -386,6 +386,7 @@ def standard_gatenames_stim_conversions():
     except ImportError:
         raise ImportError("Stim is required for this operation, and it does not appear to be installed.")
     gate_dict = {
+    'COMPOUND' : stim.Tableau.from_named_gate('I'),
     'Gi'    : stim.Tableau.from_named_gate('I'),
     'Gxpi'  : stim.Tableau.from_named_gate('X'),
     'Gypi'  : stim.Tableau.from_named_gate('Y'),

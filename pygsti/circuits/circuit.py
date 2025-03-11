@@ -3762,7 +3762,7 @@ class Circuit(object):
         f.close()
 
 
-    def convert_to_stim_tableau_layers(self, gate_name_conversions=None, num_qubits=None):
+    def convert_to_stim_tableau_layers(self, gate_name_conversions=None, num_qubits=None, qubit_lbl_conversions=None):
         """
         Converts this circuit to a list of stim tableau layers
 
@@ -3772,10 +3772,21 @@ class Circuit(object):
             A map from pygsti gatenames to standard stim tableaus. 
             If None a standard set of gate names is used from 
             `pygsti.tools.internalgates`
+        
+        num_qubits : int, optional (default None)
+            The number of qubits this circuit acts on. If None then the
+            number of line labels is used. If the line labels are the placeholder
+            value of '*' an exception will be raised.
+
+        qubit_lbl_conversions : dict, optional (default None)
+            A mapping between qubit labels and the qubit indices
+            to use in the stim Tableau construction. Stim only supports
+            integer qubit indices, so if the qubit labels are strings
+            this mapping must be specified or else and exception will be raised. 
 
         Returns
         -------
-        A layer by layer list of stim tableaus    
+        A layer by layer list of stim Tableaus    
         """
         try:
             import stim
@@ -3789,6 +3800,8 @@ class Circuit(object):
             assert line_labels != ('*',), "Cannot convert circuits with placeholder line label to stim Tableau unless number of qubits is specified."
             num_qubits=len(line_labels)
         
+        default_qubit_indices = tuple([i for i in range(num_qubits)])
+
         stim_layers=[]
 
         if self._static:
@@ -3796,17 +3809,36 @@ class Circuit(object):
         else:
             circuit_layers = self._labels
 
+        #check whether any of the qubit labels are strings.
+        is_str_lbl = False
+        for layer in circuit_layers:
+            for sub_lbl in layer:
+                if any([isinstance(qubit_lbl, str) for qubit_lbl in sub_lbl.qubits]):
+                    is_str_lbl = True
+                    break
+            if is_str_lbl:
+                break
+        if is_str_lbl:
+            assert qubit_lbl_conversions is not None, 'Must specify a qubit label mapping to integers when qubit labels in circuit are strings.'
+
         #cannot convert if qubit labels are strings.
-        msg = 'Cannot convert circuit two stim Tableaus when using qubit labels that are strings.'\
-              +' Please first convert qubit labels to integers, see `map_state_space_labels` for more.'
-        assert not any([isinstance(sub_lbl.qubits, str) for lbl in circuit_layers for sub_lbl in lbl]), msg
+        #msg = 'Cannot convert circuit two stim Tableaus when using qubit labels that are strings.'\
+        #      +' Please first convert qubit labels to integers, see `map_state_space_labels` for more.'
+        #assert not any([isinstance(sub_lbl.qubits, str) for lbl in circuit_layers for sub_lbl in lbl]), msg
 
         empty_tableau = stim.Tableau(num_qubits)
         for layer in circuit_layers:
             stim_layer = empty_tableau.copy()
             for sub_lbl in layer:
-                temp = gate_name_conversions[sub_lbl.name]    
-                stim_layer.append(temp, sub_lbl.qubits)
+                temp = gate_name_conversions[sub_lbl.name]
+                if sub_lbl.qubits is None:
+                    qubit_indices = default_qubit_indices
+                else:
+                    if is_str_lbl:
+                        qubit_indices = [qubit_lbl_conversions[qubit_lbl] for qubit_lbl in sub_lbl.qubits]
+                    else:
+                        qubit_indices = sub_lbl.qubits 
+                stim_layer.append(temp, qubit_indices)
             stim_layers.append(stim_layer)
         return stim_layers
     
