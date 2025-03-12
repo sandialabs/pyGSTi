@@ -103,8 +103,8 @@ extras['testing_no_cython'] = [e for e in extras['testing'] if e != 'cython']
 # Configure setuptools_scm to build a custom version (for more info,
 # see https://stackoverflow.com/a/78657279 and https://setuptools-scm.readthedocs.io/en/latest/extending)
 # If on a clean release, it uses no local scheme
-# If not on master, appends branch to the local scheme
-# If not clean/, uses default local scheme (node-and-date)
+# Otherwise, it uses g{commit hash}.{branch}.[clean | d{date}] for the local scheme,
+# where the last entry is "clean" if everything is committed and otherwise the date of last commit
 def custom_version(version):
     from setuptools_scm.version import get_local_node_and_date
 
@@ -112,7 +112,15 @@ def custom_version(version):
 
     local_scheme = "no-local-version"
     if version.dirty or version.distance:
-        local_scheme = get_local_node_and_date(version) + (f'.{b}' if b else '')
+        node_and_date = get_local_node_and_date(version)
+
+        if version.dirty:
+            node, date = node_and_date.split('.')
+        else:
+            node = node_and_date
+            date = "clean"
+        
+        local_scheme = node + (f'.{b}.' if b else 'master') + date
     elif b:
         local_scheme = f"+{b}"
 
