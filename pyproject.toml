@@ -6,8 +6,9 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pygsti"
-dynamic = ["version", "readme", "optional-dependencies"]
+dynamic = ["version"]
 description = 'A python implementation of Gate Set Tomography'
+readme = "README.md"
 authors = [
     {email = 'pygsti@sandia.gov'},
     {name = 'Erik Nielsen'},
@@ -47,6 +48,48 @@ classifiers=[
     "Operating System :: MacOS :: MacOS X",
     "Operating System :: Unix"
 ]
+
+[project.optional-dependencies]
+diamond_norm = [
+    'cvxopt',
+    'cvxpy'
+]
+evolutionary_optimization = ['deap']
+extensions = ['cython']
+html_reports = ['jinja2', 'MarkupSafe']
+interpygate = ['csaps']
+linting = [
+    'autopep8',
+    'flake8'
+]
+memory_profiling = ['psutil']
+mongodb = ['pymongo']
+msgpack = ['msgpack']
+multiprocessor = ['mpi4py']
+notebooks = [
+    'ipython',
+    'notebook',
+    'jupyter_server'
+]
+pytorch = ['torch']
+report_pdf_figures = ['matplotlib']
+reports = ['pygsti[html_reports,report_pdf_figures]']
+testing_no_cython_mpi = [
+    'pytest',
+    'pytest-xdist',
+    'pytest-cov',
+    'nbval',
+    'packaging',
+    'zmq',
+    'seaborn',
+    'ply',
+    'cirq-core',
+    'pygsti[diamond_norm,interpygate,memory_profiling,msgpack,notebooks,pytorch,reports]'
+]
+testing_no_cython = ['pygsti[multiprocessor,testing_no_cython_mpi]']
+testing = ['pygsti[extensions,testing_no_cython]']
+no_mpi = ['pygsti[evolutionary_optimization,extensions,linting,mongodb,testing_no_cython_mpi]']
+complete = ['pygsti[multiprocessor,no_mpi]']
 
 [project.urls]
 Homepage = 'https://www.pygsti.info'

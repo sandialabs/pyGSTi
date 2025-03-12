@@ -12,94 +12,6 @@ except ImportError:
     from distutils.extension import Extension
     from distutils.command.build_ext import build_ext
 
-
-    
-descriptionTxt = """\
-Gate set tomography (GST) is a quantum tomography protocol that provides full characterization of a quantum logic device
-(e.g. a qubit).  GST estimates a set of quantum logic gates and (simultaneously) the associated state preparation and
-measurement (SPAM) operations.  GST is self-calibrating.  This eliminates a key limitation of traditional quantum state
-and process tomography, which characterize either states (assuming perfect processes) or processes (assuming perfect
-state preparation and measurement), but not both together.  Compared with benchmarking protocols such as randomized
-benchmarking, GST provides much more detailed and accurate information about the gates, but demands more data.  The
-primary downside of GST has been its complexity.  Whereas benchmarking and state/process tomography data can be analyzed
-with relatively simple algorithms, GST requires more complex algorithms and more fine-tuning (linear GST is an exception
-that can be implemented easily).  pyGSTi addresses and eliminates this obstacle by providing a fully-featured, publicly
-available implementation of GST in the Python programming language.
-
-The primary goals of the pyGSTi project are to:
-
-- provide efficient and robust implementations of Gate Set Tomography algorithms;
-- allow straightforward interoperability with other software;
-- provide a powerful high-level interface suited to inexperienced programmers, so that
-  common GST tasks can be performed using just one or two lines of code;
-- use modular design to make it easy for users to modify, customize, and extend GST functionality.
-"""
-
-# Extra requirements
-extras = {
-    'pytorch' : ['torch'],
-    'diamond_norm': [
-        'cvxopt',
-        'cvxpy'
-    ],
-    'memory_profiling': ['psutil'],
-    'multiprocessor': ['mpi4py'],
-    'evolutionary_optimization': ['deap'],
-    'report_pickling': ['pandas'],
-    'report_pdf_figures': ['matplotlib'],
-    'html_reports': ['jinja2', 'MarkupSafe'],
-    'notebooks': [
-        'ipython',
-        'notebook',
-        'jupyter_server'
-    ],
-    'mongodb': ['pymongo'],
-    'msgpack': ['msgpack'],
-    'extensions': ['cython'],
-    'linting': [
-        'autopep8',
-        'flake8'
-    ],
-    'interpygate': ['csaps'],
-    'testing': [
-        'pytest',
-        'pytest-xdist',
-        'pytest-cov',
-        'nbval',
-        'csaps',
-        'cvxopt',
-        'cvxpy',
-        'cython',
-        'matplotlib',
-        'mpi4py',
-        'msgpack',
-        'packaging',
-        'pandas',
-        'psutil',
-        'zmq',
-        'jinja2',
-        'seaborn',
-        'scipy',
-        'ply',
-        'cirq-core',
-        'notebook',
-        'ipython',
-        'jupyter_server',
-        'torch'
-    ]
-}
-
-# Add `complete' target, which will install all extras listed above
-extras['complete'] = list({pkg for req in extras.values() for pkg in req})
-
-# Add `no_mpi' target, identical to `complete' target but without mpi4py,
-# which is unavailable in some common environments.
-extras['no_mpi'] = [e for e in extras['complete'] if e != 'mpi4py']
-
-# Add testing_no_cython target, identical to `testing` but no cython
-extras['testing_no_cython'] = [e for e in extras['testing'] if e != 'cython']
-
-
 # Configure setuptools_scm to build a custom version (for more info,
 # see https://stackoverflow.com/a/78657279 and https://setuptools-scm.readthedocs.io/en/latest/extending)
 # If on a clean release, it uses no local scheme
@@ -150,10 +62,8 @@ class build_ext_compiler_check(build_ext):
 
 def setup_with_extensions(extensions=None):
     setup(
-        long_description=descriptionTxt,
         use_scm_version={'version_scheme': 'no-guess-dev', 'version_file': "pygsti/_version.py", 'local_scheme': custom_version},
         cmdclass={'build_ext': build_ext_compiler_check},
-        extras_require=extras,
         ext_modules=extensions or [],
         packages=find_packages(),
         package_data={

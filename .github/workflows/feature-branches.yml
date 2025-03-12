@@ -18,7 +18,7 @@ jobs:
     strategy:
       # fail-fast: true is OK here
       matrix:
-        os: [macos-latest, ubuntu-latest, windows-latest] # TEMP: Try latest mac again # No Mac
+        os: [ubuntu-latest, windows-latest]
         python-version: [3.9, '3.12'] # Only extremal Python versions
     uses: ./.github/workflows/reuseable-main.yml
     name: Run pyGSTi tests
@@ -27,8 +27,8 @@ jobs:
       python-version: ${{ matrix.python-version }}
       use-cython: 'true' # Only test environment with Cython
       run-unit-tests: 'true'
-      run-extra-tests: 'true' # No integration tests # TEMP: Try integration tests
-      run-notebook-tests: 'true' # No notebook tests # TEMP: Try notebook tests
+      run-extra-tests: 'false' # No integration tests
+      run-notebook-tests: 'false' # No notebook tests
 
 
 
