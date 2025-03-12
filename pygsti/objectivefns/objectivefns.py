@@ -555,6 +555,8 @@ class RawObjectiveFunction(ObjectiveFunction):
         """
         return _np.sqrt(self.terms(probs, counts, total_counts, freqs, intermediates))
 
+    # Infinite loop in evaluation of "dterms" and "dlsvec".
+
     def dterms(self, probs, counts, total_counts, freqs, intermediates=None):
         """
         Compute the derivatives of the terms of this objective function.
@@ -589,10 +591,11 @@ class RawObjectiveFunction(ObjectiveFunction):
         """
         if intermediates is None:
             intermediates = self._intermediates(probs, counts, total_counts, freqs)
-        lsvec = self.lsvec(probs, counts, total_counts, freqs, intermediates)
+        u = self.lsvec(probs, counts, total_counts, freqs, intermediates)
+        v = self.dlsvec(probs, counts, total_counts, freqs, intermediates)
         # NOTE: this function is correct under the assumption that terms == lsvec**2,
         #       independent of whether or not lsvec is nonnegative.
-        return 2 * lsvec * self.dlsvec(probs, counts, total_counts, freqs, intermediates)
+        return 2 * u * v
 
     def dlsvec(self, probs, counts, total_counts, freqs, intermediates=None):
         """
@@ -627,7 +630,8 @@ class RawObjectiveFunction(ObjectiveFunction):
             A 1D array of length equal to that of each array argument.
         """
         # lsvec = sqrt(terms)
-        #   NOTE: ^ That's only correct if lsvec is >= 0, and some classes don't satisfy that.
+        #   NOTE: ^ That's only correct if lsvec is >= 0.
+        #           Any class that doesn't ensure lsvec >= 0 must override this function.
         # dlsvec = 0.5/lsvec * dterms
         #
         if intermediates is None:
@@ -2671,36 +2675,37 @@ class RawCustomWeightedChi2Function(RawChi2Function):
             return 2 * _np.ones(len(probs))
 
 
-# The log(Likelihood) within the Poisson picture is:                                                                                                    # noqa
-#                                                                                                                                                       # noqa
-# L = prod_{i,sl} lambda_{i,sl}^N_{i,sl} e^{-lambda_{i,sl}} / N_{i,sl}!                                                                                 # noqa
-#                                                                                                                                                       # noqa
-# Where lamba_{i,sl} := p_{i,sl}*N[i] is a rate, i indexes the operation sequence,                                                                      # noqa
-#  and sl indexes the spam label.  N[i] is the total counts for the i-th circuit, and                                                                   # noqa
-#  so sum_{sl} N_{i,sl} == N[i]. We can ignore the p-independent N_j! and take the log:                                                                 # noqa
-#                                                                                                                                                       # noqa
-# log L = sum_{i,sl} N_{i,sl} log(N[i]*p_{i,sl}) - N[i]*p_{i,sl}                                                                                        # noqa
-#       = sum_{i,sl} N_{i,sl} log(p_{i,sl}) - N[i]*p_{i,sl}   (where we ignore the p-independent log(N[i]) terms)                                       # noqa
-#                                                                                                                                                       # noqa
-# The objective function computes the negative log(Likelihood) as a vector of leastsq                                                                   # noqa
-#  terms, where each term == sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} )                                                                        # noqa
-#                                                                                                                                                       # noqa
-# See LikelihoodFunctions.py for details on patching                                                                                                    # noqa
-# The log(Likelihood) within the standard picture is:
-#
-# L = prod_{i,sl} p_{i,sl}^N_{i,sl}
-#
-# Where i indexes the operation sequence, and sl indexes the spam label.
-#  N[i] is the total counts for the i-th circuit, and
-#  so sum_{sl} N_{i,sl} == N[i]. We take the log:
-#
-# log L = sum_{i,sl} N_{i,sl} log(p_{i,sl})
-#
-# The objective function computes the negative log(Likelihood) as a vector of leastsq
-#  terms, where each term == sqrt( N_{i,sl} * -log(p_{i,sl}) )
-#
-# See LikelihoodFunction.py for details on patching
+"""
+The log(Likelihood) within the Poisson picture is:                                                                                                    # noqa
+                                                                                                                                                      # noqa
+L = prod_{i,sl} lambda_{i,sl}^N_{i,sl} e^{-lambda_{i,sl}} / N_{i,sl}!                                                                                 # noqa
+                                                                                                                                                      # noqa
+Where lamba_{i,sl} := p_{i,sl}*N[i] is a rate, i indexes the operation sequence,                                                                      # noqa
+ and sl indexes the spam label.  N[i] is the total counts for the i-th circuit, and                                                                   # noqa
+ so sum_{sl} N_{i,sl} == N[i]. We can ignore the p-independent N_j! and take the log:                                                                 # noqa
+                                                                                                                                                      # noqa
+log L = sum_{i,sl} N_{i,sl} log(N[i]*p_{i,sl}) - N[i]*p_{i,sl}                                                                                        # noqa
+      = sum_{i,sl} N_{i,sl} log(p_{i,sl}) - N[i]*p_{i,sl}   (where we ignore the p-independent log(N[i]) terms)                                       # noqa
+                                                                                                                                                      # noqa
+The objective function computes the negative log(Likelihood) as a vector of leastsq                                                                   # noqa
+ terms, where each term == sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} )                                                                        # noqa
+                                                                                                                                                      # noqa
+See LikelihoodFunctions.py for details on patching                                                                                                    # noqa
+The log(Likelihood) within the standard picture is:
 
+L = prod_{i,sl} p_{i,sl}^N_{i,sl}
+
+Where i indexes the operation sequence, and sl indexes the spam label.
+ N[i] is the total counts for the i-th circuit, and
+ so sum_{sl} N_{i,sl} == N[i]. We take the log:
+
+log L = sum_{i,sl} N_{i,sl} log(p_{i,sl})
+
+The objective function computes the negative log(Likelihood) as a vector of leastsq
+ terms, where each term == sqrt( N_{i,sl} * -log(p_{i,sl}) )
+
+See LikelihoodFunction.py for details on patching
+"""
 
 class RawPoissonPicDeltaLogLFunction(RawObjectiveFunction):
     """
@@ -3938,6 +3943,9 @@ class RawTVDFunction(RawObjectiveFunction):
                  resource_alloc=None, name='tvd', description="Total Variational Distance (TVD)", verbosity=0):
         super().__init__(regularization, resource_alloc, name, description, verbosity)
 
+    def chi2k_distributed_qty(self, objective_function_value):
+        return -1
+
     def terms(self, probs, counts, total_counts, freqs, intermediates=None):
         """
         Compute the terms of the objective function.
@@ -4003,7 +4011,11 @@ class RawTVDFunction(RawObjectiveFunction):
         numpy.ndarray
             A 1D array of length equal to that of each array argument.
         """
-        raise NotImplementedError("Derivatives not implemented for TVD yet!")
+        _warnings.warn('This derivative is discontinuous and does not return a full subgradient.')
+        t = probs - freqs
+        d = 0.5*_np.ones_like(t)
+        d[t < 0] *= -1
+        return d
 
     def hterms(self, probs, counts, total_counts, freqs, intermediates=None):
         """
@@ -5208,6 +5220,109 @@ class TVDFunction(TimeIndependentMDCObjectiveFunction):
     def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0):
         raw_objfn = RawTVDFunction(regularization, mdc_store.resource_alloc, name, description, verbosity)
         super().__init__(raw_objfn, mdc_store, penalties, verbosity)
+        self.num_circuits = 0
+        self.terms_weights = _np.array([])
+        self._update_terms_weights() # <-- properly computes the two properties above.
+
+    def _update_terms_weights(self):
+        # if self.num_circuits == self.layout.num_circuits:
+        #     # Assume there's nothing to do.
+        #     return
+        # else, assume that self.layout has been updated.
+        self.num_circuits = self.layout.num_circuits
+        num_elements = self.layout.num_elements
+        circuit_sizes = _np.zeros((num_elements,))
+        for elind, circuit, _ in self.layout:
+            circuit_sizes[elind] = 1 + circuit.num_gates
+        assert _np.all(circuit_sizes > 0)
+        self.terms_weights = 1 / circuit_sizes
+        self.terms_weights /= _np.mean(self.terms_weights)
+        # ^ Make the weights mean-1 to avoid unintended changes to Levenberg-Marquardt
+        #   stopping criteria.
+        return
+
+    # QUESTION: could I just call the base class's implementation of terms and then scale the 
+    # result? If so then I can avoid a ton of code duplication.
+    def terms(self, paramvec=None, oob_check=False, profiler_str="TERMS OBJECTIVE"):
+        tm = _time.time()
+        if paramvec is None:
+            paramvec = self.model.to_vector()
+        else:
+            self.model.from_vector(paramvec)
+        terms = self.obj.view()
+
+        unit_ralloc = self.layout.resource_alloc('atom-processing')
+        shared_mem_leader = unit_ralloc.is_host_leader
+
+        with self.resource_alloc.temporarily_track_memory(self.nelements):  # 'e' (terms)
+            self.model.sim.bulk_fill_probs(self.probs, self.layout)
+            self._clip_probs()
+    
+            if oob_check:  # Only used for termgap cases
+                if not self.model.sim.bulk_test_if_paths_are_sufficient(self.layout, self.probs, verbosity=1):
+                    raise ValueError("Out of bounds!")  # signals LM optimizer
+
+            if shared_mem_leader:
+                terms_no_penalty = self.raw_objfn.terms(self.probs, self.counts, self.total_counts, self.freqs)
+                terms[:self.nelements] = terms_no_penalty
+                if self._process_penalties:
+                    terms[self.nelements:] = self._terms_penalty(paramvec)
+
+        if self.firsts is not None and shared_mem_leader:
+            omitted_probs = 1.0 - _np.array([self.probs[self.layout.indices_for_index(i)].sum() for i in self.indicesOfCircuitsWithOmittedData])
+            omitted_probs_firsts_terms = self.raw_objfn.zero_freq_terms(self.total_counts[self.firsts], omitted_probs)
+            terms[self.firsts] += omitted_probs_firsts_terms
+        
+        self._update_terms_weights()
+        terms[:self.nelements] *= self.terms_weights
+        
+        unit_ralloc.host_comm_barrier()
+
+        self.raw_objfn.resource_alloc.profiler.add_time(profiler_str, tm)
+        assert(terms.shape == (self.nelements + self.local_ex,))
+        terms *= self.terms_weights
+        return terms
+
+    # QUESTION: could I just call the base class's implementation of dterms and then scale the 
+    # leading rows of the result? If so then I can avoid a ton of code duplication.
+    def dterms(self, paramvec=None):
+        tm = _time.time()
+        unit_ralloc = self.layout.resource_alloc('param-processing')
+        shared_mem_leader = unit_ralloc.is_host_leader
+
+        if paramvec is None:
+            paramvec = self.model.to_vector()
+        else:
+            self.model.from_vector(paramvec)
+    
+        dprobs = self.jac[0:self.nelements, :]
+        dprobs.shape = (self.nelements, self.nparams)
+
+        with self.resource_alloc.temporarily_track_memory(2 * self.nelements):
+            self.model.sim.bulk_fill_dprobs(dprobs, self.layout, self.probs)
+            self._clip_probs()
+            if shared_mem_leader:
+                if self.firsts is not None:
+                    for ii, i in enumerate(self.indicesOfCircuitsWithOmittedData):
+                        self.dprobs_omitted_rowsum[ii, :] = _np.sum(dprobs[self.layout.indices_for_index(i), :], axis=0)
+                dg_probs = self.raw_objfn.dterms(self.probs, self.counts, self.total_counts, self.freqs)
+                dprobs *= dg_probs[:, None]
+        
+        if shared_mem_leader and self.firsts is not None:
+            total_counts_firsts = self.total_counts[self.firsts]
+            omitted_probs = 1.0 - _np.array([_np.sum(self.probs[self.layout.indices_for_index(i)]) for i in self.indicesOfCircuitsWithOmittedData])
+            omitted_dprobs_firsts_dterms = self.raw_objfn.zero_freq_dterms(total_counts_firsts, omitted_probs)
+            dprobs[self.firsts] -= omitted_dprobs_firsts_dterms[:, None] * self.dprobs_omitted_rowsum
+    
+        self._update_terms_weights()
+        dprobs[:self.nelements] *= self.terms_weights[:, None]
+
+        if shared_mem_leader and self._process_penalties:
+            self._dterms_fill_penalty(paramvec, self.jac[self.nelements:, :])
+
+        unit_ralloc.host_comm_barrier()
+        self.raw_objfn.resource_alloc.profiler.add_time("JACOBIAN", tm)
+        return self.jac
 
 
 class TimeDependentMDCObjectiveFunction(MDCObjectiveFunction):
