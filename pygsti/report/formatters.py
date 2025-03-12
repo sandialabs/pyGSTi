@@ -67,7 +67,7 @@ NormalHTML = _Formatter(html,
                         ebstring='%s <span class="errorbar">&plusmn; %s</span>',
                         nmebstring='%s <span class="nmerrorbar">&plusmn; %s</span>')
 NormalLatex = _Formatter(latex,
-                         ebstring='$ \\begin{array}{c} %s \\\\ \pm %s \\end{array} $')  # nmebstring will match
+                         ebstring='$ \\begin{array}{c} %s \\\\ \\pm %s \\end{array} $')  # nmebstring will match
 
 # Normal replacements
 format_dict['Normal'] = {
@@ -186,7 +186,7 @@ format_dict['MathText'] = {
 
 format_dict['Vec'] = {
     'html': NormalHTML,
-    'latex': _Formatter(latex, ebstring='%s $\pm$ %s'),
+    'latex': _Formatter(latex, ebstring='%s $\\pm$ %s'),
     'python': _no_format}
 
 format_dict['Circuit'] = {

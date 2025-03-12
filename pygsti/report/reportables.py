@@ -15,7 +15,7 @@ Named quantities as well as their confidence-region error bars are
  used primarily in reports, so we refer to these quantities as
  "reportables".
 """
-import pkgutil
+import importlib
 import warnings as _warnings
 
 import numpy as _np
@@ -32,7 +32,7 @@ from pygsti.modelmembers.operations.lindbladcoefficients import LindbladCoeffici
 from pygsti.models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
 
 
-_CVXPY_AVAILABLE = pkgutil.find_loader('cvxpy') is not None
+_CVXPY_AVAILABLE = importlib.util.find_spec('cvxpy') is not None
 
 FINITE_DIFF_EPS = 1e-7
 
