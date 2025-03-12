@@ -4,13 +4,15 @@ from warnings import warn
 from collections import defaultdict
 
 try:
-    from setuptools import setup
+    from setuptools import setup, find_packages
     from setuptools import Extension
     from setuptools.command.build_ext import build_ext
 except ImportError:
     from distutils.core import setup
     from distutils.extension import Extension
     from distutils.command.build_ext import build_ext
+
+
     
 descriptionTxt = """\
 Gate set tomography (GST) is a quantum tomography protocol that provides full characterization of a quantum logic device
@@ -140,61 +142,12 @@ class build_ext_compiler_check(build_ext):
 
 def setup_with_extensions(extensions=None):
     setup(
-        name='pygsti',
-        dynamic=["version"],
-        use_scm_version={'version_scheme': 'no-guess-dev', 'local_scheme': custom_version},
-        cmdclass={'build_ext': build_ext_compiler_check},
-        description='A python implementation of Gate Set Tomography',
         long_description=descriptionTxt,
-        author='Erik Nielsen, Stefan Seritan, Corey Ostrove, Riley Murray, Jordan Hines, ' +\
-            'Kenneth Rudinger, Timothy Proctor, John Gamble, Robin Blume-Kohout',
-        author_email='pygsti@sandia.gov',
-        packages=[
-            'pygsti',
-            'pygsti.algorithms',
-            'pygsti.baseobjs',
-            'pygsti.baseobjs.opcalc',
-            'pygsti.circuits',
-            'pygsti.circuits.circuitparser',
-            'pygsti.data',
-            'pygsti.drivers',
-            'pygsti.evotypes',
-            'pygsti.evotypes.densitymx',
-            'pygsti.evotypes.densitymx_slow',
-            'pygsti.evotypes.statevec',
-            'pygsti.evotypes.statevec_slow',
-            'pygsti.evotypes.stabilizer',
-            'pygsti.evotypes.stabilizer_slow',
-            'pygsti.evotypes.chp',
-            'pygsti.extras',
-            'pygsti.extras.rpe',
-            'pygsti.extras.drift',
-            'pygsti.extras.ibmq',
-            'pygsti.extras.idletomography',
-            'pygsti.extras.interpygate',
-            'pygsti.extras.crosstalk',
-            'pygsti.extras.devices',
-            'pygsti.forwardsims',
-            'pygsti.io',
-            'pygsti.layouts',
-            'pygsti.models',
-            'pygsti.modelmembers',
-            'pygsti.modelmembers.states',
-            'pygsti.modelmembers.operations',
-            'pygsti.modelmembers.instruments',
-            'pygsti.modelmembers.povms',
-            'pygsti.modelpacks',
-            'pygsti.modelpacks.legacy',
-            'pygsti.objectivefns',
-            'pygsti.optimize',
-            'pygsti.processors',
-            'pygsti.protocols',
-            'pygsti.report',
-            'pygsti.report.section',
-            'pygsti.serialization',
-            'pygsti.tools',
-        ],
-        package_dir={'': '.'},
+        use_scm_version={'version_scheme': 'no-guess-dev', 'version_file': "pygsti/_version.py", 'local_scheme': custom_version},
+        cmdclass={'build_ext': build_ext_compiler_check},
+        extras_require=extras,
+        ext_modules=extensions or [],
+        packages=find_packages(),
         package_data={
             'pygsti.tools': ['fastcalc.pyx'],
             'pygsti.evotypes': [
@@ -277,40 +230,7 @@ def setup_with_extensions(extensions=None):
                 'templates/offline/fonts/*',
                 'templates/offline/images/*'
             ]
-        },
-        setup_requires=['setuptools>=61', 'setuptools_scm>=6.2'],
-        install_requires=[
-            'numpy>=1.15.0',
-            'scipy',
-            'plotly',
-            'pandas',
-            'networkx'
-        ],
-        extras_require=extras,
-        python_requires='>=3.9',
-        platforms=["any"],
-        url='http://www.pygsti.info',
-        download_url='https://github.com/sandialabs/pyGSTi/tarball/master',
-        keywords=[
-            'pygsti',
-            'tomography',
-            'gate set',
-            'pigsty',
-            'pig',
-            'quantum',
-            'qubit'
-        ],
-        classifiers=[
-            "Development Status :: 4 - Beta",
-            "Intended Audience :: Science/Research",
-            "License :: OSI Approved :: Apache Software License",
-            "Programming Language :: Python",
-            "Topic :: Scientific/Engineering :: Physics",
-            "Operating System :: Microsoft :: Windows",
-            "Operating System :: MacOS :: MacOS X",
-            "Operating System :: Unix"
-        ],
-        ext_modules=extensions or [],
+        }
     )
 
 

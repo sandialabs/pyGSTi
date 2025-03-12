@@ -1,8 +1,57 @@
 
 [build-system]
-requires = ["setuptools>=61", "wheel", "setuptools_scm>=6.2"]
+# see https://github.com/cvxgrp/cvxpy/issues/968 for numpy version
+requires = ["setuptools>=61", "wheel", "setuptools_scm>=6.2", "numpy>=1.16.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pygsti"
+dynamic = ["version", "readme", "optional-dependencies"]
+description = 'A python implementation of Gate Set Tomography'
+authors = [
+    {email = 'pygsti@sandia.gov'},
+    {name = 'Erik Nielsen'},
+    {name = 'Stefan Seritan'},
+    {name = 'Corey Ostrove'},
+    {name = 'Riley Murray'},
+    {name = 'Jordan Hines'},
+    {name = 'Kenneth Rudinger'},
+    {name = 'Timothy Proctor'},
+    {name = 'John Gamble'},
+    {name = 'Robin Blume-Kohout'}
+]
+dependencies=[
+    'numpy>=1.15.0',
+    'scipy',
+    'plotly',
+    'pandas',
+    'networkx'
+]
+requires-python='>=3.9'
+keywords=[
+    'pygsti',
+    'tomography',
+    'gate set',
+    'pigsty',
+    'pig',
+    'quantum',
+    'qubit'
+]
+classifiers=[
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: Unix"
+]
+
+[project.urls]
+Homepage = 'https://www.pygsti.info'
+Repository = 'https://github.com/sandialabs/pyGSTi'
+Download ='https://github.com/sandialabs/pyGSTi/tarball/master'
 
 [tool.setuptools_scm]
-write_to = "pygsti/_version.py"
-version_scheme = "post-release"
-local_scheme = "no-local-version"  # because pypi doesn't suppport it
+version_file = "pygsti/_version.py"
