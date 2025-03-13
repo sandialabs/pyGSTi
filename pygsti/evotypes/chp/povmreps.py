@@ -51,7 +51,7 @@ class POVMRep(_basereps.POVMRep):
 
         # Extract outputs
         #print("CHP program out (debug): ", out.decode('utf-8'))
-        pattern = _re.compile('Outcome of measuring qubit (\d+): (\d)( ?\S*)')
+        pattern = _re.compile(r'Outcome of measuring qubit (\d+): (\d)( ?\S*)')
         matched_values = []  # elements = (qubit_index, outcome, '(random)' or '') tuples
         for match in pattern.finditer(out.decode('utf-8')):
             matched_values.append((int(match.group(1)), match.group(2), match.group(3)))
