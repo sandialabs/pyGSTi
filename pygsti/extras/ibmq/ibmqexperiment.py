@@ -309,7 +309,7 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         if not self.disable_checkpointing:
             self.data.write(self.checkpoint_path, edesign_already_written=True)
 
-    def submit(self, ibmq_backend, start=None, stop=None, ignore_job_limit=True, wait_time=5, max_attempts=10):
+    def submit(self, ibmq_backend, start=None, stop=None, ignore_job_limit=True, wait_time=5, max_attempts=10, ibmq_session=None):
         """
         Submits the jobs to IBM Q, that implements the experiment specified by the ExperimentDesign
         used to create this object.
@@ -343,6 +343,9 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         wait_steps: int
             Number of steps to take before retrying job submission.
 
+        ibmq_session: IBMQuantumRuntimeSession
+            IBMQuantumRuntime Session to use 
+
         Returns
         -------
         None
@@ -375,7 +378,9 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
 
             stop = min(start + allowed_jobs, stop)
         
-        ibmq_session = _Session(backend = ibmq_backend)
+        if ibmq_session is None: 
+            ibmq_session = _Session(backend = ibmq_backend)
+
         sampler = _Sampler(session=ibmq_session)
         
         for batch_idx, batch in enumerate(self.qiskit_isa_circuit_batches):
