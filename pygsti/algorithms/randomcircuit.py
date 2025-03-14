@@ -769,7 +769,7 @@ def create_random_circuit(pspec, length, qubit_labels=None, sampler='Qeliminatio
                 layer = sample_circuit_layer_of_one_q_gates(pspec, qubit_labels, *lsargs, rand_state=rand_state)
             # For even layers, we sample according to the given distribution
             else:
-                layer = sampler(pspec, qubit_labels, *samplerargs)
+                layer = sampler(pspec, qubit_labels, *samplerargs, rand_state=rand_state)
             circuit.insert_layer_inplace(layer, 0)
 
     circuit.done_editing()
@@ -1990,7 +1990,7 @@ def create_random_germpower_mirror_circuits(pspec, absolute_compilation, depths,
     return circlist, outlist, aux
     
 ###begin BiRB tools###
-def _stabilizer_to_all_zs(stabilizer, qubit_labels, absolute_compilation):
+def _stabilizer_to_all_zs(stabilizer, qubit_labels, absolute_compilation, seed=None):
     #inputs: 
     #   - stabilizer: An n-qubit Pauli, represented as a string of X, Y, Z, and Is.
     #   - qubit_labels: list/tuple of qubit labels
@@ -1999,6 +1999,8 @@ def _stabilizer_to_all_zs(stabilizer, qubit_labels, absolute_compilation):
     #   into a Pauli with only Zs and Is.
     #   - s, layer, p_layer: Symplectic representation of the layer
     #   - stab_circuit: Layer as a compiled circuit
+    rng = _np.random.default_rng(seed)
+
     n = len(stabilizer)
     
     symp_reps = _symp.compute_internal_gate_symplectic_representations()
@@ -2018,7 +2020,7 @@ def _stabilizer_to_all_zs(stabilizer, qubit_labels, absolute_compilation):
             stab_layer.append((s_h, p_h))
             c.append(_lbl.Label('C12','{}'.format(qubit_labels[i])))
         elif stabilizer[i] == 'I':
-            rand_clifford = str(_np.random.choice(_np.arange(24)))
+            rand_clifford = str(rng.choice(_np.arange(24)))
             s_rand, p_rand = symp_reps['C'+rand_clifford]
             stab_layer.append((s_rand, p_rand))
             c.append(_lbl.Label('C'+rand_clifford,'{}'.format(qubit_labels[i])))
@@ -2064,7 +2066,7 @@ def _symplectic_to_pauli(s,p):
             
     return pauli
 
-def _sample_random_pauli(n,pspec = None, absolute_compilation = None, qubit_labels = None, circuit = False, include_identity = False):
+def _sample_random_pauli(n,pspec = None, absolute_compilation = None, qubit_labels = None, circuit = False, include_identity = False, seed=None):
     # Samples a random Pauli along with a +-1 phase. Returns the Pauli as a list or as a circuit depending 
     # upon the value of "circuit"
     #     - n: Number of qubits
@@ -2077,18 +2079,20 @@ def _sample_random_pauli(n,pspec = None, absolute_compilation = None, qubit_labe
         if qubit_labels is not None: qubits = qubit_labels[:]  # copy this list
         else: qubits = pspec.qubit_labels[:]
     
+    rng = _np.random.default_rng(seed)
+
     pauli_list = ['I','X','Y','Z']
     
     if include_identity is False:
         while True: 
-            rand_ints = _np.random.randint(0,4,n)
+            rand_ints = rng.integers(0, 4, n)
             if sum(rand_ints) != 0: # make sure we don't get all identities
                 break
     else:
-        rand_ints = _np.random.randint(0, 4, n)
+        rand_ints = rng.integers(0, 4, n)
             
     pauli = [pauli_list[i] for i in rand_ints]
-    if set(pauli) != set('I'): sign = _np.random.choice([-1,1])
+    if set(pauli) != set('I'): sign = rng.choice([-1,1])
     else: sign = 1
     
     if circuit is False:
@@ -2106,11 +2110,13 @@ def _sample_random_pauli(n,pspec = None, absolute_compilation = None, qubit_labe
     return pauli, sign, pauli_circuit
 
       
-def _select_neg_evecs(pauli, sign):
+def _select_neg_evecs(pauli, sign, seed=None):
     # Selects the entries in an n-qubit that will be turned be given a -1 1Q eigenstates
     #     - pauli: The n-qubit Pauli
     #     - sign: Whether you want a -1 or +1 eigenvector
     # Returns: A bitstring whose 0/1 entries specify if you have a +1 or -1 1Q eigenstate
+    rng = _np.random.default_rng(seed)
+    
     n = len(pauli)
     identity_bitstring = [0 if i == 'I' else 1 for i in pauli]
     nonzero_indices = _np.nonzero(identity_bitstring)[0]
@@ -2125,10 +2131,10 @@ def _select_neg_evecs(pauli, sign):
             choices = _np.arange(start = 0, stop = num_nid, step = 2)
         else:
             choices = _np.arange(start = 1, stop = num_nid+1, step = 2)
-    num_neg_evecs = _np.random.choice(choices)
+    num_neg_evecs = rng.choice(choices)
     assert((-1)**num_neg_evecs == sign)
     
-    neg_evecs = _np.random.choice(nonzero_indices, num_neg_evecs, replace = False)
+    neg_evecs = rng.choice(nonzero_indices, num_neg_evecs, replace = False)
     
     bit_evecs = _np.zeros(n)
     bit_evecs[neg_evecs] = 1
@@ -2160,7 +2166,7 @@ def _compose_initial_cliffords(prep_circuit):
         composed_layer.append(new_gate)
     return composed_layer
 
-def _sample_stabilizer(pauli, sign, absolute_compilation, qubit_labels):
+def _sample_stabilizer(pauli, sign, absolute_compilation, qubit_labels, seed=None):
     # Samples a random stabilizer of a Pauli, s = s_1 \otimes ... \otimes s_n. For each s_i,
     # we perform the following gates:
     #     - s_i = X: H
@@ -2176,10 +2182,10 @@ def _sample_stabilizer(pauli, sign, absolute_compilation, qubit_labels):
     #          preparation circuit, and a pygsti circuit representation of the prep circuit
 
 
-
+    rng = _np.random.default_rng(seed)
 
     n = len(pauli)
-    neg_evecs = _select_neg_evecs(pauli, sign)
+    neg_evecs = _select_neg_evecs(pauli, sign, seed=seed)
     assert((-1)**sum(neg_evecs) == sign)
     zvals = [0 if neg_evecs[i] == 0 else -1 for i in range(n)]
     
@@ -2199,7 +2205,7 @@ def _sample_stabilizer(pauli, sign, absolute_compilation, qubit_labels):
                  'Z': 'C0'}
     
     x_layer = [symp_reps['I'] if zvals[i] == 0 else symp_reps['X'] for i in range(len(zvals))]
-    circ_layer = [circ_dict[i] if i in circ_dict.keys() else 'C'+str(_np.random.randint(24)) for i in pauli]
+    circ_layer = [circ_dict[i] if i in circ_dict.keys() else 'C'+str(rng.integers(24)) for i in pauli]
 
     init_layer = [symp_reps[circ_layer[i]] for i in range(len(pauli))]
     
@@ -2257,8 +2263,7 @@ def _determine_sign(s_state, p_state, measurement):
 
 
 def create_binary_rb_circuit(pspec, clifford_compilations, length, qubit_labels=None, layer_sampling = 'mixed1q2q', sampler='Qelimination',
-                             samplerargs=None, addlocal=False, lsargs=None,
-                             seed=None):
+                             samplerargs=None, addlocal=False, lsargs=None, seed=None):
     """
     Generates a "binary randomized benchmarking" (BiRB) circuit.
 
@@ -2343,19 +2348,21 @@ def create_binary_rb_circuit(pspec, clifford_compilations, length, qubit_labels=
     
 
     rand_pauli, rand_sign, pauli_circuit = _sample_random_pauli(n = n, pspec = pspec, qubit_labels=qubit_labels,
-                                                                   absolute_compilation = clifford_compilations,
-                                                                   circuit = True, include_identity = False)
+                                                                absolute_compilation = clifford_compilations,
+                                                                circuit = True, include_identity = False, seed=seed+42)
 
-    s_inputstate, p_inputstate, s_init_layer, p_init_layer, prep_circuit = _sample_stabilizer(rand_pauli, rand_sign, clifford_compilations, qubit_labels)
+    s_inputstate, p_inputstate, s_init_layer, p_init_layer, prep_circuit = _sample_stabilizer(rand_pauli, rand_sign, clifford_compilations, 
+                                                                                              qubit_labels, seed=seed+43)
     
-    s_pc, p_pc = _symp.symplectic_rep_of_clifford_circuit(pauli_circuit, pspec=pspec.subset(gate_names_to_include='all', qubit_labels_to_keep=qubit_labels)) #note: if the pspec contains gates not in pyGSTi, this
+    s_pc, p_pc = _symp.symplectic_rep_of_clifford_circuit(pauli_circuit, pspec=pspec.subset(gate_names_to_include='all', 
+                                                                                            qubit_labels_to_keep=qubit_labels)) #note: if the pspec contains gates not in pyGSTi, this
     
     # build the initial layer of the circuit
     full_circuit = prep_circuit.copy(editable=True)
 
     # Sample a random circuit of "native gates".
     if layer_sampling == 'alternating1q2q':
-        circuit = random_alternating_clifford_circ(pspec, length, qubit_labels=qubit_labels, two_q_gate_density=samplerargs[0]) 
+        circuit = random_alternating_clifford_circ(pspec, length, qubit_labels=qubit_labels, two_q_gate_density=samplerargs[0], rand_state=rand_state) 
     elif layer_sampling == 'mixed1q2q':
         circuit = create_random_circuit(pspec=pspec, length=length, qubit_labels=qubit_labels, sampler=sampler,
                                     samplerargs=samplerargs, addlocal=addlocal, lsargs=lsargs, rand_state=rand_state)
@@ -2386,7 +2393,7 @@ def create_binary_rb_circuit(pspec, clifford_compilations, length, qubit_labels=
         
     # Turn the stabilizer into an all Z and I stabilizer. Append this to the circuit.
     
-    s_stab, p_stab, stab_circuit = _stabilizer_to_all_zs(pauli, qubit_labels, clifford_compilations)
+    s_stab, p_stab, stab_circuit = _stabilizer_to_all_zs(pauli, qubit_labels, clifford_compilations, seed=seed+404)
     
     full_circuit.append_circuit_inplace(stab_circuit)
     
@@ -2405,7 +2412,7 @@ def create_binary_rb_circuit(pspec, clifford_compilations, length, qubit_labels=
         
     return outcircuit, measurement, sign
 
-def random_alternating_clifford_circ(pspec, depth, qubit_labels=None, two_q_gate_density=0.25):
+def random_alternating_clifford_circ(pspec, depth, qubit_labels=None, two_q_gate_density=0.25, rand_state=None):
     """
     Generates a random circuit with composite layers cponsisting of a layer of two-qubit gates followed by 
     a layer of of single-qubit gates.
@@ -2443,8 +2450,9 @@ def random_alternating_clifford_circ(pspec, depth, qubit_labels=None, two_q_gate
     #sample # benchmarking layers = depth
     circ = _cir.Circuit(layer_labels=[], line_labels=qubit_labels, editable=True)
     for _ in range(depth):
-        oneQ_layer = _cir.Circuit([sample_circuit_layer_of_one_q_gates(pspec, qubit_labels = qubit_labels)]).parallelize()
-        twoQ_layer = _cir.Circuit(sample_circuit_layer_by_edgegrab(pspec, qubit_labels=qubit_labels, two_q_gate_density=two_q_gate_density)).parallelize()
+        oneQ_layer = _cir.Circuit([sample_circuit_layer_of_one_q_gates(pspec, qubit_labels = qubit_labels, rand_state=rand_state)]).parallelize()
+        twoQ_layer = _cir.Circuit(sample_circuit_layer_by_edgegrab(pspec, qubit_labels=qubit_labels, two_q_gate_density=two_q_gate_density, 
+                                                                   rand_state=rand_state)).parallelize()
         circ.append_circuit_inplace(twoQ_layer)
         circ.append_circuit_inplace(oneQ_layer)
     circ.done_editing()
