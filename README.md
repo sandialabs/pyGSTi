@@ -1,5 +1,5 @@
 ********************************************************************************
-  pyGSTi 0.9.13
+  pyGSTi 0.9.13.1
 ********************************************************************************
 
 [![master build](https://img.shields.io/github/actions/workflow/status/sandialabs/pyGSTi/beta-master.yml?branch=master&label=master)](https://github.com/sandialabs/pyGSTi/actions/workflows/beta-master.yml)
