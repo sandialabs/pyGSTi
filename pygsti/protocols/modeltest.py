@@ -2,7 +2,7 @@
 ModelTest Protocol objects
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -127,12 +127,6 @@ class ModelTest(_proto.Protocol):
         self.oplabel_aliases = None
         self.circuit_weights = None
         self.unreliable_ops = ('Gcnot', 'Gcphase', 'Gms', 'Gcn', 'Gcx', 'Gcz')
-
-    #def run_using_germs_and_fiducials(self, model, dataset, target_model, prep_fiducials,
-    #                                  meas_fiducials, germs, maxLengths):
-    #    from .gst import StandardGSTDesign as _StandardGSTDesign
-    #    design = _StandardGSTDesign(target_model, prep_fiducials, meas_fiducials, germs, maxLengths)
-    #    return self.run(_proto.ProtocolData(design, dataset))
 
     def run(self, data, memlimit=None, comm=None, checkpoint=None, checkpoint_path=None, disable_checkpointing=False,
             simulator: Optional[ForwardSimulator.Castable]=None):

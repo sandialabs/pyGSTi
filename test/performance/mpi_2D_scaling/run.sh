@@ -29,4 +29,4 @@ export MKL_NUM_THREADS=1
 # Note: This flags are useful on Kahuna to avoid error messages
 # But the --mca flags are not necessary for performance
 mpirun -np ${NUM_PROCS} --mca pml ucx --mca btl '^openib' \
-  python ./mpi_timings.py &> ${PREFIX}.out
+  python ./run_me_with_mpirun.py &> ${PREFIX}.out

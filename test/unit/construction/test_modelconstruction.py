@@ -523,7 +523,7 @@ class ModelConstructionTester(BaseCase):
                                                           prep_names=("rhoA", "rhoC"), povm_names=("Ma", "Mc"),
                                                           nonstd_preps={'rhoA': "rho0", 'rhoC': prep_vec},
                                                           nonstd_povms={'Ma': {'0': "0000", '1': EA},
-                                                                        'Mc': {'OutA': "0000", 'OutB': [EA, EB]}})
+                                                                        'Mc': {'OutA': "E_0000", 'OutB': [EA, EB], 'OutC': 'E13'}})
         pspec_vecs = save_and_load_pspec(pspec_vecs)  # make sure serialization works too
 
         self.assertEqual(pspec_vecs.prep_names, ('rhoA', 'rhoC'))
@@ -540,7 +540,7 @@ class ModelConstructionTester(BaseCase):
         self.assertArraysAlmostEqual(mdl_vecs.prep_blks['layers']['rhoC'].to_dense(), prep_supervec)
 
         self.assertEqual(list(mdl_vecs.povm_blks['layers']['Ma'].keys()), ['0', '1'])
-        self.assertEqual(list(mdl_vecs.povm_blks['layers']['Mc'].keys()), ['OutA', 'OutB'])
+        self.assertEqual(list(mdl_vecs.povm_blks['layers']['Mc'].keys()), ['OutA', 'OutB', 'OutC'])
 
         def Zeffect(index):
             v = np.zeros(2**4, complex); v[index] = 1.0
@@ -551,6 +551,7 @@ class ModelConstructionTester(BaseCase):
 
         self.assertArraysAlmostEqual(mdl_vecs.povm_blks['layers']['Mc']['OutA'].to_dense(), Zeffect(0))
         self.assertArraysAlmostEqual(mdl_vecs.povm_blks['layers']['Mc']['OutB'].to_dense(), Zeffect(14) + Zeffect(15))
+        self.assertArraysAlmostEqual(mdl_vecs.povm_blks['layers']['Mc']['OutC'].to_dense(), Zeffect(13))
 
     def test_instruments_in_processorspecs(self):
         #Instruments

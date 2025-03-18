@@ -2,7 +2,7 @@
 Functions for selecting a complete set of fiducials for a GST analysis.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -408,13 +408,6 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
     else:
         return prepFidList, measFidList    
 
-
-#def bool_list_to_ind_list(boolList):
-#    output = _np.array([])
-#    for i, boolVal in boolList:
-#        if boolVal == 1:
-#            output = _np.append(i)
-#    return output
 
 def xor(*args):
     """

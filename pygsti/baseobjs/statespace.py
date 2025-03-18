@@ -2,7 +2,7 @@
 Defines OrderedDict-derived classes used to store specific pyGSTi objects
 """
 # ***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -1273,6 +1273,7 @@ class ExplicitStateSpace(StateSpace):
         return ' + '.join(
             ['*'.join(["%s(%d%s)" % (lbl, self.label_dims[lbl], 'c' if (self.label_types[lbl] == 'C') else '')
                        for lbl in tpb]) for tpb in self.labels])
+
 
 def default_space_for_dim(dim):
     """

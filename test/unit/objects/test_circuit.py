@@ -626,6 +626,14 @@ MEASURE 2 ro[2]
         self.assertLess(abs(out['00'] - 0.5), 10**-10)
         self.assertLess(abs(out['11'] - 0.5), 10**-10)
 
+        # Comment this back in once issue described in #505 is fixed
+        # if mdl.evotype != "densitymx_slow":
+        #     # Also tests the non-Cython code if above tested "densitymx" (the default)
+        #     mdl2 = mc.create_crosstalk_free_model(ps, evotype="densitymx_slow")
+        #     out2 = c.simulate(mdl2)
+        #     self.assertLess(abs(out2['00'] - 0.5), 10**-10)
+        #     self.assertLess(abs(out2['11'] - 0.5), 10**-10)
+
     def test_simulate_marginalization(self):
         pspec = QubitProcessorSpec(4, ['Gx', 'Gy'], geometry='line')
         mdl = mc.create_crosstalk_free_model(pspec)

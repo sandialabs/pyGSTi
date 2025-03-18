@@ -2,7 +2,7 @@
 Defines the MapCOPALayout class.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -11,10 +11,12 @@ Defines the MapCOPALayout class.
 #***************************************************************************************************
 
 import collections as _collections
+import importlib as _importlib
+import numpy as _np
 
 from pygsti.layouts.distlayout import DistributableCOPALayout as _DistributableCOPALayout
 from pygsti.layouts.distlayout import _DistributableAtom
-from pygsti.layouts.prefixtable import PrefixTable as _PrefixTable
+from pygsti.layouts.prefixtable import PrefixTable as _PrefixTable, PrefixTableJacobian as _PrefixTableJacobian
 from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.tools import listtools as _lt
 
@@ -51,8 +53,10 @@ class _MapCOPALayoutAtom(_DistributableAtom):
     """
 
     def __init__(self, unique_complete_circuits, ds_circuits, group, model,
-                 dataset, max_cache_size, expanded_complete_circuit_cache = None):
-
+                 dataset, max_cache_size, 
+                 circuit_param_dependencies=None, param_circuit_dependencies=None, 
+                 expanded_complete_circuit_cache = None):
+        
         expanded_circuit_info_by_unique = dict()
         expanded_circuit_set = dict() # only use SeparatePOVMCircuit keys as ordered set
 
@@ -65,10 +69,22 @@ class _MapCOPALayoutAtom(_DistributableAtom):
                 unique_observed_outcomes = None if (dataset is None) else dataset[ds_circuits[i]].unique_outcomes
                 d = model.expand_instruments_and_separate_povm(unique_complete_circuits[i], unique_observed_outcomes)
             expanded_circuit_info_by_unique[i] = d  # a dict of SeparatePOVMCircuits => tuples of outcome labels
-            expanded_circuit_set.update(d)
-            
+            expanded_circuit_set.update(d)            
+
         expanded_circuits = list(expanded_circuit_set.keys())
+        
         self.table = _PrefixTable(expanded_circuits, max_cache_size)
+
+        #only Build the Jacobian prefix table if we are using the generic evotype.
+        if model.sim.calclib is _importlib.import_module("pygsti.forwardsims.mapforwardsim_calc_generic"):
+            #create a list for storing the model parameter dependencies of expanded circuits
+            expanded_param_circuit_depend = [{} for _ in range(len(param_circuit_dependencies))]
+            for i in group:
+                for param_idx in circuit_param_dependencies[i]:
+                    expanded_param_circuit_depend[param_idx].update(expanded_circuit_info_by_unique[i])
+            expanded_param_circuit_depend = [list(param_circuit_depend_dict.keys()) for  param_circuit_depend_dict in expanded_param_circuit_depend]
+
+            self.jac_table = _PrefixTableJacobian(expanded_circuits, max_cache_size, expanded_param_circuit_depend)
 
         #Create circuit element <=> integer index lookups for speed
         all_rholabels = set()
@@ -203,16 +219,33 @@ class MapCOPALayout(_DistributableCOPALayout):
 
     resource_alloc : ResourceAllocation, optional
         The resources available for computing circuit outcome probabilities.
+    
+    circuit_partition_cost_functions : tuple of str, optional (default ('size', 'propagations'))
+        A tuple of strings denoting cost function to use in each of the two stages of the algorithm
+        for determining the partitions of the complete circuit set amongst atoms.
+        Allowed options are 'size', which corresponds to balancing the number of circuits, 
+        and 'propagations', which corresponds to balancing the number of state propagations.
 
     verbosity : int or VerbosityPrinter
         Determines how much output to send to stdout.  0 means no output, higher
         integers mean more output.
+
+    layout_creation_circuit_cache : dict, optional (default None)
+        An optional dictionary containing pre-computed circuit structures/modifications which
+        can be used to reduce the overhead of repeated circuit operations during layout creation.
+    
+    load_balancing_parameters : tuple of floats, optional (default (1.2, .1))
+        A tuple of floats used as load balancing parameters when splitting a layout across atoms,
+        as in the multi-processor setting when using MPI. These parameters correspond to the `imbalance_threshold`
+        and `minimum_improvement_threshold` parameters described in the method `find_splitting_new`
+        of the `PrefixTable` class.
     """
 
     def __init__(self, circuits, model, dataset=None, max_cache_size=None,
                  num_sub_tables=None, num_table_processors=1, num_param_dimension_processors=(),
-                 param_dimensions=(), param_dimension_blk_sizes=(), resource_alloc=None, verbosity=0,
-                 layout_creation_circuit_cache=None):
+                 param_dimensions=(), param_dimension_blk_sizes=(), resource_alloc=None, 
+                 circuit_partition_cost_functions=('size', 'propagations'), verbosity=0, 
+                 layout_creation_circuit_cache=None, load_balancing_parameters = (1.2, .1)):
 
         unique_circuits, to_unique = self._compute_unique_circuits(circuits)
         aliases = circuits.op_label_aliases if isinstance(circuits, _CircuitList) else None
@@ -243,21 +276,41 @@ class MapCOPALayout(_DistributableCOPALayout):
                     split_circuits.append(split_ckt)
                 else:
                     split_circuits.append(model.split_circuit(c_complete, split_prep=False))
-            
 
+        #construct a map for the parameter dependence for each of the unique_complete_circuits.
+        #returns a dictionary who's keys are the unique completed circuits, and whose
+        #values are lists of model parameters upon which that circuit depends.
+        if model.sim.calclib is _importlib.import_module("pygsti.forwardsims.mapforwardsim_calc_generic") and model.param_interposer is None:
+            circ_param_map, param_circ_map = model.circuit_parameter_dependence(unique_complete_circuits, return_param_circ_map=True)
+            uniq_comp_circs_param_depend = list(circ_param_map.values())
+            uniq_comp_param_circs_depend = param_circ_map
+        else : 
+            circ_param_map = None
+            param_circ_map = None
+            uniq_comp_circs_param_depend = None
+            uniq_comp_param_circs_depend = None
         #construct list of unique POVM-less circuits.
         unique_povmless_circuits = [ckt_tup[1] for ckt_tup in split_circuits]
 
         max_sub_table_size = None  # was an argument but never used; remove in future
         if (num_sub_tables is not None and num_sub_tables > 1) or max_sub_table_size is not None:
             circuit_table = _PrefixTable(unique_povmless_circuits, max_cache_size)
-            groups = circuit_table.find_splitting(max_sub_table_size, num_sub_tables, verbosity=verbosity)
+            self.complete_circuit_table = circuit_table
+            groups = circuit_table.find_splitting_new(max_sub_table_size, num_sub_tables, verbosity=verbosity,
+                                                      initial_cost_metric=circuit_partition_cost_functions[0],
+                                                      rebalancing_cost_metric=circuit_partition_cost_functions[1],
+                                                      imbalance_threshold = load_balancing_parameters[0],
+                                                      minimum_improvement_threshold = load_balancing_parameters[1])
+            #groups = circuit_table.find_splitting(max_sub_table_size, num_sub_tables, verbosity=verbosity)
         else:
-            groups = [set(range(len(unique_complete_circuits)))]
+            groups = [list(range(len(unique_complete_circuits)))]
+        
 
         def _create_atom(group):
             return _MapCOPALayoutAtom(unique_complete_circuits, ds_circuits, group,
                                       model, dataset, max_cache_size,
+                                      circuit_param_dependencies= uniq_comp_circs_param_depend,
+                                      param_circuit_dependencies= uniq_comp_param_circs_depend,
                                       expanded_complete_circuit_cache=self.expanded_and_separated_circuits_cache)
 
         super().__init__(circuits, unique_circuits, to_unique, unique_complete_circuits,

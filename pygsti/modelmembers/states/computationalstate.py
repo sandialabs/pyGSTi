@@ -2,7 +2,7 @@
 The ComputationalBasisState class and supporting functionality.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -140,7 +140,7 @@ class ComputationalBasisState(_State, _NoErrorGeneratorInterface):
             else _statespace.StateSpace.cast(state_space)
         basis = _Basis.cast(basis, state_space)  # basis for Hilbert-Schmidt (superop) space
 
-        evotype = _Evotype.cast(evotype)
+        evotype = _Evotype.cast(evotype, state_space=state_space)
         self._evotype = evotype  # set this before call to _State.__init__ so self.to_dense() can work...
         rep = evotype.create_computational_state_rep(self._zvals, basis, state_space)
         _State.__init__(self, rep, evotype)
