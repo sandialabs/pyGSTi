@@ -22,7 +22,7 @@ def custom_version(version):
 
     b = version.branch if version.branch and version.branch != "master" else None
 
-    local_scheme = "no-local-version"
+    local_scheme = ""
     if version.dirty or version.distance:
         node_and_date = get_local_node_and_date(version)
 
