@@ -36,7 +36,7 @@ In particular, there are a number of characterization protocols currently implem
 
 PyGSTi is designed with a modular structure so as to be highly customizable
 and easily integrated to new or existing python software.  It runs using
-python 3.8 or higher.  To faclilitate integration with software for running
+python 3.9 or higher.  To faclilitate integration with software for running
 cloud-QIP experiments, pyGSTi `Circuit` objects can be converted to IBM's
 **OpenQASM** and Rigetti Quantum Computing's **Quil** circuit description languages.
 
