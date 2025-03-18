@@ -1780,6 +1780,7 @@ def errorgen_and_projections(errgen, mx_basis):
     ret = {}
     ret['error generator'] = errgen
 
+    mx_basis = _Basis.cast(mx_basis, errgen.shape[0])
     if set(mx_basis.name.split('*')) == set(['pp']):
         #HACK: convert 'pp' => 'PP' here, as that's typically used.  However, other
         # bases just pass through as before and may have different scalings than earlier
