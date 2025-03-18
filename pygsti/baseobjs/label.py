@@ -13,6 +13,7 @@ Defines the Label class
 import itertools as _itertools
 import numbers as _numbers
 import sys as _sys
+import numpy as _np
 
 
 class Label(object):
@@ -127,7 +128,10 @@ class Label(object):
             time = 0.0  # for non-TupTup labels not setting a time is equivalent to setting it to 0.0
 
         #print(" -> preproc with name=", name, "sslbls=", state_space_labels, "t=", time, "args=", args)
-        if state_space_labels is None or state_space_labels in ((), (None,)):
+        # If numpy object, we have to check size=0 for empty; otherwise, check for empty tuple
+        if state_space_labels is None \
+            or (isinstance(state_space_labels, (_np.ndarray, _np.generic)) and state_space_labels.size == 0) \
+            or (not isinstance(state_space_labels, (_np.ndarray, _np.generic)) and state_space_labels in ((), (None,))):
             if args is not None:
                 return LabelTupWithArgs.init(name, (), time, args)  # just use empty sslbls
             else:
