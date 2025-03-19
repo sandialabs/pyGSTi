@@ -442,7 +442,7 @@ class VectorBasisConstructor(object):
 def std_matrices(matrix_dim):
     """
     Get the elements of the matrix unit, or "standard", basis of matrix-dimension `matrix_dim`.
-    The matrices are ordered so that the row index changes the fastest.
+    The matrices are ordered so that the column index changes the fastest.
 
     Constructs the standard basis spanning the density-matrix space given by
     `matrix_dim` x `matrix_dim` matrices.

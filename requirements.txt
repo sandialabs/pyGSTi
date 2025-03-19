@@ -4,3 +4,4 @@ scipy
 plotly
 pandas
 networkx
+stim
