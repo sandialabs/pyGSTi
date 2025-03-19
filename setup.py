@@ -33,8 +33,6 @@ def custom_version(version):
             date = "clean"
         
         local_scheme = node + (f'.{b}.' if b else 'master') + date
-    elif b:
-        local_scheme = f"+{b}"
 
     return local_scheme
 
@@ -65,7 +63,7 @@ def setup_with_extensions(extensions=None):
         use_scm_version={'version_scheme': 'no-guess-dev', 'version_file': "pygsti/_version.py", 'local_scheme': custom_version},
         cmdclass={'build_ext': build_ext_compiler_check},
         ext_modules=extensions or [],
-        packages=find_packages(),
+        packages=find_packages(where='.', include=['pygsti']),
         package_data={
             'pygsti.tools': ['fastcalc.pyx'],
             'pygsti.evotypes': [
