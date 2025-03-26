@@ -2,7 +2,7 @@
 Functions for selecting a complete set of germs for a GST analysis.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -408,16 +408,25 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
 
     #force the line labels on each circuit to match the state space labels for the target model.
     #this is suboptimal for many-qubit models, so will probably want to revisit this. #TODO
-    finalGermList = []
-    for ckt in germList:
-        if ckt._static:
-            new_ckt = ckt.copy(editable=True)
-            new_ckt.line_labels = target_model.state_space.state_space_labels
-            new_ckt.done_editing()
-            finalGermList.append(new_ckt)
-        else:
-            ckt.line_labels = target_model.state_space.state_space_labels
-            finalGermList.append(ckt)
+    def fix_line_labels(germListToFix):
+        fixedGermList = []
+        if germListToFix is not None:
+            for ckt_or_list in germListToFix:
+                if isinstance(ckt_or_list, _circuits.Circuit) and ckt_or_list._static:
+                    new_ckt = ckt_or_list.copy(editable=True)
+                    new_ckt.line_labels = target_model.state_space.state_space_labels
+                    new_ckt.done_editing()
+                    fixedGermList.append(new_ckt)
+                elif isinstance(ckt_or_list, _circuits.Circuit):
+                    ckt_or_list.line_labels = target_model.state_space.state_space_labels
+                    fixedGermList.append(ckt_or_list)
+                else:
+                    # This is probably a list of circuits from GRASP w/ return_all = True
+                    # Call this function recursively
+                    fixedGermList.append(fix_line_labels(ckt_or_list))
+        return fixedGermList
+    finalGermList = fix_line_labels(germList)
+
     return finalGermList
 
 
@@ -4531,6 +4540,10 @@ def germ_set_spanning_vectors(target_model, germ_list, assume_real=False, float_
         amplificational properties of the reduced vector set. 
     """
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
+
+    if not isinstance(target_model.sim, _MatrixForwardSimulator):
+        target_model = target_model.copy()
+        target_model.sim = 'matrix'
     
     #Add some checks related to the option to switch up data types:
     if not assume_real:
