@@ -107,10 +107,12 @@ class CompleteElementaryErrorgenBasisTester(BaseCase):
         labels = self.complete_errorgen_basis_default_1Q.labels
 
         test_eg = GlobalElementaryErrorgenLabel('C', ['X', 'Y'], (0,))
+        test_eg_local = LocalElementaryErrorgenLabel('C', ['XI', 'YI'])
         test_eg_missing = GlobalElementaryErrorgenLabel('C', ['X', 'Y'], (1,))
 
         lbl_idx = self.complete_errorgen_basis_default_1Q.label_index(test_eg)
-
+        lbl_idx_1 = self.complete_errorgen_basis_default_1Q.label_index(test_eg_local)
+        assert lbl_idx == lbl_idx_1
         assert lbl_idx ==  labels.index(test_eg)
 
         with self.assertRaises(KeyError):

@@ -6,8 +6,14 @@
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
-
-import stim
+import warnings
+try:
+    import stim
+except ImportError:
+    msg = "Stim is required for use of the error generator propagation module, " \
+          "and it does not appear to be installed. If you intend to use this module please update" \
+          " your environment."
+    warnings.warn(msg)
 import numpy as _np
 import scipy.linalg as _spl
 from .localstimerrorgen import LocalStimErrorgenLabel as _LSE

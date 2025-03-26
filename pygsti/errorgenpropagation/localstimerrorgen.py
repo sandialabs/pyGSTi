@@ -9,7 +9,10 @@
 
 from pygsti.baseobjs.errorgenlabel import ElementaryErrorgenLabel as _ElementaryErrorgenLabel, GlobalElementaryErrorgenLabel as _GEEL,\
 LocalElementaryErrorgenLabel as _LEEL
-import stim
+try:
+    import stim
+except ImportError:
+    pass
 import numpy as _np
 from pygsti.tools import change_basis
 from pygsti.tools.lindbladtools import create_elementary_errorgen
