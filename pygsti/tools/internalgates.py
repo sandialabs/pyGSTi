@@ -504,8 +504,8 @@ def cirq_gatenames_standard_conversions():
 def qiskit_gatenames_standard_conversions():
     
     """
-    A dictionary converting Qiskit gates (based on Instruction.name) to built-in pyGSTi names for these gates. Additional flag in dict value indicates if the gate has params
-    Does not currently support conversion of all cirq gate types.
+    A dictionary converting Qiskit gates (based on Instruction.name) to built-in pyGSTi names for these gates. Additional flag in dict value indicates if the gate has params.
+    Does not currently support conversion of all qiskit gate types.
     """
 
     try:
@@ -525,6 +525,7 @@ def qiskit_gatenames_standard_conversions():
 
     qiskit_to_standard_mapping['rz'] = ['Gzr', True]
     qiskit_to_standard_mapping['u'] = ['Gu3', True]
+    qiskit_to_standard_mapping['u3'] = ['Gu3', True]
 
     qiskit_to_standard_mapping['cx'] = ['Gcnot', False]
     qiskit_to_standard_mapping['cz'] = ['Gcphase', False]

@@ -376,7 +376,7 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
             stop = min(start + allowed_jobs, stop)
         
         ibmq_session = _Session(backend = ibmq_backend)
-        sampler = _Sampler(session=ibmq_session)
+        sampler = _Sampler(mode=ibmq_session)
         
         for batch_idx, batch in enumerate(self.qiskit_isa_circuit_batches):
             if batch_idx < start or batch_idx >= stop:

@@ -16,11 +16,11 @@ from pygsti.processors import random_compilation as _rc
 #TODO: OOP-ify this code?
 
 def make_mirror_edesign(test_edesign: _FreeformDesign,
-                        ref_edesign: _FreeformDesign,
-                        id_exact_circ_dict: dict,
+                        ref_edesign: Optional[_FreeformDesign] = None,
+                        id_exact_circ_dict: Optional[dict] = None,
                         num_mcs_per_circ: int = 100,
                         num_ref_per_qubit_subset: int = 100,
-                        mirroring_strategy: Literal['rc', 'cp'] = 'rc',
+                        mirroring_strategy: Literal['pauli_rc', 'central_pauli'] = 'pauli_rc',
                         gate_set: str = 'u3_cx',
                         inverse: Optional[Callable[[_Circuit], _Circuit]] = None,
                         inv_kwargs: Optional[dict] = None,
@@ -81,11 +81,19 @@ def make_mirror_edesign(test_edesign: _FreeformDesign,
 
         qubit_subsets[aux['width']].append(qubits)
 
-        # find the corresponding exact circuit for the inexact circuit 'c' using the look-up table generated
-        circ_id = aux['id']
-        exact_circ = id_exact_circ_dict[circ_id]
+        if ref_edesign is not None:
+            # find the corresponding exact circuit for the inexact circuit 'c' using the look-up table generated
+            circ_id = aux['id']
 
-        assert test_edesign.aux_info[c][0]['id'] == ref_edesign.aux_info[exact_circ][0]['id'], f"ID mismatch! test circuit has ID {test_edesign.aux_info[c][0]['id']}, ref circuit has ID {ref_edesign.aux_info[exact_circ][0]['id']}"
+            assert id_exact_circ_dict is not None, "when providing separate test and reference compilations, you must provide a lookup dictionary for the reference circuits so they can be matched with the correct test circuits."
+            
+            exact_circ = id_exact_circ_dict[circ_id]
+
+            assert test_edesign.aux_info[c][0]['id'] == ref_edesign.aux_info[exact_circ][0]['id'], f"ID mismatch! test circuit has ID {test_edesign.aux_info[c][0]['id']}, ref circuit has ID {ref_edesign.aux_info[exact_circ][0]['id']}"
+
+        else:
+            print("using provided edesign for both reference and test compilations")
+            exact_circ = c
 
         # R for "Reference" circuit, T for "Test" circuit
         R = exact_circ
@@ -114,7 +122,7 @@ def make_mirror_edesign(test_edesign: _FreeformDesign,
                 elif gate_set == 'u3_cx':
                     Rinv_Linv, L_T_Rinv_Linv_bs = random_compiler.compile(R_inv + L_inv)
                     L_T_Rinv_Linv = L + T + Rinv_Linv
-                    # L_T_Rinv_Linv = L_T_Rinv_Linv.reorder_lines(c.line_labels)
+                    L_T_Rinv_Linv = L_T_Rinv_Linv.reorder_lines(c.line_labels)
                     L_R_Rinv_Linv, L_R_Rinv_Linv_bs = random_compiler.compile(L + R + R_inv + L_inv)
                 elif gate_set == 'clifford':
                     #TODO: add clifford RC function
@@ -139,6 +147,7 @@ def make_mirror_edesign(test_edesign: _FreeformDesign,
 
                     CP_Rinv_Linv, L_T_Rinv_Linv_bs = random_compiler.compile(circ=R_inv+L_inv)
                     L_T_Rinv_Linv = L + T + CP_Rinv_Linv
+                    L_T_Rinv_Linv = L_T_Rinv_Linv.reorder_lines(c.line_labels)
                     # print("new function:")
                     # print(L_T_Rinv_Linv)
                     # print(L_T_Rinv_Linv_bs)
@@ -161,7 +170,7 @@ def make_mirror_edesign(test_edesign: _FreeformDesign,
                     raise RuntimeError(f"No default CP function for gate set '{gate_set}' exists, you must provide your own!")
                 
             else:
-                raise RuntimeError("'mirroring_strategy' must be either 'rc' or 'cp'")
+                raise RuntimeError("'mirroring_strategy' must be either 'pauli_rc' or 'central_pauli'")
             
             L_T_Rinv_Linv_aux = [{'base_aux': a, 'idealout': L_T_Rinv_Linv_bs, 'id': j} for a in auxlist]
             test_ref_invs[L_T_Rinv_Linv] = L_T_Rinv_Linv_aux

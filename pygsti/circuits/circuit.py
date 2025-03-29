@@ -4018,7 +4018,7 @@ class Circuit(object):
         except ImportError:
             raise ImportError("Qiskit is required for this operation, and it does not appear to be installed.")
         
-        #mapping between cirq gates and pygsti gate names:
+        #mapping between qiskit gates and pygsti gate names:
         if qiskit_gate_conversion is not None:
             if use_standard_gate_conversion_as_backup == True:
                 qiskit_to_gate_name_mapping = _itgs.qiskit_gatenames_standard_conversions()
@@ -4076,20 +4076,24 @@ class Circuit(object):
             # print(num_qubits)
             # print(params)
 
-            pygsti_qubits = [qubit_conversion[i] for i in instruction_qubit_indices]
+            pygsti_gate_qubits = [qubit_conversion[i] for i in instruction_qubit_indices]
 
-            if name == 'measure' or name == 'barrier':
-                _warnings.warn('skipping measure or barrier')
+            if name == 'measure':
+                _warnings.warn('skipping measure')
+                continue
+
+            if name == 'barrier':
+                _warnings.warn('skipping barrier')
                 continue
 
             pygsti_gate_name = qiskit_to_gate_name_mapping[name][0]
 
-            label = _Label(pygsti_gate_name, pygsti_qubits, args=params)
+            label = _Label(pygsti_gate_name, pygsti_gate_qubits, args=params)
 
             
             #convert_qiskit_instruction_to_pygsti_label(name, qubits, params)
 
-            next_index = max(layer_indices[qubit] for qubit in pygsti_qubits)
+            next_index = max(layer_indices[qubit] for qubit in pygsti_gate_qubits)
             # print(f'computed next index for {pygsti_gate_name} gate on lines {pygsti_qubits}: {next_index}')
 
             if allow_different_gates_in_same_layer == True: #layers are not separated by the type of gate they contain
@@ -4097,12 +4101,12 @@ class Circuit(object):
                 if next_index < len(pygsti_circ_layers): #there is an existing layer in the circuit where the gate can be inserted
                     pygsti_circ_layers[next_index].append(label)
                     # print(f"inserting {pygsti_gate_name} gate in layer {next_index} on lines {pygsti_qubits}")
-                    for pygsti_qubit in pygsti_qubits: #update where a gate on these qubits can be placed
+                    for pygsti_qubit in pygsti_gate_qubits: #update where a gate on these qubits can be placed
                         layer_indices[pygsti_qubit] = next_index + 1
                 else:
                     # print(f"inserting {pygsti_gate_name} gate at end of circuit, which is layer {len(pygsti_circ_layers)} on lines {pygsti_qubits}")
                     pygsti_circ_layers.append([label]) #need to append gate at the end of the circuit, thus creating a new layer
-                    for pygsti_qubit in pygsti_qubits:
+                    for pygsti_qubit in pygsti_gate_qubits:
                         layer_indices[pygsti_qubit] = len(pygsti_circ_layers)
 
             else:
@@ -4110,7 +4114,7 @@ class Circuit(object):
                     if name == layer_names[i]:
                         # print(f'inserting gate {name} on qubits {qubits} in layer {i}')
                         pygsti_circ_layers[i].append(label)
-                        for pygsti_qubit in pygsti_qubits:
+                        for pygsti_qubit in pygsti_gate_qubits:
                             layer_indices[pygsti_qubit] = i + 1
                         break
 
@@ -4118,7 +4122,7 @@ class Circuit(object):
                     # print(f'inserting gate {name} on qubits {qubits} in layer {len(pygsti_circ_layers)}')
                     pygsti_circ_layers.append([label])
                     layer_names.append(name)
-                    for pygsti_qubit in pygsti_qubits:
+                    for pygsti_qubit in pygsti_gate_qubits:
                         layer_indices[pygsti_qubit] = len(pygsti_circ_layers)
             
         circuit = cls(pygsti_circ_layers, line_labels=line_labels)
