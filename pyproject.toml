@@ -41,13 +41,13 @@ keywords=[
 classifiers=[
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python",
     "Topic :: Scientific/Engineering :: Physics",
     "Operating System :: Microsoft :: Windows",
     "Operating System :: MacOS :: MacOS X",
     "Operating System :: Unix"
 ]
+license = "Apache-2.0"
 
 [project.optional-dependencies]
 diamond_norm = [
