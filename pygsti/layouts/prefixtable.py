@@ -12,7 +12,6 @@ Defines the PrefixTable class.
 
 import collections as _collections
 import networkx as _nx
-import matplotlib.pyplot as plt
 from math import ceil
 from pygsti.baseobjs import Label as _Label
 from pygsti.circuits.circuit import SeparatePOVMCircuit as _SeparatePOVMCircuit
@@ -1208,6 +1207,8 @@ def _draw_graph(G, node_label_key='label', edge_label_key='promotion_cost', figu
         An optional size specifier passed into the matplotlib figure
         constructor to set the plot size.
     """
+    import matplotlib.pyplot as plt
+    
     plt.figure(figsize=figure_size)
     pos = _nx.nx_agraph.graphviz_layout(G, prog="dot", args="-Granksep=5 -Gnodesep=10")
     labels = _nx.get_node_attributes(G, node_label_key)
