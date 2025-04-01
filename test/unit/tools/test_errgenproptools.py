@@ -251,7 +251,7 @@ class ApproxStabilizerMethodTester(BaseCase):
             ut = stim.Tableau.from_state_vector(u, endian='little')
             vt = stim.Tableau.from_state_vector(v, endian='little')
             actual = _eprop.tableau_fidelity(ut, vt)
-            np.testing.assert_allclose(actual, expected, rtol=1e-5)
+            np.testing.assert_allclose(actual, expected, atol=1e-14, rtol=1e-5)
 
         s = 0.5**0.5
         _assert_correct_tableau_fidelity([1, 0], [0, 1])
