@@ -355,6 +355,6 @@ try:
 except SystemExit as e:
     print("\nAn error occurred while compiling Cython extensions.")
     print("Either fix the compilation issue or use the PYGSTI_CYTHON_SKIP to skip compilation,",)
-    print('e.g. PYGSTI_CYTHON_SKIP=1 pip install pygsti\n')
-    print("To enable partial Cython failures (i.e. the exclude_failures=True flag of cythonize), use PYGSTI_CYTHON_EXCLUDE_FAILURES instead.")
+    print('e.g. PYGSTI_CYTHON_SKIP=1 pip install pygsti')
+    print("To enable partial Cython failures (i.e. the exclude_failures=True flag of cythonize), use PYGSTI_CYTHON_EXCLUDE_FAILURES instead.\n")
     raise e
