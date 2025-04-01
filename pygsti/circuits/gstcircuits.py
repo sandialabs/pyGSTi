@@ -26,6 +26,9 @@ from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrint
 from pygsti.tools import listtools as _lt
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
 
+from typing import Dict
+ordereddict = Dict
+
 
 def _create_raw_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_length_list,
                             fid_pairs=None, trunc_scheme="whole germ powers", nest=True,
@@ -444,7 +447,7 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
                 for i in reversed(inds_to_remove):
                     del fidpair_indices[i]
 
-        fidpairs = {(j, i): (prep_fiducials[i], meas_fiducials[j]) for i, j in fidpair_indices}
+        fidpairs: ordereddict = {(j, i): (prep_fiducials[i], meas_fiducials[j]) for i, j in fidpair_indices}
 
         if base_circuit not in plaquette_dict:
             pkey_dict[base_circuit] = (maxlen, germ)
@@ -527,7 +530,7 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
     if nest:
         #keep track of running quantities used to build circuit structures
         running_plaquette_keys = {}  # base-circuit => (maxlength, germ) key for final plaquette dict
-        running_plaquettes = dict()  # keep consistent ordering in produced circuit list.
+        running_plaquettes: ordereddict = dict()  # keep consistent ordering in produced circuit list.
         running_unindexed = []
         running_maxLens = []
 
@@ -553,7 +556,7 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
             unindexed = running_unindexed
         else:  # create a new cs for just this maxLen
             pkey = {}  # base-circuit => (maxlength, germ) key for final plaquette dict
-            plaquettes = dict()
+            plaquettes: ordereddict = dict()
             maxLens = [maxLen]
             unindexed = []
 
