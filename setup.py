@@ -15,12 +15,10 @@ except ImportError:
 # Configure setuptools_scm to build a custom version (for more info,
 # see https://stackoverflow.com/a/78657279 and https://setuptools-scm.readthedocs.io/en/latest/extending)
 # If on a clean release, it uses no local scheme
-# Otherwise, it uses g{commit hash}.{branch}.[clean | d{date}] for the local scheme,
-# where the last entry is "clean" if everything is committed and otherwise the date of last commit
+# Otherwise, it uses g{commit hash}.{branch}.[CLEAN | d{date}] for the local scheme,
+# where the last entry is "CLEAN" if everything is committed and otherwise the date of last commit
 def custom_version(version):
     from setuptools_scm.version import get_local_node_and_date
-
-    b = version.branch if version.branch and version.branch != "master" else None
 
     local_scheme = ""
     if version.dirty or version.distance:
@@ -30,9 +28,9 @@ def custom_version(version):
             node, date = node_and_date.split('.')
         else:
             node = node_and_date
-            date = "clean"
+            date = "CLEAN"
         
-        local_scheme = node + (f'.{b}.' if b else 'master') + date
+        local_scheme = node + f'.{version.branch}.' + date
 
     return local_scheme
 
