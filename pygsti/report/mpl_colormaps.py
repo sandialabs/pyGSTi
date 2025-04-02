@@ -2,7 +2,7 @@
 Plotly-to-Matplotlib conversion functions.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -540,7 +540,7 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
                 axes.bar(x, y, barWidth, color=color)
             else:
                 axes.bar(x, y, barWidth, color=color,
-                         yerr=yerr.flatten().real)
+                         yerr=yerr.ravel().real)
 
             if xtickvals is not None:
                 xtics = _np.array(xtickvals) + 0.5  # _np.arange(plt_data.shape[1])+0.5

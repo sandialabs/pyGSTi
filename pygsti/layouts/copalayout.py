@@ -2,7 +2,7 @@
 A object representing the indexing into a (flat) array of circuit outcome probabilities.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -190,24 +190,26 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
         if unique_circuits is None and to_unique is None:
             unique_circuits, to_unique = self._compute_unique_circuits(circuits)
         self._unique_circuits = unique_circuits
-        self._unique_circuit_index = _collections.OrderedDict(
-            [(c, i) for i, c in enumerate(self._unique_circuits)])  # original circuits => unique circuit indices
+        self._unique_circuit_index = {c:i for i, c in enumerate(self._unique_circuits)}  # original circuits => unique circuit indices
         self._to_unique = to_unique  # original indices => unique circuit indices
         self._unique_complete_circuits = unique_complete_circuits  # Note: can be None
         self._param_dimensions = param_dimensions
         self._resource_alloc = _ResourceAllocation.cast(resource_alloc)
 
-        max_element_index = max(_it.chain(*[[ei for ei, _ in pairs] for pairs in elindex_outcome_tuples.values()])) \
-            if len(elindex_outcome_tuples) > 0 else -1  # -1 makes _size = 0 below
-        indices = set(i for tuples in elindex_outcome_tuples.values() for i, o in tuples)
+        indices = [i for tuples in elindex_outcome_tuples.values() for i, _ in tuples]
+        max_element_index = max(indices) if len(elindex_outcome_tuples) > 0 else -1  # -1 makes _size = 0 below
+        indices = set(indices)
+        
+        
         self._size = max_element_index + 1
         assert(len(indices) == self._size), \
             "Inconsistency: %d distinct indices but max index + 1 is %d!" % (len(indices), self._size)
 
-        self._outcomes = _collections.OrderedDict()
-        self._element_indices = _collections.OrderedDict()
+        self._outcomes = dict()
+        self._element_indices = dict()
+        sort_idx_func = lambda x: x[0]
         for i_unique, tuples in elindex_outcome_tuples.items():
-            sorted_tuples = sorted(tuples, key=lambda x: x[0])  # sort by element index
+            sorted_tuples = sorted(tuples, key=sort_idx_func)  # sort by element index
             elindices, outcomes = zip(*sorted_tuples)  # sorted by elindex so we make slices whenever possible
             self._outcomes[i_unique] = tuple(outcomes)
             self._element_indices[i_unique] = _slct.list_to_slice(elindices, array_ok=True)
@@ -597,10 +599,6 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
         None
         """
         jtj[:] = _np.dot(j.T, j)
-
-    #Not needed
-    #def allocate_jtj_shared_mem_buf(self):
-    #    return _np.empty((self._param_dimensions[0], self._param_dimensions[0]), 'd'), None
 
     def memory_estimate(self, array_type, dtype='d'):
         """

@@ -2,7 +2,7 @@
 Defines the Circuit class
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -20,12 +20,7 @@ from pygsti.baseobjs.label import Label as _Label, CircuitLabel as _CircuitLabel
 from pygsti.baseobjs import outcomelabeldict as _ld, _compatibility as _compat
 from pygsti.tools import internalgates as _itgs
 from pygsti.tools import slicetools as _slct
-
-
-#Internally:
-# when static: a tuple of Label objects labelling each top-level circuit layer
-# when editable: a list of lists, one per top-level layer, holding just
-# the non-LabelTupTup (non-compound) labels.
+from pygsti.tools.legacytools import deprecate as _deprecate_fn
 
 #Externally, we'd like to do thinks like:
 # c = Circuit( LabelList )
@@ -101,13 +96,12 @@ def _label_to_nested_lists_of_simple_labels(lbl, default_sslbls=None, always_ret
     """ Convert lbl into nested lists of *simple* labels """
     if not isinstance(lbl, _Label):  # if not a Label, make into a label,
         lbl = _Label(lbl)  # e.g. a string or list/tuple of labels, etc.
-    if lbl.is_simple():  # a *simple* label - the elements of our lists
+    if lbl.IS_SIMPLE:  # a *simple* label - the elements of our lists
         if lbl.sslbls is None and default_sslbls is not None:
             lbl = _Label(lbl.name, default_sslbls)
         return [lbl] if always_return_list else lbl
     return [_label_to_nested_lists_of_simple_labels(l, default_sslbls, False)
             for l in lbl.components]  # a *list*
-
 
 def _sslbls_of_nested_lists_of_simple_labels(obj, labels_to_ignore=None):
     """ Get state space labels from a nested lists of simple (not compound) Labels. """
@@ -119,7 +113,6 @@ def _sslbls_of_nested_lists_of_simple_labels(obj, labels_to_ignore=None):
         sub_sslbls = [_sslbls_of_nested_lists_of_simple_labels(sub, labels_to_ignore) for sub in obj]
         return None if (None in sub_sslbls) else set(_itertools.chain(*sub_sslbls))
 
-
 def _accumulate_explicit_sslbls(obj):
     """
     Get all the explicitly given state-space labels within `obj`,
@@ -127,7 +120,7 @@ def _accumulate_explicit_sslbls(obj):
     """
     ret = set()
     if isinstance(obj, _Label):
-        if not obj.is_simple():
+        if not obj.IS_SIMPLE:
             for lbl in obj.components:
                 ret.update(_accumulate_explicit_sslbls(lbl))
         else:  # a simple label
@@ -205,87 +198,6 @@ class Circuit(object):
     construct the circuit in place, after which `done_editing()` should be
     called so that the Circuit can be properly hashed as needed.
 
-    Parameters
-    ----------
-    layer_labels : iterable of Labels or str
-        This argument provides a list of the layer labels specifying the
-        state preparations, gates, and measurements for the circuit.  This
-        argument can also be a :class:`Circuit` or a string, in which case
-        it is parsed as a text-formatted circuit.  Internally this will
-        eventually be converted to a list of `Label` objects, one per layer,
-        but it may be specified using anything that can be readily converted
-        to a Label objects.  For example, any of the following are allowed:
-
-        - `['Gx','Gx']` : X gate on each of 2 layers
-        - `[Label('Gx'),Label('Gx')]` : same as above
-        - `[('Gx',0),('Gy',0)]` : X then Y on qubit 0 (2 layers)
-        - `[[('Gx',0),('Gx',1)],[('Gy',0),('Gy',1)]]` : parallel X then Y on qubits 0 & 1
-
-    line_labels : iterable, optional
-        The (string valued) label for each circuit line.  If `'auto'`, then
-        `line_labels` is taken to be the list of all state-space labels
-        present within `layer_labels`.  If there are no such labels (e.g.
-        if `layer_labels` contains just gate names like `('Gx','Gy')`), then
-        the special value `'*'` is used as a single line label.
-
-    num_lines : int, optional
-        Specify this instead of `line_labels` to set the latter to the
-        integers between 0 and `num_lines-1`.
-
-    editable : bool, optional
-        Whether the created `Circuit` is created in able to be modified.  If
-        `True`, then you should call `done_editing()` once the circuit is
-        completely assembled, as this makes the circuit read-only and
-        allows it to be hashed.
-
-    stringrep : string, optional
-        A string representation for the circuit.  If `None` (the default),
-        then this will be generated automatically when needed.  One
-        reason you'd want to specify this is if you know of a nice compact
-        string representation that you'd rather use, e.g. `"Gx^4"` instead
-        of the automatically generated `"GxGxGxGx"`.  If you want to
-        initialize a `Circuit` entirely from a string representation you
-        can either specify the string in as `layer_labels` or set
-        `layer_labels` to `None` and `stringrep` to any valid (one-line)
-        circuit string.
-
-    name : str, optional
-        A name for this circuit (useful if/when used as a block within
-        larger circuits).
-
-    check : bool, optional
-        Whether `stringrep` should be checked against `layer_labels` to
-        ensure they are consistent, and whether the labels in `layer_labels`
-        are a subset of `line_labels`.  The only reason you'd want to set
-        this to `False` is if you're absolutely sure `stringrep` and
-        `line_labels` are consistent and want to save computation time.
-
-    expand_subcircuits : bool or "default"
-        If `"default"`, then the value of `Circuit.default_expand_subcircuits`
-        is used.  If True, then any sub-circuits (e.g. anything exponentiated
-        like "(GxGy)^4") will be expanded when it is stored within the created
-        Circuit.  If False, then such sub-circuits will be left as-is.  It's
-        typically more robust to expand sub-circuits as this facilitates
-        comparison (e.g. so "GxGx" == "Gx^2"), but in cases when you have
-        massive exponents (e.g. "Gx^8192") it may improve performance to
-        set `expand_subcircuits=False`.
-
-    occurrence : hashable, optional
-        A value to set as the "occurrence id" for this circuit.  This
-        value doesn't affect the circuit an any way except by affecting
-        it's hashing and equivalence testing.  Circuits with different
-        occurrence ids are *not* equivalent.  Occurrence values effectively
-        allow multiple copies of the same ciruit to be stored in a
-        dictionary or :class:`DataSet`.
-
-    compilable_layer_indices : tuple, optional
-        The circuit-layer indices that may be internally altered (but retaining the
-        same target operation) and/or combined with the following circuit layer
-        by a hardware compiler.when executing this circuit.  Layers that are
-        not "compilable" are effectively followed by a *barrier* which prevents
-        the hardward compiler from restructuring the circuit across the layer
-        boundary.
-
     Attributes
     ----------
     default_expand_subcircuits : bool
@@ -302,6 +214,17 @@ class Circuit(object):
 
     str : str
         The Python string representation of this Circuit.
+    
+    layer_labels : 
+        When static: a tuple of Label objects labelling each top-level circuit layer
+        When editable: a list of lists, one per top-level layer, holding just
+        the non-LabelTupTup (non-compound) labels. I.e. in the static case a LabelTupTup 
+        which specifies a complete circuit layer is assumed to contain no LabelTupTups as 
+        sub-components. Similarly, in the  editable case a nested sublist which 
+        contains a set of Labels for a complete circuit layer is assumed to contain 
+        no further nested sublists as elements. For more complicated nested 
+        circuit structures, if required, circuits can contain CircuitLabel objects as elements.
+        see :class:pygsti.baseobjs.label.CircuitLabel.
     """
     default_expand_subcircuits = True
 
@@ -471,7 +394,6 @@ class Circuit(object):
             expand_subcircuits = Circuit.default_expand_subcircuits
         if expand_subcircuits and layer_labels is not None:
             layer_labels_objs = tuple(_itertools.chain(*[x.expand_subcircuits() for x in map(to_label, layer_labels)]))
-            #print("DB: Layer labels = ",layer_labels_objs)
 
         #Parse stringrep if needed
         if stringrep is not None and (layer_labels is None or check):
@@ -480,7 +402,6 @@ class Circuit(object):
             chk, chk_labels, chk_occurrence, chk_compilable_inds = cparser.parse(stringrep)  # tuple of Labels
             if expand_subcircuits and chk is not None:
                 chk = tuple(_itertools.chain(*[x.expand_subcircuits() for x in map(to_label, chk)]))
-                #print("DB: Check Layer labels = ",chk)
 
             if layer_labels is None:
                 layer_labels = chk
@@ -488,7 +409,6 @@ class Circuit(object):
                 if layer_labels_objs is None:
                     layer_labels_objs = tuple(map(to_label, layer_labels))
                 if layer_labels_objs != tuple(chk):
-                    #print("DB: ",layer_labels_objs,"VS",tuple(chk))
                     raise ValueError(("Error intializing Circuit: "
                                       " `layer_labels` and `stringrep` do not match: %s != %s\n"
                                       "(set `layer_labels` to None to infer it from `stringrep`)")
@@ -573,51 +493,80 @@ class Circuit(object):
         if compilable_layer_indices is not None:
             max_layer_index = len(labels) - 1
             if any([(i < 0 or i > max_layer_index) for i in compilable_layer_indices]):
-                raise ValueError("Entry our of range in `compilable_layer_indices`!")
-            compilable_layer_indices = tuple(compilable_layer_indices)
+                raise ValueError("Entry out of range in `compilable_layer_indices`!")
+            compilable_layer_indices_tup = tuple(compilable_layer_indices)
+        else:
+            compilable_layer_indices_tup = ()
 
         #Set *all* class attributes (separated so can call bare_init separately for fast internal creation)
-        self._bare_init(labels, my_line_labels, editable, name, stringrep, occurrence, compilable_layer_indices)
+        self._bare_init(labels, my_line_labels, editable, name, stringrep, 
+                        occurrence, compilable_layer_indices_tup)
 
-        # # Special case: layer_labels can be a single CircuitLabel or Circuit
-        # # (Note: a Circuit would work just fine, as a list of layers, but this performs some extra checks)
-        # isCircuit = isinstance(layer_labels, _Circuit)
-        # isCircuitLabel = isinstance(layer_labels, _CircuitLabel)
-        # if isCircuitLabel:
-        #    assert(line_labels is None or line_labels == "auto" or line_labels == expected_line_labels), \
-        #        "Given `line_labels` (%s) are inconsistent with CircuitLabel's sslbls (%s)" \
-        #        % (str(line_labels),str(layer_labels.sslbls))
-        #    assert(num_lines is None or layer_labels.sslbls == tuple(range(num_lines))), \
-        #        "Given `num_lines` (%d) is inconsistend with CircuitLabel's sslbls (%s)" \
-        #        % (num_lines,str(layer_labels.sslbls))
-        #    if name is None: name = layer_labels.name # Note: `name` can be used to rename a CircuitLabel
-
-        #    self._line_labels = layer_labels.sslbls
-        #    self._reps = layer_labels.reps
-        #    self._name = name
-        #    self._static = not editable
 
     @classmethod
     def _fastinit(cls, labels, line_labels, editable, name='', stringrep=None, occurrence=None,
-                  compilable_layer_indices=None):
+                  compilable_layer_indices_tup=()):
         ret = cls.__new__(cls)
-        ret._bare_init(labels, line_labels, editable, name, stringrep, occurrence)
+        ret._bare_init(labels, line_labels, editable, name, stringrep, occurrence, compilable_layer_indices_tup)
         return ret
 
+    #Note: If editing _bare_init one should also check _copy_init in case changes must be propagated.
     def _bare_init(self, labels, line_labels, editable, name='', stringrep=None, occurrence=None,
-                   compilable_layer_indices=None):
+                   compilable_layer_indices_tup=()):
+        self._labels = labels
+        self._line_labels = tuple(line_labels)
+        self._occurrence_id = occurrence
+        self._compilable_layer_indices_tup = compilable_layer_indices_tup # always a tuple, but can be empty.
+        self._static = not editable
+        if self._static:
+            self._hashable_tup = self.tup #if static precompute and cache the hashable circuit tuple.
+            self._hash = hash(self._hashable_tup)
+            self._str = stringrep
+        else:
+            self._str = None # can be None (lazy generation)
+        self._name = name  # can be None
+        #self._times = None  # for FUTURE expansion
+        self.auxinfo = {}  # for FUTURE expansion / user metadata
+
+    #Note: If editing _copy_init one should also check _bare_init in case changes must be propagated.
+    #specialized codepath for copying
+    def _copy_init(self, labels, line_labels, editable, name='', stringrep=None, occurrence=None,
+                compilable_layer_indices_tup=(), hashable_tup=None, precomp_hash=None):
         self._labels = labels
         self._line_labels = line_labels
         self._occurrence_id = occurrence
-        self._compilable_layer_indices_tup = ('__CMPLBL__',) + compilable_layer_indices \
-            if (compilable_layer_indices is not None) else ()  # always a tuple, but can be empty.
+        self._compilable_layer_indices_tup = compilable_layer_indices_tup # always a tuple, but can be empty.
         self._static = not editable
-        #self._reps = reps # repetitions: default=1, which remains unless we initialize from a CircuitLabel...
+        if self._static:
+            self._hashable_tup = hashable_tup #if static we have already precomputed and cached the hashable circuit tuple.
+            self._hash = precomp_hash #Same as previous comment. Only meant to be used in settings where we're explicitly checking for self._static.
+            self._str = stringrep
+        else:
+            self._str = None # can be None (lazy generation)
         self._name = name  # can be None
-        self._str = stringrep if self._static else None  # can be None (lazy generation)
-        self._times = None  # for FUTURE expansion
+        #self._times = None  # for FUTURE expansion
         self.auxinfo = {}  # for FUTURE expansion / user metadata
-        self._alignmarks = ()  # layer indices *before* which there is an alignment mark
+
+        return self
+    
+    #pickle management functions
+    def __getstate__(self):
+        state_dict = self.__dict__
+        #if state_dict.get('_hash', None) is not None:
+        #    del state_dict['_hash'] #don't store the hash, recompute at unpickling time
+        return state_dict
+
+    def __setstate__(self, state_dict):
+        for k, v in state_dict.items():
+            self.__dict__[k] = v
+        if self.__dict__['_static']:
+            #reinitialize the hash
+            if self.__dict__.get('_hashable_tup', None) is not None:
+                self._hash = hash(self._hashable_tup)
+            else: #legacy support
+                self._hashable_tup = self.tup
+                self._hash = hash(self._hashable_tup)
+
 
     def to_label(self, nreps=1):
         """
@@ -653,17 +602,15 @@ class Circuit(object):
         """
         The line labels (often qubit labels) of this circuit.
         """
+        assert(not self._static), \
+            ("Cannot edit a read-only circuit!  "
+             "Set editable=True when calling pygsti.baseobjs.Circuit to create editable circuit.")
         if value == self._line_labels: return
-        #added_line_labels = set(value) - set(self._line_labels) # it's always OK to add lines
         removed_line_labels = set(self._line_labels) - set(value)
         if removed_line_labels:
             idling_line_labels = set(self.idling_lines())
             removed_not_idling = removed_line_labels - idling_line_labels
-            if removed_not_idling and self._static:
-                raise ValueError("Cannot remove non-idling lines %s from a read-only circuit!" %
-                                 str(removed_not_idling))
-            else:
-                self.delete_lines(tuple(removed_not_idling))
+            self.delete_lines(tuple(removed_not_idling))
         self._line_labels = tuple(value)
         self._str = None  # regenerate string rep (it may have updated)
 
@@ -689,6 +636,9 @@ class Circuit(object):
         """
         The occurrence id of this circuit.
         """
+        assert(not self._static), \
+            ("Cannot edit a read-only circuit!  "
+             "Set editable=True when calling pygsti.baseobjs.Circuit to create editable circuit.")
         self._occurrence_id = value
         self._str = None  # regenerate string rep (it may have updated)
 
@@ -704,8 +654,8 @@ class Circuit(object):
         if self._static:
             return self._labels
         else:
-            return tuple([to_label(layer_lbl) for layer_lbl in self._labels])
-
+            return tuple([layer_lbl if isinstance(layer_lbl, _Label) 
+                          else _Label(layer_lbl) for layer_lbl in self._labels])
     @property
     def tup(self):
         """
@@ -715,35 +665,66 @@ class Circuit(object):
         -------
         tuple
         """
+        comp_lbl_flag = ('__CMPLBL__',) if self._compilable_layer_indices_tup else ()
+        layertup = self._labels if self._static else self.layertup
+
         if self._occurrence_id is None:
             if self._line_labels in (('*',), ()):  # No line labels
-                return self.layertup + self._compilable_layer_indices_tup
+                return layertup + comp_lbl_flag + self._compilable_layer_indices_tup
             else:
-                return self.layertup + ('@',) + self._line_labels + self._compilable_layer_indices_tup
-        else:
-            linelbl_tup = () if self._line_labels in (('*',), ()) else self._line_labels
-            return self.layertup + ('@',) + linelbl_tup + ('@', self._occurrence_id) \
-                + self._compilable_layer_indices_tup
+                return layertup + ('@',) + self._line_labels + comp_lbl_flag\
+                        + self._compilable_layer_indices_tup
+        else: 
+            if self._line_labels in (('*',), ()):
+                return layertup + ('@',) + ('@', self._occurrence_id) \
+                        + comp_lbl_flag + self._compilable_layer_indices_tup
+            else:
+                return layertup + ('@',) + self._line_labels + ('@', self._occurrence_id) \
+                        + comp_lbl_flag + self._compilable_layer_indices_tup
+            # Note: we *always* need line labels (even if they're empty) when using occurrence id
+
+    def _tup_copy(self, labels):
+        """
+        This Circuit as a standard Python tuple of layer Labels and line labels.
+        This version takes as input a precomputed set of static layer labels
+        and uses this to avoid double computing this during copy operations.
+        Only presently intended for expediting copy operations.
+        Returns
+        -------
+        tuple
+        """
+        comp_lbl_flag = ('__CMPLBL__',) if self._compilable_layer_indices_tup else ()
+        if self._occurrence_id is None:
+            if self._line_labels in (('*',), ()):  # No line labels
+                return labels + comp_lbl_flag + self._compilable_layer_indices_tup
+            else:
+                return labels + ('@',) + self._line_labels + comp_lbl_flag + self._compilable_layer_indices_tup
+        else: 
+            if self._line_labels in (('*',), ()):
+                return labels + ('@',) + ('@', self._occurrence_id) \
+                        + comp_lbl_flag + self._compilable_layer_indices_tup
+            else:
+                return labels + ('@',) + self._line_labels + ('@', self._occurrence_id) \
+                        + comp_lbl_flag + self._compilable_layer_indices_tup
             # Note: we *always* need line labels (even if they're empty) when using occurrence id
 
     @property
     def compilable_layer_indices(self):
         """ Tuple of the layer indices corresponding to "compilable" layers."""
-        if len(self._compilable_layer_indices_tup) > 0:  # then begins with __CMPLBL__
-            return self._compilable_layer_indices_tup[1:]
-        else:
-            return ()
+        return self._compilable_layer_indices_tup
 
     @compilable_layer_indices.setter
     def compilable_layer_indices(self, val):
-        self._compilable_layer_indices_tup = ('__CMPLBL__',) + tuple(val) \
-            if (val is not None) else ()  # always a tuple, but can be empty.
+        assert(not self._static), \
+            ("Cannot edit a read-only circuit!  "
+             "Set editable=True when calling pygsti.baseobjs.Circuit to create editable circuit.")
+        self._compilable_layer_indices_tup = tuple(val) if (val is not None) else ()  # always a tuple, but can be empty.
 
     @property
     def compilable_by_layer(self):
         """ Boolean array indicating whether each layer is "compilable" or not."""
         ret = _np.zeros(self.depth, dtype=bool)
-        ret[list(self.compilable_layer_indices)] = True
+        ret[list(self._compilable_layer_indices_tup)] = True
         return ret
 
     @property
@@ -756,8 +737,8 @@ class Circuit(object):
         str
         """
         if self._str is None:
-            generated_str = _op_seq_to_str(self._labels, self.line_labels, self._occurrence_id,
-                                           self.compilable_layer_indices)  # lazy generation
+            generated_str = _op_seq_to_str(self._labels, self._line_labels, self._occurrence_id,
+                                           self._compilable_layer_indices_tup)  # lazy generation
             if self._static:  # if we're read-only then cache the string one and for all,
                 self._str = generated_str  # otherwise keep generating it as needed (unless it's set by the user?)
             return generated_str
@@ -802,20 +783,20 @@ class Circuit(object):
                               " evaluate to %s (this circuit)") %
                              (value, self.str))
         if chk_labels is not None:
-            if tuple(self.line_labels) != chk_labels:
+            if tuple(self._line_labels) != chk_labels:
                 raise ValueError(("Cannot set .str to %s because line labels evaluate to"
                                   " %s which is != this circuit's line labels (%s).") %
-                                 (value, chk_labels, str(self.line_labels)))
+                                 (value, chk_labels, str(self._line_labels)))
         if chk_occurrence is not None:
             if self._occurrence_id != chk_occurrence:
                 raise ValueError(("Cannot set .str to %s because occurrence evaluates to"
                                   " %s which is != this circuit's occurrence (%s).") %
                                  (value, str(chk_occurrence), str(self._occurrence_id)))
         if chk_compilable_inds is not None:
-            if self.compilable_layer_indices != chk_compilable_inds:
+            if self._compilable_layer_indices_tup != chk_compilable_inds:
                 raise ValueError(("Cannot set .str to %s because compilable layer indices eval to"
                                   " %s which is != this circuit's indices (%s).") %
-                                 (value, str(chk_compilable_inds), str(self.compilable_layer_indices)))
+                                 (value, str(chk_compilable_inds), str(self._compilable_layer_indices_tup)))
 
         self._str = value
 
@@ -825,11 +806,7 @@ class Circuit(object):
                             " mode in order to hash it.  You should call"
                             " circuit.done_editing() beforehand."))
             self.done_editing()
-        return hash(self.tup)
-        #if self._line_labels in (('*',),()): #No line labels
-        #    return hash(self._labels)
-        #else:
-        #    return hash(self._labels + ('@',) + self._line_labels)
+        return self._hash
 
     def __len__(self):
         return len(self._labels)
@@ -844,7 +821,7 @@ class Circuit(object):
     def __radd__(self, x):
         if not isinstance(x, Circuit):
             assert(all([isinstance(l, _Label) for l in x])), "Only Circuits and Label-tuples can be added to Circuits!"
-            return Circuit._fastinit(x + self.layertup, self.line_labels, editable=False)
+            return Circuit._fastinit(x + self.layertup, self._line_labels, editable=False)
         return x.__add__(self)
 
     def __add__(self, x):
@@ -867,24 +844,28 @@ class Circuit(object):
 
         if not isinstance(x, Circuit):
             assert(all([isinstance(l, _Label) for l in x])), "Only Circuits and Label-tuples can be added to Circuits!"
-            return Circuit._fastinit(self.layertup + x, self.line_labels, editable=False)
+            new_line_labels = set(sum([l.sslbls for l in x if l.sslbls is not None], 
+                                      self._line_labels)) #trick for concatenating multiple tuples
+            #new_line_labels.update(self._line_labels)
+            new_line_labels = sorted(new_line_labels)
+            return Circuit._fastinit(self.layertup + x, new_line_labels, editable=False)
         
         #Add special line label handling to deal with the special global idle circuits (which have no line labels
         # associated with them typically).
         #Check if a the circuit or labels being added are all global idles, if so inherit the
         #line labels from the circuit being added to. Otherwise, enforce compatibility.
-        layertup_x = x.layertup if isinstance(x, Circuit) else x
+        layertup_x = x.layertup
         gbl_idle_x= all([lbl == _Label(()) for lbl in layertup_x])
         gbl_idle_self= all([lbl == _Label(()) for lbl in self.layertup])
 
         if not (gbl_idle_x or gbl_idle_self):
-            combined_labels = {x.line_labels, self.line_labels}
+            combined_labels = {x._line_labels, self._line_labels}
         elif not gbl_idle_x and gbl_idle_self:
-            combined_labels = {x.line_labels}
+            combined_labels = {x._line_labels}
         elif gbl_idle_x and not gbl_idle_self:    
-            combined_labels = {self.line_labels}
+            combined_labels = {self._line_labels}
         else: #both are all global idles so it doesn't matter which we take.
-            combined_labels = {self.line_labels}
+            combined_labels = {self._line_labels}
 
         #check that the line labels are compatible between circuits.
         #i.e. raise error if adding circuit with * line label to one with
@@ -918,7 +899,7 @@ class Circuit(object):
         #unpack all of the different sets of labels and make sure there are no duplicates
         combined_labels_unpacked = {el for tup in combined_labels for el in tup}
         try:
-            new_line_labels = tuple(sorted(list(combined_labels_unpacked)))
+            new_line_labels = tuple(sorted(combined_labels_unpacked))
         except TypeError:
             new_line_labels = tuple(combined_labels_unpacked)
 
@@ -927,6 +908,33 @@ class Circuit(object):
 
         return Circuit._fastinit(self.layertup + x.layertup, new_line_labels, editable=False, name='',
                                  stringrep=s, occurrence=None)
+    
+
+    def sandwich(self, x, y):
+        """
+        Method for sandwiching labels around this circuit.
+
+        Parameters
+        ----------
+        x : tuple of `Label` objects
+            Tuple of Labels to prepend to this
+            Circuit.
+        
+        y:  tuple of `Label` objects
+            Same as `x`, but appended instead.
+
+        Returns
+        -------
+        Circuit
+        """
+
+        assert(isinstance(x, tuple) and isinstance(y, tuple)), 'Only tuples of labels are currently supported by `sandwich` method.'
+        combined_sandwich_labels = x + y
+        assert(all([isinstance(l, _Label) for l in combined_sandwich_labels])), "Only Circuits and Label-tuples can be added to Circuits!"
+        new_line_labels = set(sum([l.sslbls for l in combined_sandwich_labels if l.sslbls is not None], 
+                                  self._line_labels)) #trick for concatenating multiple tuples
+        new_line_labels = tuple(sorted(new_line_labels))
+        return Circuit._fastinit(x + self.layertup + y, new_line_labels, editable=False)
 
     def repeat(self, ntimes, expand="default"):
         """
@@ -953,10 +961,10 @@ class Circuit(object):
             s += "@" + mylines  # add line labels
         if ntimes >= 1 and expand is False:
             reppedCircuitLbl = self.to_label(nreps=ntimes)
-            return Circuit((reppedCircuitLbl,), self.line_labels, None, not self._static, s, check=False)
+            return Circuit((reppedCircuitLbl,), self._line_labels, None, not self._static, s, check=False)
         else:
             # just adds parens to string rep & copies
-            return Circuit(self.layertup * ntimes, self.line_labels, None, not self._static, s, check=False)
+            return Circuit(self.layertup * ntimes, self._line_labels, None, not self._static, s, check=False)
 
     def __mul__(self, x):
         return self.repeat(x)
@@ -965,21 +973,39 @@ class Circuit(object):
         return self.__mul__(x)
 
     def __eq__(self, x):
-        if x is None: return False
+        
         if isinstance(x, Circuit):
-            return self.tup.__eq__(x.tup)
+            if len(self) != len(x):
+                return False
+            else:
+                if self._static and x._static:
+                    return self._hash == x._hash
+                else:
+                    return self.tup == x.tup
+        elif x is None: 
+            return False
         else:
-            return self.layertup == tuple(x)  # equality with non-circuits is just based on *labels*
+            tup_x = tuple(x)
+            if len(self.layertup) != len(tup_x):
+                return False
+            else:
+                return self.layertup == tup_x  # equality with non-circuits is just based on *labels*
 
     def __lt__(self, x):
         if isinstance(x, Circuit):
-            return self.tup.__lt__(x.tup)
+            if self._static and x._static:
+                return self._hashable_tup.__lt__(x._hashable_tup)
+            else:
+                return self.tup.__lt__(x.tup)
         else:
             return self.layertup < tuple(x)  # comparison with non-circuits is just based on *labels*
 
     def __gt__(self, x):
         if isinstance(x, Circuit):
-            return self.tup.__gt__(x.tup)
+            if self._static and x._static:
+                return self._hashable_tup.__gt__(x._hashable_tup)
+            else:
+                return self.tup.__gt__(x.tup)
         else:
             return self.layertup > tuple(x)  # comparison with non-circuits is just based on *labels*
 
@@ -992,9 +1018,9 @@ class Circuit(object):
         -------
         int
         """
-        return len(self.line_labels)
-
-    def copy(self, editable="auto"):
+        return len(self._line_labels)
+    
+    def copy(self, editable='auto'):
         """
         Returns a copy of the circuit.
 
@@ -1008,9 +1034,43 @@ class Circuit(object):
         -------
         Circuit
         """
-        if editable == "auto": editable = not self._static
-        return Circuit(self.layertup, self.line_labels, None, editable, self._str, check=False,
-                       occurrence=self.occurrence)
+        
+        if editable == "auto": 
+            editable = not self._static
+
+        #inline new circuit creation.
+        ret = Circuit.__new__(Circuit)
+
+        if editable:
+            if self._static:
+                #static and editable circuits have different conventions for _labels.
+                editable_labels =[[lbl] if lbl.IS_SIMPLE else list(lbl.components) for lbl in self._labels]
+                return ret._copy_init(editable_labels, self._line_labels, editable, 
+                                      self._name, self._str, self._occurrence_id, 
+                                      self._compilable_layer_indices_tup)
+            else:
+                #copy the editable labels (avoiding shallow copy issues)
+                editable_labels = [sublist.copy() for sublist in self._labels]
+                return ret._copy_init(editable_labels, self._line_labels, editable, 
+                                      self._name, self._str, self._occurrence_id, 
+                                      self._compilable_layer_indices_tup)
+        else: #create static copy
+            if self._static:
+                #if presently static leverage precomputed hashable_tup and hash. 
+                #These values are only used by _copy_init if the circuit being 
+                #created is static, and are ignored otherwise.
+                return ret._copy_init(self._labels, self._line_labels, editable, 
+                                      self._name, self._str, self._occurrence_id, 
+                                      self._compilable_layer_indices_tup, 
+                                      self._hashable_tup, self._hash)
+            else:
+                static_labels = tuple([layer_lbl if isinstance(layer_lbl, _Label) else _Label(layer_lbl) 
+                                       for layer_lbl in self._labels])
+                hashable_tup = self._tup_copy(static_labels)
+                return ret._copy_init(static_labels, self._line_labels, 
+                                      editable, self._name, self._str, self._occurrence_id, 
+                                      self._compilable_layer_indices_tup, 
+                                      hashable_tup, hash(hashable_tup))
 
     def clear(self):
         """
@@ -1039,10 +1099,10 @@ class Circuit(object):
     def _proc_lines_arg(self, lines):
         """ Pre-process the lines argument used by many methods """
         if lines is None:
-            lines = self.line_labels
+            lines = self._line_labels
         elif isinstance(lines, slice):
             if lines.start is None and lines.stop is None:
-                lines = self.line_labels
+                lines = self._line_labels
             else:
                 lines = _slct.indices(lines)
         elif not isinstance(lines, (list, tuple)):
@@ -1052,19 +1112,18 @@ class Circuit(object):
     def _proc_key_arg(self, key):
         """ Pre-process the key argument used by many methods """
         if isinstance(key, tuple):
-            if len(key) != 2: return IndexError("Index must be of the form <layerIndex>,<lineIndex>")
-            layers = key[0]
-            lines = key[1]
+            if len(key) != 2: 
+                return IndexError("Index must be of the form <layerIndex>,<lineIndex>")
+            else:
+                return key[0], key[1]
         else:
-            layers = key
-            lines = None
-        return layers, lines
+            return key, None
 
     def _layer_components(self, ilayer):
         """ Get the components of the `ilayer`-th layer as a list/tuple. """
         #(works for static and non-static Circuits)
         if self._static:
-            if self._labels[ilayer].is_simple(): return [self._labels[ilayer]]
+            if self._labels[ilayer].IS_SIMPLE: return [self._labels[ilayer]]
             else: return self._labels[ilayer].components
         else:
             return self._labels[ilayer] if isinstance(self._labels[ilayer], list) \
@@ -1148,21 +1207,41 @@ class Circuit(object):
             `layers` is a single integer and as a `Circuit` otherwise.
             Note: if you want a `Circuit` when only selecting one layer,
             set `layers` to a slice or tuple containing just a single index.
+            Note that the returned circuit doesn't retain any original
+            metadata, such as the compilable layer indices or occurence id.
         """
         nonint_layers = not isinstance(layers, int)
 
         #Shortcut for common case when lines == None and when we're only taking a layer slice/index
-        if lines is None:
-            assert(layers is not None)
-            if nonint_layers is False: return self.layertup[layers]
-            if isinstance(layers, slice) and strict is True:  # if strict=False, then need to recompute line labels
-                return Circuit._fastinit(self._labels[layers], self.line_labels, not self._static)
+        if lines is None and layers is not None:
+            if self._static:
+                if not nonint_layers:
+                    return self._labels[layers]
+                if isinstance(layers, slice) and strict is True:  # if strict=False, then need to recompute line labels
+                    #can speed this up a measurably by manually computing the new hashable tuple value and hash
+                    if not self._line_labels in (('*',), ()):
+                        new_hashable_tup = self._labels[layers] + ('@',) + self._line_labels
+                    else:
+                        new_hashable_tup = self._labels[layers]
+                    ret = Circuit.__new__(Circuit)
+                    return ret._copy_init(self._labels[layers], self._line_labels, not self._static, hashable_tup= new_hashable_tup, precomp_hash=hash(new_hashable_tup))
+            else:
+                if not nonint_layers:
+                    return self.layertup[layers]
+                if isinstance(layers, slice) and strict is True:  # if strict=False, then need to recompute line labels
+                    return Circuit._fastinit(self._labels[layers], self._line_labels, not self._static)
+        #otherwise assert both are not None:
+
 
         layers = self._proc_layers_arg(layers)
         lines = self._proc_lines_arg(lines)
         if len(layers) == 0 or len(lines) == 0:
-            return Circuit._fastinit(() if self._static else [],
-                                     lines, not self._static) if nonint_layers else None  # zero-area region
+            if self._static:
+                return Circuit._fastinit((), tuple(lines), False)  # zero-area region
+            else:
+                return Circuit._fastinit(() if self._static else [],
+                                        tuple(lines) if self._static else lines,
+                                        not self._static)  # zero-area region
 
         ret = []
         if self._static:
@@ -1178,7 +1257,7 @@ class Circuit(object):
                     ## add in special case of identity layer
                     #if (isinstance(l,_Label) and l.name == self.identity): # ~ is_identity_layer(l)
                     #    ret_layer.append(l); continue
-                    sslbls = set(self.line_labels)  # otherwise, treat None sslbs as *all* labels
+                    sslbls = set(self._line_labels)  # otherwise, treat None sslbs as *all* labels
                 else:
                     sslbls = set(sslbls)
                 if (strict and sslbls.issubset(lines)) or \
@@ -1189,7 +1268,10 @@ class Circuit(object):
         if nonint_layers:
             if not strict: lines = "auto"  # since we may have included lbls on other lines
             # don't worry about string rep for now...
-            return Circuit._fastinit(tuple(ret) if self._static else ret, lines, not self._static)
+            
+            return Circuit._fastinit(tuple(ret) if self._static else ret, 
+                                     tuple(lines) if self._static else lines,
+                                     not self._static)
         else:
             return _Label(ret[0])
 
@@ -1253,9 +1335,9 @@ class Circuit(object):
             lbls_sslbls = None if (lbls.sslbls is None) else set(lbls.sslbls)
         else:
             if isinstance(lbls, Circuit):
-                assert(set(lbls.line_labels).issubset(self.line_labels)), \
+                assert(set(lbls._line_labels).issubset(self._line_labels)), \
                     "Assigned circuit has lines (%s) not contained in this circuit (%s)!" \
-                    % (str(lbls.line_labels), str(self.line_labels))
+                    % (str(lbls._line_labels), str(self._line_labels))
                 lbls = lbls.layertup  # circuit layer labels as a tuple
             assert(isinstance(lbls, (tuple, list))), \
                 ("When assigning to a layer range (even w/len=1) `lbls` "
@@ -1278,18 +1360,18 @@ class Circuit(object):
         # the lines being assigned.  If sslbl != None, then the labels must be
         # contained within the line labels being assigned (unless we're allowed to expand)
         if lbls_sslbls is not None:
-            new_line_labels = set(lbls_sslbls) - set(self.line_labels)
+            new_line_labels = set(lbls_sslbls) - set(self._line_labels)
             if all_lines:  # then allow new lines to be added
                 if len(new_line_labels) > 0:
-                    self._line_labels = self.line_labels + tuple(sorted(new_line_labels))  # sort?
+                    self._line_labels = self._line_labels + tuple(sorted(new_line_labels))  # sort?
             else:
                 assert(len(new_line_labels) == 0), "Cannot add new lines %s" % str(new_line_labels)
                 assert(set(lbls_sslbls).issubset(lines)), \
                     "Unallowed state space labels: %s" % str(set(lbls_sslbls) - set(lines))
 
-        assert(set(lines).issubset(self.line_labels)), \
+        assert(set(lines).issubset(self._line_labels)), \
             ("Specified lines (%s) must be a subset of this circuit's lines"
-             " (%s).") % (str(lines), str(self.line_labels))
+             " (%s).") % (str(lines), str(self._line_labels))
 
         #remove all labels in block to be assigned
         self._clear_labels(layers, lines)
@@ -1372,10 +1454,10 @@ class Circuit(object):
                 self._labels.insert(insert_before, [])
 
             #Shift compilable layer indices as needed
-            if len(self._compilable_layer_indices_tup) > 0:  # then begins with __CMPLBL__
+            if self._compilable_layer_indices_tup:
                 shifted_inds = [i if (i < insert_before) else (i + num_to_insert)
-                                for i in self._compilable_layer_indices_tup[1:]]
-                self._compilable_layer_indices_tup = ('__CMPLBL__',) + tuple(shifted_inds)
+                                for i in self._compilable_layer_indices_tup]
+                self._compilable_layer_indices_tup = tuple(shifted_inds)
 
         else:  # insert layers only on given lines - shift existing labels to right
             for i in range(num_to_insert):
@@ -1418,6 +1500,7 @@ class Circuit(object):
         -------
         None
         """
+        assert(not self._static), "Cannot edit a read-only circuit!"
         self.insert_idling_layers_inplace(None, num_to_insert, lines)
 
     def insert_labels_into_layers(self, lbls, layer_to_insert_before, lines=None):
@@ -1486,6 +1569,7 @@ class Circuit(object):
         -------
         None
         """
+        assert(not self._static), "Cannot edit a read-only circuit!"
         if isinstance(lbls, Circuit): lbls = tuple(lbls)
         # lbls is expected to be a list/tuple of Label-like items, one per inserted layer
         lbls = tuple(map(to_label, lbls))
@@ -1535,13 +1619,12 @@ class Circuit(object):
         -------
         None
         """
-        #assert(not self._static),"Cannot edit a read-only circuit!"
-        # Actually, this is OK even for static circuits because it won't affect the hashed value (labels only)
+        assert(not self._static),"Cannot edit a read-only circuit!"
         if insert_before is None:
-            i = len(self.line_labels)
+            i = len(self._line_labels)
         else:
-            i = self.line_labels.index(insert_before)
-        self._line_labels = self.line_labels[0:i] + tuple(line_labels) + self.line_labels[i:]
+            i = self._line_labels.index(insert_before)
+        self._line_labels = self._line_labels[0:i] + tuple(line_labels) + self._line_labels[i:]
 
     def _append_idling_lines(self, line_labels):
         """
@@ -1594,6 +1677,8 @@ class Circuit(object):
         -------
         None
         """
+        assert(not self._static), "Cannot edit a read-only circuit!"
+
         if layer_to_insert_before is None: layer_to_insert_before = 0
         elif layer_to_insert_before < 0: layer_to_insert_before = len(self._labels) + layer_to_insert_before
 
@@ -1603,7 +1688,7 @@ class Circuit(object):
         elif line_labels == "auto":
             line_labels = tuple(sorted(_accumulate_explicit_sslbls(lbls)))
 
-        existing_labels = set(line_labels).intersection(self.line_labels)
+        existing_labels = set(line_labels).intersection(self._line_labels)
         if len(existing_labels) > 0:
             raise ValueError("Cannot insert line(s) labeled %s - they already exist!" % str(existing_labels))
 
@@ -1697,7 +1782,7 @@ class Circuit(object):
             new_layer = []
             for l in self._layer_components(i):  # loop over labels in this layer
                 sslbls = _sslbls_of_nested_lists_of_simple_labels(l)
-                sslbls = set(self.line_labels) if (sslbls is None) else set(sslbls)
+                sslbls = set(self._line_labels) if (sslbls is None) else set(sslbls)
                 if len(sslbls.intersection(lines)) == 0:
                     new_layer.append(l)
                 elif not clear_straddlers and not sslbls.issubset(lines):
@@ -1752,12 +1837,12 @@ class Circuit(object):
             del self._labels[i]
 
         #Shift compilable layer indices as needed
-        if len(self._compilable_layer_indices_tup) > 0:  # begins with __CMPLBL__
+        if self._compilable_layer_indices_tup:
             deleted_indices = set(layers)
-            new_inds = list(filter(lambda x: x not in deleted_indices, self._compilable_layer_indices_tup[1:]))
+            new_inds =  [x for x in self._compilable_layer_indices_tup if x not in deleted_indices]
             for deleted_i in reversed(sorted(deleted_indices)):
                 new_inds = [i if (i < deleted_i) else (i - 1) for i in new_inds]  # Note i never == deleted_i (filtered)
-            self._compilable_layer_indices_tup = ('__CMPLBL__',) + tuple(new_inds)
+            self._compilable_layer_indices_tup = tuple(new_inds)
 
     def delete_lines(self, lines, delete_straddlers=False):
         """
@@ -1789,7 +1874,7 @@ class Circuit(object):
                     raise ValueError(("Cannot remove a block that is straddled by "
                                       "%s when `delete_straddlers` == False!") % _Label(l))
             self._labels[i] = new_layer
-        self._line_labels = tuple([x for x in self.line_labels if x not in lines])
+        self._line_labels = tuple([x for x in self._line_labels if x not in lines])
 
     def __getitem__(self, key):
         layers, lines = self._proc_key_arg(key)
@@ -1903,7 +1988,7 @@ class Circuit(object):
             if len(lbl.components) == 0:  # special case of an empty-layer label,
                 serial_lbls.append(lbl)  # which we serialize as an atomic object
             serial_lbls.extend(list(lbl.components) * lbl.reps)
-        return Circuit._fastinit(tuple(serial_lbls), self.line_labels, editable=False, occurrence=self.occurrence)
+        return Circuit._fastinit(tuple(serial_lbls), self._line_labels, editable=False, occurrence=self.occurrence)
 
     def parallelize(self, can_break_labels=True, adjacent_only=False):
         """
@@ -1989,7 +2074,7 @@ class Circuit(object):
 
         # Convert elements of `parallel_lbls` into Labels (needed b/c we use _fastinit below)
         parallel_lbls = [_Label(lbl_list) if len(lbl_list) != 1 else lbl_list[0] for lbl_list in parallel_lbls]
-        return Circuit._fastinit(tuple(parallel_lbls), self.line_labels, editable=False, occurrence=self.occurrence)
+        return Circuit._fastinit(tuple(parallel_lbls), self._line_labels, editable=False, occurrence=self._occurrence_id)
 
     def expand_subcircuits_inplace(self):
         """
@@ -2003,25 +2088,41 @@ class Circuit(object):
         None
         """
         assert(not self._static), "Cannot edit a read-only circuit!"
+        
+        #_subcircuits_to_expand returns list of tuples
+        #with the circuits to expand. The first entry of each tuple
+        #is the index of the layer, with the rest of the entries the 
+        #CircuitLabels to expand. And these indices are given in descending
+        #order.
+        subcircs_to_expand = self._subcircuits_to_expand()
+        while subcircs_to_expand:
+            for subcirc_tup in subcircs_to_expand:
+                layer_idx = subcirc_tup[0]
+                subcircs = subcirc_tup[1:]
+                #want a different notion of depth than that of CircuitLabel, since that depth
+                #is calculated recursively, and we're handling the recursion manually.
+                length_components = [len(l.components)*l.reps for l in subcircs]
+                layers_to_add = max(0, *[comp_len - 1 for comp_len in length_components])
+                if layers_to_add:
+                    self.insert_idling_layers_inplace(layer_idx + 1, layers_to_add)
+                for depth, subc in zip(length_components, subcircs):
+                    self.clear_labels(slice(layer_idx, layer_idx + depth), subc.sslbls)  # remove the CircuitLabel
+                    self.set_labels(subc.components * subc.reps, slice(layer_idx, layer_idx + depth), subc.sslbls)  # dump in the contents
+            #loop back through the circuit and see if we need to take another pass.
+            subcircs_to_expand = self._subcircuits_to_expand()                
 
-        #Iterate in reverse so we don't have to deal with
-        # added layers.
+    def _subcircuits_to_expand(self):
+        #Return this as a list of sparse list of tuples, giving only the layers which
+        #contain CircuitLabels to be expanded. The first entry of the tuple will be the
+        #original layer index, and the will be ordered in descending value to perform
+        #expansion in reverse.
+        subckts_to_expand = []
         for i in reversed(range(len(self._labels))):
-            circuits_to_expand = []
-            layers_to_add = 0
-
-            for l in self._layer_components(i):  # loop over labels in this layer
-                if isinstance(l, _CircuitLabel):
-                    circuits_to_expand.append(l)
-                    layers_to_add = max(layers_to_add, l.depth - 1)
-
-            if layers_to_add > 0:
-                self.insert_idling_layers_inplace(i + 1, layers_to_add)
-            for subc in circuits_to_expand:
-                self.clear_labels(slice(i, i + subc.depth), subc.sslbls)  # remove the CircuitLabel
-                self.set_labels(subc.components * subc.reps, slice(i, i + subc.depth),
-                                subc.sslbls)  # dump in the contents
-
+            subckts_to_expand_for_layer = [l for l in self._labels[i] if isinstance(l, _CircuitLabel)]
+            if subckts_to_expand_for_layer:
+                subckts_to_expand.append(tuple([i]+subckts_to_expand_for_layer))
+        return subckts_to_expand
+        
     def expand_subcircuits(self):
         """
         Returns a new circuit with :class:`CircuitLabel` labels expanded.
@@ -2059,13 +2160,11 @@ class Circuit(object):
             while iEnd < nLayers and self._labels[iStart] == self._labels[iEnd]:
                 iEnd += 1
             nreps = iEnd - iStart
-            #print("Start,End = ",iStart,iEnd)
             if nreps <= 1:  # just move to next layer
                 iStart += 1; continue  # nothing to do
 
             #Construct a sub-circuit label that repeats layer[iStart] nreps times
             # and stick it at layer iStart
-            #print("Constructing %d reps at %d" % (nreps, iStart))
             repCircuit = _CircuitLabel('', self._labels[iStart], None, nreps)
             self.clear_labels(iStart, None)  # remove existing labels (unnecessary?)
             self.set_labels(repCircuit, iStart, None)
@@ -2073,7 +2172,6 @@ class Circuit(object):
             iStart += nreps  # advance iStart to next unprocessed layer inde
 
         if len(iLayersToRemove) > 0:
-            #print("Removing layers: ",iLayersToRemove)
             self.delete_layers(iLayersToRemove)
 
     def insert_layer(self, circuit_layer, j):
@@ -2126,7 +2224,7 @@ class Circuit(object):
         None
         """
         assert(not self._static), "Cannot edit a read-only circuit!"
-        if self.line_labels is None or self.line_labels == ():
+        if self._line_labels is None or self._line_labels == ():
             #Allow insertion of a layer into an empty circuit to update the circuit's line_labels
             layer_lbl = to_label(circuit_layer)
             self.line_labels = layer_lbl.sslbls if (layer_lbl.sslbls is not None) else ('*',)
@@ -2186,8 +2284,8 @@ class Circuit(object):
         """
         assert(not self._static), "Cannot edit a read-only circuit!"
         lines_to_insert = []
-        for line_lbl in circuit.line_labels:
-            if line_lbl in self.line_labels:
+        for line_lbl in circuit._line_labels:
+            if line_lbl in self._line_labels:
                 lines_to_insert.append(line_lbl)
             else:
                 assert(circuit._is_line_idling(line_lbl)), \
@@ -2230,6 +2328,7 @@ class Circuit(object):
         -------
         None
         """
+        assert(not self._static), "Cannot edit a read-only circuit!"
         self.insert_circuit_inplace(circuit, self.num_layers)
 
     def prefix_circuit(self, circuit):
@@ -2266,6 +2365,7 @@ class Circuit(object):
         -------
         None
         """
+        assert(not self._static), "Cannot edit a read-only circuit!"
         self.insert_circuit_inplace(circuit, 0)
 
     def tensor_circuit_inplace(self, circuit, line_order=None):
@@ -2295,12 +2395,12 @@ class Circuit(object):
         #assert(self.identity == circuit.identity), "The identity labels must be the same!"
 
         #Construct new line labels (of final circuit)
-        overlap = set(self.line_labels).intersection(circuit.line_labels)
+        overlap = set(self._line_labels).intersection(circuit._line_labels)
         if len(overlap) > 0:
             raise ValueError(
                 "The line labels of `circuit` and this Circuit must be distinct, but overlap = %s!" % str(overlap))
 
-        all_line_labels = set(self.line_labels + circuit.line_labels)
+        all_line_labels = set(self._line_labels + circuit._line_labels)
         if line_order is not None:
             line_order_set = set(line_order)
             if len(line_order_set) != len(line_order):
@@ -2316,7 +2416,7 @@ class Circuit(object):
 
             new_line_labels = line_order
         else:
-            new_line_labels = self.line_labels + circuit.line_labels
+            new_line_labels = self._line_labels + circuit._line_labels
 
         #Add circuit's labels into this circuit
         self.insert_labels_as_lines_inplace(circuit._labels, line_labels=circuit.line_labels)
@@ -2366,6 +2466,7 @@ class Circuit(object):
         -------
         None
         """
+        assert(not self._static), "Cannot edit a read-only circuit!"
         del self[j]
         self.insert_labels_into_layers_inplace(circuit, j)
 
@@ -2454,7 +2555,7 @@ class Circuit(object):
             return cpy
         else:  # static case: so self._labels is a tuple of Labels
             return Circuit([lbl.replace_name(old_gatename, new_gatename)
-                            for lbl in self._labels], self.line_labels, occurrence=self.occurrence)
+                            for lbl in self._labels], self._line_labels, occurrence=self._occurrence_id)
 
     def replace_gatename_with_idle_inplace(self, gatename):
         """
@@ -2530,12 +2631,14 @@ class Circuit(object):
             #Could to this in both cases, but is slow for large static circuits
             cpy = self.copy(editable=False)  # convert our layers to Labels
             return Circuit._fastinit(tuple([new_layer if lbl == old_layer else lbl
-                                            for lbl in cpy._labels]), self.line_labels, editable=False,
-                                     occurrence=self.occurrence, compilable_layer_indices=self.compilable_layer_indices)
+                                            for lbl in cpy._labels]), self._line_labels, editable=False,
+                                     occurrence=self._occurrence_id, 
+                                     compilable_layer_indices_tup=self._compilable_layer_indices_tup)
         else:  # static case: so self._labels is a tuple of Labels
             return Circuit(tuple([new_layer if lbl == old_layer else lbl
-                                  for lbl in self._labels]), self.line_labels, editable=False,
-                           occurrence=self.occurrence, compilable_layer_indices=self.compilable_layer_indices)
+                                  for lbl in self._labels]), self._line_labels, editable=False,
+                           occurrence=self._occurrence_id, 
+                           compilable_layer_indices=self._compilable_layer_indices_tup)
 
     def replace_layers_with_aliases(self, alias_dict):
         """
@@ -2562,34 +2665,7 @@ class Circuit(object):
             while label in layers:
                 i = layers.index(label)
                 layers = layers[:i] + c._labels + layers[i + 1:]
-        return Circuit._fastinit(layers, self.line_labels, editable=False, occurrence=self.occurrence)
-
-    #def replace_identity(self, identity, convert_identity_gates = True): # THIS module only
-    #    """
-    #    Changes the *name* of the idle/identity gate in the circuit. This replaces
-    #    the name of the identity element in the circuit by setting self.identity = identity.
-    #    If `convert_identity_gates` is True, this also changes the names of all the gates that
-    #    had the old self.identity name.
-    #
-    #    Parameters
-    #    ----------
-    #    identity : string
-    #        The new name for the identity gate.
-    #
-    #    convert_identity_gates : bool, optional
-    #        If True, all gates that had the old identity name are converted to the new identity
-    #        name. Otherwise, they keep the old name, and the circuit nolonger considers them to
-    #        be identity gates.
-    #
-    #    Returns
-    #    -------
-    #    None
-    #    """
-    #    if convert_identity_gates:
-    #        self.replace_gatename(self.identity, identity)
-    #
-    #    self._tup_dirty = self._str_dirty = True
-    #    self.identity = identity
+        return Circuit._fastinit(layers, self._line_labels, editable=False, occurrence=self._occurrence_id)
 
     def change_gate_library(self, compilation, allowed_filter=None, allow_unchanged_gates=False, depth_compression=True,
                             one_q_gate_relations=None):
@@ -2720,7 +2796,7 @@ class Circuit(object):
 
         def map_names(obj):  # obj is either a simple label or a list
             if isinstance(obj, _Label):
-                if obj.is_simple():  # *simple* label
+                if obj.IS_SIMPLE:  # *simple* label
                     new_name = mapper_func(obj.name)
                     newobj = _Label(new_name, obj.sslbls) \
                         if (new_name is not None) else obj
@@ -2752,7 +2828,7 @@ class Circuit(object):
         def mapper_func(line_label): return mapper[line_label] \
             if isinstance(mapper, dict) else mapper
 
-        self._line_labels = tuple((mapper_func(l) for l in self.line_labels))
+        self._line_labels = tuple((mapper_func(l) for l in self._line_labels))
 
         def map_sslbls(obj):  # obj is either a simple label or a list
             if isinstance(obj, _Label):
@@ -2781,9 +2857,9 @@ class Circuit(object):
         """
         def mapper_func(line_label): return mapper[line_label] \
             if isinstance(mapper, dict) else mapper(line_label)
-        mapped_line_labels = tuple(map(mapper_func, self.line_labels))
+        mapped_line_labels = tuple(map(mapper_func, self._line_labels))
         return Circuit([l.map_state_space_labels(mapper_func) for l in self.layertup],
-                       mapped_line_labels, None, not self._static, occurrence=self.occurrence)
+                       mapped_line_labels, None, not self._static, occurrence=self._occurrence_id)
 
     def reorder_lines_inplace(self, order):
         """
@@ -2802,7 +2878,7 @@ class Circuit(object):
         None
         """
         assert(not self._static), "Cannot edit a read-only circuit!"
-        assert(set(order) == set(self.line_labels)), "The line labels must be the same!"
+        assert(set(order) == set(self._line_labels)), "The line labels must be the same!"
         self._line_labels = tuple(order)
 
     def reorder_lines(self, order):
@@ -2847,10 +2923,9 @@ class Circuit(object):
             True if the line is idling. False otherwise.
         """
         if self._static:
-            layers = list(filter(lambda x: x not in idle_layer_labels, self._labels)) \
-                if idle_layer_labels else self._labels
+            layers = [x for x in self._labels if x not in idle_layer_labels] if idle_layer_labels else self._labels
             all_sslbls = None if any([layer.sslbls is None for layer in layers]) \
-                else set(_itertools.chain(*[layer.sslbls for layer in layers]))
+                else set([sslbl for layer in layers for sslbl in layer.sslbls])
         else:
             all_sslbls = _sslbls_of_nested_lists_of_simple_labels(self._labels, idle_layer_labels)  # None or a set
 
@@ -2875,17 +2950,16 @@ class Circuit(object):
         tuple
         """
         if self._static:
-            layers = list(filter(lambda x: x not in idle_layer_labels, self._labels)) \
-                if idle_layer_labels else self._labels
+            layers = [x for x in self._labels if x not in idle_layer_labels] if idle_layer_labels else self._labels
             all_sslbls = None if any([layer.sslbls is None for layer in layers]) \
-                else set(_itertools.chain(*[layer.sslbls for layer in layers]))
+                else set([sslbl for layer in layers for sslbl in layer.sslbls])
         else:
             all_sslbls = _sslbls_of_nested_lists_of_simple_labels(self._labels, idle_layer_labels)  # None or a set
 
         if all_sslbls is None:
             return ()
         else:
-            return tuple([x for x in self.line_labels
+            return tuple([x for x in self._line_labels
                           if x not in all_sslbls])  # preserve order
 
     def delete_idling_lines_inplace(self, idle_layer_labels=None):
@@ -2904,17 +2978,15 @@ class Circuit(object):
         -------
         None
         """
-        #assert(not self._static),"Cannot edit a read-only circuit!"
-        # Actually, this is OK even for static circuits because it won't affect the hashed value (labels only)
+        assert(not self._static),"Cannot edit a read-only circuit!"
 
         if idle_layer_labels:
             assert(all([to_label(x).sslbls is None for x in idle_layer_labels])), "Idle layer labels must be *global*"
 
         if self._static:
-            layers = list(filter(lambda x: x not in idle_layer_labels, self._labels)) \
-                if idle_layer_labels else self._labels
+            layers = [x for x in self._labels if x not in idle_layer_labels] if idle_layer_labels else self._labels
             all_sslbls = None if any([layer.sslbls is None for layer in layers]) \
-                else set(_itertools.chain(*[layer.sslbls for layer in layers]))
+                else set([sslbl for layer in layers for sslbl in layer.sslbls])
         else:
             all_sslbls = _sslbls_of_nested_lists_of_simple_labels(self._labels, idle_layer_labels)  # None or a set
 
@@ -2923,7 +2995,7 @@ class Circuit(object):
 
         #All we need to do is update line_labels since there aren't any labels
         # to remove in self._labels (as all the lines are idling)
-        self._line_labels = tuple([x for x in self.line_labels
+        self._line_labels = tuple([x for x in self._line_labels
                                    if x in all_sslbls])  # preserve order
 
     def delete_idling_lines(self, idle_layer_labels=None):
@@ -2969,6 +3041,7 @@ class Circuit(object):
         -------
         None
         """
+        assert(not self._static), "Cannot edit a read-only circuit!"
         self.clear_labels(lines=line_label, clear_straddlers=clear_straddlers)
 
     def reverse_inplace(self):
@@ -2983,10 +3056,10 @@ class Circuit(object):
         self._labels = list(reversed(self._labels))  # reverses the layer order
         #FUTURE: would need to reverse_inplace each layer too, if layer can have *sublayers*
 
-        if len(self._compilable_layer_indices_tup) > 0:  # begins with __CMPLBL__
+        if self._compilable_layer_indices_tup:
             depth = len(self._labels)
-            self._compilable_layer_indices_tup = ('__CMPLBL__',) \
-                + tuple([(depth - 1 - i) for i in self._compilable_layer_indices_tup[1:]])
+            self._compilable_layer_indices_tup = \
+                tuple([(depth - 1 - i) for i in self._compilable_layer_indices_tup])
 
     def _combine_one_q_gates_inplace(self, one_q_gate_relations):
         """
@@ -3032,7 +3105,6 @@ class Circuit(object):
         productive = True
 
         while productive:  # keep iterating
-            #print("BEGIN ITER")
             productive = False
             # Loop through all the qubits, to try and compress squences of 1-qubit gates on the qubit in question.
             for ilayer in range(0, len(self._labels) - 1):
@@ -3047,7 +3119,6 @@ class Circuit(object):
                     for b, lblB in enumerate(layerB_comps):
                         if isinstance(lblB, _Label) and lblB.sslbls == lblA.sslbls:
                             #queue an apply rule if one exists
-                            #print("CHECK for: ", (lblA.name,lblB.name))
                             if (lblA.name, lblB.name) in one_q_gate_relations:
                                 new_Aname = one_q_gate_relations[lblA.name, lblB.name]
                                 applies.append((a, b, new_Aname, lblA.sslbls))
@@ -3100,17 +3171,14 @@ class Circuit(object):
         # Keeps track of whether any changes have been made to the circuit.
         compression_implemented = False
 
-        #print("BEGIN")
         used_lines = {}
         for icurlayer in range(len(self._labels)):
-            #print("LAYER ",icurlayer)
             #Slide labels in current layer to left ("forward")
             icomps_to_remove = []; used_lines[icurlayer] = set()
             for icomp, lbl in enumerate(self._layer_components(icurlayer)):
                 #see if we can move this label forward
-                #print("COMP%d: %s" % (icomp,str(lbl)))
                 sslbls = _sslbls_of_nested_lists_of_simple_labels(lbl)
-                if sslbls is None: sslbls = self.line_labels
+                if sslbls is None: sslbls = self._line_labels
 
                 dest_layer = icurlayer
                 while dest_layer > 0 and len(used_lines[dest_layer - 1].intersection(sslbls)) == 0:
@@ -3119,14 +3187,11 @@ class Circuit(object):
                     icomps_to_remove.append(icomp)  # remove this label from current layer
                     self._append_layer_component(dest_layer, lbl)  # add it to the destination layer
                     used_lines[dest_layer].update(sslbls)  # update used_lines at dest layer
-                    #print(" <-- layer %d (used=%s)" % (dest_layer,str(used_lines[dest_layer])))
                 else:
                     #can't move this label forward - update used_lines of current layer
                     used_lines[icurlayer].update(sslbls)  # update used_lines at dest layer
-                    #print(" can't move: (cur layer used=%s)" % (str(used_lines[icurlayer])))
-
+                    
             #Remove components in current layer which were pushed forward
-            #print("Removing ",icomps_to_remove," from layer ",icurlayer)
             for icomp in reversed(icomps_to_remove):
                 self._remove_layer_component(icurlayer, icomp)
 
@@ -3296,11 +3361,11 @@ class Circuit(object):
         layer_lbl = self.layer_label(j)  # (a Label)
         if layer_lbl.sslbls is None:
             if layer_lbl == ():  # special case - the completely empty layer: sslbls=None but needs padding
-                return _Label([_Label(idle_gate_name, line_lbl) for line_lbl in self.line_labels])
+                return _Label([_Label(idle_gate_name, line_lbl) for line_lbl in self._line_labels])
             return layer_lbl  # all qubits used - no idles to pad
 
         components = list(layer_lbl.components)
-        for line_lbl in self.line_labels:
+        for line_lbl in self._line_labels:
             if line_lbl not in layer_lbl.sslbls:
                 components.append(_Label(idle_gate_name, line_lbl))
         return _Label(components)
@@ -3351,7 +3416,7 @@ class Circuit(object):
         -------
         int
         """
-        return len(self.line_labels)
+        return len(self._line_labels)
 
     @property
     def size(self):
@@ -3370,14 +3435,14 @@ class Circuit(object):
         #TODO HERE -update from here down b/c of sub-circuit blocks
         if self._static:
             def size(lbl):  # obj a Label, perhaps compound
-                if lbl.is_simple():  # a simple label
-                    return len(lbl.sslbls) if (lbl.sslbls is not None) else len(self.line_labels)
+                if lbl.IS_SIMPLE:  # a simple label
+                    return len(lbl.sslbls) if (lbl.sslbls is not None) else len(self._line_labels)
                 else:
                     return sum([size(sublbl) for sublbl in lbl.components])
         else:
             def size(obj):  # obj is either a simple label or a list
-                if isinstance(obj, _Label):  # all Labels are simple labels
-                    return len(obj.sslbls) if (obj.sslbls is not None) else len(self.line_labels)
+                if isinstance(obj, _Label):  # all Labels in editable format are simple labels
+                    return len(obj.sslbls) if (obj.sslbls is not None) else len(self._line_labels)
                 else:
                     return sum([size(sub) for sub in obj])
 
@@ -3416,7 +3481,7 @@ class Circuit(object):
         """
         if self._static:
             def cnt(lbl):  # obj a Label, perhaps compound
-                if lbl.is_simple():  # a simple label
+                if lbl.IS_SIMPLE:  # a simple label
                     return 1 if (lbl.sslbls is not None) else 0
                 else:
                     return sum([cnt(sublbl) for sublbl in lbl.components])
@@ -3449,7 +3514,7 @@ class Circuit(object):
         """
         if self._static:
             def cnt(lbl):  # obj a Label, perhaps compound
-                if lbl.is_simple():  # a simple label
+                if lbl.IS_SIMPLE:  # a simple label
                     return 1 if (lbl.sslbls is not None) and (len(lbl.sslbls) == nq) else 0
                 else:
                     return sum([cnt(sublbl) for sublbl in lbl.components])
@@ -3477,7 +3542,7 @@ class Circuit(object):
         """
         if self._static:
             def cnt(lbl):  # obj a Label, perhaps compound
-                if lbl.is_simple():  # a simple label
+                if lbl.IS_SIMPLE:  # a simple label
                     return 1 if (lbl.sslbls is not None) and (len(lbl.sslbls) >= 2) else 0
                 else:
                     return sum([cnt(sublbl) for sublbl in lbl.components])
@@ -3489,52 +3554,17 @@ class Circuit(object):
                     return sum([cnt(sub) for sub in obj])
 
         return sum([cnt(layer_lbl) for layer_lbl in self._labels])
-
-    # UNUSED
-    #def predicted_error_probability(self, gate_error_probabilities):
-    #    """
-    #    Predicts the probability that one or more errors occur in the circuit
-    #    if the gates have the error probabilities specified by in the input
-    #    dictionary. Given correct error rates for the gates and stochastic errors,
-    #    this is predictive of the probability of an error in the circuit. But note
-    #    that that is generally *not* the same as the probability that the circuit
-    #    implemented is incorrect (e.g., stochastic errors can cancel).
-    #
-    #    Parameters
-    #    ----------
-    #    gate_error_probabilities : dict
-    #        A dictionary where the keys are the labels that appear in the circuit, and
-    #        the value is the error probability for that gate.
-    #
-    #    Returns
-    #    -------
-    #    float
-    #        The probability that there is one or more errors in the circuit.
-    #    """
-    #    f = 1.
-    #    depth = self.num_layers
-    #    for i in range(0,self.num_lines):
-    #        for j in range(0,depth):
-    #            gatelbl = self.line_items[i][j]
-    #
-    #            # So that we don't include multi-qubit gates more than once.
-    #            if gatelbl.qubits is None:
-    #                if i == 0:
-    #                    f = f*(1-gate_error_probabilities[gatelbl])
-    #            elif gatelbl.qubits[0] == self.line_labels[i]:
-    #                f = f*(1-gate_error_probabilities[gatelbl])
-    #    return 1 - f
-
+    
     def _togrid(self, identity_name):
         """ return a list-of-lists rep? """
         d = self.num_layers
-        line_items = [[_Label(identity_name, ll)] * d for ll in self.line_labels]
+        line_items = [[_Label(identity_name, ll)] * d for ll in self._line_labels]
 
         for ilayer in range(len(self._labels)):
             for layercomp in self._layer_components(ilayer):
                 if isinstance(layercomp, _Label):
                     comp_label = layercomp
-                    if layercomp.is_simple():
+                    if layercomp.IS_SIMPLE:
                         comp_sslbls = layercomp.sslbls
                     else:
                         #We can't intelligently flatten compound labels that occur within a layer-label yet...
@@ -3542,9 +3572,9 @@ class Circuit(object):
                 else:  # layercomp must be a list (and _static == False)
                     comp_label = _Label(layercomp)
                     comp_sslbls = _sslbls_of_nested_lists_of_simple_labels(layercomp)
-                if comp_sslbls is None: comp_sslbls = self.line_labels
+                if comp_sslbls is None: comp_sslbls = self._line_labels
                 for sslbl in comp_sslbls:
-                    lineIndx = self.line_labels.index(sslbl)  # replace w/dict for speed...
+                    lineIndx = self._line_labels.index(sslbl)  # replace w/dict for speed...
                     line_items[lineIndx][ilayer] = comp_label
         return line_items
 
@@ -3563,7 +3593,7 @@ class Circuit(object):
 
         def abbrev(lbl, k):  # assumes a simple label w/ name & qubits
             """ Returns what to print on line 'k' for label 'lbl' """
-            lbl_qubits = lbl.qubits if (lbl.qubits is not None) else self.line_labels
+            lbl_qubits = lbl.qubits if (lbl.qubits is not None) else self._line_labels
             nqubits = len(lbl_qubits)
             if nqubits == 1 and lbl.name is not None:
                 if isinstance(lbl, _CircuitLabel):  # HACK
@@ -3573,12 +3603,12 @@ class Circuit(object):
                 else:
                     return lbl.name
             elif lbl.name in ('CNOT', 'Gcnot') and nqubits == 2:  # qubit indices = (control,target)
-                if k == self.line_labels.index(lbl_qubits[0]):
+                if k == self._line_labels.index(lbl_qubits[0]):
                     return Ctxt + str(lbl_qubits[1])
                 else:
                     return Ttxt + str(lbl_qubits[0])
             elif lbl.name in ('CPHASE', 'Gcphase') and nqubits == 2:
-                if k == self.line_labels.index(lbl_qubits[0]):
+                if k == self._line_labels.index(lbl_qubits[0]):
                     otherqubit = lbl_qubits[1]
                 else:
                     otherqubit = lbl_qubits[0]
@@ -3593,11 +3623,11 @@ class Circuit(object):
                              for i in range(0, self.num_lines)])
                         for j in range(0, self.num_layers)]
 
-        max_linelabellen = max([len(str(llabel)) for llabel in self.line_labels])
+        max_linelabellen = max([len(str(llabel)) for llabel in self._line_labels])
 
         for i in range(self.num_lines):
-            s += 'Qubit {} '.format(self.line_labels[i]) + ' ' * \
-                (max_linelabellen - len(str(self.line_labels[i]))) + '---'
+            s += 'Qubit {} '.format(self._line_labels[i]) + ' ' * \
+                (max_linelabellen - len(str(self._line_labels[i]))) + '---'
             for j, maxlbllen in enumerate(max_labellen):
                 if line_items[i][j].name == identityName:
                     # Replace with special idle print at some point
@@ -3706,7 +3736,7 @@ class Circuit(object):
             # The quantum wire for qubit q
             circuit_for_q = self.line_items[q]
             for gate in circuit_for_q:
-                gate_qubits = gate.qubits if (gate.qubits is not None) else self.line_labels
+                gate_qubits = gate.qubits if (gate.qubits is not None) else self._line_labels
                 nqubits = len(gate_qubits)
                 if gate.name == self.identity:
                     qstring += r' \qw &'
@@ -3730,6 +3760,72 @@ class Circuit(object):
         f.write("}\\end{equation*}\n")
         f.write("\\end{document}")
         f.close()
+
+
+    def convert_to_stim_tableau_layers(self, gate_name_conversions=None, num_qubits=None):
+        """
+        Converts this circuit to a list of stim tableau layers
+
+        Parameters
+        ----------
+        gate_name_conversions : dict, optional (default None)
+            A map from pygsti gatenames to standard stim tableaus. 
+            If None a standard set of gate names is used from 
+            `pygsti.tools.internalgates`
+
+        Returns
+        -------
+        A layer by layer list of stim tableaus    
+        """
+        try:
+            import stim
+        except ImportError:
+            raise ImportError("Stim is required for this operation, and it does not appear to be installed.")
+        if gate_name_conversions is None:
+            gate_name_conversions = _itgs.standard_gatenames_stim_conversions()
+
+        if num_qubits is None:
+            line_labels = self._line_labels
+            assert line_labels != ('*',), "Cannot convert circuits with placeholder line label to stim Tableau unless number of qubits is specified."
+            num_qubits=len(line_labels)
+        
+        stim_layers=[]
+
+        if self._static:
+            circuit_layers = [layer.components for layer in self._labels]
+        else:
+            circuit_layers = self._labels
+        empty_tableau = stim.Tableau(num_qubits)
+        for layer in circuit_layers:
+            stim_layer = empty_tableau.copy()
+            for sub_lbl in layer:
+                temp = gate_name_conversions[sub_lbl.name]    
+                stim_layer.append(temp, sub_lbl.qubits)
+            stim_layers.append(stim_layer)
+        return stim_layers
+    
+    def convert_to_stim_tableau(self, gate_name_conversions=None):
+        """
+        Converts this circuit to a stim tableau
+
+        Parameters
+        ----------
+        gate_name_conversions : dict, optional (default None)
+            A map from pygsti gatenames to standard stim tableaus. 
+            If None a standard set of gate names is used from 
+            `pygsti.tools.internalgates`
+
+        Returns
+        -------
+        A single stim.Tableau representing the entire circuit.
+        """
+        layers=self.convert_to_stim_tableau_layers(gate_name_conversions)
+        if layers:        
+            tableau=layers[0]
+            for layer in layers[1:]:
+                tableau= layer*tableau
+            return tableau
+        
 
     def convert_to_cirq(self,
                         qubit_conversion,
@@ -3777,8 +3873,8 @@ class Circuit(object):
         #of the keys for qubit_conversion (indicating there isn't a corresponding mapping into cirq objects).
         msg1 = 'Conversion to cirq does not work with circuits w/placeholder * line label.'
         msg2 = 'Missing qubit conversions, some line labels have no corresponding cirq conversion in qubit_conversions.'
-        assert self.line_labels != ('*',), msg1
-        assert set(self.line_labels).issubset(set(qubit_conversion.keys())), msg2
+        assert self._line_labels != ('*',), msg1
+        assert set(self._line_labels).issubset(set(qubit_conversion.keys())), msg2
 
         moments = []
         for i in range(self.num_layers):
@@ -3911,7 +4007,8 @@ class Circuit(object):
                             #append the default.
                             circuit_layers.append(_Label(()))
                         else:
-                            circuit_layers.append(_Label(global_idle_replacement_label, tuple(sorted([qubit_conversion[qubit] for qubit in all_cirq_qubits]))))
+                            circuit_layers.append(_Label(global_idle_replacement_label, 
+                                                         tuple(sorted([qubit_conversion[qubit] for qubit in all_cirq_qubits]))))
                     elif isinstance(global_idle_replacement_label, _Label):
                         circuit_layers.append(global_idle_replacement_label)   
                 else:
@@ -3946,7 +4043,8 @@ class Circuit(object):
                             #append the default.
                             circuit_layers.append(_Label(()))
                         else:
-                            circuit_layers.append(_Label(global_idle_replacement_label, tuple(sorted([qubit_conversion[qubit] for qubit in all_cirq_qubits]))))
+                            circuit_layers.append(_Label(global_idle_replacement_label, 
+                                                         tuple(sorted([qubit_conversion[qubit] for qubit in all_cirq_qubits]))))
                     elif isinstance(global_idle_replacement_label, _Label):
                         circuit_layers.append(global_idle_replacement_label)
                 #check whether any of the elements are implied idles, and if so use flag
@@ -4039,19 +4137,19 @@ class Circuit(object):
             # To tell us whether we have found a standard qubit labelling type.
             standardtype = False
             # Must first check they are strings, because cannot query q[0] for int q.
-            if all([isinstance(q, str) for q in self.line_labels]):
-                if all([q[0] == 'Q' for q in self.line_labels]):
+            if all([isinstance(q, str) for q in self._line_labels]):
+                if all([q[0] == 'Q' for q in self._line_labels]):
                     standardtype = True
-                    qubit_conversion = {llabel: int(llabel[1:]) for llabel in self.line_labels}
-            if all([isinstance(q, int) for q in self.line_labels]):
-                qubit_conversion = {q: q for q in self.line_labels}
+                    qubit_conversion = {llabel: int(llabel[1:]) for llabel in self._line_labels}
+            if all([isinstance(q, int) for q in self._line_labels]):
+                qubit_conversion = {q: q for q in self._line_labels}
                 standardtype = True
             if not standardtype:
                 raise ValueError(
                     "No standard qubit labelling conversion is available! Please provide `qubit_conversion`.")
 
         if num_qubits is None:
-            num_qubits = len(self.line_labels)
+            num_qubits = len(self._line_labels)
 
         # Init the quil string.
         quil = ''
@@ -4079,7 +4177,7 @@ class Circuit(object):
 
             # Go through the (non-self.identity) gates in the layer and convert them to quil
             for gate in layer.components:
-                gate_qubits = gate.qubits if (gate.qubits is not None) else self.line_labels
+                gate_qubits = gate.qubits if (gate.qubits is not None) else self._line_labels
                 assert(len(gate_qubits) <= 2 or gate.qubits is None), \
                     'Gate on more than 2 qubits given; this is currently not supported!'
 
@@ -4117,7 +4215,7 @@ class Circuit(object):
                 qubits_used.extend(gate_qubits)
 
             # All gates that don't have a non-idle gate acting on them get an idle in the layer.
-            for q in self.line_labels:
+            for q in self._line_labels:
                 if q not in qubits_used:
                     quil += 'I' + ' ' + str(qubit_conversion[q]) + '\n'
 
@@ -4132,11 +4230,11 @@ class Circuit(object):
 
         # Add in a measurement at the end.
         if readout_conversion is None:
-            for q in self.line_labels:
+            for q in self._line_labels:
                 #            quil += "MEASURE {0} [{1}]\n".format(str(qubit_conversion[q]),str(qubit_conversion[q]))
                 quil += "MEASURE {0} ro[{1}]\n".format(str(qubit_conversion[q]), str(qubit_conversion[q]))
         else:
-            for q in self.line_labels:
+            for q in self._line_labels:
                 quil += "MEASURE {0} ro[{1}]\n".format(str(qubit_conversion[q]), str(readout_conversion[q]))
 
         return quil
@@ -4216,22 +4314,19 @@ class Circuit(object):
             # To tell us whether we have found a standard qubit labelling type.
             standardtype = False
             # Must first check they are strings, because cannot query q[0] for int q.
-            if all([isinstance(q, str) for q in self.line_labels]):
-                if all([q[0] == 'Q' for q in self.line_labels]):
+            if all([isinstance(q, str) for q in self._line_labels]):
+                if all([q[0] == 'Q' for q in self._line_labels]):
                     standardtype = True
-                    qubit_conversion = {llabel: int(llabel[1:]) for llabel in self.line_labels}
-            if all([isinstance(q, int) for q in self.line_labels]):
-                qubit_conversion = {q: q for q in self.line_labels}
+                    qubit_conversion = {llabel: int(llabel[1:]) for llabel in self._line_labels}
+            if all([isinstance(q, int) for q in self._line_labels]):
+                qubit_conversion = {q: q for q in self._line_labels}
                 standardtype = True
             if not standardtype:
                 raise ValueError(
                     "No standard qubit labelling conversion is available! Please provide `qubit_conversion`.")
 
         if num_qubits is None:
-            num_qubits = len(self.line_labels)
-
-        # if gateargs_map is None:
-        #     gateargs_map = {}
+            num_qubits = len(self._line_labels)
 
         #Currently only using 'Iz' as valid intermediate measurement ('IM') label.
         #Todo:  Expand to all intermediate measurements.
@@ -4250,6 +4345,9 @@ class Circuit(object):
             # Include a delay instruction
             openqasm += 'opaque delay(t) q;\n\n'
 
+        # Add a template for ECR commands that we will replace/remove later
+        openqasm += "ECRPLACEHOLDER"
+
         openqasm += 'qreg q[{0}];\n'.format(str(num_qubits))
         # openqasm += 'creg cr[{0}];\n'.format(str(num_qubits))
         openqasm += 'creg cr[{0}];\n'.format(str(num_qubits + num_IMs))
@@ -4267,7 +4365,7 @@ class Circuit(object):
 
             # Go through the (non-self.identity) gates in the layer and convert them to openqasm
             for gate in layer.components:
-                gate_qubits = gate.qubits if (gate.qubits is not None) else self.line_labels
+                gate_qubits = gate.qubits if (gate.qubits is not None) else self._line_labels
                 assert(len(gate_qubits) <= 2), 'Gates on more than 2 qubits given; this is currently not supported!'
 
                 # Find the openqasm for the gate.
@@ -4290,9 +4388,9 @@ class Circuit(object):
                                 openqasm_for_gate += subopenqasm_for_gate + ' q[' + str(qubit_conversion[q]) + '];\n'
                             if block_between_gates:
                                 openqasm_for_gate += 'barrier '
-                                for q in self.line_labels[:-1]:
+                                for q in self._line_labels[:-1]:
                                     openqasm_for_gate += 'q[{0}], '.format(str(qubit_conversion[q]))
-                                openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[self.line_labels[-1]]))
+                                openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[self._line_labels[-1]]))
 
                         else:
                             openqasm_for_gate += subopenqasm_for_gate
@@ -4303,9 +4401,9 @@ class Circuit(object):
                             openqasm_for_gate += ';\n'
                             if block_between_gates:
                                 openqasm_for_gate += 'barrier '
-                                for q in self.line_labels[:-1]:
+                                for q in self._line_labels[:-1]:
                                     openqasm_for_gate += 'q[{0}], '.format(str(qubit_conversion[q]))
-                                openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[self.line_labels[-1]]))
+                                openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[self._line_labels[-1]]))
 
                 else:
                     assert len(gate.qubits) == 1
@@ -4325,7 +4423,7 @@ class Circuit(object):
 
             # All gates that don't have a non-idle gate acting on them get an idle in the layer.
             if not block_between_gates and include_delay_on_idle:
-                for q in self.line_labels:
+                for q in self._line_labels:
                     if q not in qubits_used:
                         # Delay 0 works because of the barrier
                         # In OpenQASM3, this should probably be a stretch instead
@@ -4339,19 +4437,27 @@ class Circuit(object):
             # where pragma blocks should be.
             if block_between_layers:
                 openqasm += 'barrier '
-                for q in self.line_labels[:-1]:
+                for q in self._line_labels[:-1]:
                     openqasm += 'q[{0}], '.format(str(qubit_conversion[q]))
-                openqasm += 'q[{0}];\n'.format(str(qubit_conversion[self.line_labels[-1]]))
+                openqasm += 'q[{0}];\n'.format(str(qubit_conversion[self._line_labels[-1]]))
                 # openqasm += ';'
 
         # Add in a measurement at the end.
-        for q in self.line_labels:
+        for q in self._line_labels:
             # openqasm += "measure q[{0}] -> cr[{1}];\n".format(str(qubit_conversion[q]), str(qubit_conversion[q]))
             openqasm += "measure q[{0}] -> cr[{1}];\n".format(str(qubit_conversion[q]),
                                                               str(num_IMs_used + qubit_conversion[q]))
+        
+        # Replace ECR placeholder
+        ecr_replace_str = ""
+        if 'ecr' in openqasm:
+            ecr_replace_str = "gate rzx(param0) q0,q1 { h q1; cx q0,q1; rz(param0) q1; cx q0,q1; h q1; }\n"
+            ecr_replace_str += "gate ecr q0,q1 { rzx(pi/4) q0,q1; x q0; rzx(-pi/4) q0,q1; }\n\n"
+        openqasm = openqasm.replace("ECRPLACEHOLDER", ecr_replace_str)
 
         return openqasm
-
+    
+    @_deprecate_fn('Model.probabilites or Model.sim.probs')
     def simulate(self, model, return_all_outcomes=False):
         """
         Compute the outcome probabilities of this Circuit using `model` as a model for the gates.
@@ -4415,108 +4521,10 @@ class Circuit(object):
         """
         if not self._static:
             self._static = True
-            self._labels = tuple([_Label(layer_lbl) for layer_lbl in self._labels])
-
-    def expand_instruments_and_separate_povm(self, model, observed_outcomes=None):
-        """
-        Creates a dictionary of :class:`SeparatePOVMCircuit` objects from expanding the instruments of this circuit.
-
-        Each key of the returned dictionary replaces the instruments in this circuit with a selection
-        of their members.  (The size of the resulting dictionary is the product of the sizes of
-        each instrument appearing in this circuit when `observed_outcomes is None`).  Keys are stored
-        as :class:`SeparatePOVMCircuit` objects so it's easy to keep track of which POVM outcomes (effects)
-        correspond to observed data.  This function is, for the most part, used internally to process
-        a circuit before computing its outcome probabilities.
-
-        Parameters
-        ----------
-        model : Model
-            The model used to provide necessary details regarding the expansion, including:
-
-            - default SPAM layers
-            - definitions of instrument-containing layers
-            - expansions of individual instruments and POVMs
-
-        Returns
-        -------
-        OrderedDict
-            A dict whose keys are :class:`SeparatePOVMCircuit` objects and whose
-            values are tuples of the outcome labels corresponding to this circuit,
-            one per POVM effect held in the key.
-        """
-        complete_circuit = model.complete_circuit(self)
-        expanded_circuit_outcomes = _collections.OrderedDict()
-        povm_lbl = complete_circuit[-1]  # "complete" circuits always end with a POVM label
-        circuit_without_povm = complete_circuit[0:len(complete_circuit) - 1]
-
-        def create_tree(lst):
-            subs = _collections.OrderedDict()
-            for el in lst:
-                if len(el) > 0:
-                    if el[0] not in subs: subs[el[0]] = []
-                    subs[el[0]].append(el[1:])
-            return _collections.OrderedDict([(k, create_tree(sub_lst)) for k, sub_lst in subs.items()])
-
-        def add_expanded_circuit_outcomes(circuit, running_outcomes, ootree, start):
-            """
-            """
-            cir = circuit if start == 0 else circuit[start:]  # for performance, avoid uneeded slicing
-            for k, layer_label in enumerate(cir, start=start):
-                components = layer_label.components
-                #instrument_inds = _np.nonzero([model._is_primitive_instrument_layer_lbl(component)
-                #                               for component in components])[0]  # SLOWER than statement below
-                instrument_inds = _np.array([i for i, component in enumerate(components)
-                                             if model._is_primitive_instrument_layer_lbl(component)])
-                if instrument_inds.size > 0:
-                    # This layer contains at least one instrument => recurse with instrument(s) replaced with
-                    #  all combinations of their members.
-                    component_lookup = {i: comp for i, comp in enumerate(components)}
-                    instrument_members = [model._member_labels_for_instrument(components[i])
-                                          for i in instrument_inds]  # also components of outcome labels
-                    for selected_instrmt_members in _itertools.product(*instrument_members):
-                        expanded_layer_lbl = component_lookup.copy()
-                        expanded_layer_lbl.update({i: components[i] + "_" + sel
-                                                   for i, sel in zip(instrument_inds, selected_instrmt_members)})
-                        expanded_layer_lbl = _Label([expanded_layer_lbl[i] for i in range(len(components))])
-
-                        if ootree is not None:
-                            new_ootree = ootree
-                            for sel in selected_instrmt_members:
-                                new_ootree = new_ootree.get(sel, {})
-                            if len(new_ootree) == 0: continue  # no observed outcomes along this outcome-tree path
-                        else:
-                            new_ootree = None
-
-                        add_expanded_circuit_outcomes(circuit[0:k] + Circuit((expanded_layer_lbl,)) + circuit[k + 1:],
-                                                      running_outcomes + selected_instrmt_members, new_ootree, k + 1)
-                    break
-
-            else:  # no more instruments to process: `cir` contains no instruments => add an expanded circuit
-                assert(circuit not in expanded_circuit_outcomes)  # shouldn't be possible to generate duplicates...
-                elabels = model._effect_labels_for_povm(povm_lbl) if (observed_outcomes is None) \
-                    else tuple(ootree.keys())
-                outcomes = tuple((running_outcomes + (elabel,) for elabel in elabels))
-                expanded_circuit_outcomes[SeparatePOVMCircuit(circuit, povm_lbl, elabels)] = outcomes
-
-        ootree = create_tree(observed_outcomes) if observed_outcomes is not None else None  # tree of observed outcomes
-        # e.g. [('0','00'), ('0','01'), ('1','10')] ==> {'0': {'00': {}, '01': {}}, '1': {'10': {}}}
-
-        if model._has_instruments():
-            add_expanded_circuit_outcomes(circuit_without_povm, (), ootree, start=0)
-        else:
-            # It may be helpful to cache the set of elabels for a POVM (maybe within the model?) because
-            # currently the call to _effect_labels_for_povm may be a bottleneck.  It's needed, even when we have
-            # observed outcomes, because there may be some observed outcomes that aren't modeled (e.g. leakage states)
-            if observed_outcomes is None:
-                elabels = model._effect_labels_for_povm(povm_lbl)
-            else:
-                possible_lbls = set(model._effect_labels_for_povm(povm_lbl))
-                elabels = tuple([oo for oo in ootree.keys() if oo in possible_lbls])
-            outcomes = tuple(((elabel,) for elabel in elabels))
-            expanded_circuit_outcomes[SeparatePOVMCircuit(circuit_without_povm, povm_lbl, elabels)] = outcomes
-
-        return expanded_circuit_outcomes
-
+            self._labels = tuple([layer_lbl if isinstance(layer_lbl, _Label) 
+                                  else _Label(layer_lbl) for layer_lbl in self._labels])
+        self._hashable_tup = self.tup
+        self._hash = hash(self._hashable_tup)
 
 class CompressedCircuit(object):
     """
@@ -4571,7 +4579,7 @@ class CompressedCircuit(object):
         self._tup = CompressedCircuit.compress_op_label_tuple(
             circuit.layertup, min_len_to_compress, max_period_to_look_for)
         self._str = circuit.str
-        self._line_labels = circuit.line_labels
+        self._line_labels = circuit._line_labels
         self._occurrence_id = circuit.occurrence
 
     def __getstate__(self):
@@ -4705,12 +4713,35 @@ class SeparatePOVMCircuit(object):
     """
     def __init__(self, circuit_without_povm, povm_label, effect_labels):
         self.circuit_without_povm = circuit_without_povm
-        self.povm_label = povm_label
-        self.effect_labels = effect_labels
+        self._povm_label = povm_label
+        self._effect_labels = effect_labels
+        self._full_effect_labels = tuple([(self.povm_label + "_" + el) for el in self._effect_labels])
 
     @property
     def full_effect_labels(self):
-        return [(self.povm_label + "_" + el) for el in self.effect_labels]
+        return self._full_effect_labels
+    
+    @property 
+    def effect_labels(self):
+        return self._effect_labels
+    
+    @property 
+    def povm_label(self):
+        return self._povm_label
+
+    @effect_labels.setter
+    def effect_labels(self, value):
+        self._effect_labels = value
+        self._full_effect_labels = tuple([(self._povm_label + "_" + el) for el in value])
+
+    @povm_label.setter
+    def povm_label(self, value):
+        self._povm_label = value
+        self._full_effect_labels = tuple([(value + "_" + el) for el in self._effect_labels])
+    
+    @full_effect_labels.setter
+    def full_effect_labels(self, value):
+        self._full_effect_labels = value
 
     def __len__(self):
         return len(self.circuit_without_povm)  # don't count POVM in length, so slicing works as expected
@@ -4725,4 +4756,3 @@ class SeparatePOVMCircuit(object):
         return "SeparatePOVM(" + self.circuit_without_povm.str + "," \
             + str(self.povm_label) + "," + str(self.effect_labels) + ")"
 
-    #LATER: add a method for getting the "POVM_effect" labels?

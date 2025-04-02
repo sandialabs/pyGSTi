@@ -3,7 +3,7 @@
 # cython: linetrace=False
 
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -111,13 +111,6 @@ cdef class TermRep(_basereps_cython.TermRep):
         return TermRep(self.coeff.copy(), self.magnitude, self.logmagnitude,
                          self.pre_state, self.post_state, self.pre_effect, self.post_effect,
                          self.pre_ops, self.post_ops)
-
-    #Not needed - and this implementation is quite right as it will need to change
-    # the ordering of the pre/post ops also.
-    #def conjugate(self):
-    #    return TermRep(self.coeff.copy(), self.magnitude, self.logmagnitude,
-    #                     self.post_state, self.pre_state, self.post_effect, self.pre_effect,
-    #                     self.post_ops, self.pre_ops)
 
 
 #Note: to use direct term reps (numerical coeffs) we'll need to update

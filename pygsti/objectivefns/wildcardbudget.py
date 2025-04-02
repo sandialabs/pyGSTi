@@ -2,7 +2,7 @@
 Functions related to computation of the log-likelihood.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -142,11 +142,6 @@ class WildcardBudget(_NicelySerializable):
         dict
         """
         raise NotImplementedError("Derived classes must implement `description`")
-
-    #def compute_circuit_wildcard_budget(c, w_vec):
-    #    #raise NotImplementedError("TODO!!!")
-    #    #for now, assume w_vec is a length-1 vector
-    #    return abs(w_vec[0]) * len(c)
 
     def precompute_for_same_circuits(self, circuits):
         """
@@ -596,7 +591,7 @@ class PrimitiveOpsWildcardBudgetBase(WildcardBudget):
             elif lbl.name in error_per_op:
                 return pos(error_per_op[lbl.name])
             else:
-                assert(not lbl.is_simple()), "Simple label %s must be a primitive op of this WEB!" % str(lbl)
+                assert(not lbl.is_simple), "Simple label %s must be a primitive op of this WEB!" % str(lbl)
                 return sum([budget_for_label(component) for component in lbl.components])
 
         budget = error_per_op.get('SPAM', 0)
@@ -656,7 +651,7 @@ class PrimitiveOpsWildcardBudgetBase(WildcardBudget):
                 deriv[self.primitive_op_index[lbl.name]] = 1.0
                 return deriv
             else:
-                assert(not lbl.is_simple()), "Simple label %s must be a primitive op of this WEB!" % str(lbl)
+                assert(not lbl.is_simple), "Simple label %s must be a primitive op of this WEB!" % str(lbl)
                 return sum([budget_deriv_for_label(component) for component in lbl.components])
 
         circuit_budget_matrix = _np.zeros((len(circuits), self.num_primitive_ops), 'd')

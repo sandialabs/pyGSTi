@@ -2,7 +2,7 @@
 Defines the ModelParamsInterposer class and supporting functionality.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -77,7 +77,7 @@ class LinearInterposer(ModelParamsInterposer):
         # This can and should be improved later - particularly this will be awful when labels (els of wl) are tuples.
         ret = []
         for irow in range(self.inv_transform_matrix.shape[0]):
-            lbl = ' + '.join(["%g%s" % (coeff, str(lbl)) for coeff, lbl in zip(self.inv_transform_matrix[irow, :], wl)])
+            lbl = ' + '.join(["%g%s" % (coeff, str(lbl)) for coeff, lbl in zip(self.inv_transform_matrix[irow, :], wl) if abs(coeff)>1e-10])
             ret.append(lbl)
         return ret
 
