@@ -125,7 +125,8 @@ def jamiolkowski_iso(operation_mx, op_mx_basis='pp', choi_mx_basis='pp', normali
     M = len(BVec)  # can be < N if basis has multiple block dims
     assert(M == N), 'Expected {}, got {}'.format(M, N)
 
-    opMxInStdBasis_vec = opMxInStdBasis.ravel()
+    opMxInStdBasis_vec = opMxInStdBasis.flatten()
+    # ^ use flatten, not ravel, in case we're using a CVXPY Expression.
     choiMx_rows = []
     for i in range(M):
         rows = []

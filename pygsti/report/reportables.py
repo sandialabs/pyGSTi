@@ -1020,6 +1020,55 @@ def leaky_maximum_trace_dist(gate, mx_basis):
 
 Leaky_maximum_trace_dist = _modf.opfn_factory(leaky_maximum_trace_dist)
 
+def diamonddist_to_leakfree_cptp(op, ignore, mx_basis):
+    return _tools.diamonddist_projection(op, mx_basis, leakfree=True, seepfree=False, n_leak=1, cptp=True, subspace_diamond=False)
+
+Diamonddist_to_leakfree_cptp = _modf.opsfn_factory(diamonddist_to_leakfree_cptp)
+
+def subspace_diamonddist_to_leakfree_cptp(op, ignore, mx_basis):
+    return _tools.diamonddist_projection(op, mx_basis, leakfree=True, seepfree=False, n_leak=1, cptp=True, subspace_diamond=True)
+
+SubspaceDiamonddist_to_leakfree_cptp = _modf.opsfn_factory(subspace_diamonddist_to_leakfree_cptp)
+
+def subspace_diamonddist(op_a, op_b, basis):
+    dim_mixed = op_a.shape[0]
+    dim_pure  = int(dim_mixed**0.5)
+    dim_pure_compsub = dim_pure - 1
+    from pygsti.tools.optools import leading_dxd_submatrix_basis_vectors
+    U = leading_dxd_submatrix_basis_vectors(dim_pure_compsub, dim_pure, basis)
+    P = U @ U.T.conj()
+    assert _np.linalg.norm(P - P.real) < 1e-10
+    P = P.real
+    from pygsti.tools.optools import diamonddist
+    return diamonddist(op_a @ P, op_b @ P, basis) / 2
+
+SubspaceDiamonddist = _modf.opsfn_factory(subspace_diamonddist)
+
+def pergate_leakrate_reduction(op, ignore, mx_basis, reduction):
+    lfb = _tools.leakage_friendly_basis_2plus1()
+    op_lfb = _tools.change_basis(op, mx_basis, lfb)
+    leakage_effect_superket = op_lfb[-1,:4]
+    leakage_effect = _tools.vec_to_stdmx(leakage_effect_superket, 'pp')
+    leakage_rates = _np.linalg.eigvalsh(leakage_effect)
+    return _np.round(reduction(leakage_rates), 8)
+
+def pergate_leakrate_max(op, ignore, mx_basis):
+    return pergate_leakrate_reduction(op, ignore, mx_basis, max)
+
+def pergate_leakrate_min(op, ignore, mx_basis):
+    return pergate_leakrate_reduction(op, ignore, mx_basis, min)
+
+PerGateLeakRateMax = _modf.opsfn_factory(pergate_leakrate_max)
+PerGateLeakRateMin = _modf.opsfn_factory(pergate_leakrate_min)
+
+def pergate_seeprate(op, ignore, mx_basis):
+    lfb = _tools.leakage_friendly_basis_2plus1()
+    op_lfb = _tools.change_basis(op, mx_basis, lfb)
+    seeprate = _np.round(op_lfb[0,-1], 8)
+    return seeprate
+
+PerGateSeepRate = _modf.opsfn_factory(pergate_seeprate)
+
 
 def angles_btwn_rotn_axes(model):
     """
@@ -2486,10 +2535,19 @@ def info_of_opfn_by_name(name):
                  'respectively'),
         "trace": ("1/2 Trace|Distance",
                   "0.5 | Chi(A) - Chi(B) |_tr"),
-        "diamond": ("1/2 Diamond|Distance",
-                    "0.5 sup | (1 x (A-B))(rho) |_tr"),
         "la-trace" : ("1/2 Trace|Distance (subspace)",
                       "TO-WRITE"),
+        "diamond": ("1/2 Diamond|Distance",
+                    "0.5 sup | (1 x (A-B))(rho) |_tr"),
+        "la-diamond": ("1/2 Diamond|Distance (subspace)",
+                    "0.5 sup | (1 x (A-B))(rho) |_tr, rho in subspace"),
+        # BEGIN new metrics that need descriptions
+        "plf-diamond" : ("◆ norm projection|to LF-CPTP cone", "TO WRITE"),
+        "plf-la-diamond" : ("(subspace-◆) norm projection|to LF-CPTP cone", "TO WRITE"),
+        # END new metrics that need descriptions
+        "per-gate-seep-rate": ("Seepage:|Maximum|TOPM", "This gate's maximum transport of probability mass INTO the computational subspace."),
+        "per-gate-leak-rate-max": ("Leakage:|Maximum|TOPM", "This gate's maximum transport of probability mass OUT of the computational subspace."),
+        "per-gate-leak-rate-min": ("Leakage:|Minimum|TOPM|(subspace)", "This gate's minimum transport of probability mass OUT of the computational subspace, assuming all probability mass starts in the computational subspace."),
         "nuinf": ("Non-unitary|Ent. Infidelity",
                   "(d^2-1)/d^2 [1 - sqrt( unitarity(A B^-1) )]"),
         "nuagi": ("Non-unitary|Avg. Gate Infidelity",
@@ -2577,6 +2635,24 @@ def evaluate_opfn_by_name(name, model, target_model, op_label_or_string,
     elif name == "diamond":
         fn = HalfDiamondNorm if b else \
             CircuitHalfDiamondNorm
+    elif name == 'la-diamond':
+        assert b
+        fn = SubspaceDiamonddist
+    elif name == 'plf-la-diamond':
+        assert b
+        fn = SubspaceDiamonddist_to_leakfree_cptp
+    elif name == 'plf-diamond':
+        assert b
+        fn = Diamonddist_to_leakfree_cptp
+    elif name == 'per-gate-leak-rate-max':
+        assert b
+        fn = PerGateLeakRateMax
+    elif name == 'per-gate-leak-rate-min':
+        assert b
+        fn = PerGateLeakRateMin
+    elif name == 'per-gate-seep-rate':
+        assert b
+        fn = PerGateSeepRate
     elif name == "nuinf":
         fn = Nonunitary_entanglement_infidelity if b else \
             Circuit_nonunitary_entanglement_infidelity
