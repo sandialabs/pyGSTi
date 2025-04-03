@@ -18,7 +18,41 @@ from pygsti.baseobjs.basisconstructors import _basis_constructor_dict
 # from ..baseobjs.basis import Basis, BuiltinBasis, DirectSumBasis
 from pygsti.baseobjs import basis as _basis
 
-@lru_cache(maxsize=1)
+
+def leakage_friendly_basis_2plus1():
+    """ 
+    This basis is used to isolate the parts of Hilbert-Schmidt space that act on
+    the computational subspace induced from a partition of 3-dimensional complex
+    Hilbert space into a 2-dimensional computational subspace and a 1-dimensional
+    leakage space.
+    """
+    gm_basis = _basis.Basis.cast("gm", 9)
+    leakage_basis_mxs = [
+        _np.sqrt(2) / 3 * (_np.sqrt(3) * gm_basis[0] + 0.5 * _np.sqrt(6) * gm_basis[8]),
+        gm_basis[1],
+        gm_basis[4],
+        gm_basis[7],
+        gm_basis[2],
+        gm_basis[3],
+        gm_basis[5],
+        gm_basis[6],
+        1 / 3 * (_np.sqrt(3) * gm_basis[0] - _np.sqrt(6) * gm_basis[8]),
+    ]
+    check = _np.zeros((9, 9), complex)
+    for i, m1 in enumerate(leakage_basis_mxs):
+        for j, m2 in enumerate(leakage_basis_mxs):
+            check[i, j] = _np.vdot(m1, m2)
+    assert _np.allclose(check, _np.identity(9, complex))
+    leakage_basis = _basis.ExplicitBasis(
+        leakage_basis_mxs,
+        name="LeakageBasis",
+        longname="2+1 level leakage basis",
+        real=True,
+        labels=["I", "X", "Y", "Z", "LX0", "LX1", "LY0", "LY1", "L"],
+    )
+    return leakage_basis
+
+
 def basis_matrices(name_or_basis, dim, sparse=False):
     """
     Get the elements of the specifed basis-type which spans the density-matrix space given by `dim`.

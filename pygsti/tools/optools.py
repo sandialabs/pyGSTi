@@ -275,6 +275,11 @@ def tracedist(a, b):
     """
     return 0.5 * tracenorm(a - b)
 
+"""
+TODO: make versions of diamonddist that compute distance to leakage-free or seepage-free CPTP operators.
+Use _sdps.diamond_norm_canon.
+"""
+
 
 def diamonddist(a, b, mx_basis='pp', return_x=False, return_all_vars=False):
     """
@@ -344,62 +349,6 @@ def diamonddist(a, b, mx_basis='pp', return_x=False, return_all_vars=False):
         return objective_val, varvals
     else:
         return objective_val
-
-
-def _diamond_norm_model(dim, smallDim, J):
-    # return a model for computing the diamond norm.
-    #
-    # Uses the primal SDP from arXiv:1207.5726v2, Sec 3.2
-    #
-    # Maximize 1/2 ( < J(phi), X > + < J(phi).dag, X.dag > )
-    # Subject to  [[ I otimes rho0,       X        ],
-    #              [      X.dag   ,   I otimes rho1]] >> 0
-    #              rho0, rho1 are density matrices
-    #              X is linear operator
-
-    import cvxpy as _cp
-
-    rho0 = _cp.Variable((smallDim, smallDim), name='rho0', hermitian=True)
-    rho1 = _cp.Variable((smallDim, smallDim), name='rho1', hermitian=True)
-    X = _cp.Variable((dim, dim), name='X', complex=True)
-    Y = _cp.real(X)
-    Z = _cp.imag(X)
-
-    K = J.real
-    L = J.imag
-    if hasattr(_cp, 'scalar_product'):
-        objective_expr = _cp.scalar_product(K, Y) + _cp.scalar_product(L, Z)
-    else:
-        Kf = K.flatten(order='F')
-        Yf = Y.flatten(order='F')
-        Lf = L.flatten(order='F')
-        Zf = Z.flatten(order='F')
-        objective_expr = Kf @ Yf + Lf @ Zf
-
-    objective = _cp.Maximize(objective_expr)
-
-    ident = _np.identity(smallDim, 'd')
-    kr_tau0 = _cp.kron(ident, _cp.imag(rho0))
-    kr_tau1 = _cp.kron(ident, _cp.imag(rho1))
-    kr_sig0 = _cp.kron(ident, _cp.real(rho0))
-    kr_sig1 = _cp.kron(ident, _cp.real(rho1))
-
-    block_11 = _cp.bmat([[kr_sig0 ,    Y   ],
-                         [   Y.T  , kr_sig1]])
-    block_21 = _cp.bmat([[kr_tau0 ,    Z   ],
-                         [   -Z.T , kr_tau1]])
-    block_12 = block_21.T
-    mat_joint = _cp.bmat([[block_11, block_12],
-                          [block_21, block_11]])
-    constraints = [
-        mat_joint >> 0,
-        rho0 >> 0,
-        rho1 >> 0,
-        _cp.trace(rho0) == 1.,
-        _cp.trace(rho1) == 1.
-    ]
-    prob = _cp.Problem(objective, constraints)
-    return prob, [X, rho0, rho1]
 
 
 def jtracedist(a, b, mx_basis='pp'):  # Jamiolkowski trace distance:  Tr(|J(a)-J(b)|)
@@ -682,6 +631,25 @@ def leading_dxd_submatrix_basis_vectors(d: int, n: int, current_basis, return_la
         return submatrix_basis_vectors, basis_labels
     if not return_labels:
         return submatrix_basis_vectors
+
+def diamonddist_projection(
+        superop, basis, leakfree=False, seepfree=False, n_leak=0, cptp=True, subspace_diamond=False,
+        return_optvars=False, verbose=False
+    ):
+    prob, projection, solvers = _sdps.diamond_norm_projection_model(superop, basis, leakfree, seepfree, n_leak, cptp, subspace_diamond)
+    objective_val = -2
+    optvars = []
+    for solver in solvers:
+        try:
+            prob.solve(solver=solver, verbose=verbose)
+            objective_val = prob.value
+            optvars.append(projection.value)
+            optvars.extend(v.value for v in prob.variables())
+            return (objective_val, optvars) if return_optvars else objective_val
+        except Exception as e:
+            _warnings.warn(f"Running CVXPY with solver {solver} failed with message {str(e)}.")
+    _warnings.warn(f"All numerical solvers failed; returning -2!")
+    return (objective_val, optvars) if return_optvars else objective_val
 
 
 def subspace_restricted_fro_dist(a, b, mx_basis, n_leak=0):

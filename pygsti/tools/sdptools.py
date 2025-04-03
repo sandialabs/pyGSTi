@@ -128,6 +128,66 @@ def diamond_norm_canon(arg : cp.Expression, basis) -> Tuple[cp.Expression, List[
     return epi, constraints
 
 
+def cptp_superop_variable(purestate_dim: int, basis) -> Tuple[cp.Expression, List[cp.Constraint]]:
+    d = purestate_dim ** 2
+    basis = pgb.Basis.cast(basis, d)
+    constraints = []
+    if basis.first_element_is_identity:
+        toprow = np.zeros((1,d))
+        toprow[0] = 1
+        X_free = cp.Variable((d-1, d))
+        X = cp.vstack((toprow, X_free))
+    else:
+        X = cp.Variable((d, d))
+        matI = np.eye(purestate_dim)
+        vecI = bt.stdmx_to_vec(matI, basis)
+        constraints.append(X.T @ vecI == vecI)
+        """
+        Let X be the process matrix for a gate "G". We have
+                tr(G(rho)) = < I, G(rho) >
+                           = < vec(I), vec(G(rho)) >
+                           = < vec(I), X @ vec(rho) >
+                           = < X.T @ vec(I), vec(rho) >.
+        Therefore tr(G(rho)) = tr(rho) for all rho iff X.T @ vec(I) == vec(I).
+        """
+    J = jam.jamiolkowski_iso(X, basis, basis, normalized=True)
+    constraints.append(J >> 0)
+    return X, constraints
+
+
+def diamond_norm_projection_model(superop: np.ndarray, basis: Basis, leakfree=False, seepfree=False, n_leak=0, cptp=True, subspace_diamond=False):
+    assert CVXPY_ENABLED
+    dim_mixed = superop.shape[0]
+    dim_pure = int(np.sqrt(dim_mixed))
+    assert dim_pure**2 == dim_mixed
+    constraints = []
+    if cptp:
+        proj_superop, cons = cptp_superop_variable(dim_pure, basis)
+        constraints.extend(cons)
+    else:
+        proj_superop = cp.Variable((dim_mixed, dim_mixed))
+    diamondnorm_arg = superop - proj_superop
+    if (leakfree or seepfree or subspace_diamond):
+        assert n_leak == 1
+        from pygsti.tools.optools import leading_dxd_submatrix_basis_vectors
+        dim_pure_compsub  = dim_pure - n_leak
+        U = leading_dxd_submatrix_basis_vectors(dim_pure_compsub, dim_pure, basis)
+        P = U @ U.T.conj()
+        I = np.eye(dim_mixed)
+        if leakfree:
+            constraints.append( (I -  P) @ proj_superop @ U == 0 )
+        if seepfree:
+            constraints.append( U.T @ proj_superop @ (I - P) == 0 )
+        if subspace_diamond:
+            diamondnorm_arg = diamondnorm_arg @ P
+    expr, cons = diamond_norm_canon(diamondnorm_arg, basis)
+    objective = cp.Minimize(expr / 2)
+    constraints.extend(cons)
+    problem = cp.Problem(objective, constraints)
+    viable_solvers = [solver for solver in ['MOSEK', 'CLARABEL', 'CVXOPT'] if solver in cp.installed_solvers()]
+    return problem, proj_superop, viable_solvers
+
+
 def root_fidelity_canon(sigma: cp.Expression, rho: cp.Expression) -> Tuple[cp.Expression, List[cp.Constraint]]:
     """
     pyGSTi defines fidelity as
