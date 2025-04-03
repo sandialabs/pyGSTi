@@ -2542,12 +2542,11 @@ def info_of_opfn_by_name(name):
         "la-diamond": ("1/2 Diamond|Distance (subspace)",
                     "0.5 sup | (1 x (A-B))(rho) |_tr, rho in subspace"),
         # BEGIN new metrics that need descriptions
-        "plf-diamond" : ("◆ norm projection|to LF-CPTP cone", "TO WRITE"),
-        "plf-la-diamond" : ("(subspace-◆) norm projection|to LF-CPTP cone", "TO WRITE"),
-        # END new metrics that need descriptions
-        "per-gate-seep-rate": ("Seepage:|Maximum|TOPM", "This gate's maximum transport of probability mass INTO the computational subspace."),
-        "per-gate-leak-rate-max": ("Leakage:|Maximum|TOPM", "This gate's maximum transport of probability mass OUT of the computational subspace."),
-        "per-gate-leak-rate-min": ("Leakage:|Minimum|TOPM|(subspace)", "This gate's minimum transport of probability mass OUT of the computational subspace, assuming all probability mass starts in the computational subspace."),
+        "plf-diamond" : ("1/2 Diamond|Distance to|No-leak Channel", "0.5 min |A - X|_◆, X is CPTP and leakage-free."),
+        "plf-la-diamond" : ("Leakage:|1/2 Min|Diamond|Dist.|to a No-leak|Channel|", "0.5 min |A - X|_{subspace ◆}, X is CPTP and leakage-free."),
+        "per-gate-seep-rate": ("Seepage:|Max TOP", "It's the gate's maximum transport of population INTO the computational subspace. This is not an error metric! There is little (if any) reason to prefer that it equal zero."),
+        "per-gate-leak-rate-max": ("Leakage:|Max TOP", "This gate's maximum transport of [state] population OUT of the computational subspace."),
+        "per-gate-leak-rate-min": ("Leakage:|Min TOP|(subspace)", "This gate's minimum transport of [state] population OUT of the computational subspace, assuming the entire [state] population starts in the computational subspace."),
         "nuinf": ("Non-unitary|Ent. Infidelity",
                   "(d^2-1)/d^2 [1 - sqrt( unitarity(A B^-1) )]"),
         "nuagi": ("Non-unitary|Avg. Gate Infidelity",
