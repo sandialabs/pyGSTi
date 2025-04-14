@@ -33,6 +33,15 @@ class SummarySection(_Section):
             linlg_pcntle=linlog_percentile / 100,
             typ='histogram', comm=comm, bgcolor=bgcolor
         )
+    
+    @_Section.figure_factory()
+    def final_tvd_histogram(workspace, switchboard=None, comm=None, bgcolor='white',
+                                  **kwargs):
+        return workspace.ColorBoxPlot(
+            'tvd', switchboard.circuits_final,
+            switchboard.modvi_ds, switchboard.mdl_current_modvi,
+            typ='histogram', comm=comm, bgcolor=bgcolor
+        )
 
     @_Section.figure_factory()
     def final_gates_vs_target_table_insummary(workspace, switchboard=None, confidence_level=None, ci_brevity=1,
