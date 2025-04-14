@@ -3,3 +3,4 @@ numpy
 scipy
 plotly >= 3
 pandas
+networkx

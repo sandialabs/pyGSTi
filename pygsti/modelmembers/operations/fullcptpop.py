@@ -2,7 +2,7 @@
 The FullCPTPOp class and supporting functionality.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -42,7 +42,7 @@ class FullCPTPOp(_KrausOperatorInterface, _LinearOperator):
         choi_mx = _LinearOperator.convert_to_matrix(choi_mx)
         state_space = _statespace.default_space_for_dim(choi_mx.shape[0]) if (state_space is None) \
             else _statespace.StateSpace.cast(state_space)
-        evotype = _Evotype.cast(evotype)
+        evotype = _Evotype.cast(evotype, state_space=state_space)
         self._basis = _Basis.cast(basis, state_space.dim) if (basis is not None) else None  # for Hilbert-Schmidt space
 
         #scratch space
@@ -93,7 +93,7 @@ class FullCPTPOp(_KrausOperatorInterface, _LinearOperator):
             Lmx = _np.linalg.cholesky(choi_mx)
 
         #check TP condition: that diagonal els of Lmx squared add to 1.0
-        Lmx_norm = _np.trace(_np.dot(Lmx.T.conjugate(), Lmx))  # sum of magnitude^2 of all els
+        Lmx_norm = _np.linalg.norm(Lmx)  # = sqrt(tr(Lmx' Lmx))
         assert(_np.isclose(Lmx_norm, 1.0)), "Cholesky decomp didn't preserve trace=1!"
 
         self.params = _np.empty(dim**2, 'd')

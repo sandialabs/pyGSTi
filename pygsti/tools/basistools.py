@@ -2,7 +2,7 @@
 Utility functions for working with Basis objects
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -189,9 +189,9 @@ def change_basis(mx, from_basis, to_basis):
     if isMx:
         # want ret = toMx.dot( _np.dot(mx, fromMx)) but need to deal
         # with some/all args being sparse:
-        ret = _mt.safe_dot(toMx, _mt.safe_dot(mx, fromMx))
+        ret = toMx @ (mx @ fromMx)
     else:  # isVec
-        ret = _mt.safe_dot(toMx, mx)
+        ret = toMx @ mx
 
     if not to_basis.real:
         return ret
@@ -199,38 +199,7 @@ def change_basis(mx, from_basis, to_basis):
     if _mt.safe_norm(ret, 'imag') > 1e-8:
         raise ValueError("Array has non-zero imaginary part (%g) after basis change (%s to %s)!\n%s" %
                          (_mt.safe_norm(ret, 'imag'), from_basis, to_basis, ret))
-    return _mt.safe_real(ret)
-
-#def transform_matrix(from_basis, to_basis, dim_or_block_dims=None, sparse=False):
-#    '''
-#    Compute the transformation matrix between two bases
-#
-#    Parameters
-#    ----------
-#    from_basis : Basis or str
-#        Basis being converted from
-#
-#    to_basis : Basis or str
-#        Basis being converted to
-#
-#    dim_or_block_dims : int or list of ints
-#        if strings provided as bases, the dimension of basis to use.
-#
-#    sparse : bool, optional
-#        Whether to construct a sparse or dense transform matrix
-#        when this isn't specified already by `from_basis` or
-#        `to_basis` (e.g. when these are both strings).
-#
-#    Returns
-#    -------
-#    Basis
-#        the composite basis created
-#    '''
-#    if dim_or_block_dims is None:
-#        assert isinstance(from_basis, Basis)
-#    else:
-#        from_basis = Basis(from_basis, dim_or_block_dims, sparse=sparse)
-#    return from_basis.transform_matrix(to_basis)
+    return ret.real
 
 
 def create_basis_pair(mx, from_basis, to_basis):
@@ -507,7 +476,11 @@ def vec_to_stdmx(v, basis, keep_complex=False):
     """
     if not isinstance(basis, _basis.Basis):
         basis = _basis.BuiltinBasis(basis, len(v))
+    v = v.ravel()
     ret = _np.zeros(basis.elshape, 'complex')
+    if v.ndim > 1:
+        assert v.size == v.shape[0]
+        v = v.ravel()
     for i, mx in enumerate(basis.elements):
         if keep_complex:
             ret += v[i] * mx
@@ -549,9 +522,9 @@ def stdmx_to_vec(m, basis):
     v = _np.empty((basis.size, 1))
     for i, mx in enumerate(basis.elements):
         if basis.real:
-            v[i, 0] = _np.real(_mt.trace(_np.dot(mx, m)))
+            v[i, 0] = _np.real(_np.vdot(mx, m))
         else:
-            v[i, 0] = _np.real_if_close(_mt.trace(_np.dot(mx, m)))
+            v[i, 0] = _np.real_if_close(_np.vdot(mx, m))
     return v
 
 

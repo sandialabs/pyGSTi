@@ -2,7 +2,7 @@
 Defines the Estimate class.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -87,7 +87,6 @@ class Estimate(_MongoSerializable):
 
     @classmethod
     def _create_obj_from_doc_and_mongodb(cls, doc, mongodb, quick_load=False):
-        #def from_mongodb(cls, mongodb_collection, doc_id, ):
         ret = cls.__new__(cls)
         _MongoSerializable.__init__(ret, doc.get('_id', None))
         ret.__dict__.update(_io.read_auxtree_from_mongodb_doc(mongodb, doc, 'auxfile_types', quick_load=quick_load))

@@ -31,6 +31,11 @@ doc/build
 *gst_checkpoints*
 *model_test_checkpoints*
 *standard_gst_checkpoints*
+*ibmqexperiment_checkpoint*
+
+# Serialization Testing Artifacts #
+###################################
+*LinearGateSetTomography_serialization*
 
 # Test Metadata #
 #################
@@ -39,6 +44,7 @@ test/output/pylint/*
 test/output/individual_coverage/*/*
 test/test_packages/cmp_chk_files/Fake_Dataset_none.txt.cache
 **.noseids
+**test_ibmq**
 
 # Tutorial Notebook Untracked Files #
 ####################################
@@ -56,6 +62,7 @@ jupyter_notebooks/Tutorials/tutorial_files/exampleBriefReport
 jupyter_notebooks/Tutorials/tutorial_files/*.ipynb
 jupyter_notebooks/Tutorials/tutorial_files/tempTest
 jupyter_notebooks/Tutorials/tutorial_files/*checkpoints
+jupyter_notebooks/Tutorials/tutorial_files/test_mirror_benchmark
 
 
 
@@ -138,3 +145,4 @@ scripts/profiling/data
 ############################
 local
 pygsti/_version.py
+1_1.profile/0.prof

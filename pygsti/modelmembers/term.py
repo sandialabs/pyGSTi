@@ -2,7 +2,7 @@
 Defines classes which represent terms in gate expansions
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -384,7 +384,7 @@ class RankOnePrepTerm(RankOneTerm, _NoMagnitude):
         -------
         RankOnePrepTerm
         """
-        evotype = _Evotype.cast(evotype)
+        evotype = _Evotype.cast(evotype, state_space=state_space)
         default_basis = 'pp'
 
         if isinstance(pre_state, _mm.ModelMember):
@@ -459,7 +459,7 @@ class RankOneEffectTerm(RankOneTerm, _NoMagnitude):
         -------
         RankOneEffectTerm
         """
-        evotype = _Evotype.cast(evotype)
+        evotype = _Evotype.cast(evotype, state_space=state_space)
         default_basis = 'pp'
 
         if isinstance(pre_effect, _mm.ModelMember):
@@ -534,7 +534,7 @@ class RankOneOpTerm(RankOneTerm, _NoMagnitude):
         -------
         RankOneOpTerm
         """
-        evotype = _Evotype.cast(evotype)
+        evotype = _Evotype.cast(evotype, state_space=state_space)
         pre_reps = []
         post_reps = []
 
@@ -717,9 +717,6 @@ class _HasPolynomialCoefficient(object):
         The term's coefficient (a :class:`Polynomial`).
         """
         return _Polynomial.from_rep(self._rep.coeff)
-
-    #def _coeff_copy(self):
-    #    return self.coeff.copy()
 
     def map_indices_inplace(self, mapfn):
         """

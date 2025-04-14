@@ -2,7 +2,7 @@
 Sub-package holding model operation objects.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -475,18 +475,16 @@ def optimize_operation(op_to_optimize, target_op):
         return
 
     from pygsti import optimize as _opt
-    from pygsti.tools import matrixtools as _mt
     assert(target_op.dim == op_to_optimize.dim)  # operations must have the same overall dimension
     targetMatrix = target_op.to_dense() if isinstance(target_op, LinearOperator) else target_op
 
     def _objective_func(param_vec):
         op_to_optimize.from_vector(param_vec)
-        return _mt.frobeniusnorm(op_to_optimize.to_dense() - targetMatrix)
+        return _np.linalg.norm(op_to_optimize.to_dense() - targetMatrix)
 
     x0 = op_to_optimize.to_vector()
     minSol = _opt.minimize(_objective_func, x0, method='BFGS', maxiter=10000, maxfev=10000,
                            tol=1e-6, callback=None)
 
     op_to_optimize.from_vector(minSol.x)
-    #print("DEBUG: optimized operation to min frobenius distance %g" %
-    #      _mt.frobeniusnorm(op_to_optimize-targetMatrix))
+    return

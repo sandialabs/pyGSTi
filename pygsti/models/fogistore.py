@@ -2,7 +2,7 @@
 Defines the FirstOrderGaugeInvariantStore class and supporting functionality.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -265,8 +265,9 @@ class FirstOrderGaugeInvariantStore(object):
         errorgen_vec = _np.zeros(self.errorgen_space_dim, 'd')
         for i, (op_label, elem_lbl) in enumerate(self.errorgen_space_op_elem_labels):
             errorgen_vec[i] += op_coeffs[op_label].get(elem_lbl, 0.0)
-        return self.errorgen_vec_to_fogi_components_array(errorgen_vec), \
-            self.errorgen_vec_to_fogv_components_array(errorgen_vec)
+        out1 = self.errorgen_vec_to_fogi_components_array(errorgen_vec)
+        out2 = self.errorgen_vec_to_fogv_components_array(errorgen_vec)
+        return out1, out2
 
     def fogi_components_array_to_errorgen_vec(self, fogi_components):
         assert(self._dependent_fogi_action == 'drop'), \
@@ -547,7 +548,8 @@ class FirstOrderGaugeInvariantStore(object):
         else:
             raise ValueError("Invalid intrinsic_or_relational value: `%s`" % str(intrinsic_or_relational))
 
-        space = _mt.remove_dependent_cols(space)
+        col_indices = _mt.independent_columns(space)
+        space = space[:, col_indices]
         return space
 
     @classmethod

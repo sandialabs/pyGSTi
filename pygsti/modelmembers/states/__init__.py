@@ -2,7 +2,7 @@
 Sub-package holding model state preparation objects.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -14,8 +14,6 @@ import numpy as _np
 import scipy.linalg as _spl
 import scipy.optimize as _spo
 import warnings as _warnings
-
-from numpy.lib.arraysetops import isin
 
 from pygsti.modelmembers.povms.computationalpovm import ComputationalBasisPOVM
 
@@ -426,17 +424,16 @@ def optimize_state(vec_to_optimize, target_vec):
         return
 
     from pygsti import optimize as _opt
-    from pygsti.tools import matrixtools as _mt
     assert(target_vec.dim == vec_to_optimize.dim)  # vectors must have the same overall dimension
     targetVector = target_vec.to_dense() if isinstance(target_vec, State) else target_vec
 
     def _objective_func(param_vec):
         vec_to_optimize.from_vector(param_vec)
-        return _mt.frobeniusnorm(vec_to_optimize.to_dense() - targetVector)
+        return _np.linalg.norm(vec_to_optimize.to_dense() - targetVector)
 
     x0 = vec_to_optimize.to_vector()
     minSol = _opt.minimize(_objective_func, x0, method='BFGS', maxiter=10000, maxfev=10000,
                            tol=1e-6, callback=None)
 
     vec_to_optimize.from_vector(minSol.x)
-    #print("DEBUG: optimized vector to min frobenius distance %g" % _mt.frobeniusnorm(vec_to_optimize-targetVector))
+    return

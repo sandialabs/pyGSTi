@@ -2,7 +2,7 @@
 Classes corresponding to tables within a Workspace context.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -2315,10 +2315,10 @@ class OldRotationAxisTable(WorkspaceTable):
         formatters = [None] * nCols
 
         table = "tabular"
-        latex_head = "\\begin{%s}[l]{%s}\n\hline\n" % (table, "|c" * nCols + "|")
+        latex_head = "\\begin{%s}[l]{%s}\n\\hline\n" % (table, "|c" * nCols + "|")
         latex_head += "\\multirow{2}{*}{Gate} & \\multirow{2}{*}{Angle} & " + \
-                      "\\multicolumn{%d}{c|}{Angle between Rotation Axes} \\\\ \cline{3-%d}\n" % (len(opLabels), nCols)
-        latex_head += " & & %s \\\\ \hline\n" % (" & ".join(map(str, opLabels)))
+                      "\\multicolumn{%d}{c|}{Angle between Rotation Axes} \\\\ \\cline{3-%d}\n" % (len(opLabels), nCols)
+        latex_head += " & & %s \\\\ \\hline\n" % (" & ".join(map(str, opLabels)))
 
         table = _ReportTable(colHeadings, formatters,
                              custom_header={'latex': latex_head}, confidence_region_info=confidence_region_info)
@@ -2953,8 +2953,8 @@ class FitComparisonTable(WorkspaceTable):
         if objfn_builder == "chi2" or (isinstance(objfn_builder, _objfns.ObjectiveFunctionBuilder)
                                        and objfn_builder.cls_to_build == _objfns.Chi2Function):
             colHeadings = {
-                'latex': (x_label, '$\\chi^2$', '$k$', '$\\chi^2-k$', '$\sqrt{2k}$',
-                          '$N_\\sigma$', '$N_s$', '$N_p$', 'Rating'),
+                'latex': (x_label, r'$\chi^2$', '$k$', r'$\chi^2-k$', r'$\sqrt{2k}$',
+                          r'$N_\sigma$', '$N_s$', '$N_p$', 'Rating'),
                 'html': (x_label, '&chi;<sup>2</sup>', 'k', '&chi;<sup>2</sup>-k',
                          '&radic;<span style="text-decoration:overline;">2k</span>',
                          'N<sub>sigma</sub>', 'N<sub>s</sub>', 'N<sub>p</sub>', 'Rating'),
@@ -2964,8 +2964,8 @@ class FitComparisonTable(WorkspaceTable):
         elif objfn_builder == "logl" or (isinstance(objfn_builder, _objfns.ObjectiveFunctionBuilder)
                                          and objfn_builder.cls_to_build == _objfns.PoissonPicDeltaLogLFunction):
             colHeadings = {
-                'latex': (x_label, '$2\Delta\\log(\\mathcal{L})$', '$k$', '$2\Delta\\log(\\mathcal{L})-k$',
-                          '$\sqrt{2k}$', '$N_\\sigma$', '$N_s$', '$N_p$', 'Rating'),
+                'latex': (x_label, r'$2\Delta\log(\mathcal{L})$', '$k$', r'$2\Delta\log(\mathcal{L})-k$',
+                          r'$\sqrt{2k}$', r'$N_\sigma$', '$N_s$', '$N_p$', 'Rating'),
                 'html': (x_label, '2&Delta;(log L)', 'k', '2&Delta;(log L)-k',
                          '&radic;<span style="text-decoration:overline;">2k</span>',
                          'N<sub>sigma</sub>', 'N<sub>s</sub>', 'N<sub>p</sub>', 'Rating'),
@@ -3074,9 +3074,9 @@ class CircuitTable(WorkspaceTable):
         else:
             table = "tabular"
             colHeadings = ('\\#',) + tuple(titles)
-            latex_head = "\\begin{%s}[l]{%s}\n\hline\n" % (table, "|c" * len(colHeadings) + "|")
-            latex_head += " & \multicolumn{%d}{c|}{%s} \\\\ \hline\n" % (len(colHeadings) - 1, common_title)
-            latex_head += "%s \\\\ \hline\n" % (" & ".join(colHeadings))
+            latex_head = "\\begin{%s}[l]{%s}\n\\hline\n" % (table, "|c" * len(colHeadings) + "|")
+            latex_head += " & \\multicolumn{%d}{c|}{%s} \\\\ \\hline\n" % (len(colHeadings) - 1, common_title)
+            latex_head += "%s \\\\ \\hline\n" % (" & ".join(colHeadings))
 
             colHeadings = ('#',) + tuple(titles)
             html_head = '<table class="%(tableclass)s" id="%(tableid)s" ><thead>'
@@ -3277,9 +3277,9 @@ class GatesSingleMetricTable(WorkspaceTable):
         #html_head += "</thead><tbody>"
 
         if table_title:
-            latex_head = "\\begin{tabular}[l]{%s}\n\hline\n" % ("|c" * nCols + "|")
-            latex_head += "\\multicolumn{%d}{c|}{%s} \\\\ \cline{1-%d}\n" % (nCols, table_title, nCols)
-            latex_head += " & ".join(colHeadings) + "\\\\ \hline\n"
+            latex_head = "\\begin{tabular}[l]{%s}\n\\hline\n" % ("|c" * nCols + "|")
+            latex_head += "\\multicolumn{%d}{c|}{%s} \\\\ \\cline{1-%d}\n" % (nCols, table_title, nCols)
+            latex_head += " & ".join(colHeadings) + "\\\\ \\hline\n"
 
             html_head = '<table class="%(tableclass)s" id="%(tableid)s" ><thead>'
             html_head += '<tr><th colspan="%d">%s</th></tr>\n' % (nCols, table_title)
@@ -3534,8 +3534,8 @@ class MetadataTable(WorkspaceTable):
         formatters = ('Bold', 'Bold')
 
         #custom latex header for maximum width imposed on 2nd col
-        latex_head = "\\begin{tabular}[l]{|c|p{3in}|}\n\hline\n"
-        latex_head += "\\textbf{Quantity} & \\textbf{Value} \\\\ \hline\n"
+        latex_head = "\\begin{tabular}[l]{|c|p{3in}|}\n\\hline\n"
+        latex_head += "\\textbf{Quantity} & \\textbf{Value} \\\\ \\hline\n"
         table = _ReportTable(colHeadings, formatters,
                              custom_header={'latex': latex_head})
 
@@ -3641,8 +3641,8 @@ class SoftwareEnvTable(WorkspaceTable):
         formatters = ('Bold', 'Bold')
 
         #custom latex header for maximum width imposed on 2nd col
-        latex_head = "\\begin{tabular}[l]{|c|p{3in}|}\n\hline\n"
-        latex_head += "\\textbf{Quantity} & \\textbf{Value} \\\\ \hline\n"
+        latex_head = "\\begin{tabular}[l]{|c|p{3in}|}\n\\hline\n"
+        latex_head += "\\textbf{Quantity} & \\textbf{Value} \\\\ \\hline\n"
         table = _ReportTable(colHeadings, formatters,
                              custom_header={'latex': latex_head})
 
@@ -3711,8 +3711,8 @@ class ProfilerTable(WorkspaceTable):
         formatters = ('Bold', 'Bold')
 
         #custom latex header for maximum width imposed on 2nd col
-        latex_head = "\\begin{tabular}[l]{|c|p{3in}|}\n\hline\n"
-        latex_head += "\\textbf{Label} & \\textbf{Time} (sec) \\\\ \hline\n"
+        latex_head = "\\begin{tabular}[l]{|c|p{3in}|}\n\\hline\n"
+        latex_head += "\\textbf{Label} & \\textbf{Time} (sec) \\\\ \\hline\n"
         table = _ReportTable(colHeadings, formatters,
                              custom_header={'latex': latex_head})
 

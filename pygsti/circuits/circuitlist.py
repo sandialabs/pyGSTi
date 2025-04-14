@@ -2,7 +2,7 @@
 Defines the CircuitList class, for holding meta-data alongside a list or tuple of Circuits.
 """
 # ***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -158,11 +158,7 @@ class CircuitList(_NicelySerializable):
         -------
         CircuitList
         """
-        if isinstance(circuits_to_keep, set):
-            new_circuits = list(filter(lambda c: c in circuits_to_keep, self._circuits))
-        else:
-            current_circuits = set(self._circuits)
-            new_circuits = list(filter(lambda c: c in current_circuits, circuits_to_keep))
+        new_circuits = list(filter(lambda c: c in set(circuits_to_keep), self._circuits))
         return CircuitList(new_circuits, self.op_label_aliases)  # don't transfer weights or name
 
     def truncate_to_dataset(self, dataset):

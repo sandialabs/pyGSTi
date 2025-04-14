@@ -2,7 +2,7 @@
 The ComposedErrorgen class and supporting functionality.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -63,7 +63,7 @@ class ComposedErrorgen(_LinearOperator):
 
         if evotype == "auto":
             evotype = errgens_to_compose[0]._evotype
-        evotype = _Evotype.cast(evotype)
+        evotype = _Evotype.cast(evotype, state_space=state_space)
         assert(all([evotype == eg._evotype for eg in errgens_to_compose])), \
             "All error generators must have the same evolution type (%s expected)!" % evotype
 
