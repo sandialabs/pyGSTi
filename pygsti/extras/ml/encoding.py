@@ -415,7 +415,7 @@ def create_probability_data(circs:list,
                             tracked_error_gens: list, 
                             pspec, geometry: str, true_probabilities=None, 
                             num_qubits = None, num_channels = None, 
-                            measurement_encoding = None, idealouts = None,
+                            measurement_encoding = False, idealouts = None,
                             indexmapper = None, indexmapper_kwargs = {}, 
                             valuemapper = None, valuemapper_kwargs = {},
                             max_depth = None, return_separate=False, stimDict = None,
@@ -445,12 +445,13 @@ def create_probability_data(circs:list,
     x_circs = _np.zeros((num_circs, num_qubits, max_depth, num_channels), float)
     x_signs = _np.zeros((num_circs, max_depth, num_error_gens), int)
     x_indices = _np.zeros((num_circs, max_depth, num_error_gens), int)
-    y_true = _np.array(true_probabilities)
+    if true_probabilities is not None:
+        y_true = _np.array(true_probabilities)
     y_approx = _np.array(approximate_probabilities)
                     
     for i in trange(len(circs), smoothing=0):
         c = circs[i]
-        x_circs[i, :, :, :] = circuit_to_tensor(c, max_depth, num_qubits, num_channels, encode_measurements,
+        x_circs[i, :, :, :] = circuit_to_tensor(c, max_depth, num_qubits, num_channels, measurement_encoding,
                                                          indexmapper, indexmapper_kwargs,
                                                          valuemapper, valuemapper_kwargs 
                                                          )              
@@ -465,10 +466,10 @@ def create_probability_data(circs:list,
         for ci in range(num_channels): 
             xc_reshaped[:, :, qi * num_channels + ci] = x_circs[:, qi, :, ci].copy()
 
-    # if y_true.shape[0] > 0:
-    #     return xc_reshaped, x_signs, x_indices, x_alpha, x_px, y_approx, y_true
-    # else:
-    return xc_reshaped, x_signs, x_indices, x_alpha, x_px, y_approx
+    if true_probabilities is not None:
+        return xc_reshaped, x_signs, x_indices, x_alpha, x_px, y_approx, y_true
+    else:
+        return xc_reshaped, x_signs, x_indices, x_alpha, x_px, y_approx
 
 def create_probability_data_test(circs: list,
                             ideal_probabilities: list, 
