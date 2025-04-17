@@ -4142,18 +4142,14 @@ class RawTVDFunction(RawObjectiveFunction):
 class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
     TEMPLATE_FIELDS = (
-    # Class description
     """
     A time-independent model-based (:class:`MDCObjectiveFunction`-derived) objective function.
-    """
-    # Constructor has ONE custom leading arguments.
+    """,
     """ 
     raw_objfn : RawObjectiveFunction
         The raw objective function - specifies how probability and count values
         are turned into objective function values.
-    """,
-    # Constructor has ZERO custom trailing arguments.
-    ""
+    """, ""
     )
 
     DOCSTR_TEMPLATE = \
@@ -4802,7 +4798,7 @@ class ChiAlphaFunction(TimeIndependentMDCObjectiveFunction):
     """
     Model-based chi-alpha function: `N[x + 1/(alpha * x^alpha) - (1 + 1/alpha)]` where `x := p/f`.
     """,
-    "" # no custom leading arguments.
+    "", # no custom leading arguments.
     """
     alpha : float, optional
         The alpha parameter, which lies in the interval (0,1].
@@ -4831,7 +4827,7 @@ class FreqWeightedChi2Function(TimeIndependentMDCObjectiveFunction):
     """, "", ""
     )
 
-    @set_docstring(TimeIndependentMDCObjectiveFunction % TEMPLATE_FIELDS)
+    @set_docstring(TimeIndependentMDCObjectiveFunction.DOCSTR_TEMPLATE % TEMPLATE_FIELDS)
     def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0):
         raw_objfn = RawFreqWeightedChi2Function(regularization, mdc_store.resource_alloc, name, description, verbosity)
         super().__init__(raw_objfn, mdc_store, penalties, verbosity)
@@ -4858,7 +4854,7 @@ class CustomWeightedChi2Function(TimeIndependentMDCObjectiveFunction):
         mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names, array_types, verbosity)
         return cls(mdc_store, regularization, penalties, name, description, verbosity, custom_weights)
 
-    @set_docstring(TimeIndependentMDCObjectiveFunction @ TEMPLATE_FIELDS)
+    @set_docstring(TimeIndependentMDCObjectiveFunction.DOCSTR_TEMPLATE % TEMPLATE_FIELDS)
     def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0,
                  custom_weights=None):
         raw_objfn = RawCustomWeightedChi2Function(regularization, mdc_store.resource_alloc, name, description,
@@ -4874,7 +4870,7 @@ class PoissonPicDeltaLogLFunction(TimeIndependentMDCObjectiveFunction):
     """, "", ""
     )
 
-    @set_docstring(TimeIndependentMDCObjectiveFunction % TEMPLATE_FIELDS)
+    @set_docstring(TimeIndependentMDCObjectiveFunction.DOCSTR_TEMPLATE % TEMPLATE_FIELDS)
     def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0):
         raw_objfn = RawPoissonPicDeltaLogLFunction(regularization, mdc_store.resource_alloc, name, description,
                                                    verbosity)
