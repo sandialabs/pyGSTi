@@ -760,7 +760,7 @@ class GSTObjFnBuilders(_NicelySerializable):
 
         Parameters
         ----------
-        objective : {'logl', 'chi2'}, optional
+        objective : {'logl', 'chi2', 'tvd'}, optional
             Whether to create builders for maximum-likelihood or minimum-chi-squared GST.
 
         freq_weighted_chi2 : bool, optional
@@ -782,7 +782,13 @@ class GSTObjFnBuilders(_NicelySerializable):
         chi2_builder = _objfns.ObjectiveFunctionBuilder.create_from('chi2', freq_weighted_chi2)
         mle_builder = _objfns.ObjectiveFunctionBuilder.create_from('logl')
 
-        if objective == "chi2":
+        if not isinstance(objective, str):
+            import warnings
+            warnings.warn(f'Trying to create an objective function from non-string specification, "{objective}". \
+                           \nSupport for this kind of specification is experimental!')
+            iteration_builders = [chi2_builder]
+            final_builders = [_objfns.ObjectiveFunctionBuilder.create_from(objective)]
+        elif objective == "chi2":
             iteration_builders = [chi2_builder]
             final_builders = []
         elif objective == "logl":
@@ -792,11 +798,13 @@ class GSTObjFnBuilders(_NicelySerializable):
             else:
                 iteration_builders = [chi2_builder]
                 final_builders = [mle_builder]
-        elif objective == "tvd":
-            iteration_builders = [chi2_builder]
-            final_builders = [_objfns.ObjectiveFunctionBuilder.create_from('tvd')]
         else:
-            raise ValueError("Invalid objective: %s" % objective)
+            iteration_builders = [chi2_builder]
+            try:
+                final_builders = [_objfns.ObjectiveFunctionBuilder.create_from(objective)]
+            except Exception as e:
+                raise ValueError("Invalid objective: %s" % objective)
+    
         return cls(iteration_builders, final_builders)
 
     def __init__(self, iteration_builders, final_builders=()):

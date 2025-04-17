@@ -391,7 +391,8 @@ def run_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
         that we never reference in the code (truncScheme, estimate_label, and
         missingDataAction).
 
-        - objective = {'chi2', 'logl', 'tvd'}
+        - objective = typically, a string in {'chi2', 'logl', 'tvd'}. But this can
+          be anything accepted by the `ObjectiveFunctionBuilder.create_from` function.
         - op_labels = list of strings
         - circuit_weights = dict or None
         - starting_point = "LGST-if-possible" (default), "LGST", or "target"
