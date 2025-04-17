@@ -29,6 +29,13 @@ from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrint
 from pygsti.models.model import OpModel as _OpModel
 
 
+def set_docstring(docstr):
+    def assign(fn):
+        fn.__doc__ = docstr
+        return fn
+    return assign
+
+
 def _objfn(objfn_cls, model, dataset, circuits=None,
            regularization=None, penalties=None, op_label_aliases=None,
            comm=None, mem_limit=None, method_names=None, array_types=None,
@@ -4133,15 +4140,27 @@ class RawTVDFunction(RawObjectiveFunction):
 
 
 class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
+
+    TEMPLATE_FIELDS = (
+    # Class description
     """
     A time-independent model-based (:class:`MDCObjectiveFunction`-derived) objective function.
-
-    Parameters
-    ----------
+    """
+    # Constructor has ONE custom leading arguments.
+    """ 
     raw_objfn : RawObjectiveFunction
         The raw objective function - specifies how probability and count values
         are turned into objective function values.
+    """,
+    # Constructor has ZERO custom trailing arguments.
+    ""
+    )
 
+    DOCSTR_TEMPLATE = \
+    """
+    %s
+    Parameters
+    ----------%s
     mdl : Model
         The model - specifies how parameter values are turned into probabilities
         for each circuit outcome.
@@ -4177,6 +4196,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         Whether hessian calculations are allowed.  If `True` then more resources are
         needed.  If `False`, calls to hessian-requiring function will result in an
         error.
+    %s
     """
 
     @classmethod
@@ -4220,11 +4240,10 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         return ModelDatasetCircuitsStore(model, dataset, circuits, resource_alloc, array_types, None, verbosity)
 
     @classmethod
-    def create_from(cls, raw_objfn, model, dataset, circuits, resource_alloc=None, penalties=None,
-                    verbosity=0, method_names=('fn',), array_types=()):
-        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names,
-                                          array_types, verbosity)
-        return cls(raw_objfn, mdc_store, penalties, verbosity)
+    def create_from(cls, model, dataset, circuits, regularization=None, penalties=None, resource_alloc=None,
+                    name=None, description=None, verbosity=0, method_names=('fn',), array_types=()):
+        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names, array_types, verbosity)
+        return cls(mdc_store, regularization, penalties, name, description, verbosity)
 
     @classmethod
     def _array_types_for_method(cls, method_name, fsim):
@@ -4255,6 +4274,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
         return array_types
 
+    @set_docstring(DOCSTR_TEMPLATE % TEMPLATE_FIELDS)
     def __init__(self, raw_objfn, mdc_store, penalties=None, verbosity=0):
 
         super().__init__(raw_objfn, mdc_store, verbosity)
@@ -4763,113 +4783,40 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
 
 class Chi2Function(TimeIndependentMDCObjectiveFunction):
+
+    TEMPLATE_FIELDS = (
     """
     Model-based chi-squared function: `N(p-f)^2 / p`
+    """, "", ""
+    )
 
-    Parameters
-    ----------
-    mdl : Model
-        The model - specifies how parameter values are turned into probabilities
-        for each circuit outcome.
-
-    dataset : DataSet
-        The data set - specifies how counts and total_counts are obtained for each
-        circuit outcome.
-
-    circuits : list or CircuitList
-        The circuit list - specifies what probabilities and counts this objective
-        function compares.  If `None`, then the keys of `dataset` are used.
-
-    regularization : dict, optional
-        Regularization values.
-
-    penalties : dict, optional
-        Penalty values.  Penalties usually add additional (penalty) terms to the sum
-        of per-circuit-outcome contributions that evaluate to the objective function.
-
-    resource_alloc : ResourceAllocation, optional
-        Available resources and how they should be allocated for computations.
-
-    name : str, optional
-        A name for this objective function (can be anything).
-
-    description : str, optional
-        A description for this objective function (can be anything)
-
-    verbosity : int, optional
-        Level of detail to print to stdout.
-
-    enable_hessian : bool, optional
-        Whether hessian calculations are allowed.  If `True` then more resources are
-        needed.  If `False`, calls to hessian-requiring function will result in an
-        error.
-    """
-    @classmethod
-    def create_from(cls, model, dataset, circuits, regularization=None, penalties=None, resource_alloc=None,
-                    name=None, description=None, verbosity=0, method_names=('fn',), array_types=()):
-        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names,
-                                          array_types, verbosity)
-        return cls(mdc_store, regularization, penalties, name, description, verbosity)
-
+    @set_docstring(TimeIndependentMDCObjectiveFunction.DOCSTR_TEMPLATE % TEMPLATE_FIELDS)
     def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0):
         raw_objfn = RawChi2Function(regularization, mdc_store.resource_alloc, name, description, verbosity)
         super().__init__(raw_objfn, mdc_store, penalties, verbosity)
 
 
 class ChiAlphaFunction(TimeIndependentMDCObjectiveFunction):
+
+    TEMPLATE_FIELDS = (
     """
     Model-based chi-alpha function: `N[x + 1/(alpha * x^alpha) - (1 + 1/alpha)]` where `x := p/f`.
-
-    Parameters
-    ----------
-    mdl : Model
-        The model - specifies how parameter values are turned into probabilities
-        for each circuit outcome.
-
-    dataset : DataSet
-        The data set - specifies how counts and total_counts are obtained for each
-        circuit outcome.
-
-    circuits : list or CircuitList
-        The circuit list - specifies what probabilities and counts this objective
-        function compares.  If `None`, then the keys of `dataset` are used.
-
-    regularization : dict, optional
-        Regularization values.
-
-    penalties : dict, optional
-        Penalty values.  Penalties usually add additional (penalty) terms to the sum
-        of per-circuit-outcome contributions that evaluate to the objective function.
-
-    resource_alloc : ResourceAllocation, optional
-        Available resources and how they should be allocated for computations.
-
-    name : str, optional
-        A name for this objective function (can be anything).
-
-    description : str, optional
-        A description for this objective function (can be anything)
-
-    verbosity : int, optional
-        Level of detail to print to stdout.
-
-    enable_hessian : bool, optional
-        Whether hessian calculations are allowed.  If `True` then more resources are
-        needed.  If `False`, calls to hessian-requiring function will result in an
-        error.
-
+    """,
+    "" # no custom leading arguments.
+    """
     alpha : float, optional
         The alpha parameter, which lies in the interval (0,1].
-    """
+    """  # one custom trailing argument.
+    )
 
     @classmethod
     def create_from(cls, model, dataset, circuits, regularization=None, penalties=None,
                     resource_alloc=None, name=None, description=None, verbosity=0,
                     method_names=('fn',), array_types=(), alpha=1):
-        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names,
-                                          array_types, verbosity)
+        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names, array_types, verbosity)
         return cls(mdc_store, regularization, penalties, name, description, verbosity, alpha)
 
+    @set_docstring(TimeIndependentMDCObjectiveFunction.DOCSTR_TEMPLATE % TEMPLATE_FIELDS)
     def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0,
                  alpha=1):
         raw_objfn = RawChiAlphaFunction(regularization, mdc_store.resource_alloc, name, description, verbosity, alpha)
@@ -4877,117 +4824,41 @@ class ChiAlphaFunction(TimeIndependentMDCObjectiveFunction):
 
 
 class FreqWeightedChi2Function(TimeIndependentMDCObjectiveFunction):
+
+    TEMPLATE_FIELDS = (
     """
     Model-based frequency-weighted chi-squared function: `N(p-f)^2 / f`
+    """, "", ""
+    )
 
-    Parameters
-    ----------
-    mdl : Model
-        The model - specifies how parameter values are turned into probabilities
-        for each circuit outcome.
-
-    dataset : DataSet
-        The data set - specifies how counts and total_counts are obtained for each
-        circuit outcome.
-
-    circuits : list or CircuitList
-        The circuit list - specifies what probabilities and counts this objective
-        function compares.  If `None`, then the keys of `dataset` are used.
-
-    regularization : dict, optional
-        Regularization values.
-
-    penalties : dict, optional
-        Penalty values.  Penalties usually add additional (penalty) terms to the sum
-        of per-circuit-outcome contributions that evaluate to the objective function.
-
-    resource_alloc : ResourceAllocation, optional
-        Available resources and how they should be allocated for computations.
-
-    name : str, optional
-        A name for this objective function (can be anything).
-
-    description : str, optional
-        A description for this objective function (can be anything)
-
-    verbosity : int, optional
-        Level of detail to print to stdout.
-
-    enable_hessian : bool, optional
-        Whether hessian calculations are allowed.  If `True` then more resources are
-        needed.  If `False`, calls to hessian-requiring function will result in an
-        error.
-    """
-
-    @classmethod
-    def create_from(cls, model, dataset, circuits, regularization=None, penalties=None,
-                    resource_alloc=None, name=None, description=None, verbosity=0,
-                    method_names=('fn',), array_types=()):
-        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names,
-                                          array_types, verbosity)
-        return cls(mdc_store, regularization, penalties, name, description, verbosity)
-
+    @set_docstring(TimeIndependentMDCObjectiveFunction % TEMPLATE_FIELDS)
     def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0):
         raw_objfn = RawFreqWeightedChi2Function(regularization, mdc_store.resource_alloc, name, description, verbosity)
         super().__init__(raw_objfn, mdc_store, penalties, verbosity)
 
 
 class CustomWeightedChi2Function(TimeIndependentMDCObjectiveFunction):
+
+    TEMPLATE_FIELDS = (
     """
     Model-based custom-weighted chi-squared function: `cw^2 (p-f)^2`
-
-    Parameters
-    ----------
-    mdl : Model
-        The model - specifies how parameter values are turned into probabilities
-        for each circuit outcome.
-
-    dataset : DataSet
-        The data set - specifies how counts and total_counts are obtained for each
-        circuit outcome.
-
-    circuits : list or CircuitList
-        The circuit list - specifies what probabilities and counts this objective
-        function compares.  If `None`, then the keys of `dataset` are used.
-
-    regularization : dict, optional
-        Regularization values.
-
-    penalties : dict, optional
-        Penalty values.  Penalties usually add additional (penalty) terms to the sum
-        of per-circuit-outcome contributions that evaluate to the objective function.
-
-    resource_alloc : ResourceAllocation, optional
-        Available resources and how they should be allocated for computations.
-
-    name : str, optional
-        A name for this objective function (can be anything).
-
-    description : str, optional
-        A description for this objective function (can be anything)
-
-    verbosity : int, optional
-        Level of detail to print to stdout.
-
-    enable_hessian : bool, optional
-        Whether hessian calculations are allowed.  If `True` then more resources are
-        needed.  If `False`, calls to hessian-requiring function will result in an
-        error.
-
+    """, "",
+    """
     custom_weights : numpy.ndarray, optional
         One-dimensional array of the custom weights, which linearly multiply the
         *least-squares* terms, i.e. `(p - f)`.  If `None`, then unit weights are
         used and the objective function computes the sum of unweighted squares.
     """
+    )
 
     @classmethod
     def create_from(cls, model, dataset, circuits, regularization=None, penalties=None,
                     resource_alloc=None, name=None, description=None, verbosity=0,
                     method_names=('fn',), array_types=(), custom_weights=None):
-        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names,
-                                          array_types, verbosity)
+        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names, array_types, verbosity)
         return cls(mdc_store, regularization, penalties, name, description, verbosity, custom_weights)
 
+    @set_docstring(TimeIndependentMDCObjectiveFunction @ TEMPLATE_FIELDS)
     def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0,
                  custom_weights=None):
         raw_objfn = RawCustomWeightedChi2Function(regularization, mdc_store.resource_alloc, name, description,
@@ -4996,56 +4867,14 @@ class CustomWeightedChi2Function(TimeIndependentMDCObjectiveFunction):
 
 
 class PoissonPicDeltaLogLFunction(TimeIndependentMDCObjectiveFunction):
+
+    TEMPLATE_FIELDS = (
     """
     Model-based poisson-picture delta log-likelihood function: `N*f*log(f/p) - N*(f-p)`.
+    """, "", ""
+    )
 
-    Parameters
-    ----------
-    mdl : Model
-        The model - specifies how parameter values are turned into probabilities
-        for each circuit outcome.
-
-    dataset : DataSet
-        The data set - specifies how counts and total_counts are obtained for each
-        circuit outcome.
-
-    circuits : list or CircuitList
-        The circuit list - specifies what probabilities and counts this objective
-        function compares.  If `None`, then the keys of `dataset` are used.
-
-    regularization : dict, optional
-        Regularization values.
-
-    penalties : dict, optional
-        Penalty values.  Penalties usually add additional (penalty) terms to the sum
-        of per-circuit-outcome contributions that evaluate to the objective function.
-
-    resource_alloc : ResourceAllocation, optional
-        Available resources and how they should be allocated for computations.
-
-    name : str, optional
-        A name for this objective function (can be anything).
-
-    description : str, optional
-        A description for this objective function (can be anything)
-
-    verbosity : int, optional
-        Level of detail to print to stdout.
-
-    enable_hessian : bool, optional
-        Whether hessian calculations are allowed.  If `True` then more resources are
-        needed.  If `False`, calls to hessian-requiring function will result in an
-        error.
-    """
-
-    @classmethod
-    def create_from(cls, model, dataset, circuits, regularization=None, penalties=None,
-                    resource_alloc=None, name=None, description=None, verbosity=0,
-                    method_names=('fn',), array_types=()):
-        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names,
-                                          array_types, verbosity)
-        return cls(mdc_store, regularization, penalties, name, description, verbosity)
-
+    @set_docstring(TimeIndependentMDCObjectiveFunction % TEMPLATE_FIELDS)
     def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0):
         raw_objfn = RawPoissonPicDeltaLogLFunction(regularization, mdc_store.resource_alloc, name, description,
                                                    verbosity)
@@ -5053,112 +4882,35 @@ class PoissonPicDeltaLogLFunction(TimeIndependentMDCObjectiveFunction):
 
 
 class DeltaLogLFunction(TimeIndependentMDCObjectiveFunction):
+
+    TEMPLATE_FIELDS = (
     """
     Model-based delta log-likelihood function: `N*f*log(f/p)`.
+    """, "", ""
+    )
 
-    Parameters
-    ----------
-    mdl : Model
-        The model - specifies how parameter values are turned into probabilities
-        for each circuit outcome.
-
-    dataset : DataSet
-        The data set - specifies how counts and total_counts are obtained for each
-        circuit outcome.
-
-    circuits : list or CircuitList
-        The circuit list - specifies what probabilities and counts this objective
-        function compares.  If `None`, then the keys of `dataset` are used.
-
-    regularization : dict, optional
-        Regularization values.
-
-    penalties : dict, optional
-        Penalty values.  Penalties usually add additional (penalty) terms to the sum
-        of per-circuit-outcome contributions that evaluate to the objective function.
-
-    resource_alloc : ResourceAllocation, optional
-        Available resources and how they should be allocated for computations.
-
-    name : str, optional
-        A name for this objective function (can be anything).
-
-    description : str, optional
-        A description for this objective function (can be anything)
-
-    verbosity : int, optional
-        Level of detail to print to stdout.
-
-    enable_hessian : bool, optional
-        Whether hessian calculations are allowed.  If `True` then more resources are
-        needed.  If `False`, calls to hessian-requiring function will result in an
-        error.
-    """
-
-    @classmethod
-    def create_from(cls, model, dataset, circuits, regularization=None, penalties=None,
-                    resource_alloc=None, name=None, description=None, verbosity=0,
-                    method_names=('fn',), array_types=()):
-        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names,
-                                          array_types, verbosity)
-        return cls(mdc_store, regularization, penalties, name, description, verbosity)
-
+    @set_docstring(TimeIndependentMDCObjectiveFunction.DOCSTR_TEMPLATE % TEMPLATE_FIELDS)
     def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0):
         raw_objfn = RawDeltaLogLFunction(regularization, mdc_store.resource_alloc, name, description, verbosity)
         super().__init__(raw_objfn, mdc_store, penalties, verbosity)
 
 
 class MaxLogLFunction(TimeIndependentMDCObjectiveFunction):
+
+    TEMPLATE_FIELDS = (
     """
     Model-based maximum-model log-likelihood function: `N*f*log(f)`
-
-    Parameters
-    ----------
-    mdl : Model
-        The model - specifies how parameter values are turned into probabilities
-        for each circuit outcome.
-
-    dataset : DataSet
-        The data set - specifies how counts and total_counts are obtained for each
-        circuit outcome.
-
-    circuits : list or CircuitList
-        The circuit list - specifies what probabilities and counts this objective
-        function compares.  If `None`, then the keys of `dataset` are used.
-
-    regularization : dict, optional
-        Regularization values.
-
-    penalties : dict, optional
-        Penalty values.  Penalties usually add additional (penalty) terms to the sum
-        of per-circuit-outcome contributions that evaluate to the objective function.
-
-    resource_alloc : ResourceAllocation, optional
-        Available resources and how they should be allocated for computations.
-
-    name : str, optional
-        A name for this objective function (can be anything).
-
-    description : str, optional
-        A description for this objective function (can be anything)
-
-    verbosity : int, optional
-        Level of detail to print to stdout.
-
-    enable_hessian : bool, optional
-        Whether hessian calculations are allowed.  If `True` then more resources are
-        needed.  If `False`, calls to hessian-requiring function will result in an
-        error.
-    """
+    """, "", ""
+    )
 
     @classmethod
     def create_from(cls, model, dataset, circuits, regularization=None, penalties=None,
                     resource_alloc=None, name=None, description=None, verbosity=0,
                     method_names=('fn',), array_types=(), poisson_picture=True):
-        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names,
-                                          array_types, verbosity)
+        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names, array_types, verbosity)
         return cls(mdc_store, regularization, penalties, name, description, verbosity, poisson_picture)
 
+    @set_docstring(TimeIndependentMDCObjectiveFunction.DOCSTR_TEMPLATE % TEMPLATE_FIELDS)
     def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0,
                  poisson_picture=True):
         raw_objfn = RawMaxLogLFunction(regularization, mdc_store.resource_alloc, name, description, verbosity,
@@ -5166,79 +4918,26 @@ class MaxLogLFunction(TimeIndependentMDCObjectiveFunction):
         super().__init__(raw_objfn, mdc_store, penalties, verbosity)
 
 
-class TVDFunction(TimeIndependentMDCObjectiveFunction):
+class TermWeighted(TimeIndependentMDCObjectiveFunction):
     """
-    Model-based TVD function: `0.5 * |p-f|`.
+    Represents an objective whose term function takes the form
+      f(params) = w * g(params),
+    where w is constant and g(params) is a black-box term function.
 
-    Parameters
-    ----------
-    mdl : Model
-        The model - specifies how parameter values are turned into probabilities
-        for each circuit outcome.
-
-    dataset : DataSet
-        The data set - specifies how counts and total_counts are obtained for each
-        circuit outcome.
-
-    circuits : list or CircuitList
-        The circuit list - specifies what probabilities and counts this objective
-        function compares.  If `None`, then the keys of `dataset` are used.
-
-    regularization : dict, optional
-        Regularization values.
-
-    penalties : dict, optional
-        Penalty values.  Penalties usually add additional (penalty) terms to the sum
-        of per-circuit-outcome contributions that evaluate to the objective function.
-
-    resource_alloc : ResourceAllocation, optional
-        Available resources and how they should be allocated for computations.
-
-    name : str, optional
-        A name for this objective function (can be anything).
-
-    description : str, optional
-        A description for this objective function (can be anything)
-
-    verbosity : int, optional
-        Level of detail to print to stdout.
-
-    enable_hessian : bool, optional
-        Whether hessian calculations are allowed.  If `True` then more resources are
-        needed.  If `False`, calls to hessian-requiring function will result in an
-        error.
+    This class' implementation of terms() and dterms() has a substantial amount of code
+    duplication with the implementations in TimeIndependentMDCObjectiveFunction
     """
 
-    @classmethod
-    def create_from(cls, model, dataset, circuits, regularization=None, penalties=None,
-                    resource_alloc=None, name=None, description=None, verbosity=0,
-                    method_names=('fn',), array_types=()):
-        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names,
-                                          array_types, verbosity)
-        return cls(mdc_store, regularization, penalties, name, description, verbosity)
-
-    def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0):
-        raw_objfn = RawTVDFunction(regularization, mdc_store.resource_alloc, name, description, verbosity)
-        super().__init__(raw_objfn, mdc_store, penalties, verbosity)
-        self.num_circuits = 0
-        self.terms_weights = _np.array([])
-        self._update_terms_weights() # <-- properly computes the two properties above.
+    @property
+    def terms_weights(self) -> _np.ndarray:
+        if not hasattr(self, '_terms_weights'):
+            self._update_terms_weights()
+        return self._terms_weights
 
     def _update_terms_weights(self):
-        self.num_circuits = self.layout.num_circuits
-        num_elements = self.layout.num_elements
-        circuit_sizes = _np.zeros((num_elements,))
-        for elind, circuit, _ in self.layout:
-            circuit_sizes[elind] = 1 + circuit.num_gates
-        assert _np.all(circuit_sizes > 0)
-        self.terms_weights = 1 / circuit_sizes
-        self.terms_weights /= _np.mean(self.terms_weights)
-        # ^ Make the weights mean-1 to avoid unintended changes to Levenberg-Marquardt
-        #   stopping criteria.
+        self._terms_weights = _np.ones(self.layout.num_elements)
         return
 
-    # QUESTION: could I just call the base class's implementation of terms and then scale the 
-    # result? If so then I can avoid a ton of code duplication.
     def terms(self, paramvec=None, oob_check=False, profiler_str="TERMS OBJECTIVE"):
         tm = _time.time()
         if paramvec is None:
@@ -5279,8 +4978,6 @@ class TVDFunction(TimeIndependentMDCObjectiveFunction):
         terms *= self.terms_weights
         return terms
 
-    # QUESTION: could I just call the base class's implementation of dterms and then scale the 
-    # leading rows of the result? If so then I can avoid a ton of code duplication.
     def dterms(self, paramvec=None):
         tm = _time.time()
         unit_ralloc = self.layout.resource_alloc('param-processing')
@@ -5319,6 +5016,33 @@ class TVDFunction(TimeIndependentMDCObjectiveFunction):
         unit_ralloc.host_comm_barrier()
         self.raw_objfn.resource_alloc.profiler.add_time("JACOBIAN", tm)
         return self.jac
+
+
+class TVDFunction(TermWeighted):
+
+    TEMPLATE_FIELDS = (
+    """
+    Model-based TVD function: `0.5 * |p-f|`.
+    """, "", ""
+    )
+
+    @set_docstring(TermWeighted.DOCSTR_TEMPLATE % TEMPLATE_FIELDS)
+    def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0):
+        raw_objfn = RawTVDFunction(regularization, mdc_store.resource_alloc, name, description, verbosity)
+        super().__init__(raw_objfn, mdc_store, penalties, verbosity)
+        self._update_terms_weights()
+
+    def _update_terms_weights(self):
+        num_elements = self.layout.num_elements
+        circuit_sizes = _np.zeros((num_elements,))
+        for elind, circuit, _ in self.layout:
+            circuit_sizes[elind] = 1 + circuit.num_gates
+        assert _np.all(circuit_sizes > 0)
+        self._terms_weights = 1 / circuit_sizes
+        self._terms_weights /= _np.mean(self.terms_weights)
+        # ^ Make the weights mean-1 to avoid unintended changes to Levenberg-Marquardt
+        #   stopping criteria.
+        return
 
 
 class TimeDependentMDCObjectiveFunction(MDCObjectiveFunction):
