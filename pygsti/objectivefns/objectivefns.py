@@ -5225,10 +5225,6 @@ class TVDFunction(TimeIndependentMDCObjectiveFunction):
         self._update_terms_weights() # <-- properly computes the two properties above.
 
     def _update_terms_weights(self):
-        # if self.num_circuits == self.layout.num_circuits:
-        #     # Assume there's nothing to do.
-        #     return
-        # else, assume that self.layout has been updated.
         self.num_circuits = self.layout.num_circuits
         num_elements = self.layout.num_elements
         circuit_sizes = _np.zeros((num_elements,))
