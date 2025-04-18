@@ -287,6 +287,8 @@ class SimplerLMOptimizer(Optimizer):
             objective_func, jacobian, x0,
             max_iter=self.maxiter,
             num_fd_iters=self.fditer,
+            # NOTE: I think the fallback values below will NEVER be triggered. 
+            # Should probably remove them. See __init__ instead.
             f_norm2_tol=self.tol.get('f', 1.0),
             jac_norm_tol=self.tol.get('jac', 1e-6),
             rel_ftol=self.tol.get('relf', 1e-6),
@@ -583,7 +585,7 @@ def simplish_leastsq(
 
             if norm_JTf < jac_norm_tol:
                 if oob_check_interval <= 1:
-                    msg = "norm(jacobian) is at most %g" % jac_norm_tol
+                    msg = "norm(J'f) is at most %g" % jac_norm_tol
                     converged = True
                     break
                 else:
