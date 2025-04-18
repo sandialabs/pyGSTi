@@ -731,8 +731,9 @@ class GSTObjFnBuilders(_NicelySerializable):
         on the final GST iteration.
     """
 
-    @classmethod
-    def cast(cls, obj):
+    # This used to be a class method, but this class has no derived classes.
+    @staticmethod
+    def cast(obj):
         """
         Cast `obj` to a :class:`GSTObjFnBuilders` object.
 
@@ -747,14 +748,16 @@ class GSTObjFnBuilders(_NicelySerializable):
         -------
         GSTObjFnBuilders
         """
+        cls = GSTObjFnBuilders
         if isinstance(obj, cls): return obj
         elif obj is None: return cls.create_from()
         elif isinstance(obj, dict): return cls.create_from(**obj)
         elif isinstance(obj, (list, tuple)): return cls(*obj)
         else: raise ValueError("Cannot create an %s object from '%s'" % (cls.__name__, str(type(obj))))
 
-    @classmethod
-    def create_from(cls, objective='logl', freq_weighted_chi2=False, always_perform_mle=False, only_perform_mle=False):
+    # This used to be a class method, but this class has no derived classes.
+    @staticmethod
+    def create_from(objective='logl', freq_weighted_chi2=False, always_perform_mle=False, only_perform_mle=False):
         """
         Creates a common :class:`GSTObjFnBuilders` object from several arguments.
 
@@ -805,7 +808,7 @@ class GSTObjFnBuilders(_NicelySerializable):
             except Exception as e:
                 raise ValueError("Invalid objective: %s" % objective)
     
-        return cls(iteration_builders, final_builders)
+        return GSTObjFnBuilders(iteration_builders, final_builders)
 
     def __init__(self, iteration_builders, final_builders=()):
         super().__init__()
