@@ -1010,7 +1010,7 @@ def _circuit_color_scatterplot(circuit_structure, sub_mxs, colormap,
 
 
 def _circuit_color_histogram(circuit_structure, sub_mxs, colormap,
-                             ylabel="", scale=1.0):
+                             ylabel="", scale=1.0, include_chi2=True):
     """
     Similar to :func:`_circuit_color_boxplot` except a histogram is created.
 
@@ -1033,6 +1033,11 @@ def _circuit_color_histogram(circuit_structure, sub_mxs, colormap,
 
     scale : float, optional
         Scaling factor to adjust the size of the final figure.
+
+    include_chi2 : bool, optional (default True)
+        If True then include a trace corresponding to a chi^2
+        distributions with a number of degrees of freedom inferred
+        from the input data.
 
     Returns
     -------
@@ -1110,16 +1115,17 @@ def _circuit_color_histogram(circuit_structure, sub_mxs, colormap,
         showlegend=False,
     )
 
-    dof = colormap.dof if hasattr(colormap, "dof") else 1
-    line_trace = go.Scatter(
-        x=bincenters,
-        y=[nvals * bindelta * _chi2.pdf(xval, dof) for xval in bincenters],
-        name="expected",
-        showlegend=False,
-        line=dict(
-            color=('rgb(0, 0, 0)'),
-            width=1)  # dash = 'dash') # dash options include 'dash', 'dot', and 'dashdot'
-    )
+    if include_chi2:
+        dof = colormap.dof if hasattr(colormap, "dof") else 1
+        line_trace = go.Scatter(
+            x=bincenters,
+            y=[nvals * bindelta * _chi2.pdf(xval, dof) for xval in bincenters],
+            name="expected",
+            showlegend=False,
+            line=dict(
+                color=('rgb(0, 0, 0)'),
+                width=1)  # dash = 'dash') # dash options include 'dash', 'dot', and 'dashdot'
+        )
 
     hist_values, np_bins = _np.histogram(ys, nbins, range=(minval - binsize / 2.0,
                                                            maxval + binsize / 2.0))
@@ -1151,7 +1157,7 @@ def _circuit_color_histogram(circuit_structure, sub_mxs, colormap,
     )
 
     pythonVal = {'histogram values': ys}
-    return ReportFigure(go.Figure(data=[trace, line_trace], layout=layout),
+    return ReportFigure(go.Figure(data=[trace, line_trace] if include_chi2 else [trace], layout=layout),
                         colormap, pythonVal)
 
 
@@ -2647,8 +2653,12 @@ class ColorBoxPlot(WorkspacePlot):
                                                     colorbar, hover_info, sum_up, ytitle,
                                                     scale, addl_hover_info)
             elif typ == "histogram":
+                if isinstance(ptyp, _objfns.ObjectiveFunctionBuilder) and ptyp.name=='tvd':
+                    include_chi2 = False
+                else:
+                    include_chi2 = True
                 newfig = _circuit_color_histogram(circuit_struct, subMxs, colormap,
-                                                  ytitle, scale)
+                                                    ytitle, scale, include_chi2=include_chi2)
             else:
                 raise ValueError("Invalid `typ` argument: %s" % typ)
 

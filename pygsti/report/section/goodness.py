@@ -40,6 +40,15 @@ class GoodnessSection(_Section):
             switchboard.modvi_ds, switchboard.objfn_builder_modvi, 'L', comm=comm,
             mdc_stores = switchboard.mdc_store_all
         )
+    
+    @_Section.figure_factory(4)
+    def final_tvd_histogram(workspace, switchboard=None, comm=None, bgcolor='white',
+                                  **kwargs):
+        return workspace.ColorBoxPlot(
+            'tvd', switchboard.circuits_final,
+            switchboard.modvi_ds, switchboard.mdl_current_modvi,
+            typ='histogram', comm=comm, bgcolor=bgcolor
+        )
 
 
 class GoodnessColorBoxPlotSection(_Section):
