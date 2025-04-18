@@ -2292,10 +2292,15 @@ class ColorBoxPlot(WorkspacePlot):
         fig = None
         addl_hover_info_fns = dict()
         if mdc_store is not None:  # then it overrides
-            assert(circuits is None and dataset is None and model is None)
-            circuits = mdc_store.circuits
-            dataset = mdc_store.dataset
-            model = mdc_store.model
+            #assert(circuits is None and dataset is None and model is None)
+            #circuits = mdc_store.circuits
+            #dataset = mdc_store.dataset
+            #model = mdc_store.model
+
+            #assert(circuits is None and dataset is None and model is None)
+            circuits = mdc_store.circuits if circuits is None else circuits
+            dataset = mdc_store.dataset if dataset is None else dataset
+            model = mdc_store.model if model is None else model
 
         if not isinstance(plottypes, (list, tuple)):
             plottypes = [plottypes]

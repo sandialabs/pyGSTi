@@ -56,6 +56,10 @@ class GoodnessColorBoxPlotSection(_Section):
         )
         if brevity < 1:
             qty.set_render_options(click_to_display=False, valign='bottom')
+        #HACK:turn off aspect ratio lock to avoid container resizing issue since the height and width
+        #of this plot are fine-tuned manually for proper display
+        qty.set_render_options(lock_aspect_ratio=False)
+
         return qty
 
     @_Section.figure_factory(1)
@@ -66,6 +70,10 @@ class GoodnessColorBoxPlotSection(_Section):
         )
         if brevity < 1:
             qty.set_render_options(click_to_display=False, valign='bottom')
+        #HACK:turn off aspect ratio lock to avoid container resizing issue since the height and width
+        #of this plot are fine-tuned manually for proper display
+        qty.set_render_options(lock_aspect_ratio=False)
+
         return qty
 
     @_Section.figure_factory()
