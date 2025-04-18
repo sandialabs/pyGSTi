@@ -273,7 +273,7 @@ class LindbladErrorgen(_LinearOperator):
             errgen = _np.zeros((errgen_or_dim, errgen_or_dim), 'd')
         else:
             errgen =  errgen_or_dim
-        return cls._from_error_generator(errgen, parameterization, lindblad_basis,
+        return cls._from_error_generator(errgen, parameterization, elementary_errorgen_basis,
                                          mx_basis, truncate, evotype, state_space)
 
     @classmethod
