@@ -23,7 +23,7 @@ class ErrorGeneratorContainer(object):
     def __init__(self, errorgen):
         self.errorgen = errorgen
 
-    def errorgen_coefficients(self, return_basis=False, logscale_nonham=False):
+    def errorgen_coefficients(self, return_basis=False, logscale_nonham=False, label_type='global'):
         """
         Constructs a dictionary of the Lindblad-error-generator coefficients of this operation.
 
@@ -46,6 +46,12 @@ class ErrorGeneratorContainer(object):
             channel where all stochastic generators had this same coefficient.
             This is the value returned by :meth:`error_rates`.
 
+        label_type : str, optional (default 'global')
+            String specifying which type of `ElementaryErrorgenLabel` to use
+            as the keys for the returned dictionary. Allowed options are
+            'global' for `GlobalElementaryErrorgenLabel` and 'local' for
+            `LocalElementaryErrorgenLabel`.
+
         Returns
         -------
         lindblad_term_dict : dict
@@ -61,11 +67,19 @@ class ErrorGeneratorContainer(object):
             A Basis mapping the basis labels used in the
             keys of `lindblad_term_dict` to basis matrices.
         """
-        return self.errorgen.coefficients(return_basis, logscale_nonham)
+        return self.errorgen.coefficients(return_basis, logscale_nonham, label_type)
 
-    def errorgen_coefficient_labels(self):
+    def errorgen_coefficient_labels(self, label_type='global'):
         """
         The elementary error-generator labels corresponding to the elements of :meth:`errorgen_coefficients_array`.
+
+        Parameters
+        ----------
+        label_type : str, optional (default 'global')
+            String specifying which type of `ElementaryErrorgenLabel` to use
+            as the keys for the returned dictionary. Allowed options are
+            'global' for `GlobalElementaryErrorgenLabel` and 'local' for
+            `LocalElementaryErrorgenLabel`.
 
         Returns
         -------
@@ -73,7 +87,7 @@ class ErrorGeneratorContainer(object):
             A tuple of (<type>, <basisEl1> [,<basisEl2]) elements identifying the elementary error
             generators of this gate.
         """
-        return self.errorgen.coefficient_labels()
+        return self.errorgen.coefficient_labels(label_type)
 
     def errorgen_coefficients_array(self):
         """
@@ -104,7 +118,7 @@ class ErrorGeneratorContainer(object):
         """
         return self.errorgen.coefficients_array_deriv_wrt_params()
 
-    def error_rates(self):
+    def error_rates(self, label_type='global'):
         """
         Constructs a dictionary of the error rates associated with this operation.
 
@@ -127,6 +141,14 @@ class ErrorGeneratorContainer(object):
         rates is not necessarily the error rate of the overall
         channel.
 
+        Parameters
+        ----------
+        label_type : str, optional (default 'global')
+            String specifying which type of `ElementaryErrorgenLabel` to use
+            as the keys for the returned dictionary. Allowed options are
+            'global' for `GlobalElementaryErrorgenLabel` and 'local' for
+            `LocalElementaryErrorgenLabel`.
+        
         Returns
         -------
         lindblad_term_dict : dict
@@ -139,7 +161,7 @@ class ErrorGeneratorContainer(object):
             terms.  Values are real error rates except for the 2-basis-label
             case.
         """
-        return self.errorgen_coefficients(return_basis=False, logscale_nonham=True)
+        return self.errorgen_coefficients(return_basis=False, logscale_nonham=True, label_type=label_type)
 
     def set_errorgen_coefficients(self, lindblad_term_dict, action="update", logscale_nonham=False, truncate=False):
         """
@@ -226,7 +248,7 @@ class ErrorMapContainer(object):
     def __init__(self, error_map):
         self.error_map = error_map
 
-    def errorgen_coefficients(self, return_basis=False, logscale_nonham=False):
+    def errorgen_coefficients(self, return_basis=False, logscale_nonham=False, label_type='global'):
         """
         Constructs a dictionary of the Lindblad-error-generator coefficients of this operation.
 
@@ -249,6 +271,12 @@ class ErrorMapContainer(object):
             channel where all stochastic generators had this same coefficient.
             This is the value returned by :meth:`error_rates`.
 
+        label_type : str, optional (default 'global')
+            String specifying which type of `ElementaryErrorgenLabel` to use
+            as the keys for the returned dictionary. Allowed options are
+            'global' for `GlobalElementaryErrorgenLabel` and 'local' for
+            `LocalElementaryErrorgenLabel`.
+
         Returns
         -------
         lindblad_term_dict : dict
@@ -264,11 +292,19 @@ class ErrorMapContainer(object):
             A Basis mapping the basis labels used in the
             keys of `lindblad_term_dict` to basis matrices.
         """
-        return self.error_map.errorgen_coefficients(return_basis, logscale_nonham)
+        return self.error_map.errorgen_coefficients(return_basis, logscale_nonham, label_type)
 
-    def errorgen_coefficient_labels(self):
+    def errorgen_coefficient_labels(self, label_type='global'):
         """
         The elementary error-generator labels corresponding to the elements of :meth:`errorgen_coefficients_array`.
+
+        Parameters
+        ----------
+        label_type : str, optional (default 'global')
+            String specifying which type of `ElementaryErrorgenLabel` to use
+            as the keys for the returned dictionary. Allowed options are
+            'global' for `GlobalElementaryErrorgenLabel` and 'local' for
+            `LocalElementaryErrorgenLabel`.
 
         Returns
         -------
@@ -276,7 +312,7 @@ class ErrorMapContainer(object):
             A tuple of (<type>, <basisEl1> [,<basisEl2]) elements identifying the elementary error
             generators of this gate.
         """
-        return self.errormap.errorgen_coefficient_labels()
+        return self.errormap.errorgen_coefficient_labels(label_type)
 
     def errorgen_coefficients_array(self):
         """
@@ -307,7 +343,7 @@ class ErrorMapContainer(object):
         """
         return self.error_map.errorgen_coefficients_array_deriv_wrt_params()
 
-    def error_rates(self):
+    def error_rates(self, label_type='global'):
         """
         Constructs a dictionary of the error rates associated with this operation.
 
@@ -330,6 +366,14 @@ class ErrorMapContainer(object):
         rates is not necessarily the error rate of the overall
         channel.
 
+        Parameters
+        ----------
+        label_type : str, optional (default 'global')
+            String specifying which type of `ElementaryErrorgenLabel` to use
+            as the keys for the returned dictionary. Allowed options are
+            'global' for `GlobalElementaryErrorgenLabel` and 'local' for
+            `LocalElementaryErrorgenLabel`.
+
         Returns
         -------
         lindblad_term_dict : dict
@@ -342,7 +386,7 @@ class ErrorMapContainer(object):
             terms.  Values are real error rates except for the 2-basis-label
             case.
         """
-        return self.errorgen_coefficients(return_basis=False, logscale_nonham=True)
+        return self.errorgen_coefficients(return_basis=False, logscale_nonham=True, label_type=label_type)
 
 
 class NoErrorGeneratorInterface(object):
@@ -350,7 +394,7 @@ class NoErrorGeneratorInterface(object):
     Add-on class that implements a number of error-generator access functions for an op that has no error generator.
     """
 
-    def errorgen_coefficients(self, return_basis=False, logscale_nonham=False):
+    def errorgen_coefficients(self, return_basis=False, logscale_nonham=False, label_type='global'):
         """
         Constructs a dictionary of the Lindblad-error-generator coefficients of this operation.
 
@@ -372,6 +416,12 @@ class NoErrorGeneratorInterface(object):
             the contribution this term would have within a depolarizing
             channel where all stochastic generators had this same coefficient.
             This is the value returned by :meth:`error_rates`.
+        
+        label_type : str, optional (default 'global')
+            String specifying which type of `ElementaryErrorgenLabel` to use
+            as the keys for the returned dictionary. Allowed options are
+            'global' for `GlobalElementaryErrorgenLabel` and 'local' for
+            `LocalElementaryErrorgenLabel`.
 
         Returns
         -------
@@ -438,7 +488,7 @@ class NoErrorGeneratorInterface(object):
         if len(lindblad_term_dict) > 0:
             raise ValueError("Cannot set any error generator coefficients on an op with no error generator!")
 
-    def errorgen_coefficient_labels(self):
+    def errorgen_coefficient_labels(self, label_type='global'):
         """
         The elementary error-generator labels corresponding to the elements of :meth:`errorgen_coefficients_array`.
 
@@ -479,7 +529,7 @@ class NoErrorGeneratorInterface(object):
         """
         return _np.empty((0, self.num_params), 'd')
 
-    def error_rates(self):
+    def error_rates(self, label_type):
         """
         Constructs a dictionary of the error rates associated with this operation.
 
@@ -501,6 +551,14 @@ class NoErrorGeneratorInterface(object):
         commute with one another, the sum of the returned error
         rates is not necessarily the error rate of the overall
         channel.
+
+        Parameters
+        ----------
+        label_type : str, optional (default 'global')
+            String specifying which type of `ElementaryErrorgenLabel` to use
+            as the keys for the returned dictionary. Allowed options are
+            'global' for `GlobalElementaryErrorgenLabel` and 'local' for
+            `LocalElementaryErrorgenLabel`.
 
         Returns
         -------

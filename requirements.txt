@@ -4,3 +4,4 @@ scipy
 plotly >= 3
 pandas
 networkx
+stim

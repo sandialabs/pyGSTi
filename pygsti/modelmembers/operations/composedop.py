@@ -12,6 +12,7 @@ The ComposedOp class and supporting functionality.
 
 import collections as _collections
 import itertools as _itertools
+from copy import deepcopy
 
 import numpy as _np
 
@@ -643,7 +644,7 @@ class ComposedOp(_LinearOperator):
         for operation in self.factorops:
             operation.transform_inplace(s)
 
-    def errorgen_coefficients(self, return_basis=False, logscale_nonham=False):
+    def errorgen_coefficients(self, return_basis=False, logscale_nonham=False, label_type='global'):
         """
         Constructs a dictionary of the Lindblad-error-generator coefficients of this operation.
 
@@ -666,6 +667,12 @@ class ComposedOp(_LinearOperator):
             channel where all stochastic generators had this same coefficient.
             This is the value returned by :meth:`error_rates`.
 
+        label_type : str, optional (default 'global')
+            String specifying which type of `ElementaryErrorgenLabel` to use
+            as the keys for the returned dictionary. Allowed options are
+            'global' for `GlobalElementaryErrorgenLabel` and 'local' for
+            `LocalElementaryErrorgenLabel`.
+
         Returns
         -------
         lindblad_term_dict : dict
@@ -681,17 +688,23 @@ class ComposedOp(_LinearOperator):
             A Basis mapping the basis labels used in the
             keys of `lindblad_term_dict` to basis matrices.
         """
-        #*** Note: this function is nearly identitcal to ComposedErrorgen.coefficients() ***
-        Ltermdict = _collections.OrderedDict()
-        basisdict = _collections.OrderedDict()
+        #*** Note: this function is nearly identical to ComposedErrorgen.coefficients() ***
+        Ltermdict = dict()
+        basisdict = dict()
         first_nonempty_basis = None
         constant_basis = None  # the single same Basis used for every factor with a nonempty basis
 
         for op in self.factorops:
             try:
-                factor_coeffs = op.errorgen_coefficients(return_basis, logscale_nonham)
+                factor_coeffs = op.errorgen_coefficients(return_basis, logscale_nonham, label_type)
+
             except AttributeError:
                 continue  # just skip members that don't implemnt errorgen_coefficients (?)
+            
+            #If the op has a NoErrorgenInterface as a parent class then factor_coeffs could be empty
+            #which should be skipped.
+            if (return_basis and not factor_coeffs[0]) or not factor_coeffs:
+                continue
 
             if return_basis:
                 ltdict, factor_basis = factor_coeffs
@@ -716,10 +729,9 @@ class ComposedOp(_LinearOperator):
                 ltdict = factor_coeffs
 
             for key, coeff in ltdict.items():
-                if key in Ltermdict:
-                    Ltermdict[key] += coeff
-                else:
-                    Ltermdict[key] = coeff
+                Ltermdict[key] = coeff + Ltermdict.get(key, 0)
+
+        Ltermdict = dict(Ltermdict)
 
         if return_basis:
             #Use constant_basis or turn basisdict into a Basis to return
@@ -736,9 +748,17 @@ class ComposedOp(_LinearOperator):
         else:
             return Ltermdict
 
-    def errorgen_coefficient_labels(self):
+    def errorgen_coefficient_labels(self, label_type='global'):
         """
         The elementary error-generator labels corresponding to the elements of :meth:`errorgen_coefficients_array`.
+
+        Parameters
+        ----------
+        label_type : str, optional (default 'global')
+            String specifying which type of `ElementaryErrorgenLabel` to use
+            as the keys for the returned dictionary. Allowed options are
+            'global' for `GlobalElementaryErrorgenLabel` and 'local' for
+            `LocalElementaryErrorgenLabel`.
 
         Returns
         -------
@@ -746,7 +766,7 @@ class ComposedOp(_LinearOperator):
             A tuple of (<type>, <basisEl1> [,<basisEl2]) elements identifying the elementary error
             generators of this gate.
         """
-        return tuple(_itertools.chain(*[op.errorgen_coefficient_labels() for op in self.factorops]))
+        return tuple(_itertools.chain(*[op.errorgen_coefficient_labels(label_type) for op in self.factorops]))
 
     def errorgen_coefficients_array(self):
         """
@@ -784,7 +804,7 @@ class ComposedOp(_LinearOperator):
             off += mx.shape[0]
         return ret
 
-    def error_rates(self):
+    def error_rates(self, label_type='global'):
         """
         Constructs a dictionary of the error rates associated with this operation.
 
@@ -807,6 +827,14 @@ class ComposedOp(_LinearOperator):
         rates is not necessarily the error rate of the overall
         channel.
 
+        Parameters
+        ----------
+        label_type : str, optional (default 'global')
+            String specifying which type of `ElementaryErrorgenLabel` to use
+            as the keys for the returned dictionary. Allowed options are
+            'global' for `GlobalElementaryErrorgenLabel` and 'local' for
+            `LocalElementaryErrorgenLabel`.
+
         Returns
         -------
         lindblad_term_dict : dict
@@ -819,7 +847,7 @@ class ComposedOp(_LinearOperator):
             terms.  Values are real error rates except for the 2-basis-label
             case.
         """
-        return self.errorgen_coefficients(return_basis=False, logscale_nonham=True)
+        return self.errorgen_coefficients(return_basis=False, logscale_nonham=True, label_type=label_type)
 
     def set_errorgen_coefficients(self, lindblad_term_dict, action="update", logscale_nonham=False, truncate=True):
         """
@@ -863,8 +891,7 @@ class ComposedOp(_LinearOperator):
         -------
         None
         """
-        sslbls = self.state_space.sole_tensor_product_block_labels
-        values_to_set = {_GlobalElementaryErrorgenLabel.cast(k, sslbls): v for k, v in lindblad_term_dict.items()}
+        values_to_set = deepcopy(lindblad_term_dict)
 
         for op in self.factorops:
             try:
@@ -872,8 +899,7 @@ class ComposedOp(_LinearOperator):
             except AttributeError:
                 continue  # just skip members that don't implemnt errorgen_coefficients (?)
 
-            Ltermdict_local = _collections.OrderedDict([(k, v) for k, v in values_to_set.items()
-                                                        if k in available_factor_coeffs])
+            Ltermdict_local = {k:v for k, v in values_to_set.items() if k in available_factor_coeffs}
             op.set_errorgen_coefficients(Ltermdict_local, action, logscale_nonham, truncate)
             for k in Ltermdict_local:
                 del values_to_set[k]  # remove the values that we just set
