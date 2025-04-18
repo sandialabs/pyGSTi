@@ -150,8 +150,9 @@ class ObjectiveFunctionBuilder(_NicelySerializable):
         Penalty values (allowed keys depend on `cls_to_build`).
     """
 
-    @classmethod
-    def cast(cls, obj):
+    # This was a classmethod, but I made it static because this class has no derived classes.
+    @staticmethod
+    def cast(obj):
         """
         Cast `obj` to an `ObjectiveFunctionBuilder` instance.
 
@@ -167,6 +168,7 @@ class ObjectiveFunctionBuilder(_NicelySerializable):
         -------
         ObjectiveFunctionBuilder
         """
+        cls = ObjectiveFunctionBuilder
         if isinstance(obj, cls): return obj
         elif obj is None: return cls.create_from()
         elif isinstance(obj, str): return cls.create_from(objective=obj)
@@ -174,15 +176,16 @@ class ObjectiveFunctionBuilder(_NicelySerializable):
         elif isinstance(obj, (list, tuple)): return cls(*obj)
         else: raise ValueError("Cannot create an %s object from '%s'" % (cls.__name__, str(type(obj))))
 
-    @classmethod
-    def create_from(cls, objective='logl', freq_weighted_chi2=False):
+    # This was a classmethod, but I made it static because this class has no derived classes.
+    @staticmethod
+    def create_from(objective='logl', freq_weighted_chi2=False):
         """
         Creates common :class:`ObjectiveFunctionBuilder` from a few arguments.
 
         Parameters
         ----------
-        objective : {'logl', 'chi2'}, optional
-            The objective function type: log-likelihood or chi-squared.
+        objective : {'logl', 'chi2', 'tvd'}, optional
+            The objective function type: log-likelihood, chi-squared, or TVD.
 
         freq_weighted_chi2 : bool, optional
             Whether to use 1/frequency values as the weights in the `"chi2"` case.
@@ -190,18 +193,34 @@ class ObjectiveFunctionBuilder(_NicelySerializable):
         Returns
         -------
         ObjectiveFunctionBuilder
+
+        Notes
+        -----
+        This function's implementation calls relies on various "builder" classmethods of other classes.
+        There is a default implementation of `.builder` that's triggered in most codepaths. That
+        default is to just return
+
+            ObjectiveFunctionBuilder(cls, name, description, regularization, penalties, **kwargs).
+
+        In these cases, the kwargs that we pass to `.builder` functions get seen as **kwargs
+        for a call to the ObjectiveFunctionBuilder constructor. Those kwargs are stored in the 
+        `.additional_args` member of the returned ObjectiveFunctionBuilder object. That member
+        is passed as **kwargs to the constructor for the input `cls` when we call `.build()` on
+        the ObjectiveFunctionBuilder instance.
         """
         if objective == "chi2":
             if freq_weighted_chi2:
                 builder = FreqWeightedChi2Function.builder(
                     name='fwchi2',
                     description="Freq-weighted sum of Chi^2",
-                    regularization={'min_freq_clip_for_weighting': 1e-4})
+                    regularization={'min_freq_clip_for_weighting': 1e-4}
+                )
             else:
                 builder = Chi2Function.builder(
                     name='chi2',
                     description="Sum of Chi^2",
-                    regularization={'min_prob_clip_for_weighting': 1e-4})
+                    regularization={'min_prob_clip_for_weighting': 1e-4}
+                )
 
         elif objective == "logl":
             builder = PoissonPicDeltaLogLFunction.builder(
@@ -210,16 +229,19 @@ class ObjectiveFunctionBuilder(_NicelySerializable):
                 regularization={'min_prob_clip': 1e-4,
                                 'radius': 1e-4},
                 penalties={'cptp_penalty_factor': 0,
-                           'spam_penalty_factor': 0})
+                           'spam_penalty_factor': 0}
+            )
 
         elif objective == "tvd":
-            builder = TVDFunction.builder(
-                name='tvd',
-                description="Total Variational Distance (TVD)")
+            builder = TVDFunction.builder(name='tvd', description="Total Variational Distance (TVD)")
+    
+        elif isinstance(objective, tuple) and objective[0] == 'Lp^p':
+            power = objective[1]
+            builder = LpNormToPowerP.builder(name='Lp^p', description=f"L_{power} norm to the power {power}.", power=objective[1])
 
         else:
             raise ValueError("Invalid objective: %s" % objective)
-        assert(isinstance(builder, cls)), "This function should always return an ObjectiveFunctionBuilder!"
+        assert(isinstance(builder, ObjectiveFunctionBuilder)), "This function should always return an ObjectiveFunctionBuilder!"
         return builder
 
     def __init__(self, cls_to_build, name=None, description=None, regularization=None, penalties=None, **kwargs):
@@ -4132,6 +4154,30 @@ class RawTVDFunction(RawObjectiveFunction):
         raise NotImplementedError("Derivatives not implemented for TVD yet!")
 
 
+class RawAbsPower(RawObjectiveFunction):
+
+    def __init__(self, power: float,  regularization=None, resource_alloc=None,
+                 name='Lp^p', description="Elementwise absolute value and raising to a power.", verbosity=0):
+        super().__init__(regularization, resource_alloc, name, description, verbosity)
+        assert power >= 1
+        self.power = power
+
+    def chi2k_distributed_qty(self, objective_function_value):
+        return -1
+    
+    def terms(self, probs, counts, total_counts, freqs, intermediates=None):
+        return 0.5 * _np.abs(probs - freqs) ** self.power
+    
+    def dterms(self, probs, counts, total_counts, freqs, intermediates=None):
+        t = probs - freqs
+        d = (0.5 * self.power) * _np.abs(t) ** (self.power - 1)
+        d[t < 0] *= -1
+        return d
+    
+    def zero_freq_terms(self, total_counts, probs):
+        return 0.5 * _np.abs(probs) ** self.power
+
+
 ######################################################
 #
 #   Start MDCObjectiveFunction subclasses
@@ -5039,6 +5085,27 @@ class TVDFunction(TermWeighted):
         # ^ Make the weights mean-1 to avoid unintended changes to Levenberg-Marquardt
         #   stopping criteria.
         return
+
+
+class LpNormToPowerP(TermWeighted):
+
+    TEMPLATE_FIELDS = (
+    """
+    Model-based loss function: `0.5 * |p-f|^power`.
+    """, "",
+    """
+    power : float, optonal
+        Must be >= 1.
+    """
+    )
+
+    @set_docstring(TermWeighted.DOCSTR_TEMPLATE % TEMPLATE_FIELDS)
+    def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None,
+                 verbosity=0, power=2):
+        raw_objfn = RawAbsPower(power, regularization, mdc_store.resource_alloc, name, description, verbosity)
+        super().__init__(raw_objfn, mdc_store, penalties, verbosity)
+        self.power = raw_objfn.power
+        self._update_terms_weights()
 
 
 class TimeDependentMDCObjectiveFunction(MDCObjectiveFunction):
