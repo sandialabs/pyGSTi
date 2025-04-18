@@ -53,7 +53,7 @@ class GaugeInvariantsGatesSection(_Section):
         )
 
     @_Section.figure_factory(4)
-    def final_model_vs_target_table(workspace, switchboard=None, confidence_level=None, ci_brevity=1, **kwargs):
+    def final_model_predicted_RB_table(workspace, switchboard=None, confidence_level=None, ci_brevity=1, **kwargs):
         return workspace.ModelVsTargetTable(
             switchboard.mdl_final, switchboard.mdl_target, switchboard.clifford_compilation,
             _cri(1, switchboard, confidence_level, ci_brevity)

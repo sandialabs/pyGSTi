@@ -1151,22 +1151,12 @@ class ModelVsTargetTable(WorkspaceTable):
         table = _ReportTable(colHeadings, formatters, col_heading_labels=tooltips,
                              confidence_region_info=confidence_region_info)
 
-        #Leave this off for now, as it's primary use is to compare with RB and the predicted RB number is better
-        #for this.
-        #pAGsI = _ev(_reportables.Average_gateset_infidelity(model, target_model), confidence_region_info)
-        #table.add_row(("Avg. primitive model infidelity", pAGsI), (None, 'Normal') )
-
         pRBnum = _ev(_reportables.Predicted_rb_number(model, target_model), confidence_region_info)
         table.add_row(("Predicted primitive RB number", pRBnum), (None, 'Normal'))
 
-        from pygsti.forwardsims import MatrixForwardSimulator as _MatrixFSim
-        if clifford_compilation and isinstance(model.sim, _MatrixFSim):
+        if clifford_compilation:
             clifford_model = _models.create_explicit_alias_model(model, clifford_compilation)
             clifford_targetModel = _models.create_explicit_alias_model(target_model, clifford_compilation)
-
-            ##For clifford versions we don't have a confidence region - so no error bars
-            #AGsI = _ev(_reportables.Average_gateset_infidelity(clifford_model, clifford_targetModel))
-            #table.add_row(("Avg. clifford model infidelity", AGsI), (None, 'Normal') )
 
             RBnum = _ev(_reportables.Predicted_rb_number(clifford_model, clifford_targetModel))
             table.add_row(("Predicted Clifford RB number", RBnum), (None, 'Normal'))
