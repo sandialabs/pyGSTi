@@ -1634,7 +1634,7 @@ def generator_infidelity(a, b, mx_basis):
 
     return _tools.generator_infidelity(a, b, mx_basis)
 
-Generator_infidelity = _modf.opsfn_factory(avg_gate_infidelity)
+Generator_infidelity = _modf.opsfn_factory(generator_infidelity)
 # init args == (model1, model2, op_label)
 
 def model_model_angles_btwn_axes(a, b, mx_basis):  # Note: default 'gm' basis

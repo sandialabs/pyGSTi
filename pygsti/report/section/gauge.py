@@ -125,7 +125,7 @@ class GaugeInvariantsGermsSection(_Section):
     def final_gates_vs_target_table_gauge_invgerms(workspace, switchboard=None, confidence_level=None,
                                                    ci_brevity=1, **kwargs):
         return workspace.GatesVsTargetTable(
-            switchboard.mdl_gaugeinv, switchboard.mdl_gaugeinv_ep,
+            switchboard.mdl_gaugeinv, switchboard.mdl_target,
             _cri_gauge_inv(0, switchboard, confidence_level, ci_brevity),
             display=('evdiamond', 'evnudiamond'), virtual_ops=switchboard.germs
         )
@@ -133,7 +133,7 @@ class GaugeInvariantsGermsSection(_Section):
     @_Section.figure_factory(3)
     def germs_eigenvalue_table(workspace, switchboard=None, confidence_level=None, ci_brevity=1, **kwargs):
         return workspace.GateEigenvalueTable(
-            switchboard.mdl_gaugeinv, switchboard.mdl_gaugeinv_ep,
+            switchboard.mdl_gaugeinv, switchboard.mdl_target,
             _cri_gauge_inv(1, switchboard, confidence_level, ci_brevity),
             display=('evals', 'target', 'absdiff-evals', 'infdiff-evals', 'log-evals', 'absdiff-log-evals'),
             virtual_ops=switchboard.germs
