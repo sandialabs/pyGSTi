@@ -765,19 +765,21 @@ def run_iterative_gst(dataset, start_model, circuit_lists,
 
     models = []
     optimums = []
+    mdc_store_list = []
 
     for i in range(len(circuit_lists)):
         #then do the final iteration slightly differently since the generator should
         #give three return values.
         if i==len(circuit_lists)-1:
-            mdl_iter, opt_iter, final_objfn =  next(gst_iter_gen)
+                mdl_iter, opt_iter, mdc_store_iter, final_objfn = next(gst_iter_gen)
         else:
-            mdl_iter, opt_iter =  next(gst_iter_gen)
+            mdl_iter, opt_iter, mdc_store_iter =  next(gst_iter_gen)
 
         models.append(mdl_iter)
         optimums.append(opt_iter)
+        mdc_store_list.append(mdc_store_iter)
         
-    return models, optimums, final_objfn
+    return models, optimums, final_objfn, mdc_store_list
 
 def iterative_gst_generator(dataset, start_model, circuit_lists,
                       optimizer, iteration_objfn_builders, final_objfn_builders,
