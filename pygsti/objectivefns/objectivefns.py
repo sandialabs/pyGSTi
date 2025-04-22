@@ -232,8 +232,11 @@ class ObjectiveFunctionBuilder(_NicelySerializable):
                            'spam_penalty_factor': 0}
             )
 
-        elif objective == "tvd":
-            builder = TVDFunction.builder(name='tvd', description="Total Variational Distance (TVD)")
+        elif 'tvd' in objective:
+            descr = "Total Variational Distance (TVD)"
+            if 'normalized' in objective:
+                descr = descr + ', normalized by circuit depth'
+            builder = TVDFunction.builder(name=objective, description=descr)
     
         elif isinstance(objective, tuple) and objective[0] == 'Lp^p':
             power = objective[1]
@@ -5064,7 +5067,10 @@ class TVDFunction(TermWeighted):
 
     TEMPLATE_FIELDS = (
     """
-    Model-based TVD function: `0.5 * |p-f|`.
+    Model-based TVD function: `0.5 * w * |p-f|`, where w is a vector of weights.
+
+    If `name == 'normalized tvd'`, then `w[i]` will be 1/(length of circuit associated with i).
+    Otherwise, w[i] will equal 1.
     """, "", ""
     )
 
@@ -5072,18 +5078,23 @@ class TVDFunction(TermWeighted):
     def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0):
         raw_objfn = RawTVDFunction(regularization, mdc_store.resource_alloc, name, description, verbosity)
         super().__init__(raw_objfn, mdc_store, penalties, verbosity)
+        self.normalized = name == 'normalized tvd'
+        self._terms_weights = None
         self._update_terms_weights()
 
     def _update_terms_weights(self):
-        num_elements = self.layout.num_elements
-        circuit_sizes = _np.zeros((num_elements,))
-        for elind, circuit, _ in self.layout:
-            circuit_sizes[elind] = 1 + circuit.num_gates
-        assert _np.all(circuit_sizes > 0)
-        self._terms_weights = 1 / circuit_sizes
-        self._terms_weights /= _np.mean(self.terms_weights)
-        # ^ Make the weights mean-1 to avoid unintended changes to Levenberg-Marquardt
-        #   stopping criteria.
+        if self.normalized:
+            num_elements = self.layout.num_elements
+            circuit_sizes = _np.zeros((num_elements,))
+            for elind, circuit, _ in self.layout:
+                circuit_sizes[elind] = 1 + circuit.num_gates
+            assert _np.all(circuit_sizes > 0)
+            self._terms_weights = 1 / circuit_sizes
+            # self._terms_weights /= _np.mean(self.terms_weights)
+            # ^ Make the weights mean-1 to avoid unintended changes to Levenberg-Marquardt
+            #   stopping criteria.
+        elif self._terms_weights is None:
+            self._terms_weights = _np.ones(self.layout.num_elements)
         return
 
 
