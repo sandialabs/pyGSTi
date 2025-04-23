@@ -3121,6 +3121,9 @@ class ModelEstimateResults(_proto.ProtocolResults):
             _warnings.warn("Re-initializing the %s estimate" % estimate_key
                            + " of this Results object!  Usually you don't"
                            + " want to do this.")
+            
+        if estimate.parent is None:
+            estimate.set_parent(self)
 
         self.estimates[estimate_key] = estimate
 

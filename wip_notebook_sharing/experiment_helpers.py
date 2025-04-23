@@ -32,9 +32,9 @@ def make_tweaked_dataset(modelpack, depol_level=0.01, rand_unitary_scale=0.001, 
     lsgst_circuit_lists = pygsti.circuits.create_lsgst_circuit_lists(ideal_model, prep_fids, meas_fids, germs, max_lens)
     all_circuits = lsgst_circuit_lists[-1]
     shots_per_circuit = 1000
+    depol_model = ideal_model.depolarize(op_noise=depol_level, spam_noise=depol_level/2, seed=1997)
+    final_model = depol_model.randomize_with_unitary(scale=rand_unitary_scale, seed=250422)
     rng_state = np.random.default_rng(0)
-    depol_model = ideal_model.depolarize(op_noise=depol_level, spam_noise=depol_level/2)
-    final_model = depol_model.randomize_with_unitary(scale=rand_unitary_scale)
     ds = pygsti.data.simulate_data(final_model, all_circuits, shots_per_circuit, rand_state=rng_state)
     return ds, final_model
 
@@ -119,18 +119,17 @@ def run_gst(ds, fids, germs, target_model, final_objectives: List[Union[str, tup
     builders = pygsti.protocols.GSTObjFnBuilders(
         [ObjectiveFunctionBuilder.create_from(iteration_objective)],
         [ObjectiveFunctionBuilder.create_from(final_objective)]
-        #[ObjectiveFunctionBuilder.create_from(fo) for fo in final_objectives]
+    )
+    _update_objfn_builders(builders.iteration_builders, dict())
+    optim_iter = SimplerLMOptimizer.cast(
+        _get_optimizer(dict(), target_model)
     )
     advanced_options = {
         'extra_lm_opts': {'tol':
             {'relx': 1e-8, 'relf': 1e-6, 'f': -1.0, 'jac': -1, 'maxdx': 1.0},                                       
         }
     }
-    _update_objfn_builders(builders.iteration_builders, advanced_options)
     _update_objfn_builders(builders.final_builders, advanced_options)
-    optim_iter = SimplerLMOptimizer.cast(
-        _get_optimizer(dict(), target_model)
-    )
     optim_last = SimplerLMOptimizer.cast(
         _get_optimizer(advanced_options, target_model)
     )
@@ -152,30 +151,36 @@ def run_gst(ds, fids, germs, target_model, final_objectives: List[Union[str, tup
     est = modelest_results.estimates[str(final_objective)]
     seed_name = f'iteration {est.num_iterations - 1} estimate'
     seed_model = est.models[seed_name]
+    seed_vec = seed_model.to_vector()
     circuits = exp_design.all_circuits_needing_data
-    # array_types = optim.array_types + builders.final_builders[0].compute_array_types(
-    #     optim.called_objective_methods, seed_model.sim
-    # )
-    seed_mdc_store = est.final_mdc_store()
-    comm = seed_mdc_store.resource_alloc.comm
-    printer = pygsti.VerbosityPrinter.create_printer(verbosity, comm)
-    import time
+    printer = pygsti.VerbosityPrinter.create_printer(verbosity, None)
     import copy
-    from pygsti.algorithms.core import _do_runopt
-    from pygsti.algorithms.gaugeopt import gaugeopt_to_target
     for final_objective in final_objectives[1:]:
         builder = ObjectiveFunctionBuilder.create_from(final_objective)
+        curr_seed_model = copy.deepcopy(seed_model)
+        # ^ A copy is needed because this will be used as the foundational of a ModelDatasetCircuitStore,
+        #   which in turn will be the foundation for an MDCObjective.
+        curr_seed_model.from_vector(seed_vec)
         array_types = optim_last.array_types + \
-            builder.compute_array_types(optim_last.called_objective_methods, seed_model.sim)
-        mdc_store = ModelDatasetCircuitsStore(seed_model, data.dataset, circuits, seed_mdc_store.resource_alloc, array_types=array_types)
+            builder.compute_array_types(optim_last.called_objective_methods, curr_seed_model.sim)
+        mdc_store = ModelDatasetCircuitsStore(curr_seed_model, data.dataset, circuits, None, array_types=array_types)
         printer.log('')
-        out = run_gst_fit(mdc_store, optim_last, builder, verbosity - 2)
-        # ^ Would be nice if that accepted a printer.
+        _, outobjective = run_gst_fit(mdc_store, optim_last, builder, verbosity - 2)
+        
         fobjstr = str(final_objective)
-        modelest_results.add_estimate(copy.deepcopy(est), fobjstr)
-        modelest_results.estimates[fobjstr].models['final iteration estimate'] = out[1].model
-        modelest_results.estimates[fobjstr].models.pop('stdgaugeopt')
-        modelest_results.estimates[fobjstr].add_gaugeoptimized(gop_params['stdgaugeopt'], label='stdgaugeopt')
+        
+        curr_est = copy.deepcopy(est)
+        curr_est._final_mdc_store = outobjective
+        curr_est._final_objfn = outobjective
+        curr_est._final_objfn_cache = None
+        curr_est._final_objective_fn_cache = None
+        modelest_results.add_estimate(curr_est, fobjstr)
+
+        curr_est = modelest_results.estimates[fobjstr]
+        curr_est.models['final iteration estimate'] = outobjective.model
+        curr_est.models.pop('stdgaugeopt')
+        curr_est.add_gaugeoptimized(gop_params['stdgaugeopt'], label='stdgaugeopt')
+
         pass
 
     return modelest_results

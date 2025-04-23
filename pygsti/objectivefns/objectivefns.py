@@ -236,6 +236,9 @@ class ObjectiveFunctionBuilder(_NicelySerializable):
             descr = "Total Variational Distance (TVD)"
             if 'normalized' in objective:
                 descr = descr + ', normalized by circuit depth'
+                assert objective == 'normalized tvd'
+            else:
+                assert objective == 'tvd'
             builder = TVDFunction.builder(name=objective, description=descr)
     
         elif isinstance(objective, tuple) and objective[0] == 'Lp^p':
@@ -1392,7 +1395,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         # Note: don't need paramvec here since above call sets it
         return (0.5 / denom)[:, None] * self.dpercircuit()
 
-    def fn_local(self, paramvec=None):
+    def fn_local(self, paramvec=None, stateless=False):
         """
         Evaluate the *local* value of this objective function.
 
@@ -1411,9 +1414,15 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         -------
         float
         """
-        return _np.sum(self.terms(paramvec))
+        if paramvec is None or not stateless:
+            return _np.sum(self.terms(paramvec))
+        else:
+            old_paramvec = self.model.to_vector()
+            val = _np.sum(self.terms(paramvec))
+            self.model.from_vector(old_paramvec)
+            return val
 
-    def fn(self, paramvec=None):
+    def fn(self, paramvec=None, stateless=False):
         """
         Evaluate the value of this objective function.
 
@@ -1428,7 +1437,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         float
         """
         result, result_shm = _smt.create_shared_ndarray(self.resource_alloc, (1,), 'd')
-        local = _np.array([self.fn_local(paramvec)], 'd')
+        local = _np.array([self.fn_local(paramvec, stateless)], 'd')
         unit_ralloc = self.layout.resource_alloc('atom-processing')  # proc group that computes same els
         self.resource_alloc.allreduce_sum(result, local, unit_ralloc)
         global_fnval = result[0]
