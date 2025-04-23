@@ -5099,9 +5099,13 @@ class TVDFunction(TermWeighted):
                 circuit_sizes[elind] = 1 + circuit.num_gates
             assert _np.all(circuit_sizes > 0)
             self._terms_weights = 1 / circuit_sizes
-            # self._terms_weights /= _np.mean(self.terms_weights)
+            self._terms_weights /= _np.mean(self.terms_weights)
             # ^ Make the weights mean-1 to avoid unintended changes to Levenberg-Marquardt
-            #   stopping criteria.
+            #   stopping criteria. This has an undesirable side effect of affecting how
+            #   one would interpret individual circuits' contributions to the terms vector.
+            #   However, this function is first and foremost a sum of terms, and the sum
+            #   never has an interesting interpretation. 
+            #
         elif self._terms_weights is None:
             self._terms_weights = _np.ones(self.layout.num_elements)
         return
