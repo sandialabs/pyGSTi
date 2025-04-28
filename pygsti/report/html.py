@@ -4,7 +4,7 @@ Routines for converting python objects to HTML.
 Parallel rountines as latex.py has for latex conversion.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -149,10 +149,10 @@ def vector(v, specs):
         lines.append(value(el, specs, mathmode=True))
     if specs['brackets']:
         return "$ \\begin{pmatrix}\n" + \
-            " \\\\ \n".join(lines) + "\n \end{pmatrix} $\n"
+            " \\\\ \n".join(lines) + "\n \\end{pmatrix} $\n"
     else:
         return "$ \\begin{pmatrix}\n" + \
-            " \\\\ \n".join(lines) + "\n \end{pmatrix} $\n"
+            " \\\\ \n".join(lines) + "\n \\end{pmatrix} $\n"
 
 
 def matrix(m, specs):
@@ -177,7 +177,7 @@ def matrix(m, specs):
     fontsize = specs['fontsize']
 
     if fontsize is not None:
-        prefix += "\\fontsize{%f}{%f}\selectfont " % (fontsize, fontsize * 1.2)
+        prefix += "\\fontsize{%f}{%f}\\selectfont " % (fontsize, fontsize * 1.2)
 
     for r in range(m.shape[0]):
         lines.append(" & ".join(
@@ -185,10 +185,10 @@ def matrix(m, specs):
 
     if specs['brackets']:
         return prefix + "$ \\begin{pmatrix}\n" + \
-            " \\\\ \n".join(lines) + "\n \end{pmatrix} $\n"
+            " \\\\ \n".join(lines) + "\n \\end{pmatrix} $\n"
     else:
         return prefix + "$ \\begin{pmatrix}\n" + \
-            " \\\\ \n".join(lines) + "\n \end{pmatrix} $\n"
+            " \\\\ \n".join(lines) + "\n \\end{pmatrix} $\n"
 
 
 def value(el, specs, mathmode=False):

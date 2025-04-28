@@ -2,7 +2,7 @@
 The standard unitaries and gate names, used internal compilers and short-hand model init
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -370,7 +370,46 @@ def unitary_to_standard_gatename(unitary, up_to_phase = False, return_phase = Fa
                         return std_name
 
     return None
+def standard_gatenames_stim_conversions():
+    """
+    A dictionary converting the gates with standard names to stim tableus for these gates. Currently is only capable of converting
+    clifford gates, no capability for T gates
 
+    TODO: Add all standard clifford gate names in
+
+    Returns
+    -------
+    A dict mapping string to tableu
+    """
+    try:
+        import stim
+    except ImportError:
+        raise ImportError("Stim is required for this operation, and it does not appear to be installed.")
+    gate_dict = {
+    'Gi'    : stim.Tableau.from_named_gate('I'),
+    'Gxpi'  : stim.Tableau.from_named_gate('X'),
+    'Gypi'  : stim.Tableau.from_named_gate('Y'),
+    'Gzpi'  : stim.Tableau.from_named_gate('Z'),
+    'Gxpi2' : stim.Tableau.from_named_gate('SQRT_X'),
+    'Gypi2' : stim.Tableau.from_named_gate('SQRT_Y'),
+    'Gzpi2' : stim.Tableau.from_named_gate('SQRT_Z'),
+    'Gxmpi2': stim.Tableau.from_named_gate('SQRT_X_DAG'),
+    'Gympi2': stim.Tableau.from_named_gate('SQRT_Y_DAG'),
+    'Gzmpi2': stim.Tableau.from_named_gate('SQRT_Z_DAG'),
+    'Gs'    : stim.Tableau.from_named_gate('S'),
+    'Gsm'   : stim.Tableau.from_named_gate('S_DAG'),
+    'Gh'    : stim.Tableau.from_named_gate('H'),
+    'Gxx'   : stim.Tableau.from_named_gate('SQRT_XX'),
+    'Gzz'   : stim.Tableau.from_named_gate('SQRT_ZZ'),
+    'Gcnot' : stim.Tableau.from_named_gate('CNOT'),
+    'Gswap' : stim.Tableau.from_named_gate('SWAP'),
+    'Gcphase' : stim.Tableau.from_named_gate('CZ')
+    }
+    ecr_unitary = _np.array([[0, 1, 0., 1j], [1., 0, -1j, 0.],
+                             [0., 1j, 0, 1], [-1j, 0., 1, 0]], complex)/_np.sqrt(2)
+    gate_dict['Gecres'] = stim.Tableau.from_unitary_matrix(ecr_unitary, endian='big')
+
+    return gate_dict
 
 def standard_gatenames_cirq_conversions():
     """
