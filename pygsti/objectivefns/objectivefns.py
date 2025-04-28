@@ -1444,6 +1444,13 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         _smt.cleanup_shared_ndarray(result_shm)
         return global_fnval
 
+    def fn_from_model(self, model):
+        m = self.model
+        self.model = model
+        val = self.fn()
+        self.model = m
+        return val
+
     def jacobian(self, paramvec=None):
         """
         Compute the Jacobian of this objective function.
