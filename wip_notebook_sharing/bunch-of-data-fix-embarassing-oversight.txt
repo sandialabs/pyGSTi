@@ -29,6 +29,10 @@ Here is how I used it; note that Model A has more noise than Model B.
 
 In the tables below, rows labeled "argmin(func)" show results for the model obtained by fitting "func" to the mixed dataset.
 
+PROBLEM: the L10(...) objectives occasionally have values < 1e-6, even though the vast majority are O(1e-2).
+This happens because of a stupid way that I wrote code to infer when we were looking at the result of the L10^10
+objective as opposed to other objectives. In reality, any obective value < 1e-6 needs to be raised to the power 1/10.
+
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 The mixture dataset had weight 1.00 on dataset A and weight 0.00 on dataset B. argmin(...) models were fit to that dataset.
