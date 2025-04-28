@@ -3175,10 +3175,15 @@ class FitComparisonBarPlot(WorkspacePlot):
         if isinstance(dataset_by_x, _DataSet):
             dataset_by_x = [dataset_by_x] * len(model_by_x)
 
+        # TODO: figure out why the report shows N_sigma values that are different than if I
+        # call _ph.rated_n_sigma directly.
+        self.ws.smartCache.ineffective.add('rated_n_sigma')
         for X, mdl, circuits, dataset, Np in zip(x_names, model_by_x, circuits_by_x, dataset_by_x, np_by_x):
             if circuits is None or mdl is None:
                 Nsig, rating = _np.nan, 5
             else:
+                # from pygsti.baseobjs.smartcache import _get_fn_name_key
+                # self.ws.smartCache.ineffective.add(_get_fn_name_key(_ph.rated_n_sigma))
                 Nsig, rating, _, _, _, _ = self._ccompute(_ph.rated_n_sigma, dataset, mdl,
                                                           circuits, objfn_builder, Np, wildcard,
                                                           return_all=True, comm=comm)
