@@ -2,7 +2,7 @@
 Defines the MatrixCOPALayout class.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -323,7 +323,6 @@ class MatrixCOPALayout(_DistributableCOPALayout):
                     unique_complete_circuits.append(comp_ckt)
                 else:
                     unique_complete_circuits.append(model.complete_circuit(c))
-
         #Note: "unique" means a unique circuit *before* circuit-completion, so there could be duplicate
         # "unique circuits" after completion, e.g. "rho0Gx" and "Gx" could both complete to "rho0GxMdefault_0".
 

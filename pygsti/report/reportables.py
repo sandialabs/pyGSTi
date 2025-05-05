@@ -2,7 +2,7 @@
 Functions which compute named quantities for Models and Datasets.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -15,7 +15,7 @@ Named quantities as well as their confidence-region error bars are
  used primarily in reports, so we refer to these quantities as
  "reportables".
 """
-import pkgutil
+import importlib
 import warnings as _warnings
 
 import numpy as _np
@@ -29,9 +29,10 @@ from pygsti.baseobjs.basis import Basis as _Basis, DirectSumBasis as _DirectSumB
 from pygsti.baseobjs.label import Label as _Lbl
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LEEL
 from pygsti.modelmembers.operations.lindbladcoefficients import LindbladCoefficientBlock as _LindbladCoefficientBlock
+from pygsti.models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
 
 
-_CVXPY_AVAILABLE = pkgutil.find_loader('cvxpy') is not None
+_CVXPY_AVAILABLE = importlib.util.find_spec('cvxpy') is not None
 
 FINITE_DIFF_EPS = 1e-7
 
@@ -331,13 +332,6 @@ class CircuitEigenvalues(_modf.ModelFunction):
     # ref for eigenvalue derivatives: https://www.win.tue.nl/casa/meetings/seminar/previous/_abstract051019_files/Presentation.pdf                              # noqa
 
 
-#def circuit_eigenvalues(model, circuit):
-#    return _np.array(sorted(_np.linalg.eigvals(model.sim.product(circuit)),
-#                            key=lambda ev: abs(ev), reverse=True))
-#CircuitEigenvalues = _modf.modelfn_factory(circuit_eigenvalues)
-## init args == (model, circuit)
-
-
 def rel_circuit_eigenvalues(model_a, model_b, circuit):
     """
     Eigenvalues of dot(productB(circuit)^-1, productA(circuit))
@@ -541,13 +535,6 @@ if _CVXPY_AVAILABLE:
             J = JBstd - JAstd
             val = 0.5 * (_np.vdot(J.real, self.W.real) + _np.vdot(J.imag, self.W.imag))
             return val
-
-    #def circuit_half_diamond_norm(model_a, model_b, circuit):
-    #    A = model_a.sim.product(circuit) # "gate"
-    #    B = model_b.sim.product(circuit) # "target gate"
-    #    return half_diamond_norm(A, B, model_b.basis)
-    #CircuitHalfDiamondNorm = _modf.modelfn_factory(circuit_half_diamond_norm)
-    #  # init args == (model_a, model_b, circuit)
 
 else:
     circuit_half_diamond_norm = None
@@ -1204,7 +1191,10 @@ if _CVXPY_AVAILABLE:
 
         def __init__(self, model_a, model_b, oplabel):
             self.oplabel = oplabel
-            self.B = model_b.operations[oplabel].to_dense(on_space='HilbertSchmidt')
+            if isinstance(model_b, _ExplicitOpModel):
+                self.B = model_b.operations[oplabel].to_dense(on_space='HilbertSchmidt')
+            else:
+                self.B = model_b.operation_blks['gates'][oplabel].to_dense(on_space='HilbertSchmidt')
             self.d = int(round(_np.sqrt(model_a.dim)))
             _modf.ModelFunction.__init__(self, model_a, [("gate", oplabel)])
 
@@ -1222,8 +1212,13 @@ if _CVXPY_AVAILABLE:
             float
             """
             gl = self.oplabel
-            dm, W = _tools.diamonddist(model.operations[gl].to_dense(on_space='HilbertSchmidt'),
-                                       self.B, model.basis, return_x=True)
+            if isinstance(model, _ExplicitOpModel):
+                dm, W = _tools.diamonddist(model.operations[gl].to_dense(on_space='HilbertSchmidt'),
+                                           self.B, model.basis, return_x=True)
+            else:
+                dm, W = _tools.diamonddist(model.operation_blks['gates'][gl].to_dense(on_space='HilbertSchmidt'),
+                                           self.B, 'pp', return_x=True)  # HACK - need to get basis from model 'pp' HARDCODED for now
+
             self.W = W
             return 0.5 * dm
 
@@ -1241,7 +1236,11 @@ if _CVXPY_AVAILABLE:
             float
             """
             mxBasis = nearby_model.basis
-            A = nearby_model.operations[self.oplabel].to_dense(on_space='HilbertSchmidt')
+            if isinstance(nearby_model, _ExplicitOpModel):
+                A = nearby_model.operations[self.oplabel].to_dense(on_space='HilbertSchmidt')
+            else:
+                A = nearby_model.operation_blks['gates'][self.oplabel].to_dense(on_space='HilbertSchmidt')
+                mxBasis = 'pp'  # HACK need to set mxBasis based on model but not the full model basis
             JAstd = self.d * _tools.fast_jamiolkowski_iso_std(A, mxBasis)
             JBstd = self.d * _tools.fast_jamiolkowski_iso_std(self.B, mxBasis)
             J = JBstd - JAstd
@@ -1781,6 +1780,7 @@ def errorgen_and_projections(errgen, mx_basis):
     ret = {}
     ret['error generator'] = errgen
 
+    mx_basis = _Basis.cast(mx_basis, errgen.shape[0])
     if set(mx_basis.name.split('*')) == set(['pp']):
         #HACK: convert 'pp' => 'PP' here, as that's typically used.  However, other
         # bases just pass through as before and may have different scalings than earlier

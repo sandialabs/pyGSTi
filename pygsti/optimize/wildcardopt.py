@@ -2,7 +2,7 @@
 Wildcard budget fitting routines
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -66,19 +66,6 @@ def optimize_wildcard_budget_neldermead(budget, L1weights, wildcard_objfn, two_d
         percircuit_penalty = layout.allsum_local_quantity('c', percircuit_penalty)
 
         return max(0, two_dlogl - two_dlogl_threshold) + percircuit_penalty
-
-    ##For debugging wildcard (see below for suggested insertion point)
-    #def _wildcard_fit_criteria_debug(wv):
-    #    dlogl_elements = logl_wildcard_fn.lsvec(wv)**2  # b/c WC fn only has sqrt of terms implemented now
-    #    for i in range(num_circuits):
-    #        dlogl_percircuit[i] = _np.sum(dlogl_elements[layout.indices_for_index(i)], axis=0)
-    #    two_dlogl_percircuit = 2 * dlogl_percircuit
-    #    two_dlogl = sum(two_dlogl_percircuit)
-    #    print("Aggregate penalty = ", two_dlogl, "-", two_dlogl_threshold, "=", two_dlogl - two_dlogl_threshold)
-    #    print("Per-circuit (redbox) penalty = ", sum(_np.clip(two_dlogl_percircuit - redbox_threshold, 0, None)))
-    #    print(" per-circuit threshold = ", redbox_threshold, " highest violators = ")
-    #    sorted_percircuit = sorted(enumerate(two_dlogl_percircuit), key=lambda x: x[1], reverse=True)
-    #    print('\n'.join(["(%d) %s: %g" % (i, layout.circuits[i].str, val) for i, val in sorted_percircuit[0:10]]))
 
     num_iters = 0
     wvec_init = budget.to_vector()
@@ -540,13 +527,6 @@ def optimize_wildcard_budget_barrier(budget, L1weights, objfn, two_dlogl_thresho
                 Dobj = t * (c**2 * x / sqrtVec) + Dbarrier
                 Hobj = t * _np.diag(-1.0 / (sqrtVec**3) * (c**2 * x)**2 + c**2 / sqrtVec) + Hbarrier
             return obj, Dobj, Hobj
-
-        #import scipy.optimize
-        #def barrier_obj(x):
-        #    x = _np.clip(x, 1e-10, None)
-        #    return t * _np.dot(c.T, x) - _np.log(-barrierF(x, False))
-        #result = scipy.optimize.minimize(barrier_obj, x, method="CG")
-        #x = _np.clip(result.x, 0, None)
 
         x, debug_x_list = NewtonSolve(x, NewtonObjective, NewtonObjective_derivs, tol, max_iters, printer - 1)
         #x, debug_x_list = NewtonSolve(x, NewtonObjective, None, tol, max_iters, printer - 1)  # use finite-diff derivs

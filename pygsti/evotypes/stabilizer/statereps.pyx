@@ -3,7 +3,7 @@
 # cython: linetrace=False
 
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -48,10 +48,6 @@ cdef class StateRep(_basereps_cython.StateRep):
     @property
     def nqubits(self):
         return self.state_space.num_qubits
-
-    #@property
-    #def dim(self):
-    #    return 2**(self.c_state._n) # assume "unitary evolution"-type mode
 
     def actionable_staterep(self):
         # return a state rep that can be acted on by op reps or mapped to

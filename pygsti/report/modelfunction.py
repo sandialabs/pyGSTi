@@ -2,7 +2,7 @@
 Defines the ModelFunction class
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -10,6 +10,8 @@ Defines the ModelFunction class
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from pygsti.models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
+from pygsti.models.localnoisemodel import LocalNoiseModel as _LocalNoiseModel
 
 class ModelFunction(object):
     """
@@ -233,9 +235,16 @@ def opsfn_factory(fn):
 
         def evaluate(self, model):
             """ Evaluate this gate-set-function at `model`."""
-            return fn(model.operations[self.gl].to_dense(on_space='HilbertSchmidt'),
-                      self.other_model.operations[self.gl].to_dense(on_space='HilbertSchmidt'),
-                      model.basis, *self.args, **self.kwargs)  # assume functions want *dense* gates
+            if isinstance(model, _ExplicitOpModel):
+                return fn(model.operations[self.gl].to_dense(on_space='HilbertSchmidt'),
+                          self.other_model.operations[self.gl].to_dense(on_space='HilbertSchmidt'),
+                          model.basis, *self.args, **self.kwargs)  # assume functions want *dense* gates
+            elif isinstance(model, _LocalNoiseModel):
+                return fn(model.operation_blks['gates'][self.gl].to_dense(on_space='HilbertSchmidt'),
+                          self.other_model.operation_blks['gates'][self.gl].to_dense(on_space='HilbertSchmidt'),
+                          model.basis, *self.args, **self.kwargs)  # assume functions want *dense* gates
+            else:
+                raise ValueError(f"Unsupported model type: {type(model)}!")
 
     GSFTemp.__name__ = fn.__name__ + str("_class")
     return GSFTemp

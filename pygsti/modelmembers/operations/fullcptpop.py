@@ -2,7 +2,7 @@
 The FullCPTPOp class and supporting functionality.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -42,7 +42,7 @@ class FullCPTPOp(_KrausOperatorInterface, _LinearOperator):
         choi_mx = _LinearOperator.convert_to_matrix(choi_mx)
         state_space = _statespace.default_space_for_dim(choi_mx.shape[0]) if (state_space is None) \
             else _statespace.StateSpace.cast(state_space)
-        evotype = _Evotype.cast(evotype)
+        evotype = _Evotype.cast(evotype, state_space=state_space)
         self._basis = _Basis.cast(basis, state_space.dim) if (basis is not None) else None  # for Hilbert-Schmidt space
 
         #scratch space
