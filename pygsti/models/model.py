@@ -1259,13 +1259,68 @@ class OpModel(Model):
             #parse the strings into integer indices.
             param_labels_list = self.parameter_labels.tolist()
             indices = [param_labels_list.index(lbl) for lbl in indices]
-                        
+
+        if self._param_interposer is not None:
+            orig_param_vec = self._paramvec.copy()
+
         for idx, val in zip(indices, values):
             self._paramvec[idx] = val
 
         if self._param_interposer is not None or self._index_mm_map is None:
-            #fall back to standard from_vector call.
             self.from_vector(self._paramvec)
+            
+        elif False: #self._param_interposer is not None or self._index_mm_map is None:
+            print('not here')
+            #fall back to standard from_vector call.
+            #self.from_vector(self._paramvec)
+            #test_model = self.copy()
+            #test_model.from_vector(self._paramvec)
+
+            original_errgen_vec = self._param_interposer.transform_matrix @ orig_param_vec
+            new_errgen_vec = self._param_interposer.transform_matrix @ self._paramvec
+            diff_vec =  original_errgen_vec -  new_errgen_vec
+            diff_vec[_np.abs(diff_vec) < 1e-14] = 0
+            non_zero_errgens = _np.nonzero(diff_vec)
+
+            indices = non_zero_errgens[0]
+            values = new_errgen_vec[indices]
+            unique_mms = {lbl:val for idx in indices for lbl, val in zip(self._index_mm_label_map[idx], self._index_mm_map[idx])}
+
+            for obj in unique_mms.values():
+                obj.from_vector(new_errgen_vec[obj.gpindices].copy(), close, dirty_value=False)
+            
+            #go through the model members which have been updated and identify whether any of them have children
+            #which may be present in the _opcaches which have already been updated by the parents. I think the
+            #conditions under which this should be safe are: a) the layer rules are ExplicitLayerRules,
+            #b) The parent is a POVM (it should be safe to assume that POVMs update their children, 
+            #and c) the effect is a child of that POVM.
+            
+            if isinstance(self._layer_rules, _ExplicitLayerRules):
+                updated_children = []
+                for obj in unique_mms.values():
+                    if isinstance(obj, _POVM):
+                        updated_children.extend(obj.values())
+            else:
+                updated_children = None
+
+            # Call from_vector on elements of the cache
+            if self._call_fromvector_on_cache:
+                #print(f'{self._opcaches=}')
+                for opcache in self._opcaches.values():
+                    for obj in opcache.values():
+                        opcache_elem_gpindices = _slct.indices(obj.gpindices) if isinstance(obj.gpindices, slice) else obj.gpindices
+                        if any([idx in opcache_elem_gpindices for idx in indices]):
+                            #check whether we have already updated this object.
+                            if updated_children is not None and any([child is obj for child in updated_children]):
+                                continue
+                            obj.from_vector(self._paramvec[opcache_elem_gpindices], close, dirty_value=False)
+
+            if OpModel._pcheck: self._check_paramvec()
+            #for (_, obj), (_, obj2) in zip(test_model._iter_parameterized_objs(), self._iter_parameterized_objs()):
+            #    assert _np.allclose(obj.to_vector(), obj2.to_vector())
+            #print('checked')
+            
+            
         else:
             #get all of the model members which need to be be updated and loop through them to update their
             #parameters.
@@ -2500,7 +2555,7 @@ class OpModel(Model):
 
     def setup_fogi(self, initial_gauge_basis, create_complete_basis_fn=None,
                    op_label_abbrevs=None, reparameterize=False, reduce_to_model_space=True,
-                   dependent_fogi_action='drop', include_spam=True, primitive_op_labels=None):
+                   dependent_fogi_action='drop', include_spam=True, primitive_op_labels=None, include_fogv = False):
 
         from pygsti.baseobjs.errorgenbasis import CompleteElementaryErrorgenBasis as _CompleteElementaryErrorgenBasis
         from pygsti.baseobjs.errorgenbasis import ExplicitElementaryErrorgenBasis as _ExplicitElementaryErrorgenBasis
@@ -2659,10 +2714,22 @@ class OpModel(Model):
                                      norm_order=norm_order)
 
         if reparameterize:
-            self.param_interposer = self._add_reparameterization(
+            fogi_interposer = self._add_reparameterization(
                 primitive_op_labels + primitive_prep_labels + primitive_povm_labels,
                 self.fogi_store.fogi_directions.toarray(),  # DENSE now (leave sparse in FUTURE?)
                 self.fogi_store.errorgen_space_op_elem_labels)
+            
+            if include_fogv:
+                fogv_interposer = self._add_reparameterization(
+                primitive_op_labels + primitive_prep_labels + primitive_povm_labels,
+                self.fogi_store.fogv_directions.toarray(),  # DENSE now (leave sparse in FUTURE?)
+                self.fogi_store.errorgen_space_op_elem_labels)
+            
+            self.param_interposer = fogi_interposer
+
+            if include_fogv:
+                self.param_interposer.gaugefull_inv_transform_matrix = _np.vstack([fogi_interposer.inv_transform_matrix, fogv_interposer.inv_transform_matrix])
+                self.param_interposer.gaugefull_transform_matrix = _np.linalg.inv(self.param_interposer.gaugefull_inv_transform_matrix)
 
     def fogi_errorgen_component_labels(self, include_fogv=False, typ='normal'):
         labels = self.fogi_store.fogi_errorgen_direction_labels(typ)
