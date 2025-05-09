@@ -1254,28 +1254,24 @@ class OpModel(Model):
         -------
         None
         """
+        orig_param_vec = self._paramvec.copy()
 
         if isinstance(indices[0], tuple):
             #parse the strings into integer indices.
             param_labels_list = self.parameter_labels.tolist()
             indices = [param_labels_list.index(lbl) for lbl in indices]
-
-        if self._param_interposer is not None:
-            orig_param_vec = self._paramvec.copy()
+            
 
         for idx, val in zip(indices, values):
             self._paramvec[idx] = val
 
-        if self._param_interposer is not None or self._index_mm_map is None:
+        if self._index_mm_map is None:
             self.from_vector(self._paramvec)
-            
-        elif False: #self._param_interposer is not None or self._index_mm_map is None:
-            print('not here')
-            #fall back to standard from_vector call.
-            #self.from_vector(self._paramvec)
-            #test_model = self.copy()
-            #test_model.from_vector(self._paramvec)
+            print("optimized code was skipped")
+            return
 
+        if self._param_interposer is not None:
+            
             original_errgen_vec = self._param_interposer.transform_matrix @ orig_param_vec
             new_errgen_vec = self._param_interposer.transform_matrix @ self._paramvec
             diff_vec =  original_errgen_vec -  new_errgen_vec
@@ -1284,78 +1280,50 @@ class OpModel(Model):
 
             indices = non_zero_errgens[0]
             values = new_errgen_vec[indices]
-            unique_mms = {lbl:val for idx in indices for lbl, val in zip(self._index_mm_label_map[idx], self._index_mm_map[idx])}
-
-            for obj in unique_mms.values():
-                obj.from_vector(new_errgen_vec[obj.gpindices].copy(), close, dirty_value=False)
-            
-            #go through the model members which have been updated and identify whether any of them have children
-            #which may be present in the _opcaches which have already been updated by the parents. I think the
-            #conditions under which this should be safe are: a) the layer rules are ExplicitLayerRules,
-            #b) The parent is a POVM (it should be safe to assume that POVMs update their children, 
-            #and c) the effect is a child of that POVM.
-            
-            if isinstance(self._layer_rules, _ExplicitLayerRules):
-                updated_children = []
-                for obj in unique_mms.values():
-                    if isinstance(obj, _POVM):
-                        updated_children.extend(obj.values())
-            else:
-                updated_children = None
-
-            # Call from_vector on elements of the cache
-            if self._call_fromvector_on_cache:
-                #print(f'{self._opcaches=}')
-                for opcache in self._opcaches.values():
-                    for obj in opcache.values():
-                        opcache_elem_gpindices = _slct.indices(obj.gpindices) if isinstance(obj.gpindices, slice) else obj.gpindices
-                        if any([idx in opcache_elem_gpindices for idx in indices]):
-                            #check whether we have already updated this object.
-                            if updated_children is not None and any([child is obj for child in updated_children]):
-                                continue
-                            obj.from_vector(self._paramvec[opcache_elem_gpindices], close, dirty_value=False)
-
-            if OpModel._pcheck: self._check_paramvec()
-            #for (_, obj), (_, obj2) in zip(test_model._iter_parameterized_objs(), self._iter_parameterized_objs()):
-            #    assert _np.allclose(obj.to_vector(), obj2.to_vector())
-            #print('checked')
-            
-            
+            vec_to_access = new_errgen_vec
         else:
-            #get all of the model members which need to be be updated and loop through them to update their
-            #parameters.
-            unique_mms = {lbl:val for idx in indices for lbl, val in zip(self._index_mm_label_map[idx], self._index_mm_map[idx])}
+            vec_to_access = self._paramvec.copy()
+
+        #get all of the model members which need to be be updated and loop through them to update their
+        #parameters.
+        print("optimized code")
+        #test_model = self.copy()
+        #test_model.from_vector(self._paramvec)
+        unique_mms = {lbl:val for idx in indices for lbl, val in zip(self._index_mm_label_map[idx], self._index_mm_map[idx])}
+        for obj in unique_mms.values():
+            obj.from_vector(vec_to_access[obj.gpindices].copy(), close, dirty_value=False)
+        
+        #go through the model members which have been updated and identify whether any of them have children
+        #which may be present in the _opcaches which have already been updated by the parents. I think the
+        #conditions under which this should be safe are: a) the layer rules are ExplicitLayerRules,
+        #b) The parent is a POVM (it should be safe to assume that POVMs update their children, 
+        #and c) the effect is a child of that POVM.
+        
+        if isinstance(self._layer_rules, _ExplicitLayerRules):
+            updated_children = []
             for obj in unique_mms.values():
-                obj.from_vector(self._paramvec[obj.gpindices].copy(), close, dirty_value=False)
-            
-            #go through the model members which have been updated and identify whether any of them have children
-            #which may be present in the _opcaches which have already been updated by the parents. I think the
-            #conditions under which this should be safe are: a) the layer rules are ExplicitLayerRules,
-            #b) The parent is a POVM (it should be safe to assume that POVMs update their children, 
-            #and c) the effect is a child of that POVM.
-            
-            if isinstance(self._layer_rules, _ExplicitLayerRules):
-                updated_children = []
-                for obj in unique_mms.values():
-                    if isinstance(obj, _POVM):
-                        updated_children.extend(obj.values())
-            else:
-                updated_children = None
+                if isinstance(obj, _POVM):
+                    updated_children.extend(obj.values())
+        else:
+            updated_children = None
 
-            # Call from_vector on elements of the cache
-            if self._call_fromvector_on_cache:
-                #print(f'{self._opcaches=}')
-                for opcache in self._opcaches.values():
-                    for obj in opcache.values():
-                        opcache_elem_gpindices = _slct.indices(obj.gpindices) if isinstance(obj.gpindices, slice) else obj.gpindices
-                        if any([idx in opcache_elem_gpindices for idx in indices]):
-                            #check whether we have already updated this object.
-                            if updated_children is not None and any([child is obj for child in updated_children]):
-                                continue
-                            obj.from_vector(self._paramvec[opcache_elem_gpindices], close, dirty_value=False)
+        # Call from_vector on elements of the cache
+        if self._call_fromvector_on_cache:
+            #print(f'{self._opcaches=}')
+            for opcache in self._opcaches.values():
+                for obj in opcache.values():
+                    opcache_elem_gpindices = _slct.indices(obj.gpindices) if isinstance(obj.gpindices, slice) else obj.gpindices
+                    if any([idx in opcache_elem_gpindices for idx in indices]):
+                        #check whether we have already updated this object.
+                        if updated_children is not None and any([child is obj for child in updated_children]):
+                            continue
+                        obj.from_vector(self._paramvec[opcache_elem_gpindices], close, dirty_value=False)
 
-            if OpModel._pcheck: self._check_paramvec()
+        if OpModel._pcheck: self._check_paramvec()
 
+        #for (_, obj), (_, obj2) in zip(test_model._iter_parameterized_objs(), self._iter_parameterized_objs()):
+        #    assert _np.allclose(obj.to_vector(), obj2.to_vector())
+        #    print('checked')
     @property
     def param_interposer(self):
         return self._param_interposer
