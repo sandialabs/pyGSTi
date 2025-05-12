@@ -2,7 +2,9 @@
 
 import cProfile
 import os
+from pathlib import Path
 import pickle
+import time
 
 from mpi4py import MPI
 
@@ -18,17 +20,20 @@ exp_design = std.get_gst_experiment_design(64)
 mdl_datagen = mdl.depolarize(op_noise=0.01, spam_noise=0.01)
 
 # First time running through, generate reference dataset
-#if comm.rank == 0:
-#    ds = pygsti.construction.simulate_data(mdl_datagen, exp_design, 1000, seed=1234, comm=resource_alloc.comm)
-#    pickle.dump(ds, open('reference_ds.pkl','wb'))
-#sys.exit(0)
+if not Path('reference_ds.pkl').exists():
+   if comm.rank == 0:
+      ds = pygsti.data.simulate_data(mdl_datagen, exp_design, 1000, seed=1234, comm=resource_alloc.comm)
+      pickle.dump(ds, open('reference_ds.pkl','wb'))
+   else:
+      time.sleep(2)
+
 ds_ref = pickle.load(open('reference_ds.pkl','rb'))
 ds = ds_ref
 
 MINCLIP = 1e-4
-chi2_builder = pygsti.objects.Chi2Function.builder(
+chi2_builder = pygsti.objectivefns.Chi2Function.builder(
         'chi2', regularization={'min_prob_clip_for_weighting': MINCLIP}, penalties={'cptp_penalty_factor': 0.0})
-mle_builder = pygsti.objects.PoissonPicDeltaLogLFunction.builder(
+mle_builder = pygsti.objectivefns.PoissonPicDeltaLogLFunction.builder(
         'logl', regularization={'min_prob_clip': MINCLIP, 'radius': MINCLIP})
 iteration_builders = [chi2_builder]; final_builders = [mle_builder]
 builders = pygsti.protocols.GSTObjFnBuilders(iteration_builders, final_builders)
@@ -40,8 +45,8 @@ opt = None  # default
 #GST TEST
 data = pygsti.protocols.ProtocolData(exp_design, ds)
 #mdl.sim = pygsti.baseobjs.MatrixForwardSimulator(num_atoms=1)
-mdl.sim = pygsti.objects.MapForwardSimulator(num_atoms=1, max_cache_size=0)
-gst = pygsti.protocols.GateSetTomography(mdl, gaugeopt_suite=False,  # 'randomizeStart': 0e-6,
+mdl.sim = pygsti.forwardsims.MapForwardSimulator(num_atoms=1, max_cache_size=0)
+gst = pygsti.protocols.GateSetTomography(mdl, 
                                          objfn_builders=builders, optimizer=opt, verbosity=4)
 
 profiler = cProfile.Profile()

@@ -2,7 +2,7 @@
 Functions related to computation of the log-likelihood.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -142,11 +142,6 @@ class WildcardBudget(_NicelySerializable):
         dict
         """
         raise NotImplementedError("Derived classes must implement `description`")
-
-    #def compute_circuit_wildcard_budget(c, w_vec):
-    #    #raise NotImplementedError("TODO!!!")
-    #    #for now, assume w_vec is a length-1 vector
-    #    return abs(w_vec[0]) * len(c)
 
     def precompute_for_same_circuits(self, circuits):
         """

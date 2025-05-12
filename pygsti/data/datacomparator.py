@@ -2,7 +2,7 @@
 Defines the DataComparator class used to compare multiple DataSets.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -48,11 +48,6 @@ def _loglikelihood(p_list, n_list):
     for i, pVal in enumerate(p_list):
         output += _xlogy(n_list[i], pVal)
     return output
-
-# Only used by the rectify data function, which is commented out,
-# so this is also commented out.
-# def loglikelihoodRatioObj(alpha,n_list_list,dof):
-#     return _np.abs(dof - _loglikelihood_ratio(alpha*n_list_list))
 
 
 def _loglikelihood_ratio(n_list_list):

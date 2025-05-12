@@ -2,7 +2,7 @@
 Utility functions for working with Python slice objects
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -295,7 +295,7 @@ def list_to_slice(lst, array_ok=False, require_contiguous=True):
     step = lst[1] - lst[0]
     stop = start + step * len(lst)
 
-    if list(lst) == list(range(start, stop, step)):
+    if step != 0 and list(lst) == list(range(start, stop, step)):
         if require_contiguous and step != 1:
             if array_ok: 
                 return _np.array(lst, _np.int64)

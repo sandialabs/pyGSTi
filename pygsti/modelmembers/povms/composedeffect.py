@@ -2,7 +2,7 @@
 The ComposedPOVMEffect class and supporting functionality.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -44,9 +44,6 @@ class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
 
     def __init__(self, static_effect, errormap):
         evotype = errormap._evotype
-        #from .operation import LindbladOp as _LPGMap
-        #assert(evotype in ("densitymx", "svterm", "cterm")), \
-        #    "Invalid evotype: %s for %s" % (evotype, self.__class__.__name__)
 
         if not isinstance(static_effect, _POVMEffect):
             # UNSPECIFIED BASIS -- should be able to use static_effect._rep.basis once we get std attribute setup

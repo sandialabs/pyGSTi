@@ -2,7 +2,7 @@
 The EmbeddedErrorgen class and supporting functionality.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -10,11 +10,10 @@ The EmbeddedErrorgen class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import collections as _collections
+from pygsti.baseobjs.basis import Basis as _Basis
 import warnings as _warnings
 
 from pygsti.modelmembers.operations.embeddedop import EmbeddedOp as _EmbeddedOp
-from pygsti.baseobjs.basis import Basis as _Basis, EmbeddedBasis as _EmbeddedBasis
 
 
 # Idea:
@@ -93,7 +92,10 @@ class EmbeddedErrorgen(_EmbeddedOp):
         _EmbeddedOp.from_vector(self, v, close, dirty_value)
         self.dirty = dirty_value
 
-    def coefficients(self, return_basis=False, logscale_nonham=False):
+    #TODO: I don't think the return_basis flag actually works atm. Maybe remove?
+    #TODO: Refactor naming to match EmbeddedOp. Only reason we can't just directly use the
+    #method from the parent class is naming convention mismatches for methods on children.
+    def coefficients(self, return_basis=False, logscale_nonham=False, label_type='global', identity_label='I'):
         """
         Constructs a dictionary of the Lindblad-error-generator coefficients of this operation.
 
@@ -115,27 +117,57 @@ class EmbeddedErrorgen(_EmbeddedOp):
             the contribution this term would have within a depolarizing
             channel where all stochastic generators had this same coefficient.
             This is the value returned by :meth:`error_rates`.
+        
+        label_type : str, optional (default 'global')
+            String specifying which type of `ElementaryErrorgenLabel` to use
+            as the keys for the returned dictionary. Allowed options are
+            'global' for `GlobalElementaryErrorgenLabel` and 'local' for
+            `LocalElementaryErrorgenLabel`.
+
+        identity_label : str, optional (default 'I')
+            An optional string specifying the basis element label for the
+            identity. Used when label_type is 'local' to allow for embedding
+            local basis element labels into the appropriate higher dimensional
+            space. Only change when using a basis for which 'I' does not denote
+            the identity.
 
         Returns
         -------
-        Ltermdict : dict
-            Keys are `(termType, basisLabel1, <basisLabel2>)`
-            tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
-            or `"A"` (Affine).  Hamiltonian and Affine terms always have a
-            single basis label (so key is a 2-tuple) whereas Stochastic tuples
-            have 1 basis label to indicate a *diagonal* term and otherwise have
-            2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
-            terms.  Basis labels are integers starting at 0.  Values are complex
-            coefficients.
-        basis : Basis
-            A Basis mapping the basis labels used in the
-            keys of `Ltermdict` to basis matrices.
+        embedded_coeffs : dict
+            Keys are instances of `ElementaryErrorgenLabel`, which wrap the 
+            `(termType, basisLabel1, <basisLabel2>)` information for each coefficient.
+            Where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
+            `"C"`(Correlation)  or `"A"` (Affine).  Hamiltonian and S terms always have a
+            single basis label while 'C' and 'A' terms have two.
         """
-        return self.embedded_op.coefficients(return_basis, logscale_nonham)
+        coeffs_to_embed = self.embedded_op.coefficients(return_basis, logscale_nonham, label_type)
 
-    def coefficient_labels(self):
+        if coeffs_to_embed:
+            embedded_labels = self.coefficient_labels(label_type=label_type, identity_label=identity_label)
+            embedded_coeffs = {lbl:val for lbl, val in zip(embedded_labels, coeffs_to_embed.values())}
+        else:
+            embedded_coeffs = dict()
+
+        return embedded_coeffs
+
+    def coefficient_labels(self, label_type='global', identity_label='I'):
         """
         The elementary error-generator labels corresponding to the elements of :meth:`coefficients_array`.
+
+        Parameters
+        ----------
+        label_type : str, optional (default 'global')
+            String specifying which type of `ElementaryErrorgenLabel` to use
+            as the keys for the returned dictionary. Allowed options are
+            'global' for `GlobalElementaryErrorgenLabel` and 'local' for
+            `LocalElementaryErrorgenLabel`.
+
+        identity_label : str, optional (default 'I')
+            An optional string specifying the basis element label for the
+            identity. Used when label_type is 'local' to allow for embedding
+            local basis element labels into the appropriate higher dimensional
+            space. Only change when using a basis for which 'I' does not denote
+            the identity.
 
         Returns
         -------
@@ -143,7 +175,16 @@ class EmbeddedErrorgen(_EmbeddedOp):
             A tuple of (<type>, <basisEl1> [,<basisEl2]) elements identifying the elementary error
             generators of this gate.
         """
-        return self.embedded_op.coefficient_labels()
+        if label_type=='global' and self._cached_embedded_errorgen_labels_global is not None:
+            return self._cached_embedded_errorgen_labels_global
+        elif label_type=='local' and self._cached_embedded_errorgen_labels_local is not None and self._cached_embedded_label_identity_label==identity_label:
+            return self._cached_embedded_errorgen_labels_local
+
+        labels_to_embed = self.embedded_op.coefficient_labels(label_type)
+        embedded_labels = self._embed_labels(labels_to_embed, label_type, identity_label)
+        
+        return embedded_labels
+
 
     def coefficients_array(self):
         """
@@ -174,7 +215,7 @@ class EmbeddedErrorgen(_EmbeddedOp):
         """
         return self.embedded_op.coefficients_array_deriv_wrt_params()
 
-    def error_rates(self):
+    def error_rates(self, label_type='global', identity_label='I'):
         """
         Constructs a dictionary of the error rates associated with this error generator.
 
@@ -199,19 +240,31 @@ class EmbeddedErrorgen(_EmbeddedOp):
         rates is not necessarily the error rate of the overall
         channel.
 
+        Parameters
+        ----------
+        label_type : str, optional (default 'global')
+            String specifying which type of `ElementaryErrorgenLabel` to use
+            as the keys for the returned dictionary. Allowed options are
+            'global' for `GlobalElementaryErrorgenLabel` and 'local' for
+            `LocalElementaryErrorgenLabel`.
+
+        identity_label : str, optional (default 'I')
+            An optional string specifying the basis element label for the
+            identity. Used when label_type is 'local' to allow for embedding
+            local basis element labels into the appropriate higher dimensional
+            space. Only change when using a basis for which 'I' does not denote
+            the identity.
+
         Returns
         -------
         lindblad_term_dict : dict
-            Keys are `(termType, basisLabel1, <basisLabel2>)`
-            tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
-            or `"A"` (Affine).  Hamiltonian and Affine terms always have a
-            single basis label (so key is a 2-tuple) whereas Stochastic tuples
-            have 1 basis label to indicate a *diagonal* term and otherwise have
-            2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
-            terms.  Values are real error rates except for the 2-basis-label
-            case.
+            Keys are instances of `ElementaryErrorgenLabel`, which wrap the 
+            `(termType, basisLabel1, <basisLabel2>)` information for each coefficient.
+            Where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
+            `"C"`(Correlation)  or `"A"` (Affine).  Hamiltonian and S terms always have a
+            single basis label while 'C' and 'A' terms have two.
         """
-        return self.coefficients(return_basis=False, logscale_nonham=True)
+        return self.coefficients(return_basis=False, logscale_nonham=True, label_type=label_type, identity_label=identity_label)
 
     def set_coefficients(self, lindblad_term_dict, action="update", logscale_nonham=False, truncate=True):
         """
@@ -223,14 +276,11 @@ class EmbeddedErrorgen(_EmbeddedOp):
         Parameters
         ----------
         lindblad_term_dict : dict
-            Keys are `(termType, basisLabel1, <basisLabel2>)`
-            tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
-            or `"A"` (Affine).  Hamiltonian and Affine terms always have a
-            single basis label (so key is a 2-tuple) whereas Stochastic tuples
-            have 1 basis label to indicate a *diagonal* term and otherwise have
-            2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
-            terms.  Values are the coefficients of these error generators,
-            and should be real except for the 2-basis-label case.
+            Keys are instances of `ElementaryErrorgenLabel`, which wrap the 
+            `(termType, basisLabel1, <basisLabel2>)` information for each coefficient.
+            Where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
+            `"C"`(Correlation)  or `"A"` (Affine).  Hamiltonian and S terms always have a
+            single basis label while 'C' and 'A' terms have two. Values are corresponding rates.
 
         action : {"update","add","reset"}
             How the values in `lindblad_term_dict` should be combined with existing
@@ -255,7 +305,9 @@ class EmbeddedErrorgen(_EmbeddedOp):
         -------
         None
         """
-        self.embedded_op.set_coefficients(lindblad_term_dict, action, logscale_nonham, truncate)
+        if lindblad_term_dict:
+            unembedded_coeffs = self._unembed_coeff_dict_labels(lindblad_term_dict)
+            self.embedded_op.set_coefficients(unembedded_coeffs, action, logscale_nonham, truncate)
 
     def set_error_rates(self, lindblad_term_dict, action="update"):
         """
@@ -353,6 +405,6 @@ class EmbeddedErrorgen(_EmbeddedOp):
         """ Return string representation """
         s = "Embedded error generator with full dimension %d and state space %s\n" % (self.dim, self.state_space)
         s += " that embeds the following %d-dimensional operation into acting on the %s space\n" \
-             % (self.embedded_op.dim, str(self.targetLabels))
+             % (self.embedded_op.dim, str(self.target_labels))
         s += str(self.embedded_op)
         return s

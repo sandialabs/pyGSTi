@@ -2,7 +2,7 @@
 Defines the Instrument class
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -71,7 +71,7 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
                 if state_space is None:
                     state_space = _statespace.default_space_for_dim(member_list[0][1].shape[0])
                 if evotype is None:
-                    evotype = _Evotype.cast('default')
+                    evotype = _Evotype.cast('default', state_space=state_space)
                 member_list = [(k, v if isinstance(v, _op.LinearOperator) else
                                 _op.FullArbitraryOp(v, None, evotype, state_space)) for k, v in member_list]
 
@@ -79,10 +79,10 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
                 "Must specify `state_space` when there are no instrument members!"
             assert(len(member_list) > 0 or evotype is not None), \
                 "Must specify `evotype` when there are no instrument members!"
-            evotype = _Evotype.cast(evotype) if (evotype is not None) else member_list[0][1].evotype
             state_space = member_list[0][1].state_space if (state_space is None) \
                 else _statespace.StateSpace.cast(state_space)
-
+            evotype = _Evotype.cast(evotype, state_space=state_space) if (evotype is not None)\
+                else member_list[0][1].evotype
             items = []
             for k, member in member_list:
                 assert(evotype == member.evotype), \
