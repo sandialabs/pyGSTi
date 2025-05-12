@@ -4,17 +4,23 @@ import scipy.sparse.linalg as _spsl
 import collections as _collections
 import copy as _copy
 import warnings as _warnings
-
 from pygsti.tools import lindbladtools as _lt
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools import optools as _ot
-from pygsti.tools import fastcalc as _fc
 from pygsti.baseobjs.basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis
 from pygsti.modelmembers import term as _term
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
-
 from functools import lru_cache
+try:
+    from pygsti.tools import fastcalc as _fc
+    triu_indices = _fc.fast_triu_indices
+except ImportError:
+    msg = 'Could not import cython module `fastcalc`. This may indicate that your cython extensions for pyGSTi failed to.'\
+          +'properly build. Lack of cython extensions can result in significant performance degredation so we recommend trying to rebuild them.'\
+           'Falling back to numpy implementation for triu_indices.'
+    _warnings.warn(msg)
+    triu_indices = _np.triu_indices
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 
@@ -843,7 +849,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
 
                 cache_mx = self._cache_mx
 
-                params_upper_indices = _fc.fast_triu_indices(num_bels) 
+                params_upper_indices = triu_indices(num_bels) 
                 params_upper = 1j*params[params_upper_indices]
                 params_lower = (params.T)[params_upper_indices]
 
@@ -866,7 +872,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
 
             elif self._param_mode == "elements":  # params mx stores block_data (hermitian) directly
                 #params holds block_data real and imaginary parts directly
-                params_upper_indices = _fc.fast_triu_indices(num_bels) 
+                params_upper_indices = triu_indices(num_bels) 
                 params_upper = -1j*params[params_upper_indices]
                 params_lower = (params.T)[params_upper_indices]
 

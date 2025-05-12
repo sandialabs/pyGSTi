@@ -2,7 +2,7 @@
 Utility functions relevant to Lindblad forms and projections
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -506,7 +506,7 @@ def create_lindbladian_term_errorgen(typ, Lm, Ln=None, sparse=False):  # noqa N8
     return lind_errgen
 
 
-def random_error_generator_rates(num_qubits, errorgen_types=('H', 'S', 'C', 'A'), max_weights=None,
+def random_CPTP_error_generator_rates(num_qubits, errorgen_types=('H', 'S', 'C', 'A'), max_weights=None,
                                  H_params=(0.,.01), SCA_params=(0.,.01), error_metric=None, error_metric_value=None, 
                                  relative_HS_contribution=None, fixed_errorgen_rates=None, sslbl_overlap=None, 
                                  label_type='global', seed=None, qubit_labels=None):

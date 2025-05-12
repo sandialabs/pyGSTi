@@ -2,7 +2,7 @@
 Defines the ElementaryErrorgenBasis class and supporting functionality.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -724,7 +724,7 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
         """
         return  tuple(zip(self.elemgen_supports, self.elemgen_matrices))
 
-    def label_index(self, label, ok_if_missing=False):
+    def label_index(self, label, ok_if_missing=False, identity_label='I'):
         """
         Return the index of the specified elementary error generator label
         in this basis' `labels` list.
@@ -736,12 +736,13 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
         
         ok_if_missing : bool
            If True, then returns `None` instead of an integer when the given label is not present.
-        """
-        #CIO: I don't entirely understand the intention behind this method, so rather than trying to make it work
-        #using `LocalElementaryErrorgenLabel` I'll just assert it is a global one for now...
-        if isinstance(label, _LocalElementaryErrorgenLabel):
-            raise NotImplementedError('This method is not currently implemented for `LocalElementaryErrorgenLabel` inputs.')
         
+        identity_label : str, optional (default 'I')
+            An optional string specifying the label used to denote the identity in basis element labels.
+        """
+        if isinstance(label, _LocalElementaryErrorgenLabel):
+            label = _GlobalElementaryErrorgenLabel.cast(label, self.sslbls, identity_label=identity_label)
+
         support = label.sslbls
         eetype = label.errorgen_type
         bels = label.basis_element_labels

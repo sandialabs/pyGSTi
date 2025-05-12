@@ -2,7 +2,7 @@
 Functions which compute named quantities for Models and Datasets.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -15,7 +15,7 @@ Named quantities as well as their confidence-region error bars are
  used primarily in reports, so we refer to these quantities as
  "reportables".
 """
-import pkgutil
+import importlib
 import warnings as _warnings
 
 import numpy as _np
@@ -32,7 +32,7 @@ from pygsti.modelmembers.operations.lindbladcoefficients import LindbladCoeffici
 from pygsti.models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
 
 
-_CVXPY_AVAILABLE = pkgutil.find_loader('cvxpy') is not None
+_CVXPY_AVAILABLE = importlib.util.find_spec('cvxpy') is not None
 
 FINITE_DIFF_EPS = 1e-7
 
@@ -1780,6 +1780,7 @@ def errorgen_and_projections(errgen, mx_basis):
     ret = {}
     ret['error generator'] = errgen
 
+    mx_basis = _Basis.cast(mx_basis, errgen.shape[0])
     if set(mx_basis.name.split('*')) == set(['pp']):
         #HACK: convert 'pp' => 'PP' here, as that's typically used.  However, other
         # bases just pass through as before and may have different scalings than earlier

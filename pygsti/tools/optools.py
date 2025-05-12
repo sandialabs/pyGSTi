@@ -2,7 +2,7 @@
 Utility functions operating on operation matrices
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -753,7 +753,7 @@ def unitarity(a, mx_basis="gm"):
     noise" NJP 17 113020 (2015). The unitarity is given by (Prop 1 in Wallman
     et al):
 
-    `u(a) = Tr( A_u^{\dagger} A_u ) / (d^2  - 1)`,
+    `u(a) = Tr( A_u^{\\dagger} A_u ) / (d^2  - 1)`,
 
     where A_u is the unital submatrix of a, and d is the dimension of
     the Hilbert space. When a is written in any basis for which the
