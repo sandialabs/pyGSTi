@@ -2344,7 +2344,7 @@ def _sample_stabilizer(pauli, sign, absolute_compilation, qubit_labels, seed=Non
     if randomize_for_identity:
         circ_layer = [circ_dict[i] if i in circ_dict.keys() else 'C'+str(rng.integers(24)) for i in pauli]
     else:
-    circ_layer = [circ_dict[i] if i in circ_dict.keys() else 'C'+str(0) for i in pauli]
+        circ_layer = [circ_dict[i] if i in circ_dict.keys() else 'C'+str(0) for i in pauli]
 
     init_layer = [symp_reps[circ_layer[i]] for i in range(len(pauli))]
     
