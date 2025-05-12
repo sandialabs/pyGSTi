@@ -6661,6 +6661,75 @@ def pairwise_bch_numerical(mat1, mat2, order=1):
         bch_result += (1/120)*(commutator21212 - commutator12112)
     return bch_result
 
+def magnus_numerical(propagated_errorgen_layers, error_propagator, magnus_order=1):
+    """
+    Compute effective error generator layer produced by applying the magnus expansions
+    to the list of input error generator matrices. Note this is primarily intended
+    as part of testing and validation infrastructure.
+
+    Parameters
+    ----------
+    propagated_errorgen_layers : list of dictionaries
+        List of the error generator layers (in circuit ordering) in the form of dictionaries
+        whose keys are elementary error generator labels and whose values are their corresponding
+        rates. These dictionaries are in the format produced by the `ErrorGeneratorPropagator` class's
+        `propagate_errorgens` method.
+
+    error_propagator : `ErrorGeneratorPropagator`
+        An `ErrorGeneratorPropagator` instance to use as part of the Magnus calculation.
+
+    magnus_order : int, optional (default 1)
+        Order of the Magnus expansion to apply (up to 2 is supported currently).
+
+    Returns
+    -------
+    numpy.ndarray
+        A dense numpy array corresponding to the result of the iterative application of the BCH
+        approximation.
+    """
+
+    #Need to build an appropriate basis for getting the error generator matrices.
+    #accumulate the error generator coefficients needed.
+    collected_coeffs = []
+    for layer in propagated_errorgen_layers:
+        for coeff in layer.keys():
+            collected_coeffs.append(coeff.to_local_eel())
+    #only want the unique ones.
+    unique_coeffs = list(set(collected_coeffs))
+    
+    num_qubits = len(error_propagator.model.state_space.qubit_labels)
+    
+    errorgen_basis = _ExplicitElementaryErrorgenBasis(_QubitSpace(num_qubits), unique_coeffs, basis_1q=_BuiltinBasis('PP', 4))
+    
+    #iterate through each of the propagated error generator layers and turn these into dense numpy arrays
+    errorgen_layer_mats = []
+    for layer in propagated_errorgen_layers:
+        errorgen_layer_mats.append(error_propagator.errorgen_layer_dict_to_errorgen(layer, mx_basis='pp'))
+    
+    #initialize a matrix for storing the result of doing magnus.
+    magnus = _np.zeros((4**num_qubits, 4**num_qubits), dtype=_np.complex128)
+    
+    for curr_order in range(magnus_order):
+        #first-order magnus terms:
+        #\sum_{t1} A_{t1}
+        if curr_order == 0:
+            for mat in errorgen_layer_mats:
+                magnus += mat
+                
+        elif curr_order == 1:
+            errorgen_pairs = []
+            for i in range(len(errorgen_layer_mats)):
+                for j in range(i):
+                    errorgen_pairs.append((errorgen_layer_mats[i], errorgen_layer_mats[j]))
+            for errorgen_pair in errorgen_pairs:
+                magnus += .5*_matrix_commutator(errorgen_pair[0], errorgen_pair[1])
+        
+        else:
+            raise NotImplementedError('Magnus beyond second order is not currently implemented.')
+        
+    return magnus  
+
+
 def _matrix_commutator(mat1, mat2):
     return mat1@mat2 - mat2@mat1
 
