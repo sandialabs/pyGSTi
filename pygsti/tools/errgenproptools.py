@@ -459,6 +459,140 @@ def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1, truncation_th
 
     return new_errorgen_layer_dict
 
+def magnus_expansion(errorgen_layers, magnus_order=1, truncation_threshold=1e-14):
+
+    """
+    Function for computing the nth-order magnus expansion for a set of error generator layers.
+
+    Parameters
+    ----------
+    errorgen_layers : list of dicts
+        List of dictionaries of the error generator coefficients and rates for a circuit layer. 
+        The error generator coefficients are represented using LocalStimErrorgenLabel.
+
+    errorgen_transform_maps : dict
+        Map giving the relationship between input error generators and their final
+        value following propagation through the circuit. Needed to track any sign updates
+        for terms with zero mean but nontrivial covariance.
+
+    cov_func : 
+        A function which maps tuples of elementary error generator labels at multiple times to
+        a scalar quantity corresponding to the value of the covariance for that pair.
+    
+    magnus_order : int, optional (default 1)
+        Order of the magnus expansion to apply.
+    
+    truncation_threshold : float, optional (default 1e-14)
+        Threshold for which any error generators with magnitudes below this value
+        are truncated.
+        
+    Returns
+    -------
+    magnus_expansion_dict : dict
+        A dictionary with the same general structure as those in `errorgen_layers`, but with the
+        rates combined according to the selected order of the magnus expansion.
+    """
+
+    new_errorgen_layer = []
+
+    for curr_order in range(magnus_order):
+        #first-order magnus terms:
+        #\sum_{t1} A_{t1}
+        if curr_order == 0:
+            #Get a combined set of error generator coefficient labels for the list of dictionaries.
+            current_combined_coeff_lbls = {key: None for key in chain(*errorgen_layers)}            
+
+            first_order_dict = dict()
+            #loop through the combined set of coefficient labels and add them to the new dictionary for the current BCH
+            #approximation order. If present in both we sum the rates.
+            for coeff_lbl in current_combined_coeff_lbls:
+                #only add to the first order dictionary if the coefficient exceeds the truncation threshold.
+                first_order_rate = sum([errgen_layer.get(coeff_lbl, 0) for errgen_layer in errorgen_layers])  
+                if abs(first_order_rate) > truncation_threshold:
+                    first_order_dict[coeff_lbl] = first_order_rate
+            
+            #allow short circuiting to avoid an expensive bunch of recombination logic when only using first order BCH
+            #which will likely be a common use case.
+            if magnus_order==1:
+                return first_order_dict
+            new_errorgen_layer.append(first_order_dict)
+        
+        #second-order magnus terms:
+        #(1/2)\sum_{t1=1}^n \sum_{t2=1}^{t1-1} [A(t1), A(t2)]
+        elif curr_order == 1:
+            #construct a list of all of the pairs of error generator layers we need the
+            #commutators for.
+            errorgen_pairs = []
+            for i in range(len(errorgen_layers)):
+                for j in range(i):
+                    errorgen_pairs.append((errorgen_layers[i], errorgen_layers[j]))
+            
+            #precompute an identity string for comparisons in commutator calculations.
+            if errorgen_layers:
+                for layer in errorgen_layers:
+                    if layer:
+                        identity = stim.PauliString('I'*len(next(iter(layer)).basis_element_labels[0]))
+                        break
+            
+            #compute second-order BCH correction for each pair of error generators in the
+            #errorgen_pairs list.
+            commuted_errgen_list = []
+            for errorgen_pair in errorgen_pairs:
+                for error1, error1_val in errorgen_pair[0].items():
+                    for error2, error2_val in errorgen_pair[1].items():
+                        #get the list of error generator labels
+                        weight = .5*error1_val*error2_val
+                        #avoid computing commutators which will be effectively zero.
+                        if abs(weight) < truncation_threshold:
+                            continue
+                        commuted_errgen_sublist = error_generator_commutator(error1, error2, 
+                                                                            weight= weight, identity=identity)
+                        commuted_errgen_list.extend(commuted_errgen_sublist)
+            #loop through all of the elements of commuted_errorgen_list and instantiate a dictionary with the requisite keys.
+            second_order_comm_dict = {error_tuple[0]: 0 for error_tuple in commuted_errgen_list}
+
+            #Add all of these error generators to the working dictionary of updated error generators and weights.
+            #There may be duplicates, which should be summed together.
+            for error_tuple in commuted_errgen_list:
+                second_order_comm_dict[error_tuple[0]] += error_tuple[1]
+            #truncate any terms which are below the truncation threshold following
+            #aggregation.
+            second_order_comm_dict = {key: val for key, val in second_order_comm_dict.items() if abs(val)>truncation_threshold}
+
+            new_errorgen_layer.append(second_order_comm_dict)
+
+        else: 
+            raise NotImplementedError("Magnus expansions beyond second order are not implemented yet.")
+
+    #Finally accumulate all of the dictionaries in new_errorgen_layer into a single one, summing overlapping terms.   
+    errorgen_labels_by_order = [{key: None for key in order_dict} for order_dict in new_errorgen_layer]
+    complete_errorgen_labels = errorgen_labels_by_order[0]
+    for order_dict in errorgen_labels_by_order[1:]:
+        complete_errorgen_labels.update(order_dict)
+
+    #initialize a dictionary with requisite keys
+    new_errorgen_layer_dict = {lbl: 0 for lbl in complete_errorgen_labels}
+
+    for order_dict in new_errorgen_layer:
+        for lbl, rate in order_dict.items():
+            new_errorgen_layer_dict[lbl] += rate.real
+
+    #Future: Possibly do one last truncation pass in case any of the different order cancel out when aggregated?
+    return new_errorgen_layer_dict
+
+
+
+
+
+
+            
+
+
+
+
+
+
+
 def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight=1.0, identity=None):
     """
     Returns the commutator of two error generators. I.e. [errorgen_1, errorgen_2].

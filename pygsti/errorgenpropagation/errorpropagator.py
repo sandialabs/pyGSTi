@@ -215,7 +215,7 @@ class ErrorGeneratorPropagator:
         return propagated_errorgen_layers
         
 
-    def propagate_errorgens_bch(self, circuit, bch_order=1, include_spam=True, truncation_threshold=1e-14):
+    def propagate_errorgens_bch(self, circuit, bch_order=1, include_spam=True, truncation_threshold=1e-14, mode='magnus'):
         """
         Propagate all of the error generators for each circuit to the end,
         performing approximation/recombination using the BCH approximation.
@@ -236,6 +236,11 @@ class ErrorGeneratorPropagator:
         truncation_threshold : float, optional (default 1e-14)
             Threshold below which any error generators with magnitudes below this value
             are truncated during the BCH approximation.
+        
+        mode : str, optional ('magnus' default)
+            This specifies whether to apply the BCH approximation using a given order
+            of the Magnus expansion (default mode of 'magnus') or via repeated application of
+            the pairwise BCH of the given order 'pairwise'.
         """
 
         propagated_errorgen_layers = self.propagate_errorgens(circuit, include_spam=include_spam)
@@ -243,13 +248,19 @@ class ErrorGeneratorPropagator:
         if len(propagated_errorgen_layers)==1:
             return propagated_errorgen_layers[0]
         
-        #otherwise iterate through in reverse order (the propagated layers are
-        #in circuit ordering and not matrix multiplication ordering at the moment)
-        #and combine the terms pairwise
-        combined_err_layer = propagated_errorgen_layers[-1]
-        for i in range(len(propagated_errorgen_layers)-2, -1, -1):
-            combined_err_layer = _eprop.bch_approximation(combined_err_layer, propagated_errorgen_layers[i],
-                                                            bch_order=bch_order, truncation_threshold=truncation_threshold)
+        if mode == 'magnus':
+            combined_err_layer = _eprop.magnus_expansion(propagated_errorgen_layers, magnus_order=bch_order, truncation_threshold=truncation_threshold)
+
+        elif mode == 'pairwise':
+            #iterate through in reverse order (the propagated layers are
+            #in circuit ordering and not matrix multiplication ordering at the moment)
+            #and combine the terms pairwise
+            combined_err_layer = propagated_errorgen_layers[-1]
+            for i in range(len(propagated_errorgen_layers)-2, -1, -1):
+                combined_err_layer = _eprop.bch_approximation(combined_err_layer, propagated_errorgen_layers[i],
+                                                                bch_order=bch_order, truncation_threshold=truncation_threshold)
+        else:
+            NotImplementedError(f'Unrecognized mode {mode}')
 
         return combined_err_layer
         
