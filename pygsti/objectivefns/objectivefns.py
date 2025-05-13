@@ -4059,7 +4059,6 @@ class RawTVDFunction(RawObjectiveFunction):
         numpy.ndarray
             A 1D array of length equal to that of each array argument.
         """
-        _warnings.warn('This derivative is discontinuous and does not return a full subgradient.')
         t = probs - freqs
         d = 0.5*_np.ones_like(t)
         d[t < 0] *= -1
