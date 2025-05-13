@@ -6,6 +6,7 @@ from pygsti.drivers.longsequence import _get_optimizer, _get_badfit_options, _up
 from pygsti.objectivefns import ObjectiveFunctionBuilder, ModelDatasetCircuitsStore
 import pygsti.objectivefns
 from pygsti.optimize import SimplerLMOptimizer
+import scipy.linalg as la
 
 
 def make_depolarized_dataset(modelpack, depol_level=0.01, max_max_len=128):
@@ -23,7 +24,7 @@ def make_depolarized_dataset(modelpack, depol_level=0.01, max_max_len=128):
     return ds, depol_model
 
 
-def make_tweaked_dataset(modelpack, depol_level=0.01, rand_unitary_scale=0.001, max_max_len=128):
+def make_tweaked_dataset(modelpack, depol_level=0.01, rand_unitary_scale=0.001, max_max_len=128, sample_error='multinomial', seed=0, shots_per_circuit=1000):
     ideal_model = modelpack.target_model()
     prep_fids = modelpack.prep_fiducials()
     meas_fids = modelpack.meas_fiducials()
@@ -31,12 +32,75 @@ def make_tweaked_dataset(modelpack, depol_level=0.01, rand_unitary_scale=0.001, 
     max_lens = [2**p for p in range(1+int(np.log2(max_max_len)))]
     lsgst_circuit_lists = pygsti.circuits.create_lsgst_circuit_lists(ideal_model, prep_fids, meas_fids, germs, max_lens)
     all_circuits = lsgst_circuit_lists[-1]
-    shots_per_circuit = 1000
-    depol_model = ideal_model.depolarize(op_noise=depol_level, spam_noise=depol_level/2, seed=1997)
-    final_model = depol_model.randomize_with_unitary(scale=rand_unitary_scale, seed=250422)
-    rng_state = np.random.default_rng(0)
-    ds = pygsti.data.simulate_data(final_model, all_circuits, shots_per_circuit, rand_state=rng_state)
+
+    depol_model = ideal_model.depolarize(op_noise=depol_level, spam_noise=depol_level/2, seed=seed+1997)
+    final_model = depol_model.randomize_with_unitary(scale=rand_unitary_scale, seed=seed+250422, transform_spam=True)
+    rng_state = np.random.default_rng(seed)
+    ds = pygsti.data.simulate_data(final_model, all_circuits, shots_per_circuit, sample_error=sample_error, rand_state=rng_state)
+    
     return ds, final_model
+
+def make_tweaked_dataset_pairs(modelpack, depol_level=0.01, rand_unitary_scale=0.001, max_max_len=128, sample_error='multinomial', seed=0, shots_per_circuit=1000, gaugeopt=True):
+    ideal_model = modelpack.target_model()
+    prep_fids = modelpack.prep_fiducials()
+    meas_fids = modelpack.meas_fiducials()
+    germs = modelpack.germs()
+    max_lens = [2**p for p in range(1+int(np.log2(max_max_len)))]
+    lsgst_circuit_lists = pygsti.circuits.create_lsgst_circuit_lists(ideal_model, prep_fids, meas_fids, germs, max_lens)
+    all_circuits = lsgst_circuit_lists[-1]
+
+    depol_model = ideal_model.depolarize(op_noise=depol_level, spam_noise=depol_level/2, seed=seed+1997)
+
+    model_a = depol_model.copy()
+    model_b = depol_model.copy()
+    rndm = np.random.RandomState(seed+250422)
+    import pygsti.tools.optools as _ot
+    import pygsti.modelmembers.operations as _op
+    from pygsti.modelmembers.povms import create_from_dmvecs
+    from pygsti.modelmembers.states import FullState
+    unitary_dim = 2
+    basis = depol_model.basis
+
+    def rand_unitary_as_superop():
+        rand_mat = rndm.randn(unitary_dim, unitary_dim) + 1j * rndm.randn(unitary_dim, unitary_dim)
+        rand_herm = rand_mat.T.conj() + rand_mat
+        rand_herm /= la.norm(rand_herm)
+        rand_herm *= rand_unitary_scale * np.sqrt(unitary_dim)
+        rand_unitary = la.expm(-1j * rand_herm)
+        rand_op = _ot.unitary_to_superop(rand_unitary, basis)
+        assert la.norm(rand_op @ rand_op.T - np.eye(unitary_dim**2)) < 1e-12
+        return rand_op
+    
+    for opLabel, gate in depol_model.operations.items():
+        rand_op = rand_unitary_as_superop()
+        model_a.operations[opLabel] = _op.FullArbitraryOp(rand_op @ gate)
+        model_b.operations[opLabel] = _op.FullArbitraryOp(rand_op.T @ gate)
+
+    for preplbl, rho in depol_model.preps.items():
+        rand_op = rand_unitary_as_superop()
+        model_a.preps[preplbl] = FullState(rand_op   @ rho)
+        model_b.preps[preplbl] = FullState(rand_op.T @ rho)
+
+    for povmlbl, M in depol_model.povms.items():
+        rand_op = rand_unitary_as_superop()
+        dmvecs = {elbl: rand_op @ e.to_dense() for elbl, e in M.items()}
+        model_a.povms[povmlbl] = create_from_dmvecs(dmvecs, 'full')
+        dmvecs = {elbl: rand_op.T @ e.to_dense() for elbl, e in M.items()}
+        model_b.povms[povmlbl] = create_from_dmvecs(dmvecs, 'full')
+
+    rng_state = np.random.default_rng(seed)
+    dsa = pygsti.data.simulate_data(model_a, all_circuits, shots_per_circuit, sample_error=sample_error, rand_state=rng_state)
+    dsb = pygsti.data.simulate_data(model_b, all_circuits, shots_per_circuit, sample_error=sample_error, rand_state=rng_state)
+
+    if gaugeopt:
+        from pygsti.algorithms.gaugeopt import gaugeopt_to_target
+        for model in [model_a, model_b]:
+            model.convert_members_inplace('full')
+            model.default_gauge_group = 'unitary'
+        model_a = gaugeopt_to_target(model_a, ideal_model)
+        model_b = gaugeopt_to_target(model_b, ideal_model)
+
+    return dsa, model_a, dsb, model_b
 
 
 
