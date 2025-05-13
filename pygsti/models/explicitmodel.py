@@ -1101,7 +1101,7 @@ class ExplicitOpModel(_mdl.OpModel):
         newModel._clean_paramvec()  # rotate may leave dirty members
         return newModel
 
-    def randomize_with_unitary(self, scale, seed=None, rand_state=None):
+    def randomize_with_unitary(self, scale, seed=None, rand_state=None, transform_spam=False):
         """
         Create a new model with random unitary perturbations.
 
@@ -1142,16 +1142,30 @@ class ExplicitOpModel(_mdl.OpModel):
 
         mdl_randomized = self.copy()
 
+        def rand_unitary_as_superop():
+            rand_mat = rndm.randn(unitary_dim, unitary_dim) + 1j * rndm.randn(unitary_dim, unitary_dim)
+            rand_herm = rand_mat.T.conj() + rand_mat
+            rand_herm /= _scipy.linalg.norm(rand_herm)
+            rand_herm *= scale * _np.sqrt(unitary_dim)
+            rand_unitary = _scipy.linalg.expm(-1j * rand_herm)
+            rand_op = _ot.unitary_to_superop(rand_unitary, self.basis)
+            return rand_op
+        
         for opLabel, gate in self.operations.items():
-            randMat = scale * (rndm.randn(unitary_dim, unitary_dim)
-                               + 1j * rndm.randn(unitary_dim, unitary_dim))
-            randMat = _np.transpose(_np.conjugate(randMat)) + randMat
-            # make randMat Hermetian: (A_dag + A)^dag = (A_dag + A)
-            randUnitary = _scipy.linalg.expm(-1j * randMat)
+            rand_op = rand_unitary_as_superop()
+            mdl_randomized.operations[opLabel] = _op.FullArbitraryOp(rand_op @ gate)
 
-            randOp = _ot.unitary_to_superop(randUnitary, self.basis)
-
-            mdl_randomized.operations[opLabel] = _op.FullArbitraryOp(_np.dot(randOp, gate))
+        if transform_spam:
+            from pygsti.modelmembers.states import FullState
+            for preplbl, rho in self.preps.items():
+                rand_op = rand_unitary_as_superop()
+                mdl_randomized.preps[preplbl] = FullState(rand_op @ rho)
+            from pygsti.modelmembers.povms import create_from_dmvecs
+            for povmlbl, M in self.povms.items():
+                rand_op = rand_unitary_as_superop()
+                dmvecs = {elbl: rand_op @ e.to_dense() for elbl, e in M.items()}
+                mdl_randomized.povms[povmlbl] = create_from_dmvecs(dmvecs, 'full')
+            
 
         #Note: this function does NOT randomize instruments
 

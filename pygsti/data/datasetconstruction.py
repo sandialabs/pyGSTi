@@ -209,17 +209,19 @@ def simulate_data(model_or_dataset, circuit_list, num_samples,
     return dataset
 
 
-def mix_datasets(dsa, dsb, p):
+def mix_datasets(dsa, dsb, p, integral=True):
     dsc = dsa.copy_nonstatic()
     # arr = _np.array(dsc.repData).ravel()
     # print((arr, arr.size))
     # print((dsb.repData, dsb.repData.size))
     for i, (_, dsrow) in enumerate(dsb.items()):
         interpolated = p*dsc.repData[i] + (1-p)*dsrow.reps
-        total = int(_np.ceil((_np.sum(interpolated))))
-        j = _np.argmin(interpolated)
-        interpolated[j] = _np.ceil(interpolated[j])
-        interpolated[1 - j] = total - interpolated[j]
+        if integral:
+            assert interpolated.size == 2
+            total = int(_np.ceil((_np.sum(interpolated))))
+            j = _np.argmin(interpolated)
+            interpolated[j] = _np.ceil(interpolated[j])
+            interpolated[1 - j] = total - interpolated[j]
         dsc.repData[i][:] = interpolated
     dsc.done_adding_data()
     # arr = np.array(dsc.repData).ravel()
