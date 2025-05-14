@@ -398,7 +398,8 @@ def standard_gatenames_stim_conversions():
     'Gzz'   : stim.Tableau.from_named_gate('SQRT_ZZ'),
     'Gcnot' : stim.Tableau.from_named_gate('CNOT'),
     'Gswap' : stim.Tableau.from_named_gate('SWAP'),
-    'Gcphase' : stim.Tableau.from_named_gate('CZ')
+    'Gcphase' : stim.Tableau.from_named_gate('CZ'),
+    'Giswap' : stim.Tableau.from_named_gate('ISWAP')
     }
     ecr_unitary = _np.array([[0, 1, 0., 1j], [1., 0, -1j, 0.],
                              [0., 1j, 0, 1], [-1j, 0., 1, 0]], complex)/_np.sqrt(2)
