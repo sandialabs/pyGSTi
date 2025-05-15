@@ -262,7 +262,7 @@ class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
         #Get the union of the two bases labels.
         union_labels = set(self._labels) | set(other_basis.labels)
         union_state_space = self.state_space.union(other_basis.state_space)
-        return ExplicitElementaryErrorgenBasis(union_state_space, union_labels, self._basis_1q)
+        return ExplicitElementaryErrorgenBasis(union_state_space, sorted(union_labels, key=lambda label: label.__str__()), self._basis_1q)
 
     def intersection(self, other_basis):
         """
@@ -277,7 +277,7 @@ class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
 
         intersection_labels = set(self._labels) & set(other_basis.labels)
         intersection_state_space = self.state_space.intersection(other_basis.state_space)
-        return ExplicitElementaryErrorgenBasis(intersection_state_space, intersection_labels, self._basis_1q)
+        return ExplicitElementaryErrorgenBasis(intersection_state_space, sorted(intersection_labels, key=lambda label: label.__str__()), self._basis_1q)
 
     def difference(self, other_basis):
         """
@@ -295,7 +295,7 @@ class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
         #that relied on the old (kind of incorrect behavior). Revert back to old version temporarily.
         #difference_state_space = self.state_space.difference(other_basis.state_space)
         difference_state_space = self.state_space
-        return ExplicitElementaryErrorgenBasis(difference_state_space, difference_labels, self._basis_1q)
+        return ExplicitElementaryErrorgenBasis(difference_state_space, sorted(difference_labels, key=lambda label: label.__str__()), self._basis_1q)
 
 class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
     """
