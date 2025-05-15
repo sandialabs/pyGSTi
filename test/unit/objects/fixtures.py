@@ -65,9 +65,11 @@ def lsgstStructs(self):
 
 @ns.memo
 def mdl_lsgst(self):
-    chi2_builder = pygsti.objectivefns.Chi2Function.builder(
+    from pygsti.objectivefns.objectivefns import ObjectiveFunctionBuilder, Chi2Function
+    chi2_builder = ObjectiveFunctionBuilder(Chi2Function,
         regularization={'min_prob_clip_for_weighting': 1e-6},
-        penalties={'prob_clip_interval': (-1e6, 1e6)})
+        penalties={'prob_clip_interval': (-1e6, 1e6)}
+    )
     models, _, _ = pygsti.algorithms.core.run_iterative_gst(
         self.dataset, self.mdl_clgst, self.lsgstStrings,
         optimizer=None,

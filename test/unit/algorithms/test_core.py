@@ -6,7 +6,7 @@ from pygsti.algorithms import core
 from pygsti.baseobjs import Label
 from pygsti.circuits import Circuit, CircuitList
 from pygsti.objectivefns import Chi2Function, FreqWeightedChi2Function, \
-    PoissonPicDeltaLogLFunction
+    PoissonPicDeltaLogLFunction, ObjectiveFunctionBuilder
 from . import fixtures
 from ..util import BaseCase
 
@@ -117,7 +117,7 @@ class CoreMC2GSTTester(CoreStdData, BaseCase):
         # TODO assert correctness
 
     def test_do_mc2gst_regularize_factor(self):
-        obj_builder = Chi2Function.builder(
+        obj_builder = ObjectiveFunctionBuilder(Chi2Function,
             name='chi2',
             description="Sum of chi^2",
             regularization={'min_prob_clip_for_weighting': 1e-4},
@@ -130,7 +130,7 @@ class CoreMC2GSTTester(CoreStdData, BaseCase):
         # TODO assert correctness
 
     def test_do_mc2gst_CPTP_penalty_factor(self):
-        obj_builder = Chi2Function.builder(
+        obj_builder = ObjectiveFunctionBuilder(Chi2Function,
             name='chi2',
             description="Sum of chi^2",
             regularization={'min_prob_clip_for_weighting': 1e-4},
@@ -143,7 +143,7 @@ class CoreMC2GSTTester(CoreStdData, BaseCase):
         # TODO assert correctness
 
     def test_do_mc2gst_SPAM_penalty_factor(self):
-        obj_builder = Chi2Function.builder(
+        obj_builder = ObjectiveFunctionBuilder(Chi2Function,
             name='chi2',
             description="Sum of chi^2",
             regularization={'min_prob_clip_for_weighting': 1e-4},
@@ -156,7 +156,7 @@ class CoreMC2GSTTester(CoreStdData, BaseCase):
         # TODO assert correctness
 
     def test_do_mc2gst_CPTP_SPAM_penalty_factor(self):
-        obj_builder = Chi2Function.builder(
+        obj_builder = ObjectiveFunctionBuilder(Chi2Function,
             name='chi2',
             description="Sum of chi^2",
             regularization={'min_prob_clip_for_weighting': 1e-4},
@@ -202,7 +202,7 @@ class CoreMC2GSTTester(CoreStdData, BaseCase):
         # TODO assert correctness
 
     def test_do_iterative_mc2gst_regularize_factor(self):
-        obj_builder = Chi2Function.builder(
+        obj_builder = ObjectiveFunctionBuilder(Chi2Function,
             name='chi2',
             description="Sum of chi^2",
             regularization={'min_prob_clip_for_weighting': 1e-4},
@@ -218,7 +218,7 @@ class CoreMC2GSTTester(CoreStdData, BaseCase):
         # TODO assert correctness
 
     def test_do_iterative_mc2gst_use_freq_weighted_chi2(self):
-        obj_builder = FreqWeightedChi2Function.builder(
+        obj_builder = ObjectiveFunctionBuilder(FreqWeightedChi2Function,
             name='freq-weighted-chi2',
             description="Sum of chi^2",
             regularization={'min_freq_clip_for_weighting': 1e-4}
@@ -269,7 +269,7 @@ class CoreMLGSTTester(CoreStdData, BaseCase):
         # TODO assert correctness
 
     def test_do_mlgst_CPTP_penalty_factor(self):
-        obj_builder = PoissonPicDeltaLogLFunction.builder(
+        obj_builder = ObjectiveFunctionBuilder(PoissonPicDeltaLogLFunction,
             name='logl',
             description="2*DeltaLogL",
             regularization={'min_prob_clip': 1e-4},
@@ -283,7 +283,7 @@ class CoreMLGSTTester(CoreStdData, BaseCase):
         # TODO assert correctness
 
     def test_do_mlgst_SPAM_penalty_factor(self):
-        obj_builder = PoissonPicDeltaLogLFunction.builder(
+        obj_builder = ObjectiveFunctionBuilder(PoissonPicDeltaLogLFunction,
             name='logl',
             description="2*DeltaLogL",
             regularization={'min_prob_clip': 1e-4},
@@ -302,7 +302,7 @@ class CoreMLGSTTester(CoreStdData, BaseCase):
         # FUTURE: see what we can do in custom LM about scaling large
         # jacobians...
         #self.skipTest("Ignore for now.")
-        obj_builder = PoissonPicDeltaLogLFunction.builder(
+        obj_builder = ObjectiveFunctionBuilder(PoissonPicDeltaLogLFunction,
             name='logl',
             description="2*DeltaLogL",
             regularization={'min_prob_clip': 1e-4},
@@ -356,7 +356,7 @@ class CoreMLGSTTester(CoreStdData, BaseCase):
     #     )
 
     def test_do_iterative_mlgst_use_freq_weighted_chi2(self):
-        obj_builder = FreqWeightedChi2Function.builder(
+        obj_builder = ObjectiveFunctionBuilder(FreqWeightedChi2Function,
             name='freq-weighted-chi2',
             description="Sum of chi^2",
             regularization={'min_freq_clip_for_weighting': 1e-4}
@@ -404,7 +404,7 @@ class CoreMLGSTTester(CoreStdData, BaseCase):
     # XXX if this function needs explicit coverage, it should be public!
     def test_do_mlgst_base_forcefn_grad(self):
         forcefn_grad = np.ones((1, self.mdl_clgst.num_params), 'd')
-        obj_builder = PoissonPicDeltaLogLFunction.builder(
+        obj_builder = ObjectiveFunctionBuilder(PoissonPicDeltaLogLFunction,
             name='logl',
             description="2*DeltaLogL",
             regularization={'min_prob_clip': 1e-4},

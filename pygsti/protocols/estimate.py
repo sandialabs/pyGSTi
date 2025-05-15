@@ -163,7 +163,7 @@ class Estimate(_MongoSerializable):
         self.profiler = parameters.get('profiler', None)
         self._final_mdc_store = parameters.get('final_mdc_store', None)
         self._final_objfn_cache = parameters.get('final_objfn_cache', None)
-        self.final_objfn_builder = parameters.get('final_objfn_builder', _objfns.PoissonPicDeltaLogLFunction.builder())
+        self.final_objfn_builder = parameters.get('final_objfn_builder', _objfns.ObjectiveFunctionBuilder(_objfns.PoissonPicDeltaLogLFunction))
         self._final_objfn = parameters.get('final_objfn', None)
 
         self.extra_parameters = extra_parameters if (extra_parameters is not None) else {}

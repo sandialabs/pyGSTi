@@ -31,10 +31,14 @@ ds_ref = pickle.load(open('reference_ds.pkl','rb'))
 ds = ds_ref
 
 MINCLIP = 1e-4
-chi2_builder = pygsti.objectivefns.Chi2Function.builder(
-        'chi2', regularization={'min_prob_clip_for_weighting': MINCLIP}, penalties={'cptp_penalty_factor': 0.0})
-mle_builder = pygsti.objectivefns.PoissonPicDeltaLogLFunction.builder(
-        'logl', regularization={'min_prob_clip': MINCLIP, 'radius': MINCLIP})
+chi2_builder = pygsti.objectivefns.ObjectiveFunctionBuilder(
+        pygsti.objectivefns.Chi2Function,
+        'chi2', regularization={'min_prob_clip_for_weighting': MINCLIP}, penalties={'cptp_penalty_factor': 0.0}
+)
+mle_builder = pygsti.objectivefns.ObjectiveFunctionBuilder(
+        pygsti.objectivefns.PoissonPicDeltaLogLFunction,
+        'logl', regularization={'min_prob_clip': MINCLIP, 'radius': MINCLIP}
+)
 iteration_builders = [chi2_builder]; final_builders = [mle_builder]
 builders = pygsti.protocols.GSTObjFnBuilders(iteration_builders, final_builders)
 

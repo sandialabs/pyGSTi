@@ -178,7 +178,7 @@ class ObjectiveFunctionBuilder(_NicelySerializable):
 
     # This was a classmethod, but I made it static because this class has no derived classes.
     @staticmethod
-    def create_from(objective='logl', freq_weighted_chi2=False):
+    def create_from(objective='logl', freq_weighted_chi2=False, penalty_callable=None):
         """
         Creates common :class:`ObjectiveFunctionBuilder` from a few arguments.
 
@@ -193,37 +193,23 @@ class ObjectiveFunctionBuilder(_NicelySerializable):
         Returns
         -------
         ObjectiveFunctionBuilder
-
-        Notes
-        -----
-        This function's implementation calls relies on various "builder" classmethods of other classes.
-        There is a default implementation of `.builder` that's triggered in most codepaths. That
-        default is to just return
-
-            ObjectiveFunctionBuilder(cls, name, description, regularization, penalties, **kwargs).
-
-        In these cases, the kwargs that we pass to `.builder` functions get seen as **kwargs
-        for a call to the ObjectiveFunctionBuilder constructor. Those kwargs are stored in the 
-        `.additional_args` member of the returned ObjectiveFunctionBuilder object. That member
-        is passed as **kwargs to the constructor for the input `cls` when we call `.build()` on
-        the ObjectiveFunctionBuilder instance.
         """
         if objective == "chi2":
             if freq_weighted_chi2:
-                builder = FreqWeightedChi2Function.builder(
+                builder = ObjectiveFunctionBuilder(FreqWeightedChi2Function,
                     name='fwchi2',
                     description="Freq-weighted sum of Chi^2",
                     regularization={'min_freq_clip_for_weighting': 1e-4}
                 )
             else:
-                builder = Chi2Function.builder(
+                builder = ObjectiveFunctionBuilder(Chi2Function,
                     name='chi2',
                     description="Sum of Chi^2",
                     regularization={'min_prob_clip_for_weighting': 1e-4}
                 )
 
         elif objective == "logl":
-            builder = PoissonPicDeltaLogLFunction.builder(
+            builder = ObjectiveFunctionBuilder(PoissonPicDeltaLogLFunction,
                 name='dlogl',
                 description="2*Delta(log(L))",
                 regularization={'min_prob_clip': 1e-4,
@@ -239,15 +225,19 @@ class ObjectiveFunctionBuilder(_NicelySerializable):
                 assert objective == 'normalized tvd'
             else:
                 assert objective == 'tvd'
-            builder = TVDFunction.builder(name=objective, description=descr)
+            builder = ObjectiveFunctionBuilder(TVDFunction, name=objective, description=descr)
     
         elif isinstance(objective, tuple) and objective[0] == 'Lp^p':
             power = objective[1]
-            builder = LpNormToPowerP.builder(name='Lp^p', description=f"L_{power} norm to the power {power}.", power=objective[1])
+            builder = ObjectiveFunctionBuilder(LpNormToPowerP,
+                name='Lp^p',
+                description=f"L_{power} norm to the power {power}.",
+                power=objective[1]
+            )
 
         else:
             raise ValueError("Invalid objective: %s" % objective)
-        assert(isinstance(builder, ObjectiveFunctionBuilder)), "This function should always return an ObjectiveFunctionBuilder!"
+
         return builder
 
     def __init__(self, cls_to_build, name=None, description=None, regularization=None, penalties=None, **kwargs):
@@ -4260,31 +4250,6 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
     """
 
     @classmethod
-    def builder(cls, name=None, description=None, regularization=None, penalties=None, **kwargs):
-        """
-        Create an :class:`ObjectiveFunctionBuilder` that builds an objective function of this type.
-
-        Parameters
-        ----------
-        name : str, optional
-            A name for the built objective function (can be anything).
-
-        description : str, optional
-            A description for the built objective function (can be anything)
-
-        regularization : dict, optional
-            Regularization values.
-
-        penalties : dict, optional
-            Penalty values.
-
-        Returns
-        -------
-        ObjectiveFunctionBuilder
-        """
-        return ObjectiveFunctionBuilder(cls, name, description, regularization, penalties, **kwargs)
-
-    @classmethod
     def _create_mdc_store(cls, model, dataset, circuits, resource_alloc,
                           method_names=('fn',), array_types=(), verbosity=0):
         # Note: array_types should not include the types used by the created objective function (store) or by the
@@ -5172,31 +5137,6 @@ class TimeDependentMDCObjectiveFunction(MDCObjectiveFunction):
     verbosity : int, optional
         Level of detail to print to stdout.
     """
-
-    @classmethod
-    def builder(cls, name=None, description=None, regularization=None, penalties=None, **kwargs):
-        """
-        Create an :class:`ObjectiveFunctionBuilder` that builds an objective function of this type.
-
-        Parameters
-        ----------
-        name : str, optional
-            A name for the built objective function (can be anything).
-
-        description : str, optional
-            A description for the built objective function (can be anything)
-
-        regularization : dict, optional
-            Regularization values.
-
-        penalties : dict, optional
-            Penalty values.
-
-        Returns
-        -------
-        ObjectiveFunctionBuilder
-        """
-        return ObjectiveFunctionBuilder(cls, name, description, regularization, penalties, **kwargs)
 
     #This objective function can handle time-dependent circuits - that is, circuits are treated as
     # potentially time-dependent and mdl as well.  For now, we don't allow any regularization or penalization

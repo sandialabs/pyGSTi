@@ -1654,7 +1654,7 @@ class LinearGateSetTomography(_proto.Protocol):
         parameters['protocol'] = self  # Estimates can hold sub-Protocols <=> sub-results
         parameters['profiler'] = profiler
         parameters['final_mdc_store'] = final_store
-        parameters['final_objfn_builder'] = _objfns.PoissonPicDeltaLogLFunction.builder()
+        parameters['final_objfn_builder'] = _objfns.ObjectiveFunctionBuilder(_objfns.PoissonPicDeltaLogLFunction)
         # just set final objective function as default logl objective (for ease of later comparison)
 
         ret = ModelEstimateResults(data, self)
