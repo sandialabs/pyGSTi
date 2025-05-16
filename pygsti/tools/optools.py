@@ -87,6 +87,18 @@ def fidelity(a, b):
     assert_hermitian(a)
     assert_hermitian(b)
 
+    def check_unit_trace(mat):
+        tr = _np.trace(mat)
+        if abs(tr - 1) > __VECTOR_TOL__:
+            message = f"""
+                The input matrix is trace {tr}, which deviates from 1 by more than {__VECTOR_TOL__}.
+                Beware result!
+            """
+            _warnings.warn(message)
+
+    check_unit_trace(a)
+    check_unit_trace(b)
+
     def check_rank_one_density(mat):
         """
         mat is Hermitian of order n. This function uses an O(n^2) time randomized algorithm to
@@ -159,17 +171,11 @@ def fidelity(a, b):
         if _np.min(evals) < -__SCALAR_TOL__:
             message = f"""
             Input matrix is not PSD up to tolerance {__SCALAR_TOL__}.
+            The negative eigenvalues are {evals[evals < 0]}.
             We'll project out the bad eigenspaces to only work with the PSD part.
             """
             _warnings.warn(message)
         evals[evals < 0] = 0.0
-        tr = _np.sum(evals)
-        if abs(tr - 1) > __VECTOR_TOL__:
-            message = f"""
-            The PSD part of the input matrix is not trace-1 up to tolerance {__VECTOR_TOL__}.
-            Beware result!
-            """
-            _warnings.warn(message)
         sqrt_mat = U @ (_np.sqrt(evals).reshape((-1, 1)) * U.T.conj())
         return sqrt_mat
     
