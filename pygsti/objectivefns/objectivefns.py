@@ -15,6 +15,7 @@ import sys as _sys
 import time as _time
 import pathlib as _pathlib
 import warnings as _warnings
+from typing import Callable
 
 import numpy as _np
 
@@ -178,7 +179,7 @@ class ObjectiveFunctionBuilder(_NicelySerializable):
 
     # This was a classmethod, but I made it static because this class has no derived classes.
     @staticmethod
-    def create_from(objective='logl', freq_weighted_chi2=False, penalty_callable=None):
+    def create_from(objective='logl', freq_weighted_chi2=False, callable_penalty=None):
         """
         Creates common :class:`ObjectiveFunctionBuilder` from a few arguments.
 
@@ -194,18 +195,26 @@ class ObjectiveFunctionBuilder(_NicelySerializable):
         -------
         ObjectiveFunctionBuilder
         """
+        if callable_penalty is None and isinstance(objective, tuple) and len(objective) >= 2 and isinstance(objective[1], Callable):
+            callable_penalty = objective[1]
+            # callable_penalty_scale = 1.0 if len(objective) == 2 else objective[2]
+            objective = objective[0]
+            
+
         if objective == "chi2":
             if freq_weighted_chi2:
                 builder = ObjectiveFunctionBuilder(FreqWeightedChi2Function,
                     name='fwchi2',
                     description="Freq-weighted sum of Chi^2",
-                    regularization={'min_freq_clip_for_weighting': 1e-4}
+                    regularization={'min_freq_clip_for_weighting': 1e-4},
+                    callable_penalty=callable_penalty
                 )
             else:
                 builder = ObjectiveFunctionBuilder(Chi2Function,
                     name='chi2',
                     description="Sum of Chi^2",
-                    regularization={'min_prob_clip_for_weighting': 1e-4}
+                    regularization={'min_prob_clip_for_weighting': 1e-4},
+                    callable_penalty=callable_penalty
                 )
 
         elif objective == "logl":
@@ -215,7 +224,8 @@ class ObjectiveFunctionBuilder(_NicelySerializable):
                 regularization={'min_prob_clip': 1e-4,
                                 'radius': 1e-4},
                 penalties={'cptp_penalty_factor': 0,
-                           'spam_penalty_factor': 0}
+                           'spam_penalty_factor': 0},
+                callable_penalty=callable_penalty
             )
 
         elif 'tvd' in objective:
@@ -225,14 +235,18 @@ class ObjectiveFunctionBuilder(_NicelySerializable):
                 assert objective == 'normalized tvd'
             else:
                 assert objective == 'tvd'
-            builder = ObjectiveFunctionBuilder(TVDFunction, name=objective, description=descr)
+            builder = ObjectiveFunctionBuilder(
+                TVDFunction, name=objective, description=descr,
+                callable_penalty=callable_penalty
+            )
     
         elif isinstance(objective, tuple) and objective[0] == 'Lp^p':
             power = objective[1]
             builder = ObjectiveFunctionBuilder(LpNormToPowerP,
                 name='Lp^p',
                 description=f"L_{power} norm to the power {power}.",
-                power=objective[1]
+                power=objective[1],
+                callable_penalty=callable_penalty
             )
 
         else:
@@ -1124,9 +1138,9 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
     """
 
     @classmethod
-    def create_from(cls, raw_objfn, model, dataset, circuits, resource_alloc=None, verbosity=0, array_types=()):
+    def create_from(cls, raw_objfn, model, dataset, circuits, resource_alloc=None, verbosity=0, array_types=(), **kwargs):
         mdc_store = ModelDatasetCircuitsStore(model, dataset, circuits, resource_alloc, array_types)
-        return cls(raw_objfn, mdc_store, verbosity)
+        return cls(raw_objfn, mdc_store, verbosity, **kwargs)
 
     @classmethod
     def _array_types_for_method(cls, method_name, fsim):
@@ -1138,7 +1152,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         if method_name == 'dpercircuit': return cls._array_types_for_method('dterms', fsim) + ('cp',)
         return ()
 
-    def __init__(self, raw_objfn, mdc_store, verbosity=0):
+    def __init__(self, raw_objfn, mdc_store, verbosity=0, **kwargs):
         """
         Create a new MDCObjectiveFunction.
 
@@ -1147,6 +1161,8 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         """
         EvaluatedModelDatasetCircuitsStore.__init__(self, mdc_store, verbosity)
         self.raw_objfn = raw_objfn
+        self.callable_penalty        = kwargs.get('callable_penalty', None)
+        self.callable_penalty_factor = 0.0 if self.callable_penalty is None else 1.0
 
     @property
     def name(self):
@@ -4174,16 +4190,16 @@ class RawAbsPower(RawObjectiveFunction):
         return -1
     
     def terms(self, probs, counts, total_counts, freqs, intermediates=None):
-        return 0.5 * _np.abs(probs - freqs) ** self.power
+        return _np.abs(probs - freqs) ** self.power
     
     def dterms(self, probs, counts, total_counts, freqs, intermediates=None):
         t = probs - freqs
-        d = (0.5 * self.power) * _np.abs(t) ** (self.power - 1)
+        d = self.power * _np.abs(t) ** (self.power - 1)
         d[t < 0] *= -1
         return d
     
     def zero_freq_terms(self, total_counts, probs):
-        return 0.5 * _np.abs(probs) ** self.power
+        return _np.abs(probs) ** self.power
 
 
 ######################################################
@@ -4266,9 +4282,9 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
     @classmethod
     def create_from(cls, model, dataset, circuits, regularization=None, penalties=None, resource_alloc=None,
-                    name=None, description=None, verbosity=0, method_names=('fn',), array_types=()):
+                    name=None, description=None, verbosity=0, method_names=('fn',), array_types=(), **kwargs):
         mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names, array_types, verbosity)
-        return cls(mdc_store, regularization, penalties, name, description, verbosity)
+        return cls(mdc_store, regularization, penalties, name, description, verbosity, **kwargs)
 
     @classmethod
     def _array_types_for_method(cls, method_name, fsim):
@@ -4300,9 +4316,9 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         return array_types
 
     @set_docstring(DOCSTR_TEMPLATE % TEMPLATE_FIELDS)
-    def __init__(self, raw_objfn, mdc_store, penalties=None, verbosity=0):
+    def __init__(self, raw_objfn, mdc_store, penalties=None, verbosity=0, **kwargs):
 
-        super().__init__(raw_objfn, mdc_store, verbosity)
+        super().__init__(raw_objfn, mdc_store, verbosity, **kwargs)
 
         if penalties is None: penalties = {}
         self.ex = self.set_penalties(**penalties)
@@ -4420,7 +4436,11 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         if self.cptp_penalty_factor != 0: ex += _cptp_penalty_size(self.model)
         if self.spam_penalty_factor != 0: ex += _spam_penalty_size(self.model)
         if self.errorgen_penalty_factor != 0: ex += _errorgen_penalty_size(self.model)
-
+        if self.callable_penalty is not None: ex += 1
+        # ^ We want to be able to change the penalty factor without having to rebuild
+        #   this objective function. So we allocate space for the callable penalty
+        #   if it exists at all, rather than requiring self.callable_penalty_factor > 0.
+        #
         return ex
 
     def terms(self, paramvec=None, oob_check=False, profiler_str="TERMS OBJECTIVE"):
@@ -4572,6 +4592,27 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             terms_jac[off:off+n, :] *= 2*errorgen_penalty[:, None]
             off += n
 
+        if self.callable_penalty is not None:
+            #
+            #   Ideally we'd have put in the effort to do this earlier when doing finite-difference to get
+            #   the Jacobian of terms. But we start with a simple implementation.
+            #
+            terms_jac[off:off+1, :] = 0.0
+            if self.callable_penalty_factor:
+                vec0 = self.model.to_vector()
+                val0 = self.callable_penalty(self.model)
+                eps = 1e-7
+                for i in range(vec0.size):
+                    vec0[i] += eps
+                    self.model.from_vector(vec0)
+                    val = self.callable_penalty(self.model)
+                    dval = (val - val0) / eps
+                    terms_jac[off, i] = dval
+                    vec0[i] -= eps
+                self.model.from_vector(vec0)
+            off += 1
+            pass
+
         assert(off == self.local_ex)
         return
 
@@ -4599,6 +4640,11 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         if self.errorgen_penalty_factor > 0:
             errorgen_penalty = _errorgen_penalty(self.model, self.errorgen_penalty_factor) ** 2
             blocks.append(errorgen_penalty)
+
+        if self.callable_penalty is not None:
+            f = self.callable_penalty_factor
+            val = f * self.callable_penalty(self.model) if f > 0 else 0.0
+            blocks.append(_np.array([val]))
 
         return _np.concatenate(blocks)
 
@@ -4816,9 +4862,9 @@ class Chi2Function(TimeIndependentMDCObjectiveFunction):
     )
 
     @set_docstring(TimeIndependentMDCObjectiveFunction.DOCSTR_TEMPLATE % TEMPLATE_FIELDS)
-    def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0):
+    def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0, **kwargs):
         raw_objfn = RawChi2Function(regularization, mdc_store.resource_alloc, name, description, verbosity)
-        super().__init__(raw_objfn, mdc_store, penalties, verbosity)
+        super().__init__(raw_objfn, mdc_store, penalties, verbosity, **kwargs)
 
 
 class ChiAlphaFunction(TimeIndependentMDCObjectiveFunction):
@@ -4837,15 +4883,15 @@ class ChiAlphaFunction(TimeIndependentMDCObjectiveFunction):
     @classmethod
     def create_from(cls, model, dataset, circuits, regularization=None, penalties=None,
                     resource_alloc=None, name=None, description=None, verbosity=0,
-                    method_names=('fn',), array_types=(), alpha=1):
+                    method_names=('fn',), array_types=(), alpha=1, **kwargs):
         mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names, array_types, verbosity)
-        return cls(mdc_store, regularization, penalties, name, description, verbosity, alpha)
+        return cls(mdc_store, regularization, penalties, name, description, verbosity, alpha, **kwargs)
 
     @set_docstring(TimeIndependentMDCObjectiveFunction.DOCSTR_TEMPLATE % TEMPLATE_FIELDS)
     def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0,
-                 alpha=1):
+                 alpha=1, **kwargs):
         raw_objfn = RawChiAlphaFunction(regularization, mdc_store.resource_alloc, name, description, verbosity, alpha)
-        super().__init__(raw_objfn, mdc_store, penalties, verbosity)
+        super().__init__(raw_objfn, mdc_store, penalties, verbosity, **kwargs)
 
 
 class FreqWeightedChi2Function(TimeIndependentMDCObjectiveFunction):
@@ -4857,9 +4903,9 @@ class FreqWeightedChi2Function(TimeIndependentMDCObjectiveFunction):
     )
 
     @set_docstring(TimeIndependentMDCObjectiveFunction.DOCSTR_TEMPLATE % TEMPLATE_FIELDS)
-    def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0):
+    def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0, **kwargs):
         raw_objfn = RawFreqWeightedChi2Function(regularization, mdc_store.resource_alloc, name, description, verbosity)
-        super().__init__(raw_objfn, mdc_store, penalties, verbosity)
+        super().__init__(raw_objfn, mdc_store, penalties, verbosity, **kwargs)
 
 
 class CustomWeightedChi2Function(TimeIndependentMDCObjectiveFunction):
@@ -4879,9 +4925,9 @@ class CustomWeightedChi2Function(TimeIndependentMDCObjectiveFunction):
     @classmethod
     def create_from(cls, model, dataset, circuits, regularization=None, penalties=None,
                     resource_alloc=None, name=None, description=None, verbosity=0,
-                    method_names=('fn',), array_types=(), custom_weights=None):
+                    method_names=('fn',), array_types=(), custom_weights=None, **kwargs):
         mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names, array_types, verbosity)
-        return cls(mdc_store, regularization, penalties, name, description, verbosity, custom_weights)
+        return cls(mdc_store, regularization, penalties, name, description, verbosity, custom_weights, **kwargs)
 
     @set_docstring(TimeIndependentMDCObjectiveFunction.DOCSTR_TEMPLATE % TEMPLATE_FIELDS)
     def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0,
@@ -4900,10 +4946,10 @@ class PoissonPicDeltaLogLFunction(TimeIndependentMDCObjectiveFunction):
     )
 
     @set_docstring(TimeIndependentMDCObjectiveFunction.DOCSTR_TEMPLATE % TEMPLATE_FIELDS)
-    def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0):
+    def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0, **kwargs):
         raw_objfn = RawPoissonPicDeltaLogLFunction(regularization, mdc_store.resource_alloc, name, description,
                                                    verbosity)
-        super().__init__(raw_objfn, mdc_store, penalties, verbosity)
+        super().__init__(raw_objfn, mdc_store, penalties, verbosity, **kwargs)
 
 
 class DeltaLogLFunction(TimeIndependentMDCObjectiveFunction):
@@ -4915,9 +4961,9 @@ class DeltaLogLFunction(TimeIndependentMDCObjectiveFunction):
     )
 
     @set_docstring(TimeIndependentMDCObjectiveFunction.DOCSTR_TEMPLATE % TEMPLATE_FIELDS)
-    def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0):
+    def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0, **kwargs):
         raw_objfn = RawDeltaLogLFunction(regularization, mdc_store.resource_alloc, name, description, verbosity)
-        super().__init__(raw_objfn, mdc_store, penalties, verbosity)
+        super().__init__(raw_objfn, mdc_store, penalties, verbosity, **kwargs)
 
 
 class MaxLogLFunction(TimeIndependentMDCObjectiveFunction):
@@ -4931,16 +4977,16 @@ class MaxLogLFunction(TimeIndependentMDCObjectiveFunction):
     @classmethod
     def create_from(cls, model, dataset, circuits, regularization=None, penalties=None,
                     resource_alloc=None, name=None, description=None, verbosity=0,
-                    method_names=('fn',), array_types=(), poisson_picture=True):
+                    method_names=('fn',), array_types=(), poisson_picture=True, **kwargs):
         mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names, array_types, verbosity)
-        return cls(mdc_store, regularization, penalties, name, description, verbosity, poisson_picture)
+        return cls(mdc_store, regularization, penalties, name, description, verbosity, poisson_picture, **kwargs)
 
     @set_docstring(TimeIndependentMDCObjectiveFunction.DOCSTR_TEMPLATE % TEMPLATE_FIELDS)
     def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0,
-                 poisson_picture=True):
+                 poisson_picture=True, **kwargs):
         raw_objfn = RawMaxLogLFunction(regularization, mdc_store.resource_alloc, name, description, verbosity,
                                        poisson_picture)
-        super().__init__(raw_objfn, mdc_store, penalties, verbosity)
+        super().__init__(raw_objfn, mdc_store, penalties, verbosity, **kwargs)
 
 
 class TermWeighted(TimeIndependentMDCObjectiveFunction):
@@ -5055,9 +5101,9 @@ class TVDFunction(TermWeighted):
     )
 
     @set_docstring(TermWeighted.DOCSTR_TEMPLATE % TEMPLATE_FIELDS)
-    def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0):
+    def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0, **kwargs):
         raw_objfn = RawTVDFunction(regularization, mdc_store.resource_alloc, name, description, verbosity)
-        super().__init__(raw_objfn, mdc_store, penalties, verbosity)
+        super().__init__(raw_objfn, mdc_store, penalties, verbosity, **kwargs)
         self.normalized = name == 'normalized tvd'
         self._terms_weights = None
         self._update_terms_weights()
@@ -5096,9 +5142,9 @@ class LpNormToPowerP(TermWeighted):
 
     @set_docstring(TermWeighted.DOCSTR_TEMPLATE % TEMPLATE_FIELDS)
     def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None,
-                 verbosity=0, power=2):
+                 verbosity=0, power=2, **kwargs):
         raw_objfn = RawAbsPower(power, regularization, mdc_store.resource_alloc, name, description, verbosity)
-        super().__init__(raw_objfn, mdc_store, penalties, verbosity)
+        super().__init__(raw_objfn, mdc_store, penalties, verbosity, **kwargs)
         self.power = raw_objfn.power
         self._update_terms_weights()
 
@@ -5145,7 +5191,7 @@ class TimeDependentMDCObjectiveFunction(MDCObjectiveFunction):
     @classmethod
     def create_from(cls, model, dataset, circuits, regularization=None, penalties=None,
                     resource_alloc=None, name=None, description=None, verbosity=0,
-                    method_names=('fn',), array_types=()):
+                    method_names=('fn',), array_types=(), **kwargs):
         #Array types are used to construct memory estimates (as a function of element number, etc) for layout creation.
         # They account for memory used in:
         #  1) an optimization method (if present),
@@ -5153,7 +5199,7 @@ class TimeDependentMDCObjectiveFunction(MDCObjectiveFunction):
         #  2b) intermediate memory allocated by methods of the created object (possibly an objective function)
         array_types += cls.compute_array_types(method_names, model.sim)
         mdc_store = ModelDatasetCircuitsStore(model, dataset, circuits, resource_alloc, array_types)
-        return cls(mdc_store, regularization, penalties, name, description, verbosity)
+        return cls(mdc_store, regularization, penalties, name, description, verbosity, **kwargs)
 
     @classmethod
     def compute_array_types(cls, method_names, fsim):

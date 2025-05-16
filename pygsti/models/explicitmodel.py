@@ -927,6 +927,14 @@ class ExplicitOpModel(_mdl.OpModel):
                                          self.factories.items()):
             yield (lbl, obj)
 
+    def members(self, include=('preps', 'operations', 'povms')):
+        out = dict()
+        for member_type in include:
+            member_dict = self.__getattribute__(member_type)
+            for k,v in member_dict.items():
+                out[k] = v
+        return out
+
 #TODO: how to handle these given possibility of different parameterizations...
 #  -- maybe only allow these methods to be called when using a "full" parameterization?
 #  -- or perhaps better to *move* them to the parameterization class
