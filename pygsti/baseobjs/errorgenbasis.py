@@ -231,8 +231,8 @@ class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
 
             sub_labels, sub_indices = zip(*[(lbl, i) for i, lbl in enumerate(self._labels)
                                             if overlaps(lbl[0])])
-            sub_state_space = self.state_space.create_subspace(sub_sslbls)
             sub_sslbls = sorted(sub_sslbls)
+            sub_state_space = self.state_space.create_subspace(sub_sslbls)
         else:
             sub_labels = []
             for lbl in self.labels:
