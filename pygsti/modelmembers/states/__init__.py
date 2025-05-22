@@ -266,22 +266,22 @@ def convert(state, to_type, basis, cp_penalty=1e-7, ideal_state=None, flatten_st
                     dense_state = state.to_dense()
                     num_qubits = st.state_space.num_qubits
                     
-                    errgen = _LindbladErrorgen.from_error_generator(2**(2*num_qubits), parameterization=to_type)
-                    num_errgens = errgen.num_params
+                    
 
                     #GLND for states suffers from "trivial gauge" freedom. This function identifies
                     #the physical directions to avoid this gauge.
                     def calc_physical_subspace(ideal_prep, epsilon = 1e-9):
+                        errgen = _LindbladErrorgen.from_error_generator(2**(2*num_qubits), parameterization=to_type)
+                        num_errgens = errgen.num_params
 	
                         exp_errgen = _ExpErrorgenOp(errgen)
-                        ideal_vec = _np.zeros(num_errgens)
 
                         #Compute the jacobian with respect to the error generators. This will allow us to see which
                         #error generators change the POVM entries
                         J = _np.zeros((state.num_params, num_errgens))
 
-                        for i in range(len(ideal_vec)):
-                            new_vec = ideal_vec.copy()
+                        for i in range(num_errgens):
+                            new_vec = _np.zeros(num_errgens)
                             new_vec[i] = epsilon
                             exp_errgen.from_vector(new_vec)
                             J[:,i] = (exp_errgen.to_dense() @ ideal_prep - ideal_prep)[1:]/epsilon
@@ -302,8 +302,8 @@ def convert(state, to_type, basis, cp_penalty=1e-7, ideal_state=None, flatten_st
                         return _np.linalg.norm(proc_matrix @ dense_st - dense_state) + cp_penalty * sum_of_negative_choi_eigenvalues_gate(proc_matrix, basis)
                     
                     soln = _spo.minimize(_objfn, _np.zeros(len(phys_directions), 'd'), method="Nelder-Mead", options={},
-                                         tol=1e-13)  # , callback=callback)
-                    #print("DEBUG: opt done: ",soln.success, soln.fun, soln.x)  # REMOVE
+                                         tol=1e-13)  
+                    
                     if not soln.success and soln.fun > 1e-6:  # not "or" because success is often not set correctly
                         raise ValueError("Failed to find an errorgen such that exp(errorgen)|ideal> = |state>")
                     
@@ -322,7 +322,6 @@ def convert(state, to_type, basis, cp_penalty=1e-7, ideal_state=None, flatten_st
                     return create_from_dmvec(vec, to_type, basis, state.evotype, state.state_space)
 
         except ValueError as e:
-            #_warnings.warn('Failed to convert state to type %s with error: %s' % (to_type, e))
             error_msgs[to_type] = str(e)  # try next to_type
 
     raise ValueError("Could not convert state to to type(s): %s\n%s" % (str(to_types), str(error_msgs)))

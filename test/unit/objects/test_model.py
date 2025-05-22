@@ -741,7 +741,7 @@ class StaticModelTester(StaticModelBase, StandardMethodBase, BaseCase):
     def test_iter_hprobs_by_rectangle(self):
         self.skipTest("TODO should probably warn user?")
 
-class LinbladModelTester(GLNDModelBase, StandardMethodBase, BaseCase):
+class LindbladModelTester(GLNDModelBase, StandardMethodBase, BaseCase):
     pass
 class FullMapSimMethodTester(FullModelBase, SimMethodBase, BaseCase):
     def setUp(self):
