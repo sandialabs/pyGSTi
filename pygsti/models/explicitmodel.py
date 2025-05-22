@@ -2,7 +2,7 @@
 Defines the ExplicitOpModel class and supporting functionality.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -185,16 +185,6 @@ class ExplicitOpModel(_mdl.OpModel):
 
         return _explicitcalc.ExplicitOpModelCalc(self.state_space.dim, simplified_preps, simplified_ops,
                                                  simplified_effects, self.num_params, self._param_interposer)
-
-    #Unneeded - just use string processing & rely on effect labels *not* having underscores in them
-    #def simplify_spamtuple_to_outcome_label(self, simplified_spamTuple):
-    #    #TODO: make this more efficient (prep lbl isn't even used!)
-    #    for prep_lbl in self.preps:
-    #        for povm_lbl in self.povms:
-    #            for elbl in self.povms[povm_lbl]:
-    #                if simplified_spamTuple == (prep_lbl, povm_lbl + "_" + elbl):
-    #                    return (elbl,) # outcome "label" (a tuple)
-    #    raise ValueError("No outcome label found for simplified spam_tuple: ", simplified_spamTuple)
 
     def _embed_operation(self, op_target_labels, op_val, force=False):
         """
@@ -916,7 +906,7 @@ class ExplicitOpModel(_mdl.OpModel):
         for lbl, inst in self.instruments.items():
             s += "%s = " % str(lbl) + str(inst) + "\n"
         for lbl, factory in self.factories.items():
-            s += "%s = (factory)" % lbl + '\n'
+            s += "%s = (factory)" % str(lbl) + '\n'
         s += "\n"
 
         return s
@@ -1159,7 +1149,7 @@ class ExplicitOpModel(_mdl.OpModel):
 
             randOp = _ot.unitary_to_superop(randUnitary, self.basis)
 
-            mdl_randomized.operations[opLabel] = _op.FullArbitraryOp(_np.dot(randOp, gate))
+            mdl_randomized.operations[opLabel] = _op.FullArbitraryOp(_np.dot(randOp, gate.to_dense("HilbertSchmidt")))
 
         #Note: this function does NOT randomize instruments
 

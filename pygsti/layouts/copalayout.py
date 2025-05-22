@@ -2,7 +2,7 @@
 A object representing the indexing into a (flat) array of circuit outcome probabilities.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -599,10 +599,6 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
         None
         """
         jtj[:] = _np.dot(j.T, j)
-
-    #Not needed
-    #def allocate_jtj_shared_mem_buf(self):
-    #    return _np.empty((self._param_dimensions[0], self._param_dimensions[0]), 'd'), None
 
     def memory_estimate(self, array_type, dtype='d'):
         """

@@ -2,7 +2,7 @@
 Defines objective-function objects
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -14,6 +14,7 @@ import itertools as _itertools
 import sys as _sys
 import time as _time
 import pathlib as _pathlib
+import warnings as _warnings
 
 import numpy as _np
 
@@ -111,9 +112,6 @@ def _objfn(objfn_cls, model, dataset, circuits=None,
         ofn = objfn_cls(mdc_store, regularization, penalties, verbosity=0, **addl_args)
 
     return ofn
-
-    #def __len__(self):
-    #    return len(self.circuits)
 
 
 class ObjectiveFunctionBuilder(_NicelySerializable):
@@ -591,8 +589,10 @@ class RawObjectiveFunction(ObjectiveFunction):
         """
         if intermediates is None:
             intermediates = self._intermediates(probs, counts, total_counts, freqs)
-        return 2 * self.lsvec(probs, counts, total_counts, freqs, intermediates) \
-            * self.dlsvec(probs, counts, total_counts, freqs, intermediates)
+        lsvec = self.lsvec(probs, counts, total_counts, freqs, intermediates)
+        # NOTE: this function is correct under the assumption that terms == lsvec**2,
+        #       independent of whether or not lsvec is nonnegative.
+        return 2 * lsvec * self.dlsvec(probs, counts, total_counts, freqs, intermediates)
 
     def dlsvec(self, probs, counts, total_counts, freqs, intermediates=None):
         """
@@ -627,7 +627,9 @@ class RawObjectiveFunction(ObjectiveFunction):
             A 1D array of length equal to that of each array argument.
         """
         # lsvec = sqrt(terms)
+        #   NOTE: ^ That's only correct if lsvec is >= 0, and some classes don't satisfy that.
         # dlsvec = 0.5/lsvec * dterms
+        #
         if intermediates is None:
             intermediates = self._intermediates(probs, counts, total_counts, freqs)
         lsvec = self.lsvec(probs, counts, total_counts, freqs, intermediates)
@@ -1461,96 +1463,6 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         """
         raise NotImplementedError("Derived classes should implement this!")
 
-    #MOVED - but these versions have updated names
-    #def _persistent_memory_estimate(self, num_elements=None):
-    #    #  Estimate & check persistent memory (from allocs within objective function)
-    #    """
-    #    Compute the amount of memory needed to perform evaluations of this objective function.
-    #
-    #    This number includes both intermediate and final results, and assumes
-    #    that the types of evauations given by :meth:`_evaltree_subcalls`
-    #    are required.
-    #
-    #    Parameters
-    #    ----------
-    #    num_elements : int, optional
-    #        The number of elements (circuit outcomes) that will be computed.
-    #
-    #    Returns
-    #    -------
-    #    int
-    #    """
-    #    if num_elements is None:
-    #        nout = int(round(_np.sqrt(self.mdl.dim)))  # estimate of avg number of outcomes per string
-    #        nc = len(self.circuits)
-    #        ne = nc * nout  # estimate of the number of elements (e.g. probabilities, # LS terms, etc) to compute
-    #    else:
-    #        ne = num_elements
-    #    np = self.mdl.num_params
-    #
-    #    # "persistent" memory is that used to store the final results.
-    #    obj_fn_mem = FLOATSIZE * ne
-    #    jac_mem = FLOATSIZE * ne * np
-    #    hess_mem = FLOATSIZE * ne * np**2
-    #    persistent_mem = 4 * obj_fn_mem + jac_mem  # 4 different objective-function sized arrays, 1 jacobian array?
-    #    if any([nm == "bulk_fill_hprobs" for nm in self._evaltree_subcalls()]):
-    #        persistent_mem += hess_mem  # we need room for the hessian too!
-    #    # TODO: what about "bulk_hprobs_by_block"?
-    #
-    #    return persistent_mem
-    #
-    #def _evaltree_subcalls(self):
-    #    """
-    #    The types of calls that will be made to an evaluation tree.
-    #
-    #    This information is used for memory estimation purposes.
-    #
-    #    Returns
-    #    -------
-    #    list
-    #    """
-    #    calls = ["bulk_fill_probs", "bulk_fill_dprobs"]
-    #    if self.enable_hessian: calls.append("bulk_fill_hprobs")
-    #    return calls
-    #
-    #def num_data_params(self):
-    #    """
-    #    The number of degrees of freedom in the data used by this objective function.
-    #
-    #    Returns
-    #    -------
-    #    int
-    #    """
-    #    return self.dataset.degrees_of_freedom(self.ds_circuits,
-    #                                               aggregate_times=not self.time_dependent)
-
-    #def _precompute_omitted_freqs(self):
-    #    """
-    #    Detect omitted frequences (assumed to be 0) so we can compute objective fn correctly
-    #    """
-    #    self.firsts = []; self.indicesOfCircuitsWithOmittedData = []
-    #    for i, c in enumerate(self.circuits):
-    #        lklen = _slct.length(self.lookup[i])
-    #        if 0 < lklen < self.mdl.compute_num_outcomes(c):
-    #            self.firsts.append(_slct.to_array(self.lookup[i])[0])
-    #            self.indicesOfCircuitsWithOmittedData.append(i)
-    #    if len(self.firsts) > 0:
-    #        self.firsts = _np.array(self.firsts, 'i')
-    #        self.indicesOfCircuitsWithOmittedData = _np.array(self.indicesOfCircuitsWithOmittedData, 'i')
-    #        self.dprobs_omitted_rowsum = _np.empty((len(self.firsts), self.nparams), 'd')
-    #        self.raw_objfn.printer.log("SPARSE DATA: %d of %d rows have sparse data" %
-    #                                   (len(self.firsts), len(self.circuits)))
-    #    else:
-    #        self.firsts = None  # no omitted probs
-    #
-    #def _compute_count_vectors(self):
-    #    """
-    #    Ensure self.cache contains count and total-count vectors.
-    #    """
-    #    if not self.cache.has_count_vectors():
-    #        self.cache.add_count_vectors(self.dataset, self.ds_circuits, self.circuit_weights)
-    #    return self.cache.counts, self.cache.total_counts
-
     def _construct_hessian(self, counts, total_counts, prob_clip_interval):
         """
         Framework for constructing a hessian matrix row by row using a derived
@@ -1723,6 +1635,8 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
 #                         = (p - f)^2 * ( ((1-p) + p)/(p*(1-p)) )
 #                         = 1/(p*(1-p)) * (p - f)^2
 
+
+# negative lsvec possible
 class RawChi2Function(RawObjectiveFunction):
     """
     The function `N(p-f)^2 / p`
@@ -1813,7 +1727,8 @@ class RawChi2Function(RawObjectiveFunction):
         numpy.ndarray
             A 1D array of length equal to that of each array argument.
         """
-        return (probs - freqs) * self._weights(probs, freqs, total_counts)  # Note: ok if this is negative
+        out = (probs - freqs) * self._weights(probs, freqs, total_counts)  # Note: ok if this is negative
+        return out
 
     def dlsvec(self, probs, counts, total_counts, freqs, intermediates=None):
         """
@@ -1848,7 +1763,8 @@ class RawChi2Function(RawObjectiveFunction):
             A 1D array of length equal to that of each array argument.
         """
         weights = self._weights(probs, freqs, total_counts)
-        return weights + (probs - freqs) * self._dweights(probs, freqs, weights)
+        out =  weights + (probs - freqs) * self._dweights(probs, freqs, weights)
+        return out
 
     def hlsvec(self, probs, counts, total_counts, freqs, intermediates=None):
         """
@@ -2368,6 +2284,7 @@ class RawChiAlphaFunction(RawObjectiveFunction):
         return total_counts * _np.where(probs > p0, 1.0, 2 * c1 * probs)
 
 
+# negative lsvec possible
 class RawFreqWeightedChi2Function(RawChi2Function):
 
     """
@@ -2562,6 +2479,7 @@ class RawFreqWeightedChi2Function(RawChi2Function):
         return 2 * total_counts / self.min_freq_clip_for_weighting
 
 
+# negative lsvec possible
 class RawCustomWeightedChi2Function(RawChi2Function):
 
     """
@@ -2782,6 +2700,8 @@ class RawCustomWeightedChi2Function(RawChi2Function):
 #  terms, where each term == sqrt( N_{i,sl} * -log(p_{i,sl}) )
 #
 # See LikelihoodFunction.py for details on patching
+
+
 class RawPoissonPicDeltaLogLFunction(RawObjectiveFunction):
     """
     The function `N*f*log(f/p) - N*(f-p)`.
@@ -4193,6 +4113,13 @@ class RawTVDFunction(RawObjectiveFunction):
         raise NotImplementedError("Derivatives not implemented for TVD yet!")
 
 
+######################################################
+#
+#   Start MDCObjectiveFunction subclasses
+#
+######################################################
+
+
 class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
     """
     A time-independent model-based (:class:`MDCObjectiveFunction`-derived) objective function.
@@ -4353,7 +4280,8 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         self.layout.free_local_array(self.obj)
         self.layout.free_local_array(self.jac)
 
-    #Model-based regularization and penalty support functions
+    # Main public instance functions
+
     def set_penalties(self, regularize_factor=0, cptp_penalty_factor=0, spam_penalty_factor=0,
                       errorgen_penalty_factor=0, forcefn_grad=None, shift_fctr=100,
                       prob_clip_interval=(-10000, 1000)):
@@ -4417,8 +4345,10 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         self.prob_clip_interval = prob_clip_interval  # not really a "penalty" per se, but including it as one
         # gives the user the ability to easily set it if they ever need to (unlikely)
 
-        self._process_penalties = self.layout.part_of_final_atom_processor \
-            if isinstance(self.layout, _DistributableCOPALayout) else True
+        if isinstance(self.layout, _DistributableCOPALayout):
+            self._process_penalties = self.layout.part_of_final_atom_processor
+        else:
+            self._process_penalties = True
 
         ex = 0  # Compute "extra" number of terms/lsvec-element/rows-of-jacobian beyond evaltree elements
 
@@ -4436,309 +4366,184 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
         return ex
 
-    def _lspenaltyvec(self, paramvec):
-        """
-        The least-squares penalty vector, an array of the square roots of the penalty terms.
-
-        Parameters
-        ----------
-        paramvec : numpy.ndarray
-            The vector of (model) parameters to evaluate the objective function at.
-
-        Returns
-        -------
-        numpy.ndarray
-        """
-        if self.forcefn_grad is not None:
-            force_vec = self.forceShift - _np.dot(self.forcefn_grad, self.model.to_vector())
-            assert(_np.all(force_vec >= 0)), "Inadequate forcing shift!"
-            forcefn_penalty = _np.sqrt(force_vec)
-        else: forcefn_penalty = []
-
-        if self.regularize_factor != 0:
-            paramvec_norm = self.regularize_factor * _np.array([max(0, absx - 1.0) for absx in map(abs, paramvec)], 'd')
-        else: paramvec_norm = []  # so concatenate ignores
-
-        if self.cptp_penalty_factor > 0:
-            cp_penalty_vec = _cptp_penalty(self.model, self.cptp_penalty_factor, self.opBasis)
-        else: cp_penalty_vec = []  # so concatenate ignores
-
-        if self.spam_penalty_factor > 0:
-            spam_penalty_vec = _spam_penalty(self.model, self.spam_penalty_factor, self.opBasis)
-        else: spam_penalty_vec = []  # so concatenate ignores
-
-        if self.errorgen_penalty_factor > 0:
-            errorgen_penalty_vec = _errorgen_penalty(self.model, self.errorgen_penalty_factor)
+    def terms(self, paramvec=None, oob_check=False, profiler_str="TERMS OBJECTIVE"):
+        tm = _time.time()
+        if paramvec is None:
+            paramvec = self.model.to_vector()
         else:
-            errorgen_penalty_vec = []
+            self.model.from_vector(paramvec)
+        terms = self.obj.view()
 
-        return _np.concatenate((forcefn_penalty, paramvec_norm, cp_penalty_vec, spam_penalty_vec, errorgen_penalty_vec))
+        unit_ralloc = self.layout.resource_alloc('atom-processing')
+        shared_mem_leader = unit_ralloc.is_host_leader
 
-    def _penaltyvec(self, paramvec):
-        """
-        The penalty vector, an array of all the penalty terms.
+        with self.resource_alloc.temporarily_track_memory(self.nelements):  # 'e' (terms)
+            self.model.sim.bulk_fill_probs(self.probs, self.layout)
+            self._clip_probs()
+    
+            if oob_check:  # Only used for termgap cases
+                if not self.model.sim.bulk_test_if_paths_are_sufficient(self.layout, self.probs, verbosity=1):
+                    raise ValueError("Out of bounds!")  # signals LM optimizer
 
-        Parameters
-        ----------
-        paramvec : numpy.ndarray
-            The vector of (model) parameters to evaluate the objective function at.
+            if shared_mem_leader:
+                terms_no_penalty = self.raw_objfn.terms(self.probs, self.counts, self.total_counts, self.freqs)
+                terms[:self.nelements] = terms_no_penalty
+                if self._process_penalties:
+                    terms[self.nelements:] = self._terms_penalty(paramvec)
 
-        Returns
-        -------
-        numpy.ndarray
-        """
-        return self._lspenaltyvec(paramvec)**2
+        if self.firsts is not None and shared_mem_leader:
+            omitted_probs = 1.0 - _np.array([self.probs[self.layout.indices_for_index(i)].sum() for i in self.indicesOfCircuitsWithOmittedData])
+            omitted_probs_firsts_terms = self.raw_objfn.zero_freq_terms(self.total_counts[self.firsts], omitted_probs)
+            terms[self.firsts] += omitted_probs_firsts_terms
+        
+        unit_ralloc.host_comm_barrier()
 
-    def _fill_lspenaltyvec_jac(self, paramvec, lspenaltyvec_jac):
-        """
-        Fill `lspenaltyvec_jac` with the jacobian of the least-squares (sqrt of the) penalty vector.
+        self.raw_objfn.resource_alloc.profiler.add_time(profiler_str, tm)
+        assert(terms.shape == (self.nelements + self.local_ex,))
+        return terms
 
-        Parameters
-        ----------
-        paramvec : numpy.ndarray
-            The vector of (model) parameters to evaluate the objective function at.
+    def lsvec(self, paramvec=None, oob_check=False, raw_objfn_lsvec_signs=True):
+        lsvec = self.terms(paramvec, oob_check, "LS OBJECTIVE")
+        if _np.any(lsvec < 0):
+            bad_locs = _np.where(lsvec < 0)[0]
+            msg = f"""
+            lsvec is only defined when terms is elementwise nonnegative.
+            We encountered negative values for terms[i] for indices i
+            in {bad_locs}.
+            """
+            raise RuntimeError(msg)
+        lsvec **= 0.5
+        if raw_objfn_lsvec_signs:
+            if self.layout.resource_alloc('atom-processing').is_host_leader:
+                raw_lsvec = self.raw_objfn.lsvec(self.probs, self.counts, self.total_counts, self.freqs)
+                lsvec[:self.nelements][raw_lsvec < 0] *= -1
+        return lsvec
 
-        lspenaltyvec_jac : numpy.ndarray
-            The array to fill.
+    def dterms(self, paramvec=None):
+        tm = _time.time()
+        unit_ralloc = self.layout.resource_alloc('param-processing')
+        shared_mem_leader = unit_ralloc.is_host_leader
 
-        Returns
-        -------
-        None
-        """
+        if paramvec is None:
+            paramvec = self.model.to_vector()
+        else:
+            self.model.from_vector(paramvec)
+    
+        dprobs = self.jac[0:self.nelements, :]
+        dprobs.shape = (self.nelements, self.nparams)
+
+        with self.resource_alloc.temporarily_track_memory(2 * self.nelements):
+            self.model.sim.bulk_fill_dprobs(dprobs, self.layout, self.probs)
+            self._clip_probs()
+            if shared_mem_leader:
+                if self.firsts is not None:
+                    for ii, i in enumerate(self.indicesOfCircuitsWithOmittedData):
+                        self.dprobs_omitted_rowsum[ii, :] = _np.sum(dprobs[self.layout.indices_for_index(i), :], axis=0)
+                dg_probs = self.raw_objfn.dterms(self.probs, self.counts, self.total_counts, self.freqs)
+                dprobs *= dg_probs[:, None]
+        
+        if shared_mem_leader and self.firsts is not None:
+            total_counts_firsts = self.total_counts[self.firsts]
+            omitted_probs = 1.0 - _np.array([_np.sum(self.probs[self.layout.indices_for_index(i)]) for i in self.indicesOfCircuitsWithOmittedData])
+            omitted_dprobs_firsts_dterms = self.raw_objfn.zero_freq_dterms(total_counts_firsts, omitted_probs)
+            dprobs[self.firsts] -= omitted_dprobs_firsts_dterms[:, None] * self.dprobs_omitted_rowsum
+        
+        if shared_mem_leader and self._process_penalties:
+            self._dterms_fill_penalty(paramvec, self.jac[self.nelements:, :])
+
+        unit_ralloc.host_comm_barrier()
+        self.raw_objfn.resource_alloc.profiler.add_time("JACOBIAN", tm)
+        return self.jac
+    
+    def dlsvec(self, paramvec=None):
+        tm = _time.time()
+        unit_ralloc = self.layout.resource_alloc('param-processing')
+        shared_mem_leader = unit_ralloc.is_host_leader
+
+        if paramvec is None:
+            paramvec = self.model.to_vector()
+        else:
+            self.model.from_vector(paramvec)
+
+        jac = self.dterms(paramvec)
+        if shared_mem_leader:
+            lsvec = self.lsvec(paramvec)
+            p5over_lsvec = 0.5/lsvec
+            p5over_lsvec[_np.abs(lsvec) < 1e-100] = 0.0
+            jac *= p5over_lsvec[:, None]
+
+        unit_ralloc.host_comm_barrier()
+        self.raw_objfn.resource_alloc.profiler.add_time("JACOBIAN", tm)
+        return self.jac
+    
+    # Helpers, supporting main public instance functions
+    
+    def _dterms_fill_penalty(self, paramvec, terms_jac):
+        wrtslice = self.layout.global_param_slice if isinstance(self.layout, _DistributableCOPALayout) else slice(0, len(paramvec))  # all params
         off = 0
-
-        # wrtslice gives the subset of all the model parameters that this processor is responsible for
-        # computing derivatives with respect to.
-        wrtslice = self.layout.global_param_slice if isinstance(self.layout, _DistributableCOPALayout) \
-            else slice(0, len(paramvec))  # all params
 
         if self.forcefn_grad is not None:
             n = self.forcefn_grad.shape[0]
-            lspenaltyvec_jac[off:off + n, :] = -self.forcefn_grad
+            terms_jac[off:off + n, :]  = -self.forcefn_grad
+            force = self.forceShift - _np.dot(self.forcefn_grad, self.model.to_vector())
+            assert(_np.all(force >= 0)), "Inadequate forcing shift!"
+            terms_jac[off:off + n, :] *= 2*_np.sqrt(force)[:, None]
             off += n
 
         if self.regularize_factor > 0:
             n = len(paramvec)
-            lspenaltyvec_jac[off:off + n, :] = _np.diag([(self.regularize_factor * _np.sign(x) if abs(x) > 1.0 else 0.0)
-                                                         for x in paramvec[wrtslice]])  # (N,N)
+            terms_jac[off:off + n, :] = _np.diag([(self.regularize_factor * _np.sign(x) if abs(x) > 1.0 else 0.0) for x in paramvec[wrtslice]])  # (N,N)
+            paramvec_norm = _paramvec_norm_penalty(self.regularize_factor, paramvec)
+            terms_jac[off:off + n, :] *= 2*paramvec_norm[:, None]
             off += n
 
         if self.cptp_penalty_factor > 0:
-            off += _cptp_penalty_jac_fill(
-                lspenaltyvec_jac[off:, :], self.model, self.cptp_penalty_factor, self.opBasis, wrtslice)
+            n = _cptp_penalty_jac_fill(terms_jac[off:, :], self.model, self.cptp_penalty_factor, self.opBasis, wrtslice)
+            cp_penalty = _cptp_penalty(self.model, self.cptp_penalty_factor, self.opBasis)
+            terms_jac[off:off+n, :] *= 2*cp_penalty[:, None]
+            off += n
 
         if self.spam_penalty_factor > 0:
-            off += _spam_penalty_jac_fill(
-                lspenaltyvec_jac[off:, :], self.model, self.spam_penalty_factor, self.opBasis, wrtslice)
+            n = _spam_penalty_jac_fill(terms_jac[off:, :], self.model, self.spam_penalty_factor, self.opBasis, wrtslice)
+            spam_penalty = _spam_penalty(self.model, self.spam_penalty_factor, self.opBasis)
+            terms_jac[off:off+n, :] *= 2*spam_penalty[:, None]
+            off += n
 
         if self.errorgen_penalty_factor > 0:
-            off += _errorgen_penalty_jac_fill(
-                lspenaltyvec_jac[off:, :], self.model, self.errorgen_penalty_factor, wrtslice)
+            n = _errorgen_penalty_jac_fill(terms_jac[off:, :], self.model, self.errorgen_penalty_factor, wrtslice)
+            errorgen_penalty = _errorgen_penalty(self.model, self.errorgen_penalty_factor)
+            terms_jac[off:off+n, :] *= 2*errorgen_penalty[:, None]
+            off += n
 
         assert(off == self.local_ex)
+        return
 
-    def _fill_dterms_penalty(self, paramvec, terms_jac):
-        """
-        Fill `terms_jac` with the jacobian of the penalty vector.
+    def _terms_penalty(self, paramvec):
+        blocks = [_np.zeros(shape=(0,))]
 
-        Parameters
-        ----------
-        paramvec : numpy.ndarray
-            The vector of (model) parameters to evaluate the objective function at.
+        if self.forcefn_grad is not None:
+            forcefn_penalty = self.forceShift - _np.dot(self.forcefn_grad, self.model.to_vector())
+            assert(_np.all(forcefn_penalty >= 0)), "Inadequate forcing shift!"
+            blocks.append(forcefn_penalty)
 
-        terms_jac : numpy.ndarray
-            The array to fill.
+        if self.regularize_factor != 0:
+            paramvec_norm = _paramvec_norm_penalty(self.regularize_factor, paramvec)
+            paramvec_norm **= 2
+            blocks.append(paramvec_norm)
 
-        Returns
-        -------
-        None
-        """
-        # terms_penalty = ls_penalty**2
-        # terms_penalty_jac = 2 * ls_penalty * ls_penalty_jac
-        self._fill_lspenaltyvec_jac(paramvec, terms_jac)
-        terms_jac[:, :] *= 2 * self._lspenaltyvec(paramvec)[:, None]
+        if self.cptp_penalty_factor > 0:
+            cp_penalty = _cptp_penalty(self.model, self.cptp_penalty_factor, self.opBasis) ** 2
+            blocks.append(cp_penalty)
 
-    #Omitted-probability support functions
+        if self.spam_penalty_factor > 0:
+            spam_penalty = _spam_penalty(self.model, self.spam_penalty_factor, self.opBasis) ** 2
+            blocks.append(spam_penalty)
 
-    def _omitted_prob_first_terms(self, probs):
-        """
-        Extracts the value of the first term for each circuit that has omitted probabilities.
+        if self.errorgen_penalty_factor > 0:
+            errorgen_penalty = _errorgen_penalty(self.model, self.errorgen_penalty_factor) ** 2
+            blocks.append(errorgen_penalty)
 
-        Nonzero probabilities may be predicted for circuit outcomes that
-        never occur in the data, and therefore do not produce "terms" for
-        the objective function sum.  Yet, in many objective functions, zero-
-        frequency terms that have non-zero probabilities still produce a
-        non-zero contribution and must be included.  This is performed by
-        adding these "omitted-probability" contributions to the first
-        (nonzero-frequncy, thus present) term corresponding to the given
-        circuit.  This function computes these omitted (zero-frequency)
-        terms and returns them in an array of length equal to the number
-        of circuits with omitted-probability contributions.
-
-        Parameters
-        ----------
-        probs : numpy.ndarray
-            The (full) vector of probabilities. Length is equal to the
-            total number of circuit outcomes (not the length of the
-            returned array).
-
-        Returns
-        -------
-        numpy.ndarray
-        """
-        omitted_probs = 1.0 - _np.array([probs[self.layout.indices_for_index(i)].sum()
-                                         for i in self.indicesOfCircuitsWithOmittedData])
-        return self.raw_objfn.zero_freq_terms(self.total_counts[self.firsts], omitted_probs)
-
-    def _update_lsvec_for_omitted_probs(self, lsvec, probs):
-        """
-        Updates the least-squares vector `lsvec`, adding the omitted-probability contributions.
-
-        Parameters
-        ----------
-        lsvec : numpy.ndarray
-            Vector of least-squares (sqrt of terms) objective function values *before* adding
-            omitted-probability contributions.  This function updates this array.
-
-        probs : numpy.ndarray
-            The (full) vector of probabilities. Length is equal to the
-            total number of circuit outcomes.
-
-        Returns
-        -------
-        None
-        """
-        # lsvec = sqrt(terms) => sqrt(terms + zerofreqfn(omitted))
-        lsvec[self.firsts] = _np.sqrt(lsvec[self.firsts]**2 + self._omitted_prob_first_terms(probs))
-
-    def _update_terms_for_omitted_probs(self, terms, probs):
-        """
-        Updates the terms vector `terms`, adding the omitted-probability contributions.
-
-        Parameters
-        ----------
-        terms : numpy.ndarray
-            Vector of objective function term values *before* adding
-            omitted-probability contributions.  This function updates this array.
-
-        probs : numpy.ndarray
-            The (full) vector of probabilities. Length is equal to the
-            total number of circuit outcomes.
-
-        Returns
-        -------
-        None
-        """
-        # terms => terms + zerofreqfn(omitted)
-        terms[self.firsts] += self._omitted_prob_first_terms(probs)
-
-    def _omitted_prob_first_dterms(self, probs):
-        """
-        Compute the derivative of the first-terms vector returned by :meth:`_omitted_prob_first_terms`.
-
-        This derivative is just with respect to the *probabilities*, not the
-        model parameters, as it anticipates a final dot product with the jacobian
-        of the computed probabilities with respect to the model parameters (see
-        :meth:`_update_dterms_for_omitted_probs`).
-
-        Parameters
-        ----------
-        probs : numpy.ndarray
-            The (full) vector of probabilities. Length is equal to the
-            total number of circuit outcomes.
-
-        Returns
-        -------
-        numpy.ndarray
-            Vector of the derivatives of the term values with respect
-            to the corresponding probability.  As such, this is a 1D
-            array of length equal to the number of circuits with omitted
-            contributions.
-        """
-        omitted_probs = 1.0 - _np.array([_np.sum(probs[self.layout.indices_for_index(i)])
-                                         for i in self.indicesOfCircuitsWithOmittedData])
-        return self.raw_objfn.zero_freq_dterms(self.total_counts[self.firsts], omitted_probs)
-
-    def _update_dterms_for_omitted_probs(self, dterms, probs, dprobs_omitted_rowsum):
-        # terms => terms + zerofreqfn(omitted)
-        # dterms => dterms + dzerofreqfn(omitted) * domitted  (and domitted = (-omitted_rowsum))
-        """
-        Updates term jacobian to account for omitted probabilities.
-
-        Parameters
-        ----------
-        dterms : numpy.ndarray
-            Jacobian of terms before and omitted-probability contributions are added.
-            This array is updated by this function.
-
-        probs : numpy.ndarray
-            The (full) vector of probabilities. Length is equal to the
-            total number of circuit outcomes.
-
-        dprobs_omitted_rowsum : numpy.ndarray
-            An array of shape `(M,N)` where `M` is the number of circuits with
-            omitted contributions and `N` is the number of model parameters.  This
-            matrix results from summing up the jacobian rows of all the *present*
-            probabilities for the circuit corresponding to the row.  That is, the
-            i-th row of this matrix contains the summed-up derivatives of all the
-            computed probabilities (i.e. present outcomes) for the i-th circuit with
-            omitted probabilities. These omitted probabilities are never computed, but
-            are inferred as 1.0 minus the present probabilities, so this matrix gives
-            the negative of the derivative of the omitted probabilities.
-
-        Returns
-        -------
-        None
-        """
-        dterms[self.firsts] -= self._omitted_prob_first_dterms(probs)[:, None] * dprobs_omitted_rowsum
-
-    def _update_dlsvec_for_omitted_probs(self, dlsvec, lsvec, probs, dprobs_omitted_rowsum):
-        """
-        Updates least-squares vector's jacobian to account for omitted probabilities.
-
-        Parameters
-        ----------
-        dlsvec : numpy.ndarray
-            Jacobian of least-squares vector before and omitted-probability contributions
-            are added.  This array is updated by this function.
-
-        lsvec : numpy.ndarray
-            The least-squares vector itself, as this is often helpful in this computation.
-            Length is equal to the total number of circuit outcomes.
-
-        probs : numpy.ndarray
-            The (full) vector of probabilities. Length is equal to the
-            total number of circuit outcomes.
-
-        dprobs_omitted_rowsum : numpy.ndarray
-            An array of shape `(M,N)` where `M` is the number of circuits with
-            omitted contributions and `N` is the number of model parameters.  This
-            matrix results from summing up the jacobian rows of all the *present*
-            probabilities for the circuit corresponding to the row.  That is, the
-            i-th row of this matrix contains the summed-up derivatives of all the
-            computed probabilities (i.e. present outcomes) for the i-th circuit with
-            omitted probabilities. These omitted probabilities are never computed, but
-            are inferred as 1.0 minus the present probabilities, so this matrix gives
-            the negative of the derivative of the omitted probabilities.
-
-        Returns
-        -------
-        None
-        """
-        # lsvec = sqrt(terms) => sqrt(terms + zerofreqfn(omitted))
-        # dlsvec = 0.5 / sqrt(terms) * dterms = 0.5 / lsvec * dterms
-        #          0.5 / sqrt(terms + zerofreqfn(omitted)) * (dterms + dzerofreqfn(omitted) * domitted)
-        # so dterms = 2 * lsvec * dlsvec, and
-        #    new_dlsvec = 0.5 / sqrt(...) * (2 * lsvec * dlsvec + dzerofreqfn(omitted) * domitted)
-
-        lsvec_firsts = lsvec[self.firsts]
-        updated_lsvec = _np.sqrt(lsvec_firsts**2 + self._omitted_prob_first_terms(probs))
-        updated_lsvec = _np.where(updated_lsvec == 0, 1.0, updated_lsvec)  # avoid 0/0 where lsvec & deriv == 0
-
-        # dlsvec => 0.5 / updated_lsvec * (2 * lsvec * dlsvec + dzerofreqfn(omitted) * domitted) memory efficient:
-        dlsvec[self.firsts] *= (lsvec_firsts / updated_lsvec)[:, None]
-        dlsvec[self.firsts] -= ((0.5 / updated_lsvec) * self._omitted_prob_first_dterms(probs))[:, None] \
-            * dprobs_omitted_rowsum
+        return _np.concatenate(blocks)
 
     def _clip_probs(self):
         """ Clips the potentially shared-mem self.probs according to self.prob_clip_interval """
@@ -4750,266 +4555,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             else:
                 _np.clip(self.probs, self.prob_clip_interval[0], self.prob_clip_interval[1], out=self.probs)
 
-    #Objective Function
-
-    def lsvec(self, paramvec=None, oob_check=False):
-        """
-        Compute the least-squares vector of the objective function.
-
-        This is the square-root of the terms-vector returned from :meth:`terms`.
-        This vector is the objective function value used by a least-squares
-        optimizer when optimizing this objective function.  Note that the existence
-        of this quantity requires that the terms be non-negative.  If this is not
-        the case, an error is raised.
-
-        Parameters
-        ----------
-        paramvec : numpy.ndarray, optional
-            The vector of (model) parameters to evaluate the objective function at.
-            If `None`, then the model's current parameter vector is used (held internally).
-
-        oob_check : bool, optional
-            Whether the objective function should raise an error if it is being
-            evaluated in an "out of bounds" region.
-
-        Returns
-        -------
-        numpy.ndarray
-            An array of shape `(nElements,)` where `nElements` is the number
-            of circuit outcomes.
-        """
-
-        #DEBUG REMOVE - used for memory profiling
-        #import os, psutil
-        #process = psutil.Process(os.getpid())
-        #def print_mem_usage(prefix):
-        #    print("%s: mem usage = %.3f GB" % (prefix, process.memory_info().rss / (1024.0**3)))
-
-        tm = _time.time()
-        if paramvec is not None:
-            self.model.from_vector(paramvec)
-        else:
-            paramvec = self.model.to_vector()
-        lsvec = self.obj.view()
-
-        # Whether this rank is the "leader" of all the processors accessing the same shared self.jac and self.probs mem.
-        #  Only leader processors should modify the contents of the shared memory, so we only apply operations *once*
-        #  `unit_ralloc` is the group of all the procs targeting same destination into self.obj
-        unit_ralloc = self.layout.resource_alloc('atom-processing')
-        shared_mem_leader = unit_ralloc.is_host_leader
-
-        with self.resource_alloc.temporarily_track_memory(self.nelements):  # 'e' (lsvec)
-            self.model.sim.bulk_fill_probs(self.probs, self.layout)  # syncs shared mem
-            self._clip_probs()  # clips self.probs in place w/shared mem sync
-
-            if oob_check:  # Only used for termgap cases
-                if not self.model.sim.bulk_test_if_paths_are_sufficient(self.layout, self.probs, verbosity=1):
-                    raise ValueError("Out of bounds!")  # signals LM optimizer
-
-            if shared_mem_leader:
-                lsvec_no_penalty = self.raw_objfn.lsvec(self.probs, self.counts, self.total_counts, self.freqs)
-                lsvec[:] = _np.concatenate((lsvec_no_penalty, self._lspenaltyvec(paramvec))) \
-                    if self._process_penalties else lsvec_no_penalty
-
-        if self.firsts is not None and shared_mem_leader:
-            self._update_lsvec_for_omitted_probs(lsvec, self.probs)
-        unit_ralloc.host_comm_barrier()  # have non-leader procs wait for leaders to set shared mem
-
-        self.raw_objfn.resource_alloc.profiler.add_time("LS OBJECTIVE", tm)
-        assert(lsvec.shape == (self.nelements + self.local_ex,))
-        return lsvec
-
-    def terms(self, paramvec=None):
-        """
-        Compute the terms of the objective function.
-
-        The "terms" are the per-circuit-outcome values that get summed together
-        to result in the objective function value.
-
-        Parameters
-        ----------
-        paramvec : numpy.ndarray, optional
-            The vector of (model) parameters to evaluate the objective function at.
-            If `None`, then the model's current parameter vector is used (held internally).
-
-        Returns
-        -------
-        numpy.ndarray
-            An array of shape `(nElements,)` where `nElements` is the number
-            of circuit outcomes.
-        """
-        tm = _time.time()
-        if paramvec is not None: self.model.from_vector(paramvec)
-        else: paramvec = self.model.to_vector()
-        terms = self.obj.view()
-
-        # Whether this rank is the "leader" of all the processors accessing the same shared self.jac and self.probs mem.
-        #  Only leader processors should modify the contents of the shared memory, so we only apply operations *once*
-        #  `unit_ralloc` is the group of all the procs targeting same destination into self.obj
-        unit_ralloc = self.layout.resource_alloc('atom-processing')
-        shared_mem_leader = unit_ralloc.is_host_leader
-
-        with self.resource_alloc.temporarily_track_memory(self.nelements):  # 'e' (terms)
-            self.model.sim.bulk_fill_probs(self.probs, self.layout)
-            self._clip_probs()  # clips self.probs in place w/shared mem sync
-
-            if shared_mem_leader:
-                terms_no_penalty = self.raw_objfn.terms(self.probs, self.counts, self.total_counts, self.freqs)
-                terms[:] = _np.concatenate((terms_no_penalty, self._penaltyvec(paramvec))) \
-                    if self._process_penalties else terms_no_penalty
-
-        if self.firsts is not None and shared_mem_leader:
-            self._update_terms_for_omitted_probs(terms, self.probs)
-        unit_ralloc.host_comm_barrier()  # have non-leader procs wait for leaders to set shared mem
-
-        self.raw_objfn.resource_alloc.profiler.add_time("TERMS OBJECTIVE", tm)
-        assert(terms.shape == (self.nelements + self.local_ex,))
-        return terms
-
-    # Jacobian function
-    def dlsvec(self, paramvec=None):
-        """
-        The derivative (jacobian) of the least-squares vector.
-
-        Derivatives are taken with respect to model parameters.
-
-        Parameters
-        ----------
-        paramvec : numpy.ndarray, optional
-            The vector of (model) parameters to evaluate the objective function at.
-            If `None`, then the model's current parameter vector is used (held internally).
-
-        Returns
-        -------
-        numpy.ndarray
-            An array of shape `(nElements,nParams)` where `nElements` is the number
-            of circuit outcomes and `nParams` is the number of model parameters.
-        """
-        tm = _time.time()
-        dprobs = self.jac[0:self.nelements, :]  # avoid mem copying: use jac mem for dprobs
-        dprobs.shape = (self.nelements, self.nparams)
-        if paramvec is not None:
-            self.model.from_vector(paramvec)
-        else:
-            paramvec = self.model.to_vector()
-
-        # Whether this rank is the "leader" of all the processors accessing the same shared self.jac and self.probs mem.
-        #  Only leader processors should modify the contents of the shared memory, so we only apply operations *once*
-        #  `unit_ralloc` is the group of all the procs targeting same destination into self.jac
-        unit_ralloc = self.layout.resource_alloc('param-processing')
-        shared_mem_leader = unit_ralloc.is_host_leader
-
-        with self.resource_alloc.temporarily_track_memory(2 * self.nelements):  # 'e' (dg_dprobs, lsvec)
-            #OLD jac distribution method
-            # Usual: rootcomm -this_fn-> atom_comm (sub_comm) -> block_comm
-            # New: rootcomm -> jac_slice_comm -this_fn-> atom_comm (sub_comm) -> block_comm  (??)
-            # it could be that the comm in resource_alloc is already split for jac distribution, but this
-            # would mean code that doesn't compute jacobians would be less efficient.
-            # maybe hold a jac_slice_comm that is different?
-            # break up:  N procs = Natom_eaters * Nprocs_per_atom_eater
-            #            Nprocs_per_atom_eater = Nparamblk_eaters * Nprocs_per_paramblk_eater
-            #wrtSlice = resource_alloc.jac_slice if (resource_alloc.jac_distribution_method == "columns") \
-            #           else slice(0, self.model.num_params)
-
-            self.model.sim.bulk_fill_dprobs(dprobs, self.layout, self.probs)  # wrtSlice)
-            self._clip_probs()  # clips self.probs in place w/shared mem sync
-
-            if shared_mem_leader:
-                if self.firsts is not None:
-                    for ii, i in enumerate(self.indicesOfCircuitsWithOmittedData):
-                        self.dprobs_omitted_rowsum[ii, :] = _np.sum(dprobs[self.layout.indices_for_index(i), :], axis=0)
-
-                #if shared_mem_leader:  # Note: no need for barrier directly below as barrier further down suffices
-                dg_dprobs, lsvec = self.raw_objfn.dlsvec_and_lsvec(self.probs, self.counts, self.total_counts,
-                                                                   self.freqs)
-                dprobs *= dg_dprobs[:, None]
-                # (nelements,N) * (nelements,1)   (N = dim of vectorized model)
-                # this multiply also computes jac, which is just dprobs
-                # with a different shape (jac.shape == [nelements,nparams])
-
-        if shared_mem_leader:  # only "leader" modifies shared mem (dprobs & self.jac)
-            if self.firsts is not None:
-                #Note: lsvec is assumed to be *not* updated w/omitted probs contribution
-                self._update_dlsvec_for_omitted_probs(dprobs, lsvec, self.probs, self.dprobs_omitted_rowsum)
-
-            if self._process_penalties and shared_mem_leader:
-                self._fill_lspenaltyvec_jac(paramvec, self.jac[self.nelements:, :])  # jac.shape == (nelements+N,N)
-        unit_ralloc.host_comm_barrier()  # have non-leader procs wait for leaders to set shared mem
-
-        # REMOVE => unit tests?
-        #if self.check_jacobian: _opt.check_jac(lambda v: self.lsvec(
-        #    v), paramvec, self.jac, tol=1e-3, eps=1e-6, errType='abs')  # TO FIX
-
-        # dpr has shape == (nCircuits, nDerivCols), weights has shape == (nCircuits,)
-        # return shape == (nCircuits, nDerivCols) where ret[i,j] = dP[i,j]*(weights+dweights*(p-f))[i]
-        self.raw_objfn.resource_alloc.profiler.add_time("JACOBIAN", tm)
-        return self.jac
-
-    def dterms(self, paramvec=None):
-        """
-        Compute the jacobian of the terms of the objective function.
-
-        The "terms" are the per-circuit-outcome values that get summed together
-        to result in the objective function value.  Differentiation is with
-        respect to model parameters.
-
-        Parameters
-        ----------
-        paramvec : numpy.ndarray, optional
-            The vector of (model) parameters to evaluate the objective function at.
-            If `None`, then the model's current parameter vector is used (held internally).
-
-        Returns
-        -------
-        numpy.ndarray
-            An array of shape `(nElements,nParams)` where `nElements` is the number
-            of circuit outcomes and `nParams` is the number of model parameters.
-        """
-        tm = _time.time()
-        dprobs = self.jac[0:self.nelements, :]  # avoid mem copying: use jac mem for dprobs
-        dprobs.shape = (self.nelements, self.nparams)
-        if paramvec is not None:
-            self.model.from_vector(paramvec)
-        else:
-            paramvec = self.model.to_vector()
-
-        # Whether this rank is the "leader" of all the processors accessing the same shared self.jac and self.probs mem.
-        #  Only leader processors should modify the contents of the shared memory, so we only apply operations *once*
-        #  `unit_ralloc` is the group of all the procs targeting same destination into self.jac
-        unit_ralloc = self.layout.resource_alloc('param-processing')
-        shared_mem_leader = unit_ralloc.is_host_leader
-
-        with self.resource_alloc.temporarily_track_memory(2 * self.nelements):  # 'e' (dg_dprobs, lsvec)
-            self.model.sim.bulk_fill_dprobs(dprobs, self.layout, self.probs)
-            self._clip_probs()  # clips self.probs in place w/shared mem sync
-
-            if shared_mem_leader:
-                if self.firsts is not None:
-                    for ii, i in enumerate(self.indicesOfCircuitsWithOmittedData):
-                        self.dprobs_omitted_rowsum[ii, :] = _np.sum(dprobs[self.layout.indices_for_index(i), :], axis=0)
-
-                #if shared_mem_leader:  # Note: barrier below work suffices for this condition too
-                dprobs *= self.raw_objfn.dterms(self.probs, self.counts, self.total_counts, self.freqs)[:, None]
-                # (nelements,N) * (nelements,1)   (N = dim of vectorized model)
-                # this multiply also computes jac, which is just dprobs
-                # with a different shape (jac.shape == [nelements,nparams])
-
-        if shared_mem_leader:
-            if self.firsts is not None:
-                self._update_dterms_for_omitted_probs(dprobs, self.probs, self.dprobs_omitted_rowsum)
-
-            if self._process_penalties:
-                self._fill_dterms_penalty(paramvec, self.jac[self.nelements:, :])  # jac.shape == (nelements+N,N)
-        unit_ralloc.host_comm_barrier()  # have non-leader procs wait for leaders to set shared mem
-
-        # REMOVE => unit tests
-        #if self.check_jacobian: _opt.check_jac(lambda v: self.lsvec(
-        #    v), paramvec, self.jac, tol=1e-3, eps=1e-6, errType='abs')  # TO FIX
-
-        # dpr has shape == (nCircuits, nDerivCols), weights has shape == (nCircuits,)
-        # return shape == (nCircuits, nDerivCols) where ret[i,j] = dP[i,j]*(weights+dweights*(p-f))[i]
-        self.raw_objfn.resource_alloc.profiler.add_time("JACOBIAN", tm)
-        return self.jac
+    # Hessians, public and private instance functions
 
     def hessian_brute(self, paramvec=None):
         """
@@ -6276,6 +5822,11 @@ def _errorgen_penalty(mdl, prefactor):
     return prefactor * _np.array([_np.sqrt(val)], 'd')
 
 
+def _paramvec_norm_penalty(reg_factor, paramvec):
+    out = reg_factor * _np.array([max(0, absx - 1.0) for absx in map(abs, paramvec)], 'd')
+    return out
+
+
 def _cptp_penalty_jac_fill(cp_penalty_vec_grad_to_fill, mdl, prefactor, op_basis, wrt_slice):
     """
     Helper function - jacobian of CPTP penalty (sum of tracenorms of gates)
@@ -6505,10 +6056,6 @@ class LogLWildcardFunction(ObjectiveFunction):
         #assumes self.logl_objfn.fn(...) was called to initialize the members of self.logl_objfn
         self.logl_objfn.resource_alloc.add_tracked_memory(self.logl_objfn.probs.size)
         self.probs = self.logl_objfn.probs.copy()
-
-    #def _default_evalpt(self):
-    #    """The default point to evaluate functions at """
-    #    return self.wildcard_budget.to_vector()
 
     #Mimic the underlying LogL objective
     def __getattr__(self, attr):

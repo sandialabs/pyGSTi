@@ -2,7 +2,7 @@
 Functions for reducing the number of required fiducial pairs for analysis.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -19,22 +19,20 @@ import scipy.special as _spspecial
 import scipy.linalg as _sla
 
 from math import ceil
-import time
 
 from pygsti import baseobjs as _baseobjs
 from pygsti import circuits as _circuits
 
 from pygsti.circuits import circuitconstruction as _gsc
 from pygsti.modelmembers.operations import EigenvalueParamDenseOp as _EigenvalueParamDenseOp
-from pygsti.tools import apply_aliases_to_circuits as _apply_aliases_to_circuits
 from pygsti.tools import remove_duplicates as _remove_duplicates
 from pygsti.tools import slicetools as _slct
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
+from pygsti.forwardsims import MatrixForwardSimulator as _MatrixForwardSimulator
 
-from pygsti.algorithms.germselection import construct_update_cache, minamide_style_inverse_trace, compact_EVD, compact_EVD_via_SVD, germ_set_spanning_vectors
+from pygsti.algorithms.germselection import construct_update_cache, minamide_style_inverse_trace, compact_EVD, germ_set_spanning_vectors
 from pygsti.algorithms import scoring as _scoring
 
-from pygsti.tools.matrixtools import print_mx
 
 import warnings
 
@@ -1658,6 +1656,10 @@ def find_sufficient_fiducial_pairs_per_germ_global(target_model, prep_fiducials,
         `prep_fiducials` and `meas_fiducials`).
     """
 
+    if not isinstance(target_model.sim, _MatrixForwardSimulator):
+        target_model = target_model.copy()
+        target_model.sim = 'matrix'
+
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
 
     #if no germ_vector_spanning_set is passed in compute it here.
@@ -1674,7 +1676,7 @@ def find_sufficient_fiducial_pairs_per_germ_global(target_model, prep_fiducials,
             if germ_set_spanning_kwargs is not None:
                 used_kwargs.update(germ_set_spanning_kwargs)
                                        
-            germ_vector_spanning_set = germ_set_spanning_vectors(target_model, germs, 
+            germ_vector_spanning_set, _ = germ_set_spanning_vectors(target_model, germs, 
                                                                  float_type=float_type, 
                                                                  evd_tol = evd_tol,
                                                                  verbosity=verbosity,

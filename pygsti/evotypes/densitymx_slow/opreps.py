@@ -2,7 +2,7 @@
 Operation representation classes for the `densitymx_slow` evolution type.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -270,10 +270,6 @@ class OpRepStochastic(OpRepRandomUnitary):
         self.rates[:] = rates
         self.update_unitary_rates(unitary_rates)
 
-#class OpRepClifford(OpRep):  # TODO?
-#    #def __init__(self, unitarymx, symplecticrep):
-#    #    pass
-
 
 class OpRepComposed(OpRep):
 
@@ -375,13 +371,6 @@ class OpRepEmbedded(OpRep):
         self.offset = sum(blocksizes[0:self.active_block_index])
         super(OpRepEmbedded, self).__init__(state_space)
 
-    #def __reduce__(self):
-    #    return (DMOpRepEmbedded, (self.embedded,
-    #                              self.num_basis_els, self.action_inds,
-    #                              self.blocksizes, self.embeddedDim,
-    #                              self.ncomponents, self.active_block_index,
-    #                              self.nblocks, self.dim))
-
     def _acton_other_blocks_trivially(self, output_state, state):
         offset = 0
         for iBlk, blockSize in enumerate(self.blocksizes):
@@ -465,15 +454,6 @@ class OpRepExpErrorgen(OpRep):
 
     def exp_params(self):
         return (self.mu, self.eta, self.m_star, self.s)
-
-    #def __reduce__(self):
-    #    if self.unitary_postfactor is None:
-    #        return (DMOpRepLindblad, (self.errorgen_rep, self.mu, self.eta, self.m_star, self.s,
-    #                                  _np.empty(0, 'd'), _np.empty(0, _np.int64), _np.zeros(1, _np.int64)))
-    #    else:
-    #        return (DMOpRepLindblad, (self.errorgen_rep, self.mu, self.eta, self.m_star, self.s,
-    #                                  self.unitary_postfactor.data, self.unitary_postfactor.indices,
-    #                                  self.unitary_postfactor.indptr))
 
     def acton(self, state):
         """ Act this gate map on an input state """

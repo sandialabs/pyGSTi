@@ -2,7 +2,7 @@
 The LinearOperator class and supporting functionality.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -127,28 +127,6 @@ class LinearOperator(_modelmember.ModelMember):
         None
         """
         pass
-
-    #def rep_at_time(self, t):
-    #    """
-    #    Retrieves a representation of this operator at time `t`.
-    #
-    #    This is operationally equivalent to calling `self.set_time(t)` and
-    #    then retrieving `self._rep`.  However, what is returned from this function
-    #    need not be the same rep object for different times, allowing the
-    #    operator object to cache many reps for different times to increase performance
-    #    (this avoids having to initialize the same rep at a given time).
-    #
-    #    Parameters
-    #    ----------
-    #    t : float
-    #        The time.
-    #
-    #    Returns
-    #    -------
-    #    object
-    #    """
-    #    self.set_time(t)
-    #    return self._rep
 
     def to_dense(self, on_space='minimal'):
         """

@@ -2,7 +2,7 @@
 Core GST algorithms
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -1149,8 +1149,6 @@ def find_closest_unitary_opmx(operation_mx):
     # d = _np.sqrt(operation_mx.shape[0])
     # I = _np.identity(d)
 
-    #def getu_1q(basisVec):  # 1 qubit version
-    #    return _spl.expm( 1j * (basisVec[0]*_tools.sigmax + basisVec[1]*_tools.sigmay + basisVec[2]*_tools.sigmaz) )
     def _get_gate_mx_1q(basis_vec):  # 1 qubit version
         return _tools.single_qubit_gate(basis_vec[0],
                                         basis_vec[1],

@@ -2,7 +2,7 @@
 Defines the MapForwardSimulator calculator class
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -102,7 +102,6 @@ class SimpleMapForwardSimulator(_ForwardSimulator):
         #Note: I don't think we need to implement __setstate__ since the model also needs to be reset,
         # and this is done by the parent model which will cause _set_evotype to be called.
         return state
-
 
 class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimulator):
     """
@@ -313,13 +312,6 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
                                                   global_layout.num_circuits, max_local_circuits,
                                                   layout._param_dimensions, (loc_nparams1, loc_nparams2),
                                                   (blk1, blk2), max_atom_cachesize, self.model.dim)
-
-            #def approx_mem_estimate(nc, np1, np2):
-            #    approx_cachesize = (num_circuits / nc) * 1.3  # inflate expected # of circuits per atom => cache_size
-            #    return _bytes_for_array_types(array_types, num_elements, num_elements / nc,
-            #                                  num_circuits, num_circuits / nc,
-            #                                  (num_params, num_params), (num_params / np1, num_params / np2),
-            #                                  approx_cachesize, self.model.dim)
 
             GB = 1.0 / 1024.0**3
             if mem_estimate > mem_limit:

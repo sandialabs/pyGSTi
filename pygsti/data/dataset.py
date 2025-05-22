@@ -2,7 +2,7 @@
 Defines the DataSet class and supporting classes and functions
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -1488,7 +1488,7 @@ class DataSet(_MongoSerializable):
         #unsafe=True OK b/c outcome_label_list contains the keys of an OutcomeLabelDict
 
     def add_count_list(self, circuit, outcome_labels, counts, record_zero_counts=True,
-                       aux=None, update_ol=True, unsafe=False):
+                       aux=None, update_ol=True):
         """
         Add a single circuit's counts to this DataSet
 
@@ -1515,30 +1515,12 @@ class DataSet(_MongoSerializable):
         update_ol : bool, optional
             This argument is for internal use only and should be left as True.
 
-        unsafe : bool, optional
-            `True` means that `outcome_labels` is guaranteed to hold tuple-type
-            outcome labels and never plain strings.  Only set this to `True` if
-            you know what you're doing.
-
         Returns
         -------
         None
         """
-        if self.bStatic: raise ValueError("Cannot add data to a static DataSet object")
-        circuit = self._collisionaction_update_circuit(circuit)
-
-        if self.collisionAction == "aggregate" and circuit in self:
-            iNext = int(max(self[circuit].time)) + 1 \
-                if (len(self[circuit].time) > 0) else 0
-            timeStampList = [iNext] * len(counts)
-            overwriteExisting = False
-        else:
-            timeStampList = [0] * len(counts)
-            overwriteExisting = True
-
-        self.add_raw_series_data(circuit, outcome_labels, timeStampList,
-                                 counts, overwriteExisting, record_zero_counts,
-                                 aux, update_ol, unsafe=unsafe)
+        count_dict = {ol: count for ol, count in zip(outcome_labels, counts)}
+        self.add_count_dict(circuit, count_dict, record_zero_counts, aux, update_ol)
 
     def add_count_arrays(self, circuit, outcome_index_array, count_array,
                          record_zero_counts=True, aux=None):
@@ -1729,6 +1711,14 @@ class DataSet(_MongoSerializable):
                 #rep count data was given, but we're not currently holding repdata,
                 # so we need to build this up for all existings sequences:
                 self._add_explicit_repetition_counts()
+
+        if rep_array is not None:
+            # Check for entries that are numerically equal to zero. For any such entries,
+            # so them to _exactly_ zero in preparation for floating-point equality checks
+            # with zero below, and in unit tests.
+            dtype_info = _np.finfo(rep_array.dtype)
+            near_zero = rep_array < 10**(-1.5*dtype_info.precision)
+            rep_array[near_zero] = 0
 
         if not record_zero_counts:
             # Go through repArray and remove any zeros, along with

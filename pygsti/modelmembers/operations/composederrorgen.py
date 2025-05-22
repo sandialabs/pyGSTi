@@ -2,7 +2,7 @@
 The ComposedErrorgen class and supporting functionality.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -21,6 +21,7 @@ from pygsti.modelmembers import modelmember as _modelmember
 from pygsti.evotypes import Evotype as _Evotype
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.baseobjs.basis import ExplicitBasis as _ExplicitBasis
+from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GlobalElementaryErrorgenLabel, LocalElementaryErrorgenLabel as _LocalElementaryErrorgenLabel
 from pygsti.tools import matrixtools as _mt
 
 
@@ -95,7 +96,7 @@ class ComposedErrorgen(_LinearOperator):
         errgens_to_compose = [serial_memo[i] for i in mm_dict['submembers']]
         return cls(errgens_to_compose, mm_dict['evotype'], state_space)
 
-    def coefficients(self, return_basis=False, logscale_nonham=False):
+    def coefficients(self, return_basis=False, logscale_nonham=False, label_type='global'):
         """
         Constructs a dictionary of the Lindblad-error-generator coefficients of this error generator.
 
@@ -118,6 +119,12 @@ class ComposedErrorgen(_LinearOperator):
             channel where all stochastic generators had this same coefficient.
             This is the value returned by :meth:`error_rates`.
 
+        label_type : str, optional (default 'global')
+            String specifying which type of `ElementaryErrorgenLabel` to use
+            as the keys for the returned dictionary. Allowed options are
+            'global' for `GlobalElementaryErrorgenLabel` and 'local' for
+            `LocalElementaryErrorgenLabel`.
+
         Returns
         -------
         Ltermdict : dict
@@ -139,7 +146,7 @@ class ComposedErrorgen(_LinearOperator):
         constant_basis = None  # the single same Basis used for every factor with a nonempty basis
 
         for eg in self.factors:
-            factor_coeffs = eg.coefficients(return_basis, logscale_nonham)
+            factor_coeffs = eg.coefficients(return_basis, logscale_nonham, label_type)
 
             if return_basis:
                 ltdict, factor_basis = factor_coeffs
@@ -184,9 +191,17 @@ class ComposedErrorgen(_LinearOperator):
         else:
             return Ltermdict
 
-    def coefficient_labels(self):
+    def coefficient_labels(self, label_type='global'):
         """
         The elementary error-generator labels corresponding to the elements of :meth:`coefficients_array`.
+
+        Parameters
+        ----------
+        label_type : str, optional (default 'global')
+            String specifying which type of `ElementaryErrorgenLabel` to use
+            as the keys for the returned dictionary. Allowed options are
+            'global' for `GlobalElementaryErrorgenLabel` and 'local' for
+            `LocalElementaryErrorgenLabel`.
 
         Returns
         -------
@@ -194,7 +209,7 @@ class ComposedErrorgen(_LinearOperator):
             A tuple of (<type>, <basisEl1> [,<basisEl2]) elements identifying the elementary error
             generators of this gate.
         """
-        return tuple(_itertools.chain(*[eg.coefficient_labels() for eg in self.factors]))
+        return tuple(_itertools.chain(*[eg.coefficient_labels(label_type) for eg in self.factors]))
 
     def coefficients_array(self):
         """
@@ -225,7 +240,7 @@ class ComposedErrorgen(_LinearOperator):
         """
         return _np.concatenate([eg.coefficients_array_deriv_wrt_params() for eg in self.factors], axis=0)
 
-    def error_rates(self):
+    def error_rates(self, label_type='global'):
         """
         Constructs a dictionary of the error rates associated with this error generator.
 
@@ -250,6 +265,14 @@ class ComposedErrorgen(_LinearOperator):
         rates is not necessarily the error rate of the overall
         channel.
 
+        Parameters
+        ----------
+        label_type : str, optional (default 'global')
+            String specifying which type of `ElementaryErrorgenLabel` to use
+            as the keys for the returned dictionary. Allowed options are
+            'global' for `GlobalElementaryErrorgenLabel` and 'local' for
+            `LocalElementaryErrorgenLabel`.
+
         Returns
         -------
         lindblad_term_dict : dict
@@ -262,7 +285,7 @@ class ComposedErrorgen(_LinearOperator):
             terms.  Values are real error rates except for the 2-basis-label
             case.
         """
-        return self.coefficients(return_basis=False, logscale_nonham=True)
+        return self.coefficients(return_basis=False, logscale_nonham=True, label_type=label_type)
 
     def set_coefficients(self, lindblad_term_dict, action="update", logscale_nonham=False, truncate=True):
         """
@@ -306,8 +329,17 @@ class ComposedErrorgen(_LinearOperator):
         -------
         None
         """
-        factor_coeffs_list = [eg.coefficients(False, logscale_nonham) for eg in self.factors]
-        perfactor_Ltermdicts = [_collections.OrderedDict() for eg in self.factors]
+        #TODO: The logic for these updates doesn't make sense to me. I would have expected
+        #this to take a list of dictionaries to do the updates.
+        first_key = next(iter(lindblad_term_dict))
+        if isinstance(first_key, (_GlobalElementaryErrorgenLabel, tuple)):
+            label_type='global'
+        else:
+            assert isinstance(first_key, _LocalElementaryErrorgenLabel), 'Unsupported error generator label type as key.'
+            label_type='local'
+
+        factor_coeffs_list = [eg.coefficients(False, logscale_nonham, label_type) for eg in self.factors]
+        perfactor_Ltermdicts = [dict() for eg in self.factors]
         unused_Lterm_keys = set(lindblad_term_dict.keys())
 
         #Divide lindblad_term_dict in per-factor Ltermdicts

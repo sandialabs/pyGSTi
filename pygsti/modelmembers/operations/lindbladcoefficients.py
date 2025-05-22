@@ -4,17 +4,23 @@ import scipy.sparse.linalg as _spsl
 import collections as _collections
 import copy as _copy
 import warnings as _warnings
-
 from pygsti.tools import lindbladtools as _lt
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools import optools as _ot
-from pygsti.tools import fastcalc as _fc
 from pygsti.baseobjs.basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis
 from pygsti.modelmembers import term as _term
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
-
 from functools import lru_cache
+try:
+    from pygsti.tools import fastcalc as _fc
+    triu_indices = _fc.fast_triu_indices
+except ImportError:
+    msg = 'Could not import cython module `fastcalc`. This may indicate that your cython extensions for pyGSTi failed to.'\
+          +'properly build. Lack of cython extensions can result in significant performance degredation so we recommend trying to rebuild them.'\
+           'Falling back to numpy implementation for triu_indices.'
+    _warnings.warn(msg)
+    triu_indices = _np.triu_indices
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 
@@ -81,6 +87,11 @@ class LindbladCoefficientBlock(_NicelySerializable):
         self._cache_mx = _np.zeros((len(self._bel_labels), len(self._bel_labels)), 'complex') \
             if self._block_type == 'other' else None
 
+        #this would get set to True in the very next method call anyway
+        self._coefficients_need_update = True
+        self._cached_elementary_errorgens = None
+        self._cached_elementary_errorgen_indices = None
+
         self._set_block_data(initial_block_data, truncate)
 
     def _set_block_data(self, block_data, truncate):
@@ -109,6 +120,11 @@ class LindbladCoefficientBlock(_NicelySerializable):
 
         self._truncate_block_data(truncate)
 
+        #set a flag to indicate that the coefficients (as returned by elementary_errorgens)
+        #need to be updated.
+        self._coefficients_need_update = True
+
+
     @property
     def basis_element_labels(self):
         return self._bel_labels
@@ -130,7 +146,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
 
     def create_lindblad_term_superoperators(self, mx_basis='pp', sparse="auto", include_1norms=False, flat=False):
         """
-        Compute the superoperator-generators corresponding to the Lindblad coefficiens in this block.
+        Compute the superoperator-generators corresponding to the Lindblad coefficients in this block.
         TODO: docstring update
 
         Returns
@@ -329,7 +345,6 @@ class LindbladCoefficientBlock(_NicelySerializable):
 
         return Lterms
 
-    #TODO: could cache this and update only when needed (would need to add dirty flag logic)
     @property
     def elementary_errorgen_indices(self):
         """
@@ -374,6 +389,9 @@ class LindbladCoefficientBlock(_NicelySerializable):
         # this coefficient block's coefficients that product the given (by the key)
         # elementary error generator.  Values are lists of (c_i, index_i) pairs,
         # such that the given elementary generator == sum_i c_i * coefficients_in_flattened_block[index_i]
+        if not self._coefficients_need_update and self._cached_elementary_errorgen_indices is not None:
+            return self._cached_elementary_errorgen_indices
+        
         from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LEEL
 
         elem_errgen_indices = _collections.OrderedDict()
@@ -405,6 +423,8 @@ class LindbladCoefficientBlock(_NicelySerializable):
                     elem_errgen_indices[_LEEL('A', (lbl1, lbl2))] = [(0.5j, ij), (-0.5j, ji)]  # A_PQ contributions
         else:
             raise ValueError("Internal error: invalid block type!")
+
+        self._cached_elementary_errorgen_indices = elem_errgen_indices
 
         return elem_errgen_indices
 
@@ -451,7 +471,6 @@ class LindbladCoefficientBlock(_NicelySerializable):
 
         return block_data_indices
 
-    #TODO: could cache this and update only when needed (would need to add dirty flag logic)
     @property
     def elementary_errorgens(self):
         """
@@ -473,7 +492,10 @@ class LindbladCoefficientBlock(_NicelySerializable):
             Specifies `block_data` as a linear combination of elementary error generators.
             Keys are :class:`LocalElementaryErrorgenLabel` objects and values are floats.
         """
-        elementary_errorgens = _collections.OrderedDict()
+        if not self._coefficients_need_update and self._cached_elementary_errorgens is not None:
+            return self._cached_elementary_errorgens
+
+        elementary_errorgens = dict()
         eeg_indices = self.elementary_errorgen_indices
         flat_data = self.block_data.ravel()
 
@@ -481,6 +503,9 @@ class LindbladCoefficientBlock(_NicelySerializable):
             val = _np.sum([coeff * flat_data[index] for coeff, index in linear_combo])
             elementary_errorgens[eeg_lbl] = _np.real_if_close(val).item()  # item() -> scalar
             #set_basis_el(lbl, basis[lbl])  # REMOVE
+        #cache the error generator dictionary for future use
+        self._cached_elementary_errorgens = elementary_errorgens
+        self._coefficients_need_update = False
 
         return elementary_errorgens
 
@@ -506,6 +531,10 @@ class LindbladCoefficientBlock(_NicelySerializable):
         self.block_data[(slice(None, None),) * self.block_data.ndim] = flat_data.reshape(self.block_data.shape)
         self._truncate_block_data(truncate)
 
+        #set a flag to indicate that the coefficients (as returned by elementary_errorgens)
+        #need to be updated.
+        self._coefficients_need_update = True
+
         return unused_elementary_errorgens
 
     def set_from_errorgen_projections(self, errorgen, errorgen_basis='pp', return_projected_errorgen=False,
@@ -517,6 +546,11 @@ class LindbladCoefficientBlock(_NicelySerializable):
         elementary_errorgens = out[0] if return_projected_errorgen else out
         unused = self.set_elementary_errorgens(elementary_errorgens, on_missing='raise', truncate=truncate)
         assert(len(unused) == 0)
+
+        #set a flag to indicate that the coefficients (as returned by elementary_errorgens)
+        #need to be updated.
+        self._coefficients_need_update = True
+
         return out[1] if return_projected_errorgen else None
 
     @property
@@ -774,6 +808,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
         v : numpy.ndarray
             A 1D array of real parameter values.
         """
+
         if self._param_mode == 'static':
             assert(len(v) == 0), "'static' paramterized blocks should have zero parameters!"
             return  # self.block_data remains the same - no update
@@ -814,7 +849,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
 
                 cache_mx = self._cache_mx
 
-                params_upper_indices = _fc.fast_triu_indices(num_bels) 
+                params_upper_indices = triu_indices(num_bels) 
                 params_upper = 1j*params[params_upper_indices]
                 params_lower = (params.T)[params_upper_indices]
 
@@ -837,7 +872,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
 
             elif self._param_mode == "elements":  # params mx stores block_data (hermitian) directly
                 #params holds block_data real and imaginary parts directly
-                params_upper_indices = _fc.fast_triu_indices(num_bels) 
+                params_upper_indices = triu_indices(num_bels) 
                 params_upper = -1j*params[params_upper_indices]
                 params_lower = (params.T)[params_upper_indices]
 
@@ -853,8 +888,11 @@ class LindbladCoefficientBlock(_NicelySerializable):
                                  % (self._param_mode, self._block_type))
         else:
             raise ValueError("Internal error: invalid block type!")
+        
+        #set a flag to indicate that the coefficients (as returned by elementary_errorgens)
+        #need to be updated.
+        self._coefficients_need_update = True
 
-    #def paramvals_to_coefficients_deriv(self, parameter_values, cache_mx=None):
     def deriv_wrt_params(self, v=None):
         """
         Construct derivative of Lindblad coefficients (for this block) from a set of parameter values.

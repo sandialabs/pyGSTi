@@ -2,7 +2,7 @@
 Defines the Model class and supporting functionality.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -606,6 +606,56 @@ class OpModel(Model):
         """
         self._clean_paramvec()
         return len(self._paramvec)
+
+    @property
+    def parameter_labels(self):
+        """
+        A list of labels, usually of the form `(op_label, string_description)` describing this model's parameters.
+        """
+        self._clean_paramvec()
+        return self._ops_paramlbls_to_model_paramlbls(self._paramlbls)
+    
+    def set_parameter_label(self, index, label):
+        """
+        Set the label of a single model parameter.
+
+        Parameters
+        ----------
+        index : int
+            The index of the paramter whose label should be set.
+
+        label : object
+            An object that serves to label this parameter.  Often a string.
+
+        Returns
+        -------
+        None
+        """
+        self._clean_paramvec()
+        self._paramlbls[index] = label
+    
+    @property
+    def parameter_bounds(self):
+        """ Upper and lower bounds on the values of each parameter, utilized by optimization routines """
+        self._clean_paramvec()
+        return self._param_bounds
+    
+    @property
+    def num_modeltest_params(self):
+        """
+        The parameter count to use when testing this model against data.
+
+        Often times, this is the same as :meth:`num_params`, but there are times
+        when it can convenient or necessary to use a parameter count different than
+        the actual number of parameters in this model.
+
+        Returns
+        -------
+        int
+            the number of model parameters.
+        """
+        self._clean_paramvec()
+        return Model.num_modeltest_params.fget(self)
 
     @property
     def parameter_labels(self):
@@ -2392,7 +2442,7 @@ class OpModel(Model):
         if reduce_to_model_space:
             allowed_lbls = op.errorgen_coefficient_labels()
             allowed_lbls_set = set(allowed_lbls)
-            allowed_row_basis = _ExplicitElementaryErrorgenBasis(self.state_space, allowed_lbls, basis1q=None)
+            allowed_row_basis = _ExplicitElementaryErrorgenBasis(self.state_space, allowed_lbls, basis_1q=None)
             disallowed_indices = [i for i, lbl in enumerate(row_basis.labels) if lbl not in allowed_lbls_set]
 
             if len(disallowed_indices) > 0:
