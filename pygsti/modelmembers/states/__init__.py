@@ -187,7 +187,7 @@ def state_type_from_op_type(op_type):
     return state_type_preferences
 
 
-def convert(state, to_type, basis, cp_penalty=1e-7, ideal_state=None, flatten_structure=False):
+def convert(state, to_type, basis, ideal_state=None, flatten_structure=False, cp_penalty=1e-7):
     """
     TODO: update docstring
     Convert SPAM vector to a new type of parameterization.
@@ -307,7 +307,7 @@ def convert(state, to_type, basis, cp_penalty=1e-7, ideal_state=None, flatten_st
                     if not soln.success and soln.fun > 1e-6:  # not "or" because success is often not set correctly
                         raise ValueError("Failed to find an errorgen such that exp(errorgen)|ideal> = |state>")
                     
-                    errgen_vec = _np.linalg.pinv(phys_directions)  @ soln.x
+                    errgen_vec = _np.linalg.lstsq(phys_directions, soln.x)[0]
                     errorgen.from_vector(errgen_vec)
 
                 EffectiveExpErrorgen = _IdentityPlusErrorgenOp if lndtype.meta == '1+' else _ExpErrorgenOp
