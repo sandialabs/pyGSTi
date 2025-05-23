@@ -89,7 +89,11 @@ def make_mirror_edesign(test_edesign: _FreeformDesign,
             
             exact_circ = id_exact_circ_dict[circ_id]
 
-            assert test_edesign.aux_info[c][0]['id'] == ref_edesign.aux_info[exact_circ][0]['id'], f"ID mismatch! test circuit has ID {test_edesign.aux_info[c][0]['id']}, ref circuit has ID {ref_edesign.aux_info[exact_circ][0]['id']}"
+            valid_test_ids = set([aux['id'] for aux in ref_edesign.aux_info[exact_circ]])
+
+            test_id = aux['id']
+
+            assert test_id in valid_test_ids, f"Invalid ref ID {ref_id} for ref circuit corresponding to test IDs {valid_test_ids}"
 
         else:
             print("using provided edesign for both reference and test compilations")

@@ -9,6 +9,8 @@ from collections import Counter as _Counter, defaultdict as _defaultdict
 import itertools as _itertools
 import networkx as _nx
 
+import tqdm
+
 import numpy as _np
 import json as _json
 
@@ -30,7 +32,7 @@ def sample_lcu_subcircuits(lcu_circ, width_depths, num_samples, strategy='simple
                            num_test_samples=num_test_samples, rand_state=rand_state,
                            arch=arch, subgraph_cache=subgraph_cache)
 
-def sample_subcircuits(full_circs: Union[_Circuit, Dict[str, _Circuit]],
+def sample_subcircuits(full_circs: Union[_Circuit, List[_Circuit]],
                        width_depths: Dict[int, List[int]],
                        num_samples_per_circ: int,
                        strategy: Union[str, Callable[..., Any]] = 'simple',
@@ -54,11 +56,11 @@ def sample_subcircuits(full_circs: Union[_Circuit, Dict[str, _Circuit]],
     subcircuits = _defaultdict(list)
     counter = 0
 
-    if not isinstance(full_circs, dict): # package pygsti circuit into dict if dict was not provided.
-        full_circs = {'default name': full_circs}
+    if not isinstance(full_circs, list): # package pygsti circuit into dict if dict was not provided.
+        full_circs = [full_circs]
 
-    for name, full_circ in full_circs.items():
-        print(f'sampling circuit {name}')
+    for full_circ in tqdm.tqdm(full_circs, ascii=True):
+        # print(f'sampling circuit {name}')
         for w, ds in width_depths.items():
             print(f'Width: {w}, Depth: ', end='')
             for d in ds:
@@ -83,7 +85,7 @@ def sample_subcircuits(full_circs: Union[_Circuit, Dict[str, _Circuit]],
                     raise ValueError("'strategy' is not a function or known string")
                 
                 for subcirc, drop in zip(subcircs, drops):
-                    print(subcirc)
+                    # print(subcirc)
                     subcircuits[subcirc].append({'width': w, 'physical_depth': d, 'dropped_gates': drop, 'id': counter})
                     counter += 1
                 
@@ -268,7 +270,7 @@ def simple_weighted_subcirc_selection(full_circ, width, depth, num_subcircs=1, b
 
         assert len(subcirc_layers) == len(layer_names), "Relationship between layers and layer names is not one to one!"
 
-        print(len(subcirc_layers))
+        # print(len(subcirc_layers))
 
         for i in range(len(subcirc_layers)):
             scl = subcirc_layers[i]

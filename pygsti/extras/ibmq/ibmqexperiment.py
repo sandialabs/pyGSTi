@@ -28,12 +28,16 @@ except:
     _qiskit = None
 
 # Try to load IBM Runtime
-try: 
-    from qiskit_ibm_runtime import SamplerV2 as _Sampler
-    from qiskit_ibm_runtime import Session as _Session
-    from qiskit_ibm_runtime import RuntimeJobV2 as _RuntimeJobV2
-    from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager as _pass_manager
-except: _Sampler = None
+# try: 
+#     from qiskit_ibm_runtime import SamplerV2 as _Sampler
+#     from qiskit_ibm_runtime import Session as _Session
+#     from qiskit_ibm_runtime import RuntimeJobV2 as _RuntimeJobV2
+#     from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager as _pass_manager
+# except: _Sampler = None
+from qiskit_ibm_runtime import SamplerV2 as _Sampler
+from qiskit_ibm_runtime import Session as _Session
+from qiskit_ibm_runtime import RuntimeJobV2 as _RuntimeJobV2
+from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager as _pass_manager
 
 # Most recent version of QisKit that this has been tested on:
 #qiskit.__version__ = '1.1.1'
