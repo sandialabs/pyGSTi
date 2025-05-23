@@ -286,8 +286,13 @@ def convert(state, to_type, basis, ideal_state=None, flatten_structure=False, cp
                             exp_errgen.from_vector(new_vec)
                             J[:,i] = (exp_errgen.to_dense() @ ideal_prep - ideal_prep)[1:]/epsilon
 
-                        _,S,V = _np.linalg.svd(J)
-                        return V[:len(S),]
+                        _,S,Vt = _np.linalg.svd(J)
+
+                        #Only return nontrivial singular vectors
+                        non_zero_mask = _np.abs(S) > 1e-13
+                        non_trivial_vecs = Vt[non_zero_mask]
+                        non_trivial_vecs = non_trivial_vecs.reshape(-1, Vt.shape[1])  # Reshape to ensure it's 2D
+                        return non_trivial_vecs
                         
                     phys_directions = calc_physical_subspace(dense_state)
     

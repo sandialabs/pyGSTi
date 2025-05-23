@@ -578,7 +578,11 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False, cp_p
                         J[:,i] = vectorized_povm
 
                     _,S,Vt = _np.linalg.svd(J)
-                    return Vt[:len(S),]
+                    #Only return nontrivial singular vectors
+                    non_zero_mask = _np.abs(S) > 1e-13
+                    non_trivial_vecs = Vt[non_zero_mask]
+                    non_trivial_vecs = non_trivial_vecs.reshape(-1, Vt.shape[1])  # Reshape to ensure it's 2D
+                    return non_trivial_vecs
                 
                 phys_directions = calc_physical_subspace(dense_ideal_povm)
 
