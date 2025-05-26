@@ -405,15 +405,15 @@ class SimMethodBase(object):
         cls.gatestring1 = ('Gx', 'Gy')
         cls.gatestring2 = ('Gx', 'Gy', 'Gy')
         cls._expected_probs = {
-            cls.gatestring1: np.transpose(cls._model.povms['Mdefault']['0'].to_dense()) @
+            cls.gatestring1: (np.transpose(cls._model.povms['Mdefault']['0'].to_dense()) @
                                     cls._model['Gy'].to_dense() @
                                            cls._model['Gx'].to_dense() @
-                                                  cls._model.preps['rho0'].to_dense().reshape(-1)[0],
-            cls.gatestring2: np.transpose(cls._model.povms['Mdefault']['0'].to_dense()) @
+                                                  cls._model.preps['rho0'].to_dense()).reshape(-1)[0],
+            cls.gatestring2: (np.transpose(cls._model.povms['Mdefault']['0'].to_dense()) @
                                     cls._model['Gy'].to_dense() @
                                            cls._model['Gy'].to_dense() @
                                                   cls._model['Gx'].to_dense() @
-                                                         cls._model.preps['rho0'].to_dense().reshape(-1)[0]
+                                                         cls._model.preps['rho0'].to_dense()).reshape(-1)[0]
         }
         # TODO expected dprobs & hprobs
 

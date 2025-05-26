@@ -1,0 +1,1638 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.10.16, pytest-8.3.5, pluggy-1.6.0
+rootdir: /Users/jgonz19/Documents/bugfix-pr/pyGSTi
+configfile: pytest.ini
+plugins: anyio-4.9.0, nbval-0.11.0, cov-6.1.1, xdist-3.6.1
+collected 195 items
+
+test_model.py .....................................F.................... [ 29%]
+......................F............s.s...............s............F..... [ 66%]
+.....................................F...........................        [100%]
+
+=================================== FAILURES ===================================
+_____________ FullModelTester.test_set_all_parameterizations_GLND ______________
+
+self = <pygsti.models.explicitmodel.ExplicitOpModel object at 0x12abf0820>
+gate_type = 'GLND', prep_type = 'auto', povm_type = 'auto'
+instrument_type = 'auto', ideal_model = None, cptp_truncation_tol = 1e-06
+spam_cp_penalty = 1e-07
+
+    def set_all_parameterizations(self, gate_type, prep_type="auto", povm_type="auto",
+                                  instrument_type="auto", ideal_model=None, cptp_truncation_tol = 1e-6, spam_cp_penalty = 1e-7):
+        """
+        Convert all gates, states, and POVMs to a specific parameterization type.
+    
+        Parameters
+        ----------
+        parameterization_type : string
+            The gate, state, and POVM parameterization type.  Allowed
+            values are (where '*' means " terms" and " clifford terms"
+            evolution-type suffixes are allowed):
+    
+            - "full" : each gate / state / POVM effect element is an independent parameter
+            - "TP" : Trace-Preserving gates and state preps
+            - "static" : no parameters
+            - "static unitary" : no parameters; convert superops to unitaries
+            - "clifford" : no parameters; convert unitaries to Clifford symplecitics.
+            - "GLND*" : General unconstrained Lindbladian
+            - "CPTP*" : Completely-Positive-Trace-Preserving
+            - "H+S+A*" : Hamiltoian, Pauli-Stochastic, and Affine errors
+            - "H+S*" : Hamiltonian and Pauli-Stochastic errors
+            - "S+A*" : Pauli-Stochastic and Affine errors
+            - "S*" : Pauli-Stochastic errors
+            - "H+D+A*" : Hamiltoian, Depolarization, and Affine errors
+            - "H+D*" : Hamiltonian and Depolarization errors
+            - "D+A*" : Depolarization and Affine errors
+            - "D*" : Depolarization errors
+            - Any of the above with "S" replaced with "s" or "D" replaced with
+              "d". This removes the CPTP constraint on the gates and SPAM
+              operations (and as such is seldom used).
+    
+        ideal_model : Model, optional
+            This may specify an ideal model of unitary gates and pure state vectors
+            to be used as the *ideal* operation of each gate/SPAM operation, which
+            is particularly useful as target for CPTP-based conversions.
+    
+        cptp_truncation_tol : float, optional (default 1e-6)
+            Tolerance used for conversion to CPTP parameterizations. When converting to
+            CPTP models negative eigenvalues of the choi matrix representation of a superoperator
+            are truncated, which can result in a change in the PTM for that operator. This tolerance
+            indicates the maximum amount of truncation induced deviation from the original operations
+            (measured by frobenius distance) we're willing to accept without marking the conversion
+            as failed.
+        spam_cp_penalty : float, optional (default .5)
+            Converting SPAM operations to an error generator representation may
+            introduce trivial gauge degrees of freedom. These gauge degrees of freedom
+            are called trivial because they quite literally do not change the dense representation
+            (i.e. Hilbert-Schmidt vectors) at all. Despite being trivial, error generators along
+            this trivial gauge orbit may be non-CP, so this cptp penalty is used to favor channels
+            within this gauge orbit which are CPTP.
+    
+        Returns
+        -------
+        None
+        """
+        typ = gate_type
+    
+        # Set ideal model to static when used as targets (specifically needed for CPTP prep/povms)
+        static_model = None
+        if ideal_model is not None:
+            static_model = ideal_model.copy()
+            static_model.set_all_parameterizations('static')
+    
+        rtyp = _state.state_type_from_op_type(gate_type) if prep_type == "auto" else prep_type
+        povmtyp = _povm.povm_type_from_op_type(gate_type) if povm_type == "auto" else povm_type
+        ityp = _instrument.instrument_type_from_op_type(gate_type) if instrument_type == "auto" else instrument_type
+    
+        try:
+            self.convert_members_inplace(typ, 'operations', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol)
+            self.convert_members_inplace(ityp, 'instruments', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol)
+            self.convert_members_inplace(rtyp, 'preps', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol, spam_cp_penalty = spam_cp_penalty)
+>           self.convert_members_inplace(povmtyp, 'povms', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol, spam_cp_penalty = spam_cp_penalty)
+
+../../../pygsti/models/explicitmodel.py:446: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../../pygsti/models/explicitmodel.py:358: in convert_members_inplace
+    self.povms[lbl] = _povm.convert (povm, to_type, self.basis, ideal, flatten_structure, cp_penalty=spam_cp_penalty)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+povm = UnconstrainedPOVM([('0', <pygsti.modelmembers.povms.fulleffect.FullPOVMEffect object at 0x12f810190>), ('1', <pygsti.modelmembers.povms.fulleffect.FullPOVMEffect object at 0x12f8101f0>)])
+to_type = 'GLND'
+basis = <pygsti.baseobjs.basis.BuiltinBasis object at 0x12f810790>
+ideal_povm = None, flatten_structure = True, cp_penalty = 1e-07
+
+    def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False, cp_penalty=1e-7):
+        """
+        TODO: update docstring
+        Convert a POVM to a new type of parameterization.
+    
+        This potentially creates a new object.  Raises ValueError for invalid conversions.
+    
+        Parameters
+        ----------
+        povm : POVM
+            POVM to convert
+    
+        to_type : {"full","full TP","static","static pure","H+S terms",
+            "H+S clifford terms","clifford"}
+            The type of parameterizaton to convert to.  See
+            :meth:`Model.set_all_parameterizations` for more details.
+            TODO docstring: update the options here.
+    
+        basis : {'std', 'gm', 'pp', 'qt'} or Basis object
+            The basis for `povm`.  Allowed values are Matrix-unit (std),
+            Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt)
+            (or a custom basis object).
+    
+        ideal_povm : POVM, optional
+            The ideal version of `povm`, potentially used when
+            converting to an error-generator type.
+    
+        flatten_structure : bool, optional
+            When `False`, the sub-members of composed and embedded operations
+            are separately converted, leaving the original POVM's structure
+            unchanged.  When `True`, composed and embedded operations are "flattened"
+            into a single POVM of the requested `to_type`.
+    
+        cp_penalty : float, optional (default 1e-7)
+                Converting SPAM operations to an error generator representation may
+                introduce trivial gauge degrees of freedom. These gauge degrees of freedom
+                are called trivial because they quite literally do not change the dense representation
+                (i.e. Hilbert-Schmidt vectors) at all. Despite being trivial, error generators along
+                this trivial gauge orbit may be non-CP, so this cptp penalty is used to favor channels
+                within this gauge orbit which are CPTP.
+    
+        Returns
+        -------
+        POVM
+            The converted POVM vector, usually a distinct
+            object from the object passed as input.
+        """
+    
+        to_types = to_type if isinstance(to_type, (tuple, list)) else (to_type,)  # HACK to support multiple to_type values
+        error_msgs = {}
+    
+        destination_types = {'full TP': TPPOVM,
+                             'static clifford': ComputationalBasisPOVM}
+        NoneType = type(None)
+    
+        for to_type in to_types:
+            try:
+                if isinstance(povm, destination_types.get(to_type, NoneType)):
+                    return povm
+    
+                idl = dict(ideal_povm.items()) if ideal_povm is not None else {}  # ideal effects
+    
+                if to_type in ("full", "static", "static pure"):
+                    converted_effects = [(lbl, convert_effect(vec, to_type, basis, idl.get(lbl, None), flatten_structure))
+                                         for lbl, vec in povm.items()]
+                    return UnconstrainedPOVM(converted_effects, povm.evotype, povm.state_space)
+    
+                elif to_type == "full TP":
+                    converted_effects = [(lbl, convert_effect(vec, "full", basis, idl.get(lbl, None), flatten_structure))
+                                         for lbl, vec in povm.items()]
+                    return TPPOVM(converted_effects, povm.evotype, povm.state_space)
+    
+                elif _ot.is_valid_lindblad_paramtype(to_type):
+                    from ..operations import LindbladErrorgen as _LindbladErrorgen, ExpErrorgenOp as _ExpErrorgenOp
+                    from ..operations import IdentityPlusErrorgenOp as _IdentityPlusErrorgenOp
+                    from ..operations import LindbladParameterization as _LindbladParameterization
+                    lndtype = _LindbladParameterization.cast(to_type)
+    
+    
+                    #Construct a static "base" POVM
+                    if isinstance(povm, ComputationalBasisPOVM):  # special easy case
+                        base_povm = ComputationalBasisPOVM(povm.state_space.num_qubits, povm.evotype)  # just copy it?
+                    else:
+                        try:
+                            if povm.evotype.minimal_space == 'Hilbert':
+                                base_items = [(lbl, convert_effect(vec, 'static pure', basis,
+                                                                   idl.get(lbl, None), flatten_structure))
+                                              for lbl, vec in povm.items()]
+                            else:
+                                raise RuntimeError('Evotype must be compatible with Hilbert ops to use pure effects')
+                        except RuntimeError:  # try static mixed states next:
+                            #if idl.get(lbl,None) is not None:
+    
+                            base_items = []
+                            for lbl, vec in povm.items():
+                                ideal_effect = idl.get(lbl,None)
+                                if ideal_effect is not None:
+                                    base_items.append((lbl, convert_effect(ideal_effect, 'static', basis, ideal_effect, flatten_structure)))
+                                else:
+                                    base_items.append((lbl, convert_effect(vec, 'static', basis, idl.get(lbl, None), flatten_structure)))
+                        base_povm = UnconstrainedPOVM(base_items, povm.evotype, povm.state_space)
+    
+                    proj_basis = 'PP' if povm.state_space.is_entirely_qubits else basis
+                    errorgen = _LindbladErrorgen.from_error_generator(povm.state_space.dim, lndtype, proj_basis,
+                                                                      basis, truncate=True, evotype=povm.evotype)
+    
+                    #Collect all ideal effects
+                    base_dense_effects = []
+                    for item in base_items:
+                        dense_effect = item[1].to_dense()
+                        base_dense_effects.append(dense_effect.reshape((1,len(dense_effect))))
+    
+                    dense_ideal_povm = _np.concatenate(base_dense_effects, axis=0)
+    
+                    #Collect all noisy effects
+                    dense_effects = []
+                    for effect in povm.values():
+                        dense_effect = effect.to_dense()
+                        dense_effects.append(dense_effect.reshape((1,len(dense_effect))))
+    
+                    dense_povm = _np.concatenate(dense_effects, axis=0)
+    
+                    #It is often the case that there are more error generators than physical degrees of freedom in the POVM
+                    #We define a function which finds linear comb. of errgens that span these degrees of freedom.
+                    #This has been called "the trivial gauge", and this function is meant to avoid it
+                    def calc_physical_subspace(dense_ideal_povm, epsilon = 1e-9):
+    
+                        degrees_of_freedom = (dense_ideal_povm.shape[0] - 1) * dense_ideal_povm.shape[1]
+                        errgen = _LindbladErrorgen.from_error_generator(povm.state_space.dim, parameterization=to_type)
+    
+                        if degrees_of_freedom > errgen.num_params:
+                            warnings.warn("POVM has more degrees of freedom than the available number of parameters, representation in this parameterization is not guaranteed")
+                        exp_errgen = _ExpErrorgenOp(errgen)
+    
+                        num_errgens = errgen.num_params
+                        #TODO: Maybe we can use the num of params instead of number of matrix entries, as some of them are linearly dependent.
+                        #i.e E0 completely determines E1 if those are the only two povm elements (E0 + E1 = Identity)
+                        num_entries = dense_ideal_povm.size
+    
+                        #Compute the jacobian with respect to the error generators. This will allow us to see which
+                        #error generators change the POVM entries
+                        J = _np.zeros((num_entries,num_errgens))
+                        new_vec = _np.zeros(num_errgens)
+                        for i in range(num_errgens):
+    
+                            new_vec[i] = epsilon
+                            exp_errgen.from_vector(new_vec)
+                            new_vec[i] = 0
+                            vectorized_povm = _np.zeros(num_entries)
+                            perturbed_povm = (dense_ideal_povm @ exp_errgen.to_dense() - dense_ideal_povm)/epsilon
+    
+                            vectorized_povm = perturbed_povm.flatten(order='F')
+    
+                            J[:,i] = vectorized_povm
+    
+                        _,S,Vt = _np.linalg.svd(J)
+                        #Only return nontrivial singular vectors
+                        non_zero_mask = _np.abs(S) > 1e-13
+                        non_trivial_vecs = Vt[non_zero_mask]
+                        non_trivial_vecs = non_trivial_vecs.reshape(-1, Vt.shape[1])  # Reshape to ensure it's 2D
+                        return non_trivial_vecs
+    
+                    phys_directions = calc_physical_subspace(dense_ideal_povm)
+    
+                    #We use optimization to find the best error generator representation
+                    #we only vary physical directions, not independent error generators
+                    def _objfn(v):
+    
+                        #For some reason adding the sum_of_negative_choi_eigenvalues_gate term
+                        #resulted in minimize() sometimes choosing NaN values for v. There are
+                        #two stack exchange issues showing this problem with no solution.
+                        if _np.isnan(v).any():
+                            v = _np.zeros(len(v))
+    
+                        L_vec = _np.zeros(len(phys_directions[0]))
+                        for coeff, phys_direction in zip(v,phys_directions):
+                            L_vec += coeff * phys_direction
+                        errorgen.from_vector(L_vec)
+                        proc_matrix = _spl.expm(errorgen.to_dense())
+    
+                        return _np.linalg.norm(dense_povm - dense_ideal_povm @ proc_matrix) + cp_penalty * sum_of_negative_choi_eigenvalues_gate(proc_matrix, basis)
+    
+                    soln = _spo.minimize(_objfn, _np.zeros(len(phys_directions), 'd'), method="Nelder-Mead", options={},
+                                            tol=1e-13)
+                    if not soln.success and soln.fun > 1e-6:  # not "or" because success is often not set correctly
+                        raise ValueError("Failed to find an errorgen such that <ideal|exp(errorgen) = <effect|")
+                    errgen_vec = _np.linalg.lstsq(phys_directions, soln.x)[0]
+                    errorgen.from_vector(errgen_vec)
+    
+                    EffectiveExpErrorgen = _IdentityPlusErrorgenOp if lndtype.meta == '1+' else _ExpErrorgenOp
+                    return ComposedPOVM(EffectiveExpErrorgen(errorgen), base_povm, mx_basis=basis)
+    
+                elif to_type == "static clifford":
+                    #Assume `povm` already represents state-vec ops, since otherwise we'd
+                    # need to change dimension
+                    nqubits = int(round(_np.log2(povm.dim)))
+    
+                    #Check if `povm` happens to be a Z-basis POVM on `nqubits`
+                    v = (_np.array([1, 0], 'd'), _np.array([0, 1], 'd'))  # (v0,v1) - eigenstates of sigma_z
+                    for zvals, lbl in zip(_itertools.product(*([(0, 1)] * nqubits)), povm.keys()):
+                        testvec = _functools.reduce(_np.kron, [v[i] for i in zvals])
+                        if not _np.allclose(testvec, povm[lbl].to_dense()):
+                            raise ValueError("Cannot convert POVM into a Z-basis stabilizer state POVM")
+    
+                    #If no errors, then return a stabilizer POVM
+                    return ComputationalBasisPOVM(nqubits, 'stabilizer')
+    
+                else:
+                    raise ValueError("Invalid to_type argument: %s" % to_type)
+            except Exception as e:
+                error_msgs[to_type] = str(e)  # try next to_type
+    
+>       raise ValueError("Could not convert POVM to to type(s): %s\n%s" % (str(to_types), str(error_msgs)))
+E       ValueError: Could not convert POVM to to type(s): ['GLND']
+E       {'GLND': 'boolean index did not match indexed array along axis 0; size of axis is 12 but size of corresponding boolean axis is 8'}
+
+../../../pygsti/modelmembers/povms/__init__.py:637: ValueError
+
+The above exception was the direct cause of the following exception:
+
+self = <test.unit.objects.test_model.FullModelTester testMethod=test_set_all_parameterizations_GLND>
+
+    def test_set_all_parameterizations_GLND(self):
+        model_copy = self.model.copy()
+>       self.model.set_all_parameterizations("GLND")
+
+test_model.py:163: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <pygsti.models.explicitmodel.ExplicitOpModel object at 0x12abf0820>
+gate_type = 'GLND', prep_type = 'auto', povm_type = 'auto'
+instrument_type = 'auto', ideal_model = None, cptp_truncation_tol = 1e-06
+spam_cp_penalty = 1e-07
+
+    def set_all_parameterizations(self, gate_type, prep_type="auto", povm_type="auto",
+                                  instrument_type="auto", ideal_model=None, cptp_truncation_tol = 1e-6, spam_cp_penalty = 1e-7):
+        """
+        Convert all gates, states, and POVMs to a specific parameterization type.
+    
+        Parameters
+        ----------
+        parameterization_type : string
+            The gate, state, and POVM parameterization type.  Allowed
+            values are (where '*' means " terms" and " clifford terms"
+            evolution-type suffixes are allowed):
+    
+            - "full" : each gate / state / POVM effect element is an independent parameter
+            - "TP" : Trace-Preserving gates and state preps
+            - "static" : no parameters
+            - "static unitary" : no parameters; convert superops to unitaries
+            - "clifford" : no parameters; convert unitaries to Clifford symplecitics.
+            - "GLND*" : General unconstrained Lindbladian
+            - "CPTP*" : Completely-Positive-Trace-Preserving
+            - "H+S+A*" : Hamiltoian, Pauli-Stochastic, and Affine errors
+            - "H+S*" : Hamiltonian and Pauli-Stochastic errors
+            - "S+A*" : Pauli-Stochastic and Affine errors
+            - "S*" : Pauli-Stochastic errors
+            - "H+D+A*" : Hamiltoian, Depolarization, and Affine errors
+            - "H+D*" : Hamiltonian and Depolarization errors
+            - "D+A*" : Depolarization and Affine errors
+            - "D*" : Depolarization errors
+            - Any of the above with "S" replaced with "s" or "D" replaced with
+              "d". This removes the CPTP constraint on the gates and SPAM
+              operations (and as such is seldom used).
+    
+        ideal_model : Model, optional
+            This may specify an ideal model of unitary gates and pure state vectors
+            to be used as the *ideal* operation of each gate/SPAM operation, which
+            is particularly useful as target for CPTP-based conversions.
+    
+        cptp_truncation_tol : float, optional (default 1e-6)
+            Tolerance used for conversion to CPTP parameterizations. When converting to
+            CPTP models negative eigenvalues of the choi matrix representation of a superoperator
+            are truncated, which can result in a change in the PTM for that operator. This tolerance
+            indicates the maximum amount of truncation induced deviation from the original operations
+            (measured by frobenius distance) we're willing to accept without marking the conversion
+            as failed.
+        spam_cp_penalty : float, optional (default .5)
+            Converting SPAM operations to an error generator representation may
+            introduce trivial gauge degrees of freedom. These gauge degrees of freedom
+            are called trivial because they quite literally do not change the dense representation
+            (i.e. Hilbert-Schmidt vectors) at all. Despite being trivial, error generators along
+            this trivial gauge orbit may be non-CP, so this cptp penalty is used to favor channels
+            within this gauge orbit which are CPTP.
+    
+        Returns
+        -------
+        None
+        """
+        typ = gate_type
+    
+        # Set ideal model to static when used as targets (specifically needed for CPTP prep/povms)
+        static_model = None
+        if ideal_model is not None:
+            static_model = ideal_model.copy()
+            static_model.set_all_parameterizations('static')
+    
+        rtyp = _state.state_type_from_op_type(gate_type) if prep_type == "auto" else prep_type
+        povmtyp = _povm.povm_type_from_op_type(gate_type) if povm_type == "auto" else povm_type
+        ityp = _instrument.instrument_type_from_op_type(gate_type) if instrument_type == "auto" else instrument_type
+    
+        try:
+            self.convert_members_inplace(typ, 'operations', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol)
+            self.convert_members_inplace(ityp, 'instruments', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol)
+            self.convert_members_inplace(rtyp, 'preps', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol, spam_cp_penalty = spam_cp_penalty)
+            self.convert_members_inplace(povmtyp, 'povms', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol, spam_cp_penalty = spam_cp_penalty)
+        except ValueError as e:
+>           raise ValueError("Failed to convert members. If converting to CPTP-based models, " +
+                "try providing an ideal_model to avoid possible branch cuts.") from e
+E           ValueError: Failed to convert members. If converting to CPTP-based models, try providing an ideal_model to avoid possible branch cuts.
+
+../../../pygsti/models/explicitmodel.py:448: ValueError
+----------------------------- Captured stdout call -----------------------------
+here
+______________ TPModelTester.test_set_all_parameterizations_GLND _______________
+
+self = <pygsti.models.explicitmodel.ExplicitOpModel object at 0x12fd69ff0>
+gate_type = 'GLND', prep_type = 'auto', povm_type = 'auto'
+instrument_type = 'auto', ideal_model = None, cptp_truncation_tol = 1e-06
+spam_cp_penalty = 1e-07
+
+    def set_all_parameterizations(self, gate_type, prep_type="auto", povm_type="auto",
+                                  instrument_type="auto", ideal_model=None, cptp_truncation_tol = 1e-6, spam_cp_penalty = 1e-7):
+        """
+        Convert all gates, states, and POVMs to a specific parameterization type.
+    
+        Parameters
+        ----------
+        parameterization_type : string
+            The gate, state, and POVM parameterization type.  Allowed
+            values are (where '*' means " terms" and " clifford terms"
+            evolution-type suffixes are allowed):
+    
+            - "full" : each gate / state / POVM effect element is an independent parameter
+            - "TP" : Trace-Preserving gates and state preps
+            - "static" : no parameters
+            - "static unitary" : no parameters; convert superops to unitaries
+            - "clifford" : no parameters; convert unitaries to Clifford symplecitics.
+            - "GLND*" : General unconstrained Lindbladian
+            - "CPTP*" : Completely-Positive-Trace-Preserving
+            - "H+S+A*" : Hamiltoian, Pauli-Stochastic, and Affine errors
+            - "H+S*" : Hamiltonian and Pauli-Stochastic errors
+            - "S+A*" : Pauli-Stochastic and Affine errors
+            - "S*" : Pauli-Stochastic errors
+            - "H+D+A*" : Hamiltoian, Depolarization, and Affine errors
+            - "H+D*" : Hamiltonian and Depolarization errors
+            - "D+A*" : Depolarization and Affine errors
+            - "D*" : Depolarization errors
+            - Any of the above with "S" replaced with "s" or "D" replaced with
+              "d". This removes the CPTP constraint on the gates and SPAM
+              operations (and as such is seldom used).
+    
+        ideal_model : Model, optional
+            This may specify an ideal model of unitary gates and pure state vectors
+            to be used as the *ideal* operation of each gate/SPAM operation, which
+            is particularly useful as target for CPTP-based conversions.
+    
+        cptp_truncation_tol : float, optional (default 1e-6)
+            Tolerance used for conversion to CPTP parameterizations. When converting to
+            CPTP models negative eigenvalues of the choi matrix representation of a superoperator
+            are truncated, which can result in a change in the PTM for that operator. This tolerance
+            indicates the maximum amount of truncation induced deviation from the original operations
+            (measured by frobenius distance) we're willing to accept without marking the conversion
+            as failed.
+        spam_cp_penalty : float, optional (default .5)
+            Converting SPAM operations to an error generator representation may
+            introduce trivial gauge degrees of freedom. These gauge degrees of freedom
+            are called trivial because they quite literally do not change the dense representation
+            (i.e. Hilbert-Schmidt vectors) at all. Despite being trivial, error generators along
+            this trivial gauge orbit may be non-CP, so this cptp penalty is used to favor channels
+            within this gauge orbit which are CPTP.
+    
+        Returns
+        -------
+        None
+        """
+        typ = gate_type
+    
+        # Set ideal model to static when used as targets (specifically needed for CPTP prep/povms)
+        static_model = None
+        if ideal_model is not None:
+            static_model = ideal_model.copy()
+            static_model.set_all_parameterizations('static')
+    
+        rtyp = _state.state_type_from_op_type(gate_type) if prep_type == "auto" else prep_type
+        povmtyp = _povm.povm_type_from_op_type(gate_type) if povm_type == "auto" else povm_type
+        ityp = _instrument.instrument_type_from_op_type(gate_type) if instrument_type == "auto" else instrument_type
+    
+        try:
+            self.convert_members_inplace(typ, 'operations', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol)
+            self.convert_members_inplace(ityp, 'instruments', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol)
+            self.convert_members_inplace(rtyp, 'preps', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol, spam_cp_penalty = spam_cp_penalty)
+>           self.convert_members_inplace(povmtyp, 'povms', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol, spam_cp_penalty = spam_cp_penalty)
+
+../../../pygsti/models/explicitmodel.py:446: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../../pygsti/models/explicitmodel.py:358: in convert_members_inplace
+    self.povms[lbl] = _povm.convert (povm, to_type, self.basis, ideal, flatten_structure, cp_penalty=spam_cp_penalty)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+povm = TPPOVM([('0', <pygsti.modelmembers.povms.fulleffect.FullPOVMEffect object at 0x12fd68850>), ('1', <pygsti.modelmembers.povms.complementeffect.ComplementPOVMEffect object at 0x12fd68490>)])
+to_type = 'GLND'
+basis = <pygsti.baseobjs.basis.BuiltinBasis object at 0x12fd68ee0>
+ideal_povm = None, flatten_structure = True, cp_penalty = 1e-07
+
+    def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False, cp_penalty=1e-7):
+        """
+        TODO: update docstring
+        Convert a POVM to a new type of parameterization.
+    
+        This potentially creates a new object.  Raises ValueError for invalid conversions.
+    
+        Parameters
+        ----------
+        povm : POVM
+            POVM to convert
+    
+        to_type : {"full","full TP","static","static pure","H+S terms",
+            "H+S clifford terms","clifford"}
+            The type of parameterizaton to convert to.  See
+            :meth:`Model.set_all_parameterizations` for more details.
+            TODO docstring: update the options here.
+    
+        basis : {'std', 'gm', 'pp', 'qt'} or Basis object
+            The basis for `povm`.  Allowed values are Matrix-unit (std),
+            Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt)
+            (or a custom basis object).
+    
+        ideal_povm : POVM, optional
+            The ideal version of `povm`, potentially used when
+            converting to an error-generator type.
+    
+        flatten_structure : bool, optional
+            When `False`, the sub-members of composed and embedded operations
+            are separately converted, leaving the original POVM's structure
+            unchanged.  When `True`, composed and embedded operations are "flattened"
+            into a single POVM of the requested `to_type`.
+    
+        cp_penalty : float, optional (default 1e-7)
+                Converting SPAM operations to an error generator representation may
+                introduce trivial gauge degrees of freedom. These gauge degrees of freedom
+                are called trivial because they quite literally do not change the dense representation
+                (i.e. Hilbert-Schmidt vectors) at all. Despite being trivial, error generators along
+                this trivial gauge orbit may be non-CP, so this cptp penalty is used to favor channels
+                within this gauge orbit which are CPTP.
+    
+        Returns
+        -------
+        POVM
+            The converted POVM vector, usually a distinct
+            object from the object passed as input.
+        """
+    
+        to_types = to_type if isinstance(to_type, (tuple, list)) else (to_type,)  # HACK to support multiple to_type values
+        error_msgs = {}
+    
+        destination_types = {'full TP': TPPOVM,
+                             'static clifford': ComputationalBasisPOVM}
+        NoneType = type(None)
+    
+        for to_type in to_types:
+            try:
+                if isinstance(povm, destination_types.get(to_type, NoneType)):
+                    return povm
+    
+                idl = dict(ideal_povm.items()) if ideal_povm is not None else {}  # ideal effects
+    
+                if to_type in ("full", "static", "static pure"):
+                    converted_effects = [(lbl, convert_effect(vec, to_type, basis, idl.get(lbl, None), flatten_structure))
+                                         for lbl, vec in povm.items()]
+                    return UnconstrainedPOVM(converted_effects, povm.evotype, povm.state_space)
+    
+                elif to_type == "full TP":
+                    converted_effects = [(lbl, convert_effect(vec, "full", basis, idl.get(lbl, None), flatten_structure))
+                                         for lbl, vec in povm.items()]
+                    return TPPOVM(converted_effects, povm.evotype, povm.state_space)
+    
+                elif _ot.is_valid_lindblad_paramtype(to_type):
+                    from ..operations import LindbladErrorgen as _LindbladErrorgen, ExpErrorgenOp as _ExpErrorgenOp
+                    from ..operations import IdentityPlusErrorgenOp as _IdentityPlusErrorgenOp
+                    from ..operations import LindbladParameterization as _LindbladParameterization
+                    lndtype = _LindbladParameterization.cast(to_type)
+    
+    
+                    #Construct a static "base" POVM
+                    if isinstance(povm, ComputationalBasisPOVM):  # special easy case
+                        base_povm = ComputationalBasisPOVM(povm.state_space.num_qubits, povm.evotype)  # just copy it?
+                    else:
+                        try:
+                            if povm.evotype.minimal_space == 'Hilbert':
+                                base_items = [(lbl, convert_effect(vec, 'static pure', basis,
+                                                                   idl.get(lbl, None), flatten_structure))
+                                              for lbl, vec in povm.items()]
+                            else:
+                                raise RuntimeError('Evotype must be compatible with Hilbert ops to use pure effects')
+                        except RuntimeError:  # try static mixed states next:
+                            #if idl.get(lbl,None) is not None:
+    
+                            base_items = []
+                            for lbl, vec in povm.items():
+                                ideal_effect = idl.get(lbl,None)
+                                if ideal_effect is not None:
+                                    base_items.append((lbl, convert_effect(ideal_effect, 'static', basis, ideal_effect, flatten_structure)))
+                                else:
+                                    base_items.append((lbl, convert_effect(vec, 'static', basis, idl.get(lbl, None), flatten_structure)))
+                        base_povm = UnconstrainedPOVM(base_items, povm.evotype, povm.state_space)
+    
+                    proj_basis = 'PP' if povm.state_space.is_entirely_qubits else basis
+                    errorgen = _LindbladErrorgen.from_error_generator(povm.state_space.dim, lndtype, proj_basis,
+                                                                      basis, truncate=True, evotype=povm.evotype)
+    
+                    #Collect all ideal effects
+                    base_dense_effects = []
+                    for item in base_items:
+                        dense_effect = item[1].to_dense()
+                        base_dense_effects.append(dense_effect.reshape((1,len(dense_effect))))
+    
+                    dense_ideal_povm = _np.concatenate(base_dense_effects, axis=0)
+    
+                    #Collect all noisy effects
+                    dense_effects = []
+                    for effect in povm.values():
+                        dense_effect = effect.to_dense()
+                        dense_effects.append(dense_effect.reshape((1,len(dense_effect))))
+    
+                    dense_povm = _np.concatenate(dense_effects, axis=0)
+    
+                    #It is often the case that there are more error generators than physical degrees of freedom in the POVM
+                    #We define a function which finds linear comb. of errgens that span these degrees of freedom.
+                    #This has been called "the trivial gauge", and this function is meant to avoid it
+                    def calc_physical_subspace(dense_ideal_povm, epsilon = 1e-9):
+    
+                        degrees_of_freedom = (dense_ideal_povm.shape[0] - 1) * dense_ideal_povm.shape[1]
+                        errgen = _LindbladErrorgen.from_error_generator(povm.state_space.dim, parameterization=to_type)
+    
+                        if degrees_of_freedom > errgen.num_params:
+                            warnings.warn("POVM has more degrees of freedom than the available number of parameters, representation in this parameterization is not guaranteed")
+                        exp_errgen = _ExpErrorgenOp(errgen)
+    
+                        num_errgens = errgen.num_params
+                        #TODO: Maybe we can use the num of params instead of number of matrix entries, as some of them are linearly dependent.
+                        #i.e E0 completely determines E1 if those are the only two povm elements (E0 + E1 = Identity)
+                        num_entries = dense_ideal_povm.size
+    
+                        #Compute the jacobian with respect to the error generators. This will allow us to see which
+                        #error generators change the POVM entries
+                        J = _np.zeros((num_entries,num_errgens))
+                        new_vec = _np.zeros(num_errgens)
+                        for i in range(num_errgens):
+    
+                            new_vec[i] = epsilon
+                            exp_errgen.from_vector(new_vec)
+                            new_vec[i] = 0
+                            vectorized_povm = _np.zeros(num_entries)
+                            perturbed_povm = (dense_ideal_povm @ exp_errgen.to_dense() - dense_ideal_povm)/epsilon
+    
+                            vectorized_povm = perturbed_povm.flatten(order='F')
+    
+                            J[:,i] = vectorized_povm
+    
+                        _,S,Vt = _np.linalg.svd(J)
+                        #Only return nontrivial singular vectors
+                        non_zero_mask = _np.abs(S) > 1e-13
+                        non_trivial_vecs = Vt[non_zero_mask]
+                        non_trivial_vecs = non_trivial_vecs.reshape(-1, Vt.shape[1])  # Reshape to ensure it's 2D
+                        return non_trivial_vecs
+    
+                    phys_directions = calc_physical_subspace(dense_ideal_povm)
+    
+                    #We use optimization to find the best error generator representation
+                    #we only vary physical directions, not independent error generators
+                    def _objfn(v):
+    
+                        #For some reason adding the sum_of_negative_choi_eigenvalues_gate term
+                        #resulted in minimize() sometimes choosing NaN values for v. There are
+                        #two stack exchange issues showing this problem with no solution.
+                        if _np.isnan(v).any():
+                            v = _np.zeros(len(v))
+    
+                        L_vec = _np.zeros(len(phys_directions[0]))
+                        for coeff, phys_direction in zip(v,phys_directions):
+                            L_vec += coeff * phys_direction
+                        errorgen.from_vector(L_vec)
+                        proc_matrix = _spl.expm(errorgen.to_dense())
+    
+                        return _np.linalg.norm(dense_povm - dense_ideal_povm @ proc_matrix) + cp_penalty * sum_of_negative_choi_eigenvalues_gate(proc_matrix, basis)
+    
+                    soln = _spo.minimize(_objfn, _np.zeros(len(phys_directions), 'd'), method="Nelder-Mead", options={},
+                                            tol=1e-13)
+                    if not soln.success and soln.fun > 1e-6:  # not "or" because success is often not set correctly
+                        raise ValueError("Failed to find an errorgen such that <ideal|exp(errorgen) = <effect|")
+                    errgen_vec = _np.linalg.lstsq(phys_directions, soln.x)[0]
+                    errorgen.from_vector(errgen_vec)
+    
+                    EffectiveExpErrorgen = _IdentityPlusErrorgenOp if lndtype.meta == '1+' else _ExpErrorgenOp
+                    return ComposedPOVM(EffectiveExpErrorgen(errorgen), base_povm, mx_basis=basis)
+    
+                elif to_type == "static clifford":
+                    #Assume `povm` already represents state-vec ops, since otherwise we'd
+                    # need to change dimension
+                    nqubits = int(round(_np.log2(povm.dim)))
+    
+                    #Check if `povm` happens to be a Z-basis POVM on `nqubits`
+                    v = (_np.array([1, 0], 'd'), _np.array([0, 1], 'd'))  # (v0,v1) - eigenstates of sigma_z
+                    for zvals, lbl in zip(_itertools.product(*([(0, 1)] * nqubits)), povm.keys()):
+                        testvec = _functools.reduce(_np.kron, [v[i] for i in zvals])
+                        if not _np.allclose(testvec, povm[lbl].to_dense()):
+                            raise ValueError("Cannot convert POVM into a Z-basis stabilizer state POVM")
+    
+                    #If no errors, then return a stabilizer POVM
+                    return ComputationalBasisPOVM(nqubits, 'stabilizer')
+    
+                else:
+                    raise ValueError("Invalid to_type argument: %s" % to_type)
+            except Exception as e:
+                error_msgs[to_type] = str(e)  # try next to_type
+    
+>       raise ValueError("Could not convert POVM to to type(s): %s\n%s" % (str(to_types), str(error_msgs)))
+E       ValueError: Could not convert POVM to to type(s): ['GLND']
+E       {'GLND': 'boolean index did not match indexed array along axis 0; size of axis is 12 but size of corresponding boolean axis is 8'}
+
+../../../pygsti/modelmembers/povms/__init__.py:637: ValueError
+
+The above exception was the direct cause of the following exception:
+
+self = <test.unit.objects.test_model.TPModelTester testMethod=test_set_all_parameterizations_GLND>
+
+    def test_set_all_parameterizations_GLND(self):
+        model_copy = self.model.copy()
+>       self.model.set_all_parameterizations("GLND")
+
+test_model.py:163: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <pygsti.models.explicitmodel.ExplicitOpModel object at 0x12fd69ff0>
+gate_type = 'GLND', prep_type = 'auto', povm_type = 'auto'
+instrument_type = 'auto', ideal_model = None, cptp_truncation_tol = 1e-06
+spam_cp_penalty = 1e-07
+
+    def set_all_parameterizations(self, gate_type, prep_type="auto", povm_type="auto",
+                                  instrument_type="auto", ideal_model=None, cptp_truncation_tol = 1e-6, spam_cp_penalty = 1e-7):
+        """
+        Convert all gates, states, and POVMs to a specific parameterization type.
+    
+        Parameters
+        ----------
+        parameterization_type : string
+            The gate, state, and POVM parameterization type.  Allowed
+            values are (where '*' means " terms" and " clifford terms"
+            evolution-type suffixes are allowed):
+    
+            - "full" : each gate / state / POVM effect element is an independent parameter
+            - "TP" : Trace-Preserving gates and state preps
+            - "static" : no parameters
+            - "static unitary" : no parameters; convert superops to unitaries
+            - "clifford" : no parameters; convert unitaries to Clifford symplecitics.
+            - "GLND*" : General unconstrained Lindbladian
+            - "CPTP*" : Completely-Positive-Trace-Preserving
+            - "H+S+A*" : Hamiltoian, Pauli-Stochastic, and Affine errors
+            - "H+S*" : Hamiltonian and Pauli-Stochastic errors
+            - "S+A*" : Pauli-Stochastic and Affine errors
+            - "S*" : Pauli-Stochastic errors
+            - "H+D+A*" : Hamiltoian, Depolarization, and Affine errors
+            - "H+D*" : Hamiltonian and Depolarization errors
+            - "D+A*" : Depolarization and Affine errors
+            - "D*" : Depolarization errors
+            - Any of the above with "S" replaced with "s" or "D" replaced with
+              "d". This removes the CPTP constraint on the gates and SPAM
+              operations (and as such is seldom used).
+    
+        ideal_model : Model, optional
+            This may specify an ideal model of unitary gates and pure state vectors
+            to be used as the *ideal* operation of each gate/SPAM operation, which
+            is particularly useful as target for CPTP-based conversions.
+    
+        cptp_truncation_tol : float, optional (default 1e-6)
+            Tolerance used for conversion to CPTP parameterizations. When converting to
+            CPTP models negative eigenvalues of the choi matrix representation of a superoperator
+            are truncated, which can result in a change in the PTM for that operator. This tolerance
+            indicates the maximum amount of truncation induced deviation from the original operations
+            (measured by frobenius distance) we're willing to accept without marking the conversion
+            as failed.
+        spam_cp_penalty : float, optional (default .5)
+            Converting SPAM operations to an error generator representation may
+            introduce trivial gauge degrees of freedom. These gauge degrees of freedom
+            are called trivial because they quite literally do not change the dense representation
+            (i.e. Hilbert-Schmidt vectors) at all. Despite being trivial, error generators along
+            this trivial gauge orbit may be non-CP, so this cptp penalty is used to favor channels
+            within this gauge orbit which are CPTP.
+    
+        Returns
+        -------
+        None
+        """
+        typ = gate_type
+    
+        # Set ideal model to static when used as targets (specifically needed for CPTP prep/povms)
+        static_model = None
+        if ideal_model is not None:
+            static_model = ideal_model.copy()
+            static_model.set_all_parameterizations('static')
+    
+        rtyp = _state.state_type_from_op_type(gate_type) if prep_type == "auto" else prep_type
+        povmtyp = _povm.povm_type_from_op_type(gate_type) if povm_type == "auto" else povm_type
+        ityp = _instrument.instrument_type_from_op_type(gate_type) if instrument_type == "auto" else instrument_type
+    
+        try:
+            self.convert_members_inplace(typ, 'operations', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol)
+            self.convert_members_inplace(ityp, 'instruments', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol)
+            self.convert_members_inplace(rtyp, 'preps', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol, spam_cp_penalty = spam_cp_penalty)
+            self.convert_members_inplace(povmtyp, 'povms', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol, spam_cp_penalty = spam_cp_penalty)
+        except ValueError as e:
+>           raise ValueError("Failed to convert members. If converting to CPTP-based models, " +
+                "try providing an ideal_model to avoid possible branch cuts.") from e
+E           ValueError: Failed to convert members. If converting to CPTP-based models, try providing an ideal_model to avoid possible branch cuts.
+
+../../../pygsti/models/explicitmodel.py:448: ValueError
+----------------------------- Captured stdout call -----------------------------
+here
+____________ StaticModelTester.test_set_all_parameterizations_GLND _____________
+
+self = <pygsti.models.explicitmodel.ExplicitOpModel object at 0x12fd69bd0>
+gate_type = 'GLND', prep_type = 'auto', povm_type = 'auto'
+instrument_type = 'auto', ideal_model = None, cptp_truncation_tol = 1e-06
+spam_cp_penalty = 1e-07
+
+    def set_all_parameterizations(self, gate_type, prep_type="auto", povm_type="auto",
+                                  instrument_type="auto", ideal_model=None, cptp_truncation_tol = 1e-6, spam_cp_penalty = 1e-7):
+        """
+        Convert all gates, states, and POVMs to a specific parameterization type.
+    
+        Parameters
+        ----------
+        parameterization_type : string
+            The gate, state, and POVM parameterization type.  Allowed
+            values are (where '*' means " terms" and " clifford terms"
+            evolution-type suffixes are allowed):
+    
+            - "full" : each gate / state / POVM effect element is an independent parameter
+            - "TP" : Trace-Preserving gates and state preps
+            - "static" : no parameters
+            - "static unitary" : no parameters; convert superops to unitaries
+            - "clifford" : no parameters; convert unitaries to Clifford symplecitics.
+            - "GLND*" : General unconstrained Lindbladian
+            - "CPTP*" : Completely-Positive-Trace-Preserving
+            - "H+S+A*" : Hamiltoian, Pauli-Stochastic, and Affine errors
+            - "H+S*" : Hamiltonian and Pauli-Stochastic errors
+            - "S+A*" : Pauli-Stochastic and Affine errors
+            - "S*" : Pauli-Stochastic errors
+            - "H+D+A*" : Hamiltoian, Depolarization, and Affine errors
+            - "H+D*" : Hamiltonian and Depolarization errors
+            - "D+A*" : Depolarization and Affine errors
+            - "D*" : Depolarization errors
+            - Any of the above with "S" replaced with "s" or "D" replaced with
+              "d". This removes the CPTP constraint on the gates and SPAM
+              operations (and as such is seldom used).
+    
+        ideal_model : Model, optional
+            This may specify an ideal model of unitary gates and pure state vectors
+            to be used as the *ideal* operation of each gate/SPAM operation, which
+            is particularly useful as target for CPTP-based conversions.
+    
+        cptp_truncation_tol : float, optional (default 1e-6)
+            Tolerance used for conversion to CPTP parameterizations. When converting to
+            CPTP models negative eigenvalues of the choi matrix representation of a superoperator
+            are truncated, which can result in a change in the PTM for that operator. This tolerance
+            indicates the maximum amount of truncation induced deviation from the original operations
+            (measured by frobenius distance) we're willing to accept without marking the conversion
+            as failed.
+        spam_cp_penalty : float, optional (default .5)
+            Converting SPAM operations to an error generator representation may
+            introduce trivial gauge degrees of freedom. These gauge degrees of freedom
+            are called trivial because they quite literally do not change the dense representation
+            (i.e. Hilbert-Schmidt vectors) at all. Despite being trivial, error generators along
+            this trivial gauge orbit may be non-CP, so this cptp penalty is used to favor channels
+            within this gauge orbit which are CPTP.
+    
+        Returns
+        -------
+        None
+        """
+        typ = gate_type
+    
+        # Set ideal model to static when used as targets (specifically needed for CPTP prep/povms)
+        static_model = None
+        if ideal_model is not None:
+            static_model = ideal_model.copy()
+            static_model.set_all_parameterizations('static')
+    
+        rtyp = _state.state_type_from_op_type(gate_type) if prep_type == "auto" else prep_type
+        povmtyp = _povm.povm_type_from_op_type(gate_type) if povm_type == "auto" else povm_type
+        ityp = _instrument.instrument_type_from_op_type(gate_type) if instrument_type == "auto" else instrument_type
+    
+        try:
+            self.convert_members_inplace(typ, 'operations', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol)
+            self.convert_members_inplace(ityp, 'instruments', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol)
+            self.convert_members_inplace(rtyp, 'preps', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol, spam_cp_penalty = spam_cp_penalty)
+>           self.convert_members_inplace(povmtyp, 'povms', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol, spam_cp_penalty = spam_cp_penalty)
+
+../../../pygsti/models/explicitmodel.py:446: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../../pygsti/models/explicitmodel.py:358: in convert_members_inplace
+    self.povms[lbl] = _povm.convert (povm, to_type, self.basis, ideal, flatten_structure, cp_penalty=spam_cp_penalty)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+povm = UnconstrainedPOVM([('0', <pygsti.modelmembers.povms.staticeffect.StaticPOVMEffect object at 0x12fd6a470>), ('1', <pygsti.modelmembers.povms.staticeffect.StaticPOVMEffect object at 0x12fd69120>)])
+to_type = 'GLND'
+basis = <pygsti.baseobjs.basis.BuiltinBasis object at 0x12f813ac0>
+ideal_povm = None, flatten_structure = True, cp_penalty = 1e-07
+
+    def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False, cp_penalty=1e-7):
+        """
+        TODO: update docstring
+        Convert a POVM to a new type of parameterization.
+    
+        This potentially creates a new object.  Raises ValueError for invalid conversions.
+    
+        Parameters
+        ----------
+        povm : POVM
+            POVM to convert
+    
+        to_type : {"full","full TP","static","static pure","H+S terms",
+            "H+S clifford terms","clifford"}
+            The type of parameterizaton to convert to.  See
+            :meth:`Model.set_all_parameterizations` for more details.
+            TODO docstring: update the options here.
+    
+        basis : {'std', 'gm', 'pp', 'qt'} or Basis object
+            The basis for `povm`.  Allowed values are Matrix-unit (std),
+            Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt)
+            (or a custom basis object).
+    
+        ideal_povm : POVM, optional
+            The ideal version of `povm`, potentially used when
+            converting to an error-generator type.
+    
+        flatten_structure : bool, optional
+            When `False`, the sub-members of composed and embedded operations
+            are separately converted, leaving the original POVM's structure
+            unchanged.  When `True`, composed and embedded operations are "flattened"
+            into a single POVM of the requested `to_type`.
+    
+        cp_penalty : float, optional (default 1e-7)
+                Converting SPAM operations to an error generator representation may
+                introduce trivial gauge degrees of freedom. These gauge degrees of freedom
+                are called trivial because they quite literally do not change the dense representation
+                (i.e. Hilbert-Schmidt vectors) at all. Despite being trivial, error generators along
+                this trivial gauge orbit may be non-CP, so this cptp penalty is used to favor channels
+                within this gauge orbit which are CPTP.
+    
+        Returns
+        -------
+        POVM
+            The converted POVM vector, usually a distinct
+            object from the object passed as input.
+        """
+    
+        to_types = to_type if isinstance(to_type, (tuple, list)) else (to_type,)  # HACK to support multiple to_type values
+        error_msgs = {}
+    
+        destination_types = {'full TP': TPPOVM,
+                             'static clifford': ComputationalBasisPOVM}
+        NoneType = type(None)
+    
+        for to_type in to_types:
+            try:
+                if isinstance(povm, destination_types.get(to_type, NoneType)):
+                    return povm
+    
+                idl = dict(ideal_povm.items()) if ideal_povm is not None else {}  # ideal effects
+    
+                if to_type in ("full", "static", "static pure"):
+                    converted_effects = [(lbl, convert_effect(vec, to_type, basis, idl.get(lbl, None), flatten_structure))
+                                         for lbl, vec in povm.items()]
+                    return UnconstrainedPOVM(converted_effects, povm.evotype, povm.state_space)
+    
+                elif to_type == "full TP":
+                    converted_effects = [(lbl, convert_effect(vec, "full", basis, idl.get(lbl, None), flatten_structure))
+                                         for lbl, vec in povm.items()]
+                    return TPPOVM(converted_effects, povm.evotype, povm.state_space)
+    
+                elif _ot.is_valid_lindblad_paramtype(to_type):
+                    from ..operations import LindbladErrorgen as _LindbladErrorgen, ExpErrorgenOp as _ExpErrorgenOp
+                    from ..operations import IdentityPlusErrorgenOp as _IdentityPlusErrorgenOp
+                    from ..operations import LindbladParameterization as _LindbladParameterization
+                    lndtype = _LindbladParameterization.cast(to_type)
+    
+    
+                    #Construct a static "base" POVM
+                    if isinstance(povm, ComputationalBasisPOVM):  # special easy case
+                        base_povm = ComputationalBasisPOVM(povm.state_space.num_qubits, povm.evotype)  # just copy it?
+                    else:
+                        try:
+                            if povm.evotype.minimal_space == 'Hilbert':
+                                base_items = [(lbl, convert_effect(vec, 'static pure', basis,
+                                                                   idl.get(lbl, None), flatten_structure))
+                                              for lbl, vec in povm.items()]
+                            else:
+                                raise RuntimeError('Evotype must be compatible with Hilbert ops to use pure effects')
+                        except RuntimeError:  # try static mixed states next:
+                            #if idl.get(lbl,None) is not None:
+    
+                            base_items = []
+                            for lbl, vec in povm.items():
+                                ideal_effect = idl.get(lbl,None)
+                                if ideal_effect is not None:
+                                    base_items.append((lbl, convert_effect(ideal_effect, 'static', basis, ideal_effect, flatten_structure)))
+                                else:
+                                    base_items.append((lbl, convert_effect(vec, 'static', basis, idl.get(lbl, None), flatten_structure)))
+                        base_povm = UnconstrainedPOVM(base_items, povm.evotype, povm.state_space)
+    
+                    proj_basis = 'PP' if povm.state_space.is_entirely_qubits else basis
+                    errorgen = _LindbladErrorgen.from_error_generator(povm.state_space.dim, lndtype, proj_basis,
+                                                                      basis, truncate=True, evotype=povm.evotype)
+    
+                    #Collect all ideal effects
+                    base_dense_effects = []
+                    for item in base_items:
+                        dense_effect = item[1].to_dense()
+                        base_dense_effects.append(dense_effect.reshape((1,len(dense_effect))))
+    
+                    dense_ideal_povm = _np.concatenate(base_dense_effects, axis=0)
+    
+                    #Collect all noisy effects
+                    dense_effects = []
+                    for effect in povm.values():
+                        dense_effect = effect.to_dense()
+                        dense_effects.append(dense_effect.reshape((1,len(dense_effect))))
+    
+                    dense_povm = _np.concatenate(dense_effects, axis=0)
+    
+                    #It is often the case that there are more error generators than physical degrees of freedom in the POVM
+                    #We define a function which finds linear comb. of errgens that span these degrees of freedom.
+                    #This has been called "the trivial gauge", and this function is meant to avoid it
+                    def calc_physical_subspace(dense_ideal_povm, epsilon = 1e-9):
+    
+                        degrees_of_freedom = (dense_ideal_povm.shape[0] - 1) * dense_ideal_povm.shape[1]
+                        errgen = _LindbladErrorgen.from_error_generator(povm.state_space.dim, parameterization=to_type)
+    
+                        if degrees_of_freedom > errgen.num_params:
+                            warnings.warn("POVM has more degrees of freedom than the available number of parameters, representation in this parameterization is not guaranteed")
+                        exp_errgen = _ExpErrorgenOp(errgen)
+    
+                        num_errgens = errgen.num_params
+                        #TODO: Maybe we can use the num of params instead of number of matrix entries, as some of them are linearly dependent.
+                        #i.e E0 completely determines E1 if those are the only two povm elements (E0 + E1 = Identity)
+                        num_entries = dense_ideal_povm.size
+    
+                        #Compute the jacobian with respect to the error generators. This will allow us to see which
+                        #error generators change the POVM entries
+                        J = _np.zeros((num_entries,num_errgens))
+                        new_vec = _np.zeros(num_errgens)
+                        for i in range(num_errgens):
+    
+                            new_vec[i] = epsilon
+                            exp_errgen.from_vector(new_vec)
+                            new_vec[i] = 0
+                            vectorized_povm = _np.zeros(num_entries)
+                            perturbed_povm = (dense_ideal_povm @ exp_errgen.to_dense() - dense_ideal_povm)/epsilon
+    
+                            vectorized_povm = perturbed_povm.flatten(order='F')
+    
+                            J[:,i] = vectorized_povm
+    
+                        _,S,Vt = _np.linalg.svd(J)
+                        #Only return nontrivial singular vectors
+                        non_zero_mask = _np.abs(S) > 1e-13
+                        non_trivial_vecs = Vt[non_zero_mask]
+                        non_trivial_vecs = non_trivial_vecs.reshape(-1, Vt.shape[1])  # Reshape to ensure it's 2D
+                        return non_trivial_vecs
+    
+                    phys_directions = calc_physical_subspace(dense_ideal_povm)
+    
+                    #We use optimization to find the best error generator representation
+                    #we only vary physical directions, not independent error generators
+                    def _objfn(v):
+    
+                        #For some reason adding the sum_of_negative_choi_eigenvalues_gate term
+                        #resulted in minimize() sometimes choosing NaN values for v. There are
+                        #two stack exchange issues showing this problem with no solution.
+                        if _np.isnan(v).any():
+                            v = _np.zeros(len(v))
+    
+                        L_vec = _np.zeros(len(phys_directions[0]))
+                        for coeff, phys_direction in zip(v,phys_directions):
+                            L_vec += coeff * phys_direction
+                        errorgen.from_vector(L_vec)
+                        proc_matrix = _spl.expm(errorgen.to_dense())
+    
+                        return _np.linalg.norm(dense_povm - dense_ideal_povm @ proc_matrix) + cp_penalty * sum_of_negative_choi_eigenvalues_gate(proc_matrix, basis)
+    
+                    soln = _spo.minimize(_objfn, _np.zeros(len(phys_directions), 'd'), method="Nelder-Mead", options={},
+                                            tol=1e-13)
+                    if not soln.success and soln.fun > 1e-6:  # not "or" because success is often not set correctly
+                        raise ValueError("Failed to find an errorgen such that <ideal|exp(errorgen) = <effect|")
+                    errgen_vec = _np.linalg.lstsq(phys_directions, soln.x)[0]
+                    errorgen.from_vector(errgen_vec)
+    
+                    EffectiveExpErrorgen = _IdentityPlusErrorgenOp if lndtype.meta == '1+' else _ExpErrorgenOp
+                    return ComposedPOVM(EffectiveExpErrorgen(errorgen), base_povm, mx_basis=basis)
+    
+                elif to_type == "static clifford":
+                    #Assume `povm` already represents state-vec ops, since otherwise we'd
+                    # need to change dimension
+                    nqubits = int(round(_np.log2(povm.dim)))
+    
+                    #Check if `povm` happens to be a Z-basis POVM on `nqubits`
+                    v = (_np.array([1, 0], 'd'), _np.array([0, 1], 'd'))  # (v0,v1) - eigenstates of sigma_z
+                    for zvals, lbl in zip(_itertools.product(*([(0, 1)] * nqubits)), povm.keys()):
+                        testvec = _functools.reduce(_np.kron, [v[i] for i in zvals])
+                        if not _np.allclose(testvec, povm[lbl].to_dense()):
+                            raise ValueError("Cannot convert POVM into a Z-basis stabilizer state POVM")
+    
+                    #If no errors, then return a stabilizer POVM
+                    return ComputationalBasisPOVM(nqubits, 'stabilizer')
+    
+                else:
+                    raise ValueError("Invalid to_type argument: %s" % to_type)
+            except Exception as e:
+                error_msgs[to_type] = str(e)  # try next to_type
+    
+>       raise ValueError("Could not convert POVM to to type(s): %s\n%s" % (str(to_types), str(error_msgs)))
+E       ValueError: Could not convert POVM to to type(s): ['GLND']
+E       {'GLND': 'boolean index did not match indexed array along axis 0; size of axis is 12 but size of corresponding boolean axis is 8'}
+
+../../../pygsti/modelmembers/povms/__init__.py:637: ValueError
+
+The above exception was the direct cause of the following exception:
+
+self = <test.unit.objects.test_model.StaticModelTester testMethod=test_set_all_parameterizations_GLND>
+
+    def test_set_all_parameterizations_GLND(self):
+        model_copy = self.model.copy()
+>       self.model.set_all_parameterizations("GLND")
+
+test_model.py:163: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <pygsti.models.explicitmodel.ExplicitOpModel object at 0x12fd69bd0>
+gate_type = 'GLND', prep_type = 'auto', povm_type = 'auto'
+instrument_type = 'auto', ideal_model = None, cptp_truncation_tol = 1e-06
+spam_cp_penalty = 1e-07
+
+    def set_all_parameterizations(self, gate_type, prep_type="auto", povm_type="auto",
+                                  instrument_type="auto", ideal_model=None, cptp_truncation_tol = 1e-6, spam_cp_penalty = 1e-7):
+        """
+        Convert all gates, states, and POVMs to a specific parameterization type.
+    
+        Parameters
+        ----------
+        parameterization_type : string
+            The gate, state, and POVM parameterization type.  Allowed
+            values are (where '*' means " terms" and " clifford terms"
+            evolution-type suffixes are allowed):
+    
+            - "full" : each gate / state / POVM effect element is an independent parameter
+            - "TP" : Trace-Preserving gates and state preps
+            - "static" : no parameters
+            - "static unitary" : no parameters; convert superops to unitaries
+            - "clifford" : no parameters; convert unitaries to Clifford symplecitics.
+            - "GLND*" : General unconstrained Lindbladian
+            - "CPTP*" : Completely-Positive-Trace-Preserving
+            - "H+S+A*" : Hamiltoian, Pauli-Stochastic, and Affine errors
+            - "H+S*" : Hamiltonian and Pauli-Stochastic errors
+            - "S+A*" : Pauli-Stochastic and Affine errors
+            - "S*" : Pauli-Stochastic errors
+            - "H+D+A*" : Hamiltoian, Depolarization, and Affine errors
+            - "H+D*" : Hamiltonian and Depolarization errors
+            - "D+A*" : Depolarization and Affine errors
+            - "D*" : Depolarization errors
+            - Any of the above with "S" replaced with "s" or "D" replaced with
+              "d". This removes the CPTP constraint on the gates and SPAM
+              operations (and as such is seldom used).
+    
+        ideal_model : Model, optional
+            This may specify an ideal model of unitary gates and pure state vectors
+            to be used as the *ideal* operation of each gate/SPAM operation, which
+            is particularly useful as target for CPTP-based conversions.
+    
+        cptp_truncation_tol : float, optional (default 1e-6)
+            Tolerance used for conversion to CPTP parameterizations. When converting to
+            CPTP models negative eigenvalues of the choi matrix representation of a superoperator
+            are truncated, which can result in a change in the PTM for that operator. This tolerance
+            indicates the maximum amount of truncation induced deviation from the original operations
+            (measured by frobenius distance) we're willing to accept without marking the conversion
+            as failed.
+        spam_cp_penalty : float, optional (default .5)
+            Converting SPAM operations to an error generator representation may
+            introduce trivial gauge degrees of freedom. These gauge degrees of freedom
+            are called trivial because they quite literally do not change the dense representation
+            (i.e. Hilbert-Schmidt vectors) at all. Despite being trivial, error generators along
+            this trivial gauge orbit may be non-CP, so this cptp penalty is used to favor channels
+            within this gauge orbit which are CPTP.
+    
+        Returns
+        -------
+        None
+        """
+        typ = gate_type
+    
+        # Set ideal model to static when used as targets (specifically needed for CPTP prep/povms)
+        static_model = None
+        if ideal_model is not None:
+            static_model = ideal_model.copy()
+            static_model.set_all_parameterizations('static')
+    
+        rtyp = _state.state_type_from_op_type(gate_type) if prep_type == "auto" else prep_type
+        povmtyp = _povm.povm_type_from_op_type(gate_type) if povm_type == "auto" else povm_type
+        ityp = _instrument.instrument_type_from_op_type(gate_type) if instrument_type == "auto" else instrument_type
+    
+        try:
+            self.convert_members_inplace(typ, 'operations', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol)
+            self.convert_members_inplace(ityp, 'instruments', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol)
+            self.convert_members_inplace(rtyp, 'preps', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol, spam_cp_penalty = spam_cp_penalty)
+            self.convert_members_inplace(povmtyp, 'povms', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol, spam_cp_penalty = spam_cp_penalty)
+        except ValueError as e:
+>           raise ValueError("Failed to convert members. If converting to CPTP-based models, " +
+                "try providing an ideal_model to avoid possible branch cuts.") from e
+E           ValueError: Failed to convert members. If converting to CPTP-based models, try providing an ideal_model to avoid possible branch cuts.
+
+../../../pygsti/models/explicitmodel.py:448: ValueError
+----------------------------- Captured stdout call -----------------------------
+here
+___________ LindbladModelTester.test_set_all_parameterizations_GLND ____________
+
+self = <pygsti.models.explicitmodel.ExplicitOpModel object at 0x12abf1c90>
+gate_type = 'GLND', prep_type = 'auto', povm_type = 'auto'
+instrument_type = 'auto', ideal_model = None, cptp_truncation_tol = 1e-06
+spam_cp_penalty = 1e-07
+
+    def set_all_parameterizations(self, gate_type, prep_type="auto", povm_type="auto",
+                                  instrument_type="auto", ideal_model=None, cptp_truncation_tol = 1e-6, spam_cp_penalty = 1e-7):
+        """
+        Convert all gates, states, and POVMs to a specific parameterization type.
+    
+        Parameters
+        ----------
+        parameterization_type : string
+            The gate, state, and POVM parameterization type.  Allowed
+            values are (where '*' means " terms" and " clifford terms"
+            evolution-type suffixes are allowed):
+    
+            - "full" : each gate / state / POVM effect element is an independent parameter
+            - "TP" : Trace-Preserving gates and state preps
+            - "static" : no parameters
+            - "static unitary" : no parameters; convert superops to unitaries
+            - "clifford" : no parameters; convert unitaries to Clifford symplecitics.
+            - "GLND*" : General unconstrained Lindbladian
+            - "CPTP*" : Completely-Positive-Trace-Preserving
+            - "H+S+A*" : Hamiltoian, Pauli-Stochastic, and Affine errors
+            - "H+S*" : Hamiltonian and Pauli-Stochastic errors
+            - "S+A*" : Pauli-Stochastic and Affine errors
+            - "S*" : Pauli-Stochastic errors
+            - "H+D+A*" : Hamiltoian, Depolarization, and Affine errors
+            - "H+D*" : Hamiltonian and Depolarization errors
+            - "D+A*" : Depolarization and Affine errors
+            - "D*" : Depolarization errors
+            - Any of the above with "S" replaced with "s" or "D" replaced with
+              "d". This removes the CPTP constraint on the gates and SPAM
+              operations (and as such is seldom used).
+    
+        ideal_model : Model, optional
+            This may specify an ideal model of unitary gates and pure state vectors
+            to be used as the *ideal* operation of each gate/SPAM operation, which
+            is particularly useful as target for CPTP-based conversions.
+    
+        cptp_truncation_tol : float, optional (default 1e-6)
+            Tolerance used for conversion to CPTP parameterizations. When converting to
+            CPTP models negative eigenvalues of the choi matrix representation of a superoperator
+            are truncated, which can result in a change in the PTM for that operator. This tolerance
+            indicates the maximum amount of truncation induced deviation from the original operations
+            (measured by frobenius distance) we're willing to accept without marking the conversion
+            as failed.
+        spam_cp_penalty : float, optional (default .5)
+            Converting SPAM operations to an error generator representation may
+            introduce trivial gauge degrees of freedom. These gauge degrees of freedom
+            are called trivial because they quite literally do not change the dense representation
+            (i.e. Hilbert-Schmidt vectors) at all. Despite being trivial, error generators along
+            this trivial gauge orbit may be non-CP, so this cptp penalty is used to favor channels
+            within this gauge orbit which are CPTP.
+    
+        Returns
+        -------
+        None
+        """
+        typ = gate_type
+    
+        # Set ideal model to static when used as targets (specifically needed for CPTP prep/povms)
+        static_model = None
+        if ideal_model is not None:
+            static_model = ideal_model.copy()
+            static_model.set_all_parameterizations('static')
+    
+        rtyp = _state.state_type_from_op_type(gate_type) if prep_type == "auto" else prep_type
+        povmtyp = _povm.povm_type_from_op_type(gate_type) if povm_type == "auto" else povm_type
+        ityp = _instrument.instrument_type_from_op_type(gate_type) if instrument_type == "auto" else instrument_type
+    
+        try:
+            self.convert_members_inplace(typ, 'operations', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol)
+            self.convert_members_inplace(ityp, 'instruments', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol)
+            self.convert_members_inplace(rtyp, 'preps', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol, spam_cp_penalty = spam_cp_penalty)
+>           self.convert_members_inplace(povmtyp, 'povms', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol, spam_cp_penalty = spam_cp_penalty)
+
+../../../pygsti/models/explicitmodel.py:446: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../../pygsti/models/explicitmodel.py:358: in convert_members_inplace
+    self.povms[lbl] = _povm.convert (povm, to_type, self.basis, ideal, flatten_structure, cp_penalty=spam_cp_penalty)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+povm = ComposedPOVM([('0', <pygsti.modelmembers.povms.composedeffect.ComposedPOVMEffect object at 0x12fe53280>), ('1', <pygsti.modelmembers.povms.composedeffect.ComposedPOVMEffect object at 0x12fe51ba0>)])
+to_type = 'GLND'
+basis = <pygsti.baseobjs.basis.BuiltinBasis object at 0x12fe529e0>
+ideal_povm = None, flatten_structure = True, cp_penalty = 1e-07
+
+    def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False, cp_penalty=1e-7):
+        """
+        TODO: update docstring
+        Convert a POVM to a new type of parameterization.
+    
+        This potentially creates a new object.  Raises ValueError for invalid conversions.
+    
+        Parameters
+        ----------
+        povm : POVM
+            POVM to convert
+    
+        to_type : {"full","full TP","static","static pure","H+S terms",
+            "H+S clifford terms","clifford"}
+            The type of parameterizaton to convert to.  See
+            :meth:`Model.set_all_parameterizations` for more details.
+            TODO docstring: update the options here.
+    
+        basis : {'std', 'gm', 'pp', 'qt'} or Basis object
+            The basis for `povm`.  Allowed values are Matrix-unit (std),
+            Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt)
+            (or a custom basis object).
+    
+        ideal_povm : POVM, optional
+            The ideal version of `povm`, potentially used when
+            converting to an error-generator type.
+    
+        flatten_structure : bool, optional
+            When `False`, the sub-members of composed and embedded operations
+            are separately converted, leaving the original POVM's structure
+            unchanged.  When `True`, composed and embedded operations are "flattened"
+            into a single POVM of the requested `to_type`.
+    
+        cp_penalty : float, optional (default 1e-7)
+                Converting SPAM operations to an error generator representation may
+                introduce trivial gauge degrees of freedom. These gauge degrees of freedom
+                are called trivial because they quite literally do not change the dense representation
+                (i.e. Hilbert-Schmidt vectors) at all. Despite being trivial, error generators along
+                this trivial gauge orbit may be non-CP, so this cptp penalty is used to favor channels
+                within this gauge orbit which are CPTP.
+    
+        Returns
+        -------
+        POVM
+            The converted POVM vector, usually a distinct
+            object from the object passed as input.
+        """
+    
+        to_types = to_type if isinstance(to_type, (tuple, list)) else (to_type,)  # HACK to support multiple to_type values
+        error_msgs = {}
+    
+        destination_types = {'full TP': TPPOVM,
+                             'static clifford': ComputationalBasisPOVM}
+        NoneType = type(None)
+    
+        for to_type in to_types:
+            try:
+                if isinstance(povm, destination_types.get(to_type, NoneType)):
+                    return povm
+    
+                idl = dict(ideal_povm.items()) if ideal_povm is not None else {}  # ideal effects
+    
+                if to_type in ("full", "static", "static pure"):
+                    converted_effects = [(lbl, convert_effect(vec, to_type, basis, idl.get(lbl, None), flatten_structure))
+                                         for lbl, vec in povm.items()]
+                    return UnconstrainedPOVM(converted_effects, povm.evotype, povm.state_space)
+    
+                elif to_type == "full TP":
+                    converted_effects = [(lbl, convert_effect(vec, "full", basis, idl.get(lbl, None), flatten_structure))
+                                         for lbl, vec in povm.items()]
+                    return TPPOVM(converted_effects, povm.evotype, povm.state_space)
+    
+                elif _ot.is_valid_lindblad_paramtype(to_type):
+                    from ..operations import LindbladErrorgen as _LindbladErrorgen, ExpErrorgenOp as _ExpErrorgenOp
+                    from ..operations import IdentityPlusErrorgenOp as _IdentityPlusErrorgenOp
+                    from ..operations import LindbladParameterization as _LindbladParameterization
+                    lndtype = _LindbladParameterization.cast(to_type)
+    
+    
+                    #Construct a static "base" POVM
+                    if isinstance(povm, ComputationalBasisPOVM):  # special easy case
+                        base_povm = ComputationalBasisPOVM(povm.state_space.num_qubits, povm.evotype)  # just copy it?
+                    else:
+                        try:
+                            if povm.evotype.minimal_space == 'Hilbert':
+                                base_items = [(lbl, convert_effect(vec, 'static pure', basis,
+                                                                   idl.get(lbl, None), flatten_structure))
+                                              for lbl, vec in povm.items()]
+                            else:
+                                raise RuntimeError('Evotype must be compatible with Hilbert ops to use pure effects')
+                        except RuntimeError:  # try static mixed states next:
+                            #if idl.get(lbl,None) is not None:
+    
+                            base_items = []
+                            for lbl, vec in povm.items():
+                                ideal_effect = idl.get(lbl,None)
+                                if ideal_effect is not None:
+                                    base_items.append((lbl, convert_effect(ideal_effect, 'static', basis, ideal_effect, flatten_structure)))
+                                else:
+                                    base_items.append((lbl, convert_effect(vec, 'static', basis, idl.get(lbl, None), flatten_structure)))
+                        base_povm = UnconstrainedPOVM(base_items, povm.evotype, povm.state_space)
+    
+                    proj_basis = 'PP' if povm.state_space.is_entirely_qubits else basis
+                    errorgen = _LindbladErrorgen.from_error_generator(povm.state_space.dim, lndtype, proj_basis,
+                                                                      basis, truncate=True, evotype=povm.evotype)
+    
+                    #Collect all ideal effects
+                    base_dense_effects = []
+                    for item in base_items:
+                        dense_effect = item[1].to_dense()
+                        base_dense_effects.append(dense_effect.reshape((1,len(dense_effect))))
+    
+                    dense_ideal_povm = _np.concatenate(base_dense_effects, axis=0)
+    
+                    #Collect all noisy effects
+                    dense_effects = []
+                    for effect in povm.values():
+                        dense_effect = effect.to_dense()
+                        dense_effects.append(dense_effect.reshape((1,len(dense_effect))))
+    
+                    dense_povm = _np.concatenate(dense_effects, axis=0)
+    
+                    #It is often the case that there are more error generators than physical degrees of freedom in the POVM
+                    #We define a function which finds linear comb. of errgens that span these degrees of freedom.
+                    #This has been called "the trivial gauge", and this function is meant to avoid it
+                    def calc_physical_subspace(dense_ideal_povm, epsilon = 1e-9):
+    
+                        degrees_of_freedom = (dense_ideal_povm.shape[0] - 1) * dense_ideal_povm.shape[1]
+                        errgen = _LindbladErrorgen.from_error_generator(povm.state_space.dim, parameterization=to_type)
+    
+                        if degrees_of_freedom > errgen.num_params:
+                            warnings.warn("POVM has more degrees of freedom than the available number of parameters, representation in this parameterization is not guaranteed")
+                        exp_errgen = _ExpErrorgenOp(errgen)
+    
+                        num_errgens = errgen.num_params
+                        #TODO: Maybe we can use the num of params instead of number of matrix entries, as some of them are linearly dependent.
+                        #i.e E0 completely determines E1 if those are the only two povm elements (E0 + E1 = Identity)
+                        num_entries = dense_ideal_povm.size
+    
+                        #Compute the jacobian with respect to the error generators. This will allow us to see which
+                        #error generators change the POVM entries
+                        J = _np.zeros((num_entries,num_errgens))
+                        new_vec = _np.zeros(num_errgens)
+                        for i in range(num_errgens):
+    
+                            new_vec[i] = epsilon
+                            exp_errgen.from_vector(new_vec)
+                            new_vec[i] = 0
+                            vectorized_povm = _np.zeros(num_entries)
+                            perturbed_povm = (dense_ideal_povm @ exp_errgen.to_dense() - dense_ideal_povm)/epsilon
+    
+                            vectorized_povm = perturbed_povm.flatten(order='F')
+    
+                            J[:,i] = vectorized_povm
+    
+                        _,S,Vt = _np.linalg.svd(J)
+                        #Only return nontrivial singular vectors
+                        non_zero_mask = _np.abs(S) > 1e-13
+                        non_trivial_vecs = Vt[non_zero_mask]
+                        non_trivial_vecs = non_trivial_vecs.reshape(-1, Vt.shape[1])  # Reshape to ensure it's 2D
+                        return non_trivial_vecs
+    
+                    phys_directions = calc_physical_subspace(dense_ideal_povm)
+    
+                    #We use optimization to find the best error generator representation
+                    #we only vary physical directions, not independent error generators
+                    def _objfn(v):
+    
+                        #For some reason adding the sum_of_negative_choi_eigenvalues_gate term
+                        #resulted in minimize() sometimes choosing NaN values for v. There are
+                        #two stack exchange issues showing this problem with no solution.
+                        if _np.isnan(v).any():
+                            v = _np.zeros(len(v))
+    
+                        L_vec = _np.zeros(len(phys_directions[0]))
+                        for coeff, phys_direction in zip(v,phys_directions):
+                            L_vec += coeff * phys_direction
+                        errorgen.from_vector(L_vec)
+                        proc_matrix = _spl.expm(errorgen.to_dense())
+    
+                        return _np.linalg.norm(dense_povm - dense_ideal_povm @ proc_matrix) + cp_penalty * sum_of_negative_choi_eigenvalues_gate(proc_matrix, basis)
+    
+                    soln = _spo.minimize(_objfn, _np.zeros(len(phys_directions), 'd'), method="Nelder-Mead", options={},
+                                            tol=1e-13)
+                    if not soln.success and soln.fun > 1e-6:  # not "or" because success is often not set correctly
+                        raise ValueError("Failed to find an errorgen such that <ideal|exp(errorgen) = <effect|")
+                    errgen_vec = _np.linalg.lstsq(phys_directions, soln.x)[0]
+                    errorgen.from_vector(errgen_vec)
+    
+                    EffectiveExpErrorgen = _IdentityPlusErrorgenOp if lndtype.meta == '1+' else _ExpErrorgenOp
+                    return ComposedPOVM(EffectiveExpErrorgen(errorgen), base_povm, mx_basis=basis)
+    
+                elif to_type == "static clifford":
+                    #Assume `povm` already represents state-vec ops, since otherwise we'd
+                    # need to change dimension
+                    nqubits = int(round(_np.log2(povm.dim)))
+    
+                    #Check if `povm` happens to be a Z-basis POVM on `nqubits`
+                    v = (_np.array([1, 0], 'd'), _np.array([0, 1], 'd'))  # (v0,v1) - eigenstates of sigma_z
+                    for zvals, lbl in zip(_itertools.product(*([(0, 1)] * nqubits)), povm.keys()):
+                        testvec = _functools.reduce(_np.kron, [v[i] for i in zvals])
+                        if not _np.allclose(testvec, povm[lbl].to_dense()):
+                            raise ValueError("Cannot convert POVM into a Z-basis stabilizer state POVM")
+    
+                    #If no errors, then return a stabilizer POVM
+                    return ComputationalBasisPOVM(nqubits, 'stabilizer')
+    
+                else:
+                    raise ValueError("Invalid to_type argument: %s" % to_type)
+            except Exception as e:
+                error_msgs[to_type] = str(e)  # try next to_type
+    
+>       raise ValueError("Could not convert POVM to to type(s): %s\n%s" % (str(to_types), str(error_msgs)))
+E       ValueError: Could not convert POVM to to type(s): ['GLND']
+E       {'GLND': 'boolean index did not match indexed array along axis 0; size of axis is 12 but size of corresponding boolean axis is 8'}
+
+../../../pygsti/modelmembers/povms/__init__.py:637: ValueError
+
+The above exception was the direct cause of the following exception:
+
+self = <test.unit.objects.test_model.LindbladModelTester testMethod=test_set_all_parameterizations_GLND>
+
+    def test_set_all_parameterizations_GLND(self):
+        model_copy = self.model.copy()
+>       self.model.set_all_parameterizations("GLND")
+
+test_model.py:163: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <pygsti.models.explicitmodel.ExplicitOpModel object at 0x12abf1c90>
+gate_type = 'GLND', prep_type = 'auto', povm_type = 'auto'
+instrument_type = 'auto', ideal_model = None, cptp_truncation_tol = 1e-06
+spam_cp_penalty = 1e-07
+
+    def set_all_parameterizations(self, gate_type, prep_type="auto", povm_type="auto",
+                                  instrument_type="auto", ideal_model=None, cptp_truncation_tol = 1e-6, spam_cp_penalty = 1e-7):
+        """
+        Convert all gates, states, and POVMs to a specific parameterization type.
+    
+        Parameters
+        ----------
+        parameterization_type : string
+            The gate, state, and POVM parameterization type.  Allowed
+            values are (where '*' means " terms" and " clifford terms"
+            evolution-type suffixes are allowed):
+    
+            - "full" : each gate / state / POVM effect element is an independent parameter
+            - "TP" : Trace-Preserving gates and state preps
+            - "static" : no parameters
+            - "static unitary" : no parameters; convert superops to unitaries
+            - "clifford" : no parameters; convert unitaries to Clifford symplecitics.
+            - "GLND*" : General unconstrained Lindbladian
+            - "CPTP*" : Completely-Positive-Trace-Preserving
+            - "H+S+A*" : Hamiltoian, Pauli-Stochastic, and Affine errors
+            - "H+S*" : Hamiltonian and Pauli-Stochastic errors
+            - "S+A*" : Pauli-Stochastic and Affine errors
+            - "S*" : Pauli-Stochastic errors
+            - "H+D+A*" : Hamiltoian, Depolarization, and Affine errors
+            - "H+D*" : Hamiltonian and Depolarization errors
+            - "D+A*" : Depolarization and Affine errors
+            - "D*" : Depolarization errors
+            - Any of the above with "S" replaced with "s" or "D" replaced with
+              "d". This removes the CPTP constraint on the gates and SPAM
+              operations (and as such is seldom used).
+    
+        ideal_model : Model, optional
+            This may specify an ideal model of unitary gates and pure state vectors
+            to be used as the *ideal* operation of each gate/SPAM operation, which
+            is particularly useful as target for CPTP-based conversions.
+    
+        cptp_truncation_tol : float, optional (default 1e-6)
+            Tolerance used for conversion to CPTP parameterizations. When converting to
+            CPTP models negative eigenvalues of the choi matrix representation of a superoperator
+            are truncated, which can result in a change in the PTM for that operator. This tolerance
+            indicates the maximum amount of truncation induced deviation from the original operations
+            (measured by frobenius distance) we're willing to accept without marking the conversion
+            as failed.
+        spam_cp_penalty : float, optional (default .5)
+            Converting SPAM operations to an error generator representation may
+            introduce trivial gauge degrees of freedom. These gauge degrees of freedom
+            are called trivial because they quite literally do not change the dense representation
+            (i.e. Hilbert-Schmidt vectors) at all. Despite being trivial, error generators along
+            this trivial gauge orbit may be non-CP, so this cptp penalty is used to favor channels
+            within this gauge orbit which are CPTP.
+    
+        Returns
+        -------
+        None
+        """
+        typ = gate_type
+    
+        # Set ideal model to static when used as targets (specifically needed for CPTP prep/povms)
+        static_model = None
+        if ideal_model is not None:
+            static_model = ideal_model.copy()
+            static_model.set_all_parameterizations('static')
+    
+        rtyp = _state.state_type_from_op_type(gate_type) if prep_type == "auto" else prep_type
+        povmtyp = _povm.povm_type_from_op_type(gate_type) if povm_type == "auto" else povm_type
+        ityp = _instrument.instrument_type_from_op_type(gate_type) if instrument_type == "auto" else instrument_type
+    
+        try:
+            self.convert_members_inplace(typ, 'operations', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol)
+            self.convert_members_inplace(ityp, 'instruments', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol)
+            self.convert_members_inplace(rtyp, 'preps', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol, spam_cp_penalty = spam_cp_penalty)
+            self.convert_members_inplace(povmtyp, 'povms', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol, spam_cp_penalty = spam_cp_penalty)
+        except ValueError as e:
+>           raise ValueError("Failed to convert members. If converting to CPTP-based models, " +
+                "try providing an ideal_model to avoid possible branch cuts.") from e
+E           ValueError: Failed to convert members. If converting to CPTP-based models, try providing an ideal_model to avoid possible branch cuts.
+
+../../../pygsti/models/explicitmodel.py:448: ValueError
+----------------------------- Captured stdout call -----------------------------
+here
+=========================== short test summary info ============================
+FAILED test_model.py::FullModelTester::test_set_all_parameterizations_GLND - ...
+FAILED test_model.py::TPModelTester::test_set_all_parameterizations_GLND - Va...
+FAILED test_model.py::StaticModelTester::test_set_all_parameterizations_GLND
+FAILED test_model.py::LindbladModelTester::test_set_all_parameterizations_GLND
+=================== 4 failed, 188 passed, 3 skipped in 5.90s ===================

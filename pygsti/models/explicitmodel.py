@@ -349,12 +349,13 @@ class ExplicitOpModel(_mdl.OpModel):
             for lbl, prep in self.preps.items():
                 if labels_to_convert == 'all' or lbl in labels_to_convert:
                     ideal = ideal_model.preps.get(lbl, None) if (ideal_model is not None) else None
-                    self.preps[lbl] = _state.convert(prep, to_type, self.basis, spam_cp_penalty, ideal, flatten_structure)
+                    print('here')
+                    self.preps[lbl] = _state.convert(prep, to_type, self.basis, ideal, flatten_structure, cp_penalty=spam_cp_penalty)
         if any([c in categories_to_convert for c in ('all', 'povms')]):
             for lbl, povm in self.povms.items():
                 if labels_to_convert == 'all' or lbl in labels_to_convert:
                     ideal = ideal_model.povms.get(lbl, None) if (ideal_model is not None) else None
-                    self.povms[lbl] = _povm.convert(povm, to_type, self.basis, spam_cp_penalty, ideal, flatten_structure)
+                    self.povms[lbl] = _povm.convert (povm, to_type, self.basis, ideal, flatten_structure, cp_penalty=spam_cp_penalty)
 
         self._clean_paramvec()  # param indices were probabaly updated
         if set_default_gauge_group:
