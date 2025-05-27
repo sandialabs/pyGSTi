@@ -289,10 +289,9 @@ def convert(state, to_type, basis, ideal_state=None, flatten_structure=False, cp
                         _,S,Vt = _np.linalg.svd(J)
 
                         #Only return nontrivial singular vectors
-                        non_zero_mask = _np.where(_np.ones(len(S)))
+                        non_zero_mask = _np.where(_np.abs(S) > 1e-13)
                         non_trivial_vecs = Vt[non_zero_mask]
                         non_trivial_vecs = non_trivial_vecs.reshape(-1, Vt.shape[1])  # Reshape to ensure it's 2D
-                        #return Vt[:len(S),]
                         return non_trivial_vecs
                         
                     phys_directions = calc_physical_subspace(dense_state)
