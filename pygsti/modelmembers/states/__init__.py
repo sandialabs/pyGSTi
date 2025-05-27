@@ -286,7 +286,7 @@ def convert(state, to_type, basis, ideal_state=None, flatten_structure=False, cp
                             exp_errgen.from_vector(new_vec)
                             J[:,i] = (exp_errgen.to_dense() @ ideal_prep - ideal_prep)[1:]/epsilon
 
-                        _,S,Vt = _np.linalg.svd(J)
+                        _,S,Vt = _np.linalg.svd(J, full_matrices=False)
 
                         #Only return nontrivial singular vectors
                         Vt = Vt[S > 1e-13, :].reshape((-1, Vt.shape[1]))

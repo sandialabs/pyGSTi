@@ -577,7 +577,7 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False, cp_p
                         
                         J[:,i] = vectorized_povm
 
-                    _,S,Vt = _np.linalg.svd(J)
+                    _,S,Vt = _np.linalg.svd(J, full_matrices=False)
 
                     #Only return nontrivial singular vectors
                     Vt = Vt[S > 1e-13, :].reshape((-1, Vt.shape[1]))
