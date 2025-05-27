@@ -547,7 +547,7 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False, cp_p
                 #It is often the case that there are more error generators than physical degrees of freedom in the POVM
                 #We define a function which finds linear comb. of errgens that span these degrees of freedom.
                 #This has been called "the trivial gauge", and this function is meant to avoid it
-                def calc_physical_subspace(dense_ideal_povm, epsilon = 1e-9):
+                def calc_physical_subspace(dense_ideal_povm, epsilon = 1e-4):
 
                     degrees_of_freedom = (dense_ideal_povm.shape[0] - 1) * dense_ideal_povm.shape[1]
                     errgen = _LindbladErrorgen.from_error_generator(povm.state_space.dim, parameterization=to_type)
@@ -578,11 +578,14 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False, cp_p
                         J[:,i] = vectorized_povm
 
                     _,S,Vt = _np.linalg.svd(J)
+
                     #Only return nontrivial singular vectors
-                    non_zero_mask = _np.where(_np.abs(S) > 1e-13)
+                    #non_zero_mask = _np.where(_np.ones(len(S)))
+                    non_zero_mask = _np.where(_np.abs(S) > 1e-63)
                     non_trivial_vecs = Vt[non_zero_mask]
                     non_trivial_vecs = non_trivial_vecs.reshape(-1, Vt.shape[1])  # Reshape to ensure it's 2D
                     return non_trivial_vecs
+                    #return Vt[:len(S),]
                 
                 phys_directions = calc_physical_subspace(dense_ideal_povm)
 
