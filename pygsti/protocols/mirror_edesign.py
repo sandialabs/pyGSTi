@@ -93,7 +93,7 @@ def make_mirror_edesign(test_edesign: _FreeformDesign,
 
             test_id = aux['id']
 
-            assert test_id in valid_test_ids, f"Invalid ref ID {ref_id} for ref circuit corresponding to test IDs {valid_test_ids}"
+            assert test_id in valid_test_ids, f"Invalid test ID {test_id} for ref circuit corresponding to test IDs {valid_test_ids}"
 
         else:
             print("using provided edesign for both reference and test compilations")
