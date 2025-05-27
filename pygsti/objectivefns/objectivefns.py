@@ -4597,6 +4597,10 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             #   Ideally we'd have put in the effort to do this earlier when doing finite-difference to get
             #   the Jacobian of terms. But we start with a simple implementation.
             #
+            #       --> TODO: change so that if callable_penalty has a grad method then we'll call it instead
+            #                 of relying on finite-differences over all model parameters. This would help when
+            #                 the penalty is constant w.r.t. some params (like those that only appear in SPAM).
+            #
             terms_jac[off:off+1, :] = 0.0
             if self.callable_penalty_factor:
                 vec0 = self.model.to_vector()

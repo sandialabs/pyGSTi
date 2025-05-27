@@ -323,6 +323,14 @@ def L_matrix(model, target_model, weights=None):  # noqa N802
             weights[key] = 1.
 
     normalizer = _np.sum(_np.array([weights[key] for key in list(target_model.operations.keys())]))
+    # TODO: improve efficiency
+    #
+    #   1. Accumuate the summands in this list comprehension in-place. (Might already happen but that's non-obvious)
+    #   2. Use the fact that target gates are unitary and so their superoperator representation inverses should
+    #      be their transposes.
+    #   3. Have the option to return this matrix as an implicit abstract linear operator, so that anyone who wants
+    #      eigenvalue info can try to get it from an iterative method instead of a full eigendecomposition.
+    #   
     L_matrix = (1 / normalizer) * _np.sum(
         weights[key] * _np.kron(
             model.operations[key].to_dense(on_space='HilbertSchmidt').T,
