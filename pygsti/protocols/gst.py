@@ -551,12 +551,12 @@ class GSTInitialModel(_NicelySerializable):
             if comm is not None:  # broadcast starting model
                 #OLD: comm.bcast(mdl_start, root=0)
                 # just broadcast *vector* to avoid huge pickles (if cached calcs!)
+
                 comm.bcast(mdl_start.to_vector(), root=0)
         else:
             #OLD: mdl_start = comm.bcast(None, root=0)
             v = comm.bcast(None, root=0)
             mdl_start.from_vector(v)
-
         return mdl_start
 
     def _to_nice_serialization(self):

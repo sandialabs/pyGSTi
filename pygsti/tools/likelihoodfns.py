@@ -260,7 +260,7 @@ def logl_per_circuit(model, dataset, circuits=None,
         else {'min_prob_clip': min_prob_clip}  # non-poisson-pic logl has no radius
     obj_max = _objfns._objfn(_objfns.MaxLogLFunction, model, dataset, circuits,
                              mdc_store=mdc_store, method_names=('percircuit',),
-                             op_label_aliases=op_label_aliases, poisson_picture=poisson_picture)
+                             op_label_aliases=op_label_aliases, poisson_picture=poisson_picture)#, comm=comm, mem_limit=mem_limit)
     obj_cls = _objfns.PoissonPicDeltaLogLFunction if poisson_picture else _objfns.DeltaLogLFunction
     obj = _objfns._objfn(obj_cls, model, dataset, circuits,
                          regularization, {'prob_clip_interval': prob_clip_interval},
@@ -270,7 +270,7 @@ def logl_per_circuit(model, dataset, circuits=None,
         assert(poisson_picture), "Wildcard budgets can only be used with `poisson_picture=True`"
         obj.terms()  # objfn used within wildcard objective fn must be pre-evaluated
         obj = _objfns.LogLWildcardFunction(obj, model.to_vector(), wildcard)
-
+    
     local = obj_max.percircuit() - obj.percircuit()
     return obj.layout.allgather_local_array('c', local)
 

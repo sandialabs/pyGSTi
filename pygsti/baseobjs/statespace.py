@@ -418,7 +418,7 @@ class StateSpace(_NicelySerializable):
         StateSpace
         """
         # Default, generic, implementation constructs an explicit state space
-        labels = set(labels)
+        labels = sorted(set(labels))
         sub_tpb_labels = []
         sub_tpb_udims = []
         sub_tpb_types = []

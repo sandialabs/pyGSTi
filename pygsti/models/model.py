@@ -1137,21 +1137,20 @@ class OpModel(Model):
 
         #Mapping between the model index and the corresponding model members will be more complicated
         #when there is a parameter interposer, so table implementing this for that case.
-        if self.param_interposer is not None:
-            self._index_mm_map = None
-            self._index_mm_label_map = None
-        else:
-            index_mm_map = [[] for _ in range(len(self._paramvec))]
-            index_mm_label_map = [[] for _ in range(len(self._paramvec))]
-            
-            for lbl, obj in self._iter_parameterized_objs():
-                #if the gpindices are a slice then convert to a list of indices.
-                gpindices = _slct.indices(obj.gpindices) if isinstance(obj.gpindices, slice) else obj.gpindices
-                for gpidx in gpindices:
-                    index_mm_map[gpidx].append(obj)
-                    index_mm_label_map[gpidx].append(lbl)
-            self._index_mm_map = index_mm_map
-            self._index_mm_label_map = index_mm_label_map
+        
+
+        ops_param_vec = self._model_paramvec_to_ops_paramvec(self._paramvec)
+        index_mm_map = [[] for _ in range(len(ops_param_vec))]
+        index_mm_label_map = [[] for _ in range(len(ops_param_vec))]
+        
+        for lbl, obj in self._iter_parameterized_objs():
+            #if the gpindices are a slice then convert to a list of indices.
+            gpindices = _slct.indices(obj.gpindices) if isinstance(obj.gpindices, slice) else obj.gpindices
+            for gpidx in gpindices:
+                index_mm_map[gpidx].append(obj)
+                index_mm_label_map[gpidx].append(lbl)
+        self._index_mm_map = index_mm_map
+        self._index_mm_label_map = index_mm_label_map
         #Note to future selves. If we add a flag indicating the presence of collected parameters
         #then we can improve the performance of this by using a simpler structure when no collected
 
@@ -1267,7 +1266,7 @@ class OpModel(Model):
 
         if self._index_mm_map is None:
             self.from_vector(self._paramvec)
-            print("optimized code was skipped")
+            #print("optimized code was skipped")
             return
 
         if self._param_interposer is not None:
@@ -1286,7 +1285,6 @@ class OpModel(Model):
 
         #get all of the model members which need to be be updated and loop through them to update their
         #parameters.
-        print("optimized code")
         #test_model = self.copy()
         #test_model.from_vector(self._paramvec)
         unique_mms = {lbl:val for idx in indices for lbl, val in zip(self._index_mm_label_map[idx], self._index_mm_map[idx])}
@@ -2676,11 +2674,17 @@ class OpModel(Model):
 
         norm_order = "auto"  # NOTE - should be 1 for normalizing 'S' quantities and 2 for 'H',
         # so 'auto' utilizes intelligence within FOGIStore
+
+
         self.fogi_store = _FOGIStore(gauge_action_matrices, gauge_action_gauge_spaces,
                                      errorgen_coefficient_labels,  # gauge_errgen_space_labels,
                                      op_label_abbrevs, reduce_to_model_space, dependent_fogi_action,
                                      norm_order=norm_order)
-
+        #print(f'{primitive_op_labels=}')
+        #print(f'{primitive_prep_labels=}')
+        #print(f'{primitive_povm_labels=}')
+        #print(f'{self.fogi_store.fogi_directions.toarray()=}')
+        #print(f'{self.fogi_store.errorgen_space_op_elem_labels=}')
         if reparameterize:
             fogi_interposer = self._add_reparameterization(
                 primitive_op_labels + primitive_prep_labels + primitive_povm_labels,

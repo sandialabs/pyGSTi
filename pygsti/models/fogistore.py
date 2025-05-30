@@ -47,6 +47,7 @@ class FirstOrderGaugeInvariantStore(object):
         #  *difference* K - UKU^dag in the Lindblad mapping under gauge transform exp(K),  L -> L + K - UKU^dag)
         common_gauge_space = None
         for op_label, gauge_space in gauge_action_gauge_spaces_by_op.items():
+            
             #FOGI DEBUG print("DEBUG gauge space of ", op_label, "has dim", gauge_space.vectors.shape[1])
             if common_gauge_space is None:
                 common_gauge_space = gauge_space
@@ -81,6 +82,7 @@ class FirstOrderGaugeInvariantStore(object):
         #  (these could be seen as staring in the union of the common gauge's and op's elemgen
         #   bases - which would just be the common gauge's elemgen basis since it's strictly larger -
         #   restricted to the op's elemben basis)
+        
         for op_label, orig_gauge_space in gauge_action_gauge_spaces_by_op.items():
             #FOGI DEBUG print("DEBUG: ", op_label, orig_gauge_space.vectors.shape, len(orig_gauge_space.elemgen_basis))
             gauge_action = gauge_action_matrices_by_op[op_label]  # a sparse matrix
@@ -101,7 +103,9 @@ class FirstOrderGaugeInvariantStore(object):
             #FUTURE: if update above creates zero-rows in gauge action matrix, maybe remove
             # these rows from the row basis, i.e. self.elem_errorgen_labels_by_op[op_label]
 
+
         self.gauge_action_for_op = gauge_action_matrices_by_op
+
 
         (indep_fogi_directions, indep_fogi_metadata, dep_fogi_directions, dep_fogi_metadata) = \
             _fogit.construct_fogi_quantities(self.primitive_op_labels, self.gauge_action_for_op,
