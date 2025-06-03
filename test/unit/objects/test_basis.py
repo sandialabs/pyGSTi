@@ -170,3 +170,10 @@ class BasisTester(BaseCase):
         self.assertEqual(dsb.dim, 4 + 1 + 4)
         self.assertEqual(len(dsb.component_bases), 3)
         self.assertEqual([x.dim for x in dsb.component_bases], [4, 1, 4])
+
+
+    def test_sv_basis(self):
+        sv = basis.Basis.cast('sv', 7)
+        self.assertTrue(sv.dim == 7)
+        self.assertTrue(sv.is_simple())
+        self.assertTrue(len(sv.elements) == 7)

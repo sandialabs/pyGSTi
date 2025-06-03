@@ -828,7 +828,7 @@ class ExplicitBasis(Basis):
     A `Basis` whose elements are specified directly.
 
     All explicit bases are simple: their vector space is taken to be that
-    of the the flattened elements unless separate `vector_elements` are given.
+    of the flattened elements unless separate `vector_elements` are given.
 
     Parameters
     ----------
@@ -1063,12 +1063,16 @@ class BuiltinBasis(LazyBasis):
         assert(name in _basis_constructor_dict), "Unknown builtin basis name '%s'!" % name
         if sparse is None: sparse = False  # choose dense matrices by default (when sparsity is "unspecified")
 
-        if name == 'cl':  # HACK for now, until we figure out better classical state spaces
-            self.state_space = dim_or_statespace if isinstance(dim_or_statespace, _statespace.StateSpace) \
-                else _statespace.ExplicitStateSpace([('L%d' % i,) for i in range(dim_or_statespace)])
+        if isinstance(dim_or_statespace, _statespace.StateSpace):
+            self.state_space = dim_or_statespace
+        elif name == 'cl':  # HACK for now, until we figure out better classical state spaces
+            self.state_space = _statespace.ExplicitStateSpace([('L%d' % i,) for i in range(dim_or_statespace)])
+        elif name == "sv":
+            # A state vector can have any shape. It does not need to be a perfect square root.
+            udim = _np.sqrt(dim_or_statespace)
+            self.state_space = _statespace.ExplicitStateSpace(('all',), udims=(udim,), types=("quantum",))
         else:
-            self.state_space = dim_or_statespace if isinstance(dim_or_statespace, _statespace.StateSpace) \
-                else _statespace.default_space_for_dim(dim_or_statespace)
+            self.state_space = _statespace.default_space_for_dim(dim_or_statespace)
 
         longname = _basis_constructor_dict[name].longname
         real = _basis_constructor_dict[name].real
