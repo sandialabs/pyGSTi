@@ -235,6 +235,42 @@ def layer_snipper_from_qubit_graph(error_gen, num_qubits, num_channels, qubit_gr
 
     return indices_for_error
 
+        
+# @_keras.utils.register_keras_serializable()
+def layer_snipper_from_qubit_graph_with_lookback(error_gen, num_qubits, num_channels, qubit_graph_laplacian, 
+                                                 num_hops, lookback=-1):
+    """
+
+    """
+    encoding_indices_for_error = layer_snipper_from_qubit_graph(error_gen=error_gen, num_qubits=num_qubits, 
+                                                                num_channels=num_channels, 
+                                                                qubit_graph_laplacian= qubit_graph_laplacian,
+                                                                num_hops=num_hops)
+
+    indices_for_error = []
+    for relative_layer_index in range(lookback, 1):
+        indices_for_error += [[relative_layer_index, i] for i in encoding_indices_for_error]
+
+    return _np.array(indices_for_error)
+
+
+# @_keras.utils.register_keras_serializable()
+def layer_snipper_from_qubit_graph_with_simplified_lookback(error_gen, num_qubits, num_channels, qubit_graph_laplacian, 
+                                                 num_hops, lookback=-1):
+    """
+
+    """
+    encoding_indices_for_error = layer_snipper_from_qubit_graph(error_gen=error_gen, num_qubits=num_qubits, 
+                                                                num_channels=num_channels, 
+                                                                qubit_graph_laplacian= qubit_graph_laplacian,
+                                                                num_hops=num_hops)
+
+    indices_for_error = []
+    for i in range(0 np.abs(lookback)):
+        indices_for_error += list(encoding_indices_for_error) + (num_qubits * num_channels) * i)
+
+    return _np.array(indices_for_error)
+
 
 @_keras.utils.register_keras_serializable(package='Blah1')
 class CircuitErrorVecMap(_keras.Model):
