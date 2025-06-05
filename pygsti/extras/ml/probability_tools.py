@@ -360,6 +360,49 @@ def phi(tableau, desired_bitstring, P, Q):
     else:
         return complex(0)
 
+def alpha_kyiv(errorgen, tableau, desired_bitstring):
+    """
+    First-order error generator sensitivity function for probability.
+    
+    Parameters
+    ----------
+    errorgen : `ElementaryErrorgenLabel`
+        Error generator label for which to calculate sensitivity.
+    
+    tableau : stim.Tableau
+        Stim Tableau corresponding to the stabilizer state to calculate the sensitivity for.
+        
+    desired_bitstring : str
+        Bit string to calculate the sensitivity for.
+    """
+    
+    errgen_type = errorgen[0]
+    basis_element_labels = errorgen[1]
+    
+    if not isinstance(basis_element_labels[0], stim.PauliString):
+        basis_element_labels = tuple([stim.PauliString(lbl) for lbl in basis_element_labels])
+    
+    identity_pauli = stim.PauliString('I'*len(basis_element_labels[0]))
+    
+    if errgen_type == 'H':
+        #print(f'{2*phi(tableau, desired_bitstring, basis_element_labels[0], identity_pauli)=}')
+        sensitivity = 2*phi(tableau, desired_bitstring, basis_element_labels[0], identity_pauli).imag
+        
+    elif errgen_type == 'S':
+        sensitivity = phi(tableau, desired_bitstring, basis_element_labels[0], basis_element_labels[0]) \
+                    - phi(tableau, desired_bitstring, identity_pauli, identity_pauli)
+    elif errgen_type == 'C': #TODO simplify this logic
+        first_term = 2*phi(tableau, desired_bitstring, basis_element_labels[0], basis_element_labels[1])
+        second_term = phi(tableau, desired_bitstring, basis_element_labels[0]*basis_element_labels[1], identity_pauli) \
+                    + phi(tableau, desired_bitstring, basis_element_labels[1]*basis_element_labels[0], identity_pauli)
+        sensitivity =  first_term.real - second_term.real
+    else: #A
+        first_term = 2*phi(tableau, desired_bitstring, basis_element_labels[1], basis_element_labels[0])
+        second_term = phi(tableau, desired_bitstring, basis_element_labels[1]*basis_element_labels[0], identity_pauli) \
+                    - phi(tableau, desired_bitstring, basis_element_labels[0]*basis_element_labels[1], identity_pauli)
+        sensitivity =  first_term.imag + second_term.imag
+    return sensitivity.real
+    
 
 def alpha(errorgen, tableau, desired_bitstring):
     """
@@ -491,8 +534,10 @@ def probabilities_errorgen_prop(error_propagator, target_model, circuit, use_bch
 def calculate_probability(circuit, bitstring, target_model, errorgen_propagator, num_qubits):
     propagated_errorgen_layer = errorgen_propagator.propagate_errorgens_bch(circuit, bch_order=1)
 
-    for key in [error_gen for error_gen in propagated_errorgen_layer.keys() if error_gen.bel_to_strings()[0].count('I') < 2]:
-        del propagated_errorgen_layer[key]
+    # # helper fn to determine non identities
+
+    # for key in [error_gen for error_gen in propagated_errorgen_layer.keys() if error_gen.bel_to_strings()[0].count('I') < (num_qubits - 2)]:
+    #     del propagated_errorgen_layer[key]
 
     
     # rate_values = np.array([rate_[1] for rate_ in propagated_errorgen_layer.items()])
@@ -508,3 +553,51 @@ def calculate_probability(circuit, bitstring, target_model, errorgen_propagator,
                   'rate_values' : rate_values}
     
     return return_dict
+
+
+def calculate_probability_kyiv(circuit, bitstring, target_model, errorgen_propagator, num_qubits, tracked_error_gens):
+    propagated_errorgen_layer = errorgen_propagator.propagate_errorgens_bch(circuit, bch_order=1)
+
+    # helper fn to determine non identities
+
+    # for key in [error_gen for error_gen in propagated_errorgen_layer.keys() if error_gen.bel_to_strings()[0].count('I') < (num_qubits - 2)]:
+    #     del propagated_errorgen_layer[key]
+
+    
+    # rate_values = np.array([rate_[1] for rate_ in propagated_errorgen_layer.items()])
+    # rate_values = rate_generator(propagated_errorgen_layer, circuit, num_qubits)
+    # probabilities = np.array([approximate_stabilizer_probability(propagated_errorgen_layer, circuit, bit) for bit in bitstring]).T
+    alpha_values = [alpha_generator(propagated_errorgen_layer, circuit, bit, num_qubits) for bit in bitstring]
+    ideal_probabilities = [stabilizer_probability(circuit.convert_to_stim_tableau(), bit) for bit in bitstring] #probabilities[0]
+    # approximate_probabilities = probabilities[1]
+
+    return_dict = {'ideal_probabilities':ideal_probabilities,
+                  # 'approximate_probabilities': approximate_probabilities,
+                  'alpha_values': alpha_values,
+                  # 'rate_values' : rate_values
+                  }
+    
+    return return_dict
+
+
+def alpha_generator_kyiv(circuit, desired_bitstring, num_qubits, tracked_error_gens):
+
+    if isinstance(circuit, Circuit):
+        tableau = circuit.convert_to_stim_tableau()
+    elif isinstance(circuit, stim.Tableau):
+        tableau = circuit
+
+    num_random = uniform_support(tableau)
+    scale = 1/2**(num_random) #TODO: This might overflow
+    
+    num_errgens = 2*4**(num_qubits)
+    scaled_alpha_errgen = np.zeros(num_errgens, dtype=np.float64)
+    # scaled_alpha_errgen = []
+
+    for lbl in tracked_error_gens:
+        index = error_gen_to_index(lbl[0], lbl[1])
+        # if index + 1 > num_errgens:
+        #     raise ValueError(f"Index {index + 1} exceeds the number of error generators ({num_errgens}).") 
+        scaled_alpha_errgen[index] = np.float64(scale*alpha_kyiv(lbl, tableau, desired_bitstring).real)
+        # scaled_alpha_errgen.append((scale*alpha(lbl, tableau, desired_bitstring)).real)
+    return scaled_alpha_errgen
