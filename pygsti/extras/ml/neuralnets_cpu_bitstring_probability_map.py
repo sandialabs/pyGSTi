@@ -266,8 +266,8 @@ def layer_snipper_from_qubit_graph_with_simplified_lookback(error_gen, num_qubit
                                                                 num_hops=num_hops)
 
     indices_for_error = []
-    for i in range(0, np.abs(lookback)):
-        indices_for_error += list(encoding_indices_for_error) + (num_qubits * num_channels) * i
+    for i in range(0, _np.abs(lookback)):
+        indices_for_error += list(encoding_indices_for_error + ((num_qubits * num_channels) * i))
 
     return _np.array(indices_for_error)
 
