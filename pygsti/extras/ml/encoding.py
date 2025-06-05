@@ -449,7 +449,7 @@ def create_probability_data(circs:list,
         y_true = _np.array(true_probabilities)
     y_approx = _np.array(approximate_probabilities)
                     
-    for i in trange(len(circs), smoothing=0):
+    for i in range(len(circs)):
         c = circs[i]
         x_circs[i, :, :, :] = circuit_to_tensor(c, max_depth, num_qubits, num_channels, measurement_encoding,
                                                          indexmapper, indexmapper_kwargs,
@@ -519,7 +519,7 @@ def create_probability_data_test(circs: list,
     time_rest = 0
 
     start_time = time.time()
-    for i in trange(len(circs), smoothing=0):
+    for i in range(len(circs)):
         c = circs[i]
 
         start = time.time()

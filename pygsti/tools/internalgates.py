@@ -308,6 +308,9 @@ def standard_gatename_unitaries():
     std_unitaries['Gecres'] = _np.array([[0, 1, 0., 1j], [1., 0, -1j, 0.],
                                         [0., 1j, 0, 1], [-1j, 0., 1, 0]], complex)/_np.sqrt(2)
 
+    std_unitaries['Gecr'] = _np.array([[0, 1, 0., 1j], [1., 0, -1j, 0.],
+                                        [0., 1j, 0, 1], [-1j, 0., 1, 0]], complex)/_np.sqrt(2)
+
     std_unitaries['Gzr'] = Gzr()
     std_unitaries['Gczr'] = Gczr()
 
@@ -408,6 +411,7 @@ def standard_gatenames_stim_conversions():
     ecr_unitary = _np.array([[0, 1, 0., 1j], [1., 0, -1j, 0.],
                              [0., 1j, 0, 1], [-1j, 0., 1, 0]], complex)/_np.sqrt(2)
     gate_dict['Gecres'] = stim.Tableau.from_unitary_matrix(ecr_unitary, endian='big')
+    gate_dict['Gecr'] = stim.Tableau.from_unitary_matrix(ecr_unitary, endian='big')
 
     return gate_dict
 
