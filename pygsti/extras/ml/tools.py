@@ -1,5 +1,5 @@
 
-import numpy as _np
+import numpy as np
 import itertools as _itertools
 import copy as _copy
 import warnings as _warnings
@@ -13,9 +13,39 @@ from pygsti.errorgenpropagation.errorpropagator import ErrorGeneratorPropagator
 from tensorflow import unique
 import tensorflow as _tf
 
+
+def layer_snipper_from_qubit_graph(error_gen, num_qubits, num_channels, qubit_graph_laplacian, num_hops):
+    """
+
+    """
+
+    laplace_power = np.linalg.matrix_power(qubit_graph_laplacian, num_hops)
+    nodes_within_hops = []
+    for i in range(num_qubits):
+        print(i)
+        nodes_within_hops.append(np.arange(num_qubits)[abs(laplace_power[i, :]) > 0])
+
+    # These next few lines assumes only 'H' and 'S' errors because it only looks at the *first* Pauli that labels 
+    # the error generator, but there are two Paulis for 'A' and 'C'
+    
+    # The Pauli that labels the error gen, as a string of length num_qubits containing 'I', 'X', 'Y', and 'Z'.
+    pauli_string = error_gen[1][0]
+    print(pauli_string)
+    pauli_string = pauli_string[::-1] # for reverse indexing
+    # The indices of `pauli` that are not equal to 'I'.
+    qubits_acted_on_by_error = np.where(np.array(list(pauli_string)) != 'I')[0]
+    qubits_acted_on_by_error = list(qubits_acted_on_by_error)
+
+    # All the qubits that are within `hops` steps, of the qubits acted on by the error, on the connectivity
+    # graph of the qubits
+    relevant_qubits = np.unique(np.concatenate([nodes_within_hops[i] for i in qubits_acted_on_by_error]))
+    indices_for_error = np.concatenate([[num_channels * q + i for i in range(num_channels)] for q in relevant_qubits])
+
+    return indices_for_error
+
 def grid_adj_matrix(grid_width: int):
     num_qubits = grid_width**2
-    adj_matrix = _np.zeros((num_qubits, num_qubits))
+    adj_matrix = np.zeros((num_qubits, num_qubits))
     for i in range(num_qubits):
         if i % grid_width == grid_width - 1 and i != grid_width*grid_width - 1:
             # far right column, not the bottom left corner
@@ -35,7 +65,7 @@ def grid_adj_matrix(grid_width: int):
     return  adj_matrix
 
 def ring_adj_matrix(num_qubits: int):
-    adj_matrix = _np.zeros((num_qubits, num_qubits))
+    adj_matrix = np.zeros((num_qubits, num_qubits))
     for i in range(num_qubits):
         adj_matrix[i, (i-1) % num_qubits] = 1
         adj_matrix[i, (i+1) % num_qubits] = 1
@@ -43,7 +73,7 @@ def ring_adj_matrix(num_qubits: int):
 
 def melbourne_adj_matrix(num_qubits = 14):
     assert(num_qubits == 14), "We only support 5 qubits"
-    adj_matrix = _np.zeros((num_qubits, num_qubits))
+    adj_matrix = np.zeros((num_qubits, num_qubits))
     adj_matrix[0,1] = 1
     adj_matrix[1,2], adj_matrix[1,13] = 1,1
     adj_matrix[2,3], adj_matrix[2,12] = 1,1
@@ -71,7 +101,7 @@ def bowtie_adj_matrix(num_qubits = 5):
     3 - 4 
     '''
     assert(num_qubits == 5), "We only support 5 qubits"
-    adj_matrix = _np.zeros((num_qubits, num_qubits))
+    adj_matrix = np.zeros((num_qubits, num_qubits))
     adj_matrix[0, 1], adj_matrix[0, 2] = 1, 1
     adj_matrix[1, 2] = 1
     adj_matrix[2, 3], adj_matrix[2, 4] = 1, 1
@@ -90,7 +120,7 @@ def t_bar_adj_matrix(num_qubits = 5):
         4
     '''
     assert(num_qubits == 5), "We only support 5 qubits"
-    adj_matrix = _np.zeros((num_qubits, num_qubits))
+    adj_matrix = np.zeros((num_qubits, num_qubits))
     adj_matrix[0, 1] = 1
     adj_matrix[1, 2], adj_matrix[1, 3] = 1, 1
     adj_matrix[3, 4] = 1
@@ -107,18 +137,18 @@ def algiers_t_bar_adj_matrix():
         |
         3
     '''
-    adj_matrix = _np.zeros((5,5))
+    adj_matrix = np.zeros((5,5))
     adj_matrix[0, 1] = 1
     adj_matrix[1, 2], adj_matrix[1, 4] = 1, 1
     adj_matrix[2, 3] = 1
     adj_matrix = adj_matrix + adj_matrix.T
     return adj_matrix
 
-def laplace_from_qubit_graph(adj_matrix: _np.array) -> _np.array: 
+def laplace_from_qubit_graph(adj_matrix: np.array) -> np.array: 
     """
     Returns the graph laplacian for the graph defined by a given adjacency matrix.
     """
-    deg_matrix = _np.diag(_np.sum(adj_matrix, axis = 1))
+    deg_matrix = np.diag(np.sum(adj_matrix, axis = 1))
     return deg_matrix - adj_matrix
 
 def numberToBase(n, b):
@@ -205,7 +235,7 @@ def up_to_weight_k_paulis(k, n):
 
     return paulis
 
-def up_to_weight_k_paulis_from_qubit_graph(k: int, n: int, qubit_graph_laplacian: _np.array, num_hops: int) -> list:
+def up_to_weight_k_paulis_from_qubit_graph(k: int, n: int, qubit_graph_laplacian: np.array, num_hops: int) -> list:
     """
     Returns the string representation of all n-qubit Pauli operators that 
     are weight 1 up to weight k (i.e., all Paulis contain at least one and
@@ -229,17 +259,17 @@ def up_to_weight_k_paulis_from_qubit_graph(k: int, n: int, qubit_graph_laplacian
     # weight 2
     if k > 1:
         qubit_graph_laplacian = _copy.deepcopy(qubit_graph_laplacian) # Don't delete! Otherwise this function modifies the laplacian globally for some reason?
-        laplace_power = _np.linalg.matrix_power(qubit_graph_laplacian, num_hops)
-        for i in _np.arange(n):
+        laplace_power = np.linalg.matrix_power(qubit_graph_laplacian, num_hops)
+        for i in np.arange(n):
             laplace_power[i, i] = 0
         # assert (laplace_power == 0).all(axis=1).any() == False, 'Graph must be connected'
     
         nodes_within_hops = []
         for i in range(n):
-            nodes_within_hops.append(_np.arange(n)[abs(laplace_power[i, :]) > 0])
+            nodes_within_hops.append(np.arange(n)[abs(laplace_power[i, :]) > 0])
     
         for i , qubit_list in enumerate(nodes_within_hops):
-            unseen_qubits = qubit_list[_np.where(qubit_list > i)[0]]
+            unseen_qubits = qubit_list[np.where(qubit_list > i)[0]]
             for j in unseen_qubits:
                 for p in ['X', 'Y', 'Z']:
                         for q in ['X', 'Y', 'Z']:
@@ -250,7 +280,7 @@ def up_to_weight_k_paulis_from_qubit_graph(k: int, n: int, qubit_graph_laplacian
     
     return paulis
 
-def up_to_weight_k_error_gens_from_qubit_graph(k: int, n: int, qubit_graph_laplacian: _np.array, num_hops: int, egtypes=['H', 'S']) -> list:
+def up_to_weight_k_error_gens_from_qubit_graph(k: int, n: int, qubit_graph_laplacian: np.array, num_hops: int, egtypes=['H', 'S']) -> list:
     """
     Returns a list of all n-qubit error generators up to weight k, of types given in
     egtypes and based on the qubit connectivity graph, in a tuple-of-strings format.
@@ -372,10 +402,10 @@ def create_error_propagation_matrix(c, error_gens, stim_dict = None):
     for l in range(c.depth):
         indices.append([error_gen_to_index(err.errorgen_type, err.bel_to_strings()) 
                         for err in propagated_errorgen_layers[l]])
-        signs.append([_np.sign(val) for val in propagated_errorgen_layers[l].values()])
+        signs.append([np.sign(val) for val in propagated_errorgen_layers[l].values()])
 
-    indices = _np.array(indices)
-    signs = _np.array(signs)
+    indices = np.array(indices)
+    signs = np.array(signs)
 
     return indices, signs
 
@@ -384,7 +414,7 @@ def remap_indices(c_indices):
     # remaps the entries.
     # e.g., P = [[1,256], [1, 0]]   ---> [[0, 1], [0, 3]]
     flat_indices = c_indices.flatten()
-    unique_values, idx = _np.unique(flat_indices, return_inverse = True)
+    unique_values, idx = np.unique(flat_indices, return_inverse = True)
     return idx.reshape(c_indices.shape)
 
 def clockwise_cnot(g):
