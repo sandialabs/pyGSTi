@@ -3975,7 +3975,12 @@ class Circuit(object):
             return cls(circuit_layers)        
 
     @classmethod
-    def from_qiskit(cls, circuit, qubit_conversion=None, qiskit_gate_conversion=None, use_standard_gate_conversion_as_backup=True, allow_different_gates_in_same_layer=True):
+    def from_qiskit(cls, circuit,
+                    qubit_conversion=None,
+                    qiskit_gate_conversion=None,
+                    use_standard_gate_conversion_as_backup=True,
+                    allow_different_gates_in_same_layer=True,
+                    verbose=False):
         """
         Converts and instantiates a pyGSTi Circuit object from a Qiskit QuantumCircuit object.
 
@@ -4030,21 +4035,35 @@ class Circuit(object):
             qiskit_to_gate_name_mapping = _itgs.qiskit_gatenames_standard_conversions()
 
         #get all of the qubits in the Qiskit circuit
+
+        if len(circuit.qregs) > 1:
+            print("Warning: pyGSTi circuit mapping does not preserve Qiskit qreg structure.")
+
         qubits = circuit.qubits
-        qiskit_qubit_indices = []
-        for qubit in qubits:
-            qiskit_qubit_indices.append(qubit._index)
 
         
         #ensure all of these have a conversion available.
         if qubit_conversion is not None:
-            assert set(qiskit_qubit_indices).issubset(set(qubit_conversion.keys())), 'Missing Qiskit to pygsti conversions for some qubit label(s).'
+            if isinstance(qubit_conversion, dict):
+                unmapped_qubits = set(qubits).difference(set(qubit_conversion.keys()))
+                assert len(unmapped_qubits) == 0, f'Missing Qiskit to pygsti conversions for some qubits: {unmapped_qubits} '
+                    
         #if it is None, build a default mapping.
         else:
             #default mapping is the identify mapping: qubit i in the Qiskit circuit maps to qubit i in the pyGSTi circuit
-            qubit_conversion = {i: f'Q{i}' for i in qiskit_qubit_indices}
+            qubit_conversion = {circuit.qbit_argument_conversion(i)[0]: f'Q{i}' for i in range(circuit.num_qubits)} # in Qiskit 1.1.1, the method is called qbit_argument_conversion. In Qiskit >=1.2 (as far as Noah can tell), the method is called _qbit_argument_conversion. 
+
+            # for i in range(circuit.num_qubits):
+
+            # qubit_conversion = {i: f'Q{i}' for i in qiskit_qubits}
+
             
-        line_labels = tuple(sorted([qubit_conversion[qubit] for qubit in qiskit_qubit_indices]))
+        line_labels = tuple(sorted([qubit_conversion[qubit] for qubit in qubits]))
+
+        if verbose:
+            print(qubit_conversion)
+            print(line_labels)
+
 
         # print(qubit_conversion)
 
@@ -4070,13 +4089,13 @@ class Circuit(object):
             # print(instruction)
             name = instruction.operation.name
             num_qubits = instruction.operation.num_qubits
-            instruction_qubit_indices = [qubit._index for qubit in instruction.qubits]
+            # instruction_qubit_indices = [qubit._index for qubit in instruction.qubits]
             params = instruction.operation.params
             # print(name)
             # print(num_qubits)
             # print(params)
 
-            pygsti_gate_qubits = [qubit_conversion[i] for i in instruction_qubit_indices]
+            pygsti_gate_qubits = [qubit_conversion[qubit] for qubit in instruction.qubits]
 
             if name == 'measure':
                 _warnings.warn('skipping measure')
