@@ -178,7 +178,7 @@ def layer_to_matrix(layer, num_qubits = None, num_channels = None,
         for q in g.qubits:
             if type(q) == str: q_index = int(q[1:])
             else: q_index = q
-            mat[q_index, indexmapper(g, q, **indexmapper_kwargs)-1] = valuemapper(g, **valuemapper_kwargs)
+            mat[q_index, indexmapper(g, q, **indexmapper_kwargs)] = valuemapper(g, **valuemapper_kwargs)
     return mat
 
 def circuit_to_tensor(circ, depth = None, num_qubits = None, num_channels = None, add_measurements = False, 

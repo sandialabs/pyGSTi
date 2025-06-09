@@ -10,7 +10,7 @@
 
 from . import neuralnets
 # from . import neuralnets4
-# from . import neuralnets_cpu_optimization
+from . import neuralnets_cpu_optimization
 # from . import neuralnets_gpu_optimization
 # from . import neuralnets_cpu_bitstring_probability
 from . import neuralnets_cpu_bitstring_probability_map
