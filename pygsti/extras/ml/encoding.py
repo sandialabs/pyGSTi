@@ -178,6 +178,8 @@ def layer_to_matrix(layer, num_qubits = None, num_channels = None,
         for q in g.qubits:
             if type(q) == str: q_index = int(q[1:])
             else: q_index = q
+            # TODO: Why is there a -1 here? I don't think it should be there! Likely doesn't typically break 
+            # anything -- but it does give a different encoding to the one specified.
             mat[q_index, indexmapper(g, q, **indexmapper_kwargs)-1] = valuemapper(g, **valuemapper_kwargs)
     return mat
 
