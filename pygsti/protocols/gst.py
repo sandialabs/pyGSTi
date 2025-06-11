@@ -2247,6 +2247,10 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options,
                 except NotImplementedError as e:
                     printer.warning("Failed to get wildcard budget - continuing anyway.  Error was:\n" + str(e))
                     new_params['unmodeled_error'] = None
+                except ValueError as e:
+                    printer.warning("ValueError when trying to get wildcard budget - continuing anyway.  Error was:\n" + str(e))
+                    new_params['unmodeled_error'] = None
+
                 #except AssertionError as e:
                 #    printer.warning("Failed to get wildcard budget - continuing anyway.  Error was:\n" + str(e))
                 #    new_params['unmodeled_error'] = None
