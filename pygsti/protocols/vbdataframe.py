@@ -11,6 +11,11 @@ Techniques for manipulating benchmarking data stored in a Pandas DataFrame.
 #***************************************************************************************************
 import pandas as _pandas
 import numpy as _np
+import tqdm as _tqdm
+
+
+from pygsti.tools.rbtools import hamming_distance
+
 from scipy.stats import chi2 as _chi2
 
 
@@ -46,6 +51,108 @@ def success_probability_to_polarization(s, n):
     the polarization, defined by `p = (s - 1/2^n)/(1 - 1/2^n)`
     """
     return (s - 1 / 2**n) / (1 - 1 / 2**n)
+
+
+def polarization_to_fidelity(p, n): 
+    return 1 - (4**n - 1)*(1 - p)/4**n
+
+
+def fidelity_to_polarization(f, n):
+    return 1 - (4**n)*(1 - f)/(4**n - 1)
+
+
+def hamming_distance_counts(dsrow, circ, idealout):
+    """
+    Utility function for MCFE VBDataFrame creation.
+    """
+    nQ = len(circ.line_labels)  # number of qubits
+    assert nQ == len(idealout[-1]), f'{nQ} != {len(idealout[-1])}'
+    hamming_distance_counts = _np.zeros(nQ + 1, float)
+    if dsrow.total > 0:
+        for outcome_lbl, counts in dsrow.counts.items():
+            outbitstring = outcome_lbl[-1]
+            hamming_distance_counts[hamming_distance(outbitstring, idealout[-1])] += counts
+    return hamming_distance_counts
+
+
+def adjusted_success_probability(hamming_distance_counts):
+    """
+    Utility function for MCFE VBDataFrame creation.
+    """
+    if _np.sum(hamming_distance_counts) == 0.: 
+        return 0.
+    else:
+        hamming_distance_pdf = _np.array(hamming_distance_counts) / _np.sum(hamming_distance_counts)
+        adjSP = _np.sum([(-1 / 2)**n * hamming_distance_pdf[n] for n in range(len(hamming_distance_pdf))])
+        return adjSP
+    
+
+def effective_polarization(hamming_distance_counts):
+    """
+    Utility function for MCFE VBDataFrame creation.
+    """
+    n = len(hamming_distance_counts) - 1 
+    asp = adjusted_success_probability(hamming_distance_counts)
+    
+    return (4**n * asp - 1)/(4**n - 1)
+
+
+def predicted_process_fidelity(bare_rc_effective_pols, rc_rc_effective_pols, reference_effective_pols, n):
+
+    a = _np.mean(bare_rc_effective_pols)
+    b = _np.mean(rc_rc_effective_pols)
+    c = _np.mean(reference_effective_pols)
+
+    # print(a)
+
+    # print(b)
+
+    # print(c)
+    
+    if c <= 0.:
+        return _np.nan  # raise ValueError("Reference effective polarization zero or smaller! Cannot estimate the process fidelity")
+    elif b <= 0:
+        return 0.
+    else:
+        return polarization_to_fidelity(a / _np.sqrt(b * c), n)
+
+
+def predicted_process_fidelity_for_central_pauli_mcs(central_pauli_effective_pols, reference_effective_pols, n):
+    a = _np.mean(central_pauli_effective_pols)
+    c = _np.mean(reference_effective_pols)
+    if c <= 0.:
+        return _np.nan  # raise ValueError("Reference effective polarization zero or smaller! Cannot estimate the process fidelity")
+    elif a <= 0:
+        return 0.
+    else:
+        return polarization_to_fidelity(_np.sqrt(a / c), n)
+
+
+
+def bootstrap_predicted_pfid(brs, rrs, refs, n, num_bootstraps=50, rand_state=None):
+    if rand_state is None:
+        rand_state = _np.random.RandomState()
+
+    # print(num_bootstraps)
+
+    pfid_samples = []
+    for _ in range(num_bootstraps):
+        br_sample = rand_state.choice(brs, len(brs), replace=True)
+        rr_sample = rand_state.choice(rrs, len(rrs), replace=True)
+        ref_sample = rand_state.choice(refs, len(refs), replace=True)
+
+        pfid = predicted_process_fidelity(
+            br_sample,
+            rr_sample,
+            ref_sample,
+            n)
+
+        pfid_samples.append(pfid)
+
+    # print(pfid_samples)
+    # print(_np.std(pfid_samples))
+    
+    return _np.std(pfid_samples)
 
 
 def classify_circuit_shape(success_probabilities, total_counts, threshold, significance=0.05):
@@ -199,6 +306,212 @@ class VBDataFrame(object):
             self.y_values.sort()
         else:
             self.y_values = y_values
+
+    @classmethod
+    def from_mirror_experiment(cls, unmirrored_design, mirrored_data,
+                               verbose=False,
+                               bootstrap=True,
+                               num_bootstraps=50,
+                               rand_state=None
+                               ):
+        """
+        Create a dataframe from MCFE data and edesigns.
+
+        Parameters
+        ----------
+        unmirrored_design: pygsti.protocols.protocol.FreeformDesign
+            Edesign containing the circuits whose process fidelities are to be estimated.
+
+        mirrored_data: pygsti.protocols.protocol.ProtocolData
+            Data object containing the full mirror edesign and the outcome counts for each
+            circuit in the full mirror edesign.
+
+        verbose: bool
+            Toggle print statements with debug information. If True, print statements are
+            turned on. If False, print statements are omitted.
+
+        bootstrap: bool
+            Toggle the calculation of error bars from bootstrapped process fidelity calculations. If True,
+            error bars are calculated. If False, error bars are not calculated.
+
+        num_bootstraps: int
+            Number of samples to draw from the bootstrapped process fidelity calculations. This argument
+            is ignored if 'bootstrap' is False.
+
+        rand_state: np.random.RandomState
+            random state used to seed bootstrapping. If 'bootstrap' is set to False, this argument is ignored.
+
+        Returns
+        ---------
+        VBDataFrame
+            A VBDataFrame whose dataframe contains calculated MCFE values and circuit statistics.
+        
+        """
+
+        eff_pols = {k: {} for k in mirrored_data.edesign.keys()}
+    
+        # Stats about the base circuit
+        u3_densities = {}
+        cnot_densities = {}
+        cnot_counts = {}
+        cnot_depths = {}
+        pygsti_depths = {}
+        idling_qubits = {}
+        dropped_gates = {}
+        occurrences = {}
+
+        # Get a dict going from id to circuit for easy lookup
+        reverse_circ_ids = {}
+        for k,v in unmirrored_design.aux_info.items():
+            if isinstance(v, dict):
+                reverse_circ_ids[v['id']] = k
+            else:
+                for entry in v:
+                    reverse_circ_ids[entry['id']] = k
+        seen_keys = set()
+
+        num_circs = len(mirrored_data.dataset)
+        for c in _tqdm.tqdm(mirrored_data.dataset, ascii=True, desc='Calculating effective polarizations'):
+            for edkey, ed in mirrored_data.edesign.items():
+                auxlist = ed.aux_info.get(c, None)
+                # print(auxlist)
+                if auxlist is None:
+                    continue
+                elif isinstance(auxlist, dict):
+                    auxlist = [auxlist]
+
+                for aux in auxlist:
+                    if edkey.endswith('ref'):
+                        # For reference circuits, only width matters, so aggregate on that now
+                        # print(f'edkey: {edkey}')
+                        key = aux['width']
+                    else:
+                        key = (aux['base_aux']['width'], aux['base_aux']['physical_depth'], aux['base_aux']['id'])
+
+                    # Check if the mirror circuit's line labels have the same ordering as the 
+                    # base circuit's line labels. If not, reorder the bitstring to match.
+                    # This patches a bug in prior versions of the mirror design generation.
+                    # Note: this does not work for central pauli mirror designs.
+                    if edkey == 'br':
+                        base_line_labels = reverse_circ_ids[aux['base_aux']['id']].line_labels
+
+                        if c.line_labels != base_line_labels:
+                            print('line labels permuted')
+                            old_bs = aux['idealout']
+                            print(old_bs)
+                            new_bs = ''
+                            for q in c.line_labels:
+                                new_bs += old_bs[base_line_labels.index(q)]
+                            aux['idealout'] = new_bs
+                            print(new_bs)
+
+                        
+
+                    # Calculate effective polarization
+                    hdc = hamming_distance_counts(mirrored_data.dataset[c], c, (aux['idealout'],))
+                    ep = effective_polarization(hdc)
+                    
+                    # Append to other mirror circuit samples
+                    eps = eff_pols[edkey].get(key, [])
+                    eps.append(ep)
+                    eff_pols[edkey][key] = eps
+
+                    if edkey.endswith('ref') or key in seen_keys:
+                        # Skip statistic gathering for reference circuits or base circuits we've seen already
+                        continue
+
+                    orig_circ = reverse_circ_ids[key[2]]
+
+                    u3_count = 0
+                    cnot_count = 0
+                    cnot_depth = 0
+                    for i in range(orig_circ.depth):
+                        layer_cnot_depth = 0
+                        for gate in orig_circ._layer_components(i):
+                            if gate.name == 'Gu3':
+                                u3_count += 1
+                            elif gate.name == 'Gcnot':
+                                cnot_count += 2
+                                layer_cnot_depth = 1
+                        cnot_depth += layer_cnot_depth
+                    
+                    if cnot_count == 0:
+                        cnot_count = 0.01
+                        
+                    u3_densities[key] = u3_count / (key[0]*key[1])
+                    cnot_densities[key] = cnot_count / (key[0]*key[1])
+                    cnot_counts[key] = cnot_count / 2 # Want 1 for each CNOT
+                    cnot_depths[key] = cnot_depth
+                    pygsti_depths[key] = orig_circ.depth
+                    idling_qubits[key] = len(orig_circ.idling_lines())
+                    dropped_gates[key] = aux['base_aux']['dropped_gates']
+                    occurrences[key] = len(auxlist)
+
+                    seen_keys.add(key)
+
+        # Calculate process fidelities
+        df_data = {}
+        for i, key in enumerate(sorted(list(seen_keys), key=lambda x: x[2])):
+            cp_pfid = cp_pol = cp_success_prob = None
+            if 'cp' in mirrored_data.edesign and 'cpref' in mirrored_data.edesign:
+                if verbose and i == 0: print('Central pauli data detected, computing CP process fidelity')
+                cp_pfid = predicted_process_fidelity_for_central_pauli_mcs(eff_pols['cp'][key], eff_pols['cpref'][key[0]], key[0])
+                cp_pol = polarization_to_fidelity(cp_pfid, key[0]) # should this be fidelity_to_polarization?
+                cp_success_prob = polarization_to_success_probability(cp_pol, key[0])
+                
+            rc_pfid = rc_pol = rc_success_prob = None
+            if 'rr' in mirrored_data.edesign and 'br' in mirrored_data.edesign and 'ref' in mirrored_data.edesign:
+                if verbose and i == 0: print('Random compilation data detected, computing RC process fidelity')
+                rc_pfid = predicted_process_fidelity(eff_pols['br'][key], eff_pols['rr'][key], eff_pols['ref'][key[0]], key[0])
+                rc_pol = polarization_to_fidelity(rc_pfid, key[0]) # should this be fidelity_to_polarization?
+                rc_success_prob = polarization_to_success_probability(rc_pol, key[0])
+
+                if bootstrap:
+                # do bootstrapping to obtain confidence intervals
+                    rc_pfid_stdev = bootstrap_predicted_pfid(brs=eff_pols['br'][key],
+                                                            rrs=eff_pols['rr'][key],
+                                                            refs=eff_pols['ref'][key[0]],
+                                                            n=key[0],
+                                                            num_bootstraps=num_bootstraps,
+                                                            rand_state=rand_state
+                                                            )
+                
+
+            # Depth is doubled for conventions (same happens for RMC/PMC)
+            if bootstrap:
+                df_data[i] = {'Width': key[0], 'Physical Depth': key[1], 'Circuit Id': key[2],
+                            'U3 Density': u3_densities[key], 'CNOT Density': cnot_densities[key],
+                            'CNOT Counts': cnot_counts[key], 'CNOT Depth': cnot_depths[key],
+                            'U3+CNOT Depth': pygsti_depths[key], 'Dropped Gates': dropped_gates[key],
+                            'Effective Width': key[0] - idling_qubits[key],
+                            'CP Process Fidelity': cp_pfid,
+                            'CP Polarization': cp_pol, 'CP Success Probability': cp_success_prob,
+                            'RC Process Fidelity': rc_pfid, 'RC Process Fidelity stdev': rc_pfid_stdev,
+                            'RC Polarization': rc_pol, 'RC Success Probability': rc_success_prob,
+                            'Occurrences': occurrences[key], 'Total Counts': 1024} # Reevaluate whether this 'Total Counts' key
+                                                                                    # should be hard-coded, especially if we run circuits with more shots.
+
+            else:
+                df_data[i] = {'Width': key[0], 'Physical Depth': key[1], 'Circuit Id': key[2],
+                            'U3 Density': u3_densities[key], 'CNOT Density': cnot_densities[key],
+                            'CNOT Counts': cnot_counts[key], 'CNOT Depth': cnot_depths[key],
+                            'U3+CNOT Depth': pygsti_depths[key], 'Dropped Gates': dropped_gates[key],
+                            'Effective Width': key[0] - idling_qubits[key],
+                            'CP Process Fidelity': cp_pfid,
+                            'CP Polarization': cp_pol, 'CP Success Probability': cp_success_prob,
+                            'RC Process Fidelity': rc_pfid,
+                            'RC Polarization': rc_pol, 'RC Success Probability': rc_success_prob,
+                            'Occurrences': occurrences[key], 'Total Counts': 1024} # Reevaluate whether this 'Total Counts' key
+                                                                                    # should be hard-coded, especially if we run circuits with more shots.
+
+                
+        
+        df = _pandas.DataFrame.from_dict(df_data, orient='index')
+        df = df.sort_values(by='Circuit Id')
+        df = df.reset_index(drop=True)
+
+        return cls(df, x_axis='Physical Depth', y_axis='Width')
+        
 
     def select_column_value(self, column_label, column_value):
         """
