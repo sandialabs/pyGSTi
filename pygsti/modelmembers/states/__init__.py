@@ -2,7 +2,7 @@
 Sub-package holding model state preparation objects.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -29,7 +29,9 @@ from .tensorprodstate import TensorProductState
 from .tpstate import TPState
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.tools import basistools as _bt
+from pygsti.baseobjs import Basis
 from pygsti.tools import optools as _ot
+from pygsti.tools import sum_of_negative_choi_eigenvalues_gate
 
 # Avoid circular import
 import pygsti.modelmembers as _mm
@@ -185,7 +187,7 @@ def state_type_from_op_type(op_type):
     return state_type_preferences
 
 
-def convert(state, to_type, basis, ideal_state=None, flatten_structure=False):
+def convert(state, to_type, basis, ideal_state=None, flatten_structure=False, cp_penalty=1e-7):
     """
     TODO: update docstring
     Convert SPAM vector to a new type of parameterization.
@@ -217,6 +219,10 @@ def convert(state, to_type, basis, ideal_state=None, flatten_structure=False):
         are separately converted, leaving the original state's structure
         unchanged.  When `True`, composed and embedded operations are "flattened"
         into a single state of the requested `to_type`.
+    
+    cp_penalty : float, optional
+        CPTP penalty that gets factored into the optimization to find the resulting model
+        when converting to an error-generator type.
 
     Returns
     -------
@@ -234,7 +240,6 @@ def convert(state, to_type, basis, ideal_state=None, flatten_structure=False):
                          'static unitary': StaticPureState,
                          'static clifford': ComputationalBasisState}
     NoneType = type(None)
-
     for to_type in to_types:
         try:
             if isinstance(state, destination_types.get(to_type, NoneType)):
@@ -256,20 +261,57 @@ def convert(state, to_type, basis, ideal_state=None, flatten_structure=False):
                 errorgen = _LindbladErrorgen.from_error_generator(state.state_space.dim, to_type, proj_basis,
                                                                   basis, truncate=True, evotype=state.evotype)
                 if st is not state and not _np.allclose(st.to_dense(), state.to_dense()):
-                    #Need to set errorgen so exp(errorgen)|st> == |state>
+                    
                     dense_st = st.to_dense()
                     dense_state = state.to_dense()
+                    num_qubits = st.state_space.num_qubits
+                    
+                    
 
+                    #GLND for states suffers from "trivial gauge" freedom. This function identifies
+                    #the physical directions to avoid this gauge.
+                    def calc_physical_subspace(ideal_prep, epsilon = 1e-4):
+                        errgen = _LindbladErrorgen.from_error_generator(2**(2*num_qubits), parameterization=to_type)
+                        num_errgens = errgen.num_params
+	
+                        exp_errgen = _ExpErrorgenOp(errgen)
+
+                        #Compute the jacobian with respect to the error generators. This will allow us to see which
+                        #error generators change the POVM entries
+                        J = _np.zeros((state.num_params, num_errgens))
+
+                        for i in range(num_errgens):
+                            new_vec = _np.zeros(num_errgens)
+                            new_vec[i] = epsilon
+                            exp_errgen.from_vector(new_vec)
+                            J[:,i] = (exp_errgen.to_dense() @ ideal_prep - ideal_prep)[1:]/epsilon
+
+                        _,S,Vt = _np.linalg.svd(J, full_matrices=False)
+
+                        #Only return nontrivial singular vectors
+                        Vt = Vt[S > 1e-13, :].reshape((-1, Vt.shape[1]))
+                        return Vt
+                        
+                    phys_directions = calc_physical_subspace(dense_state)
+    
+                    #We use optimization to find the best error generator representation
+                    #we only vary physical directions, not independent error generators
                     def _objfn(v):
-                        errorgen.from_vector(v)
-                        return _np.linalg.norm(_spl.expm(errorgen.to_dense()) @ dense_st - dense_state)
-                    #def callback(x): print("callbk: ",_np.linalg.norm(x),_objfn(x))  # REMOVE
-                    soln = _spo.minimize(_objfn, _np.zeros(errorgen.num_params, 'd'), method="CG", options={},
-                                         tol=1e-8)  # , callback=callback)
-                    #print("DEBUG: opt done: ",soln.success, soln.fun, soln.x)  # REMOVE
+                        L_vec = _np.zeros(len(phys_directions[0]))
+                        for coeff, phys_direction in zip(v,phys_directions):
+                            L_vec += coeff * phys_direction
+                        errorgen.from_vector(L_vec)
+                        proc_matrix = _spl.expm(errorgen.to_dense())
+                        return _np.linalg.norm(proc_matrix @ dense_st - dense_state) + cp_penalty * sum_of_negative_choi_eigenvalues_gate(proc_matrix, basis)
+                    
+                    soln = _spo.minimize(_objfn, _np.zeros(len(phys_directions), 'd'), method="Nelder-Mead", options={},
+                                         tol=1e-13)  
+                    
                     if not soln.success and soln.fun > 1e-6:  # not "or" because success is often not set correctly
                         raise ValueError("Failed to find an errorgen such that exp(errorgen)|ideal> = |state>")
-                    errorgen.from_vector(soln.x)
+                    
+                    errgen_vec = _np.linalg.lstsq(phys_directions, soln.x)[0]
+                    errorgen.from_vector(errgen_vec)
 
                 EffectiveExpErrorgen = _IdentityPlusErrorgenOp if lndtype.meta == '1+' else _ExpErrorgenOp
                 return ComposedState(st, EffectiveExpErrorgen(errorgen))
@@ -283,7 +325,6 @@ def convert(state, to_type, basis, ideal_state=None, flatten_structure=False):
                     return create_from_dmvec(vec, to_type, basis, state.evotype, state.state_space)
 
         except ValueError as e:
-            #_warnings.warn('Failed to convert state to type %s with error: %s' % (to_type, e))
             error_msgs[to_type] = str(e)  # try next to_type
 
     raise ValueError("Could not convert state to to type(s): %s\n%s" % (str(to_types), str(error_msgs)))

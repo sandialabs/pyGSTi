@@ -1,5 +1,31 @@
 # CHANGELOG
 
+## [0.9.13.1] - 2025-03-18
+
+### Added
+* Wildcard support for instruments (#463, 527)
+* Parity benchmarking protocol (#532)
+* RNG seeding for BinaryRBDesign (#546, #547)
+
+### Fixed
+* Germ selection with ComposedOp (#481)
+* Basis cast in report error generator projection (#455)
+* Germ selection circuit line labels (#507, #540)
+* NumPy 2.2 deprecation fix (#514)
+* Various unit test fixes (#519, #530)
+* Plotly 0.6 API changes in reports (#533)
+* DataSet outcome label misordering with add_count_list (#535, #536)
+* Guard for fastcalc causing ImportError (#540, #541)
+* Per-germ global FPR simulator properly set (#545)
+
+### Changed
+* Simplify the TimeIndependentMDCObjectiveFunction class (#515)
+* Package configuration updates (#530)
+    * Name from pyGSTi to pygsti for PEP 625 compliance
+    * Configuration migrated mostly from setup.py to pyproject.toml
+    * Python versions bumped from 3.8 - 3.11 to 3.9 - 3.12
+    * setuptools_scm updates more verbose version names for local/editable installs
+
 ## [0.9.13] - 2025-01-16
 
 ### Added

@@ -2,7 +2,7 @@
 RB Protocol objects
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -290,7 +290,7 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
             The average number of native gates, native 2Q gates, and native size
             per Clifford as values with respective label keys
         """
-        if self.native_gate_counts_lists is None:
+        if self.native_gate_count_lists is None:
             raise ValueError("Native gate counts not available, cannot compute average gates per Clifford")
         
         num_clifford_gates = self.depths[list_idx] + 1

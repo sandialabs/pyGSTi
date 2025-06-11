@@ -2,7 +2,7 @@
 Classes corresponding to plots within a Workspace context.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -439,10 +439,10 @@ def _summable_color_boxplot(sub_mxs, xlabels, ylabels, xlabel, ylabel,
     #assert(fig is not None), "No data to display!"
     if fig is not None:  # i.e., if there was data to plot
         pfig = fig.plotlyfig
-        if xlabel: pfig['layout']['xaxis'].update(title=xlabel,
-                                                  titlefont={'size': 12 * scale, 'color': "black"})
-        if ylabel: pfig['layout']['yaxis'].update(title=ylabel,
-                                                  titlefont={'size': 12 * scale, 'color': "black"})
+        if xlabel: pfig['layout']['xaxis'].update(title=dict(text=xlabel,
+                                                  font={'size': 12 * scale, 'color': "black"}))
+        if ylabel: pfig['layout']['yaxis'].update(title=dict(text=ylabel,
+                                                  font={'size': 12 * scale, 'color': "black"}))
         if xlabels:
             pfig['layout']['xaxis'].update(tickmode="array",
                                            ticktext=val_filter(xlabels),
@@ -789,12 +789,12 @@ def _circuit_color_scatterplot(circuit_structure, sub_mxs, colormap,
         trace['hoverinfo'] = 'none'
 
     xaxis = go_x_axis(
-        title='sequence length',
+        title={'text': 'sequence length'},
         showline=False,
         zeroline=True,
     )
     yaxis = go_y_axis(
-        title=ylabel
+        title={'text': ylabel}
     )
 
     layout = go.Layout(
@@ -935,7 +935,7 @@ def _circuit_color_histogram(circuit_structure, sub_mxs, colormap,
         height=350 * scale,
         font=dict(size=10),
         xaxis=dict(
-            title=ylabel,  # b/c "y-values" are along x-axis in histogram
+            title={'text': ylabel},  # b/c "y-values" are along x-axis in histogram
             showline=True
         ),
         yaxis=dict(
@@ -1270,15 +1270,13 @@ def _matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
     bmargin *= scale
 
     layout = dict(  # go.Layout(  #use dict for speed (no plotly validation)
-        title=title,
-        titlefont=dict(size=10 * scale),
+        title={'text': title, 'font': dict(size=10 * scale)},
         width=width,
         height=height,
         margin=go_margin(l=lmargin, r=rmargin, b=bmargin, t=tmargin),  # pad=0
         xaxis=dict(
             side="top",
-            title=xlabel,
-            titlefont=dict(size=10 * scale),
+            title=dict(text=xlabel, font=dict(size=10 * scale)),
             showgrid=False,
             zeroline=False,
             showline=showframe,
@@ -1293,8 +1291,7 @@ def _matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
         ),
         yaxis=dict(
             side="left",
-            title=ylabel,
-            titlefont=dict(size=10 * scale),
+            title=dict(text=ylabel, font=dict(size=10 * scale)),
             showgrid=False,
             zeroline=False,
             showline=showframe,
@@ -2926,7 +2923,7 @@ class ChoiEigenvalueBarPlot(WorkspacePlot):
             height=height,
             margin=go_margin(l=lmargin, r=rmargin, b=bmargin, t=tmargin),
             xaxis=dict(
-                title="index",
+                title={'text':"index"},
                 tickvals=xs
             ),
             yaxis=dict(
@@ -3040,11 +3037,11 @@ class GramMatrixBarPlot(WorkspacePlot):
             width=400 * scale,
             height=300 * scale,
             xaxis=dict(
-                title="index",
+                title={'text':"index"},
                 tickvals=xs
             ),
             yaxis=dict(
-                title="eigenvalue",
+                title={'text': "eigenvalue"},
                 type='log',
                 exponentformat='power',
                 range=[_np.log10(ymin), _np.log10(ymax)],
@@ -3231,12 +3228,12 @@ class FitComparisonBarPlot(WorkspacePlot):
             height=height,
             margin=go_margin(l=lmargin, r=rmargin, b=bmargin, t=tmargin),
             xaxis=dict(
-                title=x_label,
+                title={'text':x_label},
                 tickvals=xs,
                 ticktext=xtics
             ),
             yaxis=dict(
-                title="N<sub>sigma</sub>",
+                title={'text': "N<sub>sigma</sub>"},
                 type='log'
             ),
             bargap=0.1
@@ -3658,12 +3655,12 @@ class DatasetComparisonHistogramPlot(WorkspacePlot):
             minInt = int(_np.floor(minval))
             maxInt = int(_np.ceil(maxval))
             xaxis_dict = dict(
-                title=xlabel,
+                title={'text': xlabel},
                 tickvals=list(range(minInt, maxInt + 1)),
                 ticktext=["10<sup>%d</sup>" % i for i in range(minInt, maxInt + 1)]
             )
         else:
-            xaxis_dict = dict(title=xlabel)  # auto-tick labels
+            xaxis_dict = dict(title={'text':xlabel})  # auto-tick labels
 
         datasetnames = dsc.DS_names
         if dsc.op_exclusions:
@@ -3678,11 +3675,11 @@ class DatasetComparisonHistogramPlot(WorkspacePlot):
         layout = go.Layout(
             width=700 * scale,
             height=400 * scale,
-            title=title,
+            title={'text':title},
             font=dict(size=10),
             xaxis=xaxis_dict,
             yaxis=dict(
-                title=ylabel,
+                title={'text':ylabel},
                 type='log' if log else 'linear',
                 #tickformat='g',
                 exponentformat='power',
@@ -3907,16 +3904,15 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
         layout = go.Layout(
             width=800 * scale,
             height=400 * scale,
-            title=title,
-            titlefont=dict(size=16),
+            title=dict(text=title, font=dict(size=16)),
             xaxis=dict(
-                title="RB sequence length (m)",
-                titlefont=dict(size=14),
+                title=dict(text="RB sequence length (m)",
+                font=dict(size=14)),
                 range=xlim if xlim else [xmin, xmax],
             ),
             yaxis=dict(
-                title="Success probability",
-                titlefont=dict(size=14),
+                title=dict(text="Success probability",
+                font=dict(size=14)),
                 range=ylim if ylim else [ymin, 1.0],
             ),
             legend=dict(

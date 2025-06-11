@@ -2,7 +2,7 @@
 Circuit list creation functions using repeated-germs limited by a max-length.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -25,6 +25,9 @@ from pygsti.circuits.circuitconstruction import manipulate_circuits as _manipula
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from pygsti.tools import listtools as _lt
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
+
+from typing import Dict
+ordereddict = Dict
 
 
 def _create_raw_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max_length_list,
@@ -325,7 +328,8 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
         indexing a string within prep_strs and effect_strs, respectively, so
         that prepStr = prep_strs[iPrepStr] and effectStr =
         effect_strs[iEffectStr].  If a dictionary, keys are germs (elements
-        of germ_list) and values are lists of 2-tuples specifying the pairs
+        of germ_list) or tuples of germs and length values
+        and values are lists of 2-tuples specifying the pairs
         to use for that germ.
 
     trunc_scheme : str, optional
@@ -414,9 +418,8 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
     [c.str for c in prep_fiducials]
     [c.str for c in meas_fiducials]
 
-    #print('Germs: ', germs)
-
     def filter_ds(circuits, ds, missing_lgst):
+        """Filter a list of circuits so that only those appearing in dataset are included."""
         if ds is None: return circuits[:]
         filtered_circuits = []
         for opstr in circuits:
@@ -444,8 +447,7 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
                 for i in reversed(inds_to_remove):
                     del fidpair_indices[i]
 
-        fidpairs = _collections.OrderedDict([((j, i), (prep_fiducials[i], meas_fiducials[j]))
-                                             for i, j in fidpair_indices])
+        fidpairs: ordereddict = {(j, i): (prep_fiducials[i], meas_fiducials[j]) for i, j in fidpair_indices}
 
         if base_circuit not in plaquette_dict:
             pkey_dict[base_circuit] = (maxlen, germ)
@@ -528,7 +530,7 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
     if nest:
         #keep track of running quantities used to build circuit structures
         running_plaquette_keys = {}  # base-circuit => (maxlength, germ) key for final plaquette dict
-        running_plaquettes = _collections.OrderedDict()  # keep consistent ordering in produced circuit list.
+        running_plaquettes: ordereddict = dict()  # keep consistent ordering in produced circuit list.
         running_unindexed = []
         running_maxLens = []
 
@@ -554,7 +556,7 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
             unindexed = running_unindexed
         else:  # create a new cs for just this maxLen
             pkey = {}  # base-circuit => (maxlength, germ) key for final plaquette dict
-            plaquettes = _collections.OrderedDict()
+            plaquettes: ordereddict = dict()
             maxLens = [maxLen]
             unindexed = []
 
@@ -586,39 +588,39 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
                 if power == 0 and len(germ) != 0:
                     continue
 
-                # Switch on fidpair dicts with germ or (germ, L) keys
-                key = germ
-                if fidpair_germ_power_keys:
-                    key = (germ, maxLen_thisgerm)
+                if include_lgst and i == 0:
+                    fiducialPairsThisIter = allPossiblePairs
+                else:
+                    # Switch on fidpair dicts with germ or (germ, L) keys
+                    key = germ
+                    if fidpair_germ_power_keys:
+                        key = (germ, maxLen_thisgerm)
 
-                if rndm is None:
-                    fiducialPairsThisIter = fidPairDict.get(key, allPossiblePairs) \
-                        if fidPairDict is not None else allPossiblePairs
-                    #if fiducialPairsThisIter==allPossiblePairs:
-                    #    print('Couldn\'t find ', key, ' using allPossiblePairs')
-                    #print('FiducialPairsThisIter: ', fiducialPairsThisIter)
-                elif fidPairDict is not None:
-                    pair_indx_tups = fidPairDict.get(key, allPossiblePairs)
-                    remainingPairs = [(i, j)
-                                      for i in range(len(prep_fiducials))
-                                      for j in range(len(meas_fiducials))
-                                      if (i, j) not in pair_indx_tups]
-                    nPairsRemaining = len(remainingPairs)
-                    nPairsToChoose = nPairsToKeep - len(pair_indx_tups)
-                    nPairsToChoose = max(0, min(nPairsToChoose, nPairsRemaining))
-                    assert(0 <= nPairsToChoose <= nPairsRemaining)
-                    # FUTURE: issue warnings when clipping nPairsToChoose?
+                    if rndm is None:
+                        fiducialPairsThisIter = fidPairDict.get(key, allPossiblePairs) \
+                            if fidPairDict is not None else allPossiblePairs
+                    elif fidPairDict is not None:
+                        pair_indx_tups = fidPairDict.get(key, allPossiblePairs)
+                        remainingPairs = [(i, j)
+                                        for i in range(len(prep_fiducials))
+                                        for j in range(len(meas_fiducials))
+                                        if (i, j) not in pair_indx_tups]
+                        nPairsRemaining = len(remainingPairs)
+                        nPairsToChoose = nPairsToKeep - len(pair_indx_tups)
+                        nPairsToChoose = max(0, min(nPairsToChoose, nPairsRemaining))
+                        assert(0 <= nPairsToChoose <= nPairsRemaining)
+                        # FUTURE: issue warnings when clipping nPairsToChoose?
 
-                    fiducialPairsThisIter = fidPairDict[key] + \
-                        [remainingPairs[k] for k in
-                         sorted(rndm.choice(nPairsRemaining, nPairsToChoose,
-                                            replace=False))]
+                        fiducialPairsThisIter = fidPairDict[key] + \
+                            [remainingPairs[k] for k in
+                            sorted(rndm.choice(nPairsRemaining, nPairsToChoose,
+                                                replace=False))]
 
-                else:  # rndm is not None and fidPairDict is None
-                    assert(nPairsToKeep <= nPairs)  # keep_fraction must be <= 1.0
-                    fiducialPairsThisIter = \
-                        [allPossiblePairs[k] for k in
-                         sorted(rndm.choice(nPairs, nPairsToKeep, replace=False))]
+                    else:  # rndm is not None and fidPairDict is None
+                        assert(nPairsToKeep <= nPairs)  # keep_fraction must be <= 1.0
+                        fiducialPairsThisIter = \
+                            [allPossiblePairs[k] for k in
+                            sorted(rndm.choice(nPairs, nPairsToKeep, replace=False))]
 
                 add_to_plaquettes(pkey, plaquettes, germ_power, maxLen, germ, power,
                                   fiducialPairsThisIter, dscheck, missing_list)
@@ -630,8 +632,7 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
             unindexed = unindexed[:]
 
         lsgst_structs.append(
-            _PlaquetteGridCircuitStructure(_collections.OrderedDict([(pkey[base], plaq)
-                                                                     for base, plaq in plaquettes.items()]),
+            _PlaquetteGridCircuitStructure({pkey[base]:plaq for base, plaq in plaquettes.items()},
                                            maxLens, germs, "L", "germ", unindexed, op_label_aliases,
                                            circuit_weights_dict=None, additional_circuits_location='start', name=None))
         tot_circuits += len(lsgst_structs[-1])  # only relevant for non-nested case
@@ -641,11 +642,9 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
 
     printer.log("--- Circuit Creation ---", 1)
     printer.log(" %d circuits created" % tot_circuits, 2)
-    #print("Total Number of Circuits: ", tot_circuits)
     if dscheck:
         printer.log(" Dataset has %d entries: %d utilized, %d requested circuits were missing"
                     % (len(dscheck), tot_circuits, len(missing_list)), 2)
-    #print(len(missing_lgst))
     if len(missing_list) > 0 or len(missing_lgst) > 0:
         MAX = 10  # Maximum missing-seq messages to display
         missing_msgs = [("Prep: %s, Germ: %s, L: %d, Meas: %s, Circuit: %s" % tup) for tup in missing_list[0:MAX + 1]] \
