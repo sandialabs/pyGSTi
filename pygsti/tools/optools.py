@@ -171,13 +171,6 @@ def fidelity(a, b):
             """
             _warnings.warn(message)
         evals[evals < 0] = 0.0
-        tr = _np.sum(evals)
-        if abs(tr - 1) > __VECTOR_TOL__:
-            message = f"""
-            The PSD part of the input matrix is not trace-1 up to tolerance {__VECTOR_TOL__}.
-            Beware result!
-            """
-            _warnings.warn(message)
         sqrt_mat = U @ (_np.sqrt(evals).reshape((-1, 1)) * U.T.conj())
         return sqrt_mat
     
