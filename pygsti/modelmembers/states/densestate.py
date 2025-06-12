@@ -242,9 +242,18 @@ class DenseState(DenseStateInterface, _State):
     @classmethod
     def _from_memoized_dict(cls, mm_dict, serial_memo):
         vec = cls._decodemx(mm_dict['dense_superket_vector'])
-        state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
-        basis = _Basis.from_nice_serialization(mm_dict['basis']) if (mm_dict['basis'] is not None) else None
-        return cls(vec, basis, mm_dict['evotype'], state_space)
+        # Probably TODO before merging: remove the try-catch, keeping only the try.
+        try:
+            state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
+            basis = _Basis.from_nice_serialization(mm_dict['basis']) if (mm_dict['basis'] is not None) else None
+            return cls(vec, basis, mm_dict['evotype'], state_space)
+        except Exception as e:
+            if len(serial_memo) > 0:
+                member = list(serial_memo.values())[0]
+                basis = member.parent.basis
+                state_space = basis.state_space
+                return cls(vec, basis, mm_dict['evotype'], state_space)
+            raise e
 
     def _is_similar(self, other, rtol, atol):
         """ 
