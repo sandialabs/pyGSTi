@@ -155,7 +155,7 @@ def cptp_superop_variable(purestate_dim: int, basis) -> Tuple[cp.Expression, Lis
     return X, constraints
 
 
-def diamond_norm_projection_model(superop: np.ndarray, basis: Basis, leakfree=False, seepfree=False, n_leak=0, cptp=True, subspace_diamond=False):
+def diamond_distance_projection_model(superop: np.ndarray, basis: Basis, leakfree=False, seepfree=False, n_leak=0, cptp=True, subspace_diamond=False):
     assert CVXPY_ENABLED
     dim_mixed = superop.shape[0]
     dim_pure = int(np.sqrt(dim_mixed))
@@ -182,6 +182,8 @@ def diamond_norm_projection_model(superop: np.ndarray, basis: Basis, leakfree=Fa
             diamondnorm_arg = diamondnorm_arg @ P
     expr, cons = diamond_norm_canon(diamondnorm_arg, basis)
     objective = cp.Minimize(expr / 2)
+    # ^ We define the diamond distance between two channels as 
+    #   1/2 the diamond norm of their difference.
     constraints.extend(cons)
     problem = cp.Problem(objective, constraints)
     viable_solvers = [solver for solver in ['MOSEK', 'CLARABEL', 'CVXOPT'] if solver in cp.installed_solvers()]
