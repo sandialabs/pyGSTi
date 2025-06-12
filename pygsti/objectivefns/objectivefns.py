@@ -4716,6 +4716,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             firsts, indicesWithOmitted = zip(*([(iel - element_slice.start, ic) for (iel, ic)
                                                 in zip(self.firsts, self.indicesOfCircuitsWithOmittedData)
                                                 if element_slice.start <= iel < element_slice.stop]))
+            firsts = list(firsts)
 
             #Allocate these above?  Need to know block sizes of dprobs12 & hprobs...
             dprobs12_omitted_rowsum = _np.empty((len(firsts),) + dprobs12.shape[1:], 'd')
