@@ -1300,15 +1300,21 @@ class DataSet(_MongoSerializable):
                 if isinstance(layer, list):
                     for lbl in layer:
                         if lbl.name.startswith(prefix):
-                            opLabels.add(lbl)
+                            opLabels.add(lbl.name)
                         elif lbl == empty_label:
-                            opLabels.add(empty_label)
+                            opLabels.add('[]')
                 elif isinstance(layer, _Label):
                     if layer.name.startswith(prefix):
-                        opLabels.add(layer)
+                        opLabels.add(layer.name)
                 else:
                     raise ValueError()
-        opLabels = list(opLabels)
+
+        bracket_idle = '[]' in opLabels
+        opLabels = [op for op in opLabels if op != '[]']
+        opLabels.sort()
+        if bracket_idle:
+            opLabels = ['[]'] + opLabels
+
         return opLabels
 
     def degrees_of_freedom(self, circuits=None, method="present_outcomes-1",
