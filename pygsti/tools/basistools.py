@@ -19,7 +19,7 @@ from pygsti.baseobjs.basisconstructors import _basis_constructor_dict
 from pygsti.baseobjs import basis as _basis
 
 
-def leakage_friendly_basis_2plus1():
+def leakage_friendly_basis_2plus1(return_subspace_basis=False):
     """ 
     This basis is used to isolate the parts of Hilbert-Schmidt space that act on
     the computational subspace induced from a partition of 3-dimensional complex
@@ -50,7 +50,18 @@ def leakage_friendly_basis_2plus1():
         real=True,
         labels=["I", "X", "Y", "Z", "LX0", "LX1", "LY0", "LY1", "L"],
     )
-    return leakage_basis
+    if not return_subspace_basis:
+        return leakage_basis
+    subspace_basis = _basis.ExplicitBasis(
+            leakage_basis_mxs[:4],
+            name="LeakageBasis",
+            longname="subspace basis for 2+1 level leakage",
+            real=True,
+            labels=["I", "X", "Y", "Z"]
+    )
+    return leakage_basis, subspace_basis
+    
+
 
 
 def basis_matrices(name_or_basis, dim, sparse=False):
