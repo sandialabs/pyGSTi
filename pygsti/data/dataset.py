@@ -26,6 +26,7 @@ import numpy as _np
 from pygsti.circuits import circuit as _cir
 from pygsti.baseobjs import outcomelabeldict as _ld, _compatibility as _compat
 from pygsti.baseobjs.mongoserializable import MongoSerializable as _MongoSerializable
+from pygsti.baseobjs.label import Label as _Label
 from pygsti.tools import NamedDict as _NamedDict
 from pygsti.tools import listtools as _lt
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
@@ -1292,11 +1293,22 @@ class DataSet(_MongoSerializable):
         list of strings
             A list where each element is a operation label.
         """
-        opLabels = []
-        for opLabelString in self:
-            for opLabel in opLabelString:
-                if not prefix or opLabel.name.startswith(prefix):
-                    if opLabel not in opLabels: opLabels.append(opLabel)
+        opLabels = set()
+        empty_label = _Label(())
+        for circuit in self:
+            for layer in circuit.layertup:
+                if isinstance(layer, list):
+                    for lbl in layer:
+                        if lbl.name.startswith(prefix):
+                            opLabels.add(lbl)
+                        elif lbl == empty_label:
+                            opLabels.add(empty_label)
+                elif isinstance(layer, _Label):
+                    if layer.name.startswith(prefix):
+                        opLabels.add(layer)
+                else:
+                    raise ValueError()
+        opLabels = list(opLabels)
         return opLabels
 
     def degrees_of_freedom(self, circuits=None, method="present_outcomes-1",
