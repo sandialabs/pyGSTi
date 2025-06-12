@@ -30,7 +30,8 @@ from pygsti.tools import lindbladtools as _lt
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools import sdptools as _sdps
 from pygsti.baseobjs import basis as _pgb
-from pygsti.baseobjs.basis import Basis as _Basis, ExplicitBasis as _ExplicitBasis, DirectSumBasis as _DirectSumBasis
+from pygsti.baseobjs.basis import Basis as _Basis, ExplicitBasis as _ExplicitBasis, DirectSumBasis as _DirectSumBasis, \
+    TensorProdBasis as _TensorProdBasis
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LocalElementaryErrorgenLabel
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
@@ -473,6 +474,34 @@ def entanglement_fidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
     return fidelity(JA, JB)
 
 
+def tensorized_teststate_density(dim, n_leak):
+    # Return a test state density matrix rho_t = |psi><psi|, where
+    #
+    #   |psi> = (|00> + |11> + ... + |dim - n_leak - 1>) / sqrt(dim - n_leak).
+    #
+    temp = _np.eye(dim, dtype=_np.complex128)
+    if n_leak > 0:
+        temp[-n_leak:,-n_leak:] = 0.0
+    temp /= _np.sqrt(dim - n_leak)
+    psi = _bt.stdmx_to_stdvec(temp).ravel()
+    rho_mm = _np.outer(psi, psi)
+    return rho_mm
+
+
+def tensorized_with_eye(op, basis, ten_basis=None, std_basis=None, ten_std_basis=None):
+    if ten_basis is None:
+        ten_basis = _TensorProdBasis((basis, basis))
+    if std_basis is None:
+        std_basis = _pgb.BuiltinBasis('std', basis.size)
+    if ten_std_basis is None:
+        ten_std_basis = _TensorProdBasis((std_basis, std_basis))
+    op_std = _bt.change_basis(op, basis, std_basis)
+    eye = _np.eye(basis.size)
+    ten_op_std = _np.kron(op_std, eye)
+    ten_op = _bt.change_basis(ten_op_std, ten_std_basis, ten_basis)
+    return ten_op, ten_basis
+
+
 def lift_and_act_on_maxmixed_state(op_a, op_b, mx_basis, n_leak=0):
     # Note: this function is only really useful for gates on a single system (qubit, qutrit, qudit);
     # not tensor products of such systems.
@@ -510,12 +539,7 @@ def lift_and_act_on_maxmixed_state(op_a, op_b, mx_basis, n_leak=0):
     #   |psi> = (|00> + |11> + ... + |dim - n_leak - 1>) / sqrt(dim - n_leak).
     #
     # The "mm" in "rho_mm" stands for "maximally mixed."
-    temp = _np.eye(dim, dtype=_np.complex128)
-    if n_leak > 0:
-        temp[-n_leak:,-n_leak:] = 0.0
-    temp /= _np.sqrt(dim - n_leak)
-    psi = _bt.stdmx_to_stdvec(temp).ravel()
-    rho_mm = _np.outer(psi, psi)
+    rho_mm = tensorized_teststate_density(dim, n_leak)
 
     # Of course, lift_op_a and lift_op_b only act on states in their superket representations.
     # We need the superket representation of rho_mm in terms of the tensor product basis for S2.
@@ -636,7 +660,7 @@ def diamonddist_projection(
         superop, basis, leakfree=False, seepfree=False, n_leak=0, cptp=True, subspace_diamond=False,
         return_optvars=False, verbose=False
     ):
-    prob, projection, solvers = _sdps.diamond_norm_projection_model(superop, basis, leakfree, seepfree, n_leak, cptp, subspace_diamond)
+    prob, projection, solvers = _sdps.diamond_distance_projection_model(superop, basis, leakfree, seepfree, n_leak, cptp, subspace_diamond)
     objective_val = -2
     optvars = []
     for solver in solvers:
@@ -646,7 +670,7 @@ def diamonddist_projection(
             optvars.append(projection.value)
             optvars.extend(v.value for v in prob.variables())
             return (objective_val, optvars) if return_optvars else objective_val
-        except Exception as e:
+        except AssertionError as e:
             _warnings.warn(f"Running CVXPY with solver {solver} failed with message {str(e)}.")
     _warnings.warn(f"All numerical solvers failed; returning -2!")
     return (objective_val, optvars) if return_optvars else objective_val
@@ -1113,9 +1137,13 @@ def povm_fidelity(model, target_model, povmlbl):
     -------
     float
     """
-    povm_mx = compute_povm_map(model, povmlbl)
-    target_povm_mx = compute_povm_map(target_model, povmlbl)
-    return entanglement_fidelity(povm_mx, target_povm_mx, target_model.basis)
+    try:
+        povm_mx = compute_povm_map(model, povmlbl)
+        target_povm_mx = compute_povm_map(target_model, povmlbl)
+        return entanglement_fidelity(povm_mx, target_povm_mx, target_model.basis)
+    except AssertionError as e:
+        assert '`dim` must be a perfect square' in str(e)
+        return _np.NaN
 
 
 def povm_jtracedist(model, target_model, povmlbl):
@@ -1137,9 +1165,13 @@ def povm_jtracedist(model, target_model, povmlbl):
     -------
     float
     """
-    povm_mx = compute_povm_map(model, povmlbl)
-    target_povm_mx = compute_povm_map(target_model, povmlbl)
-    return jtracedist(povm_mx, target_povm_mx, target_model.basis)
+    try:
+        povm_mx = compute_povm_map(model, povmlbl)
+        target_povm_mx = compute_povm_map(target_model, povmlbl)
+        return jtracedist(povm_mx, target_povm_mx, target_model.basis)
+    except AssertionError as e:
+        assert '`dim` must be a perfect square' in str(e)
+        return _np.NaN
 
 
 def povm_diamonddist(model, target_model, povmlbl):
@@ -1161,9 +1193,13 @@ def povm_diamonddist(model, target_model, povmlbl):
     -------
     float
     """
-    povm_mx = compute_povm_map(model, povmlbl)
-    target_povm_mx = compute_povm_map(target_model, povmlbl)
-    return diamonddist(povm_mx, target_povm_mx, target_model.basis)
+    try:
+        povm_mx = compute_povm_map(model, povmlbl)
+        target_povm_mx = compute_povm_map(target_model, povmlbl)
+        return diamonddist(povm_mx, target_povm_mx, target_model.basis)
+    except AssertionError as e:
+        assert '`dim` must be a perfect square' in str(e)
+        return _np.NaN
 
 def instrument_infidelity(a, b, mx_basis):
     """
