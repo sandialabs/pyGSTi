@@ -1607,6 +1607,7 @@ class TensorProdBasis(LazyBasis):
         # Note: this assertion also means dim == product(component_elsizes) == elsize, so basis is *simple*
 
         super(TensorProdBasis, self).__init__(name, longname, real, sparse)
+        self.elindlookup = {ellbl: i for i, ellbl in enumerate(self.labels)}
 
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
