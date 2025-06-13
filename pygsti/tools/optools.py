@@ -663,7 +663,7 @@ def diamonddist_projection(
             optvars.append(projection.value)
             optvars.extend(v.value for v in prob.variables())
             return (objective_val, optvars) if return_optvars else objective_val
-        except AssertionError as e:
+        except Exception as e:
             _warnings.warn(f"Running CVXPY with solver {solver} failed with message {str(e)}.")
     _warnings.warn(f"All numerical solvers failed; returning -2!")
     return (objective_val, optvars) if return_optvars else objective_val
