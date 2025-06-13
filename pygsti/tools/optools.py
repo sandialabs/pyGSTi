@@ -522,7 +522,7 @@ def lift_and_act_on_maxmixed_state(op_a, op_b, mx_basis, n_leak=0):
     #
     # for all sigma, rho in S. The way we do this implicitly fixes a basis for S2 as the
     # tensor product basis (std_basis \otimes std_basis). We'll make that explicit later on.
-    idle_gate = _np.eye((dim-n_leak)**2, dtype=_np.complex128)
+    idle_gate = _np.eye(dim**2, dtype=_np.complex128)
     lift_op_a = _np.kron(op_a, idle_gate)
     lift_op_b = _np.kron(op_b, idle_gate)
 
