@@ -663,7 +663,7 @@ def diamonddist_projection(
             optvars.append(projection.value)
             optvars.extend(v.value for v in prob.variables())
             return (objective_val, optvars) if return_optvars else objective_val
-        except AssertionError as e:
+        except Exception as e:
             _warnings.warn(f"Running CVXPY with solver {solver} failed with message {str(e)}.")
     _warnings.warn(f"All numerical solvers failed; returning -2!")
     return (objective_val, optvars) if return_optvars else objective_val
@@ -1956,21 +1956,22 @@ def extract_elementary_errorgen_coefficients(errorgen, elementary_errorgen_label
     if isinstance(errorgen_basis, _Basis):
         std_basis = errorgen_basis.create_equivalent('std')
         errorgen_std = _bt.change_basis(errorgen, errorgen_basis, std_basis)
-        if not std_basis.is_simple():
-            # Expand operation matrix so it acts on entire space of dmDim x dmDim density matrices.
-            expanded_std_basis = errorgen_basis.create_simple_equivalent('std') 
-            errorgen_std = _bt.resize_std_mx(errorgen_std, 'expand', std_basis, expanded_std_basis)
+
+        # Expand operation matrix so it acts on entire space of dmDim x dmDim density matrices
+        expanded_std_basis = errorgen_basis.create_simple_equivalent('std')
+        errorgen_std = _bt.resize_std_mx(errorgen_std, 'expand', std_basis, expanded_std_basis)
     else:
         errorgen_std = _bt.change_basis(errorgen, errorgen_basis, "std")
 
-    if _np.log2(errorgen_std.shape[0]) % 1 != 0:
-        msg = """
-        You're attempting to extract error generator coefficients for a superoperator
-        over density matrices whose order is not a power of two. As a result, this 
-        superoperator is not expressible in the Pauli-product basis. We have no
-        advice on how the output of this function should be interpreted.
-        """
-        _warnings.warn(msg)
+    # TODO: remove this once I'm satisfied that our existing code is fine, actually.
+    # if _np.log2(errorgen_std.shape[0]) % 1 != 0:
+    #     msg = """
+    #     You're attempting to extract error generator coefficients for a superoperator
+    #     over density matrices whose order is not a power of two. As a result, this 
+    #     superoperator is not expressible in the Pauli-product basis. We have no
+    #     advice on how the output of this function should be interpreted.
+    #     """
+    #     _warnings.warn(msg)
 
     flat_errorgen_std = errorgen_std.toarray().ravel() if _sps.issparse(errorgen_std) else errorgen_std.ravel()
 
