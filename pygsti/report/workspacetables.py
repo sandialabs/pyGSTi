@@ -1617,8 +1617,8 @@ class ErrgenTable(WorkspaceTable):
 
                 elif disp == "H":
                     if display_as == "boxes":
-                        T = "Contributes %.2f%% of Generator Infidelity<br>" % (100 * info['H generator infidelity contribution'].value)
-                        T1 = "Captures %.1f%% of E.G. Frobenius Norm" % (100 * info['H projection power'].value)
+                        T = "Contributes %.2f%% of Gen. Infdl.<br>" % (100 * info['H generator infidelity contribution'].value)
+                        T1 = "Captures %.1f%% of E.G. Frob. Norm" % (100 * info['H projection power'].value)
                         hamProjs, EB = info['H projections'].value_and_errorbar
                         m, M = _get_min_max(hamProjsM, _np.max(_np.abs(hamProjs)))
                         hamdecomp_fig = _wp.ProjectionsBoxPlot(
@@ -1632,8 +1632,8 @@ class ErrgenTable(WorkspaceTable):
 
                 elif disp == "S":
                     if display_as == "boxes":
-                        T = "Contributes %.2f%% of Generator Infidelity<br>" % (100 * info['S generator infidelity contribution'].value)
-                        T1 = "Captures %.1f%% of E.G. Frobenius Norm" % (100 * info['S projection power'].value)
+                        T = "Contributes %.2f%% of Gen. Infdl.<br>" % (100 * info['S generator infidelity contribution'].value)
+                        T1 = "Captures %.1f%% of E.G. Frob. Norm" % (100 * info['S projection power'].value)
                         stoProjs, EB = info['S projections'].value_and_errorbar
                         m, M = _get_min_max(stoProjsM, _np.max(_np.abs(stoProjs)))
                         stodecomp_fig = _wp.ProjectionsBoxPlot(
