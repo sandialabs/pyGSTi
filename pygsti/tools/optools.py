@@ -305,7 +305,7 @@ def diamonddist(a, b, mx_basis='pp', return_x=False):
     mx_basis = _bt.create_basis_for_matrix(a, mx_basis)
 
     # currently cvxpy is only needed for this function, so don't import until here
-    import cvxpy as _cvxpy
+    import cvxpy as _cp
 
     # _jam code below assumes *un-normalized* Jamiol-isomorphism.
     # It will convert a & b to a "single-block" basis representation
@@ -322,19 +322,29 @@ def diamonddist(a, b, mx_basis='pp', return_x=False):
     J = JBstd - JAstd
     prob, vars = _diamond_norm_model(dim, smallDim, J)
 
-    try:
-        prob.solve(solver='Clarabel')
-    except _cvxpy.error.SolverError as e:
-        _warnings.warn("CVXPY failed: %s - diamonddist returning -2!" % str(e))
-        return (-2, _np.zeros((dim, dim))) if return_x else -2
-    except:
-        _warnings.warn("CVXOPT failed (unknown err) - diamonddist returning -2!")
-        return (-2, _np.zeros((dim, dim))) if return_x else -2
+    objective_val = -2
+    varvals = [_np.zeros_like(J), None, None]
+    sdp_solvers = ['MOSEK', 'CLARABEL', 'CVXOPT']
+    for i, solver in enumerate(sdp_solvers):
+        try:
+            prob.solve(solver=solver)
+            objective_val = prob.value
+            varvals = [v.value for v in vars]
+            break
+        except (AssertionError, _cp.SolverError) as e:
+            if solver != 'MOSEK':
+                msg = f"Received error {e} when trying to use solver={solver}."
+                if i + 1 == len(sdp_solvers):
+                    failure_msg = "Out of solvers. Returning -2 for diamonddist."
+                else:
+                    failure_msg = f"Trying {sdp_solvers[i+1]} next."
+                msg += f'\n{failure_msg}'
+                _warnings.warn(msg)
 
     if return_x:
-        return prob.value, vars[0].value
+        return objective_val, varvals
     else:
-        return prob.value
+        return objective_val
 
 
 def _diamond_norm_model(dim, smallDim, J):

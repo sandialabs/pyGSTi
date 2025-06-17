@@ -14,8 +14,6 @@ from pygsti.modelmembers.operations.lindbladcoefficients import LindbladCoeffici
 from pygsti.modelpacks.legacy import std2Q_XXYYII
 from ..util import BaseCase, needs_cvxpy
 
-SKIP_DIAMONDIST_ON_WIN = True
-
 
 def fake_minimize(fn):
     """Mock scipy.optimize.minimize in the underlying function call to reduce optimization overhead"""
@@ -387,7 +385,6 @@ class GateOpsTester(BaseCase):
 
     @needs_cvxpy
     def test_diamond_distance(self):
-        if SKIP_DIAMONDIST_ON_WIN and sys.platform.startswith('win'): return
         val = ot.diamonddist(self.A_TP, self.A_TP, mx_basis="pp")
         self.assertAlmostEqual(val, 0.0)
         val = ot.diamonddist(self.A_TP, self.B_unitary, mx_basis="pp")
