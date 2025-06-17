@@ -29,6 +29,37 @@ class LocalElementaryErrorgenLabel(ElementaryErrorgenLabel):
     """
     @classmethod
     def cast(cls, obj, sslbls=None, identity_label='I'):
+        """
+        Method for casting an object to an instance of LocalElementaryErrorgenLabel
+
+        Parameters
+        ----------
+        obj : `LocalElementaryErrorgenLabel`, `GlobalElementaryErrorgenLabel`, str, tuple or list
+            Object to cast. If a `GlobalElementaryErrorgenLabel` then a value for the `sslbls`
+            argument should be passed with the full list of state space labels for the system.
+            Other castable options include:
+
+            -str: A string formatted as '<type>(<bel1>[,<bel2>])'. E.g. 'H(XX)' or
+             'C(X,Y)'
+            -tuple/list: These can be specified either in 'global-style' or 'local-style'.
+                - local-style: format is (<type>, <bel1>[,<bel2>])
+                - global-style:format is (<type>, (<bel1>,[<bel2>]), (<sslbls>))
+                  Where sslbls above is specifically the subset of state space labels this error
+                  generator acts on nontrivially. When specifying global-style tuple labels the sslbls kwarg of this method
+                  which contains the complete set of state-space labels must also be specified.
+            
+        sslbls : tuple or list, optional (default None)
+            A complete set of state space labels. Used when casting from a GlobalElementaryErrorgenLabel
+            or from a tuple of length 3 (wherein the final element is interpreted as the set of ssblbs the error
+            generator acts upon).
+        
+        identity_label : str, optional (default 'I')
+            An optional string specifying the label used to denote the identity in basis element labels.
+
+        Returns
+        -------
+        LocalElementaryErrorgenLabel
+        """
         if isinstance(obj, LocalElementaryErrorgenLabel):
             return obj
         elif isinstance(obj, GlobalElementaryErrorgenLabel):
@@ -65,11 +96,37 @@ class LocalElementaryErrorgenLabel(ElementaryErrorgenLabel):
             raise ValueError("Cannot convert %s to a local elementary errorgen label!" % str(obj))
 
     def __init__(self, errorgen_type, basis_element_labels):
+        """
+        Parameters
+        ----------
+        errorgen_type : str
+            A string corresponding to the error generator sector this error generator label is
+            an element of. Allowed values are 'H', 'S', 'C' and 'A'.
+
+        basis_element_labels : tuple or list
+            A list or tuple of strings labeling basis elements used to label this error generator.
+            This is either length-1 for 'H' and 'S' type error generators, or length-2 for 'C' and 'A'
+            type.
+        """
+        #TODO: Store non-standard identity labels with object so we don't need to specify this in
+        #support_indices.
         self.errorgen_type = str(errorgen_type)
         self.basis_element_labels = tuple(basis_element_labels)
+        self._hash = hash((self.errorgen_type, self.basis_element_labels))
 
     def __hash__(self):
-        return hash((self.errorgen_type, self.basis_element_labels))
+        return self._hash
+    
+    #pickle management functions
+    def __getstate__(self):
+        state_dict = self.__dict__
+        return state_dict
+
+    def __setstate__(self, state_dict):
+        for k, v in state_dict.items():
+            self.__dict__[k] = v
+        #reinitialize the hash
+        self._hash = hash((self.errorgen_type, self.basis_element_labels))
 
     def __eq__(self, other):
         return (self.errorgen_type == other.errorgen_type
@@ -80,6 +137,16 @@ class LocalElementaryErrorgenLabel(ElementaryErrorgenLabel):
 
     def __repr__(self):
         return str((self.errorgen_type, self.basis_element_labels))
+    
+    def support_indices(self, identity_label='I'):
+        """ 
+        Returns a sorted tuple of the elements of indices of the nontrivial basis
+        element label entries for this label.
+        """
+        nonidentity_indices = [i for i in range(len(self.basis_element_labels[0]))
+                                   if any([bel[i] != identity_label for bel in self.basis_element_labels])]
+
+        return tuple(nonidentity_indices)
 
 
 class GlobalElementaryErrorgenLabel(ElementaryErrorgenLabel):
@@ -91,7 +158,47 @@ class GlobalElementaryErrorgenLabel(ElementaryErrorgenLabel):
 
     @classmethod
     def cast(cls, obj, sslbls=None, identity_label='I'):
-        """ TODO: docstring - lots in this module """
+        """
+        Method for casting an object to an instance of GlobalElementaryErrorgenLabel
+
+        Parameters
+        ----------
+        obj : `GlobalElementaryErrorgenLabel`, `LocalElementaryErrorgenLabel`, tuple or list
+            Object to cast. If a `LocalElementaryErrorgenLabel` then a value for the `sslbls`
+            argument should be passed with the full list of state space labels for the system.
+            Other castable options include:
+
+            -str: Following formatting options are supported.
+                - A string formatted as '<type>(<bel1>[,<bel2>]:(<sslbls>))' where <sslbls>
+                  is the subset of state-space labels this error generator acts on nontrivially
+                  specified as a comma-separated list. E.g. 'H(XX:0,1)' or 'S(XIY):0,2'.
+                - A string formatted as <type><bel>:<sslbls>, where <sslbls>
+                  is the subset of state-space labels this error generator acts on nontrivially
+                  specified as a comma-separated list. E.g. 'HXX:0,1' or 'SIX:1'. Note this style
+                  is only compatible with basis element label error generators, and this only H and S.
+                - A string formatted as <type><bel>. For this style the basis element label
+                  is assumed to correspond to the entire state space, and as such the sslbls kwarg
+                  for this method must also be specified. Like the previous example this is also
+                  only compatible with H and S terms.
+            -tuple/list: These can be specified either in 'global-style' or 'local-style'.
+                - local-style: format is (<type>, <bel1>[,<bel2>])
+                - global-style:format is (<type>, (<bel1>,[<bel2>]), (<sslbls>))
+                  Where sslbls above is specifically the subset of state space labels this error
+                  generator acts on nontrivially. When specifying global-style tuple labels the sslbls kwarg of this method
+                  which contains the complete set of state-space labels must also be specified.
+
+        sslbls : tuple or list, optional (default None)
+            A complete set of state space labels. Used when casting from a LocalElementaryErrorgenLabel
+            or from a tuple of length 2 (wherein the final element is interpreted as the set of ssblbs the error
+            generator acts upon).
+        
+        identity_label : str, optional (default 'I')
+            An optional string specifying the label used to denote the identity in basis element labels.
+
+        Returns
+        -------
+        GlobalElementaryErrorgenLabel
+        """
         if isinstance(obj, GlobalElementaryErrorgenLabel):
             return obj
         elif isinstance(obj, LocalElementaryErrorgenLabel):
@@ -116,7 +223,7 @@ class GlobalElementaryErrorgenLabel(ElementaryErrorgenLabel):
                     return cls.cast(LocalElementaryErrorgenLabel.cast(obj), sslbls, identity_label)
             else:  # no parenthesis, assume of form "HXX:Q0,Q1" or local label, e.g. "HXX"
                 if ':' in obj:
-                    typ_bel_str, sslbl_str = in_parens.split(':')
+                    typ_bel_str, sslbl_str = obj.split(':')
                     sslbls = [_to_int_or_strip(x) for x in sslbl_str.split(',')]
                     return cls(typ_bel_str[0], (typ_bel_str[1:],), sslbls)
                 else:  # treat as a local label
@@ -132,6 +239,27 @@ class GlobalElementaryErrorgenLabel(ElementaryErrorgenLabel):
             raise ValueError("Cannot convert %s to a global elementary errorgen label!" % str(obj))
 
     def __init__(self, errorgen_type, basis_element_labels, sslbls, sort=True):
+        """
+        Parameters
+        ----------
+        errorgen_type : str
+            A string corresponding to the error generator sector this error generator label is
+            an element of. Allowed values are 'H', 'S', 'C' and 'A'.
+
+        basis_element_labels : tuple or list
+            A list or tuple of strings labeling basis elements used to label this error generator.
+            This is either length-1 for 'H' and 'S' type error generators, or length-2 for 'C' and 'A'
+            type.
+        
+        sslbls : tuple or list
+            A tuple or list of state space labels corresponding to the qudits upon which this error generator
+            is supported.
+
+        sort : bool, optional (default True)
+            If True then the input state space labels are first sorted, and then the used basis element labels
+            are sorted to match the order to the newly sorted state space labels.
+        """
+        
         if sort:
             sorted_indices, sslbls = zip(*sorted(enumerate(sslbls), key=lambda x: x[1]))
             basis_element_labels = [''.join([bel[i] for i in sorted_indices]) for bel in basis_element_labels]
@@ -141,9 +269,21 @@ class GlobalElementaryErrorgenLabel(ElementaryErrorgenLabel):
         self.sslbls = tuple(sslbls)
         # Note: each element of basis_element_labels must be an iterable over
         #  1-qubit basis labels of length len(self.sslbls) (?)
+        self._hash = hash((self.errorgen_type, self.basis_element_labels, self.sslbls))
 
     def __hash__(self):
-        return hash((self.errorgen_type, self.basis_element_labels, self.sslbls))
+        return self._hash
+    
+    #pickle management functions
+    def __getstate__(self):
+        state_dict = self.__dict__
+        return state_dict
+
+    def __setstate__(self, state_dict):
+        for k, v in state_dict.items():
+            self.__dict__[k] = v
+        #reinitialize the hash
+        self._hash = hash((self.errorgen_type, self.basis_element_labels, self.sslbls))
 
     def __eq__(self, other):
         return (self.errorgen_type == other.errorgen_type

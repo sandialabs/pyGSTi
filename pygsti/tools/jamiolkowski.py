@@ -273,6 +273,27 @@ def fast_jamiolkowski_iso_std_inv(choi_mx, op_mx_basis):
     #transform operation matrix into appropriate basis
     return _bt.change_basis(opMxInStdBasis, op_mx_basis.create_equivalent('std'), op_mx_basis)
 
+def sum_of_negative_choi_eigenvalues_gate(op_mx, op_mx_basis):
+    """
+    Compute the sum of the negative Choi eigenvalues of a process matrix.
+
+    Parameters
+    ----------
+    op_mx : np.array
+
+    op_mx_basis : Basis
+
+    Returns
+    -------
+    float
+        the sum of the negative eigenvalues of the Choi representation of op_mx
+    """
+    sumOfNeg = 0
+    J = fast_jamiolkowski_iso_std(op_mx, op_mx_basis)  # Choi mx basis doesn't matter
+    evals = _np.linalg.eigvals(J)  # could use eigvalsh, but wary of this since eigh can be wrong...
+    for ev in evals:
+            if ev.real < 0: sumOfNeg -= ev.real
+    return sumOfNeg
 
 def sum_of_negative_choi_eigenvalues(model, weights=None):
     """
@@ -327,7 +348,7 @@ def sums_of_negative_choi_eigenvalues(model):
     """
     ret = []
     for (_, gate) in model.operations.items():
-        J = fast_jamiolkowski_iso_std(gate, model.basis)  # Choi mx basis doesn't matter
+        J = fast_jamiolkowski_iso_std(gate.to_dense(on_space='HilbertSchmidt'), model.basis)  # Choi mx basis doesn't matter
         evals = _np.linalg.eigvals(J)  # could use eigvalsh, but wary of this since eigh can be wrong...
         sumOfNeg = 0.0
         for ev in evals:
