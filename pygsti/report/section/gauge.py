@@ -18,7 +18,6 @@ class GaugeInvariantsGatesSection(_Section):
 
     def render(self, workspace, results=None, dataset_labels=None, est_labels=None, embed_figures=True, **kwargs):
         # This section's figures depend on switchboards, which must be rendered in advance:
-        # XXX this is so wack
         gi_switchboard = _create_single_metric_switchboard(
             workspace, results, True, dataset_labels, est_labels, embed_figures
         )
@@ -55,7 +54,7 @@ class GaugeInvariantsGatesSection(_Section):
     @_Section.figure_factory(4)
     def final_model_predicted_RB_table(workspace, switchboard=None, confidence_level=None, ci_brevity=1, **kwargs):
         return workspace.ModelVsTargetTable(
-            switchboard.mdl_final, switchboard.mdl_target, switchboard.clifford_compilation,
+            switchboard.mdl_gaugeinv, switchboard.mdl_target, switchboard.clifford_compilation,
             _cri(1, switchboard, confidence_level, ci_brevity)
         )
 
@@ -72,7 +71,7 @@ class GaugeInvariantsGatesSection(_Section):
     def final_gauge_inv_model_table(workspace, switchboard=None, confidence_level=None, ci_brevity=1, **kwargs):
         #return workspace.BlankTable()  # this table is slow, uncomment this to disable it temporarily
         return workspace.GaugeRobustModelTable(
-            switchboard.mdl_final, switchboard.mdl_target, 'boxes', _cri(1, switchboard, confidence_level, ci_brevity)
+            switchboard.mdl_gaugeinv, switchboard.mdl_target, 'boxes', _cri(1, switchboard, confidence_level, ci_brevity)
         )
 
     @_Section.figure_factory(4)
@@ -99,14 +98,14 @@ class GaugeInvariantsGatesSection(_Section):
                                      gr_switchboard=None, **kwargs):
         # Temporarily disable this table for > 1Q models, since it's so slow...
         first_model = None
-        for mdl in switchboard.mdl_final.base.flat:
+        for mdl in switchboard.mdl_gaugeinv.base.flat:
             if not isinstance(mdl, _NotApplicable):
                 first_model = mdl; break
         if first_model and first_model.dim > 4:
             return workspace.BlankTable()  # this table is slow, uncomment this to disable it temporarily
 
         return workspace.GaugeRobustMetricTable(
-            switchboard.mdl_final, switchboard.mdl_target, gr_switchboard.metric,
+            switchboard.mdl_gaugeinv, switchboard.mdl_target, gr_switchboard.metric,
             _cri(1, switchboard, confidence_level, ci_brevity)
         )
 

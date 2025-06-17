@@ -29,7 +29,7 @@ class SummarySection(_Section):
                                   **kwargs):
         return workspace.ColorBoxPlot(
             switchboard.objfn_builder, switchboard.circuits_final,
-            switchboard.modvi_ds, switchboard.mdl_current_modvi,
+            switchboard.modvi_ds, switchboard.mdl_final_modvi,
             linlg_pcntle=linlog_percentile / 100,
             typ='histogram', comm=comm, bgcolor=bgcolor,
             mdc_store= switchboard.final_mdc_store
