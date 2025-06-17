@@ -626,6 +626,16 @@ class QuditSpace(StateSpace):
         return cls(state['qudit_labels'], state['qudit_udims'])
 
     @property
+    def qudit_labels(self):
+        """The labels of the qudits in this state space."""
+        return self._qudit_labels
+
+    @property
+    def qudit_udims(self):
+        """Integer Hilbert (unitary operator) space dimensions of the qudits in ths quantum state space."""
+        return self._qudit_udims
+
+    @property
     def udim(self):
         """
         Integer Hilbert (unitary operator) space dimension of this quantum state space.
@@ -1297,7 +1307,7 @@ def default_space_for_dim(dim):
         return ExplicitStateSpace(('all',), udims=(udim,), types=('quantum',))
 
 
-def default_space_for_udim(udim):
+def fdefault_space_for_udim(udim):
     """
     Create a state space for a given unitary operator dimension.
 
