@@ -24,6 +24,7 @@ authors = [
 dependencies=[
     'numpy>=1.15.0',
     'scipy',
+    'stim',
     'plotly',
     'pandas',
     'networkx'
