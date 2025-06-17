@@ -510,6 +510,10 @@ def qiskit_gatenames_standard_conversions():
 
     try:
         import qiskit
+        if qiskit.__version__ != '1.1.1':
+            print("warning: function 'qiskit_gatenames_standard_conversions()' is designed for qiskit version 1.1.1 \
+                    and may not function properly for your qiskit version, which is " + qiskit.__version__)
+            
     except ImportError:
         raise ImportError("Qiskit is required for this operation, and it does not appear to be installed.")
     
@@ -520,6 +524,7 @@ def qiskit_gatenames_standard_conversions():
     qiskit_to_standard_mapping['y'] = ['Gypi', False]
     qiskit_to_standard_mapping['z'] = ['Gzpi', False]
     qiskit_to_standard_mapping['sx'] = ['Gxpi2', False]
+    qiskit_to_standard_mapping['sxdg'] = ['Gxmpi2', False]
     qiskit_to_standard_mapping['t'] = ['Gt', False]
     qiskit_to_standard_mapping['h'] = ['Gh', False]
 
@@ -817,6 +822,7 @@ def standard_gatenames_openqasm_conversions(version='u3'):
         std_gatenames_to_qasm['Gc23'] = ['rz(4.71238898038469)']
         std_gatenames_to_qasm['Gt'] = ['rz(0.7853981633974485)']
         std_gatenames_to_qasm['Gtdag'] = ['rz(5.497787143782138)']
+        std_gatenames_to_qasm['Gecres'] = ['ecr']
 
         std_gatenames_to_argmap = {}
         std_gatenames_to_argmap['Gzr'] = lambda gatearg: ['rz(' + str(gatearg[0]) + ')']
@@ -829,6 +835,45 @@ def standard_gatenames_openqasm_conversions(version='u3'):
         raise ValueError("Unknown version!")
 
     return std_gatenames_to_qasm, std_gatenames_to_argmap
+
+
+def standard_gatenames_qiskit_conversions():
+
+    try:
+        import qiskit
+        from qiskit.circuit import Delay
+        from qiskit.circuit.library import standard_gates
+
+        if qiskit.__version__ != '1.1.1':
+            print("warning: function 'standard_gatenames_qiskit_conversions()' is designed for qiskit version 1.1.1 \
+                    and may not function properly for your qiskit version, which is " + qiskit.__version__)
+            
+    except ImportError:
+        raise ImportError("Qiskit is required for this operation, and it does not appear to be installed.")
+
+    std_gatenames_to_qiskit = {}
+
+
+    std_gatenames_to_qiskit['Gcphase'] = (standard_gates.CZGate, False)
+    std_gatenames_to_qiskit['Gcnot'] = (standard_gates.CXGate, False)
+    std_gatenames_to_qiskit['Gecres'] = (standard_gates.ECRGate, False)
+    std_gatenames_to_qiskit['Gxpi2'] = (standard_gates.SXGate, False)
+    std_gatenames_to_qiskit['Gzr'] = (standard_gates.RZGate, False)
+    std_gatenames_to_qiskit['Gxpi'] = (standard_gates.XGate, False)
+    std_gatenames_to_qiskit['Gi'] = (standard_gates.IGate, False)
+    std_gatenames_to_qiskit['Gu3'] = (standard_gates.UGate, False)
+
+    std_gatenames_to_qiskit['Gdelay'] = (Delay, False)
+
+    
+
+    return std_gatenames_to_qiskit
+
+
+
+
+
+
 
 
 def qasm_u3(theta, phi, lamb, output='unitary'):

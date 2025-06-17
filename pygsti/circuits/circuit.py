@@ -4014,12 +4014,18 @@ class Circuit(object):
 
         Returns
         -------
-        pygsti_circuit
-            A pyGSTi Circuit instance equivalent to the specified Qiskit one.
+        Tuple: 
+            pygsti_circuit
+                A pyGSTi Circuit instance equivalent to the specified Qiskit one.
+
+            Dict {qiskit_qubit_idx, pyGSTi_qubit}
         """
 
         try:
             import qiskit
+            if qiskit.__version__ != '1.1.1':
+                print("warning: Circuit class method 'from_qiskit()' is designed for qiskit version 1.1.1 and may not \
+                       function properly for your qiskit version, which is " + qiskit.__version__)
         except ImportError:
             raise ImportError("Qiskit is required for this operation, and it does not appear to be installed.")
         
@@ -4044,14 +4050,17 @@ class Circuit(object):
         
         #ensure all of these have a conversion available.
         if qubit_conversion is not None:
-            if isinstance(qubit_conversion, dict):
-                unmapped_qubits = set(qubits).difference(set(qubit_conversion.keys()))
-                assert len(unmapped_qubits) == 0, f'Missing Qiskit to pygsti conversions for some qubits: {unmapped_qubits} '
+            unmapped_qubits = set(qubits).difference(set(qubit_conversion.keys()))
+            assert len(unmapped_qubits) == 0, f'Missing Qiskit to pygsti conversions for some qubits: {unmapped_qubits}'
+
+            qubit_idx_conversion = {i: qubit_conversion[circuit.qbit_argument_conversion(i)[0]] for i in range(circuit.num_qubits)}
                     
         #if it is None, build a default mapping.
         else:
             #default mapping is the identify mapping: qubit i in the Qiskit circuit maps to qubit i in the pyGSTi circuit
             qubit_conversion = {circuit.qbit_argument_conversion(i)[0]: f'Q{i}' for i in range(circuit.num_qubits)} # in Qiskit 1.1.1, the method is called qbit_argument_conversion. In Qiskit >=1.2 (as far as Noah can tell), the method is called _qbit_argument_conversion. 
+
+            qubit_idx_conversion = {i: f'Q{i}' for i in range(circuit.num_qubits)}
 
             # for i in range(circuit.num_qubits):
 
@@ -4091,9 +4100,11 @@ class Circuit(object):
             num_qubits = instruction.operation.num_qubits
             # instruction_qubit_indices = [qubit._index for qubit in instruction.qubits]
             params = instruction.operation.params
-            # print(name)
-            # print(num_qubits)
-            # print(params)
+
+            if verbose:
+                print(name)
+                print(num_qubits)
+                print(params)
 
             pygsti_gate_qubits = [qubit_conversion[qubit] for qubit in instruction.qubits]
 
@@ -4102,7 +4113,11 @@ class Circuit(object):
                 continue
 
             if name == 'barrier':
-                _warnings.warn('skipping barrier')
+                next_index = max(layer_indices[qubit] for qubit in pygsti_gate_qubits)
+                for qubit in pygsti_gate_qubits:
+                    layer_indices[qubit] = next_index
+
+                # _warnings.warn('skipping barrier')
                 continue
 
             pygsti_gate_name = qiskit_to_gate_name_mapping[name][0]
@@ -4146,7 +4161,7 @@ class Circuit(object):
             
         circuit = cls(pygsti_circ_layers, line_labels=line_labels)
 
-        return circuit
+        return (circuit, qubit_idx_conversion)
 
 
 
@@ -4317,6 +4332,81 @@ class Circuit(object):
 
         return quil
 
+
+    def convert_to_qiskit(self, num_qubits=None,
+                          qubit_conversion=None,
+                          gatename_conversion=None,
+                          block_between_layers=True,
+                          qubits_to_measure=None,
+                          ):
+        
+        try:
+            import qiskit
+        except ImportError:
+            raise ImportError("Qiskit is required for this operation, and it does not appear to be installed.")
+        
+        depth = self.depth
+
+        if num_qubits is None:
+            num_qubits = self.width
+
+        if qubit_conversion is None:
+            qubit_conversion = {label: label for label in self.line_labels}
+        elif qubit_conversion == 'remove-Q':
+            qubit_conversion = {label: int(label[1:]) for label in self.line_labels}
+
+
+        qiskit_qc = qiskit.QuantumCircuit(num_qubits)
+
+        qiskit_gate_conversion = _itgs.standard_gatenames_qiskit_conversions()
+
+        for i in range(depth):
+            layer = self.layer_label(i).components
+            for gate in layer:
+                qiskit_gate, is_standard_gate = qiskit_gate_conversion[gate.name]
+                # pseudo-code
+                qiskit_qubits = [qubit_conversion[qubit] for qubit in gate.qubits]
+
+                # if qiskit_version >= 2.0:
+                #     if is_standard_gate:
+                #         qiskit_qc._append_standard_gate(qiskit_gate, qiskit_qubits, gate.args)
+                #     else:
+                #         qiskit_qc.append(qiskit_gate(gate.args), gate.qubits, copy=False)
+
+                qiskit_qc.append(qiskit_gate(*(gate.args)), qiskit_qubits, copy=False)
+            
+            if block_between_layers:
+                qiskit_qc.barrier()
+
+
+        if qubits_to_measure is not None:
+            if isinstance(qubits_to_measure, str):
+                if qubits_to_measure == 'all':
+                    qiskit_qc.measure_all()
+
+                elif qubits_to_measure == 'active':
+                    qiskit_qubits_to_measure = [v for v in qubit_conversion.values()]
+                    new_creg = qiskit_qc._create_creg(len(qiskit_qubits_to_measure), "meas")
+                    qiskit_qc.add_register(new_creg)
+                    qiskit_qc.barrier()
+                    qiskit_qc.measure(qiskit_qubits_to_measure, new_creg)
+
+                else:
+                    raise ValueError(f"unknown string option for 'qubits_to_measure': {qubits_to_measure}")
+                
+            elif isinstance(qubits_to_measure, list):
+                qiskit_qubits_to_measure = [qubit_conversion[qubit] for qubit in qubits_to_measure]
+                new_creg = qiskit_qc._create_creg(len(qiskit_qubits_to_measure), "meas")
+                qiskit_qc.add_register(new_creg)
+                qiskit_qc.barrier()
+                qiskit_qc.measure(qiskit_qubits_to_measure, new_creg)
+
+            else:
+                raise ValueError(f"could not parse argument for 'qubits_to_measure': {qubits_to_measure}")
+
+        return qiskit_qc
+                    
+
     def convert_to_openqasm(self, num_qubits=None,
                             standard_gates_version='u3',
                             gatename_conversion=None, qubit_conversion=None,
@@ -4453,7 +4543,7 @@ class Circuit(object):
                     if openqasmlist_for_gate is None:
                         # Try to look up the operation in mapping dict instead
                         openqasmfn_for_gate = gateargs_map.get(gate.name, None)
-                        assert openqasmfn_for_gate is not None, "Could not look up {} as qasm list or func" % gate.name
+                        assert openqasmfn_for_gate is not None, f"Could not look up {gate.name} as qasm list or func"
                         openqasmlist_for_gate = openqasmfn_for_gate(gate.args)
 
                     openqasm_for_gate = ''

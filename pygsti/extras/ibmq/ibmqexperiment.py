@@ -71,6 +71,17 @@ def _transpile_batch(circs, pass_manager, qasm_convert_kwargs):
     return pass_manager.run(batch)
 
 
+def _convert_batch(circs, qiskit_convert_kwargs):
+    batch = []
+    for circ in circs:
+        qiskit_qc = circ.convert_to_qiskit(**qiskit_convert_kwargs)
+
+        batch.append(qiskit_qc)
+
+    return batch
+
+
+
 class IBMQExperiment(_TreeNode, _HasPSpec):
     """
     A object that converts pyGSTi ExperimentDesigns into jobs to be submitted to IBM Q, submits these
@@ -479,7 +490,14 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
             if submit_status is False:
                 raise RuntimeError("Ran out of max attempts and job was still not submitted successfully")
 
-    def transpile(self, ibmq_backend, qiskit_pass_kwargs=None, qasm_convert_kwargs=None, num_workers=1):
+    def transpile(self,
+                  ibmq_backend,
+                  direct_to_qiskit=False,
+                  qiskit_pass_kwargs=None,
+                  qasm_convert_kwargs=None,
+                  qiskit_convert_kwargs=None,
+                  num_workers=1,
+                  ):
         """Transpile pyGSTi circuits into Qiskit circuits for submission to IBMQ.
 
         Parameters
@@ -487,36 +505,58 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         ibmq_backend:
             IBM backend to use during Qiskit transpilation
         
-        opt_level: int, optional
-            Optimization level for Qiskit `generate_preset_pass_manager`.
+        direct_to_qiskit: bool, optional
+            Whether to use OpenQASM as an intermediary in the conversion from pyGSTi circut
+            to Qiskit circuit. If True, `qiskit_convert_kwargs` is passed to
+            `Circuit.convert_to_qiskit`. If False, the pyGSTi circuits are first converted to
+            OpenQASM and then converted into Qiskit circuits.
         
         qiskit_pass_kwargs: dict, optional
+            Only used if direct_to_qiskit is False.
             Additional kwargs to pass in to `generate_preset_pass_manager`.
             If not defined, the default is {'seed_transpiler': self.seed, 'optimization_level': 0,
             'basis_gates': ibmq_backend.operation_names}
             Note that "optimization_level" is a required argument to the pass manager.
         
         qasm_convert_kwargs: dict, optional
+            Only used if direct_to_qiskit is False.
             Additional kwargs to pass in to `Circuit.convert_to_openqasm`.
             If not defined, the default is {'num_qubits': self.processor_spec.num_qubits,
             'standard_gates_version': 'x-sx-rz'}
-        
+
+        qiskit_convert_kwargs: dict, optional
+            Only used if direct_to_qiskit is True.
+            Additional kwargs to pass to `Circuit.convert_to_qiskit`.
+            If not defined, the default is {'num_qubits': self.processor_spec.num_qubits,
+            'qubit_conversion': 'remove-Q', 'block_between_layers': True,
+            'qubits_to_measure': 'active'}.
+
         num_workers: int, optional
             Number of workers to use for parallel (by batch) transpilation
         """
         circuits = self.edesign.all_circuits_needing_data.copy()
         num_batches = int(_np.ceil(len(circuits) / self.circuits_per_batch))
 
-        if qiskit_pass_kwargs is None:
-            qiskit_pass_kwargs = {}
-        qiskit_pass_kwargs['seed_transpiler'] = qiskit_pass_kwargs.get('seed_transpiler', self.seed)
-        qiskit_pass_kwargs['optimization_level'] = qiskit_pass_kwargs.get('optimization_level', 0)
-        qiskit_pass_kwargs['basis_gates'] = qiskit_pass_kwargs.get('basis_gates', ibmq_backend.operation_names)
-        
-        if qasm_convert_kwargs is None:
-            qasm_convert_kwargs = {}
-        qasm_convert_kwargs['num_qubits'] = qasm_convert_kwargs.get('num_qubits', self.processor_spec.num_qubits)
-        qasm_convert_kwargs['standard_gates_version'] = qasm_convert_kwargs.get('standard_gates_version', 'x-sx-rz')
+        if direct_to_qiskit:
+            if qiskit_convert_kwargs is None:
+                qiskit_convert_kwargs = {}
+
+            qiskit_convert_kwargs['num_qubits'] = qiskit_convert_kwargs.get('num_qubits', self.processor_spec.num_qubits)
+            qiskit_convert_kwargs['qubit_conversion'] = qiskit_convert_kwargs.get('qubit_conversion', 'remove-Q')
+            qiskit_convert_kwargs['block_between_layers'] = qiskit_convert_kwargs.get('block_between_layers', True)
+            qiskit_convert_kwargs['qubits_to_measure'] = qiskit_convert_kwargs.get('qubits_to_measure', 'active')
+
+        else:
+            if qiskit_pass_kwargs is None:
+                qiskit_pass_kwargs = {}
+            qiskit_pass_kwargs['seed_transpiler'] = qiskit_pass_kwargs.get('seed_transpiler', self.seed)
+            qiskit_pass_kwargs['optimization_level'] = qiskit_pass_kwargs.get('optimization_level', 0)
+            qiskit_pass_kwargs['basis_gates'] = qiskit_pass_kwargs.get('basis_gates', ibmq_backend.operation_names)
+            
+            if qasm_convert_kwargs is None:
+                qasm_convert_kwargs = {}
+            qasm_convert_kwargs['num_qubits'] = qasm_convert_kwargs.get('num_qubits', self.processor_spec.num_qubits)
+            qasm_convert_kwargs['standard_gates_version'] = qasm_convert_kwargs.get('standard_gates_version', 'x-sx-rz')
 
         if not len(self.pygsti_circuit_batches):
             rand_state = _np.random.RandomState(self.seed) # TODO: Should this be a different seed as transpiler?
@@ -549,15 +589,27 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
             print(f'Already completed transpilation of {len(self.qiskit_isa_circuit_batches)}/{num_batches} circuit batches')
             if len(self.qiskit_isa_circuit_batches) == num_batches:
                 return
-
-        pm = _pass_manager(backend=ibmq_backend, **qiskit_pass_kwargs)
+            
 
         # Set up parallel tasks
         tasks = [self.pygsti_circuit_batches[i] for i in range(len(self.qiskit_isa_circuit_batches), num_batches)]
 
-        # We want to use transpile_batch and it's the same pm/convert kwargs, so create a new function with partially applied kwargs
+        # we are running convert_batch (or transpile_batch) where the only arg that changes
+        # across ranks is the circuits. Thus, create a new function with partially applied kwargs
         # This function now only takes circs as an argument (which are our task elements above)
-        task_fn = _partial(_transpile_batch, pass_manager=pm, qasm_convert_kwargs=qasm_convert_kwargs)
+
+        if direct_to_qiskit:
+            task_fn = _partial(_convert_batch,
+                               qiskit_convert_kwargs=qiskit_convert_kwargs)
+
+        else:
+            pm = _pass_manager(backend=ibmq_backend, **qiskit_pass_kwargs)
+
+            task_fn = _partial(_transpile_batch,
+                            pass_manager=pm,
+                            qasm_convert_kwargs=qasm_convert_kwargs,
+                            direct_to_qiskit=direct_to_qiskit,
+                            direct_qiskit_kwargs=qiskit_convert_kwargs)
 
         # Run in parallel (p.imap) with progress bars (tqdm)
         #with _mp.Pool(num_workers) as p:

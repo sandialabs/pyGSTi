@@ -97,7 +97,7 @@ def effective_polarization(hamming_distance_counts):
     return (4**n * asp - 1)/(4**n - 1)
 
 
-def predicted_process_fidelity(bare_rc_effective_pols, rc_rc_effective_pols, reference_effective_pols, n):
+def rc_predicted_process_fidelity(bare_rc_effective_pols, rc_rc_effective_pols, reference_effective_pols, n):
 
     a = _np.mean(bare_rc_effective_pols)
     b = _np.mean(rc_rc_effective_pols)
@@ -129,7 +129,7 @@ def predicted_process_fidelity_for_central_pauli_mcs(central_pauli_effective_pol
 
 
 
-def bootstrap_predicted_pfid(brs, rrs, refs, n, num_bootstraps=50, rand_state=None):
+def rc_bootstrap_predicted_pfid(brs, rrs, refs, n, num_bootstraps=50, rand_state=None):
     if rand_state is None:
         rand_state = _np.random.RandomState()
 
@@ -141,7 +141,7 @@ def bootstrap_predicted_pfid(brs, rrs, refs, n, num_bootstraps=50, rand_state=No
         rr_sample = rand_state.choice(rrs, len(rrs), replace=True)
         ref_sample = rand_state.choice(refs, len(refs), replace=True)
 
-        pfid = predicted_process_fidelity(
+        pfid = rc_predicted_process_fidelity(
             br_sample,
             rr_sample,
             ref_sample,
@@ -384,9 +384,10 @@ class VBDataFrame(object):
                     if edkey.endswith('ref'):
                         # For reference circuits, only width matters, so aggregate on that now
                         # print(f'edkey: {edkey}')
-                        key = aux['width']
+                        key = (aux['width'], c.line_labels)
+
                     else:
-                        key = (aux['base_aux']['width'], aux['base_aux']['physical_depth'], aux['base_aux']['id'])
+                        key = (aux['base_aux']['width'], aux['base_aux']['physical_depth'], aux['base_aux']['id'], c.line_labels)
 
                     # Check if the mirror circuit's line labels have the same ordering as the 
                     # base circuit's line labels. If not, reorder the bitstring to match.
@@ -396,14 +397,15 @@ class VBDataFrame(object):
                         base_line_labels = reverse_circ_ids[aux['base_aux']['id']].line_labels
 
                         if c.line_labels != base_line_labels:
-                            print('line labels permuted')
-                            old_bs = aux['idealout']
-                            print(old_bs)
-                            new_bs = ''
-                            for q in c.line_labels:
-                                new_bs += old_bs[base_line_labels.index(q)]
-                            aux['idealout'] = new_bs
-                            print(new_bs)
+                            raise RuntimeError('line labels permuted')
+                            # print('line labels permuted')
+                            # old_bs = aux['idealout']
+                            # print(old_bs)
+                            # new_bs = ''
+                            # for q in c.line_labels:
+                            #     new_bs += old_bs[base_line_labels.index(q)]
+                            # aux['idealout'] = new_bs
+                            # print(new_bs)
 
                         
 
@@ -455,54 +457,52 @@ class VBDataFrame(object):
             cp_pfid = cp_pol = cp_success_prob = None
             if 'cp' in mirrored_data.edesign and 'cpref' in mirrored_data.edesign:
                 if verbose and i == 0: print('Central pauli data detected, computing CP process fidelity')
-                cp_pfid = predicted_process_fidelity_for_central_pauli_mcs(eff_pols['cp'][key], eff_pols['cpref'][key[0]], key[0])
-                cp_pol = polarization_to_fidelity(cp_pfid, key[0]) # should this be fidelity_to_polarization?
+                cp_pfid = predicted_process_fidelity_for_central_pauli_mcs(eff_pols['cp'][key],
+                                                                           eff_pols['cpref'][(key[0], key[3])],
+                                                                           key[0])
+                
+                cp_pol = fidelity_to_polarization(cp_pfid, key[0]) # should this be fidelity_to_polarization?
                 cp_success_prob = polarization_to_success_probability(cp_pol, key[0])
                 
-            rc_pfid = rc_pol = rc_success_prob = None
+            rc_pfid = rc_pol = rc_success_prob = rc_pfid_stdev = None
             if 'rr' in mirrored_data.edesign and 'br' in mirrored_data.edesign and 'ref' in mirrored_data.edesign:
                 if verbose and i == 0: print('Random compilation data detected, computing RC process fidelity')
-                rc_pfid = predicted_process_fidelity(eff_pols['br'][key], eff_pols['rr'][key], eff_pols['ref'][key[0]], key[0])
-                rc_pol = polarization_to_fidelity(rc_pfid, key[0]) # should this be fidelity_to_polarization?
+
+                spam_ref_key = (key[0], key[3])
+                print(spam_ref_key)
+                print(len(eff_pols['ref'][spam_ref_key]))
+
+                rc_pfid = rc_predicted_process_fidelity(eff_pols['br'][key],
+                                                     eff_pols['rr'][key],
+                                                     eff_pols['ref'][(key[0], key[3])],
+                                                     key[0])
+                
+                rc_pol = fidelity_to_polarization(rc_pfid, key[0]) # should this be fidelity_to_polarization?
                 rc_success_prob = polarization_to_success_probability(rc_pol, key[0])
 
                 if bootstrap:
                 # do bootstrapping to obtain confidence intervals
-                    rc_pfid_stdev = bootstrap_predicted_pfid(brs=eff_pols['br'][key],
+                    rc_pfid_stdev = rc_bootstrap_predicted_pfid(brs=eff_pols['br'][key],
                                                             rrs=eff_pols['rr'][key],
-                                                            refs=eff_pols['ref'][key[0]],
+                                                            refs=eff_pols['ref'][(key[0], key[3])],
                                                             n=key[0],
                                                             num_bootstraps=num_bootstraps,
                                                             rand_state=rand_state
                                                             )
                 
 
-            # Depth is doubled for conventions (same happens for RMC/PMC)
-            if bootstrap:
-                df_data[i] = {'Width': key[0], 'Physical Depth': key[1], 'Circuit Id': key[2],
-                            'U3 Density': u3_densities[key], 'CNOT Density': cnot_densities[key],
-                            'CNOT Counts': cnot_counts[key], 'CNOT Depth': cnot_depths[key],
-                            'U3+CNOT Depth': pygsti_depths[key], 'Dropped Gates': dropped_gates[key],
-                            'Effective Width': key[0] - idling_qubits[key],
-                            'CP Process Fidelity': cp_pfid,
-                            'CP Polarization': cp_pol, 'CP Success Probability': cp_success_prob,
-                            'RC Process Fidelity': rc_pfid, 'RC Process Fidelity stdev': rc_pfid_stdev,
-                            'RC Polarization': rc_pol, 'RC Success Probability': rc_success_prob,
-                            'Occurrences': occurrences[key], 'Total Counts': 1024} # Reevaluate whether this 'Total Counts' key
-                                                                                    # should be hard-coded, especially if we run circuits with more shots.
-
-            else:
-                df_data[i] = {'Width': key[0], 'Physical Depth': key[1], 'Circuit Id': key[2],
-                            'U3 Density': u3_densities[key], 'CNOT Density': cnot_densities[key],
-                            'CNOT Counts': cnot_counts[key], 'CNOT Depth': cnot_depths[key],
-                            'U3+CNOT Depth': pygsti_depths[key], 'Dropped Gates': dropped_gates[key],
-                            'Effective Width': key[0] - idling_qubits[key],
-                            'CP Process Fidelity': cp_pfid,
-                            'CP Polarization': cp_pol, 'CP Success Probability': cp_success_prob,
-                            'RC Process Fidelity': rc_pfid,
-                            'RC Polarization': rc_pol, 'RC Success Probability': rc_success_prob,
-                            'Occurrences': occurrences[key], 'Total Counts': 1024} # Reevaluate whether this 'Total Counts' key
-                                                                                    # should be hard-coded, especially if we run circuits with more shots.
+        # Depth is doubled for conventions (same happens for RMC/PMC)
+            df_data[i] = {'Width': key[0], 'Physical Depth': key[1], 'Circuit Id': key[2],
+                        'U3 Density': u3_densities[key], 'CNOT Density': cnot_densities[key],
+                        'CNOT Counts': cnot_counts[key], 'CNOT Depth': cnot_depths[key],
+                        'U3+CNOT Depth': pygsti_depths[key], 'Dropped Gates': dropped_gates[key],
+                        'Effective Width': key[0] - idling_qubits[key],
+                        'CP Process Fidelity': cp_pfid,
+                        'CP Polarization': cp_pol, 'CP Success Probability': cp_success_prob,
+                        'RC Process Fidelity': rc_pfid, 'RC Process Fidelity stdev': rc_pfid_stdev,
+                        'RC Polarization': rc_pol, 'RC Success Probability': rc_success_prob,
+                        'Occurrences': occurrences[key], 'Total Counts': 1024} # Reevaluate whether this 'Total Counts' key
+                                                                                # should be hard-coded, especially if we run circuits with more shots.
 
                 
         
