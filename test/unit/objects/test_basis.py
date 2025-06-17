@@ -175,5 +175,6 @@ class BasisTester(BaseCase):
     def test_sv_basis(self):
         sv = basis.Basis.cast('sv', 7)
         self.assertTrue(sv.dim == 7)
+        self.assertTrue(sv.elshape == (7,))
         self.assertTrue(sv.is_simple())
         self.assertTrue(len(sv.elements) == 7)

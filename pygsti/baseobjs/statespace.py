@@ -1307,7 +1307,7 @@ def default_space_for_dim(dim):
         return ExplicitStateSpace(('all',), udims=(udim,), types=('quantum',))
 
 
-def fdefault_space_for_udim(udim):
+def default_space_for_udim(udim):
     """
     Create a state space for a given unitary operator dimension.
 

@@ -14,7 +14,7 @@ import copy as _copy
 import itertools as _itertools
 import warnings as _warnings
 from functools import lru_cache
-from typing import Union, Tuple, List
+from typing import Union
 
 import numpy as _np
 import scipy.sparse as _sps
@@ -1069,8 +1069,7 @@ class BuiltinBasis(LazyBasis):
             self.state_space = _statespace.ExplicitStateSpace([('L%d' % i,) for i in range(dim_or_statespace)])
         elif name == "sv":
             # A state vector can have any shape. It does not need to be a perfect square root.
-            udim = _np.sqrt(dim_or_statespace)
-            self.state_space = _statespace.ExplicitStateSpace(('all',), udims=(udim,), types=("quantum",))
+            self.state_space = _statespace.default_space_for_udim(dim_or_statespace)
         else:
             self.state_space = _statespace.default_space_for_dim(dim_or_statespace)
 
@@ -1092,6 +1091,14 @@ class BuiltinBasis(LazyBasis):
     def _from_nice_serialization(cls, state):
         statespace = _StateSpace.from_nice_serialization(state['state_space'])
         return cls(state['name'], statespace, state['sparse'])
+    
+    def _get_dimension_to_pass_to_constructor(self):
+        """
+        A basis in the state-vector (name= 'sv') case will correspond to a basis of vectors of length d.
+        This means that it will be operated on by matrices of shape (d \times d).
+        """
+        return self.state_space.udim if self.name == "sv" else self.state_space.dim
+
 
     @property
     def dim(self):
@@ -1100,7 +1107,7 @@ class BuiltinBasis(LazyBasis):
         spans.  Equivalently, the length of the `vector_elements` of the
         basis.
         """
-        size, dim, elshape = _basis_constructor_dict[self.name].sizes(dim=self.state_space.dim, sparse=self.sparse)
+        size, dim, elshape = _basis_constructor_dict[self.name].sizes(dim=self._get_dimension_to_pass_to_constructor(), sparse=self.sparse)
         return dim
 
     @property
@@ -1108,7 +1115,7 @@ class BuiltinBasis(LazyBasis):
         """
         The number of elements (or vector-elements) in the basis.
         """
-        size, dim, elshape = _basis_constructor_dict[self.name].sizes(dim=self.state_space.dim, sparse=self.sparse)
+        size, dim, elshape = _basis_constructor_dict[self.name].sizes(dim=self._get_dimension_to_pass_to_constructor(), sparse=self.sparse)
         return size
 
     @property
@@ -1119,7 +1126,7 @@ class BuiltinBasis(LazyBasis):
         Note that *vector elements* always have shape `(dim,)` (or `(dim,1)`
         in the sparse case).
         """
-        size, dim, elshape = _basis_constructor_dict[self.name].sizes(dim=self.state_space.dim, sparse=self.sparse)
+        size, dim, elshape = _basis_constructor_dict[self.name].sizes(dim=self._get_dimension_to_pass_to_constructor(), sparse=self.sparse)
 
         #Check that sparse is True only when elements are *matrices*
         assert(not self.sparse or len(elshape) == 2), "`sparse == True` is only allowed for *matrix*-valued bases!"
@@ -1138,14 +1145,16 @@ class BuiltinBasis(LazyBasis):
 
     def _lazy_build_elements(self):
         f = _basis_constructor_dict[self.name].constructor
-        cargs = {'dim': self.state_space.dim, 'sparse': self.sparse}
-        self._elements = _np.array(f(**cargs))  # a list of (dense) mxs -> ndarray (possibly sparse in future?)
+
+        cargs = {'dim': self._get_dimension_to_pass_to_constructor(), 'sparse': self.sparse}
+        self._elements = _np.array(f(**cargs))  # a list of (dense) mxs or vectors -> ndarray (possibly sparse in future?)
         assert(len(self._elements) == self.size), "Logic error: wrong number of elements were created!"
 
     def _lazy_build_labels(self):
         f = _basis_constructor_dict[self.name].labeler
-        cargs = {'dim': self.state_space.dim, 'sparse': self.sparse}
+        cargs = {'dim': self._get_dimension_to_pass_to_constructor(), 'sparse': self.sparse}
         self._labels = f(**cargs)
+        assert(len(self._labels) == self.size)
 
     def _copy_with_toggled_sparsity(self):
         return BuiltinBasis(self.name, self.state_space, not self.sparse)
