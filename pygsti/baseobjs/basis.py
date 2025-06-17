@@ -1082,7 +1082,7 @@ class BuiltinBasis(LazyBasis):
         super(BuiltinBasis, self).__init__(name, longname, real, sparse)
 
         #precompute some properties
-        self._size, self._dim, self._elshape = _basis_constructor_dict[self.name].sizes(dim=self.state_space.dim, sparse=self.sparse)
+        self._size, self._dim, self._elshape = _basis_constructor_dict[self.name].sizes(dim=self._get_dimension_to_pass_to_constructor(), sparse=self.sparse)
         #Check that sparse is True only when elements are *matrices*
         assert(not self.sparse or len(self._elshape) == 2), "`sparse == True` is only allowed for *matrix*-valued bases!"
 
