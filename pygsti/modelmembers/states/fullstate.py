@@ -76,7 +76,7 @@ class FullState(_DenseState):
         int
             the number of independent parameters.
         """
-        return self.size
+        return self._ptr.size
 
     def to_vector(self):
         """
