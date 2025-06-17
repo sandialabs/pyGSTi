@@ -969,12 +969,6 @@ def _circuit_color_scatterplot(circuit_structure, sub_mxs, colormap,
                         else:
                             texts.append(str(sub_mxs[i][j]))
 
-    #This GL version works, but behaves badly, sometimes failing to render...
-    #trace = go.Scattergl(x=xs, y=ys, mode="markers",
-    #                     marker=dict(size=8,
-    #                            color=[colormap.interpolate_color(y) for y in ys],
-    #                            #colorscale=colormap.create_plotly_colorscale(),  #doesn't seem to work properly in GL?
-    #                            line=dict(width=1)))
     trace = go.Scatter(x=xs, y=ys, mode="markers",
                        marker=dict(size=8,
                                    color=[colormap.interpolate_color(y) for y in ys],
@@ -1086,13 +1080,11 @@ def _circuit_color_histogram(circuit_structure, sub_mxs, colormap,
     maxval = max(minval + 1e-3, _np.max(ys))  # don't let minval==maxval
     nvals = len(ys)
     cumulative = dict(enabled=False)
-    #             marker=dict(color=barcolor),
-    #barcolor = 'gray'
-
     nbins = 50
     binsize = (maxval - minval) / (nbins - 1)
     bincenters = _np.linspace(minval, maxval, nbins)
     bindelta = (maxval - minval) / (nbins - 1)  # spacing between bin centers
+
 
     trace = go.Histogram(
         x=[bincenters[0]] + ys,  # artificially add 1 count in lowest bin so plotly anchors histogram properly
@@ -2652,7 +2644,7 @@ class ColorBoxPlot(WorkspacePlot):
                 else:
                     include_chi2 = True
                 newfig = _circuit_color_histogram(circuit_struct, subMxs, colormap,
-                                                    ytitle, scale, include_chi2=include_chi2)
+                                                  ytitle, scale, include_chi2=include_chi2)
             else:
                 raise ValueError("Invalid `typ` argument: %s" % typ)
 
