@@ -637,13 +637,13 @@ def _create_objective_fn(model, target_model, item_weights=None,
                     for opLbl in mdl.operations:
                         wt = item_weights.get(opLbl, opWeight)
                         ret += wt * (1.0 - _tools.entanglement_fidelity(
-                            target_model.operations[opLbl], mdl.operations[opLbl]))**2
+                            target_model.operations[opLbl].to_dense(), mdl.operations[opLbl].to_dense()))**2
 
                 elif gates_metric == "tracedist":
                     for opLbl in mdl.operations:
                         wt = item_weights.get(opLbl, opWeight)
                         ret += opWeight * _tools.jtracedist(
-                            target_model.operations[opLbl], mdl.operations[opLbl])
+                            target_model.operations[opLbl].to_dense(), mdl.operations[opLbl].to_dense())
 
                 else: raise ValueError("Invalid gates_metric: %s" % gates_metric)
 
@@ -666,9 +666,9 @@ def _create_objective_fn(model, target_model, item_weights=None,
                 elif spam_metric == "fidelity":
                     for preplabel, prep in mdl.preps.items():
                         wt = item_weights.get(preplabel, spamWeight)
-                        rhoMx1 = _tools.vec_to_stdmx(prep, mxBasis)
+                        rhoMx1 = _tools.vec_to_stdmx(prep.to_dense(), mxBasis)
                         rhoMx2 = _tools.vec_to_stdmx(
-                            target_model.preps[preplabel], mxBasis)
+                            target_model.preps[preplabel].to_dense(), mxBasis)
                         ret += wt * (1.0 - _tools.fidelity(rhoMx1, rhoMx2))**2
 
                     for povmlabel, povm in mdl.povms.items():
@@ -679,9 +679,9 @@ def _create_objective_fn(model, target_model, item_weights=None,
                 elif spam_metric == "tracedist":
                     for preplabel, prep in mdl.preps.items():
                         wt = item_weights.get(preplabel, spamWeight)
-                        rhoMx1 = _tools.vec_to_stdmx(prep, mxBasis)
+                        rhoMx1 = _tools.vec_to_stdmx(prep.to_dense(), mxBasis)
                         rhoMx2 = _tools.vec_to_stdmx(
-                            target_model.preps[preplabel], mxBasis)
+                            target_model.preps[preplabel].to_dense(), mxBasis)
                         ret += wt * _tools.tracedist(rhoMx1, rhoMx2)
 
                     for povmlabel, povm in mdl.povms.items():
@@ -768,11 +768,11 @@ def _cptp_penalty_jac_fill(cp_penalty_vec_grad_to_fill, mdl_pre, mdl_post,
     dS = _np.rollaxis(dS, 2)  # shape (n, d1, d2)
 
     for i, (gl, gate) in enumerate(mdl_post.operations.items()):
-        pre_op = mdl_pre.operations[gl]
+        pre_op = mdl_pre.operations[gl].to_dense()
 
         #get sgn(chi-matrix) == d(|chi|_Tr)/dchi in std basis
         # so sgnchi == d(|chi_std|_Tr)/dchi_std
-        chi = _tools.fast_jamiolkowski_iso_std(gate, op_basis)
+        chi = _tools.fast_jamiolkowski_iso_std(gate.to_dense(), op_basis)
         assert(_np.linalg.norm(chi - chi.T.conjugate()) < 1e-4), \
             "chi should be Hermitian!"
 
@@ -785,7 +785,7 @@ def _cptp_penalty_jac_fill(cp_penalty_vec_grad_to_fill, mdl_pre, mdl_post,
         # transform).  This shuffle op commutes with the derivative, so that
         # dchi_std/dp := d(M(G'))/dp = M(d(S_inv*G*S)/dp) = M( d(S_inv)*G*S + S_inv*G*dS )
         #              = M( (-S_inv*dS*S_inv)*G*S + S_inv*G*dS ) = M( S_inv*(-dS*S_inv*G*S) + G*dS )
-        left = -1 * _np.dot(dS, gate)  # shape (n,d1,d2)
+        left = -1 * _np.dot(dS, gate.to_dense())  # shape (n,d1,d2)
         right = _np.swapaxes(_np.dot(pre_op, dS), 0, 1)  # shape (d1, n, d2) -> (n,d1,d2)
         result = _np.swapaxes(_np.dot(S_inv, left + right), 0, 1)  # shape (n, d1, d2)
 

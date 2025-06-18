@@ -119,7 +119,7 @@ class InterpygateConstructionTester(BaseCase):
                                 interpolator_and_args='linear')
         op = opfactory_linear.create_op([0,np.pi/4])
         op.from_vector([1])
-        self.assertArraysAlmostEqual(op, self.static_target)
+        self.assertArraysAlmostEqual(op.to_dense(), self.static_target)
 
         if USE_CSAPS: 
             opfactory_spline = interp.InterpolatedOpFactory.create_by_interpolating_physical_process(
@@ -128,7 +128,7 @@ class InterpygateConstructionTester(BaseCase):
                                     interpolator_and_args='spline')
             op = opfactory_spline.create_op([0,np.pi/4])
             op.from_vector([1])
-            self.assertArraysAlmostEqual(op, self.static_target)
+            self.assertArraysAlmostEqual(op.to_dense(), self.static_target)
 
         interpolator_and_args = (_linND, {'rescale': True})
         opfactory_custom = opfactory_spline = interp.InterpolatedOpFactory.create_by_interpolating_physical_process(
@@ -137,7 +137,7 @@ class InterpygateConstructionTester(BaseCase):
                                 interpolator_and_args=interpolator_and_args)
         op = opfactory_custom.create_op([0,np.pi/4])
         op.from_vector([1])
-        self.assertArraysAlmostEqual(op, self.static_target)
+        self.assertArraysAlmostEqual(op.to_dense(), self.static_target)
 
 
 

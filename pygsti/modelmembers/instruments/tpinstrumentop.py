@@ -122,13 +122,13 @@ class TPInstrumentOp(_DenseOperator):
         nEls = self.num_instrument_elements
         self._ptr.flags.writeable = True
         if self.index < nEls - 1:
-            self._ptr[:, :] = _np.asarray(self.relevant_param_ops[1]  # i.e. param_ops[self.index + 1]
-                                          + self.relevant_param_ops[0])  # i.e. param_ops[0]
+            self._ptr[:, :] = _np.asarray(self.relevant_param_ops[1].to_dense()  # i.e. param_ops[self.index + 1]
+                                          + self.relevant_param_ops[0].to_dense())  # i.e. param_ops[0]
         else:
             assert(self.index == nEls - 1), \
                 "Invalid index %d > %d" % (self.index, nEls - 1)
-            self._ptr[:, :] = _np.asarray(-sum(self.relevant_param_ops)  # all instrument param_ops == relevant
-                                          - (nEls - 3) * self.relevant_param_ops[0])
+            self._ptr[:, :] = _np.asarray(-sum([op.to_dense() for op in self.relevant_param_ops])  # all instrument param_ops == relevant
+                                          - (nEls - 3) * self.relevant_param_ops[0].to_dense())
 
         assert(self._ptr.shape == (self.dim, self.dim))
         self._ptr.flags.writeable = False

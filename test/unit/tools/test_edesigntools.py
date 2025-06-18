@@ -125,8 +125,10 @@ class FisherInformationTester(BaseCase):
         #E0 = target_model.effects['0']
         #E1 = target_model.effects['1']
         # Alternate indexing that uses POVM label explicitly
-        E0 = self.target_model['Mdefault']['0']  # 'Mdefault' = POVM label, '0' = effect label
-        E1 = self.target_model['Mdefault']['1']
+        E0 = self.target_model['Mdefault']['0'].to_dense()
+        E0 = E0.reshape(len(E0),1)  # 'Mdefault' = POVM label, '0' = effect label
+        E1 = self.target_model['Mdefault']['1'].to_dense()
+        E1 = E1.reshape(len(E1),1)
         Gmz_plus = _np.dot(E0,E0.T) #note effect vectors are stored as column vectors
         Gmz_minus = _np.dot(E1,E1.T)
         self.target_model_inst[('Iz',0)] = TPInstrument({'p0': Gmz_plus, 'p1': Gmz_minus})

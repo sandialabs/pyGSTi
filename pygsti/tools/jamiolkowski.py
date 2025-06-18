@@ -375,7 +375,7 @@ def magnitudes_of_negative_choi_eigenvalues(model):
     """
     ret = []
     for (_, gate) in model.operations.items():
-        J = jamiolkowski_iso(gate, model.basis, choi_mx_basis=model.basis.create_simple_equivalent('std'))
+        J = jamiolkowski_iso(gate.to_dense(on_space='HilbertSchmidt'), model.basis, choi_mx_basis=model.basis.create_simple_equivalent('std'))
         evals = _np.linalg.eigvals(J)  # could use eigvalsh, but wary of this since eigh can be wrong...
         for ev in evals:
             ret.append(-ev.real if ev.real < 0 else 0.0)

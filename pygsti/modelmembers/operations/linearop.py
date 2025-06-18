@@ -671,7 +671,7 @@ class LinearOperator(_modelmember.ModelMember):
             Array of derivatives with shape (dimension^2, num_params)
         """
         if self.num_params == 0:
-            derivMx = _np.zeros((self.size, 0), 'd')
+            derivMx = _np.zeros((self._ptr.size, 0), 'd')
             if wrt_filter is None:
                 return derivMx
             else:

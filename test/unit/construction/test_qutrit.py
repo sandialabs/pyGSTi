@@ -11,7 +11,7 @@ class QutritConstructionTester(BaseCase):
     def test_noisy_qutrit(self):
         mdl_sim = qutrit.create_qutrit_model(error_scale=0.1, similarity=True, seed=1234, basis='qt')
         mdl_ideal = qutrit.create_qutrit_model(error_scale=0.1, similarity=True, seed=1234, basis='qt')
-        self.assertArraysAlmostEqual(mdl_sim['Gi', 'QT'], mdl_ideal['Gi', 'QT'])
+        self.assertArraysAlmostEqual(mdl_sim['Gi', 'QT'].to_dense(), mdl_ideal['Gi', 'QT'].to_dense())
 
         #just test building a gate in the qutrit basis
         # Can't do this b/c need a 'T*' triplet space designator for "triplet space" and it doesn't seem

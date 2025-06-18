@@ -91,61 +91,16 @@ class DenseStateBase(StateBase):
         self.vec.from_vector(v)
         deriv = self.vec.deriv_wrt_params()
         # TODO assert correctness
-    
-    def test_element_accessors(self):
-        a = self.vec[:]
-        b = self.vec[0]
-        #with self.assertRaises(ValueError):
-        #    self.vec.shape = (2,2) #something that would affect the shape??
-
-        self.vec_as_str = str(self.vec)
-        a1 = self.vec[:]  # invoke getslice method
-        # TODO assert correctness
 
     def test_copy(self):
         vec_copy = self.vec.copy()
         self.assertArraysAlmostEqual(vec_copy.to_dense(), self.vec.to_dense())
         self.assertEqual(type(vec_copy), type(self.vec))
 
-    def test_arithmetic(self):
-        result = self.vec + self.vec
-        self.assertEqual(type(result), np.ndarray)
-        result = self.vec + (-self.vec)
-        self.assertEqual(type(result), np.ndarray)
-        result = self.vec - self.vec
-        self.assertEqual(type(result), np.ndarray)
-        result = self.vec - abs(self.vec)
-        self.assertEqual(type(result), np.ndarray)
-        result = 2 * self.vec
-        self.assertEqual(type(result), np.ndarray)
-        result = self.vec * 2
-        self.assertEqual(type(result), np.ndarray)
-        result = 2 / self.vec
-        self.assertEqual(type(result), np.ndarray)
-        result = self.vec / 2
-        self.assertEqual(type(result), np.ndarray)
-        result = self.vec // 2
-        self.assertEqual(type(result), np.ndarray)
-        result = self.vec**2
-        self.assertEqual(type(result), np.ndarray)
-        result = self.vec.transpose()
-        self.assertEqual(type(result), np.ndarray)
-
-        V = np.ones((4, 1), 'd')
-
-        result = self.vec + V
-        self.assertEqual(type(result), np.ndarray)
-        result = self.vec - V
-        self.assertEqual(type(result), np.ndarray)
-        result = V + self.vec
-        self.assertEqual(type(result), np.ndarray)
-        result = V - self.vec
-        self.assertEqual(type(result), np.ndarray)
-
-
+   
 class MutableDenseStateBase(DenseStateBase):
     def test_set_value(self):
-        v = np.asarray(self.vec)
+        v = np.asarray(self.vec.to_dense())
         self.vec.set_dense(v)
         # TODO assert correctness
 
@@ -162,7 +117,7 @@ class MutableDenseStateBase(DenseStateBase):
 
 class ImmutableDenseStateBase(DenseStateBase):
     def test_raises_on_set_value(self):
-        v = np.asarray(self.vec)
+        v = np.asarray(self.vec.to_dense())
         with self.assertRaises(ValueError):
             self.vec.set_dense(v)
 

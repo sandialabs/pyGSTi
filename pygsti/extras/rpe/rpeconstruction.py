@@ -95,9 +95,9 @@ def create_parameterized_rpe_model(alpha_true, epsilon_true, aux_rot, spam_depol
             effect_labels=ELabels, effect_expressions=EExpressions)
 
         outputModel.operations[loose_axis_gate_label] = \
-            _np.dot(_np.dot(_np.linalg.inv(modelAux1.operations[auxiliary_axis_gate_label]),
-                            outputModel.operations[loose_axis_gate_label]),
-                    modelAux1.operations[auxiliary_axis_gate_label])
+            _np.linalg.inv(modelAux1.operations[auxiliary_axis_gate_label].to_dense())@\
+            outputModel.operations[loose_axis_gate_label].to_dense()@\
+            modelAux1.operations[auxiliary_axis_gate_label].to_dense()
 
     outputModel = outputModel.depolarize(op_noise=gate_depol,
                                          spam_noise=spam_depol)

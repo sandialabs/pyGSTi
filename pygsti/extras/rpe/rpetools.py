@@ -257,7 +257,7 @@ def extract_alpha(model, rpeconfig_inst):
         The value of alpha for the input model.
     """
     op_label = rpeconfig_inst.fixed_axis_gate_label
-    decomp = _decompose_gate_matrix(model.operations[op_label])
+    decomp = _decompose_gate_matrix(model.operations[op_label].to_dense())
     alphaVal = decomp['pi rotations'] * _np.pi
     return alphaVal
 
@@ -284,7 +284,7 @@ def extract_epsilon(model, rpeconfig_inst):
         The value of epsilon for the input model.
     """
     op_label = rpeconfig_inst.loose_axis_gate_label
-    decomp = _decompose_gate_matrix(model.operations[op_label])
+    decomp = _decompose_gate_matrix(model.operations[op_label].to_dense())
 
     epsilonVal = decomp['pi rotations'] * _np.pi
     return epsilonVal
@@ -313,10 +313,10 @@ def extract_theta(model, rpeconfig_inst):
         The value of theta for the input model.
     """
     op_label = rpeconfig_inst.loose_axis_gate_label
-    decomp = _decompose_gate_matrix(model.operations[op_label])
+    decomp = _decompose_gate_matrix(model.operations[op_label].to_dense())
     target_axis = rpeconfig_inst.loose_axis_target
 
-    decomp = _decompose_gate_matrix(model.operations[op_label])
+    decomp = _decompose_gate_matrix(model.operations[op_label].to_dense())
     thetaVal = _np.real_if_close([_np.arccos(
         _np.dot(decomp['axis of rotation'], target_axis))])[0]
     if thetaVal > _np.pi / 2:

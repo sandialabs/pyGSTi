@@ -69,6 +69,7 @@ def mdl_lsgst(self):
         resource_alloc={'mem_limit': self.CM + 1024**3},
         verbosity=0
     )
+    print(models[-1])
     return models[-1]
 
 

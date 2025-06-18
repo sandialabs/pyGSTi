@@ -611,12 +611,12 @@ class FullModelTester(FullModelBase, StandardMethodBase, BaseCase):
 
         # TODO is this needed?
         for opLabel in cp.operations:
-            self.assertArraysAlmostEqual(cp[opLabel], Tinv @ self.model[opLabel] @ T)
+            self.assertArraysAlmostEqual(cp[opLabel].to_dense(), Tinv @ self.model[opLabel].to_dense() @ T)
         for prepLabel in cp.preps:
-            self.assertArraysAlmostEqual(cp[prepLabel], Tinv @ self.model[prepLabel])
+            self.assertArraysAlmostEqual(cp[prepLabel].to_dense(), Tinv @ self.model[prepLabel].to_dense())
         for povmLabel in cp.povms:
             for effectLabel, eVec in cp.povms[povmLabel].items():
-                self.assertArraysAlmostEqual(eVec, np.transpose(T) @ self.model.povms[povmLabel][effectLabel])
+                self.assertArraysAlmostEqual(eVec.to_dense(), np.transpose(T) @ self.model.povms[povmLabel][effectLabel].to_dense())
 
     def test_gpindices(self):
         # Test instrument construction with elements whose gpindices
@@ -629,7 +629,9 @@ class FullModelTester(FullModelBase, StandardMethodBase, BaseCase):
         v = mdl.to_vector()
         Np = mdl.num_params
         gate_with_gpindices = FullArbitraryOp(np.identity(4, 'd'))
-        gate_with_gpindices[0, :] = v[0:4]
+        updated_op = gate_with_gpindices.to_dense()
+        updated_op[0,:] = v[0:4]
+        gate_with_gpindices.set_dense(updated_op)
         gate_with_gpindices.set_gpindices(np.concatenate(
             (np.arange(0, 4), np.arange(Np, Np + 12))), mdl)  # manually set gpindices
         mdl.operations['Gnew2'] = gate_with_gpindices
@@ -645,7 +647,7 @@ class FullModelTester(FullModelBase, StandardMethodBase, BaseCase):
             self.model._check_paramvec(debug=True)  # param vec is now out of sync!
 
     def test_probs_warns_on_nan_in_input(self):
-        self.model['rho0'][:] = np.nan
+        self.model['rho0'].set_dense(np.array([np.nan, np.nan, np.nan, np.nan]))
         with self.assertWarns(Warning):
             self.model.probabilities(self.gatestring1)
 
@@ -658,11 +660,11 @@ class TPModelTester(TPModelBase, StandardMethodBase, BaseCase):
         Gi_test_matrix = np.random.random((4, 4))
         Gi_test_matrix[0, :] = [1, 0, 0, 0]  # so TP mode works
         self.model["Gi"] = Gi_test_matrix  # set operation matrix
-        self.assertArraysAlmostEqual(self.model['Gi'], Gi_test_matrix)
+        self.assertArraysAlmostEqual(self.model['Gi'].to_dense(), Gi_test_matrix)
 
         Gi_test_dense_op = FullArbitraryOp(Gi_test_matrix)
         self.model["Gi"] = Gi_test_dense_op  # set gate object
-        self.assertArraysAlmostEqual(self.model['Gi'], Gi_test_matrix)
+        self.assertArraysAlmostEqual(self.model['Gi'].to_dense(), Gi_test_matrix)
 
 
 class StaticModelTester(StaticModelBase, StandardMethodBase, BaseCase):
@@ -671,7 +673,7 @@ class StaticModelTester(StaticModelBase, StandardMethodBase, BaseCase):
         Gi_test_matrix = np.random.random((4, 4))
         Gi_test_dense_op = FullArbitraryOp(Gi_test_matrix)
         self.model["Gi"] = Gi_test_dense_op  # set gate object
-        self.assertArraysAlmostEqual(self.model['Gi'], Gi_test_matrix)
+        self.assertArraysAlmostEqual(self.model['Gi'].to_dense(), Gi_test_matrix)
 
     def test_bulk_fill_dprobs_with_high_smallness_threshold(self):
         self.skipTest("TODO should probably warn user?")

@@ -225,6 +225,44 @@ class DenseOperator(_KrausOperatorInterface, _LinearOperator):
         """
         return self._rep.to_dense(on_space)  # both types of possible reps implement 'to_dense'
 
+    def to_array(self):
+        """
+        Return the array used to identify this operation within its range of possible values.
+
+        For instance, if the operation is a unitary operation, this returns a
+        unitary matrix regardless of the evolution type.  The related :meth:`to_dense`
+        method, in contrast, returns the dense representation of the operation, which
+        varies by evolution type.
+
+        Note: for efficiency, this doesn't copy the underlying data, so
+        the caller should copy this data before modifying it.
+
+        Returns
+        -------
+        numpy.ndarray
+        """
+        return _np.asarray(self._ptr)
+        # *must* be a numpy array for Cython arg conversion
+
+    def to_sparse(self, on_space='minimal'):
+        """
+        Return the operation as a sparse matrix.
+
+        Parameters
+        ----------
+        on_space : {'minimal', 'Hilbert', 'HilbertSchmidt'}
+            The space that the returned dense operation acts upon.  For unitary matrices and bra/ket vectors,
+            use `'Hilbert'`.  For superoperator matrices and super-bra/super-ket vectors use `'HilbertSchmidt'`.
+            `'minimal'` means that `'Hilbert'` is used if possible given this operator's evolution type, and
+            otherwise `'HilbertSchmidt'` is used.
+
+        Returns
+        -------
+        scipy.sparse.csr_matrix
+        """
+        return _sps.csr_matrix(self.to_dense(on_space))
+
+
     def to_memoized_dict(self, mmg_memo):
         """Create a serializable dict with references to other objects in the memo.
 
@@ -469,6 +507,43 @@ class DenseUnitaryOperator(_KrausOperatorInterface, _LinearOperator):
         if self._reptype == 'superop' and on_space == 'Hilbert':
             return self._unitary
         return self._rep.to_dense(on_space)  # both types of possible reps implement 'to_dense'
+
+    def to_array(self):
+        """
+        Return the array used to identify this operation within its range of possible values.
+
+        For instance, if the operation is a unitary operation, this returns a
+        unitary matrix regardless of the evolution type.  The related :meth:`to_dense`
+        method, in contrast, returns the dense representation of the operation, which
+        varies by evolution type.
+
+        Note: for efficiency, this doesn't copy the underlying data, so
+        the caller should copy this data before modifying it.
+
+        Returns
+        -------
+        numpy.ndarray
+        """
+        return _np.asarray(self._ptr)
+        # *must* be a numpy array for Cython arg conversion
+
+    def to_sparse(self, on_space='minimal'):
+        """
+        Return the operation as a sparse matrix.
+
+        Parameters
+        ----------
+        on_space : {'minimal', 'Hilbert', 'HilbertSchmidt'}
+            The space that the returned dense operation acts upon.  For unitary matrices and bra/ket vectors,
+            use `'Hilbert'`.  For superoperator matrices and super-bra/super-ket vectors use `'HilbertSchmidt'`.
+            `'minimal'` means that `'Hilbert'` is used if possible given this operator's evolution type, and
+            otherwise `'HilbertSchmidt'` is used.
+
+        Returns
+        -------
+        scipy.sparse.csr_matrix
+        """
+        return _sps.csr_matrix(self.to_dense(on_space))
 
     def to_memoized_dict(self, mmg_memo):
         """Create a serializable dict with references to other objects in the memo.

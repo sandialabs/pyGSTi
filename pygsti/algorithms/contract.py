@@ -295,7 +295,7 @@ def _contract_to_cp_direct(model, verbosity, tp_also=False, maxiter=100000, tol=
         #else: print "contract_to_cp_direct success in %d iterations" % it  #DEBUG
 
         printer.log("Direct CP contraction of %s gate gives frobenius diff of %g" %
-                    (opLabel, _tools.frobeniusdist(mdl.operations[opLabel].to_dense(), gate)), 2)
+                    (opLabel, _tools.frobeniusdist(mdl.operations[opLabel].to_dense(), gate.to_dense())), 2)
 
     #mdl.log("Choi-Truncate to %s" % ("CPTP" if tp_also else "CP"), { 'maxiter': maxiter } )
     distance = mdl.frobeniusdist(model)
@@ -305,8 +305,8 @@ def _contract_to_cp_direct(model, verbosity, tp_also=False, maxiter=100000, tol=
         op_dim = mdl.dim
         for lbl, rhoVec in mdl.preps.items():
             new_rho_vec = rhoVec.to_dense()
-            new_rho_vec[0, 0] = 1.0 / op_dim**0.25
-            mdl.preps[lbl] = _state.TPState(new_rho_vec)
+            new_rho_vec[0] = 1.0 / op_dim**0.25
+            mdl.preps[lbl] = new_rho_vec
 
     mdl._need_to_rebuild = True
     return distance, mdl
@@ -321,15 +321,15 @@ def _contract_to_tp(model, verbosity):
     for lbl, gate in mdl.operations.items():
         new_gate_mx = gate.to_dense()
         new_gate_mx[0, 0] = 1.0
-        for k in range(1, gate.shape[1]): 
+        for k in range(1, new_gate_mx.shape[1]): 
             new_gate_mx[0, k] = 0.0
-        mdl.operations[lbl] = _op.FullTPOp(new_gate_mx)
+        mdl.operations[lbl] = new_gate_mx
 
     op_dim = mdl.dim
     for lbl, rhoVec in mdl.preps.items():
         new_rho_vec = rhoVec.to_dense()
-        new_rho_vec[0, 0] = 1.0 / op_dim**0.25
-        mdl.preps[lbl] = _state.TPState(new_rho_vec)
+        new_rho_vec[0] = 1.0 / op_dim**0.25
+        mdl.preps[lbl] = new_rho_vec
 
     mdl._need_to_rebuild = True
     distance = mdl.frobeniusdist(model)
@@ -378,8 +378,8 @@ def _contract_to_valid_spam(model, verbosity=0):
         # to multiple rhovecs -- can only use on ratio,
         # so maybe take average of ideal ratios for each rhoVec
         # and apply that?  The function works fine now for just one rhovec.
-        if abs(firstElTarget - vec[0, 0]) > TOL:
-            r = firstElTarget / vec[0, 0]
+        if abs(firstElTarget - vec[0]) > TOL:
+            r = firstElTarget / vec[0]
             vec *= r  # multiply rhovec by factor
             for povmLbl in list(mdl.povms.keys()):
                 scaled_effects = []
@@ -394,8 +394,8 @@ def _contract_to_valid_spam(model, verbosity=0):
         lowEval = min([ev.real for ev in _np.linalg.eigvals(mx)])
         while(lowEval < -TOL):
             # only element with trace (even for multiple qubits) -- keep this constant and decrease others
-            idEl = vec[0, 0]
-            vec /= 1.00001; vec[0, 0] = idEl
+            idEl = vec[0]
+            vec /= 1.00001; vec[0] = idEl
             lowEval = min([ev.real for ev in _np.linalg.eigvals(_tools.ppvec_to_stdmx(vec))])
 
         diff += _np.linalg.norm(model.preps[prepLabel].to_dense() - vec)
@@ -419,7 +419,7 @@ def _contract_to_valid_spam(model, verbosity=0):
                     if ev > 1.0: evals[k] = 1.0
                 mx = _np.dot(evecs, _np.dot(_np.diag(evals), _np.linalg.inv(evecs)))
                 vec = _tools.stdmx_to_ppvec(mx)
-                diff += _np.linalg.norm(model.povms[povmLbl][ELabel] - vec)
+                diff += _np.linalg.norm(model.povms[povmLbl][ELabel].to_dense() - vec)
                 scaled_effects.append((ELabel, vec))
             else:
                 scaled_effects.append((ELabel, EVec))  # no scaling
