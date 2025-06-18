@@ -1055,7 +1055,7 @@ def pergate_leakrate_reduction(op, ignore, mx_basis, reduction):
     leakage_effect_superket = op_lfb[-1,:4]
     leakage_effect = _tools.vec_to_stdmx(leakage_effect_superket, 'pp')
     leakage_rates = _np.linalg.eigvalsh(leakage_effect)
-    return _np.round(reduction(leakage_rates), 8)
+    return reduction(leakage_rates)
 
 def pergate_leakrate_max(op, ignore, mx_basis):
     return pergate_leakrate_reduction(op, ignore, mx_basis, max)
@@ -1069,7 +1069,7 @@ PerGateLeakRateMin = _modf.opsfn_factory(pergate_leakrate_min)
 def pergate_seeprate(op, ignore, mx_basis):
     lfb = _tools.leakage_friendly_basis_2plus1()
     op_lfb = _tools.change_basis(op, mx_basis, lfb)
-    seeprate = _np.round(op_lfb[0,-1], 8)
+    seeprate = op_lfb[0,-1]
     return seeprate
 
 PerGateSeepRate = _modf.opsfn_factory(pergate_seeprate)
