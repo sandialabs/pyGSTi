@@ -134,7 +134,7 @@ def cptp_superop_variable(purestate_dim: int, basis) -> Tuple[cp.Expression, Lis
     constraints = []
     if basis.first_element_is_identity:
         toprow = np.zeros((1,d))
-        toprow[0] = 1
+        toprow[0,0] = 1
         X_free = cp.Variable((d-1, d))
         X = cp.vstack((toprow, X_free))
     else:
