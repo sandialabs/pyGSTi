@@ -95,3 +95,7 @@ complete = ['pygsti[multiprocessor,no_mpi]']
 Homepage = 'https://www.pygsti.info'
 Repository = 'https://github.com/sandialabs/pyGSTi'
 Download ='https://github.com/sandialabs/pyGSTi/tarball/master'
+
+[tool.setuptools_scm]
+version_scheme = "only-version"
+local_scheme = "no-local-version"
