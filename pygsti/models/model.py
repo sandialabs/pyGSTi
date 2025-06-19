@@ -1315,7 +1315,7 @@ class OpModel(Model):
                         #check whether we have already updated this object.
                         if updated_children is not None and any([child is obj for child in updated_children]):
                             continue
-                        obj.from_vector(self._paramvec[opcache_elem_gpindices], close, dirty_value=False)
+                        obj.from_vector(vec_to_access[obj.gpindices].copy(), close, dirty_value=False)
 
         if OpModel._pcheck: self._check_paramvec()
 
