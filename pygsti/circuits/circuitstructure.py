@@ -719,16 +719,6 @@ class PlaquetteGridCircuitStructure(_CircuitList):
                                           if (self.circuit_weights is not None) else None)
                       })
 
-        #state['plaquette_types'] = XXX
-        #state['datacols'] = {
-        #    'Circuit': [circuits]
-        #    'PlaquetteX':
-        #    'PlaquetteY':
-        #    'X':
-        #    'Y':
-        #    'weight':
-        #    # additional circuits have sentinels for Plaquette coords?
-
         return state
 
     @classmethod
