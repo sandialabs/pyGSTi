@@ -544,7 +544,11 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
         unindexed = filter_ds(lgst_list, dscheck, missing_lgst)
         lsgst_structs.append(
             _PlaquetteGridCircuitStructure({}, [], germs, "L", "germ", unindexed, op_label_aliases,
-                                           circuit_weights_dict=None, additional_circuits_location='start', name=None))
+                                           circuit_weights_dict=None, additional_circuits_location='start', name=None)).copy() #HACK
+        #TODO: Track bug where the ordering of the _circuit attribute of the 
+        #PlaquetteGridCircuitStructure is somehow changing after copying compared
+        #to how it is constructed here. The hack of bug is meant to mitigate this behavior
+        #by copying the structure ahead of time (the ordering appears to be stable with multiple copies).  
 
     for i, maxLen in enumerate(max_lengths):
 
@@ -634,7 +638,12 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
         lsgst_structs.append(
             _PlaquetteGridCircuitStructure({pkey[base]:plaq for base, plaq in plaquettes.items()},
                                            maxLens, germs, "L", "germ", unindexed, op_label_aliases,
-                                           circuit_weights_dict=None, additional_circuits_location='start', name=None))
+                                           circuit_weights_dict=None, additional_circuits_location='start', name=None).copy()) #HACK
+        #TODO: Track bug where the ordering of the _circuit attribute of the 
+        #PlaquetteGridCircuitStructure is somehow changing after copying compared
+        #to how it is constructed here. The hack of bug is meant to mitigate this behavior
+        #by copying the structure ahead of time (the ordering appears to be stable with multiple copies).
+        
         tot_circuits += len(lsgst_structs[-1])  # only relevant for non-nested case
 
     if nest:  # then totStrs computation about overcounts -- just take string count of final stage

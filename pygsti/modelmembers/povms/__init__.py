@@ -299,7 +299,7 @@ def povm_type_from_op_type(op_type):
     return povm_type_preferences
 
 
-def convert(povm, to_type, basis, cp_penalty=1e-7, ideal_povm=None, flatten_structure=False):
+def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False, cp_penalty=1e-7):
     """
     TODO: update docstring
     Convert a POVM to a new type of parameterization.
@@ -347,7 +347,6 @@ def convert(povm, to_type, basis, cp_penalty=1e-7, ideal_povm=None, flatten_stru
         object from the object passed as input.
     """
 
-    ##TEST CONVERSION BETWEEN LINBLAD TYPES
     to_types = to_type if isinstance(to_type, (tuple, list)) else (to_type,)  # HACK to support multiple to_type values
     error_msgs = {}
 
@@ -421,14 +420,15 @@ def convert(povm, to_type, basis, cp_penalty=1e-7, ideal_povm=None, flatten_stru
                     dense_effects.append(dense_effect.reshape((1,len(dense_effect))))
 
                 dense_povm = _np.concatenate(dense_effects, axis=0)
-                degrees_of_freedom = (dense_ideal_povm.shape[0] - 1) * dense_ideal_povm.shape[1]
-
+                
                 #It is often the case that there are more error generators than physical degrees of freedom in the POVM
                 #We define a function which finds linear comb. of errgens that span these degrees of freedom.
                 #This has been called "the trivial gauge", and this function is meant to avoid it
-                def calc_physical_subspace(dense_ideal_povm, epsilon = 1e-9):
-    
+                def calc_physical_subspace(dense_ideal_povm, epsilon = 1e-4):
+
+                    degrees_of_freedom = (dense_ideal_povm.shape[0] - 1) * dense_ideal_povm.shape[1]
                     errgen = _LindbladErrorgen.from_error_generator(povm.state_space.dim, parameterization=to_type)
+
                     if degrees_of_freedom > errgen.num_params:
                         warnings.warn("POVM has more degrees of freedom than the available number of parameters, representation in this parameterization is not guaranteed")
                     exp_errgen = _ExpErrorgenOp(errgen)
@@ -436,30 +436,30 @@ def convert(povm, to_type, basis, cp_penalty=1e-7, ideal_povm=None, flatten_stru
                     num_errgens = errgen.num_params
                     #TODO: Maybe we can use the num of params instead of number of matrix entries, as some of them are linearly dependent.
                     #i.e E0 completely determines E1 if those are the only two povm elements (E0 + E1 = Identity)
-                    num_entries = dense_ideal_povm.shape[0]*dense_ideal_povm.shape[1]
-                    #assert num_errgens >= povm.num_params, "POVM has too many elements, error generator parameterization is not possible"
-
-                    ideal_vec = _np.zeros(num_errgens)
+                    num_entries = dense_ideal_povm.size
 
                     #Compute the jacobian with respect to the error generators. This will allow us to see which
                     #error generators change the POVM entries
                     J = _np.zeros((num_entries,num_errgens))
-                    
-                    for i in range(len(ideal_vec)):
-                        new_vec = ideal_vec.copy()
+                    new_vec = _np.zeros(num_errgens)
+                    for i in range(num_errgens):
+                        
                         new_vec[i] = epsilon
                         exp_errgen.from_vector(new_vec)
+                        new_vec[i] = 0
                         vectorized_povm = _np.zeros(num_entries)
                         perturbed_povm = (dense_ideal_povm @ exp_errgen.to_dense() - dense_ideal_povm)/epsilon 
 
-                        perturbed_povm_t = perturbed_povm.transpose()
-                        for j, column in enumerate(perturbed_povm_t):
-                            vectorized_povm[j*len(perturbed_povm_t[0]):(j+1)*len(perturbed_povm_t[0])] = column
+                        vectorized_povm = perturbed_povm.flatten(order='F')
                         
-                        J[:,i] = vectorized_povm.transpose()
+                        J[:,i] = vectorized_povm
 
-                    _,S,V = _np.linalg.svd(J)
-                    return V[:len(S),]
+                    _,S,Vt = _np.linalg.svd(J, full_matrices=False)
+
+                    #Only return nontrivial singular vectors
+                    Vt = Vt[S > 1e-13, :].reshape((-1, Vt.shape[1]))
+                    return Vt
+                    
                 
                 phys_directions = calc_physical_subspace(dense_ideal_povm)
 
@@ -482,10 +482,10 @@ def convert(povm, to_type, basis, cp_penalty=1e-7, ideal_povm=None, flatten_stru
                     return _np.linalg.norm(dense_povm - dense_ideal_povm @ proc_matrix) + cp_penalty * sum_of_negative_choi_eigenvalues_gate(proc_matrix, basis)
                 
                 soln = _spo.minimize(_objfn, _np.zeros(len(phys_directions), 'd'), method="Nelder-Mead", options={},
-                                        tol=1e-13)  # , callback=callback)
+                                        tol=1e-13) 
                 if not soln.success and soln.fun > 1e-6:  # not "or" because success is often not set correctly
                     raise ValueError("Failed to find an errorgen such that <ideal|exp(errorgen) = <effect|")
-                errgen_vec = _np.linalg.pinv(phys_directions)  @ soln.x
+                errgen_vec = _np.linalg.lstsq(phys_directions, soln.x)[0]
                 errorgen.from_vector(errgen_vec)
                 
                 EffectiveExpErrorgen = _IdentityPlusErrorgenOp if lndtype.meta == '1+' else _ExpErrorgenOp

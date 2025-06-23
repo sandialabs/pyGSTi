@@ -343,14 +343,14 @@ class ThresholdMethodBase(object):
 
     def test_product(self):
         circuit = ('Gx', 'Gy')
-        p1 = np.dot(self.model['Gy'].to_dense(), self.model['Gx'].to_dense())
+        p1 = self.model['Gy'].to_dense() @ self.model['Gx'].to_dense()
         p2 = self.model.sim.product(circuit, scale=False)
         p3, scale = self.model.sim.product(circuit, scale=True)
         self.assertArraysAlmostEqual(p1, p2)
         self.assertArraysAlmostEqual(p1, scale * p3)
 
         circuit = ('Gx', 'Gy', 'Gy')
-        p1 = np.dot(self.model['Gy'].to_dense(), np.dot(self.model['Gy'].to_dense(), self.model['Gx'].to_dense()))
+        p1 = self.model['Gy'].to_dense() @ self.model['Gy'].to_dense() @ self.model['Gx'].to_dense()
         p2 = self.model.sim.product(circuit, scale=False)
         p3, scale = self.model.sim.product(circuit, scale=True)
         self.assertArraysAlmostEqual(p1, p2)
@@ -361,8 +361,8 @@ class ThresholdMethodBase(object):
         gatestring2 = ('Gx', 'Gy', 'Gy')
         circuits = [gatestring1, gatestring2]
 
-        p1 = np.dot(self.model['Gy'].to_dense(), self.model['Gx'].to_dense())
-        p2 = np.dot(self.model['Gy'].to_dense(), np.dot(self.model['Gy'].to_dense(), self.model['Gx'].to_dense()))
+        p1 = self.model['Gy'].to_dense() @ self.model['Gx'].to_dense()
+        p2 = self.model['Gy'].to_dense() @ self.model['Gy'].to_dense() @ self.model['Gx'].to_dense()
 
         bulk_prods = self.model.sim.bulk_product(circuits)
         bulk_prods_scaled, scaleVals = self.model.sim.bulk_product(circuits, scale=True)
@@ -414,15 +414,15 @@ class SimMethodBase(object):
         cls.gatestring1 = ('Gx', 'Gy')
         cls.gatestring2 = ('Gx', 'Gy', 'Gy')
         cls._expected_probs = {
-            cls.gatestring1: np.dot(np.transpose(cls._model.povms['Mdefault']['0'].to_dense()),
-                                    np.dot(cls._model['Gy'].to_dense(),
-                                           np.dot(cls._model['Gx'].to_dense(),
-                                                  cls._model.preps['rho0'].to_dense()))).reshape(-1)[0],
-            cls.gatestring2: np.dot(np.transpose(cls._model.povms['Mdefault']['0'].to_dense()),
-                                    np.dot(cls._model['Gy'].to_dense(),
-                                           np.dot(cls._model['Gy'].to_dense(),
-                                                  np.dot(cls._model['Gx'].to_dense(),
-                                                         cls._model.preps['rho0'].to_dense())))).reshape(-1)[0]
+            cls.gatestring1: (np.transpose(cls._model.povms['Mdefault']['0'].to_dense()) @
+                                    cls._model['Gy'].to_dense() @
+                                           cls._model['Gx'].to_dense() @
+                                                  cls._model.preps['rho0'].to_dense()).reshape(-1)[0],
+            cls.gatestring2: (np.transpose(cls._model.povms['Mdefault']['0'].to_dense()) @
+                                    cls._model['Gy'].to_dense() @
+                                           cls._model['Gy'].to_dense() @
+                                                  cls._model['Gx'].to_dense() @
+                                                         cls._model.preps['rho0'].to_dense()).reshape(-1)[0]
         }
         # TODO expected dprobs & hprobs
 
@@ -670,12 +670,12 @@ class FullModelTester(FullModelBase, StandardMethodBase, BaseCase):
 
         # TODO is this needed?
         for opLabel in cp.operations:
-            self.assertArraysAlmostEqual(cp[opLabel], np.dot(Tinv, np.dot(self.model[opLabel], T)))
+            self.assertArraysAlmostEqual(cp[opLabel], Tinv @ self.model[opLabel] @ T)
         for prepLabel in cp.preps:
-            self.assertArraysAlmostEqual(cp[prepLabel], np.dot(Tinv, self.model[prepLabel]))
+            self.assertArraysAlmostEqual(cp[prepLabel], Tinv @ self.model[prepLabel])
         for povmLabel in cp.povms:
             for effectLabel, eVec in cp.povms[povmLabel].items():
-                self.assertArraysAlmostEqual(eVec, np.dot(np.transpose(T), self.model.povms[povmLabel][effectLabel]))
+                self.assertArraysAlmostEqual(eVec, np.transpose(T) @ self.model.povms[povmLabel][effectLabel])
 
     def test_gpindices(self):
         # Test instrument construction with elements whose gpindices
@@ -741,7 +741,7 @@ class StaticModelTester(StaticModelBase, StandardMethodBase, BaseCase):
     def test_iter_hprobs_by_rectangle(self):
         self.skipTest("TODO should probably warn user?")
 
-class LinbladModelTester(GLNDModelBase, StandardMethodBase, BaseCase):
+class LindbladModelTester(GLNDModelBase, StandardMethodBase, BaseCase):
     pass
 class FullMapSimMethodTester(FullModelBase, SimMethodBase, BaseCase):
     def setUp(self):

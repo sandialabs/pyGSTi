@@ -70,10 +70,10 @@ class LinearInterposer(ModelParamsInterposer):
         self.full_span_transform_matrix = self.transform_matrix.copy()
         super().__init__(transform_matrix.shape[1], transform_matrix.shape[0])
     def model_paramvec_to_ops_paramvec(self, v):
-        return _np.dot(self.transform_matrix, v)
+        return self.transform_matrix @ v
 
     def ops_paramvec_to_model_paramvec(self, w):
-        return _np.dot(self.inv_transform_matrix, w)
+        return self.inv_transform_matrix @ w
 
     def ops_paramlbls_to_model_paramlbls(self, wl):
         # This can and should be improved later - particularly this will be awful when labels (els of wl) are tuples.
