@@ -62,7 +62,7 @@ def display_ipynb(content):
     -------
     None
     """
-    from IPython.core.display import display, HTML
+    from IPython.display import display, HTML
     display(HTML(content))
 
 
