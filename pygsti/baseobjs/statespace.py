@@ -418,7 +418,7 @@ class StateSpace(_NicelySerializable):
         StateSpace
         """
         # Default, generic, implementation constructs an explicit state space
-        labels = set(labels)
+        labels = sorted(set(labels))
         sub_tpb_labels = []
         sub_tpb_udims = []
         sub_tpb_types = []
@@ -1387,7 +1387,6 @@ class ExplicitStateSpace(StateSpace):
         return ' + '.join(
             ['*'.join(["%s(%d%s)" % (lbl, self.label_dims[lbl], 'c' if (self.label_types[lbl] == 'C') else '')
                        for lbl in tpb]) for tpb in self._labels])
-
 
 def default_space_for_dim(dim):
     """

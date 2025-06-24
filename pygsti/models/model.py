@@ -657,56 +657,6 @@ class OpModel(Model):
         self._clean_paramvec()
         return Model.num_modeltest_params.fget(self)
 
-    @property
-    def parameter_labels(self):
-        """
-        A list of labels, usually of the form `(op_label, string_description)` describing this model's parameters.
-        """
-        self._clean_paramvec()
-        return self._ops_paramlbls_to_model_paramlbls(self._paramlbls)
-    
-    def set_parameter_label(self, index, label):
-        """
-        Set the label of a single model parameter.
-
-        Parameters
-        ----------
-        index : int
-            The index of the paramter whose label should be set.
-
-        label : object
-            An object that serves to label this parameter.  Often a string.
-
-        Returns
-        -------
-        None
-        """
-        self._clean_paramvec()
-        self._paramlbls[index] = label
-    
-    @property
-    def parameter_bounds(self):
-        """ Upper and lower bounds on the values of each parameter, utilized by optimization routines """
-        self._clean_paramvec()
-        return self._param_bounds
-    
-    @property
-    def num_modeltest_params(self):
-        """
-        The parameter count to use when testing this model against data.
-
-        Often times, this is the same as :meth:`num_params`, but there are times
-        when it can convenient or necessary to use a parameter count different than
-        the actual number of parameters in this model.
-
-        Returns
-        -------
-        int
-            the number of model parameters.
-        """
-        self._clean_paramvec()
-        return Model.num_modeltest_params.fget(self)
-
     def _iter_parameterized_objs(self):
         raise NotImplementedError("Derived Model classes should implement _iter_parameterized_objs")
         #return # default is to have no parameterized objects
@@ -1187,21 +1137,20 @@ class OpModel(Model):
 
         #Mapping between the model index and the corresponding model members will be more complicated
         #when there is a parameter interposer, so table implementing this for that case.
-        if self.param_interposer is not None:
-            self._index_mm_map = None
-            self._index_mm_label_map = None
-        else:
-            index_mm_map = [[] for _ in range(len(self._paramvec))]
-            index_mm_label_map = [[] for _ in range(len(self._paramvec))]
-            
-            for lbl, obj in self._iter_parameterized_objs():
-                #if the gpindices are a slice then convert to a list of indices.
-                gpindices = _slct.indices(obj.gpindices) if isinstance(obj.gpindices, slice) else obj.gpindices
-                for gpidx in gpindices:
-                    index_mm_map[gpidx].append(obj)
-                    index_mm_label_map[gpidx].append(lbl)
-            self._index_mm_map = index_mm_map
-            self._index_mm_label_map = index_mm_label_map
+        
+
+        ops_param_vec = self._model_paramvec_to_ops_paramvec(self._paramvec)
+        index_mm_map = [[] for _ in range(len(ops_param_vec))]
+        index_mm_label_map = [[] for _ in range(len(ops_param_vec))]
+        
+        for lbl, obj in self._iter_parameterized_objs():
+            #if the gpindices are a slice then convert to a list of indices.
+            gpindices = _slct.indices(obj.gpindices) if isinstance(obj.gpindices, slice) else obj.gpindices
+            for gpidx in gpindices:
+                index_mm_map[gpidx].append(obj)
+                index_mm_label_map[gpidx].append(lbl)
+        self._index_mm_map = index_mm_map
+        self._index_mm_label_map = index_mm_label_map
         #Note to future selves. If we add a flag indicating the presence of collected parameters
         #then we can improve the performance of this by using a simpler structure when no collected
 
@@ -1304,53 +1253,75 @@ class OpModel(Model):
         -------
         None
         """
+        orig_param_vec = self._paramvec.copy()
 
         if isinstance(indices[0], tuple):
             #parse the strings into integer indices.
             param_labels_list = self.parameter_labels.tolist()
             indices = [param_labels_list.index(lbl) for lbl in indices]
-                        
+            
+
         for idx, val in zip(indices, values):
             self._paramvec[idx] = val
 
-        if self._param_interposer is not None or self._index_mm_map is None:
-            #fall back to standard from_vector call.
+        if self._index_mm_map is None:
             self.from_vector(self._paramvec)
+            #print("optimized code was skipped")
+            return
+
+        if self._param_interposer is not None:
+            
+            original_errgen_vec = self._param_interposer.transform_matrix @ orig_param_vec
+            new_errgen_vec = self._param_interposer.transform_matrix @ self._paramvec
+            diff_vec =  original_errgen_vec -  new_errgen_vec
+            diff_vec[_np.abs(diff_vec) < 1e-14] = 0
+            non_zero_errgens = _np.nonzero(diff_vec)
+
+            indices = non_zero_errgens[0]
+            values = new_errgen_vec[indices]
+            vec_to_access = new_errgen_vec
         else:
-            #get all of the model members which need to be be updated and loop through them to update their
-            #parameters.
-            unique_mms = {lbl:val for idx in indices for lbl, val in zip(self._index_mm_label_map[idx], self._index_mm_map[idx])}
+            vec_to_access = self._paramvec.copy()
+
+        #get all of the model members which need to be be updated and loop through them to update their
+        #parameters.
+        #test_model = self.copy()
+        #test_model.from_vector(self._paramvec)
+        unique_mms = {lbl:val for idx in indices for lbl, val in zip(self._index_mm_label_map[idx], self._index_mm_map[idx])}
+        for obj in unique_mms.values():
+            obj.from_vector(vec_to_access[obj.gpindices].copy(), close, dirty_value=False)
+        
+        #go through the model members which have been updated and identify whether any of them have children
+        #which may be present in the _opcaches which have already been updated by the parents. I think the
+        #conditions under which this should be safe are: a) the layer rules are ExplicitLayerRules,
+        #b) The parent is a POVM (it should be safe to assume that POVMs update their children, 
+        #and c) the effect is a child of that POVM.
+        
+        if isinstance(self._layer_rules, _ExplicitLayerRules):
+            updated_children = []
             for obj in unique_mms.values():
-                obj.from_vector(self._paramvec[obj.gpindices].copy(), close, dirty_value=False)
-            
-            #go through the model members which have been updated and identify whether any of them have children
-            #which may be present in the _opcaches which have already been updated by the parents. I think the
-            #conditions under which this should be safe are: a) the layer rules are ExplicitLayerRules,
-            #b) The parent is a POVM (it should be safe to assume that POVMs update their children, 
-            #and c) the effect is a child of that POVM.
-            
-            if isinstance(self._layer_rules, _ExplicitLayerRules):
-                updated_children = []
-                for obj in unique_mms.values():
-                    if isinstance(obj, _POVM):
-                        updated_children.extend(obj.values())
-            else:
-                updated_children = None
+                if isinstance(obj, _POVM):
+                    updated_children.extend(obj.values())
+        else:
+            updated_children = None
 
-            # Call from_vector on elements of the cache
-            if self._call_fromvector_on_cache:
-                #print(f'{self._opcaches=}')
-                for opcache in self._opcaches.values():
-                    for obj in opcache.values():
-                        opcache_elem_gpindices = _slct.indices(obj.gpindices) if isinstance(obj.gpindices, slice) else obj.gpindices
-                        if any([idx in opcache_elem_gpindices for idx in indices]):
-                            #check whether we have already updated this object.
-                            if updated_children is not None and any([child is obj for child in updated_children]):
-                                continue
-                            obj.from_vector(self._paramvec[opcache_elem_gpindices], close, dirty_value=False)
+        # Call from_vector on elements of the cache
+        if self._call_fromvector_on_cache:
+            #print(f'{self._opcaches=}')
+            for opcache in self._opcaches.values():
+                for obj in opcache.values():
+                    opcache_elem_gpindices = _slct.indices(obj.gpindices) if isinstance(obj.gpindices, slice) else obj.gpindices
+                    if any([idx in opcache_elem_gpindices for idx in indices]):
+                        #check whether we have already updated this object.
+                        if updated_children is not None and any([child is obj for child in updated_children]):
+                            continue
+                        obj.from_vector(vec_to_access[obj.gpindices].copy(), close, dirty_value=False)
 
-            if OpModel._pcheck: self._check_paramvec()
+        if OpModel._pcheck: self._check_paramvec()
 
+        #for (_, obj), (_, obj2) in zip(test_model._iter_parameterized_objs(), self._iter_parameterized_objs()):
+        #    assert _np.allclose(obj.to_vector(), obj2.to_vector())
+        #    print('checked')
     @property
     def param_interposer(self):
         return self._param_interposer
@@ -2550,7 +2521,7 @@ class OpModel(Model):
 
     def setup_fogi(self, initial_gauge_basis, create_complete_basis_fn=None,
                    op_label_abbrevs=None, reparameterize=False, reduce_to_model_space=True,
-                   dependent_fogi_action='drop', include_spam=True, primitive_op_labels=None):
+                   dependent_fogi_action='drop', include_spam=True, primitive_op_labels=None, include_fogv = False):
 
         from pygsti.baseobjs.errorgenbasis import CompleteElementaryErrorgenBasis as _CompleteElementaryErrorgenBasis
         from pygsti.baseobjs.errorgenbasis import ExplicitElementaryErrorgenBasis as _ExplicitElementaryErrorgenBasis
@@ -2703,16 +2674,34 @@ class OpModel(Model):
 
         norm_order = "auto"  # NOTE - should be 1 for normalizing 'S' quantities and 2 for 'H',
         # so 'auto' utilizes intelligence within FOGIStore
-        self.fogi_store = _FOGIStore(gauge_action_matrices, gauge_action_gauge_spaces,
+
+
+        self.fogi_store = _FOGIStore.compute_fogis(gauge_action_matrices, gauge_action_gauge_spaces,
                                      errorgen_coefficient_labels,  # gauge_errgen_space_labels,
                                      op_label_abbrevs, reduce_to_model_space, dependent_fogi_action,
                                      norm_order=norm_order)
-
+        #print(f'{primitive_op_labels=}')
+        #print(f'{primitive_prep_labels=}')
+        #print(f'{primitive_povm_labels=}')
+        #print(f'{self.fogi_store.fogi_directions.toarray()=}')
+        #print(f'{self.fogi_store.errorgen_space_op_elem_labels=}')
         if reparameterize:
-            self.param_interposer = self._add_reparameterization(
+            fogi_interposer = self._add_reparameterization(
                 primitive_op_labels + primitive_prep_labels + primitive_povm_labels,
                 self.fogi_store.fogi_directions.toarray(),  # DENSE now (leave sparse in FUTURE?)
                 self.fogi_store.errorgen_space_op_elem_labels)
+            
+            if include_fogv:
+                fogv_interposer = self._add_reparameterization(
+                primitive_op_labels + primitive_prep_labels + primitive_povm_labels,
+                self.fogi_store.fogv_directions.toarray(),  # DENSE now (leave sparse in FUTURE?)
+                self.fogi_store.errorgen_space_op_elem_labels)
+            
+            self.param_interposer = fogi_interposer
+
+            if include_fogv:
+                self.param_interposer.gaugefull_inv_transform_matrix = _np.vstack([fogi_interposer.inv_transform_matrix, fogv_interposer.inv_transform_matrix])
+                self.param_interposer.gaugefull_transform_matrix = _np.linalg.inv(self.param_interposer.gaugefull_inv_transform_matrix)
 
     def fogi_errorgen_component_labels(self, include_fogv=False, typ='normal'):
         labels = self.fogi_store.fogi_errorgen_direction_labels(typ)
