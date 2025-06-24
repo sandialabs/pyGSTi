@@ -234,6 +234,15 @@ class ExplicitOpModel(_mdl.OpModel):
         """
         The default gauge group.
         """
+        if isinstance(value, str):
+            value = value.lower()
+            if value == 'unitary':
+                value = _gg.UnitaryGaugeGroup(self.state_space, self.basis, self.evotype)
+            elif value == 'tp':
+                value = _gg.TPGaugeGroup(self.state_space, self.basis, self.evotypes)
+            else:
+                msg = f'string "{value}" cannot be used to set this model\'s gauge group.'
+                raise ValueError(msg)
         self._default_gauge_group = value
 
     @property

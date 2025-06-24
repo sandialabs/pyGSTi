@@ -785,7 +785,6 @@ class GSTObjFnBuilders(_NicelySerializable):
         if objective == "chi2":
             iteration_builders = [chi2_builder]
             final_builders = []
-
         elif objective == "logl":
             if always_perform_mle:
                 iteration_builders = [mle_builder] if only_perform_mle else [chi2_builder, mle_builder]
@@ -793,6 +792,9 @@ class GSTObjFnBuilders(_NicelySerializable):
             else:
                 iteration_builders = [chi2_builder]
                 final_builders = [mle_builder]
+        elif objective == "tvd":
+            iteration_builders = [chi2_builder]
+            final_builders = [_objfns.ObjectiveFunctionBuilder.create_from('tvd')]
         else:
             raise ValueError("Invalid objective: %s" % objective)
         return cls(iteration_builders, final_builders)
