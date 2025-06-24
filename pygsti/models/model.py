@@ -2521,11 +2521,9 @@ class OpModel(Model):
 
     def setup_fogi(self, initial_gauge_basis, create_complete_basis_fn=None,
                    op_label_abbrevs=None, reparameterize=False, reduce_to_model_space=True,
-                   dependent_fogi_action='drop', include_spam=True, primitive_op_labels=None, include_fogv = False):
+                   dependent_fogi_action='drop', include_spam=True, primitive_op_labels=None):
 
         from pygsti.baseobjs.errorgenbasis import CompleteElementaryErrorgenBasis as _CompleteElementaryErrorgenBasis
-        from pygsti.baseobjs.errorgenbasis import ExplicitElementaryErrorgenBasis as _ExplicitElementaryErrorgenBasis
-        from pygsti.baseobjs.errorgenspace import ErrorgenSpace as _ErrorgenSpace
 
         from pygsti.tools import basistools as _bt
         from pygsti.tools import fogitools as _fogit
@@ -2680,29 +2678,12 @@ class OpModel(Model):
                                      errorgen_coefficient_labels,  # gauge_errgen_space_labels,
                                      op_label_abbrevs, reduce_to_model_space, dependent_fogi_action,
                                      norm_order=norm_order)
-        #print(f'{primitive_op_labels=}')
-        #print(f'{primitive_prep_labels=}')
-        #print(f'{primitive_povm_labels=}')
-        #print(f'{self.fogi_store.fogi_directions.toarray()=}')
-        #print(f'{self.fogi_store.errorgen_space_op_elem_labels=}')
         if reparameterize:
-            fogi_interposer = self._add_reparameterization(
+            self.param_interposer = self._add_reparameterization(
                 primitive_op_labels + primitive_prep_labels + primitive_povm_labels,
                 self.fogi_store.fogi_directions.toarray(),  # DENSE now (leave sparse in FUTURE?)
                 self.fogi_store.errorgen_space_op_elem_labels)
             
-            if include_fogv:
-                fogv_interposer = self._add_reparameterization(
-                primitive_op_labels + primitive_prep_labels + primitive_povm_labels,
-                self.fogi_store.fogv_directions.toarray(),  # DENSE now (leave sparse in FUTURE?)
-                self.fogi_store.errorgen_space_op_elem_labels)
-            
-            self.param_interposer = fogi_interposer
-
-            if include_fogv:
-                self.param_interposer.gaugefull_inv_transform_matrix = _np.vstack([fogi_interposer.inv_transform_matrix, fogv_interposer.inv_transform_matrix])
-                self.param_interposer.gaugefull_transform_matrix = _np.linalg.inv(self.param_interposer.gaugefull_inv_transform_matrix)
-
     def fogi_errorgen_component_labels(self, include_fogv=False, typ='normal'):
         labels = self.fogi_store.fogi_errorgen_direction_labels(typ)
         if include_fogv:
