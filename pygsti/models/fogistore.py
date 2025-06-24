@@ -46,7 +46,7 @@ class FirstOrderGaugeInvariantStore(_NicelySerializable):
         self.allop_gauge_action = allop_gauge_action
         self.gauge_space_directions = gauge_space_directions
         self.norm_order = norm_order
-        self.dependent_fogi_action = dependent_fogi_action
+        self._dependent_fogi_action = dependent_fogi_action
 
         self.errorgen_space_op_elem_labels = tuple([(op_label, elem_lbl) for op_label in self.primitive_op_labels
                                                     for elem_lbl in self.elem_errorgen_labels_by_op[op_label]])
