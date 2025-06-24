@@ -26,6 +26,7 @@ from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GlobalElementaryErrorgenLabel
 from pygsti.tools.slicetools import slice_hash as _slice_hash
 from pygsti.baseobjs.errorgenspace import ErrorgenSpace as _ErrorgenSpace
+
 class FirstOrderGaugeInvariantStore(_NicelySerializable):
     """
     An object that computes and stores the first-order-gauge-invariant quantities of a model.
@@ -70,7 +71,6 @@ class FirstOrderGaugeInvariantStore(_NicelySerializable):
         common_gauge_space = None
         for op_label, gauge_space in gauge_action_gauge_spaces_by_op.items():
             
-            #FOGI DEBUG print("DEBUG gauge space of ", op_label, "has dim", gauge_space.vectors.shape[1])
             if common_gauge_space is None:
                 common_gauge_space = gauge_space
             else:

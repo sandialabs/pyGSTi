@@ -123,9 +123,7 @@ class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
         state.update({'state_space' : self.state_space._to_nice_serialization(),
                       'labels' : [label.__str__() for label in self.labels],
                       '_basis_1q' : self._basis_1q if isinstance(self._basis_1q, str) else self._basis_1q._to_nice_serialization()
-
-        }
-        )
+        })
         return state
     @classmethod
     def from_nice_serialization(cls, state):
@@ -273,6 +271,7 @@ class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
         #assert that these two bases have compatible label types.
         msg = 'Incompatible `ElementaryErrrogenLabel` types, the two `ElementaryErrorgenBasis` should have the same label type.'
         assert type(self._labels[0]) == type(other_basis.labels[0]), msg
+
         #Get the union of the two bases labels.
         union_labels = set(self._labels) | set(other_basis.labels)
         union_state_space = self.state_space.union(other_basis.state_space)
@@ -754,7 +753,6 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
         identity_label : str, optional (default 'I')
             An optional string specifying the label used to denote the identity in basis element labels.
         """
-
         if isinstance(label, _LocalElementaryErrorgenLabel):
             label = _GlobalElementaryErrorgenLabel.cast(label, self.sslbls, identity_label=identity_label)
 
@@ -788,7 +786,7 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
             raise ValueError("Invalid elementary errorgen type: %s" % str(eetype))
 
         return base + indices[label]
-        
+
     def create_subbasis(self, sslbl_overlap, retain_max_weights=True):
         """
         Create a sub-basis of this basis by including only the elements

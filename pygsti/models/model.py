@@ -1319,9 +1319,6 @@ class OpModel(Model):
 
         if OpModel._pcheck: self._check_paramvec()
 
-        #for (_, obj), (_, obj2) in zip(test_model._iter_parameterized_objs(), self._iter_parameterized_objs()):
-        #    assert _np.allclose(obj.to_vector(), obj2.to_vector())
-        #    print('checked')
     @property
     def param_interposer(self):
         return self._param_interposer
@@ -2683,7 +2680,7 @@ class OpModel(Model):
                 primitive_op_labels + primitive_prep_labels + primitive_povm_labels,
                 self.fogi_store.fogi_directions.toarray(),  # DENSE now (leave sparse in FUTURE?)
                 self.fogi_store.errorgen_space_op_elem_labels)
-            
+
     def fogi_errorgen_component_labels(self, include_fogv=False, typ='normal'):
         labels = self.fogi_store.fogi_errorgen_direction_labels(typ)
         if include_fogv:

@@ -186,7 +186,7 @@ class ExplicitOpModel(_mdl.OpModel):
 
         return _explicitcalc.ExplicitOpModelCalc(self.state_space.dim, simplified_preps, simplified_ops,
                                                  simplified_effects, self.num_params, self._param_interposer)
-    
+
     def _embed_operation(self, op_target_labels, op_val, force=False):
         """
         Called by OrderedMemberDict._auto_embed to create an embedded-gate

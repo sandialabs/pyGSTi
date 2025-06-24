@@ -35,10 +35,7 @@ class ErrorgenSpace(_NicelySerializable):
         state = super()._to_nice_serialization()
         state.update({'vectors' : self._encodemx(self.vectors),
                       'basis': self.elemgen_basis._to_nice_serialization()
-
-        }
-
-        )
+        })
         return state
     @classmethod
     def from_nice_serialization(cls, state):
