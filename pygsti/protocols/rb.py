@@ -1012,7 +1012,7 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
         """
         mapped_circuits_and_idealouts_by_depth = self._mapped_circuits_and_idealouts_by_depth(mapper)
         mapped_qubit_labels = self._mapped_qubit_labels(mapper)
-        return DirectRBDesign.from_existing_circuits(mapped_circuits_and_idealouts_by_depth,
+        return MirrorRBDesign.from_existing_circuits(mapped_circuits_and_idealouts_by_depth,
                                                      mapped_qubit_labels,
                                                      self.circuit_type, self.sampler,
                                                      self.samplerargs, self.localclifford,
