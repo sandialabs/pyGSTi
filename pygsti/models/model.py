@@ -1266,7 +1266,6 @@ class OpModel(Model):
 
         if self._index_mm_map is None:
             self.from_vector(self._paramvec)
-            #print("optimized code was skipped")
             return
 
         if self._param_interposer is not None:
@@ -1307,7 +1306,6 @@ class OpModel(Model):
 
         # Call from_vector on elements of the cache
         if self._call_fromvector_on_cache:
-            #print(f'{self._opcaches=}')
             for opcache in self._opcaches.values():
                 for obj in opcache.values():
                     opcache_elem_gpindices = _slct.indices(obj.gpindices) if isinstance(obj.gpindices, slice) else obj.gpindices
