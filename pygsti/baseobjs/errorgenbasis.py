@@ -16,11 +16,12 @@ import itertools as _itertools
 from pygsti.baseobjs import Basis as _Basis
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GlobalElementaryErrorgenLabel,\
 LocalElementaryErrorgenLabel as _LocalElementaryErrorgenLabel
-
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.tools import optools as _ot
+from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 
 
-class ElementaryErrorgenBasis(object):
+class ElementaryErrorgenBasis(_NicelySerializable):
     """
     A basis for error-generator space defined by a set of elementary error generators.
 
@@ -88,6 +89,7 @@ class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
             comprise the basis element labels for the values of the
             `ElementaryErrorgenLabels` in `labels`.
         """
+        super().__init__()
         labels = tuple(labels)
 
         #add an assertion that the labels are ElementaryErrorgenLabels and that all of the labels are the same type.
@@ -116,6 +118,16 @@ class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
         self._cached_dual_matrices = None
         self._cached_supports = None
 
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'state_space' : self.state_space._to_nice_serialization(),
+                      'labels' : [label.__str__() for label in self.labels],
+                      '_basis_1q' : self._basis_1q if isinstance(self._basis_1q, str) else self._basis_1q._to_nice_serialization()
+        })
+        return state
+    @classmethod
+    def from_nice_serialization(cls, state):
+        return cls(_StateSpace.from_nice_serialization(state['state_space']), [_GlobalElementaryErrorgenLabel.cast(label) for label in state['labels']], state['_basis_1q'] if isinstance(state['_basis_1q'], str) else _Basis.from_nice_serialization(state['_basis_1q']))
     @property
     def labels(self):
         return self._labels
@@ -259,7 +271,7 @@ class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
         #assert that these two bases have compatible label types.
         msg = 'Incompatible `ElementaryErrrogenLabel` types, the two `ElementaryErrorgenBasis` should have the same label type.'
         assert type(self._labels[0]) == type(other_basis.labels[0]), msg
-        
+
         #Get the union of the two bases labels.
         union_labels = set(self._labels) | set(other_basis.labels)
         union_state_space = self.state_space.union(other_basis.state_space)

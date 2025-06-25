@@ -11,11 +11,11 @@ Defines the ErrorgenSpace class and supporting functionality.
 #***************************************************************************************************
 
 import numpy as _np
-
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.tools import matrixtools as _mt
+from pygsti.baseobjs.errorgenbasis import ExplicitElementaryErrorgenBasis
 
-
-class ErrorgenSpace(object):
+class ErrorgenSpace(_NicelySerializable):
     """
     A vector space of error generators, spanned by some basis.
 
@@ -24,13 +24,22 @@ class ErrorgenSpace(object):
     """
 
     def __init__(self, vectors, basis):
+        super().__init__()
         self.vectors = vectors
         self.elemgen_basis = basis
         #Question: have multiple bases or a single one?
         #self._vectors = [] if (items is None) else items  # list of (basis, vectors_mx) pairs
         # map sslbls => (vectors, basis) where basis.sslbls == sslbls
         # or basis => vectors if bases can hash well(?)
-
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'vectors' : self._encodemx(self.vectors),
+                      'basis': self.elemgen_basis._to_nice_serialization()
+        })
+        return state
+    @classmethod
+    def from_nice_serialization(cls, state):
+        return cls(state['vectors'], ExplicitElementaryErrorgenBasis.from_nice_serialization(state['basis']))
     def intersection(self, other_space, free_on_unspecified_space=False, use_nice_nullspace=False):
         """
         TODO: docstring
