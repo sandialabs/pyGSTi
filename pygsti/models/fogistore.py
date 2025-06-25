@@ -53,7 +53,7 @@ class FirstOrderGaugeInvariantStore(_NicelySerializable):
         self.fogv_labels = ["%d gauge action" % i for i in range(self.fogv_directions.shape[1])]
     
     @classmethod
-    def compute_fogis(cls, gauge_action_matrices_by_op, gauge_action_gauge_spaces_by_op, errorgen_coefficient_labels_by_op,
+    def from_gauge_action_matrices(cls, gauge_action_matrices_by_op, gauge_action_gauge_spaces_by_op, errorgen_coefficient_labels_by_op,
                  op_label_abbrevs=None, reduce_to_model_space=True,
                  dependent_fogi_action='drop', norm_order=None):
         """

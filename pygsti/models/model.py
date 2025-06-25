@@ -2671,7 +2671,7 @@ class OpModel(Model):
         # so 'auto' utilizes intelligence within FOGIStore
 
 
-        self.fogi_store = _FOGIStore.compute_fogis(gauge_action_matrices, gauge_action_gauge_spaces,
+        self.fogi_store = _FOGIStore.from_gauge_action_matrices(gauge_action_matrices, gauge_action_gauge_spaces,
                                      errorgen_coefficient_labels,  # gauge_errgen_space_labels,
                                      op_label_abbrevs, reduce_to_model_space, dependent_fogi_action,
                                      norm_order=norm_order)
