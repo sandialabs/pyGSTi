@@ -16,8 +16,41 @@ import scipy.sparse.linalg as _spsl
 
 from . import matrixtools as _mt
 from . import optools as _ot
+from pygsti.models.fogistore import FirstOrderGaugeInvariantStore as _FirstOrderGaugeInvariantStore 
+from pygsti.models.modelparaminterposer import LinearInterposer as _LinearInterposer
+from pygsti.baseobjs.errorgenspace import ErrorgenSpace as _ErrorgenSpace
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 
+class FOGICheckpoint(_NicelySerializable):
+    def __init__(self, step, allowed_row_basis_labels = None, gauge_action_matrices = None, gauge_action_gauge_spaces = None, param_interposer = None, fogi_store = None):
+        super.__init__()
+        self.step = step
+        self.param_interposer = param_interposer
+        self.fogi_store = fogi_store
+        self.allowed_row_basis_labels = allowed_row_basis_labels
+        self.gauge_action_matrices = gauge_action_matrices
+        self.gauge_action_gauge_spaces = gauge_action_gauge_spaces
 
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'step': self.step,
+                      'param_interposer': None if self.param_interposer == None else self.parameter_interposer._to_nice_serialization(),
+                      'fogi_store': None if self.fogi_store == None else self.fogi_store._to_nice_serialization(),
+                      'allowed_row_basis_labels' : self.allowed_row_basis_labels,
+                      'gauge_action_matrices': None if self.gauge_action_matrices == None else {label:self._encodemx(matrix) for label, matrix in self.gauge_action_matrices.items()},
+                      'gauge_action_gauge_spaces': None if self.gauge_action_gauge_spaces == None else {label:gauge_space._to_nice_serialization() for label, gauge_space in self.gauge_action_gauge_spaces.items()}
+        })
+        return state
+    @classmethod
+    def from_nice_serialization(cls, state):
+        step = state['step']
+        param_interposer = _LinearInterposer.from_nice_serialization(state['param_interposer'])
+        fogi_store = _FirstOrderGaugeInvariantStore.from_nice_serialization(state['fogi_store'])
+        allowed_row_basis_labels = state['allowed_row_basis_labels']
+        gauge_action_matrices = {label: cls._decodemx(matrix) for label, matrix in state['gauge_action_matrices'].items()},
+        gauge_action_gauge_spaces = _ErrorgenSpace.from_nice_serialization(state['gauge_action_gauge_spaces'])
+        return cls(step, param_interposer=param_interposer, fogi_store=fogi_store, allowed_row_basis_labels=allowed_row_basis_labels,gauge_action_matrices=gauge_action_matrices,gauge_action_gauge_spaces=gauge_action_gauge_spaces)
+    
 def first_order_gauge_action_matrix(clifford_superop_mx, target_sslbls, model_state_space,
                                     elemgen_gauge_basis, elemgen_row_basis):
     """

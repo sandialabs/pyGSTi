@@ -2584,10 +2584,10 @@ class OpModel(Model):
         errorgen_coefficient_labels = _collections.OrderedDict()  # by operation
         #Checkpoint number 1 skips this loop
         if check_point != None:
-            if check_point['step'] == 1:
+            if check_point.step == 1:
                 primitive_op_labels_copy = primitive_op_labels.copy()
                 # Check if primitive_op_labels matches the ops in the saved dictionary
-                for label in list(check_point['allowed_row_basis_labels'].keys()) + list(check_point['gauge_action_matrices'].keys()) + list(check_point['gauge_action_gauge_spaces'].keys()):
+                for label in list(check_point.allowed_row_basis_labels.keys()) + list(check_point.gauge_action_matrices.keys()) + list(check_point.gauge_action_gauge_spaces.keys()):
                     if not (label in primitive_op_labels):
                         raise ValueError('The checkpoint provided is invalid. Make sure it was generated with the same parameters currently provided. The gates within the gate set provided do not match the ones on disk.')
                     else:
@@ -2595,9 +2595,9 @@ class OpModel(Model):
                 if len(primitive_op_labels_copy) != 0:
                     raise ValueError('The checkpoint provided is invalid. Make sure it was generated with the same parameters currently provided. The gates within the gate set provided do not match the ones on disk.')
                 
-                errorgen_coefficient_labels = check_point['allowed_row_basis_labels']
-                gauge_action_matrices = check_point['gauge_action_matrices']
-                gauge_action_gauge_spaces = check_point['gauge_action_gauge_spaces']
+                errorgen_coefficient_labels = check_point.allowed_row_basis_labels
+                gauge_action_matrices = check_point.gauge_action_matrices
+                gauge_action_gauge_spaces = check_point.gauge_action_gauge_spaces
         
         else:
             for op_label in primitive_op_labels:  # Note: "ga" stands for "gauge action" in variable names below
