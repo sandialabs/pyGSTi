@@ -34,6 +34,27 @@ class FirstOrderGaugeInvariantStore(_NicelySerializable):
     Currently, it is only compatible with :class:`ExplicitOpModel` objects.
     """
     def __init__(self, primitive_op_labels, gauge_space, elem_errorgen_labels_by_op, op_errorgen_indices, fogi_directions, fogi_metadata, dependent_dir_indices, fogv_directions, allop_gauge_action, gauge_space_directions, norm_order=None, dependent_fogi_action='drop'):
+        """
+
+        Parameters
+        ----------
+        primitive_op_labels : tuple of Label
+            Labels describing the gate set operations
+
+        gauge_space : ErrorgenSpace
+            Special way of intersecting the gauge spaces of all ops, see the beginning of from_gauge_action_matrices 
+            for a more detailed description
+        elem_errorgen_labels_by_op (_type_): _description_
+        op_errorgen_indices (_type_): _description_
+        fogi_directions (_type_): _description_
+        fogi_metadata (_type_): _description_
+        dependent_dir_indices (_type_): _description_
+        fogv_directions (_type_): _description_
+        allop_gauge_action (_type_): _description_
+        gauge_space_directions (_type_): _description_
+        norm_order (_type_, optional): _description_. Defaults to None.
+        dependent_fogi_action (str, optional): _description_. Defaults to 'drop'.
+        """
         super().__init__()
         self.primitive_op_labels = primitive_op_labels
         self.gauge_space = gauge_space
@@ -62,6 +83,7 @@ class FirstOrderGaugeInvariantStore(_NicelySerializable):
 
         primitive_op_labels = tuple(gauge_action_matrices_by_op.keys())
 
+        
         # Construct common gauge space by special way of intersecting the gauge spaces for all the ops
         # Note: the gauge_space of each op is constructed (see `setup_fogi`) so that the gauge action is
         #  zero on any elementary error generator not in the elementary-errorgen basis associated with

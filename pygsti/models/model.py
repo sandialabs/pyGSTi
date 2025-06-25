@@ -434,27 +434,6 @@ class OpModel(Model):
     possible to build up layer operations in an on-demand fashion from pieces
     within the model.
 
-    Parameters
-    ----------
-    state_space : StateSpace
-        The state space for this model.
-
-    basis : Basis
-        The basis used for the state space by dense operator representations.
-
-    evotype : Evotype or str, optional
-        The evolution type of this model, describing how states are
-        represented.  The special value `"default"` is equivalent
-        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
-
-    layer_rules : LayerRules
-        The "layer rules" used for constructing operators for circuit
-        layers.  This functionality is essential to using this model to
-        simulate ciruits, and is typically supplied by derived classes.
-
-    simulator : ForwardSimulator or {"auto", "matrix", "map"}
-        The forward simulator (or typ) that this model should use.  `"auto"`
-        tries to determine the best type automatically.
     """
 
     #Whether to perform extra parameter-vector integrity checks
@@ -466,6 +445,27 @@ class OpModel(Model):
     def __init__(self, state_space, basis, evotype, layer_rules, simulator="auto"):
         """
         Creates a new OpModel.  Rarely used except from derived classes `__init__` functions.
+        Parameters
+        ----------
+        state_space : StateSpace
+            The state space for this model.
+
+        basis : Basis
+            The basis used for the state space by dense operator representations.
+
+        evotype : Evotype or str, optional
+            The evolution type of this model, describing how states are
+            represented.  The special value `"default"` is equivalent
+            to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
+
+        layer_rules : LayerRules
+            The "layer rules" used for constructing operators for circuit
+            layers.  This functionality is essential to using this model to
+            simulate ciruits, and is typically supplied by derived classes.
+
+        simulator : ForwardSimulator or {"auto", "matrix", "map"}
+            The forward simulator (or typ) that this model should use.  `"auto"`
+            tries to determine the best type automatically.
         """
         self._set_state_space(state_space, basis)
         #sets self._state_space, self._basis
