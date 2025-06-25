@@ -657,56 +657,6 @@ class OpModel(Model):
         self._clean_paramvec()
         return Model.num_modeltest_params.fget(self)
 
-    @property
-    def parameter_labels(self):
-        """
-        A list of labels, usually of the form `(op_label, string_description)` describing this model's parameters.
-        """
-        self._clean_paramvec()
-        return self._ops_paramlbls_to_model_paramlbls(self._paramlbls)
-    
-    def set_parameter_label(self, index, label):
-        """
-        Set the label of a single model parameter.
-
-        Parameters
-        ----------
-        index : int
-            The index of the paramter whose label should be set.
-
-        label : object
-            An object that serves to label this parameter.  Often a string.
-
-        Returns
-        -------
-        None
-        """
-        self._clean_paramvec()
-        self._paramlbls[index] = label
-    
-    @property
-    def parameter_bounds(self):
-        """ Upper and lower bounds on the values of each parameter, utilized by optimization routines """
-        self._clean_paramvec()
-        return self._param_bounds
-    
-    @property
-    def num_modeltest_params(self):
-        """
-        The parameter count to use when testing this model against data.
-
-        Often times, this is the same as :meth:`num_params`, but there are times
-        when it can convenient or necessary to use a parameter count different than
-        the actual number of parameters in this model.
-
-        Returns
-        -------
-        int
-            the number of model parameters.
-        """
-        self._clean_paramvec()
-        return Model.num_modeltest_params.fget(self)
-
     def _iter_parameterized_objs(self):
         raise NotImplementedError("Derived Model classes should implement _iter_parameterized_objs")
         #return # default is to have no parameterized objects
@@ -1187,21 +1137,20 @@ class OpModel(Model):
 
         #Mapping between the model index and the corresponding model members will be more complicated
         #when there is a parameter interposer, so table implementing this for that case.
-        if self.param_interposer is not None:
-            self._index_mm_map = None
-            self._index_mm_label_map = None
-        else:
-            index_mm_map = [[] for _ in range(len(self._paramvec))]
-            index_mm_label_map = [[] for _ in range(len(self._paramvec))]
-            
-            for lbl, obj in self._iter_parameterized_objs():
-                #if the gpindices are a slice then convert to a list of indices.
-                gpindices = _slct.indices(obj.gpindices) if isinstance(obj.gpindices, slice) else obj.gpindices
-                for gpidx in gpindices:
-                    index_mm_map[gpidx].append(obj)
-                    index_mm_label_map[gpidx].append(lbl)
-            self._index_mm_map = index_mm_map
-            self._index_mm_label_map = index_mm_label_map
+        
+
+        ops_param_vec = self._model_paramvec_to_ops_paramvec(self._paramvec)
+        index_mm_map = [[] for _ in range(len(ops_param_vec))]
+        index_mm_label_map = [[] for _ in range(len(ops_param_vec))]
+        
+        for lbl, obj in self._iter_parameterized_objs():
+            #if the gpindices are a slice then convert to a list of indices.
+            gpindices = _slct.indices(obj.gpindices) if isinstance(obj.gpindices, slice) else obj.gpindices
+            for gpidx in gpindices:
+                index_mm_map[gpidx].append(obj)
+                index_mm_label_map[gpidx].append(lbl)
+        self._index_mm_map = index_mm_map
+        self._index_mm_label_map = index_mm_label_map
         #Note to future selves. If we add a flag indicating the presence of collected parameters
         #then we can improve the performance of this by using a simpler structure when no collected
 
@@ -1304,52 +1253,71 @@ class OpModel(Model):
         -------
         None
         """
+        orig_param_vec = self._paramvec.copy()
 
         if isinstance(indices[0], tuple):
             #parse the strings into integer indices.
             param_labels_list = self.parameter_labels.tolist()
             indices = [param_labels_list.index(lbl) for lbl in indices]
-                        
+            
+
         for idx, val in zip(indices, values):
             self._paramvec[idx] = val
 
-        if self._param_interposer is not None or self._index_mm_map is None:
-            #fall back to standard from_vector call.
+        if self._index_mm_map is None:
             self.from_vector(self._paramvec)
+            #print("optimized code was skipped")
+            return
+
+        if self._param_interposer is not None:
+            
+            original_errgen_vec = self._param_interposer.transform_matrix @ orig_param_vec
+            new_errgen_vec = self._param_interposer.transform_matrix @ self._paramvec
+            diff_vec =  original_errgen_vec -  new_errgen_vec
+            diff_vec[_np.abs(diff_vec) < 1e-14] = 0
+            non_zero_errgens = _np.nonzero(diff_vec)
+
+            indices = non_zero_errgens[0]
+            values = new_errgen_vec[indices]
+            vec_to_access = new_errgen_vec
         else:
-            #get all of the model members which need to be be updated and loop through them to update their
-            #parameters.
-            unique_mms = {lbl:val for idx in indices for lbl, val in zip(self._index_mm_label_map[idx], self._index_mm_map[idx])}
+            vec_to_access = self._paramvec.copy()
+
+        #get all of the model members which need to be be updated and loop through them to update their
+        #parameters.
+        #test_model = self.copy()
+        #test_model.from_vector(self._paramvec)
+        unique_mms = {lbl:val for idx in indices for lbl, val in zip(self._index_mm_label_map[idx], self._index_mm_map[idx])}
+        for obj in unique_mms.values():
+            obj.from_vector(vec_to_access[obj.gpindices].copy(), close, dirty_value=False)
+        
+        #go through the model members which have been updated and identify whether any of them have children
+        #which may be present in the _opcaches which have already been updated by the parents. I think the
+        #conditions under which this should be safe are: a) the layer rules are ExplicitLayerRules,
+        #b) The parent is a POVM (it should be safe to assume that POVMs update their children, 
+        #and c) the effect is a child of that POVM.
+        
+        if isinstance(self._layer_rules, _ExplicitLayerRules):
+            updated_children = []
             for obj in unique_mms.values():
-                obj.from_vector(self._paramvec[obj.gpindices].copy(), close, dirty_value=False)
-            
-            #go through the model members which have been updated and identify whether any of them have children
-            #which may be present in the _opcaches which have already been updated by the parents. I think the
-            #conditions under which this should be safe are: a) the layer rules are ExplicitLayerRules,
-            #b) The parent is a POVM (it should be safe to assume that POVMs update their children, 
-            #and c) the effect is a child of that POVM.
-            
-            if isinstance(self._layer_rules, _ExplicitLayerRules):
-                updated_children = []
-                for obj in unique_mms.values():
-                    if isinstance(obj, _POVM):
-                        updated_children.extend(obj.values())
-            else:
-                updated_children = None
+                if isinstance(obj, _POVM):
+                    updated_children.extend(obj.values())
+        else:
+            updated_children = None
 
-            # Call from_vector on elements of the cache
-            if self._call_fromvector_on_cache:
-                #print(f'{self._opcaches=}')
-                for opcache in self._opcaches.values():
-                    for obj in opcache.values():
-                        opcache_elem_gpindices = _slct.indices(obj.gpindices) if isinstance(obj.gpindices, slice) else obj.gpindices
-                        if any([idx in opcache_elem_gpindices for idx in indices]):
-                            #check whether we have already updated this object.
-                            if updated_children is not None and any([child is obj for child in updated_children]):
-                                continue
-                            obj.from_vector(self._paramvec[opcache_elem_gpindices], close, dirty_value=False)
+        # Call from_vector on elements of the cache
+        if self._call_fromvector_on_cache:
+            #print(f'{self._opcaches=}')
+            for opcache in self._opcaches.values():
+                for obj in opcache.values():
+                    opcache_elem_gpindices = _slct.indices(obj.gpindices) if isinstance(obj.gpindices, slice) else obj.gpindices
+                    if any([idx in opcache_elem_gpindices for idx in indices]):
+                        #check whether we have already updated this object.
+                        if updated_children is not None and any([child is obj for child in updated_children]):
+                            continue
+                        obj.from_vector(vec_to_access[obj.gpindices].copy(), close, dirty_value=False)
 
-            if OpModel._pcheck: self._check_paramvec()
+        if OpModel._pcheck: self._check_paramvec()
 
     @property
     def param_interposer(self):
@@ -2550,11 +2518,9 @@ class OpModel(Model):
 
     def setup_fogi(self, initial_gauge_basis, create_complete_basis_fn=None,
                    op_label_abbrevs=None, reparameterize=False, reduce_to_model_space=True,
-                   dependent_fogi_action='drop', include_spam=True, primitive_op_labels=None):
+                   dependent_fogi_action='drop', include_spam=True, primitive_op_labels=None, check_point=None):
 
         from pygsti.baseobjs.errorgenbasis import CompleteElementaryErrorgenBasis as _CompleteElementaryErrorgenBasis
-        from pygsti.baseobjs.errorgenbasis import ExplicitElementaryErrorgenBasis as _ExplicitElementaryErrorgenBasis
-        from pygsti.baseobjs.errorgenspace import ErrorgenSpace as _ErrorgenSpace
 
         from pygsti.tools import basistools as _bt
         from pygsti.tools import fogitools as _fogit
@@ -2616,103 +2582,150 @@ class OpModel(Model):
         gauge_action_matrices = _collections.OrderedDict()
         gauge_action_gauge_spaces = _collections.OrderedDict()
         errorgen_coefficient_labels = _collections.OrderedDict()  # by operation
-        for op_label in primitive_op_labels:  # Note: "ga" stands for "gauge action" in variable names below
-            #print("DB FOGI: ",op_label)  #REMOVE
-            op, op_with_errorgen = self._op_decomposition(op_label)  # gives target_op, op_error
-            U = extract_std_target_mx(op, self.basis)
-            all_sslbls = self.state_space.sole_tensor_product_block_labels
+        #Checkpoint number 1 skips this loop
+        if check_point != None:
+            if check_point['step'] == 1:
+                primitive_op_labels_copy = primitive_op_labels.copy()
+                # Check if primitive_op_labels matches the ops in the saved dictionary
+                for label in list(check_point['allowed_row_basis_labels'].keys()) + list(check_point['gauge_action_matrices'].keys()) + list(check_point['gauge_action_gauge_spaces'].keys()):
+                    if not (label in primitive_op_labels):
+                        raise ValueError('The checkpoint provided is invalid. Make sure it was generated with the same parameters currently provided. The gates within the gate set provided do not match the ones on disk.')
+                    else:
+                        primitive_op_labels_copy.pop(primitive_op_labels_copy.index(label))
+                if len(primitive_op_labels_copy) != 0:
+                    raise ValueError('The checkpoint provided is invalid. Make sure it was generated with the same parameters currently provided. The gates within the gate set provided do not match the ones on disk.')
+                
+                errorgen_coefficient_labels = check_point['allowed_row_basis_labels']
+                gauge_action_matrices = check_point['gauge_action_matrices']
+                gauge_action_gauge_spaces = check_point['gauge_action_gauge_spaces']
+        
+        else:
+            for op_label in primitive_op_labels:  # Note: "ga" stands for "gauge action" in variable names below
+                #print("DB FOGI: ",op_label)  #REMOVE
+                op, op_with_errorgen = self._op_decomposition(op_label)  # gives target_op, op_error
+                U = extract_std_target_mx(op, self.basis)
+                all_sslbls = self.state_space.sole_tensor_product_block_labels
 
-            if op_label.sslbls is None:
-                target_sslbls = all_sslbls
-            elif U.shape[0] == self.state_space.dim and len(op_label.sslbls) < len(all_sslbls):  # don't "trust" sslbls
-                target_sslbls = all_sslbls  # e.g., for 2Q explicit models with 2Q gate matched with Gx:0 label
-            else:
-                target_sslbls = op_label.sslbls
+                if op_label.sslbls is None:
+                    target_sslbls = all_sslbls
+                elif U.shape[0] == self.state_space.dim and len(op_label.sslbls) < len(all_sslbls):  # don't "trust" sslbls
+                    target_sslbls = all_sslbls  # e.g., for 2Q explicit models with 2Q gate matched with Gx:0 label
+                else:
+                    target_sslbls = op_label.sslbls
 
-            op_gauge_basis = initial_gauge_basis.create_subbasis(target_sslbls)  # gauge space lbls that overlap target
-            # Note: can assume gauge action is zero (U acts as identity) on all basis elements not in op_gauge_basis
+                op_gauge_basis = initial_gauge_basis.create_subbasis(target_sslbls)  # gauge space lbls that overlap target
+                # Note: can assume gauge action is zero (U acts as identity) on all basis elements not in op_gauge_basis
 
-            initial_row_basis = create_complete_basis_fn(all_sslbls)  # Not just target_sslbls, but prune? (FUTURE)
+                initial_row_basis = create_complete_basis_fn(all_sslbls)  # Not just target_sslbls, but prune? (FUTURE)
 
-            #support_sslbls, gauge_errgen_basis = get_overlapping_labels(gauge_errgen_space_labels, target_sslbls)
-            mx, row_basis = _fogit.first_order_gauge_action_matrix(U, target_sslbls, self.state_space,
-                                                                   op_gauge_basis, initial_row_basis)
-            #print("DB FOGI: action mx: ", mx.shape) #REMOVE
-            #FOGI DEBUG print("DEBUG => mx is ", mx.shape)
+                #support_sslbls, gauge_errgen_basis = get_overlapping_labels(gauge_errgen_space_labels, target_sslbls)
+                mx, row_basis = _fogit.first_order_gauge_action_matrix(U, target_sslbls, self.state_space,
+                                                                    op_gauge_basis, initial_row_basis)
+                #print("DB FOGI: action mx: ", mx.shape) #REMOVE
+                #FOGI DEBUG print("DEBUG => mx is ", mx.shape)
 
-            # Note: mx is a sparse lil matrix
-            # mx cols => op_gauge_basis, mx rows => row_basis, as zero rows have already been removed
-            # (DONE: - remove all all-zero rows from mx (and corresponding basis labels) )
-            # Note: row_basis is a simple subset of initial_row_basis
+                # Note: mx is a sparse lil matrix
+                # mx cols => op_gauge_basis, mx rows => row_basis, as zero rows have already been removed
+                # (DONE: - remove all all-zero rows from mx (and corresponding basis labels) )
+                # Note: row_basis is a simple subset of initial_row_basis
 
-            allowed_rowspace_mx, allowed_row_basis, op_gauge_space = \
-                self._format_gauge_action_matrix(mx, op_with_errorgen, reduce_to_model_space, row_basis, op_gauge_basis,
-                                                 create_complete_basis_fn)
-            #DEBUG
-            #print("DB FOGI: action matrix formatting done:")
-            #if allowed_rowspace_mx.shape[0] < 10:
-            #    print(_np.round(allowed_rowspace_mx.toarray(), 4))
-            #else:
-            #    print(repr(allowed_rowspace_mx))
-            #print(" on ", allowed_row_basis.labels)
+                allowed_rowspace_mx, allowed_row_basis, op_gauge_space = \
+                    self._format_gauge_action_matrix(mx, op_with_errorgen, reduce_to_model_space, row_basis, op_gauge_basis,
+                                                    create_complete_basis_fn)
+                #DEBUG
+                #print("DB FOGI: action matrix formatting done:")
+                #if allowed_rowspace_mx.shape[0] < 10:
+                #    print(_np.round(allowed_rowspace_mx.toarray(), 4))
+                #else:
+                #    print(repr(allowed_rowspace_mx))
+                #print(" on ", allowed_row_basis.labels)
 
-            errorgen_coefficient_labels[op_label] = allowed_row_basis.labels
-            gauge_action_matrices[op_label] = allowed_rowspace_mx
-            gauge_action_gauge_spaces[op_label] = op_gauge_space
-            #FOGI DEBUG print("DEBUG => final allowed_rowspace_mx shape =", allowed_rowspace_mx.shape)
+                errorgen_coefficient_labels[op_label] = allowed_row_basis.labels
+                gauge_action_matrices[op_label] = allowed_rowspace_mx
+                gauge_action_gauge_spaces[op_label] = op_gauge_space
+                #FOGI DEBUG print("DEBUG => final allowed_rowspace_mx shape =", allowed_rowspace_mx.shape)
 
         # Similar for SPAM
-        for prep_label in primitive_prep_labels:
-            prep = self._circuit_layer_operator(prep_label, 'prep')
-            v = extract_std_target_vec(prep)
-            target_sslbls = prep_label.sslbls if (prep_label.sslbls is not None and v.shape[0] < self.state_space.dim) \
-                else self.state_space.sole_tensor_product_block_labels
-            op_gauge_basis = initial_gauge_basis.create_subbasis(target_sslbls)  # gauge space lbls that overlap target
-            initial_row_basis = create_complete_basis_fn(target_sslbls)
+        #Checkpoint number 2 skips this loop
+        if check_point != None:
+            if check_point['step'] == 2:
+                primitive_SPAM_labels = primitive_prep_labels.copy() + primitive_povm_labels.copy()
+                # Check if primitive_op_labels matches the ops in the saved dictionary
+                for label in list(check_point['allowed_row_basis_labels'].keys()) + list(check_point['gauge_action_matrices'].keys()) + list(check_point['gauge_action_gauge_spaces'].keys()):
+                    if not (label in primitive_SPAM_labels):
+                        raise ValueError('The checkpoint provided is invalid. Make sure it was generated with the same parameters currently provided. The SPAM within the gate set provided does not match the one on disk.')
+                    else:
+                        primitive_SPAM_labels.pop(primitive_SPAM_labels.index(label))
+                if len(primitive_SPAM_labels) != 0:
+                    raise ValueError('The checkpoint provided is invalid. Make sure it was generated with the same parameters currently provided. The SPAM within the gate set provided do not match the ones on disk.')
+                
+                errorgen_coefficient_labels = check_point['allowed_row_basis_labels']
+                gauge_action_matrices = check_point['gauge_action_matrices']
+                gauge_action_gauge_spaces = check_point['gauge_action_gauge_spaces']
+        else:
+            for prep_label in primitive_prep_labels:
+                prep = self._circuit_layer_operator(prep_label, 'prep')
+                v = extract_std_target_vec(prep)
+                target_sslbls = prep_label.sslbls if (prep_label.sslbls is not None and v.shape[0] < self.state_space.dim) \
+                    else self.state_space.sole_tensor_product_block_labels
+                op_gauge_basis = initial_gauge_basis.create_subbasis(target_sslbls)  # gauge space lbls that overlap target
+                initial_row_basis = create_complete_basis_fn(target_sslbls)
 
-            mx, row_basis = _fogit.first_order_gauge_action_matrix_for_prep(v, target_sslbls, self.state_space,
-                                                                            op_gauge_basis, initial_row_basis)
+                mx, row_basis = _fogit.first_order_gauge_action_matrix_for_prep(v, target_sslbls, self.state_space,
+                                                                                op_gauge_basis, initial_row_basis)
 
-            allowed_rowspace_mx, allowed_row_basis, op_gauge_space = \
-                self._format_gauge_action_matrix(mx, prep, reduce_to_model_space, row_basis, op_gauge_basis,
-                                                 create_complete_basis_fn)
+                allowed_rowspace_mx, allowed_row_basis, op_gauge_space = \
+                    self._format_gauge_action_matrix(mx, prep, reduce_to_model_space, row_basis, op_gauge_basis,
+                                                    create_complete_basis_fn)
 
-            errorgen_coefficient_labels[prep_label] = allowed_row_basis.labels
-            gauge_action_matrices[prep_label] = allowed_rowspace_mx
-            gauge_action_gauge_spaces[prep_label] = op_gauge_space
+                errorgen_coefficient_labels[prep_label] = allowed_row_basis.labels
+                gauge_action_matrices[prep_label] = allowed_rowspace_mx
+                gauge_action_gauge_spaces[prep_label] = op_gauge_space
 
-        for povm_label in primitive_povm_labels:
-            povm = self._circuit_layer_operator(povm_label, 'povm')
-            vecs = [extract_std_target_vec(effect) for effect in povm.values()]
-            target_sslbls = povm_label.sslbls if (povm_label.sslbls is not None
-                                                  and vecs[0].shape[0] < self.state_space.dim) \
-                else self.state_space.sole_tensor_product_block_labels
-            op_gauge_basis = initial_gauge_basis.create_subbasis(target_sslbls)  # gauge space lbls that overlap target
-            initial_row_basis = create_complete_basis_fn(target_sslbls)
+            for povm_label in primitive_povm_labels:
+                povm = self._circuit_layer_operator(povm_label, 'povm')
+                vecs = [extract_std_target_vec(effect) for effect in povm.values()]
+                target_sslbls = povm_label.sslbls if (povm_label.sslbls is not None
+                                                    and vecs[0].shape[0] < self.state_space.dim) \
+                    else self.state_space.sole_tensor_product_block_labels
+                op_gauge_basis = initial_gauge_basis.create_subbasis(target_sslbls)  # gauge space lbls that overlap target
+                initial_row_basis = create_complete_basis_fn(target_sslbls)
 
-            mx, row_basis = _fogit.first_order_gauge_action_matrix_for_povm(vecs, target_sslbls, self.state_space,
-                                                                            op_gauge_basis, initial_row_basis)
+                mx, row_basis = _fogit.first_order_gauge_action_matrix_for_povm(vecs, target_sslbls, self.state_space,
+                                                                                op_gauge_basis, initial_row_basis)
 
-            allowed_rowspace_mx, allowed_row_basis, op_gauge_space = \
-                self._format_gauge_action_matrix(mx, povm, reduce_to_model_space, row_basis, op_gauge_basis,
-                                                 create_complete_basis_fn)
+                allowed_rowspace_mx, allowed_row_basis, op_gauge_space = \
+                    self._format_gauge_action_matrix(mx, povm, reduce_to_model_space, row_basis, op_gauge_basis,
+                                                    create_complete_basis_fn)
 
-            errorgen_coefficient_labels[povm_label] = allowed_row_basis.labels
-            gauge_action_matrices[povm_label] = allowed_rowspace_mx
-            gauge_action_gauge_spaces[povm_label] = op_gauge_space
+                errorgen_coefficient_labels[povm_label] = allowed_row_basis.labels
+                gauge_action_matrices[povm_label] = allowed_rowspace_mx
+                gauge_action_gauge_spaces[povm_label] = op_gauge_space
 
         norm_order = "auto"  # NOTE - should be 1 for normalizing 'S' quantities and 2 for 'H',
         # so 'auto' utilizes intelligence within FOGIStore
-        self.fogi_store = _FOGIStore(gauge_action_matrices, gauge_action_gauge_spaces,
-                                     errorgen_coefficient_labels,  # gauge_errgen_space_labels,
-                                     op_label_abbrevs, reduce_to_model_space, dependent_fogi_action,
-                                     norm_order=norm_order)
 
+        #Checkpoint number 3 skips FOGIStore creation
+        if check_point != None:
+            if check_point['step'] == 3:
+                self.fogi_store = check_point['fogi_store']
+        else:
+            self.fogi_store = _FOGIStore.compute_fogis(gauge_action_matrices, gauge_action_gauge_spaces,
+                                        errorgen_coefficient_labels,  # gauge_errgen_space_labels,
+                                        op_label_abbrevs, reduce_to_model_space, dependent_fogi_action,
+                                        norm_order=norm_order)
+        
         if reparameterize:
-            self.param_interposer = self._add_reparameterization(
-                primitive_op_labels + primitive_prep_labels + primitive_povm_labels,
-                self.fogi_store.fogi_directions.toarray(),  # DENSE now (leave sparse in FUTURE?)
-                self.fogi_store.errorgen_space_op_elem_labels)
+            loaded = False
+            if check_point != None:
+                if 'param_interposer' in check_point.keys():
+                    self.param_interposer = check_point['param_interposer']
+                    loaded = True
+            if not loaded:
+                self.param_interposer = self._add_reparameterization(
+                    primitive_op_labels + primitive_prep_labels + primitive_povm_labels,
+                    self.fogi_store.fogi_directions.toarray(),  # DENSE now (leave sparse in FUTURE?)
+                    self.fogi_store.errorgen_space_op_elem_labels)
 
     def fogi_errorgen_component_labels(self, include_fogv=False, typ='normal'):
         labels = self.fogi_store.fogi_errorgen_direction_labels(typ)
