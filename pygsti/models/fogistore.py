@@ -189,7 +189,7 @@ class FirstOrderGaugeInvariantStore(_NicelySerializable):
         # elem_errogen_vec = dot(pinv_fogi_dirs_T, fogi_coeffs), where dot(fogi_directions.T, pinv_fogi_dirs_T) == I
         # (This will only be the case when fogi_vecs are linearly independent, so when dependent_indices == 'drop')
 
-        if self.dependent_fogi_action == 'drop':
+        if self._dependent_fogi_action == 'drop':
             #assert(_mt.columns_are_orthogonal(self.fogi_directions))  # not true unless we construct them so...
             assert(_np.linalg.norm(_np.dot(fogi_dirs.T, _np.linalg.pinv(fogi_dirs.T))
                                     - _np.identity(fogi_dirs.shape[1], 'd')) < 1e-6)
@@ -223,7 +223,7 @@ class FirstOrderGaugeInvariantStore(_NicelySerializable):
                       'allop_gauge_action' : self._encodemx(self.allop_gauge_action),
                       'gauge_space_directions' : self._encodemx(self.gauge_space_directions),
                       'norm_order' : self.norm_order,
-                      'dependent_fogi_action' : self.dependent_fogi_action,
+                      'dependent_fogi_action' : self._dependent_fogi_action,
                       'gauge_space' : self.gauge_space._to_nice_serialization()
                       })
         return state
