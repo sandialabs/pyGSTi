@@ -33,7 +33,9 @@ class FirstOrderGaugeInvariantStore(_NicelySerializable):
 
     Currently, it is only compatible with :class:`ExplicitOpModel` objects.
     """
-    def __init__(self, primitive_op_labels, gauge_space, elem_errorgen_labels_by_op, op_errorgen_indices, fogi_directions, fogi_metadata, dependent_dir_indices, fogv_directions, allop_gauge_action, gauge_space_directions, norm_order=None, dependent_fogi_action='drop'):
+    def __init__(self, primitive_op_labels, gauge_space, elem_errorgen_labels_by_op, op_errorgen_indices, fogi_directions, 
+                 fogi_metadata, dependent_dir_indices, fogv_directions, allop_gauge_action, gauge_space_directions, 
+                 norm_order='auto', dependent_fogi_action='drop'):
         """
 
         Parameters
@@ -42,18 +44,70 @@ class FirstOrderGaugeInvariantStore(_NicelySerializable):
             Labels describing the gate set operations
 
         gauge_space : ErrorgenSpace
-            Special way of intersecting the gauge spaces of all ops, see the beginning of from_gauge_action_matrices 
-            for a more detailed description
-        elem_errorgen_labels_by_op (_type_): _description_
-        op_errorgen_indices (_type_): _description_
-        fogi_directions (_type_): _description_
-        fogi_metadata (_type_): _description_
-        dependent_dir_indices (_type_): _description_
-        fogv_directions (_type_): _description_
-        allop_gauge_action (_type_): _description_
-        gauge_space_directions (_type_): _description_
-        norm_order (_type_, optional): _description_. Defaults to None.
-        dependent_fogi_action (str, optional): _description_. Defaults to 'drop'.
+            Special way of intersecting the gauge spaces of all ops, see the beginning of from_gauge_action_matrices()
+            for a more detailed description.
+
+        elem_errorgen_labels_by_op : dict of Label keys with GlobalElementaryErrorgenLabel or GlobalElementaryErrorgenLabel values
+            Elementary error generator labels for every operation in the gate set
+
+        op_errorgen_indices : dict of Label keys with Slices values
+            Specifies which indices from the error generator space labels correspond to which operation. For example,
+            these allows us to index accordingly into the rows of allop_gauge_action which contain all error generators
+            from every operation stacked on top of each other.
+
+        fogi_directions : numpy array
+            Array where each column is a FOGI direction, the rows represent the modelmember parameters from which they were
+            derived (typically elementary error generators)
+
+        fogi_metadata : list of dictionaries 
+            Entry number k of this list contains metadata information about fogi quantity k (column k of fogi_directions). 
+            It is organized as a dictionary with the following entries:
+
+                - 'name' (str) : Label describing the FOGI quantity
+
+                - 'abbrev' (str) : An abbreviated version of the label above TODO: more details 
+
+                - 'r' (float) : constant that allows us to convert between the gauge-space-normalized
+                       FOGI direction to the errgen-space-normalized version of it.
+                       fogi_dir = r * dot(M, epsilon) = r * dot(inv_diff_gauge_action, int_vec)
+
+                - 'gaugespace_dir' (numpy array) : A corresponding gauge direction TODO: more details on their relationship
+                                    to FOGI quantities
+
+                - 'opset' (list of Label) : The set of model member operations that are affected by the corresponding FOGI
+                           quantity
+
+                - 'raw' (str) : Another version of 'name' without abbreviations
+
+        dependent_dir_indices : list of int
+            Specifies the indices of a set of FOGI quantities which, if removed, the remaining FOGI quantities are linearly independent.
+
+        fogv_directions : numpy array
+            A list of gauge directions that span the gauge space of the target gate set
+
+        allop_gauge_action : lil_matrix
+            A restricted version of each operation's gauge_action stacked together. Ignores elemgens that are not included in the 
+            common gauge space. The common gauge space is the intersection of all the individual gauge spaces. TODO: I believe 
+            this is done to remove the "trivial"/"meta" gauge from SPAM operations. We should verify this and if so, include
+            it in this docstring
+
+        gauge_space_directions : numpy array 
+            Contains, when applicable, a gauge-space direction that
+            correspondings to the FOGI quantity in fogi_directions.  Such a gauge-space direction
+            exists for relational FOGI quantities, where the FOGI quantity is constructed by taking the
+            *difference* of a gauge-space action (given by the gauge-space direction) on two operations
+            (or sets of operations). TODO: How does one know the corresponding fogi direction? each
+            one of these is computed from fogv_directions.
+
+        norm_order : str or int
+
+            Defines the order of the norm to normalize FOGI directions. It should be 1 for normalizing 'S' quantities and 2 for 'H',
+            so 'auto' utilizes intelligence.
+
+        dependent_fogi_action : 'drop' or 'mark'
+
+            If 'drop', all linearly dependent FOGI directions are not returned, resulting in a linearly independent set of quantities. 
+            If 'mark' linearly dependent FOGI directions are kept and marked by dependent_dir_indices.
         """
         super().__init__()
         self.primitive_op_labels = primitive_op_labels
@@ -76,7 +130,7 @@ class FirstOrderGaugeInvariantStore(_NicelySerializable):
     @classmethod
     def from_gauge_action_matrices(cls, gauge_action_matrices_by_op, gauge_action_gauge_spaces_by_op, errorgen_coefficient_labels_by_op,
                  op_label_abbrevs=None, reduce_to_model_space=True,
-                 dependent_fogi_action='drop', norm_order=None):
+                 dependent_fogi_action='drop', norm_order='auto'):
         """
         TODO: docstring
         """
@@ -176,23 +230,20 @@ class FirstOrderGaugeInvariantStore(_NicelySerializable):
 
         #Get gauge-space directions corresponding to the fogv directions
         # (pinv_allop_gauge_action takes errorgen-set -> gauge-gen space)
-        allop_gauge_action = allop_gauge_action
         pinv_allop_gauge_action = _np.linalg.pinv(allop_gauge_action.toarray(), rcond=1e-7)
-        gauge_space_directions = _np.dot(pinv_allop_gauge_action,
-                                         fogv_directions.toarray())  # in gauge-generator space
-        gauge_space_directions = gauge_space_directions
+        gauge_space_directions = pinv_allop_gauge_action @ fogv_directions.toarray()  # in gauge-generator space
 
         #Notes on error-gen vs gauge-gen space:
         # self.fogi_directions and self.fogv_directions are dual vectors in error-generator space,
         # i.e. with elements corresponding to the elementary error generators given by
         # self.errorgen_space_op_elem_labels.
-        # self.fogi_gaugespace_directions contains, when applicable, a gauge-space direction that
+        # self.fogi_gauge_space_directions contains, when applicable, a gauge-space direction that
         # correspondings to the FOGI quantity in self.fogi_directions.  Such a gauge-space direction
         # exists for relational FOGI quantities, where the FOGI quantity is constructed by taking the
         # *difference* of a gauge-space action (given by the gauge-space direction) on two operations
         # (or sets of operations).
 
-        #Store auxiliary info for later use
+        
         fogi_store = cls(primitive_op_labels, gauge_space, elem_errorgen_labels_by_op, op_errorgen_indices, fogi_directions, fogi_metadata, dependent_dir_indices, fogv_directions, allop_gauge_action, gauge_space_directions, norm_order, dependent_fogi_action)
         fogi_store._check_fogi_store()
         return fogi_store

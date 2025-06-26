@@ -339,7 +339,14 @@ def _create_op_errgen_indices_dict(primitive_op_labels, errorgen_coefficient_lab
 def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                               errorgen_coefficient_labels, op_errgen_indices, gauge_space,
                               op_label_abbrevs=None, dependent_fogi_action='drop', norm_order=None):
-    """ TODO: docstring """
+    """ TODO: docstring 
+    Parameters
+    ----------
+    dependent_fogi_action : 'drop' or 'mark'
+        'drop' ensures the set of FOGI quantities returned is linearly independent. 'mark' ensures 
+
+
+    """
     assert(dependent_fogi_action in ('drop', 'mark'))
     orthogonalize_relationals = True
 
