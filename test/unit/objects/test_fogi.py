@@ -2,15 +2,14 @@ import pickle
 
 import sys
 import numpy as np
-
-from ..util import BaseCase
+from ..util import BaseCase, with_temp_path
 from pygsti.modelpacks import smq1Q_XYI as std
 from pygsti.modelpacks import smq1Q_XY as std2
 from pygsti.modelpacks import smq1Q_XZ as std3
 from pygsti.baseobjs import Basis, CompleteElementaryErrorgenBasis
 from pygsti.processors import QubitProcessorSpec
 from pygsti.models import create_crosstalk_free_model
-from pygsti.models import create_cloud_crosstalk_model_from_hops_and_weights
+from pygsti.models import create_cloud_crosstalk_model_from_hops_and_weights, Model
 
 
 class FogiTester(BaseCase):
@@ -234,8 +233,8 @@ class FogiTester(BaseCase):
     def test_equal_method(self):
 
         def equal_fogi_models(fogi_model, fogi_model2):
-
             return fogi_model.fogi_store.__eq__(fogi_model2.fogi_store) and fogi_model.param_interposer.__eq__(fogi_model2.param_interposer)
+        
         model = std.target_model('GLND')
         model2 = std2.target_model('GLND')
         model3 = std3.target_model('GLND')
@@ -261,5 +260,30 @@ class FogiTester(BaseCase):
         self.assertFalse(equal_fogi_models(model, model2), msg=msg)
         self.assertFalse(equal_fogi_models(model, model3), msg=msg)
         self.assertFalse(equal_fogi_models(model2, model3), msg=msg)
+
+    #TODO: should this be in test_nice_serialization instead?
+    @with_temp_path
+    def test_fogi_serialization(self, temp_pth):
+        def equal_fogi_models(fogi_model, fogi_model2):
+            return fogi_model.fogi_store.__eq__(fogi_model2.fogi_store) and fogi_model.param_interposer.__eq__(fogi_model2.param_interposer)
+        
+        model = std.target_model('GLND')
+        model2 = std2.target_model('GLND')
+        model3 = std3.target_model('GLND')
+
+        model.write(temp_pth + '.json')
+        loaded_model = Model.read(temp_pth + '.json')
+        model2.write(temp_pth + '.json')
+        loaded_model2 = Model.read(temp_pth + '.json')
+        model3.write(temp_pth + '.json')
+        loaded_model3 = Model.read(temp_pth + '.json')
+
+        self.assertTrue(equal_fogi_models(model, loaded_model))
+        self.assertTrue(equal_fogi_models(model2, loaded_model2))
+        self.assertTrue(equal_fogi_models(model3, loaded_model3))
+        
+
+        
+
 
 

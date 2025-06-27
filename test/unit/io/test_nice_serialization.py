@@ -69,6 +69,8 @@ class NiceSerializationTester(BaseCase):
         self.assertTrue(mdl_cloud.is_equivalent(mdl_cloud2))
 
 
+#Somewhat random question for other pyGSTi developers: 
+#Am I missing something or does this class not test anything related to serialization?
 class ModelEquivalenceTester(BaseCase):
 
     def setUp(self):
