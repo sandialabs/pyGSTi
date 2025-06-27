@@ -84,6 +84,9 @@ class ErrorgenSpace(_NicelySerializable):
 
         return ErrorgenSpace(intersection_vecs, common_basis)
 
+    def __eq__(self, other):
+
+        return _np.allclose(self.vectors, other.vectors) and self.elemgen_basis.__eq__(other.elemgen_basis)
     def union(self, other_space):
         """
         TODO: docstring

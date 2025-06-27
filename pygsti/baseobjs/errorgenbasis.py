@@ -119,6 +119,9 @@ class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
         self._cached_dual_matrices = None
         self._cached_supports = None
 
+    def __eq__(self, other):
+        return self.state_space.__eq__(other.state_space) and [label.__str__() for label in self.labels] == [label.__str__() for label in other.labels] and self._basis_1q.__eq__(other._basis_1q)
+    
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
         state.update({'state_space' : self.state_space._to_nice_serialization(),

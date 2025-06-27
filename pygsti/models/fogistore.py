@@ -86,7 +86,7 @@ class FirstOrderGaugeInvariantStore(_NicelySerializable):
             A list of gauge directions that span the gauge space of the target gate set
 
         allop_gauge_action : lil_matrix
-            A restricted version of each operation's gauge_action stacked together. Ignores elemgens that are not included in the 
+            Stands for "All operations gauge action". It is a restricted version of each operation's gauge_action stacked together. Ignores elemgens that are not included in the 
             common gauge space. The common gauge space is the intersection of all the individual gauge spaces. TODO: I believe 
             this is done to remove the "trivial"/"meta" gauge from SPAM operations. We should verify this and if so, include
             it in this docstring
@@ -359,7 +359,81 @@ class FirstOrderGaugeInvariantStore(_NicelySerializable):
         #gauge_space_directions = _np.dot(pinv_allop_gauge_action, self.fogv_directions)  # in gauge-generator space
         #assert(_np.linalg.matrix_rank(gauge_space_directions) <= self._gauge_space_dim)  # should be nearly full rank
         pass
+    
+    def __eq__(self, other):
 
+        
+        if [label.__str__() for label in self.primitive_op_labels] != [label.__str__() for label in other.primitive_op_labels]:
+            return False
+        
+        if not self.gauge_space.__eq__(other.gauge_space):
+            return False
+        
+        if [op.__str__() for op in self.elem_errorgen_labels_by_op.keys()] != [op.__str__() for op in other.elem_errorgen_labels_by_op.keys()]:
+            return False
+        
+        for errgens_self, errgens_other in zip(list(self.elem_errorgen_labels_by_op.values()), list(other.elem_errorgen_labels_by_op.values())):
+            for errgen_self, errgen_other in zip(errgens_self, errgens_other):
+                if errgen_self.__str__() != errgen_other.__str__():
+                    return False
+        
+        if not (self.fogi_directions != other.fogi_directions).nnz == 0:
+            return False
+        
+        for object_self, object_other in zip(self.fogi_metadata, other.fogi_metadata):
+
+            if (object_self['name'] != object_other['name']) or (object_self['abbrev'] != object_other['abbrev']) or (object_self['r'] != object_other['r']) \
+                or (object_self['raw'] != object_other['raw']):
+                return False
+            #Case for when one of the spaces is None but the other isn't
+            if (object_self['gaugespace_dir'] is not None and object_other['gaugespace_dir'] is None) or \
+            (object_self['gaugespace_dir'] is None and object_other['gaugespace_dir'] is not None):
+                return False
+            #If they are both not none, check that their matrices are equal
+            if object_self['gaugespace_dir'] is not None and object_other['gaugespace_dir'] is not None:
+                if not _np.allclose(object_self['gaugespace_dir'], object_other['gaugespace_dir']):
+                    return False
+            if [label.__str__() for label in object_self['opset']] != [label.__str__() for label in object_other['opset']]:
+                return False
+        
+        if not _np.allclose(self.dependent_dir_indices, other.dependent_dir_indices):
+            return False
+        
+        if not (self.fogv_directions != other.fogv_directions).nnz == 0:
+            return False 
+        
+        if not (self.allop_gauge_action != other.allop_gauge_action).nnz == 0:
+            return False
+        #Case for when one of the spaces is none but the other isn't
+        if (self.gauge_space_directions is not None and other.gauge_space_directions is None) or \
+            (self.gauge_space_directions is None and other.gauge_space_directions is not None):
+            return False
+        #If they are both not none, check that their matrices are equal
+        if self.gauge_space_directions is not None and other.gauge_space_directions is not None:
+            if not _np.allclose(self.gauge_space_directions, other.gauge_space_directions):
+                return False
+        
+        if self.norm_order != other.norm_order or self._dependent_fogi_action != other._dependent_fogi_action:
+            return False
+        return True
+        
+        '''
+        self.primitive_op_labels = primitive_op_labels
+        self.gauge_space = gauge_space
+        self.elem_errorgen_labels_by_op = elem_errorgen_labels_by_op
+        self.op_errorgen_indices = op_errorgen_indices
+        self.fogi_directions = fogi_directions
+        self.fogi_metadata = fogi_metadata
+        self.dependent_dir_indices = dependent_dir_indices
+        self.fogv_directions = fogv_directions
+        self.allop_gauge_action = allop_gauge_action
+        self.gauge_space_directions = gauge_space_directions
+        self.norm_order = norm_order
+        self._dependent_fogi_action = dependent_fogi_action
+
+        self.errorgen_space_op_elem_labels = tuple([(op_label, elem_lbl) for op_label in self.primitive_op_labels
+                                                    for elem_lbl in self.elem_errorgen_labels_by_op[op_label]])
+        self.fogv_labels = ["%d gauge action" % i for i in range(self.fogv_directions.shape[1])]'''
     @property
     def errorgen_space_dim(self):
         return self.fogi_directions.shape[0]
