@@ -362,6 +362,7 @@ class FirstOrderGaugeInvariantStore(_NicelySerializable):
     
     def __eq__(self, other):
 
+        assert isinstance(other, FirstOrderGaugeInvariantStore), 'Object provided is not of type FirstOrderGaugeInvariantStore'
         
         if [label.__str__() for label in self.primitive_op_labels] != [label.__str__() for label in other.primitive_op_labels]:
             return False

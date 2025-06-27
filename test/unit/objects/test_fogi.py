@@ -5,6 +5,8 @@ import numpy as np
 
 from ..util import BaseCase
 from pygsti.modelpacks import smq1Q_XYI as std
+from pygsti.modelpacks import smq1Q_XY as std2
+from pygsti.modelpacks import smq1Q_XZ as std3
 from pygsti.baseobjs import Basis, CompleteElementaryErrorgenBasis
 from pygsti.processors import QubitProcessorSpec
 from pygsti.models import create_crosstalk_free_model
@@ -228,3 +230,36 @@ class FogiTester(BaseCase):
         w = np.random.rand(mdl.num_params)
         w[0:nprefix] = 0 # zero out all unused params (these can be SPAM and can't be any value?)
         mdl.from_vector(w)
+
+    def test_equal_method(self):
+
+        def equal_fogi_models(fogi_model, fogi_model2):
+
+            return fogi_model.fogi_store.__eq__(fogi_model2.fogi_store) and fogi_model.param_interposer.__eq__(fogi_model2.param_interposer)
+        model = std.target_model('GLND')
+        model2 = std2.target_model('GLND')
+        model3 = std3.target_model('GLND')
+
+        basis1q = Basis.cast('pp', 4)
+        gauge_basis = CompleteElementaryErrorgenBasis(
+            basis1q, model.state_space, elementary_errorgen_types='HSCA')
+        gauge_basis2 = CompleteElementaryErrorgenBasis(
+            basis1q, model2.state_space, elementary_errorgen_types='HSCA')
+        gauge_basis3 = CompleteElementaryErrorgenBasis(
+            basis1q, model3.state_space, elementary_errorgen_types='HSCA')
+        
+        model.setup_fogi(gauge_basis, None, None, reparameterize=True, dependent_fogi_action='drop', include_spam=True)
+        model2.setup_fogi(gauge_basis2, None, None, reparameterize=True, dependent_fogi_action='drop', include_spam=True)
+        model3.setup_fogi(gauge_basis3, None, None, reparameterize=True, dependent_fogi_action='drop', include_spam=True)
+        
+        msg = 'FOGI models that are the same are identified as different by __eq__ methods'
+        self.assertTrue(equal_fogi_models(model, model), msg=msg)
+        self.assertTrue(equal_fogi_models(model2, model2), msg=msg)
+        self.assertTrue(equal_fogi_models(model3, model3), msg=msg)
+
+        msg = 'FOGI models that are different are not recognized as different by __eq__ methods'
+        self.assertFalse(equal_fogi_models(model, model2), msg=msg)
+        self.assertFalse(equal_fogi_models(model, model3), msg=msg)
+        self.assertFalse(equal_fogi_models(model2, model3), msg=msg)
+
+
