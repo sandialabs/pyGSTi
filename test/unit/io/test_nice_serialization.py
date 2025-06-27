@@ -122,5 +122,3 @@ class ModelEquivalenceTester(BaseCase):
                                                  lindblad_error_coeffs={'Gcnot': {('H','ZZ'): 0.07, ('S','XX'): 0.10}},
                                                  independent_gates=True, independent_spam=True, verbosity=2)
         self.check_model(mdl_cloud)
-
-

@@ -271,6 +271,18 @@ class FogiTester(BaseCase):
         model2 = std2.target_model('GLND')
         model3 = std3.target_model('GLND')
 
+        basis1q = Basis.cast('pp', 4)
+        gauge_basis = CompleteElementaryErrorgenBasis(
+            basis1q, model.state_space, elementary_errorgen_types='HSCA')
+        gauge_basis2 = CompleteElementaryErrorgenBasis(
+            basis1q, model2.state_space, elementary_errorgen_types='HSCA')
+        gauge_basis3 = CompleteElementaryErrorgenBasis(
+            basis1q, model3.state_space, elementary_errorgen_types='HSCA')
+        
+        model.setup_fogi(gauge_basis, None, None, reparameterize=True, dependent_fogi_action='drop', include_spam=True)
+        model2.setup_fogi(gauge_basis2, None, None, reparameterize=True, dependent_fogi_action='drop', include_spam=True)
+        model3.setup_fogi(gauge_basis3, None, None, reparameterize=True, dependent_fogi_action='drop', include_spam=True)
+
         model.write(temp_pth + '.json')
         loaded_model = Model.read(temp_pth + '.json')
         model2.write(temp_pth + '.json')
@@ -282,8 +294,25 @@ class FogiTester(BaseCase):
         self.assertTrue(equal_fogi_models(model2, loaded_model2))
         self.assertTrue(equal_fogi_models(model3, loaded_model3))
         
-
+    def test_set_param_values(self):
         
+        model = std.target_model('GLND')
+        cp = model.copy()
 
+        basis1q = Basis.cast('pp', 4)
+        gauge_basis = CompleteElementaryErrorgenBasis(
+            basis1q, model.state_space, elementary_errorgen_types='HSCA')
+
+        model.setup_fogi(gauge_basis, None, None, reparameterize=True, dependent_fogi_action='drop', include_spam=True)
+        cp.setup_fogi(gauge_basis, None, None, reparameterize=True, dependent_fogi_action='drop', include_spam=True)
+
+        test_vec = np.arange(model.num_params) * 1e-3
+        cp.set_parameter_values(np.arange(model.num_params), test_vec)
+        model.from_vector(test_vec)
+        self.assertAlmostEqual(np.linalg.norm(model.to_vector() - cp.to_vector()), 0)
+        #TODO: Uncomment when issue #600 is resolved, remove line above
+        #self.assertTrue(cp.is_equivalent(cp2))
+        
+        
 
 
