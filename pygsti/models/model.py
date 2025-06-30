@@ -2639,10 +2639,10 @@ class OpModel(Model):
         # Similar for SPAM
         #Checkpoint number 2 skips this loop
         if check_point != None:
-            if check_point['step'] == 2:
+            if check_point.step == 2:
                 primitive_SPAM_labels = primitive_prep_labels.copy() + primitive_povm_labels.copy()
                 # Check if primitive_op_labels matches the ops in the saved dictionary
-                for label in list(check_point['allowed_row_basis_labels'].keys()) + list(check_point['gauge_action_matrices'].keys()) + list(check_point['gauge_action_gauge_spaces'].keys()):
+                for label in list(check_point.allowed_row_basis_labels.keys()) + list(check_point.gauge_action_matrices.keys()) + list(check_point.gauge_action_gauge_spaces.keys()):
                     if not (label in primitive_SPAM_labels):
                         raise ValueError('The checkpoint provided is invalid. Make sure it was generated with the same parameters currently provided. The SPAM within the gate set provided does not match the one on disk.')
                     else:
@@ -2650,9 +2650,9 @@ class OpModel(Model):
                 if len(primitive_SPAM_labels) != 0:
                     raise ValueError('The checkpoint provided is invalid. Make sure it was generated with the same parameters currently provided. The SPAM within the gate set provided do not match the ones on disk.')
                 
-                errorgen_coefficient_labels = check_point['allowed_row_basis_labels']
-                gauge_action_matrices = check_point['gauge_action_matrices']
-                gauge_action_gauge_spaces = check_point['gauge_action_gauge_spaces']
+                errorgen_coefficient_labels = check_point.allowed_row_basis_labels
+                gauge_action_matrices = check_point.gauge_action_matrices
+                gauge_action_gauge_spaces = check_point.gauge_action_gauge_spaces
         else:
             for prep_label in primitive_prep_labels:
                 prep = self._circuit_layer_operator(prep_label, 'prep')
@@ -2698,19 +2698,19 @@ class OpModel(Model):
 
         #Checkpoint number 3 skips FOGIStore creation
         if check_point != None:
-            if check_point['step'] == 3:
-                self.fogi_store = check_point['fogi_store']
+            if check_point.step == 3:
+                self.fogi_store = check_point.fogi_store
         else:
             self.fogi_store = _FOGIStore.compute_fogis(gauge_action_matrices, gauge_action_gauge_spaces,
-                                        errorgen_coefficient_labels,  # gauge_errgen_space_labels,
+                                        errorgen_coefficient_labels,  
                                         op_label_abbrevs, reduce_to_model_space, dependent_fogi_action,
                                         norm_order=norm_order)
         
         if reparameterize:
             loaded = False
             if check_point != None:
-                if 'param_interposer' in check_point.keys():
-                    self.param_interposer = check_point['param_interposer']
+                if check_point.param_interposer is not None:
+                    self.param_interposer = check_point.param_interposer
                     loaded = True
             if not loaded:
                 self.param_interposer = self._add_reparameterization(
