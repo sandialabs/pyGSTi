@@ -16,7 +16,7 @@ import scipy.sparse.linalg as _spsl
 
 from . import matrixtools as _mt
 from . import optools as _ot
-from pygsti.models.fogistore import FirstOrderGaugeInvariantStore as _FirstOrderGaugeInvariantStore 
+from pygsti.models import fogistore  as _fogistore
 from pygsti.models.modelparaminterposer import LinearInterposer as _LinearInterposer
 from pygsti.baseobjs.errorgenspace import ErrorgenSpace as _ErrorgenSpace
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
@@ -45,7 +45,7 @@ class FOGICheckpoint(_NicelySerializable):
     def from_nice_serialization(cls, state):
         step = state['step']
         param_interposer = _LinearInterposer.from_nice_serialization(state['param_interposer'])
-        fogi_store = _FirstOrderGaugeInvariantStore.from_nice_serialization(state['fogi_store'])
+        fogi_store = _fogistore.FirstOrderGaugeInvariantStore.from_nice_serialization(state['fogi_store'])
         allowed_row_basis_labels = state['allowed_row_basis_labels']
         gauge_action_matrices = {label: cls._decodemx(matrix) for label, matrix in state['gauge_action_matrices'].items()},
         gauge_action_gauge_spaces = _ErrorgenSpace.from_nice_serialization(state['gauge_action_gauge_spaces'])

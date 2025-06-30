@@ -2621,8 +2621,6 @@ class OpModel(Model):
                 #support_sslbls, gauge_errgen_basis = get_overlapping_labels(gauge_errgen_space_labels, target_sslbls)
                 mx, row_basis = _fogit.first_order_gauge_action_matrix(U, target_sslbls, self.state_space,
                                                                     op_gauge_basis, initial_row_basis)
-                #print("DB FOGI: action mx: ", mx.shape) #REMOVE
-                #FOGI DEBUG print("DEBUG => mx is ", mx.shape)
 
                 # Note: mx is a sparse lil matrix
                 # mx cols => op_gauge_basis, mx rows => row_basis, as zero rows have already been removed
@@ -2632,13 +2630,6 @@ class OpModel(Model):
                 allowed_rowspace_mx, allowed_row_basis, op_gauge_space = \
                     self._format_gauge_action_matrix(mx, op_with_errorgen, reduce_to_model_space, row_basis, op_gauge_basis,
                                                     create_complete_basis_fn)
-                #DEBUG
-                #print("DB FOGI: action matrix formatting done:")
-                #if allowed_rowspace_mx.shape[0] < 10:
-                #    print(_np.round(allowed_rowspace_mx.toarray(), 4))
-                #else:
-                #    print(repr(allowed_rowspace_mx))
-                #print(" on ", allowed_row_basis.labels)
 
                 errorgen_coefficient_labels[op_label] = allowed_row_basis.labels
                 gauge_action_matrices[op_label] = allowed_rowspace_mx
