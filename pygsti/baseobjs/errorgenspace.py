@@ -21,6 +21,14 @@ class ErrorgenSpace(_NicelySerializable):
 
     This object collects the information needed to specify a space
     within the space of all error generators.
+
+    Parameters
+    ----------
+    vectors : numpy array
+        List of vectors that span the space
+    
+        elemgen_basis : ElementaryErrorgenBasis
+            The elementary error generator basis that define the entries of self.vectors 
     """
 
     def __init__(self, vectors, basis):
@@ -39,7 +47,7 @@ class ErrorgenSpace(_NicelySerializable):
         return state
     @classmethod
     def from_nice_serialization(cls, state):
-        return cls(state['vectors'], ExplicitElementaryErrorgenBasis.from_nice_serialization(state['basis']))
+        return cls(cls._decodemx(state['vectors']), ExplicitElementaryErrorgenBasis.from_nice_serialization(state['basis']))
     def intersection(self, other_space, free_on_unspecified_space=False, use_nice_nullspace=False):
         """
         TODO: docstring
