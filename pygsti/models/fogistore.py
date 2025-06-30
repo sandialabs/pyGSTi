@@ -129,10 +129,44 @@ class FirstOrderGaugeInvariantStore(_NicelySerializable):
     
     @classmethod
     def from_gauge_action_matrices(cls, gauge_action_matrices_by_op, gauge_action_gauge_spaces_by_op, errorgen_coefficient_labels_by_op,
-                 op_label_abbrevs=None, reduce_to_model_space=True,
-                 dependent_fogi_action='drop', norm_order='auto'):
+                 op_label_abbrevs=None, dependent_fogi_action='drop', norm_order='auto'):
         """
-        TODO: docstring
+        Receives the matrices describing the individual gauge action of each operation within the gate set, and massages
+        them into appropriate from to be fed into construct_fogi_quantities() which finds FOGI quantities for the corresponding
+        gate set. Aditionally, gauge space vectors are computed, and gauge directions that "correspond" to FOGI quantities are 
+        identified. With all of this, a FOGIStore object is created and returned.
+
+        Parameters
+        ----------
+        gauge_action_matrices_by_op : dict of Label keys and numpy array values
+            Gauge action of the primitive operator described by Label. For SPAM, 
+            "gauge action" matrix is just the identity on the *relevant* space of gauge transformations.
+            For gates, it is K - UKU^dag where K is a gauge generator, and U is the ideal gate.
+
+        gauge_action_gauge_spaces_by_op : dict of Label keys and numpy array values
+            "Formatted" gauge spaces corresponding to each gauge action from gauge_action_matrices_by_op. 
+            This formatting occurs in model.py:_format_gauge_action_matrix() TODO: More details
+
+        errorgen_coefficient_labels_by_op : dict of Label keys and list of Label values
+            If indexed by an operation Label, this variable returns a list of error generator labels
+            that identify every row of their corresponding gauge action matrix in gauge_action_matrices_by_op
+
+        op_label_abbrevs : dict of Label keys with str values
+            The user is able to fill the values of this dictionary with any strings to represent
+            the operations in the gate set. typically used to choose shorter names to avoid
+            FOGI names that are too long/complicated to read. 
+
+
+        norm_order : int or 'auto' (Defaults to 'auto')
+
+            Defines the order of the norm to normalize FOGI directions. It should be 1 for 
+            normalizing 'S' quantities and 2 for 'H', so 'auto' utilizes intelligence.
+
+        dependent_fogi_action : 'drop' or 'mark' (Defaults to 'drop')
+
+            If 'drop', all linearly dependent FOGI directions are not returned, resulting in a linearly 
+            independent set of quantities. If 'mark' linearly dependent FOGI directions are kept and
+            marked by dependent_dir_indices.
         """
 
         primitive_op_labels = tuple(gauge_action_matrices_by_op.keys())
@@ -363,7 +397,7 @@ class FirstOrderGaugeInvariantStore(_NicelySerializable):
     def __eq__(self, other):
 
         assert isinstance(other, FirstOrderGaugeInvariantStore), 'Object provided is not of type FirstOrderGaugeInvariantStore'
-        
+
         if [label.__str__() for label in self.primitive_op_labels] != [label.__str__() for label in other.primitive_op_labels]:
             return False
         
