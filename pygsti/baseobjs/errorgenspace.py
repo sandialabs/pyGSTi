@@ -16,22 +16,23 @@ from pygsti.tools import matrixtools as _mt
 from pygsti.baseobjs.errorgenbasis import ExplicitElementaryErrorgenBasis
 
 class ErrorgenSpace(_NicelySerializable):
-    """
-    A vector space of error generators, spanned by some basis.
 
-    This object collects the information needed to specify a space
-    within the space of all error generators.
-
-    Parameters
-    ----------
-    vectors : numpy array
-        List of vectors that span the space
-    
-        elemgen_basis : ElementaryErrorgenBasis
-            The elementary error generator basis that define the entries of self.vectors 
-    """
 
     def __init__(self, vectors, basis):
+        """
+        A vector space of error generators, spanned by some basis.
+
+        This object collects the information needed to specify a space
+        within the space of all error generators.
+
+        Parameters
+        ----------
+        vectors : numpy array
+            List of vectors that span the space
+        
+            elemgen_basis : ElementaryErrorgenBasis
+                The elementary error generator basis that define the entries of self.vectors 
+        """
         super().__init__()
         self.vectors = vectors
         self.elemgen_basis = basis
