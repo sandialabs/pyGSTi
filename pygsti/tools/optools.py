@@ -691,8 +691,13 @@ def generator_infidelity(a, b, mx_basis = 'pp'):
     from pygsti.modelmembers.operations.lindbladerrorgen import LindbladErrorgen as _LindbladErrorgen
 
     # Compute error generator
-    errgen_mat = error_generator(a, b, mx_basis, 'logGTi')
-    errgen = _LindbladErrorgen.from_error_generator(errgen_mat, parameterization = 'GLND')
+    try:
+        errgen_mat = error_generator(a, b, mx_basis, 'logGTi')
+        errgen = _LindbladErrorgen.from_error_generator(errgen_mat, parameterization = 'GLND')
+    except Exception as e:
+        msg = 'Failed to construct an error generator from inputs. Will return NaN. Encountered the following exception while' \
+         + ' attempting:\n' + str(e)
+        return _np.nan
 
     # Loop through coefficient blocks and index into the
     #block_data attributes for each to pull out the H and S terms.
