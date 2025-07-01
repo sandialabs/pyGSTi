@@ -35,13 +35,15 @@ try:
     from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager as _pass_manager
 except: _Sampler = None
 
-# Most recent version of QisKit that this has been tested on:
-#qiskit.__version__ = '1.1.1'
-#qiskit_ibm_runtime.__version__ = '0.25.0'
-# Note that qiskit<1.0 is going EOL in August 2024,
-# and v1 backends are also being deprecated (we now support only v2)
-# Also qiskit-ibm-provider is ALSO being deprecated,
-# so I'm only supporting runtime here
+# Tim updated to Qiskit 2.1.0
+# OLD COMMENT FROM STEFAN?
+# # Most recent version of QisKit that this has been tested on:
+# # qiskit.__version__ = '1.1.1'
+# # qiskit_ibm_runtime.__version__ = '0.25.0'
+# # Note that qiskit<1.0 is going EOL in August 2024,
+# # and v1 backends are also being deprecated (we now support only v2)
+# # Also qiskit-ibm-provider is ALSO being deprecated,
+# # so I'm only supporting runtime here
 
 try:
     from bson import json_util as _json_util
@@ -292,7 +294,6 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         ds = _data.DataSet()
         # for exp_idx in range(len(self.batch_results), len(self.qjobs)):
         for exp_idx in range(0, len(self.qjobs)):
-            print(0)
             qjob = self.qjobs[exp_idx]
             print(f"Querying IBMQ for results objects for batch {exp_idx + 1}...")
             batch_result = qjob.result()
