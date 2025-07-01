@@ -25,7 +25,7 @@ dependencies=[
     'numpy>=1.15.0',
     'scipy',
     'stim',
-    'plotly',
+    'plotly>=3.8.0',
     'pandas',
     'networkx'
 ]
