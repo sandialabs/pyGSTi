@@ -2518,14 +2518,16 @@ class OpModel(Model):
 
     def setup_fogi(self, initial_gauge_basis, create_complete_basis_fn=None,
                    op_label_abbrevs=None, reparameterize=False, reduce_to_model_space=True,
-                   dependent_fogi_action='drop', include_spam=True, primitive_op_labels=None, check_point=None):
-
+                   dependent_fogi_action='drop', include_spam=True, primitive_op_labels=None, check_point=None, checkpoint_path=''):
+        
         from pygsti.baseobjs.errorgenbasis import CompleteElementaryErrorgenBasis as _CompleteElementaryErrorgenBasis
 
         from pygsti.tools import basistools as _bt
         from pygsti.tools import fogitools as _fogit
         from pygsti.models.fogistore import FirstOrderGaugeInvariantStore as _FOGIStore
-
+        from pygsti.tools.fogitools import FOGICheckpoint as _FOGICheckpoint
+        if check_point is None and not disable_checkpoints:
+            check_point = _FOGICheckpoint(0)
         if primitive_op_labels is None:
             primitive_op_labels = self.primitive_op_labels
 
@@ -2583,7 +2585,7 @@ class OpModel(Model):
         gauge_action_gauge_spaces = _collections.OrderedDict()
         errorgen_coefficient_labels = _collections.OrderedDict()  # by operation
         #Checkpoint number 1 skips this loop
-        if check_point != None:
+        if check_point is not None:
             if check_point.step == 1:
                 primitive_op_labels_copy = primitive_op_labels.copy()
                 # Check if primitive_op_labels matches the ops in the saved dictionary
@@ -2635,6 +2637,11 @@ class OpModel(Model):
                 gauge_action_matrices[op_label] = allowed_rowspace_mx
                 gauge_action_gauge_spaces[op_label] = op_gauge_space
                 #FOGI DEBUG print("DEBUG => final allowed_rowspace_mx shape =", allowed_rowspace_mx.shape)
+            check_point.allowed_row_basis_labels = errorgen_coefficient_labels
+            check_point.gauge_action_matrices = gauge_action_matrices 
+            check_point.gauge_action_gauge_spaces = gauge_action_gauge_spaces
+            check_point.step = 1
+            check_point.
 
         # Similar for SPAM
         #Checkpoint number 2 skips this loop
