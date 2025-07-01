@@ -1046,11 +1046,8 @@ def cl_vectors(dim):
     list
         A list of `dim` numpy arrays each of shape (dim,).
     """
-    vecList = []
-    for i in range(dim):
-        v = _np.zeros(dim, 'd'); v[i] = 1.0
-        vecList.append(v)
-    return vecList
+    data = _np.eye(dim)
+    return [v for v in data]
 
 
 def cl_labels(dim):
@@ -1205,11 +1202,8 @@ def sv_vectors(dim):
     list
         A list of `dim` numpy arrays each of shape (dim,).
     """
-    vecList = []
-    for i in range(dim):
-        v = _np.zeros(dim, complex); v[i] = 1.0
-        vecList.append(v)
-    return vecList
+    data = _np.eye(dim, dtype=complex)
+    return [v for v in data]
 
 
 def sv_labels(dim):

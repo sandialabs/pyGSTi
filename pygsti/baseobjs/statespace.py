@@ -706,6 +706,7 @@ class QuditSpace(StateSpace):
     @property
     def qudit_udims(self):
         """Integer Hilbert (unitary operator) space dimensions of the qudits in ths quantum state space."""
+        return self._qudit_udims
 
     @property
     def udim(self):
