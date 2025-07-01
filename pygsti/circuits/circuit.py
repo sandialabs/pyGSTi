@@ -2498,6 +2498,46 @@ class Circuit(object):
         if self._static: cpy.done_editing()
         return cpy
 
+    def replace_spatially_equivalent_qubits(self, old_single_qubit, equiv_qubit_in_model):
+        """
+        Changes the *name* of a gate throughout this Circuit.
+
+        Note that the name is only a part of the label identifying each
+        gate, and doesn't include the lines (qubits) a gate acts upon.  For
+        example, the "Gx:0" and "Gx:1" labels both have the same name but
+        act on different qubits.
+
+        Parameters
+        ----------
+        old_single_qubit : int
+            The qubit to replace.
+
+        equiv_qubit_in_model : int
+            The qubit to replace `equiv_qubit_in_model` with.
+
+        Returns
+        -------
+        None
+        """
+        assert(not self._static), "Cannot edit a read-only circuit!"
+
+        def replace(obj):  # obj is either a simple label or a list
+            if isinstance(obj, _Label):
+                if len(obj.qubits) == 1:
+                    if obj.qubits[0] == old_single_qubit:
+                        newobj = _Label(obj.name,
+                                        (equiv_qubit_in_model,))
+                    else:
+                        newobj = obj
+                else: 
+                    newobj = obj
+            else:
+                newobj = [replace(sub) for sub in obj]
+            return newobj
+
+        self._labels = replace(self._labels)
+
+
     def replace_gatename_inplace(self, old_gatename, new_gatename):
         """
         Changes the *name* of a gate throughout this Circuit.
