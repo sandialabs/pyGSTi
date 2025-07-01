@@ -50,6 +50,7 @@ class ElementaryErrorgenBasis(_NicelySerializable):
         Number of elementary errorgen elements in this basis.
         """
         return len(self.labels)
+    
 
 #helper function for checking label types.
 def _all_elements_same_type(lst):
@@ -118,16 +119,24 @@ class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
         self._cached_dual_matrices = None
         self._cached_supports = None
 
+    def __eq__(self, other):
+        return self.state_space.__eq__(other.state_space) and [label.__str__() for label in self.labels] == [label.__str__() for label in other.labels] and self._basis_1q.__eq__(other._basis_1q)
+    
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
         state.update({'state_space' : self.state_space._to_nice_serialization(),
                       'labels' : [label.__str__() for label in self.labels],
+                      'label_type' : 'global' if isinstance(self.labels[0], _GlobalElementaryErrorgenLabel) else 'local',
                       '_basis_1q' : self._basis_1q if isinstance(self._basis_1q, str) else self._basis_1q._to_nice_serialization()
         })
         return state
     @classmethod
     def from_nice_serialization(cls, state):
-        return cls(_StateSpace.from_nice_serialization(state['state_space']), [_GlobalElementaryErrorgenLabel.cast(label) for label in state['labels']], state['_basis_1q'] if isinstance(state['_basis_1q'], str) else _Basis.from_nice_serialization(state['_basis_1q']))
+        if state['label_type'] == 'global':
+            cast = _GlobalElementaryErrorgenLabel.cast
+        else:
+            cast = _LocalElementaryErrorgenLabel.cast
+        return cls(_StateSpace.from_nice_serialization(state['state_space']), [cast(label) for label in state['labels']], state['_basis_1q'] if isinstance(state['_basis_1q'], str) else _Basis.from_nice_serialization(state['_basis_1q']))
     @property
     def labels(self):
         return self._labels
@@ -528,7 +537,7 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
             `GlobalElementaryErrorgenLabel` and `LocalElementaryErrorgenLabel`,
             respectively.
         """
-
+        super().__init__()
         if isinstance(basis_1q, _Basis):
             self._basis_1q = basis_1q
         elif isinstance(basis_1q, str):
@@ -601,6 +610,24 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
         #                      (IXX,XXI) #   on right, loop over all possible choices of at least one, an at most m,
         #                      (IXX,XXX) #    nontrivial indices to place within the m nontriv left indices (1 & 2 here)
 
+    def _to_nice_serialization(self):
+         
+        state = super()._to_nice_serialization()
+        state.update({'basis_1q' : self._basis_1q.to_nice_serialization(),
+                      'state_space' : self.state_space.to_nice_serialization(),
+                      'elementary_errorgen_types': self._elementary_errorgen_types,
+                      'max_weights' : self.max_weights,
+                      'sslbl_overlap' : self._sslbl_overlap,
+                      'default_label_type': self._default_lbl_typ 
+        })
+        return state
+    
+    @classmethod
+    def from_nice_serialization(cls, state):
+        
+        return cls(_Basis.from_nice_serialization(state['basis_1q']), _StateSpace.from_nice_serialization(state['state_space']), \
+                   state['elementary_errorgen_types'], max_weights=state['max_weights'], sslbl_overlap=state['sslbl_overlap'], \
+                    default_label_type=state['default_label_type'])
     def __len__(self):
         """ Number of elementary errorgen elements in this basis """
         return self._offsets[self._elementary_errorgen_types[-1]]['END']

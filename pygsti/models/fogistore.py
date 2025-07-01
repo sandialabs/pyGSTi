@@ -33,7 +33,82 @@ class FirstOrderGaugeInvariantStore(_NicelySerializable):
 
     Currently, it is only compatible with :class:`ExplicitOpModel` objects.
     """
-    def __init__(self, primitive_op_labels, gauge_space, elem_errorgen_labels_by_op, op_errorgen_indices, fogi_directions, fogi_metadata, dependent_dir_indices, fogv_directions, allop_gauge_action, gauge_space_directions, norm_order=None, dependent_fogi_action='drop'):
+    def __init__(self, primitive_op_labels, gauge_space, elem_errorgen_labels_by_op, op_errorgen_indices, fogi_directions, 
+                 fogi_metadata, dependent_dir_indices, fogv_directions, allop_gauge_action, gauge_space_directions, 
+                 norm_order='auto', dependent_fogi_action='drop'):
+        """
+
+        Parameters
+        ----------
+        primitive_op_labels : tuple of Label
+            Labels describing the gate set operations
+
+        gauge_space : ErrorgenSpace
+            Special way of intersecting the gauge spaces of all ops, see the beginning of from_gauge_action_matrices()
+            for a more detailed description.
+
+        elem_errorgen_labels_by_op : dict of Label keys with GlobalElementaryErrorgenLabel or GlobalElementaryErrorgenLabel values
+            Elementary error generator labels for every operation in the gate set
+
+        op_errorgen_indices : dict of Label keys with Slices values
+            Specifies which indices from the error generator space labels correspond to which operation. For example,
+            these allows us to index accordingly into the rows of allop_gauge_action which contain all error generators
+            from every operation stacked on top of each other.
+
+        fogi_directions : numpy array
+            Array where each column is a FOGI direction, the rows represent the modelmember parameters from which they were
+            derived (typically elementary error generators)
+
+        fogi_metadata : list of dictionaries 
+            Entry number k of this list contains metadata information about fogi quantity k (column k of fogi_directions). 
+            It is organized as a dictionary with the following entries:
+
+                - 'name' (str) : Label describing the FOGI quantity
+
+                - 'abbrev' (str) : An abbreviated version of the label above TODO: more details 
+
+                - 'r' (float) : constant that allows us to convert between the gauge-space-normalized
+                       FOGI direction to the errgen-space-normalized version of it.
+                       fogi_dir = r * dot(M, epsilon) = r * dot(inv_diff_gauge_action, int_vec)
+
+                - 'gaugespace_dir' (numpy array) : A corresponding gauge direction TODO: more details on their relationship
+                                    to FOGI quantities
+
+                - 'opset' (list of Label) : The set of model member operations that are affected by the corresponding FOGI
+                           quantity
+
+                - 'raw' (str) : Another version of 'name' without abbreviations
+
+        dependent_dir_indices : list of int
+            Specifies the indices of a set of FOGI quantities which, if removed, the remaining FOGI quantities are linearly independent.
+
+        fogv_directions : numpy array
+            A list of gauge directions that span the gauge space of the target gate set
+
+        allop_gauge_action : lil_matrix
+            Stands for "All operations gauge action". It is a restricted version of each operation's gauge_action stacked together. Ignores elemgens that are not included in the 
+            common gauge space. The common gauge space is the intersection of all the individual gauge spaces. TODO: I believe 
+            this is done to remove the "trivial"/"meta" gauge from SPAM operations. We should verify this and if so, include
+            it in this docstring
+
+        gauge_space_directions : numpy array 
+            Contains, when applicable, a gauge-space direction that
+            correspondings to the FOGI quantity in fogi_directions.  Such a gauge-space direction
+            exists for relational FOGI quantities, where the FOGI quantity is constructed by taking the
+            *difference* of a gauge-space action (given by the gauge-space direction) on two operations
+            (or sets of operations). TODO: How does one know the corresponding fogi direction? each
+            one of these is computed from fogv_directions.
+
+        norm_order : str or int
+
+            Defines the order of the norm to normalize FOGI directions. It should be 1 for normalizing 'S' quantities and 2 for 'H',
+            so 'auto' utilizes intelligence.
+
+        dependent_fogi_action : 'drop' or 'mark'
+
+            If 'drop', all linearly dependent FOGI directions are not returned, resulting in a linearly independent set of quantities. 
+            If 'mark' linearly dependent FOGI directions are kept and marked by dependent_dir_indices.
+        """
         super().__init__()
         self.primitive_op_labels = primitive_op_labels
         self.gauge_space = gauge_space
@@ -53,15 +128,50 @@ class FirstOrderGaugeInvariantStore(_NicelySerializable):
         self.fogv_labels = ["%d gauge action" % i for i in range(self.fogv_directions.shape[1])]
     
     @classmethod
-    def compute_fogis(cls, gauge_action_matrices_by_op, gauge_action_gauge_spaces_by_op, errorgen_coefficient_labels_by_op,
-                 op_label_abbrevs=None, reduce_to_model_space=True,
-                 dependent_fogi_action='drop', norm_order=None):
+    def from_gauge_action_matrices(cls, gauge_action_matrices_by_op, gauge_action_gauge_spaces_by_op, errorgen_coefficient_labels_by_op,
+                 op_label_abbrevs=None, dependent_fogi_action='drop', norm_order='auto'):
         """
-        TODO: docstring
+        Receives the matrices describing the individual gauge action of each operation within the gate set, and massages
+        them into appropriate from to be fed into construct_fogi_quantities() which finds FOGI quantities for the corresponding
+        gate set. Aditionally, gauge space vectors are computed, and gauge directions that "correspond" to FOGI quantities are 
+        identified. With all of this, a FOGIStore object is created and returned.
+
+        Parameters
+        ----------
+        gauge_action_matrices_by_op : dict of Label keys and numpy array values
+            Gauge action of the primitive operator described by Label. For SPAM, 
+            "gauge action" matrix is just the identity on the *relevant* space of gauge transformations.
+            For gates, it is K - UKU^dag where K is a gauge generator, and U is the ideal gate.
+
+        gauge_action_gauge_spaces_by_op : dict of Label keys and numpy array values
+            "Formatted" gauge spaces corresponding to each gauge action from gauge_action_matrices_by_op. 
+            This formatting occurs in model.py:_format_gauge_action_matrix() TODO: More details
+
+        errorgen_coefficient_labels_by_op : dict of Label keys and list of Label values
+            If indexed by an operation Label, this variable returns a list of error generator labels
+            that identify every row of their corresponding gauge action matrix in gauge_action_matrices_by_op
+
+        op_label_abbrevs : dict of Label keys with str values
+            The user is able to fill the values of this dictionary with any strings to represent
+            the operations in the gate set. typically used to choose shorter names to avoid
+            FOGI names that are too long/complicated to read. 
+
+
+        norm_order : int or 'auto' (Defaults to 'auto')
+
+            Defines the order of the norm to normalize FOGI directions. It should be 1 for 
+            normalizing 'S' quantities and 2 for 'H', so 'auto' utilizes intelligence.
+
+        dependent_fogi_action : 'drop' or 'mark' (Defaults to 'drop')
+
+            If 'drop', all linearly dependent FOGI directions are not returned, resulting in a linearly 
+            independent set of quantities. If 'mark' linearly dependent FOGI directions are kept and
+            marked by dependent_dir_indices.
         """
 
         primitive_op_labels = tuple(gauge_action_matrices_by_op.keys())
 
+        
         # Construct common gauge space by special way of intersecting the gauge spaces for all the ops
         # Note: the gauge_space of each op is constructed (see `setup_fogi`) so that the gauge action is
         #  zero on any elementary error generator not in the elementary-errorgen basis associated with
@@ -154,23 +264,20 @@ class FirstOrderGaugeInvariantStore(_NicelySerializable):
 
         #Get gauge-space directions corresponding to the fogv directions
         # (pinv_allop_gauge_action takes errorgen-set -> gauge-gen space)
-        allop_gauge_action = allop_gauge_action
         pinv_allop_gauge_action = _np.linalg.pinv(allop_gauge_action.toarray(), rcond=1e-7)
-        gauge_space_directions = _np.dot(pinv_allop_gauge_action,
-                                         fogv_directions.toarray())  # in gauge-generator space
-        gauge_space_directions = gauge_space_directions
+        gauge_space_directions = pinv_allop_gauge_action @ fogv_directions.toarray()  # in gauge-generator space
 
         #Notes on error-gen vs gauge-gen space:
         # self.fogi_directions and self.fogv_directions are dual vectors in error-generator space,
         # i.e. with elements corresponding to the elementary error generators given by
         # self.errorgen_space_op_elem_labels.
-        # self.fogi_gaugespace_directions contains, when applicable, a gauge-space direction that
+        # self.fogi_gauge_space_directions contains, when applicable, a gauge-space direction that
         # correspondings to the FOGI quantity in self.fogi_directions.  Such a gauge-space direction
         # exists for relational FOGI quantities, where the FOGI quantity is constructed by taking the
         # *difference* of a gauge-space action (given by the gauge-space direction) on two operations
         # (or sets of operations).
 
-        #Store auxiliary info for later use
+        
         fogi_store = cls(primitive_op_labels, gauge_space, elem_errorgen_labels_by_op, op_errorgen_indices, fogi_directions, fogi_metadata, dependent_dir_indices, fogv_directions, allop_gauge_action, gauge_space_directions, norm_order, dependent_fogi_action)
         fogi_store._check_fogi_store()
         return fogi_store
@@ -286,7 +393,82 @@ class FirstOrderGaugeInvariantStore(_NicelySerializable):
         #gauge_space_directions = _np.dot(pinv_allop_gauge_action, self.fogv_directions)  # in gauge-generator space
         #assert(_np.linalg.matrix_rank(gauge_space_directions) <= self._gauge_space_dim)  # should be nearly full rank
         pass
+    
+    def __eq__(self, other):
 
+        assert isinstance(other, FirstOrderGaugeInvariantStore), 'Object provided is not of type FirstOrderGaugeInvariantStore'
+
+        if [label.__str__() for label in self.primitive_op_labels] != [label.__str__() for label in other.primitive_op_labels]:
+            return False
+        
+        if not self.gauge_space.__eq__(other.gauge_space):
+            return False
+        
+        if [op.__str__() for op in self.elem_errorgen_labels_by_op.keys()] != [op.__str__() for op in other.elem_errorgen_labels_by_op.keys()]:
+            return False
+        
+        for errgens_self, errgens_other in zip(list(self.elem_errorgen_labels_by_op.values()), list(other.elem_errorgen_labels_by_op.values())):
+            for errgen_self, errgen_other in zip(errgens_self, errgens_other):
+                if errgen_self.__str__() != errgen_other.__str__():
+                    return False
+        
+        if not (self.fogi_directions != other.fogi_directions).nnz == 0:
+            return False
+        
+        for object_self, object_other in zip(self.fogi_metadata, other.fogi_metadata):
+
+            if (object_self['name'] != object_other['name']) or (object_self['abbrev'] != object_other['abbrev']) or (object_self['r'] != object_other['r']) \
+                or (object_self['raw'] != object_other['raw']):
+                return False
+            #Case for when one of the spaces is None but the other isn't
+            if (object_self['gaugespace_dir'] is not None and object_other['gaugespace_dir'] is None) or \
+            (object_self['gaugespace_dir'] is None and object_other['gaugespace_dir'] is not None):
+                return False
+            #If they are both not none, check that their matrices are equal
+            if object_self['gaugespace_dir'] is not None and object_other['gaugespace_dir'] is not None:
+                if not _np.allclose(object_self['gaugespace_dir'], object_other['gaugespace_dir']):
+                    return False
+            if [label.__str__() for label in object_self['opset']] != [label.__str__() for label in object_other['opset']]:
+                return False
+        
+        if not _np.allclose(self.dependent_dir_indices, other.dependent_dir_indices):
+            return False
+        
+        if not (self.fogv_directions != other.fogv_directions).nnz == 0:
+            return False 
+        
+        if not (self.allop_gauge_action != other.allop_gauge_action).nnz == 0:
+            return False
+        #Case for when one of the spaces is none but the other isn't
+        if (self.gauge_space_directions is not None and other.gauge_space_directions is None) or \
+            (self.gauge_space_directions is None and other.gauge_space_directions is not None):
+            return False
+        #If they are both not none, check that their matrices are equal
+        if self.gauge_space_directions is not None and other.gauge_space_directions is not None:
+            if not _np.allclose(self.gauge_space_directions, other.gauge_space_directions):
+                return False
+        
+        if self.norm_order != other.norm_order or self._dependent_fogi_action != other._dependent_fogi_action:
+            return False
+        return True
+        
+        '''
+        self.primitive_op_labels = primitive_op_labels
+        self.gauge_space = gauge_space
+        self.elem_errorgen_labels_by_op = elem_errorgen_labels_by_op
+        self.op_errorgen_indices = op_errorgen_indices
+        self.fogi_directions = fogi_directions
+        self.fogi_metadata = fogi_metadata
+        self.dependent_dir_indices = dependent_dir_indices
+        self.fogv_directions = fogv_directions
+        self.allop_gauge_action = allop_gauge_action
+        self.gauge_space_directions = gauge_space_directions
+        self.norm_order = norm_order
+        self._dependent_fogi_action = dependent_fogi_action
+
+        self.errorgen_space_op_elem_labels = tuple([(op_label, elem_lbl) for op_label in self.primitive_op_labels
+                                                    for elem_lbl in self.elem_errorgen_labels_by_op[op_label]])
+        self.fogv_labels = ["%d gauge action" % i for i in range(self.fogv_directions.shape[1])]'''
     @property
     def errorgen_space_dim(self):
         return self.fogi_directions.shape[0]

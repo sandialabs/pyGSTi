@@ -16,14 +16,23 @@ from pygsti.tools import matrixtools as _mt
 from pygsti.baseobjs.errorgenbasis import ExplicitElementaryErrorgenBasis
 
 class ErrorgenSpace(_NicelySerializable):
-    """
-    A vector space of error generators, spanned by some basis.
 
-    This object collects the information needed to specify a space
-    within the space of all error generators.
-    """
 
     def __init__(self, vectors, basis):
+        """
+        A vector space of error generators, spanned by some basis.
+
+        This object collects the information needed to specify a space
+        within the space of all error generators.
+
+        Parameters
+        ----------
+        vectors : numpy array
+            List of vectors that span the space
+        
+            elemgen_basis : ElementaryErrorgenBasis
+                The elementary error generator basis that define the entries of self.vectors 
+        """
         super().__init__()
         self.vectors = vectors
         self.elemgen_basis = basis
@@ -39,7 +48,7 @@ class ErrorgenSpace(_NicelySerializable):
         return state
     @classmethod
     def from_nice_serialization(cls, state):
-        return cls(state['vectors'], ExplicitElementaryErrorgenBasis.from_nice_serialization(state['basis']))
+        return cls(cls._decodemx(state['vectors']), ExplicitElementaryErrorgenBasis.from_nice_serialization(state['basis']))
     def intersection(self, other_space, free_on_unspecified_space=False, use_nice_nullspace=False):
         """
         TODO: docstring
@@ -84,6 +93,9 @@ class ErrorgenSpace(_NicelySerializable):
 
         return ErrorgenSpace(intersection_vecs, common_basis)
 
+    def __eq__(self, other):
+
+        return _np.allclose(self.vectors, other.vectors) and self.elemgen_basis.__eq__(other.elemgen_basis)
     def union(self, other_space):
         """
         TODO: docstring

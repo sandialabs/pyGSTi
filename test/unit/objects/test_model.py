@@ -16,7 +16,6 @@ from pygsti.models import ExplicitOpModel
 from pygsti.circuits import Circuit
 from pygsti.models.gaugegroup import FullGaugeGroupElement
 from ..util import BaseCase, needs_cvxpy
-
 SKIP_DIAMONDIST_ON_WIN = True
 
 
@@ -191,7 +190,9 @@ class GeneralMethodBase(object):
 
     def test_copy(self):
         gs2 = self.model.copy()
-        # TODO assert correctness
+        #TODO: Uncomment when issue #600 is resolved
+        #self.assertTrue(gs2.is_equivalent(self.model))
+        
 
     def test_deriv_wrt_params(self):
         deriv = self.model.deriv_wrt_params()
@@ -220,6 +221,18 @@ class GeneralMethodBase(object):
         v = cp.to_vector()
         cp.from_vector(v)
         self.assertAlmostEqual(self.model.frobeniusdist(cp), 0)
+
+    def test_set_parameter_values(self):
+        if self.model.num_params > 0:
+            cp = self.model.copy()
+            cp2 = self.model.copy()
+            test_vec = np.arange(self.model.num_params) * 1e-3
+            cp.set_parameter_values(np.arange(self.model.num_params), test_vec)
+            cp2.from_vector(test_vec)
+            self.assertAlmostEqual(np.linalg.norm(cp2.to_vector() - cp.to_vector()), 0)
+            #TODO: Uncomment when issue #600 is resolved, remove line above
+            #self.assertTrue(cp.is_equivalent(cp2))
+
 
     def test_pickle(self):
         # XXX what exactly does this cover and is it needed?  EGN: this tests that the individual pieces (~dicts) within a model can be pickled; it's useful for debuggin b/c often just one of these will break.
