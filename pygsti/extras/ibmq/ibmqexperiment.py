@@ -285,12 +285,14 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
                     output_dict[new_string] = input_dict[bitstring]
             return output_dict
 
-        if len(self.batch_results):
-            print(f'Already retrieved results of {len(self.batch_results)}/{len(self.qiskit_isa_circuit_batches)} circuit batches')
+        #if len(self.batch_results):
+        #    print(f'Already retrieved results of {len(self.batch_results)}/{len(self.qiskit_isa_circuit_batches)} circuit batches')
 
         #get results from backend jobs and add to dict
         ds = _data.DataSet()
-        for exp_idx in range(len(self.batch_results), len(self.qjobs)):
+        # for exp_idx in range(len(self.batch_results), len(self.qjobs)):
+        for exp_idx in range(0, len(self.qjobs)):
+            print(0)
             qjob = self.qjobs[exp_idx]
             print(f"Querying IBMQ for results objects for batch {exp_idx + 1}...")
             batch_result = qjob.result()
@@ -381,7 +383,7 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         if ibmq_session is None: 
             ibmq_session = _Session(backend = ibmq_backend)
 
-        sampler = _Sampler(session=ibmq_session)
+        sampler = _Sampler(mode=ibmq_session)
         
         for batch_idx, batch in enumerate(self.qiskit_isa_circuit_batches):
             if batch_idx < start or batch_idx >= stop:
