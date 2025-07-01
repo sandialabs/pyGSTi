@@ -380,7 +380,6 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
             switchBd.mdl_gaugeinv[d, i] = est.models[GIRepLbl]
             
             switchBd.mdl_final_modvi[d, i]= est.models['final iteration estimate']
-            #print(est.models['final iteration estimate'])
             
             try:
                 switchBd.mdl_gaugeinv_ep[d, i] = _tools.project_to_target_eigenspace(est.models[GIRepLbl],
