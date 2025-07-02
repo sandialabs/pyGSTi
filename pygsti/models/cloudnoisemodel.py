@@ -18,7 +18,7 @@ import numpy as _np
 import scipy.sparse as _sps
 
 from pygsti.baseobjs import statespace as _statespace
-from pygsti.models.implicitmodel import ImplicitOpModel as _ImplicitOpModel, _init_spam_layers
+from pygsti.models.implicitmodel import ImplicitOpModel as _ImplicitOpModel
 from pygsti.models.layerrules import LayerRules as _LayerRules
 from pygsti.models.memberdict import OrderedMemberDict as _OrderedMemberDict
 from pygsti.evotypes import Evotype as _Evotype
@@ -306,7 +306,7 @@ class CloudNoiseModel(_ImplicitOpModel):
                     # used to specify which gate parameters should be amplifiable by germs for a given cloud (?)
                     # TODO CHECK THIS
 
-        _init_spam_layers(self, prep_layers, povm_layers)  # SPAM
+        self._init_spam_layers(self, prep_layers, povm_layers)  # SPAM
 
         printer.log("DONE! - created Model with nqudits=%d and op-blks=" % self.state_space.num_qudits)
         for op_blk_lbl, op_blk in self.operation_blks.items():

@@ -15,7 +15,7 @@ import itertools as _itertools
 import warnings as _warnings
 import numpy as _np
 
-from pygsti.models.implicitmodel import ImplicitOpModel as _ImplicitOpModel, _init_spam_layers
+from pygsti.models.implicitmodel import ImplicitOpModel as _ImplicitOpModel
 from pygsti.models.layerrules import LayerRules as _LayerRules
 from pygsti.models.memberdict import OrderedMemberDict as _OrderedMemberDict
 from pygsti.baseobjs import qubitgraph as _qgraph, statespace as _statespace
@@ -26,6 +26,7 @@ from pygsti.forwardsims.matrixforwardsim import MatrixForwardSimulator as _Matri
 from pygsti.modelmembers import operations as _op
 from pygsti.modelmembers import povms as _povm
 from pygsti.modelmembers import states as _state
+from pygsti.modelmembers import instruments as _instruments
 from pygsti.modelmembers.operations import opfactory as _opfactory
 from pygsti.modelmembers.modelmembergraph import ModelMemberGraph as _MMGraph
 from pygsti.baseobjs.basis import BuiltinBasis as _BuiltinBasis
@@ -38,6 +39,8 @@ from pygsti.tools import optools as _ot
 from pygsti.tools import listtools as _lt
 from pygsti.processors.processorspec import ProcessorSpec as _ProcessorSpec, QubitProcessorSpec as _QubitProcessorSpec
 
+from typing import Dict
+ordereddict = Dict
 
 class LocalNoiseModel(_ImplicitOpModel):
     """
@@ -54,8 +57,7 @@ class LocalNoiseModel(_ImplicitOpModel):
         processor.
 
     gatedict : dict
-        A dictionary (an `OrderedDict` if you care about insertion order) that
-        associates with gate names (e.g. `"Gx"`) :class:`LinearOperator`,
+        A dictionary that associates gate names (e.g. `"Gx"`) with :class:`LinearOperator` or
         `numpy.ndarray` objects. When the objects may act on fewer than the total
         number of qudits (determined by their dimension/shape) then they are
         repeatedly embedded into operation on the entire state space as specified
@@ -102,8 +104,7 @@ class LocalNoiseModel(_ImplicitOpModel):
           a circuit for any preparation and outcome.  High memory demand;
           best for a small number of (1 or 2) qubits.
         - "map" : op_matrix-state_vector products are repeatedly computed
-          to simulate circuits.  Slower for a small number of qubits, but
-          faster and more memory efficient for higher numbers of qubits (3+).
+          to simulate circuits.
 
     on_construction_error : {'raise','warn',ignore'}
         What to do when the conversion from a value in `gatedict` to a
@@ -142,8 +143,8 @@ class LocalNoiseModel(_ImplicitOpModel):
         this idle operation is *not* added to other layers as in `"add_global"`.
     """
 
-    def __init__(self, processor_spec, gatedict, prep_layers=None, povm_layers=None, evotype="default",
-                 simulator="auto", on_construction_error='raise',
+    def __init__(self, processor_spec, gatedict, instdict=None, prep_layers=None, povm_layers=None, 
+                 evotype="default", simulator="auto", on_construction_error='raise',
                  independent_gates=False, ensure_composed_gates=False, implicit_idle_mode="none"):
 
         qudit_labels = processor_spec.qudit_labels
@@ -158,7 +159,8 @@ class LocalNoiseModel(_ImplicitOpModel):
         # For later processing, we'll create mm_gatedict to contain each item as a ModelMember.  In local noise
         # models, these gates can be parameterized however the user desires - the LocalNoiseModel just embeds these
         # operators appropriately.
-        mm_gatedict = _collections.OrderedDict()  # ops as ModelMembers
+        mm_gatedict: ordereddict = dict()  # ops as ModelMembers
+        mm_instdict: ordereddict = dict()
 
         for key, gate in gatedict.items():
             if isinstance(gate, (_op.LinearOperator, _opfactory.OpFactory)):
@@ -167,8 +169,17 @@ class LocalNoiseModel(_ImplicitOpModel):
                 mm_gatedict[key] = _op.StaticArbitraryOp(gate, basis=None, evotype=evotype,
                                                          state_space=state_space)  # static gates by default
 
+
+        for key, inst in instdict.items():
+            if isinstance(inst, (_instruments.Instrument, _instruments.TPInstrument)):
+                mm_instdict[key] = inst
+            else:
+                if isinstance(inst, dict):
+                    mm_instdict[key] = _instruments.Instrument(inst)
+                else:
+                    raise ValueError(f'Unrecognized instdict member {inst}')
+
         self.processor_spec = processor_spec
-        idle_names = processor_spec.idle_gate_names
         global_idle_layer_label = processor_spec.global_idle_layer_label
 
         layer_rules = _SimpleCompLayerRules(qudit_labels, implicit_idle_mode, None, global_idle_layer_label)
@@ -178,23 +189,32 @@ class LocalNoiseModel(_ImplicitOpModel):
 
         flags = {'auto_embed': False, 'match_parent_statespace': False,
                  'match_parent_evotype': True, 'cast_to_type': None}
-        self.prep_blks['layers'] = _OrderedMemberDict(self, None, None, flags)
-        self.povm_blks['layers'] = _OrderedMemberDict(self, None, None, flags)
+        self.prep_blks['layers']= _OrderedMemberDict(self, None, None, flags)
+        self.povm_blks['layers']= _OrderedMemberDict(self, None, None, flags)
         self.operation_blks['gates'] = _OrderedMemberDict(self, None, None, flags)
         self.operation_blks['layers'] = _OrderedMemberDict(self, None, None, flags)
+        self.instrument_blks['gates'] = _OrderedMemberDict(self, None, None, flags)
         self.instrument_blks['layers'] = _OrderedMemberDict(self, None, None, flags)
         self.factories['gates'] = _OrderedMemberDict(self, None, None, flags)
         self.factories['layers'] = _OrderedMemberDict(self, None, None, flags)
 
-        _init_spam_layers(self, prep_layers, povm_layers)  # SPAM
+        self._init_spam_layers(self, prep_layers, povm_layers)  # SPAM
 
+        self._init_gate_layers(independent_gates, mm_gatedict, ensure_composed_gates, on_construction_error, implicit_idle_mode)
+        
+        self._init_instrument_layers(independent_gates, mm_instdict, on_construction_error)
+
+        self._clean_paramvec()
+
+    def _init_gate_layers(self, independent_gates, mm_gatedict, ensure_composed_gates, on_construction_error, implicit_idle_mode):
+        """Helper method for initialization of gate layers."""
         for gateName in self.processor_spec.gate_names:
             # process gate names (no sslbls, e.g. "Gx", not "Gx:0") - we'll check for the
             # latter when we process the corresponding gate name's availability
             gate_unitary = self.processor_spec.gate_unitaries[gateName]
             resolved_avail = self.processor_spec.resolved_availability(gateName)
 
-            gate_is_idle = gateName in idle_names
+            gate_is_idle = gateName in self.processor_spec.idle_gate_names
             gate_is_factory = callable(gate_unitary)
 
             if not independent_gates:  # then get our "template" gate ready
@@ -213,12 +233,12 @@ class LocalNoiseModel(_ImplicitOpModel):
                     else:
                         self.operation_blks['gates'][_Lbl(gateName)] = gate
 
-                    if gate_is_idle and gate.state_space.num_qudits == 1 and global_idle_layer_label is None:
+                    if gate_is_idle and gate.state_space.num_qudits == 1 and self.processor_spec.global_idle_layer_label is None:
                         # then attempt to turn this 1Q idle into a global idle (for implied idle layers)
-                        global_idle = _op.ComposedOp([_op.EmbeddedOp(state_space, (qlbl,), gate)
-                                                      for qlbl in qudit_labels])
+                        global_idle = _op.ComposedOp([_op.EmbeddedOp(self.state_space, (qlbl,), gate)
+                                                      for qlbl in self.processor_spec.qudit_labels])
                         self.operation_blks['layers'][_Lbl('{auto_global_idle}')] = global_idle
-                        global_idle_layer_label = layer_rules.global_idle_layer_label = _Lbl('{auto_global_idle}')
+                        global_idle_layer_label = self._layer_rules.global_idle_layer_label = _Lbl('{auto_global_idle}')
             else:
                 gate = None  # this is set to something useful in the "elif independent_gates" block below
 
@@ -233,7 +253,7 @@ class LocalNoiseModel(_ImplicitOpModel):
                 # when just ordering doesn't align (e.g. Gcnot:1:0 on 2-qudits needs to embed)
                 allowed_sslbls_fn = resolved_avail if callable(resolved_avail) else None
                 gate_nQudits = self.processor_spec.gate_num_qudits(gateName)
-                embedded_op = _opfactory.EmbeddingOpFactory(state_space, base_gate,
+                embedded_op = _opfactory.EmbeddingOpFactory(self.state_space, base_gate,
                                                             num_target_labels=gate_nQudits,
                                                             allowed_sslbls_fn=allowed_sslbls_fn)
                 self.factories['layers'][_Lbl(gateName)] = embedded_op
@@ -282,16 +302,16 @@ class LocalNoiseModel(_ImplicitOpModel):
                     # into inds (except in the special case inds[0] == '*' where we make an EmbeddingOpFactory)
                     try:
                         if gate_is_factory:
-                            if inds is None or inds == tuple(qudit_labels):  # then no need to embed
+                            if inds is None or inds == tuple(self.processor_spec.qudit_labels):  # then no need to embed
                                 embedded_op = base_gate
                             else:
-                                embedded_op = _opfactory.EmbeddedOpFactory(state_space, inds, base_gate)
+                                embedded_op = _opfactory.EmbeddedOpFactory(self.state_space, inds, base_gate)
                             self.factories['layers'][_Lbl(gateName, inds)] = embedded_op
                         else:
-                            if inds is None or inds == tuple(qudit_labels):  # then no need to embed
+                            if inds is None or inds == tuple(self.processor_spec.qudit_labels):  # then no need to embed
                                 embedded_op = base_gate
                             else:
-                                embedded_op = _op.EmbeddedOp(state_space, inds, base_gate)
+                                embedded_op = _op.EmbeddedOp(self.state_space, inds, base_gate)
                             self.operation_blks['layers'][_Lbl(gateName, inds)] = embedded_op
 
                             # If a 1Q idle gate (factories not supported yet) then turn this into a global idle
@@ -301,21 +321,63 @@ class LocalNoiseModel(_ImplicitOpModel):
 
                     except Exception as e:
                         if on_construction_error == 'warn':
-                            _warnings.warn("Failed to embed %s gate. Dropping it." % str(_Lbl(gateName, inds)))
-                        if on_construction_error in ('warn', 'ignore'): continue
-                        else: raise e
+                            _warnings.warn(f"Failed to embed {str(_Lbl(gateName, inds))} gate. Dropping it.")
+                        if on_construction_error in ('warn', 'ignore'): 
+                            continue
+                        else: 
+                            raise e
 
                 if len(singleQ_idle_layer_labels) > 0:
                     if implicit_idle_mode in ('add_global', 'only_global') and global_idle_layer_label is None:
                         # then create a global idle based on 1Q idle gates
                         global_idle = _op.ComposedOp([self.operation_blks['layers'][lbl]
                                                       for lbl in singleQ_idle_layer_labels.values()])
-                        global_idle_layer_label = layer_rules.global_idle_layer_label = _Lbl('{auto_global_idle}')
+                        global_idle_layer_label = self._layer_rules.global_idle_layer_label = _Lbl('{auto_global_idle}')
                         self.operation_blks['layers'][_Lbl('{auto_global_idle}')] = global_idle
                     elif implicit_idle_mode == 'pad_1Q':
-                        layer_rules.single_qubit_idle_layer_labels = singleQ_idle_layer_labels
+                        self._layer_rules.single_qubit_idle_layer_labels = singleQ_idle_layer_labels
 
-        self._clean_paramvec()
+    def _init_instrument_layers(self, independent_ops, mm_instdict, on_construction_error):
+        for instname in self.processor_spec.instrument_names:
+            inst_spec = self.processor_spec.instrument_specifiers[instname]
+            resolved_avail = self.processor_spec.resolved_availability(instname)
+
+            if not independent_ops:
+                inst = mm_instdict.get(instname, None)
+                if inst is not None:
+                    self.instrument_blks['gates'][_Lbl(instname)] = inst
+            else:
+                inst = None
+        
+        if callable(resolved_avail) or resolved_avail == '*':
+            raise NotImplementedError() #TODO: implement this case.
+        else:
+            for inds in resolved_avail:
+                if _Lbl(instname, inds) in mm_instdict and inds is not None:
+                    base_inst = mm_instdict[_Lbl(instname, inds)]
+                    self.instrument_blks['gates'][_Lbl(instname, inds)] = base_inst
+                elif independent_ops:
+                    base_inst = mm_instdict[instname].copy()
+                    self.instrument_blks['gates'][_Lbl(instname, inds)] = base_inst
+                else:
+                     base_inst = inst
+                
+                try:
+                    if inds is None or inds == tuple(self.processor_spec.qudit_labels):
+                        embedded_inst = base_inst
+                    else:
+                        embedded_instrument_members = dict()
+                        for key, member in base_inst.items():
+                            embedded_instrument_members[key] = _op.EmbeddedOp(self.state_space, inds, member)
+                        embedded_inst = _instruments.Instrument(embedded_instrument_members)
+                    self.instrument_blks['layers'][_Lbl(instname, inds)] = embedded_inst
+                except Exception as e:
+                    if on_construction_error == 'warn':
+                            _warnings.warn(f"Failed to embed {str(_Lbl(instname, inds))} gate. Dropping it.")
+                    if on_construction_error in ('warn', 'ignore'): 
+                        continue
+                    else: 
+                        raise e
 
     def create_processor_spec(self):
         import copy as _copy
@@ -354,6 +416,8 @@ class LocalNoiseModel(_ImplicitOpModel):
                                                          modelmembers.get('operation_blks|gates', []))
         mdl.operation_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags,
                                                           modelmembers.get('operation_blks|layers', []))
+        mdl.instrument_blks['gates'] = _OrderedMemberDict(mdl, None, None, flags,
+                                                           modelmembers.get('instrument_blks|gates', []))
         mdl.instrument_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags,
                                                            modelmembers.get('instrument_blks|layers', []))
         mdl.factories['gates'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers.get('factories|gates', []))

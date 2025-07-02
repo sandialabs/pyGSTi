@@ -26,6 +26,8 @@ from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from pygsti.models.layerrules import LayerRules as _LayerRules
 from pygsti.forwardsims.forwardsim import ForwardSimulator as _FSim
 
+from typing import Dict
+ordereddict = Dict
 
 class ImplicitOpModel(_mdl.OpModel):
     """
@@ -58,17 +60,12 @@ class ImplicitOpModel(_mdl.OpModel):
         represented, allowing compatibility checks with (super)operator
         objects.
     """
-    def __init__(self,
-                 state_space,
-                 layer_rules,
-                 basis="pp",
-                 simulator="auto",
-                 evotype="densitymx"):
-        self.prep_blks = _collections.OrderedDict()
-        self.povm_blks = _collections.OrderedDict()
-        self.operation_blks = _collections.OrderedDict()
-        self.instrument_blks = _collections.OrderedDict()
-        self.factories = _collections.OrderedDict()
+    def __init__(self, state_space, layer_rules, basis="pp", simulator="auto", evotype="densitymx"):
+        self.prep_blks: ordereddict = dict()
+        self.povm_blks: ordereddict = dict()
+        self.operation_blks: ordereddict = dict()
+        self.instrument_blks: ordereddict = dict()
+        self.factories: ordereddict = dict()
 
         super(ImplicitOpModel, self).__init__(state_space, basis, evotype, layer_rules, simulator)
 
@@ -370,27 +367,27 @@ class ImplicitOpModel(_mdl.OpModel):
         return mdl
 
 
-def _init_spam_layers(model, prep_layers, povm_layers):
-    """ Helper function for initializing the .prep_blks and .povm_blks elements of an implicit model"""
-    # SPAM (same as for cloud noise model)
-    if prep_layers is None:
-        pass  # no prep layers
-    elif isinstance(prep_layers, dict):
-        for rhoname, layerop in prep_layers.items():
-            model.prep_blks['layers'][_Label(rhoname)] = layerop
-    elif isinstance(prep_layers, _op.LinearOperator):  # just a single layer op
-        model.prep_blks['layers'][_Label('rho0')] = prep_layers
-    else:  # assume prep_layers is an iterable of layers, e.g. isinstance(prep_layers, (list,tuple)):
-        for i, layerop in enumerate(prep_layers):
-            model.prep_blks['layers'][_Label("rho%d" % i)] = layerop
+    def _init_spam_layers(self, prep_layers, povm_layers):
+        """ Helper function for initializing the .prep_blks and .povm_blks elements of an implicit model"""
+        # SPAM (same as for cloud noise model)
+        if prep_layers is None:
+            pass  # no prep layers
+        elif isinstance(prep_layers, dict):
+            for rhoname, layerop in prep_layers.items():
+                self.prep_blks['layers'][_Label(rhoname)] = layerop
+        elif isinstance(prep_layers, _op.LinearOperator):  # just a single layer op
+            self.prep_blks['layers'][_Label('rho0')] = prep_layers
+        else:  # assume prep_layers is an iterable of layers, e.g. isinstance(prep_layers, (list,tuple)):
+            for i, layerop in enumerate(prep_layers):
+                self.prep_blks['layers'][_Label("rho%d" % i)] = layerop
 
-    if povm_layers is None:
-        pass  # no povms
-    elif isinstance(povm_layers, _povm.POVM):  # just a single povm - must precede 'dict' test!
-        model.povm_blks['layers'][_Label('Mdefault')] = povm_layers
-    elif isinstance(povm_layers, dict):
-        for povmname, layerop in povm_layers.items():
-            model.povm_blks['layers'][_Label(povmname)] = layerop
-    else:  # assume povm_layers is an iterable of layers, e.g. isinstance(povm_layers, (list,tuple)):
-        for i, layerop in enumerate(povm_layers):
-            model.povm_blks['layers'][_Label("M%d" % i)] = layerop
+        if povm_layers is None:
+            pass  # no povms
+        elif isinstance(povm_layers, _povm.POVM):  # just a single povm - must precede 'dict' test!
+            self.povm_blks['layers'][_Label('Mdefault')] = povm_layers
+        elif isinstance(povm_layers, dict):
+            for povmname, layerop in povm_layers.items():
+                self.povm_blks['layers'][_Label(povmname)] = layerop
+        else:  # assume povm_layers is an iterable of layers, e.g. isinstance(povm_layers, (list,tuple)):
+            for i, layerop in enumerate(povm_layers):
+                self.povm_blks['layers'][_Label("M%d" % i)] = layerop
