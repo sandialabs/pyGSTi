@@ -165,7 +165,7 @@ class FirstOrderGaugeInvariantStore(_NicelySerializable):
         dependent_fogi_action : 'drop' or 'mark' (Defaults to 'drop')
 
             If 'drop', all linearly dependent FOGI directions are not returned, resulting in a linearly 
-            independent set of quantities. If 'mark' linearly dependent FOGI directions are kept and
+            independent set of quantities. If 'mark', linearly dependent FOGI directions are kept and
             marked by dependent_dir_indices.
         """
 
