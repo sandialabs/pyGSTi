@@ -97,7 +97,7 @@ def sample_subcircuits(full_circs: Union[_Circuit, List[_Circuit]],
                 
                 for subcirc, drop in zip(subcircs, drops):
                     # print(subcirc)
-                    subcircuits[subcirc].append({'width': w, 'physical_depth': d, 'dropped_gates': drop, 'id': counter})
+                    subcircuits[subcirc].append({'width': w, 'depth': d, 'dropped_gates': drop, 'id': counter})
                     counter += 1
                 
             print()
@@ -172,8 +172,6 @@ def simple_weighted_subcirc_selection(full_circ, width, depth, num_subcircs,
         # Sample depth with cumulative layer weights
         start = rand_state.choice(possible_starts)
 
-        layer_names = []
-
         # Calculate physical depth
         compiled_depth = 0
         end = start - 1
@@ -183,16 +181,12 @@ def simple_weighted_subcirc_selection(full_circ, width, depth, num_subcircs,
                 layer_depth = 1
 
             # qubits = set(full_circ.line_labels)
-            if depth_metric == 'falcon_depth':
+            elif depth_metric == 'falcon_depth':
                 layer_depth = 1
                 for comp in full_circ._layer_components(end):
                     if comp.name == 'Gu3':
                         layer_depth = 2
                 
-                if comp.name == 'Gu3':
-                    layer_names.append('Gu3')
-                elif comp.name == 'Gcnot':
-                    layer_names.append('Gcnot')
                 else:
                     raise RuntimeError('Invalid layer type!')
                 
@@ -221,8 +215,9 @@ def simple_weighted_subcirc_selection(full_circ, width, depth, num_subcircs,
         for layer_idx in range(start, end+1):
             max_comp_duration = 0
             for comp in full_circ._layer_components(layer_idx):
-                backend_comp_name = gate_name_conversions[0]().name
-                comp_duration = instruction_durations.get(backend_comp_name, qubits)
+                backend_comp_name = gate_name_conversions[comp.name][1]
+                backend_comp_qubits = [int(q[1:]) for q in comp.qubits]
+                comp_duration = instruction_durations.get(backend_comp_name, backend_comp_qubits)
                 if comp_duration > max_comp_duration:
                     max_comp_duration = comp_duration
             layer_durations.append(max_comp_duration)
@@ -295,15 +290,13 @@ def simple_weighted_subcirc_selection(full_circ, width, depth, num_subcircs,
         # # Drop any empty layers
         # subcirc_layers = [scl for scl in subcirc_layers if len(scl)]
 
-        assert len(subcirc_layers) == len(layer_names), "Relationship between layers and layer names is not one to one!"
-
         # print(len(subcirc_layers))
 
         for i in range(len(subcirc_layers)):
             scl = subcirc_layers[i]
-            if len(scl): #layer is empty. add delay of appropriate duration
+            if len(scl) == 0: #layer is empty. add delay of appropriate duration
                 # handle the addition of a delay instruction based on the maximum duration of an instruction in this circuit layer
-                delay_layer = [_Label('Gdelay', qubit_subset, args=[layer_durations[i]])]
+                delay_layer = [_Label('Gdelay', qubit, args=[layer_durations[i]]) for qubit in qubit_subset]
                 subcirc_layers[i] = delay_layer
 
         # Build subcircuit

@@ -481,10 +481,14 @@ def u3_cx_inv(circ: _Circuit) -> _Circuit:
 def gate_inverse(label):
     if label.name == 'Gcnot':
         return label
+    elif label.name == 'Gcphase':
+        return label
     elif label.name == 'Gu3':
         return _Label('Gu3', label.qubits, args=inverse_u3(label.args))
     elif label.name in ['Gi', 'Gdelay']:
         return label
+    else:
+        raise RuntimeError(f'cannot compute gate inverse for {label}')
 
 def inverse_u3(args):
     theta_inv = mod_2pi(-float(args[0]))

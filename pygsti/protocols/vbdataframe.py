@@ -18,6 +18,9 @@ from pygsti.tools.rbtools import hamming_distance
 
 from scipy.stats import chi2 as _chi2
 
+import ipdb
+
+
 
 def _calculate_summary_statistic(x, statistic, lower_cutoff=None):
     """
@@ -42,7 +45,10 @@ def polarization_to_success_probability(p, n):
     """
     Inverse of success_probability_to_polarization.
     """
-    return p * (1 - 1 / 2**n) + 1 / 2**n
+    if n < 20:
+        return p * (1 - 1 / 2**n) + 1 / 2**n
+    else:
+        return p
 
 
 def success_probability_to_polarization(s, n):
@@ -50,15 +56,24 @@ def success_probability_to_polarization(s, n):
     Maps a success probablity s for an n-qubit circuit to
     the polarization, defined by `p = (s - 1/2^n)/(1 - 1/2^n)`
     """
-    return (s - 1 / 2**n) / (1 - 1 / 2**n)
+    if n < 20:
+        return (s - 1 / 2**n) / (1 - 1 / 2**n)
+    else:
+        return s
 
 
-def polarization_to_fidelity(p, n): 
-    return 1 - (4**n - 1)*(1 - p)/4**n
+def polarization_to_fidelity(p, n):
+    if n < 20: 
+        return 1 - (4**n - 1)*(1 - p)/4**n
+    else:
+        return p
 
 
 def fidelity_to_polarization(f, n):
-    return 1 - (4**n)*(1 - f)/(4**n - 1)
+    if n < 20:
+        return 1 - (4**n)*(1 - f)/(4**n - 1)
+    else:
+        return f
 
 
 def hamming_distance_counts(dsrow, circ, idealout):
@@ -93,8 +108,11 @@ def effective_polarization(hamming_distance_counts):
     """
     n = len(hamming_distance_counts) - 1 
     asp = adjusted_success_probability(hamming_distance_counts)
-    
-    return (4**n * asp - 1)/(4**n - 1)
+
+    if n < 20:
+        return (4**n * asp - 1)/(4**n - 1)
+    else:
+        return asp
 
 
 def rc_predicted_process_fidelity(bare_rc_effective_pols, rc_rc_effective_pols, reference_effective_pols, n):
@@ -114,7 +132,9 @@ def rc_predicted_process_fidelity(bare_rc_effective_pols, rc_rc_effective_pols, 
     elif b <= 0:
         return 0.
     else:
-        return polarization_to_fidelity(a / _np.sqrt(b * c), n)
+        pfid = polarization_to_fidelity(a / _np.sqrt(b * c), n)
+        return min(pfid, 1.0)
+        # return pfid
 
 
 def predicted_process_fidelity_for_central_pauli_mcs(central_pauli_effective_pols, reference_effective_pols, n):
@@ -126,8 +146,7 @@ def predicted_process_fidelity_for_central_pauli_mcs(central_pauli_effective_pol
         return 0.
     else:
         return polarization_to_fidelity(_np.sqrt(a / c), n)
-
-
+    
 
 def rc_bootstrap_predicted_pfid(brs, rrs, refs, n, num_bootstraps=50, rand_state=None):
     if rand_state is None:
@@ -151,8 +170,14 @@ def rc_bootstrap_predicted_pfid(brs, rrs, refs, n, num_bootstraps=50, rand_state
 
     # print(pfid_samples)
     # print(_np.std(pfid_samples))
+
+    bootstrapped_stdev = _np.std(pfid_samples)
+
+    # if bootstrapped_stdev > 0.1:
+    #     print(pfid_samples)
+    #     ipdb.set_trace()
     
-    return _np.std(pfid_samples)
+    return bootstrapped_stdev
 
 
 def classify_circuit_shape(success_probabilities, total_counts, threshold, significance=0.05):
@@ -309,10 +334,11 @@ class VBDataFrame(object):
 
     @classmethod
     def from_mirror_experiment(cls, unmirrored_design, mirrored_data,
-                               verbose=False,
+                               dropped_gates=False,
                                bootstrap=True,
                                num_bootstraps=50,
-                               rand_state=None
+                               rand_state=None,
+                               verbose=False,
                                ):
         """
         Create a dataframe from MCFE data and edesigns.
@@ -387,7 +413,7 @@ class VBDataFrame(object):
                         key = (aux['width'], c.line_labels)
 
                     else:
-                        key = (aux['base_aux']['width'], aux['base_aux']['physical_depth'], aux['base_aux']['id'], c.line_labels)
+                        key = (aux['base_aux']['width'], aux['base_aux']['depth'], aux['base_aux']['id'], c.line_labels)
 
                     # Check if the mirror circuit's line labels have the same ordering as the 
                     # base circuit's line labels. If not, reorder the bitstring to match.
@@ -407,8 +433,6 @@ class VBDataFrame(object):
                             # aux['idealout'] = new_bs
                             # print(new_bs)
 
-                        
-
                     # Calculate effective polarization
                     hdc = hamming_distance_counts(mirrored_data.dataset[c], c, (aux['idealout'],))
                     ep = effective_polarization(hdc)
@@ -424,29 +448,31 @@ class VBDataFrame(object):
 
                     orig_circ = reverse_circ_ids[key[2]]
 
-                    u3_count = 0
-                    cnot_count = 0
-                    cnot_depth = 0
-                    for i in range(orig_circ.depth):
-                        layer_cnot_depth = 0
-                        for gate in orig_circ._layer_components(i):
-                            if gate.name == 'Gu3':
-                                u3_count += 1
-                            elif gate.name == 'Gcnot':
-                                cnot_count += 2
-                                layer_cnot_depth = 1
-                        cnot_depth += layer_cnot_depth
+                    # u3_count = 0
+                    # cnot_count = 0
+                    # cnot_depth = 0
+                    # for i in range(orig_circ.depth):
+                    #     layer_cnot_depth = 0
+                    #     for gate in orig_circ._layer_components(i):
+                    #         if gate.name == 'Gu3':
+                    #             u3_count += 1
+                    #         elif gate.name == 'Gcnot':
+                    #             cnot_count += 2
+                    #             layer_cnot_depth = 1
+                    #     cnot_depth += layer_cnot_depth
                     
-                    if cnot_count == 0:
-                        cnot_count = 0.01
+                    # if cnot_count == 0:
+                    #     cnot_count = 0.01
                         
-                    u3_densities[key] = u3_count / (key[0]*key[1])
-                    cnot_densities[key] = cnot_count / (key[0]*key[1])
-                    cnot_counts[key] = cnot_count / 2 # Want 1 for each CNOT
-                    cnot_depths[key] = cnot_depth
+                    # u3_densities[key] = u3_count / (key[0]*key[1])
+                    # cnot_densities[key] = cnot_count / (key[0]*key[1])
+                    # cnot_counts[key] = cnot_count / 2 # Want 1 for each CNOT
+                    # cnot_depths[key] = cnot_depth
+                    # TODO: add 2Q gate density metric
                     pygsti_depths[key] = orig_circ.depth
                     idling_qubits[key] = len(orig_circ.idling_lines())
-                    dropped_gates[key] = aux['base_aux']['dropped_gates']
+                    if dropped_gates:
+                        dropped_gates[key] = aux['base_aux']['dropped_gates']
                     occurrences[key] = len(auxlist)
 
                     seen_keys.add(key)
@@ -468,9 +494,23 @@ class VBDataFrame(object):
             if 'rr' in mirrored_data.edesign and 'br' in mirrored_data.edesign and 'ref' in mirrored_data.edesign:
                 if verbose and i == 0: print('Random compilation data detected, computing RC process fidelity')
 
-                spam_ref_key = (key[0], key[3])
-                print(spam_ref_key)
-                print(len(eff_pols['ref'][spam_ref_key]))
+            
+                if verbose:
+                    spam_ref_key = (key[0], key[3])
+                    print(spam_ref_key)
+                    print(len(eff_pols['ref'][spam_ref_key]))
+
+                # import ipdb
+
+                # print(key)
+                # print(_np.mean(eff_pols['br'][key]))
+                # print(_np.std(eff_pols['br'][key]))
+                # print(_np.mean(eff_pols['rr'][key]))
+                # print(_np.std(eff_pols['rr'][key]))
+                # print(_np.mean(eff_pols['ref'][(key[0], key[3])]))
+                # print(_np.std(eff_pols['ref'][(key[0], key[3])]))
+
+                # ipdb.set_trace()
 
                 rc_pfid = rc_predicted_process_fidelity(eff_pols['br'][key],
                                                      eff_pols['rr'][key],
@@ -489,28 +529,32 @@ class VBDataFrame(object):
                                                             num_bootstraps=num_bootstraps,
                                                             rand_state=rand_state
                                                             )
-                
 
-        # Depth is doubled for conventions (same happens for RMC/PMC)
-            df_data[i] = {'Width': key[0], 'Physical Depth': key[1], 'Circuit Id': key[2],
-                        'U3 Density': u3_densities[key], 'CNOT Density': cnot_densities[key],
-                        'CNOT Counts': cnot_counts[key], 'CNOT Depth': cnot_depths[key],
-                        'U3+CNOT Depth': pygsti_depths[key], 'Dropped Gates': dropped_gates[key],
-                        'Effective Width': key[0] - idling_qubits[key],
+            data_dict = {'Width': key[0], 'Depth': key[1], 'Circuit Id': key[2],
+                        # 'U3 Density': u3_densities[key], 'CNOT Density': cnot_densities[key],
+                        # 'CNOT Counts': cnot_counts[key], 'CNOT Depth': cnot_depths[key],
+                        # 'U3+CNOT Depth': pygsti_depths[key],
+                        # 'Effective Width': key[0] - idling_qubits[key],
                         'CP Process Fidelity': cp_pfid,
                         'CP Polarization': cp_pol, 'CP Success Probability': cp_success_prob,
                         'RC Process Fidelity': rc_pfid, 'RC Process Fidelity stdev': rc_pfid_stdev,
                         'RC Polarization': rc_pol, 'RC Success Probability': rc_success_prob,
-                        'Occurrences': occurrences[key], 'Total Counts': 1024} # Reevaluate whether this 'Total Counts' key
-                                                                                # should be hard-coded, especially if we run circuits with more shots.
-
+                        'Occurrences': occurrences[key],
+                        # 'Total Counts': 1024 # Reevaluate whether this 'Total Counts' key should be hard-coded, especially if we run circuits with more shots.
+                        }
+            
+            if dropped_gates:
+                data_dict['Dropped Gates'] = dropped_gates[key]
                 
-        
+        # Depth is doubled for conventions (same happens for RMC/PMC)
+            df_data[i] = data_dict
+            
+
         df = _pandas.DataFrame.from_dict(df_data, orient='index')
         df = df.sort_values(by='Circuit Id')
         df = df.reset_index(drop=True)
 
-        return cls(df, x_axis='Physical Depth', y_axis='Width')
+        return cls(df, x_axis='Depth', y_axis='Width')
         
 
     def select_column_value(self, column_label, column_value):
@@ -793,3 +837,111 @@ class VBDataFrame(object):
             capreg = trimmed_capreg
 
         return capreg
+    
+
+
+    def create_vb_plot(self, title, accumulator=_np.mean, cp_or_rc='rc',
+                       show_dropped_gates=False, dg_accumulator=_np.mean,
+                       cmap=None, margin=0.15,
+                       save_fig=False, fig_path=None, fig_format=None):
+
+        try:
+            import matplotlib.pyplot as _plt
+            import matplotlib as _mp
+        except:
+            raise RuntimeError('matplotlib is required for this operation, and does not appear to be installed.')
+        
+        if cmap is None:
+            cmap = _mp.colormaps['Spectral']
+
+
+        fig = _plt.figure(figsize=(5.5,8))
+        ax = _plt.gca()
+        ax.set_aspect('equal')
+
+        x_axis = 'Depth'
+        y_axis = 'Width'
+        
+        if cp_or_rc == 'rc':
+            c_axis = 'RC Process Fidelity'
+        elif cp_or_rc == 'cp':
+            c_axis = 'CP Process Fidelity'
+        else:
+            raise ValueError(f"invalid argument passed to 'cp_or_rc': {cp_or_rc}")
+        
+        xticks = self.dataframe[x_axis].unique()
+        yticks = self.dataframe[y_axis].unique()
+        # assert np.allclose(xticks, bk_df[x_axis].unique()), "Dataframes must have same x-axis values"
+        # assert np.allclose(yticks, bk_df[y_axis].unique()), "Dataframes must have same y-axis values"
+        
+        xmap = {j: i for i, j in enumerate(xticks)}
+        ymap = {j: i for i, j in enumerate(yticks)}
+        
+        # Jordan-Wigner (upper left triange)
+        acc_values = self.dataframe.groupby([x_axis, y_axis])[c_axis].apply(accumulator)
+        if show_dropped_gates:
+            dg_values = self.dataframe.groupby([x_axis, y_axis])["Dropped Gates"].apply(dg_accumulator)
+
+        for xlbl, ylbl in acc_values.keys():
+            x = xmap[xlbl]
+            y = ymap[ylbl]
+
+            side = 0.5-margin
+            
+            cval = acc_values[(xlbl, ylbl)]
+            if show_dropped_gates:
+                dgval = dg_values[(xlbl, ylbl)]
+            # Inner triange: Smaller by ratio of dropped gates
+                inside = side * (xlbl-dgval)/xlbl
+
+            else:
+                inside = side
+            
+            inpoints = [(x-side, y-side), (x-side, y+inside), (x+inside, y+inside), (x+inside, y-side)]
+            tin = _plt.Polygon(inpoints, color=cmap(cval))
+            ax.add_patch(tin)
+            
+            # Outer Triangle
+            outer_points = [(x-side, y-side), (x-side, y+side), (x+side, y+side), (x+side, y-side)]
+            tout = _plt.Polygon(outer_points, edgecolor='k', fill=None)
+            ax.add_patch(tout)
+        
+        # # Bravyi-Kitaev (lower right triange)
+        # acc_values = bk_df.groupby([x_axis, y_axis])[c_axis].apply(accumulator)
+        # dg_values = bk_df.groupby([x_axis, y_axis])["Dropped Gates"].apply(dg_accumulator)
+        # for xlbl, ylbl in acc_values.keys():
+        #     x = xmap[xlbl]
+        #     y = ymap[ylbl]
+
+        #     side = 0.5-margin
+            
+        #     cval = acc_values[(xlbl, ylbl)]
+        #     dgval = dg_values[(xlbl, ylbl)]
+
+        #     # Inner triange: Smaller by ratio of dropped gates
+        #     inside = side * (xlbl-dgval)/xlbl
+            
+        #     inpoints = [(x-side, y-side), (x+inside, y-side), (x+inside, y+inside)]
+        #     tin = plt.Polygon(inpoints, color=cmap(cval))
+        #     ax.add_patch(tin)
+            
+        #     # Outer Triangle
+        #     outer_points = [(x-side, y-side), (x+side, y-side), (x+side, y+side)]
+        #     tout = plt.Polygon(outer_points, edgecolor='k', fill=None)
+        #     ax.add_patch(tout)
+        
+        _plt.xlabel(x_axis, {'size': 20})
+        _plt.ylabel(y_axis, {'size': 20})
+        _plt.xticks(list(range(len(xticks))), labels=xticks)
+        _plt.yticks(list(range(len(yticks))), labels=yticks)
+        _plt.xlim([-0.5, len(xticks)-0.5])
+        _plt.ylim([-0.5, len(yticks)-0.5])
+        ax.tick_params(axis='both', which='major', labelsize=14)
+        _plt.title(title, {"size": 24})
+
+        if save_fig:
+            _plt.savefig(fig_path, format=fig_format)
+
+        # return fig
+
+        

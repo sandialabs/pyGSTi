@@ -26,9 +26,9 @@ def active_qubits(circ, ignore=None):
     return(active_qubits)
 
 
-def qiskit_circuit_list_to_fullstack_mirror_edesign(qk_circs, #not transpiled
+def qiskit_circuits_to_fullstack_mirror_edesign(qk_circs, #not transpiled
                                                     qk_backend,
-                                                    qk_pass_manager,
+                                                    transpiler_kwargs_dict={},
                                                     mirroring_kwargs_dict={},
                                                     num_transpilation_attempts=100
                                                     ):
@@ -37,7 +37,7 @@ def qiskit_circuit_list_to_fullstack_mirror_edesign(qk_circs, #not transpiled
         if qiskit.__version__ != '1.1.1':
             print("warning: 'qiskit_circuit_list_to_fullstack_mirror_edesign' is designed for qiskit 1.1.1. Your version is " + qiskit.__version__)
 
-            from qiskit import transpile
+        from qiskit import transpile
     except:
         raise RuntimeError('qiskit is required for this operation, and does not appear to be installed.')
 
@@ -46,12 +46,20 @@ def qiskit_circuit_list_to_fullstack_mirror_edesign(qk_circs, #not transpiled
 
     ref_circ_id_lookup_dict = {}
 
-    for i, qk_circ in enumerate(qk_circs):
+    if isinstance(qk_circs, list):
+        qk_circs = {i: qk_circ for i, qk_circ in enumerate(qk_circs)}
+
+    # set default transpilation kwargs
+    transpiler_kwargs_dict['optimization_level'] = transpiler_kwargs_dict.get('optimization_level', 3)
+    transpiler_kwargs_dict['approximation_degree'] = transpiler_kwargs_dict.get('approximation_degree', 1.0)
+    transpiler_kwargs_dict['seed_transpiler'] = transpiler_kwargs_dict.get('seed_transpiler', None)
+
+    for k, qk_circ in qk_circs.items():
         num_virtual_qubits = qk_circ.num_qubits
         for _ in range(num_transpilation_attempts):
             qk_test_circ = transpile(qk_circ,
-                                     backend=qk_backend, 
-                                     optimization_level=3)
+                                    backend=qk_backend, 
+                                    **transpiler_kwargs_dict)
 
             num_active_qubits = len(active_qubits(qk_test_circ))
             if num_active_qubits == num_virtual_qubits:
@@ -71,7 +79,7 @@ def qiskit_circuit_list_to_fullstack_mirror_edesign(qk_circs, #not transpiled
         ps_routing_perm = {ps_init_opt_layout[i]: ps_final_opt_layout[i] for i in range(num_virtual_qubits)}
 
         test_metadata = {
-            'id': i,
+            'id': k,
             'width': ps_test_circ.width,
             'depth': ps_test_circ.depth,
             'initial_layout': ps_init_opt_layout,
@@ -87,7 +95,8 @@ def qiskit_circuit_list_to_fullstack_mirror_edesign(qk_circs, #not transpiled
                                         coupling_map=qk_backend.coupling_map,
                                         basis_gates=['u3', 'cz'],
                                         initial_layout=qk_final_opt_layout,
-                                        optimization_level=0
+                                        optimization_level=1,
+                                        approximation_degree=1.0
                                         )
             
             num_active_qubits = len(active_qubits(qk_ref_inv_circ))
@@ -110,7 +119,7 @@ def qiskit_circuit_list_to_fullstack_mirror_edesign(qk_circs, #not transpiled
         routing_perm_ref_inv_ps = {ps_init_ref_inv_layout[i]: ps_final_ref_inv_layout[i] for i in range(num_virtual_qubits)}
 
         ref_metadata = {
-            'id': i,
+            'id': k,
             'width': ps_ref_circ.width,
             'depth': ps_ref_circ.depth,
             'initial_layout_inv': ps_init_ref_inv_layout,
@@ -118,9 +127,9 @@ def qiskit_circuit_list_to_fullstack_mirror_edesign(qk_circs, #not transpiled
             'routing_permutation_inv': routing_perm_ref_inv_ps
         }
 
-        ref_circ_dict[ps_ref_circ] += ref_metadata
+        ref_circ_dict[ps_ref_circ] += [ref_metadata]
 
-        ref_circ_id_lookup_dict[i] = ps_ref_circ
+        ref_circ_id_lookup_dict[k] = ps_ref_circ
 
     test_edesign = _FreeformDesign(test_circ_dict)
     ref_edesign = _FreeformDesign(ref_circ_dict)
@@ -137,9 +146,9 @@ def qiskit_circuit_list_to_fullstack_mirror_edesign(qk_circs, #not transpiled
                                          **mirroring_kwargs_dict
                                          )
     
-    return mirror_edesign
+    return test_edesign, mirror_edesign
 
-def qiskit_circuit_list_to_mirror_edesign(qk_circs, # yes transpiled
+def qiskit_circuits_to_mirror_edesign(qk_circs, # yes transpiled
                                           mirroring_kwargs_dict={}
                                           ):
 
@@ -159,11 +168,43 @@ def qiskit_circuit_list_to_mirror_edesign(qk_circs, # yes transpiled
 
     ref_circ_id_lookup_dict = {}
 
-    for i, qk_test_circ in enumerate(qk_circs):
-        qk_ref_circ = transpile(qk_test_circ, basis_gates=['u3', 'cz'])
+    if isinstance(qk_circs, list):
+        qk_circs = {i: qk_circ for i, qk_circ in enumerate(qk_circs)}
 
-        ps_test_circ = _Circuit.from_qiskit(qk_test_circ, allow_different_gates_in_same_layer=True)
-        ps_ref_circ = _Circuit.from_qiskit(qk_ref_circ, allow_different_gates_in_same_layer=False)
+    for k, qk_test_circ in qk_circs.items():
+        qk_ref_circ = transpile(qk_test_circ,
+                                basis_gates=['u3', 'cz'],
+                                layout_method='trivial',
+                                routing_method='none',
+                                optimization_level=1,
+                                approximation_degree=1.0)
+        
+
+        # from qiskit_aer import AerSimulator
+
+        # sim = AerSimulator()
+
+        # qc_2 = qk_test_circ.compose(qk_ref_circ.inverse())
+
+        # qc_2.measure_active()
+
+        # print('pre-pyGSTi:')
+        # print(sim.run(qc_2, shots=64).result().get_counts())
+
+        ps_test_circ, _ = _Circuit.from_qiskit(qk_test_circ, allow_different_gates_in_same_layer=True)
+        ps_ref_circ, _ = _Circuit.from_qiskit(qk_ref_circ, allow_different_gates_in_same_layer=False)
+
+        # R = ps_ref_circ
+        # T = ps_test_circ
+
+        # R_inv = compute_inverse(circ=R, gate_set='u3_cx', inverse=None, inv_kwargs=None)
+
+        # TR_inv = T + R_inv
+        # TR_qk = TR_inv.convert_to_qiskit(qubit_conversion='remove-Q', qubits_to_measure='active')
+
+        # print('post-pyGSTi:')
+        # print(sim.run(TR_qk, shots=64).result().get_counts())
+        
 
         ps_test_circ = ps_test_circ.delete_idling_lines()
         ps_test_circ = ps_test_circ.reorder_lines(sorted(ps_test_circ.line_labels))
@@ -171,19 +212,39 @@ def qiskit_circuit_list_to_mirror_edesign(qk_circs, # yes transpiled
         ps_ref_circ = ps_ref_circ.delete_idling_lines()
         ps_ref_circ = ps_ref_circ.reorder_lines(sorted(ps_ref_circ.line_labels))
 
+
+        # R = ps_ref_circ
+        # T = ps_test_circ
+
+        # R_inv = compute_inverse(circ=R, gate_set='u3_cx', inverse=None, inv_kwargs=None)
+
+        # TR_inv = T + R_inv
+        # TR_qk = TR_inv.convert_to_qiskit(qubit_conversion='remove-Q', qubits_to_measure='active')
+
+        # print('post-reordering:')
+        # print(sim.run(TR_qk, shots=64).result().get_counts())
+
+        # import ipdb
+
+        # ipdb.set_trace()
+
+
         test_circ_metadata = {
-            'id': i,
+            'id': k,
             'width': ps_test_circ.width,
             'depth': ps_test_circ.depth,
             # other information as it becomes necessary
         }
 
-        test_circ_dict[ps_test_circ] += test_circ_metadata
+        test_circ_dict[ps_test_circ] += [test_circ_metadata]
 
-        ref_circ_metadata = {}
-        ref_circ_dict[ps_ref_circ] += ref_circ_metadata
+        ref_circ_metadata = {
+                            'id': k,
+                            }
+        
+        ref_circ_dict[ps_ref_circ] += [ref_circ_metadata]
 
-        ref_circ_id_lookup_dict[i] = ps_ref_circ
+        ref_circ_id_lookup_dict[k] = ps_ref_circ
 
         test_edesign = _FreeformDesign(test_circ_dict)
         ref_edesign = _FreeformDesign(ref_circ_dict)
@@ -201,11 +262,12 @@ def qiskit_circuit_list_to_mirror_edesign(qk_circs, # yes transpiled
                                          **mirroring_kwargs_dict
                                          )
     
-    return mirror_edesign
+    return test_edesign, mirror_edesign
 
 
-def qiskit_circuit_list_to_svb_mirror_edesign(qk_circs,
+def qiskit_circuits_to_svb_mirror_edesign(qk_circs,
                                               width_depth_dict,
+                                              backend_num_qubits,
                                               coupling_map,
                                               instruction_durations,
                                               aggregate_subcircs,
@@ -218,21 +280,26 @@ def qiskit_circuit_list_to_svb_mirror_edesign(qk_circs,
         if qiskit.__version__ != '1.1.1':
             print("warning: 'qiskit_circuit_list_to_fullstack_mirror_edesign' is designed for qiskit 1.1.1. Your version is " + qiskit.__version__)
 
-            from qiskit import transpile
+        from qiskit import transpile
     except:
         raise RuntimeError('qiskit is required for this operation, and does not appear to be installed.')
     
-    # if `aggregate_subcircs` is set to true, then subcircuits from the provided circuits `qk_list` will be aggregated into one mirror edesign. This option may be desirable if all circuits in the list are members of the same "family": for instance, all circuits are 8-qubit Bernstein-Vazirani circuits, just with varying keys.
+    # if `aggregate_subcircs` is set to true, then subcircuits from the provided circuits `qk_list` will be aggregated into one mirror edesign. This option may be desirable if all circuits in the list are members of the same "family": for instance, all circuits are 8-qubit Bernstein-Vazirani circuits, just with varying secret keys.
     # If `aggregate_subcircs` is set to false, each circuit in `qk_list` will be subsampled separately and will have its own mirror edesign.
 
     # convert to pygsti
-    ps_circs = []
-    for qk_circ in qk_circs:
+
+    if isinstance(qk_circs, list):
+        qk_circs = {i: qk_circ for i, qk_circ in enumerate(qk_circs)}
+
+
+    ps_circs = {}
+    for k, qk_circ in qk_circs.items():
         ps_circ, _ = _Circuit.from_qiskit(qk_circ, allow_different_gates_in_same_layer=True)
         ps_circ = ps_circ.delete_idling_lines()
         ps_circ = ps_circ.reorder_lines(sorted(ps_circ.line_labels))
 
-        ps_circs.append(ps_circ)
+        ps_circs[k] = ps_circ
 
     # subcirc sampling in device native gate set
 
@@ -240,37 +307,46 @@ def qiskit_circuit_list_to_svb_mirror_edesign(qk_circs,
     
     test_edesigns = {}
     if aggregate_subcircs:
-        test_edesign = _subcircsel.sample_subcircuits(full_circs=ps_circs,
+        test_edesign = _subcircsel.sample_subcircuits(full_circs=list(ps_circs.values()),
                                                       width_depths=width_depth_dict,
                                                       instruction_durations=instruction_durations,
                                                       coupling_map=coupling_map,
                                                       **subcirc_kwargs_dict)
-        test_edesigns[1] = test_edesign
+        test_edesigns[0] = test_edesign
 
     else:
-        for i, ps_circ in enumerate(ps_circs):
+        for k, ps_circ in ps_circs.items():
             test_edesign = _subcircsel.sample_subcircuits(full_circs=ps_circ,
                                                           width_depths=width_depth_dict,
                                                           instruction_durations=instruction_durations,
                                                           coupling_map=coupling_map,
                                                           **subcirc_kwargs_dict)
             
-            test_edesigns[i] = test_edesign
+            test_edesigns[k] = test_edesign
 
     mirror_edesigns = {}
 
-    for idx, test_edesign in test_edesigns.items():
+    for k, test_edesign in test_edesigns.items():
         ref_circ_dict = defaultdict(list)
         ref_circ_id_lookup_dict = {}
 
         for ps_test_circ, auxlist in test_edesign.aux_info.items():
             # convert back to qiskit to perform reference transpilations in u3-cz gate set (no layer blocking required, just need logical equivalence)
-            qk_test_circ = ps_test_circ.convert_to_qiskit(qubit_conversion='remove-Q')
-            qk_ref_circ = transpile(qk_test_circ, basis_gates=['u3', 'cz'])
+            qk_test_circ = ps_test_circ.convert_to_qiskit(qubit_conversion='remove-Q', num_qubits=backend_num_qubits)
+            qk_ref_circ = transpile(qk_test_circ,
+                                    basis_gates=['u3', 'cz'],
+                                    layout_method='trivial',
+                                    routing_method='none',
+                                    optimization_level=1,
+                                    approximation_degree=1.0
+                                    )
             # convert those reference circuits back to pyGSTi (layer blocking required to separate u3 and cz)
             ps_ref_circ, _ = _Circuit.from_qiskit(qk_ref_circ, allow_different_gates_in_same_layer=False)
+            ps_ref_circ = ps_ref_circ.delete_idling_lines()
+            ps_ref_circ = ps_ref_circ.reorder_lines(sorted(ps_ref_circ.line_labels))
+            
             for aux in auxlist:
-                ref_circ_dict[ps_ref_circ] += aux
+                ref_circ_dict[ps_ref_circ] += [aux]
                 ref_circ_id_lookup_dict[aux['id']] = ps_ref_circ
 
         ref_edesign = _FreeformDesign(ref_circ_dict)
@@ -282,27 +358,12 @@ def qiskit_circuit_list_to_svb_mirror_edesign(qk_circs,
                                              **mirroring_kwargs_dict
                                              )
 
-        mirror_edesigns[idx] = mirror_edesign
+        mirror_edesigns[k] = mirror_edesign
 
     if aggregate_subcircs:
-        return mirror_edesigns[1]
+        return test_edesigns[0], mirror_edesigns[0]
     else:
-        return mirror_edesigns
-
-
-
-    
-
-        
-
-
-
-    ### set defaults for subcircuit sampling if not provided
-    
-        
-
-
-    pass
+        return test_edesigns, mirror_edesigns
 
 
 
@@ -393,11 +454,13 @@ def make_mirror_edesign(test_edesign: _FreeformDesign,
             
             exact_circ = ref_id_lookup_dict[circ_id]
 
-            valid_test_ids = set(ref_edesign.aux_info[exact_circ]['id'])
+            # print(ref_edesign.aux_info[exact_circ])
+
+            valid_test_ids = set(aux['id'] for aux in ref_edesign.aux_info[exact_circ])
 
             test_id = test_aux['id']
 
-            assert test_id in valid_test_ids, f"Invalid test ID {test_id} for ref circuit corresponding to test IDs {valid_test_ids}"
+            assert circ_id in valid_test_ids, f"Invalid test ID {circ_id} for ref circuit corresponding to test IDs {valid_test_ids}"
 
         else:
             # print("using provided edesign for both reference and test compilations")
@@ -408,6 +471,15 @@ def make_mirror_edesign(test_edesign: _FreeformDesign,
         T = c
 
         R_inv = compute_inverse(circ=R, gate_set=gate_set, inverse=inverse, inv_kwargs=inv_kwargs)
+
+        # from qiskit_aer import AerSimulator
+
+        # sim = AerSimulator()
+
+        # TR_circ = T + R_inv
+        # TR_qk = TR_circ.convert_to_qiskit(qubit_conversion='remove-Q',qubits_to_measure='active')
+
+        # print(sim.run(TR_qk, shots=64).result().get_counts())
 
         # print(R)
         # print(T)
@@ -429,7 +501,8 @@ def make_mirror_edesign(test_edesign: _FreeformDesign,
 
                     T_routing = test_aux['routing_permutation']
                     
-                    ref_aux = ref_edesign.aux_info[R]
+                    ref_aux = ref_edesign.aux_info[R][0]
+
                     R_routing = ref_aux['routing_permutation_inv']
 
                     mc_routing_perm = {k: R_routing[v] for k,v in T_routing.items()} # compute overall routing permutation for the composition of the test circuit and the inverse of the reference circuit
@@ -535,6 +608,32 @@ def make_mirror_edesign(test_edesign: _FreeformDesign,
                 
             else:
                 raise RuntimeError("'mirroring_strategy' must be either 'pauli_rc' or 'central_pauli'")
+
+
+            # #debug shenanigans
+            # from qiskit_aer import AerSimulator
+
+            # TR_circ = T + R_inv
+            # TR_qk = TR_circ.convert_to_qiskit(qubit_conversion='remove-Q',qubits_to_measure='active')
+
+            # RR_circ = R + R_inv
+            # RR_qk = RR_circ.convert_to_qiskit(qubit_conversion='remove-Q',qubits_to_measure='active')
+
+            # M1_qk = L_T_Rinv_Linv.convert_to_qiskit(qubit_conversion='remove-Q',qubits_to_measure='active')
+            # M2_qk = L_R_Rinv_Linv.convert_to_qiskit(qubit_conversion='remove-Q',qubits_to_measure='active')
+
+            # sim = AerSimulator()
+
+            # for qk_circ in [TR_qk, RR_qk, M1_qk, M2_qk]:
+            #     print(sim.run(qk_circ, shots=64).result().get_counts())
+
+            # import ipdb
+
+            # ipdb.set_trace()
+
+
+            # ### end debug nonsense
+
             
             L_T_Rinv_Linv_aux = [{'base_aux': a,
                                   'idealout': L_T_Rinv_Linv_bs,

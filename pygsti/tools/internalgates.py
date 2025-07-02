@@ -529,6 +529,8 @@ def qiskit_gatenames_standard_conversions():
     qiskit_to_standard_mapping['h'] = ['Gh', False]
 
     qiskit_to_standard_mapping['rz'] = ['Gzr', True]
+    qiskit_to_standard_mapping['ry'] = ['Gyr', True]
+    qiskit_to_standard_mapping['rx'] = ['Gxr', True]
     qiskit_to_standard_mapping['u'] = ['Gu3', True]
     qiskit_to_standard_mapping['u3'] = ['Gu3', True]
 
@@ -536,6 +538,8 @@ def qiskit_gatenames_standard_conversions():
     qiskit_to_standard_mapping['cz'] = ['Gcphase', False]
     qiskit_to_standard_mapping['ecr'] = ['Gecres', False]
     qiskit_to_standard_mapping['swap'] = ['Gswap', False]
+
+    qiskit_to_standard_mapping['delay'] = ['Gdelay', True]
 
 
     return qiskit_to_standard_mapping
@@ -853,17 +857,20 @@ def standard_gatenames_qiskit_conversions():
 
     std_gatenames_to_qiskit = {}
 
+    # third entry of tuple indicates whether the gate is a accelerateable standard Qiskit gate.
 
-    std_gatenames_to_qiskit['Gcphase'] = (standard_gates.CZGate, False)
-    std_gatenames_to_qiskit['Gcnot'] = (standard_gates.CXGate, False)
-    std_gatenames_to_qiskit['Gecres'] = (standard_gates.ECRGate, False)
-    std_gatenames_to_qiskit['Gxpi2'] = (standard_gates.SXGate, False)
-    std_gatenames_to_qiskit['Gzr'] = (standard_gates.RZGate, False)
-    std_gatenames_to_qiskit['Gxpi'] = (standard_gates.XGate, False)
-    std_gatenames_to_qiskit['Gi'] = (standard_gates.IGate, False)
-    std_gatenames_to_qiskit['Gu3'] = (standard_gates.UGate, False)
+    std_gatenames_to_qiskit['Gcphase'] = (standard_gates.CZGate, 'cz', False)
+    std_gatenames_to_qiskit['Gcnot'] = (standard_gates.CXGate, 'cx', False)
+    std_gatenames_to_qiskit['Gecres'] = (standard_gates.ECRGate, 'ecr', False)
+    std_gatenames_to_qiskit['Gxpi2'] = (standard_gates.SXGate, 'sx', False)
+    std_gatenames_to_qiskit['Gzr'] = (standard_gates.RZGate, 'rz', False)
+    std_gatenames_to_qiskit['Gyr'] = (standard_gates.RYGate, 'ry', False)
+    std_gatenames_to_qiskit['Gxr'] = (standard_gates.RXGate, 'rx', False)
+    std_gatenames_to_qiskit['Gxpi'] = (standard_gates.XGate, 'x', False)
+    std_gatenames_to_qiskit['Gi'] = (standard_gates.IGate, 'id', False)
+    std_gatenames_to_qiskit['Gu3'] = (standard_gates.UGate, 'u', False)
 
-    std_gatenames_to_qiskit['Gdelay'] = (Delay, False)
+    std_gatenames_to_qiskit['Gdelay'] = (Delay, 'delay', False)
 
     
 

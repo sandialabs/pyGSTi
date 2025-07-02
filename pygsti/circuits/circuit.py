@@ -4043,7 +4043,7 @@ class Circuit(object):
         #get all of the qubits in the Qiskit circuit
 
         if len(circuit.qregs) > 1:
-            print("Warning: pyGSTi circuit mapping does not preserve Qiskit qreg structure.")
+            _warnings.warn('pyGSTi circuit mapping does not preserve Qiskit qreg structure.')
 
         qubits = circuit.qubits
 
@@ -4350,6 +4350,8 @@ class Circuit(object):
         if num_qubits is None:
             num_qubits = self.width
 
+        # print(num_qubits)
+
         if qubit_conversion is None:
             qubit_conversion = {label: label for label in self.line_labels}
         elif qubit_conversion == 'remove-Q':
@@ -4363,7 +4365,7 @@ class Circuit(object):
         for i in range(depth):
             layer = self.layer_label(i).components
             for gate in layer:
-                qiskit_gate, is_standard_gate = qiskit_gate_conversion[gate.name]
+                qiskit_gate, qiskit_gate_name, is_standard_gate = qiskit_gate_conversion[gate.name]
                 # pseudo-code
                 qiskit_qubits = [qubit_conversion[qubit] for qubit in gate.qubits]
 
@@ -4386,7 +4388,7 @@ class Circuit(object):
 
                 elif qubits_to_measure == 'active':
                     qiskit_qubits_to_measure = [v for v in qubit_conversion.values()]
-                    new_creg = qiskit_qc._create_creg(len(qiskit_qubits_to_measure), "meas")
+                    new_creg = qiskit_qc._create_creg(len(qiskit_qubits_to_measure), "cr")
                     qiskit_qc.add_register(new_creg)
                     qiskit_qc.barrier()
                     qiskit_qc.measure(qiskit_qubits_to_measure, new_creg)
@@ -4396,7 +4398,7 @@ class Circuit(object):
                 
             elif isinstance(qubits_to_measure, list):
                 qiskit_qubits_to_measure = [qubit_conversion[qubit] for qubit in qubits_to_measure]
-                new_creg = qiskit_qc._create_creg(len(qiskit_qubits_to_measure), "meas")
+                new_creg = qiskit_qc._create_creg(len(qiskit_qubits_to_measure), "cr")
                 qiskit_qc.add_register(new_creg)
                 qiskit_qc.barrier()
                 qiskit_qc.measure(qiskit_qubits_to_measure, new_creg)
