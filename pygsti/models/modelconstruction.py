@@ -735,19 +735,57 @@ def create_explicit_model(processor_spec, custom_gates=None,
                           lindblad_parameterization='auto',
                           evotype="default", simulator="auto",
                           ideal_gate_type='auto', ideal_spam_type='computational',
-                          embed_gates=False, basis='pp'):
+                          embed_gates=False, basis='pp',
+                          ideal_instrument_type='auto'):
+    """
+    Create a new `ExplicitOpModel` based on a processor specification.
+
+    Parameters
+    ----------
+    processor_spec
+
+    custom_gates
+
+    depolarization_strengths
+
+    stochastic_error_probs
+
+    lindblad_error_coeffs
+
+    lindblad_paramterization
+
+    evotype
+
+    simulator
+
+    ideal_gate_type
+
+    ideal_spam_type
+
+    embed_gates
+
+    basis
+
+    ideal_instrument_type
+
+
+    Returns
+    -------
+    ExplicitOpModel
+    """    
+
 
     modelnoise = _build_modelnoise_from_args(depolarization_strengths, stochastic_error_probs, lindblad_error_coeffs,
                                              depolarization_parameterization, stochastic_parameterization,
                                              lindblad_parameterization, allow_nonlocal=True)
 
     return _create_explicit_model(processor_spec, modelnoise, custom_gates, evotype,
-                                  simulator, ideal_gate_type, ideal_spam_type, ideal_spam_type, embed_gates, basis)
+                                  simulator, ideal_gate_type, ideal_spam_type, ideal_spam_type, embed_gates, basis, ideal_instrument_type)
 
 
 def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotype="default", simulator="auto",
                            ideal_gate_type='auto', ideal_prep_type='auto', ideal_povm_type='auto',
-                           embed_gates=False, basis='pp'):
+                           embed_gates=False, basis='pp', ideal_instrument_type='auto'):
     qudit_labels = processor_spec.qudit_labels
     state_space = _statespace.QubitSpace(qudit_labels) if all([udim == 2 for udim in processor_spec.qudit_udims]) \
         else _statespace.QuditSpace(qudit_labels, processor_spec.qudit_udims)
@@ -765,7 +803,11 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
         ideal_prep_type = _state.state_type_from_op_type(ideal_gate_type)
     if ideal_povm_type == "auto":
         ideal_povm_type = _povm.povm_type_from_op_type(ideal_gate_type)
+    if ideal_instrument_type == 'auto':
+        ideal_instrument_type = _instrument.instrument_type_from_op_type(ideal_gate_type)
 
+    #-------------Gates-------------------#
+    #-------------------------------------#
     def _embed_unitary(statespace, target_labels, unitary):
         dummyop = _op.EmbeddedOp(statespace, target_labels,
                                  _op.StaticUnitaryOp(unitary, basis=basis, evotype="statevec_slow"))
@@ -870,128 +912,35 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
                     layer = _op.ComposedOp([ideal_gate, noiseop]) if (noiseop is not None) else ideal_gate
                     ret.operations[key] = layer
 
-    # Instruments:
+    #-----------Instruments-----------#:
+    #---------------------------------#
+    def _embed_instrument_op(statespace, target_labels, instrument_op):
+        dummyop = _op.EmbeddedOp(statespace, target_labels,
+                                 _op.StaticArbitraryOp(instrument_op, basis=basis))
+        return dummyop.to_dense("HilbertSchmidt")
+    
     for instrument_name in processor_spec.instrument_names:
         instrument_spec = processor_spec.instrument_specifier(instrument_name)
-
-        #FUTURE: allow instruments to be embedded
-        #resolved_avail = processor_spec.resolved_availability(instrument_name)
-        resolved_avail = [None]  # all instrument (so far) act on all the qudits
+        resolved_avail = processor_spec.resolved_availability(instrument_name)
+        dense_instrument_spec ={k: _bt.change_basis(mx, from_basis='std', to_basis=basis) 
+                                for k, mx in instrument_spec.to_dense_spec().items()}
 
         # resolved_avail is a list/tuple of available sslbls for the current gate/factory
         for inds in resolved_avail:  # inds are target qudit labels
-            key = _label.Label(instrument_name, inds)
-
-            if isinstance(instrument_spec, str):
-                if instrument_spec == "Iz": #TODO: Create a set of standard instruments the same way we handle gates.
-                    #NOTE: this is very inefficient currently - there should be a better way of
-                    # creating an Iz instrument in the FUTURE
-                    inst_members = {}
-                    if not all([udim == 2 for udim in processor_spec.qudit_udims]):
-                        raise NotImplementedError("'Iz' instrument can only be constructed on a space of *qubits*")
-                    for ekey, effect_vec in _povm.ComputationalBasisPOVM(nqubits=len(qudit_labels), evotype=evotype,
-                                                                         state_space=state_space).items():
-                        E = effect_vec.to_dense('HilbertSchmidt').reshape((state_space.dim, 1))
-                        inst_members[ekey] = _np.dot(E, E.T)  # (effect vector is a column vector)
-                    ideal_instrument = _instrument.Instrument(inst_members)
-                else:
-                    raise ValueError("Unrecognized instrument spec '%s'" % instrument_spec)
-
-            elif isinstance(instrument_spec, dict):
-
-                def _spec_to_densevec(spec, is_prep):
-                    num_qudits = len(qudit_labels)
-                    if isinstance(spec, str):
-                        if spec.isdigit():  # all([l in ('0', '1') for l in spec]): for qubits
-                            bydigit_index = spec
-                            assert (len(bydigit_index) == num_qudits), \
-                                "Wrong number of qudits in '%s': expected %d" % (spec, num_qudits)
-                            #Map a (possibly possibly mixed-base) string qudit state specifiers to a
-                            #integer mapping into the corresponding standard basis state.
-                            v = _np.zeros(state_space.udim)
-                            inc = _np.flip(_np.cumprod(list(reversed(processor_spec.qudit_udims[1:] + (1,)))))
-                            index = _np.dot(inc, list(map(int, bydigit_index)))
-                            v[index] = 1.0
-                        elif (not is_prep) and spec.startswith("E_") and spec[len('E_'):].isdigit():
-                            bydigit_index = spec[len('E_'):]
-                            assert (len(bydigit_index) == num_qudits), \
-                                "Wrong number of qudits in '%s': expected %d" % (spec, num_qudits)
-                            v = _np.zeros(state_space.udim)
-                            inc = _np.flip(_np.cumprod(list(reversed(processor_spec.qudit_udims[1:] + (1,)))))
-                            index = _np.dot(inc, list(map(int, bydigit_index)))
-                            v[index] = 1.0
-                        elif (not is_prep) and spec.startswith("E") and spec[len('E'):].isdigit():
-                            index = int(spec[len('E'):])
-                            assert (0 <= index < state_space.udim), \
-                                "Index in '%s' out of bounds for state space with udim %d" % (spec, state_space.udim)
-                            v = _np.zeros(state_space.udim); v[index] = 1.0
-                        elif is_prep and spec.startswith("rho_") and spec[len('rho_'):].isdigit():
-                            bydigit_index = spec[len('rho_'):]
-                            assert (len(bydigit_index) == num_qudits), \
-                                "Wrong number of qudits in '%s': expected %d" % (spec, num_qudits)
-                            v = _np.zeros(state_space.udim)
-                            inc = _np.flip(_np.cumprod(list(reversed(processor_spec.qudit_udims[1:] + (1,)))))
-                            index = _np.dot(inc, list(map(int, bydigit_index)))
-                            v[index] = 1.0
-                        elif is_prep and spec.startswith("rho") and spec[len('rho'):].isdigit():
-                            index = int(effect_spec[len('rho'):])
-                            assert (0 <= index < state_space.udim), \
-                                "Index in '%s' out of bounds for state space with udim %d" % (spec, state_space.udim)
-                            v = _np.zeros(state_space.udim); v[index] = 1.0
-                        else:
-                            raise ValueError("Unrecognized instrument member spec '%s'" % spec)
-                    elif isinstance(spec, _np.ndarray):
-                        assert (len(spec) == state_space.udim), \
-                            "Expected length-%d (not %d!) array to specify a state of %s" % (
-                                state_space.udim, len(spec), str(state_space))
-                        v = spec
-                    else:
-                        raise ValueError("Invalid effect or state prep spec: %s" % str(spec))
-
-                    return _bt.change_basis(_ot.state_to_dmvec(v), 'std', basis)
-
-                # elements are key, list-of-2-tuple pairs or numpy array 
-                inst_members = {}
-                for k, inst_effect_spec in instrument_spec.items():
-                    #one option is to specify the full dense instrument effect as a numpy array.
-                    if isinstance(inst_effect_spec, _np.ndarray):
-                        inst_members[k] = inst_effect_spec.copy()
-                        continue
-                    member = None
-                    if isinstance(inst_effect_spec, tuple):
-                        inst_effect_spec = [inst_effect_spec]
-                    elif isinstance(inst_effect_spec, list):
-                        #elements should be 2-tuples corresponding to effect specs and prep effects respectively.
-                        for (effect_spec, prep_spec) in inst_effect_spec:
-                            effect_vec = _spec_to_densevec(effect_spec, is_prep=False)
-                            prep_vec = _spec_to_densevec(prep_spec, is_prep=True)
-                            if member is None:
-                                member = _np.outer(effect_vec, prep_vec)
-                            else:
-                                member += _np.outer(effect_vec, prep_vec)
-                    else:
-                        raise ValueError('Unsupported instrument effect specification. See documentation of `QuditProcessorSpec` or `QubitProcessorSpec` for supported formats.')
-
-                    assert (member is not None), \
-                        "You must provide at least one rank-1 specifier for each instrument member!"
-                    inst_members[k] = member
-                ideal_instrument = _instrument.Instrument(inst_members)
-            else:
-                raise ValueError("Invalid instrument spec: %s" % str(instrument_spec))
-
+            inst_label = _label.Label(instrument_name, inds)
             if inds is None or inds == tuple(qudit_labels):  # then no need to embed
-                #ideal_gate = _op.create_from_unitary_mx(gate_unitary, ideal_gate_type, 'pp',
-                #                                        None, evotype, state_space)
-                pass  # ideal_instrument already created
+                ideal_instrument = _instrument.Instrument(dense_instrument_spec)
             else:
-                raise NotImplementedError("Embedded Instruments aren't supported yet")
-                # FUTURE: embed ideal_instrument onto qudits given by layer key (?)
+                embedded_instrument_members = dict()
+                for key, member in dense_instrument_spec.items():
+                    embedded_instrument_members[key] = _embed_instrument_op(state_space, inds, member)
+                ideal_instrument = _instrument.Instrument(embedded_instrument_members)
 
             #TODO: once we can compose instruments, compose with noise op here
             #noiseop = modelnoise.create_errormap(key, evotype, state_space, target_labels=inds)
             #layer = _op.ComposedOp([ideal_gate, noiseop]) if (noiseop is not None) else ideal_gate
-            layer = ideal_instrument
-            ret.instruments[key] = layer
+            ret.instruments[inst_label] = _instrument.convert(ideal_instrument, to_type=ideal_instrument_type,
+                                                              basis=basis) 
 
     # SPAM:
     local_noise = False; independent_gates = True; independent_spam = True
@@ -1005,12 +954,13 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
 
     modelnoise.warn_about_zero_counters()
 
-    if ideal_gate_type == "full" and ideal_prep_type == "full" and ideal_povm_type == "full":
+    if ideal_gate_type == "full" and ideal_prep_type == "full" and ideal_povm_type == "full" and ideal_instrument_type=='full':
         ret.default_gauge_group = _gg.FullGaugeGroup(ret.state_space, basis, evotype)
-    elif (ideal_gate_type in ("full TP", "TP") and ideal_prep_type in ("full TP", "TP")
-          and ideal_povm_type in ("full TP", "TP")):
+    elif (ideal_gate_type in ("full TP", "TP", 'GLND') and ideal_prep_type in ("full TP", "TP", 'GLND')
+          and ideal_povm_type in ("full TP", "TP", 'GLND') and ideal_instrument_type in ('full TP', 'TP')):
         ret.default_gauge_group = _gg.TPGaugeGroup(ret.state_space, basis, evotype)
-    elif ideal_gate_type == "CPTP" and ideal_prep_type == "CPTP" and ideal_povm_type == "CPTP":
+    elif (ideal_gate_type in ("CPTP", "CPTPLND") and ideal_prep_type in ("CPTP", 'CPTPLND')  
+         and ideal_povm_type in ("CPTP", 'CPTPLND') and ideal_instrument_type in ('full TP', 'TP')):
         ret.default_gauge_group = _gg.UnitaryGaugeGroup(ret.state_space, basis, evotype)
     else:
         ret.default_gauge_group = _gg.TrivialGaugeGroup(ret.state_space)

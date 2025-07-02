@@ -132,7 +132,9 @@ class ExplicitOpModel(_mdl.OpModel):
         self.preps = _OrderedMemberDict(self, default_prep_type, prep_prefix, flagfn("state"))
         self.povms = _OrderedMemberDict(self, default_povm_type, povm_prefix, flagfn("povm"))
         self.operations = _OrderedMemberDict(self, default_gate_type, gate_prefix, flagfn("operation"))
-        self.instruments = _OrderedMemberDict(self, default_instrument_type, instrument_prefix, flagfn("instrument"))
+        self.instruments = _OrderedMemberDict(self, default_instrument_type, instrument_prefix, 
+                                              {'auto_embed': False, 'match_parent_statespace': True,
+                                               'match_parent_evotype': True, 'cast_to_type': 'instrument'})
         self.factories = _OrderedMemberDict(self, default_gate_type, gate_prefix, flagfn("factory"))
         self.effects_prefix = effect_prefix
         self._default_gauge_group = None
@@ -217,6 +219,8 @@ class ExplicitOpModel(_mdl.OpModel):
             return op_val  # if gate operates on full dimension, no need to embed.
 
         return _op.EmbeddedOp(self.state_space, op_target_labels, op_val)
+    
+    #TODO: Add an equivalent method for embedding instruments automatically.
 
     @property
     def default_gauge_group(self):

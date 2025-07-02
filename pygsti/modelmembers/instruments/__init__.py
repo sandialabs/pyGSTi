@@ -21,7 +21,8 @@ import pygsti.modelmembers as _mm
 
 
 def instrument_type_from_op_type(op_type):
-    """Decode an op type into an appropriate instrument type.
+    """
+    Decode an op type into an appropriate instrument type.
 
     Parameters:
     -----------
@@ -38,13 +39,13 @@ def instrument_type_from_op_type(op_type):
     # Limited set (only matching what is in convert)
     instr_conversion = {
         'auto': 'full',
-        'static unitary': 'static unitary',
-        'static clifford': 'static clifford',
+        'static unitary': 'static',
+        'static clifford': 'static',
         'static': 'static',
         'full': 'full',
         'full TP': 'full TP',
-        'full CPTP': 'full CPTP',
-        'full unitary': 'full unitary',
+        'full CPTP': 'full TP',
+        'full unitary': 'full',
     }
 
     instr_type_preferences = []
@@ -71,6 +72,8 @@ def instrument_type_from_op_type(op_type):
 
     return instr_type_preferences
 
+def create_from_instrument_effects():
+    pass
 
 def convert(instrument, to_type, basis, ideal_instrument=None, flatten_structure=False):
     """
@@ -121,7 +124,7 @@ def convert(instrument, to_type, basis, ideal_instrument=None, flatten_structure
 
             if to_type == "full TP":
                 return TPInstrument(list(instrument.items()), instrument.evotype, instrument.state_space)
-            elif to_type in ("full", "static", "static unitary"):
+            elif to_type in ("full", "static"):
                 from ..operations import convert as _op_convert
                 ideal_items = dict(ideal_instrument.items()) if (ideal_instrument is not None) else {}
                 members = [(k, _op_convert(g, to_type, basis, ideal_items.get(k, None), flatten_structure))

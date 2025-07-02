@@ -15,6 +15,7 @@ import itertools as _itertools
 import collections as _collections
 import warnings as _warnings
 from functools import lru_cache
+from math import log
 
 
 from pygsti.tools import internalgates as _itgs
@@ -187,9 +188,15 @@ class QuditProcessorSpec(ProcessorSpec):
             Any additional information that should be attached to this processor spec.
         """
         num_qudits = len(qudit_labels)
-        assert(len(qudit_udims) == num_qudits), "length of `qudit_labels` must equal that of `qubit_udims`!"
+        assert(len(qudit_udims) == num_qudits), "length of `qudit_labels` must equal that of `qudit_udims`!"
         assert(not (len(qudit_labels) > 1 and availability is None and geometry is None)), \
             "For multi-qudit processors you must specify either the geometry or the availability!"
+
+        first_udim = qudit_udims[0]
+        if not all([udim == first_udim for udim in qudit_udims]):
+            msg = 'Warning: automatic availability resolution for operations does not currently work for processor specifications'+\
+                  ' with mixed qudit dimensions. Please manually specify the availability for each operation.'
+            _warnings.warn(msg)
 
         if nonstd_gate_unitaries is None: nonstd_gate_unitaries = {}
 
@@ -238,7 +245,18 @@ class QuditProcessorSpec(ProcessorSpec):
                 raise ValueError(
                     str(gname) + " is not a valid 'standard' gate name, it must be given in `nonstd_gate_unitaries`")
 
-        # Note: do *not* store the complex vectors defining states, POVM effects, and instrument members
+        #store the ideal instrument effects for each of the instruments.
+        std_instruments = _itgs.standard_instruments()
+        self.instrument_specifiers = dict()
+        for instname in instrument_names:
+            if nonstd_instruments is not None and instname in nonstd_instruments:
+                self.instrument_specifiers[instname] = nonstd_instruments[instname]
+            elif instname in std_instruments:
+                self.instrument_specifiers[instname] = std_instruments[instname]
+            else:
+                raise ValueError(f"{str(instname)} is not a valid 'standard' gate name, it must be given in `nonstd_instruments`")        
+
+        # Note: do *not* store the complex vectors defining states, POVM effects
         # as these can be large n-qudit vectors.
 
         # Set self.qudit_graph  (note QubitGraph is not actually qubit specific -- works fine for labelled qudits too)
@@ -257,7 +275,8 @@ class QuditProcessorSpec(ProcessorSpec):
         # Set availability
         if availability is None: 
             availability = {}
-        self.availability = {gatenm: availability.get(gatenm, 'all-edges') for gatenm in self.gate_names}
+        self.availability = {op_name: availability.get(op_name, 'all-edges') 
+                            for op_name in _itertools.chain(self.gate_names,self.instrument_names)}
         # if _Lbl(gatenm).sslbls is not None NEEDED?
 
         self.compiled_from = None  # could hold (QuditProcessorSpec, compilations) tuple if not None
@@ -478,11 +497,10 @@ class QuditProcessorSpec(ProcessorSpec):
         -------
         str or dict
         """
-        if name in self.nonstd_instruments:
-            return self.nonstd_instruments[name]
+        if name in self.instrument_specifiers:
+            return self.instrument_specifiers[name]
         else:
-            # assert(is_standard_instrument_name(name)) TODO
-            return name
+            raise ValueError(f'{name} not found in `nonstd_instruments` and is not a built-in instrument name.')
 
     @property
     def primitive_op_labels(self):
@@ -494,23 +512,36 @@ class QuditProcessorSpec(ProcessorSpec):
             ret.extend([_Lbl(gn, sslbls) for sslbls in avail])
         return tuple(ret)
 
-    def gate_num_qudits(self, gate_name):
+    def op_num_qudits(self, op_name):
         """
-        The number of qudits that a given gate acts upon.
+        The number of qudits that a given gate or instrument acts upon.
 
         Parameters
         ----------
-        gate_name : str
-            The name of the gate.
+        op_name : str
+            The name of the gate or instrument.
 
         Returns
         -------
         int
         """
-        unitary = self.gate_unitaries[gate_name]
-        if unitary is None: return len(self.qudit_labels)  # unitary=None => identity on all qudits
-        if isinstance(unitary, (int, _np.int64)): return unitary  # unitary=int => identity in n qudits
-        return int(round(_np.log2(unitary.shape[0])))  # possibly factory *function* SHAPE (unitary may be callable)
+        first_udim = self.qudit_udims[0]
+        if not all([udim == first_udim for udim in self.qudit_udims]):
+            msg = 'Automatic resolution of the number of qudits an for operation acts upon does not currently work' \
+                  'for processor specifications'+\
+                  ' with mixed qudit dimensions. Please manually specify the availability for each operation.'
+            raise ValueError(msg)
+
+        if op_name[0] == 'G':
+            unitary = self.gate_unitaries[op_name]
+            if isinstance(unitary, (int, _np.int64)): 
+                return unitary  # unitary=int => identity in n qudits
+            return int(round(log(unitary.shape[0], first_udim)))  # possibly factory *function* SHAPE (unitary may be callable)
+        elif op_name[0] == 'I':
+            instrument_spec = self.instrument_specifiers[op_name]
+            return instrument_spec.num_qudits  
+        else:
+            raise ValueError("Operation names should begin with either 'G' for gates or 'I' for instruments.")
 
     def rename_gate_inplace(self, existing_gate_name, new_gate_name):
         """
@@ -539,24 +570,24 @@ class QuditProcessorSpec(ProcessorSpec):
         self.gate_unitaries = {rename(k): v for k, v in self.gate_unitaries}
         self.availability = {rename(k): v for k, v in self.availability}
 
-    def resolved_availability(self, gate_name, tuple_or_function="auto"):
+    def resolved_availability(self, op_name, tuple_or_function="auto"):
         """
-        The availability of a given gate, resolved as either a tuple of sslbl-tuples or a function.
+        The availability of a given gate or instrument, resolved as either a tuple of sslbl-tuples or a function.
 
         This function does more than just access the `availability` attribute, as this may
-        hold special values like `"all-edges"`.  It takes the value of `self.availability[gate_name]`
+        hold special values like `"all-edges"`.  It takes the value of `self.availability[op_name]`
         and resolves and converts it into the desired format: either a tuple of state-space labels
         or a function with a single state-space-labels-tuple argument.
 
         Parameters
         ----------
-        gate_name : str
-            The gate name to get the availability of.
+        op_name : str
+            The gate or instrument name to get the availability of.
 
         tuple_or_function : {'tuple', 'function', 'auto'}
             The type of object to return.  `'tuple'` means a tuple of state space label tuples,
             e.g. `((0,1), (1,2))`.  `'function'` means a function that takes a single state
-            space label tuple argument and returns `True` or `False` to indicate whether the gate
+            space label tuple argument and returns `True` or `False` to indicate whether the gate or instrument
             is available on the given target labels.  If `'auto'` is given, then either a tuple or
             function is returned - whichever is more computationally convenient.
 
@@ -565,15 +596,25 @@ class QuditProcessorSpec(ProcessorSpec):
         tuple or function
         """
         assert(tuple_or_function in ('tuple', 'function', 'auto'))
-        avail_entry = self.availability.get(gate_name, 'all-edges')
-        gate_nqudits = self.gate_num_qudits(gate_name)
-        return self._resolve_availability(avail_entry, gate_nqudits, tuple_or_function)
+        avail_entry = self.availability.get(op_name, 'all-edges')
+        try:  
+            op_nqudits = self.op_num_qudits(op_name)
+        except ValueError:
+            #String values for availability all require logic we don't
+            #have for cases with mixed qudit dimension, which are the most likely
+            #reasons the above `op_num_qudits` case would fail.
+            msg = 'Automatic availability resolution for operations does not currently work for processor specifications'+\
+                  ' with mixed qudit dimensions. Please manually specify the availability for each operation'+\
+                  ' using the list of tuples format (a list of tuples of qudit targets).'
+            assert not isinstance(avail_entry, str) and not callable(avail_entry), msg        
 
-    def _resolve_availability(self, avail_entry, gate_nqudits, tuple_or_function="auto"):
+        return self._resolve_availability(avail_entry, op_nqudits, tuple_or_function)
+
+    def _resolve_availability(self, avail_entry, op_nqudits, tuple_or_function="auto"):
 
         if callable(avail_entry):  # a boolean function(sslbls)
             if tuple_or_function == "tuple":
-                return tuple([sslbls for sslbls in _itertools.permutations(self.qudit_labels, gate_nqudits)
+                return tuple([sslbls for sslbls in _itertools.permutations(self.qudit_labels, op_nqudits)
                               if avail_entry(sslbls)])
             return avail_entry  # "auto" also comes here
 
@@ -582,18 +623,18 @@ class QuditProcessorSpec(ProcessorSpec):
                 def _f(sslbls):
                     return set(sslbls).issubset(self.qudit_labels) and tuple(sslbls) == tuple(sorted(sslbls))
                 return _f
-            return tuple(_itertools.combinations(self.qudit_labels, gate_nqudits))  # "auto" also comes here
+            return tuple(_itertools.combinations(self.qudit_labels, op_nqudits))  # "auto" also comes here
 
         elif avail_entry == 'all-permutations':
             if tuple_or_function == "function":
                 def _f(sslbls):
                     return set(sslbls).issubset(self.qudit_labels)
                 return _f
-            return tuple(_itertools.permutations(self.qudit_labels, gate_nqudits))  # "auto" also comes here
+            return tuple(_itertools.permutations(self.qudit_labels, op_nqudits))  # "auto" also comes here
 
         elif avail_entry == 'all-edges':
-            assert(gate_nqudits in (1, 2)), \
-                "I don't know how to place a %d-qudit gate on graph edges yet" % gate_nqudits
+            assert(op_nqudits in (1, 2)), \
+                "I don't know how to place a %d-qudit gate on graph edges yet" % op_nqudits
             if tuple_or_function == "function":
                 def _f(sslbls):
                     if len(sslbls) == 1: return True
@@ -602,8 +643,8 @@ class QuditProcessorSpec(ProcessorSpec):
                 return _f
 
             # "auto" also comes here:
-            if gate_nqudits == 1: return tuple([(i,) for i in self.qudit_labels])
-            elif gate_nqudits == 2: return tuple(self.qudit_graph.edges(double_for_undirected=True))
+            if op_nqudits == 1: return tuple([(i,) for i in self.qudit_labels])
+            elif op_nqudits == 2: return tuple(self.qudit_graph.edges(double_for_undirected=True))
             else: raise NotImplementedError()
 
         elif avail_entry in ('arbitrary', '*'):  # indicates user supplied factory determines allowed sslbls
@@ -824,7 +865,76 @@ class QuditProcessorSpec(ProcessorSpec):
                 return _Lbl(gn, self.qudit_labels)
         return None
 
+    def _inst_spec_to_dense_elems(self, instrument_spec):
+        """Helper method for converting an instrument spec into a dictionary of dense elements."""
+        # elements are key, list-of-2-tuple pairs or numpy array 
+        inst_members = {}
+        for k, inst_effect_spec in instrument_spec.items():
+            #one option is to specify the full dense instrument effect as a numpy array.
+            if isinstance(inst_effect_spec, _np.ndarray):
+                inst_members[k] = inst_effect_spec.copy()
+                continue
+            member = None
+            if isinstance(inst_effect_spec, tuple):
+                inst_effect_spec = [inst_effect_spec]
+            elif isinstance(inst_effect_spec, list):
+                #elements should be 2-tuples corresponding to effect specs and prep effects respectively.
+                for (effect_spec, prep_spec) in inst_effect_spec:
+                    effect_vec = _spec_to_densevec(effect_spec, is_prep=False)
+                    prep_vec = _spec_to_densevec(prep_spec, is_prep=True)
+                    if member is None:
+                        member = _np.outer(effect_vec, prep_vec)
+                    else:
+                        member += _np.outer(effect_vec, prep_vec)
+            else:
+                raise ValueError('Unsupported instrument effect specification. See documentation of `QuditProcessorSpec` or `QubitProcessorSpec` for supported formats.')
 
+            assert (member is not None), \
+                "You must provide at least one rank-1 specifier for each instrument member!"
+            inst_members[k] = member
+        return inst_members
+    
+    def _num_qudits_for_inst_spec(self, instrument_spec):
+        """A helper function which identifies the number of qudits an instrument specification acts on"""
+        first_udim = self.qudit_udims[0]
+        if not all([udim == first_udim for udim in self.qudit_udims]):
+            msg = 'Automatic resolution of the number of qudits an for operation acts upon does not currently work' \
+                  'for processor specifications'+\
+                  ' with mixed qudit dimensions. Please manually specify the availability for each operation.'
+            raise ValueError(msg)
+        # elements are key, list-of-2-tuple pairs or numpy array
+        # get the first instrument effect spec for the instrument spec.
+        first_inst_effect_spec = instrument_spec[next(iter(instrument_spec))]  
+
+        if isinstance(first_inst_effect_spec, _np.ndarray):
+            return int(round(log(_np.sqrt(first_inst_effect_spec.shape[0]), first_udim)))
+            
+        if isinstance(inst_effect_spec, tuple):
+            inst_effect_spec = [inst_effect_spec]
+
+        if isinstance(inst_effect_spec, list):
+            #elements should be 2-tuples corresponding to effect specs and prep effects respectively.
+            for (effect_spec, _) in inst_effect_spec:
+                effect_vec = _spec_to_densevec(effect_spec, is_prep=False)
+                if member is None:
+                    member = _np.outer(effect_vec, prep_vec)
+                else:
+                    member += _np.outer(effect_vec, prep_vec)
+        else:
+            raise ValueError('Unsupported instrument effect specification. See documentation of `QuditProcessorSpec` or `QubitProcessorSpec` for supported formats.')
+
+        assert (member is not None), \
+            "You must provide at least one rank-1 specifier for each instrument member!"
+        inst_members[k] = member
+        return inst_members
+
+
+
+
+def _num_qubits_for_spec(spec, qudit_labels, qudit_udims, state_space, is_prep):
+    """Helper function used in getting the number of qudits an instrument acts upon
+       from an instrument specification."""
+       
 class QubitProcessorSpec(QuditProcessorSpec):
     """
     The device specification for a one or more qudit quantum computer.
@@ -1367,3 +1477,173 @@ class QubitProcessorSpec(QuditProcessorSpec):
 
         return _qgraph.QubitGraph(qubit_labels, twoQ_connectivity)
     
+
+class InstrumentSpec:
+    """
+    Class for storing a specifier for an ideal quantum instrument for use as part of
+    a `QuditProcessorSpec` or `QubitProcessorSpec`. This class enables compact storage
+    of data associated with ideal quantum instruments as well as methods for producing
+    dense or sparse representations of these instruments.
+    """
+
+    @classmethod
+    def cast(cls, obj):
+        """
+        Casts obj to an instance of `InstrumentSpec`, if possible.
+        """
+        pass
+
+
+    def __init__(self, name, inst_effect_labels, inst_effect_specs, state_space):
+        """
+        Create an instance of a specifier for ideal quantum instruments.
+        
+        Parameters
+        ----------
+        name : str
+            Name for the specified quantum instrument.
+
+        inst_effect_labels : list of str
+            A list of labels for each of the instrument effect elements.
+        
+        inst_effect_specs : list of strs or dicts
+            The values this list give the specifications for each of the corresponding instrument elements labeled
+            in `inst_effect_labels`. The values of this list of this list can be the following specifiers:
+
+            - string specifiers: Presently only one special string specifier is supported, 'Iz'. This corresponds to a quantum
+              instrument for computational-basis readout.
+            - dictionary: A dictionary whose keys are instrument effect labels, and whose values are specifiers used to construct the
+              corresponding instrument effects. Instrument effect specifiers can take the following form:
+              - numpy array: A numpy array corresponding to the dense representation of the instrument effect.
+              - lists of 2-tuples: Each tuple in this list of 2-tuples is such that the first element corresponds to a POVM effect
+                specifier (see `nonstd_povms` for supported options), and the second element is a state preparation specifier
+                (see `nonstd_preps` for supported options). These specifiers are used to construct appropriate effect and preparation
+                representations which are then have their outer product taken. This is done for each 2-tuple, and the outer products are
+                then summed to get the overall instrument effect. In the case where there is only a single 2-tuple for an instrument effect
+                this tuple can be used directly as the dictionary value (w/o being wrapped in a list) for convenience.
+
+        state_space : `StateSpace`
+            The state space upon which this instrument acts.
+        """
+
+        self.name = name
+        self.instrument_effect_labels = list(inst_effect_labels)
+        self.instrument_spec = {key:val for key,val in zip(inst_effect_labels, inst_effect_specs)}
+        self.state_space = state_space
+
+    @property
+    def num_qudits(self):
+        """
+        Number of qudits upon which this instrument acts.        
+        """
+        return self.state_space.num_qudits
+    
+    def to_dense_spec(self):
+        """
+        Method for converting this instrument spec into a dictionary of dense elements.
+        
+        Returns
+        -------
+        dict of np.ndarray
+            A dictionary whose keys are labels for instrument effects, and whose
+            values are numpy arrays with the dense representations of the instrument
+            effects specified in `self.instrument_spec`, in the standard/computational basis.        
+            
+        """
+        # elements are key, list-of-2-tuple pairs or numpy array 
+        inst_members = {}
+        for k, inst_effect_spec in self.instrument_spec.items():
+            #one option is to specify the full dense instrument effect as a numpy array.
+            if isinstance(inst_effect_spec, _np.ndarray):
+                inst_members[k] = inst_effect_spec.copy()
+                continue
+            member = None
+            if isinstance(inst_effect_spec, tuple):
+                inst_effect_spec = [inst_effect_spec]
+            if isinstance(inst_effect_spec, list):
+                #elements should be 2-tuples corresponding to effect specs and prep effects respectively.
+                for (effect_spec, prep_spec) in inst_effect_spec:
+                    effect_vec = self._inst_effect_spec_to_densevec(effect_spec, is_prep=False)
+                    prep_vec = self._inst_effect_spec_to_densevec(prep_spec, is_prep=True)
+                    if member is None:
+                        member = _np.outer(effect_vec, prep_vec)
+                    else:
+                        member += _np.outer(effect_vec, prep_vec)
+            else:
+                raise ValueError('Unsupported instrument effect specification. See documentation of `QuditProcessorSpec` or `QubitProcessorSpec` for supported formats.')
+
+            assert (member is not None), \
+                "You must provide at least one rank-1 specifier for each instrument member!"
+            inst_members[k] = member
+        return inst_members
+
+    def _inst_effect_spec_to_densevec(self, inst_effect_spec, is_prep):
+        """
+        Helper method used in converting parts of an instrument effect specification into the corresponding
+        dense vectors.
+
+        Parameters
+        ----------
+        inst_effect_spec : str or np.ndarray
+            Either a string specifier or a numpy array specifying part of instrument effect specifier.
+        
+        is_prep : bool
+            Flag indicating whether the input specification component is for an effect vector or a state
+            preparation.
+        """
+        if isinstance(inst_effect_spec, str):
+            if inst_effect_spec.isdigit():  # all([l in ('0', '1') for l in spec]): for qubits
+                bydigit_index = inst_effect_spec
+                assert (len(bydigit_index) == self.num_qudits), \
+                    "Wrong number of qudits in '%s': expected %d" % (inst_effect_spec, self.num_qudits)
+                #Map a (possibly possibly mixed-base) string qudit state specifiers to a
+                #integer mapping into the corresponding standard basis state.
+                v = _np.zeros(self.state_space.udim)
+                inc = _np.flip(_np.cumprod(list(reversed(self.state_space.qudit_udims[1:] + (1,)))))
+                index = _np.dot(inc, list(map(int, bydigit_index)))
+                v[index] = 1.0
+            elif (not is_prep) and inst_effect_spec.startswith("E_") and inst_effect_spec[len('E_'):].isdigit():
+                bydigit_index = inst_effect_spec[len('E_'):]
+                assert (len(bydigit_index) == self.num_qudits), \
+                    "Wrong number of qudits in '%s': expected %d" % (inst_effect_spec, self.num_qudits)
+                v = _np.zeros(self.state_space.udim)
+                inc = _np.flip(_np.cumprod(list(reversed(self.state_space.qudit_udims[1:] + (1,)))))
+                index = _np.dot(inc, list(map(int, bydigit_index)))
+                v[index] = 1.0
+            elif (not is_prep) and inst_effect_spec.startswith("E") and inst_effect_spec[len('E'):].isdigit():
+                index = int(inst_effect_spec[len('E'):])
+                assert (0 <= index < self.state_space.udim), \
+                    "Index in '%s' out of bounds for state space with udim %d" % (inst_effect_spec, self.state_space.udim)
+                v = _np.zeros(self.state_space.udim); v[index] = 1.0
+            elif is_prep and inst_effect_spec.startswith("rho_") and inst_effect_spec[len('rho_'):].isdigit():
+                bydigit_index = inst_effect_spec[len('rho_'):]
+                assert (len(bydigit_index) == self.num_qudits), \
+                    "Wrong number of qudits in '%s': expected %d" % (inst_effect_spec, self.num_qudits)
+                v = _np.zeros(self.state_space.udim)
+                inc = _np.flip(_np.cumprod(list(reversed(self.qudit_udims[1:] + (1,)))))
+                index = _np.dot(inc, list(map(int, bydigit_index)))
+                v[index] = 1.0
+            elif is_prep and inst_effect_spec.startswith("rho") and inst_effect_spec[len('rho'):].isdigit():
+                index = int(inst_effect_spec[len('rho'):])
+                assert (0 <= index < self.state_space.udim), \
+                    "Index in '%s' out of bounds for state space with udim %d" % (inst_effect_spec, self.state_space.udim)
+                v = _np.zeros(self.state_space.udim); v[index] = 1.0
+            else:
+                raise ValueError("Unrecognized instrument member spec '%s'" % inst_effect_spec)
+        elif isinstance(inst_effect_spec, _np.ndarray):
+            assert (len(inst_effect_spec) == self.state_space.udim), \
+                "Expected length-%d (not %d!) array to specify a state of %s" % (
+                    self.state_space.udim, len(inst_effect_spec), str(self.state_space))
+            v = inst_effect_spec
+        else:
+            raise ValueError("Invalid effect or state prep spec: %s" % str(inst_effect_spec))
+
+        return _ot.state_to_dmvec(v)
+
+
+
+
+
+
+
+

@@ -313,6 +313,29 @@ def standard_gatename_unitaries():
 
     return std_unitaries
 
+def standard_instruments():
+    """
+    Construct a dictionary of standard instrument elements for commonly used quantum instruments.
+
+    Returns:
+    --------
+    std_instruments: dict of dicts
+        Returns a dictionary whose keys are strings corresponding to recognized built-in instruments.
+        The values of the dictionary are themselves dictionaries whose keys are instrument effect labels
+        and whose values are numpy arrays corresponding to the ideal instrument elements in the pauli-product
+        basis.
+    """
+    from pygsti.processors.processorspec import InstrumentSpec as _InstrumentSpec
+    from pygsti.baseobjs.statespace import QubitSpace as _QubitSpace
+    std_instruments = dict()
+    #Iz
+    Iz_inst_members = {}
+    Iz_effect_specs = [(_np.array([1,0]), _np.array([1,0])), (_np.array([0,1]), _np.array([0,1]))]
+    Iz_effect_lbls = ['p0', 'p1'] 
+    std_instruments['Iz'] = _InstrumentSpec(name='Iz', inst_effect_labels=Iz_effect_lbls, inst_effect_specs=Iz_effect_specs,
+                                            state_space= _QubitSpace(1))
+    #TODO: n-qubit Iz instruments to match old conventions.
+    return std_instruments
 
 def unitary_to_standard_gatename(unitary, up_to_phase = False, return_phase = False):
     """
