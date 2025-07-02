@@ -2516,7 +2516,7 @@ class OpModel(Model):
 
     def setup_fogi(self, initial_gauge_basis, create_complete_basis_fn=None,
                    op_label_abbrevs=None, reparameterize=False, reduce_to_model_space=True,
-                   dependent_fogi_action='drop', include_spam=True, primitive_op_labels=None, load_checkpoint= False, save_checkpoints=False, verbosity=1):
+                   dependent_fogi_action='drop', include_spam=True, primitive_op_labels=None, load_checkpoint= False, save_checkpoint=False, verbosity=1):
         """TODO Summary
 
         Args TODO:
@@ -2552,9 +2552,9 @@ class OpModel(Model):
             if verbosity > 0:
                     print("Valid checkpoint found")
 
-        if save_checkpoints and checkpoint_obj is None:
-            assert isinstance(save_checkpoints, str), 'Checkpoint save path must be a string'
-            assert _exists(save_checkpoints.rstrip(save_checkpoints.split('/')[-1])), 'Checkpoint save folder not found. Make sure the folder ' + save_checkpoints.split('/')[:-1] + ' exists'
+        if save_checkpoint and checkpoint_obj is None:
+            assert isinstance(save_checkpoint, str), 'Checkpoint save path must be a string'
+            assert _exists(save_checkpoint.rstrip(save_checkpoint.split('/')[-1])), 'Checkpoint save folder not found. Make sure the folder ' + save_checkpoint.split('/')[:-1] + ' exists'
             checkpoint_obj = _FOGICheckpoint(0)
 
         if primitive_op_labels is None:
@@ -2672,14 +2672,17 @@ class OpModel(Model):
                 gauge_action_matrices[op_label] = allowed_rowspace_mx
                 gauge_action_gauge_spaces[op_label] = op_gauge_space
                 #FOGI DEBUG print("DEBUG => final allowed_rowspace_mx shape =", allowed_rowspace_mx.shape)
-            if save_checkpoints:
-                checkpoint_obj.allowed_row_basis_labels = errorgen_coefficient_labels
-                checkpoint_obj.gauge_action_matrices = gauge_action_matrices 
-                checkpoint_obj.gauge_action_gauge_spaces = gauge_action_gauge_spaces
-                checkpoint_obj.step = 1
-                checkpoint_obj.write(save_checkpoints)
-                if verbosity > 0:
-                    print("Saved checkpoint 1/3 in " + save_checkpoints)
+            if save_checkpoint:
+                try:
+                    checkpoint_obj.allowed_row_basis_labels = errorgen_coefficient_labels
+                    checkpoint_obj.gauge_action_matrices = gauge_action_matrices 
+                    checkpoint_obj.gauge_action_gauge_spaces = gauge_action_gauge_spaces
+                    checkpoint_obj.step = 1
+                    checkpoint_obj.write(save_checkpoint)
+                    if verbosity > 0:
+                        print("Saved checkpoint 1/3 in " + save_checkpoint)
+                except:
+                    raise Warning('Something went wrong with checkpoint save 1/3')
             
 
         # Similar for SPAM
@@ -2741,14 +2744,17 @@ class OpModel(Model):
                 errorgen_coefficient_labels[povm_label] = allowed_row_basis.labels
                 gauge_action_matrices[povm_label] = allowed_rowspace_mx
                 gauge_action_gauge_spaces[povm_label] = op_gauge_space
-            if save_checkpoints:
-                checkpoint_obj.allowed_row_basis_labels = errorgen_coefficient_labels
-                checkpoint_obj.gauge_action_matrices = gauge_action_matrices 
-                checkpoint_obj.gauge_action_gauge_spaces = gauge_action_gauge_spaces
-                checkpoint_obj.step = 2
-                checkpoint_obj.write(save_checkpoints)
-                if verbosity > 0:
-                    print("Saved checkpoint 2/3 in " + save_checkpoints)
+            try:
+                if save_checkpoint:
+                    checkpoint_obj.allowed_row_basis_labels = errorgen_coefficient_labels
+                    checkpoint_obj.gauge_action_matrices = gauge_action_matrices 
+                    checkpoint_obj.gauge_action_gauge_spaces = gauge_action_gauge_spaces
+                    checkpoint_obj.step = 2
+                    checkpoint_obj.write(save_checkpoint)
+                    if verbosity > 0:
+                        print("Saved checkpoint 2/3 in " + save_checkpoint)
+            except:
+                    raise Warning('Something went wrong with checkpoint save 2/3')
 
         norm_order = "auto"  # NOTE - should be 1 for normalizing 'S' quantities and 2 for 'H',
         # so 'auto' utilizes intelligence within FOGIStore
@@ -2764,12 +2770,15 @@ class OpModel(Model):
                                         errorgen_coefficient_labels,
                                         op_label_abbrevs, dependent_fogi_action,
                                         norm_order=norm_order)
-            if save_checkpoints:
-                checkpoint_obj.fogi_store = self.fogi_store
-                checkpoint_obj.step = 3
-                checkpoint_obj.write(save_checkpoints)
-                if verbosity > 0:
-                    print("Saved checkpoint 3/3 in ", save_checkpoints)
+            if save_checkpoint:
+                try:
+                    checkpoint_obj.fogi_store = self.fogi_store
+                    checkpoint_obj.step = 3
+                    checkpoint_obj.write(save_checkpoint)
+                    if verbosity > 0:
+                        print("Saved checkpoint 3/3 in ", save_checkpoint)
+                except:
+                    raise Warning('Something went wrong with checkpoint save 3/3')
         
         if reparameterize:
                 self.param_interposer = self._add_reparameterization(
