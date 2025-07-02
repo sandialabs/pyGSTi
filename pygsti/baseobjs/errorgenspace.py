@@ -13,7 +13,7 @@ Defines the ErrorgenSpace class and supporting functionality.
 import numpy as _np
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.tools import matrixtools as _mt
-from pygsti.baseobjs.errorgenbasis import ExplicitElementaryErrorgenBasis
+from pygsti.baseobjs.errorgenbasis import CompleteElementaryErrorgenBasis as _CompleteElementaryErrorgenBasis, ExplicitElementaryErrorgenBasis as _ExplicitElementaryErrorgenBasis
 
 class ErrorgenSpace(_NicelySerializable):
 
@@ -43,12 +43,20 @@ class ErrorgenSpace(_NicelySerializable):
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
         state.update({'vectors' : self._encodemx(self.vectors),
-                      'basis': self.elemgen_basis._to_nice_serialization()
+                      'basis': self.elemgen_basis._to_nice_serialization(),
+                      'basis_type' : 'complete' if isinstance(self.elemgen_basis, _CompleteElementaryErrorgenBasis) else 'explicit'
         })
+        #DEBUG 
+        assert  (isinstance(self.elemgen_basis, _CompleteElementaryErrorgenBasis) or isinstance(self.elemgen_basis, _ExplicitElementaryErrorgenBasis)), 'If this assertion is raised, from_nice_serialization needs to be changed'
         return state
     @classmethod
     def from_nice_serialization(cls, state):
-        return cls(cls._decodemx(state['vectors']), ExplicitElementaryErrorgenBasis.from_nice_serialization(state['basis']))
+        if state['basis_type'] == 'complete':
+            from_nice_serialization = _CompleteElementaryErrorgenBasis.from_nice_serialization
+        else:
+            from_nice_serialization = _ExplicitElementaryErrorgenBasis.from_nice_serialization
+
+        return cls(cls._decodemx(state['vectors']), from_nice_serialization(state['basis']))
     def intersection(self, other_space, free_on_unspecified_space=False, use_nice_nullspace=False):
         """
         TODO: docstring

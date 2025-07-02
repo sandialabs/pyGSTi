@@ -2516,16 +2516,47 @@ class OpModel(Model):
 
     def setup_fogi(self, initial_gauge_basis, create_complete_basis_fn=None,
                    op_label_abbrevs=None, reparameterize=False, reduce_to_model_space=True,
-                   dependent_fogi_action='drop', include_spam=True, primitive_op_labels=None, check_point=None, checkpoint_path=''):
-        
+                   dependent_fogi_action='drop', include_spam=True, primitive_op_labels=None, load_checkpoint= False, save_checkpoints=False, verbosity=1):
+        """TODO Summary
+
+        Args TODO:
+            initial_gauge_basis (_type_): _description_
+            create_complete_basis_fn (_type_, optional): _description_. Defaults to None.
+            op_label_abbrevs (_type_, optional): _description_. Defaults to None.
+            reparameterize (bool, optional): _description_. Defaults to False.
+            reduce_to_model_space (bool, optional): _description_. Defaults to True.
+            dependent_fogi_action (str, optional): _description_. Defaults to 'drop'.
+            include_spam (bool, optional): _description_. Defaults to True.
+            primitive_op_labels (_type_, optional): _description_. Defaults to None.
+
+            check_point (str, optional): False, or a string with the file path and name
+
+        Returns TODO:
+            _type_: _description_
+        """
         from pygsti.baseobjs.errorgenbasis import CompleteElementaryErrorgenBasis as _CompleteElementaryErrorgenBasis
 
         from pygsti.tools import basistools as _bt
         from pygsti.tools import fogitools as _fogit
         from pygsti.models.fogistore import FirstOrderGaugeInvariantStore as _FOGIStore
         from pygsti.tools.fogitools import FOGICheckpoint as _FOGICheckpoint
-        if check_point is None and not disable_checkpoints:
-            check_point = _FOGICheckpoint(0)
+
+        from os.path import isfile as _isfile   
+        from os.path import exists as _exists
+        
+        checkpoint_obj = None
+        if load_checkpoint:
+            assert isinstance(load_checkpoint, str), 'Checkpoint file to load must be a string'
+            assert _isfile(load_checkpoint), 'Checkpoint load file not found. Make sure ' + load_checkpoint + ' exists'
+            checkpoint_obj = _FOGICheckpoint.read(load_checkpoint)
+            if verbosity > 0:
+                    print("Valid checkpoint found")
+
+        if save_checkpoints and checkpoint_obj is None:
+            assert isinstance(save_checkpoints, str), 'Checkpoint save path must be a string'
+            assert _exists(save_checkpoints.rstrip(save_checkpoints.split('/')[-1])), 'Checkpoint save folder not found. Make sure the folder ' + save_checkpoints.split('/')[:-1] + ' exists'
+            checkpoint_obj = _FOGICheckpoint(0)
+
         if primitive_op_labels is None:
             primitive_op_labels = self.primitive_op_labels
 
@@ -2583,21 +2614,27 @@ class OpModel(Model):
         gauge_action_gauge_spaces = _collections.OrderedDict()
         errorgen_coefficient_labels = _collections.OrderedDict()  # by operation
         #Checkpoint number 1 skips this loop
-        if check_point is not None:
-            if check_point.step == 1:
-                primitive_op_labels_copy = primitive_op_labels.copy()
+        if load_checkpoint:
+            if checkpoint_obj.step == 1:
+                primitive_op_labels_copy = list(primitive_op_labels)
                 # Check if primitive_op_labels matches the ops in the saved dictionary
-                for label in list(check_point.allowed_row_basis_labels.keys()) + list(check_point.gauge_action_matrices.keys()) + list(check_point.gauge_action_gauge_spaces.keys()):
+                for label in list(checkpoint_obj.allowed_row_basis_labels.keys()):
                     if not (label in primitive_op_labels):
                         raise ValueError('The checkpoint provided is invalid. Make sure it was generated with the same parameters currently provided. The gates within the gate set provided do not match the ones on disk.')
                     else:
                         primitive_op_labels_copy.pop(primitive_op_labels_copy.index(label))
                 if len(primitive_op_labels_copy) != 0:
                     raise ValueError('The checkpoint provided is invalid. Make sure it was generated with the same parameters currently provided. The gates within the gate set provided do not match the ones on disk.')
-                
-                errorgen_coefficient_labels = check_point.allowed_row_basis_labels
-                gauge_action_matrices = check_point.gauge_action_matrices
-                gauge_action_gauge_spaces = check_point.gauge_action_gauge_spaces
+                if checkpoint_obj.allowed_row_basis_labels.keys() != checkpoint_obj.gauge_action_gauge_spaces.keys() or checkpoint_obj.gauge_action_gauge_spaces.keys() != checkpoint_obj.gauge_action_matrices.keys():
+                    raise ValueError('The checkpoint file may be corrupted')
+                errorgen_coefficient_labels = checkpoint_obj.allowed_row_basis_labels
+                gauge_action_matrices = checkpoint_obj.gauge_action_matrices
+                gauge_action_gauge_spaces = checkpoint_obj.gauge_action_gauge_spaces
+                load_checkpoint = False
+                if verbosity > 0:
+                    print("Loaded gauge action matrices for gates from checkpoint 1/3")
+            else:
+                assert checkpoint_obj.step > 1, 'DEBUG: problem with checkpoint'
         
         else:
             for op_label in primitive_op_labels:  # Note: "ga" stands for "gauge action" in variable names below
@@ -2635,19 +2672,23 @@ class OpModel(Model):
                 gauge_action_matrices[op_label] = allowed_rowspace_mx
                 gauge_action_gauge_spaces[op_label] = op_gauge_space
                 #FOGI DEBUG print("DEBUG => final allowed_rowspace_mx shape =", allowed_rowspace_mx.shape)
-            check_point.allowed_row_basis_labels = errorgen_coefficient_labels
-            check_point.gauge_action_matrices = gauge_action_matrices 
-            check_point.gauge_action_gauge_spaces = gauge_action_gauge_spaces
-            check_point.step = 1
-            check_point.
+            if save_checkpoints:
+                checkpoint_obj.allowed_row_basis_labels = errorgen_coefficient_labels
+                checkpoint_obj.gauge_action_matrices = gauge_action_matrices 
+                checkpoint_obj.gauge_action_gauge_spaces = gauge_action_gauge_spaces
+                checkpoint_obj.step = 1
+                checkpoint_obj.write(save_checkpoints)
+                if verbosity > 0:
+                    print("Saved checkpoint 1/3 in " + save_checkpoints)
+            
 
         # Similar for SPAM
         #Checkpoint number 2 skips this loop
-        if check_point != None:
-            if check_point.step == 2:
+        if load_checkpoint:
+            if checkpoint_obj.step == 2:
                 primitive_SPAM_labels = primitive_prep_labels.copy() + primitive_povm_labels.copy()
                 # Check if primitive_op_labels matches the ops in the saved dictionary
-                for label in list(check_point.allowed_row_basis_labels.keys()) + list(check_point.gauge_action_matrices.keys()) + list(check_point.gauge_action_gauge_spaces.keys()):
+                for label in list(checkpoint_obj.allowed_row_basis_labels.keys()) + list(checkpoint_obj.gauge_action_matrices.keys()) + list(checkpoint_obj.gauge_action_gauge_spaces.keys()):
                     if not (label in primitive_SPAM_labels):
                         raise ValueError('The checkpoint provided is invalid. Make sure it was generated with the same parameters currently provided. The SPAM within the gate set provided does not match the one on disk.')
                     else:
@@ -2655,9 +2696,12 @@ class OpModel(Model):
                 if len(primitive_SPAM_labels) != 0:
                     raise ValueError('The checkpoint provided is invalid. Make sure it was generated with the same parameters currently provided. The SPAM within the gate set provided do not match the ones on disk.')
                 
-                errorgen_coefficient_labels = check_point.allowed_row_basis_labels
-                gauge_action_matrices = check_point.gauge_action_matrices
-                gauge_action_gauge_spaces = check_point.gauge_action_gauge_spaces
+                errorgen_coefficient_labels = checkpoint_obj.allowed_row_basis_labels
+                gauge_action_matrices = checkpoint_obj.gauge_action_matrices
+                gauge_action_gauge_spaces = checkpoint_obj.gauge_action_gauge_spaces
+                load_checkpoint = False
+                if verbosity > 0:
+                    print("Loaded gauge action matrices for SPAM from checkpoint 2/3")
         else:
             for prep_label in primitive_prep_labels:
                 prep = self._circuit_layer_operator(prep_label, 'prep')
@@ -2697,27 +2741,37 @@ class OpModel(Model):
                 errorgen_coefficient_labels[povm_label] = allowed_row_basis.labels
                 gauge_action_matrices[povm_label] = allowed_rowspace_mx
                 gauge_action_gauge_spaces[povm_label] = op_gauge_space
+            if save_checkpoints:
+                checkpoint_obj.allowed_row_basis_labels = errorgen_coefficient_labels
+                checkpoint_obj.gauge_action_matrices = gauge_action_matrices 
+                checkpoint_obj.gauge_action_gauge_spaces = gauge_action_gauge_spaces
+                checkpoint_obj.step = 2
+                checkpoint_obj.write(save_checkpoints)
+                if verbosity > 0:
+                    print("Saved checkpoint 2/3 in " + save_checkpoints)
 
         norm_order = "auto"  # NOTE - should be 1 for normalizing 'S' quantities and 2 for 'H',
         # so 'auto' utilizes intelligence within FOGIStore
 
         #Checkpoint number 3 skips FOGIStore creation
-        if check_point != None:
-            if check_point.step == 3:
-                self.fogi_store = check_point.fogi_store
+        if load_checkpoint:
+            if checkpoint_obj.step == 3:
+                self.fogi_store = checkpoint_obj.fogi_store
+                if verbosity > 0:
+                    print("Loaded FOGI store from checkpoint 3/3")
         else:
-            self.fogi_store = _FOGIStore.compute_fogis(gauge_action_matrices, gauge_action_gauge_spaces,
+            self.fogi_store = _FOGIStore.from_gauge_action_matrices(gauge_action_matrices, gauge_action_gauge_spaces,
                                         errorgen_coefficient_labels,
                                         op_label_abbrevs, dependent_fogi_action,
                                         norm_order=norm_order)
+            if save_checkpoints:
+                checkpoint_obj.fogi_store = self.fogi_store
+                checkpoint_obj.step = 3
+                checkpoint_obj.write(save_checkpoints)
+                if verbosity > 0:
+                    print("Saved checkpoint 3/3 in ", save_checkpoints)
         
         if reparameterize:
-            loaded = False
-            if check_point != None:
-                if check_point.param_interposer is not None:
-                    self.param_interposer = check_point.param_interposer
-                    loaded = True
-            if not loaded:
                 self.param_interposer = self._add_reparameterization(
                     primitive_op_labels + primitive_prep_labels + primitive_povm_labels,
                     self.fogi_store.fogi_directions.toarray(),  # DENSE now (leave sparse in FUTURE?)

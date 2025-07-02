@@ -20,10 +20,12 @@ from pygsti.models import fogistore  as _fogistore
 from pygsti.models.modelparaminterposer import LinearInterposer as _LinearInterposer
 from pygsti.baseobjs.errorgenspace import ErrorgenSpace as _ErrorgenSpace
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
-
+from pygsti.baseobjs import Label as _Label
+from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GlobalElementaryErrorgenLabel,\
+LocalElementaryErrorgenLabel as _LocalElementaryErrorgenLabel
 class FOGICheckpoint(_NicelySerializable):
     def __init__(self, step, allowed_row_basis_labels = None, gauge_action_matrices = None, gauge_action_gauge_spaces = None, param_interposer = None, fogi_store = None):
-        super.__init__()
+        super().__init__()
         self.step = step
         self.param_interposer = param_interposer
         self.fogi_store = fogi_store
@@ -33,22 +35,40 @@ class FOGICheckpoint(_NicelySerializable):
 
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
+        #All three objects allowed_row_basis_labels, gauge_action_matrices and gauge_action_gauge_spaces
+        #must have the same keys by construction.
+        op_keys = None if self.allowed_row_basis_labels is None else [op for op in self.allowed_row_basis_labels.keys()]
         state.update({'step': self.step,
                       'param_interposer': None if self.param_interposer == None else self.parameter_interposer._to_nice_serialization(),
                       'fogi_store': None if self.fogi_store == None else self.fogi_store._to_nice_serialization(),
-                      'allowed_row_basis_labels' : self.allowed_row_basis_labels,
-                      'gauge_action_matrices': None if self.gauge_action_matrices == None else {label:self._encodemx(matrix) for label, matrix in self.gauge_action_matrices.items()},
-                      'gauge_action_gauge_spaces': None if self.gauge_action_gauge_spaces == None else {label:gauge_space._to_nice_serialization() for label, gauge_space in self.gauge_action_gauge_spaces.items()}
+                      'op_keys' : None if op_keys is None else [op.to_native() for op in op_keys],
+                      'allowed_row_basis_labels' : None if self.allowed_row_basis_labels is None else [[label.__str__() for label in self.allowed_row_basis_labels[op]] for op in op_keys],
+                      'label_types' :  None if self.allowed_row_basis_labels is None else ('global' if isinstance(list(self.allowed_row_basis_labels.values())[0][0],_GlobalElementaryErrorgenLabel) else 'local'), 
+                      'gauge_action_matrices': None if self.gauge_action_matrices == None else [self._encodemx(self.gauge_action_matrices[op]) for op in op_keys],
+                      'gauge_action_gauge_spaces': None if self.gauge_action_gauge_spaces == None else [self.gauge_action_gauge_spaces[op]._to_nice_serialization() for op in op_keys]
         })
+        #DEBUG 
+        assert (state['label_types'] == 'global' and isinstance(list(self.allowed_row_basis_labels.values())[0][0],_GlobalElementaryErrorgenLabel)) or (state['label_types'] == 'local' and isinstance(list(self.allowed_row_basis_labels.values())[0][0],_LocalElementaryErrorgenLabel))
         return state
     @classmethod
     def from_nice_serialization(cls, state):
         step = state['step']
-        param_interposer = _LinearInterposer.from_nice_serialization(state['param_interposer'])
-        fogi_store = _fogistore.FirstOrderGaugeInvariantStore.from_nice_serialization(state['fogi_store'])
-        allowed_row_basis_labels = state['allowed_row_basis_labels']
-        gauge_action_matrices = {label: cls._decodemx(matrix) for label, matrix in state['gauge_action_matrices'].items()},
-        gauge_action_gauge_spaces = _ErrorgenSpace.from_nice_serialization(state['gauge_action_gauge_spaces'])
+
+        if state['op_keys'] == None:
+            gauge_action_matrices = None
+            allowed_row_basis_labels = None
+            gauge_action_gauge_spaces = None
+        else:
+            if state['label_types'] == 'global':
+                cast = _GlobalElementaryErrorgenLabel.cast
+            else:
+                cast = _LocalElementaryErrorgenLabel.cast
+
+            gauge_action_matrices = {_Label(op): cls._decodemx(matrix) for matrix, op in zip(state['gauge_action_matrices'], state['op_keys'])}
+            gauge_action_gauge_spaces = {_Label(op): _ErrorgenSpace.from_nice_serialization(gauge_space) for gauge_space, op in zip(state['gauge_action_gauge_spaces'],state['op_keys'])}
+            allowed_row_basis_labels = {_Label(op): [cast(label) for label in labels] for labels, op in zip(state['allowed_row_basis_labels'], state['op_keys'])}
+        param_interposer = None if state['param_interposer'] is None else _LinearInterposer.from_nice_serialization(state['param_interposer'])
+        fogi_store = None if state['fogi_store'] is None else _fogistore.FirstOrderGaugeInvariantStore.from_nice_serialization(state['fogi_store'])
         return cls(step, param_interposer=param_interposer, fogi_store=fogi_store, allowed_row_basis_labels=allowed_row_basis_labels,gauge_action_matrices=gauge_action_matrices,gauge_action_gauge_spaces=gauge_action_gauge_spaces)
     
 def first_order_gauge_action_matrix(clifford_superop_mx, target_sslbls, model_state_space,
