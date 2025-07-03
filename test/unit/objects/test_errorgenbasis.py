@@ -112,6 +112,7 @@ class CompleteElementaryErrorgenBasisTester(BaseCase):
 
         lbl_idx = self.complete_errorgen_basis_default_1Q.label_index(test_eg)
         lbl_idx_1 = self.complete_errorgen_basis_default_1Q.label_index(test_eg_local)
+        print(lbl_idx, lbl_idx_1, labels.index(test_eg))
         assert lbl_idx == lbl_idx_1
         assert lbl_idx ==  labels.index(test_eg)
 

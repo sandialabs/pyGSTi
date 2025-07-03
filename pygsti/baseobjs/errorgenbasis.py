@@ -780,16 +780,11 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
         identity_label : str, optional (default 'I')
             An optional string specifying the label used to denote the identity in basis element labels.
         """
-        try:
-            return self.labels.index(label)
-        except ValueError as error:
-            
-            if ok_if_missing:
-                return None
-            else:
-                raise error
-        '''if isinstance(label, _LocalElementaryErrorgenLabel):
+        
+        if isinstance(label, _LocalElementaryErrorgenLabel):
             label = _GlobalElementaryErrorgenLabel.cast(label, self.sslbls, identity_label=identity_label)
+
+        
 
         support = label.sslbls
         eetype = label.errorgen_type
@@ -820,7 +815,14 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
         else:
             raise ValueError("Invalid elementary errorgen type: %s" % str(eetype))
 
-        return base + indices[label]'''
+        try:
+            return self.labels.index(label)
+        except ValueError as error:
+            
+            if ok_if_missing:
+                return None
+            else:
+                raise error
 
     def create_subbasis(self, sslbl_overlap, retain_max_weights=True):
         """
