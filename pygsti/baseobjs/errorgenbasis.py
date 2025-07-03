@@ -784,8 +784,6 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
         if isinstance(label, _LocalElementaryErrorgenLabel):
             label = _GlobalElementaryErrorgenLabel.cast(label, self.sslbls, identity_label=identity_label)
 
-        
-
         support = label.sslbls
         eetype = label.errorgen_type
         bels = label.basis_element_labels
@@ -804,8 +802,10 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
         elif eetype in ('C', 'A'):
             assert(len(trivial_bel) == 1)  # assumes this is a single character
             nontrivial_inds = [i for i, letter in enumerate(bels[0]) if letter != trivial_bel]
-            left_support = tuple([self.sslbls[i] for i in nontrivial_inds])
-
+            left_support = tuple([label.sslbls[i] for i in nontrivial_inds])
+            #left_support = tuple([self.sslbls[i] for i in nontrivial_inds])
+            #This line above is supposed to be a bugfix, I want to verify this with
+            #Corey before removing this comment
             if ok_if_missing and (support, left_support) not in self._offsets[eetype]:
                 return None
             base = self._offsets[eetype][(support, left_support)]
@@ -814,15 +814,7 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
                 support, left_support, eetype, [trivial_bel], nontrivial_bels))}
         else:
             raise ValueError("Invalid elementary errorgen type: %s" % str(eetype))
-
-        try:
-            return self.labels.index(label)
-        except ValueError as error:
-            
-            if ok_if_missing:
-                return None
-            else:
-                raise error
+        return base + indices[label]
 
     def create_subbasis(self, sslbl_overlap, retain_max_weights=True):
         """
