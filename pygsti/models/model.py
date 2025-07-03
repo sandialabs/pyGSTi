@@ -2689,14 +2689,18 @@ class OpModel(Model):
         #Checkpoint number 2 skips this loop
         if load_checkpoint:
             if checkpoint_obj.step == 2:
-                primitive_SPAM_labels = primitive_prep_labels.copy() + primitive_povm_labels.copy()
+                primitive_SPAM_labels = list(primitive_prep_labels) + list(primitive_povm_labels)
+                primitive_op_labels_copy = list(primitive_op_labels)
                 # Check if primitive_op_labels matches the ops in the saved dictionary
-                for label in list(checkpoint_obj.allowed_row_basis_labels.keys()) + list(checkpoint_obj.gauge_action_matrices.keys()) + list(checkpoint_obj.gauge_action_gauge_spaces.keys()):
-                    if not (label in primitive_SPAM_labels):
+                for label in list(checkpoint_obj.allowed_row_basis_labels.keys()):
+                    if not ((label in primitive_SPAM_labels) or (label in primitive_op_labels)):
                         raise ValueError('The checkpoint provided is invalid. Make sure it was generated with the same parameters currently provided. The SPAM within the gate set provided does not match the one on disk.')
                     else:
-                        primitive_SPAM_labels.pop(primitive_SPAM_labels.index(label))
-                if len(primitive_SPAM_labels) != 0:
+                        if (label in primitive_SPAM_labels):
+                            primitive_SPAM_labels.pop(primitive_SPAM_labels.index(label))
+                        else:
+                            primitive_op_labels_copy.pop(primitive_op_labels_copy.index(label))
+                if len(primitive_SPAM_labels) != 0 and len(primitive_op_labels):
                     raise ValueError('The checkpoint provided is invalid. Make sure it was generated with the same parameters currently provided. The SPAM within the gate set provided do not match the ones on disk.')
                 
                 errorgen_coefficient_labels = checkpoint_obj.allowed_row_basis_labels
