@@ -11,9 +11,7 @@ Extends Plolty python library for additional needed functionality.
 #***************************************************************************************************
 
 import os as _os
-#from plotly.offline.offline import get_plotlyjs
-#from plotly.offline.offline import __PLOTLY_OFFLINE_INITIALIZED
-#from pkg_resources import resource_string
+
 DEFAULT_PLOTLY_TEMPLATE = 'none'
 
 # Try to set the default plotly template.  This isn't essential, but makes the
@@ -274,7 +272,7 @@ def init_notebook_mode_ex(connected=False):
             'requirejs.config({'
             'paths: { '
             # Note we omit the extension .js because require will include it.
-            '\'plotly\': [\'https://cdn.plot.ly/plotly-latest.min\']},'
+            '\'plotly\': [\'https://cdn.plot.ly/plotly-3.0.1.min.js\']},'
             '});'
             'if(!window.Plotly) {{'
             'require([\'plotly\'],'
