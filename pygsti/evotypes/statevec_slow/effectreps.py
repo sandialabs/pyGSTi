@@ -13,7 +13,7 @@ POVM effect representation classes for the `statevec_slow` evolution type.
 import numpy as _np
 
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
-from pygsti.tools import SpaceConversionType
+from pygsti.enums import SpaceConversionType
 
 class EffectRep(object):
     def __init__(self, state_space):

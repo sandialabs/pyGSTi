@@ -17,7 +17,7 @@ from pygsti.baseobjs.opcalc import bulk_eval_compact_polynomials_complex as _bul
 from pygsti.modelmembers import modelmember as _modelmember
 from pygsti.baseobjs import _compatibility as _compat
 from pygsti.tools import optools as _ot
-from pygsti.tools import SpaceConversionType
+from pygsti.enums import SpaceConversionType
 
 
 class State(_modelmember.ModelMember):

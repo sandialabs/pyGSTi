@@ -19,7 +19,7 @@ from pygsti.evotypes import Evotype as _Evotype
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
-from pygsti.tools import SpaceConversionType
+from pygsti.enums import SpaceConversionType
 
 class StochasticNoiseOp(_LinearOperator, _KrausOperatorInterface):
     """

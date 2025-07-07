@@ -42,7 +42,7 @@ from .affineshiftop import AffineShiftOp
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.tools import basistools as _bt
 from pygsti.tools import optools as _ot
-from pygsti.tools import SpaceConversionType
+from pygsti.enums import SpaceConversionType
 
 def create_from_unitary_mx(unitary_mx, op_type, basis='pp', stdname=None, evotype='default', state_space=None):
     """ TODO: docstring - note that op_type can be a list/tuple of types in order of precedence """

@@ -27,7 +27,7 @@ from pygsti.tools import sharedmemtools as _smt
 from pygsti.tools import slicetools as _slct
 from pygsti.tools.matrixtools import _fas
 from pygsti.tools import listtools as _lt
-from pygsti.tools import SpaceConversionType
+from pygsti.enums import SpaceConversionType
 from pygsti.circuits import CircuitList as _CircuitList
 
 _dummy_profiler = _DummyProfiler()

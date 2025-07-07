@@ -23,7 +23,7 @@ from ...tools import internalgates as _itgs
 from ...tools import lindbladtools as _lbt
 from ...tools import matrixtools as _mt
 from ...tools import optools as _ot
-from pygsti.tools import SpaceConversionType
+from pygsti.enums import SpaceConversionType
 
 class OpRep:
     """

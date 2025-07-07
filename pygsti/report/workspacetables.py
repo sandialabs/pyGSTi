@@ -33,7 +33,7 @@ from pygsti.objectivefns import objectivefns as _objfns
 from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LEEL
 from pygsti.data import DataSet as _DataSet
-from pygsti.tools import SpaceConversionType
+from pygsti.enums import SpaceConversionType
 
 
 class BlankTable(WorkspaceTable):

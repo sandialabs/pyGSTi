@@ -15,7 +15,7 @@ import numpy as _np
 from pygsti.tools import basistools as _bt
 from pygsti.tools import matrixtools as _mt
 from pygsti.baseobjs.basis import Basis as _Basis
-from pygsti.tools import SpaceConversionType
+from pygsti.enums import SpaceConversionType
 
 # Gate Mx G:      rho  --> G rho                    where G and rho are in the Pauli basis (by definition/convention)                                           # noqa
 #            vec(rhoS) --> GStd vec(rhoS)           where GS and rhoS are in the std basis, GS = PtoS * G * StoP                                                # noqa

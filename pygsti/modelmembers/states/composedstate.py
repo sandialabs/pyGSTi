@@ -17,7 +17,7 @@ from pygsti.modelmembers.states.state import State as _State
 from pygsti.modelmembers.states.staticstate import StaticState as _StaticState
 from pygsti.modelmembers import modelmember as _modelmember, term as _term
 from pygsti.modelmembers.errorgencontainer import ErrorMapContainer as _ErrorMapContainer
-from pygsti.tools import SpaceConversionType
+from pygsti.enums import SpaceConversionType
 
 class ComposedState(_State):  # , _ErrorMapContainer
     """

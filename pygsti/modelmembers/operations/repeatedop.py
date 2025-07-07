@@ -15,7 +15,7 @@ import scipy.sparse as _sps
 
 from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
 from pygsti.evotypes import Evotype as _Evotype
-from pygsti.tools import SpaceConversionType
+from pygsti.enums import SpaceConversionType
 
 
 class RepeatedOp(_LinearOperator):

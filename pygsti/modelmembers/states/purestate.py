@@ -20,7 +20,7 @@ from pygsti.evotypes import Evotype as _Evotype
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
 from pygsti.tools import basistools as _bt
 from pygsti.tools import optools as _ot
-from pygsti.tools import SpaceConversionType
+from pygsti.enums import SpaceConversionType
 
 
 #TODO: figure out what to do with this class when we wire up term calcs??

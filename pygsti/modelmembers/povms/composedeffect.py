@@ -16,7 +16,7 @@ import numpy as _np
 from pygsti.modelmembers.povms.effect import POVMEffect as _POVMEffect
 from pygsti.modelmembers import modelmember as _modelmember, term as _term
 from pygsti.modelmembers.states.staticstate import StaticState as _StaticState
-from pygsti.tools import SpaceConversionType
+from pygsti.enums import SpaceConversionType
 
 class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
     """

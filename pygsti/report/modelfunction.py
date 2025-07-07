@@ -14,7 +14,7 @@ from pygsti.models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
 from pygsti.models.localnoisemodel import LocalNoiseModel as _LocalNoiseModel
 from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.baseobjs.basis import TensorProdBasis as _TensorProdBasis
-from pygsti.tools import SpaceConversionType
+from pygsti.enums import SpaceConversionType
 
 class ModelFunction(object):
     """

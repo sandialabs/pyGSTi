@@ -27,7 +27,7 @@ from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAl
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from pygsti.models.model import OpModel as _OpModel
-from pygsti.tools import SpaceConversionType
+from pygsti.enums import SpaceConversionType
 
 def _objfn(objfn_cls, model, dataset, circuits=None,
            regularization=None, penalties=None, op_label_aliases=None,

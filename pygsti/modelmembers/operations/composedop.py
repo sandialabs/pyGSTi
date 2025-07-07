@@ -27,7 +27,7 @@ from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
 from pygsti.tools import listtools as _lt
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools import slicetools as _slct
-from pygsti.tools import SpaceConversionType
+from pygsti.enums import SpaceConversionType
 
 
 class ComposedOp(_LinearOperator):

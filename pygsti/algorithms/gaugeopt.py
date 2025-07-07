@@ -19,7 +19,7 @@ from pygsti import baseobjs as _baseobjs
 from pygsti import optimize as _opt
 from pygsti import tools as _tools
 from pygsti.tools import mpitools as _mpit
-from pygsti.tools import SpaceConversionType
+from pygsti.enums import SpaceConversionType
 from pygsti.tools import slicetools as _slct
 from pygsti.models.gaugegroup import TrivialGaugeGroupElement as _TrivialGaugeGroupElement
 

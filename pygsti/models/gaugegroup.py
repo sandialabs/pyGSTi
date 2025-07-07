@@ -18,7 +18,7 @@ from pygsti.baseobjs import statespace as _statespace
 from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.evotypes.evotype import Evotype as _Evotype
-from pygsti.tools import SpaceConversionType
+from pygsti.enums import SpaceConversionType
 
 class GaugeGroup(_NicelySerializable):
     """

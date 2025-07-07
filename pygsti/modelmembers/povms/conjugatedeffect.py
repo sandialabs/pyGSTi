@@ -16,7 +16,7 @@ import copy as _copy
 from pygsti.modelmembers.povms.effect import POVMEffect as _POVMEffect
 from pygsti.modelmembers import term as _term
 from pygsti.tools import matrixtools as _mt
-from pygsti.tools import SpaceConversionType
+from pygsti.enums import SpaceConversionType
 
 
 class DenseEffectInterface(object):

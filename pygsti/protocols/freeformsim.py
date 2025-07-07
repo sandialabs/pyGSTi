@@ -16,7 +16,7 @@ from pygsti.protocols import protocol as _proto
 from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.data.freedataset import FreeformDataSet as _FreeformDataSet
 from pygsti.modelmembers import states as _state
-from pygsti.tools import SpaceConversionType
+from pygsti.enums import SpaceConversionType
 
 class FreeformDataSimulator(_proto.DataSimulator):
     """

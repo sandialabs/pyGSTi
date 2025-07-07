@@ -21,7 +21,7 @@ from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOpe
 from pygsti.modelmembers import modelmember as _modelmember, term as _term
 from pygsti.modelmembers.errorgencontainer import ErrorGeneratorContainer as _ErrorGeneratorContainer
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
-from pygsti.tools import SpaceConversionType
+from pygsti.enums import SpaceConversionType
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 MAX_EXPONENT = _np.log(_np.finfo('d').max) - 10.0  # so that exp(.) doesn't overflow

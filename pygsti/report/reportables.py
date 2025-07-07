@@ -30,7 +30,7 @@ from pygsti.baseobjs.label import Label as _Lbl
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LEEL
 from pygsti.modelmembers.operations.lindbladcoefficients import LindbladCoefficientBlock as _LindbladCoefficientBlock
 from pygsti.models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
-from pygsti.tools import SpaceConversionType
+from pygsti.enums import SpaceConversionType
 
 _CVXPY_AVAILABLE = importlib.util.find_spec('cvxpy') is not None
 

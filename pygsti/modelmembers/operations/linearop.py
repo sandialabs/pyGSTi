@@ -15,7 +15,7 @@ import numpy as _np
 from pygsti.baseobjs.opcalc import bulk_eval_compact_polynomials_complex as _bulk_eval_compact_polynomials_complex
 from pygsti.modelmembers import modelmember as _modelmember
 from pygsti.tools import optools as _ot
-from pygsti.tools import SpaceConversionType
+from pygsti.enums import SpaceConversionType
 
 #Note on initialization sequence of Operations within a Model:
 # 1) a Model is constructed (empty)

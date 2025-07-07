@@ -25,7 +25,7 @@ from pygsti.tools import basistools as _bt
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools import jamiolkowski as _jt
 from pygsti.tools import optools as _ot
-from pygsti.tools import SpaceConversionType
+from pygsti.enums import SpaceConversionType
 
 
 def finite_difference_deriv_wrt_params(operation, wrt_filter, eps=1e-7):

@@ -27,7 +27,7 @@ from pygsti.baseobjs.basis import Basis as _Basis, ExplicitBasis as _ExplicitBas
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LocalElementaryErrorgenLabel
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
-from pygsti.tools import SpaceConversionType
+from pygsti.enums import SpaceConversionType
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 

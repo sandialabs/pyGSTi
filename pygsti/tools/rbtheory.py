@@ -17,7 +17,7 @@ import numpy as _np
 from pygsti.tools import matrixtools as _mtls
 from pygsti.tools import optools as _optls
 from pygsti.tools import rbtools as _rbtls
-from pygsti.tools import SpaceConversionType
+from pygsti.enums import SpaceConversionType
 
 def predicted_rb_number(model, target_model, weights=None, d=None, rtype='EI'):
     """

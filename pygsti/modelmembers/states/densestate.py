@@ -21,7 +21,7 @@ from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.tools import basistools as _bt
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools import optools as _ot
-from pygsti.tools import SpaceConversionType
+from pygsti.enums import SpaceConversionType
 
 
 class DenseStateInterface(object):

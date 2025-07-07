@@ -19,7 +19,7 @@ from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOpe
 from pygsti.modelmembers import modelmember as _modelmember
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GlobalElementaryErrorgenLabel, LocalElementaryErrorgenLabel as _LocalElementaryErrorgenLabel
-from pygsti.tools import SpaceConversionType
+from pygsti.enums import SpaceConversionType
 
 class EmbeddedOp(_LinearOperator):
     """

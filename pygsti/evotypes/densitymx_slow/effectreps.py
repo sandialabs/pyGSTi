@@ -15,7 +15,7 @@ import numpy as _np
 # import functools as _functools
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from ...tools import matrixtools as _mt
-from pygsti.tools import SpaceConversionType
+from pygsti.enums import SpaceConversionType
 
 
 class EffectRep:

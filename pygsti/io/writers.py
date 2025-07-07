@@ -23,7 +23,7 @@ from pygsti.models import gaugegroup as _gaugegroup
 
 # from . import stdinput as _stdinput
 from pygsti import tools as _tools
-from pygsti.tools import SpaceConversionType
+from pygsti.enums import SpaceConversionType
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
 from pygsti.modelmembers import instruments as _instrument
 from pygsti.modelmembers import operations as _op

@@ -13,7 +13,7 @@ from pygsti.modelmembers.operations.fulltpop import FullTPOp
 from pygsti.modelmembers.operations import FullUnitaryOp, FullArbitraryOp
 from pygsti.forwardsims import WeakForwardSimulator, MapForwardSimulator
 from pygsti.tools import create_elementary_errorgen, change_basis, unitary_to_superop
-from pygsti.tools import SpaceConversionType
+from pygsti.enums import SpaceConversionType
 
 from ..util import BaseCase, needs_cvxpy
 

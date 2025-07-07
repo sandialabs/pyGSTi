@@ -18,7 +18,7 @@ from .. import basereps as _basereps
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from ...tools import basistools as _bt
 from ...tools import optools as _ot
-from pygsti.tools import SpaceConversionType
+from pygsti.enums import SpaceConversionType
 
 try:
     from ...tools import fastcalc as _fastcalc

@@ -43,7 +43,7 @@ from pygsti.tools import optools as _ot
 from pygsti.tools import fogitools as _fogit
 from pygsti.tools import slicetools as _slct
 from pygsti.tools import listtools as _lt
-from pygsti.tools import SpaceConversionType
+from pygsti.enums import SpaceConversionType
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
 
 

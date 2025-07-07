@@ -8,7 +8,7 @@ import pygsti.tools.internalgates as itgs
 import pygsti.tools.lindbladtools as lt
 import pygsti.tools.basistools as bt
 import pygsti.tools.optools as gt
-from pygsti.tools import SpaceConversionType
+from pygsti.enums import SpaceConversionType
 from pygsti.models.modelconstruction import create_spam_vector, create_operation
 from pygsti.evotypes import Evotype
 from pygsti.modelmembers.instruments import TPInstrument

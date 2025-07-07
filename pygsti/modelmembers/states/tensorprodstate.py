@@ -21,7 +21,7 @@ from pygsti.modelmembers import modelmember as _modelmember, term as _term
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.tools import listtools as _lt
 from pygsti.tools import matrixtools as _mt
-from pygsti.tools import SpaceConversionType
+from pygsti.enums import SpaceConversionType
 
 class TensorProductState(_State):
     """

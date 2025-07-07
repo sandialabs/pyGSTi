@@ -22,7 +22,7 @@ from .. import basereps as _basereps
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from ...tools import internalgates as _itgs
 from ...tools import optools as _ot
-from pygsti.tools import SpaceConversionType
+from pygsti.enums import SpaceConversionType
 
 class OpRep(_basereps.OpRep):
     def __init__(self, state_space):
