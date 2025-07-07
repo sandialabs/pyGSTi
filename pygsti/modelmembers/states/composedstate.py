@@ -17,7 +17,7 @@ from pygsti.modelmembers.states.state import State as _State
 from pygsti.modelmembers.states.staticstate import StaticState as _StaticState
 from pygsti.modelmembers import modelmember as _modelmember, term as _term
 from pygsti.modelmembers.errorgencontainer import ErrorMapContainer as _ErrorMapContainer
-
+from pygsti.tools import SpaceConversionType
 
 class ComposedState(_State):  # , _ErrorMapContainer
     """
@@ -291,7 +291,7 @@ class ComposedState(_State):  # , _ErrorMapContainer
         numpy array
             Array of derivatives, shape == (dimension, num_params)
         """
-        dmVec = self.state_vec.to_dense(on_space='minimal')
+        dmVec = self.state_vec.to_dense(SpaceConversionType.Minimal)
 
         derrgen = self.error_map.deriv_wrt_params(wrt_filter)  # shape (dim*dim, n_params)
         derrgen.shape = (self.dim, self.dim, derrgen.shape[1])  # => (dim,dim,n_params)
@@ -323,7 +323,7 @@ class ComposedState(_State):  # , _ErrorMapContainer
         numpy array
             Hessian with shape (dimension, num_params1, num_params2)
         """
-        dmVec = self.state_vec.to_dense(on_space='minimal')
+        dmVec = self.state_vec.to_dense(SpaceConversionType.Minimal)
 
         herrgen = self.error_map.hessian_wrt_params(wrt_filter1, wrt_filter2)  # shape (dim*dim, nParams1, nParams2)
         herrgen.shape = (self.dim, self.dim, herrgen.shape[1], herrgen.shape[2])  # => (dim,dim,nParams1, nParams2)

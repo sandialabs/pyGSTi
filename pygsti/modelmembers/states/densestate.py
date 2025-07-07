@@ -21,6 +21,7 @@ from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.tools import basistools as _bt
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools import optools as _ot
+from pygsti.tools import SpaceConversionType
 
 
 class DenseStateInterface(object):
@@ -134,7 +135,7 @@ class DenseStateInterface(object):
 
     def __str__(self):
         s = "%s with dimension %d\n" % (self.__class__.__name__, self.dim)
-        s += _mt.mx_to_string(self.to_dense(on_space='minimal'), width=4, prec=2)
+        s += _mt.mx_to_string(self.to_dense(SpaceConversionType.Minimal), width=4, prec=2)
         return s
 
 
@@ -351,7 +352,7 @@ class DensePureState(DenseStateInterface, _State):
         """
         mm_dict = super().to_memoized_dict(mmg_memo)
 
-        mm_dict['dense_state_vector'] = self._encodemx(self.to_dense('Hilbert'))
+        mm_dict['dense_state_vector'] = self._encodemx(self.to_dense(SpaceConversionType.Hilbert))
         mm_dict['basis'] = self._basis.to_nice_serialization() if (self._basis is not None) else None
         return mm_dict
 

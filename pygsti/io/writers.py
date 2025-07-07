@@ -23,6 +23,7 @@ from pygsti.models import gaugegroup as _gaugegroup
 
 # from . import stdinput as _stdinput
 from pygsti import tools as _tools
+from pygsti.tools import SpaceConversionType
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
 from pygsti.modelmembers import instruments as _instrument
 from pygsti.modelmembers import operations as _op
@@ -349,8 +350,8 @@ def write_model(model, filename, title=None):
             elif isinstance(rhoVec, _state.StaticState): typ = "STATIC-PREP"
             #elif isinstance(rhoVec, _state.LindbladSPAMVec):  # TODO - change to ComposedState?
             #    typ = "CPTP-PREP"
-            #    props = [("PureVec", rhoVec.state_vec.to_dense(on_space='HilbertSchmidt')),
-            #             ("ErrgenMx", rhoVec.error_map.to_dense(on_space='HilbertSchmidt'))]
+            #    props = [("PureVec", rhoVec.state_vec.to_dense(SpaceConversionType.HilbertSchmidt)),
+            #             ("ErrgenMx", rhoVec.error_map.to_dense(SpaceConversionType.HilbertSchmidt))]
             else:
                 _warnings.warn(
                     ("Non-standard prep of type {typ} cannot be described by"
@@ -358,7 +359,7 @@ def write_model(model, filename, title=None):
                      "fully parameterized spam vector").format(typ=str(type(rhoVec))))
                 typ = "PREP"
 
-            if props is None: props = [("LiouvilleVec", rhoVec.to_dense(on_space='HilbertSchmidt'))]
+            if props is None: props = [("LiouvilleVec", rhoVec.to_dense(SpaceConversionType.HilbertSchmidt))]
             output.write("%s: %s\n" % (typ, prepLabel))
             for lbl, val in props:
                 writeprop(output, lbl, val)
@@ -369,7 +370,7 @@ def write_model(model, filename, title=None):
             elif isinstance(povm, _povm.TPPOVM): povmType = "TP-POVM"
             #elif isinstance(povm, _povm.LindbladPOVM):  # TODO - change to ComposedPOVM?
             #    povmType = "CPTP-POVM"
-            #    props = [("ErrgenMx", povm.error_map.to_dense(on_space='HilbertSchmidt'))]
+            #    props = [("ErrgenMx", povm.error_map.to_dense(SpaceConversionType.HilbertSchmidt))]
             #    povm_to_write = povm.base_povm
             else:
                 _warnings.warn(
@@ -394,7 +395,7 @@ def write_model(model, filename, title=None):
                          "fully parameterized spam vector").format(typ=str(type(EVec))))
                     typ = "EFFECT"
                 output.write("%s: %s\n" % (typ, ELabel))
-                writeprop(output, "LiouvilleVec", EVec.to_dense(on_space='HilbertSchmidt'))
+                writeprop(output, "LiouvilleVec", EVec.to_dense(SpaceConversionType.HilbertSchmidt))
 
             output.write("END POVM\n\n")
 
@@ -405,7 +406,7 @@ def write_model(model, filename, title=None):
             elif isinstance(gate, _op.StaticArbitraryOp): typ = "STATIC-GATE"
             elif isinstance(gate, _op.ComposedOp):
                 typ = "COMPOSED-GATE"
-                props = [("%dLiouvilleMx" % i, factor.to_dense(on_space='HilbertSchmidt'))
+                props = [("%dLiouvilleMx" % i, factor.to_dense(SpaceConversionType.HilbertSchmidt))
                          for i, factor in enumerate(gate.factorops)]
             else:
                 _warnings.warn(
@@ -414,7 +415,7 @@ def write_model(model, filename, title=None):
                      "fully parameterized gate").format(typ=str(type(gate))))
                 typ = "GATE"
 
-            if props is None: props = [("LiouvilleMx", gate.to_dense(on_space='HilbertSchmidt'))]
+            if props is None: props = [("LiouvilleMx", gate.to_dense(SpaceConversionType.HilbertSchmidt))]
             output.write(typ + ": " + str(label) + '\n')
             for lbl, val in props:
                 writeprop(output, lbl, val)
@@ -441,7 +442,7 @@ def write_model(model, filename, title=None):
                          "fully parameterized gate").format(typ=str(type(gate))))
                     typ = "IGATE"
                 output.write(typ + ": " + str(label) + '\n')
-                writeprop(output, "LiouvilleMx", gate.to_dense(on_space='HilbertSchmidt'))
+                writeprop(output, "LiouvilleMx", gate.to_dense(SpaceConversionType.HilbertSchmidt))
             output.write("END Instrument\n\n")
 
         if model.state_space is not None:

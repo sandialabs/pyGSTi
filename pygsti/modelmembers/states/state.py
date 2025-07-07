@@ -17,6 +17,7 @@ from pygsti.baseobjs.opcalc import bulk_eval_compact_polynomials_complex as _bul
 from pygsti.modelmembers import modelmember as _modelmember
 from pygsti.baseobjs import _compatibility as _compat
 from pygsti.tools import optools as _ot
+from pygsti.tools import SpaceConversionType
 
 
 class State(_modelmember.ModelMember):
@@ -320,12 +321,12 @@ class State(_modelmember.ModelMember):
         -------
         float
         """
-        vec = self.to_dense(on_space='minimal')
+        vec = self.to_dense(SpaceConversionType.Minimal)
         if inv_transform is None:
-            return _ot.frobeniusdist_squared(vec, other_spam_vec.to_dense(on_space='minimal'))
+            return _ot.frobeniusdist_squared(vec, other_spam_vec.to_dense(SpaceConversionType.Minimal))
         else:
             return _ot.frobeniusdist_squared(_np.dot(inv_transform, vec),
-                                             other_spam_vec.to_dense(on_space='minimal'))
+                                             other_spam_vec.to_dense(SpaceConversionType.Minimal))
 
     def residuals(self, other_spam_vec, transform=None, inv_transform=None):
         """
@@ -349,10 +350,10 @@ class State(_modelmember.ModelMember):
         -------
         float
         """
-        vec = self.to_dense(on_space='minimal')
+        vec = self.to_dense(SpaceConversionType.Minimal)
         if inv_transform is not None:
             vec = inv_transform @ vec
-        return (vec - other_spam_vec.to_dense(on_space='minimal')).ravel()
+        return (vec - other_spam_vec.to_dense(SpaceConversionType.Minimal)).ravel()
 
 
     def transform_inplace(self, s):
@@ -378,7 +379,7 @@ class State(_modelmember.ModelMember):
         None
         """
         Si = s.transform_matrix_inverse
-        self.set_dense(_np.dot(Si, self.to_dense(on_space='minimal')))
+        self.set_dense(_np.dot(Si, self.to_dense(SpaceConversionType.Minimal)))
 
     def depolarize(self, amount):
         """
@@ -407,7 +408,7 @@ class State(_modelmember.ModelMember):
         else:
             assert(len(amount) == self.dim - 1)
             D = _np.diag([1] + list(1.0 - _np.array(amount, 'd')))
-        self.set_dense(_np.dot(D, self.to_dense(on_space='minimal')))
+        self.set_dense(_np.dot(D, self.to_dense(SpaceConversionType.Minimal)))
 
     @property
     def num_params(self):
@@ -541,7 +542,7 @@ class State(_modelmember.ModelMember):
         numpy array
         """
         if isinstance(v, State):
-            vector = v.to_dense(on_space='minimal').copy()
+            vector = v.to_dense(SpaceConversionType.Minimal).copy()
             vector.shape = (vector.size, 1)
         elif isinstance(v, _np.ndarray):
             vector = v.copy()

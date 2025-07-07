@@ -27,7 +27,7 @@ from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAl
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from pygsti.models.model import OpModel as _OpModel
-
+from pygsti.tools import SpaceConversionType
 
 def _objfn(objfn_cls, model, dataset, circuits=None,
            regularization=None, penalties=None, op_label_aliases=None,
@@ -5790,11 +5790,11 @@ def _spam_penalty(mdl, prefactor, op_basis):
     return prefactor * (_np.sqrt(
         _np.array([
             _tools.tracenorm(
-                _tools.vec_to_stdmx(prepvec.to_dense(on_space='minimal'), op_basis)
+                _tools.vec_to_stdmx(prepvec.to_dense(SpaceConversionType.Minimal), op_basis)
             ) for prepvec in mdl.preps.values()
         ] + [
             _tools.tracenorm(
-                _tools.vec_to_stdmx(mdl.povms[plbl][elbl].to_dense(on_space='minimal'), op_basis)
+                _tools.vec_to_stdmx(mdl.povms[plbl][elbl].to_dense(SpaceConversionType.Minimal), op_basis)
             ) for plbl in mdl.povms for elbl in mdl.povms[plbl]], 'd')
     ))
 

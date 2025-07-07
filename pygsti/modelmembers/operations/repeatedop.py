@@ -15,6 +15,7 @@ import scipy.sparse as _sps
 
 from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
 from pygsti.evotypes import Evotype as _Evotype
+from pygsti.tools import SpaceConversionType
 
 
 class RepeatedOp(_LinearOperator):
@@ -192,7 +193,7 @@ class RepeatedOp(_LinearOperator):
         numpy array
             Array of derivatives with shape (dimension^2, num_params)
         """
-        mx = self.repeated_op.to_dense(on_space='minimal')
+        mx = self.repeated_op.to_dense(SpaceConversionType.Minimal)
 
         mx_powers = {0: _np.identity(self.dim, 'd'), 1: mx}
         for i in range(2, self.num_repetitions):

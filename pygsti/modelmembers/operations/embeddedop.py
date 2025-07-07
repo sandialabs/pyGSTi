@@ -19,7 +19,7 @@ from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOpe
 from pygsti.modelmembers import modelmember as _modelmember
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GlobalElementaryErrorgenLabel, LocalElementaryErrorgenLabel as _LocalElementaryErrorgenLabel
-
+from pygsti.tools import SpaceConversionType
 
 class EmbeddedOp(_LinearOperator):
     """
@@ -95,7 +95,7 @@ class EmbeddedOp(_LinearOperator):
     def _update_denserep(self):
         """Performs additional update for the case when we use a dense underlying representation."""
         self._rep.base.flags.writeable = True
-        self._rep.base[:, :] = self.to_dense(on_space='minimal')
+        self._rep.base[:, :] = self.to_dense(SpaceConversionType.Minimal)
         self._rep.base.flags.writeable = False
 
     def _update_submember_state_spaces(self, old_parent_state_space, new_parent_state_space):

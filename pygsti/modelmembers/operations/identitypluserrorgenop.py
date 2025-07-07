@@ -23,6 +23,7 @@ from pygsti.modelmembers import modelmember as _modelmember, term as _term
 from pygsti.modelmembers.errorgencontainer import ErrorGeneratorContainer as _ErrorGeneratorContainer
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
 from pygsti.tools import matrixtools as _mt
+from pygsti.tools import SpaceConversionType
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 TODENSE_TRUNCATE = 1e-11
@@ -106,7 +107,7 @@ class IdentityPlusErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         if self._rep_type == 'dense':
             # compute 1 + errorgen explicitly
             self._rep.base.flags.writeable = True
-            self._rep.base[:, :] = self._ident + self.errorgen.to_dense(on_space='HilbertSchmidt')
+            self._rep.base[:, :] = self._ident + self.errorgen.to_dense(SpaceConversionType.HilbertSchmidt)
             self._rep.base.flags.writeable = False
         else:
             pass  # nothing to do -- no need to even notify OpRepIdentityPlusErrorgen that errorgen has changed
