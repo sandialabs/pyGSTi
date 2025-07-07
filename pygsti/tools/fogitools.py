@@ -683,45 +683,8 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                             [errorgen_coefficient_labels[ol] for ol in existing_set + (op_label,)],
                             norm_order)
 
-                        try:
-                            assert(_np.linalg.norm(_np.dot(gauge_action.T, local_fogi_dirs)) < 1e-8)
-                        except:
-                            #TODO: REMOVE !!!!!!!!!!!!!!!!!!!!!!!!!!!
-                            g = intersection_space
-                            A = gauge_action[0:n, :]
-                            B = gauge_action[n:, :]
-                            Na = _mt.nice_nullspace(A, orthogonalize=True)
-                            Nb = _mt.nice_nullspace(B, orthogonalize=True)
-                            pinvA = _np.linalg.pinv(A, rcond=1e-7)
-                            pinvB = _np.linalg.pinv(B, rcond=1e-7)
-                            testA = pinvA @ A
-                            testA2 = intersection_space.T @ testA @ intersection_space
-                            testB = pinvB @ B
-                            testB2 = intersection_space.T @ testB @ intersection_space
-                            gtestA = testA @ g
-                            gtestB = testB @ g
-                            import scipy.linalg as _spl
-                            tg = _mt.intersection_space(ccommA, ccommB, use_nice_nullspace=False)
-                            ttg = _mt.intersection_space(ccommA, ccommB, use_nice_nullspace=True)
-                            print("Hermitian")
-                            print(_np.linalg.norm(testA - testA.T.conjugate()))
-                            print(_np.linalg.norm(testB - testB.T.conjugate()))
-                            print("Nullspace")
-                            print(_np.linalg.norm(g.T.conjugate() @ Na))
-                            print(_np.linalg.norm(g.T.conjugate() @ Nb))
-                            print("pinvA * A acts as identity on g")
-                            print(_np.linalg.norm(g.T @ testA - g.T))
-                            print(_np.linalg.norm(g.T @ testB - g.T))
-                            print(_np.linalg.norm(testA @ g - g))
-                            print(_np.linalg.norm(testB @ g - g))
-                            print("g in span")
-                            print(_np.linalg.matrix_rank(_np.concatenate((ccommA, g), axis=1)))
-                            print(_np.linalg.matrix_rank(_np.concatenate((ccommB, g), axis=1)))
-                            print("tg in span")
-                            print(_np.linalg.matrix_rank(_np.concatenate((ccommA, tg), axis=1)))
-                            print(_np.linalg.matrix_rank(_np.concatenate((ccommB, tg), axis=1)))
-                            import bpdb; bpdb.set_trace()
-                            print("ERROR!")
+                        assert(_np.linalg.norm(_np.dot(gauge_action.T, local_fogi_dirs)) < 1e-8)
+      
                         # transpose => dot(local_fogi_dirs.T, gauge_action) = 0
                         # = int_spc.T * [ pinv_gA  -pinv_gB ] * [[ga] [gB]]
                         # = int_spc.T * (pinv_gA * gA - pinv_gB * gB) = 0 b/c int_vec lies in "support" of A & B,
