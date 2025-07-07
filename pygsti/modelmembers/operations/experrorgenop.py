@@ -10,7 +10,6 @@ The ExpErrorgenOp class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import warnings as _warnings
 import math
 
 import numpy as _np
@@ -19,11 +18,9 @@ import scipy.sparse as _sps
 import scipy.sparse.linalg as _spsl
 
 from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
-from pygsti.modelmembers.operations.lindbladerrorgen import LindbladParameterization as _LindbladParameterization
 from pygsti.modelmembers import modelmember as _modelmember, term as _term
 from pygsti.modelmembers.errorgencontainer import ErrorGeneratorContainer as _ErrorGeneratorContainer
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
-from pygsti.tools import matrixtools as _mt
 from pygsti.tools import SpaceConversionType
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
@@ -696,7 +693,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
            or isinstance(s, _gaugegroup.TPSpamGaugeGroupElement):
             U = s.transform_matrix
             Uinv = s.transform_matrix_inverse
-            mx = self.to_dense(SpaceConversionType.Minimal) if self._rep_type == 'dense' else self.to_sparse(on_space='minimal')
+            mx = self.to_dense(SpaceConversionType.Minimal) if self._rep_type == 'dense' else self.to_sparse(on_space=SpaceConversionType.Minimal)
 
             #just act on postfactor and Lindbladian exponent:
             if typ == "prep":

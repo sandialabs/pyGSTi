@@ -529,7 +529,7 @@ class GatesTable(WorkspaceTable):
                     intervalMx = None
 
                 #turn the op matrix into a ReportableQty
-                op_matrix = _ReportableQty(op.to_dense('HilbertSchmidt'), errbar=intervalMx)
+                op_matrix = _ReportableQty(op.to_dense(SpaceConversionType.HilbertSchmidt), errbar=intervalMx)
 
                 if display_as == "numbers":
                     row_data.append(op_matrix)

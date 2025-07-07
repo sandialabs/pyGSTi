@@ -17,6 +17,7 @@ import numpy as _np
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from ...tools import basistools as _bt
 from ...tools import optools as _ot
+from pygsti.tools import SpaceConversionType
 
 try:
     from ...tools import fastcalc as _fastcalc
@@ -136,7 +137,7 @@ class StateRepComposed(StateRep):
     def __init__(self, state_rep, op_rep, state_space):
         self.state_rep = state_rep
         self.op_rep = op_rep
-        super(StateRepComposed, self).__init__(state_rep.to_dense('HilbertSchmidt'), state_space)
+        super(StateRepComposed, self).__init__(state_rep.to_dense(SpaceConversionType.HilbertSchmidt), state_space)
         self.reps_have_changed()
 
     def reps_have_changed(self):
@@ -158,9 +159,9 @@ class StateRepTensorProduct(StateRep):
         if len(self.factor_reps) == 0:
             vec = _np.empty(0, 'd')
         else:
-            vec = self.factor_reps[0].to_dense('HilbertSchmidt')
+            vec = self.factor_reps[0].to_dense(SpaceConversionType.HilbertSchmidt)
             for i in range(1, len(self.factor_reps)):
-                vec = _np.kron(vec, self.factor_reps[i].to_dense('HilbertSchmidt'))
+                vec = _np.kron(vec, self.factor_reps[i].to_dense(SpaceConversionType.HilbertSchmidt))
         self.data[:] = vec
 
     def __reduce__(self):

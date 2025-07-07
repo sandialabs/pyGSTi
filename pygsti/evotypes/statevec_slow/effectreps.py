@@ -13,7 +13,7 @@ POVM effect representation classes for the `statevec_slow` evolution type.
 import numpy as _np
 
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
-
+from pygsti.tools import SpaceConversionType
 
 class EffectRep(object):
     def __init__(self, state_space):
@@ -84,7 +84,7 @@ class EffectRepComputational(EffectRep):
 
     def amplitude(self, state):  # allow scratch to be passed in?
         scratch = _np.empty(self.dim, complex)
-        Edense = self.to_dense('Hilbert', scratch)
+        Edense = self.to_dense(SpaceConversionType.Hilbert, scratch)
         return _np.vdot(Edense, state.data)
 
 
@@ -113,7 +113,7 @@ class EffectRepTensorProduct(EffectRep):
     def _fill_fast_kron(self):
         """ Fills in self._fast_kron_array based on current self.factors """
         for i, (factor_dim, Elbl) in enumerate(zip(self._fast_kron_factordims, self.effectLbls)):
-            self.kron_array[i][0:factor_dim] = self.povm_factors[i][Elbl].to_dense('Hilbert')
+            self.kron_array[i][0:factor_dim] = self.povm_factors[i][Elbl].to_dense(SpaceConversionType.Hilbert)
 
     def factor_effects_have_changed(self):
         self._fill_fast_kron()  # updates effect reps
@@ -165,7 +165,7 @@ class EffectRepTensorProduct(EffectRep):
 
     def amplitude(self, state):  # allow scratch to be passed in?
         scratch = _np.empty(self.dim, complex)
-        Edense = self.to_dense('Hilbert', scratch)
+        Edense = self.to_dense(SpaceConversionType.Hilbert, scratch)
         return _np.vdot(Edense, state.data)
 
 

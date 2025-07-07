@@ -19,7 +19,7 @@ from pygsti.evotypes import Evotype as _Evotype
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
-
+from pygsti.tools import SpaceConversionType
 
 class StochasticNoiseOp(_LinearOperator, _KrausOperatorInterface):
     """
@@ -290,7 +290,7 @@ class StochasticNoiseOp(_LinearOperator, _KrausOperatorInterface):
     @property
     def kraus_operators(self):
         """A list of this operation's Kraus operators as numpy arrays."""
-        kraus_ops = [_np.sqrt(urate) * urep.to_dense('Hilbert')
+        kraus_ops = [_np.sqrt(urate) * urep.to_dense(SpaceConversionType.Hilbert)
                      for urate, urep in zip(self._rep.unitary_rates, self._rep.unitary_reps)]
         return kraus_ops
 

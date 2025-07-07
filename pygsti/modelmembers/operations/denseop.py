@@ -25,6 +25,7 @@ from pygsti.tools import basistools as _bt
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools import jamiolkowski as _jt
 from pygsti.tools import optools as _ot
+from pygsti.tools import SpaceConversionType
 
 
 def finite_difference_deriv_wrt_params(operation, wrt_filter, eps=1e-7):
@@ -406,7 +407,7 @@ class DenseOperator(DenseOperatorInterface, _KrausOperatorInterface, _LinearOper
         #   -> let reshaped K-th evector be called O_K and dual O_K^dag
         #  = sum_K D_KK O_K rho O_K^dag
         assert(self._basis is not None), "Kraus operator functionality requires specifying a superoperator basis"
-        superop_mx = self.to_dense('HilbertSchmidt'); d = int(_np.round(_np.sqrt(superop_mx.shape[0])))
+        superop_mx = self.to_dense(SpaceConversionType.HilbertSchmidt); d = int(_np.round(_np.sqrt(superop_mx.shape[0])))
         std_basis = _Basis.cast('std', superop_mx.shape[0])
         choi_mx = _jt.jamiolkowski_iso(superop_mx, self._basis, std_basis) * d  # see NOTE below
         # NOTE: multiply by `d` (density mx dimension) to un-normalize choi_mx as given by
@@ -611,7 +612,7 @@ class DenseUnitaryOperator(DenseOperatorInterface, _KrausOperatorInterface, _Lin
         """
         mm_dict = super().to_memoized_dict(mmg_memo)
 
-        mm_dict['dense_matrix'] = self._encodemx(self.to_dense('Hilbert'))
+        mm_dict['dense_matrix'] = self._encodemx(self.to_dense(SpaceConversionType.Hilbert))
         mm_dict['basis'] = self._basis.to_nice_serialization()
 
         return mm_dict
@@ -636,7 +637,7 @@ class DenseUnitaryOperator(DenseOperatorInterface, _KrausOperatorInterface, _Lin
     @property
     def kraus_operators(self):
         """A list of this operation's Kraus operators as numpy arrays."""
-        return [self.to_dense('Hilbert')]
+        return [self.to_dense(SpaceConversionType.Hilbert)]
 
     def set_kraus_operators(self, kraus_operators):
         """

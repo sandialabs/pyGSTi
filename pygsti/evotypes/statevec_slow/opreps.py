@@ -20,10 +20,9 @@ from numpy.random import RandomState as _RandomState
 from .statereps import StateRepDensePure as _StateRepDensePure
 from .. import basereps as _basereps
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
-from ...tools import basistools as _bt
 from ...tools import internalgates as _itgs
 from ...tools import optools as _ot
-
+from pygsti.tools import SpaceConversionType
 
 class OpRep(_basereps.OpRep):
     def __init__(self, state_space):
@@ -49,12 +48,12 @@ class OpRep(_basereps.OpRep):
         def mv(v):
             if v.ndim == 2 and v.shape[1] == 1: v = v[:, 0]
             in_state = _StateRepDensePure(_np.ascontiguousarray(v, complex), self.state_space, basis=None)
-            return self.acton(in_state).to_dense('Hilbert')
+            return self.acton(in_state).to_dense(SpaceConversionType.Hilbert)
 
         def rmv(v):
             if v.ndim == 2 and v.shape[1] == 1: v = v[:, 0]
             in_state = _StateRepDensePure(_np.ascontiguousarray(v, complex), self.state_space, basis=None)
-            return self.adjoint_acton(in_state).to_dense('Hilbert')
+            return self.adjoint_acton(in_state).to_dense(SpaceConversionType.Hilbert)
         return LinearOperator((self.dim, self.dim), matvec=mv, rmatvec=rmv)  # transpose, adjoint, dot, matmat?
 
     def copy(self):

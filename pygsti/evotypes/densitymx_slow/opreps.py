@@ -23,7 +23,7 @@ from ...tools import internalgates as _itgs
 from ...tools import lindbladtools as _lbt
 from ...tools import matrixtools as _mt
 from ...tools import optools as _ot
-
+from pygsti.tools import SpaceConversionType
 
 class OpRep:
     """
@@ -51,12 +51,12 @@ class OpRep:
         def mv(v):
             if v.ndim == 2 and v.shape[1] == 1: v = v[:, 0]
             in_state = _StateRepDense(_np.ascontiguousarray(v, 'd'), self.state_space, None)
-            return self.acton(in_state).to_dense(on_space='HilbertSchmidt')
+            return self.acton(in_state).to_dense(on_space=SpaceConversionType.HilbertSchmidt)
 
         def rmv(v):
             if v.ndim == 2 and v.shape[1] == 1: v = v[:, 0]
             in_state = _StateRepDense(_np.ascontiguousarray(v, 'd'), self.state_space, None)
-            return self.adjoint_acton(in_state).to_dense(on_space='HilbertSchmidt')
+            return self.adjoint_acton(in_state).to_dense(on_space=SpaceConversionType.HilbertSchmidt)
         return LinearOperator((self.dim, self.dim), matvec=mv, rmatvec=rmv)  # transpose, adjoint, dot, matmat?
 
 
