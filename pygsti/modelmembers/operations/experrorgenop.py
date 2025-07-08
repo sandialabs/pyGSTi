@@ -19,6 +19,7 @@ import scipy.linalg as _spl
 import scipy.sparse as _sps
 import scipy.sparse.linalg as _spsl
 
+from typing import Union
 from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
 from pygsti.modelmembers.operations.lindbladerrorgen import LindbladErrorgen as _LindbladErrorgen
 from pygsti.modelmembers.operations.embeddederrorgen import EmbeddedErrorgen as _EmbeddedErrorGen
