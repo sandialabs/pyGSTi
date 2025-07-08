@@ -11,29 +11,23 @@ The LindbladErrorgen class and supporting functionality.
 #***************************************************************************************************
 
 import warnings as _warnings
-import collections as _collections
-import copy as _copy
 import itertools as _itertools
 
 import numpy as _np
 import scipy.linalg as _spl
 import scipy.sparse as _sps
-import scipy.sparse.linalg as _spsl
 
 from pygsti.baseobjs.opcalc import compact_deriv as _compact_deriv, \
     bulk_eval_compact_polynomials_complex as _bulk_eval_compact_polynomials_complex, \
     abs_sum_bulk_eval_compact_polynomials_complex as _abs_sum_bulk_eval_compact_polynomials_complex
 from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
 from pygsti.modelmembers.operations.lindbladcoefficients import LindbladCoefficientBlock as _LindbladCoefficientBlock
-from pygsti.modelmembers import term as _term
 from pygsti.evotypes import Evotype as _Evotype
 from pygsti.baseobjs import statespace as _statespace
-from pygsti.baseobjs.basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis
-from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
+from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LocalElementaryErrorgenLabel
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GlobalElementaryErrorgenLabel
-from pygsti.tools import basistools as _bt
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools import optools as _ot
 
@@ -42,53 +36,65 @@ IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 
 class LindbladErrorgen(_LinearOperator):
     """
-    An Lindblad-form error generator.
-
-    This error generator consisting of terms that, with appropriate constraints
-    ensurse that the resulting (after exponentiation) operation/layer operation
-    is CPTP.  These terms can be divided into "Hamiltonian"-type terms, which
-    map rho -> i[H,rho] and "non-Hamiltonian"/"other"-type terms, which map rho
-    -> A rho B + 0.5*(ABrho + rhoAB).
+    A class for representing noisy quantum operations using Lindblad error generators.
     """
 
-    _generators_cache = {}  # a custom cache for _init_generators method calls
-
     @classmethod
-    def from_operation_matrix_and_blocks(cls, op_matrix, lindblad_coefficient_blocks, lindblad_basis='auto',
+    def from_operation_matrix_and_blocks(cls, op_matrix, lindblad_coefficient_blocks, elementary_errorgen_basis='PP',
                                          mx_basis='pp', truncate=True, evotype="default", state_space=None):
-        
         """
-        Create a Lindblad-parameterized error generator from an operation matrix and coefficient blocks.
+        Creates a Lindblad-parameterized error generator from an operation and a set
+        of `LindbladCoefficientBlock`s. 
+
+        Here "operation" means the exponentiated error generator, so this method
+        essentially takes the matrix log of `op_matrix` and constructs an error
+        generator from this by subsequently projecting this constructed error generator
+        onto the specified `LindbladCoefficientBlock`s. Note that since these blocks are
+        user specified this projection may not be complete. E.g. passing in a general operation consisting
+        of non-trivial 'H', 'S', 'C' and 'A' generators together with a single `LindbladCoefficientBlock`
+        for storing 'H' terms will result in an 'H'-only generator.
 
         Parameters
         ----------
         op_matrix : numpy array or SciPy sparse matrix
-            A square 2D array that gives the raw operation matrix, assumed to be in the `mx_basis` basis.
-            The shape of this array sets the dimension of the operation.
+            a square 2D array that gives the raw operation matrix, assumed to
+            be in the `mx_basis` basis, to parameterize.  The shape of this
+            array sets the dimension of the operation.
 
-        lindblad_coefficient_blocks : list
-            A list of Lindblad coefficient blocks to set from the error generator projections.
+        lindblad_coefficient_blocks : list of `LindbladCoefficientBlocks`
+            List of `LindbladCoefficientBlocks` for storing the input error generator data
+            given the projections onto these blocks.
 
-        lindblad_basis : {'auto', 'PP', 'std', 'gm', 'qt'}, optional
-            The basis used for Lindblad terms. Default is 'auto'.
-
-        mx_basis : {'std', 'gm', 'pp', 'qt'} or Basis object, optional
-            The basis for this error generator's linear mapping. Default is 'pp'.
+        elementary_errorgen_basis: str or 'Basis', optional (default 'PP')  
+            The basis is used to construct the elementary error generator basis elements.
+            Should be compatible with the basis element subscripts labeling the coefficients
+            in `elementary_errorgens`. Most commonly 'PP', the unnormalized Pauli-product basis.
+            
+        mx_basis : str or Basis object
+            The basis in which to return matrix representation of the constructed error generator.
+            E.g. 'pp', 'gm', 'std', etc...
 
         truncate : bool, optional
-            Whether to truncate the projections onto the Lindblad terms in order to meet constraints.
-            Default is True. (e.g. to preserve CPTP) when necessary. If False, then an error is thrown 
-            when the Lindblad terms don't conform to the constrains.
+            Whether to truncate the projections onto the Lindblad terms in
+            order to meet constraints (e.g. to preserve CPTP) when necessary.
+            If False, then an error is thrown when the given error generator cannot
+            be realized by the specified parameterization.
 
-        evotype : {"default", "densitymx", "svterm", "cterm"}, optional
-            The evolution type of the error generator being constructed. Default is "default".
+        evotype : str or `Evotype`, optional (default 'default')
+            The evolution type of the error generator being constructed.
+            When specifying 'default' the evotype is automatically inferred/chosen.
+            `"densitymx"` means usual Lioville density-matrix-vector propagation
+            via matrix-vector products.  `"svterm"` denotes state-vector term-
+            based evolution (action of operation is obtained by evaluating the rank-1
+            terms up to some order).  `"cterm"` is similar but uses Clifford operation
+            action on stabilizer states.
 
-        state_space : StateSpace, optional
-            The state space for the error generator. Default is None.
+        state_space : `StateSpace` or castable to `StateSpace`
+            The state space upon which this error generator acts.
 
         Returns
         -------
-        LindbladErrorgen
+        `LindbladErrorgen`
         """
 
         sparseOp = _sps.issparse(op_matrix)
@@ -110,10 +116,10 @@ class LindbladErrorgen(_LinearOperator):
                                            mx_basis, "logGTi")
         for blk in lindblad_coefficient_blocks:
             blk.set_from_errorgen_projections(errgenMx, mx_basis, truncate=truncate)
-        return cls(lindblad_coefficient_blocks, lindblad_basis, mx_basis, evotype, state_space)
+        return cls(lindblad_coefficient_blocks, elementary_errorgen_basis, mx_basis, evotype, state_space)
 
     @classmethod
-    def from_operation_matrix(cls, op_matrix, parameterization='CPTP', lindblad_basis='PP',
+    def from_operation_matrix(cls, op_matrix, parameterization='CPTPLND', elementary_errorgen_basis='PP',
                               mx_basis='pp', truncate=True, evotype="default", state_space=None):
         """
         Creates a Lindblad-parameterized error generator from an operation.
@@ -125,31 +131,56 @@ class LindbladErrorgen(_LinearOperator):
         Parameters
         ----------
         op_matrix : numpy array or SciPy sparse matrix
-            A square 2D array that gives the raw operation matrix, assumed to be in the `mx_basis` basis.
-            The shape of this array sets the dimension of the operation.
+            a square 2D array that gives the raw operation matrix, assumed to
+            be in the `mx_basis` basis, to parameterize.  The shape of this
+            array sets the dimension of the operation.
 
-        parameterization : str, optional (default 'CPTP') 
-            Describes how the Lindblad coefficients/projections relate to the error generator's parameter values.
-            Default is "CPTP". Supported strings are those castable to `LindbladParameterization`. See
-            `LindbladParameterization` for supported options.
+        parameterization: `LindbladParameterization` or str castable to `LindbladParameterization`, optional (default 'auto')
+            Either an instance of `LindbladParameterization` or a string castable to a
+            valid `LindbladParameterization`. This object specifies the internal parameterizations
+            and coefficient blocks required for storing the data associated with this error generator
+            and requisite for enforcing appropriate constraints. See documentation of `LindbladParameterization`
+            for more details, but common examples include:
+            
+            - 'auto': A minimal parameterization is inferred based on the contents of `elementary_errorgens`.
+              See the `minimal_from_elementary_errorgens` method of `LindbladParameterization` for more.
+            - 'CPTPLND': A CPTP-constrained error generator parameterization
+            - 'GLND': General Lindbladian, a non-CP (but still TP) constrained parameterization
+            - 'H': A Hamiltonian-only parameterization (no 'S', 'C', or 'A' terms)
+            - 'H+S': A Hamiltonian + Stochastic only parameterization (no 'C' or 'A' terms).
 
-        lindblad_basis : {'PP', 'std', 'gm', 'qt'}, optional
-            The basis used for Lindblad terms. Default is 'PP'.
+            See aforementioned documentation for more details. 
 
-        mx_basis : {'std', 'gm', 'pp', 'qt'} or Basis object, optional
-            The basis for this error generator's linear mapping. Default is 'pp'. Allowed
-            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
-            and Qutrit (qt) (or a custom basis object).
+        elementary_errorgen_basis: str or 'Basis', optional (default 'PP')  
+            The basis is used to construct the elementary error generator basis elements.
+            Should be compatible with the basis element subscripts labeling the coefficients
+            in `elementary_errorgens`. Most commonly 'PP', the unnormalized Pauli-product basis.
+            
+        mx_basis : str or Basis object
+            The basis in which to return matrix representation of the constructed error generator.
+            E.g. 'pp', 'gm', 'std', etc...
 
         truncate : bool, optional
-            Whether to truncate the projections onto the Lindblad terms in order to meet constraints.
-            Default is True.
+            Whether to truncate the projections onto the Lindblad terms in
+            order to meet constraints (e.g. to preserve CPTP) when necessary.
+            If False, then an error is thrown when the given error generator cannot
+            be realized by the specified parameterization.
 
-        evotype : {"default", "densitymx", "svterm", "cterm"}, optional
-            The evolution type of the error generator being constructed. Default is "default".
+        evotype : str or `Evotype`, optional (default 'default')
+            The evolution type of the error generator being constructed.
+            When specifying 'default' the evotype is automatically inferred/chosen.
+            `"densitymx"` means usual Lioville density-matrix-vector propagation
+            via matrix-vector products.  `"svterm"` denotes state-vector term-
+            based evolution (action of operation is obtained by evaluating the rank-1
+            terms up to some order).  `"cterm"` is similar but uses Clifford operation
+            action on stabilizer states.
 
-        state_space : StateSpace, optional
-            The state space for the error generator. Default is None.
+        state_space : `StateSpace` or castable to `StateSpace`
+            The state space upon which this error generator acts.
+
+        Returns
+        -------
+        `LindbladErrorgen`
         """
 
         #Compute an errorgen from the given op_matrix. Works with both
@@ -172,142 +203,150 @@ class LindbladErrorgen(_LinearOperator):
         else:
             errgenMx = _ot.error_generator(op_matrix, _np.identity(op_matrix.shape[0], 'd'),
                                            mx_basis, "logGTi")
-        return cls.from_error_generator(errgenMx, parameterization, lindblad_basis,
+        return cls.from_error_generator(errgenMx, parameterization, elementary_errorgen_basis,
                                         mx_basis, truncate, evotype, state_space=state_space)
 
     @classmethod
-    def from_error_generator(cls, errgen_or_dim, parameterization="CPTP", lindblad_basis='PP', mx_basis='pp',
+    def from_error_generator(cls, errgen_or_dim, parameterization="CPTPLND", elementary_errorgen_basis='PP', mx_basis='pp',
                              truncate=True, evotype="default", state_space=None):
         """
-        Create a Lindblad-parameterized error generator from an error generator matrix or dimension.
-
+        Construct a new `LindbladErrorgen` instance instantiated using a dense numpy array or sparse
+        scipy array representation. 
+        
         Parameters
         ----------
-        errgen_or_dim : numpy array, SciPy sparse matrix, or int
-            A square 2D array that gives the full error generator or an integer specifying the dimension
-            of a zero error generator.
+        errgen_or_dim : numpy array or SciPy sparse matrix or int
+            A square 2D array that gives the full error generator, or an integer specifying the dimension
+            of an empty (all-zeros) 2D array to construct. 
 
-        parameterization : str, optional (default 'CPTP') 
-            Describes how the Lindblad coefficients/projections relate to the error generator's parameter values.
-            Default is "CPTP". Supported strings are those castable to `LindbladParameterization`. See
-            `LindbladParameterization` for supported options.
+        parameterization: `LindbladParameterization` or str castable to `LindbladParameterization`, optional (default 'auto')
+            Either an instance of `LindbladParameterization` or a string castable to a
+            valid `LindbladParameterization`. This object specifies the internal parameterizations
+            and coefficient blocks required for storing the data associated with this error generator
+            and requisite for enforcing appropriate constraints. See documentation of `LindbladParameterization`
+            for more details, but common examples include:
+            
+            - 'auto': A minimal parameterization is inferred based on the contents of `elementary_errorgens`.
+              See the `minimal_from_elementary_errorgens` method of `LindbladParameterization` for more.
+            - 'CPTPLND': A CPTP-constrained error generator parameterization
+            - 'GLND': General Lindbladian, a non-CP (but still TP) constrained parameterization
+            - 'H': A Hamiltonian-only parameterization (no 'S', 'C', or 'A' terms)
+            - 'H+S': A Hamiltonian + Stochastic only parameterization (no 'C' or 'A' terms).
 
-        lindblad_basis : {'PP', 'std', 'gm', 'qt'}, optional
-            The basis used for Lindblad terms. Default is 'PP'.
+            See aforementioned documentation for more details. 
 
-        mx_basis : {'std', 'gm', 'pp', 'qt'} or Basis object, optional
-            The basis for this error generator's linear mapping. Default is 'pp'. Allowed
-            values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
-            and Qutrit (qt) (or a custom basis object).
-
-        truncate : bool, optional
-            Whether to truncate the projections onto the Lindblad terms in order to meet constraints.
-            Default is True.
-
-        evotype : {"default", "densitymx", "svterm", "cterm"}, optional
-            The evolution type of the error generator being constructed. Default is "default".
-
-        state_space : StateSpace, optional
-            The state space for the error generator. Default is None.
-
-        Returns
-        -------
-        LindbladErrorgen
-        """
-        errgen = _np.zeros((errgen_or_dim, errgen_or_dim), 'd') \
-            if isinstance(errgen_or_dim, (int, _np.int64)) else errgen_or_dim
-        return cls._from_error_generator(errgen, parameterization, lindblad_basis,
-                                         mx_basis, truncate, evotype, state_space)
-
-    @classmethod
-    def from_error_generator_and_blocks(cls, errgen_or_dim, lindblad_coefficient_blocks,
-                                        lindblad_basis='PP', mx_basis='pp',
-                                        truncate=True, evotype="default", state_space=None):
-        """
-        Create a Lindblad-parameterized error generator from an error generator matrix or dimension and coefficient blocks.
-
-        Parameters
-        ----------
-        errgen_or_dim : numpy array, SciPy sparse matrix, or int
-            A square 2D array that gives the full error generator or an integer specifying the dimension
-            of a zero error generator.
-
-        lindblad_coefficient_blocks : list
-            A list of Lindblad coefficient blocks to set from the error generator projections.
-
-        lindblad_basis : {'PP', 'std', 'gm', 'qt'}, optional
-            The basis used for Lindblad terms. Default is 'PP'.
-
-        mx_basis : {'std', 'gm', 'pp', 'qt'} or Basis object, optional
-            The basis for this error generator's linear mapping. Default is 'pp'.
-
-        truncate : bool, optional
-            Whether to truncate the projections onto the Lindblad terms in order to meet constraints.
-            Default is True.
-
-        evotype : {"default", "densitymx", "svterm", "cterm"}, optional
-            The evolution type of the error generator being constructed. Default is "default".
-
-        state_space : StateSpace, optional
-            The state space for the error generator. Default is None.
-
-        Returns
-        -------
-        LindbladErrorgen
-        """
-        errgenMx = _np.zeros((errgen_or_dim, errgen_or_dim), 'd') \
-            if isinstance(errgen_or_dim, (int, _np.int64)) else errgen_or_dim
-        for blk in lindblad_coefficient_blocks:
-            blk.set_from_errorgen_projections(errgenMx, mx_basis, truncate=truncate)
-        return cls(lindblad_coefficient_blocks, lindblad_basis, mx_basis, evotype, state_space)
-
-    @classmethod
-    def _from_error_generator(cls, errgen, parameterization="CPTP", lindblad_basis="PP",
-                              mx_basis="pp", truncate=True, evotype="default", state_space=None):
-        """
-        Create a Lindblad-form error generator from an error generator matrix and a basis.
-
-        The basis specifies how to decompose (project) the error generator.
-
-        Parameters
-        ----------
-        errgen : numpy array or SciPy sparse matrix
-            a square 2D array that gives the full error generator. The shape of
-            this array sets the dimension of the operator. The projections of
-            this quantity are closely related to the parameters of the error 
-            generator (they may not be exactly equal if parameterization = 'CPTP').
-
-        lindblad_basis : {'PP', 'std', 'gm', 'qt'}, optional
-            The basis used for Lindblad terms. Default is 'PP'.
-
-        parameterization : str, optional (default 'CPTP') 
-            Describes how the Lindblad coefficients/projections relate to the error generator's parameter values.
-            Default is "CPTP". Supported strings are those castable to `LindbladParameterization`. See
-            `LindbladParameterization` for supported options.
-
-        mx_basis : {'std', 'gm', 'pp', 'qt'} or Basis object, optional
-            The basis for this error generator's linear mapping. Default is 'pp'.
+        elementary_errorgen_basis: str or 'Basis', optional (default 'PP')  
+            The basis is used to construct the elementary error generator basis elements.
+            Should be compatible with the basis element subscripts labeling the coefficients
+            in `elementary_errorgens`. Most commonly 'PP', the unnormalized Pauli-product basis.
+            
+        mx_basis : str or Basis object
+            The basis in which to return matrix representation of the constructed error generator.
+            E.g. 'pp', 'gm', 'std', etc...
 
         truncate : bool, optional
             Whether to truncate the projections onto the Lindblad terms in
             order to meet constraints (e.g. to preserve CPTP) when necessary.
-            If False, then an error is thrown when the given `errgen` cannot
-            be realized by the specified set of Lindblad projections.
+            If False, then an error is thrown when the given error generator cannot
+            be realized by the specified parameterization.
 
-        evotype : {"densitymx","svterm","cterm"}
+        evotype : str or `Evotype`, optional (default 'default')
             The evolution type of the error generator being constructed.
+            When specifying 'default' the evotype is automatically inferred/chosen.
             `"densitymx"` means usual Lioville density-matrix-vector propagation
             via matrix-vector products.  `"svterm"` denotes state-vector term-
             based evolution (action of operation is obtained by evaluating the rank-1
             terms up to some order).  `"cterm"` is similar but uses Clifford operation
             action on stabilizer states.
 
-        state_space : StateSpace, optional
-            The state space for the error generator. Default is None.
+        state_space : StateSpace, optional (default None)
+            StateSpace object to use in construction of this LindbladErrorgen.
+            If None we use the function `pygsti.baseobjs.statespace.default_space_for_dim`
+            to infer the correct state space from the dimensions of the passed in
+            error generator.
 
         Returns
         -------
-        LindbladErrorgen
+        `LindbladErrorgen`
+        """
+        if isinstance(errgen_or_dim, (int, _np.int64)):
+            errgen = _np.zeros((errgen_or_dim, errgen_or_dim), 'd')
+        else:
+            errgen =  errgen_or_dim
+        return cls._from_error_generator(errgen, parameterization, elementary_errorgen_basis,
+                                         mx_basis, truncate, evotype, state_space)
+
+    @classmethod
+    def from_error_generator_and_blocks(cls, errgen_or_dim, lindblad_coefficient_blocks,
+                                        elementary_errorgen_basis='PP', mx_basis='pp',
+                                        truncate=True, evotype="default", state_space=None):
+        """
+        Creates a Lindblad-parameterized error generator from an operation and a set
+        of `LindbladCoefficientBlock`s. 
+
+        Here "operation" means the exponentiated error generator, so this method
+        essentially takes the matrix log of `op_matrix` and constructs an error
+        generator from this by subsequently projecting this constructed error generator
+        onto the specified `LindbladCoefficientBlock`s. Note that since these blocks are
+        user specified this projection may not be complete. E.g. passing in a general operation consisting
+        of non-trivial 'H', 'S', 'C' and 'A' generators together with a single `LindbladCoefficientBlock`
+        for storing 'H' terms will result in an 'H'-only generator.
+
+        Parameters
+        ----------
+        errgen_or_dim : numpy array or SciPy sparse matrix or int
+            A square 2D array that gives the full error generator, or an integer specifying the dimension
+            of an empty (all-zeros) 2D array to construct.
+
+        lindblad_coefficient_blocks : list of `LindbladCoefficientBlocks`
+            List of `LindbladCoefficientBlocks` for storing the input error generator data
+            given the projections onto these blocks.
+
+        elementary_errorgen_basis: str or 'Basis', optional (default 'PP')  
+            The basis is used to construct the elementary error generator basis elements.
+            Should be compatible with the basis element subscripts labeling the coefficients
+            in `elementary_errorgens`. Most commonly 'PP', the unnormalized Pauli-product basis.
+            
+        mx_basis : str or Basis object
+            The basis in which to return matrix representation of the constructed error generator.
+            E.g. 'pp', 'gm', 'std', etc...
+
+        truncate : bool, optional
+            Whether to truncate the projections onto the Lindblad terms in
+            order to meet constraints (e.g. to preserve CPTP) when necessary.
+            If False, then an error is thrown when the given error generator cannot
+            be realized by the specified parameterization.
+
+        evotype : str or `Evotype`, optional (default 'default')
+            The evolution type of the error generator being constructed.
+            When specifying 'default' the evotype is automatically inferred/chosen.
+            `"densitymx"` means usual Lioville density-matrix-vector propagation
+            via matrix-vector products.  `"svterm"` denotes state-vector term-
+            based evolution (action of operation is obtained by evaluating the rank-1
+            terms up to some order).  `"cterm"` is similar but uses Clifford operation
+            action on stabilizer states.
+
+        state_space : StateSpace, optional (default None)
+            StateSpace object to use in construction of this LindbladErrorgen.
+            If None we use the function `pygsti.baseobjs.statespace.default_space_for_dim`
+            to infer the correct state space from the dimensions of the passed in
+            error generator.
+
+        Returns
+        -------
+        `LindbladErrorgen`
+        """
+        errgenMx = _np.zeros((errgen_or_dim, errgen_or_dim), 'd') \
+            if isinstance(errgen_or_dim, (int, _np.int64)) else errgen_or_dim
+        for blk in lindblad_coefficient_blocks:
+            blk.set_from_errorgen_projections(errgenMx, mx_basis, truncate=truncate)
+        return cls(lindblad_coefficient_blocks, elementary_errorgen_basis, mx_basis, evotype, state_space)
+
+    @classmethod
+    def _from_error_generator(cls, errgen, parameterization="CPTPLND", elementary_errorgen_basis="PP",
+                              mx_basis="pp", truncate=True, evotype="default", state_space=None):
+        """
+        See `from_error_generator` for more details.
         """
 
         dim = errgen.shape[0]
@@ -318,12 +357,12 @@ class LindbladErrorgen(_LinearOperator):
         # given to us are sparse or not and make them all consistent
         # (maybe this is needed by lindblad_errorgen_projections call below?)
         sparse = None
-        if isinstance(lindblad_basis, _Basis):
-            sparse = lindblad_basis.sparse
+        if isinstance(elementary_errorgen_basis, _Basis):
+            sparse = elementary_errorgen_basis.sparse
         else:
-            if isinstance(lindblad_basis, str): sparse = _sps.issparse(errgen)
-            elif len(lindblad_basis) > 0: sparse = _sps.issparse(lindblad_basis[0])
-            lindblad_basis = _Basis.cast(lindblad_basis, dim, sparse=sparse)
+            if isinstance(elementary_errorgen_basis, str): sparse = _sps.issparse(errgen)
+            elif len(elementary_errorgen_basis) > 0: sparse = _sps.issparse(elementary_errorgen_basis[0])
+            elementary_errorgen_basis = _Basis.cast(elementary_errorgen_basis, dim, sparse=sparse)
 
         if sparse is None: sparse = False  # the default
 
@@ -338,66 +377,90 @@ class LindbladErrorgen(_LinearOperator):
         # Create blocks based on bases along - no specific errorgen labels
         blocks = []
         for blk_type, blk_param_mode in zip(parameterization.block_types, parameterization.param_modes):
-            blk = _LindbladCoefficientBlock(blk_type, lindblad_basis, param_mode=blk_param_mode)
+            blk = _LindbladCoefficientBlock(blk_type, elementary_errorgen_basis, param_mode=blk_param_mode)
             blk.set_from_errorgen_projections(errgen, matrix_basis, truncate=truncate)
             blocks.append(blk)
 
         return cls(blocks, "auto", mx_basis, evotype, state_space)
 
+    #TODO: Need to make the construction robust to empty elementary_errorgens dictionaries.
     @classmethod
     def from_elementary_errorgens(cls, elementary_errorgens, parameterization='auto', elementary_errorgen_basis='PP',
-                              mx_basis="pp", truncate=True, evotype="default", state_space=None):
+                                  mx_basis="pp", truncate=True, evotype="default", state_space=None):
         """
-        Create a Lindblad-parameterized error generator from elementary error generators.
-
+        Construct a new `LindbladErrorgen` instance instantiated using a dictionary of elementary error generator
+        coefficients and rates.
+        
         Parameters
         ----------
         elementary_errorgens : dict
-            A dictionary of elementary error generators. Keys are labels specifying the type and basis
-            elements of the elementary error generators, and values are the corresponding coefficients.
-            Keys are `(termType, basisLabel1, <basisLabel2>)` tuples, where `termType` is 
-            `"H"` (Hamiltonian), `"S"` (Stochastic), `"C"` (Correlation) or `"A"` (Active).  
-            Hamiltonian and Stochastic terms always have a single basis label (so key is a 2-tuple) 
-            whereas C and A tuples have 2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
-            terms.  Basis labels are pauli strings. Values are coefficients.
+            A dictionary whose keys are `ElementaryErrogenLabel`s and whose values are corresponding error generator rates.
 
-        parameterization : str, optional (default 'CPTP') 
-            Describes how the Lindblad coefficients/projections relate to the error generator's parameter values.
-            Default is "CPTP". Supported strings are those castable to `LindbladParameterization`. See
-            `LindbladParameterization` for supported options.
+        parameterization: `LindbladParameterization` or str castable to `LindbladParameterization`, optional (default 'auto')
+            Either an instance of `LindbladParameterization` or a string castable to a
+            valid `LindbladParameterization`. This object specifies the internal parameterizations
+            and coefficient blocks required for storing the data associated with this error generator
+            and requisite for enforcing appropriate constraints. See documentation of `LindbladParameterization`
+            for more details, but common examples include:
+            
+            - 'auto': A minimal parameterization is inferred based on the contents of `elementary_errorgens`.
+              See the `minimal_from_elementary_errorgens` method of `LindbladParameterization` for more.
+            - 'CPTPLND': A CPTP-constrained error generator parameterization
+            - 'GLND': General Lindbladian, a non-CP (but still TP) constrained parameterization
+            - 'H': A Hamiltonian-only parameterization (no 'S', 'C', or 'A' terms)
+            - 'H+S': A Hamiltonian + Stochastic only parameterization (no 'C' or 'A' terms).
 
-        elementary_errorgen_basis : {'PP', 'std', 'gm', 'qt'}, optional
-            The basis used for the elementary error generators. Default is 'PP'.
+            See aforementioned documentation for more details. 
 
-        mx_basis : {'std', 'gm', 'pp', 'qt'} or Basis object, optional
-            The basis for this error generator's linear mapping. Default is 'pp'.
+        elementary_errorgen_basis: str or 'Basis', optional (default 'PP')  
+            The basis is used to construct the elementary error generator basis elements.
+            Should be compatible with the basis element subscripts labeling the coefficients
+            in `elementary_errorgens`. Most commonly 'PP', the unnormalized Pauli-product basis.
+            
+        mx_basis : str or Basis object
+            The basis in which to return matrix representation of the constructed error generator.
+            E.g. 'pp', 'gm', 'std', etc...
 
         truncate : bool, optional
-            Whether to truncate the projections onto the Lindblad terms in order to meet constraints.
-            Default is True.
+            Whether to truncate the projections onto the Lindblad terms in
+            order to meet constraints (e.g. to preserve CPTP) when necessary.
+            If False, then an error is thrown when the given error generator cannot
+            be realized by the specified parameterization.
 
-        evotype : {"default", "densitymx", "svterm", "cterm"}, optional
-            The evolution type of the error generator being constructed. Default is "default".
+        evotype : str or `Evotype`, optional (default 'default')
+            The evolution type of the error generator being constructed.
+            When specifying 'default' the evotype is automatically inferred/chosen.
+            `"densitymx"` means usual Lioville density-matrix-vector propagation
+            via matrix-vector products.  `"svterm"` denotes state-vector term-
+            based evolution (action of operation is obtained by evaluating the rank-1
+            terms up to some order).  `"cterm"` is similar but uses Clifford operation
+            action on stabilizer states.
 
-        state_space : StateSpace, optional
-            The state space for the error generator. Default is None.
+        state_space : `StateSpace` or castable to `StateSpace`
+            The state space upon which this error generator acts.
 
         Returns
         -------
-        LindbladErrorgen
+        `LindbladErrorgen`
         """
-
+        if state_space is None:
+            raise ValueError('Must specify a state space when using `from_elementary_errorgens`.')
         state_space = _statespace.StateSpace.cast(state_space)
         dim = state_space.dim  # Store superop dimension
         basis = _Basis.cast(elementary_errorgen_basis, dim)
 
-        #convert elementary errorgen labels to *local* labels (ok to specify w/global labels)
-        identity_label_1Q = 'I'  # maybe we could get this from a 1Q basis somewhere?
-        sslbls = state_space.sole_tensor_product_block_labels  # first TPB labels == all labels
-        elementary_errorgens = _collections.OrderedDict(
-            [(_LocalElementaryErrorgenLabel.cast(lbl, sslbls, identity_label_1Q), val)
-             for lbl, val in elementary_errorgens.items()])
-
+        #check the first key, if local then no need to convert, otherwise convert from global.
+        if elementary_errorgens:
+            first_key = next(iter(elementary_errorgens))
+            if isinstance(first_key, (_GlobalElementaryErrorgenLabel, tuple)):
+                #convert keys to local elementary errorgen labels (the same as those used by the coefficient blocks):
+                identity_label_1Q = 'I'  # maybe we could get this from a 1Q basis somewhere?
+                sslbls = state_space.sole_tensor_product_block_labels  # take first TPB labels as all labels
+                elementary_errorgens = {_LocalElementaryErrorgenLabel.cast(k, sslbls, identity_label_1Q): v
+                                        for k, v in elementary_errorgens.items()}
+            else:
+                assert isinstance(first_key, _LocalElementaryErrorgenLabel), 'Unsupported error generator label type as key.'
+        
         parameterization = LindbladParameterization.minimal_from_elementary_errorgens(elementary_errorgens) \
             if parameterization == "auto" else LindbladParameterization.cast(parameterization)
 
@@ -410,14 +473,15 @@ class LindbladErrorgen(_LinearOperator):
         blocks = []
         for blk_type, blk_param_mode in zip(parameterization.block_types, parameterization.param_modes):
             relevant_eegs = eegs_by_typ[blk_type]  # KeyError => unrecognized block type!
-            bels = sorted(set(_itertools.chain(*[lbl.basis_element_labels for lbl in relevant_eegs.keys()])))
-            blk = _LindbladCoefficientBlock(blk_type, basis, bels, param_mode=blk_param_mode)
-            blk.set_elementary_errorgens(relevant_eegs, truncate=truncate)
-            blocks.append(blk)
-
+            #only add block type is relevant_eegs is not empty.
+            if relevant_eegs:
+                bels = sorted(set(_itertools.chain(*[lbl.basis_element_labels for lbl in relevant_eegs.keys()])))
+                blk = _LindbladCoefficientBlock(blk_type, basis, bels, param_mode=blk_param_mode)
+                blk.set_elementary_errorgens(relevant_eegs, truncate=truncate)
+                blocks.append(blk)
         return cls(blocks, basis, mx_basis, evotype, state_space)
 
-    def __init__(self, lindblad_coefficient_blocks, lindblad_basis='auto', mx_basis='pp',
+    def __init__(self, lindblad_coefficient_blocks, elementary_errorgen_basis='auto', mx_basis='pp',
                  evotype="default", state_space=None):
         
         """
@@ -467,15 +531,18 @@ class LindbladErrorgen(_LinearOperator):
             raise ValueError("Evotype doesn't support any of the representations a LindbladErrorgen requires.")
         sparse_bases = bool(self._rep_type == 'sparse superop')  # we use sparse bases iff we have a sparse rep        
 
-        if lindblad_basis == "auto":
+        state_space = _statespace.StateSpace.cast(state_space)
+        dim = state_space.dim  # Store superop dimension
+
+        if elementary_errorgen_basis == "auto":
             assert(all([(blk._basis is not None) for blk in lindblad_coefficient_blocks])), \
-                "When `lindblad_basis == 'auto'`, the supplied coefficient blocks must have valid bases!"
-            default_lindblad_basis = None
+                "When `elementary_errorgen_basis == 'auto'`, the supplied coefficient blocks must have valid bases!"
+            default_elementary_errorgen_basis = None
         else:
-            default_lindblad_basis = _Basis.cast(lindblad_basis, dim, sparse=sparse_bases)
+            default_elementary_errorgen_basis = _Basis.cast(elementary_errorgen_basis, dim, sparse=sparse_bases)
 
         for blk in lindblad_coefficient_blocks:
-            if blk._basis is None: blk._basis = default_lindblad_basis
+            if blk._basis is None: blk._basis = default_elementary_errorgen_basis
             elif blk._basis.sparse != sparse_bases:  # update block bases to desired sparsity if needed
                 blk._basis = blk._basis.with_sparsity(sparse_bases)
 
@@ -502,7 +569,8 @@ class LindbladErrorgen(_LinearOperator):
             for blk in lindblad_coefficient_blocks]
 
         #combine all of the linblad term superoperators across the blocks to a single concatenated tensor.
-        self.combined_lindblad_term_superops = _np.concatenate([Lterm_superops for (Lterm_superops, _) in self.lindblad_term_superops_and_1norms], axis=0)
+        self.combined_lindblad_term_superops = _np.concatenate([Lterm_superops for (Lterm_superops, _) in 
+                                                                self.lindblad_term_superops_and_1norms], axis=0)
 
         #Create a representation of the type chosen above:
         if self._rep_type == 'lindblad errorgen':
@@ -538,8 +606,6 @@ class LindbladErrorgen(_LinearOperator):
             [blk.param_labels for blk in self.coefficient_blocks])), dtype=object)
         assert(self._onenorm_upbound is not None)  # _update_rep should set this
 
-        # Done with __init__(...)
-
     def _init_terms(self, coefficient_blocks, max_polynomial_vars):
 
         Lterms = []; off = 0
@@ -559,21 +625,6 @@ class LindbladErrorgen(_LinearOperator):
             ctape = _np.empty(0, complex)
         coeffs_as_compact_polys = (vtape, ctape)
 
-        #DEBUG TODO REMOVE (and make into test) - check norm of rank-1 terms
-        # (Note: doesn't work for Clifford terms, which have no .base):
-        # rho =OP=> coeff * A rho B
-        # want to bound | coeff * Tr(E Op rho) | = | coeff | * | <e|A|psi><psi|B|e> |
-        # so A and B should be unitary so that | <e|A|psi><psi|B|e> | <= 1
-        # but typically these are unitaries / (sqrt(2)*nqubits)
-        #import bpdb; bpdb.set_trace()
-        #scale = 1.0
-        #for t in Lterms:
-        #    for op in t._rep.pre_ops:
-        #        test = _np.dot(_np.conjugate(scale * op.base.T), scale * op.base)
-        #        assert(_np.allclose(test, _np.identity(test.shape[0], 'd')))
-        #    for op in t._rep.post_ops:
-        #        test = _np.dot(_np.conjugate(scale * op.base.T), scale * op.base)
-        #        assert(_np.allclose(test, _np.identity(test.shape[0], 'd')))
         return Lterms, coeffs_as_compact_polys
 
     def _set_params_from_matrix(self, errgen, truncate):
@@ -593,7 +644,6 @@ class LindbladErrorgen(_LinearOperator):
             off += blk.num_params
 
         self._update_rep()
-        #assert(_np.allclose(errgen, self.to_dense()))  # DEBUG
 
     def _update_rep(self):
         """
@@ -796,23 +846,6 @@ class LindbladErrorgen(_LinearOperator):
         assert(_np.linalg.norm(_np.imag(ret)) < 1e-8)
         return ret.real
 
-        #DEBUG
-        #ret2 = _np.empty(self.num_params,'d')
-        #eps = 1e-8
-        #orig_vec = self.to_vector().copy()
-        #f0 = sum([abs(coeff) for coeff in coeff_values])
-        #for i in range(self.num_params):
-        #    v = orig_vec.copy()
-        #    v[i] += eps
-        #    new_coeff_values = _bulk_eval_compact_polynomials_complex(vtape, ctape, v, (len(self.Lterms),))
-        #    ret2[i] = ( sum([abs(coeff) for coeff in new_coeff_values]) - f0 ) / eps
-
-        #test3 = _np.linalg.norm(ret-ret2)
-        #print("TEST3 = ",test3)
-        #if test3 > 10.0:
-        #    import bpdb; bpdb.set_trace()
-        #return ret
-
     @property
     def num_params(self):
         """
@@ -871,13 +904,13 @@ class LindbladErrorgen(_LinearOperator):
         self._update_rep()
         self.dirty = dirty_value
 
-    def coefficients(self, return_basis=False, logscale_nonham=False):
+    def coefficients(self, return_basis=False, logscale_nonham=False, label_type='global'):
         """
         Constructs a dictionary of the Lindblad-error-generator coefficients of this error generator.
 
-        Note that these are not necessarily the parameter values, as these
-        coefficients are generally functions of the parameters (so as to keep
-        the coefficients positive, for instance).
+        Note that these are not necessarily the parameter values as those parameter value
+        correspond to the internal representation utilized, which may be constructed to
+        enforce positivity constraints, for instance.
 
         Parameters
         ----------
@@ -893,34 +926,53 @@ class LindbladErrorgen(_LinearOperator):
             the contribution this term would have within a depolarizing
             channel where all stochastic generators had this same coefficient.
             This is the value returned by :meth:`error_rates`.
+        
+        label_type : str, optional (default 'global')
+            String specifying which type of `ElementaryErrorgenLabel` to use
+            as the keys for the returned dictionary. Allowed options are
+            'global' for `GlobalElementaryErrorgenLabel` and 'local' for
+            `LocalElementaryErrorgenLabel`.
 
         Returns
         -------
-        Ltermdict : dict
-            Keys are `(termType, basisLabel1, <basisLabel2>)`
-            tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
-            `"C"` (Correlation) or `"A"` (Active).  Hamiltonian and Stochastic terms 
-            always have a single basis label (so key is a 2-tuple) whereas C and A tuples
-            have 2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
-            terms.  Basis labels are pauli strings. Values are coefficients.
+        elem_errorgens : dict
+            Keys are instances of `ElementaryErrorgenLabel`, which wrap the 
+            `(termType, basisLabel1, <basisLabel2>)` information for each coefficient.
+            Where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
+            `"C"`(Correlation)  or `"A"` (Affine).  Hamiltonian and S terms always have a
+            single basis label while 'C' and 'A' terms have two.
+
         basis : Basis
             A Basis mapping the basis labels used in the
-            keys of `Ltermdict` to basis matrices.
+            keys of `elem_errorgens` to basis matrices.
         """
+        assert label_type=='global' or label_type=='local', "Allowed values of label_type are 'global' and 'local'."
+
         elem_errorgens = {}
-        bases = set()
-        for blk in self.coefficient_blocks:
-            elem_errorgens.update(blk.elementary_errorgens)
-            if blk._basis not in bases:
-                bases.add(blk._basis)
+        
+        if return_basis:
+            bases = set()
+            for blk in self.coefficient_blocks:
+                elem_errorgens.update(blk.elementary_errorgens)
+                if blk._basis not in bases:
+                    bases.add(blk._basis)
+        else: #split this off to avoid expensive basis hashing and equivalence checking if not needed.
+            for blk in self.coefficient_blocks:
+                elem_errorgens.update(blk.elementary_errorgens)
 
-        #convert to *global* elementary errorgen labels
-        identity_label_1Q = 'I'  # maybe we could get this from a 1Q basis somewhere?
-        sslbls = self.state_space.sole_tensor_product_block_labels  # take first TPB labels as all labels
-        elem_errorgens = _collections.OrderedDict(
-            [(_GlobalElementaryErrorgenLabel.cast(local_eeg_lbl, sslbls, identity_label_1Q), value)
-             for local_eeg_lbl, value in elem_errorgens.items()])
-
+        first_key = next(iter(elem_errorgens))
+        if label_type=='global' and isinstance(first_key, _LocalElementaryErrorgenLabel):
+            #convert to *global* elementary errorgen labels
+            identity_label_1Q = 'I'  # maybe we could get this from a 1Q basis somewhere?
+            sslbls = self.state_space.sole_tensor_product_block_labels  # take first TPB labels as all labels
+            elem_errorgens = {_GlobalElementaryErrorgenLabel.cast(local_eeg_lbl, sslbls, identity_label_1Q): value
+                            for local_eeg_lbl, value in elem_errorgens.items()}
+        elif label_type=='local' and isinstance(first_key, _GlobalElementaryErrorgenLabel):
+            identity_label_1Q = 'I'  # maybe we could get this from a 1Q basis somewhere?
+            sslbls = self.state_space.sole_tensor_product_block_labels  # take first TPB labels as all labels
+            elem_errorgens = {_LocalElementaryErrorgenLabel.cast(local_eeg_lbl, sslbls, identity_label_1Q): value
+                            for local_eeg_lbl, value in elem_errorgens.items()}
+        
         if logscale_nonham:
             dim = self.dim
             for k in elem_errorgens.keys():
@@ -935,26 +987,47 @@ class LindbladErrorgen(_LinearOperator):
         else:
             return elem_errorgens
 
-    def coefficient_labels(self):
+    def coefficient_labels(self, label_type='global'):
         """
         The elementary error-generator labels corresponding to the elements of :meth:`coefficients_array`.
 
+        Parameters
+        ----------
+        label_type : str, optional (default 'global')
+            String specifying which type of `ElementaryErrorgenLabel` to use
+            as the keys for the returned dictionary. Allowed options are
+            'global' for `GlobalElementaryErrorgenLabel` and 'local' for
+            `LocalElementaryErrorgenLabel`.
+
         Returns
         -------
-        tuple
-            A tuple of (<type>, <basisEl1> [,<basisEl2]) elements identifying the elementary error
-            generators of this gate.
+        elem_errorgens : dict
+            list of `ElementaryErrorgenLabel`, which wrap the 
+            `(termType, basisLabel1, <basisLabel2>)` information for each coefficient.
+            Where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
+            `"C"`(Correlation)  or `"A"` (Affine).  Hamiltonian and S terms always have a
+            single basis label while 'C' and 'A' terms have two.
         """
         labels = []
         for blk in self.coefficient_blocks:
             #labels.extend(blk.coefficent_labels)
             labels.extend(blk.elementary_errorgens.keys())
 
-        #convert to *global* elementary errorgen labels
-        identity_label_1Q = 'I'  # maybe we could get this from a 1Q basis somewhere?
-        sslbls = self.state_space.sole_tensor_product_block_labels  # take first TPB labels as all labels
-        return tuple([_GlobalElementaryErrorgenLabel.cast(local_eeg_lbl, sslbls, identity_label_1Q)
-                      for local_eeg_lbl in labels])
+        first_label = labels[0] if len(labels)>0 else None
+
+        if label_type == 'global' and isinstance(first_label, _LocalElementaryErrorgenLabel):
+            #convert to *global* elementary errorgen labels
+            identity_label_1Q = 'I'  # maybe we could get this from a 1Q basis somewhere?
+            sslbls = self.state_space.sole_tensor_product_block_labels  # take first TPB labels as all labels
+            labels = [_GlobalElementaryErrorgenLabel.cast(local_eeg_lbl, sslbls, identity_label_1Q)
+                        for local_eeg_lbl in labels]
+        elif label_type=='local' and isinstance(first_label, _GlobalElementaryErrorgenLabel):
+            identity_label_1Q = 'I'  # maybe we could get this from a 1Q basis somewhere?
+            sslbls = self.state_space.sole_tensor_product_block_labels  # take first TPB labels as all labels
+            labels = [_LocalElementaryErrorgenLabel.cast(local_eeg_lbl, sslbls, identity_label_1Q)
+                        for local_eeg_lbl in labels]
+        return tuple(labels)
+
 
     def coefficients_array(self):
         """
@@ -971,7 +1044,6 @@ class LindbladErrorgen(_LinearOperator):
             combination of standard error generators that is this error generator.
         """
         # Note: ret will be complex if any block's data is
-        #ret = _np.concatenate([blk.block_data.flat for blk in self.coefficient_blocks])
         ret = _np.concatenate([list(blk.elementary_errorgens.values()) for blk in self.coefficient_blocks])
         if self._coefficient_weights is not None:
             ret *= self._coefficient_weights
@@ -1003,7 +1075,7 @@ class LindbladErrorgen(_LinearOperator):
             ret *= self._coefficient_weights[:, None]
         return ret
 
-    def error_rates(self):
+    def error_rates(self, label_type='global'):
         """
         Constructs a dictionary of the error rates associated with this error generator.
 
@@ -1028,35 +1100,42 @@ class LindbladErrorgen(_LinearOperator):
         rates is not necessarily the error rate of the overall
         channel.
 
+        Parameters
+        ----------
+        label_type : str, optional (default 'global')
+            String specifying which type of `ElementaryErrorgenLabel` to use
+            as the keys for the returned dictionary. Allowed options are
+            'global' for `GlobalElementaryErrorgenLabel` and 'local' for
+            `LocalElementaryErrorgenLabel`.
+
         Returns
         -------
-        Ltermdict : dict
-            Keys are `(termType, basisLabel1, <basisLabel2>)`
-            tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
-            `"C"` (Correlation) or `"A"` (Active).  Hamiltonian and Stochastic terms 
-            always have a single basis label (so key is a 2-tuple) whereas C and A tuples
-            have 2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
-            terms.  Basis labels are pauli strings. Values are coefficients. 
-            Values are real error rates except for the 2-basis-label case.
+        elem_errorgens : dict
+            Keys are instances of `ElementaryErrorgenLabel`, which wrap the 
+            `(termType, basisLabel1, <basisLabel2>)` information for each coefficient.
+            Where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
+            `"C"`(Correlation)  or `"A"` (Affine).  Hamiltonian and S terms always have a
+            single basis label while 'C' and 'A' terms have two.
         """
-        return self.coefficients(return_basis=False, logscale_nonham=True)
+        return self.coefficients(return_basis=False, logscale_nonham=True, label_type=label_type)
 
     def set_coefficients(self, elementary_errorgens, action="update", logscale_nonham=False, truncate=True):
         """
         Sets the coefficients of elementary error generator terms in this error generator.
 
-        The dictionary `lindblad_term_dict` has tuple-keys describing the type
-        of term and the basis elements used to construct it, e.g. `('H','X')`.
+        The dictionary `elementary_errorgens` has keys which are `ElementaryErrorgenLabel`s 
+        describing the type of term and the basis elements used to construct it, e.g. `('H','X')`,
+        together with the corresponding rates.
 
         Parameters
         ----------
-        lindblad_term_dict : dict
-            Keys are `(termType, basisLabel1, <basisLabel2>)`
-            tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
-            `"C"` (Correlation) or `"A"` (Active).  Hamiltonian and Stochastic terms 
-            always have a single basis label (so key is a 2-tuple) whereas C and A tuples
-            have 2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
-            terms.  Basis labels are pauli strings.
+        elementary_errorgens : dict
+            Dictionary whose keys are instances of `ElementaryErrorgenLabel`, which wrap the 
+            `(termType, basisLabel1, <basisLabel2>)` information for each coefficient, and whose
+            values are corresponding error generator rates for each coefficient.
+            Where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
+            `"C"`(Correlation)  or `"A"` (Affine).  Hamiltonian and S terms always have a
+            single basis label while 'C' and 'A' terms have two.
 
         action : {"update","add","reset"}
             How the values in `lindblad_term_dict` should be combined with existing
@@ -1081,12 +1160,16 @@ class LindbladErrorgen(_LinearOperator):
         -------
         None
         """
-        #convert keys to local elementary errorgen labels (the same as those used by the coefficient blocks):
-        identity_label_1Q = 'I'  # maybe we could get this from a 1Q basis somewhere?
-        sslbls = self.state_space.sole_tensor_product_block_labels  # take first TPB labels as all labels
-        elem_errorgens = _collections.OrderedDict(
-            [(_LocalElementaryErrorgenLabel.cast(k, sslbls, identity_label_1Q), v)
-             for k, v in elementary_errorgens.items()])
+        #check the first key, if local then no need to convert, otherwise convert from global.
+        first_key = next(iter(elementary_errorgens))
+        if isinstance(first_key, (_GlobalElementaryErrorgenLabel, tuple)):
+            #convert keys to local elementary errorgen labels (the same as those used by the coefficient blocks):
+            identity_label_1Q = 'I'  # maybe we could get this from a 1Q basis somewhere?
+            sslbls = self.state_space.sole_tensor_product_block_labels  # take first TPB labels as all labels
+            elem_errorgens = {_LocalElementaryErrorgenLabel.cast(k, sslbls, identity_label_1Q): v
+                              for k, v in elementary_errorgens.items()}
+        else:
+            assert isinstance(first_key, _LocalElementaryErrorgenLabel), 'Unsupported error generator label type as key.'
 
         processed = set()  # keep track of which entries in elem_errorgens have been processed by a block
         for blk in self.coefficient_blocks:
@@ -1132,18 +1215,22 @@ class LindbladErrorgen(_LinearOperator):
         Sets the coeffcients of elementary error generator terms in this error generator.
 
         Coefficients are set so that the contributions of the resulting
-        channel's error rate are given by the values in `lindblad_term_dict`.
+        channel's error rate are given by the values in `elementary_errorgens`.
         See :meth:`error_rates` for more details.
 
         Parameters
         ----------
-        lindblad_term_dict : dict
-            Keys are `(termType, basisLabel1, <basisLabel2>)`
-            tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
-            `"C"` (Correlation) or `"A"` (Active).  Hamiltonian and Stochastic terms 
-            always have a single basis label (so key is a 2-tuple) whereas C and A tuples
-            have 2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
-            terms.  Basis labels are pauli strings.
+        elementary_errorgens : dict
+            Dictionary whose keys are instances of `ElementaryErrorgenLabel`, which wrap the 
+            `(termType, basisLabel1, <basisLabel2>)` information for each coefficient, and whose
+            values are corresponding error generator rates for each coefficient.
+            Where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
+            `"C"`(Correlation)  or `"A"` (Affine).  Hamiltonian and S terms always have a
+            single basis label while 'C' and 'A' terms have two.
+
+        action : {"update","add","reset"}
+            How the values in `lindblad_term_dict` should be combined with existing
+            error-generator coefficients.
 
         action : {"update","add","reset"}
             How the values in `lindblad_term_dict` should be combined with existing
@@ -1155,21 +1242,13 @@ class LindbladErrorgen(_LinearOperator):
         """
         self.set_coefficients(elementary_errorgens, action, logscale_nonham=True)
 
-    def coefficient_weights(self, weights):
+    def coefficient_weights(self):
         """
-        Get the non-default coefficient weights.
-
-        This method returns a dictionary of coefficient weights that are not equal to the default value of 1.0.
-
-        Parameters
-        ----------
-        weights : dict
-            A dictionary where keys are coefficient labels and values are the corresponding weights.
-
-        Returns
-        -------
-        dict
-            A dictionary where keys are coefficient labels and values are the corresponding weights that are not equal to 1.0.
+        Return a dictionary whose keys are error generator coefficients, as given by
+        :method:`coefficient_labels`, and whose value are the weights that have been specified
+        for those coefficients. Note that weight != rate! These weights are used in conjunction
+        with certain penalty factor options available in the construction of objective functions
+        for parameters estimation purposes, and are not generally used outside of that setting.
         """
         coeff_labels = self.coefficient_labels()
         lbl_lookup = {i: lbl for i, lbl in enumerate(coeff_labels)}
@@ -1185,10 +1264,12 @@ class LindbladErrorgen(_LinearOperator):
 
     def set_coefficient_weights(self, weights):
         """
-        Set the coefficient weights.
-
-        This method sets the weights for the coefficients of the error generator. If the coefficient weights
-        array is not initialized, it initializes it to an array of ones.
+        Set the weights for the error generator coefficients in this error generator using a
+        dictionary whose keys are error generator coefficients, as given by
+        :method:`coefficient_labels`, and whose value are the weights that have been specified
+        for those coefficients. Note that weight != rate! These weights are used in conjunction
+        with certain penalty factor options available in the construction of objective functions
+        for parameters estimation purposes, and are not generally used outside of that setting.
 
         Parameters
         ----------
@@ -1243,6 +1324,7 @@ class LindbladErrorgen(_LinearOperator):
         else:
             raise ValueError("Invalid transform for this LindbladErrorgen: type %s"
                              % str(type(s)))
+
 
     def deriv_wrt_params(self, wrt_filter=None):
         """
@@ -1391,6 +1473,7 @@ class LindbladErrorgen(_LinearOperator):
         state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
         coeff_blocks = [_LindbladCoefficientBlock.from_nice_serialization(blk)
                         for blk in mm_dict['coefficient_blocks']]
+
         ret = cls(coeff_blocks, 'auto', mx_basis, mm_dict['evotype'], state_space)
         #reinitialize the paramvals attribute from memoized dict. Rederiving this from the block data has 
         #been leading to sign ambiguity on deserialization.
@@ -1408,10 +1491,10 @@ class LindbladErrorgen(_LinearOperator):
             (self.dim, self.num_params)
         return s
 
-    def _oneline_contents(self):
+    def _oneline_contents(self, label_type='global'):
         """ Summarizes the contents of this object in a single line.  Does not summarize submembers. """
         MAXLEN = 60
-        coeff_dict = self.coefficients(); s = ""
+        coeff_dict = self.coefficients(label_type=label_type); s = ""
         for lbl, val in coeff_dict.items():
             if len(s) > MAXLEN:
                 s += "..."; break
@@ -1479,10 +1562,8 @@ class LindbladParameterization(_NicelySerializable):
         if any([lbl.errorgen_type == 'S' for lbl in errs]): paramtypes.append('S')
         if any([lbl.errorgen_type == 'C' for lbl in errs]): paramtypes.append('C')
         if any([lbl.errorgen_type == 'A' for lbl in errs]): paramtypes.append('A')
-        #if any([lbl.errorgen_type == 'S' and len(lbl.basis_element_labels) == 2 for lbl in errs]):
-        #    # parameterization must be "CPTP" if there are any ('S',b1,b2) keys
         if 'C' in paramtypes or 'A' in paramtypes:
-            parameterization = "CPTP"
+            parameterization = "CPTPLND"
         else:
             parameterization = '+'.join(paramtypes)
         return cls.cast(parameterization)

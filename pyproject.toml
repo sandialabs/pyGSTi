@@ -24,7 +24,8 @@ authors = [
 dependencies=[
     'numpy>=1.15.0',
     'scipy',
-    'plotly',
+    'stim',
+    'plotly>=3.8.0',
     'pandas',
     'networkx'
 ]
@@ -95,3 +96,8 @@ complete = ['pygsti[multiprocessor,no_mpi]']
 Homepage = 'https://www.pygsti.info'
 Repository = 'https://github.com/sandialabs/pyGSTi'
 Download ='https://github.com/sandialabs/pyGSTi/tarball/master'
+
+[tool.setuptools_scm]
+version_file = "pygsti/_version.py"
+version_scheme = "only-version"
+local_scheme = "no-local-version"

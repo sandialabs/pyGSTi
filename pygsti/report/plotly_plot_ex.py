@@ -103,11 +103,6 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
         aspect_ratio = orig_width / orig_height
     else: aspect_ratio = None
 
-    #Remove original dimensions of plot so default of 100% is used below
-    # (and triggers resize-script creation)
-    if orig_width: del fig['layout']['width']
-    if orig_height: del fig['layout']['height']
-
     #Special polar plot case - see below - add dummy width & height so
     # we can find/replace them with variables in generated javascript.
     if 'angularaxis' in fig['layout']:
@@ -118,33 +113,20 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
     config['showLink'] = show_link
     config['linkText'] = link_text
 
-    #Add version-dependent kwargs to _plot_html call below
-    plotly_version = tuple(map(int, _plotly_version.split('.')))
-    if plotly_version < (3, 8, 0):  # "old" plotly with _plot_html function
-        from plotly.offline.offline import _plot_html
-
-        kwargs = {}
-        if plotly_version >= (3, 7, 0):  # then auto_play arg exists
-            kwargs['auto_play'] = False
-
-        #Note: removing width and height from layout above causes default values to
-        # be used (the '100%'s hardcoded below) which subsequently trigger adding a resize script.
-        plot_html, plotdivid, _, _ = _plot_html(
-            fig, config, validate, '100%', '100%',
-            global_requirejs=False,  # no need for global_requirejs here
-            **kwargs)  # since we now extract js and remake full script.
-    else:
+    try:
         from plotly.io import to_html as _to_html
-        import uuid as _uuid
-        plot_html = _to_html(fig, config, auto_play=False, include_plotlyjs=False,
-                             include_mathjax=False, post_script=None, full_html=False,
-                             animation_opts=None, validate=validate)
-        assert(plot_html.startswith("<div>") and plot_html.endswith("</div>"))
-        plot_html = plot_html[len("<div>"):-len("</div>")].strip()
-        assert(plot_html.endswith("</script>"))
-        id_index = plot_html.find('id="')
-        id_index_end = plot_html.find('"', id_index + len('id="'))
-        plotdivid = _uuid.UUID(plot_html[id_index + len('id="'):id_index_end])
+    except ImportError:
+        print('Unable to import plotly.io.to_html. This likely means your version of plotly is incompatible (<3.8.0), please upgrade and try again.')
+    import uuid as _uuid
+    plot_html = _to_html(fig, config, auto_play=False, include_plotlyjs=False,
+                            include_mathjax=False, post_script=None, full_html=False,
+                            animation_opts=None, validate=validate)
+    assert(plot_html.startswith("<div>") and plot_html.endswith("</div>"))
+    plot_html = plot_html[len("<div>"):-len("</div>")].strip()
+    assert(plot_html.endswith("</script>"))
+    id_index = plot_html.find('id="')
+    id_index_end = plot_html.find('"', id_index + len('id="'))
+    plotdivid = _uuid.UUID(plot_html[id_index + len('id="'):id_index_end])
 
     if orig_width: fig['layout']['width'] = orig_width
     if orig_height: fig['layout']['height'] = orig_height

@@ -14,7 +14,7 @@ import copy as _copy
 import itertools as _itertools
 import warnings as _warnings
 from functools import lru_cache
-from typing import Union, Tuple, List
+from typing import Union
 
 import numpy as _np
 import scipy.sparse as _sps
@@ -454,7 +454,8 @@ class Basis(_NicelySerializable):
                 return _np.array_equal(self.elements, other.elements)
             else:
                 return _np.array_equal(self.elements, other)
-
+    
+    @lru_cache(maxsize=4)
     def create_transform_matrix(self, to_basis):
         """
         Get the matrix that transforms a vector from this basis to `to_basis`.
@@ -484,6 +485,7 @@ class Basis(_NicelySerializable):
         else:
             return _np.dot(to_basis.from_std_transform_matrix, self.to_std_transform_matrix)
 
+    @lru_cache(maxsize=4)
     def reverse_transform_matrix(self, from_basis):
         """
         Get the matrix that transforms a vector from `from_basis` to this basis.
@@ -828,7 +830,7 @@ class ExplicitBasis(Basis):
     A `Basis` whose elements are specified directly.
 
     All explicit bases are simple: their vector space is taken to be that
-    of the the flattened elements unless separate `vector_elements` are given.
+    of the flattened elements unless separate `vector_elements` are given.
 
     Parameters
     ----------
@@ -1063,18 +1065,26 @@ class BuiltinBasis(LazyBasis):
         assert(name in _basis_constructor_dict), "Unknown builtin basis name '%s'!" % name
         if sparse is None: sparse = False  # choose dense matrices by default (when sparsity is "unspecified")
 
-        if name == 'cl':  # HACK for now, until we figure out better classical state spaces
-            self.state_space = dim_or_statespace if isinstance(dim_or_statespace, _statespace.StateSpace) \
-                else _statespace.ExplicitStateSpace([('L%d' % i,) for i in range(dim_or_statespace)])
+        if isinstance(dim_or_statespace, _statespace.StateSpace):
+            self.state_space = dim_or_statespace
+        elif name == 'cl':  # HACK for now, until we figure out better classical state spaces
+            self.state_space = _statespace.ExplicitStateSpace([('L%d' % i,) for i in range(dim_or_statespace)])
+        elif name == "sv":
+            # A state vector can have any shape. It does not need to be a perfect square root.
+            self.state_space = _statespace.default_space_for_udim(dim_or_statespace)
         else:
-            self.state_space = dim_or_statespace if isinstance(dim_or_statespace, _statespace.StateSpace) \
-                else _statespace.default_space_for_dim(dim_or_statespace)
+            self.state_space = _statespace.default_space_for_dim(dim_or_statespace)
 
         longname = _basis_constructor_dict[name].longname
         real = _basis_constructor_dict[name].real
         self._first_element_is_identity = _basis_constructor_dict[name].first_element_is_identity
 
         super(BuiltinBasis, self).__init__(name, longname, real, sparse)
+
+        #precompute some properties
+        self._size, self._dim, self._elshape = _basis_constructor_dict[self.name].sizes(dim=self._get_dimension_to_pass_to_constructor(), sparse=self.sparse)
+        #Check that sparse is True only when elements are *matrices*
+        assert(not self.sparse or len(self._elshape) == 2), "`sparse == True` is only allowed for *matrix*-valued bases!"
 
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
@@ -1088,6 +1098,14 @@ class BuiltinBasis(LazyBasis):
     def _from_nice_serialization(cls, state):
         statespace = _StateSpace.from_nice_serialization(state['state_space'])
         return cls(state['name'], statespace, state['sparse'])
+    
+    def _get_dimension_to_pass_to_constructor(self):
+        """
+        A basis in the state-vector (name= 'sv') case will correspond to a basis of vectors of length d.
+        This means that it will be operated on by matrices of shape (d \times d).
+        """
+        return self.state_space.udim if self.name == "sv" else self.state_space.dim
+
 
     @property
     def dim(self):
@@ -1096,16 +1114,14 @@ class BuiltinBasis(LazyBasis):
         spans.  Equivalently, the length of the `vector_elements` of the
         basis.
         """
-        size, dim, elshape = _basis_constructor_dict[self.name].sizes(dim=self.state_space.dim, sparse=self.sparse)
-        return dim
+        return self._dim
 
     @property
     def size(self):
         """
         The number of elements (or vector-elements) in the basis.
         """
-        size, dim, elshape = _basis_constructor_dict[self.name].sizes(dim=self.state_space.dim, sparse=self.sparse)
-        return size
+        return self._size
 
     @property
     def elshape(self):
@@ -1115,12 +1131,7 @@ class BuiltinBasis(LazyBasis):
         Note that *vector elements* always have shape `(dim,)` (or `(dim,1)`
         in the sparse case).
         """
-        size, dim, elshape = _basis_constructor_dict[self.name].sizes(dim=self.state_space.dim, sparse=self.sparse)
-
-        #Check that sparse is True only when elements are *matrices*
-        assert(not self.sparse or len(elshape) == 2), "`sparse == True` is only allowed for *matrix*-valued bases!"
-
-        return elshape
+        return self._elshape
 
     @property
     def first_element_is_identity(self):
@@ -1134,14 +1145,16 @@ class BuiltinBasis(LazyBasis):
 
     def _lazy_build_elements(self):
         f = _basis_constructor_dict[self.name].constructor
-        cargs = {'dim': self.state_space.dim, 'sparse': self.sparse}
-        self._elements = _np.array(f(**cargs))  # a list of (dense) mxs -> ndarray (possibly sparse in future?)
+
+        cargs = {'dim': self._get_dimension_to_pass_to_constructor(), 'sparse': self.sparse}
+        self._elements = _np.array(f(**cargs))  # a list of (dense) mxs or vectors -> ndarray (possibly sparse in future?)
         assert(len(self._elements) == self.size), "Logic error: wrong number of elements were created!"
 
     def _lazy_build_labels(self):
         f = _basis_constructor_dict[self.name].labeler
-        cargs = {'dim': self.state_space.dim, 'sparse': self.sparse}
+        cargs = {'dim': self._get_dimension_to_pass_to_constructor(), 'sparse': self.sparse}
         self._labels = f(**cargs)
+        assert(len(self._labels) == self.size)
 
     def _copy_with_toggled_sparsity(self):
         return BuiltinBasis(self.name, self.state_space, not self.sparse)
@@ -1227,26 +1240,29 @@ class DirectSumBasis(LazyBasis):
         '''
         assert(len(component_bases) > 0), "Must supply at least one component basis"
 
-        self.component_bases = []
+        self._component_bases = []
         self._vector_elements = None  # vectorized elements: 1D arrays
 
         for compbasis in component_bases:
             if isinstance(compbasis, Basis):
-                self.component_bases.append(compbasis)
+                self._component_bases.append(compbasis)
             else:
                 #compbasis can be a list/tuple of args to Basis.cast, e.g. ('pp',2)
-                self.component_bases.append(Basis.cast(*compbasis))
+                self._component_bases.append(Basis.cast(*compbasis))
 
         if name is None:
-            name = "+".join([c.name for c in self.component_bases])
+            name = "+".join([c.name for c in self._component_bases])
         if longname is None:
             longname = "Direct-sum basis with components " + ", ".join(
-                [c.name for c in self.component_bases])
+                [c.name for c in self._component_bases])
 
-        real = all([c.real for c in self.component_bases])
-        sparse = all([c.sparse for c in self.component_bases])
-        assert(all([c.real == real for c in self.component_bases])), "Inconsistent `real` value among component bases!"
-        assert(all([c.sparse == sparse for c in self.component_bases])), "Inconsistent sparsity among component bases!"
+        real = all([c.real for c in self._component_bases])
+        sparse = all([c.sparse for c in self._component_bases])
+        assert(all([c.real == real for c in self._component_bases])), "Inconsistent `real` value among component bases!"
+        assert(all([c.sparse == sparse for c in self._component_bases])), "Inconsistent sparsity among component bases!"
+
+        #precompute various basis properties. can add more as they are deemed frequently accessed.
+        self._dim = sum([c.dim for c in self._component_bases])
 
         #Init everything but elements and labels & their number/size
         super(DirectSumBasis, self).__init__(name, longname, real, sparse)
@@ -1255,7 +1271,7 @@ class DirectSumBasis(LazyBasis):
         state = super()._to_nice_serialization()
         state.update({'name': self.name,
                       'longname': self.longname,
-                      'component_bases': [b.to_nice_serialization() for b in self.component_bases]
+                      'component_bases': [b.to_nice_serialization() for b in self._component_bases]
                       })
         return state
 
@@ -1265,20 +1281,25 @@ class DirectSumBasis(LazyBasis):
         return cls(component_bases, state['name'], state['longname'])
 
     @property
+    def component_bases(self):
+        """A list of the component bases."""
+        return self._component_bases
+
+    @property
     def dim(self):
         """
         The dimension of the vector space this basis fully or partially
         spans.  Equivalently, the length of the `vector_elements` of the
         basis.
         """
-        return sum([c.dim for c in self.component_bases])
+        return self._dim
 
     @property
     def size(self):
         """
         The number of elements (or vector-elements) in the basis.
         """
-        return sum([c.size for c in self.component_bases])
+        return sum([c.size for c in self._component_bases])
 
     @property
     def elshape(self):
@@ -1288,13 +1309,13 @@ class DirectSumBasis(LazyBasis):
         Note that *vector elements* always have shape `(dim,)` (or `(dim,1)`
         in the sparse case).
         """
-        elndim = len(self.component_bases[0].elshape)
-        assert(all([len(c.elshape) == elndim for c in self.component_bases])
+        elndim = len(self._component_bases[0].elshape)
+        assert(all([len(c.elshape) == elndim for c in self._component_bases])
                ), "Inconsistent element ndims among component bases!"
-        return tuple([sum([c.elshape[k] for c in self.component_bases]) for k in range(elndim)])
+        return tuple([sum([c.elshape[k] for c in self._component_bases]) for k in range(elndim)])
 
     def __hash__(self):
-        return hash(tuple((hash(comp) for comp in self.component_bases)))
+        return hash((self.name,)+tuple((hash(comp) for comp in self._component_bases)))
 
     def _lazy_build_vector_elements(self):
         if self.sparse:
@@ -1303,7 +1324,7 @@ class DirectSumBasis(LazyBasis):
             compMxs = _np.zeros((self.size, self.dim), 'complex')
 
         i, start = 0, 0
-        for compbasis in self.component_bases:
+        for compbasis in self._component_bases:
             for lbl, vel in zip(compbasis.labels, compbasis.vector_elements):
                 assert(_sps.issparse(vel) == self.sparse), "Inconsistent sparsity!"
                 if self.sparse:
@@ -1325,7 +1346,7 @@ class DirectSumBasis(LazyBasis):
             vstart = 0
             if self.sparse:  # build block-diagonal sparse mx
                 diagBlks = []
-                for compbasis in self.component_bases:
+                for compbasis in self._component_bases:
                     cs = compbasis.elshape
                     comp_vel = vel[vstart:vstart + compbasis.dim]
                     diagBlks.append(comp_vel.reshape(cs))
@@ -1335,7 +1356,7 @@ class DirectSumBasis(LazyBasis):
             else:
                 start = [0] * self.elndim
                 el = _np.zeros(self.elshape, 'complex')
-                for compbasis in self.component_bases:
+                for compbasis in self._component_bases:
                     cs = compbasis.elshape
                     comp_vel = vel[vstart:vstart + compbasis.dim]
                     slc = tuple([slice(start[k], start[k] + cs[k]) for k in range(self.elndim)])
@@ -1349,12 +1370,12 @@ class DirectSumBasis(LazyBasis):
 
     def _lazy_build_labels(self):
         self._labels = []
-        for i, compbasis in enumerate(self.component_bases):
+        for i, compbasis in enumerate(self._component_bases):
             for lbl in compbasis.labels:
                 self._labels.append(lbl + "/%d" % i)
 
     def _copy_with_toggled_sparsity(self):
-        return DirectSumBasis([cb._copy_with_toggled_sparsity() for cb in self.component_bases],
+        return DirectSumBasis([cb._copy_with_toggled_sparsity() for cb in self._component_bases],
                               self.name, self.longname)
 
     def is_equivalent(self, other, sparseness_must_match=True):
@@ -1376,9 +1397,9 @@ class DirectSumBasis(LazyBasis):
         """
         otherIsBasis = isinstance(other, DirectSumBasis)
         if not otherIsBasis: return False  # can't be equal to a non-DirectSumBasis
-        if len(self.component_bases) != len(other.component_bases): return False
+        if len(self._component_bases) != len(other.component_bases): return False
         return all([c1.is_equivalent(c2, sparseness_must_match)
-                    for (c1, c2) in zip(self.component_bases, other.component_bases)])
+                    for (c1, c2) in zip(self._component_bases, other.component_bases)])
 
     @property
     def vector_elements(self):
@@ -1469,7 +1490,7 @@ class DirectSumBasis(LazyBasis):
         -------
         DirectSumBasis
         """
-        equiv_components = [c.create_equivalent(builtin_basis_name) for c in self.component_bases]
+        equiv_components = [c.create_equivalent(builtin_basis_name) for c in self._component_bases]
         return DirectSumBasis(equiv_components)
 
     def create_simple_equivalent(self, builtin_basis_name=None):
@@ -1497,9 +1518,9 @@ class DirectSumBasis(LazyBasis):
         """
         if builtin_basis_name is None:
             builtin_basis_name = self.name  # default
-            if len(self.component_bases) > 0:
-                first_comp_name = self.component_bases[0].name
-                if all([c.name == first_comp_name for c in self.component_bases]):
+            if len(self._component_bases) > 0:
+                first_comp_name = self._component_bases[0].name
+                if all([c.name == first_comp_name for c in self._component_bases]):
                     builtin_basis_name = first_comp_name  # if all components have the same name
         return BuiltinBasis(builtin_basis_name, self.elsize, sparse=self.sparse)  # Note: changes dimension
 
@@ -1554,24 +1575,36 @@ class TensorProdBasis(LazyBasis):
         '''
         assert(len(component_bases) > 0), "Must supply at least one component basis"
 
-        self.component_bases = []
+        self._component_bases = []
         for compbasis in component_bases:
             if isinstance(compbasis, Basis):
-                self.component_bases.append(compbasis)
+                self._component_bases.append(compbasis)
             else:
                 #compbasis can be a list/tuple of args to Basis.cast, e.g. ('pp',2)
-                self.component_bases.append(Basis.cast(*compbasis))
+                self._component_bases.append(Basis.cast(*compbasis))
 
         if name is None:
-            name = "*".join([c.name for c in self.component_bases])
+            name = "*".join([c.name for c in self._component_bases])
         if longname is None:
             longname = "Tensor-product basis with components " + ", ".join(
-                [c.name for c in self.component_bases])
+                [c.name for c in self._component_bases])
 
-        real = all([c.real for c in self.component_bases])
-        sparse = all([c.sparse for c in self.component_bases])
-        #assert(all([c.real == real for c in self.component_bases])), "Inconsistent `real` value among component bases!"
-        assert(all([c.sparse == sparse for c in self.component_bases])), "Inconsistent sparsity among component bases!"
+        real = all([c.real for c in self._component_bases])
+        sparse = all([c.sparse for c in self._component_bases])
+        #assert(all([c.real == real for c in self._component_bases])), "Inconsistent `real` value among component bases!"
+        assert(all([c.sparse == sparse for c in self._component_bases])), "Inconsistent sparsity among component bases!"
+
+        #precompute certain properties. Can add more as deemed frequently accessed.
+        self._dim = int(_np.prod([c.dim for c in self._component_bases]))
+
+        #NOTE: this is actually to restrictive -- what we need is a test/flag for whether the elements of a
+        # basis are in their "natrual" representation where it makes sense to take tensor products.  For
+        # example, a direct-sum basis may hold elements in a compact way that violate this... but I'm not sure if they
+        # do and this needs to be checked.  For now, we could just disable this overly-restrictive assert:
+        assert(all([c.is_simple() for c in self._component_bases])), \
+            "Components of a tensor product basis must be *simple* (have vector-dimension == size of elements)"
+        # because we use the natural representation to take tensor (kronecker) products.
+        # Note: this assertion also means dim == product(component_elsizes) == elsize, so basis is *simple*
 
         super(TensorProdBasis, self).__init__(name, longname, real, sparse)
 
@@ -1579,7 +1612,7 @@ class TensorProdBasis(LazyBasis):
         state = super()._to_nice_serialization()
         state.update({'name': self.name,
                       'longname': self.longname,
-                      'component_bases': [b.to_nice_serialization() for b in self.component_bases]
+                      'component_bases': [b.to_nice_serialization() for b in self._component_bases]
                       })
         return state
 
@@ -1589,31 +1622,25 @@ class TensorProdBasis(LazyBasis):
         return cls(component_bases, state['name'], state['longname'])
 
     @property
+    def component_bases(self):
+        """A list of the component bases."""
+        return self._component_bases
+
+    @property
     def dim(self):
         """
         The dimension of the vector space this basis fully or partially
         spans.  Equivalently, the length of the `vector_elements` of the
         basis.
         """
-        dim = int(_np.prod([c.dim for c in self.component_bases]))
-
-        #NOTE: this is actually to restrictive -- what we need is a test/flag for whether the elements of a
-        # basis are in their "natrual" representation where it makes sense to take tensor products.  For
-        # example, a direct-sum basis may hold elements in a compact way that violate this... but I'm not sure if they
-        # do and this needs to be checked.  For now, we could just disable this overly-restrictive assert:
-        assert(all([c.is_simple() for c in self.component_bases])), \
-            "Components of a tensor product basis must be *simple* (have vector-dimension == size of elements)"
-        # because we use the natural representation to take tensor (kronecker) products.
-        # Note: this assertion also means dim == product(component_elsizes) == elsize, so basis is *simple*
-
-        return dim
+        return self._dim
 
     @property
     def size(self):
         """
         The number of elements (or vector-elements) in the basis.
         """
-        return int(_np.prod([c.size for c in self.component_bases]))
+        return int(_np.prod([c.size for c in self._component_bases]))
 
     @property
     def elshape(self):
@@ -1623,16 +1650,16 @@ class TensorProdBasis(LazyBasis):
         Note that *vector elements* always have shape `(dim,)` (or `(dim,1)`
         in the sparse case).
         """
-        elndim = max([c.elndim for c in self.component_bases])
+        elndim = max([c.elndim for c in self._component_bases])
         elshape = [1] * elndim
-        for c in self.component_bases:
+        for c in self._component_bases:
             off = elndim - c.elndim
             for k, d in enumerate(c.elshape):
                 elshape[k + off] *= d
         return tuple(elshape)
 
     def __hash__(self):
-        return hash(tuple((hash(comp) for comp in self.component_bases)))
+        return hash((self.name,) + tuple((hash(comp) for comp in self._component_bases)))
 
     def _lazy_build_elements(self):
         #LAZY building of elements (in case we never need them)
@@ -1644,7 +1671,7 @@ class TensorProdBasis(LazyBasis):
         #Take kronecker product of *natural* reps of component-basis elements
         # then reshape to vectors at the end.  This requires that the vector-
         # dimension of the component spaces equals the "natural space" dimension.
-        comp_els = [c.elements for c in self.component_bases]
+        comp_els = [c.elements for c in self._component_bases]
         for i, factors in enumerate(_itertools.product(*comp_els)):
             if self.sparse:
                 M = _sps.identity(1, 'complex', 'csr')
@@ -1660,12 +1687,12 @@ class TensorProdBasis(LazyBasis):
 
     def _lazy_build_labels(self):
         self._labels = []
-        comp_lbls = [c.labels for c in self.component_bases]
+        comp_lbls = [c.labels for c in self._component_bases]
         for i, factor_lbls in enumerate(_itertools.product(*comp_lbls)):
             self._labels.append(''.join(factor_lbls))
 
     def _copy_with_toggled_sparsity(self):
-        return TensorProdBasis([cb._copy_with_toggled_sparsity() for cb in self.component_bases],
+        return TensorProdBasis([cb._copy_with_toggled_sparsity() for cb in self._component_bases],
                                self.name, self.longname)
 
     def is_equivalent(self, other, sparseness_must_match=True):
@@ -1687,10 +1714,10 @@ class TensorProdBasis(LazyBasis):
         """
         otherIsBasis = isinstance(other, TensorProdBasis)
         if not otherIsBasis: return False  # can't be equal to a non-DirectSumBasis
-        if len(self.component_bases) != len(other.component_bases): return False
+        if len(self._component_bases) != len(other.component_bases): return False
         if self.sparse != other.sparse: return False
         return all([c1.is_equivalent(c2, sparseness_must_match)
-                    for (c1, c2) in zip(self.component_bases, other.component_bases)])
+                    for (c1, c2) in zip(self._component_bases, other.component_bases)])
 
     def create_equivalent(self, builtin_basis_name):
         """
@@ -1714,11 +1741,11 @@ class TensorProdBasis(LazyBasis):
         # This is a part of what woudl go into that... but it's not complete.
         # if builtin_basis_name == 'std':  # special case when we change classical components to 'cl'
         #     equiv_components = []
-        #     for c in self.component_bases:
+        #     for c in self._component_bases:
         #         if c.elndim == 1: equiv_components.append(c.create_equivalent('cl'))
         #         else: equiv_components.append(c.create_equivalent('std'))
         # else:
-        equiv_components = [c.create_equivalent(builtin_basis_name) for c in self.component_bases]
+        equiv_components = [c.create_equivalent(builtin_basis_name) for c in self._component_bases]
         return TensorProdBasis(equiv_components)
 
     def create_simple_equivalent(self, builtin_basis_name=None):
@@ -1746,7 +1773,7 @@ class TensorProdBasis(LazyBasis):
         """
         #if builtin_basis_name == 'std':  # special case when we change classical components to 'clmx'
         #    equiv_components = []
-        #    for c in self.component_bases:
+        #    for c in self._component_bases:
         #        if c.elndim == 1: equiv_components.append(BuiltinBasis('clmx', c.dim**2, sparse=self.sparse))
         #        # c.create_simple_equivalent('clmx'))
         #        else: equiv_components.append(c.create_simple_equivalent('std'))
@@ -1755,8 +1782,8 @@ class TensorProdBasis(LazyBasis):
 
         if builtin_basis_name is None:
             builtin_basis_name = self.name  # default
-            if len(self.component_bases) > 0:
-                first_comp_name = self.component_bases[0].name
-                if all([c.name == first_comp_name for c in self.component_bases]):
+            if len(self._component_bases) > 0:
+                first_comp_name = self._component_bases[0].name
+                if all([c.name == first_comp_name for c in self._component_bases]):
                     builtin_basis_name = first_comp_name  # if all components have the same name
         return BuiltinBasis(builtin_basis_name, self.elsize, sparse=self.sparse)

@@ -445,6 +445,34 @@ Circuit_avg_gate_infidelity = _modf.modelfn_factory(circuit_avg_gate_infidelity)
 # init args == (model_a, model_b, circuit)
 
 
+def circuit_generator_infidelity(model_a, model_b, circuit):
+    """
+    Generator infidelity between productA(circuit) and productB(circuit).
+
+    Parameters
+    ----------
+    model_a : Model
+        The first model (to evaluate productA)
+
+    model_b : Model
+        The second model (to evaluate productB)
+
+    circuit : Circuit
+        The circuit.
+
+    Returns
+    -------
+    float
+    """
+    A = model_a.sim.product(circuit)  # "gate"
+    B = model_b.sim.product(circuit)  # "target gate"
+    return generator_infidelity(A, B, model_b.basis)
+
+
+Circuit_generator_infidelity = _modf.modelfn_factory(circuit_generator_infidelity)
+# init args == (model_a, model_b, circuit)
+
+
 def circuit_jtrace_diff(model_a, model_b, circuit):
     """
     Jamiolkowski trace distance between productA(circuit) and productB(circuit)
@@ -1578,6 +1606,37 @@ Avg_gate_infidelity = _modf.opsfn_factory(avg_gate_infidelity)
 # init args == (model1, model2, op_label)
 
 
+def generator_infidelity(a, b, mx_basis):
+    """
+    Returns the generator infidelity between a and b, where b is the "target" operation.
+    Generator infidelity is given by the sum of the squared hamiltonian error generator
+    rates plus the sum of the stochastic error generator rates.
+
+    GI = sum_k(H_k**2) + sum_k(S_k)
+
+    Parameters
+    ----------
+    a : numpy.ndarray
+        The first process (transfer) matrix.
+
+    b : numpy.ndarray
+        The second process (transfer) matrix.
+
+    mx_basis : mx_basis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The basis that `a` and `b` are in. Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).
+
+    Returns
+    -------
+    float
+    """
+
+    return _tools.generator_infidelity(a, b, mx_basis)
+
+Generator_infidelity = _modf.opsfn_factory(generator_infidelity)
+# init args == (model1, model2, op_label)
+
 def model_model_angles_btwn_axes(a, b, mx_basis):  # Note: default 'gm' basis
     """
     Angle between the rotation axes of a and b (1-qubit gates)
@@ -1814,33 +1873,15 @@ def errorgen_and_projections(errgen, mx_basis):
             ca_mx[i, j] = Cproj.get(_LEEL('C', (lbl1, lbl2)), 0.0)  # upper triangle == C
             ca_mx[j, i] = Aproj.get(_LEEL('A', (lbl1, lbl2)), 0.0)  # lower triangle == A
     ret['CA projections'] = ca_mx
-    return ret
 
-    #OLD REMOVE
-    #proj, scale = \
-    #    _tools.std_errorgen_projections(
-    #        errgen, "hamiltonian", mx_basis, mx_basis, return_scale_fctr=True)
-    #ret['hamiltonian projections'] = proj
-    #ret['hamiltonian projection power'] = float(_np.sum(proj**2) * scale**2) / egnorm**2 \
-    #    if (abs(scale) > 1e-8 and abs(egnorm) > 1e-8) else 0
-    ##sum of squared projections of normalized error generator onto normalized projectors
-    #
-    #proj, scale = \
-    #    _tools.std_errorgen_projections(
-    #        errgen, "stochastic", mx_basis, mx_basis, return_scale_fctr=True)
-    #ret['stochastic projections'] = proj
-    #ret['stochastic projection power'] = float(_np.sum(proj**2) * scale**2) / egnorm**2 \
-    #    if (abs(scale) > 1e-8 and abs(egnorm) > 1e-8) else 0
-    ##sum of squared projections of normalized error generator onto normalized projectors
-    #
-    #proj, scale = \
-    #    _tools.std_errorgen_projections(
-    #        errgen, "affine", mx_basis, mx_basis, return_scale_fctr=True)
-    #ret['affine projections'] = proj
-    #ret['affine projection power'] = float(_np.sum(proj**2) * scale**2) / egnorm**2 \
-    #    if (abs(scale) > 1e-8 and abs(egnorm) > 1e-8) else 0
-    ##sum of squared projections of normalized error generator onto normalized projectors
-    #return ret
+    #add in a calculation of the contributions to the generator infidelity for H and S.
+    H_gen_infdl = _np.sum(ret['H projections']**2)
+    S_gen_infdl = _np.sum(ret['S projections'])
+    gen_infdl = H_gen_infdl + S_gen_infdl
+    ret['H generator infidelity contribution'] = H_gen_infdl/gen_infdl
+    ret['S generator infidelity contribution'] = S_gen_infdl/gen_infdl
+    
+    return ret
 
 
 def log_tig_and_projections(a, b, mx_basis):
@@ -2218,9 +2259,7 @@ def predicted_rb_number(model_a, model_b):
     -------
     float
     """
-    #TEMPORARILY disabled b/c RB analysis is broken
-    #from ..extras.rb import theory as _rbtheory
-    return -1.0  # _rbtheory.predicted_rb_number(model_a, model_b)
+    return _tools.rbtheory.predicted_rb_number(model_a, model_b)
 
 
 Predicted_rb_number = _modf.modelfn_factory(predicted_rb_number)
@@ -2370,6 +2409,7 @@ def info_of_opfn_by_name(name):
 
         - "inf" :     entanglement infidelity
         - "agi" :     average gate infidelity
+        - "geni" :    generator infidelity
         - "trace" :   1/2 trace distance
         - "diamond" : 1/2 diamond norm distance
         - "nuinf" :   non-unitary entanglement infidelity
@@ -2393,6 +2433,10 @@ def info_of_opfn_by_name(name):
                 "1.0 - <psi| 1 x Lambda(psi) |psi>"),
         "agi": ("Avg. Gate|Infidelity",
                 "d/(d+1) (entanglement infidelity)"),
+        "geni": ('Generator|Infidelity',
+                 'sum_k (theta_k^2 + epsilon_k)  '
+                 'where theta_k and epsilon_k are the hamiltonan and stochastic error rates '
+                 'respectively'),
         "trace": ("1/2 Trace|Distance",
                   "0.5 | Chi(A) - Chi(B) |_tr"),
         "diamond": ("1/2 Diamond-Dist",
@@ -2467,6 +2511,9 @@ def evaluate_opfn_by_name(name, model, target_model, op_label_or_string,
     elif name == "agi":
         fn = Avg_gate_infidelity if b else \
             Circuit_avg_gate_infidelity
+    elif name == 'geni':
+        fn = Generator_infidelity if b else \
+            Circuit_generator_infidelity
     elif name == "trace":
         fn = Jt_diff if b else \
             Circuit_jt_diff

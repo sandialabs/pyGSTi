@@ -265,6 +265,10 @@ def gaugeopt_custom(model, objective_fn, gauge_group=None,
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, comm)
     tStart = _time.time()
 
+    #replace model with a new copy of itself so as to not propagate the conversion back to the 
+    #instance of the model object we are gauge optimizing.
+    model = model.copy()
+
     if comm is not None:
         mdl_cmp = comm.bcast(model if (comm.Get_rank() == 0) else None, root=0)
         try:
