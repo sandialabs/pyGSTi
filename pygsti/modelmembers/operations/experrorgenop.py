@@ -18,8 +18,10 @@ import scipy.linalg as _spl
 import scipy.sparse as _sps
 import scipy.sparse.linalg as _spsl
 
+from typing import Union
 from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
-from pygsti.modelmembers.operations.lindbladerrorgen import LindbladParameterization as _LindbladParameterization
+from pygsti.modelmembers.operations.lindbladerrorgen import LindbladErrorgen as _LindbladErrorgen
+from pygsti.modelmembers.operations.embeddederrorgen import EmbeddedErrorgen as _EmbeddedErrorGen
 from pygsti.modelmembers import modelmember as _modelmember, term as _term
 from pygsti.modelmembers.errorgencontainer import ErrorGeneratorContainer as _ErrorGeneratorContainer
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
@@ -44,7 +46,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         operator is `exp(L)`.
     """
 
-    def __init__(self, errorgen):
+    def __init__(self, errorgen : Union[_LindbladErrorgen, _EmbeddedErrorGen]):
         # Extract superop dimension from 'errorgen'
         state_space = errorgen.state_space
         self.errorgen = errorgen  # don't copy (allow object reuse)
