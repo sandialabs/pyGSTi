@@ -16,6 +16,7 @@ import itertools as _itertools
 import warnings as _warnings
 
 import numpy as _np
+import scipy.linalg as _la
 
 from pygsti.baseobjs import basisconstructors as _bc
 from pygsti.tools import matrixtools as _mt
@@ -609,17 +610,13 @@ class ExplicitOpModelCalc(object):
         else:
             orthog_to = gauge_space
 
-        #OLD: nongauge_space = _mt.nullspace(orthog_to.T) #cols are non-gauge directions
-        nongauge_space = _mt.nullspace_qr(orthog_to.T)  # cols are non-gauge directions
-        # print("DB: nullspace of gen_dG (shape = %s, rank=%d) = %s" \
-        #       % (str(gen_dG.shape),_np.linalg.matrix_rank(gen_dG),str(gen_ndG.shape)))
+        u,s,_ = _la.svd(orthog_to, full_matrices=True, compute_uv=True)
+        TOL = 1e-7
+        r = _np.count_nonzero(s >= TOL*s[0])
+        gauge_space    = u[:, :r]
+        nongauge_space = u[:, r:] 
 
-        #REMOVE
-        ## reduce gen_dG if it doesn't have full rank
-        #u, s, vh = _np.linalg.svd(gen_dG, full_matrices=False)
-        #rank = _np.count_nonzero(s > P_RANK_TOL)
-        #if rank < gen_dG.shape[1]:
-        #    gen_dG = u[:, 0:rank]
+        #OLD: nongauge_space = _mt.nullspace(orthog_to.T) #cols are non-gauge directions
 
         assert(nongauge_space.shape[0] == gauge_space.shape[0] == nongauge_space.shape[1] + gauge_space.shape[1])
         return nongauge_space, gauge_space
