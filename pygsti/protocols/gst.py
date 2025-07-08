@@ -984,7 +984,8 @@ class GSTGaugeOptSuite(_NicelySerializable):
 
         return gaugeopt_suite_dict
 
-    def _update_gaugeopt_dict_from_suitename(self, gaugeopt_suite_dict, root_lbl, suite_name, model,
+    @staticmethod
+    def _update_gaugeopt_dict_from_suitename(gaugeopt_suite_dict, root_lbl, suite_name, model,
                                              unreliable_ops, printer):
         if suite_name in ("stdgaugeopt", "stdgaugeopt-unreliable2Q", "stdgaugeopt-tt", "stdgaugeopt-safe",
                           "stdgaugeopt-noconversion", "stdgaugeopt-noconversion-safe"):
