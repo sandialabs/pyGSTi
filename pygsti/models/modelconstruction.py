@@ -37,6 +37,7 @@ from pygsti.models import explicitmodel as _emdl
 from pygsti.models import gaugegroup as _gg
 from pygsti.models.localnoisemodel import LocalNoiseModel as _LocalNoiseModel
 from pygsti.models.cloudnoisemodel import CloudNoiseModel as _CloudNoiseModel
+from pygsti.models.singlequbitequivalencerules import EquivalentClassesLocalNoiseModel as _EquivalentClassesLocalNoiseModel
 from pygsti.baseobjs import label as _label
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.baseobjs.basis import Basis as _Basis
@@ -1524,6 +1525,52 @@ def _setup_local_gates(processor_spec, evotype, modelnoise=None, custom_gates=No
                 if (noiseop is not None) else ideal_factory
     return gatedict
 
+def _create_crosstalk_free_model_with_equivalent_clases(qudit_to_spatially_equivalent_qudit ,processor_spec, modelnoise, custom_gates=None, evotype="default", simulator="auto",
+                                 on_construction_error='raise', independent_gates=False, independent_spam=True,
+                                 ensure_composed_gates=False, ideal_gate_type='auto', ideal_prep_type='auto',
+                                 ideal_povm_type='auto', implicit_idle_mode='none', basis='pp') -> _EquivalentClassesLocalNoiseModel:
+    """
+    Create a n-qudit "crosstalk-free" model while assuming that certain qudits are spatially equivalent for 1 qudit gates.
+
+    Similar to :meth:`create_crosstalk_free_model` but the noise is input more generally,
+    as a :class:`ModelNoise` object.  Arguments are the same as this function except that
+    `modelnoise` is given instead of several more specific noise-describing arguments.
+
+    Returns
+    -------
+    EquivalentClassesLocalNoiseModel
+    """
+
+    qudit_labels = processor_spec.qudit_labels
+    state_space = _statespace.QubitSpace(qudit_labels) if all([udim == 2 for udim in processor_spec.qudit_udims]) \
+        else _statespace.QuditSpace(qudit_labels, processor_spec.qudit_udims)
+    evotype = _Evotype.cast(evotype, state_space=state_space)
+    modelnoise = _OpModelNoise.cast(modelnoise)
+    modelnoise.reset_access_counters()
+
+    if ideal_gate_type == "auto":
+        ideal_gate_type = ('static standard', 'static clifford', 'static unitary')
+    if ideal_prep_type == "auto":
+        ideal_prep_type = _state.state_type_from_op_type(ideal_gate_type)
+    if ideal_povm_type == "auto":
+        ideal_povm_type = _povm.povm_type_from_op_type(ideal_gate_type)
+
+    gatedict = _setup_local_gates(processor_spec, evotype, modelnoise, custom_gates, ideal_gate_type, basis)
+
+    # (Note: global idle is now handled through processor-spec processing)
+
+    # SPAM:
+    local_noise = True
+    prep_layers, povm_layers = _create_spam_layers(processor_spec, modelnoise, local_noise,
+                                                   ideal_prep_type, ideal_povm_type, evotype,
+                                                   state_space, independent_spam, basis)
+
+    modelnoise.warn_about_zero_counters()
+    return _EquivalentClassesLocalNoiseModel(qudit_to_spatially_equivalent_qudit, processor_spec, gatedict, prep_layers, povm_layers,
+                            evotype, simulator, on_construction_error,
+                            independent_gates, ensure_composed_gates,
+                            implicit_idle_mode)
+
 
 def create_crosstalk_free_model(processor_spec, custom_gates=None,
                                 depolarization_strengths=None, stochastic_error_probs=None, lindblad_error_coeffs=None,
@@ -1532,7 +1579,7 @@ def create_crosstalk_free_model(processor_spec, custom_gates=None,
                                 evotype="default", simulator="auto", on_construction_error='raise',
                                 independent_gates=False, independent_spam=True, ensure_composed_gates=False,
                                 ideal_gate_type='auto', ideal_spam_type='computational', implicit_idle_mode='none',
-                                basis='pp'):
+                                basis='pp', qudit_to_equivalent_qudit:dict[int, int] = None):
     """
     Create a n-qudit "crosstalk-free" model.
 
@@ -1677,6 +1724,12 @@ def create_crosstalk_free_model(processor_spec, custom_gates=None,
     modelnoise = _build_modelnoise_from_args(depolarization_strengths, stochastic_error_probs, lindblad_error_coeffs,
                                              depolarization_parameterization, stochastic_parameterization,
                                              lindblad_parameterization, allow_nonlocal=False)
+
+    if qudit_to_equivalent_qudit:
+        return _create_crosstalk_free_model_with_equivalent_clases(qudit_to_equivalent_qudit, processor_spec, modelnoise, custom_gates, evotype,
+                                                                   simulator, on_construction_error, independent_gates, independent_spam,
+                                                                   ensure_composed_gates, ideal_gate_type, ideal_spam_type, ideal_spam_type, implicit_idle_mode, basis)
+    
 
     return _create_crosstalk_free_model(processor_spec, modelnoise, custom_gates, evotype,
                                         simulator, on_construction_error, independent_gates, independent_spam,

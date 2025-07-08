@@ -21,7 +21,9 @@ from pygsti.forwardsims.distforwardsim import DistributableForwardSimulator as _
 from pygsti.forwardsims.forwardsim import ForwardSimulator as _ForwardSimulator
 from pygsti.forwardsims.forwardsim import _bytes_for_array_types
 from pygsti.layouts.evaltree import EvalTree as _EvalTree
+from pygsti.layouts.evaltree import EvalTreeBasedUponLongestCommonSubstring as _EvalTreeLCS
 from pygsti.layouts.matrixlayout import MatrixCOPALayout as _MatrixCOPALayout
+from pygsti.layouts.matrixlayout import _MatrixCOPALayoutAtomWithLCS
 from pygsti.baseobjs.profiler import DummyProfiler as _DummyProfiler
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
@@ -3673,3 +3675,94 @@ class NicksMatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixFo
                                                   layout.resource_alloc())
         return self._bulk_fill_timedep_dobjfn(raw_obj, array_to_fill, layout, ds_circuits, num_total_outcomes,
                                               dataset, ds_cache)
+
+
+class LCSEvalTreeMatrixForwardSimulator(MatrixForwardSimulator):
+
+    def bulk_product(self, circuits, scale=False, resource_alloc=None):
+        """
+        Compute the products of many circuits at once.
+
+        Parameters
+        ----------
+        circuits : list of Circuits
+            The circuits to compute products for.  These should *not* have any preparation or
+            measurement layers.
+
+        scale : bool, optional
+            When True, return a scaling factor (see below).
+
+        resource_alloc : ResourceAllocation
+            Available resources for this computation. Includes the number of processors
+            (MPI comm) and memory limit.
+
+        Returns
+        -------
+        prods : numpy array
+            Array of shape S x G x G, where:
+            - S == the number of operation sequences
+            - G == the linear dimension of a operation matrix (G x G operation matrices).
+        scaleValues : numpy array
+            Only returned when scale == True. A length-S array specifying
+            the scaling that needs to be applied to the resulting products
+            (final_product[i] = scaleValues[i] * prods[i]).
+        """
+        resource_alloc = _ResourceAllocation.cast(resource_alloc)
+        nCircuits = len(circuits)
+
+        eval_tree = _EvalTreeLCS(circuits)
+        prodCache = eval_tree.fill_out_circuit_cache(self.model)
+        Gs = prodCache[0:nCircuits]
+
+
+        return Gs
+
+    def _bulk_fill_probs_atom(self, array_to_fill, layout_atom: _MatrixCOPALayoutAtomWithLCS, resource_alloc):
+        
+        # Overestimate the amount of cache usage by assuming everything is the same size.
+        dim = self.model.evotype.minimal_dim(self.model.state_space)
+        resource_alloc.check_can_allocate_memory(len(layout_atom.tree.cache) * dim**2)  # prod cache
+
+        prodCache = layout_atom.tree.collapse_circuits_to_process_matrices(self.model)
+        Gs = layout_atom.tree.reconstruct_full_matrices(prodCache)
+        old_err = _np.seterr(over='ignore')
+        for spam_tuple, (element_indices, tree_indices) in layout_atom.indices_by_spamtuple.items():
+            # "element indices" index a circuit outcome probability in array_to_fill's first dimension
+            # "tree indices" index a quantity for a no-spam circuit in a computed cache, which correspond
+            #  to the the element indices when `spamtuple` is used.
+            # (Note: *don't* set dest_indices arg = layout.element_slice, as this is already done by caller)
+            rho, E = self._rho_e_from_spam_tuple(spam_tuple)
+            _fas(array_to_fill, [element_indices],
+                 self._probs_from_rho_e(rho, E, Gs[tree_indices], 1))
+        _np.seterr(**old_err)
+
+    def _bulk_fill_dprobs_atom(self, array_to_fill, dest_param_slice, layout_atom: _MatrixCOPALayoutAtomWithLCS, param_slice, resource_alloc):
+
+        
+        eps = 1e-7  # hardcoded?
+        if param_slice is None:
+            param_slice = slice(0, self.model.num_params)
+        param_indices = _slct.to_array(param_slice)
+
+        if dest_param_slice is None:
+            dest_param_slice = slice(0, len(param_indices))
+        dest_param_indices = _slct.to_array(dest_param_slice)
+
+        iParamToFinal = {i: dest_param_indices[ii] for ii, i in enumerate(param_indices)}
+
+        probs = _np.empty(layout_atom.num_elements, 'd')
+        self._bulk_fill_probs_atom(probs, layout_atom, resource_alloc)
+
+        probs2 = _np.empty(layout_atom.num_elements, 'd')
+        orig_vec = self.model.to_vector().copy()
+
+        for i in range(self.model.num_params):
+            if i in iParamToFinal:
+                iFinal = iParamToFinal[i]
+                vec = orig_vec.copy(); vec[i] += eps
+                self.model.from_vector(vec, close=True)
+                self._bulk_fill_probs_atom(probs2, layout_atom)
+                array_to_fill[:, iFinal] = (probs2 - probs) / eps
+
+    def create_layout(self, circuits, dataset=None, resource_alloc=None, array_types=('E', ), derivative_dimensions=None, verbosity=0, layout_creation_circuit_cache=None):
+        return super().create_layout(circuits, dataset, resource_alloc, array_types, derivative_dimensions, verbosity, layout_creation_circuit_cache)
