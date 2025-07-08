@@ -139,7 +139,8 @@ class Label(object):
                 return LabelStr.init(name, time)
 
         else:
-            if args is not None: return LabelTupWithArgs.init(name, state_space_labels, time, args)
+            if args is not None:
+                return LabelTupWithArgs.init(name, state_space_labels, time, args)
             else:
                 if time == 0.0:
                     return LabelTup.init(name, state_space_labels)
