@@ -30,6 +30,7 @@ from .algorithms.grammatrix import *
 from pygsti.tools.gatetools import *  # *_qubit_gate fns
 from .drivers import *
 from .tools import *
+import enums
 # NUMPY BUG FIX (imported from tools)
 from pygsti.baseobjs._compatibility import _numpy14einsumfix
 

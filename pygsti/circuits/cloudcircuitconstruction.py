@@ -1261,7 +1261,7 @@ def _compute_reps_for_synthetic_idle(model, germ_str, nqubits, core_qubits):
     for gl in germ_str:
         if gl not in core_gates:
             core_gates[gl] = extract_gate(model.operation_blks['layers'][gl])
-        product = _np.dot(core_gates[gl].to_dense(SpaceConversionType.HilbertSchmidt'), product)
+        product = _np.dot(core_gates[gl].to_dense(SpaceConversionType.HilbertSchmidt), product)
 
     # Then just do matrix products until we hit the identity (or a large order)
     reps = 1; target = _np.identity(core_dim, 'd')
