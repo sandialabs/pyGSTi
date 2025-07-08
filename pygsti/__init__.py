@@ -19,6 +19,7 @@ from . import processors
 from . import protocols
 from . import report as rpt
 from . import serialization
+from . import enums
 
 # Import the most important/useful routines of each module/sub-package
 # into the package namespace
@@ -30,7 +31,7 @@ from .algorithms.grammatrix import *
 from pygsti.tools.gatetools import *  # *_qubit_gate fns
 from .drivers import *
 from .tools import *
-import enums
+
 # NUMPY BUG FIX (imported from tools)
 from pygsti.baseobjs._compatibility import _numpy14einsumfix
 
