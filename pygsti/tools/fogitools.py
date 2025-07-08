@@ -70,7 +70,12 @@ class FOGICheckpoint(_NicelySerializable):
         param_interposer = None if state['param_interposer'] is None else _LinearInterposer.from_nice_serialization(state['param_interposer'])
         fogi_store = None if state['fogi_store'] is None else _fogistore.FirstOrderGaugeInvariantStore.from_nice_serialization(state['fogi_store'])
         return cls(step, param_interposer=param_interposer, fogi_store=fogi_store, allowed_row_basis_labels=allowed_row_basis_labels,gauge_action_matrices=gauge_action_matrices,gauge_action_gauge_spaces=gauge_action_gauge_spaces)
-    
+
+class FOGIQuantitiesCheckpoint(_NicelySerializable):
+    def __init__(self, fogi_dirs):
+        super().__init__()
+        self.fogi_dirs = fogi_dirs
+        
 def first_order_gauge_action_matrix(clifford_superop_mx, target_sslbls, model_state_space,
                                     elemgen_gauge_basis, elemgen_row_basis):
     """
@@ -697,9 +702,8 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                             new_fogi_dirs[op_errgen_indices[ol], :] = local_fogi_dirs[off:off + n, :]; off += n
                         new_fogi_dirs = new_fogi_dirs.tocsc()
 
-                        # figure out which directions are independent
+                        # figure out which directions are independent #BOTTLENECK
                         indep_cols = _mt.independent_columns(new_fogi_dirs, fogi_dirs)
-                        #FOGI DEBUG print(" ==> %d independent columns" % len(indep_cols))
 
                         if dependent_fogi_action == "drop":
                             dep_cols_to_add = []
