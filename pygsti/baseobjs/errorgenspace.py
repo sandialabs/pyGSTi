@@ -94,7 +94,16 @@ class ErrorgenSpace(_NicelySerializable):
         return ErrorgenSpace(intersection_vecs, common_basis)
 
     def __eq__(self, other):
+        """Compare self with other. Return true only if they are identical, including the order of their vectors.
 
+        Args:
+            other (ExplicitElementaryErrorgenBasis): Error generator basis to compare against
+
+        Returns:
+            Boolean: True if they are identical, False otherwise
+        """
+        if not isinstance(other, ErrorgenSpace):
+            return False
         return _np.allclose(self.vectors, other.vectors) and self.elemgen_basis.__eq__(other.elemgen_basis)
     def union(self, other_space):
         """
