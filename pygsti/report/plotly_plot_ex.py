@@ -11,9 +11,7 @@ Extends Plolty python library for additional needed functionality.
 #***************************************************************************************************
 
 import os as _os
-#from plotly.offline.offline import get_plotlyjs
-#from plotly.offline.offline import __PLOTLY_OFFLINE_INITIALIZED
-#from pkg_resources import resource_string
+
 DEFAULT_PLOTLY_TEMPLATE = 'none'
 
 # Try to set the default plotly template.  This isn't essential, but makes the
@@ -274,7 +272,7 @@ def init_notebook_mode_ex(connected=False):
             'requirejs.config({'
             'paths: { '
             # Note we omit the extension .js because require will include it.
-            '\'plotly\': [\'https://cdn.plot.ly/plotly-latest.min\']},'
+            '\'plotly\': [\'https://cdn.plot.ly/plotly-3.0.1.min.js\']},'
             '});'
             'if(!window.Plotly) {{'
             'require([\'plotly\'],'
@@ -312,12 +310,12 @@ def format_plotlylib_inclusion_js():
     str
     """
     path = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
-                         "templates", "offline", "plotly-latest.min.js")  # "plotly-polarfixed.js"
+                         "templates", "offline", "plotly-3.0.1.min.js")
 
     #EGN this block mocks-up resource_string to also work when using a
     # local package... could look into whether this is unecessary if we
     # just do a "pip -e pygsti" install instead of install_locally.py...
-    with open(path) as f:
+    with open(path, 'r', encoding='utf-8') as f:
         plotlyjs = f.read()
         try:  # to convert to unicode since we use unicode literals
             plotlyjs = plotlyjs.decode('utf-8')
