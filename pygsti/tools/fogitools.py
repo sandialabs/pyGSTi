@@ -70,7 +70,7 @@ def first_order_gauge_action_matrix(clifford_superop_mx, target_sslbls, model_st
         # - a full basis for gauge_action_deriv
         #global_row_space.add_labels(row_space.labels)  # labels would need to contain sslbls too
         action_row_labels = action_row_basis.labels
-        global_row_indices = elemgen_row_basis.label_indices(action_row_labels, ok_if_missing=True)
+        global_row_indices = elemgen_row_basis.label_indices(action_row_labels, ok_if_missing=True) 
 
         #DEBUG REMOVE
         #db_num_skipped = db_num_nonzero = 0
