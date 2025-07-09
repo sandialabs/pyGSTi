@@ -7,6 +7,9 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 """ A Python implementation of LinearOperator Set Tomography """
+from .typing import (
+    SpaceT
+)
 
 from . import baseobjs
 from . import algorithms as alg
