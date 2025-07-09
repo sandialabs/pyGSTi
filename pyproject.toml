@@ -52,8 +52,7 @@ classifiers=[
 
 [project.optional-dependencies]
 diamond_norm = [
-    'cvxopt',
-    'cvxpy'
+    'cvxpy>=1.4.0'
 ]
 evolutionary_optimization = ['deap']
 extensions = ['cython']
