@@ -97,7 +97,7 @@ class ErrorgenSpace(_NicelySerializable):
         """Compare self with other. Return true only if they are identical, including the order of their vectors.
 
         Args:
-            other (ExplicitElementaryErrorgenBasis): Error generator basis to compare against
+            other (ErrorgenSpace): Error generator space to compare against
 
         Returns:
             Boolean: True if they are identical, False otherwise
