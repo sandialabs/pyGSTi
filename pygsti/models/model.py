@@ -2539,7 +2539,7 @@ class OpModel(Model):
         from pygsti.tools import basistools as _bt
         from pygsti.tools import fogitools as _fogit
         from pygsti.models.fogistore import FirstOrderGaugeInvariantStore as _FOGIStore
-        from pygsti.tools.fogitools import FOGICheckpoint as _FOGICheckpoint
+        from pygsti.tools.fogitools import FOGISetupCheckpoint as _FOGICheckpoint
 
         from os.path import isfile as _isfile   
         from os.path import exists as _exists

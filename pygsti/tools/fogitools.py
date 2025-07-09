@@ -23,7 +23,7 @@ from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySeri
 from pygsti.baseobjs import Label as _Label
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GlobalElementaryErrorgenLabel,\
 LocalElementaryErrorgenLabel as _LocalElementaryErrorgenLabel
-class FOGICheckpoint(_NicelySerializable):
+class FOGISetupCheckpoint(_NicelySerializable):
     def __init__(self, step, allowed_row_basis_labels = None, gauge_action_matrices = None, gauge_action_gauge_spaces = None, param_interposer = None, fogi_store = None):
         super().__init__()
         self.step = step
@@ -71,10 +71,22 @@ class FOGICheckpoint(_NicelySerializable):
         fogi_store = None if state['fogi_store'] is None else _fogistore.FirstOrderGaugeInvariantStore.from_nice_serialization(state['fogi_store'])
         return cls(step, param_interposer=param_interposer, fogi_store=fogi_store, allowed_row_basis_labels=allowed_row_basis_labels,gauge_action_matrices=gauge_action_matrices,gauge_action_gauge_spaces=gauge_action_gauge_spaces)
 
-class FOGIQuantitiesCheckpoint(_NicelySerializable):
-    def __init__(self, fogi_dirs):
+class ConstructFOGIQuantitiesCheckpoint(_NicelySerializable):
+    def __init__(self, iteration, fogi_dirs, fogi_meta, dep_fogi_dirs, dep_fogi_meta, ccoms, larger_sets):
+        """_summary_
+
+        Args:
+            iteration (_type_): (set_size, op_label, existing_set)
+            fogi_dirs (_type_): _description_
+        """
         super().__init__()
+        self.iteration = iteration
         self.fogi_dirs = fogi_dirs
+        self.fogi_meta = fogi_meta
+        self.dep_fogi_dirs = dep_fogi_dirs
+        self.dep_fogi_meta = dep_fogi_meta
+        self.ccoms = ccoms
+        self.larger_sets = larger_sets
         
 def first_order_gauge_action_matrix(clifford_superop_mx, target_sslbls, model_state_space,
                                     elemgen_gauge_basis, elemgen_row_basis):
@@ -554,6 +566,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                 new_set = tuple(sorted(existing_set + (op_label,)))
                 if new_set in larger_sets: continue
 
+
                 #FOGI DEBUG print("\n##", existing_set, "+", op_label)
 
                 # Merge existing set + op_label => new set of larger size
@@ -725,6 +738,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                                                              norm_order_array[indep_cols])
 
                         # add new_fogi_dirs[:, dep_cols_to_add] to dep_fogi_dirs w/meta data
+                        #could this just be skipped if 'drop'?
                         dep_fogi_dirs = add_relational_fogi_dirs(new_fogi_dirs[:, dep_cols_to_add],
                                                                  _np.take(int_vecs, dep_cols_to_add, axis=1),
                                                                  _np.take(intersection_space, dep_cols_to_add, axis=1),
