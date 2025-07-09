@@ -213,7 +213,7 @@ class GeneralMethodBase(object):
 
     @needs_cvxpy
     def test_diamonddist(self):
-        if  SKIP_DIAMONDIST_ON_WIN and sys.platform.startswith('win'): return
+        if SKIP_DIAMONDIST_ON_WIN and sys.platform.startswith('win'): return
         cp = self.model.copy()
         self.assertAlmostEqual(self.model.diamonddist(cp), 0)
         # TODO non-trivial case
