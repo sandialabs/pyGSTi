@@ -146,7 +146,7 @@ def first_order_gauge_action_matrix(clifford_superop_mx, target_sslbls, model_st
         # - a full basis for gauge_action_deriv
         #global_row_space.add_labels(row_space.labels)  # labels would need to contain sslbls too
         action_row_labels = action_row_basis.labels
-        global_row_indices = elemgen_row_basis.label_indices(action_row_labels, ok_if_missing=True)
+        global_row_indices = elemgen_row_basis.label_indices(action_row_labels, ok_if_missing=True) 
 
         #DEBUG REMOVE
         #db_num_skipped = db_num_nonzero = 0
@@ -637,9 +637,39 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                         # (A,B are faithful reps of gauge on intersection space, so pinv(ga_A) * ga_A
                         # restricted to intersection space is I:   int_spc.T * pinv(ga_A) * ga_A * int_spc == I
                         # (when int_spc vecs are orthonormal) and so the above redues to I - I = 0
+                        def scipy_pinv(A, rcond):
+                            # Step 1: Compute SVD
+                            U, S, VT = _spsl.svd(A, lapack_driver='gesvd')
 
-                        inv_diff_gauge_action = _np.concatenate((_np.linalg.pinv(gauge_action[0:n, :], rcond=1e-7),
-                                                                 -_np.linalg.pinv(gauge_action[n:, :], rcond=1e-7)),
+                            # Step 2: Construct Sigma
+                            Sigma = _np.zeros((U.shape[0], VT.shape[0]))
+                            _np.fill_diagonal(Sigma, S)
+
+                            # Step 3: Compute Sigma+
+                            S_plus = _np.zeros_like(Sigma.T)
+                            for i in range(len(S)):
+                                if _np.abs(S[i]) > rcond:
+                                    S_plus[i, i] = 1 / S[i]
+
+                            # Step 4: Compute the pseudoinverse
+                            return VT.T @ S_plus @ U.T
+
+                        try:
+                            inverse1 = _np.linalg.pinv(gauge_action[0:n, :], rcond=1e-7)
+                        except Exception as e:
+                            print('Pinverse failed with message: ', e, '\n Attempting gesvd algorithm for SVD')
+                            inverse1 = scipy_pinv(gauge_action[0:n, :], rcond=1e-7)
+                            print('success')
+                        
+                        try:
+                            inverse2 = -_np.linalg.pinv(gauge_action[n:, :], rcond=1e-7)
+                        except Exception as e:
+                            print('Pinverse failed with message: ', e, '\n Attempting gesvd algorithm for SVD')
+                            inverse2 = -scipy_pinv(gauge_action[n:, :], rcond=1e-7)
+                            print('success')
+
+                        inv_diff_gauge_action = _np.concatenate((inverse1,
+                                                                 inverse2),
                                                                 axis=1).T
 
                         #Equivalent:

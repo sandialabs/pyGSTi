@@ -15,7 +15,6 @@ import inspect as _inspect
 import itertools as _itertools
 import os as _os
 import pickle as _pickle
-# import uuid        as _uuid
 import random as _random
 import shutil as _shutil
 import subprocess as _subprocess
@@ -2447,7 +2446,7 @@ class WorkspacePlot(WorkspaceOutput):
 
     def __init__(self, ws, fn, *args):
         """
-        Create a new WorkspaceTable.  Usually not called directly.
+        Create a new WorkspacePlot.  Usually not called directly.
 
         Parameters
         ----------
@@ -2461,6 +2460,9 @@ class WorkspacePlot(WorkspaceOutput):
             The arguments to `fn`.
         """
         super(WorkspacePlot, self).__init__(ws)
+        #add a plot specific option for aspect ratios
+        self.options['lock_aspect_ratio'] = True 
+
         '''
         # LSaldyt: removed plotfn for easier pickling? It doesn't seem to be used anywhere
         self.plotfn = fn
@@ -2497,6 +2499,7 @@ class WorkspacePlot(WorkspaceOutput):
         overrideIDs = self.options.get('switched_item_id_overrides', {})
         switched_item_mode = self.options.get('switched_item_mode', 'inline')
         output_dir = self.options.get('output_dir', None)
+        lock_aspect_ratio = self.options.get('lock_aspect_ratio', True)
 
         if valign == 'top':
             abswrap_cls = 'abswrap'
@@ -2540,7 +2543,7 @@ class WorkspacePlot(WorkspaceOutput):
                     #fig.plotlyfig.update_layout(template=DEFAULT_PLOTLY_TEMPLATE)  #slow: set default theme in plot_ex
                     fig_dict = _plotly_ex.plot_ex(
                         fig.plotlyfig, show_link=False, resizable=resizable,
-                        lock_aspect_ratio=True, master=True, validate=VALIDATE_PLOTLY,  # bool(i==iMaster)
+                        lock_aspect_ratio=lock_aspect_ratio, master=True, validate=VALIDATE_PLOTLY,  # bool(i==iMaster)
                         click_to_display=self.options['click_to_display'],
                         link_to=self.options['link_to'], link_to_id=plotDivID,
                         rel_figure_dir=_os.path.basename(

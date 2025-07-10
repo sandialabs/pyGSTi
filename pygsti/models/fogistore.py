@@ -395,10 +395,16 @@ class FirstOrderGaugeInvariantStore(_NicelySerializable):
         pass
     
     def __eq__(self, other):
+        """Compare self with other. Return true only if they are identical, including the order of their attribute elements, such as labels.
 
-        if other is None:
+        Args:
+            other (FirstOrderGaugeInvariantStore): FOGIStore to compare against self
+
+        Returns:
+            Boolean: True if they are identical, False otherwise
+        """
+        if not  isinstance(other, FirstOrderGaugeInvariantStore):
             return False
-        assert isinstance(other, FirstOrderGaugeInvariantStore), 'Object provided is not of type FirstOrderGaugeInvariantStore'
 
         if [label.__str__() for label in self.primitive_op_labels] != [label.__str__() for label in other.primitive_op_labels]:
             return False

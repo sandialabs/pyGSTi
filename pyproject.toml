@@ -25,7 +25,7 @@ dependencies=[
     'numpy>=1.15.0',
     'scipy',
     'stim',
-    'plotly',
+    'plotly>=3.8.0',
     'pandas',
     'networkx'
 ]
@@ -52,8 +52,7 @@ classifiers=[
 
 [project.optional-dependencies]
 diamond_norm = [
-    'cvxopt',
-    'cvxpy'
+    'cvxpy>=1.4.0'
 ]
 evolutionary_optimization = ['deap']
 extensions = ['cython']
@@ -96,3 +95,8 @@ complete = ['pygsti[multiprocessor,no_mpi]']
 Homepage = 'https://www.pygsti.info'
 Repository = 'https://github.com/sandialabs/pyGSTi'
 Download ='https://github.com/sandialabs/pyGSTi/tarball/master'
+
+[tool.setuptools_scm]
+version_file = "pygsti/_version.py"
+version_scheme = "only-version"
+local_scheme = "no-local-version"

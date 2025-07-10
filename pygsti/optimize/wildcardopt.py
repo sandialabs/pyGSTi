@@ -356,6 +356,8 @@ def optimize_wildcard_bisect_alpha(budget, objfn, two_dlogl_threshold, redbox_th
     layout = objfn.layout
     critical_percircuit_budgets = _get_critical_circuit_budgets(objfn, redbox_threshold)  # for *global* circuits
     percircuit_budget_deriv, global_percircuit_budget_deriv = _get_percircuit_budget_deriv(budget, layout)
+    if _np.linalg.norm(percircuit_budget_deriv) < 1e-10:
+        raise ValueError("Wildcard scaling does not affect feasibility (deriv is zero)!")
 
     initial_probs = objfn.probs.copy()
     current_probs = initial_probs.copy()
@@ -383,6 +385,8 @@ def optimize_wildcard_bisect_alpha(budget, objfn, two_dlogl_threshold, redbox_th
             printer.log('Guess value is infeasible, ', 2)
             right = guess
             guess = 2 * right
+            if guess > 1e10:
+                raise ValueError("Feasible wildcard scaling cannot be found!")
     printer.log('Interval found!', 2)
 
     # We now have an interval containing the crossover point

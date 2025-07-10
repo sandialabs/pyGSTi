@@ -225,8 +225,7 @@ class CircuitList(_NicelySerializable):
             Dictates how to combine the `elementvec` components corresponding to a single
             plaquette entry (circuit).  If "sum", the returned array contains summed
             values.  If a format string, e.g. `"%.2f"`, then the so-formatted components
-            are joined together with separating commas, and the resulting array contains
-            string (object-type) entries.
+            are joined together, and the resulting array contains string (object-type) entries.
 
         Returns
         -------
@@ -241,7 +240,7 @@ class CircuitList(_NicelySerializable):
             fmt = mergeop
             ret = _np.nan * _np.ones(len(self), dtype=_np.object_)
             for i,ckt in enumerate(self._circuits):
-                ret[i] = ", ".join(["NaN" if _np.isnan(x) else
+                ret[i] = "".join(["NaN" if _np.isnan(x) else
                                     (fmt % x) for x in elementvec[layout.indices(ckt)]])
         else:
             raise ValueError("Invalid `mergeop` arg: %s" % str(mergeop))
