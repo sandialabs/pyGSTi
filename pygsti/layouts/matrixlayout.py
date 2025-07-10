@@ -24,8 +24,6 @@ from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.tools import listtools as _lt
 from pygsti.tools import slicetools as _slct
 
-NICK_USE_OLD_EVAL_TREE = False
-
 class _MatrixCOPALayoutAtom(_DistributableAtom):
     """
     The atom ("atomic unit") for dividing up the element dimension in a :class:`MatrixCOPALayout`.
@@ -500,7 +498,7 @@ class MatrixCOPALayout(_DistributableCOPALayout):
     def __init__(self, circuits, model, dataset=None, num_sub_trees=None, num_tree_processors=2,
                  num_param_dimension_processors=(), param_dimensions=(),
                  param_dimension_blk_sizes=(), resource_alloc=None, verbosity=0, 
-                 layout_creation_circuit_cache = None):
+                 layout_creation_circuit_cache = None, use_old_tree_style: bool = True):
 
         #OUTDATED: TODO - revise this:
         # 1. pre-process => get complete circuits => spam-tuples list for each no-spam circuit (no expanding yet)
@@ -579,7 +577,7 @@ class MatrixCOPALayout(_DistributableCOPALayout):
 
         def _create_atom(args):
             group, helpful_scratch_group = args
-            if NICK_USE_OLD_EVAL_TREE:
+            if use_old_tree_style:
                 return _MatrixCOPALayoutAtom(unique_complete_circuits, unique_nospam_circuits,
                                          circuits_by_unique_nospam_circuits, ds_circuits,
                                          group, helpful_scratch_group, model, 
