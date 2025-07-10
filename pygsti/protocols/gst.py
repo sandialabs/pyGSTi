@@ -2,7 +2,7 @@
 GST Protocol objects
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -1357,6 +1357,7 @@ class GateSetTomography(_proto.Protocol):
         if disable_checkpointing:
             seed_model = mdl_start.copy()
             mdl_lsgst_list = []
+            mdc_store_list = []
             starting_idx = 0
         else:
             # Set the checkpoint_path variable if None
@@ -1376,6 +1377,7 @@ class GateSetTomography(_proto.Protocol):
             if checkpoint is None:
                 seed_model = mdl_start.copy()
                 mdl_lsgst_list = []
+                mdc_store_list = []
                 checkpoint = GateSetTomographyCheckpoint()
             elif isinstance(checkpoint, GateSetTomographyCheckpoint):
                 # if the checkpoint's last completed iteration is non-negative
@@ -1393,8 +1395,12 @@ class GateSetTomography(_proto.Protocol):
                 # left set to None. There looks to be some logic for handling this and it looks
                 # like the serialization routines effectively do this already, as the value
                 # of this is lost between writing and reading.
+                mdc_store_list = [None]*len(mdl_lsgst_list) #We don't presently have serialization support for
+                #MDC store objects, so for now we'll skip serializing this and re-initialize previous iterations
+                #to None. Given how this is currently used the only downside to this should be inefficiency
+                #rebuilding the needed MDC stores in the report generation. 
             else:
-                NotImplementedError(
+                raise NotImplementedError(
                     'The only currently valid checkpoint inputs are None and GateSetTomographyCheckpoint.')
 
             # note the last_completed_iter value is initialized to -1 so the below line
@@ -1420,10 +1426,11 @@ class GateSetTomography(_proto.Protocol):
             #then do the final iteration slightly differently since the generator should
             #give three return values.
             if i==len(bulk_circuit_lists)-1:
-                mdl_iter, opt_iter, final_objfn = next(gst_iter_generator)
+                mdl_iter, opt_iter, mdc_store_iter, final_objfn = next(gst_iter_generator)
             else:
-                mdl_iter, opt_iter =  next(gst_iter_generator)
+                mdl_iter, opt_iter, mdc_store_iter =  next(gst_iter_generator)
             mdl_lsgst_list.append(mdl_iter)
+            mdc_store_list.append(mdc_store_iter)
             optima_list.append(opt_iter)
 
             if not disable_checkpointing:
@@ -1436,15 +1443,15 @@ class GateSetTomography(_proto.Protocol):
                     checkpoint.write(f'{checkpoint_path}_iteration_{i}.json')
 
         tnxt = _time.time(); profiler.add_time('GST: total iterative optimization', tref); tref = tnxt
-    
         #set parameters
-        parameters = _collections.OrderedDict()
+        parameters = dict()
         parameters['protocol'] = self  # Estimates can hold sub-Protocols <=> sub-results
         parameters['final_objfn_builder'] = self.objfn_builders.final_builders[-1] \
             if len(self.objfn_builders.final_builders) > 0 else self.objfn_builders.iteration_builders[-1]
         parameters['final_objfn'] = final_objfn  # Final obj. function evaluated at best-fit point (cache too)
         parameters['final_mdc_store'] = final_objfn  # Final obj. function is also a "MDC store"
         parameters['profiler'] = profiler
+        parameters['per_iter_mdc_store'] = mdc_store_list #list of the MDC stores for each iteration.
         # Note: we associate 'final_cache' with the Estimate, which means we assume that *all*
         # of the models in the estimate can use same evaltree, have the same default prep/POVMs, etc.
 
@@ -2247,6 +2254,10 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options,
                 except NotImplementedError as e:
                     printer.warning("Failed to get wildcard budget - continuing anyway.  Error was:\n" + str(e))
                     new_params['unmodeled_error'] = None
+                except ValueError as e:
+                    printer.warning("ValueError when trying to get wildcard budget - continuing anyway.  Error was:\n" + str(e))
+                    new_params['unmodeled_error'] = None
+
                 #except AssertionError as e:
                 #    printer.warning("Failed to get wildcard budget - continuing anyway.  Error was:\n" + str(e))
                 #    new_params['unmodeled_error'] = None
@@ -2360,14 +2371,14 @@ def _compute_wildcard_budget_1d_model(estimate, objfn_cache, mdc_objfn, paramete
         primitive_ops = list(ref.keys())
         if sum([v**2 for v in ref.values()]) < 1e-4:
             _warnings.warn("Reference values for 1D wildcard budget are all near-zero!"
-                           "This usually indicates an incorrect target model and will likely cause problems computing alpha.")
+                           " This usually indicates an incorrect target model and will likely cause problems computing alpha.")
 
     else:
         gaugeopt_labels = gaugeopt_suite.gaugeopt_suite_names
         primitive_ops = list(ref[list(gaugeopt_labels)[0]].keys())
         if sum([v**2 for v in ref[list(gaugeopt_labels)[0]].values()]) < 1e-4:
             _warnings.warn("Reference values for 1D wildcard budget are all near-zero!"
-                           "This usually indicates an incorrect target model and will likely cause problems computing alpha.")
+                           " This usually indicates an incorrect target model and will likely cause problems computing alpha.")
 
     if gaugeopt_labels is None:
         wcm = _wild.PrimitiveOpsSingleScaleWildcardBudget(primitive_ops, [ref[k] for k in primitive_ops],
@@ -2435,6 +2446,8 @@ def _compute_1d_reference_values_and_name(estimate, badfit_options, gaugeopt_sui
                 preps_dict = gaugeopt_model.prep_blks['layers']
                 targetpreps_dict = target_model.prep_blks['layers']
                 povmops_dict = {}  # HACK - need to rewrite povm_diamonddist below to work
+                insts_dict = gaugeopt_model.instrument_blks['layers']
+                targetinsts_dict = target_model.instrument_blks['layers']
 
             dd = {}
             for key, op in operations_dict.items():

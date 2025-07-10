@@ -2,7 +2,7 @@
 Tools for the propagation of error generators through circuits.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -10,7 +10,15 @@ Tools for the propagation of error generators through circuits.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import stim
+import warnings
+try:
+    import stim
+except ImportError:
+    msg = "Stim is required for use of the error generator propagation tools module, " \
+          "and it does not appear to be installed. If you intend to use this module please update" \
+          " your environment."
+    warnings.warn(msg)
+
 import numpy as _np
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GEEL, LocalElementaryErrorgenLabel as _LEEL
 from pygsti.baseobjs import QubitSpace as _QubitSpace

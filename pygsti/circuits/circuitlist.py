@@ -2,7 +2,7 @@
 Defines the CircuitList class, for holding meta-data alongside a list or tuple of Circuits.
 """
 # ***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -233,8 +233,7 @@ class CircuitList(_NicelySerializable):
             Dictates how to combine the `elementvec` components corresponding to a single
             plaquette entry (circuit).  If "sum", the returned array contains summed
             values.  If a format string, e.g. `"%.2f"`, then the so-formatted components
-            are joined together with separating commas, and the resulting array contains
-            string (object-type) entries.
+            are joined together, and the resulting array contains string (object-type) entries.
 
         Returns
         -------
@@ -249,7 +248,7 @@ class CircuitList(_NicelySerializable):
             fmt = mergeop
             ret = _np.nan * _np.ones(len(self), dtype=_np.object_)
             for i,ckt in enumerate(self._circuits):
-                ret[i] = ", ".join(["NaN" if _np.isnan(x) else
+                ret[i] = "".join(["NaN" if _np.isnan(x) else
                                     (fmt % x) for x in elementvec[layout.indices(ckt)]])
         else:
             raise ValueError("Invalid `mergeop` arg: %s" % str(mergeop))

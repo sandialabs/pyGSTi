@@ -2,7 +2,7 @@
 Functions for creating the standard sets of matrices in the standard, Pauli, Gell-Mann, and qutrit bases
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -1046,11 +1046,8 @@ def cl_vectors(dim):
     list
         A list of `dim` numpy arrays each of shape (dim,).
     """
-    vecList = []
-    for i in range(dim):
-        v = _np.zeros(dim, 'd'); v[i] = 1.0
-        vecList.append(v)
-    return vecList
+    data = _np.eye(dim)
+    return [v for v in data]
 
 
 def cl_labels(dim):
@@ -1205,11 +1202,8 @@ def sv_vectors(dim):
     list
         A list of `dim` numpy arrays each of shape (dim,).
     """
-    vecList = []
-    for i in range(dim):
-        v = _np.zeros(dim, complex); v[i] = 1.0
-        vecList.append(v)
-    return vecList
+    data = _np.eye(dim, dtype=complex)
+    return [v for v in data]
 
 
 def sv_labels(dim):

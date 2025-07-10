@@ -1,5 +1,5 @@
 ********************************************************************************
-  pyGSTi 0.9.13
+  pyGSTi 0.9.13.1
 ********************************************************************************
 
 [![master build](https://img.shields.io/github/actions/workflow/status/sandialabs/pyGSTi/beta-master.yml?branch=master&label=master)](https://github.com/sandialabs/pyGSTi/actions/workflows/beta-master.yml)
@@ -36,7 +36,7 @@ In particular, there are a number of characterization protocols currently implem
 
 PyGSTi is designed with a modular structure so as to be highly customizable
 and easily integrated to new or existing python software.  It runs using
-python 3.8 or higher.  To faclilitate integration with software for running
+python 3.9 or higher.  To faclilitate integration with software for running
 cloud-QIP experiments, pyGSTi `Circuit` objects can be converted to IBM's
 **OpenQASM** and Rigetti Quantum Computing's **Quil** circuit description languages.
 
@@ -197,3 +197,29 @@ Questions?
 ----------
 For help and support with pyGSTi, please contact the authors at
 pygsti@sandia.gov.
+
+How To Cite pyGSTi
+------------------
+
+If you've used pyGSTi in the your research and are interested in citing
+us, please consider the following software design paper from some of the
+members of our development team (bibtex below):
+
+```
+@ARTICLE{Nielsen2020-rd,
+  title     = "Probing quantum processor performance with {py{GST}i}",
+  author    = "Nielsen, Erik and Rudinger, Kenneth and Proctor, Timothy and
+              Russo, Antonio and Young, Kevin and Blume-Kohout, Robin",
+  journal   = "Quantum Sci. Technol.",
+  publisher = "IOP Publishing",
+  volume    =  5,
+  number    =  4,
+  pages     = "044002",
+  month     =  jul,
+  year      =  2020,
+  url       = "https://iopscience.iop.org/article/10.1088/2058-9565/ab8aa4",
+  copyright = "http://iopscience.iop.org/page/copyright",
+  issn      = "2058-9565",
+  doi       = "10.1088/2058-9565/ab8aa4"
+}
+```
