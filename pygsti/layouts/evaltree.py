@@ -453,7 +453,7 @@ class EvalTree(list):
         assert(sum(map(len, disjointLists)) == num_elements), "sub-tree sets are not disjoint!"
         return disjointLists, helpfulScratchLists
 
-
+#region Longest Common Subsequence
 
 def _best_matching_only(A: Sequence, B: Sequence) -> int:
     """
@@ -472,7 +472,7 @@ def _best_matching_only(A: Sequence, B: Sequence) -> int:
 
 
 
-def _lcs_dp_version(A, B):
+def _lcs_dp_version(A: Sequence, B: Sequence):
     """
     Compute the longest common substring between A and B using
     dynamic programming.
@@ -500,7 +500,7 @@ def setup_lcs_dynamic_programming_table(A, B):
     """
     return _np.zeros((len(A) + 1, len(B) + 1))
 
-def build_one_round_of_eval_tree(circuits, table_data_and_sequences, internal_tables_and_sequences, starting_cache_num, cache_struct, round_num: int=0):
+def _conduct_one_round_of_lcs_simplification(circuits, table_data_and_sequences, internal_tables_and_sequences, starting_cache_num, cache_struct, round_num: int=0):
     if table_data_and_sequences:
         table, sequences = table_data_and_sequences
     else:
@@ -575,7 +575,7 @@ def build_one_round_of_eval_tree(circuits, table_data_and_sequences, internal_ta
 
     return updated_circuits, cache_num, cache_struct, sequences_introduced_in_this_round
 
-def locate_sequences_in_AB(A, B, dp_table) -> tuple[int, int, int]:
+def _find_starting_positions_using_dp_table(dp_table) -> tuple[int, int, int]:
     """
     Finds the indices of the starting points of the sequences in A and B.
 
@@ -624,7 +624,7 @@ def _compute_lcs_for_every_pair_of_circuits(circuit_list: list[_Circuit]):
                 if len(cir1) >= curr_best:
                     table = _lcs_dp_version(cir0, cir1)
                     best_lengths[i,j] = table[0,0]
-                    best_subsequences[(i,j)] = locate_sequences_in_AB(cir0, cir1, table)
+                    best_subsequences[(i,j)] = _find_starting_positions_using_dp_table(table)
                     curr_best = max(best_lengths[i,j], curr_best)
                 else:
                     best_lengths[i,j] = -1
@@ -636,9 +636,11 @@ def _compute_lcs_for_every_pair_of_circuits(circuit_list: list[_Circuit]):
     return best_lengths, best_subsequences
 
 
-def _longest_common_internal_subsequence(A: _Circuit) -> tuple[int, dict[tuple, list[int]]]:
+def _longest_common_internal_subsequence(A: Sequence) -> tuple[int, dict[tuple, list[int]]]:
     """
     Compute the longest common subsequence within a single circuit A.
+
+    Cost ~ O(L^3 / 8) where L is the length of A
 
     Returns:
     ---------
@@ -670,6 +672,8 @@ def _longest_common_internal_subsequence(A: _Circuit) -> tuple[int, dict[tuple, 
 def build_internal_tables(circuit_list):
     """
     Compute all the longest common internal sequences for each circuit A in circuit_list
+
+    Total cost is O(C L^3).
     """
 
     C = len(circuit_list)
@@ -683,6 +687,10 @@ def build_internal_tables(circuit_list):
             curr_best = max(curr_best, the_table[i])
     return the_table, seq_table
 
+
+#endregion Longest Common Subsequence
+
+#region Split circuit list into lists of subcircuits
 def _add_in_idle_gates_to_circuit(circuit: _Circuit, idle_gate_name: str = "I") -> _Circuit:
     """
     Add in explicit idles to the labels for each layer.
@@ -793,31 +801,6 @@ def _compute_subcircuits(circuit, qubits_to_lanes: dict[int, int]) -> list[list[
 
     return lanes_to_gates
 
-
-def _split_circuits_by_lanes(circuit_list):
-    # First eliminate the duplicate circuits.
-
-    unique_circuits = []
-    matching_inds: dict[int, set[int]] = {}
-    C = len(circuit_list)
-    seen_circs: dict[tuple[LabelTupTup, int]] = {}
-    cache = {i: circuit_list[i] for i in range(len(circuit_list))}
-    for i in range(C):
-        my_cir = circuit_list[i]
-        if tuple(my_cir) in seen_circs:
-            cache[i] = seen_circs[tuple(my_cir)]
-        else:
-            seen_circs[tuple(my_cir)] = i
-
-    labels_to_circuits = {}
-    for my_cir in seen_circs:
-        line_labels = _Circuit(my_cir)._line_labels
-        if line_labels in labels_to_circuits:
-            labels_to_circuits[line_labels].append(my_cir)
-        else:
-            labels_to_circuits[line_labels] = [my_cir]
-        
-
 def setup_circuit_list_for_LCS_computations(
         circuit_list: list[_Circuit],
         implicit_idle_gate_name: str = "I") -> tuple[list[dict[int, int]],
@@ -869,6 +852,11 @@ def setup_circuit_list_for_LCS_computations(
         # cir_id_to_lanes.append(lanes_to_qubits)
     return cir_ind_and_lane_id_to_sub_cir, sub_cir_to_cir_id_and_lane_id, line_labels_to_circuit_list
 
+#endregion Split Circuits by lanes helpers
+
+
+#region Lane Collapsing Helpers
+
 def model_and_gate_to_dense_rep(model, opTuple) -> _np.ndarray:
     """
     Look up the dense representation of a gate in the model.
@@ -910,7 +898,7 @@ def combine_two_gates(cumulative_term, next_dense_matrix):
     which in matrix multiplication requires Measure @ (NextDense @ Cumulative) @ State Prep.
     """
     return next_dense_matrix @ cumulative_term
-
+#endregion Lane Collapsing Helpers
 
 class EvalTreeBasedUponLongestCommonSubstring():
 
@@ -943,7 +931,7 @@ class EvalTreeBasedUponLongestCommonSubstring():
 
         i = 0
         while max_rounds > 1:
-            new_circuit_list, cache_pos, cache, sequence_intro[i+1] = build_one_round_of_eval_tree(new_circuit_list, external_matches, internal_matches, cache_pos, cache, i)
+            new_circuit_list, cache_pos, cache, sequence_intro[i+1] = _conduct_one_round_of_lcs_simplification(new_circuit_list, external_matches, internal_matches, cache_pos, cache, i)
             i += 1
             external_matches = _compute_lcs_for_every_pair_of_circuits(new_circuit_list)
 
