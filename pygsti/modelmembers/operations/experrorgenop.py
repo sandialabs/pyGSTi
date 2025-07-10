@@ -112,7 +112,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         """
         if self._rep_type == 'dense':
             # compute matrix-exponential explicitly
-            self.exp_err_gen = _spl.expm(self.errorgen.to_dense("HilbertScmidt"))  # used in deriv_wrt_params
+            self.exp_err_gen = _spl.expm(self.errorgen.to_dense("HilbertSchmidt"))  # used in deriv_wrt_params
 
             dense = self.exp_err_gen
             self._rep.base.flags.writeable = True

@@ -115,9 +115,9 @@ class ComposedOp(_LinearOperator):
         if len(self.factorops) == 0:
             mx = _np.identity(self.state_space.dim, 'd')
         else:
-            mx = self.factorops[0].to_dense("HilbertScmidt")
+            mx = self.factorops[0].to_dense("HilbertSchmidt")
             for op in self.factorops[1:]:
-                mx = _np.dot(op.to_dense("HilbertScmidt"), mx)
+                mx = _np.dot(op.to_dense("HilbertSchmidt"), mx)
 
         self._rep.base.flags.writeable = True
         self._rep.base[:, :] = mx

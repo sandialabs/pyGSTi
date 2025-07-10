@@ -350,8 +350,8 @@ def write_model(model, filename, title=None):
             elif isinstance(rhoVec, _state.StaticState): typ = "STATIC-PREP"
             #elif isinstance(rhoVec, _state.LindbladSPAMVec):  # TODO - change to ComposedState?
             #    typ = "CPTP-PREP"
-            #    props = [("PureVec", rhoVec.state_vec.to_dense("HilbertScmidt")),
-            #             ("ErrgenMx", rhoVec.error_map.to_dense("HilbertScmidt"))]
+            #    props = [("PureVec", rhoVec.state_vec.to_dense("HilbertSchmidt")),
+            #             ("ErrgenMx", rhoVec.error_map.to_dense("HilbertSchmidt"))]
             else:
                 _warnings.warn(
                     ("Non-standard prep of type {typ} cannot be described by"
@@ -359,7 +359,7 @@ def write_model(model, filename, title=None):
                      "fully parameterized spam vector").format(typ=str(type(rhoVec))))
                 typ = "PREP"
 
-            if props is None: props = [("LiouvilleVec", rhoVec.to_dense("HilbertScmidt"))]
+            if props is None: props = [("LiouvilleVec", rhoVec.to_dense("HilbertSchmidt"))]
             output.write("%s: %s\n" % (typ, prepLabel))
             for lbl, val in props:
                 writeprop(output, lbl, val)
@@ -370,7 +370,7 @@ def write_model(model, filename, title=None):
             elif isinstance(povm, _povm.TPPOVM): povmType = "TP-POVM"
             #elif isinstance(povm, _povm.LindbladPOVM):  # TODO - change to ComposedPOVM?
             #    povmType = "CPTP-POVM"
-            #    props = [("ErrgenMx", povm.error_map.to_dense("HilbertScmidt"))]
+            #    props = [("ErrgenMx", povm.error_map.to_dense("HilbertSchmidt"))]
             #    povm_to_write = povm.base_povm
             else:
                 _warnings.warn(
@@ -395,7 +395,7 @@ def write_model(model, filename, title=None):
                          "fully parameterized spam vector").format(typ=str(type(EVec))))
                     typ = "EFFECT"
                 output.write("%s: %s\n" % (typ, ELabel))
-                writeprop(output, "LiouvilleVec", EVec.to_dense("HilbertScmidt"))
+                writeprop(output, "LiouvilleVec", EVec.to_dense("HilbertSchmidt"))
 
             output.write("END POVM\n\n")
 
@@ -406,7 +406,7 @@ def write_model(model, filename, title=None):
             elif isinstance(gate, _op.StaticArbitraryOp): typ = "STATIC-GATE"
             elif isinstance(gate, _op.ComposedOp):
                 typ = "COMPOSED-GATE"
-                props = [("%dLiouvilleMx" % i, factor.to_dense("HilbertScmidt"))
+                props = [("%dLiouvilleMx" % i, factor.to_dense("HilbertSchmidt"))
                          for i, factor in enumerate(gate.factorops)]
             else:
                 _warnings.warn(
@@ -415,7 +415,7 @@ def write_model(model, filename, title=None):
                      "fully parameterized gate").format(typ=str(type(gate))))
                 typ = "GATE"
 
-            if props is None: props = [("LiouvilleMx", gate.to_dense("HilbertScmidt"))]
+            if props is None: props = [("LiouvilleMx", gate.to_dense("HilbertSchmidt"))]
             output.write(typ + ": " + str(label) + '\n')
             for lbl, val in props:
                 writeprop(output, lbl, val)
@@ -442,7 +442,7 @@ def write_model(model, filename, title=None):
                          "fully parameterized gate").format(typ=str(type(gate))))
                     typ = "IGATE"
                 output.write(typ + ": " + str(label) + '\n')
-                writeprop(output, "LiouvilleMx", gate.to_dense("HilbertScmidt"))
+                writeprop(output, "LiouvilleMx", gate.to_dense("HilbertSchmidt"))
             output.write("END Instrument\n\n")
 
         if model.state_space is not None:

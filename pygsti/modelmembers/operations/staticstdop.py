@@ -19,6 +19,7 @@ from pygsti.baseobjs import statespace as _statespace
 from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
 from pygsti.tools import internalgates as _itgs
+from pygsti import SpaceT
 
 
 class StaticStandardOp(_LinearOperator, _NoErrorGeneratorInterface):

@@ -1070,8 +1070,8 @@ def instrument_diamonddist(a, b, mx_basis):
         aa, bb = i * adim, (i + 1) * adim
         for j in range(nComps):
             cc, dd = j * adim, (j + 1) * adim
-            composite_op[aa:bb, cc:dd] = a[clbl].to_dense("HilbertScmidt")
-            composite_top[aa:bb, cc:dd] = b[clbl].to_dense("HilbertScmidt")
+            composite_op[aa:bb, cc:dd] = a[clbl].to_dense("HilbertSchmidt")
+            composite_top[aa:bb, cc:dd] = b[clbl].to_dense("HilbertSchmidt")
     return diamonddist(composite_op, composite_top, sumbasis)
 
 

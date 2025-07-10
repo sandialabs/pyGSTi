@@ -106,7 +106,7 @@ class IdentityPlusErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         if self._rep_type == 'dense':
             # compute 1 + errorgen explicitly
             self._rep.base.flags.writeable = True
-            self._rep.base[:, :] = self._ident + self.errorgen.to_dense("HilbertScmidt")
+            self._rep.base[:, :] = self._ident + self.errorgen.to_dense("HilbertSchmidt")
             self._rep.base.flags.writeable = False
         else:
             pass  # nothing to do -- no need to even notify OpRepIdentityPlusErrorgen that errorgen has changed

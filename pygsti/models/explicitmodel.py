@@ -1530,7 +1530,7 @@ class ExplicitOpModel(_mdl.OpModel):
                     #    observed_sslbls.update(sslbls)
 
                 if gn not in gate_unitaries or gate_unitaries[gn] is None:
-                    U = _ot.superop_to_unitary(op.to_dense("HilbertScmidt"), self.basis) \
+                    U = _ot.superop_to_unitary(op.to_dense("HilbertSchmidt"), self.basis) \
                         if (op is not None) else None  # U == None indicates "unknown, up until this point"
 
                     Ulocal = extract_unitary(U, all_sslbls, sslbls)

@@ -20,6 +20,7 @@ from pygsti.baseobjs import statespace as _statespace
 from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.tools import jamiolkowski as _jt
 from pygsti.tools import basistools as _bt
+from pygsti import SpaceT
 
 IMAG_TOL = 1e-7
 

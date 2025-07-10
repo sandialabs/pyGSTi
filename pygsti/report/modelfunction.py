@@ -195,7 +195,7 @@ def opfn_factory(fn):
 
         def evaluate(self, model):
             """ Evaluate this gate-set-function at `model`."""
-            return fn(model.operations[self.gl].to_dense("HilbertScmidt"), model.basis,
+            return fn(model.operations[self.gl].to_dense("HilbertSchmidt"), model.basis,
                       *self.args, **self.kwargs)
 
     GSFTemp.__name__ = fn.__name__ + str("_class")
@@ -239,8 +239,8 @@ def opsfn_factory(fn):
         def evaluate(self, model):
             """ Evaluate this gate-set-function at `model`."""
             if isinstance(model, _ExplicitOpModel):
-                return fn(model.operations[self.gl].to_dense("HilbertScmidt"),
-                          self.other_model.operations[self.gl].to_dense("HilbertScmidt"),
+                return fn(model.operations[self.gl].to_dense("HilbertSchmidt"),
+                          self.other_model.operations[self.gl].to_dense("HilbertSchmidt"),
                           model.basis, *self.args, **self.kwargs)  # assume functions want *dense* gates
             elif isinstance(model, _LocalNoiseModel):
                 opdim = model.operation_blks['gates'][self.gl].dim
@@ -253,8 +253,8 @@ def opsfn_factory(fn):
                 else:
                     raise ValueError(f"Could not convert model basis (name={model.basis.name}) to an appropriate {opdim}-dim basis!")
 
-                return fn(model.operation_blks['gates'][self.gl].to_dense("HilbertScmidt"),
-                          self.other_model.operation_blks['gates'][self.gl].to_dense("HilbertScmidt"),
+                return fn(model.operation_blks['gates'][self.gl].to_dense("HilbertSchmidt"),
+                          self.other_model.operation_blks['gates'][self.gl].to_dense("HilbertSchmidt"),
                           basis, *self.args, **self.kwargs)  # assume functions want *dense* gates
             else:
                 raise ValueError(f"Unsupported model type: {type(model)}!")
@@ -344,11 +344,11 @@ def vecfn_factory(fn):
         def evaluate(self, model):
             """ Evaluate this gate-set-function at `model`."""
             if self.typ == "prep":
-                return fn(model.preps[self.lbl].to_dense("HilbertScmidt"), model.basis,
+                return fn(model.preps[self.lbl].to_dense("HilbertSchmidt"), model.basis,
                           *self.args, **self.kwargs)
             else:
                 povmlbl, Elbl = self.lbl.split(":")  # for effect, lbl must == "povmLbl:ELbl"
-                return fn(model.povms[povmlbl][Elbl].to_dense("HilbertScmidt"), model.basis,
+                return fn(model.povms[povmlbl][Elbl].to_dense("HilbertSchmidt"), model.basis,
                           *self.args, **self.kwargs)
 
     GSFTemp.__name__ = fn.__name__ + str("_class")
@@ -399,13 +399,13 @@ def vecsfn_factory(fn):
         def evaluate(self, model):
             """ Evaluate this gate-set-function at `model`."""
             if self.typ == "prep":
-                return fn(model.preps[self.lbl].to_dense("HilbertScmidt"),
-                          self.other_vecsrc[self.lbl].to_dense("HilbertScmidt"),
+                return fn(model.preps[self.lbl].to_dense("HilbertSchmidt"),
+                          self.other_vecsrc[self.lbl].to_dense("HilbertSchmidt"),
                           model.basis, *self.args, **self.kwargs)
             else:
                 povmlbl, Elbl = self.lbl.split(":")  # for effect, lbl must == "povmLbl:ELbl"
-                return fn(model.povms[povmlbl][Elbl].to_dense("HilbertScmidt"),
-                          self.other_vecsrc[povmlbl][Elbl].to_dense("HilbertScmidt"),
+                return fn(model.povms[povmlbl][Elbl].to_dense("HilbertSchmidt"),
+                          self.other_vecsrc[povmlbl][Elbl].to_dense("HilbertSchmidt"),
                           model.basis, *self.args, **self.kwargs)
 
     GSFTemp.__name__ = fn.__name__ + str("_class")

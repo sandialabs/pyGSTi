@@ -406,7 +406,7 @@ class DenseOperator(DenseOperatorInterface, _KrausOperatorInterface, _LinearOper
         #   -> let reshaped K-th evector be called O_K and dual O_K^dag
         #  = sum_K D_KK O_K rho O_K^dag
         assert(self._basis is not None), "Kraus operator functionality requires specifying a superoperator basis"
-        superop_mx = self.to_dense("HilbertScmidt"); d = int(_np.round(_np.sqrt(superop_mx.shape[0])))
+        superop_mx = self.to_dense("HilbertSchmidt"); d = int(_np.round(_np.sqrt(superop_mx.shape[0])))
         std_basis = _Basis.cast('std', superop_mx.shape[0])
         choi_mx = _jt.jamiolkowski_iso(superop_mx, self._basis, std_basis) * d  # see NOTE below
         # NOTE: multiply by `d` (density mx dimension) to un-normalize choi_mx as given by
