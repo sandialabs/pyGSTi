@@ -869,10 +869,52 @@ def setup_circuit_list_for_LCS_computations(
         # cir_id_to_lanes.append(lanes_to_qubits)
     return cir_ind_and_lane_id_to_sub_cir, sub_cir_to_cir_id_and_lane_id, line_labels_to_circuit_list
 
+def model_and_gate_to_dense_rep(model, opTuple) -> _np.ndarray:
+    """
+    Look up the dense representation of a gate in the model.
+    """
+
+
+    if hasattr(model, "operations"):
+        return model.operations[opTuple].to_dense()
+    elif hasattr(model, "operation_blks"):
+        if opTuple[0] not in model.operation_blks["gates"]:
+            breakpoint()
+        return model.operation_blks["gates"][opTuple[0]].to_dense()
+    else:
+        raise ValueError("Missing attribute")
+
+def get_dense_representation_of_gate_with_perfect_swap_gates(model, op: Label, saved: dict[int | LabelTupTup, _np.ndarray], swap_dense: _np.ndarray) -> _np.ndarray:
+    op_term = 1
+    if op.num_qubits == 2:
+        # We may need to do swaps.
+        if op in saved:
+            op_term = saved[op]
+        elif op.qubits[1] < op.qubits[0]:
+            # This is in the wrong order.
+            op_term = model_and_gate_to_dense_rep(model, op)
+            op_term = swap_dense @ (op_term) @ swap_dense
+            saved[op] = op_term # Save so we only need to this operation once.
+        else:
+            op_term = model_and_gate_to_dense_rep(model, op)
+    else:
+        op_term = model_and_gate_to_dense_rep(model, op)
+    return op_term
+
+def combine_two_gates(cumulative_term, next_dense_matrix):
+    """
+    Note that the visual representation was
+
+    State Prep | CumulativeTerm | NextDense | Measure
+
+    which in matrix multiplication requires Measure @ (NextDense @ Cumulative) @ State Prep.
+    """
+    return next_dense_matrix @ cumulative_term
+
 
 class EvalTreeBasedUponLongestCommonSubstring():
 
-    def __init__(self, circuit_list: list[LabelTupTup]):
+    def __init__(self, circuit_list: list[LabelTupTup], qubit_starting_loc: int = 0):
         """
         Construct an evaluation order tree for a circuit list that minimizes the number of rounds of computation.
         """
@@ -883,6 +925,7 @@ class EvalTreeBasedUponLongestCommonSubstring():
         
         best_external_match = _np.max(external_matches[0])
         self.orig_circuits = {i: circuit_list[i] for i in range(len(circuit_list))}
+        self.qubit_start_point = qubit_starting_loc
 
 
         internal_matches = build_internal_tables(circuit_list)
@@ -1017,73 +1060,58 @@ class EvalTreeBasedUponLongestCommonSubstring():
         round_keys = sorted(_np.unique(list(self.sequence_intro.keys())))[::-1]
         saved: dict[int, _LinearOperator] = {}
         
-        def look_up_operations(model, opTuple) -> _np.ndarray:
 
-            if hasattr(model, "operations"):
-                return model.operations[opTuple].to_dense()
-            elif hasattr(model, "operation_blks"):
-                if opTuple[0] not in model.operation_blks["gates"]:
+
+        def cache_lookup_and_product(cumulative_term, term_to_extend_with: int):
+            if cumulative_term is None:
+                # look up result.
+                return saved[term]
+            elif isinstance(term, int) and cumulative_term is not None:
+                return combine_two_gates(cumulative_term, saved[term_to_extend_with]) 
+
+
+
+        def collapse_cache_line(cumulative_term, term_to_extend_with: int | LabelTupTup):
+
+            if isinstance(term_to_extend_with, int):
+                return cache_lookup_and_product(cumulative_term, term_to_extend_with)
+
+            else:
+                val = 1
+                qubits_used = [i for i in range(num_qubits_in_default)]
+                while qubits_used:
+                    qu = qubits_used[0]
+                    gate_matrix = _np.eye(4)
+                    found = False
+                    op_ind = self.qubit_start_point # Handle circuits with only qubits (i, i+k) where k is number of qubits in the subsystem.
+                    while not found and op_ind < len(term):
+                        op = term[op_ind]
+                        if qu in op.qubits:
+                            gate_matrix = get_dense_representation_of_gate_with_perfect_swap_gates(model, op, saved, self.swap_gate)
+                            found = True
+                            # We assume that the qubits need to overlap for a specific gate.
+                            # i.e. One cannot have op.qubits = (0, 2) in a system with a qubits (0,1,2).
+                            qubits_used = qubits_used[len(op.qubits):]
+                        op_ind += 1
+                    val = _np.kron(val, gate_matrix)
+                    if not found:
+                        # Remove that qubit from list to check.
+                        qubits_used = qubits_used[1:]
+
+                if val.shape != expected_shape:
                     breakpoint()
-                return model.operation_blks["gates"][opTuple[0]].to_dense()
-            else:
-                raise ValueError("Missing attribute")
-
-        def get_appropriate_gate(op, saved):
-            op_term = 1
-            if op.num_qubits == 2:
-                # We may need to do swaps.
-                if op in saved:
-                    op_term = saved[op]
-                elif op.qubits[1] < op.qubits[0]:
-                    # This is in the wrong order.
-                    op_term = look_up_operations(model, op)
-                    # op_term = self.swap_gate.product(op_term.product(self.swap_gate.T))
-                    op_term = self.swap_gate @ (op_term) @ self.swap_gate.T
-                    saved[op] = op_term # Save so we only need to this operation once.
+                if cumulative_term is None:
+                    return val
                 else:
-                    op_term = look_up_operations(model, op)
-            else:
-                op_term = look_up_operations(model, op)
-            return op_term
+                    return combine_two_gates(cumulative_term, val)
 
         expected_shape = (4**num_qubits_in_default, 4**num_qubits_in_default)
         for key in round_keys:
             for cind in self.sequence_intro[key]:
                 cumulative_term = None
                 for term in self.cache[cind]:
-                    if isinstance(term, int) and cumulative_term is None:
-                        # look up result.
-                        cumulative_term = saved[term]
-                    elif isinstance(term, int) and cumulative_term is not None:
-                        cumulative_term = saved[term] @ (cumulative_term)
-                    elif isinstance(term, LabelTupTup):
-                        val = 1
-                        qubits_used = [i for i in range(num_qubits_in_default)] # Qubits are assuming to be integer markers.
-                        while qubits_used:
-                            qu = qubits_used[0]
-                            gate_matrix = _np.eye(4)
-                            found = False
-                            op_ind = 0
-                            while not found and op_ind < len(term):
-                                op = term[op_ind]
-                                if qu in op.qubits:
-                                    gate_matrix = get_appropriate_gate(op, saved)
-                                    found = True
-                                    qubits_used = qubits_used[len(op.qubits):] # We assume that the qubits need to overlap for a specific gate. i.e. One cannot have op.qubits = (0, 2) in a system with a qubits (0,1,2).
-                                op_ind += 1
-                            val = _np.kron(val, gate_matrix)
-                            if not found:
-                                # Remove that qubit from list to check.
-                                qubits_used = qubits_used[1:]
-
-                        if val.shape != expected_shape:
-                            breakpoint()
-                        if cumulative_term is None:
-                            cumulative_term = val
-                        else:
-                            if val.shape[1] != cumulative_term.shape[0]:
-                                breakpoint()
-                            cumulative_term = val @ (cumulative_term)
+                    cumulative_term = collapse_cache_line(cumulative_term, term)
+                        
                 if cumulative_term is None:
                     saved[cind] = _np.eye(4**num_qubits_in_default) # identity of the appropriate size.
                 else:
@@ -1197,7 +1225,7 @@ class CollectionOfLCSEvalTrees():
                     sample.from_other_eval_tree(self.trees[other_key], {other_key[i]: key[i] for i in range(len(key))})
                     self.trees[key] = sample
             else:
-                self.trees[key] = EvalTreeBasedUponLongestCommonSubstring(sub_cirs)
+                self.trees[key] = EvalTreeBasedUponLongestCommonSubstring(sub_cirs, sorted(key)[0])
                 
         endtime = time.time()
 

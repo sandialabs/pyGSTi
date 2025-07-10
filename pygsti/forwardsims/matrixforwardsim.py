@@ -23,6 +23,7 @@ from pygsti.forwardsims.forwardsim import ForwardSimulator as _ForwardSimulator
 from pygsti.forwardsims.forwardsim import _bytes_for_array_types
 from pygsti.layouts.evaltree import EvalTree as _EvalTree
 from pygsti.layouts.evaltree import EvalTreeBasedUponLongestCommonSubstring as _EvalTreeLCS
+from pygsti.layouts.evaltree import setup_circuit_list_for_LCS_computations, CollectionOfLCSEvalTrees
 from pygsti.layouts.matrixlayout import MatrixCOPALayout as _MatrixCOPALayout
 from pygsti.layouts.matrixlayout import _MatrixCOPALayoutAtomWithLCS
 from pygsti.baseobjs.profiler import DummyProfiler as _DummyProfiler
@@ -1040,7 +1041,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         return hProdCache
 
     def create_layout(self, circuits, dataset=None, resource_alloc=None, array_types=('E',),
-                      derivative_dimensions=None, verbosity=0, layout_creation_circuit_cache= None):
+                      derivative_dimensions=None, verbosity=0, layout_creation_circuit_cache= None, use_old_tree_style: bool = True):
         """
         Constructs an circuit-outcome-probability-array (COPA) layout for a list of circuits.
 
@@ -1127,7 +1128,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
         layout = _MatrixCOPALayout(circuits, self.model, dataset, natoms,
                                    na, npp, param_dimensions, param_blk_sizes, resource_alloc, verbosity, 
-                                   layout_creation_circuit_cache=layout_creation_circuit_cache)
+                                   layout_creation_circuit_cache=layout_creation_circuit_cache, use_old_tree_style=use_old_tree_style)
 
         if mem_limit is not None:
             loc_nparams1 = num_params / npp[0] if len(npp) > 0 else 0
@@ -3709,12 +3710,13 @@ class LCSEvalTreeMatrixForwardSimulator(MatrixForwardSimulator):
             (final_product[i] = scaleValues[i] * prods[i]).
         """
         resource_alloc = _ResourceAllocation.cast(resource_alloc)
-        nCircuits = len(circuits)
 
-        eval_tree = _EvalTreeLCS(circuits)
-        prodCache = eval_tree.fill_out_circuit_cache(self.model)
-        Gs = prodCache[0:nCircuits]
+        my_data = setup_circuit_list_for_LCS_computations(circuits, None)
 
+        full_tree = CollectionOfLCSEvalTrees(my_data[2], my_data[1], my_data[0])
+
+        full_tree.collapse_circuits_to_process_matrices(self.model)
+        Gs = full_tree.reconstruct_full_matrices()
 
         return Gs
 
@@ -3777,4 +3779,4 @@ class LCSEvalTreeMatrixForwardSimulator(MatrixForwardSimulator):
                 array_to_fill[:, iFinal] = (probs2 - probs) / eps
 
     def create_layout(self, circuits, dataset=None, resource_alloc=None, array_types=('E', ), derivative_dimensions=None, verbosity=0, layout_creation_circuit_cache=None):
-        return super().create_layout(circuits, dataset, resource_alloc, array_types, derivative_dimensions, verbosity, layout_creation_circuit_cache)
+        return super().create_layout(circuits, dataset, resource_alloc, array_types, derivative_dimensions, verbosity, layout_creation_circuit_cache, use_old_tree_style=False)
