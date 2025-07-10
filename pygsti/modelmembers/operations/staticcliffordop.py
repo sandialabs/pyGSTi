@@ -168,7 +168,7 @@ class StaticCliffordOp(_LinearOperator, _NoErrorGeneratorInterface):
         """
         return _np.empty((0,), 'd')
 
-    def to_dense(self, on_space='minimal'):
+    def to_dense(self, on_space: SpaceT='minimal'):
         """
         Return the dense array used to represent this operation within its evolution type.
 

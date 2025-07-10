@@ -27,12 +27,8 @@ from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.circuits.circuitstructure import GermFiducialPairPlaquette as _GermFiducialPairPlaquette, \
     PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
 
-from pygsti.tools import basistools as _bt
-from pygsti.tools import internalgates as _itgs
 from pygsti.tools import listtools as _lt
 from pygsti.tools import mpitools as _mpit
-from pygsti.enums import SpaceConversionType
-from pygsti.tools import optools as _ot
 from pygsti.tools import slicetools as _slct
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
 
@@ -1261,7 +1257,7 @@ def _compute_reps_for_synthetic_idle(model, germ_str, nqubits, core_qubits):
     for gl in germ_str:
         if gl not in core_gates:
             core_gates[gl] = extract_gate(model.operation_blks['layers'][gl])
-        product = _np.dot(core_gates[gl].to_dense(SpaceConversionType.HilbertSchmidt), product)
+        product = _np.dot(core_gates[gl].to_dense('HilbertSchmidt'), product)
 
     # Then just do matrix products until we hit the identity (or a large order)
     reps = 1; target = _np.identity(core_dim, 'd')

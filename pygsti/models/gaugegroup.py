@@ -18,7 +18,7 @@ from pygsti.baseobjs import statespace as _statespace
 from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.evotypes.evotype import Evotype as _Evotype
-from pygsti.enums import SpaceConversionType
+from pygsti import SpaceT
 
 class GaugeGroup(_NicelySerializable):
     """
@@ -450,7 +450,7 @@ class OpGaugeGroupElement(GaugeGroupElement):
         -------
         numpy.ndarray
         """
-        return self._operation.to_dense(SpaceConversionType.Minimal)
+        return self._operation.to_dense("minimal")
 
     @property
     def transform_matrix_inverse(self):
@@ -462,7 +462,7 @@ class OpGaugeGroupElement(GaugeGroupElement):
         numpy.ndarray
         """
         if self._inv_matrix is None:
-            self._inv_matrix = _np.linalg.inv(self._operation.to_dense(SpaceConversionType.Minimal))
+            self._inv_matrix = _np.linalg.inv(self._operation.to_dense("minimal"))
         return self._inv_matrix
 
     def deriv_wrt_params(self, wrt_filter=None):

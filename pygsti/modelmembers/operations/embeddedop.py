@@ -19,8 +19,7 @@ from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOpe
 from pygsti.modelmembers import modelmember as _modelmember
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GlobalElementaryErrorgenLabel, LocalElementaryErrorgenLabel as _LocalElementaryErrorgenLabel
-from pygsti.enums import SpaceConversionType
-
+from pygsti import SpaceT
 class EmbeddedOp(_LinearOperator):
     """
     An operation containing a single lower (or equal) dimensional operation within it.
@@ -95,7 +94,7 @@ class EmbeddedOp(_LinearOperator):
     def _update_denserep(self):
         """Performs additional update for the case when we use a dense underlying representation."""
         self._rep.base.flags.writeable = True
-        self._rep.base[:, :] = self.to_dense(SpaceConversionType.Minimal)
+        self._rep.base[:, :] = self.to_dense("minimal")
         self._rep.base.flags.writeable = False
 
     def _update_submember_state_spaces(self, old_parent_state_space, new_parent_state_space):
@@ -240,7 +239,7 @@ class EmbeddedOp(_LinearOperator):
                     self._iter_elements_cache[on_space].append(item)
                     yield item
 
-    def to_sparse(self, on_space='minimal'):
+    def to_sparse(self, on_space: SpaceT='minimal'):
         """
         Return the operation as a sparse matrix
 
@@ -262,7 +261,7 @@ class EmbeddedOp(_LinearOperator):
             finalOp[i, j] = embedded_sparse[gi, gj]
         return finalOp.tocsr()
 
-    def to_dense(self, on_space='minimal'):
+    def to_dense(self, on_space: SpaceT='minimal'):
         """
         Return the operation as a dense matrix
 

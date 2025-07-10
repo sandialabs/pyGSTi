@@ -21,7 +21,7 @@ from pygsti.modelmembers import modelmember as _modelmember, term as _term
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.tools import listtools as _lt
 from pygsti.tools import matrixtools as _mt
-from pygsti.enums import SpaceConversionType
+from pygsti import SpaceT
 
 class TensorProductState(_State):
     """
@@ -79,7 +79,7 @@ class TensorProductState(_State):
             vl[factor_local_inds] = factor_state.parameter_labels
         return vl
 
-    def to_dense(self, on_space='minimal', scratch=None):
+    def to_dense(self, on_space: SpaceT='minimal', scratch=None):
         """
         Return this state vector as a (dense) numpy array.
 
@@ -280,11 +280,11 @@ class TensorProductState(_State):
         numpy array
             Array of derivatives, shape == (dimension, num_params)
         """
-        typ = self.factors[0].to_dense(SpaceConversionType.Minimal).dtype if len(self.factors) > 0 else 'd'
+        typ = self.factors[0].to_dense("minimal").dtype if len(self.factors) > 0 else 'd'
 
         #HACK to deal with fact that output of to_dense is really what is differentiated
         # but this may not match self.dim == self.state_space.dim, e.g. for pure state vecs.
-        dims = [len(fct.to_dense(SpaceConversionType.Minimal)) for fct in self.factors]
+        dims = [len(fct.to_dense("minimal")) for fct in self.factors]
         dim = int(_np.prod(dims))
 
         derivMx = _np.zeros((dim, self.num_params), typ)
@@ -299,15 +299,15 @@ class TensorProductState(_State):
             deriv.shape = (fct_dim, vec.num_params)
 
             if i > 0:  # factors before ith
-                pre = self.factors[0].to_dense(SpaceConversionType.Minimal)
+                pre = self.factors[0].to_dense("minimal")
                 for vecA in self.factors[1:i]:
-                    pre = _np.kron(pre, vecA.to_dense(SpaceConversionType.Minimal))
+                    pre = _np.kron(pre, vecA.to_dense("minimal"))
                 deriv = _np.kron(pre[:, None], deriv)  # add a dummy 1-dim to 'pre' and do kron properly...
 
             if i + 1 < len(self.factors):  # factors after ith
-                post = self.factors[i + 1].to_dense(SpaceConversionType.Minimal)
+                post = self.factors[i + 1].to_dense("minimal")
                 for vecA in self.factors[i + 2:]:
-                    post = _np.kron(post, vecA.to_dense(SpaceConversionType.Minimal))
+                    post = _np.kron(post, vecA.to_dense("minimal"))
                 deriv = _np.kron(deriv, post[:, None])  # add a dummy 1-dim to 'post' and do kron properly...
 
             assert(fct_local_inds is not None), \
@@ -336,5 +336,5 @@ class TensorProductState(_State):
         #s += _mt.mx_to_string(ar, width=4, prec=2)
 
         # factors are just other States
-        s += " x ".join([_mt.mx_to_string(fct.to_dense(SpaceConversionType.Minimal), width=4, prec=2) for fct in self.factors])
+        s += " x ".join([_mt.mx_to_string(fct.to_dense("minimal"), width=4, prec=2) for fct in self.factors])
         return s

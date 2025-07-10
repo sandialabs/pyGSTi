@@ -42,7 +42,7 @@ from .affineshiftop import AffineShiftOp
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.tools import basistools as _bt
 from pygsti.tools import optools as _ot
-from pygsti.enums import SpaceConversionType
+from pygsti import SpaceT
 
 def create_from_unitary_mx(unitary_mx, op_type, basis='pp', stdname=None, evotype='default', state_space=None):
     """ TODO: docstring - note that op_type can be a list/tuple of types in order of precedence """
@@ -86,7 +86,7 @@ def create_from_unitary_mx(unitary_mx, op_type, basis='pp', stdname=None, evotyp
 
                 if op.dim <= 16:  # only do this for up to 2Q operations, otherwise to_dense is too expensive
                     expected_superop_mx = _ot.unitary_to_superop(U, basis)
-                    assert (_np.linalg.norm(op.to_dense(SpaceConversionType.HilbertSchmidt) - expected_superop_mx) < 1e-6), \
+                    assert (_np.linalg.norm(op.to_dense("HilbertScmidt") - expected_superop_mx) < 1e-6), \
                         "Failure to create Lindblad operation (maybe due the complex log's branch cut?)"
             else:
                 raise ValueError("Unknown operation type '%s'!" % str(typ))
@@ -141,7 +141,7 @@ def create_from_superop_mx(superop_mx, op_type, basis='pp', stdname=None, evotyp
                     ret = ExpErrorgenOp(errorgen)
 
                 if ret.dim <= 16:  # only do this for up to 2Q operations, otherwise to_dense is too expensive
-                    assert(_np.linalg.norm(superop_mx - ret.to_dense(SpaceConversionType.HilbertSchmidt))
+                    assert(_np.linalg.norm(superop_mx - ret.to_dense("HilbertScmidt"))
                            < 1e-6), "Failure to create CPTP operation (maybe due the complex log's branch cut?)"
                 return ret
 
@@ -341,11 +341,11 @@ def convert(operation, to_type, basis, ideal_operation=None, flatten_structure=F
                 proj_basis = 'PP' if operation.state_space.is_entirely_qubits else basis
                 if ideal_operation == "identity":  # special value
                     postfactor_op = None
-                    error_map_mx = operation.to_dense(SpaceConversionType.HilbertSchmidt)  # error generators are only in HS space
+                    error_map_mx = operation.to_dense("HilbertScmidt")  # error generators are only in HS space
                 else:
                     postfactor_op = ideal_operation if (ideal_operation is not None) else operation
-                    error_map_mx = _np.dot(operation.to_dense(SpaceConversionType.HilbertSchmidt),
-                                           _np.linalg.inv(postfactor_op.to_dense(SpaceConversionType.HilbertSchmidt)))
+                    error_map_mx = _np.dot(operation.to_dense("HilbertScmidt"),
+                                           _np.linalg.inv(postfactor_op.to_dense("HilbertScmidt")))
 
                 lndtype = LindbladParameterization.cast(to_type)
                 if lndtype.meta == '1+':
@@ -366,7 +366,7 @@ def convert(operation, to_type, basis, ideal_operation=None, flatten_structure=F
 
                 if ret.dim <= 81:  # only do this for up to 2-qutrit operations, otherwise to_dense is too expensive
                                    #This should probably be a relative tolerance.
-                    op_diff = _np.linalg.norm(operation.to_dense(SpaceConversionType.HilbertSchmidt) - ret.to_dense(SpaceConversionType.HilbertSchmidt))
+                    op_diff = _np.linalg.norm(operation.to_dense("HilbertScmidt") - ret.to_dense("HilbertScmidt"))
                     assert(op_diff< cptp_truncation_tol), "Failure to create CPTP operation, frobenius norm between original and converted operation large," \
                                             + str(op_diff) + ", (maybe due the complex log's branch cut?)"
                 return ret

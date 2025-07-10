@@ -148,7 +148,7 @@ class FullCPTPOp(_KrausOperatorInterface, _LinearOperator):
         else:  # self._reptype == 'dense':
             self._update_dense_rep()
 
-    def to_dense(self, on_space='minimal'):
+    def to_dense(self, on_space: SpaceT='minimal'):
         """
         Return the dense array used to represent this operation within its evolution type.
 

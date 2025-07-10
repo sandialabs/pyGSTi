@@ -58,7 +58,7 @@ class StaticStandardOp(_LinearOperator, _NoErrorGeneratorInterface):
         rep = evotype.create_standard_rep(name, basis, state_space)
         _LinearOperator.__init__(self, rep, evotype)
 
-    def to_dense(self, on_space='minimal'):
+    def to_dense(self, on_space: SpaceT='minimal'):
         """
         Return the dense array used to represent this operation within its evolution type.
 

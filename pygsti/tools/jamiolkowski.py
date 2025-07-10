@@ -15,7 +15,7 @@ import numpy as _np
 from pygsti.tools import basistools as _bt
 from pygsti.tools import matrixtools as _mt
 from pygsti.baseobjs.basis import Basis as _Basis
-from pygsti.enums import SpaceConversionType
+from pygsti import SpaceT
 
 # Gate Mx G:      rho  --> G rho                    where G and rho are in the Pauli basis (by definition/convention)                                           # noqa
 #            vec(rhoS) --> GStd vec(rhoS)           where GS and rhoS are in the std basis, GS = PtoS * G * StoP                                                # noqa
@@ -348,7 +348,7 @@ def sums_of_negative_choi_eigenvalues(model):
     """
     ret = []
     for (_, gate) in model.operations.items():
-        J = fast_jamiolkowski_iso_std(gate.to_dense(SpaceConversionType.HilbertSchmidt), model.basis)  # Choi mx basis doesn't matter
+        J = fast_jamiolkowski_iso_std(gate.to_dense("HilbertScmidt"), model.basis)  # Choi mx basis doesn't matter
         evals = _np.linalg.eigvals(J)  # could use eigvalsh, but wary of this since eigh can be wrong...
         sumOfNeg = 0.0
         for ev in evals:

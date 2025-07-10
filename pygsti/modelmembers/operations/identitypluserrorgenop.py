@@ -23,8 +23,7 @@ from pygsti.modelmembers import modelmember as _modelmember, term as _term
 from pygsti.modelmembers.errorgencontainer import ErrorGeneratorContainer as _ErrorGeneratorContainer
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
 from pygsti.tools import matrixtools as _mt
-from pygsti.enums import SpaceConversionType
-
+from pygsti import SpaceT
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 TODENSE_TRUNCATE = 1e-11
 
@@ -107,7 +106,7 @@ class IdentityPlusErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         if self._rep_type == 'dense':
             # compute 1 + errorgen explicitly
             self._rep.base.flags.writeable = True
-            self._rep.base[:, :] = self._ident + self.errorgen.to_dense(SpaceConversionType.HilbertSchmidt)
+            self._rep.base[:, :] = self._ident + self.errorgen.to_dense("HilbertScmidt")
             self._rep.base.flags.writeable = False
         else:
             pass  # nothing to do -- no need to even notify OpRepIdentityPlusErrorgen that errorgen has changed
@@ -135,7 +134,7 @@ class IdentityPlusErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         self.terms = {}  # clear terms cache since param indices have changed now
         self.local_term_poly_coeffs = {}
 
-    def to_dense(self, on_space='minimal'):
+    def to_dense(self, on_space: SpaceT='minimal'):
         """
         Return this operation as a dense matrix.
 
@@ -153,7 +152,7 @@ class IdentityPlusErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
             # Note: above fails with shape mismatch if try to get dense Hilbert-space op - is this desired?
 
     #FUTURE: maybe remove this function altogether, as it really shouldn't be called
-    def to_sparse(self, on_space='minimal'):
+    def to_sparse(self, on_space: SpaceT='minimal'):
         """
         Return the operation as a sparse matrix.
 
