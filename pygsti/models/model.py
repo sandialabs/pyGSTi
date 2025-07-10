@@ -2554,7 +2554,7 @@ class OpModel(Model):
 
         if save_checkpoint and checkpoint_obj is None:
             assert isinstance(save_checkpoint, str), 'Checkpoint save path must be a string'
-            assert _exists(save_checkpoint.rstrip(save_checkpoint.split('/')[-1])), 'Checkpoint save folder not found. Make sure the folder ' + save_checkpoint.split('/')[:-1] + ' exists'
+            assert _exists(save_checkpoint.rstrip(save_checkpoint.split('/')[-1])), 'Checkpoint save folder not found. Make sure the folder ' + str(save_checkpoint.split('/')[:-1]) + ' exists'
             checkpoint_obj = _FOGICheckpoint(0)
 
         if primitive_op_labels is None:

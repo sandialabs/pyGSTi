@@ -20,7 +20,7 @@ from pygsti.models import fogistore  as _fogistore
 from pygsti.models.modelparaminterposer import LinearInterposer as _LinearInterposer
 from pygsti.baseobjs.errorgenspace import ErrorgenSpace as _ErrorgenSpace
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
-from pygsti.baseobjs import Label as _Label
+from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GlobalElementaryErrorgenLabel,\
 LocalElementaryErrorgenLabel as _LocalElementaryErrorgenLabel
 class FOGISetupCheckpoint(_NicelySerializable):
@@ -72,7 +72,7 @@ class FOGISetupCheckpoint(_NicelySerializable):
         return cls(step, param_interposer=param_interposer, fogi_store=fogi_store, allowed_row_basis_labels=allowed_row_basis_labels,gauge_action_matrices=gauge_action_matrices,gauge_action_gauge_spaces=gauge_action_gauge_spaces)
 
 class ConstructFOGIQuantitiesCheckpoint(_NicelySerializable):
-    def __init__(self, iteration, fogi_dirs, fogi_meta, dep_fogi_dirs, dep_fogi_meta, ccoms, larger_sets):
+    def __init__(self, iteration_tracker):#, fogi_dirs, fogi_meta, dep_fogi_dirs, dep_fogi_meta, ccoms, larger_sets):
         """_summary_
 
         Args:
@@ -80,19 +80,27 @@ class ConstructFOGIQuantitiesCheckpoint(_NicelySerializable):
             fogi_dirs (_type_): _description_
         """
         super().__init__()
-        self.iteration = iteration
-        self.fogi_dirs = fogi_dirs
-        self.fogi_meta = fogi_meta
-        self.dep_fogi_dirs = dep_fogi_dirs
-        self.dep_fogi_meta = dep_fogi_meta
-        self.ccoms = ccoms
-        self.larger_sets = larger_sets
+        self.iteration_tracker = iteration_tracker
+        #self.fogi_dirs = fogi_dirs
+        #self.fogi_meta = fogi_meta
+        #self.dep_fogi_dirs = dep_fogi_dirs
+        #self.dep_fogi_meta = dep_fogi_meta
+        #self.ccoms = ccoms
+        #self.larger_sets = larger_sets
         
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
-        state.update({
-
+        state.update({'iteration_tracker' : self.iteration_tracker
         })
+        return state
+    
+    @classmethod
+    def from_nice_serialization(cls, state):
+        set_size = state['iteration_tracker'][0]
+        op_label = _Label(state['iteration_tracker'][1])
+        existing_set = [_Label(label) for label in state['iteration_tracker'][2]]
+        iteration_tracker = (set_size, op_label, existing_set)
+        return cls(iteration_tracker)
         
 def first_order_gauge_action_matrix(clifford_superop_mx, target_sslbls, model_state_space,
                                     elemgen_gauge_basis, elemgen_row_basis):
@@ -572,7 +580,8 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                 new_set = tuple(sorted(existing_set + (op_label,)))
                 if new_set in larger_sets: continue
 
-
+                checkpoint = ConstructFOGIQuantitiesCheckpoint((set_size, op_label, existing_set))
+                checkpoint.write('delete_test.json')
                 #FOGI DEBUG print("\n##", existing_set, "+", op_label)
 
                 # Merge existing set + op_label => new set of larger size
