@@ -16,8 +16,9 @@ import numpy as _np
 
 from pygsti.layouts.distlayout import DistributableCOPALayout as _DistributableCOPALayout
 from pygsti.layouts.distlayout import _DistributableAtom
-from pygsti.layouts.evaltree import EvalTree as _EvalTree
+from pygsti.layouts.evaltree import CollectionOfLCSEvalTrees as _CollectionOfLCSEvalTrees
 from pygsti.layouts.evaltree import EvalTreeBasedUponLongestCommonSubstring as _EvalTreeLCS
+from pygsti.layouts.evaltree import EvalTree as _EvalTree
 from pygsti.layouts.evaltree import setup_circuit_list_for_LCS_computations as _setup_circuit_list_for_LCS_computations
 from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.tools import listtools as _lt
@@ -346,8 +347,8 @@ class _MatrixCOPALayoutAtomWithLCS(_DistributableAtom):
 
         vals = list(double_expanded_nospam_circuits_plus_scratch.values())
         
-        circuits_this_layout_will_handle_without_any_spam, inds_needed_to_reconstruct_from_tree = _setup_circuit_list_for_LCS_computations(vals, implicit_idle_gate)
-        self.tree = _EvalTreeLCS(circuits_this_layout_will_handle_without_any_spam, inds_needed_to_reconstruct_from_tree)
+        cir_ind_and_lane_id_to_sub_cir, sub_cir_to_cir_id_and_lane_id, line_labels_to_circuit_list = _setup_circuit_list_for_LCS_computations(vals, implicit_idle_gate)
+        self.tree = _CollectionOfLCSEvalTrees(line_labels_to_circuit_list, sub_cir_to_cir_id_and_lane_id, cir_ind_and_lane_id_to_sub_cir)
         #print("Atom tree: %d circuits => tree of size %d" % (len(expanded_nospam_circuits), len(self.tree)))
 
         self._num_nonscratch_tree_items = len(expanded_nospam_circuits)  # put this in EvalTree?
@@ -588,9 +589,10 @@ class MatrixCOPALayout(_DistributableCOPALayout):
 
             gatename = None
             if hasattr(model._layer_rules, "_singleq_idle_layer_labels"):
-                keys = list(model._layer_rules._singleq_idle_layer_labels.keys())
-                if model._layer_rules.implicit_idle_mode == "pad_1Q":
-                    gatename = model._layer_rules._singleq_idle_layer_labels[keys[0]].name
+                if model._layer_rules._singleq_idle_layer_labels:
+                    keys = list(model._layer_rules._singleq_idle_layer_labels.keys())
+                    if model._layer_rules.implicit_idle_mode == "pad_1Q":
+                        gatename = model._layer_rules._singleq_idle_layer_labels[keys[0]].name
             return _MatrixCOPALayoutAtomWithLCS(unique_complete_circuits, unique_nospam_circuits,
                                          circuits_by_unique_nospam_circuits, ds_circuits,
                                          group, helpful_scratch_group, model, 
