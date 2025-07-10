@@ -20,8 +20,19 @@ from pygsti.baseobjs.smartcache import smart_cached
 def _vnorm(x, vmin, vmax):
     #Perform linear mapping from [vmin,vmax] to [0,1]
     # (which is just a *part* of the full mapping performed)
-    if _np.isclose(vmin, vmax): return _np.ma.zeros(x.shape, 'd')
-    return _np.clip((x - vmin) / (vmax - vmin), 0.0, 1.0)
+    if abs(vmin - vmax) < (1e-8 + 1e-5*vmax): #inline previous np.isclose call
+        return _np.ma.zeros(x.shape, 'd')
+    #In versions of numpy from 1.17-1.24 the function np.clip
+    #had an issue that caused it to run much slower than it should.
+    #See: https://github.com/numpy/numpy/issues/14281
+    #The workaround at that time was to use this function (which in the
+    #stated versions is 10x faster).
+    #This is has since been patched in 1.25+, but not everyone
+    #is/can be using that recent of a version, and I don't see any
+    #downside to using the version from core.umath for now. 
+    #TODO: switch back to np.clip once we're confident most users are
+    #on 1.25+
+    return _np.core.umath.clip((x - vmin) / (vmax - vmin), 0.0, 1.0)
 
 
 @smart_cached
@@ -182,6 +193,23 @@ class Colormap(object):
         # here because plotly automatically maps (linearly) the interval
         # between a heatmap's zmin and zmax to [0,1].
         return value
+    
+    def normalize_interpolate(self, value):
+        """
+        Normalize value to between zero and one as you would for use with the 
+        `interpolate_color` method.
+
+        Parameters
+        ----------
+        value : float or numpy.ndarray
+            The value to normalize.
+
+        Returns
+        -------
+        float or numpy.ndarray
+        """
+        raise NotImplementedError('This should be defined by children.')
+
 
     def besttxtcolor(self, value):
         """
@@ -208,7 +236,6 @@ class Colormap(object):
 
         # Perceived brightness calculation from http://alienryderflex.com/hsp.html
         P = self._brightness(R, G, B)
-        #print("DB: value = %f (%s), RGB = %f,%f,%f, P=%f (%s)" % (value,z,R,G,B,P,"black" if 0.5 <= P else "white"))
         return "black" if 0.5 <= P else "white"
 
     def create_plotly_colorscale(self):
@@ -242,7 +269,7 @@ class Colormap(object):
         str
             A string representation of the plotly color of the form `"rgb(R,G,B)"`.
         """
-        normalized_value = self.normalize(value)
+        normalized_value = self.normalize_interpolate(value)
 
         for i, (val, color) in enumerate(self.rgb_colors[:-1]):
             next_val, next_color = self.rgb_colors[i + 1]
@@ -496,6 +523,22 @@ class LinlogColormap(Colormap):
         norm = _mpl_LinLogNorm(self)
         cmap.set_bad('w', 1)
         return norm, cmap
+    
+    def normalize_interpolate(self, value):
+        """
+        Normalize value to between zero and one as you would for use with the 
+        `interpolate_color` method.
+
+        Parameters
+        ----------
+        value : float or numpy.ndarray
+            The value to normalize.
+
+        Returns
+        -------
+        float or numpy.ndarray
+        """
+        return self.normalize(value)
 
 
 class DivergingColormap(Colormap):
@@ -581,17 +624,6 @@ class DivergingColormap(Colormap):
 class SequentialColormap(Colormap):
     """
     A sequential color map
-
-    Parameters
-    ----------
-    vmin : float
-        The minium value of the data being colormapped.
-
-    vmax : float
-        The maximum value of the data being colormapped.
-
-    color : {"whiteToBlack", "blackToWhite"}
-        What colors to use.
     """
 
     def __init__(self, vmin, vmax, color="whiteToBlack"):
@@ -600,10 +632,13 @@ class SequentialColormap(Colormap):
 
         Parameters
         ----------
-        vmin, vmax : float
-            Min and max values of the data being colormapped.
+        vmin : float
+            The minium value of the data being colormapped.
 
-        color : {"whiteToBlack", "blackToWhite"}
+        vmax : float
+            The maximum value of the data being colormapped.
+
+        color : {"whiteToBlack", "blackToWhite", "whiteToBlue", "whiteToRed"}
             What colors to use.
         """
         hmin = vmin
@@ -642,7 +677,23 @@ class SequentialColormap(Colormap):
         #    result = result[0]
         #return result
 
+    def normalize_interpolate(self, value):
+        """
+        Normalize value to between zero and one as you would for use with the 
+        `interpolate_color` method.
 
+        Parameters
+        ----------
+        value : float or numpy.ndarray
+            The value to normalize.
+
+        Returns
+        -------
+        float or numpy.ndarray
+        """
+        return _vnorm(value, self.hmin, self.hmax)
+
+    
 class PiecewiseLinearColormap(Colormap):
     """
     A piecewise-linear color map

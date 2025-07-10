@@ -4375,7 +4375,7 @@ class Circuit(object):
                     if openqasmlist_for_gate is None:
                         # Try to look up the operation in mapping dict instead
                         openqasmfn_for_gate = gateargs_map.get(gate.name, None)
-                        assert openqasmfn_for_gate is not None, "Could not look up {} as qasm list or func" % gate.name
+                        assert openqasmfn_for_gate is not None, f"Could not look up {gate.name} as qasm list or func"
                         openqasmlist_for_gate = openqasmfn_for_gate(gate.args)
 
                     openqasm_for_gate = ''
