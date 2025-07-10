@@ -72,7 +72,7 @@ class FOGISetupCheckpoint(_NicelySerializable):
         return cls(step, param_interposer=param_interposer, fogi_store=fogi_store, allowed_row_basis_labels=allowed_row_basis_labels,gauge_action_matrices=gauge_action_matrices,gauge_action_gauge_spaces=gauge_action_gauge_spaces)
 
 class ConstructFOGIQuantitiesCheckpoint(_NicelySerializable):
-    def __init__(self, iteration_tracker):#, fogi_dirs, fogi_meta, dep_fogi_dirs, dep_fogi_meta, ccoms, larger_sets):
+    def __init__(self, iteration_tracker, fogi_dirs, fogi_meta):#, dep_fogi_dirs, dep_fogi_meta, ccoms, larger_sets):
         """_summary_
 
         Args:
@@ -81,8 +81,8 @@ class ConstructFOGIQuantitiesCheckpoint(_NicelySerializable):
         """
         super().__init__()
         self.iteration_tracker = iteration_tracker
-        #self.fogi_dirs = fogi_dirs
-        #self.fogi_meta = fogi_meta
+        self.fogi_dirs = fogi_dirs
+        self.fogi_meta = fogi_meta
         #self.dep_fogi_dirs = dep_fogi_dirs
         #self.dep_fogi_meta = dep_fogi_meta
         #self.ccoms = ccoms
@@ -90,8 +90,19 @@ class ConstructFOGIQuantitiesCheckpoint(_NicelySerializable):
         
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
-        state.update({'iteration_tracker' : self.iteration_tracker
+        encoded_metadata = []
+        for object in self.fogi_meta:
+            encoded_gauge_space = self._encodemx(object['gaugespace_dir'])
+            native_opset_labels = [label.to_native() for label in object['opset']]
+            object_copy = object.copy()
+            object_copy['gaugespace_dir'] = encoded_gauge_space
+            object_copy['opset'] = native_opset_labels
+            encoded_metadata.append(object_copy)
+        state.update({'iteration_tracker' : self.iteration_tracker,
+                      'fogi_dirs' : self._encodemx(self.fogi_dirs),
+                      'fogi_meta' : encoded_metadata
         })
+        
         return state
     
     @classmethod
@@ -100,7 +111,11 @@ class ConstructFOGIQuantitiesCheckpoint(_NicelySerializable):
         op_label = _Label(state['iteration_tracker'][1])
         existing_set = [_Label(label) for label in state['iteration_tracker'][2]]
         iteration_tracker = (set_size, op_label, existing_set)
-        return cls(iteration_tracker)
+        for object in state['fogi_meta']:
+            object['gaugespace_dir'] = cls._decodemx(object['gaugespace_dir'])
+            object['opset'] = tuple(_Label(label) for label in object['opset'])
+        fogi_meta = state['fogi_meta']
+        return cls(iteration_tracker, cls._decodemx(state['fogi_dirs']), fogi_meta)
         
 def first_order_gauge_action_matrix(clifford_superop_mx, target_sslbls, model_state_space,
                                     elemgen_gauge_basis, elemgen_row_basis):
@@ -580,7 +595,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                 new_set = tuple(sorted(existing_set + (op_label,)))
                 if new_set in larger_sets: continue
 
-                checkpoint = ConstructFOGIQuantitiesCheckpoint((set_size, op_label, existing_set))
+                checkpoint = ConstructFOGIQuantitiesCheckpoint((set_size, op_label, existing_set), fogi_dirs, fogi_meta)
                 checkpoint.write('delete_test.json')
                 #FOGI DEBUG print("\n##", existing_set, "+", op_label)
 
