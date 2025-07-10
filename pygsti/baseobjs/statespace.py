@@ -683,6 +683,12 @@ class QuditSpace(StateSpace):
     def __setstate__(self, state_dict):
         for k, v in state_dict.items():
             self.__dict__[k] = v
+            try:
+                _ = self.__getattribute__(k)
+            except AttributeError:
+                _ = self.__dict__.pop(k)
+                self.__dict__['_' + k] = v
+                _ = self.__getattribute__(k)
         #reinitialize the hash
         self._hash = hash((self.tensor_product_blocks_labels,
                            self.tensor_product_blocks_dimensions,
