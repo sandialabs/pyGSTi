@@ -477,12 +477,9 @@ def _lcs_dp_version(A: Sequence, B: Sequence):
     Compute the longest common substring between A and B using
     dynamic programming.
 
-    
     This will use O(n \times m) space and take O(n \times m \times max(m, n)) time.
-
     """
-    
-    table = setup_lcs_dynamic_programming_table(A, B)
+    table = _np.zeros((len(A) + 1, len(B) + 1))
     n, m = table.shape
     for i in range(n-2, -1, -1):
         for j in range(m-2, -1, -1):
@@ -494,11 +491,6 @@ def _lcs_dp_version(A: Sequence, B: Sequence):
             table[i,j] = max(opt1, opt2, opt3)
     return table
 
-def setup_lcs_dynamic_programming_table(A, B):
-    """
-    Create the table used for LCS dynamic programming.
-    """
-    return _np.zeros((len(A) + 1, len(B) + 1))
 
 def _conduct_one_round_of_lcs_simplification(circuits, table_data_and_sequences, internal_tables_and_sequences, starting_cache_num, cache_struct, round_num: int=0):
     if table_data_and_sequences:
