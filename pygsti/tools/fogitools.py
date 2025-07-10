@@ -88,6 +88,12 @@ class ConstructFOGIQuantitiesCheckpoint(_NicelySerializable):
         self.ccoms = ccoms
         self.larger_sets = larger_sets
         
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({
+
+        })
+        
 def first_order_gauge_action_matrix(clifford_superop_mx, target_sslbls, model_state_space,
                                     elemgen_gauge_basis, elemgen_row_basis):
     """
