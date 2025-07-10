@@ -10,6 +10,7 @@ Defines the MatrixForwardSimulator calculator class
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import time
 import collections as _collections
 import time as _time
 import warnings as _warnings
@@ -3776,10 +3777,19 @@ class LCSEvalTreeMatrixForwardSimulator(MatrixForwardSimulator):
         
         # Overestimate the amount of cache usage by assuming everything is the same size.
         dim = self.model.evotype.minimal_dim(self.model.state_space)
-        resource_alloc.check_can_allocate_memory(len(layout_atom.tree.cache) * dim**2)  # prod cache
+        # resource_alloc.check_can_allocate_memory(len(layout_atom.tree.cache) * dim**2)  # prod cache
 
-        prodCache = layout_atom.tree.collapse_circuits_to_process_matrices(self.model)
-        Gs = layout_atom.tree.reconstruct_full_matrices(prodCache)
+        starttime =time.time()
+        layout_atom.tree.collapse_circuits_to_process_matrices(self.model)
+        endtime = time.time()
+
+        print("Time to collapse the process matrices (s): ", endtime - starttime)
+        starttime = time.time()
+        Gs = layout_atom.tree.reconstruct_full_matrices()
+        endtime = time.time()
+        print("Time to reconstruct the whole matrices (s): ", endtime - starttime)
+
+        starttime = time.time()
         old_err = _np.seterr(over='ignore')
         for spam_tuple, (element_indices, tree_indices) in layout_atom.indices_by_spamtuple.items():
             # "element indices" index a circuit outcome probability in array_to_fill's first dimension
@@ -3790,6 +3800,8 @@ class LCSEvalTreeMatrixForwardSimulator(MatrixForwardSimulator):
             _fas(array_to_fill, [element_indices],
                  self._probs_from_rho_e(rho, E, Gs[tree_indices], 1))
         _np.seterr(**old_err)
+        endtime = time.time()
+        print("Time to complete the spam operations (s): ", endtime - starttime)
 
     def _bulk_fill_dprobs_atom(self, array_to_fill, dest_param_slice, layout_atom: _MatrixCOPALayoutAtomWithLCS, param_slice, resource_alloc):
 
@@ -3816,7 +3828,7 @@ class LCSEvalTreeMatrixForwardSimulator(MatrixForwardSimulator):
                 iFinal = iParamToFinal[i]
                 vec = orig_vec.copy(); vec[i] += eps
                 self.model.from_vector(vec, close=True)
-                self._bulk_fill_probs_atom(probs2, layout_atom)
+                self._bulk_fill_probs_atom(probs2, layout_atom, resource_alloc)
                 array_to_fill[:, iFinal] = (probs2 - probs) / eps
 
     def create_layout(self, circuits, dataset=None, resource_alloc=None, array_types=('E', ), derivative_dimensions=None, verbosity=0, layout_creation_circuit_cache=None):

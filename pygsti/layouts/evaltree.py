@@ -10,6 +10,7 @@ Defines the EvalTree class.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
 import bisect as _bisect
 import time as _time  # DEBUG TIMERS
 import warnings as _warnings
@@ -23,6 +24,7 @@ from pygsti.modelmembers.operations import create_from_superop_mx
 from pygsti.modelmembers.operations import LinearOperator as _LinearOperator
 import itertools
 from typing import Sequence
+import time
 
 
 
@@ -613,10 +615,11 @@ def _compute_lcs_for_every_pair_of_circuits(circuit_list: list[_Circuit]):
     best_subsequences = {}
     best_lengths = _np.zeros((len(circuit_list), len(circuit_list)))
     curr_best = 0
-    for i, cir0 in enumerate(circuit_list):
+    for i in range(len(circuit_list)-1, -1, -1): # Lets do this in reverse order
+        cir0 = circuit_list[i]
         if len(cir0) >= curr_best:
             # Could be the best.
-            for j in range(i+1, len(circuit_list)):
+            for j in range(i-1, -1, -1):
                 cir1 = circuit_list[j]
                 if len(cir1) >= curr_best:
                     table = _lcs_dp_version(cir0, cir1)
@@ -790,8 +793,36 @@ def _compute_subcircuits(circuit, qubits_to_lanes: dict[int, int]) -> list[list[
 
     return lanes_to_gates
 
-def setup_circuit_list_for_LCS_computations(circuit_list: list[_Circuit],
-                                            implicit_idle_gate_name: str = "I") -> tuple[list[tuple],list[int], list[dict[int, int]]]:
+
+def _split_circuits_by_lanes(circuit_list):
+    # First eliminate the duplicate circuits.
+
+    unique_circuits = []
+    matching_inds: dict[int, set[int]] = {}
+    C = len(circuit_list)
+    seen_circs: dict[tuple[LabelTupTup, int]] = {}
+    cache = {i: circuit_list[i] for i in range(len(circuit_list))}
+    for i in range(C):
+        my_cir = circuit_list[i]
+        if tuple(my_cir) in seen_circs:
+            cache[i] = seen_circs[tuple(my_cir)]
+        else:
+            seen_circs[tuple(my_cir)] = i
+
+    labels_to_circuits = {}
+    for my_cir in seen_circs:
+        line_labels = _Circuit(my_cir)._line_labels
+        if line_labels in labels_to_circuits:
+            labels_to_circuits[line_labels].append(my_cir)
+        else:
+            labels_to_circuits[line_labels] = [my_cir]
+        
+
+def setup_circuit_list_for_LCS_computations(
+        circuit_list: list[_Circuit],
+        implicit_idle_gate_name: str = "I") -> tuple[list[dict[int, int]],
+                                                    dict[tuple[_Circuit], list[tuple[int, int]]],
+                                                    dict[tuple[int, ...], set[_Circuit]]]:
     """
     Split a circuit list into a list of subcircuits by lanes. These lanes are non-interacting partions of a circuit.
 
@@ -799,10 +830,17 @@ def setup_circuit_list_for_LCS_computations(circuit_list: list[_Circuit],
     Then, a sequence detailing the number of qubits in each lane for a circuit.
     """
 
-    output = []
-    qubits_used_in_each_lane = []
+    # output = []
+    # cir_id_to_lanes = []
 
-    for cir in circuit_list:
+    # We want to split the circuit list into a dictionary of subcircuits where each sub_cir in the dict[key] act exclusively on the same qubits.
+    # I need a mapping from subcircuit to actual circuit. This is uniquely defined by circuit_id and then lane id.
+
+    sub_cir_to_cir_id_and_lane_id: dict[tuple[_Circuit], list[tuple[int, int]]] = {}
+    line_labels_to_circuit_list: dict[tuple[int, ...], set[_Circuit]] = {}
+    cir_ind_and_lane_id_to_sub_cir: dict[int, dict[int, _Circuit]] = {}
+
+    for i, cir in enumerate(circuit_list):
 
         if implicit_idle_gate_name:
             cir = _add_in_idle_gates_to_circuit(cir, implicit_idle_gate_name)
@@ -810,30 +848,54 @@ def setup_circuit_list_for_LCS_computations(circuit_list: list[_Circuit],
         qubits_to_lane, lanes_to_qubits = _compute_qubit_to_lanes_mapping_for_circuit(cir, cir.num_lines)
         sub_cirs = _compute_subcircuits(cir, qubits_to_lane)
 
-        output.extend(sub_cirs)
-        qubits_used_in_each_lane.append(lanes_to_qubits)
-    return output, qubits_used_in_each_lane
+        assert len(sub_cirs) == len(lanes_to_qubits)
+        for j in range(len(sub_cirs)):
+            sc = _Circuit(sub_cirs[j])
+            lbls = sc._line_labels
+            if lbls in line_labels_to_circuit_list:
+                line_labels_to_circuit_list[lbls].append(sc)
+            else:
+                line_labels_to_circuit_list[lbls] = [sc]
+            if sc in sub_cir_to_cir_id_and_lane_id:
+                sub_cir_to_cir_id_and_lane_id[sc].append((i,j))
+            else:
+                sub_cir_to_cir_id_and_lane_id[sc] = [(i,j)]
+            if i in cir_ind_and_lane_id_to_sub_cir:
+                cir_ind_and_lane_id_to_sub_cir[i][j] = sc
+            else:
+                cir_ind_and_lane_id_to_sub_cir[i] = {j: sc}
+
+        # output.extend(sub_cirs)
+        # cir_id_to_lanes.append(lanes_to_qubits)
+    return cir_ind_and_lane_id_to_sub_cir, sub_cir_to_cir_id_and_lane_id, line_labels_to_circuit_list
 
 
 class EvalTreeBasedUponLongestCommonSubstring():
 
-    def __init__(self, circuit_list: list[LabelTupTup], qubits_used_in_each_lane: list[dict[int, tuple[int, ...]]]):
+    def __init__(self, circuit_list: list[LabelTupTup]):
         """
         Construct an evaluation order tree for a circuit list that minimizes the number of rounds of computation.
         """
 
-        assert len(qubits_used_in_each_lane) <= len(circuit_list)
-        external_matches = _compute_lcs_for_every_pair_of_circuits(circuit_list)
-        internal_matches = build_internal_tables(circuit_list)
+        self.circuit_to_save_location = {tuple(cir): i for i,cir in enumerate(circuit_list)}
 
-        max_rounds = int(max(_np.max(external_matches[0]), _np.max(internal_matches[0])))
+        external_matches = _compute_lcs_for_every_pair_of_circuits(circuit_list)
+        
+        best_external_match = _np.max(external_matches[0])
+        self.orig_circuits = {i: circuit_list[i] for i in range(len(circuit_list))}
+
+
+        internal_matches = build_internal_tables(circuit_list)
+        best_internal_match = _np.max(internal_matches[0])
+
+        max_rounds = int(max(best_external_match,best_internal_match))
 
         C = len(circuit_list)
-        num_full_circuits = len(qubits_used_in_each_lane)
         sequence_intro = {0: _np.arange(C)}
 
-        cache = {i: circuit_list[i] for i in range(len(circuit_list))}
         cache_pos = C
+        cache = {i: circuit_list[i] for i in range(len(circuit_list))}
+
         new_circuit_list = [cir for cir in circuit_list] # Get a deep copy since we will modify it here.
 
         i = 0
@@ -841,18 +903,26 @@ class EvalTreeBasedUponLongestCommonSubstring():
             new_circuit_list, cache_pos, cache, sequence_intro[i+1] = build_one_round_of_eval_tree(new_circuit_list, external_matches, internal_matches, cache_pos, cache, i)
             i += 1
             external_matches = _compute_lcs_for_every_pair_of_circuits(new_circuit_list)
-            internal_matches = build_internal_tables(new_circuit_list)
 
-            max_rounds = int(max(_np.max(external_matches[0]), _np.max(internal_matches[0])))
+            if best_internal_match < best_external_match and best_external_match < 2 * best_internal_match:
+                # We are not going to get a better internal match.
+                pass
+            else:
+                internal_matches = build_internal_tables(new_circuit_list)
+
+            best_external_match = _np.max(external_matches[0])
+            best_internal_match = _np.max(internal_matches[0])
+
+            max_rounds = int(max(best_external_match,best_internal_match))
 
         self.circuit_list = new_circuit_list
         self.cache = cache
         self.num_circuits = C
-        self.qubits_used_in_each_lane = qubits_used_in_each_lane
+        self.from_other = False
 
         self.sequence_intro = sequence_intro
 
-        swap_gate = _np.array([[ 1.00000000e+00,  0.00000000e+00,  0.00000000e+00, 1.23259516e-32,  0.00000000e+00,  0.00000000e+00, 0.00000000e+00,  0.00000000e+00,
+        self.swap_gate = _np.array([[ 1.00000000e+00,  0.00000000e+00,  0.00000000e+00, 1.23259516e-32,  0.00000000e+00,  0.00000000e+00, 0.00000000e+00,  0.00000000e+00,
                                       0.00000000e+00,  0.00000000e+00,  0.00000000e+00, 0.00000000e+00,  1.23259516e-32,  0.00000000e+00, 0.00000000e+00, -1.23259516e-32],
                                     [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, 0.00000000e+00,  1.00000000e+00,  0.00000000e+00, 0.00000000e+00, 1.23259516e-32,
                                       0.00000000e+00,  0.00000000e+00,  0.00000000e+00, 0.00000000e+00, 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, 0.00000000e+00],
@@ -888,45 +958,56 @@ class EvalTreeBasedUponLongestCommonSubstring():
                                     [-1.23259516e-32, 0.00000000e+00,  0.00000000e+00, 1.23259516e-32,  0.00000000e+00,  0.00000000e+00, 0.00000000e+00,  0.00000000e+00,
                                      0.00000000e+00, 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, 1.23259516e-32,  0.00000000e+00,  0.00000000e+00, 1.00000000e+00]])
 
-        self.swap_gate = create_from_superop_mx(swap_gate, "static standard", stdname="Gswap")
+        # Assumes a perfect swap gate!
+        # self.swap_gate = create_from_superop_mx(swap_gate, "static standard", stdname="Gswap")            
 
 
-
-
-        self.cache_ind_to_num_qubits_needed = {}
-        offset = 0
-        for i in range(num_full_circuits):
-            for j in qubits_used_in_each_lane[i]:
-                cache_ind = offset + j
-                self.set_cache_sizes(cache_ind, len(qubits_used_in_each_lane[i][j]))
-
-            offset += len(qubits_used_in_each_lane[i])
+    def from_other_eval_tree(self, other: EvalTreeBasedUponLongestCommonSubstring, qubit_label_exchange: dict[int, int]):
+        """
+        Construct a tree from another tree.
+        """
         
-        self.tensor_contraction_orders_by_circuit = {}
-        self.tensor_contraction_order_cache = {}
-        self.qubit_list_cache = {}
+        self.cache = other.cache
+        self.num_circuits = other.num_circuits
+        self.sequence_intro = other.sequence_intro
+        self.swap_gate = other.swap_gate
+        self.circuit_list = other.circuit_list
+        self.orig_circuit_list = other.orig_circuit_list
+        self.circuit_to_save_location = other.circuit_to_save_location
+        self.from_other = other
 
-        for i in range(num_full_circuits):
-            self.qubit_list_cache[i] = [qubits_used_in_each_lane[i][k] for k in sorted(qubits_used_in_each_lane[i])]
-            self.tensor_contraction_orders_by_circuit[i] = self.best_order_for_tensor_contraction(tuple(self.qubit_list_cache[i]))
-            
+        for ind in self.cache:
+            for i, term in enumerate(self.cache[ind]):
+                if isinstance(term, int):
+                    pass # The tree will stay the same.
+                elif isinstance(term, LabelTupTup):
+                    new_term = ()
+                    for op in term:
+                        new_qu = (qubit_label_exchange[qu] for qu in op.qubits)
+                        new_op = (op.name, *new_qu)
+                        new_term = (*new_term, new_op)
+                    self.cache[ind][i] = Label(new_term)
 
-        # for val in cache.values():
-        #     num_terms = len(val)
-        #     self._best_order_for_first_derivative(num_terms)
+        
+        for icir in range(len(self.orig_circuit_list)):
+            self.orig_circuit_list[icir] = self.trace_through_cache_to_build_circuit(icir)
 
-    def set_cache_sizes(self, cache_ind: int, num_qubits: int):
-        """
-        Set the size to use the number of qubits specified.
-        """
-        if cache_ind in self.cache_ind_to_num_qubits_needed:
-            return # we have already set them all.
-        self.cache_ind_to_num_qubits_needed[cache_ind] = num_qubits
-        for child in self.cache:
-            if isinstance(child, int):
-                self.set_cache_sizes(child, num_qubits)
+        updated = {}
+        for cir, loc in self.circuit_to_save_location.items():
+            new_cir = ()
+            for layer in cir:
+                new_layer = ()
+                for op in layer:
+                    new_op = (op[0], *(qubit_label_exchange[qu] for qu in op[1:]))
+                    new_layer = (*new_layer, new_op)
+                new_cir = (*new_cir, new_layer)
+            updated[new_cir] = loc
+        self.circuit_to_save_location = updated
 
-    def collapse_circuits_to_process_matrices(self, model):
+
+
+
+    def collapse_circuits_to_process_matrices(self, model, num_qubits_in_default: int):
         """
         Compute the total product cache. Note that this may still have a tensor product
         structure that the operator needs to combine again if they want to have the full 'dense' matrix.
@@ -936,15 +1017,36 @@ class EvalTreeBasedUponLongestCommonSubstring():
         round_keys = sorted(_np.unique(list(self.sequence_intro.keys())))[::-1]
         saved: dict[int, _LinearOperator] = {}
         
-        def look_up_operations(model, opTuple) -> _LinearOperator:
+        def look_up_operations(model, opTuple) -> _np.ndarray:
 
             if hasattr(model, "operations"):
                 return model.operations[opTuple].to_dense()
             elif hasattr(model, "operation_blks"):
-                return model.operation_blks[opTuple].to_dense()
+                if opTuple[0] not in model.operation_blks["gates"]:
+                    breakpoint()
+                return model.operation_blks["gates"][opTuple[0]].to_dense()
             else:
                 raise ValueError("Missing attribute")
 
+        def get_appropriate_gate(op, saved):
+            op_term = 1
+            if op.num_qubits == 2:
+                # We may need to do swaps.
+                if op in saved:
+                    op_term = saved[op]
+                elif op.qubits[1] < op.qubits[0]:
+                    # This is in the wrong order.
+                    op_term = look_up_operations(model, op)
+                    # op_term = self.swap_gate.product(op_term.product(self.swap_gate.T))
+                    op_term = self.swap_gate @ (op_term) @ self.swap_gate.T
+                    saved[op] = op_term # Save so we only need to this operation once.
+                else:
+                    op_term = look_up_operations(model, op)
+            else:
+                op_term = look_up_operations(model, op)
+            return op_term
+
+        expected_shape = (4**num_qubits_in_default, 4**num_qubits_in_default)
         for key in round_keys:
             for cind in self.sequence_intro[key]:
                 cumulative_term = None
@@ -952,35 +1054,38 @@ class EvalTreeBasedUponLongestCommonSubstring():
                     if isinstance(term, int) and cumulative_term is None:
                         # look up result.
                         cumulative_term = saved[term]
-                    elif isinstance(term, int) and not (cumulative_term is None):
+                    elif isinstance(term, int) and cumulative_term is not None:
                         cumulative_term = saved[term] @ (cumulative_term)
                     elif isinstance(term, LabelTupTup):
                         val = 1
-                        for op in term:
-                            op_term = 1
-                            if op.num_qubits == 2:
-                                # We may need to do swaps.
-                                if op in saved:
-                                    op_term = saved[op]
-                                elif op.qubits[1] < op.qubits[0]:
-                                    # This is in the wrong order.
-                                    op_term = look_up_operations(model, op)
-                                    # op_term = self.swap_gate.product(op_term.product(self.swap_gate.T))
-                                    op_term = self.swap_gate @ (op_term) @ self.swap_gate.T
-                                    saved[op] = op_term # Save so we only need to this operation once.
-                                else:
-                                    op_term = look_up_operations(model, op)
-                            else:
-                                op_term = look_up_operations(model, op)
+                        qubits_used = [i for i in range(num_qubits_in_default)] # Qubits are assuming to be integer markers.
+                        while qubits_used:
+                            qu = qubits_used[0]
+                            gate_matrix = _np.eye(4)
+                            found = False
+                            op_ind = 0
+                            while not found and op_ind < len(term):
+                                op = term[op_ind]
+                                if qu in op.qubits:
+                                    gate_matrix = get_appropriate_gate(op, saved)
+                                    found = True
+                                    qubits_used = qubits_used[len(op.qubits):] # We assume that the qubits need to overlap for a specific gate. i.e. One cannot have op.qubits = (0, 2) in a system with a qubits (0,1,2).
+                                op_ind += 1
+                            val = _np.kron(val, gate_matrix)
+                            if not found:
+                                # Remove that qubit from list to check.
+                                qubits_used = qubits_used[1:]
 
-                            val = _np.kron(val, op_term)
-                        #val = model.operation_blks["gates"][term[0]].to_dense()
+                        if val.shape != expected_shape:
+                            breakpoint()
                         if cumulative_term is None:
                             cumulative_term = val
                         else:
+                            if val.shape[1] != cumulative_term.shape[0]:
+                                breakpoint()
                             cumulative_term = val @ (cumulative_term)
                 if cumulative_term is None:
-                    saved[cind] = _np.eye(4**self.cache_ind_to_num_qubits_needed[cind]) # identity of the appropriate size.
+                    saved[cind] = _np.eye(4**num_qubits_in_default) # identity of the appropriate size.
                 else:
                     saved[cind] = cumulative_term
         if __debug__:
@@ -988,157 +1093,24 @@ class EvalTreeBasedUponLongestCommonSubstring():
             for key in self.cache:
                 assert key in saved
         
-        return saved
+        # {tuple(self.trace_through_cache_to_build_circuit(icir)): icir for icir in range(len(self.orig_circuit_list)) if icir < self.num_circuits}
     
-    def reconstruct_full_matrices(self, process_matrices_cache):
+        return saved, self.circuit_to_save_location 
 
-        output = []
-        start_pos = 0
-        for cir_ind in range(len(self.qubits_used_in_each_lane)):
-            lane_circuits = []
-            for i in range(self.qubits_used_in_each_lane[cir_ind]):
-                lane_circuits.append(process_matrices_cache[start_pos + i])
-            output.append(lane_circuits)
-            start_pos += self.inds_needed_to_reconstruct[cir_ind]
+    def trace_through_cache_to_build_circuit(self, cache_ind: int) -> list[tuple]:
 
-        # Now we will do the contraction.
-        for cir_ind in range(len(self.inds_needed_to_reconstruct)):
+        output = ()
+        for term in self.cache[cache_ind]:
 
-            order = self.tensor_contraction_orders_by_circuit[cir_ind]
+            if isinstance(term, Label):
+                output = (*output, term)
+            elif isinstance(term, int):
+                # Recurse down.
+                next_term = self.trace_through_cache_to_build_circuit(term)
+                output = (*output, *next_term)
 
-            while order:
-                sp = order[0]
-                if len(output[cir_ind][sp]) == 0:
-                    breakpoint()
-                output[cir_ind][sp] = _np.kron(output[cir_ind][sp], output[cir_ind][sp+1])
-                output[cir_ind][sp+1:] = output[cir_ind][sp+2:]
-                
-                # Adjust future indices
-                tmp = []
-                for new_val in order[1:]:
-                    tmp.append((new_val - 1)*(new_val > sp) + (new_val) * (new_val < sp))
-                order = tmp
+        return list(output)
 
-            output[cir_ind] = output[cir_ind][0]
-            assert output[cir_ind].shape == (256, 256)
-        return output
-    # def compute_derivatives_using_cache(self, model, productCache):
-    #     """
-    #     We are interested in computing the derivative of the probabilities specified by a model
-    #     and the cached circuit list against the model parameters. We will assume that the model can take a
-    #     derivative with respect to a single gate operation. However, we need to handle the product rule.
-    #     """
-
-    #     productCache = self.fill_out_circuit_cache(model)
-
-    #     round_keys = sorted(_np.unique(list(self.sequence_intro.keys())))[::-1]
-    #     saved = {}
-
-    #     product_rule_cache: dict[int, list[int]] = {}
-    #     for key in round_keys:
-    #         for cind in self.sequence_intro[key]:
-
-
-                
-    #             cumulative_term = None
-    #             for term in self.cache[cind]:
-    #                 if isinstance(term, int) and cumulative_term is None:
-    #                     # look up result.
-    #                     cumulative_term = saved[term]
-    #                 elif isinstance(term, int) and not (cumulative_term is None):
-    #                     cumulative_term = saved[term] @ cumulative_term
-    #                 elif isinstance(term, LabelTupTup):
-    #                     val = 1
-    #                     for op in term:
-    #                         op_term = 1
-    #                         if op.num_qubits == 2:
-    #                             # We may need to do swaps.
-    #                             if op in saved:
-    #                                 op_term = saved[op]
-    #                             elif op.qubits[1] < op.qubits[0]:
-    #                                 # This is in the wrong order.
-    #                                 swap_term = model.operation_blks["gates"][("Gswap",0,1)].to_dense() # assume this is perfect.
-    #                                 op_term = model.operation_blks["gates"][op].to_dense()
-    #                                 op_term = swap_term @ op_term @ swap_term.T
-    #                                 saved[op] = op_term # Save so we only need to this operation once.
-    #                             else:
-    #                                 op_term = model.operation_blks["gates"][op].to_dense()
-    #                         else:
-    #                             op_term = model.operation_blks["gates"][op].to_dense()
-    #                         val = np.kron(val, op_term)
-    #                     #val = model.operation_blks["gates"][term[0]].to_dense()
-    #                     if cumulative_term is None:
-    #                         cumulative_term = val
-    #                     else:
-    #                         cumulative_term = val @ cumulative_term
-    #             saved[cind] = cumulative_term
-    #     return saved
-    
-    def cache_num_to_matrix_size(self, ind, output_cache):
-        if ind in output_cache:
-            return output_cache[ind]
-        else:
-            if ind not in self.cache:
-                assert ind in self.cache
-            children = self.cache[ind]
-            answer = 0
-            for child in children:
-                if isinstance(child, Label):
-                    lbls = child.num_qubits
-                    sub_probanswer = lbls
-                else:
-                    sub_probanswer = self.cache_num_to_matrix_size(child, output_cache)
-                answer = max(answer, sub_probanswer)
-            output_cache[ind] = answer
-            return answer
-
-
-    def best_order_for_tensor_contraction(self, qubit_list: tuple[int, ...]):
-        
-
-        if qubit_list in self.tensor_contraction_order_cache:
-            return self.tensor_contraction_order_cache[qubit_list]
-
-        best_cost = _np.inf
-        best_order = []
-
-        for order in itertools.permutations(range(len(qubit_list)-1), len(qubit_list)-1):
-
-            my_list = [qb for qb in qubit_list] # force deep copy.
-            my_starting_points = [sp for sp in order]
-            cost = 0
-            early_exit = False
-            while my_starting_points and not early_exit:
-                sp = my_starting_points.pop(0)
-
-                cost += self._tensor_cost_model(my_list[sp], my_list[sp+1])
-                if cost <= best_cost:
-                    # modify sp for future.
-                    tmp = []
-                    for new_val in my_starting_points:
-                        tmp.append((new_val - 1)*(new_val > sp) + (new_val) * (new_val < sp))
-                    my_starting_points = tmp
-
-                    q2 = my_list.pop(sp+1)
-                    my_list[sp] += q2
-                else:
-                    early_exit = True # This round is done because the partial sum was too big.
-
-            if cost < best_cost and not early_exit:
-                best_cost = cost
-                best_order = list(order)
-
-        # Store off the information.
-        self.tensor_contraction_order_cache[qubit_list] = best_order
-
-        return best_order
-
-    def _tensor_cost_model(self, num_qubits1, num_qubits2):
-        """
-        Assumes kronecker product of 2 square matrices.
-        """
-
-        return (4**num_qubits1)**2 * (4**num_qubits2)**2
 
     """        
     def _evaluate_product_rule(self, cind: int, rn: int):
@@ -1199,3 +1171,162 @@ class EvalTreeBasedUponLongestCommonSubstring():
                             cumulative_term = val @ cumulative_term
     """
     
+
+class CollectionOfLCSEvalTrees():
+
+    def __init__(self, line_lbls_to_circuit_list, sub_cir_to_full_cir_id_and_lane_id, cir_id_and_lane_id_to_sub_cir):
+        
+        self.trees: dict[tuple[int, ...], EvalTreeBasedUponLongestCommonSubstring] = {}
+
+        ASSUME_MATCHING_QUBIT_SIZE_MATCHING_TREE = False
+
+        size_to_tree: dict[int, tuple[int, ...]] = {}
+
+        self.line_lbls_to_cir_list = line_lbls_to_circuit_list
+
+        starttime = time.time()
+        for key, vals in line_lbls_to_circuit_list.items():
+            sub_cirs = [list(cir) for cir in vals]
+            if ASSUME_MATCHING_QUBIT_SIZE_MATCHING_TREE:
+                if len(key) not in size_to_tree:
+                    self.trees[key] = EvalTreeBasedUponLongestCommonSubstring(sub_cirs)
+                    size_to_tree[len(key)] = key
+                else:
+                    sample = EvalTreeBasedUponLongestCommonSubstring(sub_cirs[:2]) # Build a small version to be corrected later.
+                    other_key = size_to_tree[len(key)]
+                    sample.from_other_eval_tree(self.trees[other_key], {other_key[i]: key[i] for i in range(len(key))})
+                    self.trees[key] = sample
+            else:
+                self.trees[key] = EvalTreeBasedUponLongestCommonSubstring(sub_cirs)
+                
+        endtime = time.time()
+
+        print(" Time to compute all the evaluation orders (s): ", endtime - starttime)
+
+
+        self.sub_cir_to_full_cir_id_and_lane_id = sub_cir_to_full_cir_id_and_lane_id
+        self.cir_id_and_lane_id_to_sub_cir = cir_id_and_lane_id_to_sub_cir
+
+        self.cir_id_to_tensor_order = {}
+        self.compute_tensor_orders()
+
+        self.saved_results = {}
+        self.sub_cir_to_ind_in_results: dict[tuple[int, ...], dict[_Circuit, int]] = {}
+
+    def collapse_circuits_to_process_matrices(self, model):
+        # Just collapse all of them.
+        
+        self.saved_results = {}
+        for key in self.trees:
+            self.saved_results[key], self.sub_cir_to_ind_in_results[key] = self.trees[key].collapse_circuits_to_process_matrices(model, len(key))
+
+    def reconstruct_full_matrices(self):
+
+        if len(self.saved_results) == 0:
+            return
+        
+        # Now we can do the combination.
+
+        num_cirs = len(self.cir_id_and_lane_id_to_sub_cir)
+
+        output = []
+        for icir in range(num_cirs):
+            lane_circuits = []
+            for i in range(len(self.cir_id_and_lane_id_to_sub_cir[icir])):
+                cir = self.cir_id_and_lane_id_to_sub_cir[icir][i]
+                lblkey = cir._line_labels
+
+                if len(cir.layertup) == 0:
+
+                    lane_circuits.append(_np.eye(4**(len(lblkey))))
+                else:
+                    if cir.layertup not in self.sub_cir_to_ind_in_results[lblkey]:
+                        print(lblkey)
+                        print(cir)
+                        breakpoint()
+                    ind_in_results = self.sub_cir_to_ind_in_results[lblkey][cir.layertup]
+                    lane_circuits.append(self.saved_results[lblkey][ind_in_results])
+            output.append(lane_circuits)
+
+        # Need a map from lane id to computed location.
+        for icir in range(num_cirs):
+
+            order = self.cir_id_to_tensor_order[icir]
+            
+            
+            while order:
+                sp = order[0]
+                output[icir][sp] = _np.kron(output[icir][sp], output[icir][sp+1])
+                output[icir][sp+1:] = output[icir][sp+2:]
+                
+                # Adjust future indices
+                tmp = []
+                for new_val in order[1:]:
+                    tmp.append((new_val - 1)*(new_val > sp) + (new_val) * (new_val < sp))
+                order = tmp
+
+            output[icir] = output[icir][0]
+        return output
+    
+    def compute_tensor_orders(self):
+
+        num_cirs = len(self.cir_id_and_lane_id_to_sub_cir)
+
+        cache_struct = {}
+
+        for cir_id in range(num_cirs):
+            qubit_list = ()
+            for lane_id in range(len(self.cir_id_and_lane_id_to_sub_cir[cir_id])):
+                subcir = self.cir_id_and_lane_id_to_sub_cir[cir_id][lane_id]
+                qubit_list = (*qubit_list, len(subcir._line_labels))
+            self.cir_id_to_tensor_order[cir_id] = self.best_order_for_tensor_contraction(qubit_list, cache_struct)
+
+        return
+            
+
+    def best_order_for_tensor_contraction(self, qubit_list: tuple[int, ...], cache):
+        
+
+        if qubit_list in cache:
+            return cache[qubit_list]
+
+        best_cost = _np.inf
+        best_order = []
+
+        for order in itertools.permutations(range(len(qubit_list)-1), len(qubit_list)-1):
+
+            my_list = [qb for qb in qubit_list] # force deep copy.
+            my_starting_points = [sp for sp in order]
+            cost = 0
+            early_exit = False
+            while my_starting_points and not early_exit:
+                sp = my_starting_points.pop(0)
+
+                cost += self._tensor_cost_model(my_list[sp], my_list[sp+1])
+                if cost <= best_cost:
+                    # modify sp for future.
+                    tmp = []
+                    for new_val in my_starting_points:
+                        tmp.append((new_val - 1)*(new_val > sp) + (new_val) * (new_val < sp))
+                    my_starting_points = tmp
+
+                    q2 = my_list.pop(sp+1)
+                    my_list[sp] += q2
+                else:
+                    early_exit = True # This round is done because the partial sum was too big.
+
+            if cost < best_cost and not early_exit:
+                best_cost = cost
+                best_order = list(order)
+
+        # Store off the information.
+        cache[qubit_list] = best_order
+
+        return best_order
+
+    def _tensor_cost_model(self, num_qubits1, num_qubits2):
+        """
+        Assumes kronecker product of 2 square matrices.
+        """
+
+        return (4**num_qubits1)**2 * (4**num_qubits2)**2
