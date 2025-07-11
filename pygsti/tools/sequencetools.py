@@ -50,18 +50,18 @@ def conduct_one_round_of_lcs_simplification(sequences: list[Sequence], table_dat
     Will update the list of sequences and the cache struct to hold the longest common subsequences as new sequences.
     """
     if table_data_and_sequences:
-        table, sequences = table_data_and_sequences
+        table, external_sequences = table_data_and_sequences
     else:
-        table, sequences = _compute_lcs_for_every_pair_of_sequences(sequences)
+        table, external_sequences = _compute_lcs_for_every_pair_of_sequences(sequences)
 
     if internal_tables_and_sequences:
         internal_subtable, internal_subsequences = internal_tables_and_sequences
     else:
-        internal_subtable, internal_subsequences = build_internal_tables(sequences)
+        internal_subtable, internal_subsequences = create_tables_for_internal_LCS(sequences)
 
     best_index = _np.where(table == _np.max(table))
     best_internal_index = _np.where(internal_subtable == _np.max(internal_subtable))
-    updated_sequences = sequences
+    updated_sequences = [seq for seq in sequences]
     cache_num = starting_cache_num
 
     # Build sequence dict
@@ -79,10 +79,10 @@ def conduct_one_round_of_lcs_simplification(sequences: list[Sequence], table_dat
 
     if _np.max(table) >= _np.max(internal_subtable):
         for ii in range(len(best_index[0])):
-            starting_point, starting_point_2, length = sequences[(best_index[0][ii], best_index[1][ii])]
             cir_index = best_index[0][ii]
             cir_index2 = best_index[1][ii]
-            seq = updated_sequences[cir_index][starting_point: int(starting_point + length+1)]
+            starting_point, starting_point_2, length = external_sequences[(cir_index, cir_index2)]
+            seq = updated_sequences[cir_index][starting_point: int(starting_point + length)]
 
             key = tuple(seq)
             if key in all_subsequences_to_replace:
@@ -139,9 +139,9 @@ def _find_starting_positions_using_dp_table(dp_table: _np.ndarray) -> tuple[int,
     j = 0
     while i < n-1 and j < m -1:
         curr = dp_table[i,j]
-        opt1 = dp_table[i+1, j+1]
-        opt2 = dp_table[i+1, j]
-        opt3 = dp_table[i, j+1]
+        opt1 = dp_table[i+1, j+1] # Use
+        opt2 = dp_table[i+1, j] # Eliminate A prefix
+        opt3 = dp_table[i, j+1] # Eliminate B prefix
         options = [opt1, opt2, opt3]
         if _np.all(curr == options):
             i += 1
@@ -152,9 +152,7 @@ def _find_starting_positions_using_dp_table(dp_table: _np.ndarray) -> tuple[int,
             j += 1
         else:
             # All three options are equal. So we should march the diagonal.
-            i += 1
-            j += 1
-            return i-1, j-1, dp_table[i,j]
+            return i, j, dp_table[0,0]
     return None, None, None
 
 
@@ -220,7 +218,8 @@ def _longest_common_internal_subsequence(A: Sequence) -> tuple[int, dict[tuple, 
     return best, best_ind
 
 
-def build_internal_tables(sequences):
+def create_tables_for_internal_LCS(sequences: list[Sequence]) -> tuple[_np.ndarray,
+                                                        list[dict[tuple, list[int]]]]:
     """
     Compute all the longest common internal sequences for each circuit A in sequences
 
@@ -233,7 +232,7 @@ def build_internal_tables(sequences):
 
     curr_best = 1
     for i in range(C):
-        if len(sequences[i]) >= curr_best:
+        if len(sequences[i]) >= 2*curr_best:
             the_table[i], seq_table[i] = _longest_common_internal_subsequence(sequences[i])
             curr_best = max(curr_best, the_table[i])
     return the_table, seq_table
