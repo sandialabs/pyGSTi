@@ -168,7 +168,7 @@ class FirstOrderGaugeInvariantStore(_NicelySerializable):
             independent set of quantities. If 'mark', linearly dependent FOGI directions are kept and
             marked by dependent_dir_indices.
         """
-
+        
         primitive_op_labels = tuple(gauge_action_matrices_by_op.keys())
 
         

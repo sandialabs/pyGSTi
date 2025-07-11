@@ -2556,6 +2556,7 @@ class OpModel(Model):
             assert isinstance(save_checkpoint, str), 'Checkpoint save path must be a string'
             assert _exists(save_checkpoint.rstrip(save_checkpoint.split('/')[-1])), 'Checkpoint save folder not found. Make sure the folder ' + str(save_checkpoint.split('/')[:-1]) + ' exists'
             checkpoint_obj = _FOGICheckpoint(0)
+            checkpoint_obj.file_path = save_checkpoint
 
         if primitive_op_labels is None:
             primitive_op_labels = self.primitive_op_labels
@@ -2678,7 +2679,8 @@ class OpModel(Model):
                     checkpoint_obj.gauge_action_matrices = gauge_action_matrices 
                     checkpoint_obj.gauge_action_gauge_spaces = gauge_action_gauge_spaces
                     checkpoint_obj.step = 1
-                    checkpoint_obj.write(save_checkpoint)
+                    checkpoint_obj.save()
+                    
                     if verbosity > 0:
                         print("Saved checkpoint 1/3 in " + save_checkpoint)
                 except:
@@ -2750,11 +2752,11 @@ class OpModel(Model):
                 gauge_action_gauge_spaces[povm_label] = op_gauge_space
             try:
                 if save_checkpoint:
+                    checkpoint_obj.step = 2
                     checkpoint_obj.allowed_row_basis_labels = errorgen_coefficient_labels
                     checkpoint_obj.gauge_action_matrices = gauge_action_matrices 
                     checkpoint_obj.gauge_action_gauge_spaces = gauge_action_gauge_spaces
-                    checkpoint_obj.step = 2
-                    checkpoint_obj.write(save_checkpoint)
+                    checkpoint_obj.save()
                     if verbosity > 0:
                         print("Saved checkpoint 2/4 in " + save_checkpoint)
             except:
@@ -2773,17 +2775,23 @@ class OpModel(Model):
             if load_checkpoint:
                 if checkpoint_obj.construct_fogi_quantities_checkpoint is not None:
                     construct_fogi_quantities_checkpoint = checkpoint_obj.construct_fogi_quantities_checkpoint
+                    gauge_action_matrices = checkpoint_obj.gauge_action_matrices
+                    gauge_action_gauge_spaces = checkpoint_obj.gauge_action_gauge_spaces
+                    errorgen_coefficient_labels = checkpoint_obj.allowed_row_basis_labels
+                    
             self.fogi_store = _FOGIStore.from_gauge_action_matrices(gauge_action_matrices, gauge_action_gauge_spaces,
                                         errorgen_coefficient_labels,
                                         op_label_abbrevs, dependent_fogi_action,
-                                        norm_order=norm_order, save_checkpoint=save_checkpoint if save_checkpoint else None, checkpoint=construct_fogi_quantities_checkpoint)
+                                        norm_order=norm_order, save_checkpoint=checkpoint_obj if save_checkpoint else None, checkpoint=construct_fogi_quantities_checkpoint)
             if save_checkpoint:
                 try:
                     checkpoint_obj.fogi_store = self.fogi_store
                     checkpoint_obj.step = 4
-                    checkpoint_obj.write(save_checkpoint)
+                    checkpoint_obj.save()
+                    
                     if verbosity > 0:
                         print("Saved final checkpoint in ", save_checkpoint)
+                    assert False
                 except:
                     raise Warning('Something went wrong with checkpoint save 4/4')
         

@@ -24,9 +24,10 @@ from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GlobalElementaryErrorgenLabel,\
 LocalElementaryErrorgenLabel as _LocalElementaryErrorgenLabel
 class FOGISetupCheckpoint(_NicelySerializable):
-    def __init__(self, step, allowed_row_basis_labels = None, gauge_action_matrices = None, gauge_action_gauge_spaces = None, param_interposer = None, fogi_store = None, construct_fogi_quantities_checkpoint = None):
+    def __init__(self, step, file_path=None, allowed_row_basis_labels = None, gauge_action_matrices = None, gauge_action_gauge_spaces = None, param_interposer = None, fogi_store = None, construct_fogi_quantities_checkpoint = None):
         super().__init__()
         self.step = step
+        self.file_path = file_path
         self.param_interposer = param_interposer
         self.fogi_store = fogi_store
         self.allowed_row_basis_labels = allowed_row_basis_labels
@@ -70,6 +71,9 @@ class FOGISetupCheckpoint(_NicelySerializable):
         fogi_store = None if state['fogi_store'] is None else _fogistore.FirstOrderGaugeInvariantStore.from_nice_serialization(state['fogi_store'])
         construct_fogi_quantities_checkpoint = None if state['construct_fogi_quantities_checkpoint'] is None else ConstructFOGIQuantitiesCheckpoint.from_nice_serialization(state['construct_fogi_quantities_checkpoint'])
         return cls(step, param_interposer=param_interposer, fogi_store=fogi_store, allowed_row_basis_labels=allowed_row_basis_labels,gauge_action_matrices=gauge_action_matrices,gauge_action_gauge_spaces=gauge_action_gauge_spaces, construct_fogi_quantities_checkpoint=construct_fogi_quantities_checkpoint)
+    
+    def save(self):
+        self.write(self.file_path)
 
 class ConstructFOGIQuantitiesCheckpoint(_NicelySerializable):
     def __init__(self, start_set_size, fogi_dirs, fogi_meta, dep_fogi_dirs, dep_fogi_meta, ccomms, larger_sets):
@@ -122,7 +126,7 @@ class ConstructFOGIQuantitiesCheckpoint(_NicelySerializable):
     
     @classmethod
     def from_nice_serialization(cls, state):
-        start_set_size = state['start_set_size'][0]
+        start_set_size = state['start_set_size']
         #op_label = _Label(state['iteration_tracker'][1])
         #existing_set = [_Label(label) for label in state['iteration_tracker'][2]]
         #iteration_tracker = (set_size, op_label, existing_set)
@@ -617,7 +621,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
         #op_label_start = 0
         #smaller_set_start = 0
     for set_size in range(set_size_start, max_size):
-        assert set_size < max_size-1
+        #assert set_size < max_size-1 
         larger_sets = []
         if checkpoint is not None:
             larger_sets = checkpoint.larger_sets
@@ -849,10 +853,9 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                 larger_sets.append(new_set)
         smaller_sets = larger_sets
         if save_checkpoint is not None:
-            new_checkpoint = FOGISetupCheckpoint(0)
-            new_checkpoint.step = 3
-            new_checkpoint.constructs_fogi_quantities_checkpoint =  ConstructFOGIQuantitiesCheckpoint(set_size, fogi_dirs, fogi_meta, dep_fogi_dirs, dep_fogi_meta, ccomms, larger_sets)
-            new_checkpoint.write(save_checkpoint)
+            save_checkpoint.step = 3
+            save_checkpoint.construct_fogi_quantities_checkpoint =  ConstructFOGIQuantitiesCheckpoint(set_size, fogi_dirs, fogi_meta, dep_fogi_dirs, dep_fogi_meta, ccomms, larger_sets)
+            save_checkpoint.save()
             if verbosity > 0:
                 print('Saved checkpoint ', set_size, 'out of ', max_size-1, ' in construct_fogi_quantities')
      
