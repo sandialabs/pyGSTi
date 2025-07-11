@@ -34,7 +34,7 @@ from pygsti.modelmembers.modelmembergraph import ModelMemberGraph as _MMGraph
 from pygsti.modelmembers.operations import opfactory as _opfactory
 from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.baseobjs.basis import BuiltinBasis as _BuiltinBasis, DirectSumBasis as _DirectSumBasis
-from pygsti.baseobjs.label import Label as _Label, CircuitLabel as _CircuitLabel
+from pygsti.baseobjs.label import Label as _Label, CircuitLabel as _CircuitLabel, LabelTup as _LabelTup
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.tools import basistools as _bt
 from pygsti.tools import jamiolkowski as _jt
@@ -44,6 +44,8 @@ from pygsti.tools import fogitools as _fogit
 from pygsti.tools import slicetools as _slct
 from pygsti.tools import listtools as _lt
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
+
+from pygsti.modelmembers.operations import EmbeddedOp as _EmbeddedOp, ComposedOp as _ComposedOp
 
 
 class Roster:
@@ -1788,3 +1790,27 @@ class ExplicitLayerRules(_LayerRules):
             return model.operations[layerlbl]
         else:
             return _opfactory.op_from_factories(model.factories, layerlbl)
+        
+    def get_dense_process_matrix_represention_for_gate(self, model: ExplicitOpModel, lbl: _LabelTup):
+        """
+        Get the dense process matrix corresponding to the lbl.
+        Note this should be the minimal size required to represent the dense operator.
+
+        Parameters
+        ----------
+        lbl: Label
+            A label with a gate name and a specific set of qubits it will be acting on.
+        
+        Returns
+        ----------
+        _np.ndarray
+        """
+
+        operation = model.operations["gates"][lbl]
+
+        if isinstance(operation, _EmbeddedOp):
+            return operation.embedded_op.to_dense()
+        elif isinstance(operation, _ComposedOp):
+            breakpoint()
+        return operation.to_dense('minimal')
+
