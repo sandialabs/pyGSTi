@@ -2756,33 +2756,36 @@ class OpModel(Model):
                     checkpoint_obj.step = 2
                     checkpoint_obj.write(save_checkpoint)
                     if verbosity > 0:
-                        print("Saved checkpoint 2/3 in " + save_checkpoint)
+                        print("Saved checkpoint 2/4 in " + save_checkpoint)
             except:
-                    raise Warning('Something went wrong with checkpoint save 2/3')
+                    raise Warning('Something went wrong with checkpoint save 2/4')
 
         norm_order = "auto"  # NOTE - should be 1 for normalizing 'S' quantities and 2 for 'H',
         # so 'auto' utilizes intelligence within FOGIStore
 
-        #Checkpoint number 3 skips FOGIStore creation
-        if load_checkpoint:
-            if checkpoint_obj.step == 3:
-                self.fogi_store = checkpoint_obj.fogi_store
-                if verbosity > 0:
-                    print("Loaded FOGI store from checkpoint 3/3")
+        #Checkpoint number 4 skips FOGIStore creation
+        if load_checkpoint and checkpoint_obj.step == 4:
+            self.fogi_store = checkpoint_obj.fogi_store
+            if verbosity > 0:
+                print("Loaded FOGI store from checkpoint 4/4")
         else:
+            construct_fogi_quantities_checkpoint = None
+            if load_checkpoint:
+                if checkpoint_obj.construct_fogi_quantities_checkpoint is not None:
+                    construct_fogi_quantities_checkpoint = checkpoint_obj.construct_fogi_quantities_checkpoint
             self.fogi_store = _FOGIStore.from_gauge_action_matrices(gauge_action_matrices, gauge_action_gauge_spaces,
                                         errorgen_coefficient_labels,
                                         op_label_abbrevs, dependent_fogi_action,
-                                        norm_order=norm_order)
+                                        norm_order=norm_order, save_checkpoint=save_checkpoint if save_checkpoint else None, checkpoint=construct_fogi_quantities_checkpoint)
             if save_checkpoint:
                 try:
                     checkpoint_obj.fogi_store = self.fogi_store
-                    checkpoint_obj.step = 3
+                    checkpoint_obj.step = 4
                     checkpoint_obj.write(save_checkpoint)
                     if verbosity > 0:
-                        print("Saved checkpoint 3/3 in ", save_checkpoint)
+                        print("Saved final checkpoint in ", save_checkpoint)
                 except:
-                    raise Warning('Something went wrong with checkpoint save 3/3')
+                    raise Warning('Something went wrong with checkpoint save 4/4')
         
         if reparameterize:
                 self.param_interposer = self._add_reparameterization(

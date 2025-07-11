@@ -129,7 +129,7 @@ class FirstOrderGaugeInvariantStore(_NicelySerializable):
     
     @classmethod
     def from_gauge_action_matrices(cls, gauge_action_matrices_by_op, gauge_action_gauge_spaces_by_op, errorgen_coefficient_labels_by_op,
-                 op_label_abbrevs=None, dependent_fogi_action='drop', norm_order='auto'):
+                 op_label_abbrevs=None, dependent_fogi_action='drop', norm_order='auto', save_checkpoint=None, checkpoint=None):
         """
         Receives the matrices describing the individual gauge action of each operation within the gate set, and massages
         them into appropriate from to be fed into construct_fogi_quantities() which finds FOGI quantities for the corresponding
@@ -242,7 +242,7 @@ class FirstOrderGaugeInvariantStore(_NicelySerializable):
         (indep_fogi_directions, indep_fogi_metadata, dep_fogi_directions, dep_fogi_metadata) = \
             _fogit.construct_fogi_quantities(primitive_op_labels, gauge_action_for_op,
                                              elem_errorgen_labels_by_op, op_errorgen_indices,
-                                             gauge_space, op_label_abbrevs, dependent_fogi_action, norm_order)
+                                             gauge_space, op_label_abbrevs, dependent_fogi_action, norm_order, save_checkpoint=save_checkpoint, checkpoint=checkpoint)
         fogi_directions = _sps.hstack((indep_fogi_directions, dep_fogi_directions))
         fogi_metadata = indep_fogi_metadata + dep_fogi_metadata  # list concatenation
         dependent_dir_indices = _np.arange(len(indep_fogi_metadata), len(fogi_metadata))
