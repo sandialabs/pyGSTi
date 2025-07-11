@@ -630,15 +630,10 @@ def setup_circuit_list_for_LCS_computations(
 
 #region Lane Collapsing Helpers
 
-def model_and_gate_to_dense_rep(model, opTuple) -> _np.ndarray:
-    """
-    Look up the dense representation of a gate in the model.
-    """
-
-
-    return 
-
 def get_dense_representation_of_gate_with_perfect_swap_gates(model, op: Label, saved: dict[int | LabelTupTup, _np.ndarray], swap_dense: _np.ndarray) -> _np.ndarray:
+    """
+    Assumes that a gate which operates on 2 qubits does not have the right orientation if label is (qu_i+1, qu_i).
+    """
     op_term = 1
     if op.num_qubits == 2:
         # We may need to do swaps.
