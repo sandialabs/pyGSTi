@@ -4,7 +4,7 @@ import numpy as _np
 
 #region Longest Common Subsequence
 
-def _best_matching_only(A: Sequence, B: Sequence) -> int:
+def len_lcp(A: Sequence, B: Sequence) -> int:
     """
     Returns:
     -----
@@ -15,9 +15,9 @@ def _best_matching_only(A: Sequence, B: Sequence) -> int:
     m = len(B)
     while i < n and i < m:
         if A[i] != B[i]:
-            return len(A[:i])
+            return i
         i += 1
-    return len(A[:i])
+    return i
 
 
 def _lcs_dp_version(A: Sequence, B: Sequence) -> _np.ndarray:
@@ -33,7 +33,7 @@ def _lcs_dp_version(A: Sequence, B: Sequence) -> _np.ndarray:
         for j in range(m-2, -1, -1):
             opt1 = 0
             if A[i] == B[j]:
-                opt1 = _best_matching_only(A[i:], B[j:])
+                opt1 = len_lcp(A[i:], B[j:])
             opt2 = table[i, j+1]
             opt3 = table[i+1, j]
             table[i,j] = max(opt1, opt2, opt3)
