@@ -37,6 +37,7 @@ from pygsti.tools import internalgates as _itgs
 from pygsti.tools import optools as _ot
 from pygsti.tools import listtools as _lt
 from pygsti.processors.processorspec import ProcessorSpec as _ProcessorSpec, QubitProcessorSpec as _QubitProcessorSpec
+from pygsti.baseobjs.label import LabelTup as _LabelTup
 
 
 class LocalNoiseModel(_ImplicitOpModel):
@@ -171,7 +172,7 @@ class LocalNoiseModel(_ImplicitOpModel):
         idle_names = processor_spec.idle_gate_names
         global_idle_layer_label = processor_spec.global_idle_layer_label
 
-        layer_rules = _SimpleCompLayerRules(qudit_labels, implicit_idle_mode, None, global_idle_layer_label)
+        layer_rules = _SimpleCompLayerRules(qudit_labels, implicit_idle_mode, None, global_idle_layer_label, independent_gates=independent_gates)
 
         super(LocalNoiseModel, self).__init__(state_space, layer_rules, 'pp',
                                               simulator=simulator, evotype=evotype)
@@ -406,7 +407,7 @@ class LocalNoiseModel(_ImplicitOpModel):
 
 class _SimpleCompLayerRules(_LayerRules):
 
-    def __init__(self, qubit_labels, implicit_idle_mode, singleq_idle_layer_labels, global_idle_layer_label):
+    def __init__(self, qubit_labels, implicit_idle_mode, singleq_idle_layer_labels, global_idle_layer_label, independent_gates):
         super().__init__()
         self.implicit_idle_mode = implicit_idle_mode  # how to handle implied idles ("blanks") in circuits
         self.qubit_labels = qubit_labels
@@ -414,6 +415,7 @@ class _SimpleCompLayerRules(_LayerRules):
         self._add_global_idle_to_all_layers = False
         self._add_padded_idle = False
         self.use_op_caching = True  # expert functionality - can be turned off if needed
+        self._spacial_homogeneity_assumed = independent_gates
 
         if implicit_idle_mode not in ('none', 'add_global', 'only_global', 'pad_1Q'):
             raise ValueError("Invalid `implicit_idle_mode`: '%s'" % str(implicit_idle_mode))
@@ -613,6 +615,23 @@ class _SimpleCompLayerRules(_LayerRules):
             ret = _opfactory.op_from_factories(model.factories['layers'], complbl)
         return ret
 
+    def get_dense_process_matrix_represention_for_gate(self, model: _ImplicitOpModel, lbl: _LabelTup):
+        """
+        Get the dense process matrix corresponding to the lbl.
+        Note this should be the minimal size required to represent the dense operator.
+
+        Parameters
+        ----------
+        lbl: Label
+            A label with a gate name and a specific set of qubits it will be acting on.
+        
+        Returns
+        ----------
+        _np.ndarray
+        """
+
+        key = lbl.name if self._spacial_homogeneity_assumed else lbl
+        return model.operation_blks["gates"][key].to_dense()
 
 
 
