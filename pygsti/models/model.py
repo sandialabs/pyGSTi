@@ -2633,7 +2633,7 @@ class OpModel(Model):
                 gauge_action_gauge_spaces = checkpoint_obj.gauge_action_gauge_spaces
                 load_checkpoint = False
                 if verbosity > 0:
-                    print("Loaded gauge action matrices for gates from checkpoint 1/3")
+                    print("Loaded gauge action matrices for gates from checkpoint 1/4")
             else:
                 assert checkpoint_obj.step > 1, 'DEBUG: problem with checkpoint'
         
@@ -2682,9 +2682,9 @@ class OpModel(Model):
                     checkpoint_obj.save()
                     
                     if verbosity > 0:
-                        print("Saved checkpoint 1/3 in " + save_checkpoint)
+                        print("Saved checkpoint 1/4 in " + save_checkpoint)
                 except:
-                    raise Warning('Something went wrong with checkpoint save 1/3')
+                    raise Warning('Something went wrong with checkpoint save 1/4')
             
 
         # Similar for SPAM
@@ -2710,7 +2710,7 @@ class OpModel(Model):
                 gauge_action_gauge_spaces = checkpoint_obj.gauge_action_gauge_spaces
                 load_checkpoint = False
                 if verbosity > 0:
-                    print("Loaded gauge action matrices for SPAM from checkpoint 2/3")
+                    print("Loaded gauge action matrices for SPAM from checkpoint 2/4")
         else:
             for prep_label in primitive_prep_labels:
                 prep = self._circuit_layer_operator(prep_label, 'prep')
@@ -2791,7 +2791,6 @@ class OpModel(Model):
                     
                     if verbosity > 0:
                         print("Saved final checkpoint in ", save_checkpoint)
-                    assert False
                 except:
                     raise Warning('Something went wrong with checkpoint save 4/4')
         

@@ -618,10 +618,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
         
     else:
         set_size_start = 1
-        #op_label_start = 0
-        #smaller_set_start = 0
     for set_size in range(set_size_start, max_size):
-        #assert set_size < max_size-1 
         larger_sets = []
         if checkpoint is not None:
             larger_sets = checkpoint.larger_sets
@@ -728,9 +725,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                             inverse2 = -scipy_pinv(gauge_action[n:, :], rcond=1e-7)
                             print('success')
 
-                        inv_diff_gauge_action = _np.concatenate((inverse1,
-                                                                 inverse2),
-                                                                axis=1).T
+                        inv_diff_gauge_action = _np.concatenate((inverse1, inverse2), axis=1).T
 
                         #Equivalent:
                         #inv_diff_gauge_action = _np.concatenate((_np.linalg.pinv(gauge_action[0:n, :].T, rcond=1e-7),
