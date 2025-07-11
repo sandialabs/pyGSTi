@@ -453,6 +453,7 @@ class EvalTree(list):
         assert(sum(map(len, disjointLists)) == num_elements), "sub-tree sets are not disjoint!"
         return disjointLists, helpfulScratchLists
 
+
 #region Longest Common Subsequence
 
 def _best_matching_only(A: Sequence, B: Sequence) -> int:
@@ -469,7 +470,6 @@ def _best_matching_only(A: Sequence, B: Sequence) -> int:
             return len(A[:i])
         i += 1
     return len(A[:i])
-
 
 
 def _lcs_dp_version(A: Sequence, B: Sequence):
@@ -567,6 +567,7 @@ def _conduct_one_round_of_lcs_simplification(circuits, table_data_and_sequences,
 
     return updated_circuits, cache_num, cache_struct, sequences_introduced_in_this_round
 
+
 def _find_starting_positions_using_dp_table(dp_table) -> tuple[int, int, int]:
     """
     Finds the indices of the starting points of the sequences in A and B.
@@ -599,6 +600,7 @@ def _find_starting_positions_using_dp_table(dp_table) -> tuple[int, int, int]:
             j += 1
             return i-1, j-1, dp_table[i,j]
     return None, None, None
+
 
 def _compute_lcs_for_every_pair_of_circuits(circuit_list: list[_Circuit]):
     """
@@ -661,6 +663,7 @@ def _longest_common_internal_subsequence(A: Sequence) -> tuple[int, dict[tuple, 
             return best, best_ind
     return best, best_ind
 
+
 def build_internal_tables(circuit_list):
     """
     Compute all the longest common internal sequences for each circuit A in circuit_list
@@ -679,10 +682,11 @@ def build_internal_tables(circuit_list):
             curr_best = max(curr_best, the_table[i])
     return the_table, seq_table
 
-
 #endregion Longest Common Subsequence
 
+
 #region Split circuit list into lists of subcircuits
+
 def _add_in_idle_gates_to_circuit(circuit: _Circuit, idle_gate_name: str = "I") -> _Circuit:
     """
     Add in explicit idles to the labels for each layer.
@@ -756,7 +760,6 @@ def _compute_qubit_to_lanes_mapping_for_circuit(circuit, num_qubits: int) -> tup
     return compute_qubits_to_lanes(lanes), lanes
 
 
-
 def _compute_subcircuits(circuit, qubits_to_lanes: dict[int, int]) -> list[list[LabelTupTup]]:
     """
     Split a circuit into multiple subcircuits which do not talk across lanes.
@@ -792,6 +795,7 @@ def _compute_subcircuits(circuit, qubits_to_lanes: dict[int, int]) -> list[list[
             lanes_to_gates[group_lane].append(LabelTupTup(tuple(group)))
 
     return lanes_to_gates
+
 
 def setup_circuit_list_for_LCS_computations(
         circuit_list: list[_Circuit],
@@ -864,6 +868,7 @@ def model_and_gate_to_dense_rep(model, opTuple) -> _np.ndarray:
     else:
         raise ValueError("Missing attribute")
 
+
 def get_dense_representation_of_gate_with_perfect_swap_gates(model, op: Label, saved: dict[int | LabelTupTup, _np.ndarray], swap_dense: _np.ndarray) -> _np.ndarray:
     op_term = 1
     if op.num_qubits == 2:
@@ -881,6 +886,7 @@ def get_dense_representation_of_gate_with_perfect_swap_gates(model, op: Label, s
         op_term = model_and_gate_to_dense_rep(model, op)
     return op_term
 
+
 def combine_two_gates(cumulative_term, next_dense_matrix):
     """
     Note that the visual representation was
@@ -890,7 +896,9 @@ def combine_two_gates(cumulative_term, next_dense_matrix):
     which in matrix multiplication requires Measure @ (NextDense @ Cumulative) @ State Prep.
     """
     return next_dense_matrix @ cumulative_term
+
 #endregion Lane Collapsing Helpers
+
 
 class EvalTreeBasedUponLongestCommonSubstring():
 
@@ -984,7 +992,6 @@ class EvalTreeBasedUponLongestCommonSubstring():
         # Assumes a perfect swap gate!
         # self.swap_gate = create_from_superop_mx(swap_gate, "static standard", stdname="Gswap")            
 
-
     def from_other_eval_tree(self, other: EvalTreeBasedUponLongestCommonSubstring, qubit_label_exchange: dict[int, int]):
         """
         Construct a tree from another tree.
@@ -1026,9 +1033,6 @@ class EvalTreeBasedUponLongestCommonSubstring():
                 new_cir = (*new_cir, new_layer)
             updated[new_cir] = loc
         self.circuit_to_save_location = updated
-
-
-
 
     def collapse_circuits_to_process_matrices(self, model, num_qubits_in_default: int):
         """
@@ -1119,7 +1123,6 @@ class EvalTreeBasedUponLongestCommonSubstring():
 
         return list(output)
 
-
     """        
     def _evaluate_product_rule(self, cind: int, rn: int):
 
@@ -1178,7 +1181,7 @@ class EvalTreeBasedUponLongestCommonSubstring():
                         else:
                             cumulative_term = val @ cumulative_term
     """
-    
+
 
 class CollectionOfLCSEvalTrees():
 
@@ -1291,7 +1294,6 @@ class CollectionOfLCSEvalTrees():
 
         return
             
-
     def best_order_for_tensor_contraction(self, qubit_list: tuple[int, ...], cache):
         
 
