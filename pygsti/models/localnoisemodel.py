@@ -415,7 +415,7 @@ class _SimpleCompLayerRules(_LayerRules):
         self._add_global_idle_to_all_layers = False
         self._add_padded_idle = False
         self.use_op_caching = True  # expert functionality - can be turned off if needed
-        self._spacial_homogeneity_assumed = independent_gates
+        self._spatial_homogeneity_assumed = not independent_gates
 
         if implicit_idle_mode not in ('none', 'add_global', 'only_global', 'pad_1Q'):
             raise ValueError("Invalid `implicit_idle_mode`: '%s'" % str(implicit_idle_mode))
@@ -630,7 +630,7 @@ class _SimpleCompLayerRules(_LayerRules):
         _np.ndarray
         """
 
-        key = lbl.name if self._spacial_homogeneity_assumed else lbl
+        key = lbl.name if self._spatial_homogeneity_assumed else lbl
         return model.operation_blks["gates"][key].to_dense()
 
 

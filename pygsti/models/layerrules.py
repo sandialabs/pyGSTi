@@ -14,7 +14,6 @@ Defines the LayerLizard class and supporting functionality.
 from pygsti.modelmembers import operations as _op
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.baseobjs.label import LabelTup as _LabelTup
-from pygsti.models.model import OpModel as _OpModel
 
 class LayerRules(_NicelySerializable):
     """
@@ -112,7 +111,7 @@ class LayerRules(_NicelySerializable):
         #raise KeyError(f"Cannot create operator for non-primitive layer: {layerlbl}")
         raise KeyError("Cannot create operator for non-primitive layer: %s" % str(layerlbl))
     
-    def get_dense_process_matrix_represention_for_gate(self, model: _OpModel, lbl: _LabelTup):
+    def get_dense_process_matrix_represention_for_gate(self, model, lbl: _LabelTup):
         """
         Get the dense process matrix corresponding to the lbl.
         Note this should be the minimal size required to represent the dense operator.
