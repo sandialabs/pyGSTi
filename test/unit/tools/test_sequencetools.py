@@ -79,3 +79,25 @@ def test_one_round_update_without_collecting_tables_first():
     assert np.allclose(seq_intro, np.array(3))
 
     assert num == len(updated)
+
+
+def test_update_only_adds_those_strings_which_are_actually_used():
+    example = [('R', 'A', 'C', 'E', 'C', 'A', 'R'),
+        ('A', 'A', 'A', 'A', 'Q', 'A', 'A', 'A', 'A'),
+        ('Q', 'W', 'E', 'R', 'T', 'Y', 'Q', 'W', 'E', 'Q', 'W', 'E', 'Q', 'W', 'E')]
+    example = [list(x) for x in example]
+
+
+    cache = {i: s for i,s in enumerate(example)}
+    updated, num, cache, seq_intro = conduct_one_round_of_lcs_simplification(example, None, None, len(example), cache)
+
+    r2, num, c2, s2 = conduct_one_round_of_lcs_simplification(updated, None, None, num, cache)
+
+    assert len(r2) == num
+
+    assert len(s2) == 1
+
+    assert 4 in c2[2]
+
+    assert len(c2[4]) == 3
+

@@ -100,6 +100,7 @@ def conduct_one_round_of_lcs_simplification(sequences: list[Sequence], table_dat
     old_cache_num = cache_num
     for seq, cdict in all_subsequences_to_replace.items():
         w = len(seq)
+        update_made = 0
         if  w > 1 or (not isinstance(seq[0], int)):
             # We have reached an item which we can just compute.
             for cir_ind in cdict:
@@ -108,16 +109,20 @@ def conduct_one_round_of_lcs_simplification(sequences: list[Sequence], table_dat
                 while sp+w <= len(my_cir):
                     if list(my_cir[sp: sp+w]) == list(seq):
                         my_cir[sp: sp + w] = [cache_num]
+                        update_made = 1
 
                     sp += 1
                 updated_sequences[cir_ind] = my_cir
 
                 cache_struct[cir_ind] = updated_sequences[cir_ind]
 
-            updated_sequences.append(list(seq))
-            cache_struct[cache_num] = updated_sequences[cache_num]
+            if update_made:
+                # There may have been multiple overlapping subsequences in the same sequence.
+                # (e.g. QWEQWEQWERQWE has QWE, WEQ, and EQW all happen and all are length 3 subsequences.)
+                updated_sequences.append(list(seq))
+                cache_struct[cache_num] = updated_sequences[cache_num]
 
-            cache_num += 1
+                cache_num += 1
 
     sequences_introduced_in_this_round = _np.arange(cache_num - old_cache_num) + old_cache_num
 
