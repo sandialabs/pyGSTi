@@ -23,7 +23,7 @@ from pygsti.baseobjs.label import LabelTupTup, Label
 from pygsti.modelmembers.operations import create_from_superop_mx
 from pygsti.modelmembers.operations import LinearOperator as _LinearOperator
 import itertools
-from pygsti.tools.sequencetools import conduct_one_round_of_lcs_simplification, _compute_lcs_for_every_pair_of_sequences, build_internal_tables
+from pygsti.tools.sequencetools import conduct_one_round_of_lcs_simplification, _compute_lcs_for_every_pair_of_sequences, create_tables_for_internal_LCS
 import time
 
 
@@ -476,6 +476,12 @@ def _add_in_idle_gates_to_circuit(circuit: _Circuit, idle_gate_name: str = "I") 
 
 def _compute_qubit_to_lanes_mapping_for_circuit(circuit, num_qubits: int) -> tuple[dict[int, int], dict[int, tuple[int]]]:
     """
+    Parameters:
+    ------------
+    circuit: _Circuit - the circuit to compute qubit to lanes mapping for
+
+    num_qubits: int - The total number of qubits expected in the circuit.
+
     Returns
     --------
     Dictionary mapping qubit number to lane number in the circuit.
@@ -630,15 +636,7 @@ def model_and_gate_to_dense_rep(model, opTuple) -> _np.ndarray:
     """
 
 
-    if hasattr(model, "operations"):
-        return model.operations[opTuple].to_dense()
-    elif hasattr(model, "operation_blks"):
-        if opTuple[0] not in model.operation_blks["gates"]:
-            breakpoint()
-        return model.operation_blks["gates"][opTuple[0]].to_dense()
-    else:
-        raise ValueError("Missing attribute")
-
+    return 
 
 def get_dense_representation_of_gate_with_perfect_swap_gates(model, op: Label, saved: dict[int | LabelTupTup, _np.ndarray], swap_dense: _np.ndarray) -> _np.ndarray:
     op_term = 1
@@ -648,13 +646,13 @@ def get_dense_representation_of_gate_with_perfect_swap_gates(model, op: Label, s
             op_term = saved[op]
         elif op.qubits[1] < op.qubits[0]:
             # This is in the wrong order.
-            op_term = model_and_gate_to_dense_rep(model, op)
+            op_term = model._layer_rules.get_dense_process_matrix_represention_for_gate(model, op)
             op_term = swap_dense @ (op_term) @ swap_dense
             saved[op] = op_term # Save so we only need to this operation once.
         else:
-            op_term = model_and_gate_to_dense_rep(model, op)
+            op_term = model._layer_rules.get_dense_process_matrix_represention_for_gate(model, op)
     else:
-        op_term = model_and_gate_to_dense_rep(model, op)
+        op_term = model._layer_rules.get_dense_process_matrix_represention_for_gate(model, op)
     return op_term
 
 
@@ -687,7 +685,7 @@ class EvalTreeBasedUponLongestCommonSubstring():
         self.qubit_start_point = qubit_starting_loc
 
 
-        internal_matches = build_internal_tables(circuit_list)
+        internal_matches = create_tables_for_internal_LCS(circuit_list)
         best_internal_match = _np.max(internal_matches[0])
 
         max_rounds = int(max(best_external_match,best_internal_match))
@@ -710,14 +708,13 @@ class EvalTreeBasedUponLongestCommonSubstring():
                 # We are not going to get a better internal match.
                 pass
             else:
-                internal_matches = build_internal_tables(new_circuit_list)
+                internal_matches = create_tables_for_internal_LCS(new_circuit_list)
 
             best_external_match = _np.max(external_matches[0])
             best_internal_match = _np.max(internal_matches[0])
 
             max_rounds = int(max(best_external_match,best_internal_match))
 
-        self.circuit_list = new_circuit_list
         self.cache = cache
         self.num_circuits = C
         self.from_other = False
@@ -772,7 +769,6 @@ class EvalTreeBasedUponLongestCommonSubstring():
         self.num_circuits = other.num_circuits
         self.sequence_intro = other.sequence_intro
         self.swap_gate = other.swap_gate
-        self.circuit_list = other.circuit_list
         self.orig_circuit_list = other.orig_circuit_list
         self.circuit_to_save_location = other.circuit_to_save_location
         self.from_other = other
