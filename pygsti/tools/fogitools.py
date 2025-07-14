@@ -76,7 +76,7 @@ class FOGISetupCheckpoint(_NicelySerializable):
         self.write(self.file_path)
 
 class ConstructFOGIQuantitiesCheckpoint(_NicelySerializable):
-    def __init__(self, start_set_size, fogi_dirs, fogi_meta, dep_fogi_dirs, dep_fogi_meta, ccomms, larger_sets):
+    def __init__(self, set_size_start, fogi_dirs, fogi_meta, dep_fogi_dirs, dep_fogi_meta, ccomms, larger_sets):
         """_summary_
 
         Args:
@@ -84,7 +84,7 @@ class ConstructFOGIQuantitiesCheckpoint(_NicelySerializable):
             fogi_dirs (_type_): _description_
         """
         super().__init__()
-        self.start_set_size = start_set_size
+        self.set_size_start = set_size_start
         self.fogi_dirs = fogi_dirs
         self.fogi_meta = fogi_meta
         self.dep_fogi_dirs = dep_fogi_dirs
@@ -112,7 +112,7 @@ class ConstructFOGIQuantitiesCheckpoint(_NicelySerializable):
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
         
-        state.update({'start_set_size' : self.start_set_size,
+        state.update({'set_size_start' : self.set_size_start,
                       'fogi_dirs' : self._encodemx(self.fogi_dirs),
                       'fogi_meta' : self._encode_fogi_metadata(self.fogi_meta),
                       'dep_fogi_dirs': self._encodemx(self.dep_fogi_dirs),
@@ -126,13 +126,13 @@ class ConstructFOGIQuantitiesCheckpoint(_NicelySerializable):
     
     @classmethod
     def from_nice_serialization(cls, state):
-        start_set_size = state['start_set_size']
+        set_size_start = state['set_size_start']
         #op_label = _Label(state['iteration_tracker'][1])
         #existing_set = [_Label(label) for label in state['iteration_tracker'][2]]
         #iteration_tracker = (set_size, op_label, existing_set)
-        ccomms = {_Label(key) : cls._decodemx(value) for key, value in zip(state['ccomms_keys'], state['ccomms_values'])}
+        ccomms = {tuple([_Label(label) for label in key]) : cls._decodemx(value) for key, value in zip(state['ccomms_keys'], state['ccomms_values'])}
         larger_sets = [ [_Label(label) for label in label_list] for label_list in state['larger_sets']]
-        return cls(start_set_size, cls._decodemx(state['fogi_dirs']), cls._decode_fogi_metadata(state['fogi_meta']), cls._decodemx(state['dep_fogi_dirs']), cls._decode_fogi_metadata(state['dep_fogi_meta']), ccomms, larger_sets )
+        return cls(set_size_start, cls._decodemx(state['fogi_dirs']), cls._decode_fogi_metadata(state['fogi_meta']), cls._decodemx(state['dep_fogi_dirs']), cls._decode_fogi_metadata(state['dep_fogi_meta']), ccomms, larger_sets )
         
 def first_order_gauge_action_matrix(clifford_superop_mx, target_sslbls, model_state_space,
                                     elemgen_gauge_basis, elemgen_row_basis):
@@ -614,7 +614,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
         dep_fogi_meta = checkpoint.dep_fogi_meta
         ccomms = checkpoint.ccomms
         if verbosity > 0:
-            print('Loading construct_fogi_quantities checkpoint in step ', checkpoint.set_size_start, '/', max_size)
+            print('Loading construct_fogi_quantities checkpoint in step ', checkpoint.set_size_start, '/', max_size-1)
         
     else:
         set_size_start = 1

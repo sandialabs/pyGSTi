@@ -2551,6 +2551,8 @@ class OpModel(Model):
             checkpoint_obj = _FOGICheckpoint.read(load_checkpoint)
             if verbosity > 0:
                     print("Valid checkpoint found")
+            if save_checkpoint:
+                checkpoint_obj.file_path = save_checkpoint
 
         if save_checkpoint and checkpoint_obj is None:
             assert isinstance(save_checkpoint, str), 'Checkpoint save path must be a string'
@@ -2680,6 +2682,7 @@ class OpModel(Model):
                     checkpoint_obj.gauge_action_gauge_spaces = gauge_action_gauge_spaces
                     checkpoint_obj.step = 1
                     checkpoint_obj.save()
+                    _FOGICheckpoint.read(checkpoint_obj.file_path)
                     
                     if verbosity > 0:
                         print("Saved checkpoint 1/4 in " + save_checkpoint)
@@ -2754,7 +2757,7 @@ class OpModel(Model):
                 if save_checkpoint:
                     checkpoint_obj.step = 2
                     checkpoint_obj.allowed_row_basis_labels = errorgen_coefficient_labels
-                    checkpoint_obj.gauge_action_matrices = gauge_action_matrices 
+                    checkpoint_obj.gauge_action_matrices = gauge_action_matrices.copy()
                     checkpoint_obj.gauge_action_gauge_spaces = gauge_action_gauge_spaces
                     checkpoint_obj.save()
                     if verbosity > 0:
