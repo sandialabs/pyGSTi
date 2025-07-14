@@ -13,7 +13,7 @@ Utility functions for computing and working with first-order-gauge-invariant (FO
 import numpy as _np
 import scipy.sparse as _sps
 import scipy.sparse.linalg as _spsl
-
+import scipy as _scp
 from . import matrixtools as _mt
 from . import optools as _ot
 
@@ -562,7 +562,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                         # (when int_spc vecs are orthonormal) and so the above redues to I - I = 0
                         def scipy_pinv(A, rcond):
                             # Step 1: Compute SVD
-                            U, S, VT = _spsl.svd(A, lapack_driver='gesvd')
+                            U, S, VT = _scp.linalg.svd(A, lapack_driver='gesvd')
 
                             # Step 2: Construct Sigma
                             Sigma = _np.zeros((U.shape[0], VT.shape[0]))
