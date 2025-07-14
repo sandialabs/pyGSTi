@@ -631,7 +631,21 @@ class _SimpleCompLayerRules(_LayerRules):
         """
 
         key = lbl.name if self._spatial_homogeneity_assumed else lbl
-        return model.operation_blks["gates"][key].to_dense()
+        if key in model.operation_blks["gates"]:
+            return model.operation_blks["gates"][key].to_dense()
+
+        elif self._add_padded_idle:
+            # We have idle gates that we can include.
+            absent_sslbls = lbl[1:]
+            new_key = self.single_qubit_idle_layer_labels[absent_sslbls]
+            if self._spatial_homogeneity_assumed:
+                new_key = new_key.name
+            return model.operation_blks["gates"][new_key].to_dense()
+    
+        else:
+            # Assume a perfect idle q-qubit gate.
+            return _np.eye(4**len(lbl.qubits))
+
 
 
 
