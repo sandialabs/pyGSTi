@@ -22,7 +22,6 @@ from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrint
 from pygsti.baseobjs.label import LabelTupTup, Label
 from pygsti.modelmembers.operations import create_from_superop_mx
 from pygsti.modelmembers.operations import LinearOperator as _LinearOperator
-from pygsti.baseobjs.basis import get_num_qubits_in_basis
 import itertools
 from pygsti.tools.sequencetools import conduct_one_round_of_lcs_simplification, _compute_lcs_for_every_pair_of_sequences, create_tables_for_internal_LCS
 import time
@@ -806,9 +805,8 @@ class EvalTreeBasedUponLongestCommonSubstring():
                     cumulative_term = self._collapse_cache_line(model, cumulative_term, term, saved, num_qubits_in_default)
                         
                 if cumulative_term is None:
-                    saved[cind] = get_dense_representation_of_gate_with_perfect_swap_gates(model,  Label("Fake_Gate_To_Get_Tensor_Size_Right", *(qu for qu in range(num_qubits_in_default))), saved, self.swap_gate)
-                    # This will return an identity gate of the appropriate size.
-                    # But it may also be a Noisy idle gate.
+                    saved[cind] = _np.eye(4**num_qubits_in_default)
+                    # NOTE: unclear when (if ever) this should be a noisy idle gate.
                 else:
                     saved[cind] = cumulative_term
         if __debug__:
