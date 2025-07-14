@@ -22,10 +22,11 @@ from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrint
 from pygsti.baseobjs.label import LabelTupTup, Label
 from pygsti.modelmembers.operations import create_from_superop_mx
 from pygsti.modelmembers.operations import LinearOperator as _LinearOperator
+from pygsti.baseobjs.basis import get_num_qubits_in_basis
 import itertools
 from pygsti.tools.sequencetools import conduct_one_round_of_lcs_simplification, _compute_lcs_for_every_pair_of_sequences, create_tables_for_internal_LCS
 import time
-
+from typing import Iterable
 
 
 def _walk_subtree(treedict, indx, running_inds):
@@ -586,9 +587,6 @@ def setup_circuit_list_for_LCS_computations(
     Then, a sequence detailing the number of qubits in each lane for a circuit.
     """
 
-    # output = []
-    # cir_id_to_lanes = []
-
     # We want to split the circuit list into a dictionary of subcircuits where each sub_cir in the dict[key] act exclusively on the same qubits.
     # I need a mapping from subcircuit to actual circuit. This is uniquely defined by circuit_id and then lane id.
 
@@ -606,7 +604,7 @@ def setup_circuit_list_for_LCS_computations(
 
         assert len(sub_cirs) == len(lanes_to_qubits)
         for j in range(len(sub_cirs)):
-            sc = _Circuit(sub_cirs[j])
+            sc = _Circuit(sub_cirs[j],line_labels=tuple(lanes_to_qubits[j]))
             lbls = sc._line_labels
             if lbls in line_labels_to_circuit_list:
                 line_labels_to_circuit_list[lbls].append(sc)
@@ -621,8 +619,6 @@ def setup_circuit_list_for_LCS_computations(
             else:
                 cir_ind_and_lane_id_to_sub_cir[i] = {j: sc}
 
-        # output.extend(sub_cirs)
-        # cir_id_to_lanes.append(lanes_to_qubits)
     return cir_ind_and_lane_id_to_sub_cir, sub_cir_to_cir_id_and_lane_id, line_labels_to_circuit_list
 
 #endregion Split Circuits by lanes helpers
@@ -634,9 +630,9 @@ def get_dense_representation_of_gate_with_perfect_swap_gates(model, op: Label, s
     """
     Assumes that a gate which operates on 2 qubits does not have the right orientation if label is (qu_i+1, qu_i).
     """
-    op_term = 1
     if op.num_qubits == 2:
         # We may need to do swaps.
+        op_term = 1
         if op in saved:
             op_term = saved[op]
         elif op.qubits[1] < op.qubits[0]:
@@ -646,9 +642,8 @@ def get_dense_representation_of_gate_with_perfect_swap_gates(model, op: Label, s
             saved[op] = op_term # Save so we only need to this operation once.
         else:
             op_term = model._layer_rules.get_dense_process_matrix_represention_for_gate(model, op)
-    else:
-        op_term = model._layer_rules.get_dense_process_matrix_represention_for_gate(model, op)
-    return op_term
+        return op_term
+    return model._layer_rules.get_dense_process_matrix_represention_for_gate(model, op)
 
 
 def combine_two_gates(cumulative_term, next_dense_matrix):
@@ -752,9 +747,7 @@ class EvalTreeBasedUponLongestCommonSubstring():
                                     [-1.23259516e-32, 0.00000000e+00,  0.00000000e+00, 1.23259516e-32,  0.00000000e+00,  0.00000000e+00, 0.00000000e+00,  0.00000000e+00,
                                      0.00000000e+00, 0.00000000e+00,  0.00000000e+00,  0.00000000e+00, 1.23259516e-32,  0.00000000e+00,  0.00000000e+00, 1.00000000e+00]])
 
-        # Assumes a perfect swap gate!
-        # self.swap_gate = create_from_superop_mx(swap_gate, "static standard", stdname="Gswap")            
-
+      
     def from_other_eval_tree(self, other: EvalTreeBasedUponLongestCommonSubstring, qubit_label_exchange: dict[int, int]):
         """
         Construct a tree from another tree.
@@ -804,62 +797,18 @@ class EvalTreeBasedUponLongestCommonSubstring():
 
 
         round_keys = sorted(_np.unique(list(self.sequence_intro.keys())))[::-1]
-        saved: dict[int, _LinearOperator] = {}
+        saved: dict[int | LabelTupTup, _np.ndarray] = {}
         
-
-
-        def cache_lookup_and_product(cumulative_term, term_to_extend_with: int):
-            if cumulative_term is None:
-                # look up result.
-                return saved[term]
-            elif isinstance(term, int) and cumulative_term is not None:
-                return combine_two_gates(cumulative_term, saved[term_to_extend_with]) 
-
-
-
-        def collapse_cache_line(cumulative_term, term_to_extend_with: int | LabelTupTup):
-
-            if isinstance(term_to_extend_with, int):
-                return cache_lookup_and_product(cumulative_term, term_to_extend_with)
-
-            else:
-                val = 1
-                qubits_used = [i for i in range(num_qubits_in_default)]
-                while qubits_used:
-                    qu = qubits_used[0]
-                    gate_matrix = _np.eye(4)
-                    found = False
-                    op_ind = self.qubit_start_point # Handle circuits with only qubits (i, i+k) where k is number of qubits in the subsystem.
-                    while not found and op_ind < len(term):
-                        op = term[op_ind]
-                        if qu in op.qubits:
-                            gate_matrix = get_dense_representation_of_gate_with_perfect_swap_gates(model, op, saved, self.swap_gate)
-                            found = True
-                            # We assume that the qubits need to overlap for a specific gate.
-                            # i.e. One cannot have op.qubits = (0, 2) in a system with a qubits (0,1,2).
-                            qubits_used = qubits_used[len(op.qubits):]
-                        op_ind += 1
-                    val = _np.kron(val, gate_matrix)
-                    if not found:
-                        # Remove that qubit from list to check.
-                        qubits_used = qubits_used[1:]
-
-                if val.shape != expected_shape:
-                    breakpoint()
-                if cumulative_term is None:
-                    return val
-                else:
-                    return combine_two_gates(cumulative_term, val)
-
-        expected_shape = (4**num_qubits_in_default, 4**num_qubits_in_default)
         for key in round_keys:
             for cind in self.sequence_intro[key]:
                 cumulative_term = None
                 for term in self.cache[cind]:
-                    cumulative_term = collapse_cache_line(cumulative_term, term)
+                    cumulative_term = self._collapse_cache_line(model, cumulative_term, term, saved, num_qubits_in_default)
                         
                 if cumulative_term is None:
-                    saved[cind] = _np.eye(4**num_qubits_in_default) # identity of the appropriate size.
+                    saved[cind] = get_dense_representation_of_gate_with_perfect_swap_gates(model,  Label("Fake_Gate_To_Get_Tensor_Size_Right", *(qu for qu in range(num_qubits_in_default))), saved, self.swap_gate)
+                    # This will return an identity gate of the appropriate size.
+                    # But it may also be a Noisy idle gate.
                 else:
                     saved[cind] = cumulative_term
         if __debug__:
@@ -870,6 +819,66 @@ class EvalTreeBasedUponLongestCommonSubstring():
         # {tuple(self.trace_through_cache_to_build_circuit(icir)): icir for icir in range(len(self.orig_circuit_list)) if icir < self.num_circuits}
     
         return saved, self.circuit_to_save_location 
+
+    def handle_results_cache_lookup_and_product(self,
+                            cumulative_term: None | _np.ndarray,
+                            term_to_extend_with: int | LabelTupTup,
+                            results_cache: dict[int | LabelTupTup, _np.ndarray]) -> _np.ndarray:
+
+        if cumulative_term is None:
+            # look up result.
+            return results_cache[term_to_extend_with]
+        return combine_two_gates(cumulative_term, results_cache[term_to_extend_with]) 
+
+
+    def _collapse_cache_line(self, model, cumulative_term: None | _np.ndarray,
+                            term_to_extend_with: int | LabelTupTup,
+                            results_cache: dict[int | LabelTupTup, _np.ndarray],
+                            num_qubits_in_default: int) -> _np.ndarray:
+        """
+        Reduce a cache line to a single process matrix.
+
+        This should really only be called from collapse_circuits_to_process_matrices.
+
+        """
+
+
+        if isinstance(term_to_extend_with, int):
+            return self.handle_results_cache_lookup_and_product(cumulative_term, term_to_extend_with, results_cache)
+
+        else:
+            val = 1
+            qubits_available = [i + self.qubit_start_point for i in range(num_qubits_in_default)]
+            matrix_reps = {op.qubits: get_dense_representation_of_gate_with_perfect_swap_gates(model, op,
+                                            results_cache, self.swap_gate) for op in term_to_extend_with}
+            qubit_used = []
+            for key in matrix_reps.keys():
+                qubit_used.extend(key)
+
+            assert len(qubit_used) == len(set(qubit_used))
+            unused_qubits = set(qubits_available) - set(qubit_used)
+
+            implicit_idle_reps = {(qu,): get_dense_representation_of_gate_with_perfect_swap_gates(model,
+                                        Label("Fake_Gate_To_Get_Tensor_Size_Right", qu), # A fake gate to look up and use the appropriate idle gate.
+                                        results_cache, self.swap_gate) for qu in unused_qubits}
+
+            while qubits_available:
+
+                qu = qubits_available[0]
+                if qu in unused_qubits:
+                    val = _np.kron(val, implicit_idle_reps[(qu,)])
+                    qubits_available = qubits_available[1:]
+                else:
+                    # It must be a part of a non-trivial gate.
+                    gatekey = [key for key in matrix_reps if qu in key][0]
+                    val = _np.kron(val, matrix_reps[gatekey])
+
+                    qubits_available = qubits_available[len(gatekey):]
+
+            if cumulative_term is None:
+                return val
+            return combine_two_gates(cumulative_term, val)
+
 
     def trace_through_cache_to_build_circuit(self, cache_ind: int) -> list[tuple]:
 
@@ -884,65 +893,6 @@ class EvalTreeBasedUponLongestCommonSubstring():
                 output = (*output, *next_term)
 
         return list(output)
-
-    """        
-    def _evaluate_product_rule(self, cind: int, rn: int):
-
-        sequence = self.cache[cind]
-        num_terms = len(sequence)
-        sub_tree_cache, sub_rounds = self.deriv_ordering_cache[num_terms]
-
-        for sub_r in sorted(sub_rounds.keys())[::-1]:
-            sub_sequence = None
-            for sub_cind in sub_rounds[sub_r]:
-        
-                for term in sub_tree_cache[sub_cind]:
-                    if isinstance(term, tuple):
-                        # Then, this may be a partial derivative or an character in original sequence.
-                        if len(term) == 2:
-                            # Then this is taking a partial derivative.
-                            natural_term = term[1][0]
-                            if natural_term in self.derivative_cache:
-                                cumulative_term = cumulative_term @ self.derivative_cache[natural_term]
-                            else:
-                                # This should be a natural derivative.
-                                self.derivative_cache[natural_term] = term.deriv_wrt_params(None)
-                                cumulative_term = cumulative_term @ self.derivative_cache[natural_term]
-
-                        # It is just an index to sequence for where to look in the cache.
-                        next_ind = term[0]
-                        sequence_val = sequence[next_ind]
-
-                        if isinstance(term, int) and cumulative_term is None:
-                            # look up result.
-                            cumulative_term = saved[term]
-                        elif isinstance(term, int) and not (cumulative_term is None):
-                            cumulative_term = saved[term] @ cumulative_term
-                        elif isinstance(term, LabelTupTup):
-                            val = 1
-                            for op in term:
-                            op_term = 1
-                            if op.num_qubits == 2:
-                                # We may need to do swaps.
-                                if op in saved:
-                                    op_term = saved[op]
-                                elif op.qubits[1] < op.qubits[0]:
-                                    # This is in the wrong order.
-                                    swap_term = model.operation_blks["gates"][("Gswap",0,1)].to_dense() # assume this is perfect.
-                                    op_term = model.operation_blks["gates"][op].to_dense()
-                                    op_term = swap_term @ op_term @ swap_term.T
-                                    saved[op] = op_term # Save so we only need to this operation once.
-                                else:
-                                    op_term = model.operation_blks["gates"][op].to_dense()
-                            else:
-                                op_term = model.operation_blks["gates"][op].to_dense()
-                            val = _np.kron(val, op_term)
-                        #val = model.operation_blks["gates"][term[0]].to_dense()
-                        if cumulative_term is None:
-                            cumulative_term = val
-                        else:
-                            cumulative_term = val @ cumulative_term
-    """
 
 
 class CollectionOfLCSEvalTrees():
@@ -988,16 +938,22 @@ class CollectionOfLCSEvalTrees():
 
     def collapse_circuits_to_process_matrices(self, model):
         # Just collapse all of them.
-        
+
+
         self.saved_results = {}
         for key in self.trees:
-            self.saved_results[key], self.sub_cir_to_ind_in_results[key] = self.trees[key].collapse_circuits_to_process_matrices(model, len(key))
+            num_qubits = len(key) if key[0] != ('*',) else key[1] # Stored in the data structure.
+            tree = self.trees[key]
+            out1, out2 = tree.collapse_circuits_to_process_matrices(model, num_qubits)
+            # self.saved_results[key], self.sub_cir_to_ind_in_results[key] = self.trees[key].collapse_circuits_to_process_matrices(model, len(key))
+            self.saved_results[key] = out1
+            self.sub_cir_to_ind_in_results[key] = out2
 
     def reconstruct_full_matrices(self):
 
         if len(self.saved_results) == 0:
             return
-        
+
         # Now we can do the combination.
 
         num_cirs = len(self.cir_id_and_lane_id_to_sub_cir)
@@ -1008,17 +964,19 @@ class CollectionOfLCSEvalTrees():
             for i in range(len(self.cir_id_and_lane_id_to_sub_cir[icir])):
                 cir = self.cir_id_and_lane_id_to_sub_cir[icir][i]
                 lblkey = cir._line_labels
-
-                if len(cir.layertup) == 0:
-
-                    lane_circuits.append(_np.eye(4**(len(lblkey))))
-                else:
-                    if cir.layertup not in self.sub_cir_to_ind_in_results[lblkey]:
-                        print(lblkey)
-                        print(cir)
-                        breakpoint()
+                if lblkey == ("*",):
+                    # We are gettting a noisy idle line and so need to check the size we are expecting here.
                     ind_in_results = self.sub_cir_to_ind_in_results[lblkey][cir.layertup]
-                    lane_circuits.append(self.saved_results[lblkey][ind_in_results])
+                    print(cir.num_lines)
+                    # lane_circuits.append(self.saved_results[lblkey][ind_in_results])
+
+                    # 
+                if cir.layertup not in self.sub_cir_to_ind_in_results[lblkey]:
+                    print(lblkey)
+                    print(cir)
+                    breakpoint()
+                ind_in_results = self.sub_cir_to_ind_in_results[lblkey][cir.layertup]
+                lane_circuits.append(self.saved_results[lblkey][ind_in_results])
             output.append(lane_circuits)
 
         # Need a map from lane id to computed location.
