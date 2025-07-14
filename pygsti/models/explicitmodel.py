@@ -1806,7 +1806,7 @@ class ExplicitLayerRules(_LayerRules):
         _np.ndarray
         """
 
-        operation = model.operations["gates"][lbl]
+        operation = model.operations[lbl]
 
         if isinstance(operation, _EmbeddedOp):
             return operation.embedded_op.to_dense()

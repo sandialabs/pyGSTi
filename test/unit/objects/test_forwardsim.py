@@ -13,7 +13,10 @@ from pygsti.forwardsims.matrixforwardsim import LCSEvalTreeMatrixForwardSimulato
 from pygsti.models import ExplicitOpModel
 from pygsti.circuits import Circuit, create_lsgst_circuit_lists
 from pygsti.baseobjs import Label as L
-from ..util import BaseCase
+try:
+    from ..util import BaseCase
+except ImportError:
+    BaseCase = object
 
 from pygsti.data import simulate_data
 from pygsti.modelpacks import smq1Q_XYI
@@ -282,7 +285,7 @@ class ForwardSimConsistencyTester(TestCase):
             SimpleMatrixForwardSimulator(),
             MapForwardSimulator(),
             MatrixForwardSimulator(),
-            # LCSEvalTreeMatrixForwardSimulator()
+            LCSEvalTreeMatrixForwardSimulator()
         ]
         if TorchForwardSimulator.ENABLED:
             sims.append(TorchForwardSimulator())
@@ -364,3 +367,8 @@ class ForwardSimIntegrationTester(BaseProtocolData):
     def test_lcs_matrix_fwdsim(self):
         self._run(LCSEvalTreeMatrixForwardSimulator)
 
+
+if __name__ == '__main__':
+    tester = ForwardSimConsistencyTester()
+    tester.test_consistent_probs()
+    print()
