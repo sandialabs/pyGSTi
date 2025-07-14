@@ -131,7 +131,7 @@ class ConstructFOGIQuantitiesCheckpoint(_NicelySerializable):
         #existing_set = [_Label(label) for label in state['iteration_tracker'][2]]
         #iteration_tracker = (set_size, op_label, existing_set)
         ccomms = {tuple([_Label(label) for label in key]) : cls._decodemx(value) for key, value in zip(state['ccomms_keys'], state['ccomms_values'])}
-        larger_sets = [ [_Label(label) for label in label_list] for label_list in state['larger_sets']]
+        larger_sets = [ tuple([_Label(label) for label in label_list]) for label_list in state['larger_sets']]  
         return cls(set_size_start, cls._decodemx(state['fogi_dirs']), cls._decode_fogi_metadata(state['fogi_meta']), cls._decodemx(state['dep_fogi_dirs']), cls._decode_fogi_metadata(state['dep_fogi_meta']), ccomms, larger_sets )
         
 def first_order_gauge_action_matrix(clifford_superop_mx, target_sslbls, model_state_space,
@@ -493,7 +493,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
         # above gives us *dir*-norm we want  # DUAL NORM
         # f_hat = f_hat_vec / L2^2 = f / (nrm * L2^2) = (1 / (nrm * L2^2)) * f
 
-        resulting_dirs = _sps.hstack((initial_dirs, dirs_to_add))  # errgen-space NORMALIZED
+        resulting_dirs = _sps.hstack((initial_dirs, dirs_to_add), format='csr')  # errgen-space NORMALIZED
 
         full_gauge_vecs = _np.dot(gauge_space.vectors, gauge_vecs)  # in gauge_space's basis
         gauge_names = elem_vec_names(full_gauge_vecs, gauge_space.elemgen_basis.labels)
@@ -622,6 +622,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
         larger_sets = []
         if checkpoint is not None:
             larger_sets = checkpoint.larger_sets
+            smaller_sets = larger_sets
             checkpoint = None
         num_indep_vecs_from_smaller_sets = fogi_dirs.shape[1]
         for op_label in primitive_op_labels:
@@ -847,12 +848,16 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
 
                 larger_sets.append(new_set)
         smaller_sets = larger_sets
+        if verbosity > 0:
+                print('Done with step ', set_size, 'out of ', max_size-1, ' in construct_fogi_quantities', flush=True)
         if save_checkpoint is not None:
             save_checkpoint.step = 3
             save_checkpoint.construct_fogi_quantities_checkpoint =  ConstructFOGIQuantitiesCheckpoint(set_size, fogi_dirs, fogi_meta, dep_fogi_dirs, dep_fogi_meta, ccomms, larger_sets)
             save_checkpoint.save()
+            
             if verbosity > 0:
-                print('Saved checkpoint ', set_size, 'out of ', max_size-1, ' in construct_fogi_quantities')
+                print('Saved checkpoint ', set_size, 'out of ', max_size-1, ' in construct_fogi_quantities', flush=True)
+            
      
         
 
