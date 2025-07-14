@@ -2793,7 +2793,7 @@ class OpModel(Model):
                     checkpoint_obj.save()
                     
                     if verbosity > 0:
-                        print("Saved final checkpoint in ", save_checkpoint)
+                        print("Saved checkpoint 4/4 in", save_checkpoint)
                 except:
                     raise Warning('Something went wrong with checkpoint save 4/4')
         

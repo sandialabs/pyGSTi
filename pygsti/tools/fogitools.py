@@ -856,7 +856,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
             save_checkpoint.save()
             
             if verbosity > 0:
-                print('Saved checkpoint ', set_size, 'out of ', max_size-1, ' in construct_fogi_quantities', flush=True)
+                print('Saved checkpoint 3.', set_size, '/3.', max_size-1, ' in construct_fogi_quantities', flush=True)
             
      
         
