@@ -779,10 +779,8 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             scaleCache[iDest] = scaleCache[iLeft] + scaleCache[iRight]
 
             if prodCache[iDest].max() < _PSMALL and prodCache[iDest].min() > -_PSMALL:
-                nL = max(_nla.norm(L), _np.exp(-scaleCache[iLeft]),  1e-300)
+                nL = max(_nla.norm(L), _np.exp(-scaleCache[iLeft]), 1e-300)
                 nR = max(_nla.norm(R), _np.exp(-scaleCache[iRight]), 1e-300)
-                # ^ I want to allow L,R to be tensor product operators. That precludes
-                #   calling _nla.norm.
                 sL, sR = L / nL, R / nR
                 # ^ Again, shows the need to overload division by scalars.
                 prodCache[iDest] = sL @ sR
