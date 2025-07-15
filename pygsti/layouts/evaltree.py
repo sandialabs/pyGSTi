@@ -24,6 +24,8 @@ from pygsti.modelmembers.operations import create_from_superop_mx
 from pygsti.modelmembers.operations import LinearOperator as _LinearOperator
 import itertools
 from pygsti.tools.sequencetools import conduct_one_round_of_lcs_simplification, _compute_lcs_for_every_pair_of_sequences, create_tables_for_internal_LCS
+
+from pygsti.circuits.split_circuits_into_lanes import compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit, compute_subcircuits
 import time
 from typing import Iterable
 
@@ -474,111 +476,14 @@ def _add_in_idle_gates_to_circuit(circuit: _Circuit, idle_gate_name: str = "I") 
     return tmp
 
 
-def _compute_qubit_to_lanes_mapping_for_circuit(circuit, num_qubits: int) -> tuple[dict[int, int], dict[int, tuple[int]]]:
-    """
-    Parameters:
-    ------------
-    circuit: _Circuit - the circuit to compute qubit to lanes mapping for
 
-    num_qubits: int - The total number of qubits expected in the circuit.
-
-    Returns
-    --------
-    Dictionary mapping qubit number to lane number in the circuit.
-    """
-
-    qubits_to_potentially_entangled_others = {i: set((i,)) for i in range(num_qubits)}
-    num_layers = circuit.num_layers
-    for layer_ind in range(num_layers):
-        layer = circuit.layer(layer_ind)
-        for op in layer:
-            qubits_used = op.qubits
-            for qb in qubits_used:
-                qubits_to_potentially_entangled_others[qb].update(set(qubits_used))
-
-    lanes = {}
-    lan_num = 0
-    visited: dict[int, int] = {}
-    def reachable_nodes(starting_point: int, graph_qubits_to_neighbors: dict[int, set[int]], visited: dict[int, set[int]]):
-        """
-        Find which nodes are reachable from this starting point.
-        """
-        if starting_point in visited:
-            return visited[starting_point]
-        else:
-            assert starting_point in graph_qubits_to_neighbors
-            visited[starting_point] = graph_qubits_to_neighbors[starting_point]
-            output = set(visited[starting_point])
-            for child in graph_qubits_to_neighbors[starting_point]:
-                if child != starting_point:
-                    output.update(output, reachable_nodes(child, graph_qubits_to_neighbors, visited))
-            visited[starting_point] = output
-            return output
-
-    available_starting_points = list(sorted(qubits_to_potentially_entangled_others.keys()))
-    while available_starting_points:
-        sp = available_starting_points[0]
-        nodes = reachable_nodes(sp, qubits_to_potentially_entangled_others, visited)
-        for node in nodes:
-            available_starting_points.remove(node)
-        lanes[lan_num] = nodes
-        lan_num += 1
-
-    def compute_qubits_to_lanes(lanes_to_qubits: dict[int, set[int]]) -> dict[int, int]:
-        """
-        Determine a mapping from qubit to the lane it is in for this specific circuit.
-        """
-        out = {}
-        for key, val in lanes_to_qubits.items():
-            for qb in val:
-                out[qb] = key
-        return out
-
-    return compute_qubits_to_lanes(lanes), lanes
-
-
-def _compute_subcircuits(circuit, qubits_to_lanes: dict[int, int]) -> list[list[LabelTupTup]]:
-    """
-    Split a circuit into multiple subcircuits which do not talk across lanes.
-    """
-
-    lanes_to_gates = [[] for _ in range(_np.unique(list(qubits_to_lanes.values())).shape[0])]
-
-    num_layers = circuit.num_layers
-    for layer_ind in range(num_layers):
-        layer = circuit.layer(layer_ind)
-        group = []
-        group_lane = None
-        sorted_layer = sorted(layer, key=lambda x: x.qubits[0])
-
-        for op in sorted_layer:
-            # We need this to be sorted by the qubit number so we do not get that a lane was split Q1 Q3 Q2 in the layer where Q1 and Q2 are in the same lane.
-            qubits_used = op.qubits # This will be a list of qubits used.
-            # I am assuming that the qubits are indexed numerically and not by strings.
-            lane = qubits_to_lanes[qubits_used[0]]
-
-            if group_lane is None:
-                group_lane = lane
-                group.append(op)
-            elif group_lane == lane:
-                group.append(op)
-            else:
-                lanes_to_gates[group_lane].append(LabelTupTup(tuple(group)))
-                group_lane = lane
-                group = [op]
-
-        if len(group) > 0:
-            # We have a left over group.
-            lanes_to_gates[group_lane].append(LabelTupTup(tuple(group)))
-
-    return lanes_to_gates
 
 
 def setup_circuit_list_for_LCS_computations(
         circuit_list: list[_Circuit],
         implicit_idle_gate_name: str = "I") -> tuple[list[dict[int, int]],
-                                                    dict[tuple[_Circuit], list[tuple[int, int]]],
-                                                    dict[tuple[int, ...], set[_Circuit]]]:
+                                                    dict[tuple[LabelTupTup], list[tuple[int, int]]],
+                                                    dict[tuple[int, ...], list[LabelTupTup]]]:
     """
     Split a circuit list into a list of subcircuits by lanes. These lanes are non-interacting partions of a circuit.
 
@@ -598,25 +503,25 @@ def setup_circuit_list_for_LCS_computations(
         if implicit_idle_gate_name:
             cir = _add_in_idle_gates_to_circuit(cir, implicit_idle_gate_name)
 
-        qubits_to_lane, lanes_to_qubits = _compute_qubit_to_lanes_mapping_for_circuit(cir, cir.num_lines)
-        sub_cirs = _compute_subcircuits(cir, qubits_to_lane)
+        qubit_to_lane, lane_to_qubits = compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit(cir, cir.num_lines)
+        sub_cirs = compute_subcircuits(cir, qubit_to_lane)
 
         if not implicit_idle_gate_name:
             if not all([len(sc) == len(sub_cirs[0]) for sc in sub_cirs]):
                 raise ValueError("Each lane does not have the same number of layers. Therefore, a lane has an implicit idle gate. Please add in idle gates explicitly to the circuit.")
 
-        assert len(sub_cirs) == len(lanes_to_qubits)
+        assert len(sub_cirs) == len(lane_to_qubits)
         for j in range(len(sub_cirs)):
-            sc = _Circuit(sub_cirs[j],line_labels=tuple(lanes_to_qubits[j]),)
+            sc = _Circuit(sub_cirs[j],line_labels=tuple(lane_to_qubits[j]),)
             lbls = sc._line_labels
             if lbls in line_labels_to_circuit_list:
-                line_labels_to_circuit_list[lbls].append(sc)
+                line_labels_to_circuit_list[lbls].append(sc.layertup)
             else:
-                line_labels_to_circuit_list[lbls] = [sc]
-            if sc in sub_cir_to_cir_id_and_lane_id:
-                sub_cir_to_cir_id_and_lane_id[sc].append((i,j))
+                line_labels_to_circuit_list[lbls] = [sc.layertup]
+            if sc.layertup in sub_cir_to_cir_id_and_lane_id:
+                sub_cir_to_cir_id_and_lane_id[sc.layertup].append((i,j))
             else:
-                sub_cir_to_cir_id_and_lane_id[sc] = [(i,j)]
+                sub_cir_to_cir_id_and_lane_id[sc.layertup] = [(i,j)]
             if i in cir_ind_and_lane_id_to_sub_cir:
                 cir_ind_and_lane_id_to_sub_cir[i][j] = sc
             else:
@@ -899,7 +804,9 @@ class EvalTreeBasedUponLongestCommonSubstring():
 
 class CollectionOfLCSEvalTrees():
 
-    def __init__(self, line_lbls_to_circuit_list, sub_cir_to_full_cir_id_and_lane_id, cir_id_and_lane_id_to_sub_cir):
+    def __init__(self, line_lbls_to_circuit_list: dict[tuple[int, ...], list[LabelTupTup]],
+                 sub_cir_to_full_cir_id_and_lane_id,
+                 cir_id_and_lane_id_to_sub_cir):
         
         self.trees: dict[tuple[int, ...], EvalTreeBasedUponLongestCommonSubstring] = {}
 
@@ -913,7 +820,7 @@ class CollectionOfLCSEvalTrees():
         for key, vals in line_lbls_to_circuit_list.items():
             sub_cirs = []
             for cir in vals:
-                sub_cirs.append(list(cir))
+                sub_cirs.append(cir.layertup)
             if ASSUME_MATCHING_QUBIT_SIZE_MATCHING_TREE:
                 if len(key) not in size_to_tree:
                     self.trees[key] = EvalTreeBasedUponLongestCommonSubstring(sub_cirs)
