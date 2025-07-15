@@ -2563,9 +2563,15 @@ class Circuit(object):
 
         def replace(obj):  # obj is either a simple label or a list
             if isinstance(obj, _Label):
-                if obj.name == old_gatename:
-                    newobj = _Label(new_gatename, obj.sslbls)
-                else: newobj = obj
+                newobj = _Label(new_gatename, obj.sslbls) if (obj.name == old_gatename) else obj
+            elif obj == old_gatename:
+                if len(obj) == 0:
+                    sslbls = self.line_labels
+                else:
+                    import warnings
+                    warnings.warn(f'Cannot infer target of gate(s) of {obj}.')
+                    sslbls = tuple()
+                newobj = _Label((new_gatename,) + sslbls)
             else:
                 newobj = [replace(sub) for sub in obj]
             return newobj
