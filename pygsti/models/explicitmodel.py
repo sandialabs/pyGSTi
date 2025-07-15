@@ -48,6 +48,31 @@ from pygsti.tools.legacytools import deprecate as _deprecated_fn
 from pygsti.modelmembers.operations import EmbeddedOp as _EmbeddedOp, ComposedOp as _ComposedOp
 
 
+class Roster:
+    def __init__(self, arg):
+        if isinstance(arg, str) and arg == 'all':
+            self.trivial = True
+            self.collection = None
+        else:
+            self.trivial = False
+            self.collection = arg
+    def __contains__(self, item):
+        return self.trivial or (item in self.collection)
+
+
+class ModelView:
+    @staticmethod
+    def cast(arg):
+        return arg if arg is not None else ModelView()
+    def __init__(self):
+        self.operations  = _collections.defaultdict(lambda: None)
+        self.preps       = _collections.defaultdict(lambda: None)
+        self.povms       = _collections.defaultdict(lambda: None)
+        self.instruments = _collections.defaultdict(lambda: None)
+        self.factories   = _collections.defaultdict(lambda: None)
+
+
+
 class ExplicitOpModel(_mdl.OpModel):
     """
     Encapsulates a set of gate, state preparation, and POVM effect operations.
