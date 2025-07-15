@@ -1806,6 +1806,9 @@ class ExplicitLayerRules(_LayerRules):
         _np.ndarray
         """
 
+        if lbl not in model.operations:
+            return _np.empty(1)
+
         operation = model.operations[lbl]
 
         if isinstance(operation, _EmbeddedOp):

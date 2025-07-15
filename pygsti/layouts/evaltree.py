@@ -601,9 +601,13 @@ def setup_circuit_list_for_LCS_computations(
         qubits_to_lane, lanes_to_qubits = _compute_qubit_to_lanes_mapping_for_circuit(cir, cir.num_lines)
         sub_cirs = _compute_subcircuits(cir, qubits_to_lane)
 
+        if not implicit_idle_gate_name:
+            if not all([len(sc) == len(sub_cirs[0]) for sc in sub_cirs]):
+                raise ValueError("Each lane does not have the same number of layers. Therefore, a lane has an implicit idle gate. Please add in idle gates explicitly to the circuit.")
+
         assert len(sub_cirs) == len(lanes_to_qubits)
         for j in range(len(sub_cirs)):
-            sc = _Circuit(sub_cirs[j],line_labels=tuple(lanes_to_qubits[j]))
+            sc = _Circuit(sub_cirs[j],line_labels=tuple(lanes_to_qubits[j]),)
             lbls = sc._line_labels
             if lbls in line_labels_to_circuit_list:
                 line_labels_to_circuit_list[lbls].append(sc)
@@ -907,7 +911,9 @@ class CollectionOfLCSEvalTrees():
 
         starttime = time.time()
         for key, vals in line_lbls_to_circuit_list.items():
-            sub_cirs = [list(cir) for cir in vals]
+            sub_cirs = []
+            for cir in vals:
+                sub_cirs.append(list(cir))
             if ASSUME_MATCHING_QUBIT_SIZE_MATCHING_TREE:
                 if len(key) not in size_to_tree:
                     self.trees[key] = EvalTreeBasedUponLongestCommonSubstring(sub_cirs)
