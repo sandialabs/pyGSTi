@@ -483,8 +483,65 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
     dep_fogi_meta = []  # elements correspond to matrix columns
 
     def add_relational_fogi_dirs(dirs_to_add, gauge_vecs, gauge_dirs, initial_dirs, metadata,
-                                 existing_opset, new_op_label, new_opset, norm_orders):
-        """ Note: gauge_vecs and gauge_dirs are the same up to a normalization - maybe combine? """
+                                existing_opset, new_op_label, new_opset, norm_orders):
+        """ 
+        Stacks the vectors dirs_to_add next to initial_dirs, additionally, it identifies the corresponding
+        gauge direction to the relational quantity, constructs its label name, and stores it in the metadata in-place.
+
+        Note: gauge_vecs and gauge_dirs are the same up to a normalization - maybe combine?
+
+        Parameters
+        ----------
+        dirs_to_add : scipy csc sparse matrix
+            Matrix where each column corresponds to a new FOGI direction
+        
+        gauge_vecs : numpy ndarray
+            Normalized version of gauge_dirs
+        
+        gauge_dirs : numpy ndarray
+            TODO
+
+        initial_dirs : scipy csc sparse matrix
+            Matrix where each column corresponds to an existing FOGI quantity
+        
+        metadata : list of dictionaries 
+            Entry k contains metadata information about fogi quantity k (column k of initial_dirs). 
+            It is organized as a dictionary with the following entries:
+
+                - 'name' (str) : Label describing the FOGI quantity
+
+                - 'abbrev' (str) : An abbreviated version of the label above TODO: more details 
+
+                - 'r' (float) : constant that allows us to convert between the gauge-space-normalized
+                       FOGI direction to the errgen-space-normalized version of it.
+                       fogi_dir = r * dot(M, epsilon) = r * dot(inv_diff_gauge_action, int_vec)
+
+                - 'gaugespace_dir' (numpy array) : A corresponding gauge direction TODO: more details on their relationship
+                                    to FOGI quantities
+
+                - 'opset' (list of Label) : The set of model member operations that are affected by the corresponding FOGI
+                           quantity
+                - 'raw' (str) : Another version of 'name' without abbreviations
+    
+        existing_opset : tuple of LabelTup
+            TODO
+
+        new_op_label : LabelTup
+            TODO
+
+        new_opset : tuple of LabelTup
+            TODO
+
+        norm_orders : numpy ndarray
+            TODO
+
+        Returns:
+            resulting_dirs : scipy csr sparse matrix
+                It is simply _sps.hstack((initial_dirs, dirs_to_add), format='csr')
+            
+                NOTE: The main job of this function is to update metadata accordingly, which is done in-place
+
+         """
         vecs_to_add, nrms = _mt.normalize_columns(dirs_to_add, ord=norm_orders, return_norms=True)  # f_hat_vec = f/nrm
         vector_L2_norm2s = _mt.column_norms(vecs_to_add)**2  # L2 norm squared
         vector_L2_norm2s[vector_L2_norm2s == 0.0] = 1.0  # avoid division of zero-column by zero
@@ -807,6 +864,15 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                             new_fogi_dirs[op_errgen_indices[ol], :] = local_fogi_dirs[off:off + n, :]; off += n
                         new_fogi_dirs = new_fogi_dirs.tocsc()
 
+                        
+                        #TODO (by Juan): If I understand this code correctly, a basis is found
+                        #for the relational FOGI space between all possible combinations of gates.
+                        #Only then, a linearly independent set is identified.
+                        #This can be made faster by adding the previously found, and previously identified as
+                        #linearly independent quantities and "blocking them". Essentially, projecting the FOGI
+                        #space to not include subspaces already spanned by vectors found. This is described in the
+                        #paper. Especially because it seems like this check below is the current bottleneck.
+                        
                         # figure out which directions are independent #BOTTLENECK
                         indep_cols = _mt.independent_columns(new_fogi_dirs, fogi_dirs)
 
