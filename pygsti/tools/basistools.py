@@ -476,6 +476,10 @@ def vec_to_stdmx(v, basis, keep_complex=False):
     """
     if not isinstance(basis, _basis.Basis):
         basis = _basis.BuiltinBasis(basis, len(v))
+    if not isinstance(v, _np.ndarray):
+        v = v.to_dense()
+        # TODO: track down functions that hit this code path, then change
+        # then so this conversion isn't needed in vec_to_stdmx.
     v = v.ravel()
     ret = _np.zeros(basis.elshape, 'complex')
     if v.ndim > 1:
