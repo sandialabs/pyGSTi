@@ -1451,15 +1451,20 @@ class Circuit(object):
         None
         """
         assert(not self._static), "Cannot edit a read-only circuit!"
-        if insert_before is None: insert_before = len(self._labels)
-        elif insert_before < 0: insert_before = len(self._labels) + insert_before
-
+        if insert_before is None:
+            insert_before = len(self._labels)
+        elif insert_before < 0:
+            insert_before = len(self._labels) + insert_before
+        
         if lines is None:  # insert complete layers
             for i in range(num_to_insert):
                 self._labels.insert(insert_before, [])
 
             #Shift compilable layer indices as needed
             if self._compilable_layer_indices_tup:
+                if num_to_insert <= 0 and insert_before < len(self._labels):
+                    raise ValueError('Undefined behavior (at least until the ' \
+                    'documentation is updated).')
                 shifted_inds = [i if (i < insert_before) else (i + num_to_insert)
                                 for i in self._compilable_layer_indices_tup]
                 self._compilable_layer_indices_tup = tuple(shifted_inds)
