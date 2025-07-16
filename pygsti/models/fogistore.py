@@ -459,24 +459,7 @@ class FirstOrderGaugeInvariantStore(_NicelySerializable):
         if self.norm_order != other.norm_order or self._dependent_fogi_action != other._dependent_fogi_action:
             return False
         return True
-        
-        '''
-        self.primitive_op_labels = primitive_op_labels
-        self.gauge_space = gauge_space
-        self.elem_errorgen_labels_by_op = elem_errorgen_labels_by_op
-        self.op_errorgen_indices = op_errorgen_indices
-        self.fogi_directions = fogi_directions
-        self.fogi_metadata = fogi_metadata
-        self.dependent_dir_indices = dependent_dir_indices
-        self.fogv_directions = fogv_directions
-        self.allop_gauge_action = allop_gauge_action
-        self.gauge_space_directions = gauge_space_directions
-        self.norm_order = norm_order
-        self._dependent_fogi_action = dependent_fogi_action
 
-        self.errorgen_space_op_elem_labels = tuple([(op_label, elem_lbl) for op_label in self.primitive_op_labels
-                                                    for elem_lbl in self.elem_errorgen_labels_by_op[op_label]])
-        self.fogv_labels = ["%d gauge action" % i for i in range(self.fogv_directions.shape[1])]'''
     @property
     def errorgen_space_dim(self):
         return self.fogi_directions.shape[0]
