@@ -70,6 +70,17 @@ def stitch_circuits_by_germ_power_only(color_patches: dict, vertices: list,
     assert Label(()) not in mapper_1q.values()
     aux_info = {}
 
+    m2q = mapper_2q.copy()
+    for k2 in mapper_2q:
+        if k2.num_qubits == 1:
+            tgt = k2[1]
+            tmp = [None, None]
+            tmp[tgt] = k2
+            tmp[1-tgt] = Label("Gi", 1-tgt)
+            m2q[k2] = tuple(tmp)
+
+    mapper_2q = m2q # Reset here.
+
     num_lines = -1
     global_line_order = None
     for patch, edge_set in color_patches.items():
@@ -155,9 +166,11 @@ def stitch_circuits_by_germ_power_only(color_patches: dict, vertices: list,
                     c = c.tensor_circuit(c2) # c is already a copy due to map_line_labels above
 
                 for i in range(node_start, node_perms.shape[0]):
-                    c2 = oneq_circuits[ node_perms[i,j] ] # Fix col
-                    c2._static = False
+                    c2 = oneq_circuits[ node_perms[i,j] ].copy(True) # Fix col
+                    
                     c2._labels = [mapper_1q[ell].copy() for ell in c2._labels]
+                    c2._append_idle_layers_inplace(len(c) - len(c2))
+
                     c2.done_editing()
                     assert Label(()) not in c2._labels
                     map_dict = {oldq: newq for oldq, newq in zip(oneq_gstdesign.qubit_labels, (unused_qubits[i],))}
