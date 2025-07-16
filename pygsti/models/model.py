@@ -2550,7 +2550,7 @@ class OpModel(Model):
             assert _isfile(load_checkpoint), 'Checkpoint load file not found. Make sure ' + load_checkpoint + ' exists'
             checkpoint_obj = _FOGICheckpoint.read(load_checkpoint)
             if verbosity > 0:
-                    print("Valid checkpoint found")
+                    print("Valid checkpoint found", flush=True)
             if save_checkpoint:
                 checkpoint_obj.file_path = save_checkpoint
 

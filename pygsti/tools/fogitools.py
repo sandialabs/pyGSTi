@@ -671,7 +671,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
         dep_fogi_meta = checkpoint.dep_fogi_meta
         ccomms = checkpoint.ccomms
         if verbosity > 0:
-            print('Loading construct_fogi_quantities checkpoint in step ', checkpoint.set_size_start, '/', max_size-1)
+            print('Loading construct_fogi_quantities checkpoint in step ', checkpoint.set_size_start, '/', max_size-1, flush=True)
         
     else:
         set_size_start = 1
@@ -867,7 +867,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                         
                         #TODO (by Juan): If I understand this code correctly, a basis is found
                         #for the relational FOGI space between all possible combinations of gates.
-                        #Only then, a linearly independent set is identified.
+                        #Only then, a linearly independent set (from previously identified FOGI directions) is identified.
                         #This can be made faster by adding the previously found, and previously identified as
                         #linearly independent quantities and "blocking them". Essentially, projecting the FOGI
                         #space to not include subspaces already spanned by vectors found. This is described in the
