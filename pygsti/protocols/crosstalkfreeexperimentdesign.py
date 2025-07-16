@@ -126,6 +126,28 @@ def stitch_circuits_by_germ_power_only(color_patches: dict, vertices: list,
             assert num_lines == curr_num_lines
             if edge_perms.size > 0 and node_perms.size > 0:
                 assert edge_perms.shape[1] == node_perms.shape[1]
+            
+            # compute any padding we might need.
+            padded_circuit_lengths = np.zeros((max_len,), int)
+            for j in range(max_len):
+                clen = 0
+                if len(edge_perms):
+                    edge_start = 1
+                    node_start = 0
+                    c = twoq_circuits[edge_perms[0,j]]
+                    clen = max(clen, len(c))
+                else:
+                    edge_start = 0
+                    node_start = 1
+                    c = oneq_circuits[node_perms[0,j]]
+                    clen = max(clen, len(c))
+                for i in range(edge_start, edge_perms.shape[0]):
+                    c2 = twoq_circuits[ edge_perms[i,j] ]
+                    clen = max(clen, len(c2))
+                for i in range(node_start, node_perms.shape[0]):
+                    c2 = oneq_circuits[ node_perms[i,j] ]
+                    clen = max(clen, len(c2)) # c is already a copy due to map_state_space_labels above
+                padded_circuit_lengths[j] = clen
 
             """
             NOTE: I was able to infer that the twoq_gstdesign.sslabels should really be qubit labels by seeing how (oldq, newq)
@@ -133,52 +155,69 @@ def stitch_circuits_by_germ_power_only(color_patches: dict, vertices: list,
             """
             for j in range(max_len):
                 # Pick the initial subcircuit
+                clen = padded_circuit_lengths[j]
                 if len(edge_perms):
-                    c = twoq_circuits[edge_perms[0,j]]
-                    c._static = False
-                    c._labels = [mapper_2q[ell].copy() for ell in c._labels]
-                    c.done_editing()
-                    assert Label(()) not in c._labels
-                    map_dict = {oldq: newq for oldq, newq in zip(twoq_gstdesign.qubit_labels, edge_set[0])}
-                    c = c.map_state_space_labels(map_dict)
                     edge_start = 1
                     node_start = 0
-                else:
-                    c = oneq_circuits[node_perms[0,j]]
-                    c._static = False
-                    c._labels = [mapper_1q[ell].copy() for ell in c._labels]
+                    c = twoq_circuits[edge_perms[0,j]].copy(True)
+                    c._append_idling_layers_inplace(clen - len(c))
                     c.done_editing()
-                    assert Label(()) not in c._labels
-                    map_dict = {oldq: newq for oldq, newq in zip(oneq_gstdesign.qubit_labels, (unused_qubits[0],))}
+                    # ^ That changes the format of c._labels. We need to make more edits in this format,
+                    #   so in the next line we set c._static = False.
+                    c._static = False
+                    c._labels = [mapper_2q[ell] for ell in c._labels]
+                    c.done_editing()
+                    map_dict = {oldq: newq for oldq, newq in zip(twoq_gstdesign.qubit_labels, edge_set[0])}
                     c = c.map_state_space_labels(map_dict)
+                else:
                     edge_start = 0
                     node_start = 1
+                    c = oneq_circuits[node_perms[0,j]].copy(True)
+                    c._append_idling_layers_inplace(clen - len(c))
+                    c.done_editing()
+                    # ^ That changes the format of c._labels. We need to make more edits in this format,
+                    #   so in the next line we set c._static = False.
+                    c._static = False 
+                    c._labels = [mapper_1q[ell] for ell in c._labels]
+                    c.done_editing()
+                    map_dict = {oldq: newq for oldq, newq in zip(oneq_gstdesign.qubit_labels, (unused_qubits[0],))}
+                    c = c.map_state_space_labels(map_dict)
+
                 
                 # Tensor together the other subcircuits
                 for i in range(edge_start, edge_perms.shape[0]):
-                    c2 = twoq_circuits[ edge_perms[i,j] ]  # Fix col
+                    c2 = twoq_circuits[ edge_perms[i,j] ].copy(True)  # Fix col
+                    c2._append_idling_layers_inplace(clen - len(c2))
+                    c2.done_editing()
+                    # ^ That changes the format of c2._labels. We need to make more edits in this format,
+                    #   so in the next line we set c2._static = False.
                     c2._static = False
-                    c2._labels = [mapper_2q[ell].copy() for ell in c2._labels]
+                    c2._labels = [mapper_2q[ell] for ell in c2._labels]
                     c2.done_editing()
                     assert Label(()) not in c2._labels
                     map_dict = {oldq: newq for oldq, newq in zip(twoq_gstdesign.qubit_labels, edge_set[i])}
                     c2 = c2.map_state_space_labels(map_dict)
-                    c = c.tensor_circuit(c2) # c is already a copy due to map_line_labels above
+                    c = c.tensor_circuit(c2) # c is already a copy due to map_state_space_labels above
 
                 for i in range(node_start, node_perms.shape[0]):
-                    c2 = oneq_circuits[ node_perms[i,j] ].copy(True) # Fix col
-                    
-                    c2._labels = [mapper_1q[ell].copy() for ell in c2._labels]
-                    c2._append_idle_layers_inplace(len(c) - len(c2))
-
+                    c2 = oneq_circuits[ node_perms[i,j] ].copy(True)
+                    c2._append_idling_layers_inplace(clen - len(c2))
+                    c2.done_editing()
+                    # ^ That changes the format of c2._labels. We need to make more edits in this format,
+                    #   so in the next line we set c2._static = False.
+                    c2._static = False
+                    c2._labels = [mapper_1q[ell] for ell in c2._labels]
                     c2.done_editing()
                     assert Label(()) not in c2._labels
                     map_dict = {oldq: newq for oldq, newq in zip(oneq_gstdesign.qubit_labels, (unused_qubits[i],))}
                     c2 = c2.map_state_space_labels(map_dict)
-                    c = c.tensor_circuit(c2) # c is already a copy due to map_line_labels above
+                    c = c.tensor_circuit(c2) # c is already a copy due to map_state_space_labels above
                 
-                assert Label(()) not in c._labels
-                # By this point, should have len(c._line_labels) == [some constant, number of ]
+                for i in range(c.num_layers):
+                    l0 = set(c.layer(i))
+                    l1 = set(c.layer_with_idles(i))
+                    assert l0 == l1
+
                 circuit_lists[L].append(c.reorder_lines(global_line_order))
 
 
