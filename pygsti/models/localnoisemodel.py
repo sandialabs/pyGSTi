@@ -631,8 +631,15 @@ class _SimpleCompLayerRules(_LayerRules):
         """
 
         key = lbl.name if self._spatial_homogeneity_assumed else lbl
+        key_without_args = lbl.strip_args()
+
         if key in model.operation_blks["gates"]:
             return model.operation_blks["gates"][key].to_dense()
+        
+        elif key_without_args in model.factories['layers']:
+            ret = _opfactory.op_from_factories(model.factories['layers'], key)
+
+            return ret.embedded_op.to_dense()
 
         elif self._add_padded_idle:
             # We have idle gates that we can include.

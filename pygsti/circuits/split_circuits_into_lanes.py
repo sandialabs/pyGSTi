@@ -78,7 +78,7 @@ def compute_subcircuits(circuit: _Circuit, qubits_to_lanes: dict[int, int]) -> l
 
     num_layers = circuit.num_layers
     for layer_ind in range(num_layers):
-        layer = circuit.layer(layer_ind)
+        layer = circuit.layer_with_idles(layer_ind)
         group = []
         group_lane = None
         sorted_layer = sorted(layer, key=lambda x: x.qubits[0])
@@ -104,6 +104,6 @@ def compute_subcircuits(circuit: _Circuit, qubits_to_lanes: dict[int, int]) -> l
             lanes_to_gates[group_lane].append(LabelTupTup(tuple(group)))
 
     if num_layers == 0:
-        return []
+        return lanes_to_gates
 
     return lanes_to_gates
