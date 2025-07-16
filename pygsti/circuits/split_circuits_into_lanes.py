@@ -74,6 +74,27 @@ def compute_subcircuits(circuit: _Circuit, qubits_to_lanes: dict[int, int]) -> l
     Split a circuit into multiple subcircuits which do not talk across lanes.
     """
 
+    if "lanes" in circuit.saved_auxinfo:
+        # Check if the lane info matches and I can just return that set up.
+        lane_to_qubits: dict[int, tuple[int, ...]]= {}
+        for qu, val in qubits_to_lanes.items():
+            if val in lane_to_qubits:
+                lane_to_qubits[val] = (*lane_to_qubits[val], qu)
+            else:
+                lane_to_qubits[val] = (qu,)
+
+        if len(lane_to_qubits) == len(circuit.saved_auxinfo["lanes"]):
+            # We may have this already in cache.
+
+            lanes_to_gates = [[] for _ in range(len(lane_to_qubits))]
+            for i, key in lane_to_qubits.items():
+                if sorted(key) in circuit.saved_auxinfo["lanes"]:
+                    lanes_to_gates[i] = circuit.saved_auxinfo["lanes"][sorted(key)].layertup
+
+                else:
+                    raise ValueError(f"lbl cache miss: {key} in circuit {circuit}")
+            return lanes_to_gates
+
     lanes_to_gates = [[] for _ in range(_np.unique(list(qubits_to_lanes.values())).shape[0])]
 
     num_layers = circuit.num_layers
