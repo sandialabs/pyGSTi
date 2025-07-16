@@ -2213,17 +2213,10 @@ class LCSEvalTreeMatrixForwardSimulator(MatrixForwardSimulator):
         dim = self.model.evotype.minimal_dim(self.model.state_space)
         # resource_alloc.check_can_allocate_memory(len(layout_atom.tree.cache) * dim**2)  # prod cache
 
-        starttime =time.time()
         layout_atom.tree.collapse_circuits_to_process_matrices(self.model)
-        endtime = time.time()
 
-        print("Time to collapse the process matrices (s): ", endtime - starttime)
-        starttime = time.time()
         Gs = layout_atom.tree.reconstruct_full_matrices()
-        endtime = time.time()
-        print("Time to reconstruct the whole matrices (s): ", endtime - starttime)
 
-        starttime = time.time()
         old_err = _np.seterr(over='ignore')
         for spam_tuple, (element_indices, tree_indices) in layout_atom.indices_by_spamtuple.items():
             # "element indices" index a circuit outcome probability in array_to_fill's first dimension
@@ -2234,8 +2227,6 @@ class LCSEvalTreeMatrixForwardSimulator(MatrixForwardSimulator):
             _fas(array_to_fill, [element_indices],
                  self._probs_from_rho_e(rho, E, Gs[tree_indices], 1))
         _np.seterr(**old_err)
-        endtime = time.time()
-        print("Time to complete the spam operations (s): ", endtime - starttime)
 
     def _bulk_fill_dprobs_atom(self, array_to_fill, dest_param_slice, layout_atom: _MatrixCOPALayoutAtomWithLCS, param_slice, resource_alloc):
 

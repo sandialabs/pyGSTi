@@ -504,7 +504,7 @@ def setup_circuit_list_for_LCS_computations(
             cir = _add_in_idle_gates_to_circuit(cir, implicit_idle_gate_name)
 
         qubit_to_lane, lane_to_qubits = compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit(cir)
-        sub_cirs = compute_subcircuits(cir, qubit_to_lane)
+        sub_cirs = compute_subcircuits(cir, qubit_to_lane, lane_to_qubits)
 
         if not implicit_idle_gate_name:
             if not all([len(sc) == len(sub_cirs[0]) for sc in sub_cirs]):
@@ -563,6 +563,14 @@ def combine_two_gates(cumulative_term, next_dense_matrix):
     which in matrix multiplication requires Measure @ (NextDense @ Cumulative) @ State Prep.
     """
     return next_dense_matrix @ cumulative_term
+
+def matrix_matrix_cost_estimate(matrix_size: tuple[int, int]) -> int:
+    """
+    Estimate cost of A @ B when both are square and dense.
+    """
+    n = matrix_size[0]
+    return 2 * n**3
+
 
 #endregion Lane Collapsing Helpers
 
@@ -801,6 +809,20 @@ class EvalTreeBasedUponLongestCommonSubstring():
 
         return list(output)
 
+    def flop_cost_of_evaluating_tree(self, matrix_size: tuple[int, int]):
+        """
+        We assume that each matrix matrix multiply is the same size.
+        """
+
+        assert matrix_size[0] == matrix_size[1]
+
+        total_flop_cost = 0
+        for cache_ind in self.cache:
+            num_mm_on_this_cache_line = len(self.cache[cache_ind]) - 1
+            total_flop_cost += (matrix_matrix_cost_estimate(matrix_size)) * num_mm_on_this_cache_line
+
+        return total_flop_cost
+
 
 class CollectionOfLCSEvalTrees():
 
@@ -841,7 +863,7 @@ class CollectionOfLCSEvalTrees():
         self.sub_cir_to_full_cir_id_and_lane_id = sub_cir_to_full_cir_id_and_lane_id
         self.cir_id_and_lane_id_to_sub_cir = cir_id_and_lane_id_to_sub_cir
 
-        self.cir_id_to_tensor_order = {}
+        self.cir_id_to_tensor_order: dict[int, list[list[int], int]] = {}
         self.compute_tensor_orders()
 
         self.saved_results = {}
@@ -893,7 +915,7 @@ class CollectionOfLCSEvalTrees():
         # Need a map from lane id to computed location.
         for icir in range(num_cirs):
 
-            order = self.cir_id_to_tensor_order[icir]
+            order, _cost_estimate = self.cir_id_to_tensor_order[icir]
             
             
             while order:
@@ -925,7 +947,13 @@ class CollectionOfLCSEvalTrees():
 
         return
             
-    def best_order_for_tensor_contraction(self, qubit_list: tuple[int, ...], cache):
+    def best_order_for_tensor_contraction(self,
+                    qubit_list: tuple[int, ...],
+                    cache: dict[tuple[int, ...], tuple[list[int], int]]) -> tuple[list[int], int]:
+        """
+        Find the tensor contraction order that minizes the cost of contracting to a dense system with
+        a total number of qubits equal to the len(qubit_list)
+        """
         
 
         if qubit_list in cache:
@@ -961,9 +989,9 @@ class CollectionOfLCSEvalTrees():
                 best_order = list(order)
 
         # Store off the information.
-        cache[qubit_list] = best_order
+        cache[qubit_list] = best_order, best_cost
 
-        return best_order
+        return best_order, best_cost
 
     def _tensor_cost_model(self, num_qubits1, num_qubits2):
         """
@@ -971,3 +999,30 @@ class CollectionOfLCSEvalTrees():
         """
 
         return (4**num_qubits1)**2 * (4**num_qubits2)**2
+    
+    def _flop_estimate_to_collapse_to_each_circuit_to_process_matrix(self) -> tuple[int, list[int], list[int]]:
+        """
+        Compute the number of flops needed to collapse each circuit into a single process matrix.
+
+        Returns:
+        ---------
+            cost - int total cost to collapse and reform
+            collapse_lane_cost - list[int] cost to collapse a lane
+            tensor_cost - list[int] cost to recombine a circuit into its full size.
+        """
+
+
+        num_cirs = len(self.cir_id_and_lane_id_to_sub_cir)
+
+        collapse_lane_cost = []
+
+        for lbl_key, my_tree in self.trees.items():
+            collapse_lane_cost.append(my_tree.flop_cost_of_evaluating_tree([4**len(lbl_key), 4**len(lbl_key)]))
+
+        tensor_cost = []
+        for icir in range(num_cirs):
+            
+            _order, cost = self.cir_id_to_tensor_order[icir]
+            tensor_cost.append(cost)
+
+        return sum(tensor_cost) + sum(collapse_lane_cost), collapse_lane_cost, tensor_cost

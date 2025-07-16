@@ -347,6 +347,7 @@ class _MatrixCOPALayoutAtomWithLCS(_DistributableAtom):
         
         cir_ind_and_lane_id_to_sub_cir, sub_cir_to_cir_id_and_lane_id, line_labels_to_circuit_list = _setup_circuit_list_for_LCS_computations(vals, implicit_idle_gate)
         self.tree = _CollectionOfLCSEvalTrees(line_labels_to_circuit_list, sub_cir_to_cir_id_and_lane_id, cir_ind_and_lane_id_to_sub_cir)
+      
         #print("Atom tree: %d circuits => tree of size %d" % (len(expanded_nospam_circuits), len(self.tree)))
 
         self._num_nonscratch_tree_items = len(expanded_nospam_circuits)  # put this in EvalTree?
@@ -385,6 +386,14 @@ class _MatrixCOPALayoutAtomWithLCS(_DistributableAtom):
                 for unique_i in unique_is:
                     elindex_outcome_tuples[unique_i].append((elindex, outcome))  # *local* element indices
         self.elindex_outcome_tuples = elindex_outcome_tuples
+
+
+        print("Flop cost to evaluate the tree once: ", self.tree._flop_estimate_to_collapse_to_each_circuit_to_process_matrix()[0])
+        
+        num_circs = len(cir_ind_and_lane_id_to_sub_cir)
+        num_rho_and_em = len(self.indices_by_spamtuple.keys())
+        num_qubits_in_circuit = unique_circuits[0].num_lines
+        print("Flop cost for <p_i G Em>: ", (2*(4**num_qubits_in_circuit)**2)*num_circs*num_rho_and_em)
 
         super().__init__(element_slice, num_elements)
 
