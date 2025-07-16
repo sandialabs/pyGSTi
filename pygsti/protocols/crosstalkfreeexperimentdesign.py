@@ -2,6 +2,7 @@ import numpy as np
 from pygsti.protocols import CircuitListsDesign, HasProcessorSpec
 from pygsti.circuits.circuitlist import CircuitList
 from pygsti.circuits.circuit import Circuit
+from pygsti.circuits.split_circuits_into_lanes import batch_tensor
 from pygsti.baseobjs.label import Label
 import copy
 
@@ -77,9 +78,10 @@ def stitch_circuits_by_germ_power_only(color_patches: dict, vertices: list,
             tmp = [None, None]
             tmp[tgt] = k2
             tmp[1-tgt] = Label("Gi", 1-tgt)
-            m2q[k2] = Label(tuple(tmp))
+            m2q[k2] = tuple(tmp)
 
     mapper_2q = m2q # Reset here.
+    layer_mappers = {1: mapper_1q, 2: mapper_2q}
 
     num_lines = -1
     global_line_order = None
@@ -127,97 +129,36 @@ def stitch_circuits_by_germ_power_only(color_patches: dict, vertices: list,
             if edge_perms.size > 0 and node_perms.size > 0:
                 assert edge_perms.shape[1] == node_perms.shape[1]
             
-            # compute any padding we might need.
-            padded_circuit_lengths = np.zeros((max_len,), int)
+            # Form the tensor product circuits, over all qubits.
             for j in range(max_len):
-                clen = 0
+                tensored_lines  = []
+                circs_to_tensor = []
                 if len(edge_perms):
                     edge_start = 1
                     node_start = 0
                     c = twoq_circuits[edge_perms[0,j]]
-                    clen = max(clen, len(c))
+                    tensored_lines.append(edge_set[0])
                 else:
                     edge_start = 0
                     node_start = 1
                     c = oneq_circuits[node_perms[0,j]]
-                    clen = max(clen, len(c))
+                    tensored_lines.append((unused_qubits[0],))
+                circs_to_tensor.append(c)
                 for i in range(edge_start, edge_perms.shape[0]):
                     c2 = twoq_circuits[ edge_perms[i,j] ]
-                    clen = max(clen, len(c2))
+                    circs_to_tensor.append( c2 )
+                    tensored_lines.append(edge_set[i])
                 for i in range(node_start, node_perms.shape[0]):
                     c2 = oneq_circuits[ node_perms[i,j] ]
-                    clen = max(clen, len(c2))
-                padded_circuit_lengths[j] = clen
-
-            for j in range(max_len):
-                # Pick the initial subcircuit
-                clen = padded_circuit_lengths[j]
-                if len(edge_perms):
-                    edge_start = 1
-                    node_start = 0
-                    c = twoq_circuits[edge_perms[0,j]].copy(True)
-                    c._append_idling_layers_inplace(clen - len(c))
-                    c.done_editing()
-                    # ^ That changes the format of c._labels. We need to make more edits in this format,
-                    #   so in the next line we set c._static = False.
-                    c._static = False
-                    c._labels = [mapper_2q[ell] for ell in c._labels]
-                    c.done_editing()
-                    map_dict = {oldq: newq for oldq, newq in zip(twoq_gstdesign.qubit_labels, edge_set[0])}
-                    c = c.map_state_space_labels(map_dict)
-                else:
-                    edge_start = 0
-                    node_start = 1
-                    c = oneq_circuits[node_perms[0,j]].copy(True)
-                    c._append_idling_layers_inplace(clen - len(c))
-                    c.done_editing()
-                    # ^ That changes the format of c._labels. We need to make more edits in this format,
-                    #   so in the next line we set c._static = False.
-                    c._static = False 
-                    c._labels = [mapper_1q[ell] for ell in c._labels]
-                    c.done_editing()
-                    map_dict = {oldq: newq for oldq, newq in zip(oneq_gstdesign.qubit_labels, (unused_qubits[0],))}
-                    c = c.map_state_space_labels(map_dict)
-
-                
-                # Tensor together the other subcircuits
-                for i in range(edge_start, edge_perms.shape[0]):
-                    c2 = twoq_circuits[ edge_perms[i,j] ].copy(True)  # Fix col
-                    c2._append_idling_layers_inplace(clen - len(c2))
-                    c2.done_editing()
-                    # ^ That changes the format of c2._labels. We need to make more edits in this format,
-                    #   so in the next line we set c2._static = False.
-                    c2._static = False
-                    c2._labels = [mapper_2q[ell] for ell in c2._labels]
-                    c2.done_editing()
-                    assert Label(()) not in c2._labels
-                    map_dict = {oldq: newq for oldq, newq in zip(twoq_gstdesign.qubit_labels, edge_set[i])}
-                    c2 = c2.map_state_space_labels(map_dict)
-                    c = c.tensor_circuit(c2) # c is already a copy due to map_state_space_labels above
-
-                for i in range(node_start, node_perms.shape[0]):
-                    c2 = oneq_circuits[ node_perms[i,j] ].copy(True)
-                    c2._append_idling_layers_inplace(clen - len(c2))
-                    c2.done_editing()
-                    # ^ That changes the format of c2._labels. We need to make more edits in this format,
-                    #   so in the next line we set c2._static = False.
-                    c2._static = False
-                    c2._labels = [mapper_1q[ell] for ell in c2._labels]
-                    c2.done_editing()
-                    assert Label(()) not in c2._labels
-                    map_dict = {oldq: newq for oldq, newq in zip(oneq_gstdesign.qubit_labels, (unused_qubits[i],))}
-                    c2 = c2.map_state_space_labels(map_dict)
-                    c = c.tensor_circuit(c2) # c is already a copy due to map_state_space_labels above
-                
-                for i in range(c.num_layers):
-                    l0 = set(c.layer(i))
-                    l1 = set(c.layer_with_idles(i))
+                    circs_to_tensor.append( c2 )
+                    tensored_lines.append((unused_qubits[i],))
+                c_ten = batch_tensor(circs_to_tensor, layer_mappers, global_line_order, tensored_lines)
+                for i in range(c_ten.num_layers):
+                    l0 = set(c_ten.layer(i))
+                    l1 = set(c_ten.layer_with_idles(i))
                     assert l0 == l1
-
-                circuit_lists[L].append(c.reorder_lines(global_line_order))
-
-
-                aux_info[c] = {'edges': edge_set, 'vertices': unused_qubits} #YOLO
+                circuit_lists[L].append(c_ten)
+                aux_info[c_ten] = {'edges': edge_set, 'vertices': unused_qubits} #YOLO
 
     return circuit_lists, aux_info
 
