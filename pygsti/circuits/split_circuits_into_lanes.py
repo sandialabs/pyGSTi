@@ -1,14 +1,16 @@
 import numpy as _np
 
-from pygsti.circuits import Circuit as _Circuit
-from pygsti.baseobjs.label import LabelTupTup
+from typing import Sequence, Dict, Tuple, Optional, Set
+from pygsti.circuits import Circuit as Circuit
+from pygsti.baseobjs.label import Label, LabelTupTup
 
-def compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit(circuit: _Circuit) -> tuple[dict[int, int],
+
+def compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit(circuit: Circuit) -> tuple[dict[int, int],
                                                                                         dict[int, tuple[int]]]:
     """
     Parameters:
     ------------
-    circuit: _Circuit - the circuit to compute qubit to lanes mapping for
+    circuit: Circuit - the circuit to compute qubit to lanes mapping for
 
     num_qubits: int - The total number of qubits expected in the circuit.
 
@@ -69,7 +71,7 @@ def compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit(circuit: _Circ
     return compute_qubits_to_lanes(lanes), lanes
 
 
-def compute_subcircuits(circuit: _Circuit,
+def compute_subcircuits(circuit: Circuit,
                         qubit_to_lanes: dict[int, int],
                         lane_to_qubits: dict[int, tuple[int, ...]],
                         cache_lanes_in_circuit: bool = False) -> list[list[LabelTupTup]]:
@@ -127,3 +129,58 @@ def compute_subcircuits(circuit: _Circuit,
         return lanes_to_gates
 
     return lanes_to_gates
+
+
+@staticmethod
+def batch_tensor(
+    circuits : Sequence[Circuit],
+    layer_mappers: Dict[int, Dict],
+    global_line_order: Optional[Tuple[int,...]] = None,
+    target_lines : Optional[Sequence[Tuple[int,...]]] = None
+    ) -> Circuit:
+    """
+    """
+    assert len(circuits) > 0
+
+    if target_lines is None:
+        target_lines = []
+        total_lines = 0
+        max_cir_len = 0
+        for c in circuits:
+            target_lines.append(tuple(range(total_lines, total_lines + c.num_lines)))
+            total_lines += c.num_lines
+            max_cir_len = max(max_cir_len, len(c))
+    else:
+        total_lines = sum([c.num_lines for c in circuits])
+        max_cir_len = max(*[len(c) for c in circuits])
+
+    s : Set[int] = set()
+    for c, t in zip(circuits, target_lines):
+        assert not s.intersection(t)
+        assert len(t) == c.num_lines
+        s.update(t)
+
+    if global_line_order is None:
+        global_line_order = tuple(sorted(list(s)))
+    
+    c = circuits[0].copy(editable=True)
+    c._append_idling_layers_inplace(max_cir_len - len(c))
+    c.done_editing()
+    # ^ That changes the format of c._labels. We need to edit c while in this format,
+    #   so the next line sets c._static = False. (We repeat this pattern in the loop below.)
+    c._static = False
+    c._labels = [layer_mappers[c.num_lines][ell] for ell in c._labels]
+    c.map_state_space_labels_inplace({k:v for k,v in zip(c.line_labels, target_lines[0])})
+    c.done_editing()
+    for i, c2 in enumerate(circuits[1:]):
+        c2 = c2.copy(editable=True)
+        c2._append_idling_layers_inplace(max_cir_len - len(c2))
+        c2.done_editing()
+        c2._static = False
+        c2._labels = [layer_mappers[c2.num_lines][ell] for ell in c2._labels]
+        c2.map_state_space_labels_inplace({k:v for k,v in zip(c2.line_labels, target_lines[i+1])})
+        c2.done_editing()
+        c = c.tensor_circuit(c2)
+
+    c = c.reorder_lines(global_line_order)
+    return c

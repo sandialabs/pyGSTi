@@ -13,6 +13,7 @@ Defines the Circuit class
 from __future__ import annotations
 import itertools as _itertools
 import warnings as _warnings
+from typing import List, Sequence
 
 import numpy as _np
 from pygsti.baseobjs.label import Label as _Label, CircuitLabel as _CircuitLabel
@@ -513,7 +514,7 @@ class Circuit(object):
     #Note: If editing _bare_init one should also check _copy_init in case changes must be propagated.
     def _bare_init(self, labels, line_labels, editable, name='', stringrep=None, occurrence=None,
                    compilable_layer_indices_tup=()):
-        self._labels = labels
+        self._labels : List[_Label | Sequence[_Label]] = labels
         self._line_labels = tuple(line_labels)
         self._occurrence_id = occurrence
         self._compilable_layer_indices_tup = compilable_layer_indices_tup # always a tuple, but can be empty.
