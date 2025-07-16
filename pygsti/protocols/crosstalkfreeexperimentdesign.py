@@ -56,8 +56,8 @@ def stitch_circuits_by_germ_power_only(color_patches: dict, vertices: list,
     circuit_lists = [[] for _ in twoq_gstdesign.circuit_lists]
     twoq_idle_label = Label(('Gii',) + twoq_gstdesign.qubit_labels)
     oneq_idle_label = Label(('Gi',) + oneq_gstdesign.qubit_labels)
-    mapper_2q: dict[Label, Label] = {twoq_idle_label: twoq_idle_label}
-    mapper_1q: dict[Label, Label] = {oneq_idle_label: oneq_idle_label}
+    mapper_2q = {twoq_idle_label: twoq_idle_label}
+    mapper_1q = {oneq_idle_label: oneq_idle_label}
     for cl in twoq_gstdesign.circuit_lists:
         for c in cl:
             mapper_2q.update({k:k for k in c._labels})
@@ -77,7 +77,7 @@ def stitch_circuits_by_germ_power_only(color_patches: dict, vertices: list,
             tmp = [None, None]
             tmp[tgt] = k2
             tmp[1-tgt] = Label("Gi", 1-tgt)
-            m2q[k2] = Label(tuple(tmp))
+            m2q[k2] = tuple(tmp)
 
     mapper_2q = m2q # Reset here.
 
@@ -168,9 +168,8 @@ def stitch_circuits_by_germ_power_only(color_patches: dict, vertices: list,
                 for i in range(node_start, node_perms.shape[0]):
                     c2 = oneq_circuits[ node_perms[i,j] ].copy(True) # Fix col
                     
-                    # ell here will be a list[Label] since we copied in editable format.
-                    c2._labels = [mapper_1q[ell[0]].copy() for ell in c2._labels]
-                    c2._append_idling_layers_inplace(len(c) - len(c2))
+                    c2._labels = [mapper_1q[ell].copy() for ell in c2._labels]
+                    c2._append_idle_layers_inplace(len(c) - len(c2))
 
                     c2.done_editing()
                     assert Label(()) not in c2._labels
