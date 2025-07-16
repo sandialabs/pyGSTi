@@ -85,10 +85,36 @@ def test_subcircuits_splits_can_create_empty_sub_circuit():
     original = _Circuit([], line_labels=[0])
 
     qubits_to_lanes = {0: 0}
+    lane_to_qubits = {0: (0,)}
 
-    attempt = compute_subcircuits(original, qubits_to_lanes)
+    attempt = compute_subcircuits(original, qubits_to_lanes, lane_to_qubits)
 
-    assert original == _Circuit(attempt, line_labels=[0])
+    assert original == _Circuit(attempt[0], line_labels=[0])
+
+def test_subcircuits_split_can_be_cached():
+
+    gates_to_num_used = {"X": 1, "Y": 1, "Z": 1, "CNOT": 2, "CZ": 2}
+
+    depth = 10
+    num_qubits = 6
+
+    lane_eps = [1, 2, 4, 5]
+    # So expected lane dist is (0, ), (1), (2,3), (4,), (5,)
+
+    # This is a random circuit so the lanes may not be perfect.
+    circuit = build_circuit_with_multiple_qubit_gates_with_designated_lanes(num_qubits, depth, lane_eps, gates_to_num_used)
+
+    qubit_to_lane, lane_to_qubits = compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit(circuit)
+
+
+    assert "lanes" in circuit.saved_auxinfo
+
+    assert list(circuit.saved_auxinfo["lanes"].keys()) == [(0, 1, 2, 3, 4, 5)]
+
+    sub_cirs = compute_subcircuits(circuit, qubit_to_lane, lane_to_qubits, cache_lanes_in_circuit=True)
+
+    assert len(circuit.saved_auxinfo["lanes"].keys()) == len(sub_cirs)
+
 
 
 def test_find_qubit_to_lane_splitting():

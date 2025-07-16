@@ -2460,6 +2460,32 @@ class Circuit(object):
         cpy.tensor_circuit_inplace(circuit, line_order)
         if self._static: cpy.done_editing()
         return cpy
+    
+    def _cache_tensor_lanes(self, sub_circuit_list: list[_Label],
+                            lane_to_qubits: dict[int, tuple[int, ...]]) -> Circuit:
+        """
+        Store the tensor lanes in the circuit if appropriate. 
+        Note that this should only be called in the case that the sub_circuit_list
+        when tensored is equivalent to the current circuit.
+        """
+
+        if "lanes" in self.saved_auxinfo and len(self) > 0:
+            if len(self.saved_auxinfo["lanes"]) == 1:
+                # We will update this because it is now believed that
+                # we are able to conduct the operation in cross talk free lanes.
+                qubits_used = set()
+                for qub_in_lane in lane_to_qubits.values():
+                    qubits_used = qubits_used.union(qub_in_lane)
+
+                if len(qubits_used) != self.num_lines:
+                    # Do not update.
+                    return self
+                
+                self.saved_auxinfo["lanes"] = {} # Reset lanes info
+                for i, qubit_labels in lane_to_qubits.items():
+                    self.saved_auxinfo["lanes"][tuple(sorted(qubit_labels))] = sub_circuit_list[i]
+                    
+        return self
 
     def replace_layer_with_circuit_inplace(self, circuit: Circuit, j):
         """
@@ -2641,7 +2667,6 @@ class Circuit(object):
                 else:
                     ret.append(replace(sub))
             return ret
-
         self._labels = replace(self._labels)
 
     def replace_gatename_with_idle(self, gatename):

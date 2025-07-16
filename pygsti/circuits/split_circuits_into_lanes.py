@@ -1,7 +1,7 @@
 import numpy as _np
 
 from pygsti.circuits import Circuit as _Circuit
-from pygsti.baseobjs.label import Label, LabelTupTup
+from pygsti.baseobjs.label import LabelTupTup
 
 def compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit(circuit: _Circuit) -> tuple[dict[int, int],
                                                                                         dict[int, tuple[int]]]:
@@ -69,33 +69,29 @@ def compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit(circuit: _Circ
     return compute_qubits_to_lanes(lanes), lanes
 
 
-def compute_subcircuits(circuit: _Circuit, qubits_to_lanes: dict[int, int]) -> list[list[LabelTupTup]]:
+def compute_subcircuits(circuit: _Circuit,
+                        qubit_to_lanes: dict[int, int],
+                        lane_to_qubits: dict[int, tuple[int, ...]],
+                        cache_lanes_in_circuit: bool = False) -> list[list[LabelTupTup]]:
     """
     Split a circuit into multiple subcircuits which do not talk across lanes.
     """
 
     if "lanes" in circuit.saved_auxinfo:
         # Check if the lane info matches and I can just return that set up.
-        lane_to_qubits: dict[int, tuple[int, ...]]= {}
-        for qu, val in qubits_to_lanes.items():
-            if val in lane_to_qubits:
-                lane_to_qubits[val] = (*lane_to_qubits[val], qu)
-            else:
-                lane_to_qubits[val] = (qu,)
-
         if len(lane_to_qubits) == len(circuit.saved_auxinfo["lanes"]):
             # We may have this already in cache.
 
             lanes_to_gates = [[] for _ in range(len(lane_to_qubits))]
             for i, key in lane_to_qubits.items():
-                if sorted(key) in circuit.saved_auxinfo["lanes"]:
-                    lanes_to_gates[i] = circuit.saved_auxinfo["lanes"][sorted(key)].layertup
+                if tuple(sorted(key)) in circuit.saved_auxinfo["lanes"]:
+                    lanes_to_gates[i] = circuit.saved_auxinfo["lanes"][tuple(sorted(key))]
 
                 else:
                     raise ValueError(f"lbl cache miss: {key} in circuit {circuit}")
             return lanes_to_gates
 
-    lanes_to_gates = [[] for _ in range(_np.unique(list(qubits_to_lanes.values())).shape[0])]
+    lanes_to_gates = [[] for _ in range(_np.unique(list(qubit_to_lanes.values())).shape[0])]
 
     num_layers = circuit.num_layers
     for layer_ind in range(num_layers):
@@ -108,7 +104,7 @@ def compute_subcircuits(circuit: _Circuit, qubits_to_lanes: dict[int, int]) -> l
             # We need this to be sorted by the qubit number so we do not get that a lane was split Q1 Q3 Q2 in the layer where Q1 and Q2 are in the same lane.
             qubits_used = op.qubits # This will be a list of qubits used.
             # I am assuming that the qubits are indexed numerically and not by strings.
-            lane = qubits_to_lanes[qubits_used[0]]
+            lane = qubit_to_lanes[qubits_used[0]]
 
             if group_lane is None:
                 group_lane = lane
@@ -123,6 +119,9 @@ def compute_subcircuits(circuit: _Circuit, qubits_to_lanes: dict[int, int]) -> l
         if len(group) > 0:
             # We have a left over group.
             lanes_to_gates[group_lane].append(LabelTupTup(tuple(group)))
+
+    if cache_lanes_in_circuit:
+        circuit = circuit._cache_tensor_lanes(lanes_to_gates, lane_to_qubits)
 
     if num_layers == 0:
         return lanes_to_gates
