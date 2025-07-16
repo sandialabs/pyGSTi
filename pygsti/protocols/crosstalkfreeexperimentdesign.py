@@ -56,8 +56,8 @@ def stitch_circuits_by_germ_power_only(color_patches: dict, vertices: list,
     circuit_lists = [[] for _ in twoq_gstdesign.circuit_lists]
     twoq_idle_label = Label(('Gii',) + twoq_gstdesign.qubit_labels)
     oneq_idle_label = Label(('Gi',) + oneq_gstdesign.qubit_labels)
-    mapper_2q = {twoq_idle_label: twoq_idle_label}
-    mapper_1q = {oneq_idle_label: oneq_idle_label}
+    mapper_2q: dict[Label, Label] = {twoq_idle_label: twoq_idle_label}
+    mapper_1q: dict[Label, Label] = {oneq_idle_label: oneq_idle_label}
     for cl in twoq_gstdesign.circuit_lists:
         for c in cl:
             mapper_2q.update({k:k for k in c._labels})
@@ -77,7 +77,7 @@ def stitch_circuits_by_germ_power_only(color_patches: dict, vertices: list,
             tmp = [None, None]
             tmp[tgt] = k2
             tmp[1-tgt] = Label("Gi", 1-tgt)
-            m2q[k2] = tuple(tmp)
+            m2q[k2] = Label(tuple(tmp))
 
     mapper_2q = m2q # Reset here.
 
@@ -146,13 +146,9 @@ def stitch_circuits_by_germ_power_only(color_patches: dict, vertices: list,
                     clen = max(clen, len(c2))
                 for i in range(node_start, node_perms.shape[0]):
                     c2 = oneq_circuits[ node_perms[i,j] ]
-                    clen = max(clen, len(c2)) # c is already a copy due to map_state_space_labels above
+                    clen = max(clen, len(c2))
                 padded_circuit_lengths[j] = clen
 
-            """
-            NOTE: I was able to infer that the twoq_gstdesign.sslabels should really be qubit labels by seeing how (oldq, newq)
-            were in the iterator that zip'd (twoq_gstdesign.sslabels, other_thing).
-            """
             for j in range(max_len):
                 # Pick the initial subcircuit
                 clen = padded_circuit_lengths[j]
