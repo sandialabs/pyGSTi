@@ -1,4 +1,4 @@
-from typing import Sequence, Any, List
+from typing import Sequence, Any, List, Literal, Tuple, MutableSequence
 import numpy as _np
 
 
@@ -40,7 +40,7 @@ def _lcs_dp_version(A: Sequence, B: Sequence) -> _np.ndarray:
     return table
 
 
-def conduct_one_round_of_lcs_simplification(sequences: List[Sequence], table_data_and_sequences,
+def conduct_one_round_of_lcs_simplification(sequences: MutableSequence[MutableSequence[Any]], table_data_and_sequences,
                                             internal_tables_and_sequences,
                                             starting_cache_num,
                                             cache_struct):
@@ -129,7 +129,9 @@ def conduct_one_round_of_lcs_simplification(sequences: List[Sequence], table_dat
     return updated_sequences, cache_num, cache_struct, sequences_introduced_in_this_round
 
 
-def _find_starting_positions_using_dp_table(dp_table: _np.ndarray) -> tuple[int, int, int]:
+def _find_starting_positions_using_dp_table(
+        dp_table: _np.ndarray
+    ) -> tuple[int, int, int] | Tuple[None, None, None]:
     """
     Finds the starting positions for the longest common subsequence.
 
@@ -161,7 +163,7 @@ def _find_starting_positions_using_dp_table(dp_table: _np.ndarray) -> tuple[int,
     return None, None, None
 
 
-def _compute_lcs_for_every_pair_of_sequences(sequences: list):
+def _compute_lcs_for_every_pair_of_sequences(sequences: MutableSequence[Any]):
     """
     Computes the LCS for every pair of sequences A,B in sequences
     """
@@ -224,7 +226,7 @@ def _longest_common_internal_subsequence(A: Sequence) -> tuple[int, dict[tuple, 
 
 
 def create_tables_for_internal_LCS(
-        sequences: List[Sequence[Any]]
+        sequences: Sequence[Sequence[Any]]
     ) -> tuple[
         _np.ndarray, List[dict[tuple[Any,...], set[int]]]
     ]:
