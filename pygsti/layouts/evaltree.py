@@ -460,7 +460,7 @@ class EvalTree(list):
 
 #region Split circuit list into lists of subcircuits
 
-def _add_in_idle_gates_to_circuit(circuit: _Circuit, idle_gate_name: str = "I") -> _Circuit:
+def _add_in_idle_gates_to_circuit(circuit: _Circuit, idle_gate_name: str|Label = 'I') -> _Circuit:
     """
     Add in explicit idles to the labels for each layer.
     """
@@ -481,7 +481,7 @@ def _add_in_idle_gates_to_circuit(circuit: _Circuit, idle_gate_name: str = "I") 
 
 def setup_circuit_list_for_LCS_computations(
         circuit_list: list[_Circuit],
-        implicit_idle_gate_name: str = "I") -> tuple[list[dict[int, int]],
+        implicit_idle_gate_name: str|Label = 'I') -> tuple[list[dict[int, int]],
                                                     dict[tuple[LabelTupTup], list[tuple[int, int]]],
                                                     dict[tuple[int, ...], list[LabelTupTup]]]:
     """
