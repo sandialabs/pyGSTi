@@ -508,6 +508,15 @@ class MatrixCOPALayout(_DistributableCOPALayout):
                  num_param_dimension_processors=(), param_dimensions=(),
                  param_dimension_blk_sizes=(), resource_alloc=None, verbosity=0, 
                  layout_creation_circuit_cache = None, use_old_tree_style: bool = True):
+        
+        if not use_old_tree_style:
+            # NOTE: ERrror out if we are useing new tree and have an explicit op model. Explain why this is bad.
+            from pygsti.models import ExplicitOpModel, ImplicitOpModel
+            if isinstance(model, ExplicitOpModel):
+                raise ValueError(f"Model: {model.__class__} does not support creation of embedded op process matrices." +
+                    "One needs to be able to create the smallest representation possible a 4x4 matrix for a gate acting on a single qubit. In the case of a two qubit system (Gxpi2, 1) in the model could return a 16x16 matrix." +
+                    "This indicates that it was actually acting on the full two qubit system. We assume in the lane splitting algorithm, that the label 1 indicates it will only act on a single qubit specifically qubit 1." +
+                    f"To remedy this situation please convert the model to a subclass of {ImplicitOpModel}.")
 
         #OUTDATED: TODO - revise this:
         # 1. pre-process => get complete circuits => spam-tuples list for each no-spam circuit (no expanding yet)

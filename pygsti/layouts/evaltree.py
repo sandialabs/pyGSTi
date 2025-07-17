@@ -27,11 +27,10 @@ from pygsti.tools.sequencetools import conduct_one_round_of_lcs_simplification, 
 
 from pygsti.circuits.split_circuits_into_lanes import compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit, compute_subcircuits
 import time
-from typing import Iterable
 import numpy as np
 import scipy.linalg as la
 import scipy.sparse.linalg as sparla
-from typing import List
+from typing import List, Optional, Iterable
 
 
 def _walk_subtree(treedict, indx, running_inds):
@@ -855,9 +854,9 @@ class CollectionOfLCSEvalTrees():
             self.saved_results[key] = out1
             self.sub_cir_to_ind_in_results[key] = out2
 
-    def reconstruct_full_matrices(self):
+    def reconstruct_full_matrices(self) -> Optional[List[KronStructured]]:
         """
-        Construct a 
+        Construct a tensor product structure for each individual circuit
         """
 
         if len(self.saved_results) == 0:
