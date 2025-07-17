@@ -38,11 +38,8 @@ from pygsti.circuits import CircuitList as _CircuitList, Circuit as _Circuit
 from pygsti.tools.internalgates import internal_gate_unitaries
 from pygsti.tools.optools import unitary_to_superop
 from pygsti.baseobjs.label import LabelTup, LabelTupTup, Label
-<<<<<<< Updated upstream
 
 from typing import Sequence
-=======
->>>>>>> Stashed changes
 
 
 _dummy_profiler = _DummyProfiler()
