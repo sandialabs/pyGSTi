@@ -13,10 +13,10 @@ Defines the Circuit class
 from __future__ import annotations
 import itertools as _itertools
 import warnings as _warnings
-from typing import List, Sequence, Literal
+from typing import List, Sequence, Literal, Tuple, Any, Hashable, Optional
 
 import numpy as _np
-from pygsti.baseobjs.label import Label as _Label, CircuitLabel as _CircuitLabel
+from pygsti.baseobjs.label import Label as _Label, CircuitLabel as _CircuitLabel, LabelTupTup as _LabelTupTup
 
 from pygsti.baseobjs import outcomelabeldict as _ld, _compatibility as _compat
 from pygsti.tools import internalgates as _itgs
@@ -43,6 +43,10 @@ from pygsti.tools.legacytools import deprecate as _deprecate_fn
 msg = 'Could not find matching standard gate name in provided dictionary. Falling back to try and find a'\
      +' unitary from standard_gatename_unitaries which matches up to a global phase.'
 _warnings.filterwarnings('module', message=msg, category=UserWarning)
+
+
+LayerTupLike = tuple[_LabelTupTup, ...] | List[_Label | Sequence[_Label]] | tuple[_Label, ...]
+
 
 def _np_to_quil_def_str(name, input_array):
     """
@@ -268,9 +272,11 @@ class Circuit(object):
         else:
             return cls(tup)
 
-    def __init__(self, layer_labels=(), line_labels='auto', num_lines=None, editable=False,
-                 stringrep=None, name='', check=True, expand_subcircuits="default",
-                 occurrence=None, compilable_layer_indices=None):
+    def __init__(self,
+            layer_labels=(), line_labels: str|Tuple[Any,...] = 'auto', num_lines: Optional[int] = None,
+            editable=False, stringrep=None, name='', check=True, expand_subcircuits="default", occurrence=None,
+            compilable_layer_indices=None
+        ):
         """
         Creates a new Circuit object, encapsulating a quantum circuit.
 
@@ -649,7 +655,7 @@ class Circuit(object):
         self._str = None  # regenerate string rep (it may have updated)
 
     @property
-    def layertup(self):
+    def layertup(self) -> LayerTupLike:
         """
         This Circuit's layers as a standard Python tuple of layer Labels.
 

@@ -17,7 +17,7 @@ import warnings as _warnings
 
 import numpy as _np
 
-from pygsti.circuits.circuit import Circuit as _Circuit
+from pygsti.circuits.circuit import Circuit as _Circuit, LayerTupLike
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from pygsti.baseobjs.label import LabelTupTup, Label
 from pygsti.modelmembers.operations import create_from_superop_mx
@@ -32,6 +32,7 @@ import numpy as np
 import scipy.linalg as la
 import scipy.sparse.linalg as sparla
 from typing import List
+
 
 def _walk_subtree(treedict, indx, running_inds):
     running_inds.add(indx)
@@ -484,9 +485,12 @@ def _add_in_idle_gates_to_circuit(circuit: _Circuit, idle_gate_name: str|Label =
 
 def setup_circuit_list_for_LCS_computations(
         circuit_list: list[_Circuit],
-        implicit_idle_gate_name: str|Label = 'I') -> tuple[list[dict[int, int]],
-                                                    dict[tuple[LabelTupTup], list[tuple[int, int]]],
-                                                    dict[tuple[int, ...], list[LabelTupTup]]]:
+        implicit_idle_gate_name: str|Label = 'I'
+    ) -> tuple[
+        dict[int, dict[int, _Circuit]],
+        dict[LayerTupLike, list[tuple[int, int]]],
+        dict[tuple[int, ...],list[LayerTupLike]]
+    ]:
     """
     Split a circuit list into a list of subcircuits by lanes. These lanes are non-interacting partions of a circuit.
 
@@ -497,9 +501,9 @@ def setup_circuit_list_for_LCS_computations(
     # We want to split the circuit list into a dictionary of subcircuits where each sub_cir in the dict[key] act exclusively on the same qubits.
     # I need a mapping from subcircuit to actual circuit. This is uniquely defined by circuit_id and then lane id.
 
-    sub_cir_to_cir_id_and_lane_id: dict[tuple[_Circuit], list[tuple[int, int]]] = {}
-    line_labels_to_circuit_list: dict[tuple[int, ...], set[_Circuit]] = {}
     cir_ind_and_lane_id_to_sub_cir: dict[int, dict[int, _Circuit]] = {}
+    sub_cir_to_cir_id_and_lane_id:  dict[LayerTupLike, list[tuple[int, int]]] = {}
+    line_labels_to_layertup_lists:  dict[tuple[int, ...], list[LayerTupLike]] = {}
 
     for i, cir in enumerate(circuit_list):
 
@@ -517,10 +521,10 @@ def setup_circuit_list_for_LCS_computations(
         for j in range(len(sub_cirs)):
             sc = _Circuit(sub_cirs[j],line_labels=tuple(lane_to_qubits[j]),)
             lbls = sc._line_labels
-            if lbls in line_labels_to_circuit_list:
-                line_labels_to_circuit_list[lbls].append(sc.layertup)
+            if lbls in line_labels_to_layertup_lists:
+                line_labels_to_layertup_lists[lbls].append(sc.layertup)
             else:
-                line_labels_to_circuit_list[lbls] = [sc.layertup]
+                line_labels_to_layertup_lists[lbls] = [sc.layertup]
             if sc.layertup in sub_cir_to_cir_id_and_lane_id:
                 sub_cir_to_cir_id_and_lane_id[sc.layertup].append((i,j))
             else:
@@ -530,7 +534,7 @@ def setup_circuit_list_for_LCS_computations(
             else:
                 cir_ind_and_lane_id_to_sub_cir[i] = {j: sc}
 
-    return cir_ind_and_lane_id_to_sub_cir, sub_cir_to_cir_id_and_lane_id, line_labels_to_circuit_list
+    return cir_ind_and_lane_id_to_sub_cir, sub_cir_to_cir_id_and_lane_id, line_labels_to_layertup_lists
 
 #endregion Split Circuits by lanes helpers
 
