@@ -19,7 +19,7 @@ import numpy as _np
 
 from pygsti.circuits.circuit import Circuit as _Circuit, LayerTupLike
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from pygsti.baseobjs.label import LabelTupTup, Label
+from pygsti.baseobjs.label import LabelTupTup, Label, LabelTup
 from pygsti.modelmembers.operations import create_from_superop_mx
 from pygsti.modelmembers.operations import LinearOperator as _LinearOperator
 import itertools
@@ -541,16 +541,16 @@ def setup_circuit_list_for_LCS_computations(
 
 #region Lane Collapsing Helpers
 
-def get_dense_representation_of_gate_with_perfect_swap_gates(model, op: Label, saved: dict[int | LabelTupTup, _np.ndarray], swap_dense: _np.ndarray) -> _np.ndarray:
+def get_dense_representation_of_gate_with_perfect_swap_gates(model, op: LabelTup, saved: dict[int | LabelTup | LabelTupTup, _np.ndarray], swap_dense: _np.ndarray) -> _np.ndarray:
     """
     Assumes that a gate which operates on 2 qubits does not have the right orientation if label is (qu_i+1, qu_i).
     """
     if op.num_qubits == 2:
         # We may need to do swaps.
-        op_term = 1
+        op_term : _np.ndarray = np.array([1.])
         if op in saved:
             op_term = saved[op]
-        elif op.qubits[1] < op.qubits[0]:
+        elif op.qubits[1] < op.qubits[0]:  # type: ignore
             # This is in the wrong order.
             op_term = model._layer_rules.get_dense_process_matrix_represention_for_gate(model, op)
             op_term = swap_dense @ (op_term) @ swap_dense
