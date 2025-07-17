@@ -1807,7 +1807,7 @@ class ExplicitLayerRules(_LayerRules):
         """
 
         if lbl not in model.operations:
-            return _np.empty(1)
+            raise KeyError(f'Operation with lable {lbl} not found in model.operations.')
 
         operation = model.operations[lbl]
 
