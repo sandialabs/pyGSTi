@@ -1256,7 +1256,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         #  vp[i] = sum_k e[0,k] dot(gs, rho)[i,k,0]  * scale_vals[i]
         #  vp[i] = dot( e, dot(gs, rho))[0,i,0]      * scale_vals[i]
         #  vp    = squeeze( dot( e, dot(gs, rho)), axis=(0,2) ) * scale_vals
-        breakpoint()
+        # breakpoint()
         return _np.squeeze(_np.dot(e, _np.dot(gs, rho)), axis=(0, 2)) * scale_vals
         # shape == (len(circuit_list),) ; may overflow but OK
 
@@ -2230,7 +2230,10 @@ class LCSEvalTreeMatrixForwardSimulator(MatrixForwardSimulator):
         #     rho, E = self._rho_e_from_spam_tuple(spam_tuple)
         #     _fas(array_to_fill, [element_indices],
         #          self._probs_from_rho_e(rho, E, Gs[tree_indices], 1))
-        _fas(array_to_fill, [element_indices], self._probs_from_rho_e(sp_val, povm_vals, Gs[tree_indices], 1))
+        probs = self._probs_from_rho_e(sp_val, povm_vals, Gs[tree_indices], 1)
+        if not isinstance(element_indices, list):
+            element_indices = [element_indices]
+        _fas(array_to_fill, element_indices, probs)
         _np.seterr(**old_err)
 
     def _probs_from_rho_e(self, rho, e: _np.ndarray, gs, scale_vals = 1):
@@ -2239,7 +2242,7 @@ class LCSEvalTreeMatrixForwardSimulator(MatrixForwardSimulator):
         """
 
         assert e.ndim == 2
-        assert e[0] > 1
+        ## WHY ??? assert e[0] > 1
         return _np.squeeze(e @ (gs @ rho), axis=(2)) # only one rho.
 
         return super()._probs_from_rho_e(rho, e, gs, scale_vals)

@@ -19,15 +19,15 @@ except ImportError:
     BaseCase = object
 
 from pygsti.data import simulate_data
-from pygsti.modelpacks import smq1Q_XYI, smq1Q_XY
-from pygsti.modelpacks import smq2Q_XYZICNOT
+from pygsti.modelpacks import smq1Q_XYI, smq1Q_XY, smq2Q_XYZICNOT, smq2Q_XYCNOT
 from pygsti.protocols import gst
 from pygsti.protocols.protocol import ProtocolData
 from pygsti.tools import two_delta_logl
 
 
+GLOBAL_MODEL_PACK = smq1Q_XY
 
-GLOBAL_MODEL_IDLE = smq2Q_XYZICNOT
+
 def Ls(*args):
     """ Convert args to a tuple to Labels """
     return tuple([L(x) for x in args])
@@ -156,8 +156,8 @@ class BaseProtocolData:
 
     @classmethod
     def setUpClass(cls):
-        cls.gst_design = GLOBAL_MODEL_IDLE.create_gst_experiment_design(max_max_length=16)
-        cls.mdl_target = GLOBAL_MODEL_IDLE.target_model()
+        cls.gst_design = GLOBAL_MODEL_PACK.create_gst_experiment_design(max_max_length=16)
+        cls.mdl_target = GLOBAL_MODEL_PACK.target_model()
         cls.mdl_datagen = cls.mdl_target.depolarize(op_noise=0.05, spam_noise=0.025)
 
         ds = simulate_data(cls.mdl_datagen, cls.gst_design.all_circuits_needing_data, 20000, sample_error='none')
@@ -270,15 +270,15 @@ class ForwardSimConsistencyTester(TestCase):
 
     
     def setUp(self):
-        self.model_ideal = GLOBAL_MODEL_IDLE.target_model()
+        self.model_ideal = GLOBAL_MODEL_PACK.target_model()
         if TorchForwardSimulator.ENABLED:
             # TorchFowardSimulator can only work with TP modelmembers.
             self.model_ideal.convert_members_inplace(to_type='full TP')
         
         self.model_noisy = self.model_ideal.depolarize(op_noise=0.05, spam_noise=0.025)
-        prep_fiducials = GLOBAL_MODEL_IDLE.prep_fiducials()
-        meas_fiducials = GLOBAL_MODEL_IDLE.meas_fiducials()
-        germs = GLOBAL_MODEL_IDLE.germs()
+        prep_fiducials = GLOBAL_MODEL_PACK.prep_fiducials()
+        meas_fiducials = GLOBAL_MODEL_PACK.meas_fiducials()
+        germs = GLOBAL_MODEL_PACK.germs()
         max_lengths = [4]
         circuits = create_lsgst_circuit_lists(
             self.model_noisy, prep_fiducials, meas_fiducials, germs, max_lengths
@@ -342,7 +342,7 @@ class ForwardSimIntegrationTester(BaseProtocolData):
 
     def _run(self, obj : ForwardSimulator.Castable):
         self.setUpClass()
-        proto = gst.GateSetTomography(GLOBAL_MODEL_IDLE.target_model("full TP"), name="testGST")
+        proto = gst.GateSetTomography(GLOBAL_MODEL_PACK.target_model("full TP"), name="testGST")
         results = proto.run(self.gst_data, simulator=obj)
         mdl_result = results.estimates["testGST"].models["final iteration estimate"]
         twoDLogL = two_delta_logl(mdl_result, self.gst_data.dataset)

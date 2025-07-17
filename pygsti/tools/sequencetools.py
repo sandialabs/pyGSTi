@@ -1,4 +1,4 @@
-from typing import Sequence
+from typing import Sequence, Any, List
 import numpy as _np
 
 
@@ -40,7 +40,7 @@ def _lcs_dp_version(A: Sequence, B: Sequence) -> _np.ndarray:
     return table
 
 
-def conduct_one_round_of_lcs_simplification(sequences: list[Sequence], table_data_and_sequences,
+def conduct_one_round_of_lcs_simplification(sequences: List[Sequence], table_data_and_sequences,
                                             internal_tables_and_sequences,
                                             starting_cache_num,
                                             cache_struct):
@@ -65,7 +65,7 @@ def conduct_one_round_of_lcs_simplification(sequences: list[Sequence], table_dat
     cache_num = starting_cache_num
 
     # Build sequence dict
-    all_subsequences_to_replace: dict[tuple, dict[int, list[int]]] = {}
+    all_subsequences_to_replace: dict[tuple, dict[int, List[int]]] = {}
 
     if _np.max(internal_subtable) >= _np.max(table):
         # We are only going to replace if this was the longest substring.
@@ -189,7 +189,7 @@ def _compute_lcs_for_every_pair_of_sequences(sequences: list):
     return best_lengths, best_subsequences
 
 
-def _longest_common_internal_subsequence(A: Sequence) -> tuple[int, dict[tuple, list[int]]]:
+def _longest_common_internal_subsequence(A: Sequence) -> tuple[int, dict[tuple, set[int]]]:
     """
     Compute the longest common subsequence within a single circuit A.
 
@@ -198,11 +198,11 @@ def _longest_common_internal_subsequence(A: Sequence) -> tuple[int, dict[tuple, 
     Returns:
     ---------
     int - length of longest common subsequences within A
-    dict[tuple, list[int]] - dictionary of subsequences to starting positions within A.
+    dict[tuple, set[int]] - dictionary of subsequences to starting positions within A.
     """
     n = len(A)
     best = 0
-    best_ind = {}
+    best_ind : dict[tuple[Any,...], set[int]] = dict()
     changed = False
     for w in range(1, int(_np.floor(n / 2) + 1)):
         for sp in range(n - w):
@@ -223,8 +223,11 @@ def _longest_common_internal_subsequence(A: Sequence) -> tuple[int, dict[tuple, 
     return best, best_ind
 
 
-def create_tables_for_internal_LCS(sequences: list[Sequence]) -> tuple[_np.ndarray,
-                                                        list[dict[tuple, list[int]]]]:
+def create_tables_for_internal_LCS(
+        sequences: List[Sequence[Any]]
+    ) -> tuple[
+        _np.ndarray, List[dict[tuple[Any,...], set[int]]]
+    ]:
     """
     Compute all the longest common internal sequences for each circuit A in sequences
 
@@ -233,7 +236,7 @@ def create_tables_for_internal_LCS(sequences: list[Sequence]) -> tuple[_np.ndarr
 
     C = len(sequences)
     the_table = _np.zeros(C)
-    seq_table = [[] for _ in range(C)]
+    seq_table : List[dict[tuple[Any,...], set[int]]] = [dict() for _ in range(C)]
 
     curr_best = 1
     for i in range(C):
