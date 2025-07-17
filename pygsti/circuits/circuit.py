@@ -13,7 +13,7 @@ Defines the Circuit class
 from __future__ import annotations
 import itertools as _itertools
 import warnings as _warnings
-from typing import List, Sequence, Literal, Tuple, Any, Hashable, Optional
+from typing import List, Sequence, Literal, Tuple, Any, Hashable, Optional, TypeAlias
 
 import numpy as _np
 from pygsti.baseobjs.label import Label as _Label, CircuitLabel as _CircuitLabel, LabelTupTup as _LabelTupTup
@@ -45,7 +45,16 @@ msg = 'Could not find matching standard gate name in provided dictionary. Fallin
 _warnings.filterwarnings('module', message=msg, category=UserWarning)
 
 
-LayerTupLike = tuple[_LabelTupTup, ...] | List[_Label | Sequence[_Label]] | tuple[_Label, ...]
+##############################################################################################
+# NOTE(Riley): these types are work-in-progress. They don't make a whole lot of sense to me
+# right now. It might be possible that they just _DONT_ make sense, and yet they're correct
+# in the context of the current implementation.
+_NestedLabelSeq = List[_Label | Sequence[_Label]]
+#   ^ An alias to make it easier to see how subsequent types relate.
+#     Don't use this in function signatures.
+LayerTupLike = Tuple[_LabelTupTup,    ...] | _NestedLabelSeq | Tuple[_Label, ...]
+LabelsLike   = Tuple[_NestedLabelSeq, ...] | _NestedLabelSeq
+##############################################################################################
 
 
 def _np_to_quil_def_str(name, input_array):
@@ -520,7 +529,7 @@ class Circuit(object):
     #Note: If editing _bare_init one should also check _copy_init in case changes must be propagated.
     def _bare_init(self, labels, line_labels, editable, name='', stringrep=None, occurrence=None,
                    compilable_layer_indices_tup=()):
-        self._labels : List[_Label | Sequence[_Label]] = labels
+        self._labels : LabelsLike = labels
         self._line_labels = tuple(line_labels)
         self._occurrence_id = occurrence
         self._compilable_layer_indices_tup = compilable_layer_indices_tup # always a tuple, but can be empty.
@@ -2469,7 +2478,7 @@ class Circuit(object):
         return cpy
     
     def _cache_tensor_lanes(self, sub_circuit_list: list[_Label],
-                            lane_to_qubits: dict[int, tuple[int, ...]]) -> Circuit:
+                            lane_to_qubits: dict[int, Tuple[int, ...]]) -> Circuit:
         """
         Store the tensor lanes in the circuit if appropriate. 
         Note that this should only be called in the case that the sub_circuit_list
