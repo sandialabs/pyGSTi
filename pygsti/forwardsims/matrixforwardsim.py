@@ -34,10 +34,12 @@ from pygsti.tools import sharedmemtools as _smt
 from pygsti.tools import slicetools as _slct
 from pygsti.tools.matrixtools import _fas
 from pygsti.tools import listtools as _lt
-from pygsti.circuits import CircuitList as _CircuitList
+from pygsti.circuits import CircuitList as _CircuitList, Circuit as _Circuit
 from pygsti.tools.internalgates import internal_gate_unitaries
 from pygsti.tools.optools import unitary_to_superop
-from pygsti.baseobjs.label import LabelTup, LabelTupTup
+from pygsti.baseobjs.label import LabelTup, LabelTupTup, Label
+
+from typing import Sequence
 
 
 _dummy_profiler = _DummyProfiler()
@@ -2256,5 +2258,24 @@ class LCSEvalTreeMatrixForwardSimulator(MatrixForwardSimulator):
                 self._bulk_fill_probs_atom(probs2, layout_atom, resource_alloc)
                 array_to_fill[:, iFinal] = (probs2 - probs) / eps
 
-    def create_layout(self, circuits, dataset=None, resource_alloc=None, array_types=('E', ), derivative_dimensions=None, verbosity=0, layout_creation_circuit_cache=None):
-        return super().create_layout(circuits, dataset, resource_alloc, array_types, derivative_dimensions, verbosity, layout_creation_circuit_cache, use_old_tree_style=False)
+    def create_layout(self, circuits : Sequence[_Circuit] | _CircuitList, dataset=None, resource_alloc=None, array_types=('E', ), derivative_dimensions=None, verbosity=0, layout_creation_circuit_cache=None):
+        # replace implicit idles.
+        # from pygsti.layouts.evaltree import _add_in_idle_gates_to_circuit
+        # model_idle_key = Label(())  # not true in general.
+        sanitized_circuits = []
+        for i, c in enumerate(circuits):
+            if len(c) > 0:
+                # # Attempt 1: Broken
+                # c = c.copy(True)
+                # c.replace_gatename_inplace([], model_idle_key)
+                # c.replace_gatename_inplace(Label(()), model_idle_key)
+                # c.done_editing()
+                # # Attempt 2: Broken
+                # c = _add_in_idle_gates_to_circuit(c, model_idle_key)
+                # TODO: try yet another thing.
+                #   IDEA: define a function in the ExplicitModel class that parses a circuit
+                #         and returns one with suitably substituted explicit idles. This seems
+                #         like something that only a model can be expected to resolve.
+                pass
+            sanitized_circuits.append(c)
+        return super().create_layout(sanitized_circuits, dataset, resource_alloc, array_types, derivative_dimensions, verbosity, layout_creation_circuit_cache, use_old_tree_style=False)

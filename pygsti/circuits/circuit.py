@@ -13,7 +13,7 @@ Defines the Circuit class
 from __future__ import annotations
 import itertools as _itertools
 import warnings as _warnings
-from typing import List, Sequence
+from typing import List, Sequence, Literal
 
 import numpy as _np
 from pygsti.baseobjs.label import Label as _Label, CircuitLabel as _CircuitLabel
@@ -1026,7 +1026,7 @@ class Circuit(object):
         """
         return len(self._line_labels)
     
-    def copy(self, editable='auto'):
+    def copy(self, editable: bool | Literal['auto'] = 'auto'):
         """
         Returns a copy of the circuit.
 
@@ -3421,7 +3421,7 @@ class Circuit(object):
         """
         return tuple(self.layer_label_with_idles(j, idle_gate_name).components)
 
-    def layer_label_with_idles(self, j, idle_gate_name='I'):
+    def layer_label_with_idles(self, j, idle_gate_name : str|_Label ='I'):
         """
         Returns the layer, as a :class:`Label`, at depth j, with `idle_gate_name` at empty circuit locations.
 
