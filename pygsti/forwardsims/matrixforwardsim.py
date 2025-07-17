@@ -38,8 +38,11 @@ from pygsti.circuits import CircuitList as _CircuitList, Circuit as _Circuit
 from pygsti.tools.internalgates import internal_gate_unitaries
 from pygsti.tools.optools import unitary_to_superop
 from pygsti.baseobjs.label import LabelTup, LabelTupTup, Label
+<<<<<<< Updated upstream
 
 from typing import Sequence
+=======
+>>>>>>> Stashed changes
 
 
 _dummy_profiler = _DummyProfiler()
@@ -1256,6 +1259,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         #  vp[i] = sum_k e[0,k] dot(gs, rho)[i,k,0]  * scale_vals[i]
         #  vp[i] = dot( e, dot(gs, rho))[0,i,0]      * scale_vals[i]
         #  vp    = squeeze( dot( e, dot(gs, rho)), axis=(0,2) ) * scale_vals
+        breakpoint()
         return _np.squeeze(_np.dot(e, _np.dot(gs, rho)), axis=(0, 2)) * scale_vals
         # shape == (len(circuit_list),) ; may overflow but OK
 
@@ -2219,17 +2223,59 @@ class LCSEvalTreeMatrixForwardSimulator(MatrixForwardSimulator):
 
         Gs = layout_atom.tree.reconstruct_full_matrices()
 
+        sp_val, povm_vals, element_indices, tree_indices = self._rho_es_elm_inds_and_tree_inds_from_spam_tuples(layout_atom)
         old_err = _np.seterr(over='ignore')
-        for spam_tuple, (element_indices, tree_indices) in layout_atom.indices_by_spamtuple.items():
-            # "element indices" index a circuit outcome probability in array_to_fill's first dimension
-            # "tree indices" index a quantity for a no-spam circuit in a computed cache, which correspond
-            #  to the the element indices when `spamtuple` is used.
-            # (Note: *don't* set dest_indices arg = layout.element_slice, as this is already done by caller)
-            rho, E = self._rho_e_from_spam_tuple(spam_tuple)
-            _fas(array_to_fill, [element_indices],
-                 self._probs_from_rho_e(rho, E, Gs[tree_indices], 1))
+        # for spam_tuple, (element_indices, tree_indices) in layout_atom.indices_by_spamtuple.items():
+        #     # "element indices" index a circuit outcome probability in array_to_fill's first dimension
+        #     # "tree indices" index a quantity for a no-spam circuit in a computed cache, which correspond
+        #     #  to the the element indices when `spamtuple` is used.
+        #     # (Note: *don't* set dest_indices arg = layout.element_slice, as this is already done by caller)
+        #     rho, E = self._rho_e_from_spam_tuple(spam_tuple)
+        #     _fas(array_to_fill, [element_indices],
+        #          self._probs_from_rho_e(rho, E, Gs[tree_indices], 1))
+        _fas(array_to_fill, [element_indices], self._probs_from_rho_e(sp_val, povm_vals, Gs[tree_indices], 1))
         _np.seterr(**old_err)
 
+    def _probs_from_rho_e(self, rho, e: _np.ndarray, gs, scale_vals = 1):
+        """
+        Compute the probabilities from rho, a set of povms, the circuits defined by gs, and then scale appropriately.
+        """
+
+        assert e.ndim == 2
+        assert e[0] > 1
+        return _np.squeeze(e @ (gs @ rho), axis=(2)) # only one rho.
+
+        return super()._probs_from_rho_e(rho, e, gs, scale_vals)
+
+    def _rho_es_elm_inds_and_tree_inds_from_spam_tuples(self,
+                    layout_atom: _MatrixCOPALayoutAtomWithLCS) -> tuple[_np.ndarray, _np.ndarray]:
+        """
+        Assumes one state prep and many measurements.
+
+        We assume that there will be only one set of tree indices used throughout.
+        Also, we assume that we can find a slice 
+        """
+
+        sp_val = None
+        povm_vals: list[Label] = []
+        elm_inds: list[slice] = [] # This will get collapsed since we are assuming that each povm appears once.
+        tree_inds: list[slice] = [] # I am assuming that this will 
+        for spam_tuple, (element_indices, tree_indices) in layout_atom.indices_by_spamtuple.items():
+            if spam_tuple[0] != sp_val and sp_val is not None:
+                raise ValueError("More than one state prep is being used.")
+            else:
+                sp_val = spam_tuple[0]
+
+            
+            povm_vals.append(spam_tuple[1])
+            elm_inds.append(element_indices)
+            tree_inds.append(tree_indices)
+
+        sp_val, povm_vals = self._rho_es_from_spam_tuples(sp_val, povm_vals)
+        povm_vals = _np.vstack(povm_vals)
+        tree_inds = _np.unique(tree_inds)[0]
+        return sp_val, povm_vals, elm_inds, tree_inds
+    
     def _bulk_fill_dprobs_atom(self, array_to_fill, dest_param_slice, layout_atom: _MatrixCOPALayoutAtomWithLCS, param_slice, resource_alloc):
 
         

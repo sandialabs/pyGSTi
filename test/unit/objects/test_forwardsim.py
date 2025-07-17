@@ -20,13 +20,14 @@ except ImportError:
 
 from pygsti.data import simulate_data
 from pygsti.modelpacks import smq1Q_XYI, smq1Q_XY
+from pygsti.modelpacks import smq2Q_XYZICNOT
 from pygsti.protocols import gst
 from pygsti.protocols.protocol import ProtocolData
 from pygsti.tools import two_delta_logl
 
 
 
-GLOBAL_MODEL_IDLE = smq1Q_XYI
+GLOBAL_MODEL_IDLE = smq2Q_XYZICNOT
 def Ls(*args):
     """ Convert args to a tuple to Labels """
     return tuple([L(x) for x in args])
