@@ -560,16 +560,6 @@ def get_dense_representation_of_gate_with_perfect_swap_gates(model, op: LabelTup
     return model._layer_rules.get_dense_process_matrix_represention_for_gate(model, op)
 
 
-def combine_two_gates(cumulative_term, next_dense_matrix):
-    """
-    Note that the visual representation was
-
-    State Prep | CumulativeTerm | NextDense | Measure
-
-    which in matrix multiplication requires Measure @ (NextDense @ Cumulative) @ State Prep.
-    """
-    return next_dense_matrix @ cumulative_term
-
 def matrix_matrix_cost_estimate(matrix_size: tuple[int, int]) -> int:
     """
     Estimate cost of A @ B when both are square and dense.
@@ -715,7 +705,7 @@ class EvalTreeBasedUponLongestCommonSubstring():
         if cumulative_term is None:
             # look up result.
             return results_cache[term_to_extend_with]
-        return combine_two_gates(cumulative_term, results_cache[term_to_extend_with]) 
+        return results_cache[term_to_extend_with] @ cumulative_term 
 
 
     def _collapse_cache_line(self, model, cumulative_term: None | _np.ndarray,
@@ -729,8 +719,7 @@ class EvalTreeBasedUponLongestCommonSubstring():
 
         """
 
-
-        if isinstance(term_to_extend_with, int):
+        if term_to_extend_with in results_cache:
             return self.handle_results_cache_lookup_and_product(cumulative_term, term_to_extend_with, results_cache)
 
         else:
@@ -762,9 +751,11 @@ class EvalTreeBasedUponLongestCommonSubstring():
 
                     qubits_available = qubits_available[len(gatekey):]
 
+            results_cache[term_to_extend_with] = val
             if cumulative_term is None:
                 return val
-            return combine_two_gates(cumulative_term, val)
+            # Cache if off.
+            return results_cache[term_to_extend_with] @ cumulative_term
 
 
     def trace_through_cache_to_build_circuit(self, cache_ind: int) -> list[tuple]:
@@ -885,26 +876,7 @@ class CollectionOfLCSEvalTrees():
                     breakpoint()
                 ind_in_results = self.sub_cir_to_ind_in_results[lblkey][cir.layertup]
                 lane_circuits.append(self.saved_results[lblkey][ind_in_results])
-            output.append(lane_circuits)
-
-        # Need a map from lane id to computed location.
-        for icir in range(num_cirs):
-
-            order, _cost_estimate = self.cir_id_to_tensor_order[icir]
-            
-            
-            while order:
-                sp = order[0]
-                output[icir][sp] = _np.kron(output[icir][sp], output[icir][sp+1])
-                output[icir][sp+1:] = output[icir][sp+2:]
-                
-                # Adjust future indices
-                tmp = []
-                for new_val in order[1:]:
-                    tmp.append((new_val - 1)*(new_val > sp) + (new_val) * (new_val < sp))
-                order = tmp
-
-            output[icir] = output[icir][0]
+            output.append(KronStructured(lane_circuits))
         return output
     
     def compute_tensor_orders(self):

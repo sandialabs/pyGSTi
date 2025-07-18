@@ -2243,6 +2243,10 @@ class LCSEvalTreeMatrixForwardSimulator(MatrixForwardSimulator):
 
         assert e.ndim == 2
         ## WHY ??? assert e[0] > 1
+        out = _np.zeros((len(gs), len(e)))
+        for i in range(len(gs)):
+            out[i] = _np.squeeze(e @ (gs[i] @ rho), axis=(1))
+        return out
         return _np.squeeze(e @ (gs @ rho), axis=(2)) # only one rho.
 
         return super()._probs_from_rho_e(rho, e, gs, scale_vals)
