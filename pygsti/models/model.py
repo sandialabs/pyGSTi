@@ -458,7 +458,7 @@ class OpModel(Model):
     """
 
     #Whether to perform extra parameter-vector integrity checks
-    _pcheck = False
+    _pcheck = True
 
     #Experimental: whether to call .from_vector on operation *cache* elements as part of model.from_vector call
     _call_fromvector_on_cache = True
@@ -725,9 +725,9 @@ class OpModel(Model):
                 if _np.linalg.norm(self._paramvec[obj.gpindices] - w) > TOL:
                     if debug: print(lbl, ".to_vector() = ", w, " but Model's paramvec = ",
                                     self._paramvec[obj.gpindices])
-                    raise ValueError("%s is out of sync with paramvec!!!" % lbl)
+                    raise ValueError(f"{str(lbl)} is out of sync with paramvec!!!")
             if not self.dirty and obj.dirty:
-                raise ValueError("%s is dirty but Model.dirty=False!!" % lbl)
+                raise ValueError(f"{str(lbl)} is dirty but Model.dirty=False!!")
 
     def _clean_paramvec(self):
         """ Updates _paramvec corresponding to any "dirty" elements, which may
