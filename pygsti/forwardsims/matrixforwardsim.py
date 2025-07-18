@@ -2231,9 +2231,12 @@ class LCSEvalTreeMatrixForwardSimulator(MatrixForwardSimulator):
         #     _fas(array_to_fill, [element_indices],
         #          self._probs_from_rho_e(rho, E, Gs[tree_indices], 1))
         probs = self._probs_from_rho_e(sp_val, povm_vals, Gs[tree_indices], 1)
-        if not isinstance(element_indices, list):
-            element_indices = [element_indices]
-        _fas(array_to_fill, element_indices, probs)
+        # if not isinstance(element_indices, list):
+        #     element_indices = [element_indices]
+        # collapse element list
+        
+        # _fas(array_to_fill, element_indices, probs)
+        array_to_fill[:] = probs
         _np.seterr(**old_err)
 
     def _probs_from_rho_e(self, rho, e: _np.ndarray, gs, scale_vals = 1):
@@ -2246,6 +2249,8 @@ class LCSEvalTreeMatrixForwardSimulator(MatrixForwardSimulator):
         out = _np.zeros((len(gs), len(e)))
         for i in range(len(gs)):
             out[i] = _np.squeeze(e @ (gs[i] @ rho), axis=(1))
+        out = out.reshape((len(gs)*len(e)), order="C")
+        print(out)
         return out
         return _np.squeeze(e @ (gs @ rho), axis=(2)) # only one rho.
 
@@ -2284,6 +2289,7 @@ class LCSEvalTreeMatrixForwardSimulator(MatrixForwardSimulator):
 
         
         eps = 1e-7  # hardcoded?
+        avoiding_repeated_dividing_eps = 1 / eps 
         if param_slice is None:
             param_slice = slice(0, self.model.num_params)
         param_indices = _slct.to_array(param_slice)
@@ -2300,13 +2306,27 @@ class LCSEvalTreeMatrixForwardSimulator(MatrixForwardSimulator):
         probs2 = _np.empty(layout_atom.num_elements, 'd')
         orig_vec = self.model.to_vector().copy()
 
-        for i in range(self.model.num_params):
-            if i in iParamToFinal:
-                iFinal = iParamToFinal[i]
-                vec = orig_vec.copy(); vec[i] += eps
-                self.model.from_vector(vec, close=True)
-                self._bulk_fill_probs_atom(probs2, layout_atom, resource_alloc)
-                array_to_fill[:, iFinal] = (probs2 - probs) / eps
+        if len(param_indices)>0:
+            probs2[:] = probs[:] # Could recompute only some of the tree.
+            first_param_idx = param_indices[0]
+            iFinal = iParamToFinal[first_param_idx]
+            self.model.set_parameter_value(first_param_idx, orig_vec[first_param_idx]+eps)
+            self._bulk_fill_probs_atom(probs2,  layout_atom, resource_alloc)
+            array_to_fill[:, iFinal] = (probs2 - probs) / eps
+
+        for i in range(1, len(param_indices)):
+            probs2[:] = probs[:] # Could recompute only some of the tree.
+
+            iFinal = iParamToFinal[param_indices[i]]
+            breakpoint()
+            self.model.set_parameter_values([param_indices[i-1], param_indices[i]], 
+                                            [orig_vec[param_indices[i-1]], orig_vec[param_indices[i]]+eps])
+            vec = self.model.to_vector()
+            assert _np.allclose(_np.where(vec != 0), [i])
+            self._bulk_fill_probs_atom(probs2,  layout_atom, resource_alloc)
+            array_to_fill[:, iFinal] = (probs2 - probs) / eps
+            print(iFinal)
+        # array_to_fill = array_to_fill / eps # Divide once
 
     def create_layout(self, circuits : Sequence[_Circuit] | _CircuitList, dataset=None, resource_alloc=None, array_types=('E', ), derivative_dimensions=None, verbosity=0, layout_creation_circuit_cache=None):
         # replace implicit idles.

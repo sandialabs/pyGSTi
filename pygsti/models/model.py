@@ -458,7 +458,7 @@ class OpModel(Model):
     """
 
     #Whether to perform extra parameter-vector integrity checks
-    _pcheck = False
+    _pcheck = True
 
     #Experimental: whether to call .from_vector on operation *cache* elements as part of model.from_vector call
     _call_fromvector_on_cache = True
@@ -712,7 +712,7 @@ class OpModel(Model):
         #return # default is to have no parameterized objects
 
     #TODO: Make this work with param interposers.
-    def _check_paramvec(self, debug=False):
+    def _check_paramvec(self, debug=True):
         if debug: print("---- Model._check_paramvec ----")
 
         TOL = 1e-8
