@@ -712,7 +712,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                         new_fogi_dirs = new_fogi_dirs.tocsc()
 
                         # figure out which directions are independent
-                        indep_cols = _mt.independent_columns(new_fogi_dirs, fogi_dirs)
+                        indep_cols = _mt.independent_columns(new_fogi_dirs.toarray(), fogi_dirs.toarray())
                         #FOGI DEBUG print(" ==> %d independent columns" % len(indep_cols))
 
                         if dependent_fogi_action == "drop":
