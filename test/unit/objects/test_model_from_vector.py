@@ -16,7 +16,7 @@ from pygsti.baseobjs import qubitgraph as _qgraph
 from pygsti.protocols import ProtocolData, GateSetTomography, CircuitListsDesign
 from pygsti.processors import QubitProcessorSpec
 
-
+import numpy as np
 from pygsti.algorithms import BuiltinBasis
 
 def make_spam(num_qubits):
@@ -45,11 +45,12 @@ def make_target_model(num_qubits, independent_gates: bool = True):
         qubit_labels=tuple(range(num_qubits))
     )
     u_ecr = 1/np.sqrt(2)*np.array([[0,0,1,1j],[0,0,1j,1],[1,-1j,0,0],[-1j,1,0,0]])
-    gatenames = ['Gxpi2', 'Gypi2', 'Gi', 'Gii',  'Gecr']
+    # gatenames = ['Gxpi2', 'Gypi2', 'Gi', 'Gii',  'Gecr']
+    gatenames = ["Gxpi2", "Gi", "Gecr"]
     ps = QubitProcessorSpec(
         num_qubits=num_qubits,
         gate_names=gatenames,
-        nonstd_gate_unitaries={'Gecr': u_ecr, 'Gii': np.eye(4)},
+        nonstd_gate_unitaries={'Gecr': u_ecr}, # 'Gii': np.eye(4)},
         geometry=ps_geometry
     )
     gateerrs = dict()
@@ -59,7 +60,7 @@ def make_target_model(num_qubits, independent_gates: bool = True):
         gateerrs[gn] = {ell: 0 for ell in egb1.labels}
     egb2 = CompleteElementaryErrorgenBasis(basis, QubitSpace(2), ('H','S')) # XXXX From Riley's code, default_label_type='local')
     gateerrs['Gecr'] = {ell: 0 for ell in egb2.labels}
-    gateerrs['Gii'] = gateerrs['Gecr']
+    # gateerrs['Gii'] = gateerrs['Gecr']
 
     tmn = pgmc.create_crosstalk_free_model(ps, lindblad_error_coeffs=gateerrs, independent_gates=independent_gates)
 
@@ -73,15 +74,23 @@ def make_target_model(num_qubits, independent_gates: bool = True):
     return tmn
 
 
-def test_model_from_vector_passable_within_dprobs():
+def test_correct_number_of_model_parameters():
 
-    num_qubits = 4
+    num_qubits = 2
 
     model = make_target_model(num_qubits)
 
-    vec = model.to_vector()
+    vec = model.to_vector().copy()
 
     circuit = Circuit([("Gxpi2", 0)], num_lines=num_qubits)
 
-    dprobs = model.sim.bulk_dprobs([circuit])
+    eps = 1e-7
 
+    expected_number_of_parameters = 2 * 6 * 2 # Single gates * errors * locations
+    expected_number_of_parameters += 2 * 15 * 2 # Ecr error: 2 orders * 15 non-II single hamiltonians * 2 types of two qubit errors
+    expected_number_of_parameters += 2*3 # 2 locs * 3 single qubit error types for Prep.
+    expected_number_of_parameters += 2*3 # 2 locs * 3 single qubit error types for POVM.
+
+
+    assert len(model._paramlbls) == expected_number_of_parameters
+    
