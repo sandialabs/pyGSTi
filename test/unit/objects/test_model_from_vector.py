@@ -2,18 +2,14 @@ from pygsti.baseobjs import qubitgraph as _qgraph
 from pygsti.baseobjs import QubitSpace
 from pygsti.models import modelconstruction as pgmc
 from pygsti.processors import QubitProcessorSpec
-from pygsti.models import LocalNoiseModel, Model
 from pygsti.modelmembers.states import ComposedState, ComputationalBasisState
 from pygsti.modelmembers.povms import ComposedPOVM
-from pygsti.modelmembers.operations import ComposedOp, LindbladErrorgen, ExpErrorgenOp
+from pygsti.modelmembers.operations import LindbladErrorgen, ExpErrorgenOp
 # from pygsti.tools.lindbladtools import random_error_generator_rates
 from pygsti.baseobjs.errorgenbasis import CompleteElementaryErrorgenBasis
-from pygsti.data import simulate_data
-from pygsti.circuits import CircuitList
 from pygsti.circuits import Circuit
 
 from pygsti.baseobjs import qubitgraph as _qgraph
-from pygsti.protocols import ProtocolData, GateSetTomography, CircuitListsDesign
 from pygsti.processors import QubitProcessorSpec
 
 import numpy as np
@@ -82,8 +78,6 @@ def test_correct_number_of_model_parameters():
 
     vec = model.to_vector().copy()
 
-    circuit = Circuit([("Gxpi2", 0)], num_lines=num_qubits)
-
     eps = 1e-7
 
     expected_number_of_parameters = 2 * 6 * 2 # Single gates * errors * locations
@@ -91,6 +85,9 @@ def test_correct_number_of_model_parameters():
     expected_number_of_parameters += 2*3 # 2 locs * 3 single qubit error types for Prep.
     expected_number_of_parameters += 2*3 # 2 locs * 3 single qubit error types for POVM.
 
+    model._print_gpindices(2)
+
+    # Sees that a Gi:0 layer has parameters which have different indices than those of the ComposedOp.
 
     assert len(model._paramlbls) == expected_number_of_parameters
     
