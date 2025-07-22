@@ -388,12 +388,12 @@ class _MatrixCOPALayoutAtomWithLCS(_DistributableAtom):
         self.elindex_outcome_tuples = elindex_outcome_tuples
 
 
-        print("Flop cost to evaluate the tree once: ", self.tree._flop_estimate_to_collapse_to_each_circuit_to_process_matrix()[0])
+        print("Flop cost to evaluate the tree once: ", self.tree.flop_estimate())
         
-        num_circs = len(cir_ind_and_lane_id_to_sub_cir)
-        num_rho_and_em = len(self.indices_by_spamtuple.keys())
-        num_qubits_in_circuit = unique_circuits[0].num_lines
-        print("Flop cost for <p_i G Em>: ", (2*(4**num_qubits_in_circuit)**2)*num_circs*num_rho_and_em)
+        # num_circs = len(cir_ind_and_lane_id_to_sub_cir)
+        # num_rho_and_em = len(self.indices_by_spamtuple.keys())
+        # num_qubits_in_circuit = unique_circuits[0].num_lines
+        # print("Flop cost for <p_i G Em>: ", (2*(4**num_qubits_in_circuit)**2)*num_circs*num_rho_and_em)
 
         super().__init__(element_slice, num_elements)
 

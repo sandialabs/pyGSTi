@@ -31,6 +31,7 @@ import numpy as np
 import scipy.linalg as la
 import scipy.sparse.linalg as sparla
 from typing import List, Optional, Iterable
+from pygsti.tools.tqdm import our_tqdm
 
 
 def _walk_subtree(treedict, indx, running_inds):
@@ -616,6 +617,7 @@ class EvalTreeBasedUponLongestCommonSubstring():
             best_internal_match = _np.max(internal_matches[0])
 
             max_rounds = int(max(best_external_match,best_internal_match))
+            print("Num rounds remaining ", max_rounds)
 
         self.cache = cache
         self.num_circuits = C
@@ -802,7 +804,7 @@ class CollectionOfLCSEvalTrees():
         self.line_lbls_to_cir_list = line_lbls_to_circuit_list
 
         starttime = time.time()
-        for key, vals in line_lbls_to_circuit_list.items():
+        for key, vals in our_tqdm(line_lbls_to_circuit_list.items(), " Building Longest Common Substring Caches"):
             sub_cirs = []
             for cir in vals:
                 sub_cirs.append(list(cir))
@@ -879,6 +881,36 @@ class CollectionOfLCSEvalTrees():
             output.append(KronStructured(lane_circuits))
         return output
     
+    def flop_estimate(self, return_collapse: bool = False, return_tensor_matvec: bool = False):
+
+
+        cost_collapse = 0
+        for key in self.trees:
+            num_qubits = len(key) if key[0] != ('*',) else key[1] # Stored in the data structure.
+            tree = self.trees[key]
+            cost_collapse += tree.flop_cost_of_evaluating_tree(tuple([4**num_qubits, 4**num_qubits]))
+        
+
+        tensor_cost = 0
+        num_cirs = len(self.cir_id_and_lane_id_to_sub_cir)
+
+        for cir_id in range(num_cirs):
+            qubit_list = ()
+            for lane_id in range(len(self.cir_id_and_lane_id_to_sub_cir[cir_id])):
+                subcir = self.cir_id_and_lane_id_to_sub_cir[cir_id][lane_id]
+                qubit_list = (*qubit_list, len(subcir._line_labels))
+            qubit_list = list(qubit_list)
+            total_num = np.sum(qubit_list)
+
+            tensor_cost += cost_to_compute_tensor_matvec_without_reordering(qubit_list, total_num)
+
+        if return_collapse:
+            return tensor_cost + cost_collapse, cost_collapse
+        elif return_tensor_matvec:
+            return tensor_cost + cost_collapse, tensor_cost
+
+        return tensor_cost + cost_collapse
+
     def compute_tensor_orders(self):
 
         num_cirs = len(self.cir_id_and_lane_id_to_sub_cir)
@@ -1236,3 +1268,36 @@ class KronStructured(RealLinOp):
         self._linop   = forward._linop
         self._adjoint = forward.T
         self._dtype = self.kron_operands[0].dtype
+
+
+def cost_to_compute_tensor_matvec_without_reordering(qubit_list: list[int], total_num_qubits: int):
+
+    assert np.sum(qubit_list) == total_num_qubits
+
+    if len(qubit_list) == 1:
+        # Basic matvec.
+
+        cost = 2 * (4**qubit_list[0]**2)
+        return cost
+    
+    elif len(qubit_list) == 2:
+
+        # vec((A \tensor B) u) = vec(B U A.T)
+
+        term1 = 2*(4**qubit_list[1]**2) * (4**qubit_list[0]) # MM of BU.
+
+        term2 = 2 * (4**qubit_list[0]**2) * (4**qubit_list[1]) # MM of U A.T
+
+        return term1 + term2
+    
+    else:
+
+        # Just pop off the last term
+
+        # (B_1 \tensor B_2 ... \tensor B_n) u = (B_n \tensor B_n-1 ... \tensor B_2) U (B_1).T
+
+        right = cost_to_compute_tensor_matvec_without_reordering(qubit_list[:1], qubit_list[0]) * 4**(np.sum(qubit_list[1:]))
+
+        left = cost_to_compute_tensor_matvec_without_reordering(qubit_list[1:], total_num_qubits - qubit_list[0]) * 4**(qubit_list[0])
+
+        return left + right
