@@ -2306,23 +2306,25 @@ class LCSEvalTreeMatrixForwardSimulator(MatrixForwardSimulator):
         probs2 = _np.empty(layout_atom.num_elements, 'd')
         orig_vec = self.model.to_vector().copy()
 
-        if len(param_indices)>0:
-            probs2[:] = probs[:] # Could recompute only some of the tree.
-            first_param_idx = param_indices[0]
-            iFinal = iParamToFinal[first_param_idx]
-            self.model.set_parameter_value(first_param_idx, orig_vec[first_param_idx]+eps)
-            self._bulk_fill_probs_atom(probs2,  layout_atom, resource_alloc)
-            array_to_fill[:, iFinal] = (probs2 - probs) / eps
+        # if len(param_indices)>0:
+        #     probs2[:] = probs[:] # Could recompute only some of the tree.
+        #     first_param_idx = param_indices[0]
+        #     iFinal = iParamToFinal[first_param_idx]
+        #     self.model.set_parameter_value(first_param_idx, orig_vec[first_param_idx]+eps)
+        #     self._bulk_fill_probs_atom(probs2,  layout_atom, resource_alloc)
+        #     array_to_fill[:, iFinal] = (probs2 - probs) / eps
 
-        for i in range(1, len(param_indices)):
-            probs2[:] = probs[:] # Could recompute only some of the tree.
+        for i in range(len(param_indices)):
+            # probs2[:] = probs[:] # Could recompute only some of the tree.
 
             iFinal = iParamToFinal[param_indices[i]]
-            breakpoint()
-            self.model.set_parameter_values([param_indices[i-1], param_indices[i]], 
-                                            [orig_vec[param_indices[i-1]], orig_vec[param_indices[i]]+eps])
-            vec = self.model.to_vector()
-            assert _np.allclose(_np.where(vec != 0), [i])
+            # self.model.set_parameter_values([param_indices[i-1], param_indices[i]], 
+            #                                 [orig_vec[param_indices[i-1]], orig_vec[param_indices[i]]+eps])
+            vec = orig_vec.copy()
+            vec[param_indices[i]] += eps
+            self.model.from_vector(vec)
+            # vec = self.model.to_vector()
+            # assert _np.allclose(_np.where(vec != 0), [i])
             self._bulk_fill_probs_atom(probs2,  layout_atom, resource_alloc)
             array_to_fill[:, iFinal] = (probs2 - probs) / eps
             print(iFinal)

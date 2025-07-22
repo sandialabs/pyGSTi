@@ -458,7 +458,7 @@ class OpModel(Model):
     """
 
     #Whether to perform extra parameter-vector integrity checks
-    _pcheck = True
+    _pcheck = False
 
     #Experimental: whether to call .from_vector on operation *cache* elements as part of model.from_vector call
     _call_fromvector_on_cache = True
@@ -1007,7 +1007,7 @@ class OpModel(Model):
         # bounds to "ops" bounds like we do the parameter vector.  Need something like:
         #wb = self._model_parambouds_to_ops_parambounds(self._param_bounds) \
         #    if (self._param_bounds is not None) else _default_param_bounds(Np)
-        debug = False
+        debug = True
         if debug: print("DEBUG: rebuilding model %s..." % str(id(self)))
 
         # Step 1: add parameters that don't exist yet
@@ -1033,8 +1033,9 @@ class OpModel(Model):
                 insertion_point = max_index_processed_so_far + 1
                 if num_new_params > 0:
                     # If so, before allocating anything, make the necessary space in the parameter arrays:
+                    memo = set()
                     for _, o in self._iter_parameterized_objs():
-                        o.shift_gpindices(insertion_point, num_new_params, self)
+                        o.shift_gpindices(insertion_point, num_new_params, self, memo)
                     w = _np.insert(w, insertion_point, _np.empty(num_new_params, 'd'))
                     wl = _np.insert(wl, insertion_point, _np.empty(num_new_params, dtype=object))
                     wb = _np.insert(wb, insertion_point, _default_param_bounds(num_new_params), axis=0)
