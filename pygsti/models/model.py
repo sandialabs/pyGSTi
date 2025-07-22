@@ -1007,7 +1007,7 @@ class OpModel(Model):
         # bounds to "ops" bounds like we do the parameter vector.  Need something like:
         #wb = self._model_parambouds_to_ops_parambounds(self._param_bounds) \
         #    if (self._param_bounds is not None) else _default_param_bounds(Np)
-        debug = True
+        debug = False
         if debug: print("DEBUG: rebuilding model %s..." % str(id(self)))
 
         # Step 1: add parameters that don't exist yet

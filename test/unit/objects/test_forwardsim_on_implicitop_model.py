@@ -96,7 +96,7 @@ def make_target_model(num_qubits, independent_gates: bool = True, arbitrary_unit
         qubit_labels=tuple(range(num_qubits))
     )
     u_ecr = 1/np.sqrt(2)*np.array([[0,0,1,1j],[0,0,1j,1],[1,-1j,0,0],[-1j,1,0,0]])
-    gatenames = ['Gxpi2', 'Gypi2', 'Gzpi2', 'Gi', 'Gii',  'Gecr']
+    gatenames = ['Gxpi2', 'Gypi2', 'Gzpi2', 'Gi', 'Gii',  'Gecr', "Gcnot", "Gswap"]
     ps = QubitProcessorSpec(
         num_qubits=num_qubits,
         gate_names=gatenames,
@@ -415,15 +415,14 @@ def test_tensor_product_single_unitaries_yield_right_results_dprobs():
 
     under_test, expected_model = build_models_for_testing(num_qubits)
 
-    # circuitNone = Circuit([], num_lines=num_qubits)
+    circuitNone = Circuit([], num_lines=num_qubits)
     circuitX = Circuit([("Gxpi2", i) for i in range(num_qubits)], num_lines=num_qubits)
     circuitY = Circuit([("Gypi2", i) for i in range(num_qubits)], num_lines=num_qubits)
     circuitZ = Circuit([("Gzpi2", i) for i in range(num_qubits)], num_lines=num_qubits)
     circuitIdle = Circuit([("Gi", i) for i in range(num_qubits)], num_lines=num_qubits)
 
-    circuits = [circuitX]
+    circuits = [circuitNone, circuitX, circuitY, circuitZ, circuitIdle]
     for cir in circuits:
-        under_test.sim = MapForwardSimulator()
         probs = under_test.sim.dprobs(cir)
         expected_model.sim.calclib = _importlib.import_module("pygsti.forwardsims.mapforwardsim_calc_generic")
 
@@ -431,4 +430,67 @@ def test_tensor_product_single_unitaries_yield_right_results_dprobs():
 
         assert_probability_densities_are_equal(probs, exp, cir)
 
-test_tensor_product_single_unitaries_yield_right_results_dprobs()
+def test_tensor_product_single_unitaries_random_collection_of_xyz_dprobs():
+
+    for qb in range(2, 6):
+
+        under_test, expected_model = build_models_for_testing(qb)
+        allowed_gates = ['Gxpi2', 'Gypi2', "Gzpi2", 'Gi']
+
+        circuit100 = build_circuit(qb, 100, allowed_gates=allowed_gates)
+
+        probs = under_test.sim.dprobs(circuit100)
+        exp = expected_model.sim.dprobs(circuit100)
+
+        assert_probability_densities_are_equal(probs, exp, circuit100)
+
+def test_tensor_product_gates_with_implicit_idles_dprobs():
+
+    num_qubits = 5
+
+    under_test, expected_model = build_models_for_testing(num_qubits)
+    
+    gatenames = ["Gxpi2", "Gypi2", "Gzpi2", "Gi"]
+    for gate in gatenames:
+        for i in range(num_qubits):
+            cir = Circuit([[(gate, i)]], num_lines=num_qubits)
+
+            probs = under_test.sim.dprobs(cir)
+            exp = expected_model.sim.dprobs(cir)
+            assert_probability_densities_are_equal(probs, exp, cir)
+
+    # Now for the two qubit gates. Gecr and GCNOT
+
+    gatenames = ["Gecr", "Gcnot"]
+    # gatenames = ["Gecr"]
+    for gate in gatenames:
+        for i in range(num_qubits - 1):
+            cir = Circuit([[(gate, i, i+1)]], num_lines=num_qubits)
+
+            probs = under_test.sim.dprobs(cir)
+            exp = expected_model.sim.dprobs(cir)
+            assert_probability_densities_are_equal(probs, exp, cir)
+
+            # Order swapped.
+            cir = Circuit([[(gate, i+1, i)]], num_lines=num_qubits)
+
+            probs = under_test.sim.dprobs(cir)
+            exp = expected_model.sim.dprobs(cir)
+            assert_probability_densities_are_equal(probs, exp, cir)
+
+
+def test_tensor_product_multi_qubit_gates_with_structured_lanes_dprobs():
+
+    gates_to_used_qubits = {'Gxpi2': 1, 'Gypi2': 1, 'Gzpi2': 1, 'Gi': 1, 'Gswap': 2, 'Gcnot': 2, 'Gecr': 2}
+    for qb in range(5, 6):
+
+        lanes = [1, 2, 4]
+
+        under_test, expected_model = build_models_for_testing(qb)
+
+        circuit = build_circuit_with_multiple_qubit_gates_with_designated_lanes(qb, 100, lanes, gates_to_qubits_used=gates_to_used_qubits)
+
+        probs = under_test.sim.dprobs(circuit)
+        exp = expected_model.sim.dprobs(circuit)
+
+        assert_probability_densities_are_equal(probs, exp, circuit)
