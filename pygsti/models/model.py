@@ -1034,9 +1034,10 @@ class OpModel(Model):
                 max_index_processed_so_far = max(max_index_processed_so_far, max_existing_index)
                 insertion_point = max_index_processed_so_far + 1
                 if num_new_params > 0:
+                    memo = set()
                     # If so, before allocating anything, make the necessary space in the parameter arrays:
                     for _, o in self._iter_parameterized_objs():
-                        o.shift_gpindices(insertion_point, num_new_params, self)
+                        o.shift_gpindices(insertion_point, num_new_params, self, memo)
                     w = _np.insert(w, insertion_point, _np.empty(num_new_params, 'd'))
                     wl = _np.insert(wl, insertion_point, _np.empty(num_new_params, dtype=object))
                     wb = _np.insert(wb, insertion_point, _default_param_bounds(num_new_params), axis=0)
