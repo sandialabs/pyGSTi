@@ -876,7 +876,7 @@ class ModelDatasetCircuitsStore(object):
 
         #If a matrix layout then we have some precached circuit structures we can
         #grab to speed up store generation.
-        if False:
+        if isinstance(self.layout, _MatrixCOPALayout):
             #Grab the split_circuit_cache and down select to those in
             #self.circuits
             self.split_circuit_cache = self.layout.split_circuit_cache
