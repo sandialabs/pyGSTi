@@ -24,6 +24,7 @@ from pygsti.tools import optools as _ot
 from pygsti.tools import basistools as _bt
 from pygsti.baseobjs import qubitgraph as _qgraph
 from pygsti.baseobjs.label import Label as _Lbl
+from pygsti.baseobjs.statespace import QubitSpace as _QubitSpace
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.modelmembers.operations import LinearOperator as _LinearOp
 from pygsti.modelmembers.operations import FullArbitraryOp as _FullOp
@@ -328,7 +329,7 @@ class QuditProcessorSpec(ProcessorSpec):
 
         nonstd_preps = {k: _serialize_state(obj) for k, obj in self.nonstd_preps.items()}
         nonstd_povms = {k: _serialize_povm(obj) for k, obj in self.nonstd_povms.items()}
-        nonstd_instruments = {':'.join(k): _serialize_instrument(obj) for k, obj in self.nonstd_instruments.items()}
+        nonstd_instruments = {k: obj.to_nice_serialization() for k, obj in self.nonstd_instruments.items()}
 
         state.update({'qudit_labels': list(self.qudit_labels),
                       'qudit_udims': list(self.qudit_udims),
@@ -403,7 +404,7 @@ class QuditProcessorSpec(ProcessorSpec):
 
         nonstd_preps = {k: _unserialize_state(obj) for k, obj in state.get('nonstd_preps', {}).items()}
         nonstd_povms = {k: _unserialize_povm(obj) for k, obj in state.get('nonstd_povms', {}).items()}
-        nonstd_instruments = {tuple(k.split(':')): _unserialize_instrument(obj) for k, obj in state.get('nonstd_instruments', {}).items()}
+        nonstd_instruments = {k: InstrumentSpec.from_nice_serialization(obj) for k, obj in state.get('nonstd_instruments', {}).items()}
 
         return nonstd_gate_unitaries, nonstd_preps, nonstd_povms, nonstd_instruments
 
@@ -1478,7 +1479,7 @@ class QubitProcessorSpec(QuditProcessorSpec):
         return _qgraph.QubitGraph(qubit_labels, twoQ_connectivity)
     
 
-class InstrumentSpec:
+class InstrumentSpec(_NicelySerializable):
     """
     Class for storing a specifier for an ideal quantum instrument for use as part of
     a `QuditProcessorSpec` or `QubitProcessorSpec`. This class enables compact storage
@@ -1506,21 +1507,16 @@ class InstrumentSpec:
         inst_effect_labels : list of str
             A list of labels for each of the instrument effect elements.
         
-        inst_effect_specs : list of strs or dicts
+        inst_effect_specs : list of lists of 2-tuples, or lists of ndarrays
             The values this list give the specifications for each of the corresponding instrument elements labeled
-            in `inst_effect_labels`. The values of this list of this list can be the following specifiers:
+            in `inst_effect_labels`. The values of this list can be the following specifiers:
 
-            - string specifiers: Presently only one special string specifier is supported, 'Iz'. This corresponds to a quantum
-              instrument for computational-basis readout.
-            - dictionary: A dictionary whose keys are instrument effect labels, and whose values are specifiers used to construct the
-              corresponding instrument effects. Instrument effect specifiers can take the following form:
-              - numpy array: A numpy array corresponding to the dense representation of the instrument effect.
-              - lists of 2-tuples: Each tuple in this list of 2-tuples is such that the first element corresponds to a POVM effect
-                specifier (see `nonstd_povms` for supported options), and the second element is a state preparation specifier
-                (see `nonstd_preps` for supported options). These specifiers are used to construct appropriate effect and preparation
-                representations which are then have their outer product taken. This is done for each 2-tuple, and the outer products are
-                then summed to get the overall instrument effect. In the case where there is only a single 2-tuple for an instrument effect
-                this tuple can be used directly as the dictionary value (w/o being wrapped in a list) for convenience.
+            - numpy array: A numpy array corresponding to the dense representation of the instrument effect.
+            - lists of 2-tuples: Each tuple in this list of 2-tuples is such that the first element corresponds to a POVM effect
+              specifier (see `nonstd_povms` for supported options), and the second element is a state preparation specifier
+              (see `nonstd_preps` for supported options). These specifiers are used to construct appropriate effect and preparation
+              representations which are then have their outer product taken. This is done for each 2-tuple, and the outer products are
+              then summed to get the overall instrument effect.
 
         state_space : `StateSpace`
             The state space upon which this instrument acts.
@@ -1530,6 +1526,8 @@ class InstrumentSpec:
         self.instrument_effect_labels = list(inst_effect_labels)
         self.instrument_spec = {key:val for key,val in zip(inst_effect_labels, inst_effect_specs)}
         self.state_space = state_space
+
+        super().__init__()
 
     @property
     def num_qudits(self):
@@ -1639,7 +1637,77 @@ class InstrumentSpec:
             raise ValueError("Invalid effect or state prep spec: %s" % str(inst_effect_spec))
 
         return _ot.state_to_dmvec(v)
+    
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
 
+        def _serialize_state(obj):
+            return (obj.to_nice_serialization() if isinstance(obj, _NicelySerializable)
+                    else (obj if isinstance(obj, str) else self._encodemx(obj)))
+
+        # NicelySerializable is commented out while ModelMembers inherit from it but do not implement
+        # a non-base to_nice_serialization() method
+        def _serialize_instrument_member(obj):
+            if isinstance(obj, str): 
+                return obj
+            #if isinstance(obj, _NicelySerializable): return obj.to_nice_serialization()
+            if isinstance(obj, tuple):
+                obj = [obj]
+            if isinstance(obj, list):
+                assert(all([isinstance(rank1op_spec, (list, tuple)) and len(rank1op_spec) == 2
+                           for rank1op_spec in obj]))
+                return [(_serialize_state(espec), _serialize_state(rspec)) for espec, rspec in obj]
+            if isinstance(obj, _np.ndarray):
+                return [self._encodemx(obj)]
+            raise ValueError("Cannot serialize Instrument member specifier of type %s!" % str(type(obj)))
+
+        state.update({
+            'name': self.name,
+            'instrument_effect_labels': self.instrument_effect_labels,
+            'instrument_effect_specs': [_serialize_instrument_member(val) for val in self.instrument_spec.values()],
+            'state_space' : self.state_space._to_nice_serialization()
+        })
+
+        return state
+    
+    @classmethod
+    def _from_nice_serialization(cls, state):
+
+        from pygsti.baseobjs.statespace import QubitSpace as _QubitSpace, ExplicitStateSpace as _ExplicitStateSpace, QuditSpace as _QuditSpace
+        #HACK: Replace this with call to _state_class
+        if 'unitary_space_dimensions' in state['state_space']:
+            state_space = _ExplicitStateSpace._from_nice_serialization(state['state_space'])
+        elif 'qudit_labels' in state['state_space']:
+            state_space = _QuditSpace._from_nice_serialization(state['state_space'])
+        elif 'qubit_labels' in state['state_space']:
+            state_space = _QubitSpace._from_nice_serialization(state['state_space'])
+        else:
+            raise ValueError('Cannot deserialize state space object.')
+
+        def _unserialize_state(obj):
+            if isinstance(obj, str): return obj
+            elif isinstance(obj, dict) and "module" in obj:  # then a NicelySerializable object
+                return _NicelySerializable.from_nice_serialization(obj)
+            else:  # assume a matrix encoding of some sort (could be list or dict)
+                return cls._decodemx(obj)
+
+        def _unserialize_instrument_member(obj):
+            if isinstance(obj, str): return obj
+            elif isinstance(obj, dict) and "module" in obj:  # then a NicelySerializable object
+                return _NicelySerializable.from_nice_serialization(obj)
+            elif isinstance(obj, list):
+                if obj and isinstance(obj[0], tuple):
+                    return [(_unserialize_state(espec), _unserialize_state(rspec)) for espec, rspec in obj]
+                else: #assume this is a serialized ndarray
+                    return _unserialize_state(obj[0])
+            raise ValueError("Cannot unserialize Instrument member specifier of type %s!" % str(type(obj)))
+
+        instrument_effect_specs = [_unserialize_instrument_member(inst_effect_spec) for inst_effect_spec in state['instrument_effect_specs']]
+        instrument_effect_labels = state['instrument_effect_labels']
+        name = state['name']
+        return cls(name, instrument_effect_labels, instrument_effect_specs, state_space) 
+    
+    
 
 
 
