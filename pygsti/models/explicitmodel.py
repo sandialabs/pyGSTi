@@ -1498,7 +1498,10 @@ class ExplicitOpModel(_mdl.OpModel):
         gate_unitaries = _collections.OrderedDict()
         all_sslbls = self.state_space.sole_tensor_product_block_labels
         all_udims = [self.state_space.label_udimension(lbl) for lbl in all_sslbls]
+        sslbl_to_udim = {lbl:udim for lbl,udim in zip(all_sslbls, all_udims)}
+        all_qubits = all([udim == 2 for udim in all_udims])
         availability = {}
+        instrument_names = set(lbl.name for lbl in self.instruments)
 
         def extract_unitary(Umx, U_sslbls, extracted_sslbls):
             if extracted_sslbls is None: return Umx  # no extraction to be done
@@ -1521,7 +1524,7 @@ class ExplicitOpModel(_mdl.OpModel):
                     U_extracted[ii, jj] = Umx[i, j]
             return U_extracted
 
-        def add_availability(opkey, op):
+        def add_availability_gate(opkey, op):
             if opkey == _Label(()) or opkey.is_simple:
                 if opkey == _Label(()):  # special case: turn empty tuple labels into "{idle}" gate in processor spec
                     gn = "{idle}"
@@ -1544,16 +1547,57 @@ class ExplicitOpModel(_mdl.OpModel):
                             availability[gn].append(sslbls)
                     else:
                         availability[gn] = [sslbls]
+                
                 elif sslbls not in availability[gn]:
                     availability[gn].append(sslbls)
 
             else:  # a COMPOUND label with components => process each component separately
                 for component in opkey.components:
-                    add_availability(component, None)  # recursive call - the reason we need this to be a function!
+                    add_availability_gate(component, None)  # recursive call - the reason we need this to be a function!
+
+        def add_availability_inst(opkey):
+            if opkey.is_simple:
+                gn = opkey.name
+                sslbls = opkey.sslbls
+                #if sslbls is not None:
+                #    observed_sslbls.update(sslbls)
+                if gn in availability:
+                    if sslbls not in availability[gn]:
+                        availability[gn].append(sslbls)
+                else:
+                    availability[gn] = [sslbls]              
 
         #observed_sslbls = set()
         for opkey, op in self.operations.items():  # TODO: need to deal with special () idle label
-            add_availability(opkey, op)
+            add_availability_gate(opkey, op)
+
+        #process instruments:
+        nonstd_instruments = dict()
+        if self.instruments:
+            for instkey, inst in self.instruments.items():
+                add_availability_inst(instkey)
+
+            #create instrument specifiers.
+            seen_names = set()
+            from pygsti.processors.processorspec import InstrumentSpec as _InstrumentSpec
+            from pygsti.baseobjs.statespace import QubitSpace as _QubitSpace, QuditSpace as _QuditSpace
+            for instkey, inst in self.instruments.items():
+                instrument_specifiers = []
+                instrument_effect_labels = []
+                for lbl, inst_effect in inst.items():
+                    instrument_effect_labels.append(lbl)
+                    instrument_specifiers.append(inst_effect.to_dense())
+                name = instkey.name
+                if name not in seen_names:
+                    instkey.sslbls 
+                    if all_qubits:
+                        nonstd_instruments[name] = _InstrumentSpec(name, instrument_effect_labels, instrument_specifiers, 
+                                                                   _QubitSpace(len(instkey.sslbls)))
+                    else:
+                        
+                        nonstd_instruments[name] = _InstrumentSpec(name, instrument_effect_labels, instrument_specifiers, 
+                                                                   _QuditSpace(instkey.sslbls, [sslbl_to_udim[lbl] for lbl in instkey.sslbls]))
+                    seen_names.add(name)
 
         #Check that there aren't any undetermined unitaries
         unknown_unitaries = [k for k, v in gate_unitaries.items() if v is None]
@@ -1569,17 +1613,21 @@ class ExplicitOpModel(_mdl.OpModel):
         if qudit_labels is None:  # special case of legacy explicit models where all gates have availability [None]
             qudit_labels = tuple(range(nqudits))
 
+        
+
         assert(len(qudit_labels) == nqudits), \
             "Length of `qudit_labels` must equal %d (not %d)!" % (nqudits, len(qudit_labels))
 
         if all([udim == 2 for udim in all_udims]):
             return _QubitProcessorSpec(nqudits, list(gate_unitaries.keys()), gate_unitaries, availability,
                                        qubit_labels=qudit_labels,
-                                       instrument_names=list(self.instruments.keys()), nonstd_instruments=self.instruments)
+                                       instrument_names=list(nonstd_instruments.keys()), 
+                                       nonstd_instruments=nonstd_instruments)
         else:
             return _QuditProcessorSpec(qudit_labels, all_udims, list(gate_unitaries.keys()), gate_unitaries,
                                        availability,
-                                       instrument_names=list(self.instruments.keys()), nonstd_instruments=self.instruments)
+                                       instrument_names=list(nonstd_instruments.keys()), 
+                                       nonstd_instruments=nonstd_instruments)
 
     def create_modelmember_graph(self):
         return _MMGraph({

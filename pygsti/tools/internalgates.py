@@ -330,7 +330,7 @@ def standard_instruments():
     std_instruments = dict()
     #Iz
     Iz_inst_members = {}
-    Iz_effect_specs = [(_np.array([1,0]), _np.array([1,0])), (_np.array([0,1]), _np.array([0,1]))]
+    Iz_effect_specs = [[(_np.array([1,0]), _np.array([1,0]))], [(_np.array([0,1]), _np.array([0,1]))]]
     Iz_effect_lbls = ['p0', 'p1'] 
     std_instruments['Iz'] = _InstrumentSpec(name='Iz', inst_effect_labels=Iz_effect_lbls, inst_effect_specs=Iz_effect_specs,
                                             state_space= _QubitSpace(1))
