@@ -49,12 +49,6 @@ class FullTPOp(_DenseOperator, _Torchable):
         of this state as a super-operator.  If None, certain functionality,
         such as access to Kraus operators, will be unavailable.
 
-        NOTE: this function might raise a weird error message if the passed
-              mx isn't in the pp or gm bases. I noticed this when using an
-              ExplicitBasis that is "leakage-friendly."
-              The implicit underlying assumption is that the first element
-              of this basis is the identity matrix.
-
     evotype : Evotype or str, optional
         The evolution type.  The special value `"default"` is equivalent
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
