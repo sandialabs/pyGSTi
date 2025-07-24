@@ -30,6 +30,39 @@ except ImportError:
 #EXPM_DEFAULT_TOL = 1e-7
 EXPM_DEFAULT_TOL = 2**-53  # Scipy default
 
+BLAS_FUNCS = {
+    'herk': {
+        's' : _spl.blas.ssyrk,
+        'd' : _spl.blas.dsyrk,
+        'c' : _spl.blas.cherk,
+        'z': _spl.blas.zherk
+    }
+}
+
+def gram_matrix(m, adjoint=False):
+    """
+    If adjoint=False, then return m.T.conj() @ m, computed in a more efficient way.
+
+    If adjoint=True, return m @ m.T.conj(), likewise computed in a more efficient way.
+    """
+    assert isinstance(m, _np.ndarray)
+    prefix_char, _, _ = _spl.blas.find_best_blas_type(dtype=m.dtype)
+    herk = BLAS_FUNCS["herk"][prefix_char]
+
+    if adjoint:
+        trans = 0
+    elif _np.iscomplexobj(m):
+        trans = 2
+    else:
+        trans = 1
+    out = herk(1.0, m, trans=trans)
+    i_lower = _np.tril_indices(out.shape[0], -1)
+    upper_values = out.T[i_lower]
+    out[i_lower] = upper_values.real
+    if trans > 0:
+        out[i_lower] += upper_values.imag
+    return out
+
 
 def is_hermitian(mx, tol=1e-9):
     """
@@ -49,14 +82,13 @@ def is_hermitian(mx, tol=1e-9):
         True if mx is hermitian, otherwise False.
     """
     (m, n) = mx.shape
-    for i in range(m):
-        if abs(mx[i, i].imag) > tol: return False
-        for j in range(i + 1, n):
-            if abs(mx[i, j] - mx[j, i].conjugate()) > tol: return False
-    return True
+    if m != n:
+        return False
+    else:
+        return _np.all(_np.abs(mx - mx.T.conj()) <= tol)
 
 
-def is_pos_def(mx, tol=1e-9):
+def is_pos_def(mx, tol=1e-9, attempt_cholesky=False):
     """
     Test whether mx is a positive-definite matrix.
 
@@ -73,7 +105,15 @@ def is_pos_def(mx, tol=1e-9):
     bool
         True if mx is positive-semidefinite, otherwise False.
     """
-    evals = _np.linalg.eigvals(mx)
+    if not is_hermitian(mx, tol):
+        return False
+    if attempt_cholesky:
+        try:
+            _ = _spl.cholesky(mx)
+            return True # Cholesky succeeded
+        except _spl.LinAlgError:
+            pass # we fall back on eigenvalue decomposition
+    evals = _np.linalg.eigvalsh(mx)
     return all([ev > -tol for ev in evals])
 
 
@@ -94,7 +134,8 @@ def is_valid_density_mx(mx, tol=1e-9):
     bool
         True if mx is a valid density matrix, otherwise False.
     """
-    return is_hermitian(mx, tol) and is_pos_def(mx, tol) and abs(_np.trace(mx) - 1.0) < tol
+    # is_pos_def includes a check that the matrix is Hermitian.
+    return abs(_np.trace(mx) - 1.0) < tol and is_pos_def(mx, tol)
 
 
 def nullspace(m, tol=1e-7):
@@ -115,7 +156,7 @@ def nullspace(m, tol=1e-7):
     """
     _, s, vh = _np.linalg.svd(m)
     rank = (s > tol).sum()
-    return vh[rank:].T.conjugate().copy()
+    return vh[rank:].T.conjugate()
 
 
 def nullspace_qr(m, tol=1e-7):
@@ -156,10 +197,7 @@ def nice_nullspace(m, tol=1e-7, orthogonalize=False):
     Computes the nullspace of a matrix, and tries to return a "nice" basis for it.
 
     Columns of the returned value (a basis for the nullspace) each have a maximum
-    absolute value of 1.0 and are chosen so as to align with the the original
-    matrix's basis as much as possible (the basis is found by projecting each
-    original basis vector onto an arbitrariliy-found nullspace and keeping only
-    a set of linearly independent projections).
+    absolute value of 1.0.
 
     Parameters
     ----------
@@ -177,21 +215,22 @@ def nice_nullspace(m, tol=1e-7, orthogonalize=False):
     An matrix of shape (M,K) whose columns contain nullspace basis vectors.
     """
     nullsp = nullspace(m, tol)
-    nullsp_projector = _np.dot(nullsp, nullsp.conj().T)
-    keepers = []; current_rank = 0
-    for i in range(nullsp_projector.shape[1]):  # same as mx.shape[1]
-        rank = _np.linalg.matrix_rank(nullsp_projector[:, 0:i + 1], tol=tol)
-        if rank > current_rank:
-            keepers.append(i)
-            current_rank = rank
-    ret = _np.take(nullsp_projector, keepers, axis=1)
+    dim_ker = nullsp.shape[1]
+    if dim_ker == 0:
+        return nullsp  # empty 0-by-N array
+    _, _, p = _spl.qr(nullsp.T.conj(), mode='raw', pivoting=True)
+    ret = nullsp @ (nullsp.T[:, p[:dim_ker]]).conj()
+    # ^ That's equivalent to, but faster than:
+    #     nullsp_projector = nullsp @ nullsp.T.conj()
+    #     _, _, p = _spl.qr(nullsp_projector mode='raw', pivoting=True)
+    #     ret = nullsp_projector[:, p[:dim_ker]]
 
-    if orthogonalize:  # and not columns_are_orthogonal(ret):
-        ret, _ = _np.linalg.qr(ret)  # Gram-Schmidt orthogonalization
-
+    if orthogonalize:
+        ret, _ = _spl.qr(ret, mode='economic')
     for j in range(ret.shape[1]):  # normalize columns so largest element is +1.0
         imax = _np.argmax(_np.abs(ret[:, j]))
-        if abs(ret[imax, j]) > 1e-6: ret[:, j] /= ret[imax, j]
+        if abs(ret[imax, j]) > 1e-6:
+            ret[:, j] /= ret[imax, j]
 
     return ret
 
@@ -248,14 +287,16 @@ def column_norms(m, ord=None):
     numpy.ndarray
         A 1-dimensional array of the column norms (length is number of columns of `m`).
     """
-    ord_list = [ord] * m.shape[1] if (ord is None or isinstance(ord, int)) else ord
-    assert(len(ord_list) == m.shape[1])
-
     if _sps.issparse(m):
-        #this could be done more efficiently, e.g. by converting to csc and taking column norms directly
+        ord_list = ord if isinstance(ord, (list, _np.ndarray)) else [ord] * m.shape[1]
+        assert(len(ord_list) == m.shape[1])
         norms = _np.array([_np.linalg.norm(m[:, j].toarray(), ord=o) for j, o in enumerate(ord_list)])
+    elif isinstance(ord, (list, _np.ndarray)):
+        assert(len(ord) == m.shape[1])
+        norms = _np.array([_np.linalg.norm(m[:, j], ord=o) for j, o in enumerate(ord)])
     else:
-        norms = _np.array([_np.linalg.norm(m[:, j], ord=o) for j, o in enumerate(ord_list)])
+        norms = _np.linalg.norm(m, axis=0, ord=ord)
+
     return norms
 
 
@@ -311,8 +352,9 @@ def columns_are_orthogonal(m, tol=1e-7):
     -------
     bool
     """
-    if m.size == 0: return True  # boundary case
-    check = _np.dot(m.conj().T, m)
+    if m.size == 0:
+        return True  # boundary case
+    check = gram_matrix(m)
     check[_np.diag_indices_from(check)] = 0.0
     return bool(_np.linalg.norm(check) / check.size < tol)
 
@@ -337,9 +379,11 @@ def columns_are_orthonormal(m, tol=1e-7):
     -------
     bool
     """
-    if m.size == 0: return True  # boundary case
-    check = _np.dot(m.conj().T, m)
-    return bool(_np.allclose(check, _np.identity(check.shape[0], 'd'), atol=tol))
+    if m.size == 0:
+        return True  # boundary case
+    check = gram_matrix(m)
+    check[_np.diag_indices_from(check)] -= 1.0
+    return bool(_np.linalg.norm(check) / check.size < tol)
 
 
 def independent_columns(m, initial_independent_cols=None, tol=1e-7):
@@ -369,27 +413,30 @@ def independent_columns(m, initial_independent_cols=None, tol=1e-7):
     list
         A list of the independent-column indices of `m`.
     """
-    indep_cols = []
-
     if not _sps.issparse(m):
-        running_indep_cols = initial_independent_cols.copy() \
-            if (initial_independent_cols is not None) else _np.empty((m.shape[0], 0), m.dtype)
-        num_indep_cols = running_indep_cols.shape[0]
+        if initial_independent_cols is None:
+            proj_m = m.copy()
+        else:
+            # We assume initial_independent_cols is full column-rank.
+            # This lets us use unpivoted QR instead of pivoted QR or SVD.
+            assert initial_independent_cols.shape[0] == m.shape[0]
+            q = _spl.qr(initial_independent_cols, mode='econ')[0]
+            # proj_m = (I - qq')m
+            temp1 = q.T.conj() @ m
+            temp2 = q @ temp1
+            proj_m = m - temp2
 
-        for j in range(m.shape[1]):
-            trial = _np.concatenate((running_indep_cols, m[:, j]), axis=1)
-            if _np.linalg.matrix_rank(trial, tol=tol) == num_indep_cols + 1:
-                running_indep_cols = trial
-                indep_cols.append(j)
-                num_indep_cols += 1
+        rank = _np.linalg.matrix_rank(proj_m, tol=tol)
+        pivots = _spl.qr(proj_m, overwrite_a=True, mode='raw', pivoting=True)[2]
+        indep_cols = pivots[:rank].tolist()
 
-    else:  # sparse case
-
+    else:
+        # TODO: re-implement to avoid unreliable calls to ARPACK's svds.
+        indep_cols = []
         from scipy.sparse.linalg import ArpackNoConvergence as _ArpackNoConvergence
         from scipy.sparse.linalg import ArpackError as _ArpackError
         running_indep_cols = initial_independent_cols.copy() \
             if (initial_independent_cols is not None) else _sps.csc_matrix((m.shape[0], 0), dtype=m.dtype)
-        num_indep_cols = running_indep_cols.shape[0]
 
         for j in range(m.shape[1]):
             trial = _sps.hstack((running_indep_cols, m[:, j]))
@@ -408,15 +455,33 @@ def independent_columns(m, initial_independent_cols=None, tol=1e-7):
 
 
 def pinv_of_matrix_with_orthogonal_columns(m):
-    """ TODO: docstring """
-    col_scaling = _np.sum(_np.abs(m)**2, axis=0)
+    """
+    Return the matrix "pinv_m" so m @ pinvm and pinv_m @ m are orthogonal projectors
+    onto subspaces of dimension rank(m).
+
+    Parameters
+    ----------
+    m : numpy.ndarray
+
+    Returns
+    ----------
+    pinv_m : numpy.ndarray
+    """
+    col_scaling = _np.linalg.norm(m, axis=0)**2
     m_with_scaled_cols = m.conj() * col_scaling[None, :]
     return m_with_scaled_cols.T
 
 
 def matrix_sign(m):
     """
-    The "sign" matrix of `m`
+    Compute the matrix s = sign(m). The eigenvectors of s are the same as those of m.
+    The eigenvalues of s are +/- 1, corresponding to the signs of m's eigenvalues.
+
+    It's straightforward to compute s when m is a normal operator. If m is not normal,
+    then the definition of s can be given in terms of m's Jordan form, and s
+    can be computed by (suitably post-processing) the Schur decomposition of m.
+
+    See https://nhigham.com/2020/12/15/what-is-the-matrix-sign-function/ for background.
 
     Parameters
     ----------
@@ -427,40 +492,45 @@ def matrix_sign(m):
     -------
     numpy.ndarray
     """
-    #Notes: sign(m) defined s.t. eigvecs of sign(m) are evecs of m
-    # and evals of sign(m) are +/-1 or 0 based on sign of eigenvalues of m
+    N = m.shape[0]
+    assert(m.shape == (N, N)), "m must be square!"
 
-    #Using the extremely numerically stable (but expensive) Schur method
-    # see http://www.maths.manchester.ac.uk/~higham/fm/OT104HighamChapter5.pdf
-    N = m.shape[0]; assert(m.shape == (N, N)), "m must be square!"
-    T, Z = _spl.schur(m, 'complex')  # m = Z T Z^H where Z is unitary and T is upper-triangular
-    U = _np.zeros(T.shape, 'complex')  # will be sign(T), which is easy to compute
-    # (U is also upper triangular), and then sign(m) = Z U Z^H
+    if is_hermitian(m):
+        eigvals, eigvecs = _spl.eigh(m)
+        sign = (eigvecs * _np.sign(eigvals)[None, :]) @ eigvecs.T.conj()
+        return sign
 
-    # diagonals are easy
+    T, Z = _spl.schur(m, 'complex')    # m = Z T Z^H where Z is unitary and T is upper-triangular
+    U = _np.zeros(T.shape, 'complex') 
     U[_np.diag_indices_from(U)] = _np.sign(_np.diagonal(T))
+    # If T is diagonal, then we're basically done. If T isn't diagonal, then we have work to do.
 
-    #Off diagonals: use U^2 = I or TU = UT
-    # Note: Tij = Uij = 0 when i > j and i==j easy so just consider i<j case
-    # 0 = sum_k Uik Ukj =  (i!=j b/c off-diag)
-    # FUTURE: speed this up by using np.dot instead of sums below
-    for j in range(1, N):
-        for i in range(j - 1, -1, -1):
-            S = U[i, i] + U[j, j]
-            if _np.isclose(S, 0):  # then use TU = UT
-                if _np.isclose(T[i, i] - T[j, j], 0):  # then just set to zero
-                    U[i, j] = 0.0  # TODO: check correctness of this case
-                else:
-                    U[i, j] = T[i, j] * (U[i, i] - U[j, j]) / (T[i, i] - T[j, j]) + \
-                        sum([U[i, k] * T[k, j] - T[i, k] * U[k, j] for k in range(i + 1, j)]) \
-                        / (T[i, i] - T[j, j])
-            else:  # use U^2 = I
-                U[i, j] = - sum([U[i, k] * U[k, j] for k in range(i + 1, j)]) / S
-    return _np.dot(Z, _np.dot(U, _np.conjugate(Z.T)))
+    if not _np.all(_np.isclose(T[_np.triu_indices(N, 1)], 0.0)):
+        # Use the extremely numerically stable (but expensive) method from
+        # N. Higham's book, Functions of Matrices : Theory and Practice, Chapter 5.
 
-    #Quick & dirty - not always stable:
-    #U,_,Vt = _np.linalg.svd(M)
-    #return _np.dot(U,Vt)
+        #Off diagonals: use U^2 = I or TU = UT
+        # Note: Tij = Uij = 0 when i > j and i==j easy so just consider i<j case
+        # 0 = sum_k Uik Ukj =  (i!=j b/c off-diag)
+        # FUTURE: speed this up by using np.dot instead of sums below
+        for j in range(1, N):
+            for i in range(j - 1, -1, -1):
+                S = U[i, i] + U[j, j]
+                if _np.isclose(S, 0):  # then use TU = UT
+                    if _np.isclose(T[i, i] - T[j, j], 0):  # then just set to zero
+                        U[i, j] = 0.0  # TODO: check correctness of this case
+                    else:
+                        U[i, j] = T[i, j] * (U[i, i] - U[j, j]) / (T[i, i] - T[j, j]) + \
+                            sum([U[i, k] * T[k, j] - T[i, k] * U[k, j] for k in range(i + 1, j)]) \
+                            / (T[i, i] - T[j, j])
+                else:  # use U^2 = I
+                    U[i, j] = - sum([U[i, k] * U[k, j] for k in range(i + 1, j)]) / S
+    else:
+        pass
+
+    sign = Z @ (U @ Z.T.conj())
+    return sign
+
 
 
 def print_mx(mx, width=9, prec=4, withbrackets=False):
@@ -605,6 +675,7 @@ def unitary_superoperator_matrix_log(m, mx_basis):
     evals = _np.linalg.eigvals(M_std)
     assert(_np.allclose(_np.abs(evals), 1.0))  # simple but technically incomplete check for a unitary superop
     # (e.g. could be anti-unitary: diag(1, -1, -1, -1))
+
     U = _ot.std_process_mx_to_unitary(M_std)
     H = _spl.logm(U) / -1j  # U = exp(-iH)
     logM_std = _lt.create_elementary_errorgen('H', H)  # rho --> -i[H, rho]
@@ -686,7 +757,7 @@ def approximate_matrix_log(m, target_logm, target_weight=10.0, tol=1e-6):
         logM = flat_logm.reshape(mx_shape)
         testM = _spl.expm(logM)
         ret = target_weight * _np.linalg.norm(logM - target_logm)**2 + \
-            _np.linalg.norm(testM.flatten() - m.flatten(), 1)
+            _np.linalg.norm(testM.ravel() - m.ravel(), 1)
         #print("DEBUG: ",ret)
         return ret
 
@@ -703,7 +774,7 @@ def approximate_matrix_log(m, target_logm, target_weight=10.0, tol=1e-6):
     print_obj_func = None
 
     logM = _np.real(real_matrix_log(m, action_if_imaginary="ignore"))  # just drop any imaginary part
-    initial_flat_logM = logM.flatten()  # + 0.1*target_logm.flatten()
+    initial_flat_logM = logM.ravel()  # + 0.1*target_logm.flatten()
     # Note: adding some of target_logm doesn't seem to help; and hurts in easy cases
 
     if _objective(initial_flat_logM) > 1e-16:  # otherwise initial logM is fine!
@@ -831,9 +902,6 @@ def real_matrix_log(m, action_if_imaginary="raise", tol=1e-8):
 
 
 ## ------------------------ Erik : Matrix tools that Tim has moved here -----------
-from scipy.linalg import sqrtm as _sqrtm
-import itertools as _ittls
-
 
 def column_basis_vector(i, dim):
     """
@@ -873,27 +941,9 @@ def vec(matrix_in):
     return [b for a in _np.transpose(matrix_in) for b in a]
 
 
-def unvec(vector_in):
-    """
-    Slices a vector into the columns of a matrix.
-
-    Parameters
-    ----------
-    vector_in : numpy.ndarray
-
-    Returns
-    -------
-    numpy.ndarray
-    """
-    dim = int(_np.sqrt(len(vector_in)))
-    return _np.transpose(_np.array(list(
-        zip(*[_ittls.chain(vector_in,
-                                   _ittls.repeat(None, dim - 1))] * dim))))
-
-
 def norm1(m):
     """
-    Returns the 1 norm of a matrix
+    Returns the Schatten 1-norm of a matrix
 
     Parameters
     ----------
@@ -904,9 +954,13 @@ def norm1(m):
     -------
     numpy.ndarray
     """
-    return float(_np.real(_np.trace(_sqrtm(_np.dot(m.conj().T, m)))))
+    s = _spl.svdvals(m)
+    nrm = _np.sum(s)
+    return nrm
 
 
+# Riley note: I'd like to rewrite this, but I don't want to mess with reproducibility
+# issues. For now I've just made it a teeny bit more efficient.
 def random_hermitian(dim):
     """
     Generates a random Hermitian matrix
@@ -925,12 +979,13 @@ def random_hermitian(dim):
         dim = int(dim)
         a = _np.random.random(size=[dim, dim])
         b = _np.random.random(size=[dim, dim])
-        c = a + 1.j * b + (a + 1.j * b).conj().T
+        c = a + 1.j * b
+        c += c.conj().T
         my_norm = norm1(c)
     return c / my_norm
 
 
-def norm1to1(operator, num_samples=10000, mx_basis="gm", return_list=False):
+def norm1to1(operator, num_samples=10000, mx_basis="gm"):
     """
     The Hermitian 1-to-1 norm of a superoperator represented in the standard basis.
 
@@ -948,23 +1003,20 @@ def norm1to1(operator, num_samples=10000, mx_basis="gm", return_list=False):
     mx_basis : {'std', 'gm', 'pp', 'qt'} or Basis
         The basis of `operator`.
 
-    return_list : bool, optional
-        Whether the entire list of sampled values is returned or just the maximum.
-
     Returns
     -------
     float or list
         Depends on the value of `return_list`.
     """
     std_operator = change_basis(operator, mx_basis, 'std')
-    rand_dim = int(_np.sqrt(float(len(std_operator))))
-    vals = [norm1(unvec(_np.dot(std_operator, vec(random_hermitian(rand_dim)))))
-            for n in range(num_samples)]
-    if return_list:
-        return vals
-    else:
-        return max(vals)
-
+    dim = int(_np.sqrt(len(std_operator)))
+    max_val = 0.0
+    for _ in range(num_samples):
+        invec = random_hermitian(dim).ravel(order='F')
+        outvec = std_operator @ invec
+        val = norm1(outvec.reshape((dim,dim), order='F'))
+        max_val = max(val, max_val)
+    return max_val
 
 ## ------------------------ General utility fns -----------------------------------
 
@@ -1274,9 +1326,9 @@ def _fas(a, inds, rhs, add=False):
                 indx_tups = list(_itertools.product(*b))
                 inds = tuple(zip(*indx_tups))  # un-zips to one list per dim
                 if add:
-                    a[inds] += rhs.flatten()
+                    a[inds] += rhs.ravel()
                 else:
-                    a[inds] = rhs.flatten()
+                    a[inds] = rhs.ravel()
 
             #OLD DEBUG: just a reference for building the C-implementation (this is very slow in python!)
             ##Alt: C-able impl
@@ -1370,104 +1422,6 @@ def _findx(a, inds, always_copy=False):
 
         a_inds = a_inds.squeeze(axis=tuple(squeeze))
         return a_inds
-
-
-def safe_dot(a, b):
-    """
-    Performs dot(a,b) correctly when neither, either, or both arguments are sparse matrices.
-
-    Parameters
-    ----------
-    a : numpy.ndarray or scipy.sparse matrix.
-        First matrix.
-
-    b : numpy.ndarray or scipy.sparse matrix.
-        Second matrix.
-
-    Returns
-    -------
-    numpy.ndarray or scipy.sparse matrix
-    """
-    if _sps.issparse(a):
-        return a.dot(b)  # sparseMx.dot works for both sparse and dense args
-    elif _sps.issparse(b):
-        # to return a sparse mx even when a is dense (asymmetric behavior):
-        # --> return _sps.csr_matrix(a).dot(b) # numpyMx.dot can't handle sparse argument
-        return _np.dot(a, b.toarray())
-    else:
-        return _np.dot(a, b)
-
-
-def safe_real(a, inplace=False, check=False):
-    """
-    Get the real-part of `a`, where `a` can be either a dense array or a sparse matrix.
-
-    Parameters
-    ----------
-    a : numpy.ndarray or scipy.sparse matrix.
-        Array to take real part of.
-
-    inplace : bool, optional
-        Whether this operation should be done in-place.
-
-    check : bool, optional
-        If True, raise a `ValueError` if `a` has a nonzero imaginary part.
-
-    Returns
-    -------
-    numpy.ndarray or scipy.sparse matrix
-    """
-    if check:
-        assert(safe_norm(a, 'imag') < 1e-6), "Check failed: taking real-part of matrix w/nonzero imaginary part"
-    if _sps.issparse(a):
-        if _sps.isspmatrix_csr(a):
-            if inplace:
-                ret = _sps.csr_matrix((_np.real(a.data), a.indices, a.indptr), shape=a.shape, dtype='d')
-            else:  # copy
-                ret = _sps.csr_matrix((_np.real(a.data).copy(), a.indices.copy(),
-                                       a.indptr.copy()), shape=a.shape, dtype='d')
-            ret.eliminate_zeros()
-            return ret
-        else:
-            raise NotImplementedError("safe_real() doesn't work with %s matrices yet" % str(type(a)))
-    else:
-        return _np.real(a)
-
-
-def safe_imag(a, inplace=False, check=False):
-    """
-    Get the imaginary-part of `a`, where `a` can be either a dense array or a sparse matrix.
-
-    Parameters
-    ----------
-    a : numpy.ndarray or scipy.sparse matrix.
-        Array to take imaginary part of.
-
-    inplace : bool, optional
-        Whether this operation should be done in-place.
-
-    check : bool, optional
-        If True, raise a `ValueError` if `a` has a nonzero real part.
-
-    Returns
-    -------
-    numpy.ndarray or scipy.sparse matrix
-    """
-    if check:
-        assert(safe_norm(a, 'real') < 1e-6), "Check failed: taking imag-part of matrix w/nonzero real part"
-    if _sps.issparse(a):
-        if _sps.isspmatrix_csr(a):
-            if inplace:
-                ret = _sps.csr_matrix((_np.imag(a.data), a.indices, a.indptr), shape=a.shape, dtype='d')
-            else:  # copy
-                ret = _sps.csr_matrix((_np.imag(a.data).copy(), a.indices.copy(),
-                                       a.indptr.copy()), shape=a.shape, dtype='d')
-            ret.eliminate_zeros()
-            return ret
-        else:
-            raise NotImplementedError("safe_real() doesn't work with %s matrices yet" % str(type(a)))
-    else:
-        return _np.imag(a)
 
 
 def safe_norm(a, part=None):
@@ -2044,7 +1998,7 @@ def to_unitary(scaled_unitary):
     unitary : ndarray
         Such that `scale * unitary == scaled_unitary`.
     """
-    scaled_identity = _np.dot(scaled_unitary, _np.conjugate(scaled_unitary.T))
+    scaled_identity = gram_matrix(scaled_unitary, adjoint=True)
     scale = _np.sqrt(scaled_identity[0, 0])
     assert(_np.allclose(scaled_identity / (scale**2), _np.identity(scaled_identity.shape[0], 'd'))), \
         "Given `scaled_unitary` does not appear to be a scaled unitary matrix!"
@@ -2243,30 +2197,6 @@ def project_onto_antikite(mx, kite):
     return mx
 
 
-def remove_dependent_cols(mx, tol=1e-7):
-    """
-    Removes the linearly dependent columns of a matrix.
-
-    Parameters
-    ----------
-    mx : numpy.ndarray
-        The input matrix
-
-    Returns
-    -------
-        A linearly independent subset of the columns of `mx`.
-    """
-    last_rank = 0; cols_to_remove = []
-    for j in range(mx.shape[1]):
-        rnk = _np.linalg.matrix_rank(mx[:, 0:j + 1], tol)
-        if rnk == last_rank:
-            cols_to_remove.append(j)
-        else:
-            last_rank = rnk
-    #print("Removing %d cols" % len(cols_to_remove))
-    return _np.delete(mx, cols_to_remove, axis=1)
-
-
 def intersection_space(space1, space2, tol=1e-7, use_nice_nullspace=False):
     """
     TODO: docstring
@@ -2282,7 +2212,8 @@ def union_space(space1, space2, tol=1e-7):
     TODO: docstring
     """
     VW = _np.concatenate((space1, space2), axis=1)
-    return remove_dependent_cols(VW, tol)
+    indep_cols = independent_columns(VW, None, tol)
+    return VW[:, indep_cols]
 
 
 #UNUSED

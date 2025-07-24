@@ -170,11 +170,9 @@ class POVMEffect(_modelmember.ModelMember):
         float
         """
         vec = self.to_dense()
-        if transform is None:
-            return _ot.residuals(vec, other_spam_vec.to_dense())
-        else:
-            return _ot.residuals(_np.dot(_np.transpose(transform),
-                                         vec), other_spam_vec.to_dense())
+        if transform is not None:
+            vec = transform.T @ vec
+        return (vec - other_spam_vec.to_dense()).ravel()
 
     def transform_inplace(self, s):
         """

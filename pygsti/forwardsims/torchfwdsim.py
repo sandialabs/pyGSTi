@@ -75,8 +75,9 @@ class StatelessModel:
     def __init__(self, model: ExplicitOpModel, layout: CircuitOutcomeProbabilityArrayLayout):
         circuits = []
         self.outcome_probs_dim = 0
+        #TODO: Refactor this to use the bulk_expand_instruments_and_separate_povm codepath
         for _, circuit, outcomes in layout.iter_unique_circuits():
-            expanded_circuits = circuit.expand_instruments_and_separate_povm(model, outcomes)
+            expanded_circuits = model.expand_instruments_and_separate_povm(circuit, outcomes)
             if len(expanded_circuits) > 1:
                 raise NotImplementedError("I don't know what to do with this.")
             spc = next(iter(expanded_circuits))
@@ -108,11 +109,11 @@ class StatelessModel:
             param_type = type(obj)
             param_data = (lbl, param_type) + (obj.stateless_data(),)
             self.param_metadata.append(param_data)
-        self.params_dim = None 
-        # ^ That's set in get_free_params.
 
+        self.params_dim = None 
+        self.free_param_sizes = None
         self.default_to_reverse_ad = None
-        # ^ That'll be set to a boolean the next time that get_free_params is called.
+        # ^ Those are set in get_free_params
         return
     
     def get_free_params(self, model: ExplicitOpModel) -> Tuple[torch.Tensor]:
@@ -124,6 +125,7 @@ class StatelessModel:
         to StatelessModel.__init__(...). We raise an error if an inconsistency is detected.
         """
         free_params = []
+        free_param_sizes = []
         prev_idx = 0
         for i, (lbl, obj) in enumerate(model._iter_parameterized_objs()):
             gpind = obj.gpindices_as_array()
@@ -145,6 +147,8 @@ class StatelessModel:
                 """
                 raise ValueError(message)
             free_params.append(vec)
+            free_param_sizes.append(vec_size)
+        self.free_param_sizes = free_param_sizes
         self.params_dim = prev_idx
         self.default_to_reverse_ad = self.outcome_probs_dim < self.params_dim
         return tuple(free_params)
@@ -158,7 +162,7 @@ class StatelessModel:
         ----
         If you want to use the returned dict to build a PyTorch Tensor that supports the 
         .backward() method, then you need to make sure that fp.requires_grad is True for all
-        fp in free_params. This can be done by calling fp._requires_grad(True) before calling
+        fp in free_params. This can be done by calling fp.requires_grad_(True) before calling
         this function.
         """
         # The closest analog to this function in tgst is the first couple lines in 
@@ -214,7 +218,7 @@ class StatelessModel:
         """
         if enable_backward:
             for fp in free_params:
-                fp._requires_grad(True)
+                fp.requires_grad_(True)
 
         torch_bases = dict()
         for i, val in enumerate(free_params):
@@ -233,6 +237,23 @@ class StatelessModel:
             probs.append(circuit_probs)
         probs = torch.concat(probs)
         return probs
+    
+    def circuit_probs_from_concat_free_params(self, concat_freeparams, enable_backward=False):
+        # concat_freeparams is a Tensor of size self.params_dim
+        # we want to split it into a tuple of Tensors
+        if enable_backward:
+            concat_freeparams.require_grad_(True)
+        split_freeparams = []
+        start = 0
+        for fp_size in self.free_param_sizes:
+            stop = start + fp_size
+            split_freeparams.append(concat_freeparams[start:stop])
+            start = stop
+        split_freeparams = tuple(split_freeparams)
+        # Note: if enabled_backward was True, then the components of split_freeparams
+        # will have inherited the requires_grad==True condition. So we always use
+        # enable_backward=False in the function call below.
+        return self.circuit_probs_from_free_params(self, *split_freeparams, enable_backward=False)
 
 
 class TorchForwardSimulator(ForwardSimulator):

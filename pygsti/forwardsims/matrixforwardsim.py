@@ -29,6 +29,8 @@ from pygsti.tools import mpitools as _mpit
 from pygsti.tools import sharedmemtools as _smt
 from pygsti.tools import slicetools as _slct
 from pygsti.tools.matrixtools import _fas
+from pygsti.tools import listtools as _lt
+from pygsti.circuits import CircuitList as _CircuitList
 
 _dummy_profiler = _DummyProfiler()
 
@@ -132,12 +134,18 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
             obj_wrtFilter = []  # values = object-local param indices
             relevant_gpindices = []  # indices into original wrt_filter'd indices
 
-            gpindices = obj.gpindices_as_array()
+            if isinstance(obj.gpindices, slice):
+                gpindices_list = _slct.indices(obj.gpindices)
+            elif obj.gpindices is None:
+                gpindices_list = []
+            else:
+                gpindices_list = list(obj.gpindices)
+            gpindices_set = set(gpindices_list)
 
             for ii, i in enumerate(wrt_filter):
-                if i in gpindices:
+                if i in gpindices_set:
                     relevant_gpindices.append(ii)
-                    obj_wrtFilter.append(list(gpindices).index(i))
+                    obj_wrtFilter.append(gpindices_list.index(i))
             relevant_gpindices = _np.array(relevant_gpindices, _np.int64)
             if len(relevant_gpindices) == 1:
                 #Don't return a length-1 list, as this doesn't index numpy arrays
@@ -590,7 +598,7 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
         use_scaling = False  # Hardcoded for now
         assert(time is None), "MatrixForwardSimulator cannot be used to simulate time-dependent circuits"
 
-        expanded_circuit_outcomes = circuit.expand_instruments_and_separate_povm(self.model, outcomes)
+        expanded_circuit_outcomes = self.model.expand_instruments_and_separate_povm(circuit, outcomes)
         outcome_to_index = {outc: i for i, outc in enumerate(outcomes)}
         for spc, spc_outcomes in expanded_circuit_outcomes.items():  # spc is a SeparatePOVMCircuit
             indices = [outcome_to_index[o] for o in spc_outcomes]
@@ -1025,7 +1033,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         return hProdCache
 
     def create_layout(self, circuits, dataset=None, resource_alloc=None, array_types=('E',),
-                      derivative_dimensions=None, verbosity=0):
+                      derivative_dimensions=None, verbosity=0, layout_creation_circuit_cache= None):
         """
         Constructs an circuit-outcome-probability-array (COPA) layout for a list of circuits.
 
@@ -1056,6 +1064,12 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             Determines how much output to send to stdout.  0 means no output, higher
             integers mean more output.
 
+        layout_creation_circuit_cache : dict, optional (default None)
+            A precomputed dictionary serving as a cache for completed
+            circuits. I.e. circuits with prep labels and POVM labels appended.
+            Along with other useful pre-computed circuit structures used in layout
+            creation.
+            
         Returns
         -------
         MatrixCOPALayout
@@ -1105,7 +1119,8 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         assert(_np.prod((na,) + npp) <= nprocs), "Processor grid size exceeds available processors!"
 
         layout = _MatrixCOPALayout(circuits, self.model, dataset, natoms,
-                                   na, npp, param_dimensions, param_blk_sizes, resource_alloc, verbosity)
+                                   na, npp, param_dimensions, param_blk_sizes, resource_alloc, verbosity, 
+                                   layout_creation_circuit_cache=layout_creation_circuit_cache)
 
         if mem_limit is not None:
             loc_nparams1 = num_params / npp[0] if len(npp) > 0 else 0
@@ -1147,6 +1162,46 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
                 printer.log("   Esimated memory required = %.1fGB" % (mem_estimate * GB))
 
         return layout
+    
+    @staticmethod
+    def create_copa_layout_circuit_cache(circuits, model, dataset=None):
+        """
+        Helper function for pre-computing/pre-processing circuits structures
+        used in matrix layout creation.
+        """
+        cache = dict()
+        completed_circuits, split_circuits = model.complete_circuits(circuits, return_split=True)
+
+        cache['completed_circuits'] = {ckt: comp_ckt for ckt, comp_ckt in zip(circuits, completed_circuits)}
+        cache['split_circuits'] = {ckt: split_ckt for ckt, split_ckt in zip(circuits, split_circuits)}
+
+        if dataset is not None:
+            aliases = circuits.op_label_aliases if isinstance(circuits, _CircuitList) else None
+            ds_circuits = _lt.apply_aliases_to_circuits(circuits, aliases)
+            unique_outcomes_list = []
+            for ckt in ds_circuits:
+                ds_row = dataset[ckt]
+                unique_outcomes_list.append(ds_row.unique_outcomes if ds_row is not None else None)
+        else:
+            unique_outcomes_list = [None]*len(circuits)
+
+        expanded_circuit_outcome_list = model.bulk_expand_instruments_and_separate_povm(circuits, 
+                                                                                        observed_outcomes_list = unique_outcomes_list, 
+                                                                                        split_circuits = split_circuits)
+        
+        expanded_circuit_cache = {ckt: expanded_ckt for ckt,expanded_ckt in zip(circuits, expanded_circuit_outcome_list)}
+                    
+        cache['expanded_and_separated_circuits'] = expanded_circuit_cache
+
+        expanded_subcircuits_no_spam_cache = dict()
+        for expc_outcomes in cache['expanded_and_separated_circuits'].values():
+            for sep_povm_c, _ in expc_outcomes.items():  # for each expanded cir from unique_i-th circuit
+                exp_nospam_c = sep_povm_c.circuit_without_povm[1:] 
+                expanded_subcircuits_no_spam_cache[exp_nospam_c] = exp_nospam_c.expand_subcircuits()
+
+        cache['expanded_subcircuits_no_spam'] = expanded_subcircuits_no_spam_cache
+
+        return cache
 
     def _scale_exp(self, scale_exps):
         old_err = _np.seterr(over='ignore')
@@ -1194,7 +1249,20 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         # dp_dOps[i,j] = dot( e, dot( d_gs, rho ) )[0,i,j,0]
         # dp_dOps      = squeeze( dot( e, dot( d_gs, rho ) ), axis=(0,3))
         old_err2 = _np.seterr(invalid='ignore', over='ignore')
-        dp_dOps = _np.squeeze(_np.dot(e, _np.dot(d_gs, rho)), axis=(0, 3)) * scale_vals[:, None]
+        #print(f'{d_gs.shape=}')
+        #print(f'{e.shape=}')
+        #print(f'{rho.shape=}')
+        #print(f'{_np.dot(d_gs, rho).shape=}')
+        #print(f'{_np.dot(e, _np.dot(d_gs, rho)).shape=}')
+        #print(f'{_np.squeeze(_np.dot(e, _np.dot(d_gs, rho)), axis=(0, 3)).shape=}')
+        #
+        #print(f"{_np.einsum('hk,ijkl,lm->ij', e, d_gs, rho).shape=}")
+        #
+        #print(f"{_np.linalg.norm(_np.squeeze(_np.dot(e, _np.dot(d_gs, rho))) - _np.einsum('hk,ijkl,lm->ij', e, d_gs, rho))=}")
+        path = _np.einsum_path('hk,ijkl,lm->ij', e, d_gs, rho, optimize='optimal')
+        #print(path[1])
+        dp_dOps = _np.einsum('hk,ijkl,lm->ij', e, d_gs, rho, optimize=path[0]) * scale_vals[:, None]
+        #dp_dOps = _np.squeeze(_np.dot(e, _np.dot(d_gs, rho)), axis=(0, 3)) * scale_vals[:, None]
         _np.seterr(**old_err2)
         # may overflow, but OK ; shape == (len(circuit_list), nDerivCols)
         # may also give invalid value due to scale_vals being inf and dot-prod being 0. In
@@ -1234,7 +1302,6 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             # dp_drhos[i,J0+J] = sum_kl e[0,k] gs[i,k,l] drhoP[l,J]
             # dp_drhos[i,J0+J] = dot(e, gs, drhoP)[0,i,J]
             # dp_drhos[:,J0+J] = squeeze(dot(e, gs, drhoP),axis=(0,))[:,J]
-
             dp_drhos = _np.zeros((nCircuits, nOpDerivCols))
             _fas(dp_drhos, [None, rho_gpindices],
                  _np.squeeze(_np.dot(_np.dot(e, gs),

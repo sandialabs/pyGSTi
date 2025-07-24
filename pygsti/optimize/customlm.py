@@ -10,6 +10,7 @@ Custom implementation of the Levenberg-Marquardt Algorithm
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import os as _os
 import signal as _signal
 import time as _time
 
@@ -25,7 +26,10 @@ from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySeri
 # from scipy.optimize import OptimizeResult as _optResult
 
 #Make sure SIGINT will generate a KeyboardInterrupt (even if we're launched in the background)
-_signal.signal(_signal.SIGINT, _signal.default_int_handler)
+#This may be problematic for multithreaded parallelism above pyGSTi, e.g. Dask,
+#so this can be turned off by setting the PYGSTI_NO_CUSTOMLM_SIGINT environment variable
+if 'PYGSTI_NO_CUSTOMLM_SIGINT' not in _os.environ:
+    _signal.signal(_signal.SIGINT, _signal.default_int_handler)
 
 #constants
 _MACH_PRECISION = 1e-12

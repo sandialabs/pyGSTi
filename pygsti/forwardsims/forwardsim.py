@@ -323,7 +323,8 @@ class ForwardSimulator(_NicelySerializable):
     # ---------------------------------------------------------------------------
 
     def create_layout(self, circuits, dataset=None, resource_alloc=None,
-                      array_types=(), derivative_dimensions=None, verbosity=0):
+                      array_types=(), derivative_dimensions=None, verbosity=0,
+                      layout_creation_circuit_cache = None):
         """
         Constructs an circuit-outcome-probability-array (COPA) layout for `circuits` and `dataset`.
 
@@ -364,6 +365,8 @@ class ForwardSimulator(_NicelySerializable):
         verbosity : int or VerbosityPrinter
             Determines how much output to send to stdout.  0 means no output, higher
             integers mean more output.
+        
+        
 
         Returns
         -------
@@ -378,6 +381,15 @@ class ForwardSimulator(_NicelySerializable):
                 derivative_dimensions = tuple()
         return _CircuitOutcomeProbabilityArrayLayout.create_from(circuits, self.model, dataset, derivative_dimensions,
                                                                  resource_alloc=resource_alloc)
+    
+    @staticmethod
+    def create_copa_layout_circuit_cache(circuits, model, dataset=None):
+        """
+        Helper function for pre-computing/pre-processing circuits structures
+        used in matrix layout creation.
+        """
+        msg = "Not currently implemented for this forward simulator class."
+        raise NotImplementedError(msg)
 
     def bulk_probs(self, circuits, clip_to=None, resource_alloc=None, smartc=None):
         """

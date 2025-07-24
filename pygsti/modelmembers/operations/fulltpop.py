@@ -131,7 +131,7 @@ class FullTPOp(_DenseOperator, _Torchable):
         numpy array
             The operation parameters as a 1D array with length num_params().
         """
-        return self._ptr.flatten()[self.dim:]  # .real in case of complex matrices?
+        return self._ptr.ravel()[self.dim:].copy()  # .real in case of complex matrices?
 
     def from_vector(self, v, close=False, dirty_value=True):
         """
