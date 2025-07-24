@@ -801,13 +801,12 @@ class Circuit(object):
         self._str = value
 
     def __hash__(self):
-        return hash(self.tup)
-        # if not self._static:
-        #     _warnings.warn(("Editable circuit is being converted to read-only"
-        #                     " mode in order to hash it.  You should call"
-        #                     " circuit.done_editing() beforehand."))
-        #     self.done_editing()
-        # return self._hash
+        if not self._static:
+            _warnings.warn(("Editable circuit is being converted to read-only"
+                            " mode in order to hash it.  You should call"
+                            " circuit.done_editing() beforehand."))
+            self.done_editing()
+        return self._hash
 
     def __len__(self):
         return len(self._labels)
@@ -980,10 +979,6 @@ class Circuit(object):
                 return False
             else:
                 return self.tup == x.tup
-                # if self._static and x._static:
-                #     return self._hash == x._hash
-                # else:
-                #     return self.tup == x.tup
         elif x is None: 
             return False
         else:
