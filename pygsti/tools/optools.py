@@ -269,11 +269,6 @@ def tracedist(a, b):
     """
     return 0.5 * tracenorm(a - b)
 
-"""
-TODO: make versions of diamonddist that compute distance to leakage-free or seepage-free CPTP operators.
-Use _sdps.diamond_norm_canon.
-"""
-
 
 def diamonddist(a, b, mx_basis='pp', return_x=False, return_all_vars=False):
     """
