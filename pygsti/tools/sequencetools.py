@@ -1,6 +1,6 @@
 from typing import Sequence, Any, List, Literal, Tuple, MutableSequence
 import numpy as _np
-
+from tqdm import tqdm
 
 #region Longest Common Subsequence
 
@@ -52,7 +52,9 @@ def conduct_one_round_of_lcs_simplification(sequences: MutableSequence[MutableSe
     if table_data_and_sequences:
         table, external_sequences = table_data_and_sequences
     else:
-        table, external_sequences = _compute_lcs_for_every_pair_of_sequences(sequences)
+        table_cache = _np.zeros((len(sequences), len(sequences)))
+        table, external_sequences = _compute_lcs_for_every_pair_of_sequences(sequences, table_cache,
+                                                None, set(_np.arange(len(sequences))))
 
     if internal_tables_and_sequences:
         internal_subtable, internal_subsequences = internal_tables_and_sequences
@@ -98,6 +100,73 @@ def conduct_one_round_of_lcs_simplification(sequences: MutableSequence[MutableSe
 
     # Handle the updates.
     old_cache_num = cache_num
+    dirty_inds = set()
+    for seq, cdict in all_subsequences_to_replace.items():
+        w = len(seq)
+        update_made = 0
+        if  w > 1 or (not isinstance(seq[0], int)):
+            # We have reached an item which we can just compute.
+            for cir_ind in cdict:
+                my_cir = updated_sequences[cir_ind]
+                sp = 0
+                while sp+w <= len(my_cir):
+                    if list(my_cir[sp: sp+w]) == list(seq):
+                        my_cir[sp: sp + w] = [cache_num]
+                        dirty_inds.add(cir_ind)
+                        update_made = 1
+
+                    sp += 1
+                updated_sequences[cir_ind] = my_cir
+
+                cache_struct[cir_ind] = updated_sequences[cir_ind]
+
+            if update_made:
+                # There may have been multiple overlapping subsequences in the same sequence.
+                # (e.g. QWEQWEQWERQWE has QWE, WEQ, and EQW all happen and all are length 3 subsequences.)
+                updated_sequences.append(list(seq))
+                cache_struct[cache_num] = updated_sequences[cache_num]
+
+                cache_num += 1
+
+    sequences_introduced_in_this_round = _np.arange(cache_num - old_cache_num) + old_cache_num
+
+    dirty_inds = dirty_inds.union(set(sequences_introduced_in_this_round))
+
+    return updated_sequences, cache_num, cache_struct, sequences_introduced_in_this_round, table, external_sequences, dirty_inds
+
+def simplify_internal_first_one_round(sequences: MutableSequence[MutableSequence[Any]],
+            internal_tables_and_sequences, starting_cache_num, cache_struct):
+    """
+    Simplify the set of sequences by contracting the set of longest common subsequences.
+
+    Will update the list of sequences and the cache struct to hold the longest common subsequences as new sequences.
+    
+    Cache number will decrement so ensure that cache_struct can handle positives and negatives.
+    """
+
+    if internal_tables_and_sequences:
+        internal_subtable, internal_subsequences = internal_tables_and_sequences
+    else:
+        internal_subtable, internal_subsequences = create_tables_for_internal_LCS(sequences)
+
+    best_internal_index = _np.where(internal_subtable == _np.max(internal_subtable))
+    updated_sequences = [seq for seq in sequences]
+    cache_num = starting_cache_num
+
+    # Build sequence dict
+    all_subsequences_to_replace: dict[tuple, dict[int, List[int]]] = {}
+
+    # We are only going to replace if this was the longest substring.
+    for cir_ind in best_internal_index[0]:
+        for seq in internal_subsequences[cir_ind]:
+            key = tuple(seq)
+            if key in all_subsequences_to_replace:
+                all_subsequences_to_replace[key][cir_ind] = internal_subsequences[cir_ind][seq]
+            else:
+                all_subsequences_to_replace[key] = {cir_ind: internal_subsequences[cir_ind][seq]}
+
+    # Handle the updates.
+    old_cache_num = cache_num
     for seq, cdict in all_subsequences_to_replace.items():
         w = len(seq)
         update_made = 0
@@ -122,11 +191,12 @@ def conduct_one_round_of_lcs_simplification(sequences: MutableSequence[MutableSe
                 updated_sequences.append(list(seq))
                 cache_struct[cache_num] = updated_sequences[cache_num]
 
-                cache_num += 1
+                cache_num += -1
 
     sequences_introduced_in_this_round = _np.arange(cache_num - old_cache_num) + old_cache_num
 
     return updated_sequences, cache_num, cache_struct, sequences_introduced_in_this_round
+
 
 
 def _find_starting_positions_using_dp_table(
@@ -162,32 +232,43 @@ def _find_starting_positions_using_dp_table(
             return i, j, dp_table[0,0]
     return None, None, None
 
+def _lookup_in_sequence_cache(seq_cache: dict[tuple[int, int], tuple], i: int, j: int) -> tuple:
 
-def _compute_lcs_for_every_pair_of_sequences(sequences: MutableSequence[Any]):
+    if seq_cache:
+        return seq_cache[(i, j)]
+    return (None, None, None)
+
+
+def _compute_lcs_for_every_pair_of_sequences(sequences: MutableSequence[Any],
+                                             table_cache: _np.ndarray,
+                                             seq_cache: dict,
+                                             dirty_inds: set,
+                                             expected_best: int):
     """
     Computes the LCS for every pair of sequences A,B in sequences
     """
     best_subsequences = {}
     best_lengths = _np.zeros((len(sequences), len(sequences)))
-    curr_best = 0
-    for i in range(len(sequences)-1, -1, -1): # Lets do this in reverse order
+    curr_best = 2  # We want only subsequences that have at least two characters matching.
+    for i in tqdm(range(len(sequences)-1, -1, -1),
+                  f"LCS_circuits Expected Val {expected_best}: ", disable = True): # Lets do this in reverse order
         cir0 = sequences[i]
-        if len(cir0) >= curr_best:
-            # Could be the best.
-            for j in range(i-1, -1, -1):
-                cir1 = sequences[j]
-                if len(cir1) >= curr_best:
+        for j in range(i-1, -1, -1):
+            cir1 = sequences[j]
+            if i in dirty_inds or j in dirty_inds:
+                if len(cir0) < curr_best or len(cir1) < curr_best:
+                    # Mark pair as dirty to be computed later when it may be the longest subsequence.
+                    best_lengths[i,j] = -1
+                    best_subsequences[(i,j)] = (None, None, None)
+                else:
                     table = _lcs_dp_version(cir0, cir1)
                     best_lengths[i,j] = table[0,0]
                     best_subsequences[(i,j)] = _find_starting_positions_using_dp_table(table)
                     curr_best = max(best_lengths[i,j], curr_best)
-                else:
-                    best_lengths[i,j] = -1
-                    best_subsequences[(i,j)] = (None, None, None)
-        else:
-            # Skipped because cannot be the best yet.
-            best_lengths[i,j] = -1
-            best_subsequences[(i,j)] = (None, None, None)
+            else:
+                best_lengths[i,j] = table_cache[i,j]
+                best_subsequences[(i,j)] = _lookup_in_sequence_cache(seq_cache, i, j)
+
     return best_lengths, best_subsequences
 
 

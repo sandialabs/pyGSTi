@@ -23,7 +23,12 @@ from pygsti.baseobjs.label import LabelTupTup, Label, LabelTup
 from pygsti.modelmembers.operations import create_from_superop_mx
 from pygsti.modelmembers.operations import LinearOperator as _LinearOperator
 import itertools
-from pygsti.tools.sequencetools import conduct_one_round_of_lcs_simplification, _compute_lcs_for_every_pair_of_sequences, create_tables_for_internal_LCS
+from pygsti.tools.sequencetools import (
+    conduct_one_round_of_lcs_simplification,
+    _compute_lcs_for_every_pair_of_sequences,
+    create_tables_for_internal_LCS,
+    simplify_internal_first_one_round
+)
 
 from pygsti.circuits.split_circuits_into_lanes import compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit, compute_subcircuits
 import time
@@ -581,9 +586,6 @@ class EvalTreeBasedUponLongestCommonSubstring():
 
         self.circuit_to_save_location = {tuple(cir): i for i,cir in enumerate(circuit_list)}
 
-        external_matches = _compute_lcs_for_every_pair_of_sequences(circuit_list)
-        
-        best_external_match = _np.max(external_matches[0])
         self.orig_circuits = {i: circuit_list[i] for i in range(len(circuit_list))}
         self.qubit_start_point = qubit_starting_loc
 
@@ -591,7 +593,7 @@ class EvalTreeBasedUponLongestCommonSubstring():
         internal_matches = create_tables_for_internal_LCS(circuit_list)
         best_internal_match = _np.max(internal_matches[0])
 
-        max_rounds = int(max(best_external_match,best_internal_match))
+        max_rounds = best_internal_match
 
         C = len(circuit_list)
         sequence_intro = {0: _np.arange(C)}
@@ -601,23 +603,54 @@ class EvalTreeBasedUponLongestCommonSubstring():
 
         new_circuit_list = [cir for cir in circuit_list] # Get a deep copy since we will modify it here.
 
+        # Let's try simplifying internally first.
+        self.internal_first = True
+        if self.internal_first:
+            i = 0
+            cache_pos = -1
+            while max_rounds > 1:
+
+                tmp = simplify_internal_first_one_round(new_circuit_list, 
+                                                        internal_matches,
+                                                        cache_pos,
+                                                        cache)
+                new_circuit_list, cache_pos, cache, sequence_intro[i-1] = tmp
+                i -= 1
+                internal_matches = create_tables_for_internal_LCS(new_circuit_list)
+
+                max_rounds = _np.max(internal_matches[0])
+
+        external_matches = _compute_lcs_for_every_pair_of_sequences(new_circuit_list,
+                                                                    None,
+                                                                    None,
+                                                                    set(_np.arange(len(new_circuit_list))),
+                                                                    max([len(cir) for cir in new_circuit_list])-1)
+        
+        best_external_match = _np.max(external_matches[0])
+
+        max_rounds = int(max(best_external_match,best_internal_match))
         i = 0
+        cache_pos = len(new_circuit_list)
         while max_rounds > 1:
-            new_circuit_list, cache_pos, cache, sequence_intro[i+1] = conduct_one_round_of_lcs_simplification(new_circuit_list, external_matches, internal_matches, cache_pos, cache)
+            tmp = conduct_one_round_of_lcs_simplification(new_circuit_list, external_matches,
+                                                          internal_matches, cache_pos, cache)
+            new_circuit_list, cache_pos, cache, sequence_intro[i+1], ext_table, external_sequences, dirty_inds = tmp
             i += 1
-            external_matches = _compute_lcs_for_every_pair_of_sequences(new_circuit_list)
+            external_matches = _compute_lcs_for_every_pair_of_sequences(new_circuit_list,
+                                                                        ext_table,
+                                                                        external_sequences,
+                                                                        dirty_inds, max_rounds)
 
             if best_internal_match < best_external_match and best_external_match < 2 * best_internal_match:
                 # We are not going to get a better internal match.
                 pass
-            else:
+            elif not self.internal_first:
                 internal_matches = create_tables_for_internal_LCS(new_circuit_list)
 
             best_external_match = _np.max(external_matches[0])
             best_internal_match = _np.max(internal_matches[0])
 
             max_rounds = int(max(best_external_match,best_internal_match))
-            print("Num rounds remaining ", max_rounds)
 
         self.cache = cache
         self.num_circuits = C
@@ -678,6 +711,20 @@ class EvalTreeBasedUponLongestCommonSubstring():
 
         round_keys = sorted(_np.unique(list(self.sequence_intro.keys())))[::-1]
         saved: dict[int | LabelTupTup, _np.ndarray] = {}
+
+        if self.internal_first:
+
+            round_keys = _np.unique(list(self.sequence_intro.keys()))
+
+            pos_inds = np.where(round_keys >=0)
+            pos_keys = round_keys[pos_inds]
+            pos_keys = sorted(pos_keys)[::-1]
+
+            neg_inds = np.where(round_keys < 0)
+            neg_keys = round_keys[neg_inds]
+            neg_keys = sorted(neg_keys)
+            assert neg_keys[0] < neg_keys[1]
+            round_keys = neg_keys + pos_keys
         
         for key in round_keys:
             for cind in self.sequence_intro[key]:
