@@ -498,8 +498,8 @@ def entanglement_fidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
     
     #if the tp flag isn't set we'll calculate whether it is true here
     if is_tp is None:
-        def is_tp_fn(x): return _np.isclose(x[0, 0], 1.0) and all(
-        [_np.isclose(x[0, i], 0) for i in range(1,d2)])
+        def is_tp_fn(x):
+            return _np.isclose(x[0, 0], 1.0) and _np.allclose(x[0, 1:d2], 0)
         
         is_tp= (is_tp_fn(a) and is_tp_fn(b))
    
@@ -973,9 +973,14 @@ def povm_fidelity(model, target_model, povmlbl):
     -------
     float
     """
-    povm_mx = compute_povm_map(model, povmlbl)
-    target_povm_mx = compute_povm_map(target_model, povmlbl)
-    return entanglement_fidelity(povm_mx, target_povm_mx, target_model.basis)
+    try:
+        povm_mx = compute_povm_map(model, povmlbl)
+        target_povm_mx = compute_povm_map(target_model, povmlbl)
+        return entanglement_fidelity(povm_mx, target_povm_mx, target_model.basis)
+    except AssertionError as e:
+        se = str(e)
+        assert '`dim` must be a perfect square' in se, se
+        return _np.nan
 
 
 def povm_jtracedist(model, target_model, povmlbl):
@@ -997,9 +1002,14 @@ def povm_jtracedist(model, target_model, povmlbl):
     -------
     float
     """
-    povm_mx = compute_povm_map(model, povmlbl)
-    target_povm_mx = compute_povm_map(target_model, povmlbl)
-    return jtracedist(povm_mx, target_povm_mx, target_model.basis)
+    try:
+        povm_mx = compute_povm_map(model, povmlbl)
+        target_povm_mx = compute_povm_map(target_model, povmlbl)
+        return jtracedist(povm_mx, target_povm_mx, target_model.basis)
+    except AssertionError as e:
+        se = str(e)
+        assert '`dim` must be a perfect square' in se, se
+        return _np.nan
 
 
 def povm_diamonddist(model, target_model, povmlbl):
@@ -1785,13 +1795,15 @@ def extract_elementary_errorgen_coefficients(errorgen, elementary_errorgen_label
     """
     # the same as decompose_errorgen but given a dict/list of elementary errorgens directly instead of a basis and type
     if isinstance(errorgen_basis, _Basis):
-        errorgen_std = _bt.change_basis(errorgen, errorgen_basis, errorgen_basis.create_equivalent('std'))
+        std_basis = errorgen_basis.create_equivalent('std')
+        errorgen_std = _bt.change_basis(errorgen, errorgen_basis, std_basis)
 
-        #expand operation matrix so it acts on entire space of dmDim x dmDim density matrices
-        errorgen_std = _bt.resize_std_mx(errorgen_std, 'expand', errorgen_basis.create_equivalent('std'),
-                                         errorgen_basis.create_simple_equivalent('std'))
+        # Expand operation matrix so it acts on entire space of dmDim x dmDim density matrices
+        expanded_std_basis = errorgen_basis.create_simple_equivalent('std')
+        errorgen_std = _bt.resize_std_mx(errorgen_std, 'expand', std_basis, expanded_std_basis)
     else:
         errorgen_std = _bt.change_basis(errorgen, errorgen_basis, "std")
+
     flat_errorgen_std = errorgen_std.toarray().ravel() if _sps.issparse(errorgen_std) else errorgen_std.ravel()
 
     d2 = errorgen_std.shape[0]
