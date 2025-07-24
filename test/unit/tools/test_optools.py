@@ -17,6 +17,9 @@ from pygsti.modelpacks.legacy import std2Q_XXYYII
 from ..util import BaseCase, needs_cvxpy
 
 
+SKIP_DIAMONDIST_ON_WIN = True
+
+
 def fake_minimize(fn):
     """Mock scipy.optimize.minimize in the underlying function call to reduce optimization overhead"""
     def side_effect(o, mx, **kwargs):

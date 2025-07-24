@@ -594,20 +594,6 @@ def _create_objective_fn(model, target_model, item_weights=None,
         dim = int(_np.sqrt(mxBasis.dim))
         if n_leak > 0:
             B = _tools.leading_dxd_submatrix_basis_vectors(dim - n_leak, dim, mxBasis)
-            """
-            ^ Need to do something else. 
-            
-              In a leakage-friendly basis the operation matrices can be partitioned as 
-                  [comp     , semileak1]
-                  [semileak2, fulleak  ].
-              Instead of projecting only on to comp, we want to keep everything
-              except fullleak. ... But I don't think we can implement that just by
-              pre-multiplying by a projector.
-            
-              I think this distinction might not be significant under certain idealized
-              assumptions, but small deviations from those conditions (which are certain
-              to happen in practice) might make it matter.
-            """
             P = B @ B.T.conj()
             if _np.linalg.norm(P.imag) > 1e-12:
                 raise ValueError()
@@ -647,18 +633,7 @@ def _create_objective_fn(model, target_model, item_weights=None,
                 """
                 Leakage-aware metric supported, per implementation in mdl.frobeniusdist.
                 Refer to how mdl.frobeniusdist handles the case when transform_mx_arg
-                is a tuple in order to understand how the leakage-aware metric is defined.
-                
-                  Idea: raise an error if mxBasis isn't leakage-friendly. 
-                      PROBLEM: if we're deep in the code then we end up needing to be
-                               working in a basis that has the identity matrix as its
-                               first element. The leakage-friendly basis doesn't even
-                               have the identity matrix as an element, let alone the first element
-                
-                  TODO: dig into function calls below and see where we can
-                        access the mxBasis object. (I'm sure we can.)
-                        Looks like it isn't accessible within ExplicitOpModelCalc objects.
-                        It's most definitely available in ExplicitOpModel.       
+                is a tuple in order to understand how the leakage-aware metric is defined.  
                 """
                 if "frobenius" in gates_metric:
                     if spam_metric == gates_metric:
