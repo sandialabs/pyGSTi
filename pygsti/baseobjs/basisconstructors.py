@@ -59,7 +59,6 @@ MAX_BASIS_MATRIX_DIM = 2**6
 
 
 def _check_dim(dim):
-    global MAX_BASIS_MATRIX_DIM
     if not isinstance(dim, _numbers.Integral):
         dim = max(dim)  # assume dim is a list/tuple of dims & just consider max
     if dim > MAX_BASIS_MATRIX_DIM:
