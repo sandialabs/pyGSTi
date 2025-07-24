@@ -15,7 +15,6 @@ from functools import partial, lru_cache
 import numpy as _np
 
 from pygsti.baseobjs.basisconstructors import _basis_constructor_dict
-# from ..baseobjs.basis import Basis, BuiltinBasis, DirectSumBasis
 from pygsti.baseobjs import basis as _basis
 
 
@@ -60,10 +59,9 @@ def leakage_friendly_basis_2plus1(return_subspace_basis=False):
             labels=["I", "X", "Y", "Z"]
     )
     return leakage_basis, subspace_basis
-    
 
 
-
+@lru_cache(maxsize=1)
 def basis_matrices(name_or_basis, dim, sparse=False):
     """
     Get the elements of the specifed basis-type which spans the density-matrix space given by `dim`.

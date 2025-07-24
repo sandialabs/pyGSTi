@@ -620,11 +620,6 @@ def leading_dxd_submatrix_basis_vectors(d: int, n: int, current_basis, return_la
     if, instead of starting with the objective function || (M1 - M2) v ||, we started with
     f((M1 - M2) v) and f satisfied the property that f(c v) >= f(v) whenever c is a scalar
     greater than or equal to one.
-
-    Interesting idea:
-        Set M2 = 0.
-        Use || (I - P) M1 P || as a metric for leakage.
-        Use || P M1 (I - P) || as a metric for seepage
     """
     assert d <= n
     current_basis = _pgb.Basis.cast(current_basis, dim=n**2)

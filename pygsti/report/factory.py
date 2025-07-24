@@ -1246,9 +1246,8 @@ def construct_standard_report(results, title="auto",
 
     advanced_options = advanced_options or {}
     n_leak = advanced_options.get('n_leak', 0)
-    # ^ Not sure if this is a good place to pass this parameter.
-    #   A better implementation would be to store this info in model.basis
-    #   (for the various models).
+    # ^ It would be preferable to store n_leak in a Basis object, or something similar.
+    #   We're using this for now since it's simple and gets the job done.
     linlogPercentile = advanced_options.get('linlog percentile', 5)
     nmthreshold = advanced_options.get('nmthreshold', DEFAULT_NONMARK_ERRBAR_THRESHOLD)
     embed_figures = advanced_options.get('embed_figures', True)
@@ -1394,9 +1393,6 @@ def construct_standard_report(results, title="auto",
         'show_unmodeled_error': bool('ShowUnmodeledError' in flags),
         'n_leak' : n_leak
     }
-    # ^ Not sure if this is a good place to pass n_leak.
-    #   A better implementation would be to store this info in model.basis
-    #   (for the various models).
 
     templates = dict(
         html='~standard_html_report',

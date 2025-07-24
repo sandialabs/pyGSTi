@@ -1177,7 +1177,6 @@ class DataSet(_MongoSerializable):
         # needed because name-only Labels don't hash the same as strings
         # so key lookups need to be done at least with tuples of Labels.
         circuit = _cir.Circuit.cast(circuit)
-        circuit._static = False
         #Note: cirIndex value is either an int (non-static) or a slice (static)
         cirIndex = self.cirIndex[circuit]
         repData = self.repData[cirIndex] if (self.repData is not None) else None
