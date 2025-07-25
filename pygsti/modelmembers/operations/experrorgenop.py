@@ -19,11 +19,11 @@ import scipy.sparse as _sps
 import scipy.sparse.linalg as _spsl
 
 from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
-from pygsti.modelmembers.operations.lindbladerrorgen import LindbladParameterization as _LindbladParameterization
+from pygsti.modelmembers.operations.lindbladerrorgen import LindbladErrorgen as _LindbladErrorgen
+from pygsti.modelmembers.operations.embeddederrorgen import EmbeddedErrorgen as _EmbeddedErrorGen
 from pygsti.modelmembers import modelmember as _modelmember, term as _term
 from pygsti.modelmembers.errorgencontainer import ErrorGeneratorContainer as _ErrorGeneratorContainer
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
-from pygsti.tools import matrixtools as _mt
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 MAX_EXPONENT = _np.log(_np.finfo('d').max) - 10.0  # so that exp(.) doesn't overflow
@@ -44,7 +44,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         operator is `exp(L)`.
     """
 
-    def __init__(self, errorgen):
+    def __init__(self, errorgen : _LindbladErrorgen | _EmbeddedErrorGen):
         # Extract superop dimension from 'errorgen'
         state_space = errorgen.state_space
         self.errorgen = errorgen  # don't copy (allow object reuse)
