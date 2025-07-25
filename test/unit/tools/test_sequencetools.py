@@ -6,7 +6,7 @@ def test_external_matches():
 
     my_strings = ["ABAARCR12LIO", "QWERTYASDFGH", "QWEELLKJAT"]
 
-    tables, sequences = _compute_lcs_for_every_pair_of_sequences(my_strings)
+    tables, sequences = _compute_lcs_for_every_pair_of_sequences(my_strings, None, None, set(0,1,2), 3)
 
     assert np.max(tables) == 3
 
@@ -47,7 +47,7 @@ def test_one_round_update_collecting_tables_first():
     ('Q', 'W', 'E', 'R', 'T', 'Y', 'Q', 'W', 'E', 'Q', 'W', 'E', 'Q', 'W', 'E')]
     example = [list(x) for x in example]
     internal = create_tables_for_internal_LCS(example)
-    external = _compute_lcs_for_every_pair_of_sequences(example)
+    external = _compute_lcs_for_every_pair_of_sequences(example, None, None, set(0,1,2), 3)
 
     cache = {i: s for i,s in enumerate(example)}
     updated, num, cache, seq_intro = conduct_one_round_of_lcs_simplification(example, external, internal, len(example), cache)
