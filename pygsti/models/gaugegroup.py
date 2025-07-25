@@ -10,7 +10,7 @@ GaugeGroup and derived objects, used primarily in gauge optimization
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from typing import Tuple
+from typing import Tuple, Union
 import numpy as _np
 import scipy.linalg as _la
 
@@ -1108,7 +1108,7 @@ class DirectSumUnitaryGroup(GaugeGroup):
         and we want gauge optimization to preserve the natural separation between U and V.
     """
 
-    def __init__(self, subgroups: Tuple[UnitaryGaugeGroup | TrivialGaugeGroup, ...], basis, name="Direct sum gauge group"):
+    def __init__(self, subgroups: Tuple[Union[UnitaryGaugeGroup, TrivialGaugeGroup], ...], basis, name="Direct sum gauge group"):
         self.subgroups = subgroups
         if isinstance(basis, _Basis):
             self.basis = basis
@@ -1170,7 +1170,7 @@ class DirectSumUnitaryGroup(GaugeGroup):
 
 class DirectSumUnitaryGroupElement(GaugeGroupElement):
 
-    def __init__(self, subelements: Tuple[UnitaryGaugeGroupElement | TrivialGaugeGroupElement, ...], basis):
+    def __init__(self, subelements: Tuple[Union[UnitaryGaugeGroupElement, TrivialGaugeGroupElement], ...], basis):
         self.subelements = subelements
         self.basis = basis
         self._update_matrices()

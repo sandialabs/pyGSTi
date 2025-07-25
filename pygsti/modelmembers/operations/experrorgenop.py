@@ -12,6 +12,7 @@ The ExpErrorgenOp class and supporting functionality.
 
 import warnings as _warnings
 import math
+from typing import Union
 
 import numpy as _np
 import scipy.linalg as _spl
@@ -44,7 +45,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         operator is `exp(L)`.
     """
 
-    def __init__(self, errorgen : _LindbladErrorgen | _EmbeddedErrorGen):
+    def __init__(self, errorgen : Union[_LindbladErrorgen, _EmbeddedErrorGen]):
         # Extract superop dimension from 'errorgen'
         state_space = errorgen.state_space
         self.errorgen = errorgen  # don't copy (allow object reuse)
