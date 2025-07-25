@@ -69,8 +69,10 @@ class TPPOVM(_BasePOVM, _Torchable):
     """
 
     def __init__(self, effects, evotype=None, state_space=None, called_from_reduce=False):
-        super(TPPOVM, self).__init__(effects, evotype, state_space, preserve_sum=True,
-                                     called_from_reduce=called_from_reduce)
+        super(TPPOVM, self).__init__(
+            effects, evotype, state_space, preserve_sum=True, called_from_reduce=called_from_reduce
+        )
+        return
 
     def __reduce__(self):
         """ Needed for OrderedDict-derived classes (to set dict items) """
