@@ -14,7 +14,7 @@ from typing import Tuple
 import numpy as _np
 import scipy.linalg as _la
 
-from pygsti.baseobjs import StateSpace as _StateSpace, statespace as _statespace
+from pygsti.baseobjs import StateSpace as _StateSpace, statespace as _statespace, ExplicitStateSpace as _ExplicitStateSpace
 from pygsti.modelmembers import operations as _op
 from pygsti.baseobjs.basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
@@ -793,9 +793,11 @@ class UnitaryGaugeGroup(OpGaugeGroupWithBasis):
         state_space = _StateSpace.cast(state_space)
         evotype = _Evotype.cast(str(evotype), default_prefer_dense_reps=True)  # since we use deriv_wrt_params
         errgen = _op.LindbladErrorgen.from_operation_matrix(
-            _np.identity(state_space.dim, 'd'), "H", basis, mx_basis=basis, evotype=evotype)
+            _np.eye(state_space.dim), "H", basis, mx_basis=basis, evotype=evotype
+        )
         operation = _op.ExpErrorgenOp(errgen)
         OpGaugeGroupWithBasis.__init__(self, operation, UnitaryGaugeGroupElement, "Unitary", basis)
+        self.state_space = state_space
 
     def compute_element(self, param_vec) -> UnitaryGaugeGroupElement:
         return super().compute_element(param_vec)
@@ -1108,7 +1110,14 @@ class DirectSumUnitaryGroup(GaugeGroup):
 
     def __init__(self, subgroups: Tuple[UnitaryGaugeGroup | TrivialGaugeGroup, ...], basis, name="Direct sum gauge group"):
         self.subgroups = subgroups
-        self.basis = basis
+        if isinstance(basis, _Basis):
+            self.basis = basis
+        elif isinstance(basis, str):
+            udim = 0
+            for sg in subgroups:
+                udim += sg.state_space.udim
+            ss = _ExplicitStateSpace(['all'], [udim])
+            self.basis = _BuiltinBasis("std", ss)
         self._param_dims = _np.array([sg.num_params for sg in subgroups])
         self._num_params = _np.sum(self._param_dims)
         super().__init__(name)
@@ -1199,7 +1208,6 @@ class DirectSumUnitaryGroupElement(GaugeGroupElement):
         for se in self.subelements:
             if isinstance(se, TrivialGaugeGroupElement):
                 se_ss = _statespace.default_space_for_dim(se.transform_matrix.shape[0])
-                se_basis = _BuiltinBasis('std', se_ss.dim)
                 u_blocks.append(_np.eye(se_ss.udim))
             else:
                 u_abstract_op = se.operation
