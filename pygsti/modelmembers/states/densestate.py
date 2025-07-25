@@ -242,13 +242,28 @@ class DenseState(DenseStateInterface, _State):
     @classmethod
     def _from_memoized_dict(cls, mm_dict, serial_memo):
         vec = cls._decodemx(mm_dict['dense_superket_vector'])
-        # Probably TODO before merging: remove the try-catch, keeping only the try.
         try:
             state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
             basis = _Basis.from_nice_serialization(mm_dict['basis']) if (mm_dict['basis'] is not None) else None
             return cls(vec, basis, mm_dict['evotype'], state_space)
-        except Exception as e:
-            if len(serial_memo) > 0:
+        except AssertionError as e:
+            """
+            This codepath can get hit when deserializing TPPOVM or UnconstrainedPOVM objects.
+            
+            More specifically, it can get hit when objects other than POVMEffect vectors were
+            passed to the constructors of these classes. When that happens, their base class
+            constructor (for BasePOVM) constructs the effects as FullPOVMEffect objects (which in
+            turn rely on FullState and then DenseState) with None passed for the basis argument.
+            Somewhere downstream that None gets cast to a Basis object where `.dim == 0`, which
+            is inconsistent with the array representation of the effect having length > 0.
+            
+            In an ideal world we'd have POVMs enforce not only non-None bases but also *consistent*
+            bases for all constituent effects. For now, our fix is to just try and recover the basis
+            from serial_memo. (Perhaps not-coincidentally, this function wasn't using the serial_memo
+            argument before this code path was added.)
+            """
+            se = str(e)
+            if 'Basis object has unexpected dimension' in se and len(serial_memo) > 0:
                 member = list(serial_memo.values())[0]
                 basis = member.parent.basis
                 state_space = basis.state_space
