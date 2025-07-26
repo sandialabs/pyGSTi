@@ -2,7 +2,7 @@
 The LindbladErrorgen class and supporting functionality.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -259,15 +259,20 @@ class LindbladErrorgen(_LinearOperator):
             terms up to some order).  `"cterm"` is similar but uses Clifford operation
             action on stabilizer states.
 
-        state_space : `StateSpace` or castable to `StateSpace`
-            The state space upon which this error generator acts.
+        state_space : StateSpace, optional (default None)
+            StateSpace object to use in construction of this LindbladErrorgen.
+            If None we use the function `pygsti.baseobjs.statespace.default_space_for_dim`
+            to infer the correct state space from the dimensions of the passed in
+            error generator.
 
         Returns
         -------
         `LindbladErrorgen`
         """
-        errgen = _np.zeros((errgen_or_dim, errgen_or_dim), 'd') \
-            if isinstance(errgen_or_dim, (int, _np.int64)) else errgen_or_dim
+        if isinstance(errgen_or_dim, (int, _np.int64)):
+            errgen = _np.zeros((errgen_or_dim, errgen_or_dim), 'd')
+        else:
+            errgen =  errgen_or_dim
         return cls._from_error_generator(errgen, parameterization, elementary_errorgen_basis,
                                          mx_basis, truncate, evotype, state_space)
 
@@ -321,8 +326,11 @@ class LindbladErrorgen(_LinearOperator):
             terms up to some order).  `"cterm"` is similar but uses Clifford operation
             action on stabilizer states.
 
-        state_space : `StateSpace` or castable to `StateSpace`
-            The state space upon which this error generator acts.
+        state_space : StateSpace, optional (default None)
+            StateSpace object to use in construction of this LindbladErrorgen.
+            If None we use the function `pygsti.baseobjs.statespace.default_space_for_dim`
+            to infer the correct state space from the dimensions of the passed in
+            error generator.
 
         Returns
         -------

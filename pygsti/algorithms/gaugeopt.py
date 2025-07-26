@@ -2,7 +2,7 @@
 GST gauge optimization algorithms
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -264,6 +264,10 @@ def gaugeopt_custom(model, objective_fn, gauge_group=None,
 
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, comm)
     tStart = _time.time()
+
+    #replace model with a new copy of itself so as to not propagate the conversion back to the 
+    #instance of the model object we are gauge optimizing.
+    model = model.copy()
 
     if comm is not None:
         mdl_cmp = comm.bcast(model if (comm.Get_rank() == 0) else None, root=0)

@@ -2,7 +2,7 @@
 Defines objective-function objects
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -4716,6 +4716,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             firsts, indicesWithOmitted = zip(*([(iel - element_slice.start, ic) for (iel, ic)
                                                 in zip(self.firsts, self.indicesOfCircuitsWithOmittedData)
                                                 if element_slice.start <= iel < element_slice.stop]))
+            firsts = list(firsts)  # needed for proper numpy indexing below (tuple=different)
 
             #Allocate these above?  Need to know block sizes of dprobs12 & hprobs...
             dprobs12_omitted_rowsum = _np.empty((len(firsts),) + dprobs12.shape[1:], 'd')

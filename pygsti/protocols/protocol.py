@@ -2,7 +2,7 @@
 Protocol object
 """
 # ***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -1198,6 +1198,25 @@ class CircuitListsDesign(ExperimentDesign):
         mapped_qubit_labels = self._mapped_qubit_labels(mapper)
         return CircuitListsDesign(mapped_circuit_lists, mapped_circuits, mapped_qubit_labels,
                                   self.nested, remove_duplicates=False)  # no need to remove duplicates
+
+    def merge_with(self, other_edesign, remove_duplicates=True):
+        """
+        Merge this experiment design with another one and return the result.
+
+        Parameters
+        ----------
+        other_edesign: CircuitListsDesign
+            The other experiment design to merge
+
+        Returns
+        -------
+        CircuitListsDesign
+        """
+        assert self.qubit_labels == other_edesign.qubit_labels, "To merge, qubit_labels must be equal"
+        nested = self.nested and other_edesign.nested
+        circuit_lists = self.circuit_lists + other_edesign.circuit_lists
+        return CircuitListsDesign(circuit_lists, qubit_labels=self.qubit_labels,
+                                  nested=nested, remove_duplicates=remove_duplicates)
 
 
 class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the same dataset

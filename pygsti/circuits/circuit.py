@@ -2,7 +2,7 @@
 Defines the Circuit class
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -4413,7 +4413,7 @@ class Circuit(object):
                     if openqasmlist_for_gate is None:
                         # Try to look up the operation in mapping dict instead
                         openqasmfn_for_gate = gateargs_map.get(gate.name, None)
-                        assert openqasmfn_for_gate is not None, "Could not look up {} as qasm list or func" % gate.name
+                        assert openqasmfn_for_gate is not None, f"Could not look up {gate.name} as qasm list or func"
                         openqasmlist_for_gate = openqasmfn_for_gate(gate.args)
 
                     openqasm_for_gate = ''

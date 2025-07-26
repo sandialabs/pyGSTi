@@ -2,7 +2,7 @@
 Defines the Basis object and supporting functions
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -14,7 +14,7 @@ import copy as _copy
 import itertools as _itertools
 import warnings as _warnings
 from functools import lru_cache
-from typing import Union, Tuple, List
+from typing import Union
 
 import numpy as _np
 import scipy.sparse as _sps
@@ -830,7 +830,7 @@ class ExplicitBasis(Basis):
     A `Basis` whose elements are specified directly.
 
     All explicit bases are simple: their vector space is taken to be that
-    of the the flattened elements unless separate `vector_elements` are given.
+    of the flattened elements unless separate `vector_elements` are given.
 
     Parameters
     ----------
@@ -1065,12 +1065,15 @@ class BuiltinBasis(LazyBasis):
         assert(name in _basis_constructor_dict), "Unknown builtin basis name '%s'!" % name
         if sparse is None: sparse = False  # choose dense matrices by default (when sparsity is "unspecified")
 
-        if name == 'cl':  # HACK for now, until we figure out better classical state spaces
-            self.state_space = dim_or_statespace if isinstance(dim_or_statespace, _statespace.StateSpace) \
-                else _statespace.ExplicitStateSpace([('L%d' % i,) for i in range(dim_or_statespace)])
+        if isinstance(dim_or_statespace, _statespace.StateSpace):
+            self.state_space = dim_or_statespace
+        elif name == 'cl':  # HACK for now, until we figure out better classical state spaces
+            self.state_space = _statespace.ExplicitStateSpace([('L%d' % i,) for i in range(dim_or_statespace)])
+        elif name == "sv":
+            # A state vector can have any shape. It does not need to be a perfect square root.
+            self.state_space = _statespace.default_space_for_udim(dim_or_statespace)
         else:
-            self.state_space = dim_or_statespace if isinstance(dim_or_statespace, _statespace.StateSpace) \
-                else _statespace.default_space_for_dim(dim_or_statespace)
+            self.state_space = _statespace.default_space_for_dim(dim_or_statespace)
 
         longname = _basis_constructor_dict[name].longname
         real = _basis_constructor_dict[name].real
@@ -1079,7 +1082,7 @@ class BuiltinBasis(LazyBasis):
         super(BuiltinBasis, self).__init__(name, longname, real, sparse)
 
         #precompute some properties
-        self._size, self._dim, self._elshape = _basis_constructor_dict[self.name].sizes(dim=self.state_space.dim, sparse=self.sparse)
+        self._size, self._dim, self._elshape = _basis_constructor_dict[self.name].sizes(dim=self._get_dimension_to_pass_to_constructor(), sparse=self.sparse)
         #Check that sparse is True only when elements are *matrices*
         assert(not self.sparse or len(self._elshape) == 2), "`sparse == True` is only allowed for *matrix*-valued bases!"
 
@@ -1095,6 +1098,14 @@ class BuiltinBasis(LazyBasis):
     def _from_nice_serialization(cls, state):
         statespace = _StateSpace.from_nice_serialization(state['state_space'])
         return cls(state['name'], statespace, state['sparse'])
+    
+    def _get_dimension_to_pass_to_constructor(self):
+        """
+        A basis in the state-vector (name= 'sv') case will correspond to a basis of vectors of length d.
+        This means that it will be operated on by matrices of shape (d \times d).
+        """
+        return self.state_space.udim if self.name == "sv" else self.state_space.dim
+
 
     @property
     def dim(self):
@@ -1134,14 +1145,16 @@ class BuiltinBasis(LazyBasis):
 
     def _lazy_build_elements(self):
         f = _basis_constructor_dict[self.name].constructor
-        cargs = {'dim': self.state_space.dim, 'sparse': self.sparse}
-        self._elements = _np.array(f(**cargs))  # a list of (dense) mxs -> ndarray (possibly sparse in future?)
+
+        cargs = {'dim': self._get_dimension_to_pass_to_constructor(), 'sparse': self.sparse}
+        self._elements = _np.array(f(**cargs))  # a list of (dense) mxs or vectors -> ndarray (possibly sparse in future?)
         assert(len(self._elements) == self.size), "Logic error: wrong number of elements were created!"
 
     def _lazy_build_labels(self):
         f = _basis_constructor_dict[self.name].labeler
-        cargs = {'dim': self.state_space.dim, 'sparse': self.sparse}
+        cargs = {'dim': self._get_dimension_to_pass_to_constructor(), 'sparse': self.sparse}
         self._labels = f(**cargs)
+        assert(len(self._labels) == self.size)
 
     def _copy_with_toggled_sparsity(self):
         return BuiltinBasis(self.name, self.state_space, not self.sparse)

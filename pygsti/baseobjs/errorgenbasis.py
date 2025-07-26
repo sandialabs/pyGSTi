@@ -2,7 +2,7 @@
 Defines the ElementaryErrorgenBasis class and supporting functionality.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -231,6 +231,7 @@ class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
 
             sub_labels, sub_indices = zip(*[(lbl, i) for i, lbl in enumerate(self._labels)
                                             if overlaps(lbl[0])])
+            sub_sslbls = sorted(sub_sslbls)
             sub_state_space = self.state_space.create_subspace(sub_sslbls)
         else:
             sub_labels = []
@@ -262,7 +263,7 @@ class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
         #Get the union of the two bases labels.
         union_labels = set(self._labels) | set(other_basis.labels)
         union_state_space = self.state_space.union(other_basis.state_space)
-        return ExplicitElementaryErrorgenBasis(union_state_space, union_labels, self._basis_1q)
+        return ExplicitElementaryErrorgenBasis(union_state_space, sorted(union_labels, key=lambda label: label.__str__()), self._basis_1q)
 
     def intersection(self, other_basis):
         """
@@ -277,7 +278,7 @@ class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
 
         intersection_labels = set(self._labels) & set(other_basis.labels)
         intersection_state_space = self.state_space.intersection(other_basis.state_space)
-        return ExplicitElementaryErrorgenBasis(intersection_state_space, intersection_labels, self._basis_1q)
+        return ExplicitElementaryErrorgenBasis(intersection_state_space, sorted(intersection_labels, key=lambda label: label.__str__()), self._basis_1q)
 
     def difference(self, other_basis):
         """
@@ -295,7 +296,7 @@ class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
         #that relied on the old (kind of incorrect behavior). Revert back to old version temporarily.
         #difference_state_space = self.state_space.difference(other_basis.state_space)
         difference_state_space = self.state_space
-        return ExplicitElementaryErrorgenBasis(difference_state_space, difference_labels, self._basis_1q)
+        return ExplicitElementaryErrorgenBasis(difference_state_space, sorted(difference_labels, key=lambda label: label.__str__()), self._basis_1q)
 
 class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
     """
@@ -724,7 +725,7 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
         """
         return  tuple(zip(self.elemgen_supports, self.elemgen_matrices))
 
-    def label_index(self, label, ok_if_missing=False):
+    def label_index(self, label, ok_if_missing=False, identity_label='I'):
         """
         Return the index of the specified elementary error generator label
         in this basis' `labels` list.
@@ -736,12 +737,13 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
         
         ok_if_missing : bool
            If True, then returns `None` instead of an integer when the given label is not present.
-        """
-        #CIO: I don't entirely understand the intention behind this method, so rather than trying to make it work
-        #using `LocalElementaryErrorgenLabel` I'll just assert it is a global one for now...
-        if isinstance(label, _LocalElementaryErrorgenLabel):
-            raise NotImplementedError('This method is not currently implemented for `LocalElementaryErrorgenLabel` inputs.')
         
+        identity_label : str, optional (default 'I')
+            An optional string specifying the label used to denote the identity in basis element labels.
+        """
+        if isinstance(label, _LocalElementaryErrorgenLabel):
+            label = _GlobalElementaryErrorgenLabel.cast(label, self.sslbls, identity_label=identity_label)
+
         support = label.sslbls
         eetype = label.errorgen_type
         bels = label.basis_element_labels

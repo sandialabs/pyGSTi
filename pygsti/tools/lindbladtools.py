@@ -2,7 +2,7 @@
 Utility functions relevant to Lindblad forms and projections
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -506,7 +506,7 @@ def create_lindbladian_term_errorgen(typ, Lm, Ln=None, sparse=False):  # noqa N8
     return lind_errgen
 
 
-def random_error_generator_rates(num_qubits, errorgen_types=('H', 'S', 'C', 'A'), max_weights=None,
+def random_CPTP_error_generator_rates(num_qubits, errorgen_types=('H', 'S', 'C', 'A'), max_weights=None,
                                  H_params=(0.,.01), SCA_params=(0.,.01), error_metric=None, error_metric_value=None, 
                                  relative_HS_contribution=None, fixed_errorgen_rates=None, sslbl_overlap=None, 
                                  label_type='global', seed=None, qubit_labels=None):
@@ -641,9 +641,13 @@ def random_error_generator_rates(num_qubits, errorgen_types=('H', 'S', 'C', 'A')
             _warnings.warn('The relative_HS_contribution kwarg is only utilized when error_metric is not None, the specified value is ignored otherwise.')
         else:
             assert abs(1-sum(relative_HS_contribution))<=1e-7, 'The relative_HS_contribution should sum to 1.'
-        
+    
+    if 'C' in errorgen_types or 'A' in errorgen_types:
+        assert 'S' in errorgen_types, 'Must include S terms when C and A present. Cannot have a CP error generator otherwise.'
+
     if max_weights is not None:
-        assert max_weights['C'] <= max_weights['S'] and max_weights['A'] <= max_weights['S'], 'The maximum weight of the C and A terms should be less than or equal to the maximum weight of S.'
+        assert max_weights.get('C', 0) <= max_weights.get('S', 0) and max_weights.get('A', 0) <= max_weights.get('S', 0), 'The maximum weight of the C and A terms should be less than or equal to the maximum weight of S.'
+
     rng = _np.random.default_rng(seed)
  
     #create a state space with this dimension.

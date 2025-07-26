@@ -2,7 +2,7 @@
 Defines the ExplicitOpModel class and supporting functionality.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -333,7 +333,7 @@ class ExplicitOpModel(_mdl.OpModel):
             raise KeyError("Key %s has an invalid prefix" % label)
 
     def convert_members_inplace(self, to_type, categories_to_convert='all', labels_to_convert='all',
-                                ideal_model=None, flatten_structure=False, set_default_gauge_group=False, cptp_truncation_tol= 1e-6):
+                                ideal_model=None, flatten_structure=False, set_default_gauge_group=False, cptp_truncation_tol= 1e-7, spam_cp_penalty = 1e-7):
         """
         TODO: docstring -- like set_all_parameterizations but doesn't set default gauge group by default
         """
@@ -352,12 +352,12 @@ class ExplicitOpModel(_mdl.OpModel):
             for lbl, prep in self.preps.items():
                 if labels_to_convert == 'all' or lbl in labels_to_convert:
                     ideal = ideal_model.preps.get(lbl, None) if (ideal_model is not None) else None
-                    self.preps[lbl] = _state.convert(prep, to_type, self.basis, ideal, flatten_structure)
+                    self.preps[lbl] = _state.convert(prep, to_type, self.basis, ideal, flatten_structure, cp_penalty=spam_cp_penalty)
         if any([c in categories_to_convert for c in ('all', 'povms')]):
             for lbl, povm in self.povms.items():
                 if labels_to_convert == 'all' or lbl in labels_to_convert:
                     ideal = ideal_model.povms.get(lbl, None) if (ideal_model is not None) else None
-                    self.povms[lbl] = _povm.convert(povm, to_type, self.basis, ideal, flatten_structure)
+                    self.povms[lbl] = _povm.convert (povm, to_type, self.basis, ideal, flatten_structure, cp_penalty=spam_cp_penalty)
 
         self._clean_paramvec()  # param indices were probabaly updated
         if set_default_gauge_group:
@@ -375,7 +375,7 @@ class ExplicitOpModel(_mdl.OpModel):
             self.default_gauge_group = _gg.TrivialGaugeGroup(self.state_space)
 
     def set_all_parameterizations(self, gate_type, prep_type="auto", povm_type="auto",
-                                  instrument_type="auto", ideal_model=None, cptp_truncation_tol = 1e-6):
+                                  instrument_type="auto", ideal_model=None, cptp_truncation_tol = 1e-6, spam_cp_penalty = 1e-7):
         """
         Convert all gates, states, and POVMs to a specific parameterization type.
 
@@ -417,6 +417,13 @@ class ExplicitOpModel(_mdl.OpModel):
             indicates the maximum amount of truncation induced deviation from the original operations
             (measured by frobenius distance) we're willing to accept without marking the conversion
             as failed.
+        spam_cp_penalty : float, optional (default .5)
+            Converting SPAM operations to an error generator representation may 
+            introduce trivial gauge degrees of freedom. These gauge degrees of freedom 
+            are called trivial because they quite literally do not change the dense representation 
+            (i.e. Hilbert-Schmidt vectors) at all. Despite being trivial, error generators along 
+            this trivial gauge orbit may be non-CP, so this cptp penalty is used to favor channels 
+            within this gauge orbit which are CPTP.
 
         Returns
         -------
@@ -437,8 +444,8 @@ class ExplicitOpModel(_mdl.OpModel):
         try:
             self.convert_members_inplace(typ, 'operations', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol)
             self.convert_members_inplace(ityp, 'instruments', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol)
-            self.convert_members_inplace(rtyp, 'preps', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol)
-            self.convert_members_inplace(povmtyp, 'povms', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol)
+            self.convert_members_inplace(rtyp, 'preps', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol, spam_cp_penalty = spam_cp_penalty)
+            self.convert_members_inplace(povmtyp, 'povms', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol, spam_cp_penalty = spam_cp_penalty)
         except ValueError as e:
             raise ValueError("Failed to convert members. If converting to CPTP-based models, " +
                 "try providing an ideal_model to avoid possible branch cuts.") from e
@@ -1147,7 +1154,7 @@ class ExplicitOpModel(_mdl.OpModel):
 
             randOp = _ot.unitary_to_superop(randUnitary, self.basis)
 
-            mdl_randomized.operations[opLabel] = _op.FullArbitraryOp(_np.dot(randOp, gate))
+            mdl_randomized.operations[opLabel] = _op.FullArbitraryOp(_np.dot(randOp, gate.to_dense("HilbertSchmidt")))
 
         #Note: this function does NOT randomize instruments
 

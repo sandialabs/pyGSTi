@@ -2,7 +2,7 @@
 Defines the ModelFunction class
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -12,6 +12,9 @@ Defines the ModelFunction class
 
 from pygsti.models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
 from pygsti.models.localnoisemodel import LocalNoiseModel as _LocalNoiseModel
+from pygsti.baseobjs.basis import Basis as _Basis
+from pygsti.baseobjs.basis import TensorProdBasis as _TensorProdBasis
+
 
 class ModelFunction(object):
     """
@@ -240,9 +243,19 @@ def opsfn_factory(fn):
                           self.other_model.operations[self.gl].to_dense(on_space='HilbertSchmidt'),
                           model.basis, *self.args, **self.kwargs)  # assume functions want *dense* gates
             elif isinstance(model, _LocalNoiseModel):
+                opdim = model.operation_blks['gates'][self.gl].dim
+                if opdim == model.basis.dim:
+                    basis = model.basis
+                elif model.basis.name in ("pp", "PP", "gm"):
+                    basis = _Basis.cast(model.basis.name, opdim)
+                elif isinstance(model.basis, _TensorProdBasis) and all(sub == "pp" for sub in model.basis.name.split('*')):
+                    basis = _Basis.cast("pp", opdim)
+                else:
+                    raise ValueError(f"Could not convert model basis (name={model.basis.name}) to an appropriate {opdim}-dim basis!")
+
                 return fn(model.operation_blks['gates'][self.gl].to_dense(on_space='HilbertSchmidt'),
                           self.other_model.operation_blks['gates'][self.gl].to_dense(on_space='HilbertSchmidt'),
-                          model.basis, *self.args, **self.kwargs)  # assume functions want *dense* gates
+                          basis, *self.args, **self.kwargs)  # assume functions want *dense* gates
             else:
                 raise ValueError(f"Unsupported model type: {type(model)}!")
 

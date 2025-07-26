@@ -2,7 +2,7 @@
 Utility functions operating on operation matrices
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -305,10 +305,7 @@ def diamonddist(a, b, mx_basis='pp', return_x=False):
     mx_basis = _bt.create_basis_for_matrix(a, mx_basis)
 
     # currently cvxpy is only needed for this function, so don't import until here
-    import cvxpy as _cvxpy
-    old_cvxpy = bool(tuple(map(int, _cvxpy.__version__.split('.'))) < (1, 0))
-    if old_cvxpy:
-        raise RuntimeError('CVXPY 0.4 is no longer supported. Please upgrade to CVXPY 1.0 or higher.')
+    import cvxpy as _cp
 
     # _jam code below assumes *un-normalized* Jamiol-isomorphism.
     # It will convert a & b to a "single-block" basis representation
@@ -325,19 +322,29 @@ def diamonddist(a, b, mx_basis='pp', return_x=False):
     J = JBstd - JAstd
     prob, vars = _diamond_norm_model(dim, smallDim, J)
 
-    try:
-        prob.solve(solver='CVXOPT')
-    except _cvxpy.error.SolverError as e:
-        _warnings.warn("CVXPY failed: %s - diamonddist returning -2!" % str(e))
-        return (-2, _np.zeros((dim, dim))) if return_x else -2
-    except:
-        _warnings.warn("CVXOPT failed (unknown err) - diamonddist returning -2!")
-        return (-2, _np.zeros((dim, dim))) if return_x else -2
+    objective_val = -2
+    varvals = [_np.zeros_like(J), None, None]
+    sdp_solvers = ['MOSEK', 'CLARABEL', 'CVXOPT']
+    for i, solver in enumerate(sdp_solvers):
+        try:
+            prob.solve(solver=solver)
+            objective_val = prob.value
+            varvals = [v.value for v in vars]
+            break
+        except (AssertionError, _cp.SolverError) as e:
+            if solver != 'MOSEK':
+                msg = f"Received error {e} when trying to use solver={solver}."
+                if i + 1 == len(sdp_solvers):
+                    failure_msg = "Out of solvers. Returning -2 for diamonddist."
+                else:
+                    failure_msg = f"Trying {sdp_solvers[i+1]} next."
+                msg += f'\n{failure_msg}'
+                _warnings.warn(msg)
 
     if return_x:
-        return prob.value, vars[0].value
+        return objective_val, varvals
     else:
-        return prob.value
+        return objective_val
 
 
 def _diamond_norm_model(dim, smallDim, J):
@@ -491,8 +498,8 @@ def entanglement_fidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
     
     #if the tp flag isn't set we'll calculate whether it is true here
     if is_tp is None:
-        def is_tp_fn(x): return _np.isclose(x[0, 0], 1.0) and all(
-        [_np.isclose(x[0, i], 0) for i in range(1,d2)])
+        def is_tp_fn(x):
+            return _np.isclose(x[0, 0], 1.0) and _np.allclose(x[0, 1:d2], 0)
         
         is_tp= (is_tp_fn(a) and is_tp_fn(b))
    
@@ -662,6 +669,55 @@ def entanglement_infidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
     """
     return 1 - float(entanglement_fidelity(a, b, mx_basis, is_tp, is_unitary))
 
+def generator_infidelity(a, b, mx_basis = 'pp'):
+    """
+    Returns the generator infidelity between a and b, where b is the "target" operation.
+    Generator infidelity is given by the sum of the squared hamiltonian error generator
+    rates plus the sum of the stochastic error generator rates.
+
+    GI = sum_k(H_k**2) + sum_k(S_k)
+
+    Parameters
+    ----------
+    a : numpy.ndarray
+        The first process (transfer) matrix.
+
+    b : numpy.ndarray
+        The second process (transfer) matrix.
+
+    mx_basis : mx_basis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The basis that `a` and `b` are in. Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).
+
+    Returns
+    -------
+    float
+    """
+    #stick import here to sidestep circular import problem.
+    from pygsti.modelmembers.operations.lindbladerrorgen import LindbladErrorgen as _LindbladErrorgen
+
+    # Compute error generator
+    try:
+        errgen_mat = error_generator(a, b, mx_basis, 'logGTi')
+        errgen = _LindbladErrorgen.from_error_generator(errgen_mat, parameterization = 'GLND')
+    except Exception as e:
+        msg = 'Failed to construct an error generator from inputs. Will return NaN. Encountered the following exception while' \
+         + ' attempting:\n' + str(e)
+        return _np.nan
+
+    # Loop through coefficient blocks and index into the
+    #block_data attributes for each to pull out the H and S terms.
+    gen_infid = 0
+    for coeff_block in errgen.coefficient_blocks:
+        if coeff_block._block_type == 'ham': #H terms, get squared
+            gen_infid+= _np.sum(coeff_block.block_data**2)
+        if coeff_block._block_type == 'other_diagonal': #S terms, added directly
+            gen_infid+= _np.sum(coeff_block.block_data)
+        if coeff_block._block_type == 'other': #S terms on diagonal, added directly
+            gen_infid+= _np.sum(_np.diag(coeff_block.block_data))
+
+    return _np.real_if_close(gen_infid)
 
 def gateset_infidelity(model, target_model, itype='EI',
                        weights=None, mx_basis=None, is_tp=None, is_unitary=None):
@@ -753,7 +809,7 @@ def unitarity(a, mx_basis="gm"):
     noise" NJP 17 113020 (2015). The unitarity is given by (Prop 1 in Wallman
     et al):
 
-    `u(a) = Tr( A_u^{\dagger} A_u ) / (d^2  - 1)`,
+    `u(a) = Tr( A_u^{\\dagger} A_u ) / (d^2  - 1)`,
 
     where A_u is the unital submatrix of a, and d is the dimension of
     the Hilbert space. When a is written in any basis for which the
@@ -917,9 +973,14 @@ def povm_fidelity(model, target_model, povmlbl):
     -------
     float
     """
-    povm_mx = compute_povm_map(model, povmlbl)
-    target_povm_mx = compute_povm_map(target_model, povmlbl)
-    return entanglement_fidelity(povm_mx, target_povm_mx, target_model.basis)
+    try:
+        povm_mx = compute_povm_map(model, povmlbl)
+        target_povm_mx = compute_povm_map(target_model, povmlbl)
+        return entanglement_fidelity(povm_mx, target_povm_mx, target_model.basis)
+    except AssertionError as e:
+        se = str(e)
+        assert '`dim` must be a perfect square' in se, se
+        return _np.nan
 
 
 def povm_jtracedist(model, target_model, povmlbl):
@@ -941,9 +1002,14 @@ def povm_jtracedist(model, target_model, povmlbl):
     -------
     float
     """
-    povm_mx = compute_povm_map(model, povmlbl)
-    target_povm_mx = compute_povm_map(target_model, povmlbl)
-    return jtracedist(povm_mx, target_povm_mx, target_model.basis)
+    try:
+        povm_mx = compute_povm_map(model, povmlbl)
+        target_povm_mx = compute_povm_map(target_model, povmlbl)
+        return jtracedist(povm_mx, target_povm_mx, target_model.basis)
+    except AssertionError as e:
+        se = str(e)
+        assert '`dim` must be a perfect square' in se, se
+        return _np.nan
 
 
 def povm_diamonddist(model, target_model, povmlbl):
@@ -1729,13 +1795,15 @@ def extract_elementary_errorgen_coefficients(errorgen, elementary_errorgen_label
     """
     # the same as decompose_errorgen but given a dict/list of elementary errorgens directly instead of a basis and type
     if isinstance(errorgen_basis, _Basis):
-        errorgen_std = _bt.change_basis(errorgen, errorgen_basis, errorgen_basis.create_equivalent('std'))
+        std_basis = errorgen_basis.create_equivalent('std')
+        errorgen_std = _bt.change_basis(errorgen, errorgen_basis, std_basis)
 
-        #expand operation matrix so it acts on entire space of dmDim x dmDim density matrices
-        errorgen_std = _bt.resize_std_mx(errorgen_std, 'expand', errorgen_basis.create_equivalent('std'),
-                                         errorgen_basis.create_simple_equivalent('std'))
+        # Expand operation matrix so it acts on entire space of dmDim x dmDim density matrices
+        expanded_std_basis = errorgen_basis.create_simple_equivalent('std')
+        errorgen_std = _bt.resize_std_mx(errorgen_std, 'expand', std_basis, expanded_std_basis)
     else:
         errorgen_std = _bt.change_basis(errorgen, errorgen_basis, "std")
+
     flat_errorgen_std = errorgen_std.toarray().ravel() if _sps.issparse(errorgen_std) else errorgen_std.ravel()
 
     d2 = errorgen_std.shape[0]
