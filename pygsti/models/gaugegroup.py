@@ -765,10 +765,7 @@ class UnitaryGaugeGroupElement(OpGaugeGroupElement):
     def operation(self) -> _op.ExpErrorgenOp:
         return self._operation # type: ignore
 
-<<<<<<< HEAD
 
-=======
->>>>>>> a63f1fd11 (new DirectSumUnitaryGroup for gauge optimization, type annotations, readability improvements.)
 class UnitaryGaugeGroup(OpGaugeGroupWithBasis):
     """
     A gauge group consisting of unitary gauge-transform matrices.
