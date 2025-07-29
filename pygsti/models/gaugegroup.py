@@ -529,9 +529,9 @@ class OpGaugeGroupElement(GaugeGroupElement):
 
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
-        state.update({'class': self.__class__.__name__,
-                      'operation_matrix': self._encodemx(self._operation.to_dense())
-                      })
+        state.update(
+            {'operation_matrix': self._encodemx(self._operation.to_dense())}
+        )
         return state
 
     @classmethod
@@ -1231,7 +1231,6 @@ class DirectSumUnitaryGroupElement(GaugeGroupElement):
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
         state.update({
-            'class': self.__class__.__name__,
             'subelements': tuple([se.to_nice_serialization() for se in self.subelements]),
             'basis': self.basis if isinstance(self.basis, str) else self.basis.to_nice_serialization()
         })
