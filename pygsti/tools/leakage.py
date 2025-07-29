@@ -183,6 +183,19 @@ def leaky_jtracedist(op_a, op_b, mx_basis, n_leak=0):
     return j_dist
 
 
+def subspace_restricted_fro_dist(a, b, mx_basis, n_leak=0):
+    diff = a -  b
+    if n_leak == 0:
+        return np.linalg.norm(diff, 'fro')
+    if n_leak == 1:
+        d = int(np.sqrt(a.shape[0]))
+        assert a.shape == b.shape == (d**2, d**2)
+        B = leading_dxd_submatrix_basis_vectors(d-n_leak, d, mx_basis)
+        P = B @ B.T.conj()
+        return np.linalg.norm(diff @ P)
+    raise ValueError()
+
+
 # MARK: model construction
 
 def to_3level_unitary(U_2level):

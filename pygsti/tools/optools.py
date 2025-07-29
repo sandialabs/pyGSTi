@@ -472,20 +472,6 @@ def tensorized_with_eye(op, basis, ten_basis=None, std_basis=None, ten_std_basis
     return ten_op, ten_basis
 
 
-def subspace_restricted_fro_dist(a, b, mx_basis, n_leak=0):
-    from pygsti.tools import leakage as _leaktools
-    diff = a -  b
-    if n_leak == 0:
-        return _np.linalg.norm(diff, 'fro')
-    if n_leak == 1:
-        d = int(_np.sqrt(a.shape[0]))
-        assert a.shape == b.shape == (d**2, d**2)
-        B = _leaktools.leading_dxd_submatrix_basis_vectors(d-n_leak, d, mx_basis)
-        P = B @ B.T.conj()
-        return _np.linalg.norm(diff @ P)
-    raise ValueError()
-
-
 def average_gate_fidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
     """
     Computes the average gate fidelity (AGF) between two gates.
