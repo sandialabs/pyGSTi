@@ -1,12 +1,13 @@
 import numpy as np
 from pygsti.tools.sequencetools import _compute_lcs_for_every_pair_of_sequences, create_tables_for_internal_LCS
 from pygsti.tools.sequencetools import conduct_one_round_of_lcs_simplification
+from pygsti.tools.sequencetools import simplify_internal_first_one_round
 
 def test_external_matches():
 
     my_strings = ["ABAARCR12LIO", "QWERTYASDFGH", "QWEELLKJAT"]
 
-    tables, sequences = _compute_lcs_for_every_pair_of_sequences(my_strings, None, None, set(0,1,2), 3)
+    tables, sequences = _compute_lcs_for_every_pair_of_sequences(my_strings, None, None, set([0,1,2]), 3)
 
     assert np.max(tables) == 3
 
@@ -47,10 +48,10 @@ def test_one_round_update_collecting_tables_first():
     ('Q', 'W', 'E', 'R', 'T', 'Y', 'Q', 'W', 'E', 'Q', 'W', 'E', 'Q', 'W', 'E')]
     example = [list(x) for x in example]
     internal = create_tables_for_internal_LCS(example)
-    external = _compute_lcs_for_every_pair_of_sequences(example, None, None, set(0,1,2), 3)
+    external = _compute_lcs_for_every_pair_of_sequences(example, None, None, set([0,1,2]), 3)
 
     cache = {i: s for i,s in enumerate(example)}
-    updated, num, cache, seq_intro = conduct_one_round_of_lcs_simplification(example, external, internal, len(example), cache)
+    updated, num, cache, seq_intro, ext_table, ext_seq, ext_dirty = conduct_one_round_of_lcs_simplification(example, external, internal, len(example), cache)
 
     assert len(updated) == 4
     assert "".join(updated[3]) == "AAAA"
@@ -70,7 +71,7 @@ def test_one_round_update_without_collecting_tables_first():
 
 
     cache = {i: s for i,s in enumerate(example)}
-    updated, num, cache, seq_intro = conduct_one_round_of_lcs_simplification(example, None, None, len(example), cache)
+    updated, num, cache, seq_intro, ext_table, ext_seq, ext_dirty = conduct_one_round_of_lcs_simplification(example, None, None, len(example), cache)
 
     assert len(updated) == 4
     assert "".join(updated[3]) == "AAAA"
@@ -89,9 +90,9 @@ def test_update_only_adds_those_strings_which_are_actually_used():
 
 
     cache = {i: s for i,s in enumerate(example)}
-    updated, num, cache, seq_intro = conduct_one_round_of_lcs_simplification(example, None, None, len(example), cache)
+    updated, num, cache, seq_intro, ext_table, ext_seq, ext_dirty = conduct_one_round_of_lcs_simplification(example, None, None, len(example), cache)
 
-    r2, num, c2, s2 = conduct_one_round_of_lcs_simplification(updated, None, None, num, cache)
+    r2, num, c2, s2, ext_table, ext_seq, ext_dirty = conduct_one_round_of_lcs_simplification(updated, None, None, num, cache)
 
     assert len(r2) == num
 
@@ -101,3 +102,23 @@ def test_update_only_adds_those_strings_which_are_actually_used():
 
     assert len(c2[4]) == 3
 
+def test_multiple_successive_internal_updates_first():
+
+    strings_list = [list("IIIIIIAIIIIII")]
+
+    cache = {}
+    updated_string_list, cache_num, cache, seq_intro = simplify_internal_first_one_round(strings_list, None, -1, cache)
+
+    assert -1 in cache.keys()
+
+    assert -2 == cache_num
+    assert len(updated_string_list) == 2
+
+    updated_string_list, cache_num, cache, seq_intro = simplify_internal_first_one_round(updated_string_list, None, cache_num, cache)
+
+    breakpoint()
+    assert -2 in cache.keys()
+    assert -3 == cache_num
+
+    assert len(updated_string_list) == 3
+    assert np.allclose(seq_intro, [-3])

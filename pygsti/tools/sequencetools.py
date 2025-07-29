@@ -1,4 +1,4 @@
-from typing import Sequence, Any, List, Literal, Tuple, MutableSequence
+from typing import Sequence, Any, List, Literal, Tuple, MutableSequence, Optional
 import numpy as _np
 from tqdm import tqdm
 
@@ -43,18 +43,20 @@ def _lcs_dp_version(A: Sequence, B: Sequence) -> _np.ndarray:
 def conduct_one_round_of_lcs_simplification(sequences: MutableSequence[MutableSequence[Any]], table_data_and_sequences,
                                             internal_tables_and_sequences,
                                             starting_cache_num,
-                                            cache_struct):
+                                            cache_struct, sequence_ind_to_cache_ind: Optional[dict[int, int]] = None):
     """
     Simplify the set of sequences by contracting the set of longest common subsequences.
 
     Will update the list of sequences and the cache struct to hold the longest common subsequences as new sequences.
     """
+    if not sequence_ind_to_cache_ind:
+        sequence_ind_to_cache_ind = {i: i for i in range(len(sequences))}
     if table_data_and_sequences:
         table, external_sequences = table_data_and_sequences
     else:
         table_cache = _np.zeros((len(sequences), len(sequences)))
         table, external_sequences = _compute_lcs_for_every_pair_of_sequences(sequences, table_cache,
-                                                None, set(_np.arange(len(sequences))))
+                                                None, set(_np.arange(len(sequences))), "Unknown")
 
     if internal_tables_and_sequences:
         internal_subtable, internal_subsequences = internal_tables_and_sequences
@@ -118,7 +120,7 @@ def conduct_one_round_of_lcs_simplification(sequences: MutableSequence[MutableSe
                     sp += 1
                 updated_sequences[cir_ind] = my_cir
 
-                cache_struct[cir_ind] = updated_sequences[cir_ind]
+                cache_struct[sequence_ind_to_cache_ind[cir_ind]] = updated_sequences[cir_ind]
 
             if update_made:
                 # There may have been multiple overlapping subsequences in the same sequence.
@@ -126,16 +128,21 @@ def conduct_one_round_of_lcs_simplification(sequences: MutableSequence[MutableSe
                 updated_sequences.append(list(seq))
                 cache_struct[cache_num] = updated_sequences[cache_num]
 
+                # This is a new sequence index which will need to be updated.
+                dirty_inds.add(cache_num)
+                sequence_ind_to_cache_ind[cache_num] = cache_num
                 cache_num += 1
 
+    assert cache_num >= old_cache_num
+    assert old_cache_num >=0
     sequences_introduced_in_this_round = _np.arange(cache_num - old_cache_num) + old_cache_num
 
-    dirty_inds = dirty_inds.union(set(sequences_introduced_in_this_round))
 
     return updated_sequences, cache_num, cache_struct, sequences_introduced_in_this_round, table, external_sequences, dirty_inds
 
 def simplify_internal_first_one_round(sequences: MutableSequence[MutableSequence[Any]],
-            internal_tables_and_sequences, starting_cache_num, cache_struct):
+            internal_tables_and_sequences, starting_cache_num, cache_struct,
+            seq_ind_to_cache_ind: Optional[dict[int, int]]):
     """
     Simplify the set of sequences by contracting the set of longest common subsequences.
 
@@ -143,6 +150,8 @@ def simplify_internal_first_one_round(sequences: MutableSequence[MutableSequence
     
     Cache number will decrement so ensure that cache_struct can handle positives and negatives.
     """
+    if not seq_ind_to_cache_ind:
+        seq_ind_to_cache_ind = {i: i for i in range(len(sequences))}
 
     if internal_tables_and_sequences:
         internal_subtable, internal_subsequences = internal_tables_and_sequences
@@ -183,17 +192,24 @@ def simplify_internal_first_one_round(sequences: MutableSequence[MutableSequence
                     sp += 1
                 updated_sequences[cir_ind] = my_cir
 
-                cache_struct[cir_ind] = updated_sequences[cir_ind]
+                cache_struct[seq_ind_to_cache_ind[cir_ind]] = updated_sequences[cir_ind]
 
             if update_made:
                 # There may have been multiple overlapping subsequences in the same sequence.
                 # (e.g. QWEQWEQWERQWE has QWE, WEQ, and EQW all happen and all are length 3 subsequences.)
                 updated_sequences.append(list(seq))
-                cache_struct[cache_num] = updated_sequences[cache_num]
+                cache_struct[cache_num] = list(seq) # Add the new sequence to the cache.
+
+                # Add a new mapping from sequences to cache index.
+                seq_ind_to_cache_ind[len(updated_sequences)-1] = cache_num
 
                 cache_num += -1
 
-    sequences_introduced_in_this_round = _np.arange(cache_num - old_cache_num) + old_cache_num
+    # Cache num and old_cache_num < 0
+    assert cache_num < 0
+    assert old_cache_num < 0
+    assert old_cache_num > cache_num
+    sequences_introduced_in_this_round = _np.arange(_np.abs(cache_num - old_cache_num))*-1 + old_cache_num
 
     return updated_sequences, cache_num, cache_struct, sequences_introduced_in_this_round
 

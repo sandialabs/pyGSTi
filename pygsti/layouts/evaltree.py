@@ -32,7 +32,6 @@ from pygsti.tools.sequencetools import (
 
 from pygsti.circuits.split_circuits_into_lanes import compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit, compute_subcircuits
 import time
-import numpy as np
 import scipy.linalg as la
 import scipy.sparse.linalg as sparla
 from typing import List, Optional, Iterable
@@ -552,7 +551,7 @@ def get_dense_representation_of_gate_with_perfect_swap_gates(model, op: LabelTup
     """
     if op.num_qubits == 2:
         # We may need to do swaps.
-        op_term : _np.ndarray = np.array([1.])
+        op_term : _np.ndarray = _np.array([1.])
         if op in saved:
             op_term = saved[op]
         elif op.qubits[1] < op.qubits[0]:  # type: ignore
@@ -604,28 +603,34 @@ class EvalTreeBasedUponLongestCommonSubstring():
         new_circuit_list = [cir for cir in circuit_list] # Get a deep copy since we will modify it here.
 
         # Let's try simplifying internally first.
-        self.internal_first = True
+        self.internal_first = False
+        seq_ind_to_cache_index = {i: i for i in range(C)}
         if self.internal_first:
             i = 0
             cache_pos = -1
             while max_rounds > 1:
 
+                breakpoint()
                 tmp = simplify_internal_first_one_round(new_circuit_list, 
                                                         internal_matches,
                                                         cache_pos,
-                                                        cache)
+                                                        cache,
+                                                        seq_ind_to_cache_index)
                 new_circuit_list, cache_pos, cache, sequence_intro[i-1] = tmp
                 i -= 1
                 internal_matches = create_tables_for_internal_LCS(new_circuit_list)
 
                 max_rounds = _np.max(internal_matches[0])
-
         external_matches = _compute_lcs_for_every_pair_of_sequences(new_circuit_list,
                                                                     None,
                                                                     None,
                                                                     set(_np.arange(len(new_circuit_list))),
                                                                     max([len(cir) for cir in new_circuit_list])-1)
         
+
+        if self.internal_first:
+            breakpoint()
+
         best_external_match = _np.max(external_matches[0])
 
         max_rounds = int(max(best_external_match,best_internal_match))
@@ -633,7 +638,7 @@ class EvalTreeBasedUponLongestCommonSubstring():
         cache_pos = len(new_circuit_list)
         while max_rounds > 1:
             tmp = conduct_one_round_of_lcs_simplification(new_circuit_list, external_matches,
-                                                          internal_matches, cache_pos, cache)
+                                                          internal_matches, cache_pos, cache, seq_ind_to_cache_index)
             new_circuit_list, cache_pos, cache, sequence_intro[i+1], ext_table, external_sequences, dirty_inds = tmp
             i += 1
             external_matches = _compute_lcs_for_every_pair_of_sequences(new_circuit_list,
@@ -716,27 +721,27 @@ class EvalTreeBasedUponLongestCommonSubstring():
 
             round_keys = _np.unique(list(self.sequence_intro.keys()))
 
-            pos_inds = np.where(round_keys >=0)
+            pos_inds = _np.where(round_keys >0)
             pos_keys = round_keys[pos_inds]
             pos_keys = sorted(pos_keys)[::-1]
 
-            neg_inds = np.where(round_keys < 0)
+            neg_inds = _np.where(round_keys < 0)
             neg_keys = round_keys[neg_inds]
             neg_keys = sorted(neg_keys)
-            assert neg_keys[0] < neg_keys[1]
-            round_keys = neg_keys + pos_keys
+
+            round_keys = pos_keys + neg_keys + _np.array([0])
         
         for key in round_keys:
-            for cind in self.sequence_intro[key]:
+            for cache_ind in self.sequence_intro[key]:
                 cumulative_term = None
-                for term in self.cache[cind]:
+                for term in self.cache[cache_ind]:
                     cumulative_term = self._collapse_cache_line(model, cumulative_term, term, saved, num_qubits_in_default)
                         
                 if cumulative_term is None:
-                    saved[cind] = _np.eye(4**num_qubits_in_default)
+                    saved[cache_ind] = _np.eye(4**num_qubits_in_default)
                     # NOTE: unclear when (if ever) this should be a noisy idle gate.
                 else:
-                    saved[cind] = cumulative_term
+                    saved[cache_ind] = cumulative_term
         if __debug__:
             # We may store more in the cache in order to handle multi-qubit gates which are out of the normal order.
             for key in self.cache:
@@ -744,7 +749,20 @@ class EvalTreeBasedUponLongestCommonSubstring():
         
         # {tuple(self.trace_through_cache_to_build_circuit(icir)): icir for icir in range(len(self.orig_circuit_list)) if icir < self.num_circuits}
     
-        return saved, self.circuit_to_save_location 
+        return saved, self.circuit_to_save_location
+    
+    def combine_for_visualization(self, val, visited):
+
+        if not isinstance(val, int):
+            return [val]
+        elif val in visited:
+            return visited[val]
+        else:
+            tmp = []
+            for child in self.cache[val]:
+                tmp.append(self.combine_for_visualization(child, visited))
+            visited[val] = tmp
+            return tmp
 
     def handle_results_cache_lookup_and_product(self,
                             cumulative_term: None | _np.ndarray,
@@ -768,9 +786,11 @@ class EvalTreeBasedUponLongestCommonSubstring():
 
         """
 
+        if isinstance(term_to_extend_with, int):
+            assert term_to_extend_with in results_cache
+            return self.handle_results_cache_lookup_and_product(cumulative_term, term_to_extend_with, results_cache)
         if term_to_extend_with in results_cache:
             return self.handle_results_cache_lookup_and_product(cumulative_term, term_to_extend_with, results_cache)
-
         else:
             val = 1
             qubits_available = [i + self.qubit_start_point for i in range(num_qubits_in_default)]
@@ -912,17 +932,7 @@ class CollectionOfLCSEvalTrees():
             for i in range(len(self.cir_id_and_lane_id_to_sub_cir[icir])):
                 cir = self.cir_id_and_lane_id_to_sub_cir[icir][i]
                 lblkey = cir._line_labels
-                if lblkey == ("*",):
-                    # We are gettting a noisy idle line and so need to check the size we are expecting here.
-                    ind_in_results = self.sub_cir_to_ind_in_results[lblkey][cir.layertup]
-                    print(cir.num_lines)
-                    # lane_circuits.append(self.saved_results[lblkey][ind_in_results])
 
-                    # 
-                if cir.layertup not in self.sub_cir_to_ind_in_results[lblkey]:
-                    print(lblkey)
-                    print(cir)
-                    breakpoint()
                 ind_in_results = self.sub_cir_to_ind_in_results[lblkey][cir.layertup]
                 lane_circuits.append(self.saved_results[lblkey][ind_in_results])
             output.append(KronStructured(lane_circuits))
@@ -947,7 +957,7 @@ class CollectionOfLCSEvalTrees():
                 subcir = self.cir_id_and_lane_id_to_sub_cir[cir_id][lane_id]
                 qubit_list = (*qubit_list, len(subcir._line_labels))
             qubit_list = list(qubit_list)
-            total_num = np.sum(qubit_list)
+            total_num = _np.sum(qubit_list)
 
             tensor_cost += cost_to_compute_tensor_matvec_without_reordering(qubit_list, total_num)
 
@@ -1104,152 +1114,6 @@ def is_2d_square(arg):
     return arg.shape[0] == arg.shape[1]
 
 
-class InvTriangular(RealLinOp):
-    """
-    NOTE: can avoid relying on sparla.LinearOperator since we can implement matmul and rmatmul directly.
-    """
-
-    def __init__(self, A : np.ndarray, lower: bool, adjoint=None):
-        assert is_2d_square(A)
-        self.lower = lower
-        self.A = A
-        self._size  = A.shape[0]**2
-        self._shape = A.shape
-        self._dtype = A.dtype
-        self._adjoint = InvTriangular(A.T, not self.lower, self) if adjoint is None else adjoint
-
-    def item(self):
-        return 1 / self.A.item()
-
-    def __matmul__(self, other):
-        return la.solve_triangular(self.A, other, trans=0, lower=self.lower, check_finite=False)
-    
-    def __rmatmul__(self, other):
-        return la.solve_triangular(self.A, other.T, trans=1, lower=self.lower, check_finite=False).T
-
-
-class InvPosDef(RealLinOp):
-    """
-    NOTE: can avoid relying on sparla.LinearOperator since we can implement matmul and rmatmul directly.
-    """
-
-    def __init__(self, A: np.ndarray):
-        assert is_2d_square(A)
-        self.A = A
-        self._size  = A.shape[0]**2
-        self._shape = A.shape
-        self._dtype = A.dtype
-        self._chol = la.cho_factor(self.A)
-
-    @property
-    def T(self):
-        # override the default implementation, since we're self-adjoint.
-        return self
-
-    def item(self):
-        return 1 / self.A.item()
-    
-    def __matmul__(self, other):
-        return la.cho_solve(self._chol, other, check_finite=False)
-    
-    def __rmatmul__(self, other):
-        temp = self.__matmul__(other.T)
-        out = temp.T
-        return out
-    
-
-class InvUpdatedKronPosDef(RealLinOp):
-    """
-    A representation of a positive definite linear operator
-    
-        M = inv( K + U U' ),
-    
-    where K is a positive definite matrix with known Kronecker product
-    structure and U is a tall-and-thin matrix.
-
-    This linear operator's action is implemented by precomputing some
-    intermediate quantities at construction time and then using those
-    quantifies in the Woodbury matrix identity. Specifically, we precompute
-
-        1. an implicit representation of L = cho_factor(K, lower=True),
-        2. an explicit representation of V = inv(L) @ U,
-        3. a factored  representation of W = I + V'V,
-    
-    and then we use the formula 
-
-        M = inv(L') (I - V @ inv(W) @ V') @ inv(L).
-    
-    The essence of this method can be preserved with different factorizations
-    for K. For example, instead of computing L = cho_factor(K, lower=True),
-    we could compute P = pinv(sqrtm(K)) and substitute P wherever inv(L) or
-    inv(L') were used.
-    """
-
-    def verify(self):
-        """
-        If P = LL' + U U', then this operator is supposed to represent M = inv(P).
-        This function checks if self @ P is nearly the identity matrix.
-        """
-        explicit_K = np.eye(1)
-        for kf in self.kron_factors:
-            explicit_K = np.kron(explicit_K, kf)
-        explicit_P = explicit_K + self.U @ self.U.T
-        expect_I = self @ explicit_P
-        nrmP = la.norm(explicit_P)
-        I = np.eye(self.shape[0])
-        rel_tol = np.finfo(self.dtype).eps * nrmP
-        abs_tol = np.finfo(self.dtype).eps ** 0.5
-        tol = max(rel_tol, abs_tol)
-        assert la.norm(I - expect_I) <= tol
-        
-
-    def __init__(self, kron_factors : List[np.ndarray], U: np.ndarray, verify=False):
-        K_cho_factors = []
-        dim = 1
-        for kf in kron_factors:
-            K_cho_factors.append(la.cho_factor(kf, lower=True)[0])
-            dim *= kf.shape[0]
-        assert dim == U.shape[0]
-        self.K_cho_factors = K_cho_factors
-        invL_kron_factors = [InvTriangular(lf, lower=True) for lf in K_cho_factors]
-        self.invL = KronStructured(invL_kron_factors)
-        
-        dim_update = U.shape[1]
-        self.V = self.invL @ U
-        self.W = np.eye(dim_update) + self.V.T @ self.V
-        self.chol_W = la.cho_factor(self.W)
-        self._size  = dim * dim
-        self._shape = (dim, dim)
-        self._dtype = self.invL.dtype
-        if verify:
-            self.kron_factors = kron_factors
-            self.U = U
-            self.verify()
-        else:
-            self.U = None
-            self.kron_factors = None
-        self.verified = verify
-        pass
-
-    @property
-    def T(self):
-        return self
-    
-    def __matmul__(self, other):
-        temp1 = self.invL @ other
-        temp2 = self.V.T @ temp1
-        temp3 = la.cho_solve(self.chol_W, temp2)
-        temp4 = self.V @ temp3
-        out = self.invL.T @ (temp1 - temp4)
-        return out
-    
-    def __rmatmul__(self, other):
-        # use the fact that we're self-adjoint.
-        temp = self @ other.T
-        out = temp.T
-        return out
-
-
 class DyadicKronStructed(RealLinOp):
 
     def __init__(self, A, B, adjoint=None):
@@ -1278,8 +1142,8 @@ class DyadicKronStructed(RealLinOp):
             return self.A.item() * (self.B @ other)
         if self._B_is_trivial:
             return self.B.item() * (self.A @ other)
-        out = self.B @ np.reshape(other, self._fwd_matvec_core_shape, order='F') @ self.A.T
-        out = np.reshape(out, inshape, order='F')
+        out = self.B @ _np.reshape(other, self._fwd_matvec_core_shape, order='F') @ self.A.T
+        out = _np.reshape(out, inshape, order='F')
         return out
 
     def rmatvec(self, other):
@@ -1289,8 +1153,8 @@ class DyadicKronStructed(RealLinOp):
             return self.A.item() * (self.B.T @ other)
         if self._B_is_trivial:
             return self.B.item() * (self.A.T @ other)
-        out = self.B.T @ np.reshape(other, self._adj_matvec_core_shape, order='F') @ self.A
-        out = np.reshape(out, inshape, order='F')
+        out = self.B.T @ _np.reshape(other, self._adj_matvec_core_shape, order='F') @ self.A
+        out = _np.reshape(out, inshape, order='F')
         return out
     
     @staticmethod
@@ -1309,8 +1173,8 @@ class KronStructured(RealLinOp):
     def __init__(self, kron_operands):
         self.kron_operands = kron_operands
         assert all([op.ndim == 2 for op in kron_operands])
-        self.shapes = np.array([op.shape for op in kron_operands])
-        self._shape = tuple(int(i) for i in np.prod(self.shapes, axis=0))
+        self.shapes = _np.array([op.shape for op in kron_operands])
+        self._shape = tuple(int(i) for i in _np.prod(self.shapes, axis=0))
         forward = DyadicKronStructed.build_polyadic(self.kron_operands)
         self._linop   = forward._linop
         self._adjoint = forward.T
@@ -1319,32 +1183,26 @@ class KronStructured(RealLinOp):
 
 def cost_to_compute_tensor_matvec_without_reordering(qubit_list: list[int], total_num_qubits: int):
 
-    assert np.sum(qubit_list) == total_num_qubits
+    assert _np.sum(qubit_list) == total_num_qubits
 
     if len(qubit_list) == 1:
         # Basic matvec.
-
         cost = 2 * (4**qubit_list[0]**2)
         return cost
     
     elif len(qubit_list) == 2:
-
         # vec((A \tensor B) u) = vec(B U A.T)
-
         term1 = 2*(4**qubit_list[1]**2) * (4**qubit_list[0]) # MM of BU.
-
         term2 = 2 * (4**qubit_list[0]**2) * (4**qubit_list[1]) # MM of U A.T
-
         return term1 + term2
     
     else:
-
         # Just pop off the last term
-
         # (B_1 \tensor B_2 ... \tensor B_n) u = (B_n \tensor B_n-1 ... \tensor B_2) U (B_1).T
 
-        right = cost_to_compute_tensor_matvec_without_reordering(qubit_list[:1], qubit_list[0]) * 4**(np.sum(qubit_list[1:]))
-
-        left = cost_to_compute_tensor_matvec_without_reordering(qubit_list[1:], total_num_qubits - qubit_list[0]) * 4**(qubit_list[0])
-
+        right = cost_to_compute_tensor_matvec_without_reordering(qubit_list[:1], qubit_list[0])
+        right *= 4**(_np.sum(qubit_list[1:]))
+        left = cost_to_compute_tensor_matvec_without_reordering(qubit_list[1:],
+                                                                total_num_qubits - qubit_list[0])
+        left *= 4**(qubit_list[0])
         return left + right
