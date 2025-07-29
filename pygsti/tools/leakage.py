@@ -1,22 +1,29 @@
-import pygsti
+#***************************************************************************************************
+# Copyright 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
+
 import copy
-from pygsti import tools as pgt
-from pygsti.tools import optools as pgot
 from pygsti import modelmembers as pgmm
+from pygsti.tools import optools as pgot
 from pygsti.tools import basistools as pgbt
 from pygsti.processors import QubitProcessorSpec
-from pygsti.models.explicitmodel import ExplicitOpModel
-from pygsti.baseobjs.statespace import ExplicitStateSpace
 from pygsti.modelmembers.povms import TPPOVM
 from pygsti.baseobjs.basis import TensorProdBasis, Basis, BuiltinBasis
-from pygsti.protocols import ProtocolData
-from pygsti.protocols.gst import _add_gauge_opt, ModelEstimateResults, GSTDesign, StandardGST, GateSetTomography
 import numpy as np
-import scipy.linalg as la
-from typing import Union, Dict
+
+from typing import Union, Dict, TYPE_CHECKING, TypeVar
+if TYPE_CHECKING:
+    from pygsti.protocols.gst import ModelEstimateResults
+else:
+    ModelEstimateResults = TypeVar('ModelEstimateResults')
 
 
-# MARK: optools utilities
+# MARK: metrics
 
 def tensorized_teststate_density(dim, n_leak):
     # Return a test state density matrix rho_t = |psi><psi|, where
@@ -162,6 +169,20 @@ def leading_dxd_submatrix_basis_vectors(d: int, n: int, current_basis):
     return submatrix_basis_vectors
 
 
+def leaky_entanglement_fidelity(op_a, op_b, mx_basis, n_leak=0):
+    temp1, temp2, _ = apply_tensorized_to_teststate(op_a, op_b, mx_basis, n_leak)
+    ent_fid = np.real(temp1.conj() @ temp2)
+    return ent_fid
+
+
+def leaky_jtracedist(op_a, op_b, mx_basis, n_leak=0):
+    temp1, temp2, ten_basis = apply_tensorized_to_teststate(op_a, op_b, mx_basis, n_leak)
+    temp1_std = pgbt.vec_to_stdmx(temp1, ten_basis, keep_complex=True)
+    temp2_std = pgbt.vec_to_stdmx(temp2, ten_basis, keep_complex=True)
+    j_dist = pgot.tracedist(temp1_std, temp2_std)
+    return j_dist
+
+
 # MARK: model construction
 
 def to_3level_unitary(U_2level):
@@ -172,6 +193,8 @@ def to_3level_unitary(U_2level):
 
 
 def leaky_qubit_model_from_pspec(ps_2level: QubitProcessorSpec, levels_readout_zero=(0,)):
+    from pygsti.models.explicitmodel import ExplicitOpModel
+    from pygsti.baseobjs.statespace import ExplicitStateSpace
     assert ps_2level.num_qubits == 1
     
     Us = ps_2level.gate_unitaries
@@ -286,6 +309,7 @@ def transform_composed_model(mdl, s):
 
 
 def param_preserving_gauge_opt(gop_params_dict, results: ModelEstimateResults, est_key: str, verbosity: int = 0):
+    from pygsti.protocols.gst import _add_gauge_opt
     est = results.estimates[est_key]
     seed_mdl = est.models['final iteration estimate']
     _add_gauge_opt(results, est_key, gop_params_dict, seed_mdl, verbosity=verbosity)

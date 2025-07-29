@@ -12,6 +12,7 @@ import pygsti.tools.basistools as bt
 import pygsti.tools.lindbladtools as lt
 import pygsti.tools.optools as ot
 import pygsti.tools.sdptools as sdps
+import pygsti.tools.leakage as pgleak
 from pygsti.modelmembers.operations.lindbladcoefficients import LindbladCoefficientBlock
 from pygsti.modelpacks.legacy import std2Q_XXYYII
 from ..util import BaseCase, needs_cvxpy
@@ -413,7 +414,7 @@ class GateOpsTester(BaseCase):
     def test_diamond_distance(self):
         val = ot.diamonddist(self.A_TP, self.A_TP, mx_basis="pp")
         self.assertAlmostEqual(val, 0.0)
-        objective_val, modelvars = ot.diamonddist(self.A_TP, self.B_unitary, mx_basis="pp", return_all_vars=True)
+        objective_val, modelvars = ot.diamonddist(self.A_TP, self.B_unitary, mx_basis="pp", return_x=True)
         rho0, rho1 = modelvars[1:]
         self.validate_primal_diamondnorm(objective_val, self.A_TP - self.B_unitary, rho0, rho1)
         self.assertGreaterEqual(objective_val, 0.7)
@@ -447,10 +448,10 @@ class GateOpsTester(BaseCase):
         self.assertAlmostEqual(fidelity_TP_unitary_std, expect)
 
     def test_leaky_entanglement_fidelity(self):
-        fidelity_TP_unitary= ot.leaky_entanglement_fidelity(self.A_TP, self.B_unitary, 'pp')
-        fidelity_TP_unitary_no_flag= ot.leaky_entanglement_fidelity(self.A_TP, self.B_unitary, 'pp')
-        fidelity_TP_unitary_jam= ot.leaky_entanglement_fidelity(self.A_TP, self.B_unitary, 'pp')
-        fidelity_TP_unitary_std= ot.leaky_entanglement_fidelity(self.A_TP_std, self.B_unitary_std, mx_basis='std')
+        fidelity_TP_unitary= pgleak.leaky_entanglement_fidelity(self.A_TP, self.B_unitary, 'pp')
+        fidelity_TP_unitary_no_flag= pgleak.leaky_entanglement_fidelity(self.A_TP, self.B_unitary, 'pp')
+        fidelity_TP_unitary_jam= pgleak.leaky_entanglement_fidelity(self.A_TP, self.B_unitary, 'pp')
+        fidelity_TP_unitary_std= pgleak.leaky_entanglement_fidelity(self.A_TP_std, self.B_unitary_std, mx_basis='std')
 
         expect = 0.4804724656092404
         self.assertAlmostEqual(fidelity_TP_unitary, expect)

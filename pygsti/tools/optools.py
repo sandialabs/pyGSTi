@@ -11,11 +11,7 @@ Utility functions operating on operation matrices
 #***************************************************************************************************
 
 from __future__ import annotations
-from typing import TYPE_CHECKING, List, Tuple
-if TYPE_CHECKING:
-    import cvxpy as cp
 
-import collections as _collections
 import warnings as _warnings
 
 import numpy as _np
@@ -30,7 +26,7 @@ from pygsti.tools import lindbladtools as _lt
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools import sdptools as _sdps
 from pygsti.baseobjs import basis as _pgb
-from pygsti.baseobjs.basis import Basis as _Basis, ExplicitBasis as _ExplicitBasis, DirectSumBasis as _DirectSumBasis, \
+from pygsti.baseobjs.basis import Basis as _Basis, DirectSumBasis as _DirectSumBasis, \
     TensorProdBasis as _TensorProdBasis
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LocalElementaryErrorgenLabel
@@ -270,7 +266,7 @@ def tracedist(a, b):
     return 0.5 * tracenorm(a - b)
 
 
-def diamonddist(a, b, mx_basis='pp', return_x=False, return_all_vars=False):
+def diamonddist(a, b, mx_basis='pp', return_x=False):
     """
     Returns the approximate diamond norm describing the difference between gate matrices.
 
@@ -474,42 +470,6 @@ def tensorized_with_eye(op, basis, ten_basis=None, std_basis=None, ten_std_basis
     ten_op_std = _np.kron(op_std, eye)
     ten_op = _bt.change_basis(ten_op_std, ten_std_basis, ten_basis)
     return ten_op, ten_basis
-
-
-def leaky_entanglement_fidelity(op_a, op_b, mx_basis, n_leak=0):
-    from pygsti.tools import leakage as _leaktools
-    temp1, temp2, _ = _leaktools.apply_tensorized_to_teststate(op_a, op_b, mx_basis, n_leak)
-    ent_fid = _np.real(temp1.conj() @ temp2)
-    return ent_fid
-
-
-def leaky_jtracedist(op_a, op_b, mx_basis, n_leak=0):
-    from pygsti.tools import leakage as _leaktools
-    temp1, temp2, ten_basis = _leaktools.apply_tensorized_to_teststate(op_a, op_b, mx_basis, n_leak)
-    temp1_std = _bt.vec_to_stdmx(temp1, ten_basis, keep_complex=True)
-    temp2_std = _bt.vec_to_stdmx(temp2, ten_basis, keep_complex=True)
-    j_dist = tracedist(temp1_std, temp2_std)
-    return j_dist
-
-
-def diamonddist_projection(
-        superop, basis, leakfree=False, seepfree=False, n_leak=0, cptp=True, subspace_diamond=False,
-        return_optvars=False, verbose=False
-    ):
-    prob, projection, solvers = _sdps.diamond_distance_projection_model(superop, basis, leakfree, seepfree, n_leak, cptp, subspace_diamond)
-    objective_val = -2
-    optvars = []
-    for solver in solvers:
-        try:
-            prob.solve(solver=solver, verbose=verbose)
-            objective_val = prob.value
-            optvars.append(projection.value)
-            optvars.extend(v.value for v in prob.variables())
-            return (objective_val, optvars) if return_optvars else objective_val
-        except Exception as e:
-            _warnings.warn(f"Running CVXPY with solver {solver} failed with message {str(e)}.")
-    _warnings.warn(f"All numerical solvers failed; returning -2!")
-    return (objective_val, optvars) if return_optvars else objective_val
 
 
 def subspace_restricted_fro_dist(a, b, mx_basis, n_leak=0):
