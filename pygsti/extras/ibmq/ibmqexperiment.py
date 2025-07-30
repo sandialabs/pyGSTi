@@ -314,7 +314,9 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
                 ordered_target_indices = list(range(len(circ.line_labels)))
                 # pygsti labels are sorted lexicographically, qiskit ordering is numeric. #TODO: this assumes that we only measure the pyGSTi qubits on the device, e.g., if the pyGSTi circuit only uses Q100 and Q101, then we only measure device qubits 100 and 101. It may be useful to make this more flexible and associate some kind of 'measured_qubits' field with a metadata dict on each pyGSTi circuit (or transpiled qiskit circ).
 
-                counts_data = partial_trace(ordered_target_indices, reverse_dict_key_bits(batch_result[i].data.cr.get_counts())) #TODO: make the name of the measurement register a kwarg (often it is named 'meas' and not 'cr')
+                counts_data = partial_trace(ordered_target_indices, reverse_dict_key_bits(batch_result[i].data.cr.get_counts()))#TODO: make the name of the measurement register a kwarg (often it is named 'meas' and not 'cr')
+                # print(counts_data)
+
                 ds.add_count_dict(circ, counts_data)
 
             self.batch_results.append(batch_result)
@@ -576,7 +578,7 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         qiskit_pass_kwargs['seed_transpiler'] = qiskit_pass_kwargs.get('seed_transpiler', self.seed)
         qiskit_pass_kwargs['layout_method'] = qiskit_pass_kwargs.get('layout_method', 'trivial')
         qiskit_pass_kwargs['routing_method'] = qiskit_pass_kwargs.get('routing_method', 'none')
-        qiskit_pass_kwargs['optimization_level'] = qiskit_pass_kwargs.get('optimization_level', 0)
+        qiskit_pass_kwargs['optimization_level'] = qiskit_pass_kwargs.get('optimization_level', 1)
         qiskit_pass_kwargs['basis_gates'] = qiskit_pass_kwargs.get('basis_gates', ibmq_backend.operation_names)
 
         print(f'transpiling to basis gates {qiskit_pass_kwargs['basis_gates']}')
@@ -633,7 +635,7 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
             with _mp.Pool(num_workers) as p:
                 isa_circuits = list(_tqdm.tqdm(p.imap(task_fn, tasks), total=len(tasks)))
 
-            self.qiskit_isa_circuit_batches = isa_circuits
+            self.qiskit_isa_circuit_batches += isa_circuits
 
             #TODO: add checkpointing once all circuits are transpiled.
 

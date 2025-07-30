@@ -878,7 +878,7 @@ class QubitGraph(_NicelySerializable):
             qubit_labels = nodes_to_keep
 
         edges = []
-        for edge in self.edges():
+        for edge in self.edges(include_directions=True):
             if edge[0] in nodes_to_keep and edge[1] in nodes_to_keep:
                 if reset_nodes:
                     edges.append((labelmap[edge[0]], labelmap[edge[1]]))

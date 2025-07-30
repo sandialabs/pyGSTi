@@ -4045,6 +4045,9 @@ class Circuit(object):
         if len(circuit.qregs) > 1:
             _warnings.warn('pyGSTi circuit mapping does not preserve Qiskit qreg structure.')
 
+        if len(circuit.cregs):
+            _warnings.warn('pyGSTi circuit mapping discards classical registers.')
+
         qubits = circuit.qubits
 
         
@@ -4057,7 +4060,7 @@ class Circuit(object):
                     
         #if it is None, build a default mapping.
         else:
-            #default mapping is the identify mapping: qubit i in the Qiskit circuit maps to qubit i in the pyGSTi circuit
+            #default mapping is the identity mapping: qubit i in the Qiskit circuit maps to qubit i in the pyGSTi circuit
             qubit_conversion = {circuit.qbit_argument_conversion(i)[0]: f'Q{i}' for i in range(circuit.num_qubits)} # in Qiskit 1.1.1, the method is called qbit_argument_conversion. In Qiskit >=1.2 (as far as Noah can tell), the method is called _qbit_argument_conversion. 
 
             qubit_idx_conversion = {i: f'Q{i}' for i in range(circuit.num_qubits)}
@@ -4369,13 +4372,15 @@ class Circuit(object):
                 # pseudo-code
                 qiskit_qubits = [qubit_conversion[qubit] for qubit in gate.qubits]
 
+                args = [float(arg) for arg in gate.args] #mitigates an issue with float args being cast to strings somewhere in the mirror benchmarking pipeline, likely in the ibmqexperiment checkpoint and from_dir.
+
                 # if qiskit_version >= 2.0:
                 #     if is_standard_gate:
                 #         qiskit_qc._append_standard_gate(qiskit_gate, qiskit_qubits, gate.args)
                 #     else:
                 #         qiskit_qc.append(qiskit_gate(gate.args), gate.qubits, copy=False)
 
-                qiskit_qc.append(qiskit_gate(*(gate.args)), qiskit_qubits, copy=False)
+                qiskit_qc.append(qiskit_gate(*args), qiskit_qubits, copy=False)
             
             if block_between_layers:
                 qiskit_qc.barrier()

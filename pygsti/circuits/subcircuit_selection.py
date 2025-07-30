@@ -123,46 +123,73 @@ def simple_weighted_subcirc_selection(full_circ, width, depth, num_subcircs,
 
     possible_starts = list(range(full_depth - depth + 1))
 
-
     if rand_state is None:
         rand_state = _np.random.RandomState()
 
-    # Check for connected graphs in cache (can be expensive)
-    if subgraph_cache is None:
-        subgraph_cache = {}
-    
-    subgraphs = []
-    if subgraph_cache is not None and width in subgraph_cache:
-        if verbosity > 0: print('Reusing subgraph cache for qubit connectivity')
-        subgraphs = subgraph_cache[width]
-    elif coupling_map is not None:
-        if verbosity > 0: print('Computing subgraphs for qubit connectivity... ', end='')
-        # coupling_map = coupling_map.get_edges()
 
-        # Build graph of only used qubits
-        edges = []
-        for cs in coupling_map:
-            qubits = [f'Q{c}' for c in cs]
-            if all([q in full_circ.line_labels for q in qubits]):
-                edges.append(qubits)
+    if coupling_map == 'all-to-all': #TODO: support other topologies by string (linear, ring, etc.)
+        qubit_subset = set(rand_state.choice(full_circ.line_labels, size=width, replace=False))
 
+    elif coupling_map == 'linear':
+        start = rand_state.choice(full_width - width - 1)
+        end = start + width
+        qubit_subset = set(full_circ.line_labels[start:end+1])
+
+    elif isinstance(coupling_map, list): # this list needs to already include the 'Q' prefix on the qubits
         G = _nx.Graph()
-        G.add_edges_from(edges)
+        G.add_edges_from(coupling_map)
+        qubit_subset = random_connected_subgraph(G, width, rand_state)
 
-        for nodes in _itertools.combinations(G.nodes, width):
-            subgraph = G.subgraph(nodes)
-            if _nx.is_connected(subgraph):
-                subgraphs.append(list(subgraph.nodes.keys()))
+    else: # likely the coupling_map is a CouplingMap instance
+        try:
+            import qiskit
+            if qiskit.__version__ != '1.1.1':
+                print("warning: 'qiskit_circuits_to_svb_mirror_edesign' is designed for qiskit 1.1.1. Your version is " + qiskit.__version__)
+        except:
+            raise RuntimeError('qiskit is required for this operation, and does not appear to be installed.')
         
-        if subgraph_cache is not None:
-            subgraph_cache[width] = subgraphs
-        if verbosity > 0: print('Done!')      
-    else:
-        raise RuntimeError('Either subgraph_cache with proper width or coupling map must be provided')
+        if isinstance(coupling_map, qiskit.transpiler.CouplingMap):
+            edges = []
+            for cs in coupling_map:
+                qubits = [f'Q{c}' for c in cs]
+                if all([q in full_circ.line_labels for q in qubits]):
+                    edges.append(qubits)
     
-    assert len(subgraphs), "Subgraphs provided but empty!"
+            G = _nx.Graph()
+            G.add_edges_from(edges)
+            qubit_subset = random_connected_subgraph(G, width, rand_state) 
 
-    qubit_mapping = {j:i for i,j in enumerate(full_circ.line_labels)}
+    # generate subgraph of desired width
+
+    qubit_subset = set(str(qubit) for qubit in qubit_subset)
+
+    # # Check for connected graphs in cache (can be expensive)
+    # if subgraph_cache is None:
+    #     subgraph_cache = {}
+    
+    # subgraphs = []
+    # if subgraph_cache is not None and width in subgraph_cache:
+    #     if verbosity > 0: print('Reusing subgraph cache for qubit connectivity')
+    #     subgraphs = subgraph_cache[width]
+    # elif coupling_map is not None:
+    #     if verbosity > 0: print('Computing subgraphs for qubit connectivity... ', end='')
+    #     # coupling_map = coupling_map.get_edges()
+
+
+
+
+    #     for nodes in _itertools.combinations(G.nodes, width):
+    #         subgraph = G.subgraph(nodes)
+    #         if _nx.is_connected(subgraph):
+    #             subgraphs.append(list(subgraph.nodes.keys()))
+        
+    #     if subgraph_cache is not None:
+    #         subgraph_cache[width] = subgraphs
+    #     if verbosity > 0: print('Done!')      
+    # else:
+    #     raise RuntimeError('Either subgraph_cache with proper width or coupling map must be provided')
+    
+    # assert len(subgraphs), "Subgraphs provided but empty!"
 
     subcircs = []
 
@@ -222,10 +249,6 @@ def simple_weighted_subcirc_selection(full_circ, width, depth, num_subcircs,
                     max_comp_duration = comp_duration
             layer_durations.append(max_comp_duration)
 
-        
-        # Sample width with cumulative line weights
-        subset_idx = rand_state.choice(range(len(subgraphs)))#, p=subset_weights/sum(subset_weights))[0]
-        qubit_subset = subgraphs[subset_idx]
 
         # We have identified a width/depth to snip out, so do so now
         # But under the assumption that we fill out width pretty quickly, it should be close
@@ -301,6 +324,8 @@ def simple_weighted_subcirc_selection(full_circ, width, depth, num_subcircs,
 
         # Build subcircuit
         subcirc = _Circuit(subcirc_layers, line_labels=sorted(list(qubit_subset)))
+
+        # print(subcirc)
         subcircs.append((subcirc, total_dropped_gates, compiled_depth, (start, end), total_dangling_gates, added_layer_indices))
     
         if verbosity > 0:
@@ -522,3 +547,60 @@ def test_strategy(full_circ, width, depth, test_param, num_subcircs=1, arch=None
                                                       rand_state=rand_state, arch=arch, subgraph_cache=subgraph_cache, verbosity=0)
     
     return subcircs, drops
+
+# import ipdb
+
+def random_connected_subgraph(G, width, rand_state):
+    # take a networkx graph and grow a connected subgraph of size 'width'
+
+    # ipdb.set_trace()
+
+    if rand_state is None:
+        rand_state = _np.random.RandomState()
+
+    # pick a random starting node
+    starting_node = rand_state.choice(G.nodes)
+
+    used_nodes = set([starting_node])
+
+    plausible_growth_nodes = set([starting_node])
+
+    for i in range(width - 1):
+        valid_node_found = False
+        while valid_node_found == False and len(plausible_growth_nodes):
+            growth_node = rand_state.choice(list(plausible_growth_nodes))
+            neighbors = set(G.neighbors(growth_node))
+            new_neighbors = neighbors.difference(used_nodes)
+
+            if len(new_neighbors):
+                new_node = rand_state.choice(list(new_neighbors))
+                used_nodes.add(new_node)
+                plausible_growth_nodes.add(new_node)
+                valid_node_found = True
+
+            else:
+                plausible_growth_nodes.remove(growth_node)
+        
+        if valid_node_found == False: # we exited because all possible nodes where the graph could be extended have been exhausted
+            raise RuntimeError(f'Could not generate a subgraph with {width} nodes')
+            # failure should only occur if the initial node is on a connected component of the graph with less nodes than 'width'.
+
+        
+    assert len(used_nodes) == width, f'set of selected nodes has length {used_nodes} but should have length {width}'
+    assert _nx.is_connected(G.subgraph(used_nodes)), f'subgraph on nodes {used_nodes} should be connected but is not'
+
+    return used_nodes
+
+        
+
+    
+
+    # compute set difference of growth_node neighbors and 'used_nodes'
+
+    # if this is empty, remove the node from the 'plausible_growth_nodes' set, and try again. if the plausible_nodes set is reduced to empty, then return an error.
+
+    # else, select a node from the set difference and add it to the used nodes list. repeat until desired size is reached.
+
+
+
+

@@ -3,6 +3,7 @@ from typing import Callable, Union, Literal, Optional, Tuple
 
 import numpy as _np
 import tqdm as _tqdm
+import warnings as _warnings
 
 from collections import defaultdict
 
@@ -15,9 +16,11 @@ from pygsti.processors import random_compilation as _rc
 
 from pygsti.circuits import subcircuit_selection as _subcircsel
 
+import time
+
 #TODO: OOP-ify this code?
 
-def active_qubits(circ, ignore=None):
+def get_active_qubits(circ, ignore=None):
     from qiskit.converters.circuit_to_dag import circuit_to_dag
 
     dag = circuit_to_dag(circ)
@@ -25,21 +28,37 @@ def active_qubits(circ, ignore=None):
     
     return(active_qubits)
 
+def get_active_qubits_no_dag(circ, ignore=set()):
+    active_qubits = set()
+    for instruction, qargs, _ in circ.data:
+        if instruction.name in ignore:
+            continue
+        for qubit in qargs:
+            active_qubits.add(qubit)
+
+    return active_qubits
+
 
 def qiskit_circuits_to_fullstack_mirror_edesign(qk_circs, #not transpiled
-                                                    qk_backend,
+                                                    qk_backend=None,
+                                                    coupling_map=None,
+                                                    basis_gates=None,
                                                     transpiler_kwargs_dict={},
                                                     mirroring_kwargs_dict={},
-                                                    num_transpilation_attempts=100
+                                                    num_transpilation_attempts=100,
+                                                    return_qiskit_time=False
                                                     ):
     try:
         import qiskit
         if qiskit.__version__ != '1.1.1':
-            print("warning: 'qiskit_circuit_list_to_fullstack_mirror_edesign' is designed for qiskit 1.1.1. Your version is " + qiskit.__version__)
+            print("warning: 'qiskit_circuits_to_fullstack_mirror_edesign' is designed for qiskit 1.1.1. Your version is " + qiskit.__version__)
 
         from qiskit import transpile
     except:
         raise RuntimeError('qiskit is required for this operation, and does not appear to be installed.')
+
+    if qk_backend is None:
+        assert coupling_map is not None and basis_gates is not None, "'coupling_map' and 'basis_gates' must be provided if 'qk_backend is not provided."
 
     test_circ_dict = defaultdict(list)
     ref_circ_dict = defaultdict(list)
@@ -54,29 +73,76 @@ def qiskit_circuits_to_fullstack_mirror_edesign(qk_circs, #not transpiled
     transpiler_kwargs_dict['approximation_degree'] = transpiler_kwargs_dict.get('approximation_degree', 1.0)
     transpiler_kwargs_dict['seed_transpiler'] = transpiler_kwargs_dict.get('seed_transpiler', None)
 
+    if return_qiskit_time:
+        qiskit_time = 0.0
+
     for k, qk_circ in qk_circs.items():
         num_virtual_qubits = qk_circ.num_qubits
         for _ in range(num_transpilation_attempts):
-            qk_test_circ = transpile(qk_circ,
-                                    backend=qk_backend, 
-                                    **transpiler_kwargs_dict)
+            
+            if return_qiskit_time: start = time.time()
 
-            num_active_qubits = len(active_qubits(qk_test_circ))
-            if num_active_qubits == num_virtual_qubits:
+            if qk_backend is not None:
+                if coupling_map is not None:
+                    _warnings.warn("'coupling_map' is ignored when 'qk_backend' is provided.")
+                if basis_gates is not None:
+                    _warnings.warn("'basis_gates' is ignored when 'qk_backend' is provided.")
+
+                qk_test_circ = transpile(qk_circ,
+                                         backend=qk_backend,
+                                         coupling_map=coupling_map,
+                                         **transpiler_kwargs_dict)
+            else:
+                qk_test_circ = transpile(qk_circ,
+                                         coupling_map=coupling_map,
+                                         basis_gates=basis_gates,
+                                         **transpiler_kwargs_dict
+                                         )
+
+            if return_qiskit_time: qiskit_time += time.time() - start
+
+            # num_active_qubits = len(active_qubits(qk_test_circ))
+            active_qubits = get_active_qubits_no_dag(qk_test_circ)
+
+            uses_ancilla = False
+
+            for qubit in active_qubits:
+                idx = qubit._index
+                init_register = qk_test_circ.layout.initial_layout[idx]._register
+                if init_register.name == 'ancilla':
+                    uses_ancilla = True
+                    print(qubit)
+                    break
+
+            # assert num_active_qubits == num_active_qubits_2
+
+            if not uses_ancilla:
                 break
         else:
             raise RuntimeError('Could not generate transpilation that does not use ancilla qubits.')
 
-        qk_init_opt_layout = qk_test_circ._layout.initial_index_layout(filter_ancillas=False)[:num_virtual_qubits]
-        qk_final_opt_layout = qk_test_circ._layout.final_index_layout(filter_ancillas=False)[:num_virtual_qubits]
+        
+        # import ipdb
+
+        # ipdb.set_trace()
+
+
+        qk_init_opt_layout = qk_test_circ.layout.initial_index_layout(filter_ancillas=False)[:num_virtual_qubits]
+        qk_final_opt_layout = qk_test_circ.layout.final_index_layout(filter_ancillas=False)[:num_virtual_qubits]
+
+        assert set(qk_init_opt_layout) == set(qk_final_opt_layout)
 
         ps_test_circ, qubit_mapping = _Circuit.from_qiskit(qk_test_circ, allow_different_gates_in_same_layer=False)
         ps_test_circ = ps_test_circ.delete_idling_lines()
-        ps_test_circ = ps_test_circ.reorder_lines(sorted(ps_test_circ.line_labels))
+
+        assert len(ps_test_circ.line_labels) <= num_virtual_qubits
+        # ps_test_circ = ps_test_circ.reorder_lines(sorted(ps_test_circ.line_labels))
 
         ps_init_opt_layout = [qubit_mapping[i] for i in qk_init_opt_layout]
         ps_final_opt_layout = [qubit_mapping[i] for i in qk_final_opt_layout]
         ps_routing_perm = {ps_init_opt_layout[i]: ps_final_opt_layout[i] for i in range(num_virtual_qubits)}
+
+        assert set(ps_init_opt_layout) == set(ps_final_opt_layout)
 
         test_metadata = {
             'id': k,
@@ -86,36 +152,73 @@ def qiskit_circuits_to_fullstack_mirror_edesign(qk_circs, #not transpiled
             'final_layout': ps_final_opt_layout,
             'routing_permutation': ps_routing_perm,
         }
+
+        # print(ps_test_circ.depth)
         
         test_circ_dict[ps_test_circ] += [test_metadata]
 
+        if qk_backend is not None:
+            reduced_coupling_map = qk_backend.coupling_map.reduce(qk_final_opt_layout) # Thanks Jordan
+        else:
+            reduced_coupling_map = coupling_map.reduce(qk_final_opt_layout)
+
+
         # generate exact reference circuit, ensuring that the line labels will align with the test circuit when inverted.
+        ref_seed = 0
         for _ in range(num_transpilation_attempts):
+            
+
+            # if return_qiskit_time: start = time.time()
+            # ipdb.set_trace()
             qk_ref_inv_circ = transpile(qk_circ.inverse(),
-                                        coupling_map=qk_backend.coupling_map,
+                                        coupling_map=reduced_coupling_map,
                                         basis_gates=['u3', 'cz'],
-                                        initial_layout=qk_final_opt_layout,
+                                        initial_layout=list(range(num_virtual_qubits)),
                                         optimization_level=1,
-                                        approximation_degree=1.0
+                                        approximation_degree=1.0,
+                                        seed_transpiler=ref_seed
                                         )
             
-            num_active_qubits = len(active_qubits(qk_ref_inv_circ))
-            if num_active_qubits == num_virtual_qubits: 
+            # if return_qiskit_time: qiskit_time += time.time() - start
+
+            # num_active_qubits = len(active_qubits(qk_ref_inv_circ))
+            active_qubits = get_active_qubits_no_dag(qk_ref_inv_circ)
+
+            uses_ancilla = False
+
+            for qubit in active_qubits:
+                idx = qubit._index
+                init_register = qk_ref_inv_circ.layout.initial_layout[idx]._register
+                if init_register.name == 'ancilla':
+                    uses_ancilla = True
+                    print(qubit)
+                    break
+
+            if not uses_ancilla:
                 break
+
+            ref_seed += 1
+
         else:
             raise RuntimeError('Could not generate transpilation that does not use ancilla qubits.')
 
-        qk_init_ref_inv_layout = qk_ref_inv_circ._layout.initial_index_layout(filter_ancillas=False)[:num_virtual_qubits]
-        qk_final_ref_inv_layout = qk_ref_inv_circ._layout.final_index_layout(filter_ancillas=False)[:num_virtual_qubits]
+        qk_init_ref_inv_reduced_layout = qk_ref_inv_circ.layout.initial_index_layout(filter_ancillas=False)[:num_virtual_qubits]
+
+        qk_final_ref_inv_reduced_layout = qk_ref_inv_circ.layout.final_index_layout(filter_ancillas=False)[:num_virtual_qubits]
 
         qk_ref_circ = qk_ref_inv_circ.inverse()
 
-        ps_ref_circ, qubit_mapping = _Circuit.from_qiskit(qk_ref_circ, allow_different_gates_in_same_layer=False)
-        ps_ref_circ = ps_ref_circ.delete_idling_lines()
-        ps_ref_circ = ps_ref_circ.reorder_lines(sorted(ps_ref_circ.line_labels))
+        qubit_map = {qk_ref_inv_circ.qbit_argument_conversion(i)[0]: f'Q{qk_final_opt_layout[i]}'
+                         for i in qk_init_ref_inv_reduced_layout}
 
-        ps_init_ref_inv_layout = [qubit_mapping[i] for i in qk_init_ref_inv_layout]
-        ps_final_ref_inv_layout = [qubit_mapping[i] for i in qk_final_ref_inv_layout]
+        ps_ref_circ, qubit_idx_map = _Circuit.from_qiskit(qk_ref_circ, qubit_conversion=qubit_map, allow_different_gates_in_same_layer=False)
+        ps_ref_circ = ps_ref_circ.delete_idling_lines()
+
+        assert len(ps_ref_circ.line_labels) <= num_virtual_qubits
+        # ps_ref_circ = ps_ref_circ.reorder_lines(sorted(ps_ref_circ.line_labels))
+
+        ps_init_ref_inv_layout = [qubit_idx_map[i] for i in qk_init_ref_inv_reduced_layout]
+        ps_final_ref_inv_layout = [qubit_idx_map[i] for i in qk_final_ref_inv_reduced_layout]
         routing_perm_ref_inv_ps = {ps_init_ref_inv_layout[i]: ps_final_ref_inv_layout[i] for i in range(num_virtual_qubits)}
 
         ref_metadata = {
@@ -127,9 +230,15 @@ def qiskit_circuits_to_fullstack_mirror_edesign(qk_circs, #not transpiled
             'routing_permutation_inv': routing_perm_ref_inv_ps
         }
 
+        # print(ps_ref_circ.depth)
+
         ref_circ_dict[ps_ref_circ] += [ref_metadata]
 
+        # ipdb.set_trace()
+
         ref_circ_id_lookup_dict[k] = ps_ref_circ
+
+        
 
     test_edesign = _FreeformDesign(test_circ_dict)
     ref_edesign = _FreeformDesign(ref_circ_dict)
@@ -145,8 +254,10 @@ def qiskit_circuits_to_fullstack_mirror_edesign(qk_circs, #not transpiled
                                          account_for_routing=True,
                                          **mirroring_kwargs_dict
                                          )
-    
-    return test_edesign, mirror_edesign
+    if return_qiskit_time:
+        return test_edesign, mirror_edesign, qiskit_time
+    else:
+        return test_edesign, mirror_edesign
 
 def qiskit_circuits_to_mirror_edesign(qk_circs, # yes transpiled
                                           mirroring_kwargs_dict={}
@@ -155,7 +266,7 @@ def qiskit_circuits_to_mirror_edesign(qk_circs, # yes transpiled
     try:
         import qiskit
         if qiskit.__version__ != '1.1.1':
-            print("warning: 'qiskit_circuit_list_to_fullstack_mirror_edesign' is designed for qiskit 1.1.1. Your version is " + qiskit.__version__)
+            print("warning: 'qiskit_circuits_to_mirror_edesign' is designed for qiskit 1.1.1. Your version is " + qiskit.__version__)
 
         from qiskit import transpile
 
@@ -172,12 +283,18 @@ def qiskit_circuits_to_mirror_edesign(qk_circs, # yes transpiled
         qk_circs = {i: qk_circ for i, qk_circ in enumerate(qk_circs)}
 
     for k, qk_test_circ in qk_circs.items():
+
+        # start = time.time()
         qk_ref_circ = transpile(qk_test_circ,
                                 basis_gates=['u3', 'cz'],
                                 layout_method='trivial',
                                 routing_method='none',
                                 optimization_level=1,
-                                approximation_degree=1.0)
+                                approximation_degree=1.0,
+                                seed_transpiler=0)
+        
+        # elapsed = time.time() - start
+        # print(f'transpilation time: {elapsed}')
         
 
         # from qiskit_aer import AerSimulator
@@ -207,10 +324,10 @@ def qiskit_circuits_to_mirror_edesign(qk_circs, # yes transpiled
         
 
         ps_test_circ = ps_test_circ.delete_idling_lines()
-        ps_test_circ = ps_test_circ.reorder_lines(sorted(ps_test_circ.line_labels))
+        # ps_test_circ = ps_test_circ.reorder_lines(sorted(ps_test_circ.line_labels))
 
         ps_ref_circ = ps_ref_circ.delete_idling_lines()
-        ps_ref_circ = ps_ref_circ.reorder_lines(sorted(ps_ref_circ.line_labels))
+        # ps_ref_circ = ps_ref_circ.reorder_lines(sorted(ps_ref_circ.line_labels))
 
 
         # R = ps_ref_circ
@@ -254,6 +371,7 @@ def qiskit_circuits_to_mirror_edesign(qk_circs, # yes transpiled
     # mirroring_kwargs_dict['num_ref_per_qubit_subset'] = mirroring_kwargs_dict.get('num_ref_per_qubit_subset', 10)
     # mirroring_kwargs_dict['rand_state'] = mirroring_kwargs_dict.get('rand_state', _np.random.RandomState())
     
+    start = time.time()
 
     mirror_edesign = make_mirror_edesign(test_edesign=test_edesign,
                                          ref_edesign=ref_edesign,
@@ -261,6 +379,9 @@ def qiskit_circuits_to_mirror_edesign(qk_circs, # yes transpiled
                                          account_for_routing=False,
                                          **mirroring_kwargs_dict
                                          )
+
+    elapsed = time.time() - start
+    print(f'mirroring time: {elapsed}')
     
     return test_edesign, mirror_edesign
 
@@ -278,7 +399,7 @@ def qiskit_circuits_to_svb_mirror_edesign(qk_circs,
     try:
         import qiskit
         if qiskit.__version__ != '1.1.1':
-            print("warning: 'qiskit_circuit_list_to_fullstack_mirror_edesign' is designed for qiskit 1.1.1. Your version is " + qiskit.__version__)
+            print("warning: 'qiskit_circuits_to_svb_mirror_edesign' is designed for qiskit 1.1.1. Your version is " + qiskit.__version__)
 
         from qiskit import transpile
     except:
@@ -297,7 +418,7 @@ def qiskit_circuits_to_svb_mirror_edesign(qk_circs,
     for k, qk_circ in qk_circs.items():
         ps_circ, _ = _Circuit.from_qiskit(qk_circ, allow_different_gates_in_same_layer=True)
         ps_circ = ps_circ.delete_idling_lines()
-        ps_circ = ps_circ.reorder_lines(sorted(ps_circ.line_labels))
+        # ps_circ = ps_circ.reorder_lines(sorted(ps_circ.line_labels))
 
         ps_circs[k] = ps_circ
 
@@ -331,19 +452,35 @@ def qiskit_circuits_to_svb_mirror_edesign(qk_circs,
         ref_circ_id_lookup_dict = {}
 
         for ps_test_circ, auxlist in test_edesign.aux_info.items():
+            qubit_mapping_dict = {sslbl: i for i, sslbl in enumerate(ps_test_circ.line_labels)} # avoid mapping small circuits to large backends since connectivity is already ensured
+
+            # import ipdb
+
+            # ipdb.set_trace()
+
             # convert back to qiskit to perform reference transpilations in u3-cz gate set (no layer blocking required, just need logical equivalence)
-            qk_test_circ = ps_test_circ.convert_to_qiskit(qubit_conversion='remove-Q', num_qubits=backend_num_qubits)
+            qk_test_circ = ps_test_circ.convert_to_qiskit(qubit_conversion=qubit_mapping_dict,
+                                                        #   num_qubits=backend_num_qubits
+                                                          )
             qk_ref_circ = transpile(qk_test_circ,
                                     basis_gates=['u3', 'cz'],
                                     layout_method='trivial',
                                     routing_method='none',
                                     optimization_level=1,
-                                    approximation_degree=1.0
+                                    approximation_degree=1.0,
+                                    seed_transpiler=0
                                     )
+
+    
+
             # convert those reference circuits back to pyGSTi (layer blocking required to separate u3 and cz)
-            ps_ref_circ, _ = _Circuit.from_qiskit(qk_ref_circ, allow_different_gates_in_same_layer=False)
+            qubit_mapping_dict_2 = {qk_test_circ.qbit_argument_conversion(i)[0]: sslbl for sslbl, i in qubit_mapping_dict.items()} # now map back
+            # in Qiskit 1.1.1, the method is called qbit_argument_conversion. In Qiskit >=1.2 (as far as Noah can tell), the method is called _qbit_argument_conversion.
+
+            ps_ref_circ, _ = _Circuit.from_qiskit(qk_ref_circ,
+                                                  qubit_conversion=qubit_mapping_dict_2, allow_different_gates_in_same_layer=False)
             ps_ref_circ = ps_ref_circ.delete_idling_lines()
-            ps_ref_circ = ps_ref_circ.reorder_lines(sorted(ps_ref_circ.line_labels))
+            # ps_ref_circ = ps_ref_circ.reorder_lines(sorted(ps_ref_circ.line_labels))
             
             for aux in auxlist:
                 ref_circ_dict[ps_ref_circ] += [aux]
@@ -435,6 +572,7 @@ def make_mirror_edesign(test_edesign: _FreeformDesign,
     else:
         print("using provided edesign for both reference and test compilations")
 
+    start = time.time()
 
     for c, auxlist in _tqdm.tqdm(test_edesign.aux_info.items(), ascii=True, desc='Sampling mirror circuits'):
         test_aux = auxlist[0]
@@ -469,6 +607,9 @@ def make_mirror_edesign(test_edesign: _FreeformDesign,
         # R for "Reference" circuit, T for "Test" circuit
         R = exact_circ
         T = c
+
+        # print(f'test circ depth: {T.depth}')
+        # print(f'ref circ depth: {R.depth}')
 
         R_inv = compute_inverse(circ=R, gate_set=gate_set, inverse=inverse, inv_kwargs=inv_kwargs)
 
@@ -533,13 +674,22 @@ def make_mirror_edesign(test_edesign: _FreeformDesign,
                 elif gate_set == 'u3_cx':
 
                     # bare-ref
+
+                    # start2 = time.time()
+
                     Rinv_Linv, L_T_Rinv_Linv_bs = random_compiler.compile(R_inv + L_bareref_inv)
                     L_T_Rinv_Linv = L_bareref + T + Rinv_Linv
+
+                    # print(f'tr time: {time.time() - start2}')
+
+                    # start2 = time.time()
 
                     # L_T_Rinv_Linv = L_T_Rinv_Linv.reorder_lines(c.line_labels)
 
                     # ref-ref
                     L_R_Rinv_Linv, L_R_Rinv_Linv_bs = random_compiler.compile(L_refref + R + R_inv + L_refref_inv)
+
+                    # print(f'rr time: {time.time() - start2}')
 
                     # the assertions below check if the circuit addition in the function calls above have caused a line label reordering. If so, the MCFE code will compare bitstrings incorrectly, which is bad. This issue is fixable with enough Circuit.reorder_lines() calls, but the better approach is simply to ensure that all circuits in test_edesign and ref_edesign obey a lexicographical ordering. This is easily done by using something like 'c = c.reorder_lines(sorted(c.line_labels)) on the circuits *prior* to creating the mirror edesign.
 
@@ -651,6 +801,10 @@ def make_mirror_edesign(test_edesign: _FreeformDesign,
  
             # could change this to the same structure as described in the comment above if defaultdict(list) is not used
 
+    # print(f'tr+rr time: {time.time() - start}')
+
+    # start = time.time()
+
     for w, width_subsets in qubit_subsets.items():
         # subset_indices = rand_state.choice(list(range(len(width_subsets))), num_ref_per_qubit_subset)
         # for j in tqdm.tqdm(range(num_ref_per_qubit_subset), ascii=True, desc=f'Sampling width {w} reference circuits'):
@@ -669,6 +823,7 @@ def make_mirror_edesign(test_edesign: _FreeformDesign,
                 spam_ref = L + compute_inverse(circ=L, gate_set=gate_set, inverse=inverse, inv_kwargs=inv_kwargs)
                 spam_refs[spam_ref].append({'idealout': '0'*w, 'id': j, 'qs_to_measure': spam_ref.line_labels, 'width': w})
 
+    # print(f'ref time: {time.time() - start}')
 
     edesigns = {}
     if mirroring_strategy == 'pauli_rc':

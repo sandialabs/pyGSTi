@@ -133,7 +133,12 @@ def rc_predicted_process_fidelity(bare_rc_effective_pols, rc_rc_effective_pols, 
         return 0.
     else:
         pfid = polarization_to_fidelity(a / _np.sqrt(b * c), n)
-        return min(pfid, 1.0)
+        if pfid < 0.0:
+            return 0.0
+        elif pfid > 1.0:
+            return 1.0
+        else:
+            return pfid
         # return pfid
 
 
@@ -375,6 +380,9 @@ class VBDataFrame(object):
         """
 
         eff_pols = {k: {} for k in mirrored_data.edesign.keys()}
+
+        # import ipdb
+        # ipdb.set_trace()
     
         # Stats about the base circuit
         u3_densities = {}
@@ -446,7 +454,7 @@ class VBDataFrame(object):
                         # Skip statistic gathering for reference circuits or base circuits we've seen already
                         continue
 
-                    orig_circ = reverse_circ_ids[key[2]]
+                    # orig_circ = reverse_circ_ids[key[2]]
 
                     # u3_count = 0
                     # cnot_count = 0
@@ -469,8 +477,8 @@ class VBDataFrame(object):
                     # cnot_counts[key] = cnot_count / 2 # Want 1 for each CNOT
                     # cnot_depths[key] = cnot_depth
                     # TODO: add 2Q gate density metric
-                    pygsti_depths[key] = orig_circ.depth
-                    idling_qubits[key] = len(orig_circ.idling_lines())
+                    # pygsti_depths[key] = orig_circ.depth
+                    # idling_qubits[key] = len(orig_circ.idling_lines())
                     if dropped_gates:
                         dropped_gates[key] = aux['base_aux']['dropped_gates']
                     occurrences[key] = len(auxlist)
@@ -877,7 +885,7 @@ class VBDataFrame(object):
         xmap = {j: i for i, j in enumerate(xticks)}
         ymap = {j: i for i, j in enumerate(yticks)}
         
-        # Jordan-Wigner (upper left triange)
+        # Jordan-Wigner (upper left triangle)
         acc_values = self.dataframe.groupby([x_axis, y_axis])[c_axis].apply(accumulator)
         if show_dropped_gates:
             dg_values = self.dataframe.groupby([x_axis, y_axis])["Dropped Gates"].apply(dg_accumulator)
@@ -906,6 +914,8 @@ class VBDataFrame(object):
             tout = _plt.Polygon(outer_points, edgecolor='k', fill=None)
             ax.add_patch(tout)
         
+        # cbar = _plt.colorbar()
+        # cbar.set_clim(0.0, 1.0)
         # # Bravyi-Kitaev (lower right triange)
         # acc_values = bk_df.groupby([x_axis, y_axis])[c_axis].apply(accumulator)
         # dg_values = bk_df.groupby([x_axis, y_axis])["Dropped Gates"].apply(dg_accumulator)

@@ -80,6 +80,8 @@ def pauli_randomize_circuit(circ, rand_state=None, return_bs=False, return_targe
     p = _np.zeros(2*n, int)
     # q = _np.zeros(2*n, int) # fixes a bug that occurs if there are no U3 layers in the entire circuit (but tbh this should be fixed a different way)
 
+    # print(d)
+
     return_0_bs = False
 
     if insert_test_layers:
@@ -97,7 +99,8 @@ def pauli_randomize_circuit(circ, rand_state=None, return_bs=False, return_targe
         if layer_0[0].name == 'Gcnot':
             return_0_bs = True
 
-
+    qubit_map = {j:i for i,j in enumerate(circ.line_labels)}
+    
     qubits = circ.line_labels
 
     layers = []
@@ -125,7 +128,7 @@ def pauli_randomize_circuit(circ, rand_state=None, return_bs=False, return_targe
                 q = 2 * rand_state.randint(0, 2, 2*n)
             # update_u3_parameters now twirls/adds label for empty qubits, so don't prepad for speed
             #padded_layer = pad_layer(layer, qubits)
-            rc_layer = update_u3_parameters(layer, p, q, qubits)
+            rc_layer = update_u3_parameters(layer, p, q, qubit_map)
             # print(rc_layer)
             layers.append(rc_layer)
             p = q
@@ -136,13 +139,13 @@ def pauli_randomize_circuit(circ, rand_state=None, return_bs=False, return_targe
             for g in layer:
                 if g.name == 'Gcnot':
                     (control, target) = g.qubits
-                    p[qubits.index(control)] = (p[qubits.index(control)] + p[qubits.index(target)]) % 4
-                    p[n + qubits.index(target)] = (p[n + qubits.index(control)] + p[n + qubits.index(target)]) % 4
+                    p[qubit_map[control]] = (p[qubit_map[control]] + p[qubit_map[target]]) % 4
+                    p[n + qubit_map[target]] = (p[n + qubit_map[control]] + p[n + qubit_map[target]]) % 4
                     # q = p
                 elif g.name == 'Gcphase':
                     (control, target) = g.qubits
-                    p[qubits.index(control)] = (p[qubits.index(control)] + p[n + qubits.index(target)]) % 4
-                    p[qubits.index(target)] = (p[n + qubits.index(control)] + p[qubits.index(target)]) % 4
+                    p[qubit_map[control]] = (p[qubit_map[control]] + p[n + qubit_map[target]]) % 4
+                    p[qubit_map[target]] = (p[n + qubit_map[control]] + p[qubit_map[target]]) % 4
                 else:
                     raise ValueError("Circuit can only contain Gcnot, Gcphase, Gu3, and Gi gates in separate layers!")
             # last_layer_u3 = False
@@ -345,22 +348,23 @@ def randomize_central_pauli(circ: _Circuit, rand_state=None, return_bs=False, re
 
 
 
-def update_u3_parameters(layer, p, q, qubits):
+def update_u3_parameters(layer, p, q, qubit_map):
     """
     Takes a layer containing u3 gates, and finds a new layer containing
     u3 gates that implements p * layer * q (p followed by layer followed by
     q, so q * layer * p in matrix order), where p and q are vectors  describing layers of paulis.
 
     """
-    used_qubits = []
+    used_qubits = set()
 
     new_layer = []
-    n = len(qubits)
+    n = len(qubit_map)
 
     for g in layer:
         assert(g.name == 'Gu3')
         (theta, phi, lamb) = (float(g.args[0]), float(g.args[1]), float(g.args[2]))
-        qubit_index = qubits.index(g.qubits[0])
+        qubit = g.qubits[0]
+        qubit_index = qubit_map[qubit]
         if p[qubit_index] == 2:   # Z gate preceeding the layer
             lamb = lamb + _np.pi
         if q[qubit_index] == 2:   # Z gate following the layer
@@ -374,12 +378,16 @@ def update_u3_parameters(layer, p, q, qubits):
             phi = -phi - _np.pi
             lamb = lamb
 
-        new_args = (mod_2pi(theta), mod_2pi(phi), mod_2pi(lamb))
-        new_label = _Label('Gu3', g.qubits[0], args=new_args)
+        if _np.allclose((theta, phi, lamb), (0.0, 0.0, 0.0)):
+            new_label = _Label('Gi', qubit, args=None)
+        else:
+            new_args = (mod_2pi(theta), mod_2pi(phi), mod_2pi(lamb))
+            new_label = _Label('Gu3', qubit, args=new_args)
+            
         new_layer.append(new_label)
-        used_qubits.append(g.qubits[0])
+        used_qubits.add(qubit)
     
-    for qubit_index, qubit in enumerate(qubits):
+    for qubit, qubit_index in qubit_map.items():
         if qubit in used_qubits:
             continue
 
@@ -397,13 +405,16 @@ def update_u3_parameters(layer, p, q, qubits):
             theta = theta - _np.pi
             phi = -phi - _np.pi
             lamb = lamb
-        
-        new_args = (mod_2pi(theta), mod_2pi(phi), mod_2pi(lamb))
-        new_label = _Label('Gu3', qubit, args=new_args)
-        new_layer.append(new_label)
-        used_qubits.append(qubit)
 
-    assert(set(used_qubits) == set(qubits))
+        if _np.allclose((theta, phi, lamb), (0.0, 0.0, 0.0)):
+            new_label = _Label('Gi', qubit, args=None)
+        else:
+            new_args = (mod_2pi(theta), mod_2pi(phi), mod_2pi(lamb))
+            new_label = _Label('Gu3', qubit, args=new_args)
+        new_layer.append(new_label)
+        used_qubits.add(qubit)
+
+    assert(set(used_qubits) == set(qubit_map.keys()))
 
     return new_layer
 
