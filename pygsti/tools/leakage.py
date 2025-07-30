@@ -372,7 +372,7 @@ def add_param_preserving_gauge_opt(results: ModelEstimateResults, est_key: str, 
     est = results.estimates[est_key]
     seed_mdl = est.models['final iteration estimate']
     seed_mdl = ExplicitOpModel.from_nice_serialization(seed_mdl._to_nice_serialization())
-    _add_gauge_opt(results, est_key, gop_params, seed_mdl, verbosity=verbosity)
+    _add_gauge_opt(results, est_key, gop_params, seed_mdl, unreliable_ops=(), verbosity=verbosity)
     # ^ That can convert to whatever parameterization it wants
     #   It'll write to est._gaugeopt_suite.
     for gop_name, gop_dictorlist in est._gaugeopt_suite.gaugeopt_argument_dicts.items():
