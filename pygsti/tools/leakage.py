@@ -15,7 +15,7 @@ from pygsti.processors import QubitProcessorSpec
 from pygsti.baseobjs.basis import TensorProdBasis, Basis, BuiltinBasis
 import numpy as np
 
-from typing import Union, Dict, Optional, TypeVar, TYPE_CHECKING
+from typing import Union, Dict, Optional, List, TypeVar, TYPE_CHECKING
 if TYPE_CHECKING:
     from pygsti.protocols.gst import ModelEstimateResults
 else:
@@ -233,22 +233,6 @@ def leaky_qubit_model_from_pspec(ps_2level: QubitProcessorSpec, levels_readout_z
 
 # MARK: gauge optimization
 
-def std_lago_gopsuite(model):
-    from pygsti.protocols.gst import GSTGaugeOptSuite
-    temp_gos = GSTGaugeOptSuite(gaugeopt_suite_names=('stdgaugeopt',))
-    gop_params = temp_gos.to_dictionary(model)
-    gop_params   = {'LAGO':
-        [gp for gp in gop_params['stdgaugeopt'] if 'TPSpam' not in str(type(gp['gauge_group']))]
-    }
-    for inner_dict in gop_params['LAGO']:
-        inner_dict['method'] = 'L-BFGS-B'
-        inner_dict['n_leak'] = 1
-        inner_dict['gates_metric'] = 'frobenius squared'
-        inner_dict['spam_metric']  = 'frobenius squared'
-        inner_dict['convert_model_to']['to_type'] = 'full'
-    return gop_params
-
-
 def transform_composed_model(mdl, s):
     """
     Gauge transform this model.
@@ -299,18 +283,24 @@ def transform_composed_model(mdl, s):
     return mdl
 
 
-def lago_gaugeopt_params(existing_est):
-    gop_params   = existing_est.goparameters
-    gop_params   = copy.deepcopy(gop_params)
-    gop_params   = {'LAGO':
-        [gp for gp in gop_params['stdgaugeopt'] if 'TPSpam' not in str(type(gp['_gaugeGroupEl']))]
-    }
-    for inner_dict in gop_params['LAGO']:
+def lagoified_gopparams_dicts(gopparams_dicts: List[Dict]):
+    gopparams_dicts = [gp for gp in gopparams_dicts if 'TPSpam' not in str(type(gp['_gaugeGroupEl']))]
+    gopparams_dicts = copy.deepcopy(gopparams_dicts)
+    for inner_dict in gopparams_dicts:
         inner_dict['method'] = 'L-BFGS-B'
         inner_dict['n_leak'] = 1
         inner_dict['gates_metric'] = 'frobenius squared'
         inner_dict['spam_metric']  = 'frobenius squared'
         inner_dict['convert_model_to']['to_type'] = 'full'
+    return gopparams_dicts
+
+
+def std_lago_gopsuite(model):
+    from pygsti.protocols.gst import GSTGaugeOptSuite
+    std_gop_suite = GSTGaugeOptSuite(gaugeopt_suite_names=('stdgaugeopt',))
+    std_gos_lods  = std_gop_suite.to_dictionary(model)['stdgaugeopt']  # list of dictionaries
+    lago_gos_lods = lagoified_gopparams_dicts(std_gos_lods)
+    gop_params = {'LAGO': lago_gos_lods}
     return gop_params
 
 
@@ -327,7 +317,9 @@ def param_preserving_gauge_opt(gop_params_dict, results: ModelEstimateResults, e
 
 
 def add_lago_model(results: ModelEstimateResults, est_key: str, verbosity: int = 0):
-    existing_est = results.estimates[est_key]
-    gop_params = lago_gaugeopt_params(existing_est)
+    existing_est  = results.estimates[est_key]
+    std_gos_lods  = existing_est.goparameters['stdgaugeopt']
+    lago_gos_lods = lagoified_gopparams_dicts(std_gos_lods)
+    gop_params = {'LAGO': lago_gos_lods}
     param_preserving_gauge_opt(gop_params, results, est_key, verbosity)
     return
