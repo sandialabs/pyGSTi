@@ -240,7 +240,9 @@ class ErrorGeneratorPropagator:
         mode : str, optional ('magnus' default)
             This specifies whether to apply the BCH approximation using a given order
             of the Magnus expansion (default mode of 'magnus') or via repeated application of
-            the pairwise BCH of the given order 'pairwise'.
+            the pairwise BCH of the given order 'pairwise'. 'magnus' mode supports up to 
+            the third-order Magnus expansion, while 'pairwise' supports up to fifth-order
+            in the BCH approximation.
         """
 
         propagated_errorgen_layers = self.propagate_errorgens(circuit, include_spam=include_spam)
@@ -249,9 +251,11 @@ class ErrorGeneratorPropagator:
             return propagated_errorgen_layers[0]
         
         if mode == 'magnus':
+            assert bch_order<=3, 'The highest order Magnus expansion supported is currently third-order, requested {bch_order}.'
             combined_err_layer = _eprop.magnus_expansion(propagated_errorgen_layers, magnus_order=bch_order, truncation_threshold=truncation_threshold)
 
         elif mode == 'pairwise':
+            assert bch_order<=5, 'The highest order pairwise BCH expansion supported is currently fifth-order, requested {bch_order}.'
             #iterate through in reverse order (the propagated layers are
             #in circuit ordering and not matrix multiplication ordering at the moment)
             #and combine the terms pairwise

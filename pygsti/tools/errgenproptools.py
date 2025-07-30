@@ -574,14 +574,23 @@ def magnus_expansion(errorgen_layers, magnus_order=1, truncation_threshold=1e-14
 
             #(1/6) \sum_{t1=1}^{n} \sum_{t2=1}^{t1} \sum_{t3=1}^{t2} [A(t1), [A(t2), A(t3)]] #use linearity
             #-> (1/6) \sum_{t1=1}^{n} [A(t1), \sum_{t2=1}^{t1} \sum_{t3=1}^{t2} [A(t2), A(t3)]]
-            running_23_commutator_sum = {}
+            #when t1=t2 we pick up an extra factor of 1/2 from boundary effect in the discretization of the time-ordered integral.
+
+            #this is a version of the running sum without the extra 1/2 from boundaries, in the time-ordered integral which is what will get propagated
+            #forward through the computation.
+            running_23_commutator_sum = {} 
             for i in range(len(errorgen_layers)): #t1
                 new_23_commutator_terms = []
                 j=i #new t2 value, can remove this and just replace j with i, keeping temporatily for clarity.
                 for k in range(j): #t3
                     new_23_commutator_terms.extend(_error_generator_layer_pairwise_commutator(errorgen_layers[j], errorgen_layers[k], 
-                                                                                              addl_weight=(1/6), identity=identity, 
+                                                                                              addl_weight=(1/12), 
+                                                                                              identity=identity, 
                                                                                               truncation_threshold=truncation_threshold))
+                #with the way terms are being accumulated it is always the case at this point that j=i, so we need the extra
+                #factor of 1/2 on the new terms for the computation of the outer commutator with A(t1) with running_23_sum, 
+                #but for future iterations we want to adjust the weights we added to undo this factor of 1/2 for later iterations.
+                
                 #loop through all of the elements of new_23_commutator_terms and instantiate any new keys in running_23_commutator_sum
                 for error_tuple in new_23_commutator_terms:
                     if error_tuple[0] not in running_23_commutator_sum:
@@ -591,18 +600,26 @@ def magnus_expansion(errorgen_layers, magnus_order=1, truncation_threshold=1e-14
                 #There may be duplicates, which should be summed together.
                 for error_tuple in new_23_commutator_terms:
                     running_23_commutator_sum[error_tuple[0]] += error_tuple[1]
-                #truncate any terms which are below the truncation threshold following
-                #aggregation.
-                running_23_commutator_sum = {key: val for key, val in running_23_commutator_sum.items() if abs(val)>truncation_threshold}
-
+                #truncate any terms which are below the truncation threshold following aggregation. 
+                curr_iter_23_commutator_sum = {key: val for key, val in running_23_commutator_sum.items() if abs(val)>truncation_threshold}
+                
                 #and finally compute the commutator of the running sum with the t1 error generator layer
-                commuted_errgen_list_1.extend(_error_generator_layer_pairwise_commutator(errorgen_layers[i], running_23_commutator_sum, 
+                commuted_errgen_list_1.extend(_error_generator_layer_pairwise_commutator(errorgen_layers[i], curr_iter_23_commutator_sum, 
                                                                                          identity=identity, 
                                                                                          truncation_threshold=truncation_threshold))
+                #adjust the weights in running_23_commutator_sum to double to contribution added earlier bringing the weight from the Magnus expansion up to 1/6 for
+                #future iterations.
+                for error_tuple in new_23_commutator_terms:
+                    running_23_commutator_sum[error_tuple[0]] += error_tuple[1]
+                #truncate any terms which are below the truncation threshold following aggregation. 
+                running_23_commutator_sum = {key: val for key, val in running_23_commutator_sum.items() if abs(val)>truncation_threshold}
+
             #TODO: Cache intermediate values for [A(t1), A(t2)] when doing the second-order computation to reuse here.            
-            #-(1/6) \sum_{t1=1}^{n} \sum_{t2=1}^{t1} \sum_{t3=1}^{t2} [A(t3), [A(t1), A(t2)]] This sum can be reordered as follows (this was nonobvious to me until I confirmed explicitly)
+            #-(1/6) \sum_{t1=1}^{n} \sum_{t2=1}^{t1} \sum_{t3=1}^{t2} [A(t3), [A(t1), A(t2)]] 
+            #This sum can be reordered as follows (this was nonobvious to me until I confirmed explicitly)
             #-(1/6) \sum_{t3=1}^{n-1} \sum_{t2=t3}^{n-1} \sum_{t1=t2+1}^{n} [A(t3), [A(t1), A(t2)]]
             #-(1/6) \sum_{t3=1}^{n-1} \sum_{t1=t2+1}^{n} [A(t3), \sum_{t2=t3}^{n-1} [A(t1), A(t2)]] #applying linearity
+            #when t3=t2 we pick up an extra factor of 1/2 from the discretization of the time-ordered integral. (see computation of previous term for implementation details).
             #The inner commutator sum can be accumulated in a running fashion, and this is easiest done if we run over the outer sum index in reverse.            
             running_12_commutator_sum = {}
             for k in range(len(errorgen_layers)-2, -1, -1): #t3
@@ -610,7 +627,7 @@ def magnus_expansion(errorgen_layers, magnus_order=1, truncation_threshold=1e-14
                 j=k #new t2 value, can remove this and just replace j with k, keeping temporarily for clarity.
                 for i in range(j+1, len(errorgen_layers)): #t1
                     new_12_commutator_terms.extend(_error_generator_layer_pairwise_commutator(errorgen_layers[i], errorgen_layers[j], 
-                                                                                              addl_weight=(-1/6), identity=identity, 
+                                                                                              addl_weight=(-1/12), identity=identity, 
                                                                                               truncation_threshold=truncation_threshold))
                 #loop through all of the elements of new_12_commutator_terms and instantiate any new keys in running_12_commutator_sum
                 for error_tuple in new_12_commutator_terms:
@@ -623,13 +640,17 @@ def magnus_expansion(errorgen_layers, magnus_order=1, truncation_threshold=1e-14
                     running_12_commutator_sum[error_tuple[0]] += error_tuple[1]
                 #truncate any terms which are below the truncation threshold following
                 #aggregation.
-                running_12_commutator_sum = {key: val for key, val in running_12_commutator_sum.items() if abs(val)>truncation_threshold}
+                curr_iter_12_commutator_sum = {key: val for key, val in running_12_commutator_sum.items() if abs(val)>truncation_threshold}
 
                 #and finally compute the commutator of the running sum with the t3 error generator layer
-                commuted_errgen_list_2.extend(_error_generator_layer_pairwise_commutator(errorgen_layers[k], running_12_commutator_sum, 
+                commuted_errgen_list_2.extend(_error_generator_layer_pairwise_commutator(errorgen_layers[k], curr_iter_12_commutator_sum, 
                                                                                          identity=identity, 
                                                                                          truncation_threshold=truncation_threshold))
-
+                for error_tuple in new_12_commutator_terms:
+                    running_12_commutator_sum[error_tuple[0]] += error_tuple[1]
+                #truncate any terms which are below the truncation threshold following
+                #aggregation.
+                running_12_commutator_sum = {key: val for key, val in running_12_commutator_sum.items() if abs(val)>truncation_threshold}
 
             #finally combine the contents of commuted_errgen_list_1 and commuted_errgen_list_2 
             #turn the two new commuted error generator lists into dictionaries.
