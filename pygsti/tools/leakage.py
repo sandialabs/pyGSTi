@@ -17,9 +17,14 @@ import numpy as np
 
 from typing import Union, Dict, Optional, List, TypeVar, TYPE_CHECKING
 if TYPE_CHECKING:
-    from pygsti.protocols.gst import ModelEstimateResults
+    from pygsti.protocols.gst import ModelEstimateResults, GSTGaugeOptSuite
+    from pygsti.models import ExplicitOpModel
+    from pygsti.models.gaugegroup import GaugeGroupElement
 else:
     ModelEstimateResults = TypeVar('ModelEstimateResults')
+    GaugeGroupElement    = TypeVar('GaugeGroupElement')
+    GSTGaugeOptSuite     = TypeVar('GSTGaugeOptSuite')
+    ExplicitOpModel      = TypeVar('ExplicitOpModel')
 
 
 # MARK: metrics
@@ -233,7 +238,7 @@ def leaky_qubit_model_from_pspec(ps_2level: QubitProcessorSpec, levels_readout_z
 
 # MARK: gauge optimization
 
-def transform_composed_model(mdl, s):
+def transform_composed_model(mdl: ExplicitOpModel, s : GaugeGroupElement) -> ExplicitOpModel:
     """
     Gauge transform this model.
 
@@ -250,8 +255,17 @@ def transform_composed_model(mdl, s):
     -------
     ExplicitOpModel
     """
+    from pygsti.models import ExplicitOpModel
+    assert isinstance(mdl, ExplicitOpModel)
+
     oldmdl = mdl
-    mdl = oldmdl.copy()
+
+    def mycopy(_m):
+        s = _m.to_nice_serialization()
+        t = ExplicitOpModel.from_nice_serialization(s)
+        return t
+    
+    mdl = mycopy(oldmdl)
 
     from pygsti.modelmembers.operations import ComposedOp, StaticArbitraryOp
     from pygsti.modelmembers.povms import ComposedPOVM
@@ -304,22 +318,44 @@ def std_lago_gopsuite(model):
     return gop_params
 
 
-def param_preserving_gauge_opt(gop_params_dict, results: ModelEstimateResults, est_key: str, verbosity: int = 0):
+def add_param_preserving_gauge_opt(results: ModelEstimateResults, est_key: str, gop_params: GSTGaugeOptSuite, verbosity: int = 0):
     from pygsti.protocols.gst import _add_gauge_opt
+    from pygsti.models.gaugegroup import FullGaugeGroupElement
+    from pygsti.models import ExplicitOpModel
     est = results.estimates[est_key]
     seed_mdl = est.models['final iteration estimate']
-    _add_gauge_opt(results, est_key, gop_params_dict, seed_mdl, verbosity=verbosity)
-    for gop_name in gop_params_dict.keys():
-        ggel = est._gaugeopt_suite.gaugeopt_argument_dicts[gop_name]['_gaugeGroupEl']
+    seed_mdl = ExplicitOpModel.from_nice_serialization(seed_mdl._to_nice_serialization())
+    _add_gauge_opt(results, est_key, gop_params, seed_mdl, verbosity=verbosity)
+    # ^ That can convert to whatever parameterization it wants
+    #   It'll write to est._gaugeopt_suite.
+    for gop_name, gop_dictorlist in est._gaugeopt_suite.gaugeopt_argument_dicts.items():
+        if isinstance(gop_dictorlist, list):
+            ggel_mx = np.eye(seed_mdl.basis.dim)
+            for sub_gopdict in gop_dictorlist:
+                assert isinstance(sub_gopdict, dict)
+                assert '_gaugeGroupEl' in sub_gopdict
+                ggel_mx = ggel_mx @ sub_gopdict['_gaugeGroupEl'].transform_matrix
+            ggel = FullGaugeGroupElement(ggel_mx)
+        else:
+            ggel = gop_dictorlist['_gaugeGroupEl']
         model_implicit_gauge = transform_composed_model(est.models['final iteration estimate'], ggel)
         est.models[gop_name] = model_implicit_gauge
     return
 
 
-def add_lago_model(results: ModelEstimateResults, est_key: str, verbosity: int = 0):
-    existing_est  = results.estimates[est_key]
-    std_gos_lods  = existing_est.goparameters['stdgaugeopt']
-    lago_gos_lods = lagoified_gopparams_dicts(std_gos_lods)
-    gop_params = {'LAGO': lago_gos_lods}
-    param_preserving_gauge_opt(gop_params, results, est_key, verbosity)
+def add_lago_models(results: ModelEstimateResults, est_key: Optional[str] = None, gos: Optional[GSTGaugeOptSuite] = None, verbosity: int = 0):
+    from pygsti.protocols.gst import GSTGaugeOptSuite
+    if gos is None:
+        existing_est  = results.estimates[est_key]
+        std_gos_lods  = existing_est.goparameters['stdgaugeopt']
+        lago_gos_lods = lagoified_gopparams_dicts(std_gos_lods)
+        gop_params = {'LAGO': lago_gos_lods}
+        gos = GSTGaugeOptSuite(gaugeopt_argument_dicts=gop_params)
+    if isinstance(est_key, str):
+        add_param_preserving_gauge_opt(results, est_key, gos, verbosity)
+    elif est_key is None:
+        for est_key in results.estimates.keys():
+            add_lago_models(results, est_key, gos, verbosity)
+    else:
+        raise ValueError()
     return
