@@ -6797,13 +6797,12 @@ def magnus_numerical(propagated_errorgen_layers, error_propagator, magnus_order=
         An `ErrorGeneratorPropagator` instance to use as part of the Magnus calculation.
 
     magnus_order : int, optional (default 1)
-        Order of the Magnus expansion to apply (up to 2 is supported currently).
+        Order of the Magnus expansion to apply (up to 3 is supported currently).
 
     Returns
     -------
     numpy.ndarray
-        A dense numpy array corresponding to the result of the iterative application of the BCH
-        approximation.
+        A dense numpy array corresponding to the result of Magnus expansion.
     """
 
     #Need to build an appropriate basis for getting the error generator matrices.
@@ -6833,7 +6832,9 @@ def magnus_numerical(propagated_errorgen_layers, error_propagator, magnus_order=
         if curr_order == 0:
             for mat in errorgen_layer_mats:
                 magnus += mat
-                
+        
+        #second-order magnus terms:
+        #(1/2) \sum_{t1=1}^n \sum_{t2=1}^{t2} [A(t1), A(t2)]
         elif curr_order == 1:
             errorgen_pairs = []
             for i in range(len(errorgen_layer_mats)):
@@ -6842,8 +6843,22 @@ def magnus_numerical(propagated_errorgen_layers, error_propagator, magnus_order=
             for errorgen_pair in errorgen_pairs:
                 magnus += .5*_matrix_commutator(errorgen_pair[0], errorgen_pair[1])
         
+        #third-order magnus terms:
+        #(1/6) \sum_{t1=1}^{n} \sum_{t2=1}^{t1} \sum_{t3=1}^{t2} ([A(t1), [A(t2),A(t3)]] + [A(t3), [A(t2), A(t1)]])
+        elif curr_order == 2:
+            for i in range(len(errorgen_layer_mats)):
+                for j in range(i+1):
+                    for k in range(j+1):
+                        if i==j:
+                            magnus += (1/12)*_matrix_commutator(errorgen_layer_mats[i], _matrix_commutator(errorgen_layer_mats[j], errorgen_layer_mats[k]))
+                        else:
+                            magnus += (1/6)*_matrix_commutator(errorgen_layer_mats[i], _matrix_commutator(errorgen_layer_mats[j], errorgen_layer_mats[k]))
+                        if j==k:
+                            magnus += (1/12)*_matrix_commutator(errorgen_layer_mats[k], _matrix_commutator(errorgen_layer_mats[j], errorgen_layer_mats[i]))
+                        else:
+                            magnus += (1/6)*_matrix_commutator(errorgen_layer_mats[k], _matrix_commutator(errorgen_layer_mats[j], errorgen_layer_mats[i]))
         else:
-            raise NotImplementedError('Magnus beyond second order is not currently implemented.')
+            raise NotImplementedError('Magnus beyond third order is not currently implemented.')
         
     return magnus  
 
