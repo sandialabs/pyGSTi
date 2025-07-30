@@ -169,7 +169,7 @@ def diamond_distance_projection_model(superop: np.ndarray, basis: Basis, leakfre
     diamondnorm_arg = superop - proj_superop
     if (leakfree or seepfree or subspace_diamond):
         assert n_leak == 1
-        from pygsti.tools.optools import leading_dxd_submatrix_basis_vectors
+        from pygsti.tools.leakage import leading_dxd_submatrix_basis_vectors
         dim_pure_compsub  = dim_pure - n_leak
         U = leading_dxd_submatrix_basis_vectors(dim_pure_compsub, dim_pure, basis)
         P = U @ U.T.conj()

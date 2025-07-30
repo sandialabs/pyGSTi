@@ -1021,12 +1021,32 @@ def leaky_maximum_trace_dist(gate, mx_basis):
 Leaky_maximum_trace_dist = _modf.opfn_factory(leaky_maximum_trace_dist)
 
 def diamonddist_to_leakfree_cptp(op, ignore, mx_basis):
-    return _tools.diamonddist_projection(op, mx_basis, leakfree=True, seepfree=False, n_leak=1, cptp=True, subspace_diamond=False)
+    import pygsti.tools.sdptools as _sdps
+    prob, _, solvers = _sdps.diamond_distance_projection_model(
+        op, mx_basis, leakfree=True, seepfree=False, n_leak=1, cptp=True, subspace_diamond=False
+    )
+    for s in solvers:
+        try:
+            prob.solve(solver=s)
+            return prob.value
+        except _sdps.cp.SolverError:
+            continue
+    return -1
 
 Diamonddist_to_leakfree_cptp = _modf.opsfn_factory(diamonddist_to_leakfree_cptp)
 
 def subspace_diamonddist_to_leakfree_cptp(op, ignore, mx_basis):
-    return _tools.diamonddist_projection(op, mx_basis, leakfree=True, seepfree=False, n_leak=1, cptp=True, subspace_diamond=True)
+    import pygsti.tools.sdptools as _sdps
+    prob, _, solvers = _sdps.diamond_distance_projection_model(
+        op, mx_basis, leakfree=True, seepfree=False, n_leak=1, cptp=True, subspace_diamond=True
+    )
+    for s in solvers:
+        try:
+            prob.solve(solver=s)
+            return prob.value
+        except _sdps.cp.SolverError:
+            continue
+    return -1
 
 SubspaceDiamonddist_to_leakfree_cptp = _modf.opsfn_factory(subspace_diamonddist_to_leakfree_cptp)
 
@@ -1034,7 +1054,7 @@ def subspace_diamonddist(op_a, op_b, basis):
     dim_mixed = op_a.shape[0]
     dim_pure  = int(dim_mixed**0.5)
     dim_pure_compsub = dim_pure - 1
-    from pygsti.tools.optools import leading_dxd_submatrix_basis_vectors
+    from pygsti.tools.leakage import leading_dxd_submatrix_basis_vectors
     U = leading_dxd_submatrix_basis_vectors(dim_pure_compsub, dim_pure, basis)
     P = U @ U.T.conj()
     assert _np.linalg.norm(P - P.real) < 1e-10
