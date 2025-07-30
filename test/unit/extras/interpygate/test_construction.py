@@ -166,7 +166,6 @@ class InterpygateGSTTester(BaseCase):
         cls.model['Gxpi2',0] = x_gate
         cls.model['Gypi2',0] = y_gate
 
-        
     def test_gpindices(self):
         model = self.model.copy()
         model['rho0'].set_gpindices(slice(0,4),model)
@@ -178,7 +177,7 @@ class InterpygateGSTTester(BaseCase):
         
     def test_circuit_probabilities(self):
         datagen_model = self.model.copy()
-        datagen_params = datagen_model.to_vector()
+        datagen_params = datagen_model.to_vector().copy()
         datagen_params[-2:] = [1.1,1.1]
         datagen_model.from_vector(datagen_params)
         probs = datagen_model.probabilities( (('Gxpi2',0),))
@@ -186,7 +185,8 @@ class InterpygateGSTTester(BaseCase):
 
     def test_germ_selection(self):
         datagen_model = self.model.copy()
-        datagen_params = datagen_model.to_vector()
+
+        datagen_params = datagen_model.to_vector().copy()
         datagen_params[-2:] = [1.1,1.1]
         datagen_model.from_vector(datagen_params)
         
@@ -198,7 +198,14 @@ class InterpygateGSTTester(BaseCase):
         self.assertEqual(final_germs, [pygsti.circuits.circuit.Circuit('Gxpi2:0')])
 
 
+    def test_modifying_view_of_model_params_desynchronizes_the_global_parameter_vector(self):
+        datagen_model = self.model.copy()
 
+        datagen_params = datagen_model.to_vector()
+        datagen_params[-2:] = [1.1,1.1]
+
+        self.assertRaises(ValueError, datagen_model._check_paramvec())
+        # Modify a copy of the parameter array instead!
 
 
 
