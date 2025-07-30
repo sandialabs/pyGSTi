@@ -10,10 +10,19 @@ Tools for general statistical hypothesis testing
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from typing import (
+    Optional,
+    Sequence,
+    Literal,
+    TypeAlias,
+)
 import numpy as _np
 
 
-def bonferroni_correction(significance, numtests):
+CORRECTION_METHOD_T: TypeAlias = Literal["bonferroni", "sidak"]
+
+
+def bonferroni_correction(significance: float, numtests: int) -> float:
     """
     Calculates the standard Bonferroni correction.
 
@@ -38,11 +47,14 @@ def bonferroni_correction(significance, numtests):
     return local_significance
 
 
-def sidak_correction(significance, numtests):
+def sidak_correction(significance: float, numtests: int) -> float:
     """
     Sidak correction.
 
-    TODO: docstring - better explanaition
+    Convert a significance level for an individual test repeated independently, numtest times
+    into a significance level for the whole family of tests.
+
+    https://en.wikipedia.org/wiki/sidak_correction
 
     Parameters
     ----------
@@ -60,8 +72,8 @@ def sidak_correction(significance, numtests):
     return adjusted_significance
 
 
-def generalized_bonferroni_correction(significance, weights, numtests=None,
-                                      nested_method='bonferroni', tol=1e-10):
+def generalized_bonferroni_correction(significance: float, weights: _np.ndarray, numtests: Optional[int] = None,
+                                      nested_method: CORRECTION_METHOD_T = 'bonferroni', tol: float = 1e-10) -> float:
     """
     Generalized Bonferroni correction.
 
@@ -88,14 +100,15 @@ def generalized_bonferroni_correction(significance, weights, numtests=None,
     float
     """
     weights = _np.array(weights)
-    assert(_np.abs(_np.sum(weights) - 1.) < tol), "Invalid weighting! The weights must add up to 1."
+    assert (_np.allclose(_np.abs(weights), weights)), "Invalid weighting! The weights must be non-negative."
+    assert (_np.abs(_np.sum(weights) - 1.) < tol), "Invalid weighting! The weights must add up to 1."
 
     adjusted_significance = _np.zeros(len(weights), float)
     adjusted_significance = significance * weights
 
     if numtests is not None:
 
-        assert(len(numtests) == len(weights)), "The number of tests must be specified for each weight!"
+        assert (len(numtests) == len(weights)), "The number of tests must be specified for each weight!"
         for i in range(0, len(weights)):
 
             if nested_method == 'bonferroni':
