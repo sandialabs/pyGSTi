@@ -992,8 +992,10 @@ class GSTGaugeOptSuite(_NicelySerializable):
 
             stages = []  # multi-stage gauge opt
             gg = model.default_gauge_group
-            convert_to = {'to_type': "full TP", 'flatten_structure': True, 'set_default_gauge_group': True} \
-                if ('noconversion' not in suite_name and gg.name not in ("Full", "TP")) else None
+    
+            default_convert_to = {'to_type': "full TP", 'flatten_structure': True, 'set_default_gauge_group': True}
+            use_default_convert_to = 'noconversion' not in suite_name and gg.name not in ("Full", "TP")
+            convert_to = default_convert_to if use_default_convert_to else None
 
             if isinstance(gg, _models.gaugegroup.TrivialGaugeGroup) and convert_to is None:
                 if suite_name == "stdgaugeopt-unreliable2Q" and model.dim == 16:
@@ -2014,7 +2016,11 @@ def _load_dataset(data_filename_or_set, comm, verbosity):
 
     return ds
 
-
+# called in GST.run(...)
+#
+# calls _add_gauge_opt
+# calls _add_badfit_estimates
+#
 def _add_gaugeopt_and_badfit(results, estlbl, target_model, gaugeopt_suite,
                              unreliable_ops, badfit_options, optimizer, resource_alloc, printer):
     tref = _time.time()
@@ -2045,7 +2051,15 @@ def _add_gaugeopt_and_badfit(results, estlbl, target_model, gaugeopt_suite,
 
     return results
 
-
+# called directly in _add_gaugeopt_and_badfit
+#   calls _add_badfit_estimates
+# called directly in _add_badfit_estimates
+#
+# calls Estimate.add_gaugeoptimized, where the Estimate is taken
+# from results.estimates[lbl] for appropriately derived lbl.
+#
+#   Estimate.add_gaugeoptimized calls gaugeopt_to_target.   
+#
 def _add_gauge_opt(results, base_est_label, gaugeopt_suite, starting_model,
                    unreliable_ops, comm=None, verbosity=0):
     """
