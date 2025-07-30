@@ -107,18 +107,26 @@ def test_multiple_successive_internal_updates_first():
     strings_list = [list("IIIIIIAIIIIII")]
 
     cache = {}
-    updated_string_list, cache_num, cache, seq_intro = simplify_internal_first_one_round(strings_list, None, -1, cache)
+    seq_ind_to_cache_ind = {}
+    updated_string_list, cache_num, cache, seq_intro = simplify_internal_first_one_round(strings_list,
+                                                                                         None,
+                                                                                         -1,
+                                                                                         cache,
+                                                                                         seq_ind_to_cache_ind)
 
     assert -1 in cache.keys()
 
     assert -2 == cache_num
     assert len(updated_string_list) == 2
 
-    updated_string_list, cache_num, cache, seq_intro = simplify_internal_first_one_round(updated_string_list, None, cache_num, cache)
+    updated_string_list, cache_num, cache, seq_intro = simplify_internal_first_one_round(updated_string_list, 
+                                                                                         None,
+                                                                                         cache_num,
+                                                                                         cache,
+                                                                                         seq_ind_to_cache_ind)
 
-    breakpoint()
     assert -2 in cache.keys()
     assert -3 == cache_num
 
     assert len(updated_string_list) == 3
-    assert np.allclose(seq_intro, [-3])
+    assert np.allclose(seq_intro, [-2])

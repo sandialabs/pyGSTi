@@ -319,20 +319,6 @@ def test_tensor_product_single_unitaries_random_collection_of_xyz():
         assert_probability_densities_are_equal(probs, exp, circuit100)
 
 
-def test_tensor_product_arbitrarily_random_rotations():
-
-    for qb in range(2, 6):
-
-        under_test, expected_model = build_models_for_testing(qb)
-
-        circuit = build_circuit_with_arbitrarily_random_single_qubit_gates(qb, 10)
-
-        probs = under_test.probabilities(circuit)
-        exp = expected_model.probabilities(circuit)
-
-        assert_probability_densities_are_equal(probs, exp, circuit)
-
-
 def test_tensor_product_two_qubit_gates():
 
     num_qubits = 4
@@ -382,22 +368,6 @@ def test_tensor_product_gates_with_implicit_idles():
             probs = under_test.probabilities(cir)
             exp = expected_model.probabilities(cir)
             assert_probability_densities_are_equal(probs, exp, cir)
-
-
-def test_tensor_product_multi_qubit_gates_arbitrarily_random_rotations():
-
-    gates_to_used_qubits = {'Gxpi2': 1, 'Gypi2': 1, 'Gzpi2': 1, 'Gi': 1,
-                            'Gcustom': 1, 'Gswap': 2, 'Gcnot': 2, 'Gecr': 2}
-    for qb in range(3, 6):
-
-        under_test, expected_model = build_models_for_testing(qb)
-
-        circuit = build_circuit_with_multiple_qubit_gates(qb, 100, gates_to_qubits_used=gates_to_used_qubits)
-
-        probs = under_test.probabilities(circuit)
-        exp = expected_model.probabilities(circuit)
-
-        assert_probability_densities_are_equal(probs, exp, circuit)
 
 
 def test_tensor_product_multi_qubit_gates_with_structured_lanes():

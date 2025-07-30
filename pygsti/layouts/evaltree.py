@@ -626,10 +626,7 @@ class EvalTreeBasedUponLongestCommonSubstring():
                                                                     None,
                                                                     set(_np.arange(len(new_circuit_list))),
                                                                     max([len(cir) for cir in new_circuit_list])-1)
-        
 
-        if self.internal_first:
-            breakpoint()
 
         best_external_match = _np.max(external_matches[0])
 
@@ -637,14 +634,20 @@ class EvalTreeBasedUponLongestCommonSubstring():
         i = 0
         cache_pos = len(new_circuit_list)
         while max_rounds > 1:
-            tmp = conduct_one_round_of_lcs_simplification(new_circuit_list, external_matches,
-                                                          internal_matches, cache_pos, cache, seq_ind_to_cache_index)
+            tmp = conduct_one_round_of_lcs_simplification(new_circuit_list,
+                                                          external_matches,
+                                                          internal_matches,
+                                                          cache_pos,
+                                                          cache,
+                                                          seq_ind_to_cache_index)
             new_circuit_list, cache_pos, cache, sequence_intro[i+1], ext_table, external_sequences, dirty_inds = tmp
             i += 1
+            dirty_inds = set(_np.arange(len(new_circuit_list))) # TODO: fix to only correct those which are actually dirty.
             external_matches = _compute_lcs_for_every_pair_of_sequences(new_circuit_list,
                                                                         ext_table,
                                                                         external_sequences,
-                                                                        dirty_inds, max_rounds)
+                                                                        dirty_inds,
+                                                                        max_rounds)
 
             if best_internal_match < best_external_match and best_external_match < 2 * best_internal_match:
                 # We are not going to get a better internal match.
@@ -665,6 +668,39 @@ class EvalTreeBasedUponLongestCommonSubstring():
 
         from pygsti.modelmembers.operations import StaticStandardOp
         self.swap_gate = StaticStandardOp('Gswap', basis='pp').to_dense().round(16)
+
+        self.cache_ind_to_alphabet_vals_referenced: dict[int, set[LabelTupTup]] = {}
+
+
+        # Useful for repeated calculations seen in a derivative calculation.
+        for key in self.cache:
+            self.compute_depends_on(key, self.cache_ind_to_alphabet_vals_referenced)
+
+        alphabet_val_to_cache_inds_to_update: dict[LabelTupTup, set[int]] = {}
+
+        for cache_ind, vals in self.cache_ind_to_alphabet_vals_referenced.items():
+            for val in vals:
+                if val in alphabet_val_to_cache_inds_to_update:
+                    alphabet_val_to_cache_inds_to_update[val].add(cache_ind)
+                else:
+                    alphabet_val_to_cache_inds_to_update[val] = set([cache_ind])
+
+        self.results: dict[int | LabelTupTup, _np.ndarray] = {}
+
+        self.alphabet_val_to_sorted_cache_inds: dict[LabelTupTup, list[int]] = {}
+
+        for val, cache_inds in alphabet_val_to_cache_inds_to_update.items():
+            rnd_nums = {}
+            for cache_ind in cache_inds:
+                for rnd_num in self.sequence_intro:
+                    if cache_ind in self.sequence_intro[rnd_num]:
+                        rnd_nums[cache_ind] = rnd_num
+                        break
+
+            sorted_inds = sorted(cache_inds, key =lambda x : rnd_nums[x])[::-1] # We want to iterate large to small.
+
+            self.alphabet_val_to_sorted_cache_inds[val] = sorted_inds
+
       
     def from_other_eval_tree(self, other: EvalTreeBasedUponLongestCommonSubstring, qubit_label_exchange: dict[int, int]):
         """
@@ -707,50 +743,89 @@ class EvalTreeBasedUponLongestCommonSubstring():
             updated[new_cir] = loc
         self.circuit_to_save_location = updated
 
-    def collapse_circuits_to_process_matrices(self, model, num_qubits_in_default: int):
+    def collapse_circuits_to_process_matrices(self, model, num_qubits_in_default: int, alphabet_piece_changing: Optional[LabelTupTup] = None):
         """
         Compute the total product cache. Note that this may still have a tensor product
         structure that the operator needs to combine again if they want to have the full 'dense' matrix.
         """
 
+        if alphabet_piece_changing is not None:
 
-        round_keys = sorted(_np.unique(list(self.sequence_intro.keys())))[::-1]
-        saved: dict[int | LabelTupTup, _np.ndarray] = {}
+            if alphabet_piece_changing not in self.alphabet_val_to_sorted_cache_inds:
+                # Nothing needs to change here.
+                return self.results, self.circuit_to_save_location
+            
+            cache_inds = self.alphabet_val_to_sorted_cache_inds[alphabet_piece_changing]
 
-        if self.internal_first:
-
-            round_keys = _np.unique(list(self.sequence_intro.keys()))
-
-            pos_inds = _np.where(round_keys >0)
-            pos_keys = round_keys[pos_inds]
-            pos_keys = sorted(pos_keys)[::-1]
-
-            neg_inds = _np.where(round_keys < 0)
-            neg_keys = round_keys[neg_inds]
-            neg_keys = sorted(neg_keys)
-
-            round_keys = pos_keys + neg_keys + _np.array([0])
-        
-        for key in round_keys:
-            for cache_ind in self.sequence_intro[key]:
+            local_changes = {k: v.copy() for k, v in self.results.items()}
+            for cache_ind in cache_inds:
                 cumulative_term = None
                 for term in self.cache[cache_ind]:
-                    cumulative_term = self._collapse_cache_line(model, cumulative_term, term, saved, num_qubits_in_default)
-                        
+                    cumulative_term = self._collapse_cache_line(model, cumulative_term, term, local_changes, num_qubits_in_default)
+
+                # Do not overwrite the results cache
+                # so that we can use it again on a different derivative.
                 if cumulative_term is None:
-                    saved[cache_ind] = _np.eye(4**num_qubits_in_default)
+                    local_changes[cache_ind] = _np.eye(4**num_qubits_in_default)
                     # NOTE: unclear when (if ever) this should be a noisy idle gate.
                 else:
-                    saved[cache_ind] = cumulative_term
+                    local_changes[cache_ind] = cumulative_term
+            return local_changes, self.circuit_to_save_location
+
+
+        else:
+            round_keys = sorted(_np.unique(list(self.sequence_intro.keys())))[::-1]
+            # saved: dict[int | LabelTupTup, _np.ndarray] = {}
+
+            if self.internal_first:
+
+                round_keys = _np.unique(list(self.sequence_intro.keys()))
+
+                pos_inds = _np.where(round_keys >0)
+                pos_keys = round_keys[pos_inds]
+                pos_keys = sorted(pos_keys)[::-1]
+
+                neg_inds = _np.where(round_keys < 0)
+                neg_keys = round_keys[neg_inds]
+                neg_keys = sorted(neg_keys)
+
+                round_keys = pos_keys + neg_keys + _np.array([0])
+            
+            for key in round_keys:
+                for cache_ind in self.sequence_intro[key]:
+                    cumulative_term = None
+                    for term in self.cache[cache_ind]:
+                        cumulative_term = self._collapse_cache_line(model, cumulative_term, term, self.results, num_qubits_in_default)
+                            
+                    if cumulative_term is None:
+                        self.results[cache_ind] = _np.eye(4**num_qubits_in_default)
+                        # NOTE: unclear when (if ever) this should be a noisy idle gate.
+                    else:
+                        self.results[cache_ind] = cumulative_term
         if __debug__:
             # We may store more in the cache in order to handle multi-qubit gates which are out of the normal order.
             for key in self.cache:
-                assert key in saved
+                assert key in self.results
         
         # {tuple(self.trace_through_cache_to_build_circuit(icir)): icir for icir in range(len(self.orig_circuit_list)) if icir < self.num_circuits}
     
-        return saved, self.circuit_to_save_location
+        return self.results, self.circuit_to_save_location
     
+    def compute_depends_on(self, val: int | LabelTupTup, visited: dict[int, set[LabelTupTup]]) -> set[LabelTupTup]:
+
+        if not isinstance(val, int):
+            return set([val])
+        elif val in visited:
+            return visited[val]
+        else:
+            tmp = set()
+            for child in self.cache[val]:
+                ret_val = self.compute_depends_on(child, visited)
+                tmp = tmp.union(ret_val)
+            visited[val] = tmp
+            return tmp
+
+
     def combine_for_visualization(self, val, visited):
 
         if not isinstance(val, int):
@@ -886,7 +961,7 @@ class CollectionOfLCSEvalTrees():
                     self.trees[key] = sample
             else:
                 self.trees[key] = EvalTreeBasedUponLongestCommonSubstring(sub_cirs, sorted(key)[0])
-                
+
         endtime = time.time()
 
         print(" Time to compute all the evaluation orders (s): ", endtime - starttime)
@@ -901,7 +976,11 @@ class CollectionOfLCSEvalTrees():
         self.saved_results = {}
         self.sub_cir_to_ind_in_results: dict[tuple[int, ...], dict[_Circuit, int]] = {}
 
-    def collapse_circuits_to_process_matrices(self, model):
+    def collapse_circuits_to_process_matrices(self, model, alphabet_piece_changing: Optional[LabelTupTup] = None):
+        """
+        Collapse all circuits to their process matrices. If alphabet_piece_changing is not None, then
+        we assume we have already collapsed this system once before and so only need to update part of the eval tree.
+        """
         # Just collapse all of them.
 
 
@@ -909,7 +988,7 @@ class CollectionOfLCSEvalTrees():
         for key in self.trees:
             num_qubits = len(key) if key[0] != ('*',) else key[1] # Stored in the data structure.
             tree = self.trees[key]
-            out1, out2 = tree.collapse_circuits_to_process_matrices(model, num_qubits)
+            out1, out2 = tree.collapse_circuits_to_process_matrices(model, num_qubits, alphabet_piece_changing)
             # self.saved_results[key], self.sub_cir_to_ind_in_results[key] = self.trees[key].collapse_circuits_to_process_matrices(model, len(key))
             self.saved_results[key] = out1
             self.sub_cir_to_ind_in_results[key] = out2
