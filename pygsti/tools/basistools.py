@@ -18,49 +18,6 @@ from pygsti.baseobjs.basisconstructors import _basis_constructor_dict
 from pygsti.baseobjs import basis as _basis
 
 
-def leakage_friendly_basis_2plus1(return_subspace_basis=False):
-    """ 
-    This basis is used to isolate the parts of Hilbert-Schmidt space that act on
-    the computational subspace induced from a partition of 3-dimensional complex
-    Hilbert space into a 2-dimensional computational subspace and a 1-dimensional
-    leakage space.
-    """
-    gm_basis = _basis.Basis.cast("gm", 9)
-    leakage_basis_mxs = [
-        _np.sqrt(2) / 3 * (_np.sqrt(3) * gm_basis[0] + 0.5 * _np.sqrt(6) * gm_basis[8]),
-        gm_basis[1],
-        gm_basis[4],
-        gm_basis[7],
-        gm_basis[2],
-        gm_basis[3],
-        gm_basis[5],
-        gm_basis[6],
-        1 / 3 * (_np.sqrt(3) * gm_basis[0] - _np.sqrt(6) * gm_basis[8]),
-    ]
-    check = _np.zeros((9, 9), complex)
-    for i, m1 in enumerate(leakage_basis_mxs):
-        for j, m2 in enumerate(leakage_basis_mxs):
-            check[i, j] = _np.vdot(m1, m2)
-    assert _np.allclose(check, _np.identity(9, complex))
-    leakage_basis = _basis.ExplicitBasis(
-        leakage_basis_mxs,
-        name="LeakageBasis",
-        longname="2+1 level leakage basis",
-        real=True,
-        labels=["I", "X", "Y", "Z", "LX0", "LX1", "LY0", "LY1", "L"],
-    )
-    if not return_subspace_basis:
-        return leakage_basis
-    subspace_basis = _basis.ExplicitBasis(
-            leakage_basis_mxs[:4],
-            name="LeakageBasis",
-            longname="subspace basis for 2+1 level leakage",
-            real=True,
-            labels=["I", "X", "Y", "Z"]
-    )
-    return leakage_basis, subspace_basis
-
-
 @lru_cache(maxsize=1)
 def basis_matrices(name_or_basis, dim, sparse=False):
     """

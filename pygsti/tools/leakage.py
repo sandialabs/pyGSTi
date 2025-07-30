@@ -8,11 +8,11 @@
 #***************************************************************************************************
 
 import copy
-from pygsti import modelmembers as pgmm
 from pygsti.tools import optools as pgot
 from pygsti.tools import basistools as pgbt
+from pygsti.tools.basistools import stdmx_to_vec
 from pygsti.processors import QubitProcessorSpec
-from pygsti.baseobjs.basis import TensorProdBasis, Basis, BuiltinBasis
+from pygsti.baseobjs.basis import TensorProdBasis, Basis, BuiltinBasis, ExplicitBasis
 import numpy as np
 
 from typing import Union, Dict, Optional, List, TypeVar, TYPE_CHECKING
@@ -25,6 +25,52 @@ else:
     GaugeGroupElement    = TypeVar('GaugeGroupElement')
     GSTGaugeOptSuite     = TypeVar('GSTGaugeOptSuite')
     ExplicitOpModel      = TypeVar('ExplicitOpModel')
+
+
+def leakage_friendly_basis_2plus1(return_subspace_basis=False):
+    """ 
+    This basis is used to isolate the parts of Hilbert-Schmidt space that act on
+    the computational subspace induced from a partition of 3-dimensional complex
+    Hilbert space into a 2-dimensional computational subspace and a 1-dimensional
+    leakage space.
+    """
+    gm_basis = Basis.cast("gm", 9)
+    leakage_basis_mxs = [
+        np.sqrt(2) / 3 * (np.sqrt(3) * gm_basis[0] + 0.5 * np.sqrt(6) * gm_basis[8]),
+        gm_basis[1],
+        gm_basis[4],
+        gm_basis[7],
+        gm_basis[2],
+        gm_basis[3],
+        gm_basis[5],
+        gm_basis[6],
+        1 / 3 * (np.sqrt(3) * gm_basis[0] - np.sqrt(6) * gm_basis[8]),
+    ]
+    check = np.zeros((9, 9), complex)
+    for i, m1 in enumerate(leakage_basis_mxs):
+        for j, m2 in enumerate(leakage_basis_mxs):
+            check[i, j] = np.vdot(m1, m2)
+    assert np.allclose(check, np.identity(9, complex))
+    leakage_basis = ExplicitBasis(
+        leakage_basis_mxs,
+        name="LeakageBasis",
+        longname="2+1 level leakage basis",
+        real=True,
+        labels=["I", "X", "Y", "Z", "LX0", "LX1", "LY0", "LY1", "L"],
+    )
+    leakage_basis.elements = np.array(leakage_basis.elements)  # type: ignore
+    if not return_subspace_basis:
+        return leakage_basis
+    subspace_basis = ExplicitBasis(
+            leakage_basis_mxs[:4],
+            name="LeakageBasis",
+            longname="subspace basis for 2+1 level leakage",
+            real=True,
+            labels=["I", "X", "Y", "Z"]
+    )
+    subspace_basis.elements = np.array(subspace_basis.elements)  # type: ignore
+    return leakage_basis, subspace_basis
+
 
 
 # MARK: metrics
@@ -202,10 +248,11 @@ def subspace_restricted_fro_dist(a, b, mx_basis, n_leak=0):
 
 # MARK: model construction
 
-def leaky_qubit_model_from_pspec(ps_2level: QubitProcessorSpec, levels_readout_zero=(0,)):
+def leaky_qubit_model_from_pspec(ps_2level: QubitProcessorSpec, levels_readout_zero=(0,), basis: str|Basis ='gm'):
     from pygsti.models.explicitmodel import ExplicitOpModel
     from pygsti.baseobjs.statespace import ExplicitStateSpace
-    from pygsti.modelmembers.povms import TPPOVM
+    from pygsti.modelmembers.povms import UnconstrainedPOVM
+    from pygsti.modelmembers.states import FullState
     assert ps_2level.num_qubits == 1
     
     Us = ps_2level.gate_unitaries
@@ -215,22 +262,22 @@ def leaky_qubit_model_from_pspec(ps_2level: QubitProcessorSpec, levels_readout_z
     E1   = np.eye(3, dtype=complex) - E0
 
     ss = ExplicitStateSpace([0],[3])
-    tm_3level = ExplicitOpModel(ss, 'gm')
-    tm_3level['rho0'] =  pgbt.stdmx_to_gmvec(rho0)
-    tm_3level['Mdefault'] = TPPOVM(
-        [("0", pgbt.stdmx_to_gmvec(E0)), ("1", pgbt.stdmx_to_gmvec(E1))], evotype="default",
+    tm_3level = ExplicitOpModel(ss, basis)
+    tm_3level['rho0']     =  FullState(stdmx_to_vec(rho0, basis))
+    tm_3level['Mdefault'] =  UnconstrainedPOVM(
+        [("0", stdmx_to_vec(E0, basis)), ("1", stdmx_to_vec(E1, basis))], evotype="default",
     )
 
-    def u2x2_to_9x9_gm_superoperator(u2x2):
+    def u2x2_to_9x9_superoperator(u2x2):
         u3x3 = np.eye(3, dtype=np.complex128)
         u3x3[:2,:2] = u2x2
         superop_std = pgot.unitary_to_std_process_mx(u3x3)
-        superop_gm = pgbt.change_basis(superop_std, 'std', 'gm')
-        return superop_gm
+        superop = pgbt.change_basis(superop_std, 'std', basis)
+        return superop
 
     for gatename, unitary in Us.items():
         gatekey = (gatename, 0) if gatename != '{idle}' else ('Gi',0)
-        tm_3level[gatekey] = u2x2_to_9x9_gm_superoperator(unitary)
+        tm_3level[gatekey] = u2x2_to_9x9_superoperator(unitary)
 
     tm_3level.sim = 'map'  # can use 'matrix', if that's preferred for whatever reason.
     return tm_3level

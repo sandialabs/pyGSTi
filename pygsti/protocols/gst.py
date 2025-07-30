@@ -992,7 +992,7 @@ class GSTGaugeOptSuite(_NicelySerializable):
 
             stages = []  # multi-stage gauge opt
             gg = model.default_gauge_group
-            convert_to = {'to_type': "full TP", 'flatten_structure': True, 'set_default_gauge_group': True} \
+            convert_to = {'to_type': "full", 'flatten_structure': True, 'set_default_gauge_group': True} \
                 if ('noconversion' not in suite_name and gg.name not in ("Full", "TP")) else None
 
             if isinstance(gg, _models.gaugegroup.TrivialGaugeGroup) and convert_to is None:
