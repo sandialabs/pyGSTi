@@ -857,6 +857,14 @@ class GSTGaugeOptSuite(_NicelySerializable):
         given by the target model, which are used as the default when
         `gaugeopt_target` is None.
     """
+
+    STANDARD_SUITENAMES = ("stdgaugeopt", "stdgaugeopt-unreliable2Q", "stdgaugeopt-tt", "stdgaugeopt-safe",
+                          "stdgaugeopt-noconversion", "stdgaugeopt-noconversion-safe")
+    
+    SPECIAL_SUITENAMES = ("varySpam", "varySpamWt", "varyValidSpamWt", "toggleValidSpam",
+                          "varySpam-unreliable2Q", "varySpamWt-unreliable2Q",
+                           "varyValidSpamWt-unreliable2Q", "toggleValidSpam-unreliable2Q")
+
     @classmethod
     def cast(cls, obj):
         if obj is None:
@@ -985,10 +993,9 @@ class GSTGaugeOptSuite(_NicelySerializable):
         return gaugeopt_suite_dict
 
     @staticmethod
-    def _update_gaugeopt_dict_from_suitename(gaugeopt_suite_dict, root_lbl, suite_name, model,
-                                             unreliable_ops, printer):
-        if suite_name in ("stdgaugeopt", "stdgaugeopt-unreliable2Q", "stdgaugeopt-tt", "stdgaugeopt-safe",
-                          "stdgaugeopt-noconversion", "stdgaugeopt-noconversion-safe"):
+    def _update_gaugeopt_dict_from_suitename(gaugeopt_suite_dict, root_lbl, suite_name, model, unreliable_ops, printer):
+    
+        if suite_name in GSTGaugeOptSuite.STANDARD_SUITENAMES:
 
             stages = []  # multi-stage gauge opt
             gg = model.default_gauge_group
@@ -1061,14 +1068,12 @@ class GSTGaugeOptSuite(_NicelySerializable):
                 else:
                     gaugeopt_suite_dict[root_lbl] = stages  # can be a list of stage dictionaries
 
-        elif suite_name in ("varySpam", "varySpamWt", "varyValidSpamWt", "toggleValidSpam") or \
-            suite_name in ("varySpam-unreliable2Q", "varySpamWt-unreliable2Q",
-                           "varyValidSpamWt-unreliable2Q", "toggleValidSpam-unreliable2Q"):
+        elif suite_name in GSTGaugeOptSuite.SPECIAL_SUITENAMES:
 
-            base_wts = {'gates': 1}
+            base_wts = {'gates': 1.0}
             if suite_name.endswith("unreliable2Q") and model.dim == 16:
                 if any([gl in model.operations.keys() for gl in unreliable_ops]):
-                    base = {'gates': 1}
+                    base = {'gates': 1.0}
                     for gl in unreliable_ops:
                         if gl in model.operations.keys(): base[gl] = 0.01
                     base_wts = base
