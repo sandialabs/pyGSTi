@@ -872,14 +872,13 @@ class GSTGaugeOptSuite(_NicelySerializable):
 
     def __init__(self, gaugeopt_suite_names=None, gaugeopt_argument_dicts=None, gaugeopt_target=None):
         super().__init__()
-        if gaugeopt_suite_names is not None:
-            if gaugeopt_suite_names == 'none':
-                self.gaugeopt_suite_names = None
-            else:
-                self.gaugeopt_suite_names = (gaugeopt_suite_names,) \
-                    if isinstance(gaugeopt_suite_names, str) else tuple(gaugeopt_suite_names)
-        else:
+        if gaugeopt_suite_names is None or gaugeopt_suite_names == 'none':
             self.gaugeopt_suite_names = None
+        elif isinstance(gaugeopt_suite_names, str):
+            self.gaugeopt_suite_names = (gaugeopt_suite_names,)
+        else:
+            self.gaugeopt_suite_names = tuple(gaugeopt_suite_names)
+
 
         if gaugeopt_argument_dicts is not None:
             self.gaugeopt_argument_dicts = gaugeopt_argument_dicts.copy()
@@ -985,17 +984,16 @@ class GSTGaugeOptSuite(_NicelySerializable):
 
         return gaugeopt_suite_dict
 
-    def _update_gaugeopt_dict_from_suitename(self, gaugeopt_suite_dict, root_lbl, suite_name, model,
+    @staticmethod
+    def _update_gaugeopt_dict_from_suitename(gaugeopt_suite_dict, root_lbl, suite_name, model,
                                              unreliable_ops, printer):
         if suite_name in ("stdgaugeopt", "stdgaugeopt-unreliable2Q", "stdgaugeopt-tt", "stdgaugeopt-safe",
                           "stdgaugeopt-noconversion", "stdgaugeopt-noconversion-safe"):
 
             stages = []  # multi-stage gauge opt
             gg = model.default_gauge_group
-    
-            default_convert_to = {'to_type': "full TP", 'flatten_structure': True, 'set_default_gauge_group': True}
-            use_default_convert_to = 'noconversion' not in suite_name and gg.name not in ("Full", "TP")
-            convert_to = default_convert_to if use_default_convert_to else None
+            convert_to = {'to_type': "full", 'flatten_structure': True, 'set_default_gauge_group': True} \
+                if ('noconversion' not in suite_name and gg.name not in ("Full", "TP")) else None
 
             if isinstance(gg, _models.gaugegroup.TrivialGaugeGroup) and convert_to is None:
                 if suite_name == "stdgaugeopt-unreliable2Q" and model.dim == 16:
@@ -2016,11 +2014,7 @@ def _load_dataset(data_filename_or_set, comm, verbosity):
 
     return ds
 
-# called in GST.run(...)
-#
-# calls _add_gauge_opt
-# calls _add_badfit_estimates
-#
+
 def _add_gaugeopt_and_badfit(results, estlbl, target_model, gaugeopt_suite,
                              unreliable_ops, badfit_options, optimizer, resource_alloc, printer):
     tref = _time.time()
@@ -2051,15 +2045,7 @@ def _add_gaugeopt_and_badfit(results, estlbl, target_model, gaugeopt_suite,
 
     return results
 
-# called directly in _add_gaugeopt_and_badfit
-#   calls _add_badfit_estimates
-# called directly in _add_badfit_estimates
-#
-# calls Estimate.add_gaugeoptimized, where the Estimate is taken
-# from results.estimates[lbl] for appropriately derived lbl.
-#
-#   Estimate.add_gaugeoptimized calls gaugeopt_to_target.   
-#
+
 def _add_gauge_opt(results, base_est_label, gaugeopt_suite, starting_model,
                    unreliable_ops, comm=None, verbosity=0):
     """
@@ -2105,9 +2091,9 @@ def _add_gauge_opt(results, base_est_label, gaugeopt_suite, starting_model,
     """
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, comm)
 
-    #Get gauge optimization dictionary
-    gaugeopt_suite_dict = gaugeopt_suite.to_dictionary(starting_model,
-                                                       unreliable_ops, printer - 1)
+    gaugeopt_suite_dict = gaugeopt_suite.to_dictionary(
+        starting_model, unreliable_ops, printer - 1
+    )
 
     #Gauge optimize to list of gauge optimization parameters
     for go_label, goparams in gaugeopt_suite_dict.items():
@@ -2519,6 +2505,7 @@ def _compute_1d_reference_values_and_name(estimate, badfit_options, gaugeopt_sui
                     spamdd[key] = 0.5 * _tools.optools.povm_diamonddist(gaugeopt_model, target_model, key)
 
                 dd[lbl]['SPAM'] = sum(spamdd.values())
+
         return dd, 'diamond distance'
     else:
         raise ValueError("Invalid wildcard1d_reference value (%s) in bad-fit options!"
