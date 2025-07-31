@@ -18,9 +18,6 @@ from pygsti.modelpacks.legacy import std2Q_XXYYII
 from ..util import BaseCase, needs_cvxpy
 
 
-SKIP_DIAMONDIST_ON_WIN = True
-
-
 def fake_minimize(fn):
     """Mock scipy.optimize.minimize in the underlying function call to reduce optimization overhead"""
     def side_effect(o, mx, **kwargs):
@@ -422,7 +419,6 @@ class GateOpsTester(BaseCase):
 
     @needs_cvxpy
     def test_diamond_norm_epigraph(self):
-        if SKIP_DIAMONDIST_ON_WIN and sys.platform.startswith('win'): return
         val0 = ot.diamonddist(self.A_TP, self.B_unitary, mx_basis="pp")
         delta0 = self.A_TP - self.B_unitary
         delta1 = bt.change_basis(delta0, 'pp', 'std')
