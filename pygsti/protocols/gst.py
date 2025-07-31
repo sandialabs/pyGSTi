@@ -1097,9 +1097,6 @@ class GSTGaugeOptSuite(_NicelySerializable):
                         'item_weights': item_weights,
                         'spam_penalty_factor': valid_spam, 'verbosity': printer}
 
-        elif suite_name == "unreliable2Q":
-            raise ValueError(("unreliable2Q is no longer a separate 'suite'.  You should precede it with the suite"
-                              " name, e.g. 'stdgaugeopt-unreliable2Q' or 'varySpam-unreliable2Q'"))
         elif suite_name == 'none':
             gaugeopt_suite_dict[root_lbl] = None
         else:
