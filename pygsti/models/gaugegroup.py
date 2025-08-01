@@ -10,14 +10,16 @@ GaugeGroup and derived objects, used primarily in gauge optimization
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from typing import Tuple, Union
 import numpy as _np
+import scipy.linalg as _la
 
-from pygsti.baseobjs import StateSpace as _StateSpace
+from pygsti.baseobjs import StateSpace as _StateSpace, statespace as _statespace, ExplicitStateSpace as _ExplicitStateSpace
 from pygsti.modelmembers import operations as _op
-from pygsti.baseobjs import statespace as _statespace
-from pygsti.baseobjs.basis import Basis as _Basis
+from pygsti.baseobjs.basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.evotypes.evotype import Evotype as _Evotype
+from pygsti.tools.optools import superop_to_unitary, unitary_to_superop
 from pygsti import SpaceT
 
 class GaugeGroup(_NicelySerializable):
@@ -442,6 +444,10 @@ class OpGaugeGroupElement(GaugeGroupElement):
         GaugeGroupElement.__init__(self)
 
     @property
+    def operation(self):
+        return self._operation
+
+    @property
     def transform_matrix(self):
         """
         The gauge-transform matrix.
@@ -523,9 +529,9 @@ class OpGaugeGroupElement(GaugeGroupElement):
 
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
-        state.update({'class': self.__class__.__name__,
-                      'operation_matrix': self._encodemx(self._operation.to_dense())
-                      })
+        state.update(
+            {'operation_matrix': self._encodemx(self._operation.to_dense())}
+        )
         return state
 
     @classmethod
@@ -750,6 +756,16 @@ class TPDiagGaugeGroupElement(TPGaugeGroupElement):
         TPGaugeGroupElement.__init__(self, operation)
 
 
+class UnitaryGaugeGroupElement(OpGaugeGroupElement):
+
+    def __init__(self, operation: _op.ExpErrorgenOp):
+        OpGaugeGroupElement.__init__(self, operation)
+
+    @property
+    def operation(self) -> _op.ExpErrorgenOp:
+        return self._operation # type: ignore
+
+
 class UnitaryGaugeGroup(OpGaugeGroupWithBasis):
     """
     A gauge group consisting of unitary gauge-transform matrices.
@@ -777,28 +793,14 @@ class UnitaryGaugeGroup(OpGaugeGroupWithBasis):
         state_space = _StateSpace.cast(state_space)
         evotype = _Evotype.cast(str(evotype), default_prefer_dense_reps=True)  # since we use deriv_wrt_params
         errgen = _op.LindbladErrorgen.from_operation_matrix(
-            _np.identity(state_space.dim, 'd'), "H", basis, mx_basis=basis, evotype=evotype)
+            _np.eye(state_space.dim), "H", basis, mx_basis=basis, evotype=evotype
+        )
         operation = _op.ExpErrorgenOp(errgen)
         OpGaugeGroupWithBasis.__init__(self, operation, UnitaryGaugeGroupElement, "Unitary", basis)
+        self.state_space = state_space
 
-
-class UnitaryGaugeGroupElement(OpGaugeGroupElement):
-    """
-    Element of a :class:`UnitaryGaugeGroup`
-
-    Parameters
-    ----------
-    operation : LinearOperator
-        The operation to base this element on. It provides both parameterization
-        information and the gauge transformation matrix itself.
-    """
-
-    def __init__(self, operation):
-        """
-        Creates a new gauge group element based on `operation`, which
-        is assumed to have the correct parameterization.
-        """
-        OpGaugeGroupElement.__init__(self, operation)
+    def compute_element(self, param_vec) -> UnitaryGaugeGroupElement:
+        return super().compute_element(param_vec)
 
 
 class SpamGaugeGroup(OpGaugeGroup):
@@ -1094,3 +1096,155 @@ class TrivialGaugeGroupElement(GaugeGroupElement):
     @classmethod
     def _from_nice_serialization(cls, state):  # memo holds already de-serialized objects
         return cls(state['operation_dimension'])
+
+
+class DirectSumUnitaryGroup(GaugeGroup):
+    """
+    A subgroup of the unitary group, where the unitary operators in the group all have a
+    shared block-diagonal structure.
+
+    Example setting where this is useful: 
+        The system's Hilbert space is naturally expressed as a direct sum, H = U ⨁ V,
+        and we want gauge optimization to preserve the natural separation between U and V.
+    """
+
+    def __init__(self, subgroups: Tuple[Union[UnitaryGaugeGroup, TrivialGaugeGroup], ...], basis, name="Direct sum gauge group"):
+        self.subgroups = subgroups
+        if isinstance(basis, _Basis):
+            self.basis = basis
+        elif isinstance(basis, str):
+            udim = 0
+            for sg in subgroups:
+                udim += sg.state_space.udim
+            ss = _ExplicitStateSpace(['all'], [udim])
+            self.basis = _BuiltinBasis("std", ss)
+        self._param_dims = _np.array([sg.num_params for sg in subgroups])
+        self._num_params = _np.sum(self._param_dims)
+        super().__init__(name)
+
+    @property
+    def num_params(self):
+        return self._num_params
+
+    def compute_element(self, param_vec):
+        assert param_vec.size == self.num_params
+        subelements = []
+        offset = 0
+        for pd, sg in zip(self._param_dims, self.subgroups):
+            sub_param_vec = param_vec[offset:offset + pd]
+            sub_element = sg.compute_element(sub_param_vec)
+            subelements.append(sub_element)
+            offset += pd
+        out = DirectSumUnitaryGroupElement(tuple(subelements), self.basis)
+        return out
+
+    @property
+    def initial_params(self):
+        paramvecs = [sg.initial_params for sg in self.subgroups]
+        return _np.concatenate(paramvecs)
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({
+            'subgroups': tuple([se.to_nice_serialization() for se in self.subgroups]),
+            'state_space_dimension': int(self.basis.dim),
+            'basis': self.basis if isinstance(self.basis, str) else self.basis.to_nice_serialization(),
+            'name': self.name
+        })
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        subgroups = []
+        for sg_dict in state['subgroups']:
+            if sg_dict['class'] == 'UnitaryGaugeGroup':
+                sg = UnitaryGaugeGroup.from_nice_serialization(sg_dict)
+            else:
+                sg = TrivialGaugeGroup.from_nice_serialization(sg_dict)
+            subgroups.append(sg)
+        subgroups = tuple(subgroups)
+        basis = state['basis'] if isinstance(state['basis'], str) else _Basis.from_nice_serialization(state['basis'])
+        name = state['name']
+        return cls(subgroups, basis, name)
+
+
+class DirectSumUnitaryGroupElement(GaugeGroupElement):
+
+    def __init__(self, subelements: Tuple[Union[UnitaryGaugeGroupElement, TrivialGaugeGroupElement], ...], basis):
+        self.subelements = subelements
+        self.basis = basis
+        self._update_matrices()
+        self._vectorized_op_dim = self.basis.dim ** 2
+        self._num_params = _np.sum([se.num_params for se in self.subelements])
+        super().__init__()
+
+    @property
+    def transform_matrix(self):
+        return self._m
+
+    @property
+    def transform_matrix_inverse(self):
+        return self._invm
+
+    def deriv_wrt_params(self, wrt_filter=None):
+        raise NotImplementedError()
+
+    def to_vector(self):
+        v = _np.concatenate([se.to_vector() for se in self.subelements])
+        return v
+
+    def from_vector(self, v):
+        assert v.size == self.num_params
+        offset = 0
+        for se in self.subelements:
+            block = v[offset:(offset + se.num_params)]
+            se.from_vector(block)
+            offset += se.num_params
+        self._update_matrices()
+        return
+    
+    def _update_matrices(self):
+        u_blocks, num_params = [], []
+        for se in self.subelements:
+            if isinstance(se, TrivialGaugeGroupElement):
+                se_ss = _statespace.default_space_for_dim(se.transform_matrix.shape[0])
+                u_blocks.append(_np.eye(se_ss.udim))
+            else:
+                u_abstract_op = se.operation
+                se_basis = u_abstract_op.errorgen.matrix_basis
+                u = superop_to_unitary(se.transform_matrix, se_basis)
+                u_blocks.append(u)
+            num_params.append(se.num_params)
+        u = _la.block_diag(*u_blocks)
+        self._u = u
+        self._m = unitary_to_superop(self._u, self.basis)
+        self._invm = unitary_to_superop(self._u.T.conj(), self.basis)
+        return
+
+    @property
+    def num_params(self):
+        return self._num_params
+
+    def inverse(self):
+        return InverseGaugeGroupElement(self)
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({
+            'subelements': tuple([se.to_nice_serialization() for se in self.subelements]),
+            'basis': self.basis if isinstance(self.basis, str) else self.basis.to_nice_serialization()
+        })
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        subelements = []
+        for se_dict in state['subelements']:
+            if se_dict['class'] == 'UnitaryGaugeGroupElement':
+                se = UnitaryGaugeGroupElement.from_nice_serialization(se_dict)
+            else:
+                se = TrivialGaugeGroupElement.from_nice_serialization(se_dict)
+            subelements.append(se)
+        subelements = tuple(subelements)
+        basis = state['basis'] if isinstance(state['basis'], str) else _Basis.from_nice_serialization(state['basis'])
+        return cls(subelements, basis)

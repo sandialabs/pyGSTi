@@ -353,8 +353,7 @@ def rel_circuit_eigenvalues(model_a, model_b, circuit):
     """
     A = model_a.sim.product(circuit)  # "gate"
     B = model_b.sim.product(circuit)  # "target gate"
-    rel_op = _np.dot(_np.linalg.inv(B), A)  # "relative gate" == target^{-1} * gate
-    return _np.linalg.eigvals(rel_op)
+    return rel_eigenvalues(A, B, None)
 
 
 Rel_circuit_eigenvalues = _modf.modelfn_factory(rel_circuit_eigenvalues)
@@ -921,13 +920,16 @@ def upper_bound_fidelity(gate, mx_basis):
     gate : numpy.ndarray
         the transfer-matrix specifying a gate's action.
 
-    mx_basis : Basis or {'pp', 'gm', 'std'}
-        the basis that `gate` is in.
+    mx_basis : Basis or string
+        Currently restricted to Pauli-product
 
     Returns
     -------
     float
     """
+    basis_str = mx_basis if isinstance(mx_basis, str) else mx_basis.name
+    if basis_str != 'pp':
+        raise NotImplementedError(f'Basis must be Pauli-Product, got {mx_basis}.')
     return _tools.fidelity_upper_bound(gate)[0]
 
 
@@ -1318,8 +1320,12 @@ def std_unitarity(a, b, mx_basis):
     -------
     float
     """
-    Lambda = _np.dot(a, _np.linalg.inv(b))
-    return _tools.unitarity(Lambda, mx_basis)
+    try:
+        Lambda = _np.dot(a, _np.linalg.inv(b))
+        return _tools.unitarity(Lambda, mx_basis)
+    except _np.linalg.LinAlgError as e:
+        _warnings.warn(str(e))
+        return _np.nan
 
 
 def eigenvalue_unitarity(a, b):
@@ -1338,10 +1344,14 @@ def eigenvalue_unitarity(a, b):
     -------
     float
     """
-    Lambda = _np.dot(a, _np.linalg.inv(b))
-    d2 = Lambda.shape[0]
-    lmb = _np.linalg.eigvals(Lambda)
-    return float(_np.real(_np.linalg.norm(lmb)**2) - 1.0) / (d2 - 1.0)
+    try:
+        Lambda = _np.dot(a, _np.linalg.inv(b))
+        d2 = Lambda.shape[0]
+        lmb = _np.linalg.eigvals(Lambda)
+        return float(_np.real(_np.linalg.norm(lmb)**2) - 1.0) / (d2 - 1.0)
+    except _np.linalg.LinAlgError as e:
+        _warnings.warn(str(e))
+        return _np.nan
 
 
 def nonunitary_entanglement_infidelity(a, b, mx_basis):
@@ -1700,9 +1710,13 @@ def rel_eigenvalues(a, b, mx_basis):
     -------
     numpy.ndarray
     """
-    target_op_inv = _np.linalg.inv(b)
-    rel_op = _np.dot(target_op_inv, a)
-    return _np.linalg.eigvals(rel_op).astype("complex")  # since they generally *can* be complex
+    try:
+        target_op_inv = _np.linalg.inv(b)
+        rel_op = _np.dot(target_op_inv, a)
+        return _np.linalg.eigvals(rel_op).astype("complex")  # since they generally *can* be complex
+    except _np.linalg.LinAlgError as e:
+        _warnings.warn(str(e))
+        return _np.nan * _np.ones(a.shape)
 
 
 Rel_eigvals = _modf.opsfn_factory(rel_eigenvalues)
@@ -1790,28 +1804,8 @@ Rel_logGmlogT_eigvals = _modf.opsfn_factory(rel_log_diff_eigenvalues)
 # init args == (model1, model2, op_label)
 
 
-def rel_gate_eigenvalues(a, b, mx_basis):  # DUPLICATE of rel_eigenvalues TODO
-    """
-    Eigenvalues of b^{-1} * a
-
-    Parameters
-    ----------
-    a : numpy.ndarray
-        The first process (transfer) matrix.
-
-    b : numpy.ndarray
-        The second process (transfer) matrix.
-
-    mx_basis : Basis or {'pp', 'gm', 'std'}
-        the basis that `a` and `b` are in.
-
-    Returns
-    -------
-    numpy.ndarray
-    """
-    rel_op = _np.dot(_np.linalg.inv(b), a)  # "relative gate" == target^{-1} * gate
-    return _np.linalg.eigvals(rel_op).astype("complex")  # since they generally *can* be complex
-
+rel_gate_eigenvalues = rel_eigenvalues
+# ^ An alias.
 
 Rel_gate_eigenvalues = _modf.opsfn_factory(rel_gate_eigenvalues)
 # init args == (model1, model2, op_label)
@@ -2157,21 +2151,37 @@ def general_decomposition(model_a, model_b):
         gl = str(gl)  # Label -> str for decomp-dict keys
 
         target_evals = _np.linalg.eigvals(targetOp)
-        if _np.any(_np.isclose(target_evals, -1.0)):
-            target_logG = _tools.unitary_superoperator_matrix_log(targetOp, mxBasis)
-            logG = _tools.approximate_matrix_log(gate, target_logG)
-        else:
-            logG = _tools.real_matrix_log(gate, "warn")
-            if _np.linalg.norm(logG.imag) > 1e-6:
-                _warnings.warn("Truncating imaginary logarithm!")
-                logG = _np.real(logG)
+        failed = False
+        try:
+            if _np.any(_np.isclose(target_evals, -1.0)):
+                target_logG = _tools.unitary_superoperator_matrix_log(targetOp, mxBasis)
+                logG = _tools.approximate_matrix_log(gate, target_logG)
+            else:
+                logG = _tools.real_matrix_log(gate, "warn")
+                if _np.linalg.norm(logG.imag) > 1e-6:
+                    _warnings.warn("Truncating imaginary logarithm!")
+                    logG = _np.real(logG)
+        except (_np.linalg.LinAlgError, AssertionError) as e:
+            _warnings.warn(str(e))
+            logG = _np.nan * _np.ones(gate.shape)
+            failed = True
+
+        proj_basis = _Basis.cast('PP', model_a.dim) if model_a.state_space.is_entirely_qubits else mxBasis
+        basis_mxs = proj_basis.elements
+        blk = _LindbladCoefficientBlock('ham', proj_basis)
+        num_elem_errgens = len(blk.elementary_errorgens)
+
+        if failed:
+            decomp[gl + ' log inexactness'] = _np.nan
+            decomp[gl + ' axis' ] = _np.nan * _np.ones(num_elem_errgens)
+            decomp[gl + ' angle'] = _np.nan
+            decomp[gl + ' hamiltonian eigenvalues'] = _np.nan * _np.ones(basis_mxs[0].shape[0])
+            continue
 
         decomp[gl + ' log inexactness'] = _np.linalg.norm(_spl.expm(logG) - gate)
 
         #hamProjs, hamGens = _tools.std_errorgen_projections(
         #    logG, "hamiltonian", mxBasis, mxBasis, return_generators=True)
-        proj_basis = _Basis.cast('PP', model_a.dim) if model_a.state_space.is_entirely_qubits else mxBasis
-        blk = _LindbladCoefficientBlock('ham', proj_basis)
         blk.set_from_errorgen_projections(logG, mxBasis)
         hamProjs = blk.block_data
         #hamGens = blk.create_lindblad_term_superoperators(mxBasis)
@@ -2185,7 +2195,6 @@ def general_decomposition(model_a, model_b):
         # to *twice* this coefficient (e.g. a X(pi/2) rotn is exp( i pi/4 X ) ),
         # thus the factor of 2.0 above.
 
-        basis_mxs = proj_basis.elements
         # REMOVE scalings = [(_np.linalg.norm(hamGens[i]) / _np.linalg.norm(_tools.hamiltonian_to_lindbladian(mx))
         # REMOVE              if _np.linalg.norm(hamGens[i]) > 1e-10 else 0.0)
         # REMOVE             for i, mx in enumerate(basis_mxs)]
@@ -2198,6 +2207,9 @@ def general_decomposition(model_a, model_b):
         for gl_other in opLabels:
             rotnAngle = decomp[str(gl) + ' angle']
             rotnAngle_other = decomp[str(gl_other) + ' angle']
+            if _np.isnan(rotnAngle) or _np.isnan(rotnAngle_other):
+                decomp[str(gl) + "," + str(gl_other) + " axis angle"] = _np.nan
+                continue
 
             if gl == gl_other or abs(rotnAngle) < 1e-4 or abs(rotnAngle_other) < 1e-4:
                 decomp[str(gl) + "," + str(gl_other) + " axis angle"] = 10000.0  # sentinel for irrelevant angle
@@ -2439,7 +2451,7 @@ def info_of_opfn_by_name(name):
                  'respectively'),
         "trace": ("1/2 Trace|Distance",
                   "0.5 | Chi(A) - Chi(B) |_tr"),
-        "diamond": ("1/2 Diamond-Dist",
+        "diamond": ("1/2 Diamond|Distance",
                     "0.5 sup | (1 x (A-B))(rho) |_tr"),
         "nuinf": ("Non-unitary|Ent. Infidelity",
                   "(d^2-1)/d^2 [1 - sqrt( unitarity(A B^-1) )]"),

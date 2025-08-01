@@ -1422,8 +1422,7 @@ def _opmatrices_color_boxplot(op_matrices, color_min, color_max, mx_basis_x=None
     l=40*scale
           
     layout = dict(
-        title=title,
-        titlefont=dict(size=12 * scale),
+        title=dict(text=title, font=dict(size=12 * scale)),
         width=width,
         height=height,
         margin_b=b, 
@@ -1868,8 +1867,7 @@ def _matrices_color_boxplot(matrices, xlabels=None, ylabels=None,
     l=10*scale
           
     layout = dict(
-        title=title,
-        titlefont=dict(size=12 * scale),
+        title=dict(text=title, font=dict(size=12*scale)),
         width=width,
         height=height,
         margin_b=b, 

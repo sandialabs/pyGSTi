@@ -90,7 +90,7 @@ def predicted_rb_number(model, target_model, weights=None, d=None, rtype='EI'):
     """
     if d is None: d = int(round(_np.sqrt(model.dim)))
     p = predicted_rb_decay_parameter(model, target_model, weights=weights)
-    r = _rbtls.p_to_r(p, d=d, rtype=rtype)
+    r = _rbtls.p_to_r(p, d=d, rtype=rtype) if _np.isnan(p) else _np.nan
     return r
 
 
@@ -132,15 +132,18 @@ def predicted_rb_decay_parameter(model, target_model, weights=None):
         The second largest eigenvalue of L. This is the RB decay parameter
         for various types of RB.
     """
-    L = L_matrix(model, target_model, weights=weights)
-    E = _np.absolute(_np.linalg.eigvals(L))
-    E = _np.flipud(_np.sort(E))
-    if abs(E[0] - 1) > 10**(-12):
-        _warnings.warn("Output may be unreliable because the model is not approximately trace-preserving.")
+    try:
+        L = L_matrix(model, target_model, weights=weights)
+        E = _np.absolute(_np.linalg.eigvals(L))
+        E = _np.flipud(_np.sort(E))
+        if abs(E[0] - 1) > 10**(-12):
+            _warnings.warn("Output may be unreliable because the model is not approximately trace-preserving.")
 
-    if E[1].imag > 10**(-10):
-        _warnings.warn("Output may be unreliable because the RB decay constant has a significant imaginary component.")
-    p = abs(E[1])
+        if E[1].imag > 10**(-10):
+            _warnings.warn("Output may be unreliable because the RB decay constant has a significant imaginary component.")
+        p = abs(E[1])
+    except _np.linalg.LinAlgError:
+        p = _np.nan
     return p
 
 
