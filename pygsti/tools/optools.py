@@ -986,6 +986,7 @@ def povm_diamonddist(model, target_model, povmlbl):
         assert '`dim` must be a perfect square' in str(e)
         return _np.NaN
 
+
 def instrument_infidelity(a, b, mx_basis):
     """
     Infidelity between instruments a and b
