@@ -226,7 +226,7 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
         -------
         int
         """
-        return sum([g.size for g in self.values()])
+        return sum([g._ptr.size for g in self.values()])
 
     @property
     def num_params(self):

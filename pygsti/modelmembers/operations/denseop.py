@@ -126,23 +126,104 @@ def check_deriv_wrt_params(operation, deriv_to_check=None, wrt_filter=None, eps=
                          " norm diff = %g" %
                          _np.linalg.norm(fd_deriv - deriv_to_check))  # pragma: no cover
 
-
-class DenseOperatorInterface(object):
+def __str__(self):
+    s = "%s with shape %s\n" % (self.__class__.__name__, str(self._ptr.shape))
+    s += _mt.mx_to_string(self._ptr, width=4, prec=2)
+    return s
+class DenseOperator(_KrausOperatorInterface, _LinearOperator):
     """
-    Adds a numpy-array-mimicing interface onto an operation object.
+    An operator that behaves like a dense super-operator matrix.
+
+    This class is the common base class for more specific dense operators.
+
+    Attributes
+    ----------
+    base : numpy.ndarray
+        Direct access to the underlying process matrix data.
     """
 
-    def __init__(self):
-        pass
+    @classmethod
+    def from_kraus_operators(cls, kraus_operators, basis='pp', evotype="default", state_space=None):
+        """
+        Create an operation by specifying its Kraus operators.
+
+        Parameters
+        ----------
+        kraus_operators : list
+            A list of numpy arrays, each of which specifyies a Kraus operator.
+
+        basis : str or Basis, optional
+            The basis in which the created operator's superoperator representation is in.
+
+        evotype : Evotype or str, optional
+            The evolution type.  The special value `"default"` is equivalent
+            to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
+
+        state_space : StateSpace, optional
+            The state space for this operation.  If `None` a default state space
+            with the appropriate number of qubits is used.
+        """
+        std_superop = sum([_ot.unitary_to_std_process_mx(kop) for kop in kraus_operators])
+        superop = _bt.change_basis(std_superop, 'std', basis)
+        return cls(superop, basis, evotype, state_space)
+
+    def __init__(self, mx, basis, evotype, state_space=None):
+        """
+        Parameters
+        ----------
+        mx : numpy.ndarray
+            The operation as a dense process matrix.
+
+        basis : Basis or {'pp','gm','std'} or None
+            The basis used to construct the Hilbert-Schmidt space representation
+            of this state as a super-operator.  If None, certain functionality,
+            such as access to Kraus operators, will be unavailable.
+
+        evotype : Evotype or str
+            The evolution type.  The special value `"default"` is equivalent
+            to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
+
+        state_space : StateSpace, optional
+            The state space for this operation.  If `None` a default state space
+            with the appropriate number of qubits is used.
+        """
+        mx = _LinearOperator.convert_to_matrix(mx)
+        state_space = _statespace.default_space_for_dim(mx.shape[0]) if (state_space is None) \
+            else _statespace.StateSpace.cast(state_space)
+        evotype = _Evotype.cast(evotype, state_space=state_space)
+        self._basis = _Basis.cast(basis, state_space.dim) if (basis is not None) else None  # for Hilbert-Schmidt space
+        rep = evotype.create_dense_superop_rep(mx, self._basis, state_space)
+        _LinearOperator.__init__(self, rep, evotype)
 
     @property
     def _ptr(self):
-        raise NotImplementedError("Derived classes must implement the _ptr property!")
+        return self._rep.base
 
     def _ptr_has_changed(self):
         """ Derived classes should override this function to handle rep updates
             when the `_ptr` property is changed. """
-        pass
+        self._rep.base_has_changed()
+
+    def to_dense(self, on_space='minimal'):
+        """
+        Return the dense array used to represent this operation within its evolution type.
+
+        Note: for efficiency, this doesn't copy the underlying data, so
+        the caller should copy this data before modifying it.
+
+        Parameters
+        ----------
+        on_space : {'minimal', 'Hilbert', 'HilbertSchmidt'}
+            The space that the returned dense operation acts upon.  For unitary matrices and bra/ket vectors,
+            use `'Hilbert'`.  For superoperator matrices and super-bra/super-ket vectors use `'HilbertSchmidt'`.
+            `'minimal'` means that `'Hilbert'` is used if possible given this operator's evolution type, and
+            otherwise `'HilbertSchmidt'` is used.
+
+        Returns
+        -------
+        numpy.ndarray
+        """
+        return self._rep.to_dense(on_space)  # both types of possible reps implement 'to_dense'
 
     def to_array(self):
         """
@@ -181,173 +262,6 @@ class DenseOperatorInterface(object):
         """
         return _sps.csr_matrix(self.to_dense(on_space))
 
-    def __copy__(self):
-        # We need to implement __copy__ because we defer all non-existing
-        # attributes to self.base (a numpy array) which *has* a __copy__
-        # implementation that we don't want to use, as it results in just a
-        # copy of the numpy array.
-        cls = self.__class__
-        cpy = cls.__new__(cls)
-        cpy.__dict__.update(self.__dict__)
-        return cpy
-
-    def __deepcopy__(self, memo):
-        # We need to implement __deepcopy__ because we defer all non-existing
-        # attributes to self.base (a numpy array) which *has* a __deepcopy__
-        # implementation that we don't want to use, as it results in just a
-        # copy of the numpy array.
-        cls = self.__class__
-        cpy = cls.__new__(cls)
-        memo[id(self)] = cpy
-        for k, v in self.__dict__.items():
-            setattr(cpy, k, _copy.deepcopy(v, memo))
-        return cpy
-
-    #Access to underlying ndarray
-    def __getitem__(self, key):
-        self.dirty = True
-        return self._ptr.__getitem__(key)
-
-    def __getslice__(self, i, j):
-        self.dirty = True
-        return self.__getitem__(slice(i, j))  # Called for A[:]
-
-    def __setitem__(self, key, val):
-        self.dirty = True
-        ret = self._ptr.__setitem__(key, val)
-        self._ptr_has_changed()
-        return ret
-
-    def __getattr__(self, attr):
-        #use __dict__ so no chance for recursive __getattr__
-        #ret = getattr(self.__dict__['_rep'].base, attr)
-        ret = getattr(self._ptr, attr)
-        self.dirty = True
-        return ret
-
-    def __str__(self):
-        s = "%s with shape %s\n" % (self.__class__.__name__, str(self._ptr.shape))
-        s += _mt.mx_to_string(self._ptr, width=4, prec=2)
-        return s
-
-    #Mimic array behavior
-    def __pos__(self): return self._ptr
-    def __neg__(self): return -self._ptr
-    def __abs__(self): return abs(self._ptr)
-    def __add__(self, x): return self._ptr + x
-    def __radd__(self, x): return x + self._ptr
-    def __sub__(self, x): return self._ptr - x
-    def __rsub__(self, x): return x - self._ptr
-    def __mul__(self, x): return self._ptr * x
-    def __rmul__(self, x): return x * self._ptr
-    def __truediv__(self, x): return self._ptr / x
-    def __rtruediv__(self, x): return x / self._ptr
-    def __floordiv__(self, x): return self._ptr // x
-    def __rfloordiv__(self, x): return x // self._ptr
-    def __pow__(self, x): return self._ptr ** x
-    def __eq__(self, x): return _np.array_equal(self._ptr, x)
-    def __len__(self): return len(self._ptr)
-    def __int__(self): return int(self._ptr)
-    def __long__(self): return int(self._ptr)
-    def __float__(self): return float(self._ptr)
-    def __complex__(self): return complex(self._ptr)
-
-
-class DenseOperator(DenseOperatorInterface, _KrausOperatorInterface, _LinearOperator):
-    """
-    TODO: update docstring
-    An operator that behaves like a dense super-operator matrix.
-
-    This class is the common base class for more specific dense operators.
-
-    Parameters
-    ----------
-    mx : numpy.ndarray
-        The operation as a dense process matrix.
-
-    basis : Basis or {'pp','gm','std'} or None
-        The basis used to construct the Hilbert-Schmidt space representation
-        of this state as a super-operator.  If None, certain functionality,
-        such as access to Kraus operators, will be unavailable.
-
-    evotype : Evotype or str
-        The evolution type.  The special value `"default"` is equivalent
-        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
-
-    state_space : StateSpace, optional
-        The state space for this operation.  If `None` a default state space
-        with the appropriate number of qubits is used.
-
-    Attributes
-    ----------
-    base : numpy.ndarray
-        Direct access to the underlying process matrix data.
-    """
-
-    @classmethod
-    def from_kraus_operators(cls, kraus_operators, basis='pp', evotype="default", state_space=None):
-        """
-        Create an operation by specifying its Kraus operators.
-
-        Parameters
-        ----------
-        kraus_operators : list
-            A list of numpy arrays, each of which specifyies a Kraus operator.
-
-        basis : str or Basis, optional
-            The basis in which the created operator's superoperator representation is in.
-
-        evotype : Evotype or str, optional
-            The evolution type.  The special value `"default"` is equivalent
-            to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
-
-        state_space : StateSpace, optional
-            The state space for this operation.  If `None` a default state space
-            with the appropriate number of qubits is used.
-        """
-        std_superop = sum([_ot.unitary_to_std_process_mx(kop) for kop in kraus_operators])
-        superop = _bt.change_basis(std_superop, 'std', basis)
-        return cls(superop, basis, evotype, state_space)
-
-    def __init__(self, mx, basis, evotype, state_space=None):
-        mx = _LinearOperator.convert_to_matrix(mx)
-        state_space = _statespace.default_space_for_dim(mx.shape[0]) if (state_space is None) \
-            else _statespace.StateSpace.cast(state_space)
-        evotype = _Evotype.cast(evotype, state_space=state_space)
-        self._basis = _Basis.cast(basis, state_space.dim) if (basis is not None) else None  # for Hilbert-Schmidt space
-        rep = evotype.create_dense_superop_rep(mx, self._basis, state_space)
-        _LinearOperator.__init__(self, rep, evotype)
-        DenseOperatorInterface.__init__(self)
-
-    @property
-    def _ptr(self):
-        return self._rep.base
-
-    def _ptr_has_changed(self):
-        """ Derived classes should override this function to handle rep updates
-            when the `_ptr` property is changed. """
-        self._rep.base_has_changed()
-
-    def to_dense(self, on_space='minimal'):
-        """
-        Return the dense array used to represent this operation within its evolution type.
-
-        Note: for efficiency, this doesn't copy the underlying data, so
-        the caller should copy this data before modifying it.
-
-        Parameters
-        ----------
-        on_space : {'minimal', 'Hilbert', 'HilbertSchmidt'}
-            The space that the returned dense operation acts upon.  For unitary matrices and bra/ket vectors,
-            use `'Hilbert'`.  For superoperator matrices and super-bra/super-ket vectors use `'HilbertSchmidt'`.
-            `'minimal'` means that `'Hilbert'` is used if possible given this operator's evolution type, and
-            otherwise `'HilbertSchmidt'` is used.
-
-        Returns
-        -------
-        numpy.ndarray
-        """
-        return self._rep.to_dense(on_space)  # both types of possible reps implement 'to_dense'
 
     def to_memoized_dict(self, mmg_memo):
         """Create a serializable dict with references to other objects in the memo.
@@ -450,30 +364,16 @@ class DenseOperator(DenseOperatorInterface, _KrausOperatorInterface, _LinearOper
         superop = _bt.change_basis(std_superop, 'std', self._basis)
         self.set_dense(superop)  # this may fail if derived class doesn't allow it
 
+    def __str__(self):
+        s = "%s with shape %s\n" % (self.__class__.__name__, str(self._ptr.shape))
+        s += _mt.mx_to_string(self._ptr, width=4, prec=2)
+        return s
 
-class DenseUnitaryOperator(DenseOperatorInterface, _KrausOperatorInterface, _LinearOperator):
+class DenseUnitaryOperator(_KrausOperatorInterface, _LinearOperator):
     """
-    TODO: update docstring
     An operator that behaves like a dense (unitary) operator matrix.
 
     This class is the common base class for more specific dense operators.
-
-    Parameters
-    ----------
-    mx : numpy.ndarray
-        The operation as a dense process matrix.
-
-    basis : Basis or {'pp','gm','std'}, optional
-        The basis used to construct the Hilbert-Schmidt space representation
-        of this state as a super-operator.
-
-    evotype : Evotype or str
-        The evolution type.  The special value `"default"` is equivalent
-        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
-
-    state_space : StateSpace, optional
-        The state space for this operation.  If `None` a default state space
-        with the appropriate number of qubits is used.
 
     Attributes
     ----------
@@ -524,11 +424,29 @@ class DenseUnitaryOperator(DenseOperatorInterface, _KrausOperatorInterface, _Lin
 
         self._basis = basis
         _LinearOperator.__init__(self, rep, evotype)
-        DenseOperatorInterface.__init__(self)
         return self
 
     def __init__(self, mx, basis, evotype, state_space):
-        """ Initialize a new LinearOperator """
+        """ 
+        Initialize a new DenseUnitaryOperator
+        
+        Parameters
+        ----------
+        mx : numpy.ndarray
+            The operation as a dense process matrix.
+
+        basis : Basis or {'pp','gm','std'}, optional
+            The basis used to construct the Hilbert-Schmidt space representation
+            of this state as a super-operator.
+
+        evotype : Evotype or str
+            The evolution type.  The special value `"default"` is equivalent
+            to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
+
+        state_space : StateSpace, optional
+            The state space for this operation.  If `None` a default state space
+            with the appropriate number of qubits is used.    
+        """
         mx = _LinearOperator.convert_to_matrix(mx)
         state_space = _statespace.default_space_for_udim(mx.shape[0]) if (state_space is None) \
             else _statespace.StateSpace.cast(state_space)
@@ -554,7 +472,6 @@ class DenseUnitaryOperator(DenseOperatorInterface, _KrausOperatorInterface, _Lin
         self._basis = basis
 
         _LinearOperator.__init__(self, rep, evotype)
-        DenseOperatorInterface.__init__(self)
 
     @property
     def _ptr(self):
@@ -590,6 +507,43 @@ class DenseUnitaryOperator(DenseOperatorInterface, _KrausOperatorInterface, _Lin
         if self._reptype == 'superop' and on_space == 'Hilbert':
             return self._unitary
         return self._rep.to_dense(on_space)  # both types of possible reps implement 'to_dense'
+
+    def to_array(self):
+        """
+        Return the array used to identify this operation within its range of possible values.
+
+        For instance, if the operation is a unitary operation, this returns a
+        unitary matrix regardless of the evolution type.  The related :meth:`to_dense`
+        method, in contrast, returns the dense representation of the operation, which
+        varies by evolution type.
+
+        Note: for efficiency, this doesn't copy the underlying data, so
+        the caller should copy this data before modifying it.
+
+        Returns
+        -------
+        numpy.ndarray
+        """
+        return _np.asarray(self._ptr)
+        # *must* be a numpy array for Cython arg conversion
+
+    def to_sparse(self, on_space='minimal'):
+        """
+        Return the operation as a sparse matrix.
+
+        Parameters
+        ----------
+        on_space : {'minimal', 'Hilbert', 'HilbertSchmidt'}
+            The space that the returned dense operation acts upon.  For unitary matrices and bra/ket vectors,
+            use `'Hilbert'`.  For superoperator matrices and super-bra/super-ket vectors use `'HilbertSchmidt'`.
+            `'minimal'` means that `'Hilbert'` is used if possible given this operator's evolution type, and
+            otherwise `'HilbertSchmidt'` is used.
+
+        Returns
+        -------
+        scipy.sparse.csr_matrix
+        """
+        return _sps.csr_matrix(self.to_dense(on_space))
 
     def to_memoized_dict(self, mmg_memo):
         """Create a serializable dict with references to other objects in the memo.
@@ -654,3 +608,7 @@ class DenseUnitaryOperator(DenseOperatorInterface, _KrausOperatorInterface, _Lin
         assert(len(kraus_operators) == 1), "Length of `kraus_operators` must == 1 for a unitary channel!"
         self.set_dense(kraus_operators[0])
 
+    def __str__(self):
+        s = "%s with shape %s\n" % (self.__class__.__name__, str(self._ptr.shape))
+        s += _mt.mx_to_string(self._ptr, width=4, prec=2)
+        return s

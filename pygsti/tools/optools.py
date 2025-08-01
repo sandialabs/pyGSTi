@@ -2294,8 +2294,8 @@ def project_model(model, target_model,
         gsDict[p].set_all_parameterizations("full")
         NpDict[p] = 0
 
-    errgens = [error_generator(model.operations[gl],
-                               target_model.operations[gl],
+    errgens = [error_generator(model.operations[gl].to_dense(),
+                               target_model.operations[gl].to_dense(),
                                target_model.basis, gen_type, logG_weight)
                for gl in opLabels]
 
@@ -2325,7 +2325,7 @@ def project_model(model, target_model,
             lnd_error_gen = _np.tensordot(HBlk.block_data, HGens, (0, 0)) + \
                 _np.tensordot(otherBlk.block_data, otherGens, ((0, 1), (0, 1)))
 
-        targetOp = target_model.operations[gl]
+        targetOp = target_model.operations[gl].to_dense()
 
         if 'H' in projectiontypes:
             gsDict['H'].operations[gl] = operation_from_error_generator(

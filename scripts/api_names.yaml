@@ -1556,8 +1556,6 @@ objects:
       prs_as_polys: prs_as_polynomials
       test_map: null
   operation.py:
-    BasedDenseOperatorInterface:
-      __name__: null
     CliffordOp:
       __name__: null
     ComposedDenseOp:
@@ -1606,11 +1604,6 @@ objects:
     DenseOperator:
       __name__: null
       base: null
-    DenseOperatorInterface:
-      __name__: null
-      deriv_wrt_params: null
-      todense: to_dense
-      tosparse: to_sparse
     DepolarizeOp:
       __name__: null
       copy: null

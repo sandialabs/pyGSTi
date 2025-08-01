@@ -86,11 +86,12 @@ class TPInstrument(_mm.ModelMember, _collections.OrderedDict):
 
         if op_matrices is not None:
             if isinstance(op_matrices, dict):
-                matrix_list = [(k, v) for k, v in op_matrices.items()]  # gives definite ordering
+                matrix_list = [(k, v[()]) if (isinstance(v,_np.ndarray) and v.shape == ()) else (k,v) for k, v in op_matrices.items()]  # gives definite ordering
             elif isinstance(op_matrices, list):
-                matrix_list = op_matrices  # assume it's is already an ordered (key,value) list
+                matrix_list = [(k, v[()]) if (isinstance(v,_np.ndarray) and v.shape == ()) else (k,v) for k, v in op_matrices]
             else:
                 raise ValueError("Invalid `op_matrices` arg of type %s" % type(op_matrices))
+            matrix_list = [(k,v.to_dense()) if isinstance(v, _mm.ModelMember) else (k,v) for k,v in matrix_list]
 
             assert(len(matrix_list) > 0 or state_space is not None), \
                 "Must specify `state_space` when there are no instrument members!"
@@ -99,7 +100,7 @@ class TPInstrument(_mm.ModelMember, _collections.OrderedDict):
             evotype = _Evotype.cast(evotype, state_space=state_space)
 
             # Create gate objects that are used to parameterize this instrument
-            MT_mx = sum([v for k, v in matrix_list])  # sum-of-instrument-members matrix
+            MT_mx = sum([v for _, v in matrix_list])  # sum-of-instrument-members matrix
             MT = _op.FullTPOp(MT_mx, None, evotype, state_space)
             self.param_ops.append(MT)
 
@@ -114,14 +115,6 @@ class TPInstrument(_mm.ModelMember, _collections.OrderedDict):
             items = [(k, _TPInstrumentOp(self.param_ops, i, None))
                      for i, (k, v) in enumerate(matrix_list)]
 
-            #DEBUG
-            #print("POST INIT PARAM GATES:")
-            #for i,v in enumerate(self.param_ops):
-            #    print(i,":\n",v)
-            #
-            #print("POST nINIT ITEMS:")
-            #for k,v in items:
-            #    print(k,":\n",v)
         else:
             assert(state_space is not None), "`state_space` cannot be `None` when there are no members!"
             evotype = _Evotype.cast(evotype, state_space=state_space)
@@ -273,7 +266,7 @@ class TPInstrument(_mm.ModelMember, _collections.OrderedDict):
         -------
         int
         """
-        return sum([g.size for g in self.values()])
+        return sum([g._ptr.size for g in self.values()])
 
     @property
     def num_params(self):  # same as in Instrument CONSOLIDATE?

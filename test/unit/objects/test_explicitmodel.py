@@ -51,14 +51,14 @@ class ExplicitOpModelToolTester(BaseCase):
 
     def test_rotate_1q(self):
         sslbls = ExplicitStateSpace("Q0")
-        rotXPi = create_operation("X(pi,Q0)", sslbls, "pp")
-        rotXPiOv2 = create_operation("X(pi/2,Q0)", sslbls, "pp")
-        rotYPiOv2 = create_operation("Y(pi/2,Q0)", sslbls, "pp")
+        rotXPi = create_operation("X(pi,Q0)", sslbls, "pp").to_dense()
+        rotXPiOv2 = create_operation("X(pi/2,Q0)", sslbls, "pp").to_dense()
+        rotYPiOv2 = create_operation("Y(pi/2,Q0)", sslbls, "pp").to_dense()
         gateset_rot = self.model.rotate((np.pi / 2, 0, 0))  # rotate all gates by pi/2 about X axis
-        self.assertArraysAlmostEqual(gateset_rot['Gi'], rotXPiOv2)
-        self.assertArraysAlmostEqual(gateset_rot['Gx'], rotXPi)
-        self.assertArraysAlmostEqual(gateset_rot['Gx'], np.dot(rotXPiOv2, rotXPiOv2))
-        self.assertArraysAlmostEqual(gateset_rot['Gy'], np.dot(rotXPiOv2, rotYPiOv2))
+        self.assertArraysAlmostEqual(gateset_rot['Gi'].to_dense(), rotXPiOv2)
+        self.assertArraysAlmostEqual(gateset_rot['Gx'].to_dense(), rotXPi)
+        self.assertArraysAlmostEqual(gateset_rot['Gx'].to_dense(), np.dot(rotXPiOv2, rotXPiOv2))
+        self.assertArraysAlmostEqual(gateset_rot['Gy'].to_dense(), np.dot(rotXPiOv2, rotYPiOv2))
 
     def test_rotate_2q(self):
         gateset_2q_rot = self.gateset_2q.rotate(rotate=list(np.zeros(15, 'd')))
@@ -81,9 +81,9 @@ class ExplicitOpModelToolTester(BaseCase):
                            [0, 0, 0.9, 0],
                            [0, -0.9, 0, 0]], 'd')
         gateset_dep = self.model.depolarize(op_noise=0.1)
-        self.assertArraysAlmostEqual(gateset_dep['Gi'], Gi_dep)
-        self.assertArraysAlmostEqual(gateset_dep['Gx'], Gx_dep)
-        self.assertArraysAlmostEqual(gateset_dep['Gy'], Gy_dep)
+        self.assertArraysAlmostEqual(gateset_dep['Gi'].to_dense(), Gi_dep)
+        self.assertArraysAlmostEqual(gateset_dep['Gx'].to_dense(), Gx_dep)
+        self.assertArraysAlmostEqual(gateset_dep['Gy'].to_dense(), Gy_dep)
 
     def test_depolarize_with_spam_noise(self):
         gateset_spam = self.model.depolarize(spam_noise=0.1)

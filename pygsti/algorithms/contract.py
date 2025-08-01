@@ -19,6 +19,7 @@ from pygsti import optimize as _opt
 from pygsti import tools as _tools
 from pygsti.modelmembers import operations as _op
 from pygsti.modelmembers import povms as _povm
+from pygsti.modelmembers import states as _state
 
 
 def contract(model, to_what, dataset=None, maxiter=1000000, tol=0.01, use_direct_cp=True, method="Nelder-Mead",
@@ -192,7 +193,7 @@ def _contract_to_cp_direct(model, verbosity, tp_also=False, maxiter=100000, tol=
     printer.log(("--- Contract to %s (direct) ---" % ("CPTP" if tp_also else "CP")), 1)
 
     for (opLabel, gate) in model.operations.items():
-        new_op = gate.copy()
+        new_op = gate.to_dense()
         if(tp_also):
             for k in range(new_op.shape[1]): new_op[0, k] = 1.0 if k == 0 else 0.0
 
@@ -294,7 +295,7 @@ def _contract_to_cp_direct(model, verbosity, tp_also=False, maxiter=100000, tol=
         #else: print "contract_to_cp_direct success in %d iterations" % it  #DEBUG
 
         printer.log("Direct CP contraction of %s gate gives frobenius diff of %g" %
-                    (opLabel, _tools.frobeniusdist(mdl.operations[opLabel], gate)), 2)
+                    (opLabel, _tools.frobeniusdist(mdl.operations[opLabel].to_dense(), gate.to_dense())), 2)
 
     #mdl.log("Choi-Truncate to %s" % ("CPTP" if tp_also else "CP"), { 'maxiter': maxiter } )
     distance = mdl.frobeniusdist(model)
@@ -302,8 +303,10 @@ def _contract_to_cp_direct(model, verbosity, tp_also=False, maxiter=100000, tol=
 
     if tp_also:  # TP also constrains prep vectors
         op_dim = mdl.dim
-        for rhoVec in list(mdl.preps.values()):
-            rhoVec[0, 0] = 1.0 / op_dim**0.25
+        for lbl, rhoVec in mdl.preps.items():
+            new_rho_vec = rhoVec.to_dense()
+            new_rho_vec[0] = 1.0 / op_dim**0.25
+            mdl.preps[lbl] = new_rho_vec
 
     mdl._need_to_rebuild = True
     return distance, mdl
@@ -315,13 +318,18 @@ def _contract_to_tp(model, verbosity):
     #printer.log('', 2)
     printer.log("--- Contract to TP ---", 1)
     mdl = model.copy()
-    for gate in list(mdl.operations.values()):
-        gate[0, 0] = 1.0
-        for k in range(1, gate.shape[1]): gate[0, k] = 0.0
+    for lbl, gate in mdl.operations.items():
+        new_gate_mx = gate.to_dense()
+        new_gate_mx[0, 0] = 1.0
+        for k in range(1, new_gate_mx.shape[1]): 
+            new_gate_mx[0, k] = 0.0
+        mdl.operations[lbl] = new_gate_mx
 
     op_dim = mdl.dim
-    for rhoVec in list(mdl.preps.values()):
-        rhoVec[0, 0] = 1.0 / op_dim**0.25
+    for lbl, rhoVec in mdl.preps.items():
+        new_rho_vec = rhoVec.to_dense()
+        new_rho_vec[0] = 1.0 / op_dim**0.25
+        mdl.preps[lbl] = new_rho_vec
 
     mdl._need_to_rebuild = True
     distance = mdl.frobeniusdist(model)
@@ -363,20 +371,20 @@ def _contract_to_valid_spam(model, verbosity=0):
 
     # rhoVec must be positive semidefinite and trace = 1
     for prepLabel, rhoVec in mdl.preps.items():
-        vec = rhoVec.copy()
+        vec = rhoVec.to_dense()
 
         #Ensure trace == 1.0 (maybe later have this be optional)
         firstElTarget = 1.0 / firstElTrace  # TODO: make this function more robust
         # to multiple rhovecs -- can only use on ratio,
         # so maybe take average of ideal ratios for each rhoVec
         # and apply that?  The function works fine now for just one rhovec.
-        if abs(firstElTarget - vec[0, 0]) > TOL:
-            r = firstElTarget / vec[0, 0]
+        if abs(firstElTarget - vec[0]) > TOL:
+            r = firstElTarget / vec[0]
             vec *= r  # multiply rhovec by factor
             for povmLbl in list(mdl.povms.keys()):
                 scaled_effects = []
                 for ELabel, EVec in mdl.povms[povmLbl].items():
-                    scaled_effects.append((ELabel, EVec / r))
+                    scaled_effects.append((ELabel, EVec.to_dense() / r))
                 # Note: always creates an unconstrained POVM
                 mdl.povms[povmLbl] = _povm.UnconstrainedPOVM(scaled_effects, mdl.evotype, mdl.state_space)
 
@@ -386,11 +394,11 @@ def _contract_to_valid_spam(model, verbosity=0):
         lowEval = min([ev.real for ev in _np.linalg.eigvals(mx)])
         while(lowEval < -TOL):
             # only element with trace (even for multiple qubits) -- keep this constant and decrease others
-            idEl = vec[0, 0]
-            vec /= 1.00001; vec[0, 0] = idEl
+            idEl = vec[0]
+            vec /= 1.00001; vec[0] = idEl
             lowEval = min([ev.real for ev in _np.linalg.eigvals(_tools.ppvec_to_stdmx(vec))])
 
-        diff += _np.linalg.norm(model.preps[prepLabel] - vec)
+        diff += _np.linalg.norm(model.preps[prepLabel].to_dense() - vec)
         mdl.preps[prepLabel] = vec
 
     # EVec must have eigenvals between 0 and 1 <==> positive semidefinite and trace <= 1
@@ -399,6 +407,7 @@ def _contract_to_valid_spam(model, verbosity=0):
         for ELabel, EVec in mdl.povms[povmLbl].items():
             #if isinstance(EVec, _povm.ComplementPOVMEffect):
             #    continue #don't contract complement vectors
+            EVec = EVec.to_dense()
             evals, evecs = _np.linalg.eig(_tools.ppvec_to_stdmx(EVec))
             if(min(evals) < 0.0 or max(evals) > 1.0):
                 if all([ev > 1.0 for ev in evals]):
@@ -410,7 +419,7 @@ def _contract_to_valid_spam(model, verbosity=0):
                     if ev > 1.0: evals[k] = 1.0
                 mx = _np.dot(evecs, _np.dot(_np.diag(evals), _np.linalg.inv(evecs)))
                 vec = _tools.stdmx_to_ppvec(mx)
-                diff += _np.linalg.norm(model.povms[povmLbl][ELabel] - vec)
+                diff += _np.linalg.norm(model.povms[povmLbl][ELabel].to_dense() - vec)
                 scaled_effects.append((ELabel, vec))
             else:
                 scaled_effects.append((ELabel, EVec))  # no scaling
@@ -423,12 +432,12 @@ def _contract_to_valid_spam(model, verbosity=0):
     printer.log("--- Contract to valid SPAM ---", 1)
     printer.log(("Sum of norm(deltaE) and norm(deltaRho) = %g" % diff), 1)
     for (prepLabel, rhoVec) in model.preps.items():
-        printer.log("  %s: %s ==> %s " % (prepLabel, str(_np.transpose(rhoVec)),
-                                          str(_np.transpose(mdl.preps[prepLabel]))), 2)
+        printer.log("  %s: %s ==> %s " % (prepLabel, str(_np.transpose(rhoVec.to_dense())),
+                                          str(_np.transpose(mdl.preps[prepLabel].to_dense()))), 2)
     for povmLbl, povm in model.povms.items():
         printer.log(("  %s (POVM)" % povmLbl), 2)
         for ELabel, EVec in povm.items():
-            printer.log("  %s: %s ==> %s " % (ELabel, str(_np.transpose(EVec)),
-                                              str(_np.transpose(mdl.povms[povmLbl][ELabel]))), 2)
+            printer.log("  %s: %s ==> %s " % (ELabel, str(_np.transpose(EVec.to_dense())),
+                                              str(_np.transpose(mdl.povms[povmLbl][ELabel].to_dense()))), 2)
 
     return mdl  # return contracted model

@@ -51,12 +51,13 @@ class InstrumentInstanceBase(object):
         self.n_elements = 32
 
         self.model = std.target_model()
-        E = self.model.povms['Mdefault']['0']
-        Erem = self.model.povms['Mdefault']['1']
+        E = self.model.povms['Mdefault']['0'].to_dense()
+        E = E.reshape((len(E),1))
+        Erem = self.model.povms['Mdefault']['1'].to_dense()
+        Erem = Erem.reshape((len(Erem),1))
         self.Gmz_plus = np.dot(E, E.T)
         self.Gmz_minus = np.dot(Erem, Erem.T)
         # XXX is this used?
-        self.povm_ident = self.model.povms['Mdefault']['0'] + self.model.povms['Mdefault']['1']
         self.instrument = self.constructor({'plus': self.Gmz_plus, 'minus': self.Gmz_minus})
         self.model.instruments['Iz'] = self.instrument
         super(InstrumentInstanceBase, self).setUp()

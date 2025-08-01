@@ -21,14 +21,16 @@ class TestModelMemberGraph(BaseCase):
 
         # Change parameter, similar but not equivalent
         ex_mdl3 = ex_mdl1.copy()
-        ex_mdl3.operations['Gxpi2', 0][0, 0] = 0.0
+        op_mx = ex_mdl3.operations['Gxpi2', 0].to_dense()
+        op_mx[0,0]= 0.0
+        ex_mdl3.operations['Gxpi2', 0].set_dense(op_mx)
         ex_mmg3 = ex_mdl3.create_modelmember_graph()
         self.assertTrue(ex_mmg3.is_similar(ex_mmg1))
         self.assertFalse(ex_mmg3.is_equivalent(ex_mmg1))
 
         # Change parameterization, not similar or equivalent
         ex_mdl4 = ex_mdl1.copy()
-        ex_mdl4.operations['Gxpi2', 0] = _op.StaticArbitraryOp(ex_mdl4.operations['Gxpi2', 0])
+        ex_mdl4.operations['Gxpi2', 0] = _op.StaticArbitraryOp(ex_mdl4.operations['Gxpi2', 0].to_dense())
         ex_mmg4 = ex_mdl4.create_modelmember_graph()
         self.assertFalse(ex_mmg4.is_similar(ex_mmg1))
         self.assertFalse(ex_mmg4.is_equivalent(ex_mmg1))

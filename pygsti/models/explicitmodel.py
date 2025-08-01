@@ -801,14 +801,15 @@ class ExplicitOpModel(_mdl.OpModel):
         """
         penalty = 0.0
         for operationMx in list(self.operations.values()):
-            penalty += abs(operationMx[0, 0] - 1.0)**2
-            for k in range(1, operationMx.shape[1]):
-                penalty += abs(operationMx[0, k])**2
+            mx = operationMx.to_dense()
+            penalty += abs(mx[0, 0] - 1.0)**2
+            for k in range(1, mx.shape[1]):
+                penalty += abs(mx[0, k])**2
 
         op_dim = self.state_space.dim
         firstEl = 1.0 / op_dim**0.25
         for rhoVec in list(self.preps.values()):
-            penalty += abs(rhoVec[0, 0] - firstEl)**2
+            penalty += abs(rhoVec.to_dense()[0] - firstEl)**2
 
         return _np.sqrt(penalty)
 
@@ -1343,8 +1344,8 @@ class ExplicitOpModel(_mdl.OpModel):
         kicked_gs = self.copy()
         rndm = _np.random.RandomState(seed)
         for opLabel, gate in self.operations.items():
-            delta = absmag * 2.0 * (rndm.random_sample(gate.shape) - 0.5) + bias
-            kicked_gs.operations[opLabel] = _op.FullArbitraryOp(kicked_gs.operations[opLabel] + delta)
+            delta = absmag * 2.0 * (rndm.random_sample(gate.to_dense().shape) - 0.5) + bias
+            kicked_gs.operations[opLabel] = _op.FullArbitraryOp(kicked_gs.operations[opLabel].to_dense() + delta)
 
         #Note: does not alter intruments!
         return kicked_gs

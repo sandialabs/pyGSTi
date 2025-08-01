@@ -106,8 +106,8 @@ class ModelConstructionTester(BaseCase):
         gateset2b = mc.create_explicit_model_from_expressions([('Q0',)], ['Gi', 'Gx', 'Gy'],
                                                               ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"],
                                                               effect_labels=['1', '0'])
-        self.assertArraysAlmostEqual(model.effects['0'], gateset2b.effects['1'])
-        self.assertArraysAlmostEqual(model.effects['1'], gateset2b.effects['0'])
+        self.assertArraysAlmostEqual(model.effects['0'].to_dense(), gateset2b.effects['1'].to_dense())
+        self.assertArraysAlmostEqual(model.effects['1'].to_dense(), gateset2b.effects['0'].to_dense())
 
         # This is slightly confusing. Single qubit rotations are always stored in "pp" basis internally
         # UPDATE: now this isn't even allowed, as the 'densitymx' type represents states as *real* vectors.
@@ -667,21 +667,21 @@ class GateConstructionBase(object):
         leakA_ans = np.array([[0., 1., 0.],
                               [1., 0., 0.],
                               [0., 0., 1.]], 'd')
-        self.assertArraysAlmostEqual(self.leakA, leakA_ans)
+        self.assertArraysAlmostEqual(self.leakA.to_dense(), leakA_ans)
 
     def _test_rotXa(self):
         rotXa_ans = np.array([[1., 0., 0., 0.],
                               [0., 1., 0., 0.],
                               [0., 0., 0, -1.],
                               [0., 0., 1., 0]], 'd')
-        self.assertArraysAlmostEqual(self.rotXa, rotXa_ans)
+        self.assertArraysAlmostEqual(self.rotXa.to_dense(), rotXa_ans)
 
     def _test_rotX2(self):
         rotX2_ans = np.array([[1., 0., 0., 0.],
                               [0., 1., 0., 0.],
                               [0., 0., -1., 0.],
                               [0., 0., 0., -1.]], 'd')
-        self.assertArraysAlmostEqual(self.rotX2, rotX2_ans)
+        self.assertArraysAlmostEqual(self.rotX2.to_dense(), rotX2_ans)
 
     def _test_rotLeak(self):
         rotLeak_ans = np.array([[0.5, 0., 0., -0.5, 0.70710678],
@@ -689,7 +689,7 @@ class GateConstructionBase(object):
                                 [0., 0., 0., 0., 0.],
                                 [0.5, 0., 0., -0.5, -0.70710678],
                                 [0.70710678, 0., 0., 0.70710678, 0.]], 'd')
-        self.assertArraysAlmostEqual(self.rotLeak, rotLeak_ans)
+        self.assertArraysAlmostEqual(self.rotLeak.to_dense(), rotLeak_ans)
 
     def _test_leakB(self):
         leakB_ans = np.array([[0.5, 0., 0., -0.5, 0.70710678],
@@ -697,7 +697,7 @@ class GateConstructionBase(object):
                               [0., 0., 0., 0., 0.],
                               [-0.5, 0., 0., 0.5, 0.70710678],
                               [0.70710678, 0., 0., 0.70710678, 0.]], 'd')
-        self.assertArraysAlmostEqual(self.leakB, leakB_ans)
+        self.assertArraysAlmostEqual(self.leakB.to_dense(), leakB_ans)
 
     def _test_rotXb(self):
         rotXb_ans = np.array([[1., 0., 0., 0., 0., 0.],
@@ -706,7 +706,7 @@ class GateConstructionBase(object):
                               [0., 0., 0., -1., 0., 0.],
                               [0., 0., 0., 0., 1., 0.],
                               [0., 0., 0., 0., 0., 1.]], 'd')
-        self.assertArraysAlmostEqual(self.rotXb, rotXb_ans)
+        self.assertArraysAlmostEqual(self.rotXb.to_dense(), rotXb_ans)
 
     def _test_CnotA(self):
         CnotA_ans = np.array([[1.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -725,7 +725,7 @@ class GateConstructionBase(object):
                               [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.0, 0, 0],
                               [0, 0, 1.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
                               [0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]])
-        self.assertArraysAlmostEqual(self.CnotA, CnotA_ans)
+        self.assertArraysAlmostEqual(self.CnotA.to_dense(), CnotA_ans)
 
     def _test_CnotB(self):
         CnotB_ans = np.array([[1.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -745,7 +745,7 @@ class GateConstructionBase(object):
                               [0, 0, 1.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
                               [0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
                               [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.0]])
-        self.assertArraysAlmostEqual(self.CnotB, CnotB_ans)
+        self.assertArraysAlmostEqual(self.CnotB.to_dense(), CnotB_ans)
 
     def test_raises_on_bad_basis(self):
         with self.assertRaises(AssertionError):

@@ -31,13 +31,14 @@ class JamiolkowskiBasisTester(BaseCase):
 
         #Build a test gate   -- old # X(pi,Qhappy)*LX(pi,0,2)
         self.testGate = create_operation("LX(pi,0,2)", self.sslbls, self.stdSmall)
-        self.testGateGM_mx = bt.change_basis(self.testGate, self.stdSmall, self.gmSmall)
-        self.expTestGate_mx = bt.flexible_change_basis(self.testGate, self.stdSmall, self.std)
+        self.testGatemx = self.testGate.to_dense()
+        self.testGateGM_mx = bt.change_basis(self.testGatemx, self.stdSmall, self.gmSmall)
+        self.expTestGate_mx = bt.flexible_change_basis(self.testGatemx, self.stdSmall, self.std)
         self.expTestGateGM_mx = bt.change_basis(self.expTestGate_mx, self.std, self.gm)
 
     def checkBasis(self, cmb):
         #Op with Jamio map on gate in std and gm bases
-        Jmx1 = j.jamiolkowski_iso(self.testGate, op_mx_basis=self.stdSmall,
+        Jmx1 = j.jamiolkowski_iso(self.testGatemx, op_mx_basis=self.stdSmall,
                                   choi_mx_basis=cmb)
         Jmx2 = j.jamiolkowski_iso(self.testGateGM_mx, op_mx_basis=self.gmSmall,
                                   choi_mx_basis=cmb)
@@ -64,7 +65,7 @@ class JamiolkowskiBasisTester(BaseCase):
         #Reverse transform without specifying stateSpaceDims, then contraction, should yield same result
         revExpTestGate_mx = j.jamiolkowski_iso_inv(Jmx1, choi_mx_basis=cmb, op_mx_basis=self.std)
         self.assertArraysAlmostEqual(bt.resize_std_mx(revExpTestGate_mx, 'contract', self.std, self.stdSmall),
-                                     self.testGate)
+                                     self.testGatemx)
 
     def test_std_basis(self):
         #mx_dim = sum([ int(np.sqrt(d)) for d in ])

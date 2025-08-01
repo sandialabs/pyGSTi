@@ -5772,7 +5772,7 @@ def _cptp_penalty(mdl, prefactor, op_basis):
         a (real) 1D array of length len(mdl.operations).
     """
     return prefactor * _np.sqrt(_np.array([_tools.tracenorm(
-        _tools.fast_jamiolkowski_iso_std(gate, op_basis)
+        _tools.fast_jamiolkowski_iso_std(gate.to_dense(), op_basis)
     ) for gate in mdl.operations.values()], 'd'))
 
 
@@ -5841,7 +5841,7 @@ def _cptp_penalty_jac_fill(cp_penalty_vec_grad_to_fill, mdl, prefactor, op_basis
 
         #get sgn(chi-matrix) == d(|chi|_Tr)/dchi in std basis
         # so sgnchi == d(|chi_std|_Tr)/dchi_std
-        chi = _tools.fast_jamiolkowski_iso_std(gate, op_basis)
+        chi = _tools.fast_jamiolkowski_iso_std(gate.to_dense(), op_basis)
         assert(_np.linalg.norm(chi - chi.T.conjugate()) < 1e-4), \
             "chi should be Hermitian!"
 
@@ -5916,7 +5916,7 @@ def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl, prefactor, op_bas
 
         #get sgn(denMx) == d(|denMx|_Tr)/d(denMx) in std basis
         # dmDim = denMx.shape[0]
-        denmx = _tools.vec_to_stdmx(prepvec, op_basis)
+        denmx = _tools.vec_to_stdmx(prepvec.to_dense(), op_basis)
         assert(_np.linalg.norm(denmx - denmx.T.conjugate()) < 1e-4), \
             "denMx should be Hermitian!"
 
@@ -5951,7 +5951,7 @@ def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl, prefactor, op_bas
             nparams = effectvec.num_params
 
             #get sgn(EMx) == d(|EMx|_Tr)/d(EMx) in std basis
-            emx = _tools.vec_to_stdmx(effectvec, op_basis)
+            emx = _tools.vec_to_stdmx(effectvec.to_dense(), op_basis)
             # dmDim = EMx.shape[0]
             assert(_np.linalg.norm(emx - emx.T.conjugate()) < 1e-4), \
                 "EMx should be Hermitian!"

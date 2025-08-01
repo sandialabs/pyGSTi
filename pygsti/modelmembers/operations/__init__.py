@@ -15,7 +15,7 @@ import warnings as _warnings
 
 from .composederrorgen import ComposedErrorgen
 from .composedop import ComposedOp
-from .denseop import DenseOperator, DenseOperatorInterface
+from .denseop import DenseOperator
 from .depolarizeop import DepolarizeOp
 from .eigpdenseop import EigenvalueParamDenseOp
 from .embeddederrorgen import EmbeddedErrorgen
