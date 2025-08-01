@@ -18,11 +18,7 @@ import warnings as _warnings
 from functools import lru_cache
 from typing import (
     Union,
-    TypeAlias,
-    Literal,
     Optional,
-    Sequence,
-    Iterable,
 )
 
 import numpy as _np
@@ -218,7 +214,7 @@ class Basis(_NicelySerializable):
                 if hasattr(basis, 'state_space'):  # TODO - should *all* basis objects have a state_space?
                     assert (state_space.is_compatible_with(basis.state_space)), \
                         "Basis object has incompatible state space: %s != %s" % (str(state_space),
-                                                                                    str(basis.state_space))
+                                                                                str(basis.state_space))
             else:  # assume dim is an integer
                 assert (dim == basis.dim or dim == basis.elsize), \
                     "Basis object has unexpected dimension: %d != %d or %d" % (dim, basis.dim, basis.elsize)
@@ -624,7 +620,7 @@ class Basis(_NicelySerializable):
         # *is* a standard representation of the vector space this basis or partial-basis
         # acts upon (this is *not* true for direct-sum bases, where the flattened
         # elements represent vectors in a larger "embedding" space (w/larger dim than actual space).
-        assert (self.is_simple()), "Incorrectly using a simple-assuming implementation of to_elementstd_transform_matrix"
+        assert self.is_simple(), "Incorrectly using a simple-assuming implementation of to_elementstd_transform_matrix"
         return self.to_std_transform_matrix
 
     @property

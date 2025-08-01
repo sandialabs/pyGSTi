@@ -12,14 +12,9 @@ Tools for general statistical hypothesis testing
 
 from typing import (
     Optional,
-    Sequence,
     Literal,
-    TypeAlias,
 )
 import numpy as _np
-
-
-CORRECTION_METHOD_T: TypeAlias = Literal["bonferroni", "sidak"]
 
 
 def bonferroni_correction(significance: float, numtests: int) -> float:
@@ -73,7 +68,8 @@ def sidak_correction(significance: float, numtests: int) -> float:
 
 
 def generalized_bonferroni_correction(significance: float, weights: _np.ndarray, numtests: Optional[int] = None,
-                                      nested_method: CORRECTION_METHOD_T = 'bonferroni', tol: float = 1e-10) -> float:
+                                      nested_method: Literal["bonferroni", "sidak"] = 'bonferroni',
+                                      tol: float = 1e-10) -> float:
     """
     Generalized Bonferroni correction.
 
