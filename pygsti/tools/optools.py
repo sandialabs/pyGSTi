@@ -163,13 +163,6 @@ def fidelity(a, b):
             """
             _warnings.warn(message)
         evals[evals < 0] = 0.0
-        tr = _np.sum(evals)
-        if abs(tr - 1) > __VECTOR_TOL__:
-            message = f"""
-            The PSD part of the input matrix is not trace-1 up to tolerance {__VECTOR_TOL__}.
-            Beware result!
-            """
-            _warnings.warn(message)
         sqrt_mat = U @ (_np.sqrt(evals).reshape((-1, 1)) * U.T.conj())
         return sqrt_mat
     
@@ -1031,9 +1024,14 @@ def povm_diamonddist(model, target_model, povmlbl):
     -------
     float
     """
-    povm_mx = compute_povm_map(model, povmlbl)
-    target_povm_mx = compute_povm_map(target_model, povmlbl)
-    return diamonddist(povm_mx, target_povm_mx, target_model.basis)
+    try:
+        povm_mx = compute_povm_map(model, povmlbl)
+        target_povm_mx = compute_povm_map(target_model, povmlbl)
+        return diamonddist(povm_mx, target_povm_mx, target_model.basis)
+    except AssertionError as e:
+        assert '`dim` must be a perfect square' in str(e)
+        return _np.NaN
+
 
 def instrument_infidelity(a, b, mx_basis):
     """

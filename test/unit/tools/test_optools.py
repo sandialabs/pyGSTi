@@ -48,7 +48,7 @@ class OpToolsTester(BaseCase):
         # U_2Q is 4x4 unitary matrix operating on isolated two-qubit space (CX(pi) rotation)
 
         op_2Q = ot.unitary_to_pauligate(U_2Q)
-        op_2Q_inv = ot.process_mx_to_unitary(bt.change_basis(op_2Q, 'pp', 'std'))
+        op_2Q_inv = ot.std_process_mx_to_unitary(bt.change_basis(op_2Q, 'pp', 'std'))
         self.assertArraysAlmostEqual(U_2Q, op_2Q_inv)
 
     def test_decompose_gate_matrix(self):
