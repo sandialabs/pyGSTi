@@ -15,6 +15,7 @@ import collections as _collections
 import time as _time
 import warnings as _warnings
 
+from tqdm import tqdm
 import numpy as _np
 import numpy.linalg as _nla
 
@@ -2205,7 +2206,7 @@ class LCSEvalTreeMatrixForwardSimulator(MatrixForwardSimulator):
 
         full_tree = CollectionOfLCSEvalTrees(my_data[2], my_data[1], my_data[0])
 
-        full_tree.collapse_circuits_to_process_matrices(self.model)
+        full_tree.collapse_circuits_to_process_matrices(self.model, None)
         Gs = full_tree.reconstruct_full_matrices()
 
         return Gs
@@ -2216,7 +2217,7 @@ class LCSEvalTreeMatrixForwardSimulator(MatrixForwardSimulator):
         dim = self.model.evotype.minimal_dim(self.model.state_space)
         # resource_alloc.check_can_allocate_memory(len(layout_atom.tree.cache) * dim**2)  # prod cache
 
-        layout_atom.tree.collapse_circuits_to_process_matrices(self.model)
+        layout_atom.tree.collapse_circuits_to_process_matrices(self.model, None)
 
         Gs = layout_atom.tree.reconstruct_full_matrices()
 
@@ -2250,11 +2251,42 @@ class LCSEvalTreeMatrixForwardSimulator(MatrixForwardSimulator):
         for i in range(len(gs)):
             out[i] = _np.squeeze(e @ (gs[i] @ rho), axis=(1))
         out = out.reshape((len(gs)*len(e)), order="C")
-        print(out)
         return out
         return _np.squeeze(e @ (gs @ rho), axis=(2)) # only one rho.
 
         return super()._probs_from_rho_e(rho, e, gs, scale_vals)
+
+    def _layout_atom_to_rho_es_elm_inds_and_tree_inds_objs(self,
+                        layout_atom: _MatrixCOPALayoutAtomWithLCS):
+        
+        """
+        Assumes one state prep and many measurements.
+
+        We assume that there will be only one set of tree indices used throughout.
+        Also, we assume that we can find a slice 
+        """
+
+        sp_val = None
+        povm_vals: list[Label] = []
+        elm_inds: list[slice] = [] # This will get collapsed since we are assuming that each povm appears once.
+        tree_inds: list[slice] = [] # I am assuming that this will 
+        for spam_tuple, (element_indices, tree_indices) in layout_atom.indices_by_spamtuple.items():
+            if spam_tuple[0] != sp_val and sp_val is not None:
+                raise ValueError("More than one state prep is being used.")
+            else:
+                sp_val = spam_tuple[0]
+
+            
+            povm_vals.append(spam_tuple[1])
+            elm_inds.append(element_indices)
+            tree_inds.append(tree_indices)
+
+        sp_val = self.model.circuit_layer_operator(sp_val, "prep")
+
+        povm_vals = [self.model.circuit_layer_operator(elabel, 'povm') for elabel in povm_vals]
+
+        tree_inds = _np.unique(tree_inds)[0]
+        return sp_val, povm_vals, elm_inds, tree_inds        
 
     def _rho_es_elm_inds_and_tree_inds_from_spam_tuples(self,
                     layout_atom: _MatrixCOPALayoutAtomWithLCS) -> tuple[_np.ndarray, _np.ndarray]:
@@ -2285,7 +2317,7 @@ class LCSEvalTreeMatrixForwardSimulator(MatrixForwardSimulator):
         tree_inds = _np.unique(tree_inds)[0]
         return sp_val, povm_vals, elm_inds, tree_inds
     
-    def _bulk_fill_dprobs_atom(self, array_to_fill, dest_param_slice, layout_atom: _MatrixCOPALayoutAtomWithLCS, param_slice, resource_alloc):
+    def _bulk_fill_dprobs_atom_saved(self, array_to_fill, dest_param_slice, layout_atom: _MatrixCOPALayoutAtomWithLCS, param_slice, resource_alloc):
 
         
         eps = 1e-7  # hardcoded?
@@ -2303,51 +2335,459 @@ class LCSEvalTreeMatrixForwardSimulator(MatrixForwardSimulator):
         probs = _np.empty(layout_atom.num_elements, 'd')
         self._bulk_fill_probs_atom(probs, layout_atom, resource_alloc)
 
+        original_Gs = layout_atom.tree.reconstruct_full_matrices()
+
         probs2 = _np.empty(layout_atom.num_elements, 'd')
         orig_vec = self.model.to_vector().copy()
+        
+        sp_obj, povm_objs, _, tree_indices = self._layout_atom_to_rho_es_elm_inds_and_tree_inds_objs(layout_atom)
 
-        # if len(param_indices)>0:
-        #     probs2[:] = probs[:] # Could recompute only some of the tree.
-        #     first_param_idx = param_indices[0]
-        #     iFinal = iParamToFinal[first_param_idx]
-        #     self.model.set_parameter_value(first_param_idx, orig_vec[first_param_idx]+eps)
-        #     self._bulk_fill_probs_atom(probs2,  layout_atom, resource_alloc)
-        #     array_to_fill[:, iFinal] = (probs2 - probs) / eps
+        orig_dense_sp = sp_obj.to_dense(on_space="minimal")[:,None] # To maintain expected shape.
+        dense_povms = _np.vstack([_np.conjugate(_np.transpose(povm.to_dense(on_space='minimal')[:, None])) for povm in povm_objs])
 
-        for i in range(len(param_indices)):
-            # probs2[:] = probs[:] # Could recompute only some of the tree.
+        _, rho_gpindices = self._process_wrt_filter(param_slice, sp_obj)
+        if len(rho_gpindices)>0:
+            probs2[:] = probs[:] # Could recompute only some of the tree.
 
-            iFinal = iParamToFinal[param_indices[i]]
-            # self.model.set_parameter_values([param_indices[i-1], param_indices[i]], 
-            #                                 [orig_vec[param_indices[i-1]], orig_vec[param_indices[i]]+eps])
-            vec = orig_vec.copy()
-            vec[param_indices[i]] += eps
-            self.model.from_vector(vec)
-            # vec = self.model.to_vector()
-            # assert _np.allclose(_np.where(vec != 0), [i])
-            self._bulk_fill_probs_atom(probs2,  layout_atom, resource_alloc)
+            iFinal = iParamToFinal[rho_gpindices[0]]
+            self.model.set_parameter_value(rho_gpindices[0], orig_vec[rho_gpindices[0]]+eps)
+
+            dense_sp = sp_obj.to_dense(on_space="minimal")[:, None]
+            probs2 = self._probs_from_rho_e(dense_sp, dense_povms, original_Gs[tree_indices])
+
             array_to_fill[:, iFinal] = (probs2 - probs) / eps
-            print(iFinal)
+
+
+            for i in range(1, len(rho_gpindices)):
+                iFinal = iParamToFinal[rho_gpindices[i]]
+                self.model.set_parameter_values([rho_gpindices[i-1], rho_gpindices[i]], 
+                                                [orig_vec[rho_gpindices[i-1]], orig_vec[rho_gpindices[i]]+eps])
+
+                dense_sp = sp_obj.to_dense(on_space="minimal")[:, None]
+                probs2 = self._probs_from_rho_e(dense_sp, dense_povms, original_Gs[tree_indices])
+            
+                array_to_fill[:, iFinal] = (probs2 - probs) / eps
+
+            self.model.from_vector(orig_vec)  # Reset in case there were rho_gpindices.
+ 
+        _, povm_gpindices = self._process_wrt_filter(param_slice, self.model.circuit_layer_operator(self.model.primitive_povm_labels[0], "povm"))
+        if len(povm_gpindices) >0:
+            probs2[:] = probs[:] # Could recompute only some of the tree.
+            iFinal = iParamToFinal[povm_gpindices[0]]
+            self.model.set_parameter_value(povm_gpindices[0], orig_vec[povm_gpindices[0]]+eps)
+            
+            # We are only varying the POVMs.
+            effects = _np.vstack([_np.conjugate(_np.transpose(povm.to_dense(on_space='minimal')[:, None])) for povm in povm_objs])
+
+            probs2 = self._probs_from_rho_e(orig_dense_sp, effects, original_Gs[tree_indices])
+            
+            array_to_fill[:, iFinal] = (probs2 - probs) / eps
+
+            for i in range(1, len(povm_gpindices)):
+                probs2[:] = probs[:] # Could recompute only some of the tree.
+                iFinal = iParamToFinal[povm_gpindices[0]]
+                self.model.set_parameter_values([povm_gpindices[i-1], povm_gpindices[i]], 
+                                                [orig_vec[povm_gpindices[i-1]], orig_vec[povm_gpindices[i]]+eps])
+
+                # We are only varying the POVMs.
+                effects = _np.vstack([_np.conjugate(_np.transpose(povm.to_dense(on_space='minimal')[:, None])) for povm in povm_objs])
+
+                probs2 = self._probs_from_rho_e(orig_dense_sp, effects, original_Gs[tree_indices])
+                
+                array_to_fill[:, iFinal] = (probs2 - probs) / eps
+
+            self.model.from_vector(orig_vec)  # Reset in case there were povm_gpindices.
+        
+        remaining_param_inds = list(set(param_indices) - set(_slct.to_array(povm_gpindices)) - set(_slct.to_array(rho_gpindices)))
+
+        print(remaining_param_inds)
+
+        if len(remaining_param_inds) > 0:
+            probs2[:] = probs[:] # Could recompute only some of the tree.
+            iFinal = iParamToFinal[remaining_param_inds[0]]
+            recompute_if_change_i = layout_atom.tree.do_I_need_to_recompute_portions_if_I_change_this_index(self.model, remaining_param_inds[0]) 
+            recompute_if_change_i = True
+            if recompute_if_change_i:
+
+                self.model.set_parameter_value(remaining_param_inds[0], orig_vec[remaining_param_inds[0]]+eps)
+                
+                # The representation of a gate has changed so we need to recompute some of the sequences.
+                layout_atom.tree.collapse_circuits_to_process_matrices(self.model, remaining_param_inds[0])
+                Gs = layout_atom.tree.reconstruct_full_matrices()
+
+                probs2 = self._probs_from_rho_e(orig_dense_sp, dense_povms, Gs[tree_indices])
+
+                array_to_fill[:, iFinal] = (probs2 - probs) / eps
+            else:
+                array_to_fill[:, iFinal] = 0  # Derivative must be zero in this direction.        
+
+            for ind in tqdm(range(1, len(remaining_param_inds)), "Dx: "):
+                probs2[:] = probs[:] # Could recompute only some of the tree.
+                recompute_if_change_i_minus_1 = recompute_if_change_i
+                # recompute_if_change_i = layout_atom.tree.do_I_need_to_recompute_portions_if_I_change_this_index(self.model, remaining_param_inds[ind])
+                
+                inds_to_reset = []
+                if remaining_param_inds[ind] == 7:
+                    breakpoint()
+                vals = []
+                if recompute_if_change_i and recompute_if_change_i_minus_1:
+                    # We need to modify both.
+                    inds_to_reset = [remaining_param_inds[ind-1], remaining_param_inds[ind]]
+                    vals = [orig_vec[remaining_param_inds[ind-1]], orig_vec[remaining_param_inds[ind]] + eps]
+                elif recompute_if_change_i:
+                    inds_to_reset = [remaining_param_inds[ind]]
+                    vals = [orig_vec[remaining_param_inds[ind]] + eps]
+                elif recompute_if_change_i_minus_1:
+                    # only reset.
+                    inds_to_reset = [remaining_param_inds[ind-1]]
+                    vals = [orig_vec[remaining_param_inds[ind-1]]]
+                    
+                if inds_to_reset:
+                    self.model.set_parameter_values(inds_to_reset, vals)
+
+                    # The representation of a gate has changed so we need to recompute some of the sequences.
+                    layout_atom.tree.collapse_circuits_to_process_matrices(self.model, remaining_param_inds[ind])
+                    Gs = layout_atom.tree.reconstruct_full_matrices()
+
+                    probs2 = self._probs_from_rho_e(orig_dense_sp, dense_povms, Gs[tree_indices])
+
+                    array_to_fill[:, iFinal] = (probs2 - probs) / eps
+                
+                else:
+                    # Derivative must be zero in this direction.
+                    array_to_fill[:, iFinal] = 0
+
+        self.model.from_vector(orig_vec) # reset to the original model.
+        # array_to_fill = array_to_fill / eps # Divide once
+
+
+    def _bulk_fill_dprobs_atom(self, array_to_fill, dest_param_slice, layout_atom: _MatrixCOPALayoutAtomWithLCS, param_slice, resource_alloc):
+
+        CALL_BASIC = False
+        CALL_BASIC_SET_PARAM_VALS = False
+        CALL_SPLIT_OFF_POVM_AND_SPAM_REDO_ALL_OF_TREE = False
+        CALL_SPLIT_OFF_POVM_SPAM_CACHE_TREE = True
+
+        if CALL_BASIC:
+            return self._bulk_fill_dprobs_atom_using_from_vector(array_to_fill, dest_param_slice, layout_atom, param_slice, resource_alloc)
+        elif CALL_BASIC_SET_PARAM_VALS:
+            return self._bulk_fill_dprobs_atom_using_set_param_vals_no_cache(array_to_fill, dest_param_slice, layout_atom, param_slice, resource_alloc)
+        elif CALL_SPLIT_OFF_POVM_AND_SPAM_REDO_ALL_OF_TREE:
+            return self._bulk_fill_dprobs_atom_using_from_vector_but_split_out_collapse_if_possible(array_to_fill, dest_param_slice, layout_atom, param_slice, resource_alloc)
+        elif CALL_SPLIT_OFF_POVM_SPAM_CACHE_TREE:
+            return self._bulk_fill_dprobs_atom_using_from_vector_but_cache_collapse(array_to_fill, dest_param_slice, layout_atom, param_slice, resource_alloc)
+        
+        eps = 1e-7  # hardcoded?
+        avoiding_repeated_dividing_eps = 1 / eps 
+        if param_slice is None:
+            param_slice = slice(0, self.model.num_params)
+        param_indices = _slct.to_array(param_slice)
+
+        if dest_param_slice is None:
+            dest_param_slice = slice(0, len(param_indices))
+        dest_param_indices = _slct.to_array(dest_param_slice)
+
+        iParamToFinal = {i: dest_param_indices[ii] for ii, i in enumerate(param_indices)}
+
+        probs = _np.empty(layout_atom.num_elements, 'd')
+        self._bulk_fill_probs_atom(probs, layout_atom, resource_alloc)
+
+        original_Gs = layout_atom.tree.reconstruct_full_matrices()
+
+        probs2 = _np.empty(layout_atom.num_elements, 'd')
+        orig_vec = self.model.to_vector().copy()
+        
+
+        if len(param_indices) > 0:
+            probs2[:] = probs[:] # Could recompute only some of the tree.
+            iFinal = iParamToFinal[param_indices[0]]
+            recompute_if_change_i = layout_atom.tree.do_I_need_to_recompute_portions_if_I_change_this_index(self.model, param_indices[0]) 
+            recompute_if_change_i = True
+            if recompute_if_change_i:
+
+                self.model.set_parameter_value(param_indices[0], orig_vec[param_indices[0]]+eps)
+                
+                # The representation of a gate has changed so we need to recompute some of the sequences.
+                self._bulk_fill_probs_atom(probs2, layout_atom, resource_alloc)
+                    
+                array_to_fill[:, iFinal] = (probs2 - probs) / eps
+            else:
+                array_to_fill[:, iFinal] = 0  # Derivative must be zero in this direction.        
+
+            for ind in tqdm(range(1, len(param_indices)), "Dx: "):
+                probs2[:] = probs[:] # Could recompute only some of the tree.
+                recompute_if_change_i_minus_1 = recompute_if_change_i
+                # recompute_if_change_i = layout_atom.tree.do_I_need_to_recompute_portions_if_I_change_this_index(self.model, param_indices[ind])
+                
+                inds_to_reset = []
+                if param_indices[ind] == 7:
+                    breakpoint()
+                vals = []
+                if recompute_if_change_i and recompute_if_change_i_minus_1:
+                    # We need to modify both.
+                    inds_to_reset = [param_indices[ind-1], param_indices[ind]]
+                    vals = [orig_vec[param_indices[ind-1]], orig_vec[param_indices[ind]] + eps]
+                elif recompute_if_change_i:
+                    inds_to_reset = [param_indices[ind]]
+                    vals = [orig_vec[param_indices[ind]] + eps]
+                elif recompute_if_change_i_minus_1:
+                    # only reset.
+                    inds_to_reset = [param_indices[ind-1]]
+                    vals = [orig_vec[param_indices[ind-1]]]
+                    
+                if inds_to_reset:
+                    self.model.set_parameter_values(inds_to_reset, vals)
+
+                    # The representation of a gate has changed so we need to recompute some of the sequences.
+                    self._bulk_fill_probs_atom(probs2, layout_atom, resource_alloc)
+                    array_to_fill[:, iFinal] = (probs2 - probs) / eps
+                
+                else:
+                    # Derivative must be zero in this direction.
+                    array_to_fill[:, iFinal] = 0
+
+        self.model.from_vector(orig_vec) # reset to the original model.
         # array_to_fill = array_to_fill / eps # Divide once
 
     def create_layout(self, circuits : Sequence[_Circuit] | _CircuitList, dataset=None, resource_alloc=None, array_types=('E', ), derivative_dimensions=None, verbosity=0, layout_creation_circuit_cache=None):
-        # replace implicit idles.
-        # from pygsti.layouts.evaltree import _add_in_idle_gates_to_circuit
-        # model_idle_key = Label(())  # not true in general.
-        sanitized_circuits = []
-        for i, c in enumerate(circuits):
-            if len(c) > 0:
-                # # Attempt 1: Broken
-                # c = c.copy(True)
-                # c.replace_gatename_inplace([], model_idle_key)
-                # c.replace_gatename_inplace(Label(()), model_idle_key)
-                # c.done_editing()
-                # # Attempt 2: Broken
-                # c = _add_in_idle_gates_to_circuit(c, model_idle_key)
-                # TODO: try yet another thing.
-                #   IDEA: define a function in the ExplicitModel class that parses a circuit
-                #         and returns one with suitably substituted explicit idles. This seems
-                #         like something that only a model can be expected to resolve.
-                pass
-            sanitized_circuits.append(c)
-        return super().create_layout(sanitized_circuits, dataset, resource_alloc, array_types, derivative_dimensions, verbosity, layout_creation_circuit_cache, use_old_tree_style=False)
+        return super().create_layout(circuits, dataset, resource_alloc, array_types, derivative_dimensions, verbosity, layout_creation_circuit_cache, use_old_tree_style=False)
+
+
+
+    def _bulk_fill_dprobs_atom_using_from_vector(self, array_to_fill, dest_param_slice, layout_atom: _MatrixCOPALayoutAtomWithLCS, param_slice, resource_alloc):
+
+
+        eps = 1e-7  # hardcoded?
+        avoiding_repeated_dividing_eps = 1 / eps 
+        if param_slice is None:
+            param_slice = slice(0, self.model.num_params)
+        param_indices = _slct.to_array(param_slice)
+
+        if dest_param_slice is None:
+            dest_param_slice = slice(0, len(param_indices))
+        dest_param_indices = _slct.to_array(dest_param_slice)
+
+        iParamToFinal = {i: dest_param_indices[ii] for ii, i in enumerate(param_indices)}
+
+        probs = _np.empty(layout_atom.num_elements, 'd')
+        self._bulk_fill_probs_atom(probs, layout_atom, resource_alloc)
+        probs2 = _np.empty(layout_atom.num_elements, 'd')
+        orig_vec = self.model.to_vector().copy()
+
+        for i in range(len(param_indices)):
+
+            new_vec = orig_vec.copy()
+            new_vec[param_indices[i]] += eps
+            self.model.from_vector(new_vec)
+
+            self._bulk_fill_probs_atom(probs2, layout_atom, resource_alloc)
+
+            array_to_fill[:, iParamToFinal[param_indices[i]]] = (probs2 - probs) / eps
+
+        self.model.from_vector(orig_vec)
+
+    def _bulk_fill_dprobs_atom_using_set_param_vals_no_cache(self, array_to_fill, dest_param_slice, layout_atom: _MatrixCOPALayoutAtomWithLCS, param_slice, resource_alloc):
+
+        # THIS METHOD FAILS TO PRODUCE THE CORRECT RESULTS! THIS IS BECAUSE THE SET_PARAMETER_VALUES call still does not work.
+
+        eps = 1e-7  # hardcoded?
+        avoiding_repeated_dividing_eps = 1 / eps 
+        if param_slice is None:
+            param_slice = slice(0, self.model.num_params)
+        param_indices = _slct.to_array(param_slice)
+
+        if dest_param_slice is None:
+            dest_param_slice = slice(0, len(param_indices))
+        dest_param_indices = _slct.to_array(dest_param_slice)
+
+        iParamToFinal = {i: dest_param_indices[ii] for ii, i in enumerate(param_indices)}
+
+        probs = _np.empty(layout_atom.num_elements, 'd')
+        self._bulk_fill_probs_atom(probs, layout_atom, resource_alloc)
+        probs2 = _np.empty(layout_atom.num_elements, 'd')
+        orig_vec = self.model.to_vector().copy()
+
+        if len(param_indices) > 0:
+
+            first_ind = param_indices[0]
+            new_vec = orig_vec.copy()
+            new_vec[first_ind] += eps
+
+            self.model.set_parameter_value(first_ind, orig_vec[first_ind] + eps)
+
+            self._bulk_fill_probs_atom(probs2, layout_atom, resource_alloc)
+
+            array_to_fill[:, iParamToFinal[first_ind]] = (probs2 - probs) / eps
+
+        for i in range(1, len(param_indices)):
+            self.model.set_parameter_values([param_indices[i - 1], param_indices[i]],
+                                            [orig_vec[i-1], orig_vec[i] + eps])
+            new_vec = self.model.to_vector()
+            assert new_vec[i] == (orig_vec[i] + eps)
+            assert _np.allclose(new_vec[:i], orig_vec[:i] )
+            assert _np.allclose(new_vec[i+1:], orig_vec[i+1:])
+
+            self._bulk_fill_probs_atom(probs2, layout_atom, resource_alloc)
+
+            array_to_fill[:, iParamToFinal[first_ind]] = (probs2 - probs) / eps
+
+
+        self.model.from_vector(orig_vec)
+
+    def _bulk_fill_dprobs_atom_using_from_vector_but_split_out_collapse_if_possible(self, array_to_fill, dest_param_slice, layout_atom: _MatrixCOPALayoutAtomWithLCS, param_slice, resource_alloc):
+
+        eps = 1e-7  # hardcoded?
+        avoiding_repeated_dividing_eps = 1 / eps 
+        if param_slice is None:
+            param_slice = slice(0, self.model.num_params)
+        param_indices = _slct.to_array(param_slice)
+
+        if dest_param_slice is None:
+            dest_param_slice = slice(0, len(param_indices))
+        dest_param_indices = _slct.to_array(dest_param_slice)
+
+        iParamToFinal = {i: dest_param_indices[ii] for ii, i in enumerate(param_indices)}
+
+        probs = _np.empty(layout_atom.num_elements, 'd')
+        self._bulk_fill_probs_atom(probs, layout_atom, resource_alloc)
+
+        original_Gs = layout_atom.tree.reconstruct_full_matrices()
+
+        probs2 = _np.empty(layout_atom.num_elements, 'd')
+        orig_vec = self.model.to_vector().copy()
+        
+        sp_obj, povm_objs, _, tree_indices = self._layout_atom_to_rho_es_elm_inds_and_tree_inds_objs(layout_atom)
+
+        orig_dense_sp = sp_obj.to_dense(on_space="minimal")[:,None] # To maintain expected shape.
+        dense_povms = _np.vstack([_np.conjugate(_np.transpose(povm.to_dense(on_space='minimal')[:, None])) for povm in povm_objs])
+
+        _, rho_gpindices = self._process_wrt_filter(param_slice, sp_obj)
+        for i in range(len(rho_gpindices)):
+            probs2[:] = probs[:] # Could recompute only some of the tree.
+
+            iFinal = iParamToFinal[rho_gpindices[i]]
+            
+            new_vec = orig_vec.copy()
+            new_vec[rho_gpindices[i]] += eps
+            self.model.from_vector(new_vec)
+
+            dense_sp = sp_obj.to_dense(on_space="minimal")[:, None]
+            probs2 = self._probs_from_rho_e(dense_sp, dense_povms, original_Gs[tree_indices])
+
+            array_to_fill[:, iFinal] = (probs2 - probs) / eps
+
+ 
+        _, povm_gpindices = self._process_wrt_filter(param_slice, self.model.circuit_layer_operator(self.model.primitive_povm_labels[0], "povm"))
+        for i in range(len(povm_gpindices)):
+            probs2[:] = probs[:] # Could recompute only some of the tree.
+            iFinal = iParamToFinal[povm_gpindices[i]]
+            new_vec = orig_vec.copy()
+            new_vec[povm_gpindices[i]] += eps
+            self.model.from_vector(new_vec)
+
+            # We are only varying the POVMs.
+            effects = _np.vstack([_np.conjugate(_np.transpose(povm.to_dense(on_space='minimal')[:, None])) for povm in povm_objs])
+
+            probs2 = self._probs_from_rho_e(orig_dense_sp, effects, original_Gs[tree_indices])
+            
+            array_to_fill[:, iFinal] = (probs2 - probs) / eps
+
+
+        remaining_param_inds = list(set(param_indices) - set(_slct.to_array(povm_gpindices)) - set(_slct.to_array(rho_gpindices)))
+
+
+        for i in range(len(remaining_param_inds)):
+            probs2[:] = probs[:] # Could recompute only some of the tree.
+            iFinal = iParamToFinal[remaining_param_inds[i]]
+
+            new_vec = orig_vec.copy()
+            new_vec[remaining_param_inds[i]] += eps
+            self.model.from_vector(new_vec)
+
+            layout_atom.tree.collapse_circuits_to_process_matrices(self.model, None)
+            Gs = layout_atom.tree.reconstruct_full_matrices()
+
+            probs2 = self._probs_from_rho_e(orig_dense_sp, dense_povms, Gs[tree_indices])
+
+            array_to_fill[:, iFinal] = (probs2 - probs) / eps
+
+        self.model.from_vector(orig_vec) # reset to the original model.
+
+    def _bulk_fill_dprobs_atom_using_from_vector_but_cache_collapse(self, array_to_fill, dest_param_slice, layout_atom: _MatrixCOPALayoutAtomWithLCS, param_slice, resource_alloc):
+
+        eps = 1e-7  # hardcoded?
+        avoiding_repeated_dividing_eps = 1 / eps 
+        if param_slice is None:
+            param_slice = slice(0, self.model.num_params)
+        param_indices = _slct.to_array(param_slice)
+
+        if dest_param_slice is None:
+            dest_param_slice = slice(0, len(param_indices))
+        dest_param_indices = _slct.to_array(dest_param_slice)
+
+        iParamToFinal = {i: dest_param_indices[ii] for ii, i in enumerate(param_indices)}
+
+        probs = _np.empty(layout_atom.num_elements, 'd')
+        self._bulk_fill_probs_atom(probs, layout_atom, resource_alloc)
+
+        original_Gs = layout_atom.tree.reconstruct_full_matrices()
+
+        probs2 = _np.empty(layout_atom.num_elements, 'd')
+        orig_vec = self.model.to_vector().copy()
+        
+        sp_obj, povm_objs, _, tree_indices = self._layout_atom_to_rho_es_elm_inds_and_tree_inds_objs(layout_atom)
+
+        orig_dense_sp = sp_obj.to_dense(on_space="minimal")[:,None] # To maintain expected shape.
+        dense_povms = _np.vstack([_np.conjugate(_np.transpose(povm.to_dense(on_space='minimal')[:, None])) for povm in povm_objs])
+
+        _, rho_gpindices = self._process_wrt_filter(param_slice, sp_obj)
+        for i in range(len(rho_gpindices)):
+            probs2[:] = probs[:] # Could recompute only some of the tree.
+
+            iFinal = iParamToFinal[rho_gpindices[i]]
+            
+            new_vec = orig_vec.copy()
+            new_vec[rho_gpindices[i]] += eps
+            self.model.from_vector(new_vec)
+
+            dense_sp = sp_obj.to_dense(on_space="minimal")[:, None]
+            probs2 = self._probs_from_rho_e(dense_sp, dense_povms, original_Gs[tree_indices])
+
+            array_to_fill[:, iFinal] = (probs2 - probs) / eps
+
+ 
+        _, povm_gpindices = self._process_wrt_filter(param_slice, self.model.circuit_layer_operator(self.model.primitive_povm_labels[0], "povm"))
+        for i in range(len(povm_gpindices)):
+            probs2[:] = probs[:] # Could recompute only some of the tree.
+            iFinal = iParamToFinal[povm_gpindices[i]]
+            new_vec = orig_vec.copy()
+            new_vec[povm_gpindices[i]] += eps
+            self.model.from_vector(new_vec)
+
+            # We are only varying the POVMs.
+            effects = _np.vstack([_np.conjugate(_np.transpose(povm.to_dense(on_space='minimal')[:, None])) for povm in povm_objs])
+
+            probs2 = self._probs_from_rho_e(orig_dense_sp, effects, original_Gs[tree_indices])
+            
+            array_to_fill[:, iFinal] = (probs2 - probs) / eps
+
+
+        remaining_param_inds = list(set(param_indices) - set(_slct.to_array(povm_gpindices)) - set(_slct.to_array(rho_gpindices)))
+
+
+        for i in range(len(remaining_param_inds)):
+            probs2[:] = probs[:] # Could recompute only some of the tree.
+            iFinal = iParamToFinal[remaining_param_inds[i]]
+
+            new_vec = orig_vec.copy()
+            new_vec[remaining_param_inds[i]] += eps
+            self.model.from_vector(new_vec)
+
+            layout_atom.tree.collapse_circuits_to_process_matrices(self.model, remaining_param_inds[i])
+            Gs = layout_atom.tree.reconstruct_full_matrices()
+
+            probs2 = self._probs_from_rho_e(orig_dense_sp, dense_povms, Gs[tree_indices])
+
+            array_to_fill[:, iFinal] = (probs2 - probs) / eps
+
+        self.model.from_vector(orig_vec) # reset to the original model.

@@ -558,13 +558,13 @@ def get_dense_representation_of_gate_with_perfect_swap_gates(model, op: LabelTup
             op_term = saved[op]
         elif op.qubits[1] < op.qubits[0]:  # type: ignore
             # This is in the wrong order.
-            op_term = model._layer_rules.get_dense_process_matrix_represention_for_gate(model, op).to_dense()
+            op_term = model._layer_rules.get_dense_process_matrix_represention_for_gate(model, op)
             op_term = swap_dense @ (op_term) @ swap_dense.T
             saved[op] = op_term # Save so we only need to this operation once.
         else:
-            op_term = model._layer_rules.get_dense_process_matrix_represention_for_gate(model, op).to_dense()
+            op_term = model._layer_rules.get_dense_process_matrix_represention_for_gate(model, op)
         return op_term
-    return model._layer_rules.get_dense_process_matrix_represention_for_gate(model, op).to_dense()
+    return model._layer_rules.get_dense_process_matrix_represention_for_gate(model, op)
 
 def get_dense_op_of_gate_with_perfect_swap_gates(model, op: LabelTup, saved: dict[int | LabelTup | LabelTupTup, _np.ndarray], swap_dense: _np.ndarray):
     """
@@ -731,7 +731,11 @@ class EvalTreeBasedUponLongestCommonSubstring():
 
         cache_inds = []
         for lbl in self.alphabet_val_to_sorted_cache_inds.keys():
-            my_op = get_dense_op_of_gate_with_perfect_swap_gates(model, lbl, None, None)
+            # my_op = get_dense_op_of_gate_with_perfect_swap_gates(model, lbl, None, None)
+            try:
+                my_op = model.circuit_layer_operator(lbl, "op") # Assumes that layers have the same gpindices as the gates themselves.
+            except KeyError:
+                return cache_inds
             if gp_index_changing in my_op.gpindices_as_array():
                 cache_inds = self.alphabet_val_to_sorted_cache_inds[lbl]
                 my_arr = my_op.gpindices_as_array()
@@ -819,6 +823,7 @@ class EvalTreeBasedUponLongestCommonSubstring():
             return self.results, self.circuit_to_save_location
 
         else:
+            self.results = {} # We are asking to reset all the calculations.
             round_keys = sorted(_np.unique(list(self.sequence_intro.keys())))[::-1]
             # saved: dict[int | LabelTupTup, _np.ndarray] = {}
 

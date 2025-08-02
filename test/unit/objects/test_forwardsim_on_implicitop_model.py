@@ -417,10 +417,11 @@ def test_tensor_product_single_unitaries_yield_right_results_dprobs():
 
     num_qubits = 2
 
-    under_test, expected_model = build_models_for_testing(num_qubits)
+    under_test, expected_model = build_models_for_testing(num_qubits, independent_gates=True, simplify_for_dprobs=True)
 
     circuitNone = Circuit([], num_lines=num_qubits)
-    circuitX = Circuit([("Gxpi2", i) for i in range(num_qubits)], num_lines=num_qubits)
+    single_layer = tuple([("Gxpi2", i) for i in range(num_qubits)])
+    circuitX = Circuit([single_layer], num_lines=num_qubits)
     circuitY = Circuit([("Gypi2", i) for i in range(num_qubits)], num_lines=num_qubits)
     circuitZ = Circuit([("Gzpi2", i) for i in range(num_qubits)], num_lines=num_qubits)
     circuitIdle = Circuit([("Gi", i) for i in range(num_qubits)], num_lines=num_qubits)
@@ -428,7 +429,7 @@ def test_tensor_product_single_unitaries_yield_right_results_dprobs():
     circuits = [circuitNone, circuitX, circuitY, circuitZ, circuitIdle]
     for cir in circuits:
         probs = under_test.sim.dprobs(cir)
-        expected_model.sim.calclib = _importlib.import_module("pygsti.forwardsims.mapforwardsim_calc_generic")
+        # expected_model.sim.calclib = _importlib.import_module("pygsti.forwardsims.mapforwardsim_calc_generic")
 
         exp = expected_model.sim.dprobs(cir)
 
@@ -511,7 +512,7 @@ def test_tensor_product_multi_qubit_gates_with_structured_lanes_dprobs():
 
 
 
-def test_dprobs_matrices_are_close():
+def test_matrices_are_close():
 
     num_qubits = 3
     under_test, expected_model = build_models_for_testing(num_qubits, independent_gates=True,
@@ -525,5 +526,3 @@ def test_dprobs_matrices_are_close():
     actual_dproduct = under_test.sim.bulk_dproduct([cir])
 
     assert np.allclose(actual_dproduct, expected_dproduct)
-
-test_dprobs_matrices_are_close()

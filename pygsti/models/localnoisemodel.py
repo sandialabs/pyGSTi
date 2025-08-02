@@ -652,31 +652,3 @@ class _SimpleCompLayerRules(_LayerRules):
         else:
             # Assume a perfect idle q-qubit gate.
             return _np.eye(4**len(lbl.qubits))
-
-
-
-
-class LocalNoiseModelWithEquivalentClassesForSingleQubits(LocalNoiseModel):
-
-    def __init__(self, processor_spec, gatedict, prep_layers=None, povm_layers=None, evotype="default",
-                 simulator="auto", on_construction_error='raise',
-                 independent_gates=False, ensure_composed_gates=False, implicit_idle_mode="none", equiv_qubits_classes=None):
-
-        super().__init__(processor_spec, gatedict, prep_layers, povm_layers, evotype, simulator,
-                on_construction_error, independent_gates, ensure_composed_gates, implicit_idle_mode)
-
-        self.equiv_qubit_classes = equiv_qubit_classes
-
-        for key in self.operation_blks:
-            for labels in self.operation_blks[key]:
-                qubit_used = labels.qubits
-                if len(qubits_used) == 1:
-                    # We may be able to replace this.
-                    new_qubit = self.equiv_qubit_classes[int(qubits_used[0])]
-                    if new_qubit not in qubits_used:
-                        # Need to replace.
-                        new_label = labels[0] + (new_qubit,)
-                        self.operation_blks[key][labels] = self.operation_blks[key][new_label]
-                        # This assumes no circular updates.
-
-        
