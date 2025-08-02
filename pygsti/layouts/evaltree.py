@@ -30,6 +30,8 @@ from pygsti.tools.sequencetools import (
     simplify_internal_first_one_round
 )
 
+from pygsti.modelmembers.operations.dyadickronop import KronStructured
+
 from pygsti.circuits.split_circuits_into_lanes import compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit, compute_subcircuits
 import time
 import scipy.linalg as la
@@ -547,7 +549,7 @@ def setup_circuit_list_for_LCS_computations(
 
 def get_dense_representation_of_gate_with_perfect_swap_gates(model, op: LabelTup, saved: dict[int | LabelTup | LabelTupTup, _np.ndarray], swap_dense: _np.ndarray) -> _np.ndarray:
     """
-    Assumes that a gate which operates on 2 qubits does not have the right orientation if label is (qu_i+1, qu_i).
+    Assumes that a gate which operates on 2 qubits does not have the right orientation if label is (qu_{i+1}, qu_i).
     """
     if op.num_qubits == 2:
         # We may need to do swaps.
@@ -556,14 +558,19 @@ def get_dense_representation_of_gate_with_perfect_swap_gates(model, op: LabelTup
             op_term = saved[op]
         elif op.qubits[1] < op.qubits[0]:  # type: ignore
             # This is in the wrong order.
-            op_term = model._layer_rules.get_dense_process_matrix_represention_for_gate(model, op)
-            op_term = swap_dense @ (op_term) @ swap_dense
+            op_term = model._layer_rules.get_dense_process_matrix_represention_for_gate(model, op).to_dense()
+            op_term = swap_dense @ (op_term) @ swap_dense.T
             saved[op] = op_term # Save so we only need to this operation once.
         else:
-            op_term = model._layer_rules.get_dense_process_matrix_represention_for_gate(model, op)
+            op_term = model._layer_rules.get_dense_process_matrix_represention_for_gate(model, op).to_dense()
         return op_term
-    return model._layer_rules.get_dense_process_matrix_represention_for_gate(model, op)
+    return model._layer_rules.get_dense_process_matrix_represention_for_gate(model, op).to_dense()
 
+def get_dense_op_of_gate_with_perfect_swap_gates(model, op: LabelTup, saved: dict[int | LabelTup | LabelTupTup, _np.ndarray], swap_dense: _np.ndarray):
+    """
+    Assumes that a gate which operates on 2 qubits does not have the right orientation if label is (qu_{i+1}, qu_i).
+    """
+    return model._layer_rules.get_dense_process_matrix_represention_for_gate(model, op)
 
 def matrix_matrix_cost_estimate(matrix_size: tuple[int, int]) -> int:
     """
@@ -676,18 +683,30 @@ class EvalTreeBasedUponLongestCommonSubstring():
         for key in self.cache:
             self.compute_depends_on(key, self.cache_ind_to_alphabet_vals_referenced)
 
-        alphabet_val_to_cache_inds_to_update: dict[LabelTupTup, set[int]] = {}
+        alphabet_val_to_cache_inds_to_update: dict[LabelTup, set[int]] = {}
 
         for cache_ind, vals in self.cache_ind_to_alphabet_vals_referenced.items():
             for val in vals:
-                if val in alphabet_val_to_cache_inds_to_update:
-                    alphabet_val_to_cache_inds_to_update[val].add(cache_ind)
+                if isinstance(val, LabelTupTup):
+                    for ind_gate in val:
+                        if ind_gate in alphabet_val_to_cache_inds_to_update:
+                            alphabet_val_to_cache_inds_to_update[ind_gate].add(cache_ind)
+                        else:
+                            alphabet_val_to_cache_inds_to_update[ind_gate] = set([cache_ind])
                 else:
-                    alphabet_val_to_cache_inds_to_update[val] = set([cache_ind])
+                    if val in alphabet_val_to_cache_inds_to_update:
+                        alphabet_val_to_cache_inds_to_update[val].add(cache_ind)
+                    else:
+                        alphabet_val_to_cache_inds_to_update[val] = set([cache_ind])
 
         self.results: dict[int | LabelTupTup, _np.ndarray] = {}
 
-        self.alphabet_val_to_sorted_cache_inds: dict[LabelTupTup, list[int]] = {}
+        self.alphabet_val_to_sorted_cache_inds: dict[LabelTup, list[int]] = {}
+
+        self.gpindex_to_cache_vals: dict[int, list[int]] = {}
+        # This will be filled later by _gpindex_to_cache_inds_needed_to_recompute when we have access to the model.
+        # Warning that changing the model paramvec will result in this cache becoming invalidated.
+        # The user is currently in charge of resetting this cache.
 
         for val, cache_inds in alphabet_val_to_cache_inds_to_update.items():
             rnd_nums = {}
@@ -702,6 +721,26 @@ class EvalTreeBasedUponLongestCommonSubstring():
             self.alphabet_val_to_sorted_cache_inds[val] = sorted_inds
 
       
+    def _gpindex_to_cache_inds_needed_to_recompute(self, model, gp_index_changing: int) -> list[int]:
+        """
+        Given that I change the representation of a gate by modifying this index, gp_index_changing,
+        what cache indices do I need to recompute and in what order.
+        """
+        if gp_index_changing in self.gpindex_to_cache_vals:
+            return self.gpindex_to_cache_vals[gp_index_changing]
+
+        cache_inds = []
+        for lbl in self.alphabet_val_to_sorted_cache_inds.keys():
+            my_op = get_dense_op_of_gate_with_perfect_swap_gates(model, lbl, None, None)
+            if gp_index_changing in my_op.gpindices_as_array():
+                cache_inds = self.alphabet_val_to_sorted_cache_inds[lbl]
+                my_arr = my_op.gpindices_as_array()
+                for ind in my_arr: # Save off all the values we know about.
+                    self.gpindex_to_cache_vals[ind] = cache_inds
+                return cache_inds
+        return cache_inds
+    
+
     def from_other_eval_tree(self, other: EvalTreeBasedUponLongestCommonSubstring, qubit_label_exchange: dict[int, int]):
         """
         Construct a tree from another tree.
@@ -743,35 +782,41 @@ class EvalTreeBasedUponLongestCommonSubstring():
             updated[new_cir] = loc
         self.circuit_to_save_location = updated
 
-    def collapse_circuits_to_process_matrices(self, model, num_qubits_in_default: int, alphabet_piece_changing: Optional[LabelTupTup] = None):
+    def collapse_circuits_to_process_matrices(self, model, num_qubits_in_default: int, gp_index_changing: Optional[int] = None):
         """
         Compute the total product cache. Note that this may still have a tensor product
         structure that the operator needs to combine again if they want to have the full 'dense' matrix.
+
+        If gp_index_changing is not None then we have already computed the results once and we only need to update
+        those terms which depend on the specific gp_index.
         """
 
-        if alphabet_piece_changing is not None:
+        if gp_index_changing is not None:
 
-            if alphabet_piece_changing not in self.alphabet_val_to_sorted_cache_inds:
-                # Nothing needs to change here.
-                return self.results, self.circuit_to_save_location
-            
-            cache_inds = self.alphabet_val_to_sorted_cache_inds[alphabet_piece_changing]
+            # Dig through the tree to see if we have a matching
 
-            local_changes = {k: v.copy() for k, v in self.results.items()}
-            for cache_ind in cache_inds:
-                cumulative_term = None
-                for term in self.cache[cache_ind]:
-                    cumulative_term = self._collapse_cache_line(model, cumulative_term, term, local_changes, num_qubits_in_default)
+            cache_inds = self._gpindex_to_cache_inds_needed_to_recompute(model, gp_index_changing)
 
-                # Do not overwrite the results cache
-                # so that we can use it again on a different derivative.
-                if cumulative_term is None:
-                    local_changes[cache_ind] = _np.eye(4**num_qubits_in_default)
-                    # NOTE: unclear when (if ever) this should be a noisy idle gate.
-                else:
-                    local_changes[cache_ind] = cumulative_term
-            return local_changes, self.circuit_to_save_location
+            if cache_inds:
+                # Invalidate all gate labels that we saved just in case.
+                # Invalidate every index in the which we know to be influenced by my_op.
+                local_changes = {k: v.copy() for k, v in self.results.items() \
+                                    if (k not in cache_inds and not isinstance(k, LabelTupTup))}
 
+                for cache_ind in cache_inds:
+                    cumulative_term = None
+                    for term in self.cache[cache_ind]:
+                        cumulative_term = self._collapse_cache_line(model, cumulative_term, term, local_changes, num_qubits_in_default)
+
+                    # Save locally.
+                    if cumulative_term is None:
+                        local_changes[cache_ind] = _np.eye(4**num_qubits_in_default)
+                        # NOTE: unclear when (if ever) this should be a noisy idle gate.
+                    else:
+                        local_changes[cache_ind] = cumulative_term
+                return local_changes, self.circuit_to_save_location
+
+            return self.results, self.circuit_to_save_location
 
         else:
             round_keys = sorted(_np.unique(list(self.sequence_intro.keys())))[::-1]
@@ -976,19 +1021,33 @@ class CollectionOfLCSEvalTrees():
         self.saved_results = {}
         self.sub_cir_to_ind_in_results: dict[tuple[int, ...], dict[_Circuit, int]] = {}
 
-    def collapse_circuits_to_process_matrices(self, model, alphabet_piece_changing: Optional[LabelTupTup] = None):
+    def do_I_need_to_recompute_portions_if_I_change_this_index(self, model, gp_index_changing: int) -> bool:
+
+        for key in self.trees:
+            inds = self.trees[key]._gpindex_to_cache_inds_needed_to_recompute(model, gp_index_changing)
+            if len(inds) > 0:
+                return True
+        return False
+
+
+    def collapse_circuits_to_process_matrices(self, model, gp_index_changing: Optional[int] = None):
         """
         Collapse all circuits to their process matrices. If alphabet_piece_changing is not None, then
         we assume we have already collapsed this system once before and so only need to update part of the eval tree.
         """
         # Just collapse all of them.
 
+        if gp_index_changing is not None:
+            # We may not need to check all of the lanes.
+            pass
 
-        self.saved_results = {}
+        else:
+            self.saved_results = {}
+        
         for key in self.trees:
-            num_qubits = len(key) if key[0] != ('*',) else key[1] # Stored in the data structure.
+            num_qubits = len(key)
             tree = self.trees[key]
-            out1, out2 = tree.collapse_circuits_to_process_matrices(model, num_qubits, alphabet_piece_changing)
+            out1, out2 = tree.collapse_circuits_to_process_matrices(model, num_qubits, gp_index_changing)
             # self.saved_results[key], self.sub_cir_to_ind_in_results[key] = self.trees[key].collapse_circuits_to_process_matrices(model, len(key))
             self.saved_results[key] = out1
             self.sub_cir_to_ind_in_results[key] = out2
@@ -1145,119 +1204,6 @@ class CollectionOfLCSEvalTrees():
 
 
 
-
-class RealLinOp:
-    
-    # Function implementations below are merely defaults.
-    # Don't hesitate to override them if need be.
-
-    __array_priority__ = 100
-
-    @property
-    def ndim(self):
-        return 2
-
-    @property
-    def size(self):
-        return self._size
-
-    @property
-    def shape(self):
-        return self._shape
-
-    @property
-    def dtype(self):
-        return self._dtype
-
-    @property
-    def T(self):
-        return self._adjoint
-
-    def item(self):
-        # If self.size == 1, return a scalar representation of this linear operator.
-        # Otherwise, error.
-        raise NotImplementedError()
-
-    def __matmul__(self, other):
-        return self._linop @ other
-    
-    def __rmatmul__(self, other):
-        return other @ self._linop
-
-
-def is_2d_square(arg):
-    if not hasattr(arg, 'shape'):
-        return False
-    if len(arg.shape) != 2:
-        return False
-    return arg.shape[0] == arg.shape[1]
-
-
-class DyadicKronStructed(RealLinOp):
-
-    def __init__(self, A, B, adjoint=None):
-        assert A.ndim == 2
-        assert B.ndim == 2
-        self.A = A
-        self.B = B
-        self._A_is_trivial = A.size == 1
-        self._B_is_trivial = B.size == 1
-        self._shape = ( A.shape[0]*B.shape[0], A.shape[1]*B.shape[1] )
-        self._size = self.shape[0] * self.shape[1]
-        self._fwd_matvec_core_shape = (B.shape[1], A.shape[1])
-        self._adj_matvec_core_shape = (B.shape[0], A.shape[0])
-        self._dtype = A.dtype
-        self._linop =  sparla.LinearOperator(dtype=self.dtype, shape=self.shape, matvec=self.matvec, rmatvec=self.rmatvec)
-        self._adjoint = DyadicKronStructed(A.T, B.T, adjoint=self) if adjoint is None else adjoint
-
-    def item(self):
-        # This will raise a ValueError if self.size > 1.
-        return self.A.item() * self.B.item()
-    
-    def matvec(self, other):
-        inshape = other.shape
-        assert other.size == self.shape[1]
-        if self._A_is_trivial:
-            return self.A.item() * (self.B @ other)
-        if self._B_is_trivial:
-            return self.B.item() * (self.A @ other)
-        out = self.B @ _np.reshape(other, self._fwd_matvec_core_shape, order='F') @ self.A.T
-        out = _np.reshape(out, inshape, order='F')
-        return out
-
-    def rmatvec(self, other):
-        inshape = other.shape
-        assert other.size == self.shape[0]
-        if self._A_is_trivial:
-            return self.A.item() * (self.B.T @ other)
-        if self._B_is_trivial:
-            return self.B.item() * (self.A.T @ other)
-        out = self.B.T @ _np.reshape(other, self._adj_matvec_core_shape, order='F') @ self.A
-        out = _np.reshape(out, inshape, order='F')
-        return out
-    
-    @staticmethod
-    def build_polyadic(kron_operands):
-        if len(kron_operands) == 2:
-            out = DyadicKronStructed(kron_operands[0], kron_operands[1])
-            return out
-        # else, recurse
-        arg = DyadicKronStructed.build_polyadic(kron_operands[1:])
-        out = DyadicKronStructed(kron_operands[0], arg)
-        return out
-
-
-class KronStructured(RealLinOp):
-
-    def __init__(self, kron_operands):
-        self.kron_operands = kron_operands
-        assert all([op.ndim == 2 for op in kron_operands])
-        self.shapes = _np.array([op.shape for op in kron_operands])
-        self._shape = tuple(int(i) for i in _np.prod(self.shapes, axis=0))
-        forward = DyadicKronStructed.build_polyadic(self.kron_operands)
-        self._linop   = forward._linop
-        self._adjoint = forward.T
-        self._dtype = self.kron_operands[0].dtype
 
 
 def cost_to_compute_tensor_matvec_without_reordering(qubit_list: list[int], total_num_qubits: int):

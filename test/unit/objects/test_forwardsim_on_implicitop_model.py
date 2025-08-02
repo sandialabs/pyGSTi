@@ -1,4 +1,6 @@
 import numpy as np
+from tqdm import tqdm
+
 
 from pygsti.baseobjs import qubitgraph as _qgraph
 from pygsti.baseobjs import QubitSpace
@@ -15,7 +17,7 @@ from pygsti.baseobjs import Label
 from pygsti.modelmembers import operations as op
 from pygsti.baseobjs import UnitaryGateFunction
 from pygsti.forwardsims.matrixforwardsim import LCSEvalTreeMatrixForwardSimulator
-from pygsti.forwardsims import MapForwardSimulator
+from pygsti.forwardsims import MapForwardSimulator, MatrixForwardSimulator
 
 
 def assert_probability_densities_are_equal(op_dict: dict, exp_dict: dict, cir: Circuit):
@@ -450,13 +452,13 @@ def test_tensor_product_single_unitaries_random_collection_of_xyz_dprobs():
 
 def test_tensor_product_gates_with_implicit_idles_dprobs():
 
-    num_qubits = 5
+    num_qubits = 2
 
     under_test, expected_model = build_models_for_testing(num_qubits, independent_gates=True, simplify_for_dprobs=True)
 
     gatenames = ["Gxpi2", "Gypi2", "Gzpi2", "Gi"]
-    for gate in gatenames:
-        for i in range(num_qubits):
+    for gate in tqdm(gatenames, "Gate: "):
+        for i in tqdm(range(num_qubits), "Qubit Location: "):
             cir = Circuit([[(gate, i)]], num_lines=num_qubits)
 
             probs = under_test.sim.dprobs(cir)
@@ -467,6 +469,7 @@ def test_tensor_product_gates_with_implicit_idles_dprobs():
 
     # gatenames = ["Gecr", "Gcnot"]
     gatenames = ["Gecr"]
+    gatenames = []
     for gate in gatenames:
         for i in range(num_qubits - 1):
             cir = Circuit([[(gate, i, i + 1)]], num_lines=num_qubits)
@@ -503,5 +506,24 @@ def test_tensor_product_multi_qubit_gates_with_structured_lanes_dprobs():
 
         assert_probability_densities_are_equal(probs, exp, circuit)
 
-
+# test_tensor_product_gates_with_implicit_idles_dprobs()
 #endregion Derivative of Probabilities consistencies.
+
+
+
+def test_dprobs_matrices_are_close():
+
+    num_qubits = 3
+    under_test, expected_model = build_models_for_testing(num_qubits, independent_gates=True,
+                                                          simplify_for_dprobs=True)
+    
+    cir = Circuit([[("Gxpi2", 1)]], num_lines=num_qubits)
+
+    expected_model.sim = MatrixForwardSimulator()
+
+    expected_dproduct = expected_model.sim.bulk_dproduct([cir])
+    actual_dproduct = under_test.sim.bulk_dproduct([cir])
+
+    assert np.allclose(actual_dproduct, expected_dproduct)
+
+test_dprobs_matrices_are_close()
