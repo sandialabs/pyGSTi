@@ -603,6 +603,44 @@ MEASURE 2 ro[2]
         self.assertEqual(ckt_global_idle_custom, converted_pygsti_circuit_global_idle_custom_1)
         self.assertEqual(ckt_global_idle_none, converted_pygsti_circuit_global_idle_none)
         
+    def test_convert_to_stim_tableau(self):
+        #TODO: Add correctness checks for generated Tableaus.
+        try:
+            import stim
+        except ImportError:
+            self.skipTest("Stim is required for this operation, and it does not appear to be installed.")
+            test_circuit = Circuit([Label('Gxpi2',0), Label('Gxpi2', 1)], line_labels=(0,1))
+            tableau0 = test_circuit.convert_to_stim_tableau()
+            #more qubits than line labels (with max line label less than number of qubits)
+            test_circuit.convert_to_stim_tableau(num_qubits=3)
+
+            #Circuit where circuit layers need to be mapped into 0,1.
+            test_circuit_1 = Circuit([Label('Gxpi2',3), Label('Gxpi2', 4)], line_labels=(3,4))
+            tableau1 = test_circuit_1.convert_to_stim_tableau()
+
+            self.assertEqual(tableau0, tableau1)
+
+            #string line labels:
+            test_circuit_2 = Circuit([Label('Gxpi2','Q1'), Label('Gxpi2', 'Q2')], line_labels=('Q1', 'Q2'))
+            tableau2 = test_circuit_2.convert_to_stim_tableau()
+
+            self.assertEqual(tableau0, tableau2)
+
+            #test non-traditional line labels:
+            test_circuit_3 = Circuit([Label('Gxpi2','Qalice'), Label('Gxpi2', 'Qbob')], line_labels=('Qalice', 'Qbob'))
+
+            #confirm this fails when called with default args.
+            with self.assertRaises(RuntimeError):
+                test_circuit_3.convert_to_stim_tableau()
+
+            tableau3 = test_circuit_3.convert_to_stim_tableau_layers(qubit_label_conversions={'Qalice':0, 'Qbob':1})   
+
+            self.assertEqual(tableau0, tableau3)
+
+            #test incomplete conversion dictionary.
+            with self.assertRaises(AssertionError):
+                test_circuit_3.convert_to_stim_tableau_layers(qubit_label_conversions={'Qalice':0, 'Qcharlie':1})
+
     def test_done_editing(self):
         self.c.done_editing()
         with self.assertRaises(AssertionError):
@@ -699,6 +737,7 @@ MEASURE 2 ro[2]
 
 
 class CircuitOperationTester(BaseCase):
+
     # TODO merge with CircuitMethodTester
     def setUp(self):
         self.s1 = circuit.Circuit(('Gx', 'Gx'), stringrep="Gx^2")
