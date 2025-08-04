@@ -65,8 +65,10 @@ class LinearInterposer(ModelParamsInterposer):
     def __init__(self, transform_matrix):
         self.transform_matrix = transform_matrix  # cols specify a model parameter in terms of op params.
         self.inv_transform_matrix = _np.linalg.pinv(self.transform_matrix)
+        self.inv_transform_matrix[_np.abs(self.inv_transform_matrix) < 1e-10] = 0
+        self.projector_matrix = _np.eye(self.transform_matrix.shape[1])
+        self.full_span_transform_matrix = self.transform_matrix.copy()
         super().__init__(transform_matrix.shape[1], transform_matrix.shape[0])
-    
     def model_paramvec_to_ops_paramvec(self, v):
         return self.transform_matrix @ v
 
@@ -99,11 +101,12 @@ class LinearInterposer(ModelParamsInterposer):
     @classmethod
     def _from_nice_serialization(cls, state):  # memo holds already de-serialized objects
         return cls(cls._decodemx(state['transform_matrix']))
-    
+
     def __eq__(self, other):
-        assert isinstance(other, LinearInterposer), 'Object provided is not of LinearInterposer type'
+        if not isinstance(other, LinearInterposer):
+            return False
 
         if self.transform_matrix.shape != other.transform_matrix.shape:
             return False
+        
         return _np.allclose(self.transform_matrix, other.transform_matrix)
-    
