@@ -44,6 +44,7 @@ from pygsti.tools import optools as _ot
 from pygsti.tools import fogitools as _fogit
 from pygsti.tools import slicetools as _slct
 from pygsti.tools import listtools as _lt
+from pygsti import SpaceT
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
 
 
@@ -1530,7 +1531,7 @@ class ExplicitOpModel(_mdl.OpModel):
                     #    observed_sslbls.update(sslbls)
 
                 if gn not in gate_unitaries or gate_unitaries[gn] is None:
-                    U = _ot.superop_to_unitary(op.to_dense('HilbertSchmidt'), self.basis) \
+                    U = _ot.superop_to_unitary(op.to_dense("HilbertSchmidt"), self.basis) \
                         if (op is not None) else None  # U == None indicates "unknown, up until this point"
 
                     Ulocal = extract_unitary(U, all_sslbls, sslbls)

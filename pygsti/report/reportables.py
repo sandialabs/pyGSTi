@@ -30,7 +30,7 @@ from pygsti.baseobjs.label import Label as _Lbl
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LEEL
 from pygsti.modelmembers.operations.lindbladcoefficients import LindbladCoefficientBlock as _LindbladCoefficientBlock
 from pygsti.models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
-
+from pygsti import SpaceT
 
 _CVXPY_AVAILABLE = importlib.util.find_spec('cvxpy') is not None
 
@@ -121,8 +121,8 @@ def spam_dotprods(rho_vecs, povms):
         j = 0
         for povm in povms:
             for EVec in povm.values():
-                ret[i, j] = _np.vdot(EVec.to_dense(on_space='HilbertSchmidt'),
-                                     rhoVec.to_dense(on_space='HilbertSchmidt'))
+                ret[i, j] = _np.vdot(EVec.to_dense("HilbertSchmidt"),
+                                     rhoVec.to_dense("HilbertSchmidt"))
                 j += 1
                 # to_dense() gives a 1D array, so no need to transpose EVec
     return ret
@@ -230,7 +230,7 @@ class GateEigenvalues(_modf.ModelFunction):
         -------
         numpy.ndarray
         """
-        evals, evecs = _np.linalg.eig(model.operations[self.oplabel].to_dense(on_space='HilbertSchmidt'))
+        evals, evecs = _np.linalg.eig(model.operations[self.oplabel].to_dense("HilbertSchmidt"))
 
         ev_list = list(enumerate(evals))
         ev_list.sort(key=lambda tup: abs(tup[1]), reverse=True)
@@ -1031,7 +1031,7 @@ def angles_btwn_rotn_axes(model):
     angles_btwn_rotn_axes = _np.zeros((len(opLabels), len(opLabels)), 'd')
 
     for i, gl in enumerate(opLabels):
-        decomp = _tools.decompose_gate_matrix(model.operations[gl].to_dense(on_space='HilbertSchmidt'))
+        decomp = _tools.decompose_gate_matrix(model.operations[gl].to_dense("HilbertSchmidt"))
         rotnAngle = decomp.get('pi rotations', 'X')
         axisOfRotn = decomp.get('axis of rotation', None)
 
@@ -1222,9 +1222,9 @@ if _CVXPY_AVAILABLE:
         def __init__(self, model_a, model_b, oplabel):
             self.oplabel = oplabel
             if isinstance(model_b, _ExplicitOpModel):
-                self.B = model_b.operations[oplabel].to_dense(on_space='HilbertSchmidt')
+                self.B = model_b.operations[oplabel].to_dense("HilbertSchmidt")
             else:
-                self.B = model_b.operation_blks['gates'][oplabel].to_dense(on_space='HilbertSchmidt')
+                self.B = model_b.operation_blks['gates'][oplabel].to_dense("HilbertSchmidt")
             self.d = int(round(_np.sqrt(model_a.dim)))
             _modf.ModelFunction.__init__(self, model_a, [("gate", oplabel)])
 
@@ -1243,10 +1243,10 @@ if _CVXPY_AVAILABLE:
             """
             gl = self.oplabel
             if isinstance(model, _ExplicitOpModel):
-                dm, W = _tools.diamonddist(model.operations[gl].to_dense(on_space='HilbertSchmidt'),
+                dm, W = _tools.diamonddist(model.operations[gl].to_dense("HilbertSchmidt"),
                                            self.B, model.basis, return_x=True)
             else:
-                dm, W = _tools.diamonddist(model.operation_blks['gates'][gl].to_dense(on_space='HilbertSchmidt'),
+                dm, W = _tools.diamonddist(model.operation_blks['gates'][gl].to_dense("HilbertSchmidt"),
                                            self.B, 'pp', return_x=True)  # HACK - need to get basis from model 'pp' HARDCODED for now
 
             self.W = W
@@ -1267,9 +1267,9 @@ if _CVXPY_AVAILABLE:
             """
             mxBasis = nearby_model.basis
             if isinstance(nearby_model, _ExplicitOpModel):
-                A = nearby_model.operations[self.oplabel].to_dense(on_space='HilbertSchmidt')
+                A = nearby_model.operations[self.oplabel].to_dense("HilbertSchmidt")
             else:
-                A = nearby_model.operation_blks['gates'][self.oplabel].to_dense(on_space='HilbertSchmidt')
+                A = nearby_model.operation_blks['gates'][self.oplabel].to_dense("HilbertSchmidt")
                 mxBasis = 'pp'  # HACK need to set mxBasis based on model but not the full model basis
             JAstd = self.d * _tools.fast_jamiolkowski_iso_std(A, mxBasis)
             JBstd = self.d * _tools.fast_jamiolkowski_iso_std(self.B, mxBasis)
@@ -2146,8 +2146,8 @@ def general_decomposition(model_a, model_b):
     mxBasis = model_b.basis  # B is usually the target which has a well-defined basis
 
     for gl in opLabels:
-        gate = model_a.operations[gl].to_dense(on_space='HilbertSchmidt')
-        targetOp = model_b.operations[gl].to_dense(on_space='HilbertSchmidt')
+        gate = model_a.operations[gl].to_dense("HilbertSchmidt")
+        targetOp = model_b.operations[gl].to_dense("HilbertSchmidt")
         gl = str(gl)  # Label -> str for decomp-dict keys
 
         target_evals = _np.linalg.eigvals(targetOp)
@@ -2621,8 +2621,8 @@ def instrument_half_diamond_norm(a, b, mx_basis):
         aa, bb = i * adim, (i + 1) * adim
         for j in range(nComps):
             cc, dd = j * adim, (j + 1) * adim
-            composite_op[aa:bb, cc:dd] = a[clbl].to_dense(on_space='HilbertSchmidt')
-            composite_top[aa:bb, cc:dd] = b[clbl].to_dense(on_space='HilbertSchmidt')
+            composite_op[aa:bb, cc:dd] = a[clbl].to_dense("HilbertSchmidt")
+            composite_top[aa:bb, cc:dd] = b[clbl].to_dense("HilbertSchmidt")
     return half_diamond_norm(composite_op, composite_top, sumbasis)
 
 
