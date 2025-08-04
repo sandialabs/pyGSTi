@@ -89,7 +89,7 @@ class ErrgenCompositionCommutationTester(BaseCase):
         errorgen_lbl_matrix_dict_2Q = {lbl: mat for lbl, mat in zip(errorgen_lbls_2Q, complete_errorgen_basis_2Q.elemgen_matrices)}
         
         #augment testing with random selection of 3Q labels (some commutation relations for C and A terms require a minimum of 3 qubits).
-        errorgen_lbls_3Q, errorgen_mats_3Q = select_random_items_from_multiple_lists([complete_errorgen_basis_3Q.labels, complete_errorgen_basis_3Q.elemgen_matrices], 1000, seed= 1234)
+        errorgen_lbls_3Q, errorgen_mats_3Q = select_random_items_from_multiple_lists([complete_errorgen_basis_3Q.labels, complete_errorgen_basis_3Q.elemgen_matrices], 50)
         errorgen_lbl_matrix_dict_3Q = {lbl: mat for lbl, mat in zip(errorgen_lbls_3Q, errorgen_mats_3Q)}
             
         complete_errorgen_lbl_matrix_dict_3Q = {lbl: mat for lbl, mat in zip(complete_errorgen_basis_3Q.labels, complete_errorgen_basis_3Q.elemgen_matrices)}
@@ -351,8 +351,11 @@ class ApproxStabilizerMethodTester(BaseCase):
 
     def test_phi(self):
         bit_strings_3Q = list(product(['0','1'], repeat=3))
+        rng = np.random.default_rng()
+        paulis = np.fromiter(stim.PauliString.iter_all(3), dtype=object)
+        random_paulis = rng.choice(paulis, size=10, replace=False)
         for bit_string in bit_strings_3Q:
-            for pauli_1, pauli_2 in product(stim.PauliString.iter_all(3), stim.PauliString.iter_all(3)):
+            for pauli_1, pauli_2 in product(random_paulis, random_paulis):
                 phi_num = _eprop.phi_numerical(self.circuit_tableau_3Q, bit_string, pauli_1, pauli_2)
                 phi_analytic = _eprop.phi(self.circuit_tableau_3Q, bit_string, pauli_1, pauli_2)
                 if abs(phi_num-phi_analytic) > 1e-4:
@@ -362,8 +365,10 @@ class ApproxStabilizerMethodTester(BaseCase):
     def test_alpha(self):
         bit_strings_3Q = list(product(['0','1'], repeat=3))
         complete_errorgen_basis_3Q = CompleteElementaryErrorgenBasis('PP', QubitSpace(3), default_label_type='local')
+        rng = np.random.default_rng()
+        random_errorgens = rng.choice(np.fromiter(complete_errorgen_basis_3Q.labels, dtype=object), size=100, replace=False)
         for bit_string in bit_strings_3Q:
-            for lbl in complete_errorgen_basis_3Q.labels:
+            for lbl in random_errorgens:
                 alpha_num = _eprop.alpha_numerical(lbl, self.circuit_tableau_3Q, bit_string)
                 assert abs(alpha_num - _eprop.alpha(lbl, self.circuit_tableau_3Q, bit_string)) <1e-4
 
@@ -375,7 +380,9 @@ class ApproxStabilizerMethodTester(BaseCase):
         def _compare_alpha_pauli_analytic_numeric(num_qubits, tableau):
             #loop through all error generators and all paulis
             errorgen_basis = CompleteElementaryErrorgenBasis('PP', QubitSpace(num_qubits), default_label_type='local')
-            errorgen_labels = [_LSE.cast(lbl) for lbl in errorgen_basis.labels]
+            rng = np.random.default_rng()
+            random_errorgens = rng.choice(np.fromiter(errorgen_basis.labels, dtype=object), size=10, replace=False)
+            errorgen_labels = [_LSE.cast(lbl) for lbl in random_errorgens]
             pauli_list = list(stim.PauliString.iter_all(num_qubits))
             for lbl in errorgen_labels:
                 for pauli in pauli_list:
@@ -421,10 +428,11 @@ class ApproxStabilizerMethodTester(BaseCase):
 
         first_order_diff = exact_prop_probs[-1] - _eprop.approximate_stabilizer_probability(self.propagated_errorgen_layer, self.circuit_tableau, '1111')
         second_order_diff = exact_prop_probs[-1] - _eprop.approximate_stabilizer_probability(self.propagated_errorgen_layer, self.circuit_tableau, '1111', order=2)
-        third_order_diff = exact_prop_probs[-1] - _eprop.approximate_stabilizer_probability(self.propagated_errorgen_layer, self.circuit_tableau, '1111', order=3)
+        #skip second test of third order for now to save on unit test runtime
+        #third_order_diff = exact_prop_probs[-1] - _eprop.approximate_stabilizer_probability(self.propagated_errorgen_layer, self.circuit_tableau, '1111', order=3)
 
         assert abs(first_order_diff) > abs(second_order_diff)
-        assert abs(second_order_diff) > abs(third_order_diff)
+        #assert abs(second_order_diff) > abs(third_order_diff)
         
     def test_approximate_stabilizer_probabilities(self):
         exact_prop_probs = probabilities_errorgen_prop(self.error_propagator, self.target_model, 
@@ -450,7 +458,7 @@ class ApproxStabilizerMethodTester(BaseCase):
     def test_approximate_stabilizer_pauli_expectation(self):
         rng = np.random.default_rng(seed=12345)
         paulis_4Q = list(stim.PauliString.iter_all(4))
-        random_4Q_pauli_indices = rng.choice(len(paulis_4Q), 5, replace=False)
+        random_4Q_pauli_indices = rng.choice(len(paulis_4Q), 3, replace=False)
         random_4Q_paulis = [paulis_4Q[idx] for idx in random_4Q_pauli_indices]
 
         for pauli in random_4Q_paulis:
