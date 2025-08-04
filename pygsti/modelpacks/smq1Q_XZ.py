@@ -71,10 +71,10 @@ class _Module(GSTModelPack):
                         (('Gxpi2', 0), ('Gzpi2', 0), ('Gzpi2', 0), ('Gzpi2', 0))] #|->
         #Constructed by hand
         _measfiducials = [(), #<0|, <1|
-                        (('Gxpi2', 0),), # <-i|, <i|
+                        (('Gxpi2', 0),), # <i|, <-i|
                         (('Gzpi2', 0), ('Gxpi2', 0)), #<+|, <-| 
                         (('Gxpi2', 0), ('Gxpi2', 0)), # <1|, <0|
-                        (('Gzpi2', 0), ('Gzpi2', 0), ('Gxpi2', 0)), #<i|, <-i|
+                        (('Gzpi2', 0), ('Gzpi2', 0), ('Gxpi2', 0)), #<-i|, <i|
                         (('Gzpi2', 0), ('Gzpi2', 0), ('Gzpi2', 0), ('Gxpi2', 0))] # <-|, <+|
 
         #global_fidpairs uses an outdated version of FPR which I don't think is worth regenerating
