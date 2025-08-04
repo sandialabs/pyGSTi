@@ -764,6 +764,7 @@ def standard_gatenames_openqasm_conversions(version='u3'):
         std_gatenames_to_qasm['Gc23'] = ['u3(0, 0, 4.71238898038469)']  # [0, 0, 3] * pi/2 (this is Gzmpi2 / Gpdag)
 
         std_gatenames_to_qasm['Gecr'] = ['ecr']
+        std_gatenames_to_qasm['Gecres'] = ['ecr']
 
         std_gatenames_to_argmap = {}
         std_gatenames_to_argmap['Gzr'] = lambda gatearg: ['u3(0, 0, ' + str(gatearg[0]) + ')']
@@ -819,6 +820,7 @@ def standard_gatenames_openqasm_conversions(version='u3'):
         std_gatenames_to_qasm['Gtdag'] = ['rz(5.497787143782138)']
 
         std_gatenames_to_qasm['Gecr'] = ['ecr']
+        std_gatenames_to_qasm['Gecres'] = ['ecr']
 
         std_gatenames_to_argmap = {}
         std_gatenames_to_argmap['Gzr'] = lambda gatearg: ['rz(' + str(gatearg[0]) + ')']
