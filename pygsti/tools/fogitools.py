@@ -564,17 +564,13 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                             # Step 1: Compute SVD
                             U, S, VT = _scp.linalg.svd(A, lapack_driver='gesvd')
 
-                            # Step 2: Construct Sigma
-                            Sigma = _np.zeros((U.shape[0], VT.shape[0]))
-                            _np.fill_diagonal(Sigma, S)
-
-                            # Step 3: Compute Sigma+
-                            S_plus = _np.zeros_like(Sigma.T)
+                            # Step 2: Compute Sigma+
+                            S_plus = _np.zeros((VT.shape[0],U.shape[0]))
                             for i in range(len(S)):
                                 if _np.abs(S[i]) > rcond:
                                     S_plus[i, i] = 1 / S[i]
 
-                            # Step 4: Compute the pseudoinverse
+                            # Step 3: Compute the pseudoinverse
                             return VT.T @ S_plus @ U.T
 
                         try:
