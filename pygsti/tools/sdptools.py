@@ -28,8 +28,10 @@ from pygsti.baseobjs.basis import Basis, ExplicitBasis, DirectSumBasis
 
 try:
     import cvxpy as cp
-    old_cvxpy = bool(tuple(map(int, cp.__version__.split('.'))) < (1, 0))
-    CVXPY_ENABLED = not old_cvxpy
+    CVXPY_ENABLED = True
+    mosek_warning_pattern = ".*Incorrect array format causing data to be copied*"
+    import warnings
+    warnings.filterwarnings('ignore', mosek_warning_pattern)
 except:
     CVXPY_ENABLED = False
 
