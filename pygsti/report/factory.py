@@ -1324,7 +1324,11 @@ def construct_standard_report(results, title="auto",
     try:
         idt_results = _construct_idtresults(idtIdleOp, idtPauliDicts, results, printer)
     except Exception as e:
-        _warnings.warn("Idle tomography failed:\n" + str(e))
+        if isinstance(e, ValueError) and 'Expected matrix of shape' in str(e):
+            msg = "Idle tomography skipped. Currently, this is only supported for 2-level systems."
+            printer.log(msg)
+        else:
+            _warnings.warn("Idle tomography unexpectedly failed:\n" + str(e))
         idt_results = {}
     if len(idt_results) > 0:
         sections.append(_section.IdleTomographySection())
