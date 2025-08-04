@@ -2591,7 +2591,7 @@ def info_of_opfn_by_name(name):
         "unmodeled": ("Un-modeled|Error",
                       "The per-operation budget used to account for un-modeled errors (model violation)"),
         "sub-inf": ("Entanglement|Infidelity (subspace)",
-                   "1.0 - <psi| 1 x Lambda(psi) |psi>, where |psi> is the standard test state supported U x U and U is the computational subspace."),
+                   "1.0 - <psi| 1 x Lambda(psi) |psi>, where |psi> is the standard test state supported U x U, and U denotes the computational subspace."),
         "sub-trace" : ("1/2 Trace|Distance (subspace)",
                       "0.5 | Chi(A|U) - Chi(B|U) |_tr, where U is the computational subspace and Chi(G|U) is the image of (1 x G) on the standard test state supported on U x U."),
         "sub-diamond": ("1/2 Diamond|Distance (subspace)",
