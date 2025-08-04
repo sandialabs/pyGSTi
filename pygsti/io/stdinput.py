@@ -2,7 +2,7 @@
 Text-parsing classes and functions to read input files.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -128,7 +128,7 @@ class StdInputParser(object):
             else:
                 circuit = _Circuit._fastinit(layer_tuple, line_lbls, editable=False,
                                              name='', stringrep=s, occurrence=occurrence_id,
-                                             compilable_layer_indices=compilable_indices)
+                                             compilable_layer_indices_tup=compilable_indices)
 
             if self.use_global_parse_cache:
                 _global_parse_cache[create_subcircuits][s] = circuit
@@ -164,10 +164,10 @@ class StdInputParser(object):
         occurrence_id: int or None
             The "occurence id" - an integer following a second '@' symbol that identifies a particular
             copy of this circuit.
-        compilable_indices : tuple or None
+        compilable_indices : tuple
             A tuple of layer indices (into `label_tuple`) marking the layers that can be "compiled",
             and are *not* followed by a barrier so they can be compiled with following layers.  This
-            is non-`None` only when there are explicit markers within the circuit string indicating
+            is non-empty only when there are explicit markers within the circuit string indicating
             the presence or absence of barriers.
         """
         if lookup is None:
@@ -175,8 +175,8 @@ class StdInputParser(object):
         self._circuit_parser.lookup = lookup
         circuit_tuple, circuit_labels, occurrence_id, compilable_indices = \
             self._circuit_parser.parse(s, create_subcircuits)
-        # print "DB: result = ",result
-        # print "DB: stack = ",self.exprStack
+        compilable_indices = compilable_indices if compilable_indices is not None else ()
+
         return circuit_tuple, circuit_labels, occurrence_id, compilable_indices
 
     def parse_dataline(self, s, lookup=None, expected_counts=-1, create_subcircuits=True,
@@ -326,14 +326,9 @@ class StdInputParser(object):
                         self.parse_circuit_raw(line, {}, create_subcircuits)
                     if parsed_line_lbls is None:
                         parsed_line_lbls = line_labels  # default to the passed-in argument
-                        #nlines = num_lines
-                    #else: nlines = None  # b/c we've got a valid line_lbls
                     circuit = _Circuit._fastinit(layer_lbls, parsed_line_lbls, editable=False,
                                                  name='', stringrep=line.strip(), occurrence=occurrence_id,
-                                                 compilable_layer_indices=compilable_indices)
-                    #circuit = _Circuit(layer_lbls, stringrep=line.strip(),
-                    #                        line_labels=parsed_line_lbls, num_lines=nlines,
-                    #                        expand_subcircuits=False, check=False, occurrence=occurrence_id)
+                                                 compilable_layer_indices_tup=compilable_indices)
                     ##Note: never expand subcircuits since parse_circuit_raw already does this w/create_subcircuits arg
                 circuit_list.append(circuit)
         return circuit_list
@@ -507,11 +502,6 @@ class StdInputParser(object):
 
         last_circuit = last_commentDict = None
 
-        #REMOVE DEBUG
-        #from mpi4py import MPI
-        #comm = MPI.COMM_WORLD
-        #debug_circuit_elements = 0; debug_test_simple_dict = {}; circuit_bytes = 0; sizeof_bytes = 0
-
         with open(filename, 'r') as inputfile:
             for (iLine, line) in enumerate(inputfile):
                 if iLine % nSkip == 0 or iLine + 1 == nLines: display_progress(iLine + 1, nLines, filename)
@@ -535,7 +525,7 @@ class StdInputParser(object):
                         looking_for = "circuit_line"
                         if ignore_zero_count_lines is False and last_circuit is not None:
                             dataset.add_count_list(last_circuit, [], [], aux=last_commentDict,
-                                                   record_zero_counts=record_zero_counts, update_ol=False, unsafe=True)
+                                                   record_zero_counts=record_zero_counts, update_ol=False)
 
                 if looking_for == "circuit_line":
                     if len(dataline) == 0: continue
@@ -593,11 +583,6 @@ class StdInputParser(object):
                                     warnings.append("Dataline for circuit '%s' has zero counts and will be ignored" % s)
                                 continue  # skip lines in dataset file with zero counts (no experiments done)
                             else:
-                                #if not bBad:
-                                #    s = circuitStr if len(circuitStr) < 40 else circuitStr[0:37] + "..."
-                                #    warnings.append("Dataline for circuit '%s' has zero counts." % s)
-                                # don't make a fuss if we don't ignore the lines (needed for
-                                # fill_in_empty_dataset_with_fake_data).
                                 pass
 
                         #Call this low-level function for performance, so need to construct outcome *index* arrays above
@@ -639,7 +624,6 @@ class StdInputParser(object):
                         else:
                             raise ValueError("Invalid circuit data-line prefix: '%s'" % parts[0])
 
-        #REMOVE print("Rank %d DONE load loop.  circuit bytes = %g" % (comm.rank, circuit_bytes))
         if looking_for in ("circuit_data", "circuit_data_or_line") and current_item:
             #add final circuit info (no blank line at end of file)
             dataset.add_raw_series_data(current_item['circuit'], current_item.get('outcomes', []),

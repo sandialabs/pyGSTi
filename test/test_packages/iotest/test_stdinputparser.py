@@ -28,17 +28,9 @@ class TestStdInputParser(BaseTestCase):
                          ("G1*((G2G3)^2G4G5)^2G7", ('G1', 'G2', 'G3', 'G2', 'G3', 'G4', 'G5', 'G2', 'G3', 'G2', 'G3', 'G4', 'G5', 'G7')),
                          ("G1(G2^2(G3G4)^2)^2", ('G1', 'G2', 'G2', 'G3', 'G4', 'G3', 'G4', 'G2', 'G2', 'G3', 'G4', 'G3', 'G4')),
                          ("G1*G2", ('G1','G2')),
-                         #("S<1>",('G1',)),
-                         #("S<2>",('G1','G2')),
-                         #("G1S<2>^2G3", ('G1', 'G1', 'G2', 'G1', 'G2', 'G3')),
-                         #("G1S<1>G3",('G1','G1','G3')),
-                         #("S<3>[0:4]",('G1', 'G2', 'G3', 'G4')),
                          ("G_my_xG_my_y", ('G_my_x', 'G_my_y')),
                          ("G_my_x*G_my_y", ('G_my_x', 'G_my_y')),
                          ("GsG___", ('Gs', 'G___')),
-                         #("S<2>G3", ('G1', 'G2', 'G3')),
-                         #("S<G12>", ('G1', 'G2')),
-                         #("S<S23>", ('G2', 'G3')),
                          ("G1G2", ('G1', 'G2')),
                          ("rho0*Gx", ('rho0','Gx')),
                          ("rho0*Gx*Mdefault", ('rho0','Gx','Mdefault'))]
@@ -50,7 +42,7 @@ class TestStdInputParser(BaseTestCase):
             #print("%s ==> " % s, expected)
             result, line_labels, occurrence_id, compilable_indices = std.parse_circuit_raw(s, lookup=lkup, create_subcircuits=False)
             self.assertEqual(line_labels, None)
-            self.assertEqual(compilable_indices, None)
+            self.assertEqual(compilable_indices, ())
             circuit_result = pygsti.circuits.Circuit(result, line_labels="auto", expand_subcircuits=True)
               #use "auto" line labels since none are parsed.
             self.assertEqual(circuit_result.tup, expected)

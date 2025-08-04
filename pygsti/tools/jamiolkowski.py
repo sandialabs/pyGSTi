@@ -2,7 +2,7 @@
 Utility functions related to the Choi representation of gates.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -15,7 +15,7 @@ import numpy as _np
 from pygsti.tools import basistools as _bt
 from pygsti.tools import matrixtools as _mt
 from pygsti.baseobjs.basis import Basis as _Basis
-
+from pygsti import SpaceT
 
 # Gate Mx G:      rho  --> G rho                    where G and rho are in the Pauli basis (by definition/convention)                                           # noqa
 #            vec(rhoS) --> GStd vec(rhoS)           where GS and rhoS are in the std basis, GS = PtoS * G * StoP                                                # noqa
@@ -225,7 +225,7 @@ def fast_jamiolkowski_iso_std(operation_mx, op_mx_basis):
     N2 = opMxInStdBasis.shape[0]; N = int(_np.sqrt(N2))
     assert(N * N == N2)  # make sure N2 is a perfect square
     Jmx = opMxInStdBasis.reshape((N, N, N, N))
-    Jmx = _np.swapaxes(Jmx, 1, 2).flatten()
+    Jmx = _np.swapaxes(Jmx, 1, 2).ravel()
     Jmx = Jmx.reshape((N2, N2))
 
     # This construction results in a Jmx with trace == dim(H) = sqrt(gateMxInPauliBasis.shape[0])
@@ -261,7 +261,7 @@ def fast_jamiolkowski_iso_std_inv(choi_mx, op_mx_basis):
     N2 = choi_mx.shape[0]; N = int(_np.sqrt(N2))
     assert(N * N == N2)  # make sure N2 is a perfect square
     opMxInStdBasis = choi_mx.reshape((N, N, N, N)) * N
-    opMxInStdBasis = _np.swapaxes(opMxInStdBasis, 1, 2).flatten()
+    opMxInStdBasis = _np.swapaxes(opMxInStdBasis, 1, 2).ravel()
     opMxInStdBasis = opMxInStdBasis.reshape((N2, N2))
     op_mx_basis = _bt.create_basis_for_matrix(opMxInStdBasis, op_mx_basis)
 
@@ -273,6 +273,27 @@ def fast_jamiolkowski_iso_std_inv(choi_mx, op_mx_basis):
     #transform operation matrix into appropriate basis
     return _bt.change_basis(opMxInStdBasis, op_mx_basis.create_equivalent('std'), op_mx_basis)
 
+def sum_of_negative_choi_eigenvalues_gate(op_mx, op_mx_basis):
+    """
+    Compute the sum of the negative Choi eigenvalues of a process matrix.
+
+    Parameters
+    ----------
+    op_mx : np.array
+
+    op_mx_basis : Basis
+
+    Returns
+    -------
+    float
+        the sum of the negative eigenvalues of the Choi representation of op_mx
+    """
+    sumOfNeg = 0
+    J = fast_jamiolkowski_iso_std(op_mx, op_mx_basis)  # Choi mx basis doesn't matter
+    evals = _np.linalg.eigvals(J)  # could use eigvalsh, but wary of this since eigh can be wrong...
+    for ev in evals:
+            if ev.real < 0: sumOfNeg -= ev.real
+    return sumOfNeg
 
 def sum_of_negative_choi_eigenvalues(model, weights=None):
     """
@@ -327,7 +348,7 @@ def sums_of_negative_choi_eigenvalues(model):
     """
     ret = []
     for (_, gate) in model.operations.items():
-        J = fast_jamiolkowski_iso_std(gate, model.basis)  # Choi mx basis doesn't matter
+        J = fast_jamiolkowski_iso_std(gate.to_dense("HilbertSchmidt"), model.basis)  # Choi mx basis doesn't matter
         evals = _np.linalg.eigvals(J)  # could use eigvalsh, but wary of this since eigh can be wrong...
         sumOfNeg = 0.0
         for ev in evals:

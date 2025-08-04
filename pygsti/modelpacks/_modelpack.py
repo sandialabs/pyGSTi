@@ -2,7 +2,7 @@
 Base of the object-oriented model for modelpacks
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -129,7 +129,7 @@ class ModelPack(_ABC):
         QubitProcessorSpec
         """
         static_target_model = self.target_model('static', qubit_labels=qubit_labels)  # assumed to be an ExplicitOpModel
-        return static_target_model.create_processor_spec(self._sslbls)
+        return static_target_model.create_processor_spec(qubit_labels if qubit_labels is not None else self._sslbls)
 
     def _get_cachefile_names(self, param_type, simulator):
         """ Get the standard cache file names for a modelpack """

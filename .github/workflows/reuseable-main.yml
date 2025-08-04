@@ -34,14 +34,19 @@ jobs:
     runs-on: ${{ inputs.os }}
     steps:
     - uses: actions/checkout@v4
-    - name: Set up installation environment (Linux and Windows)
-      if: ${{ inputs.os != 'macos-13' }}
+    - name: Set up installation environment (Linux)
+      if: ${{ inputs.os == 'ubuntu-latest' }}
       run: |
         ./.github/ci-scripts/before_install.sh
     - name: Set up installation environment (MacOS)
-      if: ${{ inputs.os == 'macos-13' }}
+      if: ${{ inputs.os == 'macos-latest' }}
       run: |
         ./.github/ci-scripts/before_install_macos.sh
+    - name: Set up MPI (Windows)
+      if: ${{ inputs.os == 'windows-latest' }}
+      uses: mpi4py/setup-mpi@v1
+      with:
+        mpi: intelmpi
     - name: Set up Python ${{ inputs.python-version }}
       uses: actions/setup-python@v5
       with:
@@ -76,12 +81,12 @@ jobs:
       if: ${{ inputs.run-unit-tests == 'true' }}
       run: |
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-        python -m pytest -n auto --dist loadscope --cov=pygsti test/unit
+        python -m pytest -n auto --dist loadscope --cov=pygsti --durations=25 test/unit
     - name: Run test_packages
       if: ${{ inputs.run-extra-tests == 'true' }}
       run: |
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-        python -m pytest -v -n auto --dist loadscope --ignore=test/test_packages/mpi --ignore=test/test_packages/notebooks test/test_packages
+        python -m pytest -v -n auto --dist loadscope --ignore=test/test_packages/mpi --ignore=test/test_packages/notebooks --durations=25 test/test_packages
     - name: Run notebook regression
       if: ${{ inputs.run-notebook-tests == 'true' }}
       run: |
@@ -90,4 +95,4 @@ jobs:
         gcc -o ./jupyter_notebooks/Tutorials/algorithms/advanced/chp ./jupyter_notebooks/Tutorials/algorithms/advanced/chp.c
 
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-        python -m pytest -n auto --nbval-lax --dist loadscope --nbval-current-env jupyter_notebooks
+        python -m pytest -n auto --nbval-lax --dist loadscope --nbval-current-env --durations=25 jupyter_notebooks

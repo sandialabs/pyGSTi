@@ -2,7 +2,7 @@
 pyGSTi Optimization Python Package
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -12,6 +12,7 @@ pyGSTi Optimization Python Package
 
 from .arraysinterface import *
 from .customlm import *
+from .simplerlm import *
 from .customsolve import *
 # Import the most important/useful routines of each module into
 # the package namespace

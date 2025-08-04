@@ -2,7 +2,7 @@
 The State class and supporting functionality.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -17,6 +17,7 @@ from pygsti.baseobjs.opcalc import bulk_eval_compact_polynomials_complex as _bul
 from pygsti.modelmembers import modelmember as _modelmember
 from pygsti.baseobjs import _compatibility as _compat
 from pygsti.tools import optools as _ot
+from pygsti import SpaceT
 
 
 class State(_modelmember.ModelMember):
@@ -104,7 +105,7 @@ class State(_modelmember.ModelMember):
         """
         pass
 
-    def to_dense(self, on_space='minimal', scratch=None):
+    def to_dense(self, on_space: SpaceT='minimal', scratch=None):
         """
         Return this state vector as a (dense) numpy array.
 
@@ -320,12 +321,12 @@ class State(_modelmember.ModelMember):
         -------
         float
         """
-        vec = self.to_dense(on_space='minimal')
+        vec = self.to_dense("minimal")
         if inv_transform is None:
-            return _ot.frobeniusdist_squared(vec, other_spam_vec.to_dense(on_space='minimal'))
+            return _ot.frobeniusdist_squared(vec, other_spam_vec.to_dense("minimal"))
         else:
             return _ot.frobeniusdist_squared(_np.dot(inv_transform, vec),
-                                             other_spam_vec.to_dense(on_space='minimal'))
+                                             other_spam_vec.to_dense("minimal"))
 
     def residuals(self, other_spam_vec, transform=None, inv_transform=None):
         """
@@ -349,12 +350,11 @@ class State(_modelmember.ModelMember):
         -------
         float
         """
-        vec = self.to_dense(on_space='minimal')
-        if inv_transform is None:
-            return _ot.residuals(vec, other_spam_vec.to_dense(on_space='minimal'))
-        else:
-            return _ot.residuals(_np.dot(inv_transform, vec),
-                                 other_spam_vec.to_dense(on_space='minimal'))
+        vec = self.to_dense("minimal")
+        if inv_transform is not None:
+            vec = inv_transform @ vec
+        return (vec - other_spam_vec.to_dense("minimal")).ravel()
+
 
     def transform_inplace(self, s):
         """
@@ -379,7 +379,7 @@ class State(_modelmember.ModelMember):
         None
         """
         Si = s.transform_matrix_inverse
-        self.set_dense(_np.dot(Si, self.to_dense(on_space='minimal')))
+        self.set_dense(_np.dot(Si, self.to_dense("minimal")))
 
     def depolarize(self, amount):
         """
@@ -408,7 +408,7 @@ class State(_modelmember.ModelMember):
         else:
             assert(len(amount) == self.dim - 1)
             D = _np.diag([1] + list(1.0 - _np.array(amount, 'd')))
-        self.set_dense(_np.dot(D, self.to_dense(on_space='minimal')))
+        self.set_dense(_np.dot(D, self.to_dense("minimal")))
 
     @property
     def num_params(self):
@@ -542,7 +542,7 @@ class State(_modelmember.ModelMember):
         numpy array
         """
         if isinstance(v, State):
-            vector = v.to_dense(on_space='minimal').copy()
+            vector = v.to_dense("minimal").copy()
             vector.shape = (vector.size, 1)
         elif isinstance(v, _np.ndarray):
             vector = v.copy()
@@ -573,4 +573,4 @@ class State(_modelmember.ModelMember):
                 vector = _np.array(v, typ)[:, None]  # make into a 2-D column vec
 
         assert(len(vector.shape) == 2 and vector.shape[1] == 1)
-        return vector.flatten()  # HACK for convention change -> (N,) instead of (N,1)
+        return vector.ravel()  # HACK for convention change -> (N,) instead of (N,1)

@@ -2,7 +2,7 @@
 Functions for selecting a complete set of fiducials for a GST analysis.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -409,13 +409,6 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
         return prepFidList, measFidList    
 
 
-#def bool_list_to_ind_list(boolList):
-#    output = _np.array([])
-#    for i, boolVal in boolList:
-#        if boolVal == 1:
-#            output = _np.append(i)
-#    return output
-
 def xor(*args):
     """
     Implements logical xor function for arbitrary number of inputs.
@@ -719,8 +712,7 @@ def create_meas_cache(model, available_meas_fid_list, circuit_cache=None):
     if circuit_cache is not None:
         for povm in model.povms.values():
             for E in povm.values():
-                if isinstance(E, _ComplementPOVMEffect): continue  # complement is dependent on others
-                new_povm_effect_key_pair= (povm.to_vector().tobytes(), E.to_vector().tobytes())
+                new_povm_effect_key_pair= (povm.to_vector().tobytes(), E.to_dense().tobytes())
                 keypairlist.append(new_povm_effect_key_pair)
                 for measFid in available_meas_fid_list:
                     meas_cache[(new_povm_effect_key_pair[0],new_povm_effect_key_pair[1],measFid.str)] = _np.dot(E.to_dense(), circuit_cache[measFid.str])    
@@ -728,8 +720,7 @@ def create_meas_cache(model, available_meas_fid_list, circuit_cache=None):
     else:
         for povm in model.povms.values():
             for E in povm.values():
-                if isinstance(E, _ComplementPOVMEffect): continue  # complement is dependent on others
-                new_povm_effect_key_pair= (povm.to_vector().tobytes(), E.to_vector().tobytes())
+                new_povm_effect_key_pair= (povm.to_vector().tobytes(), E.to_dense().tobytes())
                 keypairlist.append(new_povm_effect_key_pair)
                 for measFid in available_meas_fid_list:
                     meas_cache[(new_povm_effect_key_pair[0],new_povm_effect_key_pair[1],measFid.str)] = _np.dot(E.to_dense(), model.sim.product(measFid))
@@ -784,7 +775,6 @@ def create_prep_mxs(model, prep_fid_list, prep_cache=None):
                 except KeyError as err:
                     print('A (Rho, Circuit) pair is missing from the cache, all such pairs should be available is using the caching option.')
                     raise err                
-                    #outputMat[:, i] = _np.dot(model.sim.product(prepFid), rho.to_dense())
             outputMatList.append(outputMat)
     
     else:
@@ -839,17 +829,15 @@ def create_meas_mxs(model, meas_fid_list, meas_cache=None):
                 #Actually, this is slowing things down a good amount, let's just print a
                 #descriptive error message if the key is missing 
                 try:
-                    outputMat[:, i] = meas_cache[0][(povm_key, E_key,measFid.str)] 
+                    outputMat[:, i] = meas_cache[0][(povm_key, E_key, measFid.str)] 
                 except KeyError as err:
-                    print('A (POVM, Effect, Circuit) pair is missing from the cache, all such pairs should be available is using the caching option.')
+                    print('A (POVM, Effect, Circuit) pair is missing from the cache, all such pairs should be available if using the caching option.')
                     raise err
-                    #outputMat[:, i] = _np.dot(E.to_dense(), model.sim.product(measFid))
             outputMatList.append(outputMat)
     
     else:
         for povm in model.povms.values():
             for E in povm.values():
-                if isinstance(E, _ComplementPOVMEffect): continue  # complement is dependent on others
                 outputMat = _np.zeros([dimE, numFid], float)
                 for i, measFid in enumerate(meas_fid_list):
                     outputMat[:, i] = _np.dot(E.to_dense(), model.sim.product(measFid))
@@ -1781,10 +1769,6 @@ def _find_fiducials_greedy(model, fids_list, prep_or_meas, op_penalty=0.0,
             else: 
                 for fiducial in fids_list:
                     #calculate the score matrix
-                    #if prep_or_meas == 'prep':
-                    #    fidArrayList = create_prep_mxs(model, [fiducial], fid_cache)
-                    #elif prep_or_meas == 'meas':
-                    #    fidArrayList = create_meas_mxs(model, [fiducial], fid_cache)
                     current_score_mx= fiducial_compact_EVD_cache[fiducial]
                     current_score_gramian= fiducial_compact_EVD_cache[fiducial]@fiducial_compact_EVD_cache[fiducial].T
                     current_inv_trace = _np.trace(_np.linalg.pinv(current_score_gramian, hermitian=True))

@@ -2,7 +2,7 @@
 Operation representation classes for the `densitymx_slow` evolution type.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -23,7 +23,7 @@ from ...tools import internalgates as _itgs
 from ...tools import lindbladtools as _lbt
 from ...tools import matrixtools as _mt
 from ...tools import optools as _ot
-
+from pygsti import SpaceT
 
 class OpRep:
     """
@@ -51,12 +51,12 @@ class OpRep:
         def mv(v):
             if v.ndim == 2 and v.shape[1] == 1: v = v[:, 0]
             in_state = _StateRepDense(_np.ascontiguousarray(v, 'd'), self.state_space, None)
-            return self.acton(in_state).to_dense(on_space='HilbertSchmidt')
+            return self.acton(in_state).to_dense(on_space="HilbertSchmidt")
 
         def rmv(v):
             if v.ndim == 2 and v.shape[1] == 1: v = v[:, 0]
             in_state = _StateRepDense(_np.ascontiguousarray(v, 'd'), self.state_space, None)
-            return self.adjoint_acton(in_state).to_dense(on_space='HilbertSchmidt')
+            return self.adjoint_acton(in_state).to_dense(on_space="HilbertSchmidt")
         return LinearOperator((self.dim, self.dim), matvec=mv, rmatvec=rmv)  # transpose, adjoint, dot, matmat?
 
 
@@ -80,7 +80,7 @@ class OpRepDenseSuperop(OpRep):
     def base_has_changed(self):
         pass
 
-    def to_dense(self, on_space):
+    def to_dense(self, on_space: SpaceT):
         if on_space not in ('minimal', 'HilbertSchmidt'):
             raise ValueError("'densitymx_slow' evotype cannot produce Hilbert-space ops!")
         return self.base
@@ -115,7 +115,7 @@ class OpRepDenseUnitary(OpRep):
     def base_has_changed(self):
         self.superop_base[:, :] = _ot.unitary_to_superop(self.base, self.basis)
 
-    def to_dense(self, on_space):
+    def to_dense(self, on_space: SpaceT):
         if on_space in ('minimal', 'HilbertSchmidt'):
             return self.to_dense_superop()
         else:  # 'Hilbert'
@@ -167,7 +167,7 @@ class OpRepSparse(OpRep):
         Aadj = self.A.conjugate(copy=True).transpose()
         return _StateRepDense(Aadj.dot(state.data), state.state_space, None)
 
-    def to_dense(self, on_space):
+    def to_dense(self, on_space: SpaceT):
         if on_space not in ('minimal', 'HilbertSchmidt'):
             raise ValueError("'densitymx_slow' evotype cannot produce Hilbert-space ops!")
         return self.A.toarray()
@@ -212,7 +212,7 @@ class OpRepKraus(OpRep):
     def copy(self):
         return OpRepKraus(self.basis, list(self.kraus_reps), self.state_space)
 
-    def to_dense(self, on_space):
+    def to_dense(self, on_space: SpaceT):
         assert(on_space in ('minimal', 'HilbertSchmidt')), \
             'Can only compute OpRepKraus.to_dense on HilbertSchmidt space!'
         return sum([rep.to_dense(on_space) for rep in self.kraus_reps])
@@ -245,7 +245,7 @@ class OpRepRandomUnitary(OpRep):
     def update_unitary_rates(self, rates):
         self.unitary_rates[:] = rates
 
-    def to_dense(self, on_space):
+    def to_dense(self, on_space: SpaceT):
         assert(on_space in ('minimal', 'HilbertSchmidt'))  # below code only works in this case
         return sum([rate * rep.to_dense(on_space) for rate, rep in zip(self.unitary_rates, self.unitary_reps)])
 
@@ -269,10 +269,6 @@ class OpRepStochastic(OpRepRandomUnitary):
         unitary_rates = [1 - sum(rates)] + list(rates)
         self.rates[:] = rates
         self.update_unitary_rates(unitary_rates)
-
-#class OpRepClifford(OpRep):  # TODO?
-#    #def __init__(self, unitarymx, symplecticrep):
-#    #    pass
 
 
 class OpRepComposed(OpRep):
@@ -375,13 +371,6 @@ class OpRepEmbedded(OpRep):
         self.offset = sum(blocksizes[0:self.active_block_index])
         super(OpRepEmbedded, self).__init__(state_space)
 
-    #def __reduce__(self):
-    #    return (DMOpRepEmbedded, (self.embedded,
-    #                              self.num_basis_els, self.action_inds,
-    #                              self.blocksizes, self.embeddedDim,
-    #                              self.ncomponents, self.active_block_index,
-    #                              self.nblocks, self.dim))
-
     def _acton_other_blocks_trivially(self, output_state, state):
         offset = 0
         for iBlk, blockSize in enumerate(self.blocksizes):
@@ -465,15 +454,6 @@ class OpRepExpErrorgen(OpRep):
 
     def exp_params(self):
         return (self.mu, self.eta, self.m_star, self.s)
-
-    #def __reduce__(self):
-    #    if self.unitary_postfactor is None:
-    #        return (DMOpRepLindblad, (self.errorgen_rep, self.mu, self.eta, self.m_star, self.s,
-    #                                  _np.empty(0, 'd'), _np.empty(0, _np.int64), _np.zeros(1, _np.int64)))
-    #    else:
-    #        return (DMOpRepLindblad, (self.errorgen_rep, self.mu, self.eta, self.m_star, self.s,
-    #                                  self.unitary_postfactor.data, self.unitary_postfactor.indices,
-    #                                  self.unitary_postfactor.indptr))
 
     def acton(self, state):
         """ Act this gate map on an input state """

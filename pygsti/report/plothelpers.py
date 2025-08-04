@@ -2,7 +2,7 @@
 Helper Functions for generating plots
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -103,7 +103,7 @@ def _eformat(f, prec):
 
 
 def _num_non_nan(array):
-    ixs = _np.where(_np.isnan(_np.array(array).flatten()) == False)[0]  # noqa: E712
+    ixs = _np.where(_np.isnan(_np.array(array).ravel()) == False)[0]  # noqa: E712
     return int(len(ixs))
 
 
@@ -147,7 +147,7 @@ def _compute_num_boxes_dof(sub_mxs, sum_up, element_dof):
 
         # Gets all the non-NaN boxes, flattens the resulting
         # array, and does the sum.
-        n_boxes = _np.sum(~_np.isnan(sub_mxs).flatten())
+        n_boxes = _np.sum(~_np.isnan(sub_mxs).ravel())
 
     return n_boxes, dof_per_box
 
@@ -280,7 +280,8 @@ def drift_maxtvd_matrices(gsplaq, drifttuple):
     return ret
 
 
-def rated_n_sigma(dataset, model, circuits, objfn_builder, np=None, wildcard=None, return_all=False, comm=None):
+def rated_n_sigma(dataset, model, circuits, objfn_builder, np=None, wildcard=None, return_all=False, comm=None,
+                  mdc_store=None):
     """
     Computes the number of standard deviations of model violation between `model` and `data`.
 
@@ -322,6 +323,11 @@ def rated_n_sigma(dataset, model, circuits, objfn_builder, np=None, wildcard=Non
         When not None, an MPI communicator for distributing the computation
         across multiple processors.
 
+    mdc_store : ModelDatasetCircuitStore, optional (default None)
+        Optional argument to pass in pre-computed ModelDatasetCircuitStore
+        object to speed up the construction of the objective function
+        for evaluating model violation.
+
     Returns
     -------
     Nsig : float
@@ -342,7 +348,10 @@ def rated_n_sigma(dataset, model, circuits, objfn_builder, np=None, wildcard=Non
     if isinstance(objfn_builder, str):
         objfn_builder = _objfns.ObjectiveFunctionBuilder.create_from(objfn_builder)
 
-    objfn = objfn_builder.build(model, dataset, circuits, {'comm': comm})
+    if mdc_store is not None:
+        objfn = objfn_builder.build_from_store(mdc_store)
+    else:
+        objfn = objfn_builder.build(model, dataset, circuits, {'comm': comm})
     if wildcard:
         objfn.terms()  # objfn used within wildcard objective fn must be pre-evaluated
         objfn = _objfns.LogLWildcardFunction(objfn, model.to_vector(), wildcard)
