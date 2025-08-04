@@ -7,6 +7,8 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
+
 import copy
 from pygsti.tools import optools as pgot
 from pygsti.tools import basistools as pgbt
