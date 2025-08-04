@@ -15,16 +15,11 @@ from pygsti.processors import QubitProcessorSpec
 from pygsti.baseobjs.basis import TensorProdBasis, Basis, BuiltinBasis, ExplicitBasis
 import numpy as np
 
-from typing import Union, Dict, Optional, List, TypeVar, TYPE_CHECKING
+from typing import Union, Dict, Optional, List, TYPE_CHECKING
 if TYPE_CHECKING:
     from pygsti.protocols.gst import ModelEstimateResults, GSTGaugeOptSuite
     from pygsti.models import ExplicitOpModel
     from pygsti.models.gaugegroup import GaugeGroupElement
-else:
-    ModelEstimateResults = TypeVar('ModelEstimateResults')
-    GaugeGroupElement    = TypeVar('GaugeGroupElement')
-    GSTGaugeOptSuite     = TypeVar('GSTGaugeOptSuite')
-    ExplicitOpModel      = TypeVar('ExplicitOpModel')
 
 
 def leakage_friendly_basis_2plus1(return_subspace_basis=False):
@@ -70,7 +65,6 @@ def leakage_friendly_basis_2plus1(return_subspace_basis=False):
     )
     subspace_basis.elements = np.array(subspace_basis.elements)  # type: ignore
     return leakage_basis, subspace_basis
-
 
 
 # MARK: metrics
@@ -248,7 +242,7 @@ def subspace_restricted_fro_dist(a, b, mx_basis, n_leak=0):
 
 # MARK: model construction
 
-def leaky_qubit_model_from_pspec(ps_2level: QubitProcessorSpec, levels_readout_zero=(0,), basis: str|Basis ='gm'):
+def leaky_qubit_model_from_pspec(ps_2level: QubitProcessorSpec, levels_readout_zero=(0,), basis: Union[str, Basis] ='gm'):
     from pygsti.models.explicitmodel import ExplicitOpModel
     from pygsti.baseobjs.statespace import ExplicitStateSpace
     from pygsti.modelmembers.povms import UnconstrainedPOVM

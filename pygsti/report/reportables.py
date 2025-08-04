@@ -2537,6 +2537,17 @@ def info_of_opfn_by_name(name):
         - "frob" :    frobenius distance
         - "unmodeled" : unmodeled "wildcard" budget
 
+        - "sub-inf"         : subspace entanglement infidelity
+        - "sub-trace"       : subspace trace distance
+        - "sub-diamond"     : subspace diamond distance
+        - "sub-frob"        : subspace Frobenius distance
+        - "plf-diamond"     : diamond distance to the set of leakage-free CPTP maps
+        - "plf-sub-diamond" : subspace diamond distance to the set of leakage-free CPTP maps
+        - "leak-rate-max"   : maximum transport of population out of the computational subspace
+        - "leak-rate-min"   : minimum transport of population out of the computational subspace, assuming all population starts in that subspace.
+        - "seep-rate"       : maximum transport of population into the computational subspace 
+
+
     Returns
     -------
     nicename : str
@@ -2545,8 +2556,6 @@ def info_of_opfn_by_name(name):
     info = {
         "inf": ("Entanglement|Infidelity",
                 "1.0 - <psi| 1 x Lambda(psi) |psi>"),
-        "la-inf": ("Entanglement|Infidelity (subspace)",
-                   "TO-WRITE"),
         "agi": ("Avg. Gate|Infidelity",
                 "d/(d+1) (entanglement infidelity)"),
         "geni": ('Generator|Infidelity',
@@ -2555,18 +2564,8 @@ def info_of_opfn_by_name(name):
                  'respectively'),
         "trace": ("1/2 Trace|Distance",
                   "0.5 | Chi(A) - Chi(B) |_tr"),
-        "la-trace" : ("1/2 Trace|Distance (subspace)",
-                      "TO-WRITE"),
         "diamond": ("1/2 Diamond|Distance",
                     "0.5 sup | (1 x (A-B))(rho) |_tr"),
-        "la-diamond": ("1/2 Diamond|Distance (subspace)",
-                    "0.5 sup | (1 x (A-B))(rho) |_tr, rho in subspace"),
-        # BEGIN new metrics that need descriptions
-        "plf-diamond" : ("1/2 Diamond|Distance to|No-leak Channel", "0.5 min |A - X|_◆, X is CPTP and leakage-free."),
-        "plf-la-diamond" : ("Leakage:|1/2 Min|Diamond|Dist.|to a No-leak|Channel|", "0.5 min |A - X|_{subspace ◆}, X is CPTP and leakage-free."),
-        "per-gate-seep-rate": ("Seepage:|Max TOP", "It's the gate's maximum transport of population INTO the computational subspace. This is not an error metric! There is little (if any) reason to prefer that it equal zero."),
-        "per-gate-leak-rate-max": ("Leakage:|Max TOP", "This gate's maximum transport of [state] population OUT of the computational subspace."),
-        "per-gate-leak-rate-min": ("Leakage:|Min TOP|(subspace)", "This gate's minimum transport of [state] population OUT of the computational subspace, assuming the entire [state] population starts in the computational subspace."),
         "nuinf": ("Non-unitary|Ent. Infidelity",
                   "(d^2-1)/d^2 [1 - sqrt( unitarity(A B^-1) )]"),
         "nuagi": ("Non-unitary|Avg. Gate Infidelity",
@@ -2589,10 +2588,21 @@ def info_of_opfn_by_name(name):
                         "where (a_i,b_i) are corresponding eigenvalues of A and B."),
         "frob": ("Frobenius|Distance",
                  "sqrt( sum( (A_ij - B_ij)^2 ) )"),
-        "la-frob": ("Frobenius|Distance (subspace)",
-                    "TO WRITE"),
         "unmodeled": ("Un-modeled|Error",
-                      "The per-operation budget used to account for un-modeled errors (model violation)")
+                      "The per-operation budget used to account for un-modeled errors (model violation)"),
+        "sub-inf": ("Entanglement|Infidelity (subspace)",
+                   "1.0 - <psi| 1 x Lambda(psi) |psi>, where |psi> is the standard test state supported U x U and U is the computational subspace."),
+        "sub-trace" : ("1/2 Trace|Distance (subspace)",
+                      "0.5 | Chi(A|U) - Chi(B|U) |_tr, where U is the computational subspace and Chi(G|U) is the image of (1 x G) on the standard test state supported on U x U."),
+        "sub-diamond": ("1/2 Diamond|Distance (subspace)",
+                    "0.5 sup | (1 x (A-B))(rho) |_tr, rho in subspace"),
+        "sub-frob": ("Frobenius|Distance (subspace)",
+                    "| (A - B) P |_Fro, where P is the projector onto the computational subspace."),
+        "plf-diamond" : ("1/2 Diamond|Distance to|No-leak Channel", "0.5 min |A - X|_◆, X is CPTP and leakage-free."),
+        "plf-sub-diamond" : ("Leakage:|1/2 Min|Diamond|Dist.|to a No-leak|Channel|", "0.5 min |A - X|_{subspace ◆}, X is CPTP and leakage-free."),
+        "seep-rate": ("Seepage:|Max TOP", "This gate's maximum transport of population INTO the computational subspace. This is only an error metric insofar as seepage implies leakage under unitary dynamics."),
+        "leak-rate-max": ("Leakage:|Max TOP", "This gate's maximum transport of population OUT of the computational subspace."),
+        "leak-rate-min": ("Leakage:|Min TOP|(subspace)", "This gate's minimum transport of population OUT of the computational subspace, assuming the entire population starts in the computational subspace.")
     }
     if name in info:
         return info[name]
@@ -2636,7 +2646,7 @@ def evaluate_opfn_by_name(name, model, target_model, op_label_or_string,
     if name == "inf":
         fn = Entanglement_infidelity if b else \
             Circuit_entanglement_infidelity
-    elif name == "la-inf":
+    elif name == "sub-inf":
         assert b
         fn = Leaky_entanglement_infidelity
     elif name == "agi":
@@ -2648,28 +2658,28 @@ def evaluate_opfn_by_name(name, model, target_model, op_label_or_string,
     elif name == "trace":
         fn = Jt_diff if b else \
             Circuit_jt_diff
-    elif name == "la-trace":
+    elif name == "sub-trace":
         assert b
         fn = Leaky_Jt_diff
     elif name == "diamond":
         fn = HalfDiamondNorm if b else \
             CircuitHalfDiamondNorm
-    elif name == 'la-diamond':
+    elif name == 'sub-diamond':
         assert b
         fn = SubspaceDiamonddist
-    elif name == 'plf-la-diamond':
+    elif name == 'plf-sub-diamond':
         assert b
         fn = SubspaceDiamonddist_to_leakfree_cptp
     elif name == 'plf-diamond':
         assert b
         fn = Diamonddist_to_leakfree_cptp
-    elif name == 'per-gate-leak-rate-max':
+    elif name == 'leak-rate-max':
         assert b
         fn = PerGateLeakRateMax
-    elif name == 'per-gate-leak-rate-min':
+    elif name == 'leak-rate-min':
         assert b
         fn = PerGateLeakRateMin
-    elif name == 'per-gate-seep-rate':
+    elif name == 'seep-rate':
         assert b
         fn = PerGateSeepRate
     elif name == "nuinf":
@@ -2696,7 +2706,7 @@ def evaluate_opfn_by_name(name, model, target_model, op_label_or_string,
     elif name == "evnudiamond":
         fn = Eigenvalue_nonunitary_diamondnorm if b else \
             Circuit_eigenvalue_nonunitary_diamondnorm
-    elif name == "la-frob":
+    elif name == "sub-frob":
         assert b
         fn = Leaky_gate_frob_dist
     elif name == "frob":

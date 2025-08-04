@@ -41,7 +41,7 @@ class SummarySection(_Section):
         if kwargs.get('n_leak', 0) == 0:
             summary_display = ('inf', 'trace', 'diamond', 'evinf', 'evdiamond')
         else:
-            summary_display = ('la-inf', 'la-trace', 'la-diamond', 'plf-la-diamond', 'per-gate-leak-rate-max')
+            summary_display = ('sub-inf', 'sub-trace', 'sub-diamond', 'plf-sub-diamond', 'leak-rate-max')
         wildcardBudget = None
         if show_unmodeled_error:
             summary_display += ('unmodeled',)
