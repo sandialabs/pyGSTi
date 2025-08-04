@@ -10,7 +10,7 @@ from pygsti.tools import errgenproptools as _eprop
 from pygsti.tools.matrixtools import print_mx
 from pygsti.tools.basistools import change_basis
 from ..util import BaseCase
-from itertools import product
+from itertools import product, chain
 import random
 import stim
 from pygsti.processors import QubitProcessorSpec
@@ -235,6 +235,23 @@ class ErrgenCompositionCommutationTester(BaseCase):
         exact_vs_third_order_norm  = np.linalg.norm(third_order_magnus_analytical-exact_errorgen)
         
         self.assertTrue((exact_vs_first_order_norm > exact_vs_second_order_norm) and (exact_vs_second_order_norm > exact_vs_third_order_norm))
+
+    def test_error_generator_pauli_action(self):
+        egbasis_HS = CompleteElementaryErrorgenBasis('PP', QubitSpace(3), default_label_type='local', elementary_errorgen_types=('H','S'))
+        egbasis_CA = CompleteElementaryErrorgenBasis('PP', QubitSpace(3), default_label_type='local', elementary_errorgen_types=('C','A'))
+        rng = np.random.default_rng()
+        paulis = np.fromiter(stim.PauliString.iter_all(3), dtype=object)
+        random_paulis = rng.choice(paulis, size=10, replace=False)
+        random_errorgens_HS = rng.choice(np.fromiter(egbasis_HS.labels, dtype=object), size=10, replace=False)
+        random_errorgens_CA = rng.choice(np.fromiter(egbasis_CA.labels, dtype=object), size=10, replace=False)
+        for pauli in random_paulis:
+            for eglbl in chain(random_errorgens_HS, random_errorgens_CA):
+                pauli_action = _eprop.errorgen_pauli_action(_LSE.cast(eglbl), pauli)
+                pauli_action_dense = pauli_action[0]*pauli_action[1].to_unitary_matrix(endian='big') \
+                                            if pauli_action is not None else np.zeros((2**len(pauli),2**len(pauli)))
+                pauli_action_numerical = _eprop.errorgen_pauli_action_numerical(eglbl, pauli)
+                assert np.linalg.norm(pauli_action_dense-pauli_action_numerical) < 1e-14, f'Numerical and analytical results differ, {eglbl=}, {pauli=}'
+
 class ApproxStabilizerMethodTester(BaseCase):
     def setUp(self):
         num_qubits = 4

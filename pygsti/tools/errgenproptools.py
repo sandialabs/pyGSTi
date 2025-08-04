@@ -6412,6 +6412,82 @@ def stim_pauli_string_less_than(pauli1, pauli2):
     
     return unsigned_pauli1_str < unsigned_pauli2_str
 
+def errorgen_pauli_action(errorgen, pauli):
+    """
+    Apply the specified error generator to a given Pauli operator.
+
+    Parameters
+    ----------
+    errorgen : `LocalStimErrorgenLabel`
+        A label specifying the error generator which should be applied to the specified Pauli operator.
+    
+    pauli : stim.PauliString
+        The pauli operator to apply the error generator to
+    
+    Returns:
+    --------
+    A tuple whose first value is the (generally complex) weight of the resulting pauli operator, and whose second
+    value is the unsigned Pauli operator itself. 
+    
+    If the specified error generator annihilates the given pauli then this instead returns None.
+    """
+    errgen_type = errorgen.errorgen_type
+    basis_element_labels = errorgen.basis_element_labels
+
+    #H_P[A] = -i[P,A]
+    if errgen_type == 'H':
+        ret = com(basis_element_labels[0], pauli)
+        if ret is not None:
+            ret = (_np.real_if_close(-1j*ret[0]).item(), ret[1]) 
+    #S_P[A] = PAP - A
+    elif errgen_type == 'S':
+        #if P and A commute this gives 0. if they anticommute you get -2A.
+        if pauli.commutes(basis_element_labels[0]):
+            ret = None
+        else:
+            ret = (-2, pauli)
+    #C_P,Q[A] = PAQ + QAP - (1/2){{P,Q},A}
+    elif errgen_type == 'C':
+        P = basis_element_labels[0]
+        Q = basis_element_labels[1]
+        if P.commutes(Q):
+            if not P.commutes(pauli) and not Q.commutes(pauli):
+                PA = pauli_product(P, pauli)
+                PAQ = pauli_product(PA[0]*PA[1], Q)
+                ret = (_np.real_if_close(4*PAQ[0]).item(), PAQ[1])
+            else:
+                ret = None
+        else:
+            if P.commutes(pauli) ^ Q.commutes(pauli): #xor
+                PA = pauli_product(P, pauli)
+                PAQ = pauli_product(PA[0]*PA[1], Q)
+                ret = (_np.real_if_close(2*PAQ[0]).item(), PAQ[1])
+            else:
+                ret = None
+    #A_P,Q[A] = i(PAQ - QAP + (1/2){[P,Q],A})
+    elif errgen_type == 'A':
+        P = basis_element_labels[0]
+        Q = basis_element_labels[1]
+        if P.commutes(Q):
+            if P.commutes(pauli) ^ Q.commutes(pauli): #xor
+                PA = pauli_product(P, pauli)
+                PAQ = pauli_product(PA[0]*PA[1], Q)
+                ret = (_np.real_if_close(2*1j*PAQ[0]).item(), PAQ[1])
+            else:
+                ret = None
+        else:
+            if P.commutes(pauli) and Q.commutes(pauli):
+                PA = pauli_product(P, pauli)
+                PAQ = pauli_product(PA[0]*PA[1], Q)
+                ret = (_np.real_if_close(4*1j*PAQ[0]).item(), PAQ[1])
+            else:
+                ret = None
+    else:
+        raise ValueError(f'Unsupported error generator type {errgen_type}.')
+    
+    return ret
+
+
 def errorgen_layer_to_matrix(errorgen_layer, num_qubits, errorgen_matrix_dict=None, sslbls=None):
     """
     Converts an iterable over error generator coefficients and rates into the corresponding
@@ -6861,6 +6937,50 @@ def magnus_numerical(propagated_errorgen_layers, error_propagator, magnus_order=
             raise NotImplementedError('Magnus beyond third order is not currently implemented.')
         
     return magnus  
+
+def errorgen_pauli_action_numerical(errorgen, pauli):
+    """
+    Apply the specified error generator to a given Pauli operator. This implementation
+    performs the application of the error generator numerically and is primarily
+    intended for use in testing. 
+
+    Parameters
+    ----------
+    errorgen : `ElementaryErrorgenLabel` or numpy.ndarray
+        A label specifying the error generator which should be applied to the specified Pauli operator
+        or else a dense numpy array for the error generator (in the standard basis).
+    
+    pauli : stim.PauliString
+        The pauli operator to apply the error generator to.
+    
+    
+    Returns:
+    --------
+    numpy.ndarray
+        Dense representation of the weighted pauli operator resulting from the application
+        of the specified error generator to the input pauli.
+    """
+
+    #also get the superoperator (in the standard basis) corresponding to the elementary error generator
+    if isinstance(errorgen, _LSE):
+        local_eel = errorgen.to_local_eel()
+    elif isinstance(errorgen, _GEEL):
+        local_eel = _LEEL.cast(errorgen)
+    else:
+        local_eel = errorgen
+    
+    errgen_type = local_eel.errorgen_type
+    basis_element_labels = local_eel.basis_element_labels
+    basis_1q = _BuiltinBasis('PP', 4)
+    errorgen_superop = create_elementary_errorgen_nqudit(errgen_type, basis_element_labels, basis_1q, normalize=False, sparse=False,
+                                                         tensorprod_basis=False)
+
+    pauli_unitary = pauli.to_unitary_matrix(endian='big')
+    pauli_unitary_shape = pauli_unitary.shape
+
+    weighted_pauli = (errorgen_superop@pauli_unitary.ravel()).reshape(pauli_unitary_shape)
+
+    return weighted_pauli
 
 
 def _matrix_commutator(mat1, mat2):
