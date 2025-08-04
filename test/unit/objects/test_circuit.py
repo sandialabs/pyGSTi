@@ -609,37 +609,39 @@ MEASURE 2 ro[2]
             import stim
         except ImportError:
             self.skipTest("Stim is required for this operation, and it does not appear to be installed.")
-            test_circuit = Circuit([Label('Gxpi2',0), Label('Gxpi2', 1)], line_labels=(0,1))
-            tableau0 = test_circuit.convert_to_stim_tableau()
-            #more qubits than line labels (with max line label less than number of qubits)
-            test_circuit.convert_to_stim_tableau(num_qubits=3)
 
-            #Circuit where circuit layers need to be mapped into 0,1.
-            test_circuit_1 = Circuit([Label('Gxpi2',3), Label('Gxpi2', 4)], line_labels=(3,4))
-            tableau1 = test_circuit_1.convert_to_stim_tableau()
+        test_circuit = circuit.Circuit([Label('Gxpi2',0), Label('Gxpi2', 1)], line_labels=(0,1))
+        tableau0 = test_circuit.convert_to_stim_tableau()
+        #more qubits than line labels (with max line label less than number of qubits)
+        test_circuit.convert_to_stim_tableau(num_qubits=3)
 
-            self.assertEqual(tableau0, tableau1)
+        #Circuit where circuit layers need to be mapped into 0,1.
+        test_circuit_1 = circuit.Circuit([Label('Gxpi2',3), Label('Gxpi2', 4)], line_labels=(3,4))
+        tableau1 = test_circuit_1.convert_to_stim_tableau()
 
-            #string line labels:
-            test_circuit_2 = Circuit([Label('Gxpi2','Q1'), Label('Gxpi2', 'Q2')], line_labels=('Q1', 'Q2'))
-            tableau2 = test_circuit_2.convert_to_stim_tableau()
+        self.assertEqual(tableau0, tableau1)
 
-            self.assertEqual(tableau0, tableau2)
+        #string line labels:
+        test_circuit_2 = circuit.Circuit([Label('Gxpi2','Q1'), Label('Gxpi2', 'Q2')], line_labels=('Q1', 'Q2'))
+        tableau2 = test_circuit_2.convert_to_stim_tableau()
 
-            #test non-traditional line labels:
-            test_circuit_3 = Circuit([Label('Gxpi2','Qalice'), Label('Gxpi2', 'Qbob')], line_labels=('Qalice', 'Qbob'))
+        self.assertEqual(tableau0, tableau2)
 
-            #confirm this fails when called with default args.
-            with self.assertRaises(RuntimeError):
-                test_circuit_3.convert_to_stim_tableau()
+        #test non-traditional line labels:
+        test_circuit_3 = circuit.Circuit([Label('Gxpi2','Qalice'), Label('Gxpi2', 'Qbob')], line_labels=('Qalice', 'Qbob'))
 
-            tableau3 = test_circuit_3.convert_to_stim_tableau_layers(qubit_label_conversions={'Qalice':0, 'Qbob':1})   
+        #confirm this fails when called with default args.
+        with self.assertRaises(RuntimeError):
+            test_circuit_3.convert_to_stim_tableau()
 
-            self.assertEqual(tableau0, tableau3)
+        tableau3 = test_circuit_3.convert_to_stim_tableau(qubit_label_conversions={'Qalice':0, 'Qbob':1})   
+        print(tableau0)
+        print(tableau3)
+        self.assertEqual(tableau0, tableau3)
 
-            #test incomplete conversion dictionary.
-            with self.assertRaises(AssertionError):
-                test_circuit_3.convert_to_stim_tableau_layers(qubit_label_conversions={'Qalice':0, 'Qcharlie':1})
+        #test incomplete conversion dictionary.
+        with self.assertRaises(AssertionError):
+            test_circuit_3.convert_to_stim_tableau(qubit_label_conversions={'Qalice':0, 'Qcharlie':1})
 
     def test_done_editing(self):
         self.c.done_editing()
