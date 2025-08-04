@@ -2586,7 +2586,7 @@ class ColorBoxPlot(WorkspacePlot):
             else: dataMax = 0
 
             if colormapType == "linlog":
-                colormap = _colormaps.LinlogColormap(0, dataMax, n_boxes,
+                colormap = _colormaps.LinlogColormap(0, dataMax, len(circuits),
                                                      linlg_pcntle, dof_per_box, linlog_color)
             elif colormapType == "manuallinlog":
                 colormap = _colormaps.LinlogColormap.set_manual_transition_point(

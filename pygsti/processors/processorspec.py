@@ -309,7 +309,7 @@ class QuditProcessorSpec(ProcessorSpec):
 
         nonstd_preps = {k: _serialize_state(obj) for k, obj in self.nonstd_preps.items()}
         nonstd_povms = {k: _serialize_povm(obj) for k, obj in self.nonstd_povms.items()}
-        nonstd_instruments = {':'.join(k): _serialize_instrument(obj) for k, obj in self.nonstd_instruments.items()}
+        nonstd_instruments = {':'.join(map(str, k)): _serialize_instrument(obj) for k, obj in self.nonstd_instruments.items()}
 
         state.update({'qudit_labels': list(self.qudit_labels),
                       'qudit_udims': list(self.qudit_udims),
