@@ -9,8 +9,14 @@ GaugeGroup and derived objects, used primarily in gauge optimization
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
-
+from __future__ import annotations
 import numpy as _np
+from typing import (
+    Optional,
+    Union,
+    TYPE_CHECKING
+)
+
 
 from pygsti.baseobjs import StateSpace as _StateSpace
 from pygsti.modelmembers import operations as _op
@@ -18,6 +24,9 @@ from pygsti.baseobjs import statespace as _statespace
 from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.evotypes.evotype import Evotype as _Evotype
+
+if TYPE_CHECKING:
+    from pygsti.modelmembers.operations import LinearOperator as _LinearOperator
 
 
 class GaugeGroup(_NicelySerializable):
@@ -36,7 +45,7 @@ class GaugeGroup(_NicelySerializable):
         gauge optimization was performed.
     """
 
-    def __init__(self, name):
+    def __init__(self, name: str):
         """
         Creates a new gauge group object
 
@@ -60,7 +69,7 @@ class GaugeGroup(_NicelySerializable):
         """
         return 0
 
-    def compute_element(self, param_vec):
+    def compute_element(self, param_vec: _np.ndarray) -> GaugeGroupElement:
         """
         Retrieve the element of this group corresponding to `param_vec`
 
@@ -85,8 +94,7 @@ class GaugeGroup(_NicelySerializable):
         numpy.ndarray
             A 1D array of length :meth:`num_params`.
         """
-        return _np.array([], 'd')
-
+        return _np.zeros(self.num_params, dtype='d')
 
 class GaugeGroupElement(_NicelySerializable):
     """
@@ -98,7 +106,7 @@ class GaugeGroupElement(_NicelySerializable):
         super().__init__()
 
     @property
-    def transform_matrix(self):
+    def transform_matrix(self) -> Optional[_np.ndarray]:
         """
         The gauge-transform matrix.
 
@@ -109,7 +117,7 @@ class GaugeGroupElement(_NicelySerializable):
         return None
 
     @property
-    def transform_matrix_inverse(self):
+    def transform_matrix_inverse(self) -> Optional[_np.ndarray]:
         """
         The inverse of the gauge-transform matrix.
 
@@ -119,7 +127,7 @@ class GaugeGroupElement(_NicelySerializable):
         """
         return None
 
-    def deriv_wrt_params(self, wrt_filter=None):
+    def deriv_wrt_params(self, wrt_filter: Optional[Union[_np.ndarray, list]]=None) -> Optional[_np.ndarray]:
         """
         Computes the derivative of the gauge group at this element.
 
@@ -138,7 +146,7 @@ class GaugeGroupElement(_NicelySerializable):
         """
         return None
 
-    def to_vector(self):
+    def to_vector(self) -> _np.ndarray:
         """
         Get the parameter vector corresponding to this transform.
 
@@ -148,7 +156,7 @@ class GaugeGroupElement(_NicelySerializable):
         """
         return _np.array([], 'd')
 
-    def from_vector(self, v):
+    def from_vector(self, v: _np.ndarray) -> None:
         """
         Reinitialize this `GaugeGroupElement` using the the parameter vector `v`.
 
@@ -164,7 +172,7 @@ class GaugeGroupElement(_NicelySerializable):
         pass
 
     @property
-    def num_params(self):
+    def num_params(self) -> int:
         """
         Return the number of parameters of this gauge group element.
 
@@ -176,7 +184,7 @@ class GaugeGroupElement(_NicelySerializable):
         """
         return 0
 
-    def inverse(self):
+    def inverse(self) -> InverseGaugeGroupElement:
         """
         Creates a gauge group element that performs the inverse of this element.
 
@@ -197,12 +205,12 @@ class InverseGaugeGroupElement(GaugeGroupElement):
         The element to invert.
     """
 
-    def __init__(self, gauge_group_el):
+    def __init__(self, gauge_group_el: GaugeGroupElement):
         super().__init__()
         self.inverse_element = gauge_group_el
 
     @property
-    def transform_matrix(self):
+    def transform_matrix(self) -> _np.ndarray:
         """
         The gauge-transform matrix.
 
@@ -213,7 +221,7 @@ class InverseGaugeGroupElement(GaugeGroupElement):
         return self.inverse_element.transform_matrix_inverse
 
     @property
-    def transform_matrix_inverse(self):
+    def transform_matrix_inverse(self) -> _np.ndarray:
         """
         The inverse of the gauge-transform matrix.
 
@@ -223,7 +231,7 @@ class InverseGaugeGroupElement(GaugeGroupElement):
         """
         return self.inverse_element.transform_matrix
 
-    def deriv_wrt_params(self, wrt_filter=None):
+    def deriv_wrt_params(self, wrt_filter=None) -> _np.ndarray:
         """
         Computes the derivative of the gauge group at this element.
 
@@ -250,7 +258,7 @@ class InverseGaugeGroupElement(GaugeGroupElement):
         deriv = -_np.dot(Tinv, _np.dot(dT, Tinv))  # d,d * (n,d,d * d,d) => d,d * n,d,d => d,n,d
         return _np.swapaxes(deriv, 1, 2).reshape(d * d, n)  # d,n,d => d,d,n => (d*d, n)
 
-    def to_vector(self):
+    def to_vector(self) -> _np.ndarray:
         """
         Get the parameter vector corresponding to this transform.
 
@@ -260,7 +268,7 @@ class InverseGaugeGroupElement(GaugeGroupElement):
         """
         return self.inverse_element.to_vector()
 
-    def from_vector(self, v):
+    def from_vector(self, v: _np.ndarray) -> None:
         """
         Reinitialize this `GaugeGroupElement` using the the parameter vector `v`.
 
@@ -276,7 +284,7 @@ class InverseGaugeGroupElement(GaugeGroupElement):
         return self.inverse_element.from_vector()
 
     @property
-    def num_params(self):
+    def num_params(self) -> int:
         """
         Return the number of parameters of this gauge group element.
 
@@ -288,7 +296,7 @@ class InverseGaugeGroupElement(GaugeGroupElement):
         """
         return self.inverse_element.num_params
 
-    def inverse(self):
+    def inverse(self) -> GaugeGroupElement:
         """
         Creates a gauge group element that performs the inverse of this element.
 
@@ -320,7 +328,7 @@ class OpGaugeGroup(GaugeGroup):
         gauge optimization was performed.
     """
 
-    def __init__(self, operation, elementcls, name):
+    def __init__(self, operation: _LinearOperator, elementcls, name: str):
         """
         Create a new `OpGaugeGroup`.
 
@@ -343,7 +351,7 @@ class OpGaugeGroup(GaugeGroup):
         GaugeGroup.__init__(self, name)
 
     @property
-    def num_params(self):
+    def num_params(self) -> int:
         """
         Return the number of parameters (degrees of freedom) of this gauge group.
 
@@ -353,7 +361,7 @@ class OpGaugeGroup(GaugeGroup):
         """
         return self._operation.num_params
 
-    def compute_element(self, param_vec):
+    def compute_element(self, param_vec: _np.ndarray):
         """
         Retrieve the element of this group corresponding to `param_vec`
 
@@ -371,7 +379,7 @@ class OpGaugeGroup(GaugeGroup):
         return self.element(elgate)
 
     @property
-    def initial_params(self):
+    def initial_params(self) -> _np.ndarray:
         """
         Return a good (or standard) starting parameter vector, used to initialize a gauge optimization.
 
@@ -396,7 +404,7 @@ class OpGaugeGroup(GaugeGroup):
 
 
 class OpGaugeGroupWithBasis(OpGaugeGroup):
-    def __init__(self, operation, elementcls, name, basis):
+    def __init__(self, operation: _LinearOperator, elementcls, name: str, basis):
         self._basis = basis
         super().__init__(operation, elementcls, name)
 
@@ -425,7 +433,7 @@ class OpGaugeGroupElement(GaugeGroupElement):
         information and the gauge transformation matrix itself.
     """
 
-    def __init__(self, operation):
+    def __init__(self, operation: _LinearOperator):
         """
         Create a new element based on `operation`
 
@@ -442,7 +450,7 @@ class OpGaugeGroupElement(GaugeGroupElement):
         GaugeGroupElement.__init__(self)
 
     @property
-    def transform_matrix(self):
+    def transform_matrix(self) -> _np.ndarray:
         """
         The gauge-transform matrix.
 
@@ -453,7 +461,7 @@ class OpGaugeGroupElement(GaugeGroupElement):
         return self._operation.to_dense(on_space='minimal')
 
     @property
-    def transform_matrix_inverse(self):
+    def transform_matrix_inverse(self) -> _np.ndarray:
         """
         The inverse of the gauge-transform matrix.
 
@@ -465,7 +473,7 @@ class OpGaugeGroupElement(GaugeGroupElement):
             self._inv_matrix = _np.linalg.inv(self._operation.to_dense(on_space='minimal'))
         return self._inv_matrix
 
-    def deriv_wrt_params(self, wrt_filter=None):
+    def deriv_wrt_params(self, wrt_filter: Optional[list, _np.ndarray]=None) -> _np.ndarray:
         """
         Computes the derivative of the gauge group at this element.
 
@@ -484,7 +492,7 @@ class OpGaugeGroupElement(GaugeGroupElement):
         """
         return self._operation.deriv_wrt_params(wrt_filter)
 
-    def to_vector(self):
+    def to_vector(self) -> _np.ndarray:
         """
         Get the parameter vector corresponding to this transform.
 
@@ -494,7 +502,7 @@ class OpGaugeGroupElement(GaugeGroupElement):
         """
         return self._operation.to_vector()
 
-    def from_vector(self, v):
+    def from_vector(self, v: _np.ndarray) -> None:
         """
         Reinitialize this `GaugeGroupElement` using the the parameter vector `v`.
 
@@ -511,7 +519,7 @@ class OpGaugeGroupElement(GaugeGroupElement):
         self._inv_matrix = None
 
     @property
-    def num_params(self):
+    def num_params(self) -> int:
         """
         Return the number of parameters (degrees of freedom) of this element.
 
@@ -556,7 +564,7 @@ class FullGaugeGroup(OpGaugeGroupWithBasis):
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
     """
 
-    def __init__(self, state_space, model_basis='pp', evotype='default'):
+    def __init__(self, state_space: _StateSpace, model_basis: Optional[Union[_Basis, str]]='pp', evotype: Optional[Union [_Evotype, str]] ='default'):
         state_space = _StateSpace.cast(state_space)
         operation = _op.FullArbitraryOp(_np.identity(state_space.dim, 'd'), model_basis, evotype, state_space)
         OpGaugeGroupWithBasis.__init__(self, operation, FullGaugeGroupElement, "Full", model_basis)
@@ -573,7 +581,7 @@ class FullGaugeGroupElement(OpGaugeGroupElement):
         information and the gauge transformation matrix itself.
     """
 
-    def __init__(self, operation):
+    def __init__(self, operation: _LinearOperator):
         """
         Creates a new gauge group element based on `operation`, which
         is assumed to have the correct parameterization.
@@ -604,7 +612,7 @@ class TPGaugeGroup(OpGaugeGroupWithBasis):
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
     """
 
-    def __init__(self, state_space, model_basis='pp', evotype='default'):
+    def __init__(self, state_space: _StateSpace, model_basis: Optional[Union[_Basis, str]]='pp', evotype: Optional[Union[_Evotype, str]]='default'):
         state_space = _StateSpace.cast(state_space)
         operation = _op.FullTPOp(_np.identity(state_space.dim, 'd'), model_basis, evotype, state_space)
         OpGaugeGroupWithBasis.__init__(self, operation, TPGaugeGroupElement, "TP", model_basis)
@@ -621,7 +629,7 @@ class TPGaugeGroupElement(OpGaugeGroupElement):
         information and the gauge transformation matrix itself.
     """
 
-    def __init__(self, operation):
+    def __init__(self, operation: _LinearOperator):
         """
         Creates a new gauge group element based on `operation`, which
         is assumed to have the correct parameterization.
@@ -629,7 +637,7 @@ class TPGaugeGroupElement(OpGaugeGroupElement):
         OpGaugeGroupElement.__init__(self, operation)
 
     @property
-    def transform_matrix_inverse(self):
+    def transform_matrix_inverse(self) -> _np.ndarray:
         """
         The inverse of the gauge-transform matrix.
 
@@ -662,7 +670,7 @@ class DiagGaugeGroup(OpGaugeGroup):
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
     """
 
-    def __init__(self, state_space, evotype='default'):
+    def __init__(self, state_space: _StateSpace, evotype: Optional[Union[_Evotype, str]]='default'):
         state_space = _StateSpace.cast(state_space)
         dim = state_space.dim
         ltrans = _np.identity(dim, 'd')
@@ -686,7 +694,7 @@ class DiagGaugeGroupElement(OpGaugeGroupElement):
         information and the gauge transformation matrix itself.
     """
 
-    def __init__(self, operation):
+    def __init__(self, operation: _LinearOperator):
         """
         Creates a new gauge group element based on `operation`, which
         is assumed to have the correct parameterization.
@@ -713,7 +721,7 @@ class TPDiagGaugeGroup(TPGaugeGroup):
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
     """
 
-    def __init__(self, state_space, evotype='default'):
+    def __init__(self, state_space: _StateSpace, evotype: Optional[Union[_Evotype, str]]='default'):
         """
         Create a new gauge group with gauge-transform dimension `dim`, which
         should be the same as `mdl.dim` where `mdl` is a :class:`Model` you
@@ -742,7 +750,7 @@ class TPDiagGaugeGroupElement(TPGaugeGroupElement):
         information and the gauge transformation matrix itself.
     """
 
-    def __init__(self, operation):
+    def __init__(self, operation: _LinearOperator):
         """
         Creates a new gauge group element based on `operation`, which
         is assumed to have the correct parameterization.
@@ -773,7 +781,7 @@ class UnitaryGaugeGroup(OpGaugeGroupWithBasis):
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
     """
 
-    def __init__(self, state_space, basis, evotype='default'):
+    def __init__(self, state_space: _StateSpace, basis: Optional[Union[_Basis, str]], evotype: Optional[Union[_Evotype, str]]='default'):
         state_space = _StateSpace.cast(state_space)
         evotype = _Evotype.cast(str(evotype), default_prefer_dense_reps=True)  # since we use deriv_wrt_params
         errgen = _op.LindbladErrorgen.from_operation_matrix(
@@ -793,7 +801,7 @@ class UnitaryGaugeGroupElement(OpGaugeGroupElement):
         information and the gauge transformation matrix itself.
     """
 
-    def __init__(self, operation):
+    def __init__(self, operation: _LinearOperator):
         """
         Creates a new gauge group element based on `operation`, which
         is assumed to have the correct parameterization.
@@ -823,7 +831,7 @@ class SpamGaugeGroup(OpGaugeGroup):
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
     """
 
-    def __init__(self, state_space, evotype='default'):
+    def __init__(self, state_space: _StateSpace, evotype: Optional[Union[_Evotype, str]]='default'):
         """
         Create a new gauge group with gauge-transform dimension `dim`, which
         should be the same as `mdl.dim` where `mdl` is a :class:`Model` you
@@ -853,7 +861,7 @@ class SpamGaugeGroupElement(OpGaugeGroupElement):
         information and the gauge transformation matrix itself.
     """
 
-    def __init__(self, operation):
+    def __init__(self, operation: _LinearOperator):
         """
         Creates a new gauge group element based on `operation`, which
         is assumed to have the correct parameterization.
@@ -881,7 +889,7 @@ class TPSpamGaugeGroup(OpGaugeGroup):
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
     """
 
-    def __init__(self, state_space, evotype='default'):
+    def __init__(self, state_space: _StateSpace, evotype: Optional[Union[_Evotype, str]]='default'):
         """
         Create a new gauge group with gauge-transform dimension `dim`, which
         should be the same as `mdl.dim` where `mdl` is a :class:`Model` you
@@ -910,7 +918,7 @@ class TPSpamGaugeGroupElement(OpGaugeGroupElement):
         information and the gauge transformation matrix itself.
     """
 
-    def __init__(self, operation):
+    def __init__(self, operation: _LinearOperator):
         """
         Creates a new gauge group element based on `operation`, which
         is assumed to have the correct parameterization.
@@ -936,13 +944,13 @@ class TrivialGaugeGroup(GaugeGroup):
         where `mdl` is a :class:`Model` you want to gauge-transform.
     """
 
-    def __init__(self, state_space):
+    def __init__(self, state_space: _StateSpace):
         state_space = _StateSpace.cast(state_space)
         self.state_space = state_space
         GaugeGroup.__init__(self, "Trivial")
 
     @property
-    def num_params(self):
+    def num_params(self) -> int:
         """
         Return the number of parameters (degrees of freedom) of this gauge group.
 
@@ -952,7 +960,7 @@ class TrivialGaugeGroup(GaugeGroup):
         """
         return 0
 
-    def compute_element(self, param_vec):
+    def compute_element(self, param_vec: _np.ndarray):
         """
         Retrieve the element of this group corresponding to `param_vec`
 
@@ -969,7 +977,7 @@ class TrivialGaugeGroup(GaugeGroup):
         return TrivialGaugeGroupElement(self.state_space.dim)
 
     @property
-    def initial_params(self):
+    def initial_params(self) -> _np.array:
         """
         Return a good (or standard) starting parameter vector, used to initialize a gauge optimization.
 
@@ -1010,7 +1018,7 @@ class TrivialGaugeGroupElement(GaugeGroupElement):
         GaugeGroupElement.__init__(self)
 
     @property
-    def transform_matrix(self):
+    def transform_matrix(self) -> _np.ndarray:
         """
         The gauge-transform matrix.
 
@@ -1021,7 +1029,7 @@ class TrivialGaugeGroupElement(GaugeGroupElement):
         return self._matrix
 
     @property
-    def transform_matrix_inverse(self):
+    def transform_matrix_inverse(self) -> _np.ndarry:
         """
         The inverse of the gauge-transform matrix.
 
@@ -1050,7 +1058,7 @@ class TrivialGaugeGroupElement(GaugeGroupElement):
         """
         return _np.empty(0, 'd')
 
-    def to_vector(self):
+    def to_vector(self) -> _np.ndarray:
         """
         Get the parameter vector corresponding to this transform.
 
@@ -1060,7 +1068,7 @@ class TrivialGaugeGroupElement(GaugeGroupElement):
         """
         return _np.empty(0, 'd')
 
-    def from_vector(self, v):
+    def from_vector(self, v: _np.ndarray) -> None:
         """
         Reinitialize this `GaugeGroupElement` using the the parameter vector `v`.
 
@@ -1076,7 +1084,7 @@ class TrivialGaugeGroupElement(GaugeGroupElement):
         assert(len(v) == 0)
 
     @property
-    def num_params(self):
+    def num_params(self) -> int:
         """
         Return the number of parameters (degrees of freedom) of this element.
 
@@ -1092,5 +1100,5 @@ class TrivialGaugeGroupElement(GaugeGroupElement):
         return state
 
     @classmethod
-    def _from_nice_serialization(cls, state):  # memo holds already de-serialized objects
+    def _from_nice_serialization(cls, state: dict):  # memo holds already de-serialized objects
         return cls(state['operation_dimension'])
