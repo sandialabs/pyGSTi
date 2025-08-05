@@ -16,8 +16,9 @@ from pygsti.tools.basistools import stdmx_to_vec
 from pygsti.processors import QubitProcessorSpec
 from pygsti.baseobjs.basis import TensorProdBasis, Basis, BuiltinBasis, ExplicitBasis
 import numpy as np
+import warnings
 
-from typing import Union, Dict, Optional, List, TYPE_CHECKING
+from typing import Union, Dict, Optional, List, Any, TYPE_CHECKING
 if TYPE_CHECKING:
     from pygsti.protocols.gst import ModelEstimateResults, GSTGaugeOptSuite
     from pygsti.models import ExplicitOpModel
@@ -244,7 +245,7 @@ def subspace_restricted_fro_dist(a, b, mx_basis, n_leak=0):
 
 # MARK: model construction
 
-def leaky_qubit_model_from_pspec(ps_2level: QubitProcessorSpec, levels_readout_zero=(0,), basis: Union[str, Basis] ='gm'):
+def leaky_qubit_model_from_pspec(ps_2level: QubitProcessorSpec, basis: Union[str, Basis], levels_readout_zero=(0,)):
     from pygsti.models.explicitmodel import ExplicitOpModel
     from pygsti.baseobjs.statespace import ExplicitStateSpace
     from pygsti.modelmembers.povms import UnconstrainedPOVM
@@ -402,3 +403,47 @@ def add_lago_models(results: ModelEstimateResults, est_key: Optional[str] = None
     else:
         raise ValueError()
     return
+
+
+def construct_leakage_report(
+        results : ModelEstimateResults,
+        title : str = 'auto',
+        extra_report_kwargs : Optional[dict[str,Any]] = None,
+        gaugeopt_verbosity : int = 0,
+    ):
+    """
+    This is a small wrapper around construct_standard_report. It generates a Report object
+    with leakage analysis, and returns that object along with a copy of ``results`` which
+    contains gauge-optimized models created during leakage analysis.
+
+    Notes
+    -----
+    The special gauge optimization performed by this function uses the unitary gauge group,
+    and uses a modified version of the Frobenius distance loss function. The modification
+    reflects how the target gates in a leakage model are only _really_ defined on the
+    computational subspace.
+    """
+
+    if extra_report_kwargs is None:
+        extra_report_kwargs = {'title': title}
+    
+    if extra_report_kwargs.get('title', title) != title:
+        # Yes, we let you pass keyword arguments through to construct_standard_report,
+        # but that doesn't mean you should use that ability to pass in contradictory
+        # arguments to this function.
+        ktitle = extra_report_kwargs['title']
+        msg  = f"Replacing report title in extra_report_kwargs ({ktitle}) "
+        msg += f"with this function's title argument ({title})."
+        warnings.warn(msg)
+        extra_report_kwargs['title'] = title
+    
+    results = copy.deepcopy(results)
+    est_key = results.estimates.keys()
+    for ek in est_key:
+        assert isinstance(ek, str)
+        add_lago_models(results, ek, verbosity=gaugeopt_verbosity)
+    from pygsti.report import construct_standard_report
+    report = construct_standard_report(
+        results, advanced_options={'n_leak': 1}, **extra_report_kwargs
+    )
+    return report, results
