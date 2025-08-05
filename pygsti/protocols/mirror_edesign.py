@@ -48,6 +48,84 @@ def qiskit_circuits_to_fullstack_mirror_edesign(qk_circs, #not transpiled
                                                     num_transpilation_attempts=100,
                                                     return_qiskit_time=False
                                                     ):
+
+    """
+    Create a full-stack benchmark from high-level Qiskit circuits.
+
+    Parameters
+    ----------
+    qk_circs : List[qiskit.QuantumCircuit] | Dict[qiskit.QuantumCircuit]
+        Qiskit QuantumCircuits from which a full-stack benchmark is to be created.
+        If a dictionary is provided, those keys are used.
+        If a list is provided, default integer keys are used.
+
+    qk_backend : qiskit-ibm-runtime.IBMBackend, optional
+        IBM backend whose native gate set, connectivity, and error rates
+        are to be targeted when doing a full-stack transpilation. Fake backends
+        are also acceptable. If not provided, both `coupling_map` and `basis_gates`
+        must be provided, and certain transpiler optimizations that depend on
+        backend error rates may not be accessible.
+
+    coupling_map : qiskit.transpiler.CouplingMap, optional
+        couplinp map for a target backend that must be provided if `qk_backend` is None.
+        This argument is ignored if `qk_backend` is not None.
+
+    basis_gates : list[str], optional
+        list of native gates for a target backend that must be provided
+        if `qk_backend` is None.
+        This argument is ignored if `qk_backend` is not None.
+
+    transpiler_kwargs_dict : dict, optional
+        keyword arguments that are passed to the Qiskit transpiler for full-stack
+        transpilation. Please see the Qiskit transpiler documentation
+        for a comprehensive list of options. If any or all of the following keys
+        are not provided, the listed defaults are used:
+
+        'optimization_level': default 3
+        'approximation_degree': default 1.0
+        'seed_transpiler': default None
+
+    mirroring_kwargs_dict : dict, optional
+        dictionary of keyword arguments to be used in circuit mirroring. If an arg
+        is not provided, a default value is used.
+        The args are:
+            'mirror_circuits_per_circ': default 10. The number of mirror circuits of the
+            test-exact and exact-exact varieties to be used for the process fidelity estimation
+            of each provided Qiskit circuit.
+
+            'num_ref_per_qubit_subset': default 10. The number of SPAM reference circuits to use
+            for each qubit subset that is represented among the provided Qiskit circuits.
+
+            'rand_state': default None. np.random.RandomState to be used for circuit mirroring.
+
+    num_transpilation_attempts : int, optional
+        number of times to attempt full-stack circuit transpilation. Circuit mirroring requires
+        that the transpilation not use ancilla qubits, which is difficult to enforce with the
+        other transpiler options. Instead, we adopt a try-until-success strategy, which may fail
+        if an insufficient number of attempts are allowed. Increase this number if you are
+        having issues with the transpilation. If not provided, the default is 100 attempts.
+
+    return_qiskit_time : bool, optional
+        Debug flag that sets whether or not to report the time spent in the Qiskit transpiler.
+        Qiskit transpilation is often the most costly part of benchmark creation and it can be
+        helpful to know how much time it is consuming.
+
+    Returns
+    ---------
+        Tuple
+            pygsti.protocols.FreeformDesign
+                Experiment design containing the pyGSTi conversion of all Qiskit circuits that
+                were passed in. Does not need executed, but is needed for fidelity calculations.
+
+            pygsti.protocols.CombinedExperimentDesign
+                Experiment design containing all mirror circuits that must be executed
+                in order to perform mirror circuit fidelity estimation.
+
+            float, optional
+                amount of time spent in Qiskit transpiler.
+                
+    """
+
     try:
         import qiskit
         if qiskit.__version__ != '1.1.1':
@@ -119,7 +197,7 @@ def qiskit_circuits_to_fullstack_mirror_edesign(qk_circs, #not transpiled
             if not uses_ancilla:
                 break
         else:
-            raise RuntimeError('Could not generate transpilation that does not use ancilla qubits.')
+            raise RuntimeError('Could not generate transpilation that does not use ancilla qubits. Maybe try increasing `num_transpilation_attempts?`')
 
         
         # import ipdb
@@ -263,6 +341,42 @@ def qiskit_circuits_to_mirror_edesign(qk_circs, # yes transpiled
                                           mirroring_kwargs_dict={}
                                           ):
 
+    """
+    Create a noise benchmark from transpiled Qiskit circuits.
+
+    Parameters
+    ----------
+    qk_circs : List[qiskit.QuantumCircuit] | Dict[qiskit.QuantumCircuit]
+        Qiskit QuantumCircuits from which a noise benchmark is to be created.
+        If a dictionary is provided, those keys are used.
+        If a list is provided, default integer keys are used.
+
+    mirroring_kwargs_dict : dict, optional
+        dictionary of keyword arguments to be used in circuit mirroring. If an arg
+        is not provided, a default value is used.
+        The args are:
+            'mirror_circuits_per_circ': default 10. The number of mirror circuits of the
+            test-exact and exact-exact varieties to be used for the process fidelity estimation
+            of each provided Qiskit circuit.
+
+            'num_ref_per_qubit_subset': default 10. The number of SPAM reference circuits to use
+            for each qubit subset that is represented among the provided Qiskit circuits.
+
+            'rand_state': default None. np.random.RandomState to be used for circuit mirroring.
+
+    Returns
+    ---------
+        Tuple
+            pygsti.protocols.FreeformDesign
+                Experiment design containing the pyGSTi conversion of all Qiskit circuits that
+                were passed in. Does not need executed, but is needed for fidelity calculations.
+
+            pygsti.protocols.CombinedExperimentDesign
+                Experiment design containing all mirror circuits that must be executed
+                in order to perform mirror circuit fidelity estimation.
+                
+    """
+
     try:
         import qiskit
         if qiskit.__version__ != '1.1.1':
@@ -387,14 +501,85 @@ def qiskit_circuits_to_mirror_edesign(qk_circs, # yes transpiled
 
 
 def qiskit_circuits_to_svb_mirror_edesign(qk_circs,
+                                              aggregate_subcircs,
                                               width_depth_dict,
-                                              backend_num_qubits,
                                               coupling_map,
                                               instruction_durations,
-                                              aggregate_subcircs,
                                               subcirc_kwargs_dict={},
                                               mirroring_kwargs_dict={}
                                               ): # qk_circs must already be transpiled to the device
+    
+    """
+    Create a subcircuit benchmark from transpiled Qiskit circuits.
+
+    Parameters
+    ----------
+    qk_circs : List[qiskit.QuantumCircuit] | Dict[qiskit.QuantumCircuit]
+        Qiskit QuantumCircuits from which a subcircuit benchmark is to be created.
+        If a dictionary is provided, those keys are used.
+        If a list is provided, default integer keys are used.
+
+    aggregate_subcircs : bool
+        Whether or not the provided Qiskit circuits should be used to create
+        one combined subcircuit experiment design or kept separate.
+        Circuit aggregration can be useful if the provided circuits are all
+        instances of the same 'kind' of the circuit, e.g., all
+        Bernstein-Vazirani circuits with different secret keys.
+
+    width_depth_dict : dict[int, list[int]]
+        dictionary whose keys are subcircuit widths and whose values are
+        lists of depths to snip out for that width.
+
+    coupling_map : str or qiskit.transpiler.CouplingMap
+        coupling map for the device the Qiskit circuits were transpiled to.
+        If 'all-to-all', an all-to-all coupling map is used.
+        If 'linear', a linear topology is used.
+
+    instruction_durations : qiskit.transpiler.InstructionDurations
+        instruction durations for each gate in the target device. These
+        durations are needed to calculate the appropriate delay time
+        when only idling qubits are sampled out from a full circuit layer.
+
+
+    subcirc_kwargs_dict : dict, optional
+        dictionary of keyword arguments to be used in subcircuit selection.
+        If an arg is not provided, a default value is used.
+        The args are:
+            'num_samples_per_width_depth': default 10. number of subcircuits to sample
+            from each full circuit. if `aggregate_subcircuits` is set to
+            True, `num_samplse_per_width_depth` subcircuits are drawn from
+            each full circuit and combined into one experiment design.
+
+            'rand_state': default None. np.random.RandomState to be used for subcircuit selection.
+
+    mirroring_kwargs_dict : dict, optional
+        dictionary of keyword arguments to be used in circuit mirroring
+        If an arg is not provided, a default value is used.
+        The args are:
+            'mirror_circuits_per_circ': default 10. The number of mirror circuits of the
+            test-exact and exact-exact varieties to be used for the process fidelity estimation
+            of each provided Qiskit circuit.
+
+            'num_ref_per_qubit_subset': default 10. The number of SPAM reference circuits to use
+            for each qubit subset that is represented among the provided Qiskit circuits.
+
+            'rand_state': default None. np.random.RandomState to be used for circuit mirroring.
+
+    Returns
+    ---------
+        Tuple
+            dict[hashable, pygsti.protocols.FreeformDesign] or pygsti.protocols.FreeformDesign
+                Experiment design(s) containing the pyGSTi conversion of all Qiskit circuits that
+                were passed in. Does not need executed, but is needed for fidelity calculations.
+                A dictionary is returned if `aggregate_subcircs` is False, otherwise a FreeformDesign
+                is returned.
+
+            dict[hashable, pygsti.protocols.CombinedExperimentDesign] or pygsti.protocols.CombinedExperimentDesign
+                Experiment design(s) containing all mirror circuits that must be executed
+                in order to perform mirror circuit fidelity estimation. A dictionary is returned
+                if `aggregate_subcircs` is False, otherwise a FreeformDesign is returned.
+
+    """
     
     try:
         import qiskit
@@ -405,10 +590,77 @@ def qiskit_circuits_to_svb_mirror_edesign(qk_circs,
     except:
         raise RuntimeError('qiskit is required for this operation, and does not appear to be installed.')
     
-    # if `aggregate_subcircs` is set to true, then subcircuits from the provided circuits `qk_list` will be aggregated into one mirror edesign. This option may be desirable if all circuits in the list are members of the same "family": for instance, all circuits are 8-qubit Bernstein-Vazirani circuits, just with varying secret keys.
-    # If `aggregate_subcircs` is set to false, each circuit in `qk_list` will be subsampled separately and will have its own mirror edesign.
+    """
+    Create a subcircuit benchmark from transpiled Qiskit circuits.
 
-    # convert to pygsti
+    Parameters
+    ----------
+    qk_circs : List[qiskit.QuantumCircuit] | Dict[qiskit.QuantumCircuit]
+        Qiskit QuantumCircuits from which a subcircuit benchmark is to be created.
+        If a dictionary is provided, those keys are used.
+        If a list is provided, default integer keys are used.
+
+    aggregate_subcircs : bool
+        Whether or not the provided Qiskit circuits should be used to create
+        one combined subcircuit experiment design or kept separate.
+        Circuit aggregration can be useful if the provided circuits are all
+        instances of the same 'family' of the circuit, e.g., all
+        Bernstein-Vazirani circuits with different secret keys.
+
+    width_depth_dict : dict[int, list[int]]
+        dictionary whose keys are subcircuit widths and whose values are
+        lists of depths to snip out for that width.
+
+    coupling_map : str or qiskit.transpiler.CouplingMap
+        coupling map for the device the Qiskit circuits were transpiled to.
+        If 'all-to-all', an all-to-all coupling map is used.
+        If 'linear', a linear topology is used.
+
+    instruction_durations : qiskit.transpiler.InstructionDurations
+        instruction durations for each gate in the target device. These
+        durations are needed to calculate the appropriate delay time
+        when only idling qubits are sampled out from a full circuit layer.
+
+
+    subcirc_kwargs_dict : dict, optional
+        dictionary of keyword arguments to be used in subcircuit selection.
+        If an arg is not provided, a default value is used.
+        The args are:
+            'num_samples_per_width_depth': default 10. number of subcircuits to sample
+            from each full circuit. if `aggregate_subcircuits` is set to
+            True, `num_samplse_per_width_depth` subcircuits are drawn from
+            each full circuit and combined into one experiment design.
+
+            'rand_state': default None. np.random.RandomState to be used for subcircuit selection.
+
+    mirroring_kwargs_dict : dict, optional
+        dictionary of keyword arguments to be used in circuit mirroring
+        If an arg is not provided, a default value is used.
+        The args are:
+            'mirror_circuits_per_circ': default 10. The number of mirror circuits of the
+            test-exact and exact-exact varieties to be used for the process fidelity estimation
+            of each provided Qiskit circuit.
+
+            'num_ref_per_qubit_subset': default 10. The number of SPAM reference circuits to use
+            for each qubit subset that is represented among the provided Qiskit circuits.
+
+            'rand_state': default None. np.random.RandomState to be used for circuit mirroring.
+
+    Returns
+    ---------
+        Tuple
+            dict[hashable, pygsti.protocols.FreeformDesign] or pygsti.protocols.FreeformDesign
+                Experiment design(s) containing the pyGSTi conversion of all Qiskit circuits that
+                were passed in. Does not need executed, but is needed for fidelity calculations.
+                A dictionary is returned if `aggregate_subcircs` is False, otherwise a FreeformDesign
+                is returned.
+
+            dict[hashable, pygsti.protocols.CombinedExperimentDesign] or pygsti.protocols.CombinedExperimentDesign
+                Experiment design(s) containing all mirror circuits that must be executed
+                in order to perform mirror circuit fidelity estimation. A dictionary is returned
+                if `aggregate_subcircs` is False, otherwise a FreeformDesign is returned.
+
+    """
 
     if isinstance(qk_circs, list):
         qk_circs = {i: qk_circ for i, qk_circ in enumerate(qk_circs)}
@@ -460,7 +712,6 @@ def qiskit_circuits_to_svb_mirror_edesign(qk_circs,
 
             # convert back to qiskit to perform reference transpilations in u3-cz gate set (no layer blocking required, just need logical equivalence)
             qk_test_circ = ps_test_circ.convert_to_qiskit(qubit_conversion=qubit_mapping_dict,
-                                                        #   num_qubits=backend_num_qubits
                                                           )
             qk_ref_circ = transpile(qk_test_circ,
                                     basis_gates=['u3', 'cz'],

@@ -4117,6 +4117,8 @@ class Circuit(object):
                 A pyGSTi Circuit instance equivalent to the specified Qiskit one.
 
             Dict {qiskit_qubit_idx, pyGSTi_qubit}
+                Dictionary that contains the mapping from the Qiskit qubit index
+                to the corresponding pyGSTi qubit.
         """
 
         try:
@@ -4440,6 +4442,45 @@ class Circuit(object):
                           block_between_layers=True,
                           qubits_to_measure=None,
                           ):
+
+        """
+        Convert a pyGSTi circuit to a Qiskit QuantumCircuit.
+
+        Parameters
+        ----------
+        num_qubits : int, optional
+            size of Qiskit QuantumCircuit to create from the pyGSTi circuit. If None,
+            the number of line labels will set the size of the QuantumCircuit.
+            It is often useful to provide this field if the pyGSTi circuit is to be
+            executed on a backend that has more qubits than the pyGSTi circuit.
+
+        qubit_conversion : dict, optional
+            mapping from pyGSTi line labels to Qiskit qubits, either as indices
+            or Qiskit Qubit objects. If none, a literal mapping is used. If 'remove-Q' is set,
+            then the 'Q' at the beginning of the line label is removed: e.g., 'Q53' becomes 53 (integer).
+
+        gatename_conversion : dict, optional
+            A dictionary mapping gate names contained in this circuit to the corresponding
+            gate names used in the rendered Qiskit QuantumCircuit.  If None, a standard set of conversions
+            is used (see :func:`standard_gatenames_qiskit_conversions`).
+
+        block_between_layers : bool, optional
+            Set whether or not pyGSTi layer structure is maintained in the Qiskit circuit. Default is True.
+            If set to False, Qiskit will move all gates to their earliest possible execution point.
+
+        qubits_to_measure : str or list, optional
+            Set which pyGSTi qubits should be measured in the rendered Qiskit QuantumCircuit.
+            If None, no qubits are measured.
+            If 'all', all qubits in the length-`num_qubits` Qiskit QuantumRegister are measured.
+            If 'active', only the qubits for which a qubit conversion is specified are measured.
+            If a list of pyGSTi line labels is provided, then only the corresponding Qiskit qubits are measured.
+
+        
+        Returns
+        ---------
+        qiskit.QuantumCircuit
+            a Qiskit QuantumCircuit corresponding to the pyGSTi circuits.
+        """
         
         try:
             import qiskit
