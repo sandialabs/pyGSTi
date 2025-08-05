@@ -647,7 +647,7 @@ class TPGaugeGroupElement(OpGaugeGroupElement):
         """
         if self._inv_matrix is None:
             self._inv_matrix = _np.linalg.inv(self._operation.to_dense())
-            self._inv_matrix[0, :] = 0.0  # ensure invers is *exactly* TP
+            self._inv_matrix[0, :] = 0.0  # ensure inverse is *exactly* TP
             self._inv_matrix[0, 0] = 1.0  # as otherwise small variations can get amplified
         return self._inv_matrix
 
@@ -1012,7 +1012,7 @@ class TrivialGaugeGroupElement(GaugeGroupElement):
     def __init__(self, dim):
         """
         Creates a new trivial gauge group element of dimension `dim`.
-        (so transform matirx is a `dim` by `dim` identity matrix).
+        (so transform matrix is a `dim` by `dim` identity matrix).
         """
         self._matrix = _np.identity(dim, 'd')
         GaugeGroupElement.__init__(self)
