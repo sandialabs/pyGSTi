@@ -15,7 +15,7 @@ import numpy as _np
 import json as _json
 
 # from pytket.architecture import Architecture
-from qiskit.providers.models import BackendProperties, BackendConfiguration
+# from qiskit.providers.models import BackendProperties, BackendConfiguration
 
 from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.baseobjs.label import Label as _Label

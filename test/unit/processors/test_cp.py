@@ -259,7 +259,7 @@ class TestCentralPauli(BaseCase):
     def test_cnot_x_errors(self):
 
         line_labels = ['Q1', 'Q2']
-        layers = [[L('Gcnot', ['Q1', 'Q2'], args=[])]]
+        layers = [[L('Gcnot', ['Q1', 'Q2'], args=None)]]
                 
         circ = C(layers, line_labels=line_labels)
 
@@ -306,7 +306,7 @@ class TestCentralPauli(BaseCase):
     def test_cnot_z_errors(self):
 
         line_labels = ['Q1', 'Q2']
-        layers = [[L('Gcnot', ['Q1', 'Q2'], args=[])]]
+        layers = [[L('Gcnot', ['Q1', 'Q2'], args=None)]]
                 
         circ = C(layers, line_labels=line_labels)
 
@@ -354,7 +354,7 @@ class TestCentralPauli(BaseCase):
     def test_cnot_x_and_z_errors(self):
 
         line_labels = ['Q1', 'Q2']
-        layers = [[L('Gcnot', ['Q1', 'Q2'], args=[])]]
+        layers = [[L('Gcnot', ['Q1', 'Q2'], args=None)]]
                 
         circ = C(layers, line_labels=line_labels)
 
@@ -402,7 +402,7 @@ class TestCentralPauli(BaseCase):
     def test_cphase_x_errors(self):
 
         line_labels = ['Q1', 'Q2']
-        layers = [[L('Gcphase', ['Q1', 'Q2'], args=[])]]
+        layers = [[L('Gcphase', ['Q1', 'Q2'], args=None)]]
                 
         circ = C(layers, line_labels=line_labels)
 
@@ -449,7 +449,7 @@ class TestCentralPauli(BaseCase):
     def test_cphase_z_errors(self):
 
         line_labels = ['Q1', 'Q2']
-        layers = [[L('Gcphase', ['Q1', 'Q2'], args=[])]]
+        layers = [[L('Gcphase', ['Q1', 'Q2'], args=None)]]
                 
         circ = C(layers, line_labels=line_labels)
 
@@ -497,7 +497,7 @@ class TestCentralPauli(BaseCase):
     def test_cphase_x_and_z_errors(self):
 
         line_labels = ['Q1', 'Q2']
-        layers = [[L('Gcphase', ['Q1', 'Q2'], args=[])]]
+        layers = [[L('Gcphase', ['Q1', 'Q2'], args=None)]]
                 
         circ = C(layers, line_labels=line_labels)
 
@@ -552,15 +552,15 @@ class TestCentralPauli(BaseCase):
 
         layers = [
             [L('Gu3', ['Q1'], args=Z_args), L('Gu3', ['Q2'], args=Y_args), L('Gu3', ['Q3'], args=X_args), L('Gu3', ['Q4'], args=I_args), L('Gu3', ['Q5'], args=I_args)],
-            [L('Gcnot', ['Q1', 'Q2'], args=[]), L('Gcnot', ['Q4', 'Q3'], args=[])],
+            [L('Gcnot', ['Q1', 'Q2'], args=None), L('Gcnot', ['Q4', 'Q3'], args=None)],
             [L('Gu3', ['Q1'], args=Y_args), L('Gu3', ['Q2'], args=Z_args), L('Gu3', ['Q3'], args=X_args), L('Gu3', ['Q4'], args=I_args), L('Gu3', ['Q5'], args=X_args)],
-            [L('Gcnot', ['Q2', 'Q3'], args=[]), L('Gcnot', ['Q4', 'Q5'], args=[])],
-            [L('Gcphase', ['Q1', 'Q2'], args=[]), L('Gcphase', ['Q3', 'Q4'], args=[])],
-            [L('Gcnot', ['Q3', 'Q2'], args=[]), L('Gcnot', ['Q4', 'Q5'], args=[])],
+            [L('Gcnot', ['Q2', 'Q3'], args=None), L('Gcnot', ['Q4', 'Q5'], args=None)],
+            [L('Gcphase', ['Q1', 'Q2'], args=None), L('Gcphase', ['Q3', 'Q4'], args=None)],
+            [L('Gcnot', ['Q3', 'Q2'], args=None), L('Gcnot', ['Q4', 'Q5'], args=None)],
             [L('Gu3', ['Q1'], args=X_args), L('Gu3', ['Q2'], args=Y_args), L('Gu3', ['Q3'], args=I_args), L('Gu3', ['Q4'], args=I_args), L('Gu3', ['Q5'], args=Y_args)],
             [L('Gu3', ['Q1'], args=X_args), L('Gu3', ['Q2'], args=Y_args), L('Gu3', ['Q3'], args=I_args), L('Gu3', ['Q4'], args=Y_args), L('Gu3', ['Q5'], args=Y_args)],
             [L('Gu3', ['Q1'], args=Y_args), L('Gu3', ['Q2'], args=X_args), L('Gu3', ['Q3'], args=Z_args), L('Gu3', ['Q4'], args=Y_args), L('Gu3', ['Q5'], args=I_args)],
-            [L('Gcphase', ['Q1', 'Q2'], args=[]), L('Gcphase', ['Q4', 'Q5'], args=[])]
+            [L('Gcphase', ['Q1', 'Q2'], args=None), L('Gcphase', ['Q4', 'Q5'], args=None)]
                   ]
                 
         circ = C(layers, line_labels=line_labels)

@@ -581,7 +581,7 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         qiskit_pass_kwargs['optimization_level'] = qiskit_pass_kwargs.get('optimization_level', 1)
         qiskit_pass_kwargs['basis_gates'] = qiskit_pass_kwargs.get('basis_gates', ibmq_backend.operation_names)
 
-        print(f'transpiling to basis gates {qiskit_pass_kwargs['basis_gates']}')
+        print(f"transpiling to basis gates {qiskit_pass_kwargs['basis_gates']}")
 
         if not len(self.pygsti_circuit_batches):
             rand_state = _np.random.RandomState(self.seed) # TODO: Should this be a different seed as transpiler?

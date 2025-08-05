@@ -4203,6 +4203,8 @@ class Circuit(object):
             num_qubits = instruction.operation.num_qubits
             # instruction_qubit_indices = [qubit._index for qubit in instruction.qubits]
             params = instruction.operation.params
+            if len(params) == 0:
+                params = None
 
             if verbose:
                 print(name)
