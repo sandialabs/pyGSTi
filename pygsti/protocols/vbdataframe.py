@@ -18,9 +18,6 @@ from pygsti.tools.rbtools import hamming_distance
 
 from scipy.stats import chi2 as _chi2
 
-import ipdb
-
-
 
 def _calculate_summary_statistic(x, statistic, lower_cutoff=None):
     """
@@ -178,9 +175,6 @@ def rc_bootstrap_predicted_pfid(brs, rrs, refs, n, num_bootstraps=50, rand_state
 
     bootstrapped_stdev = _np.std(pfid_samples)
 
-    # if bootstrapped_stdev > 0.1:
-    #     print(pfid_samples)
-    #     ipdb.set_trace()
     
     return bootstrapped_stdev
 
@@ -380,9 +374,6 @@ class VBDataFrame(object):
         """
 
         eff_pols = {k: {} for k in mirrored_data.edesign.keys()}
-
-        # import ipdb
-        # ipdb.set_trace()
     
         # Stats about the base circuit
         u3_densities = {}
@@ -508,7 +499,6 @@ class VBDataFrame(object):
                     print(spam_ref_key)
                     print(len(eff_pols['ref'][spam_ref_key]))
 
-                # import ipdb
 
                 # print(key)
                 # print(_np.mean(eff_pols['br'][key]))

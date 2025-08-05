@@ -18,15 +18,14 @@ from pygsti.circuits import subcircuit_selection as _subcircsel
 
 import time
 
-#TODO: OOP-ify this code?
 
-def get_active_qubits(circ, ignore=None):
-    from qiskit.converters.circuit_to_dag import circuit_to_dag
+# def get_active_qubits(circ, ignore=None):
+#     from qiskit.converters.circuit_to_dag import circuit_to_dag
 
-    dag = circuit_to_dag(circ)
-    active_qubits = [qubit for qubit in circ.qubits if qubit not in dag.idle_wires(ignore=ignore)]
+#     dag = circuit_to_dag(circ)
+#     active_qubits = [qubit for qubit in circ.qubits if qubit not in dag.idle_wires(ignore=ignore)]
     
-    return(active_qubits)
+#     return(active_qubits)
 
 def get_active_qubits_no_dag(circ, ignore=set()):
     active_qubits = set()
@@ -199,11 +198,6 @@ def qiskit_circuits_to_fullstack_mirror_edesign(qk_circs, #not transpiled
         else:
             raise RuntimeError('Could not generate transpilation that does not use ancilla qubits. Maybe try increasing `num_transpilation_attempts?`')
 
-        
-        # import ipdb
-
-        # ipdb.set_trace()
-
 
         qk_init_opt_layout = qk_test_circ.layout.initial_index_layout(filter_ancillas=False)[:num_virtual_qubits]
         qk_final_opt_layout = qk_test_circ.layout.final_index_layout(filter_ancillas=False)[:num_virtual_qubits]
@@ -247,7 +241,6 @@ def qiskit_circuits_to_fullstack_mirror_edesign(qk_circs, #not transpiled
             
 
             # if return_qiskit_time: start = time.time()
-            # ipdb.set_trace()
             qk_ref_inv_circ = transpile(qk_circ.inverse(),
                                         coupling_map=reduced_coupling_map,
                                         basis_gates=['u3', 'cz'],
@@ -312,7 +305,6 @@ def qiskit_circuits_to_fullstack_mirror_edesign(qk_circs, #not transpiled
 
         ref_circ_dict[ps_ref_circ] += [ref_metadata]
 
-        # ipdb.set_trace()
 
         ref_circ_id_lookup_dict[k] = ps_ref_circ
 
@@ -454,11 +446,6 @@ def qiskit_circuits_to_mirror_edesign(qk_circs, # yes transpiled
 
         # print('post-reordering:')
         # print(sim.run(TR_qk, shots=64).result().get_counts())
-
-        # import ipdb
-
-        # ipdb.set_trace()
-
 
         test_circ_metadata = {
             'id': k,
@@ -705,10 +692,6 @@ def qiskit_circuits_to_svb_mirror_edesign(qk_circs,
 
         for ps_test_circ, auxlist in test_edesign.aux_info.items():
             qubit_mapping_dict = {sslbl: i for i, sslbl in enumerate(ps_test_circ.line_labels)} # avoid mapping small circuits to large backends since connectivity is already ensured
-
-            # import ipdb
-
-            # ipdb.set_trace()
 
             # convert back to qiskit to perform reference transpilations in u3-cz gate set (no layer blocking required, just need logical equivalence)
             qk_test_circ = ps_test_circ.convert_to_qiskit(qubit_conversion=qubit_mapping_dict,
@@ -1009,31 +992,6 @@ def make_mirror_edesign(test_edesign: _FreeformDesign,
                 
             else:
                 raise RuntimeError("'mirroring_strategy' must be either 'pauli_rc' or 'central_pauli'")
-
-
-            # #debug shenanigans
-            # from qiskit_aer import AerSimulator
-
-            # TR_circ = T + R_inv
-            # TR_qk = TR_circ.convert_to_qiskit(qubit_conversion='remove-Q',qubits_to_measure='active')
-
-            # RR_circ = R + R_inv
-            # RR_qk = RR_circ.convert_to_qiskit(qubit_conversion='remove-Q',qubits_to_measure='active')
-
-            # M1_qk = L_T_Rinv_Linv.convert_to_qiskit(qubit_conversion='remove-Q',qubits_to_measure='active')
-            # M2_qk = L_R_Rinv_Linv.convert_to_qiskit(qubit_conversion='remove-Q',qubits_to_measure='active')
-
-            # sim = AerSimulator()
-
-            # for qk_circ in [TR_qk, RR_qk, M1_qk, M2_qk]:
-            #     print(sim.run(qk_circ, shots=64).result().get_counts())
-
-            # import ipdb
-
-            # ipdb.set_trace()
-
-
-            # ### end debug nonsense
 
             
             L_T_Rinv_Linv_aux = [{'base_aux': a,
