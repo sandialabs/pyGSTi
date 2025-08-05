@@ -159,10 +159,7 @@ def minimize(fn, x0, method='cg', callback=None,
         elif method == "L-BFGS-B": opts['gtol'] = opts['ftol'] = tol  # gradient norm and fractional y-tolerance
         elif method == "Nelder-Mead": opts['maxfev'] = maxfev  # max fn evals (note: ftol and xtol can also be set)
 
-        if method in ("BFGS", "CG", "Newton-CG", "L-BFGS-B", "TNC", "SLSQP", "dogleg", "trust-ncg"):  # use jacobian
-            solution = _spo.minimize(fn, x0, options=opts, method=method, tol=tol, callback=callback, jac=jac)
-        else:
-            solution = _spo.minimize(fn, x0, options=opts, method=method, tol=tol, callback=callback)
+        solution = _spo.minimize(fn, x0, options=opts, method=method, tol=tol, callback=callback, jac=jac)  
 
     return solution
 

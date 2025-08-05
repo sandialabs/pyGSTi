@@ -19,7 +19,7 @@ from pygsti.evotypes import Evotype as _Evotype
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
-
+from pygsti import SpaceT
 
 class StaticCliffordOp(_LinearOperator, _NoErrorGeneratorInterface):
     """
@@ -168,7 +168,7 @@ class StaticCliffordOp(_LinearOperator, _NoErrorGeneratorInterface):
         """
         return _np.empty((0,), 'd')
 
-    def to_dense(self, on_space='minimal'):
+    def to_dense(self, on_space: SpaceT='minimal'):
         """
         Return the dense array used to represent this operation within its evolution type.
 

@@ -99,4 +99,11 @@ class LinearInterposer(ModelParamsInterposer):
     @classmethod
     def _from_nice_serialization(cls, state):  # memo holds already de-serialized objects
         return cls(cls._decodemx(state['transform_matrix']))
+    
+    def __eq__(self, other):
+        assert isinstance(other, LinearInterposer), 'Object provided is not of LinearInterposer type'
 
+        if self.transform_matrix.shape != other.transform_matrix.shape:
+            return False
+        return _np.allclose(self.transform_matrix, other.transform_matrix)
+    

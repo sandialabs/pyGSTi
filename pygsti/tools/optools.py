@@ -27,6 +27,7 @@ from pygsti.baseobjs.basis import Basis as _Basis, ExplicitBasis as _ExplicitBas
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LocalElementaryErrorgenLabel
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
+from pygsti import SpaceT
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 
@@ -163,13 +164,6 @@ def fidelity(a, b):
             """
             _warnings.warn(message)
         evals[evals < 0] = 0.0
-        tr = _np.sum(evals)
-        if abs(tr - 1) > __VECTOR_TOL__:
-            message = f"""
-            The PSD part of the input matrix is not trace-1 up to tolerance {__VECTOR_TOL__}.
-            Beware result!
-            """
-            _warnings.warn(message)
         sqrt_mat = U @ (_np.sqrt(evals).reshape((-1, 1)) * U.T.conj())
         return sqrt_mat
     
@@ -305,7 +299,7 @@ def diamonddist(a, b, mx_basis='pp', return_x=False):
     mx_basis = _bt.create_basis_for_matrix(a, mx_basis)
 
     # currently cvxpy is only needed for this function, so don't import until here
-    import cvxpy as _cvxpy
+    import cvxpy as _cp
 
     # _jam code below assumes *un-normalized* Jamiol-isomorphism.
     # It will convert a & b to a "single-block" basis representation
@@ -322,19 +316,29 @@ def diamonddist(a, b, mx_basis='pp', return_x=False):
     J = JBstd - JAstd
     prob, vars = _diamond_norm_model(dim, smallDim, J)
 
-    try:
-        prob.solve(solver='CVXOPT')
-    except _cvxpy.error.SolverError as e:
-        _warnings.warn("CVXPY failed: %s - diamonddist returning -2!" % str(e))
-        return (-2, _np.zeros((dim, dim))) if return_x else -2
-    except:
-        _warnings.warn("CVXOPT failed (unknown err) - diamonddist returning -2!")
-        return (-2, _np.zeros((dim, dim))) if return_x else -2
+    objective_val = -2
+    varvals = [_np.zeros_like(J), None, None]
+    sdp_solvers = ['MOSEK', 'CLARABEL', 'CVXOPT']
+    for i, solver in enumerate(sdp_solvers):
+        try:
+            prob.solve(solver=solver)
+            objective_val = prob.value
+            varvals = [v.value for v in vars]
+            break
+        except (AssertionError, _cp.SolverError) as e:
+            if solver != 'MOSEK':
+                msg = f"Received error {e} when trying to use solver={solver}."
+                if i + 1 == len(sdp_solvers):
+                    failure_msg = "Out of solvers. Returning -2 for diamonddist."
+                else:
+                    failure_msg = f"Trying {sdp_solvers[i+1]} next."
+                msg += f'\n{failure_msg}'
+                _warnings.warn(msg)
 
     if return_x:
-        return prob.value, vars[0].value
+        return objective_val, varvals
     else:
-        return prob.value
+        return objective_val
 
 
 def _diamond_norm_model(dim, smallDim, J):
@@ -488,8 +492,8 @@ def entanglement_fidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
     
     #if the tp flag isn't set we'll calculate whether it is true here
     if is_tp is None:
-        def is_tp_fn(x): return _np.isclose(x[0, 0], 1.0) and all(
-        [_np.isclose(x[0, i], 0) for i in range(1,d2)])
+        def is_tp_fn(x):
+            return _np.isclose(x[0, 0], 1.0) and _np.allclose(x[0, 1:d2], 0)
         
         is_tp= (is_tp_fn(a) and is_tp_fn(b))
    
@@ -963,9 +967,14 @@ def povm_fidelity(model, target_model, povmlbl):
     -------
     float
     """
-    povm_mx = compute_povm_map(model, povmlbl)
-    target_povm_mx = compute_povm_map(target_model, povmlbl)
-    return entanglement_fidelity(povm_mx, target_povm_mx, target_model.basis)
+    try:
+        povm_mx = compute_povm_map(model, povmlbl)
+        target_povm_mx = compute_povm_map(target_model, povmlbl)
+        return entanglement_fidelity(povm_mx, target_povm_mx, target_model.basis)
+    except AssertionError as e:
+        se = str(e)
+        assert '`dim` must be a perfect square' in se, se
+        return _np.nan
 
 
 def povm_jtracedist(model, target_model, povmlbl):
@@ -987,9 +996,14 @@ def povm_jtracedist(model, target_model, povmlbl):
     -------
     float
     """
-    povm_mx = compute_povm_map(model, povmlbl)
-    target_povm_mx = compute_povm_map(target_model, povmlbl)
-    return jtracedist(povm_mx, target_povm_mx, target_model.basis)
+    try:
+        povm_mx = compute_povm_map(model, povmlbl)
+        target_povm_mx = compute_povm_map(target_model, povmlbl)
+        return jtracedist(povm_mx, target_povm_mx, target_model.basis)
+    except AssertionError as e:
+        se = str(e)
+        assert '`dim` must be a perfect square' in se, se
+        return _np.nan
 
 
 def povm_diamonddist(model, target_model, povmlbl):
@@ -1011,9 +1025,14 @@ def povm_diamonddist(model, target_model, povmlbl):
     -------
     float
     """
-    povm_mx = compute_povm_map(model, povmlbl)
-    target_povm_mx = compute_povm_map(target_model, povmlbl)
-    return diamonddist(povm_mx, target_povm_mx, target_model.basis)
+    try:
+        povm_mx = compute_povm_map(model, povmlbl)
+        target_povm_mx = compute_povm_map(target_model, povmlbl)
+        return diamonddist(povm_mx, target_povm_mx, target_model.basis)
+    except AssertionError as e:
+        assert '`dim` must be a perfect square' in str(e)
+        return _np.NaN
+
 
 def instrument_infidelity(a, b, mx_basis):
     """
@@ -1069,8 +1088,8 @@ def instrument_diamonddist(a, b, mx_basis):
         aa, bb = i * adim, (i + 1) * adim
         for j in range(nComps):
             cc, dd = j * adim, (j + 1) * adim
-            composite_op[aa:bb, cc:dd] = a[clbl].to_dense(on_space='HilbertSchmidt')
-            composite_top[aa:bb, cc:dd] = b[clbl].to_dense(on_space='HilbertSchmidt')
+            composite_op[aa:bb, cc:dd] = a[clbl].to_dense("HilbertSchmidt")
+            composite_top[aa:bb, cc:dd] = b[clbl].to_dense("HilbertSchmidt")
     return diamonddist(composite_op, composite_top, sumbasis)
 
 
@@ -1775,13 +1794,15 @@ def extract_elementary_errorgen_coefficients(errorgen, elementary_errorgen_label
     """
     # the same as decompose_errorgen but given a dict/list of elementary errorgens directly instead of a basis and type
     if isinstance(errorgen_basis, _Basis):
-        errorgen_std = _bt.change_basis(errorgen, errorgen_basis, errorgen_basis.create_equivalent('std'))
+        std_basis = errorgen_basis.create_equivalent('std')
+        errorgen_std = _bt.change_basis(errorgen, errorgen_basis, std_basis)
 
-        #expand operation matrix so it acts on entire space of dmDim x dmDim density matrices
-        errorgen_std = _bt.resize_std_mx(errorgen_std, 'expand', errorgen_basis.create_equivalent('std'),
-                                         errorgen_basis.create_simple_equivalent('std'))
+        # Expand operation matrix so it acts on entire space of dmDim x dmDim density matrices
+        expanded_std_basis = errorgen_basis.create_simple_equivalent('std')
+        errorgen_std = _bt.resize_std_mx(errorgen_std, 'expand', std_basis, expanded_std_basis)
     else:
         errorgen_std = _bt.change_basis(errorgen, errorgen_basis, "std")
+
     flat_errorgen_std = errorgen_std.toarray().ravel() if _sps.issparse(errorgen_std) else errorgen_std.ravel()
 
     d2 = errorgen_std.shape[0]
@@ -2634,8 +2655,8 @@ def project_to_target_eigenspace(model, target_model, eps=1e-6):
         #Essentially, we want to replace the eigenvalues of `tgt_gate`
         # (and *only* the eigenvalues) with those of `gate`.  This is what
         # a "best gate gauge transform does" (by definition)
-        gate_mx = gate.to_dense(on_space='minimal')
-        Ugauge = compute_best_case_gauge_transform(gate_mx, tgt_gate.to_dense(on_space='minimal'))
+        gate_mx = gate.to_dense("minimal")
+        Ugauge = compute_best_case_gauge_transform(gate_mx, tgt_gate.to_dense("minimal"))
         Ugauge_inv = _np.linalg.inv(Ugauge)
 
         epgate = _np.dot(Ugauge, _np.dot(gate_mx, Ugauge_inv))

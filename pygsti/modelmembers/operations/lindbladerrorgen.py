@@ -30,6 +30,7 @@ from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _Local
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GlobalElementaryErrorgenLabel
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools import optools as _ot
+from pygsti import SpaceT
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 
@@ -465,9 +466,9 @@ class LindbladErrorgen(_LinearOperator):
             if parameterization == "auto" else LindbladParameterization.cast(parameterization)
 
         eegs_by_typ = {
-            'ham': {eeglbl: v for eeglbl, v in elementary_errorgens.items() if eeglbl.errorgen_type == 'H'},
-            'other_diagonal': {eeglbl: v for eeglbl, v in elementary_errorgens.items() if eeglbl.errorgen_type == 'S'},
-            'other': {eeglbl: v for eeglbl, v in elementary_errorgens.items() if eeglbl.errorgen_type != 'H'}
+            'ham':            {eeglbl: v for eeglbl, v in elementary_errorgens.items() if eeglbl.errorgen_type == 'H' },
+            'other_diagonal': {eeglbl: v for eeglbl, v in elementary_errorgens.items() if eeglbl.errorgen_type == 'S' },
+            'other':          {eeglbl: v for eeglbl, v in elementary_errorgens.items() if eeglbl.errorgen_type != 'H' }
         }
 
         blocks = []
@@ -701,7 +702,7 @@ class LindbladErrorgen(_LinearOperator):
 
         self._onenorm_upbound = onenorm
 
-    def to_dense(self, on_space='minimal'):
+    def to_dense(self, on_space: SpaceT='minimal'):
         """
         Return this error generator as a dense matrix.
 
@@ -731,7 +732,7 @@ class LindbladErrorgen(_LinearOperator):
         else:  # dense rep
             return self._rep.to_dense(on_space)
 
-    def to_sparse(self, on_space='minimal'):
+    def to_sparse(self, on_space: SpaceT='minimal'):
         """
         Return the error generator as a sparse matrix.
 
