@@ -1,15 +1,10 @@
-from mirror_edesign import (qiskit_circuits_to_mirror_edesign,
-                            qiskit_circuits_to_fullstack_mirror_edesign,
-                            qiskit_circuits_to_svb_mirror_edesign)
-
 # right now this file is functioning as a wrapper for a bunch of functionality that exists in pygsti.protocols.mirror_edesign. A refactor is probably in order.
 
-import mirror_edesign
-import vbdataframe
+from pygsti.protocols import mirror_edesign as _mirror, vbdataframe as _vbdf
 
-def qiskit_circuits_to_mirror_edesign(qk_circs, # yes transpiled
-                                          mirroring_kwargs_dict={}
-                                          ):
+def noise_mirror_edesign(qk_circs, # yes transpiled
+                            mirroring_kwargs_dict={}
+                            ):
 
     """
     Create a noise benchmark from transpiled Qiskit circuits.
@@ -47,18 +42,18 @@ def qiskit_circuits_to_mirror_edesign(qk_circs, # yes transpiled
                 
     """
 
-    return mirror_edesign.qiskit_circuits_to_mirror_edesign(qk_circs, mirroring_kwargs_dict)
+    return _mirror.qiskit_circuits_to_mirror_edesign(qk_circs, mirroring_kwargs_dict)
 
 
-def qiskit_circuits_to_fullstack_mirror_edesign(qk_circs, #not transpiled
-                                                    qk_backend=None,
-                                                    coupling_map=None,
-                                                    basis_gates=None,
-                                                    transpiler_kwargs_dict={},
-                                                    mirroring_kwargs_dict={},
-                                                    num_transpilation_attempts=100,
-                                                    return_qiskit_time=False
-                                                    ):
+def fullstack_mirror_edesign(qk_circs, #not transpiled
+                            qk_backend=None,
+                            coupling_map=None,
+                            basis_gates=None,
+                            transpiler_kwargs_dict={},
+                            mirroring_kwargs_dict={},
+                            num_transpilation_attempts=100,
+                            return_qiskit_time=False
+                            ):
 
     """
     Create a full-stack benchmark from high-level Qiskit circuits.
@@ -137,7 +132,7 @@ def qiskit_circuits_to_fullstack_mirror_edesign(qk_circs, #not transpiled
                 
     """
 
-    return mirror_edesign.qiskit_circuits_to_fullstack_mirror_edesign(qk_circs, #not transpiled
+    return _mirror.qiskit_circuits_to_fullstack_mirror_edesign(qk_circs, #not transpiled
                                                     qk_backend,
                                                     coupling_map,
                                                     basis_gates,
@@ -148,14 +143,14 @@ def qiskit_circuits_to_fullstack_mirror_edesign(qk_circs, #not transpiled
                                                     )
 
 
-def qiskit_circuits_to_svb_mirror_edesign(qk_circs,
-                                              aggregate_subcircs,
-                                              width_depth_dict,
-                                              coupling_map,
-                                              instruction_durations,
-                                              subcirc_kwargs_dict={},
-                                              mirroring_kwargs_dict={}
-                                              ): # qk_circs must already be transpiled to the device
+def svb_mirror_edesign(qk_circs,
+                        aggregate_subcircs,
+                        width_depth_dict,
+                        coupling_map,
+                        instruction_durations,
+                        subcirc_kwargs_dict={},
+                        mirroring_kwargs_dict={}
+                        ): # qk_circs must already be transpiled to the device
     
     """
     Create a subcircuit benchmark from transpiled Qiskit circuits.
@@ -229,7 +224,7 @@ def qiskit_circuits_to_svb_mirror_edesign(qk_circs,
 
     """
 
-    return mirror_edesign.qiskit_circuits_to_svb_mirror_edesign(qk_circs,
+    return _mirror.qiskit_circuits_to_svb_mirror_edesign(qk_circs,
                                               aggregate_subcircs,
                                               width_depth_dict,
                                               coupling_map,
@@ -281,7 +276,7 @@ def calculate_mirror_benchmark_results(unmirrored_design, mirrored_data,
         
         """
 
-    return vbdataframe.VBDataFrame.from_mirror_experiment(unmirrored_design, mirrored_data,
+    return _vbdf.VBDataFrame.from_mirror_experiment(unmirrored_design, mirrored_data,
                                                           dropped_gates,
                                                           bootstrap,
                                                           num_bootstraps,
