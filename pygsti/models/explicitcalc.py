@@ -191,7 +191,7 @@ class ExplicitOpModelCalc(object):
                     delta = delta @ P
                 if invP is not None:
                     delta = invP @ delta
-                val = _np.linalg.norm(delta.flatten())
+                val = _np.linalg.norm(delta)
                 d += wt * val**2
                 nSummands += wt * (gate.dim)**2
 
@@ -206,7 +206,7 @@ class ExplicitOpModelCalc(object):
                 other = other_calc.effects[lbl].to_dense()
                 delta = evec - other
                 delta = delta @ P
-                val = _np.linalg.norm(delta.flatten())
+                val = _np.linalg.norm(delta)
                 d += wt * val**2
                 nSummands += wt * Evec.dim
 
