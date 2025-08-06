@@ -16,15 +16,9 @@ if TYPE_CHECKING:
     import cvxpy as cp
 
 import numpy as np
-import scipy.linalg as la
 
 from pygsti.tools import basistools as bt
 from pygsti.tools import jamiolkowski as jam
-from pygsti.tools import lindbladtools as lt
-from pygsti.tools import matrixtools as mt
-from pygsti.baseobjs import basis as pgb
-from pygsti.baseobjs.basis import Basis, ExplicitBasis, DirectSumBasis
-
 
 try:
     import cvxpy as cp
@@ -40,6 +34,9 @@ def diamond_norm_model_jamiolkowski(J):
     # return a model for computing the diamond norm.
     #
     # Uses the primal SDP from arXiv:1207.5726v2, Sec 3.2
+    #
+    # Throughout comments in this function, "A.dag" is the 
+    # Hermitian adjoint (complex conjugate transpose).
     #
     # Maximize 1/2 ( < J, X > + < J.dag, X.dag > )
     # Subject to  [[ I otimes rho0,       X        ],
