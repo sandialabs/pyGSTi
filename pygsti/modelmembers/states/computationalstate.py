@@ -22,6 +22,7 @@ from pygsti.evotypes import Evotype as _Evotype
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
+from pygsti import SpaceT
 
 try:
     from pygsti.tools import fastcalc as _fastcalc
@@ -145,7 +146,7 @@ class ComputationalBasisState(_State, _NoErrorGeneratorInterface):
         rep = evotype.create_computational_state_rep(self._zvals, basis, state_space)
         _State.__init__(self, rep, evotype)
 
-    def to_dense(self, on_space='minimal', scratch=None):
+    def to_dense(self, on_space: SpaceT='minimal', scratch=None):
         """
         Return this state vector as a (dense) numpy array.
 
@@ -167,8 +168,8 @@ class ComputationalBasisState(_State, _NoErrorGeneratorInterface):
         numpy.ndarray
         """
         from .staticpurestate import StaticPureState as _StaticPureState
-        v0 = _StaticPureState(_np.array((1, 0), complex), basis='pp', evotype=self._evotype).to_dense('minimal')
-        v1 = _StaticPureState(_np.array((0, 1), complex), basis='pp', evotype=self._evotype).to_dense('minimal')
+        v0 = _StaticPureState(_np.array((1, 0), complex), basis='pp', evotype=self._evotype).to_dense("minimal")
+        v1 = _StaticPureState(_np.array((0, 1), complex), basis='pp', evotype=self._evotype).to_dense("minimal")
         factor_dim = len(v0)
         v = (v0, v1)
 

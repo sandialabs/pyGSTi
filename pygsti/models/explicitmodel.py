@@ -23,6 +23,7 @@ from pygsti.models import model as _mdl, gaugegroup as _gg
 from pygsti.models.memberdict import OrderedMemberDict as _OrderedMemberDict
 from pygsti.models.layerrules import LayerRules as _LayerRules
 from pygsti.models.modelparaminterposer import ModelParamsInterposer as _ModelParamsInterposer
+from pygsti.models.fogistore import FirstOrderGaugeInvariantStore as _FirstOrderGaugeInvariantStore
 from pygsti.models.gaugegroup import GaugeGroup as _GaugeGroup
 from pygsti.forwardsims.forwardsim import ForwardSimulator as _FSim
 from pygsti.forwardsims import matrixforwardsim as _matrixfwdsim
@@ -43,6 +44,7 @@ from pygsti.tools import optools as _ot
 from pygsti.tools import fogitools as _fogit
 from pygsti.tools import slicetools as _slct
 from pygsti.tools import listtools as _lt
+from pygsti import SpaceT
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
 
 
@@ -1529,7 +1531,7 @@ class ExplicitOpModel(_mdl.OpModel):
                     #    observed_sslbls.update(sslbls)
 
                 if gn not in gate_unitaries or gate_unitaries[gn] is None:
-                    U = _ot.superop_to_unitary(op.to_dense('HilbertSchmidt'), self.basis) \
+                    U = _ot.superop_to_unitary(op.to_dense("HilbertSchmidt"), self.basis) \
                         if (op is not None) else None  # U == None indicates "unknown, up until this point"
 
                     Ulocal = extract_unitary(U, all_sslbls, sslbls)
@@ -1603,7 +1605,9 @@ class ExplicitOpModel(_mdl.OpModel):
                       'default_gauge_group': (self.default_gauge_group.to_nice_serialization()
                                               if (self.default_gauge_group is not None) else None),
                       'parameter_interposer': (self._param_interposer.to_nice_serialization()
-                                               if (self._param_interposer is not None) else None)
+                                               if (self._param_interposer is not None) else None),
+                      'fogi_store': (self.fogi_store.to_nice_serialization()
+                                               if (self.fogi_store is not None) else None)
                       })
 
         mmgraph = self.create_modelmember_graph()
@@ -1619,6 +1623,8 @@ class ExplicitOpModel(_mdl.OpModel):
             if (state['default_gauge_group'] is not None) else None
         param_interposer = _ModelParamsInterposer.from_nice_serialization(state['parameter_interposer']) \
             if (state['parameter_interposer'] is not None) else None
+        fogi_store = _FirstOrderGaugeInvariantStore.from_nice_serialization(state['fogi_store']) \
+            if (state['fogi_store'] is not None) else None
         param_labels = state.get('parameter_labels', None)
         param_bounds = state.get('parameter_bounds', None)
 
@@ -1637,6 +1643,7 @@ class ExplicitOpModel(_mdl.OpModel):
         mdl._clean_paramvec()
         mdl.default_gauge_group = default_gauge_group
         mdl.param_interposer = param_interposer
+        mdl.fogi_store = fogi_store
 
         Np = len(mdl._paramlbls)  # _clean_paramvec sets up ._paramlbls so its length == # of params
         if param_labels and len(param_labels) == Np:

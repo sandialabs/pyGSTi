@@ -35,6 +35,7 @@ from pygsti.baseobjs.basis import (
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LocalElementaryErrorgenLabel
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
+from pygsti import SpaceT
 
 from typing import Union, Optional
 BasisLike = Union[str, _Basis]
@@ -1061,8 +1062,8 @@ def instrument_diamonddist(a, b, mx_basis):
         aa, bb = i * adim, (i + 1) * adim
         for j in range(nComps):
             cc, dd = j * adim, (j + 1) * adim
-            composite_op[aa:bb, cc:dd] = a[clbl].to_dense(on_space='HilbertSchmidt')
-            composite_top[aa:bb, cc:dd] = b[clbl].to_dense(on_space='HilbertSchmidt')
+            composite_op[aa:bb, cc:dd] = a[clbl].to_dense("HilbertSchmidt")
+            composite_top[aa:bb, cc:dd] = b[clbl].to_dense("HilbertSchmidt")
     return diamonddist(composite_op, composite_top, sumbasis)
 
 
@@ -2628,8 +2629,8 @@ def project_to_target_eigenspace(model, target_model, eps=1e-6):
         #Essentially, we want to replace the eigenvalues of `tgt_gate`
         # (and *only* the eigenvalues) with those of `gate`.  This is what
         # a "best gate gauge transform does" (by definition)
-        gate_mx = gate.to_dense(on_space='minimal')
-        Ugauge = compute_best_case_gauge_transform(gate_mx, tgt_gate.to_dense(on_space='minimal'))
+        gate_mx = gate.to_dense("minimal")
+        Ugauge = compute_best_case_gauge_transform(gate_mx, tgt_gate.to_dense("minimal"))
         Ugauge_inv = _np.linalg.inv(Ugauge)
 
         epgate = _np.dot(Ugauge, _np.dot(gate_mx, Ugauge_inv))

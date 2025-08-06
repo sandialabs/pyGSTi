@@ -15,7 +15,7 @@ import numpy as _np
 # import functools as _functools
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from ...tools import matrixtools as _mt
-
+from pygsti import SpaceT
 
 class EffectRep:
     """Any representation of an "effect" in the sense of a POVM."""
@@ -44,7 +44,7 @@ class EffectRepConjugatedState(EffectRep):
         # can assume state is a StateRep and self.state_rep is
         return _np.dot(self.state_rep.data, state.data)  # not vdot b/c *real* data
 
-    def to_dense(self, on_space):
+    def to_dense(self, on_space: SpaceT):
         return self.state_rep.to_dense(on_space)
 
 
@@ -79,7 +79,7 @@ class EffectRepComputational(EffectRep):
         Edense = self.to_dense('HilbertSchmidt', scratch)
         return _np.dot(Edense, state.data)  # not vdot b/c data is *real*
 
-    def to_dense(self, on_space, outvec=None):
+    def to_dense(self, on_space: SpaceT, outvec=None):
         if on_space not in ('minimal', 'HilbertSchmidt'):
             raise ValueError("'densitymx' evotype cannot produce Hilbert-space ops!")
         return _mt.zvals_int64_to_dense(self.zvals_int, self.nfactors, outvec, False, self.abs_elval)
@@ -105,7 +105,7 @@ class EffectRepTensorProduct(EffectRep):
         super(EffectRepTensorProduct, self).__init__(state_space)
         self.factor_effects_have_changed()
 
-    def to_dense(self, on_space, outvec=None):
+    def to_dense(self, on_space: SpaceT, outvec=None):
 
         if on_space not in ('minimal', 'HilbertSchmidt'):
             raise ValueError("'densitymx' evotype cannot produce Hilbert-space ops!")
