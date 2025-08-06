@@ -612,13 +612,21 @@ class ExplicitOpModelCalc(object):
 
         u,s,_ = _la.svd(orthog_to, full_matrices=True, compute_uv=True)
         TOL = 1e-7
-        r = _np.count_nonzero(s >= TOL*s[0])
-        gauge_space    = u[:, :r]
-        nongauge_space = u[:, r:] 
+        numerical_rank = _np.count_nonzero(s >= TOL*s[0])
+        gauge_space    = u[:, :numerical_rank]
+        nongauge_space = u[:, numerical_rank:] 
 
-        #OLD: nongauge_space = _mt.nullspace(orthog_to.T) #cols are non-gauge directions
+        """NOTE: our use of SVD above.
 
-        assert(nongauge_space.shape[0] == gauge_space.shape[0] == nongauge_space.shape[1] + gauge_space.shape[1])
+        We used to use nullspace_qr instead of SVD, and we used to have a dimension check
+        at the end of this function to ensure that the span of gauge and non-gauge space
+        gave us the full space in which these subspaces lived.
+
+        We switched to SVD because, if item_weights are not None, it's possible that the
+        `metric` matrix is singular, which causes orthog_to to be rank-deficient (i.e.,
+        neither its rows nor its columns are linearly independent). 
+        """
+
         return nongauge_space, gauge_space
 
     #UNUSED - just used for checking understanding of where the nonzero logL Hessian on gauge space comes from.
