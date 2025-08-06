@@ -25,7 +25,11 @@ from pygsti.report.reportableqty import ReportableQty as _ReportableQty
 from pygsti.report import modelfunction as _modf
 from pygsti import algorithms as _alg
 from pygsti import tools as _tools
-from pygsti.baseobjs.basis import Basis as _Basis, DirectSumBasis as _DirectSumBasis
+from pygsti.baseobjs.basis import (
+    Basis as _Basis,
+    DirectSumBasis as _DirectSumBasis,
+    BuiltinBasis as _BuiltinBasis
+)
 from pygsti.baseobjs.label import Label as _Lbl
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LEEL
 from pygsti.modelmembers.operations.lindbladcoefficients import LindbladCoefficientBlock as _LindbladCoefficientBlock
@@ -1065,9 +1069,11 @@ def subspace_diamonddist(op_a, op_b, basis):
 SubspaceDiamonddist = _modf.opsfn_factory(subspace_diamonddist)
 
 def pergate_leakrate_reduction(op, ignore, mx_basis, reduction):
-    lfb = _tools.leakage_friendly_basis_2plus1()
+    assert op.shape == (9, 9)
+    lfb = _BuiltinBasis('l2p1', 9)
     op_lfb = _tools.change_basis(op, mx_basis, lfb)
-    leakage_effect_superket = op_lfb[-1,:4]
+    elinds = lfb.elindlookup
+    leakage_effect_superket = op_lfb[elinds['L'],['I','X','Y','Z']]
     leakage_effect = _tools.vec_to_stdmx(leakage_effect_superket, 'pp')
     leakage_rates = _np.linalg.eigvalsh(leakage_effect)
     return reduction(leakage_rates)
@@ -1082,9 +1088,11 @@ PerGateLeakRateMax = _modf.opsfn_factory(pergate_leakrate_max)
 PerGateLeakRateMin = _modf.opsfn_factory(pergate_leakrate_min)
 
 def pergate_seeprate(op, ignore, mx_basis):
-    lfb = _tools.leakage_friendly_basis_2plus1()
+    assert op.shape == (9, 9)
+    lfb = _BuiltinBasis('l2p1', 9)
     op_lfb = _tools.change_basis(op, mx_basis, lfb)
-    seeprate = op_lfb[0,-1]
+    elinds = lfb.elindlookup
+    seeprate = op_lfb[elinds['I'], elinds['L']]
     return seeprate
 
 PerGateSeepRate = _modf.opsfn_factory(pergate_seeprate)
