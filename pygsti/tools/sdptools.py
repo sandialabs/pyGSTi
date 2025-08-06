@@ -11,14 +11,19 @@ Functions for constructing semidefinite programming models
 #***************************************************************************************************
 
 from __future__ import annotations
-from typing import TYPE_CHECKING, List, Tuple
-if TYPE_CHECKING:
-    import cvxpy as cp
 
 import numpy as np
 
-from pygsti.tools import basistools as bt
-from pygsti.tools import jamiolkowski as jam
+from typing import Union, List, Tuple, TYPE_CHECKING
+if TYPE_CHECKING:
+    import cvxpy as cp
+    ExpressionLike = Union[cp.Expression, np.ndarray]
+
+from pygsti.baseobjs import Basis
+from pygsti.tools.basistools import stdmx_to_vec
+from pygsti.tools.jamiolkowski import jamiolkowski_iso
+
+BasisLike = Union[str, Basis]
 
 try:
     import cvxpy as cp
@@ -30,7 +35,7 @@ except:
     CVXPY_ENABLED = False
 
 
-def diamond_norm_model_jamiolkowski(J):
+def diamond_norm_model_jamiolkowski(J: ExpressionLike) -> tuple[cp.Problem, List[cp.Variable]]:
     # return a model for computing the diamond norm.
     #
     # Uses the primal SDP from arXiv:1207.5726v2, Sec 3.2
@@ -101,7 +106,7 @@ def diamond_norm_model_jamiolkowski(J):
 def diamond_norm_canon(arg : cp.Expression, basis) -> Tuple[cp.Expression, List[cp.Constraint]]:
     """
     This more or less implements canonicalization of the nonlinear expression
-    \|arg\|_{\diamond} into CVXPY Constraints and a representation of its epigraph.
+    \\|arg\\|_{\\diamond} into CVXPY Constraints and a representation of its epigraph.
     The canonicalization isn't quite "complete" in CVXPY's usual sense, which would
     require that the epigraph is affine and that no structured variables (like
     Hermitian matrices) are used.
@@ -111,7 +116,7 @@ def diamond_norm_canon(arg : cp.Expression, basis) -> Tuple[cp.Expression, List[
     small_d = int(np.sqrt(d))
     assert d == small_d**2
     assert arg.shape == (d, d)
-    Jarg = jam.jamiolkowski_iso(arg, basis, basis, normalized=False)
+    Jarg = jamiolkowski_iso(arg, basis, basis, normalized=False)
     Y0 = cp.Variable(shape=(d, d), hermitian=True)
     Y1 = cp.Variable(shape=(d, d), hermitian=True)
     bmat = cp.bmat([
@@ -127,9 +132,9 @@ def diamond_norm_canon(arg : cp.Expression, basis) -> Tuple[cp.Expression, List[
     return epi, constraints
 
 
-def cptp_superop_variable(purestate_dim: int, basis) -> Tuple[cp.Expression, List[cp.Constraint]]:
+def cptp_superop_variable(purestate_dim: int, basis: BasisLike) -> Tuple[cp.Expression, List[cp.Constraint]]:
     d = purestate_dim ** 2
-    basis = pgb.Basis.cast(basis, d)
+    basis = Basis.cast(basis, d)
     constraints = []
     if basis.first_element_is_identity:
         toprow = np.zeros((1,d))
@@ -139,7 +144,7 @@ def cptp_superop_variable(purestate_dim: int, basis) -> Tuple[cp.Expression, Lis
     else:
         X = cp.Variable((d, d))
         matI = np.eye(purestate_dim)
-        vecI = bt.stdmx_to_vec(matI, basis)
+        vecI = stdmx_to_vec(matI, basis)
         constraints.append(X.T @ vecI == vecI)
         """
         Let X be the process matrix for a gate "G". We have
@@ -149,12 +154,12 @@ def cptp_superop_variable(purestate_dim: int, basis) -> Tuple[cp.Expression, Lis
                            = < X.T @ vec(I), vec(rho) >.
         Therefore tr(G(rho)) = tr(rho) for all rho iff X.T @ vec(I) == vec(I).
         """
-    J = jam.jamiolkowski_iso(X, basis, basis, normalized=True)
+    J = jamiolkowski_iso(X, basis, basis, normalized=True)
     constraints.append(J >> 0)
     return X, constraints
 
 
-def diamond_distance_projection_model(superop: np.ndarray, basis: Basis, leakfree=False, seepfree=False, n_leak=0, cptp=True, subspace_diamond=False):
+def diamond_distance_projection_model(superop: np.ndarray, basis: Basis, leakfree: bool=False, seepfree: bool=False, n_leak: int=0, cptp: bool=True, subspace_diamond: bool=False):
     assert CVXPY_ENABLED
     dim_mixed = superop.shape[0]
     dim_pure = int(np.sqrt(dim_mixed))
@@ -199,19 +204,19 @@ def root_fidelity_canon(sigma: cp.Expression, rho: cp.Expression) -> Tuple[cp.Ex
     square on the trace. We'll call the unsquared version the *root fidelity,*
     and denote it by
 
-        \sqrt{F}(sigma, rho) = (F(sigma, rho))^{1/2}.
+        \\sqrt{F}(sigma, rho) = (F(sigma, rho))^{1/2}.
     
     The root fidelity is jointly concave (Neilson and Chuang, Exercise 9.19).
     In fact, it admits the following semidefinite programming characterization
 
-        \sqrt{F}(sigma, rho) = Maximize real(tr(X)) 
+        \\sqrt{F}(sigma, rho) = Maximize real(tr(X)) 
                                s.t. [[sigma, X],[X.T.conj(), rho]] >> 0
 
     -- see Section 7.1.3 of Killoran's PhD thesis, "Entanglement quantification
     and quantum benchmarking of optical communication devices."
 
     This function returns a pair (expr, constraints) where expr is the hypograph
-    variable for \sqrt{F}(sigma, rho) and constraints is a list of CVXPY Constraint
+    variable for \\sqrt{F}(sigma, rho) and constraints is a list of CVXPY Constraint
     objects used in the semidefinite representation of the hypograph.
     """
     t = cp.Variable()
