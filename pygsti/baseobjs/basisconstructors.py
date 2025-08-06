@@ -697,12 +697,28 @@ def gm_labels(matrix_dim):
     lblList.extend(["Z_{%d}" % (k) for k in range(1, d)])
     return lblList
 
-def lf_labels(matrix_dim):
+def lf_labels(matrix_dim: int) -> tuple[str,...]:
     if matrix_dim != 3:
         raise NotImplementedError()
-    return ("I", "X", "Y", "Z", "LX0", "LX1", "LY0", "LY1", "L")
+    # Divides the underlying Hilbert space into levels (0, 1, L), where (0, 1)
+    # is the computational subspace and (L,) is leakage space.
+    lbls = (
+        # The first element is proportional to the identity on the computational subspace.
+        "I",
+        # The next seven elements also appear in the Gell-Mann basis when matrix_dim == 3.
+        "X",   # --> X_{0,1}
+        "Y",   # --> Y_{0,1}
+        "Z",   # --> Z_{1}
+        "LX0", # --> X_{0,2}
+        "LX1", # --> X_{1,2}
+        "LY0", # --> Y_{0,2}
+        "LY1", # --> Y_{1,2}
+        # The ninth and final element is proportional to the identity on leakage space.
+        "L"
+    )
+    return lbls
 
-def lf_matrices(matrix_dim):
+def lf_matrices(matrix_dim: int) -> list[_np.ndarray]:
     """ 
     This basis is used to isolate the parts of Hilbert-Schmidt space that act on
     the computational subspace induced from a partition of 3-dimensional complex
