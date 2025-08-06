@@ -26,8 +26,6 @@ from pygsti.baseobjs.protectedarray import ProtectedArray as _ProtectedArray
 from pygsti.modelmembers.torchable import Torchable as _Torchable
 
 
-
-
 class FullTPOp(_DenseOperator, _Torchable):
     """
     A trace-preserving operation matrix.
@@ -175,7 +173,6 @@ class FullTPOp(_DenseOperator, _Torchable):
         dim, t_const = sd
         t_param_mat = t_param.view(dim - 1, dim)
         t = _torch.row_stack((t_const, t_param_mat))
-        # TODO: cache the row of all zeros?
         return t
 
 

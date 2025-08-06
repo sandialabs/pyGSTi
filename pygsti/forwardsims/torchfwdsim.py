@@ -75,7 +75,7 @@ class StatelessModel:
     def __init__(self, model: ExplicitOpModel, layout: CircuitOutcomeProbabilityArrayLayout):
         circuits = []
         self.outcome_probs_dim = 0
-        #TODO: Refactor this to use the bulk_expand_instruments_and_separate_povm codepath
+        # TODO: Refactor this to use the bulk_expand_instruments_and_separate_povm codepath
         for _, circuit, outcomes in layout.iter_unique_circuits():
             expanded_circuits = model.expand_instruments_and_separate_povm(circuit, outcomes)
             if len(expanded_circuits) > 1:
@@ -110,9 +110,9 @@ class StatelessModel:
             param_data = (lbl, param_type) + (obj.stateless_data(),)
             self.param_metadata.append(param_data)
 
-        self.params_dim = None 
-        self.free_param_sizes = None
-        self.default_to_reverse_ad = None
+        self.params_dim = []
+        self.free_param_sizes = []
+        self.default_to_reverse_ad = False
         # ^ Those are set in get_free_params
         return
     
@@ -165,17 +165,6 @@ class StatelessModel:
         fp in free_params. This can be done by calling fp.requires_grad_(True) before calling
         this function.
         """
-        # The closest analog to this function in tgst is the first couple lines in 
-        # tgst.gst.MachineModel.circuit_outcome_probs(...).
-        # Those lines just assign values a-la new_machine.params[i][:] = fp[:].
-        #
-        #   The variables new_machine.params[i] are just references to Tensors
-        #   that are attached to tgst.abstractions objects (Gate, Measurement, State).
-        #
-        #   Calling abstr.rep_array for a given abstraction performs a computation on
-        #   its attached Tensor, and that computation is roughly analogous to 
-        #   torchable.torch_base(...).
-        #
         assert len(free_params) == len(self.param_metadata)
          # ^ A sanity check that we're being called with the correct number of arguments.
         torch_bases = dict()
@@ -220,40 +209,9 @@ class StatelessModel:
             for fp in free_params:
                 fp.requires_grad_(True)
 
-        torch_bases = dict()
-        for i, val in enumerate(free_params):
-            label, type_handle, stateless_data = self.param_metadata[i]
-            param_t = type_handle.torch_base(stateless_data, val)
-            torch_bases[label] = param_t
-
-        probs = []
-        for c in self.circuits:
-            superket = torch_bases[c.prep_label]
-            superops = [torch_bases[ol] for ol in c.op_labels]
-            povm_mat = torch_bases[c.povm_label]
-            for superop in superops:
-                superket = superop @ superket
-            circuit_probs = povm_mat @ superket
-            probs.append(circuit_probs)
-        probs = torch.concat(probs)
+        torch_bases = self.get_torch_bases(*free_params)
+        probs = self.circuit_probs_from_torch_bases(torch_bases)
         return probs
-    
-    def circuit_probs_from_concat_free_params(self, concat_freeparams, enable_backward=False):
-        # concat_freeparams is a Tensor of size self.params_dim
-        # we want to split it into a tuple of Tensors
-        if enable_backward:
-            concat_freeparams.require_grad_(True)
-        split_freeparams = []
-        start = 0
-        for fp_size in self.free_param_sizes:
-            stop = start + fp_size
-            split_freeparams.append(concat_freeparams[start:stop])
-            start = stop
-        split_freeparams = tuple(split_freeparams)
-        # Note: if enabled_backward was True, then the components of split_freeparams
-        # will have inherited the requires_grad==True condition. So we always use
-        # enable_backward=False in the function call below.
-        return self.circuit_probs_from_free_params(self, *split_freeparams, enable_backward=False)
 
 
 class TorchForwardSimulator(ForwardSimulator):
@@ -295,28 +253,15 @@ class TorchForwardSimulator(ForwardSimulator):
 
         argnums = tuple(range(len(slm.param_metadata)))
         if slm.default_to_reverse_ad:
-            # Then slm.circuit_probs_from_free_params will automatically construct the
-            # torch_base dict to support reverse-mode AD.
-            # print('USING REVERSE-MODE AD')
-            J_func = torch.func.jacrev(slm.circuit_probs_from_free_params, argnums=argnums)
+            J_func = torch.func.jacrev(slm.circuit_probs_from_free_params, argnums=argnums) # type: ignore
         else:
-            # print('USING FORWARD-MODE AD')
-            # Then slm.circuit_probs_from_free_params will automatically skip the extra
-            # steps needed for torch_base to support reverse-mode AD.
-            J_func = torch.func.jacfwd(slm.circuit_probs_from_free_params, argnums=argnums)
+            J_func = torch.func.jacfwd(slm.circuit_probs_from_free_params, argnums=argnums) # type: ignore
         # ^ Note that this _bulk_fill_dprobs function doesn't accept parameters that
         #   could be used to override the default behavior of the StatelessModel. If we
         #   have a need to override the default in the future then we'd need to override
         #   the ForwardSimulator function(s) that call self._bulk_fill_dprobs(...).
 
-        # import time
-        # print('Calling J_func at current free_params')
-        # tic = time.time()
-        # with profile(activities=[ProfilerActivity.CPU], profile_memory=True) as prof:
         J_val = J_func(*free_params)
-        # toc = time.time()
-        # print()
-        # print(f'Done! --> {toc - tic} seconds elapsed')
         J_val = torch.column_stack(J_val)
         array_to_fill[:] = J_val.cpu().detach().numpy()
         return
