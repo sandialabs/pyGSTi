@@ -683,7 +683,7 @@ class OpModel(Model):
             if not self.dirty and obj.dirty:
                 raise ValueError(f"{str(lbl)} is dirty but Model.dirty=False!!")
 
-    def _clean_paramvec(self):
+    def _clean_paramvec(self, debug=False):
         """ Updates _paramvec corresponding to any "dirty" elements, which may
             have been modified without out knowing, leaving _paramvec out of
             sync with the element's internal data.  It *may* be necessary
@@ -726,7 +726,8 @@ class OpModel(Model):
                         else:
                             raise e  # we don't know what went wrong.
                     chk_norm = _np.linalg.norm(ops_paramvec[obj.gpindices] - w)
-                    print(f"{lbl} is dirty! vec = {w}, chk_norm = {chk_norm} gpindices = {obj.gpindices}")
+                    if debug:
+                        print(f"{lbl} is dirty! vec = {w}, chk_norm = {chk_norm} gpindices = {obj.gpindices}")
                     if (not _np.isfinite(chk_norm)) or chk_norm > TOL:
                         ops_paramvec[obj.gpindices] = w
                     obj.dirty = False
