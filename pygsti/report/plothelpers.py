@@ -2,7 +2,7 @@
 Helper Functions for generating plots
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -280,7 +280,8 @@ def drift_maxtvd_matrices(gsplaq, drifttuple):
     return ret
 
 
-def rated_n_sigma(dataset, model, circuits, objfn_builder, np=None, wildcard=None, return_all=False, comm=None):
+def rated_n_sigma(dataset, model, circuits, objfn_builder, np=None, wildcard=None, return_all=False, comm=None,
+                  mdc_store=None):
     """
     Computes the number of standard deviations of model violation between `model` and `data`.
 
@@ -322,6 +323,11 @@ def rated_n_sigma(dataset, model, circuits, objfn_builder, np=None, wildcard=Non
         When not None, an MPI communicator for distributing the computation
         across multiple processors.
 
+    mdc_store : ModelDatasetCircuitStore, optional (default None)
+        Optional argument to pass in pre-computed ModelDatasetCircuitStore
+        object to speed up the construction of the objective function
+        for evaluating model violation.
+
     Returns
     -------
     Nsig : float
@@ -342,7 +348,10 @@ def rated_n_sigma(dataset, model, circuits, objfn_builder, np=None, wildcard=Non
     if isinstance(objfn_builder, str):
         objfn_builder = _objfns.ObjectiveFunctionBuilder.create_from(objfn_builder)
 
-    objfn = objfn_builder.build(model, dataset, circuits, {'comm': comm})
+    if mdc_store is not None:
+        objfn = objfn_builder.build_from_store(mdc_store)
+    else:
+        objfn = objfn_builder.build(model, dataset, circuits, {'comm': comm})
     if wildcard:
         objfn.terms()  # objfn used within wildcard objective fn must be pre-evaluated
         objfn = _objfns.LogLWildcardFunction(objfn, model.to_vector(), wildcard)

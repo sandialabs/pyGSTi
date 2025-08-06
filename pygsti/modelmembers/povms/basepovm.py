@@ -2,7 +2,7 @@
 Defines the _BasePOVM class (a base class for other POVMs, not to be used independently)
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -21,7 +21,7 @@ from pygsti.modelmembers.povms.fulleffect import FullPOVMEffect as _FullPOVMEffe
 from pygsti.modelmembers.povms.povm import POVM as _POVM
 from pygsti.modelmembers import modelmember as _mm
 from pygsti.evotypes import Evotype as _Evotype
-from pygsti.baseobjs.statespace import StateSpace as _StateSpace
+from pygsti.baseobjs.statespace import StateSpace as _StateSpace, default_space_for_dim
 
 
 class _BasePOVM(_POVM):
@@ -67,7 +67,12 @@ class _BasePOVM(_POVM):
             self.complement_label = None
 
         if evotype is not None:
-            evotype = _Evotype.cast(evotype, items[0][1].state_space)  # e.g., resolve "default"
+            if state_space is None and isinstance(items[0][1], (_np.ndarray, list)):
+                evotype = _Evotype.cast(evotype, default_space_for_dim(len(items[0][1])))  # e.g., resolve "default"
+            elif state_space is not None:
+                evotype = _Evotype.cast(evotype, state_space)  # e.g., resolve "default"
+            else: #try to grab the state space from the first effect as a fall back.
+                evotype = _Evotype.cast(evotype, items[0][1].state_space)  # e.g., resolve "default"
 
         #Copy each effect vector and set it's parent and gpindices.
         # Assume each given effect vector's parameters are independent.
@@ -166,40 +171,6 @@ class _BasePOVM(_POVM):
         effects = {lbl: serial_memo[subm_serial_id]
                    for lbl, subm_serial_id in zip(mm_dict['effect_labels'], mm_dict['submembers'])}
         return cls(effects, mm_dict['evotype'], state_space)  # Note: __init__ call signature of derived classes
-
-    #def _reset_member_gpindices(self):
-    #    """
-    #    Sets gpindices for all non-complement items.  Assumes all non-complement
-    #    vectors have *independent* parameters (for now).
-    #    """
-    #    Np = 0
-    #    for k, effect in self.items():
-    #        if k == self.complement_label: continue
-    #        N = effect.num_params
-    #        pslc = slice(Np, Np + N)
-    #        if effect.gpindices != pslc:
-    #            effect.set_gpindices(pslc, self)
-    #        Np += N
-    #    self.Np = Np
-    #
-    #def _rebuild_complement(self, identity_for_complement=None):
-    #    """ Rebuild complement vector (in case other vectors have changed) """
-    #
-    #    if self.complement_label is not None and self.complement_label in self:
-    #        non_comp_effects = [v for k, v in self.items()
-    #                            if k != self.complement_label]
-    #
-    #        if identity_for_complement is None:
-    #            identity_for_complement = self[self.complement_label].identity
-    #
-    #        complement_effect = _ComplementPOVMEffect(
-    #            identity_for_complement, non_comp_effects)
-    #        complement_effect.set_gpindices(slice(0, self.Np), self)  # all parameters
-    #
-    #        #Assign new complement effect without calling our __setitem__
-    #        old_ro = self._readonly; self._readonly = False
-    #        _POVM.__setitem__(self, self.complement_label, complement_effect)
-    #        self._readonly = old_ro
 
     def __setitem__(self, key, value):
         if not self._readonly:  # when readonly == False, we're initializing

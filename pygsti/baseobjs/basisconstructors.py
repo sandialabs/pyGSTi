@@ -2,7 +2,7 @@
 Functions for creating the standard sets of matrices in the standard, Pauli, Gell-Mann, and qutrit bases
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -94,7 +94,7 @@ class MatrixBasisConstructor(object):
         real components.
     """
 
-    def __init__(self, longname, matrixgen_fn, labelgen_fn, real, first_element_is_identity):
+    def __init__(self, longname: str, matrixgen_fn, labelgen_fn, real: bool, first_element_is_identity):
         """
         Create a new MatrixBasisConstructor:
 
@@ -123,7 +123,7 @@ class MatrixBasisConstructor(object):
         self.real = real
         self.first_element_is_identity = first_element_is_identity
 
-    def matrix_dim(self, dim):
+    def matrix_dim(self, dim: int) -> int:
         """
         Helper function that converts a *vector-space* dimension `dim` to matrix-dimension by taking a sqrt.
 
@@ -140,7 +140,7 @@ class MatrixBasisConstructor(object):
         assert(d**2 == dim), "Matrix bases can only have dimension = perfect square (not %d)!" % dim
         return d
 
-    def labeler(self, dim, sparse):
+    def labeler(self, dim, sparse: bool) -> list[str]:
         """
         Get the labels of a basis to be constructed.
 
@@ -158,7 +158,7 @@ class MatrixBasisConstructor(object):
         """
         return self.labelgen_fn(self.matrix_dim(dim))
 
-    def constructor(self, dim, sparse):
+    def constructor(self, dim, sparse: bool):
         """
         Get the elements of a basis to be constructed.
 
@@ -178,7 +178,7 @@ class MatrixBasisConstructor(object):
         if sparse: els = [_sps.csr_matrix(el) for el in els]
         return els
 
-    def sizes(self, dim, sparse):
+    def sizes(self, dim, sparse: bool) -> tuple[int, int, tuple[int, int]]:
         """
         Get some relevant sizes/dimensions for constructing a basis.
 
@@ -222,7 +222,7 @@ class DiagonalMatrixBasisConstructor(MatrixBasisConstructor):
     a VectorBasisConstructor, but element are diagonal matrices rather than vectors)
     """
 
-    def constructor(self, dim, sparse):
+    def constructor(self, dim, sparse: bool):
         """
         Get the elements of a basis to be constructed.
 
@@ -245,7 +245,7 @@ class DiagonalMatrixBasisConstructor(MatrixBasisConstructor):
         if sparse: els = [_sps.csr_matrix(el) for el in els]
         return els
 
-    def sizes(self, dim, sparse):
+    def sizes(self, dim, sparse: bool):
         """
         Get some relevant sizes/dimensions for constructing a basis.
 
@@ -285,7 +285,7 @@ class SingleElementMatrixBasisConstructor(MatrixBasisConstructor):
     A constructor for a basis containing just a single element (e.g. the identity).
     """
 
-    def sizes(self, dim, sparse):
+    def sizes(self, dim, sparse: bool):
         """
         See docstring for :class:`MatrixBasisConstructor`
 
@@ -365,7 +365,7 @@ class VectorBasisConstructor(object):
         self.real = real
         self.first_element_is_identity = False  # only applies to matrix bases
 
-    def labeler(self, dim, sparse):
+    def labeler(self, dim, sparse: bool):
         """
         Get the labels of a basis to be constructed.
 
@@ -383,7 +383,7 @@ class VectorBasisConstructor(object):
         """
         return self.labelgen_fn(dim)
 
-    def constructor(self, dim, sparse):
+    def constructor(self, dim, sparse: bool):
         """
         Get the elements of a basis to be constructed.
 
@@ -403,7 +403,7 @@ class VectorBasisConstructor(object):
         assert(not sparse), "Sparse vector bases not supported (yet)"
         return els
 
-    def sizes(self, dim, sparse):
+    def sizes(self, dim, sparse: bool):
         """
         Get some relevant sizes/dimensions for constructing a basis.
 
@@ -441,7 +441,7 @@ class VectorBasisConstructor(object):
 def std_matrices(matrix_dim):
     """
     Get the elements of the matrix unit, or "standard", basis of matrix-dimension `matrix_dim`.
-    The matrices are ordered so that the row index changes the fastest.
+    The matrices are ordered so that the column index changes the fastest.
 
     Constructs the standard basis spanning the density-matrix space given by
     `matrix_dim` x `matrix_dim` matrices.
@@ -1045,11 +1045,8 @@ def cl_vectors(dim):
     list
         A list of `dim` numpy arrays each of shape (dim,).
     """
-    vecList = []
-    for i in range(dim):
-        v = _np.zeros(dim, 'd'); v[i] = 1.0
-        vecList.append(v)
-    return vecList
+    data = _np.eye(dim)
+    return [v for v in data]
 
 
 def cl_labels(dim):
@@ -1204,11 +1201,8 @@ def sv_vectors(dim):
     list
         A list of `dim` numpy arrays each of shape (dim,).
     """
-    vecList = []
-    for i in range(dim):
-        v = _np.zeros(dim, complex); v[i] = 1.0
-        vecList.append(v)
-    return vecList
+    data = _np.eye(dim, dtype=complex)
+    return [v for v in data]
 
 
 def sv_labels(dim):

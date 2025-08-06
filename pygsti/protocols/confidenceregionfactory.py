@@ -2,7 +2,7 @@
 Classes for constructing confidence regions
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -27,6 +27,7 @@ from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.objectivefns.objectivefns import PoissonPicDeltaLogLFunction as _PoissonPicDeltaLogLFunction
 from pygsti.objectivefns.objectivefns import Chi2Function as _Chi2Function
 from pygsti.objectivefns.objectivefns import FreqWeightedChi2Function as _FreqWeightedChi2Function
+from pygsti.models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
 
 
 # NON-MARKOVIAN ERROR BARS
@@ -482,9 +483,15 @@ class ConfidenceRegionFactory(_NicelySerializable):
             label = projection_type
 
         model = self.parent.models[self.model_lbl]
-        nongauge_space, gauge_space = model.compute_nongauge_and_gauge_spaces()
-        self.nNonGaugeParams = nongauge_space.shape[1]
-        self.nGaugeParams = model.num_params - self.nNonGaugeParams
+
+        if projection_type != 'none':
+            nongauge_space, gauge_space = model.compute_nongauge_and_gauge_spaces()
+            self.nNonGaugeParams = nongauge_space.shape[1]
+            self.nGaugeParams = model.num_params - self.nNonGaugeParams
+        else:
+            # no projection means we take the entire space as non-gauge
+            self.nNonGaugeParams = model.num_params
+            self.nGaugeParams = 0
 
         #Project Hessian onto non-gauge space
         if projection_type == 'none':
@@ -1068,11 +1075,18 @@ class ConfidenceRegionFactoryView(object):
             else:
                 # copy objects because we add eps to them below
                 typ, lbl = dependency
-                if typ == "gate": modelObj = mdl.operations[lbl]
-                elif typ == "prep": modelObj = mdl.preps[lbl]
-                elif typ == "povm": modelObj = mdl.povms[lbl]
-                elif typ == "instrument": modelObj = mdl.instruments[lbl]
-                else: raise ValueError("Invalid dependency type: %s" % typ)
+                if isinstance(mdl, _ExplicitOpModel):
+                    if typ == "gate": modelObj = mdl.operations[lbl]
+                    elif typ == "prep": modelObj = mdl.preps[lbl]
+                    elif typ == "povm": modelObj = mdl.povms[lbl]
+                    elif typ == "instrument": modelObj = mdl.instruments[lbl]
+                    else: raise ValueError("Invalid dependency type: %s" % typ)
+                else:
+                    if typ == "gate": modelObj = mdl.operation_blks['gates'][lbl]
+                    elif typ == "prep": modelObj = mdl.prep_blks['layers'][lbl]
+                    elif typ == "povm": modelObj = mdl.povm_blks['layers'][lbl]
+                    elif typ == "instrument": modelObj = mdl.instrument_blks['layers'][lbl]
+                    else: raise ValueError("Invalid dependency type: %s" % typ)
                 all_gpindices.extend(modelObj.gpindices_as_array())
 
         vec0 = mdl.to_vector()

@@ -2,7 +2,7 @@
 Defines the ElementaryErrorgenBasis class and supporting functionality.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -12,14 +12,16 @@ Defines the ElementaryErrorgenBasis class and supporting functionality.
 
 import numpy as _np
 import itertools as _itertools
-import collections as _collections
 
 from pygsti.baseobjs import Basis as _Basis
-from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GlobalElementaryErrorgenLabel
+from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GlobalElementaryErrorgenLabel,\
+LocalElementaryErrorgenLabel as _LocalElementaryErrorgenLabel
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.tools import optools as _ot
+from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 
 
-class ElementaryErrorgenBasis(object):
+class ElementaryErrorgenBasis(_NicelySerializable):
     """
     A basis for error-generator space defined by a set of elementary error generators.
 
@@ -28,50 +30,208 @@ class ElementaryErrorgenBasis(object):
     """
 
     def label_indices(self, labels, ok_if_missing=False):
-        """ TODO: docstring """
+        """ 
+        Return a list of indices into this basis's label list
+        for the specifed list of `ElementaryErrorgenLabels`.
+
+        Parameters
+        ----------
+        labels : list of `ElementaryErrorgenLabel`
+            A list of elementary error generator labels to extract the
+            indices of.
+        
+        ok_if_missing : bool
+           If True, then returns `None` instead of an integer when the given label is not present
+        """
         return [self.label_index(lbl, ok_if_missing) for lbl in labels]
 
     def __len__(self):
-        """ Number of elementary errorgen elements in this basis """
+        """ 
+        Number of elementary errorgen elements in this basis.
+        """
         return len(self.labels)
+    
 
+#helper function for checking label types.
+def _all_elements_same_type(lst):
+    if not lst:  # Check if the list is empty
+        return True  # An empty list can be considered to have all elements of the same type
+    
+    first_type = type(lst[0])  # Get the type of the first element
+    for element in lst:
+        if type(element) != first_type:
+            return False
+    return True
 
 class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
+    """
+    This basis object contains the information  necessary for building, 
+    storing and accessing a set of explicitly represented basis elements for a user
+    specified set of of elementary error generators.
+    """
 
-    def __init__(self, state_space, labels, basis1q=None):
-        # TODO: docstring - labels must be of form (sslbls, elementary_errorgen_lbl)
-        self._labels = tuple(labels) if not isinstance(labels, tuple) else labels
-        self._label_indices = _collections.OrderedDict([(lbl, i) for i, lbl in enumerate(self._labels)])
-        self.basis_1q = basis1q if (basis1q is not None) else _Basis.cast('pp', 4)
+    def __init__(self, state_space, labels, basis_1q=None):
+        """
+        Instantiate a new explicit elementary error generator basis. 
+
+        Parameters
+        ----------
+        state_space : `StateSpace`
+            An object describing the struture of the entire state space upon which the elements
+            of this error generator basis act.
+
+        labels : list or tuple of `ElementaryErrorgenLabel`
+            A list of elementary error generator labels for which basis elements will be
+            constructed.
+
+        basis1q : `Basis` or str, optional (default None)
+            A `Basis` object, or str which can be cast to one
+            corresponding to the single-qubit basis elements which
+            comprise the basis element labels for the values of the
+            `ElementaryErrorgenLabels` in `labels`.
+        """
+        super().__init__()
+        labels = tuple(labels)
+
+        #add an assertion that the labels are ElementaryErrorgenLabels and that all of the labels are the same type.
+        msg = '`labels` should be either LocalElementaryErrorgenLabel or GlobalElementaryErrorgenLabel objects.' 
+        if labels:
+            assert isinstance(labels[0], (_GlobalElementaryErrorgenLabel, _LocalElementaryErrorgenLabel)), msg
+            assert _all_elements_same_type(labels), 'All of the elementary error generator labels should be of the same type.'
+
+        self._labels = labels
+        self._label_indices = {lbl: i for i, lbl in enumerate(self._labels)}
+        
+        if isinstance(basis_1q, _Basis):
+            self._basis_1q = basis_1q
+        elif isinstance(basis_1q, str):
+            self._basis_1q = _Basis.cast(basis_1q, 4)
+        else:
+            self._basis_1q = _Basis.cast('PP', 4)
 
         self.state_space = state_space
         assert(self.state_space.is_entirely_qubits), "FOGI only works for models containing just qubits (so far)"
         sslbls = self.state_space.sole_tensor_product_block_labels  # all the model's state space labels
         self.sslbls = sslbls  # the "support" of this space - the qubit labels
-        self._cached_elements = None
+        
+        #Caching
+        self._cached_matrices = None
+        self._cached_dual_matrices = None
+        self._cached_supports = None
 
+    def __eq__(self, other):
+        """Compare self with other. Return true only if they are identical, including the order of their labels.
+
+        Args:
+            other (ExplicitElementaryErrorgenBasis): Error generator basis to compare against
+
+        Returns:
+            Boolean: True if they are identical, False otherwise
+        """
+        if not isinstance(other, ExplicitElementaryErrorgenBasis):
+            return False
+        return self.state_space.__eq__(other.state_space) and [label.__str__() for label in self.labels] == [label.__str__() for label in other.labels] and self._basis_1q.__eq__(other._basis_1q)
+    
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'state_space' : self.state_space._to_nice_serialization(),
+                      'labels' : [label.__str__() for label in self.labels],
+                      'label_type' : 'global' if isinstance(self.labels[0], _GlobalElementaryErrorgenLabel) else 'local',
+                      '_basis_1q' : self._basis_1q if isinstance(self._basis_1q, str) else self._basis_1q._to_nice_serialization()
+        })
+        return state
+    @classmethod
+    def from_nice_serialization(cls, state):
+        if state['label_type'] == 'global':
+            cast = _GlobalElementaryErrorgenLabel.cast
+        else:
+            cast = _LocalElementaryErrorgenLabel.cast
+        return cls(_StateSpace.from_nice_serialization(state['state_space']), [cast(label) for label in state['labels']], state['_basis_1q'] if isinstance(state['_basis_1q'], str) else _Basis.from_nice_serialization(state['_basis_1q']))
     @property
     def labels(self):
         return self._labels
+    
+    @property
+    def elemgen_supports(self):
+        """
+        Returns a tuple of tuples, each corresponding to the support
+        of the elementary error generators in this basis, returned in
+        the same order as they appear in `labels`.
+        """
+        if self._cached_supports is None:
+            if isinstance(self._labels[0], _GlobalElementaryErrorgenLabel):
+                self._cached_supports = tuple([elemgen_label.sslbls for elemgen_label in self._labels])
+            #Otherwise these are LocalElementaryErrorgenLabels
+            else:
+                #LocalElementaryErrorgenLabel doesn't have a sslbls attribute indicating
+                #support like GlobalElementaryErrorgenLabel does, do index into the `sslbls`
+                #attribute for this object.
+                self._cached_supports = tuple([tuple([self.sslbls[i] for i in elemgen_label.support_indices()]) 
+                                               for elemgen_label in self._labels])
+        return self._cached_supports
+    
+    #TODO: The implementations of some of the following properties are the same as in
+    #CompleteElementaryErrorgen, refactor some of this into the parent class.
+    @property
+    def elemgen_dual_matrices(self):
+        """
+        Returns a tuple of matrices, each corresponding to the 
+        of the matrix representation of the dual elementary error generators 
+        in this basis, returned in the same order as they appear in `labels`.
+        """
+        if self._cached_dual_matrices is None:
+            elemgen_types = [elemgen_label.errorgen_type for elemgen_label in self._labels]
+            elemgen_labels = [elemgen_label.basis_element_labels for elemgen_label in self._labels]
+            self._cached_dual_matrices = tuple(_ot.bulk_create_elementary_errorgen_nqudit_dual(
+                                            elemgen_types, elemgen_labels,
+                                            self._basis_1q, normalize=False, sparse=False,
+                                            tensorprod_basis=True))
+        return self._cached_dual_matrices
+    
+    @property
+    def elemgen_matrices(self):
+        """
+        Returns a tuple of matrices, each corresponding to the 
+        of the matrix representation of the elementary error generators 
+        in this basis, returned in the same order as they appear in `labels`.
+        """
+        if self._cached_matrices is None:
+            elemgen_types = [elemgen_label.errorgen_type for elemgen_label in self._labels]
+            elemgen_labels = [elemgen_label.basis_element_labels for elemgen_label in self._labels]
+            self._cached_matrices = tuple(_ot.bulk_create_elementary_errorgen_nqudit(
+                                            elemgen_types, elemgen_labels,
+                                            self._basis_1q, normalize=False, sparse=False,
+                                            tensorprod_basis=True))
+        return self._cached_matrices
+
+    @property
+    def elemgen_supports_and_dual_matrices(self):
+        """
+        Returns a tuple of tuples, each containing a tuple of support and a dual matrix representation
+        each corresponding to an elementary error generator in this basis, returned in the same 
+        order as they appear in `labels`.
+        """
+        return  tuple(zip(self.elemgen_supports, self.elemgen_dual_matrices))
 
     @property
     def elemgen_supports_and_matrices(self):
-        if self._cached_elements is None:
-            self._cached_elements = tuple(
-                ((elemgen_label.sslbls, _ot.lindblad_error_generator(
-                    elemgen_label.errorgen_type, elemgen_label.basis_element_labels,
-                    self.basis_1q, normalize=True, sparse=False, tensorprod_basis=True))
-                 for elemgen_label in self.labels))
-        return self._cached_elements
+        """
+        Returns a tuple of tuples, each containing a tuple of support and a matrix representation
+        each corresponding to an elementary error generator in this basis, returned in the same 
+        order as they appear in `labels`.
+        """
+        return  tuple(zip(self.elemgen_supports, self.elemgen_matrices))
 
     def label_index(self, label, ok_if_missing=False):
         """
-        TODO: docstring
+        Return the index of the specified elementary error generator label
+        in this basis' `labels` list.
         
         Parameters
         ----------
-        label
-        
+        label : `ElementaryErrorgenLabel`
+            Elementary error generator label to return index for.
+
         ok_if_missing : bool
            If True, then returns `None` instead of an integer when the given label is not present.
         """
@@ -79,67 +239,102 @@ class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
             return None
         return self._label_indices[label]
 
-    #@property
-    #def sslbls(self):
-    #    """ The support of this errorgen space, e.g., the qubits where its elements may be nontrivial """
-    #    return self.sslbls
-
-    def create_subbasis(self, must_overlap_with_these_sslbls):
+    def create_subbasis(self, sslbl_overlap):
         """
         Create a sub-basis of this basis by including only the elements
         that overlap the given support (state space labels)
+
+        Parameters
+        ----------
+        sslbl_overlap : list of sslbls
+            A list of state space labels corresponding to qudits the support of
+            an error generator must overlap with (i.e. the support must include at least
+            one of these qudits) in order to be included in this subbasis.
+
         """
-        sub_sslbls = set(must_overlap_with_these_sslbls)
+        #need different logic for LocalElementaryErrorgenLabels
+        if isinstance(self.labels[0], _GlobalElementaryErrorgenLabel):
+            sub_sslbls = set(sslbl_overlap)
+            def overlaps(sslbls):
+                ret = len(set(sslbls).intersection(sslbl_overlap)) > 0
+                if ret: sub_sslbls.update(sslbls)  # keep track of all overlaps
+                return ret
 
-        def overlaps(sslbls):
-            ret = len(set(sslbls).intersection(must_overlap_with_these_sslbls)) > 0
-            if ret: sub_sslbls.update(sslbls)  # keep track of all overlaps
-            return ret
+            sub_labels, sub_indices = zip(*[(lbl, i) for i, lbl in enumerate(self._labels)
+                                            if overlaps(lbl[0])])
+            sub_sslbls = sorted(sub_sslbls)
+            sub_state_space = self.state_space.create_subspace(sub_sslbls)
+        else:
+            sub_labels = []
+            for lbl in self.labels:
+                non_trivial_bel_indices = lbl.support_indices()
+                for sslbl in sslbl_overlap:
+                    if sslbl in non_trivial_bel_indices:
+                        sub_labels.append(lbl)
+                        break
+            #since using local labels keep the full original state space (the labels won't have gotten any shorter).
+            sub_state_space = self.state_space.copy()    
 
-        sub_labels, sub_indices = zip(*[(lbl, i) for i, lbl in enumerate(self._labels)
-                                        if overlaps(lbl[0])])
-
-        sub_state_space = self.state_space.create_subspace(sub_sslbls)
-        return ExplicitElementaryErrorgenBasis(sub_state_space, sub_labels, self.basis_1q)
+        return ExplicitElementaryErrorgenBasis(sub_state_space, sub_labels, self._basis_1q)
 
     def union(self, other_basis):
-        present_labels = self._label_indices.copy()  # an OrderedDict, indices don't matter here
-        if isinstance(other_basis, ExplicitElementaryErrorgenBasis):
-            present_labels.update(other_basis._label_indices)
-        else:
+        """
+        Create a new `ExplicitElementaryErrorgenBasis` corresponding to the union of
+        this basis with another.
 
-            for other_lbl in other_basis.labels:
-                if other_lbl not in present_labels:
-                    present_labels[other_lbl] = True
+        Parameters
+        ----------
+        other_basis : `ElementaryErrorgenBasis`
+            `ElementaryErrorgenBasis` to construct the union with.
+        """
+        #assert that these two bases have compatible label types.
+        msg = 'Incompatible `ElementaryErrrogenLabel` types, the two `ElementaryErrorgenBasis` should have the same label type.'
+        assert type(self._labels[0]) == type(other_basis.labels[0]), msg
 
+        #Get the union of the two bases labels.
+        union_labels = set(self._labels) | set(other_basis.labels)
         union_state_space = self.state_space.union(other_basis.state_space)
-        return ExplicitElementaryErrorgenBasis(union_state_space, tuple(present_labels.keys()), self.basis_1q)
+        return ExplicitElementaryErrorgenBasis(union_state_space, sorted(union_labels, key=lambda label: label.__str__()), self._basis_1q)
 
     def intersection(self, other_basis):
-        if isinstance(other_basis, ExplicitElementaryErrorgenBasis):
-            common_labels = tuple((lbl for lbl in self.labels if lbl in other_basis._label_indices))
-        else:
-            other_labels = set(other_basis.labels)
-            common_labels = tuple((lbl for lbl in self.labels if lbl in other_labels))
+        """
+        Create a new `ExplicitElementaryErrorgenBasis` corresponding to the intersection of
+        this basis with another.
 
+        Parameters
+        ----------
+        other_basis : `ElementaryErrorgenBasis`
+            `ElementaryErrorgenBasis` to construct the intersection with.
+        """
+
+        intersection_labels = set(self._labels) & set(other_basis.labels)
         intersection_state_space = self.state_space.intersection(other_basis.state_space)
-        return ExplicitElementaryErrorgenBasis(intersection_state_space, common_labels, self.basis_1q)
+        return ExplicitElementaryErrorgenBasis(intersection_state_space, sorted(intersection_labels, key=lambda label: label.__str__()), self._basis_1q)
 
     def difference(self, other_basis):
-        if isinstance(other_basis, ExplicitElementaryErrorgenBasis):
-            remaining_labels = tuple((lbl for lbl in self.labels if lbl not in other_basis._label_indices))
-        else:
-            other_labels = set(other_basis.labels)
-            remaining_labels = tuple((lbl for lbl in self.labels if lbl not in other_labels))
+        """
+        Create a new `ExplicitElementaryErrorgenBasis` corresponding to the difference of
+        this basis with another. (i.e. A basis consisting of the labels contained in this basis
+        but not the other)
 
-        remaining_state_space = self.state_space  # TODO: see if we can reduce this space based on remaining_labels?
-        return ExplicitElementaryErrorgenBasis(remaining_state_space, remaining_labels, self.basis_1q)
-
+        Parameters
+        ----------
+        other_basis : `ElementaryErrorgenBasis`
+            `ElementaryErrorgenBasis` to construct the difference with.
+        """
+        difference_labels = set(self._labels) - set(other_basis.labels)
+        #TODO: Making the state space equal to the true difference breaks some stuff in the FOGI code
+        #that relied on the old (kind of incorrect behavior). Revert back to old version temporarily.
+        #difference_state_space = self.state_space.difference(other_basis.state_space)
+        difference_state_space = self.state_space
+        return ExplicitElementaryErrorgenBasis(difference_state_space, sorted(difference_labels, key=lambda label: label.__str__()), self._basis_1q)
 
 class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
     """
-    Spanned by the elementary error generators of given type(s) (e.g. "Hamiltonian" and/or "other")
-    and with elements corresponding to a `Basis`, usually of Paulis.
+    This basis object contains the information  necessary for building, 
+    storing and accessing a set of explicitly represented basis elements 
+    for a basis of elementary error generators spanned by the elementary
+    error generators of given type(s) (e.g. "Hamiltonian" and/or "other").
     """
 
     @classmethod
@@ -203,45 +398,22 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
 
         return cnt
 
-    #UNUSED NOW
-    @classmethod
-    def _create_all_labels_for_support(cls, support, left_support, type_str, trivial_bel, nontrivial_bels):
-        n = len(support)  # == weight
-        all_bels = trivial_bel + nontrivial_bels
-        left_weight = len(left_support)
-        if left_weight < n:  # n1 < n
-            factors = [nontrivial_bels if x in left_support else trivial_bel for x in support] \
-                + [all_bels if x in left_support else nontrivial_bels for x in support]
-            return [_GlobalElementaryErrorgenLabel(type_str, (''.join(beltup[0:n]), ''.join(beltup[n:])), support)
-                    for beltup in _itertools.product(*factors)]
-            # (factors == left_factors + right_factors above)
-        else:  # n1 == n
-            ret = []
-            for left_beltup in _itertools.product(*([nontrivial_bels] * n)):  # better itertools call here TODO
-                left_bel = ''.join(left_beltup)
-                right_it = _itertools.product(*([all_bels] * n))  # better itertools call here TODO
-                next(right_it)  # advance past first (all I) element - assume trivial el = first!!
-                ret.extend([_GlobalElementaryErrorgenLabel(type_str, (left_bel, ''.join(right_beltup)), support)
-                            for right_beltup in right_it])
-            return ret
 
     @classmethod
     def _create_ordered_labels(cls, type_str, basis_1q, state_space,
-                               max_weight=None, must_overlap_with_these_sslbls=None,
+                               max_weight=None, sslbl_overlap=None,
                                include_offsets=False, initial_offset=0):
         offsets = {'BEGIN': initial_offset}
         labels = []
-        #labels_by_support = _collections.OrderedDict()
-        #all_bels = basis_1q.labels[0:]
         trivial_bel = [basis_1q.labels[0]]
         nontrivial_bels = basis_1q.labels[1:]  # assume first element is identity
 
-        if must_overlap_with_these_sslbls is not None and not isinstance(must_overlap_with_these_sslbls, set):
-            must_overlap_with_these_sslbls = set(must_overlap_with_these_sslbls)
+        if sslbl_overlap is not None and not isinstance(sslbl_overlap, set):
+            sslbl_overlap = set(sslbl_overlap)
 
+        assert(state_space.is_entirely_qubits), "FOGI only works for models containing just qubits (so far)"
+        sslbls = state_space.sole_tensor_product_block_labels  # all the model's state space labels
         if max_weight is None:
-            assert(state_space.is_entirely_qubits), "FOGI only works for models containing just qubits (so far)"
-            sslbls = state_space.sole_tensor_product_block_labels  # all the model's state space labels
             max_weight = len(sslbls)
 
         # Let k be len(nontrivial_bels)
@@ -249,8 +421,8 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
             # --> for each set of n qubit labels, there are k^n Hamiltonian terms with weight n
             for weight in range(1, max_weight + 1):
                 for support in _itertools.combinations(sslbls, weight):  # NOTE: combinations *MUST* be deterministic
-                    if (must_overlap_with_these_sslbls is not None
-                       and len(must_overlap_with_these_sslbls.intersection(support)) == 0):
+                    if (sslbl_overlap is not None
+                       and len(sslbl_overlap.intersection(support)) == 0):
                         continue
                     offsets[support] = len(labels) + initial_offset
                     labels.extend(cls._create_diag_labels_for_support(support, type_str, nontrivial_bels))
@@ -269,8 +441,8 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
             #                      (see _create_ordered_label_offsets)
             for weight in range(1, max_weight + 1):
                 for support in _itertools.combinations(sslbls, weight):
-                    if (must_overlap_with_these_sslbls is not None
-                       and len(must_overlap_with_these_sslbls.intersection(support)) == 0):
+                    if (sslbl_overlap is not None
+                       and len(sslbl_overlap.intersection(support)) == 0):
                         continue
 
                     for left_weight in range(1, weight + 1):
@@ -286,7 +458,7 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
 
     @classmethod
     def _create_ordered_label_offsets(cls, type_str, basis_1q, state_space,
-                                      max_weight=None, must_overlap_with_these_sslbls=None,
+                                      max_weight=None, sslbl_overlap=None,
                                       return_total_support=False, initial_offset=0):
         """ same as _create_ordered_labels but doesn't actually create the labels - just counts them to get offsets. """
         offsets = {'BEGIN': initial_offset}
@@ -297,12 +469,12 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
         n1Q_nontrivial_bels = n1Q_bels - 1  # assume first element is identity
         total_support = set()
 
-        if must_overlap_with_these_sslbls is not None and not isinstance(must_overlap_with_these_sslbls, set):
-            must_overlap_with_these_sslbls = set(must_overlap_with_these_sslbls)
+        if sslbl_overlap is not None and not isinstance(sslbl_overlap, set):
+            sslbl_overlap = set(sslbl_overlap)
 
+        assert(state_space.is_entirely_qubits), "FOGI only works for models containing just qubits (so far)"
+        sslbls = state_space.sole_tensor_product_block_labels  # all the model's state space labels
         if max_weight is None:
-            assert(state_space.is_entirely_qubits), "FOGI only works for models containing just qubits (so far)"
-            sslbls = state_space.sole_tensor_product_block_labels  # all the model's state space labels
             max_weight = len(sslbls)
 
         # Let k be len(nontrivial_bels)
@@ -310,8 +482,8 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
             # --> for each set of n qubit labels, there are k^n Hamiltonian terms with weight n
             for weight in range(1, max_weight + 1):
                 for support in _itertools.combinations(sslbls, weight):  # NOTE: combinations *MUST* be deterministic
-                    if (must_overlap_with_these_sslbls is not None
-                       and len(must_overlap_with_these_sslbls.intersection(support)) == 0):
+                    if (sslbl_overlap is not None
+                       and len(sslbl_overlap.intersection(support)) == 0):
                         continue
                     offsets[support] = off + initial_offset
                     off += n1Q_nontrivial_bels**weight
@@ -320,8 +492,8 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
         elif type_str in ('C', 'A'):
             for weight in range(1, max_weight + 1):
                 for support in _itertools.combinations(sslbls, weight):
-                    if (must_overlap_with_these_sslbls is not None
-                       and len(must_overlap_with_these_sslbls.intersection(support)) == 0):
+                    if (sslbl_overlap is not None
+                       and len(sslbl_overlap.intersection(support)) == 0):
                         continue
 
                     total_support.update(support)
@@ -337,45 +509,76 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
         return (offsets, total_support) if return_total_support else offsets
 
     def __init__(self, basis_1q, state_space, elementary_errorgen_types=('H', 'S', 'C', 'A'),
-                 max_ham_weight=None, max_other_weight=None, must_overlap_with_these_sslbls=None):
-        self._basis_1q = basis_1q
+                 max_weights=None, sslbl_overlap=None, default_label_type='global'):
+        """
+        Parameters
+        ----------
+        basis_1q : `Basis` or str
+            A `Basis` object, or str which can be cast to one
+            corresponding to the single-qubit basis elements which
+            comprise the basis element labels for the values of the
+            `ElementaryErrorgenLabels` in `labels`.
+
+        state_space : `StateSpace`
+            An object describing the struture of the entire state space upon which the elements
+            of this error generator basis act.
+
+        elementary_errorgen_types : tuple of str, optional (default ('H', 'S', 'C', 'A'))
+            Tuple of strings designating elementary error generator types to include in this
+            basis.
+
+        max_weights : dict, optional (default None)
+            A dictionary containing the maximum weight for each of the different error generator
+            types to include in the constructed basis. If None then 
+            there is no maximum weight. If specified, any error generator
+            types without entries will have no maximum weight associated
+            with them.
+
+        sslbl_overlap : list of sslbls, optional (default None)
+            A list of state space labels corresponding to qudits the support of
+            an error generator must overlap with (i.e. the support must include at least
+            one of these qudits) in order to be included in this basis.
+
+        default_label_type : str, optional (default 'global')
+            String specifying the type of error generator label to use by default.
+            i.e. the type of label returned by `labels`. This also impacts the
+            construction of the error generator matrices.
+            Supported options are 'global' or 'local', which correspond to 
+            `GlobalElementaryErrorgenLabel` and `LocalElementaryErrorgenLabel`,
+            respectively.
+        """
+        super().__init__()
+        if isinstance(basis_1q, _Basis):
+            self._basis_1q = basis_1q
+        elif isinstance(basis_1q, str):
+            self._basis_1q = _Basis.cast(basis_1q, 4)
+        else:
+            self._basis_1q = _Basis.cast('pp', 4)
+
         self._elementary_errorgen_types = tuple(elementary_errorgen_types)  # so works for strings like "HSCA"
-        #REMOVE self._other_mode = other_mode
         self.state_space = state_space
-        self._max_ham_weight = max_ham_weight
-        self._max_other_weight = max_other_weight
-        self._must_overlap_with_these_sslbls = must_overlap_with_these_sslbls
+        self.max_weights = max_weights if max_weights is not None else dict()
+        self._sslbl_overlap = sslbl_overlap
+        self._default_lbl_typ = default_label_type
 
         assert(self.state_space.is_entirely_qubits), "FOGI only works for models containing just qubits (so far)"
         assert(all([eetyp in ('H', 'S', 'C', 'A') for eetyp in elementary_errorgen_types])), \
             "Invalid elementary errorgen type in %s" % str(elementary_errorgen_types)
 
-        self._offsets = _collections.OrderedDict()
+        self._offsets = dict()
         present_sslbls = set()
         istart = 0
 
         for eetyp in elementary_errorgen_types:
             self._offsets[eetyp], sup = self._create_ordered_label_offsets(
                 eetyp, self._basis_1q, self.state_space,
-                (self._max_ham_weight if eetyp == 'H' else self._max_other_weight),
-                self._must_overlap_with_these_sslbls, return_total_support=True, initial_offset=istart)
+                self.max_weights.get(eetyp, None),
+                self._sslbl_overlap, return_total_support=True, initial_offset=istart)
             present_sslbls = present_sslbls.union(sup)  # set union
             istart = self._offsets[eetyp]['END']
 
-#TODO REMOVE
-#        self._h_offsets, hsup = self._create_ordered_label_offsets('H', self._basis_1q, self.state_space,
-#                                                                   'diagonal', self._max_ham_weight,
-#                                                                   self._must_overlap_with_these_sslbls,
-#                                                                   return_total_support=True)
-#        self._hs_border = self._h_offsets['END']
-#        self._s_offsets, ssup = self._create_ordered_label_offsets('S', self._basis_1q, self.state_space,
-#                                                                   other_mode, self._max_other_weight,
-#                                                                   self._must_overlap_with_these_sslbls,
-#                                                                   return_total_support=True)
-#       present_sslbls = hsup.union(ssup)  # set union
-
         #Note: state space can have additional labels that aren't in support
-        # (this is, I think, only true when must_overlap_with_these_sslbls != None)
+        # (this is, I think, only true when sslbl_overlap != None)
         sslbls = self.state_space.sole_tensor_product_block_labels  # all the model's state space labels
 
         if set(sslbls) == present_sslbls:
@@ -387,9 +590,11 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
             # this should never happen - somehow the statespace doesn't have all the labels!
             assert(False), "Logic error! State space doesn't contain all of the present labels!!"
 
-        #FUTURE: cache these for speed?  - but could just create an explicit basis which would be more transparent
-        #self._cached_labels = None
-        #self._cached_elements = None
+        self._cached_global_labels = None
+        self._cached_local_labels = None
+        self._cached_matrices = None
+        self._cached_dual_matrices = None
+        self._cached_supports = None
 
         # Notes on ordering of labels:
         # - let there be k nontrivial 1-qubit basis elements (usually k=3)
@@ -415,54 +620,183 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
         #                      (IXX,XXI) #   on right, loop over all possible choices of at least one, an at most m,
         #                      (IXX,XXX) #    nontrivial indices to place within the m nontriv left indices (1 & 2 here)
 
+    def _to_nice_serialization(self):
+         
+        state = super()._to_nice_serialization()
+        state.update({'basis_1q' : self._basis_1q.to_nice_serialization(),
+                      'state_space' : self.state_space.to_nice_serialization(),
+                      'elementary_errorgen_types': self._elementary_errorgen_types,
+                      'max_weights' : self.max_weights,
+                      'sslbl_overlap' : self._sslbl_overlap,
+                      'default_label_type': self._default_lbl_typ 
+        })
+        return state
+    
+    @classmethod
+    def from_nice_serialization(cls, state):
+        
+        return cls(_Basis.from_nice_serialization(state['basis_1q']), _StateSpace.from_nice_serialization(state['state_space']), \
+                   state['elementary_errorgen_types'], max_weights=state['max_weights'], sslbl_overlap=state['sslbl_overlap'], \
+                    default_label_type=state['default_label_type'])
     def __len__(self):
         """ Number of elementary errorgen elements in this basis """
         return self._offsets[self._elementary_errorgen_types[-1]]['END']
 
     def to_explicit_basis(self):
+        """
+        Creates a new `ExplicitElementaryErrorgenBasis` based on this Basis' elements.
+        """
         return ExplicitElementaryErrorgenBasis(self.state_space, self.labels, self._basis_1q)
 
+    #TODO: Why can't this be done at initialization time?
     @property
     def labels(self):
-        labels = []
-        for eetype in self._elementary_errorgen_types:
-            labels.extend(self._create_ordered_labels(eetype, self._basis_1q, self.state_space,
-                                                      self._max_ham_weight if eetype == 'H' else self._max_other_weight,
-                                                      self._must_overlap_with_these_sslbls))
-        return tuple(labels)
+        """
+        Tuple of either `GlobalElementaryErrorgenLabel` or `LocalElementaryErrorgenLabel` objects
+        for this basis, with which one determined by the `default_label_type` specified on basis
+        construction.
+
+        For specific label types see the `global_labels` and `local_labels` methods.
+        """
+
+        if self._default_lbl_typ == 'global':
+            return self.global_labels()
+        else:
+            return self.local_labels()
+    
+    def global_labels(self):
+        """
+        Return a list of labels for this basis as `GlobalElementaryErrorgenLabel`
+        objects.
+        """
+        if self._cached_global_labels is None:
+            labels = []
+            for eetyp in self._elementary_errorgen_types:
+                labels.extend(self._create_ordered_labels(eetyp, self._basis_1q, self.state_space,
+                                                          self.max_weights.get(eetyp, None),
+                                                          self._sslbl_overlap))
+            
+            self._cached_global_labels = tuple(labels)
+        return self._cached_global_labels
+    
+    def local_labels(self):
+        """
+        Return a list of labels for this basis as `LocalElementaryErrorgenLabel`
+        objects.
+        """
+        if self._cached_local_labels is None:
+            if self._cached_global_labels is None:
+                self._cached_global_labels = self.global_labels()
+            self._cached_local_labels = tuple([_LocalElementaryErrorgenLabel.cast(lbl, sslbls=self.sslbls) for lbl in self._cached_global_labels])
+        return self._cached_local_labels
+    
+    def sublabels(self, errorgen_type):
+        """
+        Return a tuple of labels within this basis for the specified error generator
+        type (may be empty).
+
+        Parameters
+        ----------
+        errorgen_type : 'H', 'S', 'C' or 'A'
+            String specifying the error generator type to return the labels for.
+        
+        Returns
+        -------
+        tuple of either `GlobalElementaryErrorgenLabels` or `LocalElementaryErrorgenLabels`
+        """
+        #TODO: It should be possible to do this much faster than regenerating these from scratch.
+        #Perhaps by caching the error generators by type at construction time.
+        labels = self._create_ordered_labels(errorgen_type, self._basis_1q, self.state_space,
+                                           self.max_weights.get(errorgen_type, None),
+                                           self._sslbl_overlap)
+        if self._default_lbl_typ == 'local':
+            labels = tuple([_LocalElementaryErrorgenLabel.cast(lbl, sslbls=self.sslbls) for lbl in labels])
+        return labels
+    
+    @property
+    def elemgen_supports(self):
+        """
+        Returns a tuple of tuples, each corresponding to the support
+        of the elementary error generators in this basis, returned in
+        the same order as they appear in `labels`.
+        """
+        if self._cached_supports is None:
+            self._cached_supports = tuple([elemgen_label.sslbls for elemgen_label in self.global_labels()])
+        return self._cached_supports
+    
+    @property
+    def elemgen_dual_matrices(self):
+        """
+        Returns a tuple of matrices, each corresponding to the 
+        of the matrix representation of the dual elementary error generators 
+        in this basis, returned in the same order as they appear in `labels`.
+        """
+        if self._cached_dual_matrices is None:
+            elemgen_types = [elemgen_label.errorgen_type for elemgen_label in self.labels]
+            elemgen_labels = [elemgen_label.basis_element_labels for elemgen_label in self.labels]
+            self._cached_dual_matrices = tuple(_ot.bulk_create_elementary_errorgen_nqudit_dual(
+                                            elemgen_types, elemgen_labels,
+                                            self._basis_1q, normalize=False, sparse=False,
+                                            tensorprod_basis=True))
+        return self._cached_dual_matrices
+    
+    @property
+    def elemgen_matrices(self):
+        """
+        Returns a tuple of matrices, each corresponding to the 
+        of the matrix representation of the elementary error generators 
+        in this basis, returned in the same order as they appear in `labels`.
+        """
+        if self._cached_matrices is None:
+            elemgen_types = [elemgen_label.errorgen_type for elemgen_label in self.labels]
+            elemgen_labels = [elemgen_label.basis_element_labels for elemgen_label in self.labels]
+            self._cached_matrices = tuple(_ot.bulk_create_elementary_errorgen_nqudit(
+                                            elemgen_types, elemgen_labels,
+                                            self._basis_1q, normalize=False, sparse=False,
+                                            tensorprod_basis=True))
+        return self._cached_matrices
 
     @property
     def elemgen_supports_and_dual_matrices(self):
-        return tuple(((elemgen_label.sslbls,
-                       _ot.create_elementary_errorgen_nqudit_dual(
-                           elemgen_label.errorgen_type, elemgen_label.basis_element_labels,
-                           self._basis_1q, normalize=False, sparse=False,
-                           tensorprod_basis=True))  # Note: normalize was set to True...
-                      for elemgen_label in self.labels))
+        """
+        Returns a tuple of tuples, each containing a tuple of support and a dual matrix representation
+        each corresponding to an elementary error generator in this basis, returned in the same 
+        order as they appear in `labels`.
+        """
+        return  tuple(zip(self.elemgen_supports, self.elemgen_dual_matrices))
 
     @property
     def elemgen_supports_and_matrices(self):
-        return tuple(((elemgen_label.sslbls,
-                       _ot.create_elementary_errorgen_nqudit(
-                           elemgen_label.errorgen_type, elemgen_label.basis_element_labels,
-                           self._basis_1q, normalize=False, sparse=False,
-                           tensorprod_basis=True))  # Note: normalize was set to True...
-                      for elemgen_label in self.labels))
-
-    def label_index(self, elemgen_label, ok_if_missing=False):
         """
-        TODO: docstring
+        Returns a tuple of tuples, each containing a tuple of support and a matrix representation
+        each corresponding to an elementary error generator in this basis, returned in the same 
+        order as they appear in `labels`.
+        """
+        return  tuple(zip(self.elemgen_supports, self.elemgen_matrices))
+
+    def label_index(self, label, ok_if_missing=False, identity_label='I'):
+        """
+        Return the index of the specified elementary error generator label
+        in this basis' `labels` list.
         
         Parameters
         ----------
-        elemgen_label
+        label : `ElementaryErrorgenLabel`
+            Elementary error generator label to return index for.
         
         ok_if_missing : bool
            If True, then returns `None` instead of an integer when the given label is not present.
+        
+        identity_label : str, optional (default 'I')
+            An optional string specifying the label used to denote the identity in basis element labels.
         """
-        support = elemgen_label.sslbls
-        eetype = elemgen_label.errorgen_type
-        bels = elemgen_label.basis_element_labels
+        
+        if isinstance(label, _LocalElementaryErrorgenLabel):
+            label = _GlobalElementaryErrorgenLabel.cast(label, self.sslbls, identity_label=identity_label)
+
+        support = label.sslbls
+        eetype = label.errorgen_type
+        bels = label.basis_element_labels
         trivial_bel = self._basis_1q.labels[0]  # assumes first element is identity
         nontrivial_bels = self._basis_1q.labels[1:]
 
@@ -478,8 +812,10 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
         elif eetype in ('C', 'A'):
             assert(len(trivial_bel) == 1)  # assumes this is a single character
             nontrivial_inds = [i for i, letter in enumerate(bels[0]) if letter != trivial_bel]
-            left_support = tuple([self.sslbls[i] for i in nontrivial_inds])
-
+            left_support = tuple([label.sslbls[i] for i in nontrivial_inds])
+            #left_support = tuple([self.sslbls[i] for i in nontrivial_inds])
+            #This line above is supposed to be a bugfix, I want to verify this with
+            #Corey before removing this comment
             if ok_if_missing and (support, left_support) not in self._offsets[eetype]:
                 return None
             base = self._offsets[eetype][(support, left_support)]
@@ -488,27 +824,29 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
                 support, left_support, eetype, [trivial_bel], nontrivial_bels))}
         else:
             raise ValueError("Invalid elementary errorgen type: %s" % str(eetype))
+        return base + indices[label]
 
-        return base + indices[elemgen_label]
-
-    #@property
-    #def sslbls(self):
-    #    """ The support of this errorgen space, e.g., the qubits where its elements may be nontrivial """
-    #    return self.sslbls
-
-    def create_subbasis(self, must_overlap_with_these_sslbls, retain_max_weights=True):
+    def create_subbasis(self, sslbl_overlap, retain_max_weights=True):
         """
         Create a sub-basis of this basis by including only the elements
         that overlap the given support (state space labels)
         """
         #Note: state_space is automatically reduced within __init__ when necessary, e.g., when
-        # `must_overlap_with_these_sslbls` is non-None and considerably reduces the basis.
+        # `sslbl_overlap` is non-None and considerably reduces the basis.
         return CompleteElementaryErrorgenBasis(self._basis_1q, self.state_space, self._elementary_errorgen_types,
-                                               self._max_ham_weight if retain_max_weights else None,
-                                               self._max_other_weight if retain_max_weights else None,
-                                               must_overlap_with_these_sslbls)
+                                               self.max_weights if retain_max_weights else None,
+                                               sslbl_overlap)
 
     def union(self, other_basis):
+        """
+        Create a new `ExplicitElementaryErrorgenBasis` corresponding to the union of
+        this basis with another.
+
+        Parameters
+        ----------
+        other_basis : `ElementaryErrorgenBasis`
+            `ElementaryErrorgenBasis` to construct the union with.
+        """
         # don't convert this basis to an explicit one unless it's necessary -
         # if `other_basis` is already an explicit basis then let it do the work.
         if isinstance(other_basis, ExplicitElementaryErrorgenBasis):
@@ -517,132 +855,29 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
             return self.to_explicit_basis().union(other_basis)
 
     def intersection(self, other_basis):
+        """
+        Create a new `ExplicitElementaryErrorgenBasis` corresponding to the intersection of
+        this basis with another.
+
+        Parameters
+        ----------
+        other_basis : `ElementaryErrorgenBasis`
+            `ElementaryErrorgenBasis` to construct the intersection with.
+        """
         if isinstance(other_basis, ExplicitElementaryErrorgenBasis):
             return other_basis.intersection(self)
         else:
             return self.to_explicit_basis().intersection(other_basis)
 
     def difference(self, other_basis):
+        """
+        Create a new `ExplicitElementaryErrorgenBasis` corresponding to the difference of
+        this basis with another. (i.e. A basis consisting of the labels contained in this basis
+        but not the other)
+
+        Parameters
+        ----------
+        other_basis : `ElementaryErrorgenBasis`
+            `ElementaryErrorgenBasis` to construct the difference with.
+        """
         return self.to_explicit_basis().difference(other_basis)
-
-
-#OLD - maybe not needed?
-#class LowWeightElementaryErrorgenBasis(ElementaryErrorgenBasis):
-#    """
-#    Spanned by the elementary error generators of given type(s) (e.g. "Hamiltonian" and/or "other")
-#    and with elements corresponding to a `Basis`, usually of Paulis.
-#    """
-#
-#    def __init__(self, basis_1q, state_space, other_mode, max_ham_weight=None, max_other_weight=None,
-#                 must_overlap_with_these_sslbls=None):
-#        self._basis_1q = basis_1q
-#        self._other_mode = other_mode
-#        self.state_space = state_space
-#        self._max_ham_weight = max_ham_weight
-#        self._max_other_weight = max_other_weight
-#        self._must_overlap_with_these_sslbls = must_overlap_with_these_sslbls
-#
-#        assert(self.state_space.is_entirely_qubits), "FOGI only works for models containing just qubits (so far)"
-#        sslbls = self.state_space.sole_tensor_product_block_labels  # all the model's state space labels
-#        self.sslbls = sslbls  # the "support" of this space - the qubit labels
-#
-#        self._cached_label_indices = None
-#        self._cached_labels_by_support = None
-#        self._cached_elements = None
-#
-#        #Needed?
-#        # self.dim = len(self.labels)  # TODO - update this so we don't always need to build labels
-#        # # (this defeats lazy building via property below) - we can just compute this, especially if
-#        # # not too fancy
-#
-#    @property
-#    def labels(self):
-#        if self._cached_label_indices is None:
-#
-#            def _basis_el_strs(possible_bels, wt):
-#                for els in _itertools.product(*([possible_bels] * wt)):
-#                    yield ''.join(els)
-#
-#            labels = {}
-#            all_bels = self.basis_1q.labels[1:]  # assume first element is identity
-#            nontrivial_bels = self.basis_1q.labels[1:]  # assume first element is identity
-#
-#            max_weight = self._max_ham_weight if (self._max_ham_weight is not None) else len(self.sslbls)
-#            for weight in range(1, max_weight + 1):
-#                for support in _itertools.combinations(self.sslbls, weight):
-#                    if (self._must_overlap_with_these_sslbls is not None
-#                       and len(self._must_overlap_with_these_sslbls.intersection(support)) == 0):
-#                        continue
-#                    if support not in labels: labels[support] = []  # always True?
-#                    labels[support].extend([('H', bel) for bel in _basis_el_strs(nontrivial_bels, weight)])
-#
-#            max_weight = self._max_other_weight if (self._max_other_weight is not None) else len(self.sslbls)
-#            if self._other_mode != "all":
-#                for weight in range(1, max_weight + 1):
-#                    for support in _itertools.combinations(self.sslbls, weight):
-#                        if (self._must_overlap_with_these_sslbls is not None
-#                           and len(self._must_overlap_with_these_sslbls.intersection(support)) == 0):
-#                            continue
-#                        if support not in labels: labels[support] = []
-#                        labels[support].extend([('S', bel) for bel in _basis_el_strs(nontrivial_bels, weight)])
-#            else:
-#                #This is messy code that relies on basis labels being single characters -- TODO improve(?)
-#                idle_char = self.basis_1q.labels[1:]  # assume first element is identity
-#                assert(len(idle_char) == 1 and all([len(c) == 1 for c in nontrivial_bels])), \
-#                    "All basis el labels must be single chars for other_mode=='all'!"
-#                for support in _itertools.combinations(self.sslbls, max_weight):
-#                    # Loop over all possible basis elements for this max-weight support, computing the actual support
-#                    # of each one individually and appending it to the appropriate list
-#                    for bel1 in _basis_el_strs(all_bels, max_weight):
-#                        nonidle_indices1 = [i for i in range(max_weight) if bel1[i] != idle_char]
-#                        for bel2 in _basis_el_strs(all_bels, max_weight):
-#                            nonidle_indices2 = [i for i in range(max_weight) if bel2[i] != idle_char]
-#                            nonidle_indices = list(sorted(set(nonidle_indices1) + set(nonidle_indices2)))
-#                            bel1 = ''.join([bel1[i] for i in nonidle_indices])  # trim to actual support
-#                            bel2 = ''.join([bel2[i] for i in nonidle_indices])  # trim to actual support
-#                            actual_support = tuple([support[i] for i in nonidle_indices])
-#
-#                            if (self._must_overlap_with_these_sslbls is not None
-#                               and len(self._must_overlap_with_these_sslbls.intersection(actual_support)) == 0):
-#                                continue
-#
-#                            if actual_support not in labels: labels[actual_support] = []
-#                            labels[actual_support].append(('S', bel1, bel2))
-#
-#            self._cached_labels_by_support = labels
-#            self._cached_label_indices = _collections.OrderedDict(((support_lbl, i) for i, support_lbl in enumerate(
-#                ((support, lbl) for support, lst in labels.items() for lbl in lst))))
-#
-#        return tuple(self._cached_label_indices.keys())
-#
-#    @property
-#    def element_supports_and_matrices(self):
-#        if self._cached_elements is None:
-#            self._cached_elements = tuple(
-#                ((support, _ot.lindblad_error_generator(elemgen_label, self.basis_1q, normalize=True, sparse=False))
-#                 for support, elemgen_label in self.labels))
-#        return self._cached_elements
-#
-#    def element_index(self, label):
-#        """
-#        TODO: docstring
-#        """
-#        if self._cached_label_indices is None:
-#            self.labels  # triggers building of labels
-#        return self._cached_label_indices[label]
-#
-#    @property
-#    def sslbls(self):
-#        """ The support of this errorgen space, e.g., the qubits where its elements may be nontrivial """
-#        return self.sslbls
-#
-#    def create_subbasis(self, must_overlap_with_these_sslbls, retain_max_weights=True):
-#        """
-#        Create a sub-basis of this basis by including only the elements
-#        that overlap the given support (state space labels)
-#        """
-#        #Note: can we reduce self.state_space?
-#        return CompleteErrorgenBasis(self._basis_1q, self.state_space, self._other_mode,
-#                                     self._max_ham_weight if retain_max_weights else None,
-#                                     self._max_other_weight if retain_max_weights else None,
-#                                     self._must_overlap_with_these_sslbls)

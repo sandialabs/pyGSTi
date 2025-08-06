@@ -2,7 +2,7 @@
 Routines for building qutrit gates and models
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -33,7 +33,7 @@ Y = _np.array([[0, -1j], [1j, 0]])
 
 
 def _x_2qubit(theta):
-    """
+    r"""
     Returns X(theta)^\otimes 2 (2-qubit 'XX' unitary)
 
     Parameters
@@ -50,7 +50,7 @@ def _x_2qubit(theta):
 
 
 def _y_2qubit(theta):
-    """
+    r"""
     Returns Y(theta)^\otimes 2 (2-qubit 'YY' unitary)
 
     Parameters

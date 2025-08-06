@@ -2,7 +2,7 @@
 GST gauge optimization algorithms
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -265,6 +265,10 @@ def gaugeopt_custom(model, objective_fn, gauge_group=None,
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, comm)
     tStart = _time.time()
 
+    #replace model with a new copy of itself so as to not propagate the conversion back to the 
+    #instance of the model object we are gauge optimizing.
+    model = model.copy()
+
     if comm is not None:
         mdl_cmp = comm.bcast(model if (comm.Get_rank() == 0) else None, root=0)
         try:
@@ -290,7 +294,7 @@ def gaugeopt_custom(model, objective_fn, gauge_group=None,
     gaugeGroupEl = gauge_group.compute_element(x0)  # re-used element for evals
 
     def _call_objective_fn(gauge_group_el_vec, oob_check=False):
-        # Note: oob_check can be True if oob_check_interval>=1 is given to the custom_leastsq below
+        # Note: oob_check can be True if oob_check_interval>=1 is given to the simplish_leastsq below
         gaugeGroupEl.from_vector(gauge_group_el_vec)
         return objective_fn(gaugeGroupEl, oob_check)
 
@@ -309,7 +313,7 @@ def gaugeopt_custom(model, objective_fn, gauge_group=None,
         assert(_call_jacobian_fn is not None), "Cannot use 'ls' method unless jacobian is available"
         ralloc = _baseobjs.ResourceAllocation(comm)  # FUTURE: plumb up a resource alloc object?
         test_f = _call_objective_fn(x0)
-        solnX, converged, msg, _, _, _, _, _ = _opt.custom_leastsq(
+        solnX, converged, msg, _, _, _, _ = _opt.simplish_leastsq(
             _call_objective_fn, _call_jacobian_fn, x0, f_norm2_tol=tol,
             jac_norm_tol=tol, rel_ftol=tol, rel_xtol=tol,
             max_iter=maxiter, resource_alloc=ralloc,
@@ -513,8 +517,8 @@ def _create_objective_fn(model, target_model, item_weights=None,
                 # d(op_term) = S_inv * (-dS * S_inv * G * S + G * dS) = S_inv * (-dS * G' + G * dS)
                 #   Note: (S_inv * G * S) is G' (transformed G)
                 wt = item_weights.get(lbl, opWeight)
-                left = -1 * _np.dot(dS, mdl_post.operations[lbl].to_dense(on_space='minimal'))  # shape (n,d1,d2)
-                right = _np.swapaxes(_np.dot(G.to_dense(on_space='minimal'), dS), 0, 1)  # shape (d1,n,d2) -> (n,d1,d2)
+                left = -1 * _np.dot(dS, mdl_post.operations[lbl].to_dense('minimal'))  # shape (n,d1,d2)
+                right = _np.swapaxes(_np.dot(G.to_dense('minimal'), dS), 0, 1)  # shape (d1,n,d2) -> (n,d1,d2)
                 result = _np.swapaxes(_np.dot(S_inv, left + right), 1, 2)  # shape (d1, d2, n)
                 result = result.reshape((d**2, n))  # must copy b/c non-contiguous
                 my_jacMx[start:start + d**2] = wt * result
@@ -526,8 +530,8 @@ def _create_objective_fn(model, target_model, item_weights=None,
                 wt = item_weights.get(ilbl, opWeight)
                 for lbl, G in Inst.items():
                     # same calculation as for operation terms
-                    left = -1 * _np.dot(dS, mdl_post.instruments[ilbl][lbl].to_dense(on_space='minimal'))  # (n,d1,d2)
-                    right = _np.swapaxes(_np.dot(G.to_dense(on_space='minimal'), dS), 0, 1)  # (d1,n,d2) -> (n,d1,d2)
+                    left = -1 * _np.dot(dS, mdl_post.instruments[ilbl][lbl].to_dense('minimal'))  # (n,d1,d2)
+                    right = _np.swapaxes(_np.dot(G.to_dense('minimal'), dS), 0, 1)  # (d1,n,d2) -> (n,d1,d2)
                     result = _np.swapaxes(_np.dot(S_inv, left + right), 1, 2)  # shape (d1, d2, n)
                     result = result.reshape((d**2, n))  # must copy b/c non-contiguous
                     my_jacMx[start:start + d**2] = wt * result
@@ -540,7 +544,7 @@ def _create_objective_fn(model, target_model, item_weights=None,
                 #   Note: (S_inv * rho) is transformed rho
                 wt = item_weights.get(lbl, spamWeight)
                 Sinv_dS = _np.dot(S_inv, dS)  # shape (d1,n,d2)
-                result = -1 * _np.dot(Sinv_dS, rho.to_dense(on_space='minimal'))  # shape (d,n)
+                result = -1 * _np.dot(Sinv_dS, rho.to_dense('minimal'))  # shape (d,n)
                 my_jacMx[start:start + d] = wt * result
                 start += d
 
@@ -550,7 +554,7 @@ def _create_objective_fn(model, target_model, item_weights=None,
                 for lbl, E in povm.items():
                     # d(ET_term) = E.T * dS
                     wt = item_weights.get(povmlbl + "_" + lbl, spamWeight)
-                    result = _np.dot(E.to_dense(on_space='minimal')[None, :], dS).T  # shape (1,n,d2).T => (d2,n,1)
+                    result = _np.dot(E.to_dense('minimal')[None, :], dS).T  # shape (1,n,d2).T => (d2,n,1)
                     my_jacMx[start:start + d] = wt * result.squeeze(2)  # (d2,n)
                     start += d
 
@@ -847,7 +851,7 @@ def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl_pre, mdl_post,
 
         #get sgn(denMx) == d(|denMx|_Tr)/d(denMx) in std basis
         # dmDim = denMx.shape[0]
-        denMx = _tools.vec_to_stdmx(prepvec.to_dense(on_space='minimal')[:, None], op_basis)
+        denMx = _tools.vec_to_stdmx(prepvec.to_dense('minimal')[:, None], op_basis)
         assert(_np.linalg.norm(denMx - denMx.T.conjugate()) < 1e-4), \
             "denMx should be Hermitian!"
 
@@ -861,7 +865,7 @@ def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl_pre, mdl_post,
         # get d(prepvec')/dp = d(S_inv * prepvec)/dp in op_basis [shape == (n,dim)]
         #                    = (-S_inv*dS*S_inv) * prepvec = -S_inv*dS * prepvec'
         Sinv_dS = _np.dot(S_inv, dS)  # shape (d1,n,d2)
-        dVdp = -1 * _np.dot(Sinv_dS, prepvec.to_dense(on_space='minimal')[:, None]).squeeze(2)  # shape (d,n,1) => (d,n)
+        dVdp = -1 * _np.dot(Sinv_dS, prepvec.to_dense('minimal')[:, None]).squeeze(2)  # shape (d,n,1) => (d,n)
         assert(dVdp.shape == (d, n))
 
         # denMx = sum( spamvec[i] * Bmx[i] )
@@ -886,7 +890,7 @@ def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl_pre, mdl_post,
         for lbl, effectvec in povm.items():
 
             #get sgn(EMx) == d(|EMx|_Tr)/d(EMx) in std basis
-            EMx = _tools.vec_to_stdmx(effectvec.to_dense(on_space='minimal')[:, None], op_basis)
+            EMx = _tools.vec_to_stdmx(effectvec.to_dense('minimal')[:, None], op_basis)
             # dmDim = EMx.shape[0]
             assert(_np.linalg.norm(EMx - EMx.T.conjugate()) < 1e-4), \
                 "denMx should be Hermitian!"
@@ -901,7 +905,7 @@ def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl_pre, mdl_post,
             # get d(effectvec')/dp = [d(effectvec.T * S)/dp].T in op_basis [shape == (n,dim)]
             #                      = [effectvec.T * dS].T
             #  OR = dS.T * effectvec
-            pre_effectvec = mdl_pre.povms[povmlbl][lbl].to_dense(on_space='minimal')[:, None]
+            pre_effectvec = mdl_pre.povms[povmlbl][lbl].to_dense('minimal')[:, None]
             dVdp = _np.dot(pre_effectvec.T, dS).squeeze(0).T
             # shape = (1,d) * (n, d1,d2) = (1,n,d2) => (n,d2) => (d2,n)
             assert(dVdp.shape == (d, n))

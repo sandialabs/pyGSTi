@@ -2,7 +2,7 @@
 The DenseState and DensePureState classes and supporting functionality.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -21,6 +21,7 @@ from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.tools import basistools as _bt
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools import optools as _ot
+from pygsti import SpaceT
 
 
 class DenseStateInterface(object):
@@ -140,7 +141,7 @@ class DenseStateInterface(object):
 
     def __str__(self):
         s = "%s with dimension %d\n" % (self.__class__.__name__, self.dim)
-        s += _mt.mx_to_string(self.to_dense(on_space='minimal'), width=4, prec=2)
+        s += _mt.mx_to_string(self.to_dense("minimal"), width=4, prec=2)
         return s
 
 
@@ -195,7 +196,7 @@ class DenseState(DenseStateInterface, _State):
         """
         self._rep.base_has_changed()
 
-    def to_dense(self, on_space='minimal', scratch=None):
+    def to_dense(self, on_space: SpaceT='minimal', scratch=None):
         """
         Return the dense array used to represent this state within its evolution type.
 
@@ -310,7 +311,7 @@ class DensePureState(DenseStateInterface, _State):
             self._rep.base[:] = _bt.change_basis(_ot.state_to_dmvec(self._purevec), 'std', self._basis)
         self._rep.base_has_changed()
 
-    def to_dense(self, on_space='minimal', scratch=None):
+    def to_dense(self, on_space: SpaceT='minimal', scratch=None):
         """
         Return the dense array used to represent this state within its evolution type.
 
@@ -357,7 +358,7 @@ class DensePureState(DenseStateInterface, _State):
         """
         mm_dict = super().to_memoized_dict(mmg_memo)
 
-        mm_dict['dense_state_vector'] = self._encodemx(self.to_dense('Hilbert'))
+        mm_dict['dense_state_vector'] = self._encodemx(self.to_dense("Hilbert"))
         mm_dict['basis'] = self._basis.to_nice_serialization() if (self._basis is not None) else None
         return mm_dict
 

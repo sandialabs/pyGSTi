@@ -2,7 +2,7 @@
 Optimization (minimization) functions
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -159,10 +159,7 @@ def minimize(fn, x0, method='cg', callback=None,
         elif method == "L-BFGS-B": opts['gtol'] = opts['ftol'] = tol  # gradient norm and fractional y-tolerance
         elif method == "Nelder-Mead": opts['maxfev'] = maxfev  # max fn evals (note: ftol and xtol can also be set)
 
-        if method in ("BFGS", "CG", "Newton-CG", "L-BFGS-B", "TNC", "SLSQP", "dogleg", "trust-ncg"):  # use jacobian
-            solution = _spo.minimize(fn, x0, options=opts, method=method, tol=tol, callback=callback, jac=jac)
-        else:
-            solution = _spo.minimize(fn, x0, options=opts, method=method, tol=tol, callback=callback)
+        solution = _spo.minimize(fn, x0, options=opts, method=method, tol=tol, callback=callback, jac=jac)  
 
     return solution
 
@@ -660,90 +657,6 @@ def _fmin_evolutionary(f, x0, num_generations, num_individuals, printer):
     solution.x = best_params; solution.fun = pop[indx_min_fitness].fitness.values[0]
     solution.success = True
     return solution
-
-
-#def fmin_homebrew(f, x0, maxiter):
-#    """
-#    Cooked up by Erik, this algorithm is similar to basinhopping but with some tweaks.
-#
-#    Parameters
-#    ----------
-#    fn : function
-#        The function to minimize.
-#
-#    x0 : numpy array
-#        The starting point (argument to fn).
-#
-#    maxiter : int
-#        The maximum number of iterations.
-#
-#    Returns
-#    -------
-#    scipy.optimize.Result object
-#        Includes members 'x', 'fun', 'success', and 'message'.
-#    """
-#
-#    STEP = 0.01
-#    MAX_STEPS = int(2.0 / STEP) # allow a change of at most 2.0
-#    MAX_DIR_TRIES = 1000
-#    T = 1.0
-#
-#    global_best_params = cur_x0 = x0
-#    global_best = cur_f = f(x0)
-#    N = len(x0)
-#    trial_x0 = x0.copy()
-#
-#    for it in range(maxiter):
-#
-#        #Minimize using L-BFGS-B
-#        opts = {'maxiter': maxiter, 'maxfev': maxiter, 'disp': False }
-#        soln = _spo.minimize(f,trial_x0,options=opts, method='L-BFGS-B',callback=None, tol=1e-8)
-#
-#        # Update global best
-#        if soln.fun < global_best:
-#            global_best_params = soln.x
-#            global_best = soln.fun
-#
-#        #check if we accept the new minimum
-#        if soln.fun < cur_f or _np.random.random() < _np.exp( -(soln.fun - cur_f)/T ):
-#            cur_x0 = soln.x; cur_f = soln.fun
-#            print "Iter %d: f=%g accepted -- global best = %g" % (it, cur_f, global_best)
-#        else:
-#            print "Iter %d: f=%g declined" % (it, cur_f)
-#
-#        trial_x0 = None; numTries = 0
-#        while trial_x0 is None and numTries < MAX_DIR_TRIES:
-#            #choose a random direction
-#            direction = _np.random.random( N )
-#            numTries += 1
-#
-#            #print "DB: test dir %d" % numTries #DEBUG
-#
-#            #kick solution along random direction until the value of f starts to get smaller again (if it ever does)
-#            #  (this indicates we've gone over a maximum along this direction)
-#            last_f = cur_f
-#            for i in range(1,MAX_STEPS):
-#                test_x = cur_x0 + i*STEP * direction
-#                test_f = f(test_x)
-#                #print "DB: test step=%f: f=%f" % (i*STEP, test_f)
-#                if test_f < last_f:
-#                    trial_x0 = test_x
-#                    print "Found new direction in %d tries, new f(x0) = %g" % (numTries,test_f)
-#                    break
-#                last_f = test_f
-#
-#        if trial_x0 is None:
-#            raise ValueError("Maximum number of direction tries exceeded")
-#
-#    solution = _optResult()
-#    solution.x = global_best_params; solution.fun = global_best
-#    solution.success = True
-##    if it < maxiter:
-##        solution.success = True
-##    else:
-##        solution.success = False
-##        solution.message = "Maximum iterations exceeded"
-#    return solution
 
 
 def create_objfn_printer(obj_func, start_time=None):

@@ -2,7 +2,7 @@
 Defines the MapForwardSimulator calculator class
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -27,6 +27,7 @@ from pygsti.tools import sharedmemtools as _smt
 from pygsti.tools import slicetools as _slct
 from pygsti.tools.matrixtools import _fas
 from pygsti.tools import listtools as _lt
+from pygsti import SpaceT
 from pygsti.circuits import CircuitList as _CircuitList
 
 _dummy_profiler = _DummyProfiler()
@@ -102,7 +103,6 @@ class SimpleMapForwardSimulator(_ForwardSimulator):
         #Note: I don't think we need to implement __setstate__ since the model also needs to be reset,
         # and this is done by the parent model which will cause _set_evotype to be called.
         return state
-
 
 class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimulator):
     """
@@ -239,7 +239,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
             Allowed options are 'size', which corresponds to balancing the number of circuits, 
             and 'propagations', which corresponds to balancing the number of state propagations.
 
-        load_balancing_parameters : tuple of floats, optional (default (1.2, .1))
+        load_balancing_parameters : tuple of floats, optional (default (1.15, .1))
             A tuple of floats used as load balancing parameters when splitting a layout across atoms,
             as in the multi-processor setting when using MPI. These parameters correspond to the `imbalance_threshold`
             and `minimum_improvement_threshold` parameters described in the method `find_splitting_new`
@@ -313,13 +313,6 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
                                                   global_layout.num_circuits, max_local_circuits,
                                                   layout._param_dimensions, (loc_nparams1, loc_nparams2),
                                                   (blk1, blk2), max_atom_cachesize, self.model.dim)
-
-            #def approx_mem_estimate(nc, np1, np2):
-            #    approx_cachesize = (num_circuits / nc) * 1.3  # inflate expected # of circuits per atom => cache_size
-            #    return _bytes_for_array_types(array_types, num_elements, num_elements / nc,
-            #                                  num_circuits, num_circuits / nc,
-            #                                  (num_params, num_params), (num_params / np1, num_params / np2),
-            #                                  approx_cachesize, self.model.dim)
 
             GB = 1.0 / 1024.0**3
             if mem_estimate > mem_limit:
@@ -751,7 +744,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
             G = _np.identity(self.model.evotype.minimal_dim(self.model.state_space))
             for lOp in circuit:
                 if lOp not in scaledGatesAndExps:
-                    opmx = self.model.circuit_layer_operator(lOp, 'op').to_dense(on_space='minimal')
+                    opmx = self.model.circuit_layer_operator(lOp, 'op').to_dense("minimal")
                     ng = max(_nla.norm(opmx), 1.0)
                     scaledGatesAndExps[lOp] = (opmx / ng, _np.log(ng))
 
@@ -772,6 +765,6 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         else:
             G = _np.identity(self.model.evotype.minimal_dim(self.model.state_space))
             for lOp in circuit:
-                G = _np.dot(self.model.circuit_layer_operator(lOp, 'op').to_dense(on_space='minimal'), G)
+                G = _np.dot(self.model.circuit_layer_operator(lOp, 'op').to_dense("minimal"), G)
                 # above line: LEXICOGRAPHICAL VS MATRIX ORDER
             return G

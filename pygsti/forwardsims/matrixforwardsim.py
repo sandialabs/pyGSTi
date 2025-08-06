@@ -2,7 +2,7 @@
 Defines the MatrixForwardSimulator calculator class
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -29,6 +29,7 @@ from pygsti.tools import mpitools as _mpit
 from pygsti.tools import sharedmemtools as _smt
 from pygsti.tools import slicetools as _slct
 from pygsti.tools.matrixtools import _fas
+from pygsti import SpaceT
 from pygsti.tools import listtools as _lt
 from pygsti.circuits import CircuitList as _CircuitList
 
@@ -86,7 +87,7 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
             G = _np.identity(self.model.evotype.minimal_dim(self.model.state_space))
             for lOp in circuit:
                 if lOp not in scaledGatesAndExps:
-                    opmx = self.model.circuit_layer_operator(lOp, 'op').to_dense(on_space='minimal')
+                    opmx = self.model.circuit_layer_operator(lOp, 'op').to_dense("minimal")
                     ng = max(_nla.norm(opmx), 1.0)
                     scaledGatesAndExps[lOp] = (opmx / ng, _np.log(ng))
 
@@ -107,15 +108,15 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
         else:
             G = _np.identity(self.model.evotype.minimal_dim(self.model.state_space))
             for lOp in circuit:
-                G = _np.dot(self.model.circuit_layer_operator(lOp, 'op').to_dense(on_space='minimal'), G)
+                G = _np.dot(self.model.circuit_layer_operator(lOp, 'op').to_dense("minimal"), G)
                 # above line: LEXICOGRAPHICAL VS MATRIX ORDER
             return G
 
     def _rho_es_from_spam_tuples(self, rholabel, elabels):
         # This calculator uses the convention that rho has shape (N,1)
-        rho = self.model.circuit_layer_operator(rholabel, 'prep').to_dense(on_space='minimal')[:, None]
+        rho = self.model.circuit_layer_operator(rholabel, 'prep').to_dense("minimal")[:, None]
         Es = [_np.conjugate(_np.transpose(self.model.circuit_layer_operator(
-              elabel, 'povm').to_dense(on_space='minimal')[:, None]))
+              elabel, 'povm').to_dense("minimal")[:, None]))
               for elabel in elabels]  # [:, None] becuse of convention: E has shape (1,N)
         return rho, Es
 
@@ -341,13 +342,13 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
         leftProds = []
         G = _np.identity(dim); leftProds.append(G)
         for opLabel in revOpLabelList:
-            G = _np.dot(G, self.model.circuit_layer_operator(opLabel, 'op').to_dense(on_space='minimal'))
+            G = _np.dot(G, self.model.circuit_layer_operator(opLabel, 'op').to_dense("minimal"))
             leftProds.append(G)
 
         rightProdsT = []
         G = _np.identity(dim); rightProdsT.append(_np.transpose(G))
         for opLabel in reversed(revOpLabelList):
-            G = _np.dot(self.model.circuit_layer_operator(opLabel, 'op').to_dense(on_space='minimal'), G)
+            G = _np.dot(self.model.circuit_layer_operator(opLabel, 'op').to_dense("minimal"), G)
             rightProdsT.append(_np.transpose(G))
 
         # Allocate memory for the final result
@@ -468,7 +469,7 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
             prods[(i, i - 1)] = ident  # product of no gates
             G = ident
             for (j, opLabel2) in enumerate(revOpLabelList[i:], start=i):  # loop over "ending" gate (>= starting gate)
-                G = _np.dot(G, self.model.circuit_layer_operator(opLabel2, 'op').to_dense(on_space='minimal'))
+                G = _np.dot(G, self.model.circuit_layer_operator(opLabel2, 'op').to_dense("minimal"))
                 prods[(i, j)] = G
         prods[(len(revOpLabelList), len(revOpLabelList) - 1)] = ident  # product of no gates
 
@@ -749,7 +750,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
                     prodCache[iDest] = _np.identity(dim)
                     # Note: scaleCache[i] = 0.0 from initialization
                 else:
-                    gate = self.model.circuit_layer_operator(opLabel, 'op').to_dense(on_space='minimal')
+                    gate = self.model.circuit_layer_operator(opLabel, 'op').to_dense("minimal")
                     nG = max(_nla.norm(gate), 1.0)
                     prodCache[iDest] = gate / nG
                     scaleCache[iDest] = _np.log(nG)
@@ -1147,13 +1148,6 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
                                                   (blk1, blk2), max_atom_cachesize,
                                                   self.model.evotype.minimal_dim(self.model.state_space))
 
-            #def approx_mem_estimate(natoms, np1, np2):
-            #    approx_cachesize = (num_circuits / natoms) * 1.3  # inflate expected # circuits per atom => cache_size
-            #    return _bytes_for_array_types(array_types, num_elements, num_elements / natoms,
-            #                                  num_circuits, num_circuits / natoms,
-            #                                  (num_params, num_params), (num_params / np1, num_params / np2),
-            #                                  approx_cachesize, self.model.state_space.dim)
-
             GB = 1.0 / 1024.0**3
             if mem_estimate > mem_limit:
                 raise MemoryError("Not enough memory for desired layout! (limit=%.1fGB, required=%.1fGB)" % (
@@ -1212,9 +1206,9 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
     def _rho_e_from_spam_tuple(self, spam_tuple):
         # This calculator uses the convention that rho has shape (N,1)
         rholabel, elabel = spam_tuple
-        rho = self.model.circuit_layer_operator(rholabel, 'prep').to_dense(on_space='minimal')[:, None]
+        rho = self.model.circuit_layer_operator(rholabel, 'prep').to_dense("minimal")[:, None]
         E = _np.conjugate(_np.transpose(self.model.circuit_layer_operator(
-            elabel, 'povm').to_dense(on_space='minimal')[:, None]))
+            elabel, 'povm').to_dense("minimal")[:, None]))
         return rho, E
 
     def _probs_from_rho_e(self, rho, e, gs, scale_vals):
@@ -1249,20 +1243,8 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         # dp_dOps[i,j] = dot( e, dot( d_gs, rho ) )[0,i,j,0]
         # dp_dOps      = squeeze( dot( e, dot( d_gs, rho ) ), axis=(0,3))
         old_err2 = _np.seterr(invalid='ignore', over='ignore')
-        #print(f'{d_gs.shape=}')
-        #print(f'{e.shape=}')
-        #print(f'{rho.shape=}')
-        #print(f'{_np.dot(d_gs, rho).shape=}')
-        #print(f'{_np.dot(e, _np.dot(d_gs, rho)).shape=}')
-        #print(f'{_np.squeeze(_np.dot(e, _np.dot(d_gs, rho)), axis=(0, 3)).shape=}')
-        #
-        #print(f"{_np.einsum('hk,ijkl,lm->ij', e, d_gs, rho).shape=}")
-        #
-        #print(f"{_np.linalg.norm(_np.squeeze(_np.dot(e, _np.dot(d_gs, rho))) - _np.einsum('hk,ijkl,lm->ij', e, d_gs, rho))=}")
         path = _np.einsum_path('hk,ijkl,lm->ij', e, d_gs, rho, optimize='optimal')
-        #print(path[1])
         dp_dOps = _np.einsum('hk,ijkl,lm->ij', e, d_gs, rho, optimize=path[0]) * scale_vals[:, None]
-        #dp_dOps = _np.squeeze(_np.dot(e, _np.dot(d_gs, rho)), axis=(0, 3)) * scale_vals[:, None]
         _np.seterr(**old_err2)
         # may overflow, but OK ; shape == (len(circuit_list), nDerivCols)
         # may also give invalid value due to scale_vals being inf and dot-prod being 0. In

@@ -2,7 +2,7 @@
 Utility functions for working with Basis objects
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -10,15 +10,15 @@ Utility functions for working with Basis objects
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from functools import partial
+from functools import partial, lru_cache
 
 import numpy as _np
 
 from pygsti.baseobjs.basisconstructors import _basis_constructor_dict
-# from ..baseobjs.basis import Basis, BuiltinBasis, DirectSumBasis
 from pygsti.baseobjs import basis as _basis
 
 
+@lru_cache(maxsize=1)
 def basis_matrices(name_or_basis, dim, sparse=False):
     """
     Get the elements of the specifed basis-type which spans the density-matrix space given by `dim`.
@@ -118,14 +118,14 @@ def is_sparse_basis(name_or_basis):
         return False
 
 
-def change_basis(mx, from_basis, to_basis):
+def change_basis(mx, from_basis, to_basis, expect_real=True):
     """
     Convert a operation matrix from one basis of a density matrix space to another.
 
     Parameters
     ----------
     mx : numpy array
-        The operation matrix (a 2D square array) in the `from_basis` basis.
+        The operation matrix (a 2D square array or 1D vector) in the `from_basis` basis.
 
     from_basis: {'std', 'gm', 'pp', 'qt'} or Basis object
         The source basis.  Allowed values are Matrix-unit (std), Gell-Mann (gm),
@@ -134,6 +134,10 @@ def change_basis(mx, from_basis, to_basis):
     to_basis : {'std', 'gm', 'pp', 'qt'} or Basis object
         The destination basis.  Allowed values are Matrix-unit (std), Gell-Mann
         (gm), Pauli-product (pp), and Qutrit (qt) (or a custom basis object).
+    
+    expect_real : bool, optional (default True)
+        Optional flag specifying whether it is expected that the returned
+        array in the new basis is real valued. Default is True.
 
     Returns
     -------
@@ -196,41 +200,10 @@ def change_basis(mx, from_basis, to_basis):
     if not to_basis.real:
         return ret
 
-    if _mt.safe_norm(ret, 'imag') > 1e-8:
+    if expect_real and _mt.safe_norm(ret, 'imag') > 1e-8:
         raise ValueError("Array has non-zero imaginary part (%g) after basis change (%s to %s)!\n%s" %
                          (_mt.safe_norm(ret, 'imag'), from_basis, to_basis, ret))
     return ret.real
-
-#def transform_matrix(from_basis, to_basis, dim_or_block_dims=None, sparse=False):
-#    '''
-#    Compute the transformation matrix between two bases
-#
-#    Parameters
-#    ----------
-#    from_basis : Basis or str
-#        Basis being converted from
-#
-#    to_basis : Basis or str
-#        Basis being converted to
-#
-#    dim_or_block_dims : int or list of ints
-#        if strings provided as bases, the dimension of basis to use.
-#
-#    sparse : bool, optional
-#        Whether to construct a sparse or dense transform matrix
-#        when this isn't specified already by `from_basis` or
-#        `to_basis` (e.g. when these are both strings).
-#
-#    Returns
-#    -------
-#    Basis
-#        the composite basis created
-#    '''
-#    if dim_or_block_dims is None:
-#        assert isinstance(from_basis, Basis)
-#    else:
-#        from_basis = Basis(from_basis, dim_or_block_dims, sparse=sparse)
-#    return from_basis.transform_matrix(to_basis)
 
 
 def create_basis_pair(mx, from_basis, to_basis):

@@ -2,7 +2,7 @@
 The ConjugatedStatePOVMEffect class and supporting functionality.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -16,6 +16,7 @@ import copy as _copy
 from pygsti.modelmembers.povms.effect import POVMEffect as _POVMEffect
 from pygsti.modelmembers import term as _term
 from pygsti.tools import matrixtools as _mt
+from pygsti import SpaceT
 
 
 class DenseEffectInterface(object):
@@ -167,7 +168,7 @@ class ConjugatedStatePOVMEffect(DenseEffectInterface, _POVMEffect):
         """
         return self.state.parameter_labels
 
-    def to_dense(self, on_space='minimal', scratch=None):
+    def to_dense(self, on_space: SpaceT='minimal', scratch=None):
         """
         Return this POVM effect vector as a (dense) numpy array.
 
@@ -206,7 +207,7 @@ class ConjugatedStatePOVMEffect(DenseEffectInterface, _POVMEffect):
 
     def __str__(self):
         s = "%s with dimension %d\n" % (self.__class__.__name__, self.dim)
-        s += _mt.mx_to_string(self.to_dense(on_space='minimal'), width=4, prec=2)
+        s += _mt.mx_to_string(self.to_dense("minimal"), width=4, prec=2)
         return s
 
     def submembers(self):

@@ -2,7 +2,7 @@
 Defines classes which represent gates, as well as supporting functions
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -27,11 +27,8 @@ from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.circuits.circuitstructure import GermFiducialPairPlaquette as _GermFiducialPairPlaquette, \
     PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
 
-from pygsti.tools import basistools as _bt
-from pygsti.tools import internalgates as _itgs
 from pygsti.tools import listtools as _lt
 from pygsti.tools import mpitools as _mpit
-from pygsti.tools import optools as _ot
 from pygsti.tools import slicetools as _slct
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
 
@@ -2164,7 +2161,7 @@ def _get_kcoverage_template_k2(n):
     def invert(bstr):
         return [(0 if x else 1) for x in bstr]
 
-    half = [bitstr(n, k) for k in range(int(_np.ceil(_np.math.log(n, 2))))]
+    half = [bitstr(n, k) for k in range(int(_np.ceil(_np.log2(n))))]
     other_half = [invert(bstr) for bstr in half]
     return half + other_half
 

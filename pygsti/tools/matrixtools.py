@@ -2,7 +2,7 @@
 Matrix related utility functions
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -420,7 +420,7 @@ def independent_columns(m, initial_independent_cols=None, tol=1e-7):
             # We assume initial_independent_cols is full column-rank.
             # This lets us use unpivoted QR instead of pivoted QR or SVD.
             assert initial_independent_cols.shape[0] == m.shape[0]
-            q = _spl.qr(initial_independent_cols, mode='econ')[0]
+            q = _spl.qr(initial_independent_cols, mode='economic')[0]
             # proj_m = (I - qq')m
             temp1 = q.T.conj() @ m
             temp2 = q @ temp1
@@ -1833,23 +1833,6 @@ def _custom_expm_multiply_simple_core(a, b, mu, m_star, s, tol, eta):  # t == 1.
     return F
 
 
-#From SciPy source, as a reference - above we assume A is a sparse csr matrix
-# and B is a dense vector
-#def _exact_inf_norm(A):
-#    # A compatibility function which should eventually disappear.
-#    if scipy.sparse.isspmatrix(A):
-#        return max(abs(A).sum(axis=1).flat)
-#    else:
-#        return np.linalg.norm(A, np.inf)
-#
-#
-#def _exact_1_norm(A):
-#    # A compatibility function which should eventually disappear.
-#    if scipy.sparse.isspmatrix(A):
-#        return max(abs(A).sum(axis=0).flat)
-#    else:
-#        return np.linalg.norm(A, 1)
-
 def expop_multiply_prep(op, a_1_norm=None, tol=EXPM_DEFAULT_TOL):
     """
     Returns "prepared" meta-info about operation op, which is assumed to be traceless (so no shift is needed).
@@ -2214,15 +2197,6 @@ def union_space(space1, space2, tol=1e-7):
     VW = _np.concatenate((space1, space2), axis=1)
     indep_cols = independent_columns(VW, None, tol)
     return VW[:, indep_cols]
-
-
-#UNUSED
-#def spectral_radius(x):
-#    if hasattr(x, 'ndim') and x.ndim == 2:  # then interpret as a numpy array and take norm
-#        evals = _np.sort(_np.linalg.eigvals(x))
-#        return abs(evals[-1] - evals[0])
-#    else:
-#        return x
 
 
 def jamiolkowski_angle(hamiltonian_mx):
