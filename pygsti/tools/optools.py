@@ -26,8 +26,11 @@ from pygsti.tools import lindbladtools as _lt
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools import sdptools as _sdps
 from pygsti.baseobjs import basis as _pgb
-from pygsti.baseobjs.basis import Basis as _Basis, DirectSumBasis as _DirectSumBasis, \
+from pygsti.baseobjs.basis import (
+    Basis as _Basis,
+    DirectSumBasis as _DirectSumBasis,
     TensorProdBasis as _TensorProdBasis
+)
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LocalElementaryErrorgenLabel
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
