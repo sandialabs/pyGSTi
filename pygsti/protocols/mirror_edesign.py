@@ -230,10 +230,9 @@ def qiskit_circuits_to_fullstack_mirror_edesign(qk_circs, #not transpiled
         test_circ_dict[ps_test_circ] += [test_metadata]
 
         if qk_backend is not None:
-            reduced_coupling_map = qk_backend.coupling_map.reduce(qk_final_opt_layout) # Thanks Jordan
-        else:
+            reduced_coupling_map = qk_backend.coupling_map.reduce(qk_final_opt_layout)
+        else: # there must be a coupling map that was separately provided
             reduced_coupling_map = coupling_map.reduce(qk_final_opt_layout)
-
 
         # generate exact reference circuit, ensuring that the line labels will align with the test circuit when inverted.
         ref_seed = 0
@@ -312,11 +311,6 @@ def qiskit_circuits_to_fullstack_mirror_edesign(qk_circs, #not transpiled
 
     test_edesign = _FreeformDesign(test_circ_dict)
     ref_edesign = _FreeformDesign(ref_circ_dict)
-
-    ### set default options for circuit mirroring if not provided
-    # mirroring_kwargs_dict['num_mcs_per_circ'] = mirroring_kwargs_dict.get('num_mcs_per_circ', 10)
-    # mirroring_kwargs_dict['num_ref_per_qubit_subset'] = mirroring_kwargs_dict.get('num_ref_per_qubit_subset', 10)
-    # mirroring_kwargs_dict['rand_state'] = mirroring_kwargs_dict.get('rand_state', _np.random.RandomState())
 
     mirror_edesign = make_mirror_edesign(test_edesign=test_edesign,
                                          ref_edesign=ref_edesign,
@@ -402,31 +396,9 @@ def qiskit_circuits_to_mirror_edesign(qk_circs, # yes transpiled
         # elapsed = time.time() - start
         # print(f'transpilation time: {elapsed}')
         
-
-        # from qiskit_aer import AerSimulator
-
-        # sim = AerSimulator()
-
-        # qc_2 = qk_test_circ.compose(qk_ref_circ.inverse())
-
-        # qc_2.measure_active()
-
-        # print('pre-pyGSTi:')
-        # print(sim.run(qc_2, shots=64).result().get_counts())
-
         ps_test_circ, _ = _Circuit.from_qiskit(qk_test_circ, allow_different_gates_in_same_layer=True)
         ps_ref_circ, _ = _Circuit.from_qiskit(qk_ref_circ, allow_different_gates_in_same_layer=False)
 
-        # R = ps_ref_circ
-        # T = ps_test_circ
-
-        # R_inv = compute_inverse(circ=R, gate_set='u3_cx', inverse=None, inv_kwargs=None)
-
-        # TR_inv = T + R_inv
-        # TR_qk = TR_inv.convert_to_qiskit(qubit_conversion='remove-Q', qubits_to_measure='active')
-
-        # print('post-pyGSTi:')
-        # print(sim.run(TR_qk, shots=64).result().get_counts())
         
 
         ps_test_circ = ps_test_circ.delete_idling_lines()
@@ -435,17 +407,6 @@ def qiskit_circuits_to_mirror_edesign(qk_circs, # yes transpiled
         ps_ref_circ = ps_ref_circ.delete_idling_lines()
         # ps_ref_circ = ps_ref_circ.reorder_lines(sorted(ps_ref_circ.line_labels))
 
-
-        # R = ps_ref_circ
-        # T = ps_test_circ
-
-        # R_inv = compute_inverse(circ=R, gate_set='u3_cx', inverse=None, inv_kwargs=None)
-
-        # TR_inv = T + R_inv
-        # TR_qk = TR_inv.convert_to_qiskit(qubit_conversion='remove-Q', qubits_to_measure='active')
-
-        # print('post-reordering:')
-        # print(sim.run(TR_qk, shots=64).result().get_counts())
 
         test_circ_metadata = {
             'id': k,
@@ -745,7 +706,7 @@ def make_mirror_edesign(test_edesign: _FreeformDesign,
                         num_mcs_per_circ: int = 10,
                         num_ref_per_qubit_subset: int = 10,
                         mirroring_strategy: Literal['pauli_rc', 'central_pauli'] = 'pauli_rc',
-                        gate_set: str = 'u3_cx',
+                        gate_set: str = 'u3_cx_cz',
                         inverse: Optional[Callable[[_Circuit], _Circuit]] = None,
                         inv_kwargs: Optional[dict] = None,
                         rc_function: Optional[Callable[[_Circuit], Tuple[_Circuit, str]]] = None,
@@ -755,6 +716,16 @@ def make_mirror_edesign(test_edesign: _FreeformDesign,
                         state_initialization: Optional[Union[str, Callable[..., _Circuit]]] = None,
                         state_init_kwargs: Optional[dict] = None,
                         rand_state: Optional[_np.random.RandomState] = None) -> _CombinedExperimentDesign:
+    
+    """
+    Create experiment design containing the mirror circuits needed for mirror circuit fidelity estimation (MCFE).
+
+    Parameters
+    ----------
+    test_edesign : pygsti.protocols.FreeformDesign
+
+    """
+
     # idea for random_compiling and state_initialization is that a power user could supply their own functions if they did not want to use the built-in options.
 
     # Please read carefully for guidelines on how design your own functions that implement a circuit inverse, a state prep, an RC, and a central Pauli propagation.
@@ -826,11 +797,7 @@ def make_mirror_edesign(test_edesign: _FreeformDesign,
             
             exact_circ = ref_id_lookup_dict[circ_id]
 
-            # print(ref_edesign.aux_info[exact_circ])
-
             valid_test_ids = set(aux['id'] for aux in ref_edesign.aux_info[exact_circ])
-
-            test_id = test_aux['id']
 
             assert circ_id in valid_test_ids, f"Invalid test ID {circ_id} for ref circuit corresponding to test IDs {valid_test_ids}"
 
@@ -842,22 +809,8 @@ def make_mirror_edesign(test_edesign: _FreeformDesign,
         R = exact_circ
         T = c
 
-        # print(f'test circ depth: {T.depth}')
-        # print(f'ref circ depth: {R.depth}')
-
         R_inv = compute_inverse(circ=R, gate_set=gate_set, inverse=inverse, inv_kwargs=inv_kwargs)
 
-        # from qiskit_aer import AerSimulator
-
-        # sim = AerSimulator()
-
-        # TR_circ = T + R_inv
-        # TR_qk = TR_circ.convert_to_qiskit(qubit_conversion='remove-Q',qubits_to_measure='active')
-
-        # print(sim.run(TR_qk, shots=64).result().get_counts())
-
-        # print(R)
-        # print(T)
         for j in range(num_mcs_per_circ):
             
             random_compiler = _rc.RandomCompilation(mirroring_strategy, rand_state)
@@ -887,7 +840,6 @@ def make_mirror_edesign(test_edesign: _FreeformDesign,
                     L_bareref_inv = L_bareref_inv.map_state_space_labels(mc_routing_perm)
 
 
-
                 if rc_function is not None:
                     try:
                         # bare-ref
@@ -899,13 +851,13 @@ def make_mirror_edesign(test_edesign: _FreeformDesign,
 
                         # the assertions below check if the circuit addition in the function calls above have caused a line label reordering. If so, the MCFE code will compare bitstrings incorrectly, which is bad. This issue is fixable with enough Circuit.reorder_lines() calls, but the better approach is simply to ensure that all circuits in test_edesign and ref_edesign obey a lexicographical ordering. This is easily done by using something like 'c = c.reorder_lines(sorted(c.line_labels)) on the circuits *prior* to creating the mirror edesign.
 
-                        assert L_T_Rinv_Linv.line_labels == qubits, f'line labels have been permuted: should be {qubits} but is {L_T_Rinv_Linv.line_labels} instead.'
+                        assert L_T_Rinv_Linv.line_labels == qubits, f'line labels have been modified/permuted: should be {qubits} but is {L_T_Rinv_Linv.line_labels} instead.'
 
-                        assert L_R_Rinv_Linv.line_labels == qubits, f'line labels have been permuted: should be {qubits} but is {L_R_Rinv_Linv.line_labels} instead.'
+                        assert L_R_Rinv_Linv.line_labels == qubits, f'line labels have been modified/permuted: should be {qubits} but is {L_R_Rinv_Linv.line_labels} instead.'
 
                     except:
                         raise RuntimeError(f"User-provided RC function for gate set '{gate_set}' returned an error!")
-                elif gate_set == 'u3_cx':
+                elif gate_set == 'u3_cx_cz':
 
                     # bare-ref
 
@@ -954,7 +906,7 @@ def make_mirror_edesign(test_edesign: _FreeformDesign,
 
                     except:
                         raise RuntimeError(f"User-provided CP function for gate set '{gate_set}' returned an error!")
-                elif gate_set == 'u3_cx':
+                elif gate_set == 'u3_cx_cz':
                     #print(f'ref depth: {R.depth}, ref_inv depth: {R_inv.depth}, L depth: {L_inv.depth}')
                     #reload(cp)
                     # test_rand_state1 = _np.random.RandomState(8675309)
@@ -1057,8 +1009,8 @@ def compute_inverse(circ: _Circuit,
             circ_inv = inverse(circ=circ, **inv_kwargs)
         except:
             raise RuntimeError(f"User-provided inverse function for gate set '{gate_set}' returned an error!")
-    if gate_set == 'u3_cx':
-        circ_inv = _rc.u3_cx_inv(circ)
+    if gate_set == 'u3_cx_cz':
+        circ_inv = _rc.u3_cx_cz_inv(circ)
     elif gate_set == 'clifford':
         #TODO: add clifford inverse function to circuit_inverse.py
         raise NotImplementedError("Clifford inversion is not yet supported!")
@@ -1082,7 +1034,7 @@ def init_layer(qubits,
             L = state_initialization(qubits=qubits, rand_state=rand_state, **state_init_kwargs)
         except:
             raise RuntimeError(f"User-provided state_initialization function for gate set '{gate_set}' returned an error!")
-    elif gate_set == 'u3_cx':
+    elif gate_set == 'u3_cx_cz':
         prep_layer = _rc.haar_random_u3_layer(qubits, rand_state)
         L = _Circuit([prep_layer], qubits)
     elif gate_set == 'clifford':

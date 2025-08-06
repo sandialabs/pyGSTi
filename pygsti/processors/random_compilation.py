@@ -413,9 +413,8 @@ def haar_random_u3(q, rand_state=None):
     return _Label('Gu3', q, args=(theta, phi, lamb))
 
 
-def u3_cx_inv(circ: _Circuit) -> _Circuit:
-    # Surely this method exists already. Surely.
-    # I need to optimize this a little, it is bugging me
+def u3_cx_cz_inv(circ: _Circuit) -> _Circuit:
+    # Is this function duplicative of existing functionality in pyGSTi?
     inverse_layers = []
     d = circ.depth
 
