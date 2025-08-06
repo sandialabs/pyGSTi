@@ -10,10 +10,19 @@ Utility functions related to the Choi representation of gates.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
+
 import numpy as _np
 
 from pygsti.tools import basistools as _bt
 from pygsti.baseobjs.basis import Basis as _Basis
+from typing import Union, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from cvxpy import Expression
+
+BasisLike = Union[_Basis, str]
+
 
 
 # Gate Mx G:      rho  --> G rho                    where G and rho are in the Pauli basis (by definition/convention)                                           # noqa
@@ -63,14 +72,14 @@ from pygsti.baseobjs.basis import Basis as _Basis
 #  J(Phi) = sum_(0<i,j<n) Phi(Eij) otimes Eij                                                                                                                   # noqa
 #  where Eij is the matrix unit with a single element in the (i,j)-th position, i.e. Eij == |i><j|                                                              # noqa
 
-def jamiolkowski_iso(operation_mx, op_mx_basis='pp', choi_mx_basis='pp', normalized=True):
+def jamiolkowski_iso(operation_mx: Union[_np.ndarray, Expression], op_mx_basis: BasisLike ='pp', choi_mx_basis: BasisLike = 'pp', normalized: bool = True) -> Union[_np.ndarray, Expression]:
     """
     Return a Choi matrix (in the choi_mx_basis) for operation_mx, when operation_mx
     is interpreted in the op_mx_basis. 
 
     Parameters
     ----------
-    operation_mx : numpy array
+    operation_mx : numpy array or cvxpy Expression
         the operation matrix to compute Choi matrix of.
 
     op_mx_basis : Basis object
@@ -89,7 +98,7 @@ def jamiolkowski_iso(operation_mx, op_mx_basis='pp', choi_mx_basis='pp', normali
 
     Returns
     -------
-    numpy array
+    numpy array or cvxpy Expression
         the Choi matrix, in the desired basis.
     """
     try:
@@ -147,7 +156,7 @@ def jamiolkowski_iso(operation_mx, op_mx_basis='pp', choi_mx_basis='pp', normali
 # GStd = sum_ij Jij (BSi x BSj^*)
 
 
-def jamiolkowski_iso_inv(choi_mx, choi_mx_basis='pp', op_mx_basis='pp', normalized=True):
+def jamiolkowski_iso_inv(choi_mx: Union[_np.ndarray, Expression], choi_mx_basis: BasisLike ='pp', op_mx_basis: BasisLike ='pp', normalized: bool = True) -> Union[_np.ndarray, Expression]:
     """
     Given a choi matrix (interpreted in choi_mx_basis), return the corresponding
     operation matrix (in op_mx_basis).
@@ -213,7 +222,7 @@ def jamiolkowski_iso_inv(choi_mx, choi_mx_basis='pp', op_mx_basis='pp', normaliz
     return _bt.change_basis(opMxInStdBasis, op_mx_basis.create_equivalent('std'), op_mx_basis)
 
 
-def fast_jamiolkowski_iso_std(operation_mx, op_mx_basis, normalized=True):
+def fast_jamiolkowski_iso_std(operation_mx: _np.ndarray, op_mx_basis: BasisLike, normalized: bool = True) -> _np.ndarray:
     """
     Returns the standard-basis representation of the Choi matrix for operation_mx,
     where operation_mx is interpreted in op_mx_basis.
@@ -268,7 +277,7 @@ def fast_jamiolkowski_iso_std(operation_mx, op_mx_basis, normalized=True):
     return Jmx
 
 
-def fast_jamiolkowski_iso_std_inv(choi_mx, op_mx_basis, normalized=True):
+def fast_jamiolkowski_iso_std_inv(choi_mx: _np.ndarray, op_mx_basis: BasisLike, normalized: bool = True) -> _np.ndarray:
     """
     Given a choi matrix in the standard basis, return the corresponding
     operation matrix (in op_mx_basis).
