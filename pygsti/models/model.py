@@ -437,7 +437,7 @@ class OpModel(Model):
     """
 
     #Whether to perform extra parameter-vector integrity checks
-    _pcheck = True
+    _pcheck = False
 
     #Experimental: whether to call .from_vector on operation *cache* elements as part of model.from_vector call
     _call_fromvector_on_cache = True
@@ -665,6 +665,10 @@ class OpModel(Model):
     def _check_paramvec(self, debug=False):
         if debug: print("---- Model._check_paramvec ----")
 
+        ops_paramvec = self._model_paramvec_to_ops_paramvec(self._paramvec)
+        if debug: 
+            print(f'{ops_paramvec=}')
+            print(f'{self._paramvec=}')
         TOL = 1e-8
         for lbl, obj in self._iter_parameterized_objs():
             if debug: print(lbl, ":", obj.num_params, obj.gpindices)
@@ -672,9 +676,9 @@ class OpModel(Model):
             msg = "None" if (obj.parent is None) else id(obj.parent)
             assert(obj.parent is self), "%s's parent is not set correctly (%s)!" % (lbl, msg)
             if obj.gpindices is not None and len(w) > 0:
-                if _np.linalg.norm(self._paramvec[obj.gpindices] - w) > TOL:
+                if _np.linalg.norm(ops_paramvec[obj.gpindices] - w) > TOL:
                     if debug: print(lbl, ".to_vector() = ", w, " but Model's paramvec = ",
-                                    self._paramvec[obj.gpindices])
+                                    ops_paramvec[obj.gpindices])
                     raise ValueError(f"{str(lbl)} is out of sync with paramvec!!!")
             if not self.dirty and obj.dirty:
                 raise ValueError(f"{str(lbl)} is dirty but Model.dirty=False!!")
@@ -708,7 +712,6 @@ class OpModel(Model):
         if self.dirty:  # if any member object is dirty (ModelMember.dirty setter should set this value)
             TOL = 1e-8
             ops_paramvec = self._model_paramvec_to_ops_paramvec(self._paramvec)
-
             #Note: lbl args used *just* for potential debugging - could strip out once
             # we're confident this code always works.
             def clean_single_obj(obj, lbl):  # sync an object's to_vector result w/_paramvec
@@ -723,7 +726,7 @@ class OpModel(Model):
                         else:
                             raise e  # we don't know what went wrong.
                     chk_norm = _np.linalg.norm(ops_paramvec[obj.gpindices] - w)
-                    #print(lbl, " is dirty! vec = ", w, "  chk_norm = ",chk_norm)
+                    print(f"{lbl} is dirty! vec = {w}, chk_norm = {chk_norm} gpindices = {obj.gpindices}")
                     if (not _np.isfinite(chk_norm)) or chk_norm > TOL:
                         ops_paramvec[obj.gpindices] = w
                     obj.dirty = False
@@ -1328,7 +1331,13 @@ class OpModel(Model):
             self._paramvec = self._model_paramvec_to_ops_paramvec(self._paramvec)
         self._param_interposer = interposer
         if interposer is not None:  # add new interposer
+            #the clean_paramvec call below happens at a point between when we've set the interposer 
+            #attribute, but before we've used it to set the model's parameter vector, which will results
+            #in an edge case in the parameter vector integrity logic, so disable temporarily.
+            pcheck = self._pcheck
+            OpModel._pcheck = False
             self._clean_paramvec()
+            OpModel._pcheck = pcheck
             self._paramvec = self._ops_paramvec_to_model_paramvec(self._paramvec)
 
     def _model_paramvec_to_ops_paramvec(self, v):
