@@ -93,7 +93,7 @@ class LinearOperator(_modelmember.ModelMember):
         return (self.dim)**2
 
     @property
-    def shape(self):
+    def shape(self) -> tuple[int, int]:
         # Provide this function to mimic numpy array semantics.
         #
         # We can't rely on self._rep.shape since superclasses
