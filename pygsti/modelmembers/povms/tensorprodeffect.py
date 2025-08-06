@@ -21,6 +21,7 @@ from pygsti.baseobjs import statespace as _statespace
 from pygsti.tools import listtools as _lt
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools import slicetools as _slct
+from pygsti import SpaceT
 
 
 class TensorProductPOVMEffect(_POVMEffect):
@@ -113,7 +114,7 @@ class TensorProductPOVMEffect(_POVMEffect):
             vl[povm_local_inds] = povm.parameter_labels
         return vl
 
-    def to_dense(self, on_space='minimal', scratch=None):
+    def to_dense(self, on_space: SpaceT='minimal', scratch=None):
         """
         Return this POVM effect vector as a (dense) numpy array.
 
@@ -206,13 +207,13 @@ class TensorProductPOVMEffect(_POVMEffect):
                 # as they'd only be used if the evotype was like densitymx and needed to convert to
                 # a dense superoperator.
                 pre_state_rep = self._evotype.create_tensorproduct_state_rep(
-                    [self._evotype.create_pure_state_rep(f.pre_effect.to_dense(on_space='Hilbert'), None,
+                    [self._evotype.create_pure_state_rep(f.pre_effect.to_dense("Hilbert"), None,
                                                          f.pre_effect.state_space)
                      for f in factors if (f.pre_effect is not None)], self.state_space)
                 pre_rep = self._evotype.create_conjugatedstate_effect_rep(pre_state_rep)
 
                 post_state_rep = self._evotype.create_tensorproduct_state_rep(
-                    [self._evotype.create_pure_state_rep(f.post_effect.to_dense(on_space='Hilbert'), None,
+                    [self._evotype.create_pure_state_rep(f.post_effect.to_dense("Hilbert"), None,
                                                          f.post_effect.state_space)
                      for f in factors if (f.post_effect is not None)], self.state_space)
                 post_rep = self._evotype.create_conjugatedstate_effect_rep(post_state_rep)
@@ -332,11 +333,11 @@ class TensorProductPOVMEffect(_POVMEffect):
         numpy array
             Array of derivatives, shape == (dimension, num_params)
         """
-        typ = self.factors[0].to_dense(on_space='minimal').dtype if len(self.factors) > 0 else 'd'
+        typ = self.factors[0].to_dense("minimal").dtype if len(self.factors) > 0 else 'd'
 
         #HACK to deal with fact that output of to_dense is really what is differentiated
         # but this may not match self.dim == self.state_space.dim, e.g. for pure state vecs.
-        dims = [len(fct.to_dense(on_space='minimal')) for fct in self.factors]
+        dims = [len(fct.to_dense("minimal")) for fct in self.factors]
         dim = int(_np.prod(dims))
 
         derivMx = _np.zeros((dim, self.num_params), typ)
@@ -351,15 +352,15 @@ class TensorProductPOVMEffect(_POVMEffect):
             deriv.shape = (fct_dim, vec.num_params)
 
             if i > 0:  # factors before ith
-                pre = self.factors[0][self.effectLbls[0]].to_dense(on_space='minimal')
+                pre = self.factors[0][self.effectLbls[0]].to_dense("minimal")
                 for j, fctA in enumerate(self.factors[1:i], start=1):
-                    pre = _np.kron(pre, fctA[self.effectLbls[j]].to_dense(on_space='minimal'))
+                    pre = _np.kron(pre, fctA[self.effectLbls[j]].to_dense("minimal"))
                 deriv = _np.kron(pre[:, None], deriv)  # add a dummy 1-dim to 'pre' and do kron properly...
 
             if i + 1 < len(self.factors):  # factors after ith
-                post = self.factors[i + 1][self.effectLbls[i + 1]].to_dense(on_space='minimal')
+                post = self.factors[i + 1][self.effectLbls[i + 1]].to_dense("minimal")
                 for j, fctA in enumerate(self.factors[i + 2:], start=i + 2):
-                    post = _np.kron(post, fctA[self.effectLbls[j]].to_dense(on_space='minimal'))
+                    post = _np.kron(post, fctA[self.effectLbls[j]].to_dense("minimal"))
                 deriv = _np.kron(deriv, post[:, None])  # add a dummy 1-dim to 'post' and do kron properly...
 
             assert(fct_local_inds is not None), \
@@ -388,6 +389,6 @@ class TensorProductPOVMEffect(_POVMEffect):
         #s += _mt.mx_to_string(ar, width=4, prec=2)
 
         # factors are POVMs
-        s += " x ".join([_mt.mx_to_string(fct[self.effectLbls[i]].to_dense(on_space='minimal'), width=4, prec=2)
+        s += " x ".join([_mt.mx_to_string(fct[self.effectLbls[i]].to_dense("minimal"), width=4, prec=2)
                          for i, fct in enumerate(self.factors)])
         return s

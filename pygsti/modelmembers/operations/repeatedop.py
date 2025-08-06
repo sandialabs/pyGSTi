@@ -15,6 +15,7 @@ import scipy.sparse as _sps
 
 from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
 from pygsti.evotypes import Evotype as _Evotype
+from pygsti import SpaceT
 
 
 class RepeatedOp(_LinearOperator):
@@ -77,7 +78,7 @@ class RepeatedOp(_LinearOperator):
         """
         self.repeated_op.set_time(t)
 
-    def to_sparse(self, on_space='minimal'):
+    def to_sparse(self, on_space: SpaceT='minimal'):
         """
         Return the operation as a sparse matrix
 
@@ -94,7 +95,7 @@ class RepeatedOp(_LinearOperator):
             mx = mx.dot(op)
         return mx
 
-    def to_dense(self, on_space='minimal'):
+    def to_dense(self, on_space: SpaceT='minimal'):
         """
         Return this operation as a dense matrix.
 
@@ -192,7 +193,7 @@ class RepeatedOp(_LinearOperator):
         numpy array
             Array of derivatives with shape (dimension^2, num_params)
         """
-        mx = self.repeated_op.to_dense(on_space='minimal')
+        mx = self.repeated_op.to_dense("minimal")
 
         mx_powers = {0: _np.identity(self.dim, 'd'), 1: mx}
         for i in range(2, self.num_repetitions):

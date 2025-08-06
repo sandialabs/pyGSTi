@@ -196,7 +196,8 @@ def standard_gatename_unitaries():
       * 'Gsqrtiswap' : square-root of ISWAP gate, used in some superconducting qubit platforms.
       * 'Gxx', 'Gzz' : MS-style parity gates
       * 'Gcres', 'Gecres' : Cross-resonance and echoed cross-resonance gates. Native gate operations common on transmon systems (including IBM).
-      
+      * 'Gecr' : alternative name for the echoed cross-resonance gate, matching OpenQASM / IBM conventions.
+
     * Non-Clifford gates:
 
       * 'Gt', 'Gtdag' : the T and inverse T gates (T is a Z rotation by pi/4).
@@ -302,7 +303,8 @@ def standard_gatename_unitaries():
     std_unitaries['Gcres'] = _spl.expm(-1j*_np.pi/4*sigmaxz)
     std_unitaries['Gecres'] = _np.array([[0, 1, 0., 1j], [1., 0, -1j, 0.],
                                         [0., 1j, 0, 1], [-1j, 0., 1, 0]], complex)/_np.sqrt(2)
-
+    std_unitaries['Gecr'] = std_unitaries['Gecres']  # alias
+    
     std_unitaries['Gzr'] = Gzr()
     std_unitaries['Gczr'] = Gczr()
 
@@ -403,6 +405,7 @@ def standard_gatenames_stim_conversions():
     ecr_unitary = _np.array([[0, 1, 0., 1j], [1., 0, -1j, 0.],
                              [0., 1j, 0, 1], [-1j, 0., 1, 0]], complex)/_np.sqrt(2)
     gate_dict['Gecres'] = stim.Tableau.from_unitary_matrix(ecr_unitary, endian='big')
+    gate_dict['Gecr'] = gate_dict['Gecres']
 
     return gate_dict
 
@@ -764,6 +767,7 @@ def standard_gatenames_openqasm_conversions(version='u3'):
         std_gatenames_to_qasm['Gc23'] = ['u3(0, 0, 4.71238898038469)']  # [0, 0, 3] * pi/2 (this is Gzmpi2 / Gpdag)
 
         std_gatenames_to_qasm['Gecr'] = ['ecr']
+        std_gatenames_to_qasm['Gecres'] = ['ecr']
 
         std_gatenames_to_argmap = {}
         std_gatenames_to_argmap['Gzr'] = lambda gatearg: ['u3(0, 0, ' + str(gatearg[0]) + ')']
@@ -819,6 +823,7 @@ def standard_gatenames_openqasm_conversions(version='u3'):
         std_gatenames_to_qasm['Gtdag'] = ['rz(5.497787143782138)']
 
         std_gatenames_to_qasm['Gecr'] = ['ecr']
+        std_gatenames_to_qasm['Gecres'] = ['ecr']
 
         std_gatenames_to_argmap = {}
         std_gatenames_to_argmap['Gzr'] = lambda gatearg: ['rz(' + str(gatearg[0]) + ')']
