@@ -13,7 +13,6 @@ Utility functions related to the Choi representation of gates.
 import numpy as _np
 
 from pygsti.tools import basistools as _bt
-from pygsti.tools import matrixtools as _mt
 from pygsti.baseobjs.basis import Basis as _Basis
 
 
