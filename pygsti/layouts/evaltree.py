@@ -805,7 +805,7 @@ class EvalTreeBasedUponLongestCommonSubstring():
                 # Invalidate all gate labels that we saved just in case.
                 # Invalidate every index in the which we know to be influenced by my_op.
                 local_changes = {k: v.copy() for k, v in self.results.items() \
-                                    if (k not in cache_inds and not isinstance(k, LabelTupTup))}
+                                    if ((k not in cache_inds) and (not isinstance(k, Label)))} # Could just invalidate only the lbl with the index.
 
                 for cache_ind in cache_inds:
                     cumulative_term = None
@@ -912,7 +912,9 @@ class EvalTreeBasedUponLongestCommonSubstring():
         """
 
         if isinstance(term_to_extend_with, int):
-            assert term_to_extend_with in results_cache
+            if term_to_extend_with not in results_cache:
+                breakpoint()
+                assert term_to_extend_with in results_cache, f"Term {term_to_extend_with} not in cache: {results_cache.keys()}"
             return self.handle_results_cache_lookup_and_product(cumulative_term, term_to_extend_with, results_cache)
         if term_to_extend_with in results_cache:
             return self.handle_results_cache_lookup_and_product(cumulative_term, term_to_extend_with, results_cache)
