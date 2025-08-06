@@ -28,12 +28,16 @@ from pygsti.tools import sdptools as _sdps
 from pygsti.baseobjs import basis as _pgb
 from pygsti.baseobjs.basis import (
     Basis as _Basis,
+    BuiltinBasis as _BuiltinBasis,
     DirectSumBasis as _DirectSumBasis,
     TensorProdBasis as _TensorProdBasis
 )
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LocalElementaryErrorgenLabel
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
+
+from typing import Union, Optional
+BasisLike = Union[str, _Basis]
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 
@@ -461,15 +465,28 @@ def entanglement_fidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
     return fidelity(JA, JB)
 
 
-def tensorized_with_eye(op, basis, ten_basis=None, std_basis=None, ten_std_basis=None):
+def tensorized_with_eye(op: _np.ndarray, op_basis: _Basis, ten_basis: Optional[_Basis]=None, std_basis: Optional[_Basis]=None, ten_std_basis: Optional[_Basis]=None):
+    """
+    `op` is a linear operator on a Hilbert-Schmidt space, S, represented as a matrix in the `op_basis` basis.
+
+    Returns a matrix representing a linear operator *** AND *** a basis in which to interpret that matrix.
+    The linear operator itself is the tensor product operator `op`⨂I_S, where I_S is the identity on S.
+    The basis is either ten_basis (if provided) or _TensorProdBasis((op_basis, op_basis)).
+
+    Notes
+    -----
+    We accept std_basis and ten_std_basis for efficiency reasons.
+     * If std_basis is provided,     it must be equivalent to `_BuiltinBasis('std', op_basis.size)`.
+     * If ten_std_basis is provided, it must be equivalent to `_TensorProdBasis((std_basis, std_basis))`.
+    """
     if ten_basis is None:
-        ten_basis = _TensorProdBasis((basis, basis))
+        ten_basis = _TensorProdBasis((op_basis, op_basis))
     if std_basis is None:
-        std_basis = _pgb.BuiltinBasis('std', basis.size)
+        std_basis = _BuiltinBasis('std', op_basis.size)
     if ten_std_basis is None:
         ten_std_basis = _TensorProdBasis((std_basis, std_basis))
-    op_std = _bt.change_basis(op, basis, std_basis)
-    eye = _np.eye(basis.size)
+    op_std = _bt.change_basis(op, op_basis, std_basis)
+    eye = _np.eye(op_basis.size)
     ten_op_std = _np.kron(op_std, eye)
     ten_op = _bt.change_basis(ten_op_std, ten_std_basis, ten_basis)
     return ten_op, ten_basis
