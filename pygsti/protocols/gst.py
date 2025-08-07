@@ -2171,6 +2171,7 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options,
 
     badfit_options = GSTBadFitOptions.cast(badfit_options)
     base_estimate = results.estimates[base_estimate_label]
+    #TODO is this variable needed?
     parameters = base_estimate.parameters
 
     if len(badfit_options.actions) == 0:
@@ -2206,7 +2207,7 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options,
 
         elif badfit_typ == "wildcard":
             try:
-                budget_dict = _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options, printer - 1)
+                budget_dict = _compute_wildcard_budget(objfn_cache, mdc_objfn, badfit_options, printer - 1)
                 for chain_name, (unmodeled, active_constraint_list) in budget_dict.items():
                     base_estimate.extra_parameters[chain_name + "_unmodeled_error"] = unmodeled.to_nice_serialization()
                     base_estimate.extra_parameters[chain_name + "_unmodeled_active_constraints"] \
