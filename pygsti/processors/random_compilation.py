@@ -1,3 +1,9 @@
+"""
+Randomized circuit compilation via random compiling and central Pauli propagation.
+"""
+
+#TODO: add copyright statement
+
 import numpy as _np
 
 from pygsti.circuits.circuit import Circuit as _Circuit
@@ -5,12 +11,55 @@ from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.unitarygatefunction import UnitaryGateFunction as _UnitaryGateFunction
 from pygsti.tools.internalgates import standard_gatename_unitaries as _standard_gatename_unitaries
 
-#TODO: OOP-ify this code?
 
 class RandomCompilation(object):
+    """
+    A class for performing randomized circuit compilation.
+
+    Attributes
+    ----------
+    rc_strategy : str
+        The strategy used for randomized compilation. Currently,
+        'pauli_rc' (pauli randomized compiling on a U3-CX-CZ gate set) and
+        'central_pauli' (central Pauli propagation for a U3-CX-CZ gate set)
+        are supported.
+
+    return_bs : bool
+        If True, the `compile` method will return the target bitstring for
+        the randomly compiled circuit.
+
+    testing : bool
+        Flag for unit testing. If True, the user can provide test Pauli layers for
+        random compilation instead of the layers being randomly generated.
+
+    rand_state : np.random.RandomState
+        A random state for reproducibility of random operations.
+    """
+
     def __init__(self, rc_strategy=None, return_bs=False, testing=False, rand_state=None): #pauli_rc, central_pauli are currently the supported options
-        # do I need to call super().__init__?
-        # is this even the right class to inherit from?
+        """
+        Initialize the RandomCompilation object.
+
+        Parameters
+        ----------
+        rc_strategy : str
+            The strategy used for randomized compilation. Currently,
+            'pauli_rc' (pauli randomized compiling on a U3-CX-CZ gate set) and
+            'central_pauli' (central Pauli propagation for a U3-CX-CZ gate set)
+            are supported. Defaults to 'pauli_rc'.
+
+        return_bs : bool
+            If True, the `compile` method will return the target bitstring for
+            the randomly compiled circuit. Default is False.
+
+        testing : bool
+            Flag for unit testing. If True, the user can provide test Pauli layers for
+            random compilation instead of the layers being randomly generated. Default is False.
+
+        rand_state : np.random.RandomState
+            A random state for reproducibility of random operations. Default is None.
+        """
+
         self.rc_strategy = rc_strategy if rc_strategy is not None else "pauli_rc"
         self.return_bs = return_bs
         self.testing = testing
@@ -25,9 +74,22 @@ class RandomCompilation(object):
 
 
     def compile(self, circ: _Circuit, test_layers=None): # may need to a kwarg dict parameter to this function to allow for things to be passed to a given compilation choice
-        # d = circ.depth
-        # n = circ.width
-        # framedata = {}
+        """
+        Compiles the given circuit using the specified randomized compilation strategy.
+
+        Parameters
+        -------------
+        circ : pygsti.circuits.Circuit
+            The circuit to be compiled.
+        test_layers : list[np.ndarray[int]], optional
+            A list of test layers to be used in the random compilation
+            if `self.testing` is True. Default is None.
+
+        Returns
+        --------
+        list[pygsti.circuits.Circuit, str (optional), np.ndarray (optional)]
+            A list containing the randomized circuit, and optionally the bitstring and target Pauli vector.
+        """
 
         if self.rc_strategy == 'pauli_rc':
             return_bs = False
@@ -70,8 +132,39 @@ class RandomCompilation(object):
             raise ValueError(f"unknown compilation strategy '{self.rc_strategy}'!")
 
 
-
 def pauli_randomize_circuit(circ, rand_state=None, return_bs=False, return_target_pauli=False, insert_test_layers=False, test_layers=None):
+    """
+    Performs random compilation on a given circuit by inserting Pauli gates between layers.
+
+    Parameters
+    -------------
+    circ : pygsti.circuits.Circuit
+        The circuit to be randomized.
+
+    rand_state : np.random.RandomState, optional
+        A random state for reproducibility. Default is None, which initializes a new random state.
+
+    return_bs : bool, optional
+        If True, returns the target bitstring for the randomly compiled circuit. Default is False.
+
+    return_target_pauli : bool, optional
+        If True, returns the target Pauli vector for the circuit. Default is False.
+
+    insert_test_layers : bool, optional
+        If True, uses `test_layers` as the Pauli layers to randomly compile instead of
+        randomly generating Pauli layers.
+
+    test_layers : list[np.ndarray[int]], optional
+        A list of length-2*n arrays representing the test layers to be inserted
+        if `insert_test_layers `is True. The number of test layers must equal
+        the number of U3 layers in the circuit. Default is None.
+
+    Returns
+    --------
+    list[pygsti.circuits.Circuit, str (optional), np.ndarray (optional)]
+        A list containing the randomized circuit, and optionally the bitstring and target Pauli vector if specified.
+    """
+
     if rand_state is None:
         rand_state = _np.random.RandomState()
 
@@ -100,12 +193,8 @@ def pauli_randomize_circuit(circ, rand_state=None, return_bs=False, return_targe
             return_0_bs = True
 
     qubit_map = {j:i for i,j in enumerate(circ.line_labels)}
-    
-    qubits = circ.line_labels
 
     layers = []
-
-    last_layer_u3 = False
 
     for i in range(d):
 
@@ -150,10 +239,6 @@ def pauli_randomize_circuit(circ, rand_state=None, return_bs=False, return_targe
                     raise ValueError("Circuit can only contain Gcnot, Gcphase, Gu3, and Gi gates in separate layers!")
             # last_layer_u3 = False
 
-    # if last_layer_u3 == False:
-    #     final_layer = pauli_vector_to_u3_layer(p, qubits)
-    #     layers.append(final_layer)
-
 
     bs = ''.join([str(b // 2) for b in p[n:]])
 
@@ -171,7 +256,42 @@ def pauli_randomize_circuit(circ, rand_state=None, return_bs=False, return_targe
     
 
 def randomize_central_pauli(circ: _Circuit, rand_state=None, return_bs=False, return_target_pauli=False, insert_test_layer=False, test_layer=None):
-    #this is a modified version of the central_pauli_mirror_circuit() function that only uses the reference circuit and commutes the central Pauli through it.
+    """
+    Perform circuit randomization by propagating a central Pauli layer through the circuit.
+    This function is designed to handle the "back half" of the mirror circuit: i.e., given a circuit C
+    whose fidelity is to be estimated using central Pauli mirroring, this function should be passed
+    C_inv + L_inv, where L_inv is Haar-random U3 layer. Refer to `make_mirror_edesign` in `protocols/mirror_design.py`
+    for more information.
+
+    Parameters
+    -------------
+    circ : Circuit
+        The circuit through which the central Pauli layer is to be propagated.
+
+    rand_state : np.random.RandomState, optional
+        A random state for reproducibility. Default is None, which initializes a new random state.
+
+    return_bs : bool, optional
+        If True, returns the target bitstring for the full mirror central Pauli circuit. Default is False.
+
+    return_target_pauli : bool, optional
+        If True, returns the target Pauli vector that has been propagated
+        through the circuit. Default is False.
+
+    insert_test_layer : bool, optional
+        If True, uses `test_layer` as the central Pauli layer
+        instead of randomly generating a central Pauli layer.
+
+    test_layer : np.ndarray[int], optional
+        A length-2*n array representing the test layer to be inserted
+        if `insert_test_layer `is True. Default is None.
+
+    Returns
+    --------
+    list[pygsti.circuits.Circuit, str (optional), np.ndarray (optional)]
+        A list containing the randomized circuit, and optionally the bitstring and target Pauli vector if specified.
+    """
+    
     if rand_state is None:
         rand_state = _np.random.RandomState()
     
@@ -202,8 +322,6 @@ def randomize_central_pauli(circ: _Circuit, rand_state=None, return_bs=False, re
             layers.append(layer)
 
         elif len(layer) == 0 or layer[0].name == 'Gu3':
-            # update_u3_parameters now twirls/adds label for empty qubits, so don't prepad for speed
-            #padded_layer = pad_layer(layer, qubits)
             rc_layer = update_u3_parameters(layer, p, p, qubit_map)
             layers.append(rc_layer)
             
@@ -235,72 +353,35 @@ def randomize_central_pauli(circ: _Circuit, rand_state=None, return_bs=False, re
 
     return out
 
-# def new_central_pauli_mirror_circuit(forward_circ: _Circuit, reverse_circ: _Circuit, rand_state=None):
-#     # the differences between this function and central_pauli_mirror_circuit (legacy) are:
-#         # accepting different arguments (test_circ and ref_circ_inverse instead of circuit_to_mirror)
-#         # state prep layer is implicitly a part of test_circ and ref_circ_inverse. There is not an option in this function to do randomized state prep, though there is in the legacy function.
-#         # ref_circ_inverse is already inverted, which changes the for loop from traversing back to front (d - i - 1) to front to back (d).
-
-#     if rand_state is None:
-#         rand_state = _np.random.RandomState()
-
-#     qubits = forward_circ.line_labels
-
-#     n = reverse_circ.width
-#     d = reverse_circ.depth
-
-#     central_pauli = 2 * rand_state.randint(0, 2, 2*n)
-#     central_pauli_layer = pauli_vector_to_u3_layer(central_pauli, qubits)
-#     q = central_pauli.copy()
-
-#     quasi_inverse_circ = _Circuit(line_labels=forward_circ.line_labels, editable=True)
-
-#     for i in range(d):
-
-#         layer = reverse_circ.layer_label(i).components
-
-#         if layer[0].name in ['Gi', 'Gdelay']:
-#             continue
-
-#         # Update the u3 gates.
-#         elif len(layer) == 0 or layer[0].name == 'Gu3':
-#             # update_u3_parameters now twirls/adds label for empty qubits, so don't prepad for speed
-#             #padded_layer = pad_layer(quasi_inverse_layer, qubits)
-#             layer = update_u3_parameters(layer, q, q, qubits)
-
-
-#         # Update q based on the CNOTs in the layer.
-#         else:
-#             for g in layer:
-#                 if g.name == 'Gcnot':
-#                     (control, target) = g.qubits
-#                     q[qubits.index(control)] = (q[qubits.index(control)] + q[qubits.index(target)]) % 4
-#                     q[n + qubits.index(target)] = (q[n + qubits.index(control)] + q[n + qubits.index(target)]) % 4
-#                 else:
-#                     raise ValueError("Circuit can only contain Gcnot and Gu3 gates in separate layers!")
-                
-#         #print(layer)
-
-#         quasi_inverse_circ.insert_layer_inplace(layer, i)
-
-#         #print(quasi_inverse_circ)
-
-#     mc = forward_circ + _Circuit([central_pauli_layer], line_labels=forward_circ.line_labels) + quasi_inverse_circ
-#     mc = mc.reorder_lines(forward_circ.line_labels)
-#     mc.done_editing()
-
-#     bs = ''.join([str(b // 2) for b in q[n:]])
-
-#     return mc, bs
-
-
 
 def update_u3_parameters(layer, p, q, qubit_map):
     """
-    Takes a layer containing u3 gates, and finds a new layer containing
-    u3 gates that implements p * layer * q (p followed by layer followed by
-    q, so q * layer * p in matrix order), where p and q are vectors  describing layers of paulis.
+    Updates the parameters of U3 gates in a given layer based on the provided Pauli random compiling vectors.
 
+    Parameters
+    -------------
+    layer : iterable[pygsti.baseobjs.Label]
+        A list of gate labels representing the layer containing U3 gates.
+
+    p : np.ndarray[int]
+        A vector describing the Pauli gates preceding the layer.
+        For an n-qubit layer, p is a length-2n array.
+        p[0:n] indicates Pauli-Z (2 is yes Z, 0 is no Z), p[n:2*n] is Pauli-X (2 yes, 0 no).
+        E.g., if n = 5, p[3] = 2, and p[8] = 2, then there is a Y gate on qubit 3.
+
+    p : np.ndarray[int]
+        A vector describing the Pauli gates foloowing the layer.
+        For an n-qubit layer, q is a length-2n array.
+        q[0:n] indicates Pauli-Z (2 is yes Z, 0 is no Z), q[n:2*n] is Pauli-X (2 yes, 0 no).
+        E.g., if n = 5, p[1] = 0, and p[6] = 2, then there is an X gate on qubit 3.
+
+    qubit_map : dict[str, int]
+        A mapping of qubit labels to their corresponding indices.
+
+    Returns
+    --------
+    list
+        A new layer containing updated U3 gates based on the applied Pauli gates.
     """
     used_qubits = set()
 
@@ -363,6 +444,20 @@ def update_u3_parameters(layer, p, q, qubit_map):
     return new_layer
 
 def mod_2pi(theta):
+    """
+    Modifies an angle to be within the range of -π to π.
+
+    Parameters
+    -------------
+    theta : float
+        The angle in radians to be modified.
+
+    Returns
+    --------
+    float
+        The modified angle within the range of -π to π.
+    """
+
     while (theta > _np.pi or theta <= -1 * _np.pi):
         if theta > _np.pi:
             theta = theta - 2 * _np.pi
@@ -372,6 +467,25 @@ def mod_2pi(theta):
 
 
 def pauli_vector_to_u3_layer(p, qubits):
+    """
+    Converts a Pauli vector into a corresponding layer of U3 gates.
+
+    Parameters
+    -------------
+    p : np.ndarray[int]
+        A vector representing the Pauli gates to be converted.
+        For an n-qubit layer, p is a length-2n array.
+        p[0:n] indicates Pauli-Z (2 is yes Z, 0 is no Z), p[n:2*n] is Pauli-X (2 yes, 0 no).
+        E.g., if n = 5, p[3] = 2, and p[8] = 2, then there is a Y gate on qubit 3.
+
+    qubits : list[str]
+        A list of qubit labels corresponding to the Pauli vector.
+
+    Returns
+    --------
+    pygsti.baseobjs.Label
+        Label containing the layer of U3 gates derived from the Pauli vector.
+    """
     
     n = len(qubits)
     layer = []
@@ -399,10 +513,41 @@ def pauli_vector_to_u3_layer(p, qubits):
     return _Label(layer)
 
 def haar_random_u3_layer(qubits, rand_state=None):
+    """
+    Generates a layer of Haar-random U3 gates.
+
+    Parameters
+    -------------
+    qubits : list[str]
+        A list of qubit labels for which to generate U3 gates.
+    rand_state : np.random.RandomState, optional
+        A random state for reproducibility. Default is None, which initializes a new random state.
+
+    Returns
+    --------
+    pygsti.baseobjs.Label
+        A label containing the layer of randomly generated U3 gates.
+    """
     
     return _Label([haar_random_u3(q, rand_state) for q in qubits])
 
 def haar_random_u3(q, rand_state=None):
+    """
+    Generates a Haar-random U3 gate.
+
+    Parameters
+    -------------
+    q : str
+        The qubit label for which to generate the U3 gate.
+    rand_state : np.random.RandomState, optional
+        A random state for reproducibility. Default is None, which initializes a new random state.
+
+    Returns
+    --------
+    pygsti.baseobjs.Label
+        A label representing the randomly generated U3 gate for the specified qubit.
+    """
+
     if rand_state is None:
         rand_state = _np.random.RandomState()
 
@@ -414,6 +559,20 @@ def haar_random_u3(q, rand_state=None):
 
 
 def u3_cx_cz_inv(circ: _Circuit) -> _Circuit:
+    """
+    Computes the inverse of a circuit composed of U3, CX and CZ gates.
+
+    Parameters
+    -------------
+    circ : pygsti.circuits.Circuit
+        The circuit for which to compute the inverse.
+
+    Returns
+    --------
+    pygsti.circuits.Circuit
+        A new circuit representing the inverse of the input circuit.
+    """
+
     # Is this function duplicative of existing functionality in pyGSTi?
     inverse_layers = []
     d = circ.depth
@@ -421,18 +580,27 @@ def u3_cx_cz_inv(circ: _Circuit) -> _Circuit:
     for j in range(d):
         layer = circ.layer(j)
         inverse_layer = [gate_inverse(gate_label) for gate_label in layer]
-        #not doing padding. See subcirc-vb/mirror_circuits.py, bare_mirror_circuit()
-        #not sure if it would be an optimization, but it is possible to read the layers in reverse and write in order instead of reading layers in order and writing in reverse
         inverse_layers.insert(0, inverse_layer)
 
     inverse_circ = _Circuit(inverse_layers, line_labels = circ.line_labels, check=False, expand_subcircuits=False)
 
-    # print("inverse circuit:")
-    # print(inverse_circ)
-
     return inverse_circ
 
 def gate_inverse(label):
+    """
+    Computes the inverse of a given gate label.
+
+    Parameters
+    -------------
+    label : pygsti.baseobjs.Label
+        The gate label for which to compute the inverse.
+
+    Returns
+    --------
+    pygsti.baseobjs.Label
+        A new label representing the inverse of the input gate.
+    """
+
     if label.name == 'Gcnot':
         return label
     elif label.name == 'Gcphase':
@@ -445,6 +613,20 @@ def gate_inverse(label):
         raise RuntimeError(f'cannot compute gate inverse for {label}')
 
 def inverse_u3(args):
+    """
+    Computes the inverse parameters for a U3 gate given its parameters.
+
+    Parameters
+    -------------
+    args : tuple[float]
+        A tuple containing the parameters (theta, phi, lambda) of the U3 gate.
+
+    Returns
+    --------
+    tuple[float]
+        A tuple containing the parameters of the inverse U3 gate.
+    """
+
     theta_inv = mod_2pi(-float(args[0]))
     phi_inv = mod_2pi(-float(args[2]))
     lambda_inv = mod_2pi(-float(args[1]))
@@ -452,6 +634,21 @@ def inverse_u3(args):
 
 
 def pad_layer(layer, qubits):
+    """
+    Pads a layer of gates with idle gates for any unused qubits.
+
+    Parameters
+    -------------
+    layer : list[pygsti.baseobjs.Label]
+        A list of gate labels representing the layer to be padded.
+    qubits : list[str]
+        A list of qubit labels to ensure all qubits are represented in the padded layer.
+
+    Returns
+    --------
+    list[pygsti.baseobjs.Label]
+        A new layer containing the original gates and idle gates for unused qubits.
+    """
 
     padded_layer = list(layer)
     used_qubits = []
@@ -464,20 +661,3 @@ def pad_layer(layer, qubits):
             padded_layer.append(_Label('Gu3', (q,), args=(0.0, 0.0, 0.0)))
 
     return padded_layer
-
-class Gu3(_UnitaryGateFunction):
-    shape = (2,2)
-    def __call__(self, arg):
-        theta, phi, lamb = (float(arg[0]), float(arg[1]), float(arg[2]))
-        return _np.array([[_np.cos(theta/2), -_np.exp(1j*lamb)*_np.sin(theta/2)],
-                         [_np.exp(1j*phi)*_np.sin(theta/2), _np.exp(1j*(phi + lamb))*_np.cos(theta/2)]])
-
-def get_clifford_from_unitary(U):
-    clifford_unitaries = {k: v for k, v in _standard_gatename_unitaries().items()
-                          if 'Gc' in k and v.shape == (2, 2)}
-    for k,v in clifford_unitaries.items():
-        for phase in [1, -1, 1j, -1j]:
-            if _np.allclose(U, phase*v):
-                return k
-            
-    raise RuntimeError(f'Failed to look up Clifford for unitary:\n{U}')

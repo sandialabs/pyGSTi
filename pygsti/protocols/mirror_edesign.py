@@ -1,3 +1,9 @@
+"""
+Functions for creating mirror experiment designs for mirror circuit fidelity estimation (MCFE)
+"""
+
+#TODO: add copyright statement
+
 from __future__ import annotations
 from typing import Callable, Union, Literal, Optional, Tuple
 
@@ -47,7 +53,6 @@ def qiskit_circuits_to_fullstack_mirror_edesign(qk_circs, #not transpiled
                                                     num_transpilation_attempts=100,
                                                     return_qiskit_time=False
                                                     ):
-
     """
     Create a full-stack benchmark from high-level Qiskit circuits.
 
@@ -326,7 +331,6 @@ def qiskit_circuits_to_fullstack_mirror_edesign(qk_circs, #not transpiled
 def qiskit_circuits_to_mirror_edesign(qk_circs, # yes transpiled
                                           mirroring_kwargs_dict={}
                                           ):
-
     """
     Create a noise benchmark from transpiled Qiskit circuits.
 
@@ -456,88 +460,6 @@ def qiskit_circuits_to_svb_mirror_edesign(qk_circs,
                                               subcirc_kwargs_dict={},
                                               mirroring_kwargs_dict={}
                                               ): # qk_circs must already be transpiled to the device
-    
-    """
-    Create a subcircuit benchmark from transpiled Qiskit circuits.
-
-    Parameters
-    ----------
-    qk_circs : List[qiskit.QuantumCircuit] | Dict[qiskit.QuantumCircuit]
-        Qiskit QuantumCircuits from which a subcircuit benchmark is to be created.
-        If a dictionary is provided, those keys are used.
-        If a list is provided, default integer keys are used.
-
-    aggregate_subcircs : bool
-        Whether or not the provided Qiskit circuits should be used to create
-        one combined subcircuit experiment design or kept separate.
-        Circuit aggregration can be useful if the provided circuits are all
-        instances of the same 'kind' of the circuit, e.g., all
-        Bernstein-Vazirani circuits with different secret keys.
-
-    width_depth_dict : dict[int, list[int]]
-        dictionary whose keys are subcircuit widths and whose values are
-        lists of depths to snip out for that width.
-
-    coupling_map : str or qiskit.transpiler.CouplingMap
-        coupling map for the device the Qiskit circuits were transpiled to.
-        If 'all-to-all', an all-to-all coupling map is used.
-        If 'linear', a linear topology is used.
-
-    instruction_durations : qiskit.transpiler.InstructionDurations
-        instruction durations for each gate in the target device. These
-        durations are needed to calculate the appropriate delay time
-        when only idling qubits are sampled out from a full circuit layer.
-
-
-    subcirc_kwargs_dict : dict, optional
-        dictionary of keyword arguments to be used in subcircuit selection.
-        If an arg is not provided, a default value is used.
-        The args are:
-            'num_samples_per_width_depth': default 10. number of subcircuits to sample
-            from each full circuit. if `aggregate_subcircuits` is set to
-            True, `num_samplse_per_width_depth` subcircuits are drawn from
-            each full circuit and combined into one experiment design.
-
-            'rand_state': default None. np.random.RandomState to be used for subcircuit selection.
-
-    mirroring_kwargs_dict : dict, optional
-        dictionary of keyword arguments to be used in circuit mirroring
-        If an arg is not provided, a default value is used.
-        The args are:
-            'mirror_circuits_per_circ': default 10. The number of mirror circuits of the
-            test-exact and exact-exact varieties to be used for the process fidelity estimation
-            of each provided Qiskit circuit.
-
-            'num_ref_per_qubit_subset': default 10. The number of SPAM reference circuits to use
-            for each qubit subset that is represented among the provided Qiskit circuits.
-
-            'rand_state': default None. np.random.RandomState to be used for circuit mirroring.
-
-    Returns
-    ---------
-        Tuple
-            dict[hashable, pygsti.protocols.FreeformDesign] or pygsti.protocols.FreeformDesign
-                Experiment design(s) containing the pyGSTi conversion of all Qiskit circuits that
-                were passed in. Does not need executed, but is needed for fidelity calculations.
-                A dictionary is returned if `aggregate_subcircs` is False, otherwise a FreeformDesign
-                is returned.
-
-            dict[hashable, pygsti.protocols.CombinedExperimentDesign] or pygsti.protocols.CombinedExperimentDesign
-                Experiment design(s) containing all mirror circuits that must be executed
-                in order to perform mirror circuit fidelity estimation. A dictionary is returned
-                if `aggregate_subcircs` is False, otherwise a FreeformDesign is returned.
-
-    """
-    
-    try:
-        import qiskit
-        if qiskit.__version__ != '1.1.1':
-            print("warning: 'qiskit_circuits_to_svb_mirror_edesign' is designed for qiskit 1.1.1. Your version is " + qiskit.__version__)
-
-        from qiskit import transpile
-    except:
-        raise RuntimeError('qiskit is required for this operation, and does not appear to be installed.')
-    
     """
     Create a subcircuit benchmark from transpiled Qiskit circuits.
 
@@ -609,6 +531,15 @@ def qiskit_circuits_to_svb_mirror_edesign(qk_circs,
                 if `aggregate_subcircs` is False, otherwise a FreeformDesign is returned.
 
     """
+    
+    try:
+        import qiskit
+        if qiskit.__version__ != '1.1.1':
+            print("warning: 'qiskit_circuits_to_svb_mirror_edesign' is designed for qiskit 1.1.1. Your version is " + qiskit.__version__)
+
+        from qiskit import transpile
+    except:
+        raise RuntimeError('qiskit is required for this operation, and does not appear to be installed.')
 
     if isinstance(qk_circs, list):
         qk_circs = {i: qk_circ for i, qk_circ in enumerate(qk_circs)}
@@ -711,53 +642,83 @@ def make_mirror_edesign(test_edesign: _FreeformDesign,
                         inv_kwargs: Optional[dict] = None,
                         rc_function: Optional[Callable[[_Circuit], Tuple[_Circuit, str]]] = None,
                         rc_kwargs: Optional[dict] = None,
-                        cp_function: Optional[Callable[[_Circuit], Tuple[_Circuit, str]]] = None,
-                        cp_kwargs: Optional[dict] = None,
                         state_initialization: Optional[Union[str, Callable[..., _Circuit]]] = None,
                         state_init_kwargs: Optional[dict] = None,
                         rand_state: Optional[_np.random.RandomState] = None) -> _CombinedExperimentDesign:
-    
     """
-    Create experiment design containing the mirror circuits needed for mirror circuit fidelity estimation (MCFE).
+    Creates an experiment design containing the mirror circuits needed for mirror circuit fidelity estimation (MCFE).
 
     Parameters
     ----------
     test_edesign : pygsti.protocols.FreeformDesign
+        The experiment design containing the test circuits.
 
+    account_for_routing : bool
+        Indicates whether to account for routing in the design.
+
+    ref_edesign : Optional[pygsti.protocols.FreeformDesign], optional
+        The experiment design containing the reference circuits. Default is None.
+
+    ref_id_lookup_dict : Optional[dict], optional
+        A lookup dictionary for matching test circuits with reference circuits. Default is None.
+
+    num_mcs_per_circ : int, optional
+        The number of mirror circuits to generate for each test circuit. Default is 10.
+
+    num_ref_per_qubit_subset : int, optional
+        The number of SPAM reference circuits to use for each qubit subset. Default is 10.
+
+    mirroring_strategy : Literal['pauli_rc', 'central_pauli'], optional
+        The strategy to use for mirroring ('pauli_rc' or 'central_pauli'). Default is 'pauli_rc'.
+
+    gate_set : str, optional
+        The set of gates to be used in the design. Default is 'u3_cx_cz'.
+
+    inverse : Optional[Callable[[_Circuit], _Circuit]], optional
+        A custom function to compute the inverse of a circuit. Default is None.
+        Signature: inverse(circ: pygsti.circuits.Circuit, ...) -> pygsti.circuits.Circuit
+        If providing a custom inverse function, 'circ' must be the circuit parameter name.
+
+    inv_kwargs : Optional[dict], optional
+        Additional keyword arguments for a custom inverse function. Default is None.
+
+    rc_function : Optional[Callable[[_Circuit], Tuple[_Circuit, str]]], optional
+        A custom function for random compilation. Default is None.
+
+        Signature: rc_function(circ: pygsti.circuits.Circuit, rand_state: Optional[_np.random.RandomState] = None, ...)
+        -> Tuple[pygsti.circuits.Circuit, str]
+        The user-defined function must return the randomized circuit,
+        along with the expected bitstring measurement given the randomization.
+
+        This function is called twice:
+        1) On the reverse half of the circuit, when creating the init-test-ref_inv-init_inv circuit. ref_inv and init_inv are randomized. The bitstring should be the expected measurement *for the full circuit*, *not* ref_inv-init_inv in isolation from the forward half of the circuit. Pass the forward half of the circuit as a kwarg in rc_kwargs if necessary.
+
+        2) On the entire circuit, when creating the init-ref-ref_inv-init_inv circuit. All four pieces are randomized. The bitstring should again be the expected measurement for the full circuit, but it is more clear in this case than in the previous.
+
+    rc_kwargs : Optional[dict], optional
+        Additional keyword arguments for the random compilation function. Default is None.
+        
+    state_initialization : Optional[Union[str, Callable[..., _Circuit]]], optional
+        A function or string for state initialization. Default is None.
+        Signature: state_initialization(qubits, rand_state: Optional[_np.random.RandomState] = None, ...)
+        -> pygsti.circuits.Circuit
+        If providing a custom state initialization,
+        the parameter names must be 'qubits' (list of the qubits being used) and 'rand_state'.
+
+    state_init_kwargs : Optional[dict], optional
+        Additional keyword arguments for a custom state initialization function. Default is None.
+
+    rand_state : Optional[_np.random.RandomState], optional
+        A random state for reproducibility. Default is None.
+
+    Returns
+    --------
+    pygsti.protocols.CombinedExperimentDesign
+        A combined experiment design containing the MCFE circuits.
     """
 
-    # idea for random_compiling and state_initialization is that a power user could supply their own functions if they did not want to use the built-in options.
-
-    # Please read carefully for guidelines on how design your own functions that implement a circuit inverse, a state prep, an RC, and a central Pauli propagation.
-    # You may, but are not required to, provide custom implementations for supported gate sets.
-    # For unsupported gate sets, you *must* provide a custom implementation.
-
-    # Inverse method
-    #   Signature: inverse(circ: pygsti.circuits.Circuit, ...) -> pygsti.circuits.Circuit
-    #   You *must* have 'circ' as the circuit parameter name.
-    #   Supply any additional kwargs needed by your custom inverse in the inv_kwargs kwarg when calling make_mirror_edesign().
-
-    # State prep method
-    #   Signature: state_initialization(qubits, rand_state: Optional[_np.random.RandomState] = None, ...) -> pygsti.circuits.Circuit
-    #   You *must* have 'qubits' (list of the qubits being used) and 'rand_state' as parameter names.
-    #   Supply any additional kwargs needed by your custom state initialization in the state_init_kwargs kwarg when calling make_mirror_design().
-
-    # RC method
-    #   Signature: rc_function(circ: pygsti.circuits.Circuit, rand_state: Optional[_np.random.RandomState] = None, ...) -> Tuple[pygsti.circuits.Circuit, str]
-    #   The user-defined function must return the randomized circuit, along with the expected bitstring measurement given the randomization.
-    #   This function is called twice:
-    #       1) On the reverse half of the circuit, when creating the init-test-ref_inv-init_inv circuit. ref_inv and init_inv are randomized. The bitstring should be the expected measurement *for the full circuit*, *not* ref_inv-init_inv in isolation from the forward half of the circuit. Pass the forward half of the circuit as a kwarg in rc_kwargs if necessary.
-    #       2) On the entire circuit, when creating the init-ref-ref_inv-init_inv circuit. All four pieces are randomized. The bitstring should again be the expected measurement for the full circuit, but it is more clear in this case than in the previous.
-    #   Supply any additional kwargs needed by your custom RC function in the rc_kwargs kwarg when calling make_mirror_design().
-
-    # CP method
-    #   Signature: cp_function(forward_circ: pygsti.circuits.Circuit, reverse_circ: pygsti.circuits.Circuit, rand_state: Optional[_np.random.RandomState] = None, ...) -> Tuple[pygsti.circuits.Circuit, str]
-    #   The user-defined function must return the CP circuit, along with the expected bitstring measurement given the central Pauli. The general responsibility can be thought of as creating and then "propagating" a random central Pauli layer.
-    #   This function is called once, with init-test passed as the forward circuit and ref_inv-init_inv passed as the reverse circuit.
-    #   Supply any additional kwargs needed by your custom CP function in the cp_kwargs kwarg when calling make_mirror_design().
-
-
-
+    # Power user could supply their own functions.
+    
     if rand_state is None:
         rand_state = _np.random.RandomState()
 
@@ -776,8 +737,6 @@ def make_mirror_edesign(test_edesign: _FreeformDesign,
 
     else:
         print("using provided edesign for both reference and test compilations")
-
-    start = time.time()
 
     for c, auxlist in _tqdm.tqdm(test_edesign.aux_info.items(), ascii=True, desc='Sampling mirror circuits'):
         test_aux = auxlist[0]
@@ -813,7 +772,8 @@ def make_mirror_edesign(test_edesign: _FreeformDesign,
 
         for j in range(num_mcs_per_circ):
             
-            random_compiler = _rc.RandomCompilation(mirroring_strategy, rand_state)
+            random_compiler = _rc.RandomCompilation(rc_strategy=mirroring_strategy, return_bs=True,
+                                                    rand_state=rand_state)
             
             if mirroring_strategy == 'pauli_rc':
                 L_bareref = init_layer(qubits=qubits, gate_set=gate_set, state_initialization=state_initialization, rand_state=rand_state, state_init_kwargs=state_init_kwargs)
@@ -855,8 +815,8 @@ def make_mirror_edesign(test_edesign: _FreeformDesign,
 
                         assert L_R_Rinv_Linv.line_labels == qubits, f'line labels have been modified/permuted: should be {qubits} but is {L_R_Rinv_Linv.line_labels} instead.'
 
-                    except:
-                        raise RuntimeError(f"User-provided RC function for gate set '{gate_set}' returned an error!")
+                    except Exception as e:
+                        raise RuntimeError(f"User-provided RC function for gate set '{gate_set}' returned an error: {e}")
                 elif gate_set == 'u3_cx_cz':
 
                     # bare-ref
@@ -895,39 +855,10 @@ def make_mirror_edesign(test_edesign: _FreeformDesign,
             elif mirroring_strategy == 'central_pauli':
                 assert central_pauli_allowed, "Central Pauli is not allowed when 'ref_edesign' is provided."
                 
-                #do central pauli mirror circuit
-                if cp_function is not None:
-                    try:
-                        L_T_Rinv_Linv, L_T_Rinv_Linv_bs = cp_function(forward_circ=L_refref+T, reverse_circ=R_inv+L_refref_inv, rand_state=rand_state, **cp_kwargs)
-
-                        # the assertion belows check if the circuit addition in the function call above has caused a line label reordering. If so, the MCFE code will compare bitstrings incorrectly, which is bad. This issue is fixable with enough Circuit.reorder_lines() calls, but the better approach is simply to ensure that all circuits in test_edesign and ref_edesign obey a lexicographical ordering. This is easily done by using something like 'c = c.reorder_lines(sorted(c.line_labels)) on the circuits *prior* to creating the mirror edesign.
-
-                        assert L_T_Rinv_Linv.line_labels == qubits, f'line labels have been permuted: should be {qubits} but is {L_T_Rinv_Linv.line_labels} instead.'
-
-                    except:
-                        raise RuntimeError(f"User-provided CP function for gate set '{gate_set}' returned an error!")
-                elif gate_set == 'u3_cx_cz':
-                    #print(f'ref depth: {R.depth}, ref_inv depth: {R_inv.depth}, L depth: {L_inv.depth}')
-                    #reload(cp)
-                    # test_rand_state1 = _np.random.RandomState(8675309)
+                if gate_set == 'u3_cx_cz':
 
                     CP_Rinv_Linv, L_T_Rinv_Linv_bs = random_compiler.compile(circ=R_inv+L_refref_inv)
                     L_T_Rinv_Linv = L_refref + T + CP_Rinv_Linv
-                    # L_T_Rinv_Linv = L_T_Rinv_Linv.reorder_lines(c.line_labels)
-                    # print("new function:")
-                    # print(L_T_Rinv_Linv)
-                    # print(L_T_Rinv_Linv_bs)
-                    # test_rand_state2 = _np.random.RandomState(8675309)
-                    # L_T_Rinv_Linv1, L_T_Rinv_Linv_bs1 = cp.central_pauli_mirror_circuit(test_circ=L+T, ref_circ=L+R, randomized_state_preparation=False, rand_state=test_rand_state2, new=True)
-                    # print("old function:")
-                    # print(L_T_Rinv_Linv1)
-                    # print(L_T_Rinv_Linv_bs1)
-                    # assert L_T_Rinv_Linv_bs == L_T_Rinv_Linv_bs1, "different circuit outcomes predicted!"
-                    # assert L_T_Rinv_Linv.__hash__() == L_T_Rinv_Linv1.__hash__(), f"circuit hashes do not match! Circuit 1: {L_T_Rinv_Linv}, Circuit 2: {L_T_Rinv_Linv1}"
-
-                    # L_R_Rinv_Linv, L_R_Rinv_Linv_bs = rc.central_pauli_mirror_circuit(test_circ=L+R, ref_circ=L+R, randomized_state_preparation=False, rand_state=rand_state, new=True)
-
-                    L_T_Rinv_Linv, L_T_Rinv_Linv_bs = cp_function(forward_circ=L_refref+T, reverse_circ=R_inv+L_refref_inv, rand_state=rand_state, **cp_kwargs)
 
                     # the assertion belows check if the circuit addition in the function call above has caused a line label reordering. If so, the MCFE code will compare bitstrings incorrectly, which is bad. This issue is fixable with enough Circuit.reorder_lines() calls, but the better approach is simply to ensure that all circuits in test_edesign and ref_edesign obey a lexicographical ordering. This is easily done by using something like 'c = c.reorder_lines(sorted(c.line_labels)) on the circuits *prior* to creating the mirror edesign.
 
@@ -953,28 +884,15 @@ def make_mirror_edesign(test_edesign: _FreeformDesign,
             
             test_ref_invs[L_T_Rinv_Linv] = L_T_Rinv_Linv_aux
 
-            if mirroring_strategy == 'pauli_rc': #we do not have this class of circuit for central pauli
+            if mirroring_strategy == 'pauli_rc':
                 L_R_Rinv_Linv_aux = [{'base_aux': a,
                                       'idealout': L_R_Rinv_Linv_bs,
                                       'qs_to_measure': L_R_Rinv_Linv.line_labels,
                                       'id': j} for a in auxlist]
                 ref_ref_invs[L_R_Rinv_Linv] = L_R_Rinv_Linv_aux
  
-            # could change this to the same structure as described in the comment above if defaultdict(list) is not used
-
-    # print(f'tr+rr time: {time.time() - start}')
-
-    # start = time.time()
 
     for w, width_subsets in qubit_subsets.items():
-        # subset_indices = rand_state.choice(list(range(len(width_subsets))), num_ref_per_qubit_subset)
-        # for j in tqdm.tqdm(range(num_ref_per_qubit_subset), ascii=True, desc=f'Sampling width {w} reference circuits'):
-        #     subset_idx = subset_indices[j]
-        #     spam_qubits = width_subsets[subset_idx]
-        #     L = init_layer(qubits=spam_qubits, gate_set=gate_set, state_initialization=state_initialization, rand_state=rand_state, state_init_kwargs=state_init_kwargs)
-        #     spam_ref = L + compute_inverse(circ=L, gate_set=gate_set, inverse=inverse, inv_kwargs=inv_kwargs)
-        #     spam_refs[spam_ref].append({'idealout': '0'*w, 'id': j, 'width': w})
-        #     # same defaultdict(list) change can be made as earlier
         
         unique_subsets = set(width_subsets)
         print(f'Sampling reference circuits for width {w} with {len(unique_subsets)} subsets')
@@ -984,7 +902,6 @@ def make_mirror_edesign(test_edesign: _FreeformDesign,
                 spam_ref = L + compute_inverse(circ=L, gate_set=gate_set, inverse=inverse, inv_kwargs=inv_kwargs)
                 spam_refs[spam_ref].append({'idealout': '0'*w, 'id': j, 'qs_to_measure': spam_ref.line_labels, 'width': w})
 
-    # print(f'ref time: {time.time() - start}')
 
     edesigns = {}
     if mirroring_strategy == 'pauli_rc':
@@ -1004,11 +921,34 @@ def compute_inverse(circ: _Circuit,
                     gate_set: str,
                     inverse: Optional[Callable[[_Circuit], _Circuit]] = None,
                     inv_kwargs: Optional[dict] = None) -> _Circuit:
+    """
+    Computes the inverse of a given circuit based on the specified gate set.
+
+    Parameters
+    ----------
+    circ : pygsti.circuits.Circuit
+        The circuit for which to compute the inverse.
+
+    gate_set : str
+        The set of gates used in the circuit (e.g., 'u3_cx_cz').
+
+    inverse : Optional[Callable[[_Circuit], _Circuit]], optional
+        A custom function to compute the inverse of the circuit. Default is None.
+
+    inv_kwargs : Optional[dict], optional
+        Additional keyword arguments for the custom inverse function. Default is None.
+
+    Returns
+    --------
+    pygsti.circuits.Circuit
+        A new circuit that is the inverse of the input circuit.
+    """
+
     if inverse is not None:
         try:
             circ_inv = inverse(circ=circ, **inv_kwargs)
-        except:
-            raise RuntimeError(f"User-provided inverse function for gate set '{gate_set}' returned an error!")
+        except Exception as e:
+            raise RuntimeError(f"User-provided inverse function for gate set '{gate_set}' returned an error: {e}")
     if gate_set == 'u3_cx_cz':
         circ_inv = _rc.u3_cx_cz_inv(circ)
     elif gate_set == 'clifford':
@@ -1025,15 +965,47 @@ def compute_inverse(circ: _Circuit,
 def init_layer(qubits,
                gate_set: str,
                state_initialization: Optional[Union[str, Callable[..., _Circuit]]] = None,
+               state_init_kwargs: Optional[dict] = None,
                rand_state: Optional[_np.random.RandomState] = None,
-               state_init_kwargs: Optional[dict] = None) -> _Circuit:
+               ) -> _Circuit: 
+    """
+    Create initial layer for mirror circuit.
+
+    Parameters
+    ----------
+    qubits : list
+        A list of qubit labels for the layer.
+
+    gate_set : str
+        The gate set for the mirror circuit (e.g., 'u3_cx_cz').
+
+    state_initialization : Optional[Union[str, Callable[..., _Circuit]]], optional
+        Custom function for creating initial layer, or the string 'none'. If
+        'none' is provided, then an empty initial layer is created, i.e., there
+        is no state preparation layer. Default is None, which prepares an initial layer
+        according to the gate set.
+
+    state_init_kwargs : Optional[dict], optional
+        Additional keyword arguments for the state initialization function.
+        Default is None.
+
+    rand_state : Optional[_np.random.RandomState], optional
+        A random state for reproducibility. Default is None.
+
+        
+    Returns
+    --------
+    pygsti.circuits.Circuit
+        A new circuit representing the initial layer of gates.
+    """
+
     if state_initialization == 'none':
         L = _Circuit([], qubits)
     elif state_initialization is not None:
         try:
             L = state_initialization(qubits=qubits, rand_state=rand_state, **state_init_kwargs)
-        except:
-            raise RuntimeError(f"User-provided state_initialization function for gate set '{gate_set}' returned an error!")
+        except Exception as e:
+            raise RuntimeError(f"User-provided state_initialization function for gate set '{gate_set}' returned an error: {e}")
     elif gate_set == 'u3_cx_cz':
         prep_layer = _rc.haar_random_u3_layer(qubits, rand_state)
         L = _Circuit([prep_layer], qubits)

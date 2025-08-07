@@ -1,4 +1,8 @@
-"""Utility functions for subcircuit selection"""
+"""
+Utility functions for subcircuit selection
+"""
+
+#TODO: add copyright statement
 
 from __future__ import annotations
 from typing import Dict, List, Tuple, Callable, Union, Optional, Any
@@ -14,24 +18,12 @@ import tqdm as _tqdm
 import numpy as _np
 import json as _json
 
-# from pytket.architecture import Architecture
-# from qiskit.providers.models import BackendProperties, BackendConfiguration
 
 from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.protocols.protocol import FreeformDesign as _FreeformDesign
 from pygsti.tools import internalgates as _itgs
 
-#TODO: OOP-ify?
-
-
-# Keep this for backwards compatibility for older notebooks
-def sample_lcu_subcircuits(lcu_circ, width_depths, num_samples, strategy='simple',
-                           num_test_samples=None, rand_state=None,
-                           arch=None, subgraph_cache=None):
-    return sample_subcircuits(lcu_circ, width_depths, num_samples, strategy=strategy,
-                           num_test_samples=num_test_samples, rand_state=rand_state,
-                           arch=arch, subgraph_cache=subgraph_cache)
 
 def sample_subcircuits(full_circs: Union[_Circuit, List[_Circuit]],
                        width_depths: Dict[int, List[int]],
@@ -42,18 +34,70 @@ def sample_subcircuits(full_circs: Union[_Circuit, List[_Circuit]],
                        strategy_args: Dict = None,
                        depth_metric = 'layer_count',
                        num_test_samples: int = None,
-                       subgraph_cache = None,
-                       # arch=None,
-                       # placer_json=None,
+                    #    subgraph_cache = None,
                        rand_state: Optional[_np.random.RandomState] = None,
-                       ):
-        
+                       ):    
+    """
+    Samples subcircuits from a full circuit based on specified width and depth pairs.
+
+    Parameters
+    -------------
+    full_circs : Union[pygsti.circuits.Circuit, List[pygsti.circuits.Circuit]]
+        The full circuit(s) from which to sample subcircuits.
+
+    width_depths : Dict[int, List[int]]
+        A dictionary whose keys are subcircuit widths and whose values are lists of depths
+        to sample for that subcircuit depth. Defines a list of (width, depth) pairs for
+        subcircuits.
+
+    instruction_durations : qiskit.transpiler.InstructionDurations
+        A qiskit InstructionDurations object used to determine delay times for
+        idle subcircuit layers.
+
+    coupling_map : Union[str, qiskit.transpiler.CouplingMap]
+        The coupling map defining the connectivity of qubits. Can be 'all-to-all', 'linear',
+        or a qiskit CouplingMap object.
+
+    num_samples_per_width_depth : int, optional
+        The number of subcircuits to sample for each width-depth combination. Default is 10.
+
+    strategy : Union[str, Callable[..., Any]], optional
+        The subcircuit sampling strategy to use ('simple', 'greedy', or a custom function).
+        Default is 'simple'.
+
+    strategy_args : Dict, optional
+        Additional arguments if a custom sampling strategy function is used. Default is None.
+
+    depth_metric : str, optional
+        The metric to use for measuring depth ('layer_count' or 'falcon_depth'). If `layer_count`,
+        the depth is calculated as the number of layers in the subcircuit. If `falcon_depth`,
+        the gate set must be U3-CX; U3 gates contribute 2 to the depth and CX gates contribute 1
+        to the depth. The `falcon_depth` metric is based on the Falcon generation of IBMQ devices.
+        Default is 'layer_count'.
+
+    num_test_samples : int, optional
+        The number of test samples to use if the 'greedy' subcircuit sampling strategy is employed.
+        If `strategy` is not `greedy`, this argument is ignored.
+        Default is None.
+
+    subgraph_cache : Dict[int, List[List[int]]], optional
+        Cache for subgraph information to avoid recomputation. Default is None.
+
+    rand_state : _np.random.RandomState, optional
+        A random state for reproducibility. Default is None.
+
+    Returns
+    --------
+    pygsti.protocols.FreeformDesign
+        A FreeformDesign object containing the sampled subcircuits and auxiliary
+        information, including a circuit ID and depth.
+    """
     
     if rand_state is None:
         rand_state = _np.random.RandomState()
     
-    if subgraph_cache is None:
-        subgraph_cache = {}
+    # if subgraph_cache is None:
+    #     subgraph_cache = {}
 
     # Build unmirrored circuit
     subcircuits = _defaultdict(list)
@@ -82,7 +126,7 @@ def sample_subcircuits(full_circs: Union[_Circuit, List[_Circuit]],
                                                                                         depth_metric=depth_metric,
                                                                                         instruction_durations=instruction_durations,
                                                                                         coupling_map=coupling_map,
-                                                                                        subgraph_cache=subgraph_cache,
+                                                                                        # subgraph_cache=subgraph_cache,
                                                                                         rand_state=rand_state,
                                                                                         verbosity=0)
                                                                         
@@ -108,13 +152,71 @@ def simple_weighted_subcirc_selection(full_circ, width, depth, num_subcircs,
                                       coupling_map,
                                       instruction_durations,
                                       depth_metric='layer_count',
-                                      subgraph_cache=None,
+                                    #   subgraph_cache=None,
                                       rand_state=None,
                                       return_depth_info=False,
                                       stochastic_2q_drops=False,
                                       verbosity=1,
                                       ):
-    
+    """
+    Samples subcircuits from a full circuit using a simple approach. The simple approach
+    is to identify a starting layer, along with a connected subset of active qubits, and
+    snip out a subcircuit with the desired width and depth.
+
+    Parameters
+    -------------
+    full_circs : Union[pygsti.circuits.Circuit, List[pygsti.circuits.Circuit]]
+        The full circuit(s) from which to sample subcircuits.
+
+    width : int
+        width of subcircuit to snip out.
+
+    depth: int
+        depth of subcircuit to snip out.
+
+    num_subcircs : int
+        The number of subcircuits to snip out for the given width and depth.
+
+    coupling_map : Union[str, qiskit.transpiler.CouplingMap]
+        The coupling map defining the connectivity of qubits. Can be 'all-to-all', 'linear',
+        or a qiskit CouplingMap object.
+
+    instruction_durations : qiskit.transpiler.InstructionDurations
+        A qiskit InstructionDurations object used to determine delay times for
+        idle subcircuit layers.
+
+    rand_state : _np.random.RandomState, optional
+        A random state for reproducibility. Default is None.
+
+    subgraph_cache : Dict[int, List[List[int]]], optional
+        Cache for subgraph information to avoid recomputation. Default is None.
+
+    return_depth_info : bool, optional
+        Whether to include compiled depths and the start and end layer for
+        each subcircuit. Default is False.
+
+    stochastic_2q_drops : bool, optional
+        Whether to apply stochastic dropping of 2-qubit gates. Default is False,
+        in which case all dangling 2-qubit gates are dropped. A gate is considered
+        dangling if it has support on at least one qubit that is not in the
+        selected subset of qubits snipped out for the subcircuit.
+
+    verbosity : int, optional
+        Level of verbosity for logging. Default is 1.
+
+    Returns
+    --------
+    Tuple[List[pygsti.circuits.Circuit], List[int],
+            Optional[List[int], Optional[List[Tuple[int,int]]]],
+            Optional[List[int]], Optional[List[int]]]
+
+        A tuple containing the selected subcircuits and the counts of dropped gates.
+        If `return_depth_info` is set to True, then the returns are extended to include
+        the compiled depth of each subcircuit and the start and end layers of each subcircuit.
+        If `stochastic_2q_drops` is set to True, then the returns are extended to include
+        the number of dangling gates in each subcircuit and the indices of added layers.
+    """
+
     full_width = len(full_circ.line_labels)
     full_depth = len(full_circ)
     assert width > 1 and depth > 1, "Target width and depth must be greater than 1"
@@ -342,7 +444,9 @@ def simple_weighted_subcirc_selection(full_circ, width, depth, num_subcircs,
         print(f'Compiled depths for selected circuits: {compiled_depths}')
         print(f'Dangling gate counts for selected circuits: {dangling_counts}')
 
-    returns = [list(selected_subcircs), dropped_counts, subgraph_cache]
+    returns = [list(selected_subcircs), dropped_counts,
+            #    subgraph_cache
+               ]
 
     if return_depth_info:
         returns.extend([compiled_depths, start_ends])
@@ -353,8 +457,48 @@ def simple_weighted_subcirc_selection(full_circ, width, depth, num_subcircs,
 
 def greedy_growth_subcirc_selection(full_circ, width, depth, num_subcircs=1, num_test_subcircs=10,
         rand_state=None, verbosity=1, return_depth_info=False):    
-    # we potentially want to change this function so that it will keep sampling until it finds enough unique circuits (under some upper bound). There are some decisions to be made about how exactly that should work. For instance:
-    # There is behavior that prioritizes gates with less drops and of smaller physical depth. That behavior would not work if we sampled 1 circuit at a time until we have enough. Do we sample 1 at a time and lose this behavior? Do we sample in batches? Do we do an initial large sample and then check one more circuit at a time? As I said, decisions to be made.
+    """
+    Selects subcircuits using a greedy growth strategy, starting with one gate in one layer
+    and adding gates with overlapping support in subsequent layers.
+
+    Parameters
+    -------------
+    full_circ : pygsti.circuits.Circuit
+        The full circuit from which to select subcircuits.
+
+    width : int
+        The target width of the subcircuits to be selected.
+
+    depth : int
+        The target depth of the subcircuits to be selected.
+
+    num_subcircs : int, optional
+        The number of subcircuits to select. Default is 1.
+
+    num_test_subcircs : int, optional
+        The number of test subcircuits to generate. Default is 10.
+
+    rand_state : Optional[_np.random.RandomState], optional
+        A random state for reproducibility. Default is None.
+
+    verbosity : int, optional
+        Level of verbosity for logging. Default is 1.
+
+    return_depth_info : bool, optional
+        Whether to include compiled depths and the start and end layer for
+        each subcircuit. Default is False.
+
+    Returns
+    --------
+    Tuple[List[_Circuit], List[int],
+            Optional[List[int]], Optional[List[Tuple[int,int]]]]
+        A tuple containing the selected subcircuits and the counts of dropped gates.
+        If `return_depth_info` is set to True, then the returns are extended to include
+        the compiled depth of each subcircuit and the start and end layers of each subcircuit.
+    """
+
+    # TODO: sample until success wuth some upper bound on the number of samples that can be taken?
+
     full_width = len(full_circ.line_labels)
     full_depth = len(full_circ)
     assert width > 1 and depth > 1, "Target width and depth must be greater than 1"
@@ -412,6 +556,33 @@ def greedy_growth_subcirc_selection(full_circ, width, depth, num_subcircs=1, num
 
 # Workhorse function for greedy growth subcircuit selection
 def _greedy_growth_subcirc(circ, width, depth, rand_state, verbosity=0):
+    """
+    Workhorse function for greedy generation of candidate subcircuits.
+
+    Parameters
+    -------------
+    circ : pygsti.circuits.Circuit
+        The full circuit from which to grow the subcircuit.
+
+    width : int
+        The target width of the subcircuit to be grown.
+
+    depth : int
+        The target depth of the subcircuit to be grown.
+
+    rand_state : Optional[_np.random.RandomState]
+        A random state for reproducibility. Default is None.
+
+    verbosity : int, optional
+        Level of verbosity for logging. Default is 0.
+
+    Returns
+    --------
+    Tuple[pygsti.circuits.Circuit, int, int, Tuple[int, int]]
+        A tuple containing the grown subcircuit, the count of dropped gates,
+        the physical depth, and the start-end indices of the subcircuit.
+    """
+
     # Pick an initial layer
     start = end = rand_state.randint(circ.depth)
     
@@ -425,6 +596,22 @@ def _greedy_growth_subcirc(circ, width, depth, rand_state, verbosity=0):
     
     # Helper function for adding new layers to our subcircuit
     def add_new_layer(layer_idx):
+        """
+        Helper function for adding new layers to the subcircuit.
+
+        Parameters
+        ------------
+        layer_idx : int
+            Index of layer to be added to the subcircuit.
+
+        Returns
+        -----------
+        Tuple[Set[pygsti.baseobjs.Label], int, int]
+            Tuple containing labels to be added, the number of dropped gates,
+            and the Falcon depth of the layer. The Falcon depth of a U3 layer
+            is 2; the Falcon depth of a CX layer is 1.
+        """
+
         labels_to_add = set()
         drops = 0
         new_depth = 0
@@ -539,21 +726,43 @@ def _greedy_growth_subcirc(circ, width, depth, rand_state, verbosity=0):
     return _Circuit(subcirc_layers, line_labels=qubit_subset), total_dropped_gates, physical_depth, (start, end)
 
 
-def test_strategy(full_circ, width, depth, test_param, num_subcircs=1, arch=None, subgraph_cache=None,
-                                      rand_state=None, verbosity=1, return_depth_info=False,
-                                      stochastic_2q_drops=False):
-    print(test_param)
-    subcircs, drops = simple_weighted_subcirc_selection(full_circ, width, depth, num_subcircs=num_subcircs,
-                                                      rand_state=rand_state, arch=arch, subgraph_cache=subgraph_cache, verbosity=0)
+# def test_strategy(full_circ, width, depth, test_param, num_subcircs=1,
+#                 #   arch=None,
+#                 #   subgraph_cache=None,
+#                                       rand_state=None, verbosity=1, return_depth_info=False,
+#                                       stochastic_2q_drops=False):
     
-    return subcircs, drops
+#     """
+#     TODO: add docstring
+#     """
 
-# import ipdb
+#     print(test_param)
+#     subcircs, drops = simple_weighted_subcirc_selection(full_circ, width, depth, num_subcircs=num_subcircs,
+#                                                       rand_state=rand_state,
+#                                                     #   arch=arch, subgraph_cache=subgraph_cache,
+#                                                       verbosity=0)
+    
+#     return subcircs, drops
+
 
 def random_connected_subgraph(G, width, rand_state):
-    # take a networkx graph and grow a connected subgraph of size 'width'
+    """
+    Generates a random connected subgraph of a specified width from a given graph.
 
-    # ipdb.set_trace()
+    Parameters
+    -------------
+    G : networkx.Graph
+        The graph from which to generate the connected subgraph.
+    width : int
+        The target width of the subgraph to be generated.
+    rand_state : Optional[_np.random.RandomState]
+        A random state for reproducibility. Default is None.
+
+    Returns
+    --------
+    set
+        A set of nodes representing the generated connected subgraph.
+    """
 
     if rand_state is None:
         rand_state = _np.random.RandomState()
@@ -591,15 +800,6 @@ def random_connected_subgraph(G, width, rand_state):
 
     return used_nodes
 
-        
-
-    
-
-    # compute set difference of growth_node neighbors and 'used_nodes'
-
-    # if this is empty, remove the node from the 'plausible_growth_nodes' set, and try again. if the plausible_nodes set is reduced to empty, then return an error.
-
-    # else, select a node from the set difference and add it to the used nodes list. repeat until desired size is reached.
 
 
 
