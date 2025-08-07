@@ -20,10 +20,12 @@ from pygsti import optimize as _opt
 from pygsti import tools as _tools
 from pygsti.tools import mpitools as _mpit
 from pygsti.tools import slicetools as _slct
-from pygsti.models.gaugegroup import TrivialGaugeGroupElement as _TrivialGaugeGroupElement
+from pygsti.models.gaugegroup import (
+    TrivialGaugeGroupElement as _TrivialGaugeGroupElement,
+    GaugeGroupElement as _GaugeGroupElement
+)
 
-from typing import Callable, Union
-from types import NoneType
+from typing import Callable, Union, Optional
 
 
 def gaugeopt_to_target(model, target_model, item_weights=None,
@@ -354,10 +356,15 @@ def gaugeopt_custom(model, objective_fn, gauge_group=None,
         return newModel
 
 
-def _create_objective_fn(model, target_model, item_weights=None,
-                         cptp_penalty_factor=0, spam_penalty_factor=0,
+GGElObjective = Callable[[_GaugeGroupElement,bool], Union[float, _np.ndarray]]
+
+GGElJacobian  = Union[None, Callable[[_GaugeGroupElement], _np.ndarray]]
+
+
+def _create_objective_fn(model, target_model, item_weights: Optional[dict[str,float]]=None,
+                         cptp_penalty_factor: float=0.0, spam_penalty_factor: float=0.0,
                          gates_metric="frobenius", spam_metric="frobenius",
-                         method=None, comm=None, check_jac=False, n_leak=0) -> tuple[Callable, Union[NoneType, Callable]]:
+                         method=None, comm=None, check_jac=False, n_leak=0) -> tuple[GGElObjective, GGElJacobian]:
     """
     Creates the objective function and jacobian (if available)
     for gaugeopt_to_target
