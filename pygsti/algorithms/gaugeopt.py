@@ -22,6 +22,9 @@ from pygsti.tools import mpitools as _mpit
 from pygsti.tools import slicetools as _slct
 from pygsti.models.gaugegroup import TrivialGaugeGroupElement as _TrivialGaugeGroupElement
 
+from typing import Callable, Union
+from types import NoneType
+
 
 def gaugeopt_to_target(model, target_model, item_weights=None,
                        cptp_penalty_factor=0, spam_penalty_factor=0,
@@ -354,7 +357,7 @@ def gaugeopt_custom(model, objective_fn, gauge_group=None,
 def _create_objective_fn(model, target_model, item_weights=None,
                          cptp_penalty_factor=0, spam_penalty_factor=0,
                          gates_metric="frobenius", spam_metric="frobenius",
-                         method=None, comm=None, check_jac=False, n_leak=0):
+                         method=None, comm=None, check_jac=False, n_leak=0) -> tuple[Callable, Union[NoneType, Callable]]:
     """
     Creates the objective function and jacobian (if available)
     for gaugeopt_to_target
@@ -591,6 +594,11 @@ def _create_objective_fn(model, target_model, item_weights=None,
     else:
         # non-least-squares case where objective function returns a single float
         # and (currently) there's no analytic jacobian
+
+        assert gates_metric != "frobeniustt"
+        assert spam_metric  != "frobeniustt"
+        # ^ PR #410 removed support for Frobenius transform-target metrics in this codepath.
+
         dim = int(_np.sqrt(mxBasis.dim))
         if n_leak > 0:
             B = _tools.leading_dxd_submatrix_basis_vectors(dim - n_leak, dim, mxBasis)
@@ -606,14 +614,6 @@ def _create_objective_fn(model, target_model, item_weights=None,
             #   for now I'm setting the second entry to None. -- Riley
         else:
             transform_mx_arg = (_np.eye(mxBasis.dim), None)
-
-        assert gates_metric != "frobeniustt"
-        assert spam_metric  != "frobeniustt"
-        # assert spam_metric == gates_metric
-        # ^ Erik and Corey said these are rarely used. I've removed support for
-        # them in this codepath (non-LS optimizer) in order to make it easier to
-        # read my updated code for leakage-aware metrics. It wouldn't be hard to
-        # add support back, but I just want to keep things simple. -- Riley
 
         def _objective_fn(gauge_group_el, oob_check):
             mdl = _transform_with_oob_check(model, gauge_group_el, oob_check)
