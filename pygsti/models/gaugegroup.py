@@ -14,18 +14,22 @@ import numpy as _np
 from typing import (
     Optional,
     Union,
+    Tuple,
     TYPE_CHECKING
 )
 
 import scipy.linalg as _la
 
-from pygsti.baseobjs import StateSpace as _StateSpace, statespace as _statespace, ExplicitStateSpace as _ExplicitStateSpace
+from pygsti.baseobjs import (
+    StateSpace as _StateSpace,
+    statespace as _statespace,
+    ExplicitStateSpace as _ExplicitStateSpace
+)
 from pygsti.modelmembers import operations as _op
 from pygsti.baseobjs.basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.evotypes.evotype import Evotype as _Evotype
 from pygsti.tools.optools import superop_to_unitary, unitary_to_superop
-from pygsti import SpaceT
 
 if TYPE_CHECKING:
     from pygsti.modelmembers.operations import LinearOperator as _LinearOperator
@@ -98,6 +102,7 @@ class GaugeGroup(_NicelySerializable):
         """
         return _np.zeros(self.num_params, dtype='d')
 
+
 class GaugeGroupElement(_NicelySerializable):
     """
     The element of a :class:`GaugeGroup`, which represents a single gauge transformation.
@@ -129,7 +134,7 @@ class GaugeGroupElement(_NicelySerializable):
         """
         return None
 
-    def deriv_wrt_params(self, wrt_filter: Optional[Union[_np.ndarray, list]]=None) -> Optional[_np.ndarray]:
+    def deriv_wrt_params(self, wrt_filter: Optional[Union[_np.ndarray, list]] = None) -> Optional[_np.ndarray]:
         """
         Computes the derivative of the gauge group at this element.
 
@@ -479,7 +484,7 @@ class OpGaugeGroupElement(GaugeGroupElement):
             self._inv_matrix = _np.linalg.inv(self._operation.to_dense("minimal"))
         return self._inv_matrix
 
-    def deriv_wrt_params(self, wrt_filter: Optional[list, _np.ndarray]=None) -> _np.ndarray:
+    def deriv_wrt_params(self, wrt_filter: Optional[Union[list, _np.ndarray]] = None) -> _np.ndarray:
         """
         Computes the derivative of the gauge group at this element.
 
@@ -570,7 +575,8 @@ class FullGaugeGroup(OpGaugeGroupWithBasis):
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
     """
 
-    def __init__(self, state_space: _StateSpace, model_basis: Optional[Union[_Basis, str]]='pp', evotype: Optional[Union [_Evotype, str]] ='default'):
+    def __init__(self, state_space: _StateSpace, model_basis: Optional[Union[_Basis, str]] = 'pp',
+                 evotype: Optional[Union[_Evotype, str]] = 'default'):
         state_space = _StateSpace.cast(state_space)
         operation = _op.FullArbitraryOp(_np.identity(state_space.dim, 'd'), model_basis, evotype, state_space)
         OpGaugeGroupWithBasis.__init__(self, operation, FullGaugeGroupElement, "Full", model_basis)
@@ -618,7 +624,8 @@ class TPGaugeGroup(OpGaugeGroupWithBasis):
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
     """
 
-    def __init__(self, state_space: _StateSpace, model_basis: Optional[Union[_Basis, str]]='pp', evotype: Optional[Union[_Evotype, str]]='default'):
+    def __init__(self, state_space: _StateSpace, model_basis: Optional[Union[_Basis, str]] = 'pp',
+                 evotype: Optional[Union[_Evotype, str]] = 'default'):
         state_space = _StateSpace.cast(state_space)
         operation = _op.FullTPOp(_np.identity(state_space.dim, 'd'), model_basis, evotype, state_space)
         OpGaugeGroupWithBasis.__init__(self, operation, TPGaugeGroupElement, "TP", model_basis)
@@ -676,7 +683,7 @@ class DiagGaugeGroup(OpGaugeGroup):
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
     """
 
-    def __init__(self, state_space: _StateSpace, evotype: Optional[Union[_Evotype, str]]='default'):
+    def __init__(self, state_space: _StateSpace, evotype: Optional[Union[_Evotype, str]] = 'default'):
         state_space = _StateSpace.cast(state_space)
         dim = state_space.dim
         ltrans = _np.identity(dim, 'd')
@@ -727,7 +734,7 @@ class TPDiagGaugeGroup(TPGaugeGroup):
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
     """
 
-    def __init__(self, state_space: _StateSpace, evotype: Optional[Union[_Evotype, str]]='default'):
+    def __init__(self, state_space: _StateSpace, evotype: Optional[Union[_Evotype, str]] = 'default'):
         """
         Create a new gauge group with gauge-transform dimension `dim`, which
         should be the same as `mdl.dim` where `mdl` is a :class:`Model` you
@@ -784,7 +791,7 @@ class UnitaryGaugeGroupElement(OpGaugeGroupElement):
 
     @property
     def operation(self) -> _LinearOperator:
-      return self._operation
+        return self._operation
 
 
 class UnitaryGaugeGroup(OpGaugeGroupWithBasis):
@@ -810,7 +817,8 @@ class UnitaryGaugeGroup(OpGaugeGroupWithBasis):
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
     """
 
-    def __init__(self, state_space: _StateSpace, basis: Optional[Union[_Basis, str]], evotype: Optional[Union[_Evotype, str]]='default'):
+    def __init__(self, state_space: _StateSpace, basis: Optional[Union[_Basis, str]],
+                 evotype: Optional[Union[_Evotype, str]] = 'default'):
         state_space = _StateSpace.cast(state_space)
         evotype = _Evotype.cast(str(evotype), default_prefer_dense_reps=True)  # since we use deriv_wrt_params
         errgen = _op.LindbladErrorgen.from_operation_matrix(
@@ -846,7 +854,7 @@ class SpamGaugeGroup(OpGaugeGroup):
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
     """
 
-    def __init__(self, state_space: _StateSpace, evotype: Optional[Union[_Evotype, str]]='default'):
+    def __init__(self, state_space: _StateSpace, evotype: Optional[Union[_Evotype, str]] = 'default'):
         """
         Create a new gauge group with gauge-transform dimension `dim`, which
         should be the same as `mdl.dim` where `mdl` is a :class:`Model` you
@@ -904,7 +912,7 @@ class TPSpamGaugeGroup(OpGaugeGroup):
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
     """
 
-    def __init__(self, state_space: _StateSpace, evotype: Optional[Union[_Evotype, str]]='default'):
+    def __init__(self, state_space: _StateSpace, evotype: Optional[Union[_Evotype, str]] = 'default'):
         """
         Create a new gauge group with gauge-transform dimension `dim`, which
         should be the same as `mdl.dim` where `mdl` is a :class:`Model` you
@@ -988,7 +996,7 @@ class TrivialGaugeGroup(GaugeGroup):
         -------
         TrivialGaugeGroupElement
         """
-        assert(len(param_vec) == 0)
+        assert (len(param_vec) == 0)
         return TrivialGaugeGroupElement(self.state_space.dim)
 
     @property
@@ -1096,7 +1104,7 @@ class TrivialGaugeGroupElement(GaugeGroupElement):
         -------
         None
         """
-        assert(len(v) == 0)
+        assert (len(v) == 0)
 
     @property
     def num_params(self) -> int:
@@ -1124,12 +1132,13 @@ class DirectSumUnitaryGroup(GaugeGroup):
     A subgroup of the unitary group, where the unitary operators in the group all have a
     shared block-diagonal structure.
 
-    Example setting where this is useful: 
+    Example setting where this is useful:
         The system's Hilbert space is naturally expressed as a direct sum, H = U ⨁ V,
         and we want gauge optimization to preserve the natural separation between U and V.
     """
 
-    def __init__(self, subgroups: Tuple[Union[UnitaryGaugeGroup, TrivialGaugeGroup], ...], basis, name="Direct sum gauge group"):
+    def __init__(self, subgroups: Tuple[Union[UnitaryGaugeGroup, TrivialGaugeGroup], ...],
+                 basis, name="Direct sum gauge group"):
         self.subgroups = subgroups
         if isinstance(basis, _Basis):
             self.basis = basis
@@ -1223,7 +1232,7 @@ class DirectSumUnitaryGroupElement(GaugeGroupElement):
             offset += se.num_params
         self._update_matrices()
         return
-    
+
     def _update_matrices(self):
         u_blocks, num_params = [], []
         for se in self.subelements:
