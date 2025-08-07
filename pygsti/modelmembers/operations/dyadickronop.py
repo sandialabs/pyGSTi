@@ -113,3 +113,14 @@ class KronStructured(RealLinOp):
         self._linop   = forward._linop
         self._adjoint = forward.T
         self._dtype = self.kron_operands[0].dtype
+
+    def to_full_array(self) -> np.ndarray:
+        """
+        Return the full dense matrix. Do not use this method in a performance sensitive routine
+        as you will not be utilizing the structure of the matrix to its full
+        potential. This is mainly used as a debugging tool.
+        """
+        output = 1
+        for i in range(len(self.kron_operands)):
+            output = np.kron(self.kron_operands[i], output)
+        return output

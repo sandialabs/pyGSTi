@@ -36,7 +36,7 @@ from pygsti.circuits.split_circuits_into_lanes import compute_qubit_to_lane_and_
 import time
 import scipy.linalg as la
 import scipy.sparse.linalg as sparla
-from typing import List, Optional, Iterable
+from typing import List, Optional, Iterable, Union, TYPE_CHECKING
 from pygsti.tools.tqdm import our_tqdm
 
 
@@ -735,11 +735,12 @@ class EvalTreeBasedUponLongestCommonSubstring():
             try:
                 my_op = model.circuit_layer_operator(lbl, "op") # Assumes that layers have the same gpindices as the gates themselves.
             except KeyError:
-                return cache_inds
-            if gp_index_changing in my_op.gpindices_as_array():
+                # Skip to the next lbl to check. Do not immediately return None!
+                continue
+            op_inds = my_op.gpindices_as_array()
+            if gp_index_changing in op_inds:
                 cache_inds = self.alphabet_val_to_sorted_cache_inds[lbl]
-                my_arr = my_op.gpindices_as_array()
-                for ind in my_arr: # Save off all the values we know about.
+                for ind in op_inds: # Save off all the values we know about.
                     self.gpindex_to_cache_vals[ind] = cache_inds
                 return cache_inds
         return cache_inds
@@ -1025,7 +1026,7 @@ class CollectionOfLCSEvalTrees():
         self.cir_id_to_tensor_order: dict[int, list[list[int], int]] = {}
         self.compute_tensor_orders()
 
-        self.saved_results = {}
+        self.saved_results: dict[Union[LabelTupTup, int], _np.ndarray] = {}
         self.sub_cir_to_ind_in_results: dict[tuple[int, ...], dict[_Circuit, int]] = {}
 
     def do_I_need_to_recompute_portions_if_I_change_this_index(self, model, gp_index_changing: int) -> bool:

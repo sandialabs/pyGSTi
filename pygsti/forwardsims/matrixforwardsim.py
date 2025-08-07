@@ -2210,6 +2210,18 @@ class LCSEvalTreeMatrixForwardSimulator(MatrixForwardSimulator):
         Gs = full_tree.reconstruct_full_matrices()
 
         return Gs
+    
+    def bulk_dproduct(self, circuits, flat=False, return_prods=False, scale=False, resource_alloc=None, wrt_filter=None):
+
+        layout = self.create_layout(circuits, resource_alloc=resource_alloc, array_types=('ep'))
+
+        # I will assume that we are working with only one rank here.
+
+        the_atom = layout.atoms[0]
+
+
+
+        return super().bulk_dproduct(circuits, flat, return_prods, scale, resource_alloc, wrt_filter)
 
     def _bulk_fill_probs_atom(self, array_to_fill, layout_atom: _MatrixCOPALayoutAtomWithLCS, resource_alloc):
         
@@ -2634,7 +2646,7 @@ class LCSEvalTreeMatrixForwardSimulator(MatrixForwardSimulator):
 
         self.model.from_vector(orig_vec)
 
-    def _bulk_fill_dprobs_atom_using_from_vector_but_split_out_collapse_if_possible(self, array_to_fill, dest_param_slice, layout_atom: _MatrixCOPALayoutAtomWithLCS, param_slice, resource_alloc):
+    def _bulk_fill_dprobs_atom_using_from_vector_but_split_out_collapse_if_possible(self, array_to_fill, dest_param_slice, layout_atom: _MatrixCOPALayoutAtomWithLCS, param_slice, resource_alloc, actually_just_sequence_matrices: bool = False):
 
         eps = 1e-7  # hardcoded?
         avoiding_repeated_dividing_eps = 1 / eps 
@@ -2661,6 +2673,9 @@ class LCSEvalTreeMatrixForwardSimulator(MatrixForwardSimulator):
         orig_dense_sp = sp_obj.to_dense(on_space="minimal")[:,None] # To maintain expected shape.
         dense_povms = _np.vstack([_np.conjugate(_np.transpose(povm.to_dense(on_space='minimal')[:, None])) for povm in povm_objs])
 
+        if actually_just_sequence_matrices:
+            output = []
+
         _, rho_gpindices = self._process_wrt_filter(param_slice, sp_obj)
         for i in range(len(rho_gpindices)):
             probs2[:] = probs[:] # Could recompute only some of the tree.
@@ -2676,6 +2691,8 @@ class LCSEvalTreeMatrixForwardSimulator(MatrixForwardSimulator):
 
             array_to_fill[:, iFinal] = (probs2 - probs) / eps
 
+            if actually_just_sequence_matrices:
+                output.append(original_Gs)
  
         _, povm_gpindices = self._process_wrt_filter(param_slice, self.model.circuit_layer_operator(self.model.primitive_povm_labels[0], "povm"))
         for i in range(len(povm_gpindices)):
@@ -2692,8 +2709,10 @@ class LCSEvalTreeMatrixForwardSimulator(MatrixForwardSimulator):
             
             array_to_fill[:, iFinal] = (probs2 - probs) / eps
 
+            if actually_just_sequence_matrices:
+                output.append(original_Gs)
 
-        remaining_param_inds = list(set(param_indices) - set(_slct.to_array(povm_gpindices)) - set(_slct.to_array(rho_gpindices)))
+        remaining_param_inds = sorted(list(set(param_indices) - set(_slct.to_array(povm_gpindices)) - set(_slct.to_array(rho_gpindices))))
 
 
         for i in range(len(remaining_param_inds)):
@@ -2711,9 +2730,16 @@ class LCSEvalTreeMatrixForwardSimulator(MatrixForwardSimulator):
 
             array_to_fill[:, iFinal] = (probs2 - probs) / eps
 
+            if actually_just_sequence_matrices:
+                output.append(Gs)
+
         self.model.from_vector(orig_vec) # reset to the original model.
 
-    def _bulk_fill_dprobs_atom_using_from_vector_but_cache_collapse(self, array_to_fill, dest_param_slice, layout_atom: _MatrixCOPALayoutAtomWithLCS, param_slice, resource_alloc):
+        if actually_just_sequence_matrices:
+            return output
+
+
+    def _bulk_fill_dprobs_atom_using_from_vector_but_cache_collapse(self, array_to_fill, dest_param_slice, layout_atom: _MatrixCOPALayoutAtomWithLCS, param_slice, resource_alloc, return_prob_blocks: bool = False, actually_just_sequence_matrices: bool = False):
 
         eps = 1e-7  # hardcoded?
         avoiding_repeated_dividing_eps = 1 / eps 
@@ -2739,6 +2765,8 @@ class LCSEvalTreeMatrixForwardSimulator(MatrixForwardSimulator):
 
         orig_dense_sp = sp_obj.to_dense(on_space="minimal")[:,None] # To maintain expected shape.
         dense_povms = _np.vstack([_np.conjugate(_np.transpose(povm.to_dense(on_space='minimal')[:, None])) for povm in povm_objs])
+        if actually_just_sequence_matrices:
+            output = []
 
         _, rho_gpindices = self._process_wrt_filter(param_slice, sp_obj)
         for i in range(len(rho_gpindices)):
@@ -2755,6 +2783,8 @@ class LCSEvalTreeMatrixForwardSimulator(MatrixForwardSimulator):
 
             array_to_fill[:, iFinal] = (probs2 - probs) / eps
 
+            if actually_just_sequence_matrices:
+                output.append(original_Gs)
  
         _, povm_gpindices = self._process_wrt_filter(param_slice, self.model.circuit_layer_operator(self.model.primitive_povm_labels[0], "povm"))
         for i in range(len(povm_gpindices)):
@@ -2771,8 +2801,10 @@ class LCSEvalTreeMatrixForwardSimulator(MatrixForwardSimulator):
             
             array_to_fill[:, iFinal] = (probs2 - probs) / eps
 
+            if actually_just_sequence_matrices:
+                output.append(original_Gs)
 
-        remaining_param_inds = list(set(param_indices) - set(_slct.to_array(povm_gpindices)) - set(_slct.to_array(rho_gpindices)))
+        remaining_param_inds = sorted(list(set(param_indices) - set(_slct.to_array(povm_gpindices)) - set(_slct.to_array(rho_gpindices))))
 
 
         for i in range(len(remaining_param_inds)):
@@ -2790,4 +2822,13 @@ class LCSEvalTreeMatrixForwardSimulator(MatrixForwardSimulator):
 
             array_to_fill[:, iFinal] = (probs2 - probs) / eps
 
+            if actually_just_sequence_matrices:
+                output.append(Gs)
+
         self.model.from_vector(orig_vec) # reset to the original model.
+
+        # if not return_prob_blocks:
+        #     array_to_fill = (array_to_fill - probs[:, None]) / eps
+
+        if actually_just_sequence_matrices:
+            return output
