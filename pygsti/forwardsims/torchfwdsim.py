@@ -209,7 +209,7 @@ class StatelessModel:
             for fp in free_params:
                 fp.requires_grad_(True)
 
-        torch_bases = self.get_torch_bases(*free_params)
+        torch_bases = self.get_torch_bases(free_params) # type: ignore
         probs = self.circuit_probs_from_torch_bases(torch_bases)
         return probs
 
