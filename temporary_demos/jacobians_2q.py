@@ -44,7 +44,7 @@ class Benchmarker:
         return
     
     @staticmethod
-    def from_modelpack(modelpack: ModelPack, sims: list[ForwardSimulator], gst_maxlen=64):
+    def from_modelpack(modelpack: ModelPack, sims: list[ForwardSimulator], gst_maxlen: int):
         model_ideal = modelpack.target_model()
         model_ideal.convert_members_inplace(to_type='full TP')
         # ^ TorchFowardSimulator can only work with TP modelmembers.
@@ -110,12 +110,12 @@ class Benchmarker:
         return times
 
 
-def demo_benchmarker_on_modelpack(maxlen=32):
+def demo_benchmarker_on_modelpack(gst_maxlen=32):
     sims = [TorchForwardSimulator, MapForwardSimulator]
     mp = smq2Q_XYICNOT
     print()
     print('-'*80)
-    b = Benchmarker.from_modelpack(mp, sims, maxlen)
+    b = Benchmarker.from_modelpack(mp, sims, gst_maxlen)
     b.compare_dprob_times()
     print('-'*80 + '\n')
     return
