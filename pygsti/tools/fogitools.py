@@ -487,6 +487,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
 
     smaller_sets = [(op_label,) for op_label in primitive_op_labels]
     max_size = len(primitive_op_labels)
+    set_size_dims = _np.zeros(max_size)
     for set_size in range(1, max_size):
         larger_sets = []
         num_indep_vecs_from_smaller_sets = fogi_dirs.shape[1]
@@ -709,6 +710,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
 
                         # figure out which directions are independent
                         indep_cols = _mt.independent_columns(new_fogi_dirs.toarray(), fogi_dirs.toarray())
+                        set_size_dims[set_size] += len(indep_cols)
                         #FOGI DEBUG print(" ==> %d independent columns" % len(indep_cols))
 
                         if dependent_fogi_action == "drop":
@@ -761,7 +763,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
         fogi_dirs = fogi_dirs.real
     if _spsl.norm(dep_fogi_dirs.imag) < 1e-6:
         dep_fogi_dirs = dep_fogi_dirs.real
-
+    print('Dimensions of FOGI subspaces: ', set_size_dims)
     return (fogi_dirs, fogi_meta, dep_fogi_dirs, dep_fogi_meta)
 
 

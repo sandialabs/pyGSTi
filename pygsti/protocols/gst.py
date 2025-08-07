@@ -2528,24 +2528,10 @@ def _compute_robust_scaling(scale_typ, objfn_cache, mdc_objfn):
         distribution of per-circuit goodness-of-fit values *without reordering*
         these values.
 
-    model : Model
-        The final model fit.
+    objfn_cache : TODO
 
-    ds : DataSet
-        The data set to compare to the model predictions.
-
-    circuit_list : list
-        A list of the :class:`Circuit`s whose data should be compared.
-
-    parameters : dict
-        Various parameters of the estimate at hand.
-
-    comm : mpi4py.MPI.Comm, optional
-        An MPI communicator used to run this computation in parallel.
-
-    mem_limit : int, optional
-        A rough per-processor memory limit in bytes.
-
+    mdc_objfn : TODO
+    
     Returns
     -------
     dict
@@ -2593,7 +2579,7 @@ def _compute_robust_scaling(scale_typ, objfn_cache, mdc_objfn):
     return circuit_weights  # contains *global* circuits as keys
 
 
-def _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options, verbosity):
+def _compute_wildcard_budget(objfn_cache, mdc_objfn, badfit_options, verbosity):
     """
     Create a wildcard budget for a model estimate.
     TODO: update docstring
@@ -2609,19 +2595,10 @@ def _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options,
     circuits_to_use : list
         The circuits whose data are compared.
 
-    parameters : dict
-        Various parameters of the estimate at hand.
-
     badfit_options : GSTBadFitOptions, optional
         Options specifying what post-processing actions should be performed when
         a fit is unsatisfactory.  Contains detailed parameters for wildcard budget
         creation.
-
-    comm : mpi4py.MPI.Comm, optional
-        An MPI communicator used to run this computation in parallel.
-
-    mem_limit : int, optional
-        A rough per-processor memory limit in bytes.
 
     verbosity : int, optional
         Level of detail printed to stdout.

@@ -48,7 +48,7 @@ class CustomLMOptimizer(Optimizer):
 
     tol : float or dict, optional
         The tolerance, specified as a single float or as a dict
-        with keys `{'relx', 'relf', 'jac', 'maxdx'}`.  A single
+        with keys `{'relx', 'relf', 'f', 'jac', 'maxdx'}`.  A single
         float sets the `'relf'` and `'jac'` elemments and leaves
         the others at their default values.
 
