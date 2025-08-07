@@ -12,21 +12,13 @@ os.environ['MKL_NUM_THREADS'] = thread_limit
 
 import numpy as np
 import pygsti
-from AMS.utils import get_next_reduced_models #compare_parameters_simple, compare_parameters
-from AMS.greedy import do_greedy_from_full_fast
 from mpi4py import MPI
 import pickle
-from pygsti.forwardsims import MatrixForwardSimulator
 from pygsti.objectivefns import objectivefns as _objfns
-from pygsti.circuits import Circuit
-from pygsti.baseobjs import Label
 import warnings
-from pygsti.processors import QubitProcessorSpec
-from pygsti.models.modelconstruction import create_explicit_model
-import scipy
-import random
 import time
-
+from pygsti.tools.modelselectiontools import create_red_model as _create_red_model, reduced_model_approx_GST_fast as _reduced_model_approx_GST_fast
+from pygsti.tools.modelselectiontools import parallel_GST as _parallel_GST, AMSCheckpoint as _AMSCheckpoint
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 size = comm.Get_size()
@@ -50,63 +42,6 @@ def create_projector_matrix_from_trace(graph_levels, projector_matrix = None):
         projector_matrix = np.delete(projector_matrix, param_to_remove, axis=1)
     return projector_matrix
 
-def parallel_GST(target_model, data, min_prob_clip, tol, maxiter, verbosity):
-    """
-    Wrapper to run GST with MPI with custom builders where the tolerance, probability clip and max iterations
-    are easily accesible. The seed model, "target model", gets reset to its error-less version before doing
-    GST. This function is specifically made to be used for FOGI AMS, but should work with non-FOGI models too.
-
-    TODO: This function assumes global access to comm and mem_limit, to be changed in the future.
-    
-    Parameters
-    ----------
-    
-    target_model : Model
-        The model to be fit to the data. All errors are eraed, yielding an ideal version of target_model
-        as a GST seed.
-        
-    data : ProtocolData
-        The input data to be used for GST analysis
-          
-    min_prob_clip : float
-        The minimum probability treated normally in the evaluation of the log-likelihood.
-        A penalty function replaces the true log-likelihood for probabilities that lie
-        below this threshold so that the log-likelihood never becomes undefined (which improves
-        optimizer performance).
-        
-    tol : float
-        Tolerance value used for optimization algorithms. This parameters will index the 'f' tolerance
-        (also called f_norm2_tol) in optimization subroutines, described as follows:
-            Tolerace for `F^2` where `F = `norm( sum(obj_fn(x)**2) )` is the
-            least-squares residual.  If `F**2 < f_norm2_tol`, then mark converged.  
-               
-    maxiter : int
-        The maximum number of (outer) interations for the optimizer.
-        
-    verbosity : int
-        Amount of detail to print to stdout.
-
-    Returns:
-        ModelEstimateResults
-          The return value of running protocols.GateSetTomography()
-    """
-     
-    chi2_builder = pygsti.objectivefns.Chi2Function.builder(
-        'chi2', regularization={'min_prob_clip_for_weighting': min_prob_clip}, penalties={'cptp_penalty_factor': 0.0})
-    mle_builder = pygsti.objectivefns.PoissonPicDeltaLogLFunction.builder(
-        'logl', regularization={'min_prob_clip': min_prob_clip, 'radius': min_prob_clip})
-    iteration_builders = [chi2_builder] 
-    final_builders = [mle_builder]
-    builders = pygsti.protocols.GSTObjFnBuilders(iteration_builders, final_builders)
-    
-    target_model.from_vector([0]*target_model.num_params)
-
-    optimizer = pygsti.optimize.customlm.CustomLMOptimizer(maxiter=maxiter, tol={'f':tol})
-    protoOpt = pygsti.protocols.GateSetTomography(target_model, verbosity=verbosity, optimizer=optimizer, gaugeopt_suite=None, objfn_builders=builders)
-
-    result = protoOpt.run(data, comm=comm,
-                memlimit=mem_limit)
-    return result
 
 def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, maxiter=100, tol=1.0, prob_clip=1e-3, recompute_H_thresh_percentage = .2, graph_checkpoint = None):
     """
@@ -185,33 +120,7 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
         vector corresponding to the fitted best reduced model found at its corresponding level
     """
 
-    def create_red_model(parent_model, projector_matrix, vec):
-        """TODO
 
-        Args:
-            parent_model (_type_): _description_
-            projector_matrix (_type_): _description_
-            vec (_type_): _description_
-
-        Returns:
-            _type_: _description_
-        """
-        assert projector_matrix.shape[0] == len(vec)
-        assert projector_matrix.shape[1] == parent_model.num_params
-        
-        red_model = parent_model.copy()
-        red_model.param_interposer.num_params = len(vec)
-        red_model.param_interposer.transform_matrix = parent_model.param_interposer.full_span_transform_matrix @ projector_matrix
-        red_model.param_interposer.projector_matrix = projector_matrix.copy()
-        reduced_inv_matrix =  projector_matrix.T @ parent_model.param_interposer.inv_transform_matrix
-        red_model.param_interposer.inv_transform_matrix = reduced_inv_matrix
-        red_model._paramvec = vec.copy()
-        red_model.from_vector(red_model._paramvec)
-
-        red_model._need_to_rebuild = True
-        red_model._clean_paramvec()
-        assert red_model.num_params < parent_model.num_params
-        return red_model
     #logl function will not change throughout this algorithm, so we can save a lot of time
     #by setting it up once, and recomputing its value with different inputs throughout AMS
     def create_logl_obj_fn(parent_model, dataset, min_prob_clip = 1e-6, comm = None, mem_limit = None):
@@ -230,62 +139,7 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
                             op_label_aliases, comm, mem_limit, ('percircuit',), (), mdc_store)
         return obj
     
-    def reduced_model_approx_GST_fast(red_rowandcol_H, red_row_H, x0, param_to_remove):
-        """
-        A way to obtain an approximation of the argmax(Likelihood) of a reduced model, assuming the argmax(Likelihood)
-        of the parent model is known. Here is how it works:
-
-        Consider a full model with parameter vector x, and a reduced model of this full model with 
-        parameter vector xr. Assuming we know argmax(Likelihood) of the full model (call its position x0)
-        , we can approximate MLE(xr). To do this, we will approximate the likelihood function up to second 
-        order around its maximum x0. Because we are tasked with finding the point at which it peaks, the 
-        constant and first order term are not relevant. This yields
-
-        L_approx(x0) = .5(x - x0).T H (x - x0)
-
-        Where H is the Hessian of L. As mentioned above, we are interested in the MLE of a constrained
-        version of x, where some entries are pinned to 0. To apply this constrain, we change the input
-        of the function to be E @ xr, where E is an embedder map which embeds xr into a higher dimensional
-        vector whose extra entries are set to 0. The resulting vector has the same shape as x.
-
-        L_approx(E @ xr) = .5(E @ xr - x0).T H (E @ xr - x0)
-
-        To find its argmax, we take its derivative with respect to xr. After some algebra this results in
-
-        xr_max = (E.T @ H @ E)^-1 E.T @ H @ x0
-
-        This function computes xr_max and returns it
-
-        Parameters
-        ----------
-
-        red_rowandcol_H : numpy array
-            This is a reduced version of the Hessian of the likelihood function of the full model.
-            It is missing both rows and columns corresponding to the indices that xr is missing with 
-            respect to x.
-            It is obtained through E.T @ H @ E. This variable is meant to hold the reduced version of the
-            Hessian corresponding to the previous model evaluated in AMS. Together with param_to_remove
-            it will be further reduced down to compute the approximate argmax of a further reduced model.
-            For example, the first time this function is called within AMS, if starting from a full model,
-            red_rowandcol_H will be equal to H.
-
-        red_row_H : numpy array
-            Same as red_rowandcol_H but for E.T @ H
-
-        x0 : numpy array
-            The argmax of the likelihood of a more expressive model from which we are approximating
-
-        param_to_remove : int
-            New index to remove for a further reduced model
-
-        Returns:
-            The argmax of the approximate likelihood function for a reduced model lacking param_to_remove
-            and all other parameters corresponding to missing rows and columns in red_rowandcol_H
-        """
-        #A faster version of np.linalg.inv(E.T @ H @ E) E.T @ H @ x0
-        x0_prime = np.linalg.inv(np.delete(np.delete(red_rowandcol_H, param_to_remove, axis=0), param_to_remove, axis=1)) @ np.delete(red_row_H, param_to_remove, axis=0) @ x0
-
-        return x0_prime
+    
     
     print('doing AMS ', comm.Get_rank())
     recompute_Hessian = False
@@ -296,7 +150,7 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
     
     if rank == 0:
             print('starting GST')
-    result = parallel_GST(target_model, data, prob_clip, tol, maxiter, verbosity)
+    result = _parallel_GST(target_model, data, prob_clip, tol, maxiter, verbosity)
     
     target_model_fit = result.estimates['GateSetTomography'].models['final iteration estimate']
     logl_fn = create_logl_obj_fn(target_model_fit, data.dataset)
@@ -312,7 +166,7 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
     
     graph_levels.append([[target_model_fit.to_vector(),original_logl, 0]])
     x0 = target_model_fit.to_vector()
-    
+    checkpoint = _AMSCheckpoint(target_model, data, er_thresh=2.0, verbosity=2, maxiter=100, tol=1.0, prob_clip=1e-3, recompute_H_thresh_percentage = .2, H=H, x0=x0)
     if graph_checkpoint != None:
         
         with open('./pickle_jar/graph_levels.pkl', 'rb') as file:
@@ -332,8 +186,6 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
             print(f'>> Working on level {len(graph_levels)} <<',flush = True)
             start = time.time()
         
-        
-        
         if False: #np.abs(approx_error) > recompute_H_thresh_percentage * 2:#er_thresh:
             recompute_Hessian = True
             break
@@ -352,7 +204,7 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
                     reduced_model_projector_matrix = np.delete(parent_model_projector, i, axis=1)
                     
                     #vec = reduced_model_approx_GST(H,reduced_model_projector_matrix.T, x0)
-                    vec = reduced_model_approx_GST_fast(red_rowandcol_H, red_row_H, x0, i)
+                    vec = _reduced_model_approx_GST_fast(red_rowandcol_H, red_row_H, x0, i)
                     logl_fn.model.from_vector(reduced_model_projector_matrix @ vec)
 
                     quantity = (prev_logl + logl_fn.fn())*2
@@ -369,7 +221,7 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
                 if (left_over_start_index + rank) < num_total_models:
                     i = left_over_start_index + rank
                     reduced_model_projector_matrix = np.delete(parent_model_projector, i, axis=1)     
-                    vec = reduced_model_approx_GST_fast(red_rowandcol_H, red_row_H, x0, i)
+                    vec = _reduced_model_approx_GST_fast(red_rowandcol_H, red_row_H, x0, i)
                     logl_fn.model.from_vector(reduced_model_projector_matrix @ vec)
 
                     quantity = (prev_logl + logl_fn.fn())*2
@@ -414,9 +266,9 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
                 #print('\n'.join(graph_levels[-1][0][0].parameter_labels_pretty))
                 exceeded_threshold = True
                 final_projector_matrix = parent_model_projector
-                final_model = create_red_model(target_model.copy(), final_projector_matrix, graph_levels[-1][0][0])
+                final_model = _create_red_model(target_model.copy(), final_projector_matrix, graph_levels[-1][0][0])
 
-                final_fit = parallel_GST(final_model.copy(), data, prob_clip, tol, maxiter, verbosity).estimates['GateSetTomography'].models['final iteration estimate']
+                final_fit = _parallel_GST(final_model.copy(), data, prob_clip, tol, maxiter, verbosity).estimates['GateSetTomography'].models['final iteration estimate']
     
                 logl_fn.model.from_vector(final_projector_matrix @ final_fit.to_vector())
                 curr_logl = - logl_fn.fn()

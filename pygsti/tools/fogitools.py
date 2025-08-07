@@ -694,7 +694,6 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                             print("tg in span")
                             print(_np.linalg.matrix_rank(_np.concatenate((ccommA, tg), axis=1)))
                             print(_np.linalg.matrix_rank(_np.concatenate((ccommB, tg), axis=1)))
-                            import bpdb; bpdb.set_trace()
                             print("ERROR!")
                         # transpose => dot(local_fogi_dirs.T, gauge_action) = 0
                         # = int_spc.T * [ pinv_gA  -pinv_gB ] * [[ga] [gB]]
