@@ -1,6 +1,5 @@
 import numpy as np
 import pygsti
-from mpi4py import MPI
 import pickle
 from pygsti.objectivefns import objectivefns as _objfns
 import warnings
@@ -104,9 +103,9 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
     """
 
     if comm is not None:
-        comm = MPI.COMM_WORLD
         rank = comm.Get_rank()
         size = comm.Get_size()
+        print(rank, size)
     else:
         rank = 0
         size = 1
@@ -136,7 +135,7 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
     parent_model_projector = target_model.param_interposer.projector_matrix.copy()
 
     if checkpoint is not None:
-        #TODO: maybe not have all processes read from memory in the future
+        #TODO: maybe not have all MPI processes read from memory in the future
         loaded_checkpoint = _AMSCheckpoint.read(checkpoint)
         if loaded_checkpoint.check_valid_checkpoint(target_model, data.dataset.to_str(), er_thresh, maxiter, tol, prob_clip, recompute_H_thresh_percent=recompute_H_thresh_percentage):
             H = loaded_checkpoint.H
@@ -164,7 +163,7 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
         x0 = target_model_fit.to_vector()
         if not disable_checkpoints:
             new_checkpoint = _AMSCheckpoint(target_model, data.dataset.to_str(), er_thresh, maxiter, tol, prob_clip,  recompute_H_thresh_percentage, H, x0)
-            new_checkpoint.save()
+            #new_checkpoint.save()
     
     logl_fn = create_logl_obj_fn(target_model_fit, data.dataset)
     original_logl = -logl_fn.fn()
@@ -189,50 +188,50 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
             finalists = []
             lowest_imdl = -1
             lowest_quantity = None
-            print('total ', num_total_models)
-            if size < num_total_models:
-                for i in chunk_range:
-
-                    reduced_model_projector_matrix = np.delete(parent_model_projector, i, axis=1)
-                    
-                    #vec = reduced_model_approx_GST(H,reduced_model_projector_matrix.T, x0)
-                    vec = _reduced_model_approx_GST_fast(red_rowandcol_H, red_row_H, x0, i)
-                    logl_fn.model.from_vector(reduced_model_projector_matrix @ vec)
-
-                    quantity = (prev_logl + logl_fn.fn())*2
-                    if i  % 50 == 0:
-                        print('Model ', i, ' has ev. ratio of ', quantity, flush=True)
-                    if lowest_quantity == None or lowest_quantity > quantity:
-                        lowest_quantity = quantity
-                        lowest_imdl = i
-                        lowest_vec = vec
-                    
-
-                left_over_start_index = size * bucket_size
-
-                if (left_over_start_index + rank) < num_total_models:
-                    i = left_over_start_index + rank
-                    reduced_model_projector_matrix = np.delete(parent_model_projector, i, axis=1)     
-                    vec = _reduced_model_approx_GST_fast(red_rowandcol_H, red_row_H, x0, i)
-                    logl_fn.model.from_vector(reduced_model_projector_matrix @ vec)
-
-                    quantity = (prev_logl + logl_fn.fn())*2
-                    
-                    if lowest_quantity == None or lowest_quantity > quantity:
-                        lowest_quantity = quantity
-                        lowest_imdl = i
-                        lowest_vec = vec
-                    
-                best_of_chunk = [lowest_vec, lowest_quantity, lowest_imdl]
-
-                finalists_raw = comm.allgather(best_of_chunk)
-                
-                finalists = []
-                for finalist in finalists_raw:
-                    finalists.append(finalist)
-            else:
-                    bucket_size=0
+            lowest_vec = None
+            print(f'{rank=}, {chunk_range=}', flush=True)
+            if rank == 0:
+                print('total ', num_total_models, flush=True)
             
+            for i in chunk_range:
+
+                reduced_model_projector_matrix = np.delete(parent_model_projector, i, axis=1)
+                
+                #vec = reduced_model_approx_GST(H,reduced_model_projector_matrix.T, x0)
+                vec = _reduced_model_approx_GST_fast(red_rowandcol_H, red_row_H, x0, i)
+                logl_fn.model.from_vector(reduced_model_projector_matrix @ vec)
+
+                quantity = (prev_logl + logl_fn.fn())*2
+                if i  % 50 == 0:
+                    print('Model ', i, ' has ev. ratio of ', quantity, flush=True)
+                if lowest_quantity == None or lowest_quantity > quantity:
+                    lowest_quantity = quantity
+                    lowest_imdl = i
+                    lowest_vec = vec
+                
+            left_over_start_index = size * bucket_size
+
+            if (left_over_start_index + rank) < num_total_models:
+                i = left_over_start_index + rank
+                reduced_model_projector_matrix = np.delete(parent_model_projector, i, axis=1)     
+                vec = _reduced_model_approx_GST_fast(red_rowandcol_H, red_row_H, x0, i)
+                logl_fn.model.from_vector(reduced_model_projector_matrix @ vec)
+
+                quantity = (prev_logl + logl_fn.fn())*2
+                
+                if lowest_quantity == None or lowest_quantity > quantity:
+                    lowest_quantity = quantity
+                    lowest_imdl = i
+                    lowest_vec = vec
+            
+            best_of_chunk = [lowest_vec, lowest_quantity, lowest_imdl]
+
+            finalists_raw = comm.allgather(best_of_chunk)
+            finalists = []
+            for finalist in finalists_raw:
+                finalists.append(finalist)
+            #Purge out all entries from processes that did not compute anything
+            finalists = [finalist for finalist in finalists if finalist[2] != -1]
             
             sorted_finalists = sorted(finalists, key=lambda x: x[1])
 
@@ -250,7 +249,7 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
         if verbosity and rank == 0:
             print(f'Model {sorted_finalists[0][2]} has lowest evidence ratio {sorted_finalists[0][1]:.4f}')
         
-            
+        print(len(sorted_finalists))
         if sorted_finalists[0][1] > er_thresh or len(sorted_finalists[0][0]) == 1:
                 if rank == 0 and verbosity > 0:
                     print('All models from this level exceeded evidence ratio threshold, model rejected. Stopping!')
@@ -266,11 +265,14 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
                 curr_logl = - logl_fn.fn()
                 new_quantity = 2*(prev_logl - curr_logl)
                 total_ev_ratio = 2*(original_logl - curr_logl)/len(graph_levels)
-                print('Evidence ratio wrt first model is ', total_ev_ratio)
+                
+                    
                 evratios = [level[0][1] for level in graph_levels[1:]]
                 pre_opt = np.average(evratios)
-                print('Evidence ratio pre-optimization was ', pre_opt)
-                print('Evidence ratio wrt first model improved by ', pre_opt - total_ev_ratio)
+                if rank == 0 and verbosity > 0:
+                    print('Evidence ratio wrt first model is ', total_ev_ratio)
+                    print('Evidence ratio pre-optimization was ', pre_opt)
+                    print('Evidence ratio wrt first model improved by ', pre_opt - total_ev_ratio)
                 graph_levels[-1][0] = [final_fit.to_vector(), new_quantity, graph_levels[-1][0][2], graph_levels[-1][0][1]]
                 if total_ev_ratio > er_thresh:
                      warnings.warn("Final model does not meet er_thresh specified. This can only happen if there is a bug, or if logl approximations were used" + str(2*(original_logl - curr_logl)/len(graph_levels)))
