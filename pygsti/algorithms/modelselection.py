@@ -1,15 +1,3 @@
-
-import os
-
-#TODO where should these env variables go?
-thread_limit = '1'
-os.environ['OPENBLAS_NUM_THREADS'] = thread_limit
-os.environ['GOTO_NUM_THREADS'] = thread_limit
-os.environ['OMP_NUM_THREADS'] = thread_limit
-os.environ['NUMEXPR_NUM_THREADS'] = thread_limit
-os.environ['VECLIB_MAXIMUM_THREADS'] = thread_limit
-os.environ['MKL_NUM_THREADS'] = thread_limit
-
 import numpy as np
 import pygsti
 from mpi4py import MPI
@@ -19,11 +7,6 @@ import warnings
 import time
 from pygsti.tools.modelselectiontools import create_red_model as _create_red_model, reduced_model_approx_GST_fast as _reduced_model_approx_GST_fast
 from pygsti.tools.modelselectiontools import parallel_GST as _parallel_GST, AMSCheckpoint as _AMSCheckpoint
-comm = MPI.COMM_WORLD
-rank = comm.Get_rank()
-size = comm.Get_size()
-mem = 7
-mem_limit = mem*(2**10)**3
 
 def create_projector_matrix_from_trace(graph_levels, projector_matrix = None):
     """TODO
@@ -43,7 +26,7 @@ def create_projector_matrix_from_trace(graph_levels, projector_matrix = None):
     return projector_matrix
 
 
-def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, maxiter=100, tol=1.0, prob_clip=1e-3, recompute_H_thresh_percentage = .2, graph_checkpoint = None):
+def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, maxiter=100, tol=1.0, prob_clip=1e-3, recompute_H_thresh_percentage = .2, disable_checkpoints = False, checkpoint = None, comm = None, mem_limit = None):
     """
     An automated model selection greedy algorithm. Specifically made for FOGI models, but it should be compatible
     with any model that has a linear interposer. It is considered "fast" because on most model fits, GST analysis is
@@ -120,7 +103,13 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
         vector corresponding to the fitted best reduced model found at its corresponding level
     """
 
-
+    if comm is not None:
+        comm = MPI.COMM_WORLD
+        rank = comm.Get_rank()
+        size = comm.Get_size()
+    else:
+        rank = 0
+        size = 1
     #logl function will not change throughout this algorithm, so we can save a lot of time
     #by setting it up once, and recomputing its value with different inputs throughout AMS
     def create_logl_obj_fn(parent_model, dataset, min_prob_clip = 1e-6, comm = None, mem_limit = None):
@@ -139,45 +128,48 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
                             op_label_aliases, comm, mem_limit, ('percircuit',), (), mdc_store)
         return obj
     
-    
-    
     print('doing AMS ', comm.Get_rank())
     recompute_Hessian = False
     graph_levels = []
     target_model.param_interposer.full_span_inv_transform_matrix = target_model.param_interposer.inv_transform_matrix
     target_model.param_interposer.inv_transform_matrix_projector = np.eye(target_model.num_params)
     parent_model_projector = target_model.param_interposer.projector_matrix.copy()
+
+    if checkpoint is not None:
+        #TODO: maybe not have all processes read from memory in the future
+        loaded_checkpoint = _AMSCheckpoint.read(checkpoint)
+        if loaded_checkpoint.check_valid_checkpoint(target_model, data.dataset.to_str(), er_thresh, maxiter, tol, prob_clip, recompute_H_thresh_percent=recompute_H_thresh_percentage):
+            H = loaded_checkpoint.H
+            x0 = loaded_checkpoint.x0
+            target_model_fit = target_model.copy()
+            target_model_fit.from_vector(x0)
+            if rank == 0:
+                print('Warm starting AMS from checkpoint ' + checkpoint)
+        else:
+            if rank == 0:
+                raise ValueError('Invalid AMS checkpoint provided. The checkpoint settings are:', f"{loaded_checkpoint.er_thresh=}, {loaded_checkpoint.maxiter=}, {loaded_checkpoint.tol=}, {loaded_checkpoint.prob_clip=}, {loaded_checkpoint.recompute_H_thresh_percent=}", ' make sure that these match the arguments provided match these, and that the target model and data are correct.')
     
-    if rank == 0:
-            print('starting GST')
-    result = _parallel_GST(target_model, data, prob_clip, tol, maxiter, verbosity)
+    else:
+        if rank == 0:
+                print('starting GST')
+        result = _parallel_GST(target_model, data, prob_clip, tol, maxiter, verbosity, comm=comm, mem_limit=mem_limit)
+        
+        target_model_fit = result.estimates['GateSetTomography'].models['final iteration estimate']
+        target_model_fit.sim = pygsti.forwardsims.MapForwardSimulator(param_blk_sizes=(100,100))
+        if rank == 0 : 
+            print("computing Hessian")
+        
+        H = pygsti.tools.logl_hessian(target_model_fit, data.dataset, comm=comm, mem_limit=mem_limit, verbosity = verbosity)
+        H = comm.bcast(H, root = 0)
+        x0 = target_model_fit.to_vector()
+        if not disable_checkpoints:
+            new_checkpoint = _AMSCheckpoint(target_model, data.dataset.to_str(), er_thresh, maxiter, tol, prob_clip,  recompute_H_thresh_percentage, H, x0)
+            new_checkpoint.save()
     
-    target_model_fit = result.estimates['GateSetTomography'].models['final iteration estimate']
     logl_fn = create_logl_obj_fn(target_model_fit, data.dataset)
     original_logl = -logl_fn.fn()
     prev_logl = original_logl
-
-    target_model_fit.sim = pygsti.forwardsims.MapForwardSimulator(param_blk_sizes=(100,100))
-    if rank == 0 : 
-        print("computing Hessian")
-    
-    H = pygsti.tools.logl_hessian(target_model_fit, data.dataset, comm=comm, mem_limit=mem*(2**10)**3, verbosity = verbosity)
-    H = comm.bcast(H, root = 0)
-    
-    graph_levels.append([[target_model_fit.to_vector(),original_logl, 0]])
-    x0 = target_model_fit.to_vector()
-    checkpoint = _AMSCheckpoint(target_model, data, er_thresh=2.0, verbosity=2, maxiter=100, tol=1.0, prob_clip=1e-3, recompute_H_thresh_percentage = .2, H=H, x0=x0)
-    if graph_checkpoint != None:
-        
-        with open('./pickle_jar/graph_levels.pkl', 'rb') as file:
-            graph_levels = pickle.load(file)
-        sorted_finalists = graph_levels[-1]
-        assert original_logl == graph_levels[0][0][1]
-        prev_logl = original_logl
-        for level in graph_levels[1:]:
-            prev_logl += -level[0][1]/2
-        parent_model_projector = create_projector_matrix_from_trace(graph_levels)
-
+    graph_levels.append([[x0,original_logl, 0]])
     exceeded_threshold = False
     red_row_H = H
     red_rowandcol_H = H
@@ -268,7 +260,7 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
                 final_projector_matrix = parent_model_projector
                 final_model = _create_red_model(target_model.copy(), final_projector_matrix, graph_levels[-1][0][0])
 
-                final_fit = _parallel_GST(final_model.copy(), data, prob_clip, tol, maxiter, verbosity).estimates['GateSetTomography'].models['final iteration estimate']
+                final_fit = _parallel_GST(final_model.copy(), data, prob_clip, tol, maxiter, verbosity, comm=comm, mem_limit=mem_limit).estimates['GateSetTomography'].models['final iteration estimate']
     
                 logl_fn.model.from_vector(final_projector_matrix @ final_fit.to_vector())
                 curr_logl = - logl_fn.fn()
@@ -307,4 +299,3 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
             end = time.time()
             print('time this level ', end-start)
     return graph_levels
-

@@ -13,14 +13,16 @@ os.environ['MKL_NUM_THREADS'] = thread_limit
 import numpy as _np
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 import pygsti
+from pygsti.models import Model
 import mpi4py as MPI
 import time as _time
 import datetime as _datetime
-comm = MPI.COMM_WORLD
-rank = comm.Get_rank()
-size = comm.Get_size()
-mem = 7
-mem_limit = mem*(2**10)**3
+
+#comm = MPI.COMM_WORLD
+#rank = comm.Get_rank()
+#size = comm.Get_size()
+#mem = 7
+#mem_limit = mem*(2**10)**3
 
 class AMSCheckpoint(_NicelySerializable):
     """
@@ -33,10 +35,10 @@ class AMSCheckpoint(_NicelySerializable):
     TODO
     """ 
 
-    def __init__(self, target_model, data, er_thresh, maxiter, tol, prob_clip, recompute_H_thresh_percent, H, x0, time = None):
-
+    def __init__(self, target_model, datasetstr, er_thresh, maxiter, tol, prob_clip, recompute_H_thresh_percent, H, x0, time = None):
+        super().__init__()
         self.target_model = target_model
-        self.datastr = data.to_str()
+        self.datasetstr = datasetstr
         self.er_thresh = er_thresh
         self.maxiter = maxiter
         self.tol = tol
@@ -52,7 +54,7 @@ class AMSCheckpoint(_NicelySerializable):
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
         state.update({'target_model' : self.target_model._to_nice_serialization(),
-                        'datastr' : self.datastr,
+                        'datasetstr' : self.datasetstr,
                         'er_thresh' : self.er_thresh,
                         'maxiter' : self.maxiter,
                         'tol' : self.tol,
@@ -64,14 +66,25 @@ class AMSCheckpoint(_NicelySerializable):
                        
         return state
     @classmethod
-    def from_nice_serialization(cls, state):
-        return cls(state['target_model'], state['datastr'], state['er_thresh'], state['maxiter'], state['tol'], state['prob_clip'], state['recompute_H_thresh_percent'] ,cls._decodemx(state['H']), cls._decodemx(state['x0'], state['time']))
-    def save(self, path='None'):
+    def _from_nice_serialization(cls, state):
+        return cls(Model.from_nice_serialization(state['target_model']), state['datasetstr'], state['er_thresh'], state['maxiter'], state['tol'], state['prob_clip'], state['recompute_H_thresh_percent'] ,cls._decodemx(state['H']), cls._decodemx(state['x0']), state['time'])
+    def save(self, path=None):
         if path is None:
-            path = 'AMSCheckpoint-' + _datetime.now().strftime('%Y-%m-%d_%H:%M:%S')
+            path = './ams_checkpoints/' + _datetime.datetime.now().strftime('%Y-%m-%d|%H.%M.%S') + '.json'
+        if 'ams_checkpoints' in path.split('/')[0:2]:
+            try:
+                os.mkdir('./ams_checkpoints/')
+            except FileExistsError:
+                 pass
+            except Exception as e:
+                print(f"Error creating checkpoint folder: {e}")
         self.write(path)
-    def check_valid_checkpoint(self, target_model, data, er_thresh, maxiter, tol, prob_clip, recompute_H_thresh_percent):
-        """Check if self is a checkpoint with the same settings as the ones passed in.
+
+    def checkpoint_settings(self):
+         return [self.target_model, self.datasetstr, self.er_thresh, self.maxiter, self.tol, self.prob_clip, self.recompute_H_thresh_percent]
+         
+    def check_valid_checkpoint(self, target_model, datasetstr, er_thresh, maxiter, tol, prob_clip, recompute_H_thresh_percent):
+        """Check if self is a checkpoint with the same settings as the ones passed in. This is only compatible with FOGI model checkpoints.
 
         Parameters
         ----------
@@ -104,13 +117,15 @@ class AMSCheckpoint(_NicelySerializable):
         -------
         True iff all arguments match the data inside self.
         """
-
-        if target_model == self.target_model and data.to_str() == self.datastr and er_thresh == self.er_thresh and maxiter == self.maxiter and tol == self.tol and prob_clip == self.prob_clip and recompute_H_thresh_percent == self.recompute_H_thresh_percent:
+        def equal_fogi_models(fogi_model, fogi_model2):
+            return fogi_model.fogi_store.__eq__(fogi_model2.fogi_store) and fogi_model.param_interposer.__eq__(fogi_model2.param_interposer)
+        
+        if equal_fogi_models(target_model, self.target_model) and datasetstr == self.datasetstr and er_thresh == self.er_thresh and maxiter == self.maxiter and tol == self.tol and prob_clip == self.prob_clip and recompute_H_thresh_percent == self.recompute_H_thresh_percent:
              return True
         else:
              return False
     
-def parallel_GST(target_model, data, min_prob_clip, tol, maxiter, verbosity):
+def parallel_GST(target_model, data, min_prob_clip, tol, maxiter, verbosity, comm=None, mem_limit=None):
     """
     Wrapper to run GST with MPI with custom builders where the tolerance, probability clip and max iterations
     are easily accesible. The seed model, "target model", gets reset to its error-less version before doing
@@ -179,8 +194,8 @@ def create_red_model(parent_model, projector_matrix, vec):
 	Returns:
 		_type_: _description_
 	"""
-	assert projector_matrix.shape[0] == len(vec)
-	assert projector_matrix.shape[1] == parent_model.num_params
+	assert projector_matrix.shape[1] == len(vec)
+	assert projector_matrix.shape[0] == parent_model.num_params
 	
 	red_model = parent_model.copy()
 	red_model.param_interposer.num_params = len(vec)
