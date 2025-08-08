@@ -37,7 +37,7 @@ from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _Local
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
 from pygsti import SpaceT
 
-from typing import Union, Optional
+from typing import Union, Optional, Any
 BasisLike = Union[str, _Basis]
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
@@ -184,7 +184,7 @@ def fidelity(a, b):
     return f
 
 
-def frobeniusdist(a, b):
+def frobeniusdist(a, b) -> _np.floating[Any]:
     """
     Returns the frobenius distance between arrays: ||a - b||_Fro.
 
@@ -377,7 +377,7 @@ def jtracedist(a, b, mx_basis='pp'):  # Jamiolkowski trace distance:  Tr(|J(a)-J
     return tracedist(JA, JB)
 
 
-def entanglement_fidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
+def entanglement_fidelity(a, b, mx_basis: BasisLike='pp', is_tp=None, is_unitary=None):
     """
     Returns the "entanglement" process fidelity between gate  matrices.
 
@@ -593,7 +593,7 @@ def average_gate_infidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
     return 1 - average_gate_fidelity(a, b, mx_basis, is_tp, is_unitary)
 
 
-def entanglement_infidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
+def entanglement_infidelity(a, b, mx_basis: BasisLike = 'pp', is_tp=None, is_unitary=None):
     """
     Returns the entanglement infidelity (EI) between gate matrices.
 
