@@ -120,15 +120,15 @@ def sample_subcircuits(full_circs: Union[_Circuit, List[_Circuit]],
                     #         placer_dict = json.load(f)
                     #     arch = Architecture.from_dict(placer_dict['architecture'])
 
-                    subcircs, drops, subgraph_cache = simple_weighted_subcirc_selection(full_circ,
-                                                                                        w, d,
-                                                                                        num_subcircs=num_samples_per_width_depth,
-                                                                                        depth_metric=depth_metric,
-                                                                                        instruction_durations=instruction_durations,
-                                                                                        coupling_map=coupling_map,
-                                                                                        # subgraph_cache=subgraph_cache,
-                                                                                        rand_state=rand_state,
-                                                                                        verbosity=0)
+                    subcircs, drops = simple_weighted_subcirc_selection(full_circ,
+                                                                        w, d,
+                                                                        num_subcircs=num_samples_per_width_depth,
+                                                                        depth_metric=depth_metric,
+                                                                        instruction_durations=instruction_durations,
+                                                                        coupling_map=coupling_map,
+                                                                        # subgraph_cache=subgraph_cache,
+                                                                        rand_state=rand_state,
+                                                                        verbosity=0)
                                                                         
                 elif strategy == 'greedy':
                     num_test_samples = 50 * num_samples_per_width_depth
@@ -223,19 +223,17 @@ def simple_weighted_subcirc_selection(full_circ, width, depth, num_subcircs,
     assert width <= full_width, f"Target width has to be less than full circuit width ({full_width})"
     assert depth <= full_depth, f"Target depth has to be less than full circuit depth ({full_depth})"
 
-    possible_starts = list(range(full_depth - depth + 1))
 
     if rand_state is None:
         rand_state = _np.random.RandomState()
 
-
-    if coupling_map == 'all-to-all': #TODO: support other topologies by string (linear, ring, etc.)
+    if coupling_map == 'all-to-all':
         qubit_subset = set(rand_state.choice(full_circ.line_labels, size=width, replace=False))
 
     elif coupling_map == 'linear':
-        start = rand_state.choice(full_width - width - 1)
+        start = rand_state.choice(full_width - width)
         end = start + width
-        qubit_subset = set(full_circ.line_labels[start:end+1])
+        qubit_subset = set(full_circ.line_labels[start:end])
 
     elif isinstance(coupling_map, list): # this list needs to already include the 'Q' prefix on the qubits
         G = _nx.Graph()
@@ -294,8 +292,9 @@ def simple_weighted_subcirc_selection(full_circ, width, depth, num_subcircs,
     # assert len(subgraphs), "Subgraphs provided but empty!"
 
     subcircs = []
-
     failures = 0
+
+    possible_starts = list(range(full_depth - depth + 1))
 
     while (len(subcircs) < num_subcircs) and (failures < 1000): #1000 is an arbitrary cutoff for the moment
         # Sample depth with cumulative layer weights
@@ -412,10 +411,6 @@ def simple_weighted_subcirc_selection(full_circ, width, depth, num_subcircs,
         else:
             total_dropped_gates = len(possible_dropped_gates)
         
-        # # Drop any empty layers
-        # subcirc_layers = [scl for scl in subcirc_layers if len(scl)]
-
-        # print(len(subcirc_layers))
 
         for i in range(len(subcirc_layers)):
             scl = subcirc_layers[i]
@@ -745,9 +740,10 @@ def _greedy_growth_subcirc(circ, width, depth, rand_state, verbosity=0):
 #     return subcircs, drops
 
 
-def random_connected_subgraph(G, width, rand_state):
+def random_connected_subgraph(G, width, rand_state=None):
     """
-    Generates a random connected subgraph of a specified width from a given graph.
+    Generates a random set of nodes that form a 
+    connected subgraph of a specified width from a given graph.
 
     Parameters
     -------------
@@ -760,7 +756,7 @@ def random_connected_subgraph(G, width, rand_state):
 
     Returns
     --------
-    set
+    set[int or str]
         A set of nodes representing the generated connected subgraph.
     """
 
