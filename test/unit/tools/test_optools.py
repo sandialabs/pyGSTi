@@ -409,6 +409,9 @@ class GateOpsTester(BaseCase):
 
     @needs_cvxpy
     def test_diamond_distance(self):
+        mosek_warning_pattern = ".*Incorrect array format causing data to be copied*"
+        import warnings
+        warnings.filterwarnings('ignore', mosek_warning_pattern)
         val = ot.diamonddist(self.A_TP, self.A_TP, mx_basis="pp")
         self.assertAlmostEqual(val, 0.0)
         objective_val, modelvars = ot.diamonddist(self.A_TP, self.B_unitary, mx_basis="pp", return_x=True)
@@ -419,6 +422,9 @@ class GateOpsTester(BaseCase):
 
     @needs_cvxpy
     def test_diamond_norm_epigraph(self):
+        mosek_warning_pattern = ".*Incorrect array format causing data to be copied*"
+        import warnings
+        warnings.filterwarnings('ignore', mosek_warning_pattern)
         val0 = ot.diamonddist(self.A_TP, self.B_unitary, mx_basis="pp")
         delta0 = self.A_TP - self.B_unitary
         delta1 = bt.change_basis(delta0, 'pp', 'std')
