@@ -611,7 +611,10 @@ def _create_objective_fn(model, target_model, item_weights: Optional[dict[str,fl
             B = _tools.leading_dxd_submatrix_basis_vectors(dim - n_leak, dim, mxBasis)
             P = B @ B.T.conj()
             if _np.linalg.norm(P.imag) > 1e-12:
-                raise ValueError()
+                msg  = f"Attempting to run leakage-aware gauge optimization with basis {mxBasis}\n"
+                msg +=  "is resulting an orthogonal projector onto the computational subspace that\n"
+                msg +=  "is not real-valued. Try again with a different basis, like 'l2p1' or 'gm'."
+                raise ValueError(msg)
             else:
                 P = P.real
             transform_mx_arg = (P, _tools.matrixtools.IdentityOperator())
