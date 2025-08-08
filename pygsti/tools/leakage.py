@@ -57,8 +57,8 @@ def apply_tensorized_to_teststate(op_a, op_b, mx_basis, n_leak=0):
     # It's easier to talk about this subspace (and related subspaces) if op_a and op_b are in
     # the standard basis. So the first thing we do is convert to that basis.
     std_basis = BuiltinBasis('std', dim**2)
-    op_a = pgbt.change_basis(op_a, mx_basis, std_basis)
-    op_b = pgbt.change_basis(op_b, mx_basis, std_basis)
+    op_a_std = pgbt.change_basis(op_a, mx_basis, std_basis)
+    op_b_std = pgbt.change_basis(op_b, mx_basis, std_basis)
    
     # Our next step is to construct lifted operators "lift_op_a" and "lift_op_b" that act on the
     # tensor product space S2 = (S \otimes S) according to the identities
@@ -69,8 +69,8 @@ def apply_tensorized_to_teststate(op_a, op_b, mx_basis, n_leak=0):
     # for all sigma, rho in S. The way we do this implicitly fixes a basis for S2 as the
     # tensor product basis (std_basis \otimes std_basis). We'll make that explicit later on.
     idle_gate = np.eye(dim**2, dtype=np.complex128)
-    lift_op_a = np.kron(op_a, idle_gate)
-    lift_op_b = np.kron(op_b, idle_gate)
+    lift_op_a_std = np.kron(op_a_std, idle_gate)
+    lift_op_b_std = np.kron(op_b_std, idle_gate)
 
     # Now we'll compare these lifted operators by how they act on specific state in S2.
     # That state is rho_test = |psi><psi|, where
@@ -84,13 +84,13 @@ def apply_tensorized_to_teststate(op_a, op_b, mx_basis, n_leak=0):
     #
     # Luckily, pyGSTi has a class for generating bases for a tensor-product space given
     # bases for the constituent spaces appearing in the tensor product.
-    ten_basis = TensorProdBasis((std_basis, std_basis))
-    rho_test_superket = pgbt.stdmx_to_vec(rho_test, ten_basis).ravel()
+    ten_std_basis = TensorProdBasis((std_basis, std_basis))
+    rho_test_superket = pgbt.stdmx_to_vec(rho_test, ten_std_basis).ravel()
 
-    temp1 = lift_op_a @ rho_test_superket
-    temp2 = lift_op_b @ rho_test_superket
+    temp1 = lift_op_a_std @ rho_test_superket
+    temp2 = lift_op_b_std @ rho_test_superket
 
-    return temp1, temp2, ten_basis
+    return temp1, temp2, ten_std_basis
 
 
 def leading_dxd_submatrix_basis_vectors(d: int, n: int, current_basis):
@@ -160,7 +160,7 @@ def leading_dxd_submatrix_basis_vectors(d: int, n: int, current_basis):
         return X
     # we have to select a proper subset of columns in current_basis
     std_basis = BuiltinBasis(name='std', dim_or_statespace=n**2)
-    label2ind = {ell: idx for idx, ell in enumerate(std_basis.labels)}
+    label2ind = std_basis.elindlookup
     basis_ind = []
     for i in range(d):
         for j in range(d):
@@ -172,16 +172,18 @@ def leading_dxd_submatrix_basis_vectors(d: int, n: int, current_basis):
 
 
 def leaky_entanglement_fidelity(op_a, op_b, mx_basis, n_leak=0):
-    temp1, temp2, _ = apply_tensorized_to_teststate(op_a, op_b, mx_basis, n_leak)
-    ent_fid = np.real(temp1.conj() @ temp2)
+    temp1, temp2, ten_std_basis = apply_tensorized_to_teststate(op_a, op_b, mx_basis, n_leak)
+    temp1_mx = pgbt.vec_to_stdmx(temp1, ten_std_basis, keep_complex=True)
+    temp2_mx = pgbt.vec_to_stdmx(temp2, ten_std_basis, keep_complex=True)
+    ent_fid = pgot.fidelity(temp1_mx, temp2_mx)
     return ent_fid
 
 
 def leaky_jtracedist(op_a, op_b, mx_basis, n_leak=0):
-    temp1, temp2, ten_basis = apply_tensorized_to_teststate(op_a, op_b, mx_basis, n_leak)
-    temp1_std = pgbt.vec_to_stdmx(temp1, ten_basis, keep_complex=True)
-    temp2_std = pgbt.vec_to_stdmx(temp2, ten_basis, keep_complex=True)
-    j_dist = pgot.tracedist(temp1_std, temp2_std)
+    temp1, temp2, ten_std_basis = apply_tensorized_to_teststate(op_a, op_b, mx_basis, n_leak)
+    temp1_mx = pgbt.vec_to_stdmx(temp1, ten_std_basis, keep_complex=True)
+    temp2_mx = pgbt.vec_to_stdmx(temp2, ten_std_basis, keep_complex=True)
+    j_dist = pgot.tracedist(temp1_mx, temp2_mx)
     return j_dist
 
 
