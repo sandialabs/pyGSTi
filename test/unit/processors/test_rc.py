@@ -4,7 +4,27 @@ import numpy as np
 
 from pygsti.baseobjs.label import Label as L
 from pygsti.circuits.circuit import Circuit as C
-from pygsti.processors.random_compilation import RandomCompilation, Gu3, get_clifford_from_unitary
+from pygsti.processors.random_compilation import RandomCompilation
+from pygsti.baseobjs.unitarygatefunction import UnitaryGateFunction as _UnitaryGateFunction
+from pygsti.tools.internalgates import standard_gatename_unitaries as _standard_gatename_unitaries
+
+class Gu3(_UnitaryGateFunction):
+    shape = (2,2)
+    def __call__(self, arg):
+        theta, phi, lamb = (float(arg[0]), float(arg[1]), float(arg[2]))
+        return np.array([[np.cos(theta/2), -np.exp(1j*lamb)*np.sin(theta/2)],
+                         [np.exp(1j*phi)*np.sin(theta/2), np.exp(1j*(phi + lamb))*np.cos(theta/2)]])
+
+
+def get_clifford_from_unitary(U):
+    clifford_unitaries = {k: v for k, v in _standard_gatename_unitaries().items()
+                          if 'Gc' in k and v.shape == (2, 2)}
+    for k,v in clifford_unitaries.items():
+        for phase in [1, -1, 1j, -1j]:
+            if np.allclose(U, phase*v):
+                return k
+            
+    raise RuntimeError(f'Failed to look up Clifford for unitary:\n{U}')
 
 class TestRandomCompilation(BaseCase):
 

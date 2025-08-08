@@ -40,7 +40,7 @@ class Gczr(_UnitaryGateFunction):
     @classmethod
     def _from_nice_serialization(cls, state):
         return super(Gczr, cls)._from_nice_serialization(state)
-
+    
 
 def internal_gate_unitaries():
     """
@@ -907,20 +907,17 @@ def standard_gatenames_qiskit_conversions():
     std_gatenames_to_qiskit['Gyr'] = (standard_gates.RYGate, 'ry', False)
     std_gatenames_to_qiskit['Gxr'] = (standard_gates.RXGate, 'rx', False)
     std_gatenames_to_qiskit['Gxpi'] = (standard_gates.XGate, 'x', False)
+    std_gatenames_to_qiskit['Gzpi'] = (standard_gates.ZGate, 'z', False)
+    std_gatenames_to_qiskit['Gypi'] = (standard_gates.YGate, 'y', False)
     std_gatenames_to_qiskit['Gi'] = (standard_gates.IGate, 'id', False)
     std_gatenames_to_qiskit['Gu3'] = (standard_gates.UGate, 'u', False)
+    std_gatenames_to_qiskit['Gh'] = (standard_gates.HGate, 'h', False)
 
     std_gatenames_to_qiskit['Gdelay'] = (Delay, 'delay', False)
 
     
 
     return std_gatenames_to_qiskit
-
-
-
-
-
-
 
 
 def qasm_u3(theta, phi, lamb, output='unitary'):

@@ -6,7 +6,7 @@ Tools for analyzing MCFE data
 
 import numpy as _np
 
-from rbtools import hamming_distance
+from pygsti.tools.rbtools import hamming_distance
 
 
 def success_probability_to_polarization(s, n):
