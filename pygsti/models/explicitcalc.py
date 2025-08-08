@@ -21,6 +21,10 @@ import scipy.linalg as _la
 from pygsti.baseobjs import basisconstructors as _bc
 from pygsti.tools import matrixtools as _mt
 
+from typing import Union
+
+TransformMxPair = tuple[_np.ndarray, Union[_np.ndarray, _mt.IdentityOperator]]
+
 # Tolerace for matrix_rank when finding rank of a *normalized* projection
 # matrix.  This is a legitimate tolerace since a normalized projection matrix
 # should have just 0 and 1 eigenvalues, and thus a tolerace << 1.0 will work
@@ -106,7 +110,7 @@ class ExplicitOpModelCalc(object):
         """
         return ExplicitOpModelCalc(self.dim, self.preps, self.operations, self.effects, self.Np, self.interposer)
 
-    def frobeniusdist(self, other_calc, transform_mx=None,
+    def frobeniusdist(self, other_calc, transform_mx: Union[None, _np.ndarray, TransformMxPair]=None,
                       item_weights=None, normalize=True):
         """
         Compute the weighted frobenius norm of the difference between this calc object and `other_calc`.
@@ -122,17 +126,16 @@ class ExplicitOpModelCalc(object):
             the other gate calculator to difference against.
 
         transform_mx : numpy array or tuple, optional
-            if transform_mx is a numpy array, then for each operation matrix
+            If transform_mx is a numpy array, then for each operation matrix
             G we implicitly consider the transformed quantity
                 G => inv(transform_mx) * G * transform_mx
             Similar transformations are applied for effect vectors.
             This transformation is applied only for the difference and does not
             alter the values stored in this model.
 
-            if transform_mx is a tuple then it should consist of two numpy arrays,
-            the first of which will be interpreted as transform_mx in the usual
-            sense and the second of which will either be None or will be syntactically
-            subtituted for inv(transform_mx).
+            If transform_mx is a tuple, then its first entry should be a numpy ndarray
+            that will be interpreted as transform_mx in the usual sense, and its second
+            entry will be syntactically substituted for inv(transform_mx).
 
         item_weights : dict, optional
             Dictionary of weighting factors for individual gates and spam
@@ -153,62 +156,37 @@ class ExplicitOpModelCalc(object):
         -------
         float
         """
-        if isinstance(transform_mx, tuple):
-            P, invP = transform_mx
-        else:
+        if transform_mx is None:
+            P, invP = None, None
+            # ^ It would be equivalent to use P = invP = _mt.IdentityOperator()
+        elif isinstance(transform_mx, _np.ndarray):
             P = transform_mx
-            invP = None if P is None else _np.linalg.pinv(P)
-        d = 0
+            invP = _np.linalg.pinv(P)
+        else:
+            P, invP = transform_mx
+            assert _mt.is_operatorlike(P)
+            assert _mt.is_operatorlike(invP)
+
+        d = 0.0
         nSummands = 0.0
         if item_weights is None: item_weights = {}
         opWeight = item_weights.get('gates', 1.0)
         spamWeight = item_weights.get('spam', 1.0)
 
-        if (P is None and invP is None) or isinstance(transform_mx, _np.ndarray):
-            # use the original implementation.
-            for opLabel, gate in self.operations.items():
-                wt = item_weights.get(opLabel, opWeight)
-                d += wt * gate.frobeniusdist_squared(other_calc.operations[opLabel], P, invP)
-                nSummands += wt * (gate.dim)**2
+        for opLabel, gate in self.operations.items():
+            wt = item_weights.get(opLabel, opWeight)
+            d += wt * gate.frobeniusdist_squared(other_calc.operations[opLabel], P, invP)
+            nSummands += wt * (gate.dim)**2
 
-            for lbl, rhoV in self.preps.items():
-                wt = item_weights.get(lbl, spamWeight)
-                d += wt * rhoV.frobeniusdist_squared(other_calc.preps[lbl], P, invP)
-                nSummands += wt * rhoV.dim
+        for lbl, rhoV in self.preps.items():
+            wt = item_weights.get(lbl, spamWeight)
+            d += wt * rhoV.frobeniusdist_squared(other_calc.preps[lbl], P, invP)
+            nSummands += wt * rhoV.dim
 
-            for lbl, Evec in self.effects.items():
-                wt = item_weights.get(lbl, spamWeight)
-                d += wt * Evec.frobeniusdist_squared(other_calc.effects[lbl], P, invP)
-                nSummands += wt * Evec.dim
-        else:
-            # we're in the special case that I'm creating.
-            for opLabel, gate in self.operations.items():
-                wt = item_weights.get(opLabel, opWeight)
-                gate_mx = gate.to_dense()
-                other_mx = other_calc.operations[opLabel].to_dense()
-                delta = gate_mx - other_mx
-                if P is not None:
-                    delta = delta @ P
-                if invP is not None:
-                    delta = invP @ delta
-                val = _np.linalg.norm(delta)
-                d += wt * val**2
-                nSummands += wt * (gate.dim)**2
-
-            for lbl, rhoV in self.preps.items():
-                wt = item_weights.get(lbl, spamWeight)
-                d += wt * rhoV.frobeniusdist_squared(other_calc.preps[lbl], None, None)
-                nSummands += wt * rhoV.dim
-
-            for lbl, Evec in self.effects.items():
-                wt = item_weights.get(lbl, spamWeight)
-                evec = Evec.to_dense()
-                other = other_calc.effects[lbl].to_dense()
-                delta = evec - other
-                delta = delta @ P
-                val = _np.linalg.norm(delta)
-                d += wt * val**2
-                nSummands += wt * Evec.dim
+        for lbl, Evec in self.effects.items():
+            wt = item_weights.get(lbl, spamWeight)
+            d += wt * Evec.frobeniusdist_squared(other_calc.effects[lbl], P, invP)
+            nSummands += wt * Evec.dim
 
         if normalize and nSummands > 0:
             return _np.sqrt(d / nSummands)

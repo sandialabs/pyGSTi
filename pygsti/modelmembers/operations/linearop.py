@@ -17,6 +17,8 @@ from pygsti.modelmembers import modelmember as _modelmember
 from pygsti.tools import optools as _ot
 from pygsti import SpaceT
 
+from typing import Any
+
 #Note on initialization sequence of Operations within a Model:
 # 1) a Model is constructed (empty)
 # 2) a LinearOperator is constructed - apart from a Model if it's locally parameterized,
@@ -389,7 +391,7 @@ class LinearOperator(_modelmember.ModelMember):
 
         return [t for t in terms_at_order if t.magnitude >= min_term_mag]
 
-    def frobeniusdist_squared(self, other_op, transform=None, inv_transform=None):
+    def frobeniusdist_squared(self, other_op, transform=None, inv_transform=None) -> _np.floating[Any]:
         """
         Return the squared frobenius difference between this operation and `other_op`
 
@@ -413,12 +415,13 @@ class LinearOperator(_modelmember.ModelMember):
         -------
         float
         """
-        if transform is None and inv_transform is None:
-            return _ot.frobeniusdist_squared(self.to_dense("minimal"), other_op.to_dense("minimal"))
-        else:
-            return _ot.frobeniusdist_squared(_np.dot(
-                inv_transform, _np.dot(self.to_dense("minimal"), transform)),
-                other_op.to_dense("minimal"))
+        self_mx = self.to_dense("minimal")
+        if transform is not None:
+            self_mx = self_mx @ transform
+        if inv_transform is not None:
+            self_mx = inv_transform @ self_mx
+        return _ot.frobeniusdist_squared(self_mx, other_op.to_dense("minimal"))
+
 
     def frobeniusdist(self, other_op, transform=None, inv_transform=None):
         """

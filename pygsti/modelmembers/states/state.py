@@ -19,6 +19,8 @@ from pygsti.baseobjs import _compatibility as _compat
 from pygsti.tools import optools as _ot
 from pygsti import SpaceT
 
+from typing import Any
+
 
 class State(_modelmember.ModelMember):
     """
@@ -298,13 +300,11 @@ class State(_modelmember.ModelMember):
         terms_at_order = [t.copy_with_magnitude(abs(coeff)) for coeff, t in zip(coeffs, terms_at_order)]
         return [t for t in terms_at_order if t.magnitude >= min_term_mag]
 
-    def frobeniusdist_squared(self, other_spam_vec, transform=None,
-                              inv_transform=None):
+    def frobeniusdist_squared(self, other_spam_vec, transform=None, inv_transform=None) -> _np.floating[Any]:
         """
         Return the squared frobenius difference between this operation and `other_spam_vec`.
 
-        Optionally transforms this vector first using `transform` and
-        `inv_transform`.
+        Optionally transforms this vector first using `inv_transform`.
 
         Parameters
         ----------
@@ -312,21 +312,21 @@ class State(_modelmember.ModelMember):
             The other spam vector
 
         transform : numpy.ndarray, optional
-            Transformation matrix.
+            Ignored. (We keep this as a positional argument for consistency with
+            the frobeniusdist_squared method of pyGSTi's LinearOperator objects.)
 
         inv_transform : numpy.ndarray, optional
-            Inverse of `tranform`.
+            Named for consistency with the frobeniusdist_squared method of pyGSTi's
+            LinearOperator objects.
 
         Returns
         -------
         float
         """
         vec = self.to_dense("minimal")
-        if inv_transform is None:
-            return _ot.frobeniusdist_squared(vec, other_spam_vec.to_dense("minimal"))
-        else:
-            return _ot.frobeniusdist_squared(_np.dot(inv_transform, vec),
-                                             other_spam_vec.to_dense("minimal"))
+        if inv_transform is not None:
+            vec = inv_transform @ vec
+        return _ot.frobeniusdist_squared(vec, other_spam_vec.to_dense("minimal"))
 
     def residuals(self, other_spam_vec, transform=None, inv_transform=None):
         """
