@@ -89,7 +89,7 @@ def tensorized_teststate_density(dim: int, n_leak: int) -> np.ndarray:
 
 @set_docstring(
 """
-The pair (op_x, op_y) represent some superoperators (X, Y) in S[H], using mx_basis.
+The pair (op_x, op_y) represent some superoperators (X, Y) in S[H], using op_basis.
 
 Let rho_t = tensorized_teststate_density(dim(H), n_leak), and set I to the identity
 operator in S[H].
@@ -102,45 +102,38 @@ This function returns a triplet, consisting of
 *Warning!* At present, this function can only be used for gates over a single system
 (e.g., a single qubit), not for tensor products of such systems.
 """ + NOTATION)
-def apply_tensorized_to_teststate(op_x: np.ndarray, op_y, mx_basis: np.ndarray, n_leak: int=0) -> tuple[TensorProdBasis, np.ndarray, np.ndarray]:
+def apply_tensorized_to_teststate(op_x: np.ndarray, op_y, op_basis: np.ndarray, n_leak: int=0) -> tuple[TensorProdBasis, np.ndarray, np.ndarray]:
     dim = int(np.sqrt(op_x.shape[0]))
     assert op_x.shape == (dim**2, dim**2)
     assert op_y.shape == (dim**2, dim**2)
-    # op_x and op_y act on S[H].
+    # op_x and op_y act on M[H].
     #
     # We care about op_x and op_y only up to their action on the subspace
-    #    U = {rho in S : <i|rho|i> = 0 for all i >= dim - n_leak }.
+    #    U = {rho in M[H] : <i|rho|i> = 0 for all i >= dim - n_leak }.
     #
     # It's easier to talk about this subspace (and related subspaces) if op_x and op_y are in
     # the standard basis. So the first thing we do is convert to that basis.
     std_basis = BuiltinBasis('std', dim**2)
-    op_x_std = pgbt.change_basis(op_x, mx_basis, std_basis)
-    op_y_std = pgbt.change_basis(op_y, mx_basis, std_basis)
+    op_x_std = pgbt.change_basis(op_x, op_basis, std_basis)
+    op_y_std = pgbt.change_basis(op_y, op_basis, std_basis)
    
     # Our next step is to construct lifted operators "lift_op_x" and "lift_op_y" that act on the
-    # tensor product space S[H]⨂S[H] according to the identities
+    # tensor product space M[H]⨂M[H] according to the identities
     #
     #   lift_op_x( sigma \otimes rho ) = op_x(sigma) \otimes rho
     #   lift_op_y( sigma \otimes rho ) = op_y(sigma) \otimes rho
     #
-    # for all sigma, rho in S. The way we do this implicitly fixes a basis for S[H]⨂S[H] as
+    # for all sigma, rho in M[H]. The way we do this implicitly fixes a basis for S[H]⨂S[H] as
     # the tensor product basis. We'll make that explicit later on.
     idle_gate = np.eye(dim**2, dtype=np.complex128)
     lift_op_x_std = np.kron(op_x_std, idle_gate)
     lift_op_y_std = np.kron(op_y_std, idle_gate)
 
-    # Now we'll compare these lifted operators by how they act on specific state in S[H]⨂S[H].
-    # That state is rho_test = |psi><psi|, where
-    #
-    #   |psi> = (|00> + |11> + ... + |dim - n_leak - 1>) / sqrt(dim - n_leak).
-    #
+    # Now we'll compare these lifted operators by how they act on specific state in M[H]⨂M[H].
     rho_test = tensorized_teststate_density(dim, n_leak)
 
-    # Of course, lift_op_x and lift_op_y only act on states in their superket representations.
-    # We need the superket representation of rho_test in terms of the tensor product basis for S2.
-    #
-    # Luckily, pyGSTi has a class for generating bases for a tensor-product space given
-    # bases for the constituent spaces appearing in the tensor product.
+    # lift_op_x and lift_op_y only act on states in their superket representations, so we convert
+    # rho_test to a superket representation in the induced tensor product basis for S[H]⨂S[H].
     ten_std_basis = TensorProdBasis((std_basis, std_basis))
     rho_test_superket = pgbt.stdmx_to_vec(rho_test, ten_std_basis).ravel()
 
@@ -229,33 +222,58 @@ def leading_dxd_submatrix_basis_vectors(d: int, n: int, current_basis: Basis):
     return submatrix_basis_vectors
 
 
-def leaky_entanglement_fidelity(op_x, op_y, mx_basis, n_leak=0):
-    ten_std_basis, temp1, temp2 = apply_tensorized_to_teststate(op_x, op_y, mx_basis, n_leak)
+CHOI_INDUCED_METRIC = \
+"""
+The pair (op_x, op_y) represent some superoperators (X, Y) in S[H], using op_basis.
+
+Let rho_t = tensorized_teststate_density(dim(H), n_leak), and set I to the identity
+operator in S[H].
+
+This function returns the %s between X⨂I(rho_t) and Y⨂I(rho_t).
+
+*Warning!* At present, this function can only be used for gates over a single system
+(e.g., a single qubit), not for tensor products of such systems.
+""" + NOTATION
+
+
+@set_docstring(CHOI_INDUCED_METRIC % 'entanglement fidelity')
+def subspace_entanglement_fidelity(op_x, op_y, op_basis, n_leak=0):
+    ten_std_basis, temp1, temp2 = apply_tensorized_to_teststate(op_x, op_y, op_basis, n_leak)
     temp1_mx = pgbt.vec_to_stdmx(temp1, ten_std_basis, keep_complex=True)
     temp2_mx = pgbt.vec_to_stdmx(temp2, ten_std_basis, keep_complex=True)
     ent_fid = pgot.fidelity(temp1_mx, temp2_mx)
     return ent_fid
 
 
-def leaky_jtracedist(op_x, op_y, mx_basis, n_leak=0):
-    ten_std_basis, temp1, temp2 = apply_tensorized_to_teststate(op_x, op_y, mx_basis, n_leak)
+@set_docstring(CHOI_INDUCED_METRIC % 'jamiolkowski trace distance')
+def subspace_jtracedist(op_x, op_y, op_basis, n_leak=0):
+    ten_std_basis, temp1, temp2 = apply_tensorized_to_teststate(op_x, op_y, op_basis, n_leak)
     temp1_mx = pgbt.vec_to_stdmx(temp1, ten_std_basis, keep_complex=True)
     temp2_mx = pgbt.vec_to_stdmx(temp2, ten_std_basis, keep_complex=True)
     j_dist = pgot.tracedist(temp1_mx, temp2_mx)
     return j_dist
 
 
-def subspace_restricted_fro_dist(a, b, mx_basis, n_leak=0):
-    diff = a -  b
+@set_docstring(
+"""
+The pair (op_x, op_y) represent some superoperators (X, Y) in S[H], using op_basis.
+
+We return the Frobenius distance between op_x @ P and op_y @ P, where P is the
+projector onto the computational subspace (i.e., C), of co-dimension n_leak.
+
+*Warning!* At present, this function can only be used for gates over a single system
+(e.g., a single qubit), not for tensor products of such systems.
+""" + NOTATION)
+def subspace_superop_fro_dist(op_x, op_y, op_basis, n_leak=0):
+    diff = op_x -  op_y
     if n_leak == 0:
         return np.linalg.norm(diff, 'fro')
-    if n_leak == 1:
-        d = int(np.sqrt(a.shape[0]))
-        assert a.shape == b.shape == (d**2, d**2)
-        B = leading_dxd_submatrix_basis_vectors(d-n_leak, d, mx_basis)
-        P = B @ B.T.conj()
-        return np.linalg.norm(diff @ P)
-    raise ValueError()
+    
+    d = int(np.sqrt(op_x.shape[0]))
+    assert op_x.shape == op_y.shape == (d**2, d**2)
+    B = leading_dxd_submatrix_basis_vectors(d-n_leak, d, op_basis)
+    P = B @ B.T.conj()
+    return np.linalg.norm(diff @ P)
 
 
 # MARK: model construction

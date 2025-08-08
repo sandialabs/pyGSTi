@@ -656,20 +656,20 @@ def _create_objective_fn(model, target_model, item_weights: Optional[dict[str,fl
                 ret += val
 
             elif gates_metric == "fidelity":
-                # If n_leak==0, then leaky_entanglement_fidelity is just entanglement_fidelity
+                # If n_leak==0, then subspace_entanglement_fidelity is just entanglement_fidelity
                 for opLbl in mdl.operations:
                     wt = item_weights.get(opLbl, opWeight)
                     top = target_model.operations[opLbl].to_dense()
                     mop = mdl.operations[opLbl].to_dense()
-                    ret += wt * (1.0 - _tools.leaky_entanglement_fidelity(top, mop, mxBasis, n_leak))**2
+                    ret += wt * (1.0 - _tools.subspace_entanglement_fidelity(top, mop, mxBasis, n_leak))**2
 
             elif gates_metric == "tracedist":
-                # If n_leak==0, then leaky_jtracedist is just jtracedist.
+                # If n_leak==0, then subspace_jtracedist is just jtracedist.
                 for opLbl in mdl.operations:
                     wt = item_weights.get(opLbl, opWeight)
                     top = target_model.operations[opLbl].to_dense()
                     mop = mdl.operations[opLbl].to_dense()
-                    ret += wt * _tools.leaky_jtracedist(top, mop, mxBasis, n_leak)
+                    ret += wt * _tools.subspace_jtracedist(top, mop, mxBasis, n_leak)
 
             else:
                 raise ValueError("Invalid gates_metric: %s" % gates_metric)

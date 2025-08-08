@@ -449,11 +449,11 @@ class GateOpsTester(BaseCase):
         self.assertAlmostEqual(fidelity_TP_unitary_jam, expect)
         self.assertAlmostEqual(fidelity_TP_unitary_std, expect)
 
-    def test_leaky_entanglement_fidelity(self):
-        fidelity_TP_unitary= pgleak.leaky_entanglement_fidelity(self.A_TP, self.B_unitary, 'pp')
-        fidelity_TP_unitary_no_flag= pgleak.leaky_entanglement_fidelity(self.A_TP, self.B_unitary, 'pp')
-        fidelity_TP_unitary_jam= pgleak.leaky_entanglement_fidelity(self.A_TP, self.B_unitary, 'pp')
-        fidelity_TP_unitary_std= pgleak.leaky_entanglement_fidelity(self.A_TP_std, self.B_unitary_std, mx_basis='std')
+    def test_subspace_entanglement_fidelity(self):
+        fidelity_TP_unitary= pgleak.subspace_entanglement_fidelity(self.A_TP, self.B_unitary, 'pp')
+        fidelity_TP_unitary_no_flag= pgleak.subspace_entanglement_fidelity(self.A_TP, self.B_unitary, 'pp')
+        fidelity_TP_unitary_jam= pgleak.subspace_entanglement_fidelity(self.A_TP, self.B_unitary, 'pp')
+        fidelity_TP_unitary_std= pgleak.subspace_entanglement_fidelity(self.A_TP_std, self.B_unitary_std, op_basis='std')
 
         expect = 0.4804724656092404
         self.assertAlmostEqual(fidelity_TP_unitary, expect)

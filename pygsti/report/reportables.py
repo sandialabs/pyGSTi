@@ -1020,7 +1020,7 @@ def leaky_maximum_trace_dist(gate, mx_basis):
     closestUOpMx = _alg.find_closest_unitary_opmx(gate)
     _tools.jamiolkowski_iso(closestUOpMx, mx_basis, mx_basis)
     n_leak = 1
-    return _tools.leaky_jtracedist(gate, closestUOpMx, mx_basis, n_leak)
+    return _tools.subspace_jtracedist(gate, closestUOpMx, mx_basis, n_leak)
 
 Leaky_maximum_trace_dist = _modf.opfn_factory(leaky_maximum_trace_dist)
 
@@ -1168,11 +1168,11 @@ def entanglement_fidelity(a, b, mx_basis):
 Entanglement_fidelity = _modf.opsfn_factory(entanglement_fidelity)
 # init args == (model1, model2, op_label)
 
-def leaky_entanglement_fidelity(a, b, mx_basis):
+def subspace_entanglement_fidelity(a, b, mx_basis):
     n_leak = 1
-    return _tools.leaky_entanglement_fidelity(a, b, mx_basis, n_leak)
+    return _tools.subspace_entanglement_fidelity(a, b, mx_basis, n_leak)
 
-Leaky_entanglement_fidelity = _modf.opsfn_factory(leaky_entanglement_fidelity)
+subspace_entanglement_fidelity = _modf.opsfn_factory(subspace_entanglement_fidelity)
 
 
 def entanglement_infidelity(a, b, mx_basis):
@@ -1201,7 +1201,7 @@ Entanglement_infidelity = _modf.opsfn_factory(entanglement_infidelity)
 # init args == (model1, model2, op_label)
 
 def leaky_entanglement_infidelity(a, b, mx_basis):
-    return 1 - leaky_entanglement_fidelity(a, b, mx_basis)
+    return 1 - subspace_entanglement_fidelity(a, b, mx_basis)
 
 Leaky_entanglement_infidelity = _modf.opsfn_factory(leaky_entanglement_infidelity)
 
@@ -1273,7 +1273,7 @@ Fro_diff = _modf.opsfn_factory(frobenius_diff)
 
 def leaky_gate_frob_dist(a, b, mx_basis):
     n_leak = 1
-    return _tools.subspace_restricted_fro_dist(a, b, mx_basis, n_leak)
+    return _tools.subspace_superop_fro_dist(a, b, mx_basis, n_leak)
 
 
 Leaky_gate_frob_dist = _modf.opsfn_factory(leaky_gate_frob_dist)
@@ -1306,7 +1306,7 @@ Jt_diff = _modf.opsfn_factory(jtrace_diff)
 
 def leaky_jtrace_diff(a, b, mx_basis):
     n_leak = 1
-    return _tools.leaky_jtracedist(a, b, mx_basis, n_leak)
+    return _tools.subspace_jtracedist(a, b, mx_basis, n_leak)
 
 Leaky_Jt_diff = _modf.opsfn_factory(leaky_jtrace_diff)
 
