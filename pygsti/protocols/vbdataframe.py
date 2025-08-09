@@ -281,23 +281,11 @@ class VBDataFrame(object):
                     else:
                         key = (aux['base_aux']['width'], aux['base_aux']['depth'], aux['base_aux']['id'], c.line_labels)
 
-                    # Check if the mirror circuit's line labels have the same ordering as the 
-                    # base circuit's line labels. If not, reorder the bitstring to match.
-                    # This patches a bug in prior versions of the mirror design generation.
-                    # Note: this does not work for central pauli mirror designs.
+
                     if edkey == 'br':
                         base_line_labels = reverse_circ_ids[aux['base_aux']['id']].line_labels
-
                         if c.line_labels != base_line_labels:
                             raise RuntimeError('line labels permuted')
-                            # print('line labels permuted')
-                            # old_bs = aux['idealout']
-                            # print(old_bs)
-                            # new_bs = ''
-                            # for q in c.line_labels:
-                            #     new_bs += old_bs[base_line_labels.index(q)]
-                            # aux['idealout'] = new_bs
-                            # print(new_bs)
 
                     # Calculate effective polarization
                     hdc = hamming_distance_counts(mirrored_data.dataset[c], c, (aux['idealout'],))
@@ -709,6 +697,8 @@ class VBDataFrame(object):
                        show_dropped_gates=False, dg_accumulator=_np.mean,
                        cmap=None, margin=0.15,
                        save_fig=False, fig_path=None, fig_format=None):
+
+        # TODO: add docstring
 
         try:
             import matplotlib.pyplot as _plt

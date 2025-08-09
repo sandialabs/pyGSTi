@@ -5,15 +5,7 @@ import numpy as np
 from pygsti.baseobjs.label import Label as L
 from pygsti.circuits.circuit import Circuit as C
 from pygsti.processors.random_compilation import RandomCompilation
-from pygsti.baseobjs.unitarygatefunction import UnitaryGateFunction as _UnitaryGateFunction
-from pygsti.tools.internalgates import standard_gatename_unitaries as _standard_gatename_unitaries
-
-class Gu3(_UnitaryGateFunction):
-    shape = (2,2)
-    def __call__(self, arg):
-        theta, phi, lamb = (float(arg[0]), float(arg[1]), float(arg[2]))
-        return np.array([[np.cos(theta/2), -np.exp(1j*lamb)*np.sin(theta/2)],
-                         [np.exp(1j*phi)*np.sin(theta/2), np.exp(1j*(phi + lamb))*np.cos(theta/2)]])
+from pygsti.tools.internalgates import Gu3, standard_gatename_unitaries as _standard_gatename_unitaries
 
 
 def get_clifford_from_unitary(U):

@@ -388,7 +388,6 @@ def qiskit_circuits_to_mirror_edesign(qk_circs, # yes transpiled
 
     for k, qk_test_circ in qk_circs.items():
 
-        # start = time.time()
         qk_ref_circ = transpile(qk_test_circ,
                                 basis_gates=['u3', 'cz'],
                                 layout_method='trivial',
@@ -431,11 +430,6 @@ def qiskit_circuits_to_mirror_edesign(qk_circs, # yes transpiled
 
         test_edesign = _FreeformDesign(test_circ_dict)
         ref_edesign = _FreeformDesign(ref_circ_dict)
-
-    ### set default values for mirroring kwargs if not provided
-    # mirroring_kwargs_dict['num_mcs_per_circ'] = mirroring_kwargs_dict.get('num_mcs_per_circ', 10)
-    # mirroring_kwargs_dict['num_ref_per_qubit_subset'] = mirroring_kwargs_dict.get('num_ref_per_qubit_subset', 10)
-    # mirroring_kwargs_dict['rand_state'] = mirroring_kwargs_dict.get('rand_state', _np.random.RandomState())
     
     start = time.time()
 
@@ -452,7 +446,7 @@ def qiskit_circuits_to_mirror_edesign(qk_circs, # yes transpiled
     return test_edesign, mirror_edesign
 
 
-def qiskit_circuits_to_svb_mirror_edesign(qk_circs,
+def qiskit_circuits_to_subcircuit_mirror_edesign(qk_circs,
                                               aggregate_subcircs,
                                               width_depth_dict,
                                               coupling_map,
@@ -490,7 +484,6 @@ def qiskit_circuits_to_svb_mirror_edesign(qk_circs,
         instruction durations for each gate in the target device. These
         durations are needed to calculate the appropriate delay time
         when only idling qubits are sampled out from a full circuit layer.
-
 
     subcirc_kwargs_dict : dict, optional
         dictionary of keyword arguments to be used in subcircuit selection.
@@ -775,15 +768,15 @@ def make_mirror_edesign(test_edesign: _FreeformDesign,
             random_compiler = _rc.RandomCompilation(rc_strategy=mirroring_strategy, return_bs=True,
                                                     rand_state=rand_state)
             
+            L_bareref = init_layer(qubits=qubits, gate_set=gate_set, state_initialization=state_initialization, rand_state=rand_state, state_init_kwargs=state_init_kwargs)
+
+            L_refref = init_layer(qubits=qubits, gate_set=gate_set, state_initialization=state_initialization, rand_state=rand_state, state_init_kwargs=state_init_kwargs)
+                        
+            L_bareref_inv = compute_inverse(circ=L_bareref, gate_set=gate_set, inverse=inverse, inv_kwargs=inv_kwargs)
+
+            L_refref_inv = compute_inverse(circ=L_refref, gate_set=gate_set, inverse=inverse, inv_kwargs=inv_kwargs)
+            
             if mirroring_strategy == 'pauli_rc':
-                L_bareref = init_layer(qubits=qubits, gate_set=gate_set, state_initialization=state_initialization, rand_state=rand_state, state_init_kwargs=state_init_kwargs)
-
-                L_refref = init_layer(qubits=qubits, gate_set=gate_set, state_initialization=state_initialization, rand_state=rand_state, state_init_kwargs=state_init_kwargs)
-                           
-                L_bareref_inv = compute_inverse(circ=L_bareref, gate_set=gate_set, inverse=inverse, inv_kwargs=inv_kwargs)
-
-                L_refref_inv = compute_inverse(circ=L_refref, gate_set=gate_set, inverse=inverse, inv_kwargs=inv_kwargs)
-
                 if account_for_routing: # only the bare-ref circuit has non-trivial routing
                     assert ref_edesign is not None, "'account_for_routing' set to True but no ref_edesign has been provided to match routing. If you are not providing a 'ref_edesign' that needs matched with a 'test_edesign', please set 'account_for_routing' to False."
 
@@ -877,6 +870,10 @@ def make_mirror_edesign(test_edesign: _FreeformDesign,
                 raise RuntimeError("'mirroring_strategy' must be either 'pauli_rc' or 'central_pauli'")
 
             
+            existing_aux = test_ref_invs.get(L_T_Rinv_Linv, None)
+            if existing_aux is not None:
+                raise RuntimeError('oh no')
+
             L_T_Rinv_Linv_aux = [{'base_aux': a,
                                   'idealout': L_T_Rinv_Linv_bs,
                                   'qs_to_measure': L_T_Rinv_Linv.line_labels,
@@ -885,6 +882,11 @@ def make_mirror_edesign(test_edesign: _FreeformDesign,
             test_ref_invs[L_T_Rinv_Linv] = L_T_Rinv_Linv_aux
 
             if mirroring_strategy == 'pauli_rc':
+
+                existing_aux = ref_ref_invs.get(L_R_Rinv_Linv, None)
+                if existing_aux is not None:
+                    raise RuntimeError('oh no')
+                
                 L_R_Rinv_Linv_aux = [{'base_aux': a,
                                       'idealout': L_R_Rinv_Linv_bs,
                                       'qs_to_measure': L_R_Rinv_Linv.line_labels,

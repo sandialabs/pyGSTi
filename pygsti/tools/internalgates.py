@@ -23,7 +23,7 @@ class Gzr(_UnitaryGateFunction):
     shape = (2, 2)
 
     def __call__(self, theta):
-        return _np.array([[1., 0.], [0., _np.exp(-1j * float(theta[0]))]])
+        return _np.array([[1., 0.], [0., _np.exp(1j * float(theta[0]))]])
 
     @classmethod
     def _from_nice_serialization(cls, state):
@@ -35,11 +35,24 @@ class Gczr(_UnitaryGateFunction):
 
     def __call__(self, theta):
         return _np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.],
-                          [0., 0., 0., _np.exp(-1j * float(theta[0]))]], complex)
+                          [0., 0., 0., _np.exp(1j * float(theta[0]))]], complex)
 
     @classmethod
     def _from_nice_serialization(cls, state):
         return super(Gczr, cls)._from_nice_serialization(state)
+    
+
+
+class Gu3(_UnitaryGateFunction):
+    shape = (2,2)
+    def __call__(self, arg):
+        theta, phi, lamb = (float(arg[0]), float(arg[1]), float(arg[2]))
+        return _np.array([[_np.cos(theta/2), -_np.exp(1j*lamb)*_np.sin(theta/2)],
+                         [_np.exp(1j*phi)*_np.sin(theta/2), _np.exp(1j*(phi + lamb))*_np.cos(theta/2)]])
+    
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        return super(Gu3, cls)._from_nice_serialization(state)
     
 
 def internal_gate_unitaries():
@@ -202,6 +215,7 @@ def standard_gatename_unitaries():
       * 'Gt', 'Gtdag' : the T and inverse T gates (T is a Z rotation by pi/4).
       * 'Gzr' : a parameterized gate that is a Z rotation by an angle, where when the angle = pi then it equals Z.
       * 'Gn' : N gate, pi/2 rotation about the (np.sqrt(3)/2, 0, -1/2) axis of the Bloch sphere, native gate in some spin qubit systems.
+      * 'Gu3' : parameterized gate that can encode any single-qubit rotatio with three parameters (theta, phi, lambda).
       
     Mostly, pyGSTi does not assume that a gate with one of these names is indeed
     the unitary specified here. Instead, these names are intended as short-hand
@@ -305,6 +319,8 @@ def standard_gatename_unitaries():
 
     std_unitaries['Gzr'] = Gzr()
     std_unitaries['Gczr'] = Gczr()
+
+    std_unitaries['Gu3'] = Gu3()
 
     #Add these at the end, since we don't want unitary_to_standard_gatenames to return these "shorthand" names
     std_unitaries['Gx'] = std_unitaries['Gxpi2']
@@ -534,49 +550,6 @@ def cirq_gatenames_standard_conversions():
 
     return cirq_to_standard_mapping
 
-
-def qiskit_gatenames_standard_conversions():
-    
-    """
-    A dictionary converting Qiskit gates (based on Instruction.name) to built-in pyGSTi names for these gates. Additional flag in dict value indicates if the gate has params.
-    Does not currently support conversion of all qiskit gate types.
-    """
-
-    try:
-        import qiskit
-        if qiskit.__version__ != '1.1.1':
-            print("warning: function 'qiskit_gatenames_standard_conversions()' is designed for qiskit version 1.1.1 \
-                    and may not function properly for your qiskit version, which is " + qiskit.__version__)
-            
-    except ImportError:
-        raise ImportError("Qiskit is required for this operation, and it does not appear to be installed.")
-    
-    qiskit_to_standard_mapping = {}
-
-    qiskit_to_standard_mapping['id'] = ['Gi', False]
-    qiskit_to_standard_mapping['x'] = ['Gxpi', False]
-    qiskit_to_standard_mapping['y'] = ['Gypi', False]
-    qiskit_to_standard_mapping['z'] = ['Gzpi', False]
-    qiskit_to_standard_mapping['sx'] = ['Gxpi2', False]
-    qiskit_to_standard_mapping['sxdg'] = ['Gxmpi2', False]
-    qiskit_to_standard_mapping['t'] = ['Gt', False]
-    qiskit_to_standard_mapping['h'] = ['Gh', False]
-
-    qiskit_to_standard_mapping['rz'] = ['Gzr', True]
-    qiskit_to_standard_mapping['ry'] = ['Gyr', True]
-    qiskit_to_standard_mapping['rx'] = ['Gxr', True]
-    qiskit_to_standard_mapping['u'] = ['Gu3', True]
-    qiskit_to_standard_mapping['u3'] = ['Gu3', True]
-
-    qiskit_to_standard_mapping['cx'] = ['Gcnot', False]
-    qiskit_to_standard_mapping['cz'] = ['Gcphase', False]
-    qiskit_to_standard_mapping['ecr'] = ['Gecres', False]
-    qiskit_to_standard_mapping['swap'] = ['Gswap', False]
-
-    qiskit_to_standard_mapping['delay'] = ['Gdelay', True]
-
-
-    return qiskit_to_standard_mapping
 
 
 def standard_gatenames_quil_conversions():
@@ -881,7 +854,73 @@ def standard_gatenames_openqasm_conversions(version='u3'):
     return std_gatenames_to_qasm, std_gatenames_to_argmap
 
 
+def qiskit_gatenames_standard_conversions():   
+    """
+    A dictionary converting Qiskit gates (based on Instruction.name)
+    to built-in pyGSTi names for these gates.
+    Additional flag in dict value indicates if the gate has params.
+
+    Does not currently support conversion of all qiskit gate types.
+
+    Returns
+    ---------
+    Dictionary mapping qiskit gate names to pyGSTi gate names and a flag
+    for whether or not the gate has parameters.
+    """
+
+    try:
+        import qiskit
+        if qiskit.__version__ != '1.1.1':
+            print("warning: function 'qiskit_gatenames_standard_conversions()' is designed for qiskit version 1.1.1 \
+                    and may not function properly for your qiskit version, which is " + qiskit.__version__)
+            
+    except ImportError:
+        raise ImportError("Qiskit is required for this operation, and it does not appear to be installed.")
+    
+    qiskit_to_standard_mapping = {}
+
+    qiskit_to_standard_mapping['id'] = ['Gi', False]
+    qiskit_to_standard_mapping['x'] = ['Gxpi', False]
+    qiskit_to_standard_mapping['y'] = ['Gypi', False]
+    qiskit_to_standard_mapping['z'] = ['Gzpi', False]
+    qiskit_to_standard_mapping['sx'] = ['Gxpi2', False]
+    qiskit_to_standard_mapping['sxdg'] = ['Gxmpi2', False]
+    qiskit_to_standard_mapping['t'] = ['Gt', False]
+    qiskit_to_standard_mapping['h'] = ['Gh', False]
+
+    qiskit_to_standard_mapping['rz'] = ['Gzr', True]
+    qiskit_to_standard_mapping['ry'] = ['Gyr', True]
+    qiskit_to_standard_mapping['rx'] = ['Gxr', True]
+    qiskit_to_standard_mapping['u'] = ['Gu3', True]
+    qiskit_to_standard_mapping['u3'] = ['Gu3', True]
+
+    qiskit_to_standard_mapping['cx'] = ['Gcnot', False]
+    qiskit_to_standard_mapping['cz'] = ['Gcphase', False]
+    qiskit_to_standard_mapping['ecr'] = ['Gecres', False]
+    qiskit_to_standard_mapping['swap'] = ['Gswap', False]
+
+    qiskit_to_standard_mapping['delay'] = ['Gdelay', True]
+
+    return qiskit_to_standard_mapping
+
+
 def standard_gatenames_qiskit_conversions():
+    """
+    A dictionary converting the gates with standard names to the Qiskit gates/names.
+
+    See :func:`standard_gatename_unitaries`.
+
+    Note that throughout pyGSTi the standard gatenames (e.g., 'Gh' for Hadamard)
+    are not enforced to correspond to the expected unitaries. So, if the user
+    as, say, defined 'Gh' to be something other than the Hadamard gate this
+    conversion dictionary will be incorrect.
+
+    Later versions of qiskit can utilize an accelerated circuit append.
+
+    Returns
+    -------
+    dict mapping strings to strings.
+    """
 
     try:
         import qiskit

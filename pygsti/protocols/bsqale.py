@@ -224,7 +224,7 @@ def svb_mirror_edesign(qk_circs,
 
     """
 
-    return _mirror.qiskit_circuits_to_svb_mirror_edesign(qk_circs,
+    return _mirror.qiskit_circuits_to_subcircuit_mirror_edesign(qk_circs,
                                               aggregate_subcircs,
                                               width_depth_dict,
                                               coupling_map,
