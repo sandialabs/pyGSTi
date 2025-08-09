@@ -36,7 +36,7 @@ from pygsti.circuits.split_circuits_into_lanes import compute_qubit_to_lane_and_
 import time
 import scipy.linalg as la
 import scipy.sparse.linalg as sparla
-from typing import List, Optional, Iterable, Union, TYPE_CHECKING
+from typing import List, Optional, Iterable, Union, TYPE_CHECKING, Tuple
 from pygsti.tools.tqdm import our_tqdm
 
 
@@ -739,12 +739,22 @@ class EvalTreeBasedUponLongestCommonSubstring():
                 continue
             op_inds = my_op.gpindices_as_array()
             if gp_index_changing in op_inds:
-                cache_inds = self.alphabet_val_to_sorted_cache_inds[lbl]
+                cache_inds = self.alphabet_val_to_sorted_cache_inds[lbl] + [lbl] # We also invalidate the lbl.
                 for ind in op_inds: # Save off all the values we know about.
                     self.gpindex_to_cache_vals[ind] = cache_inds
                 return cache_inds
         return cache_inds
     
+    def _which_full_circuits_will_change_due_to_gpindex_changing(self, model, gp_index_changing: int) -> list[int]:
+
+        cache_inds = self._gpindex_to_cache_inds_needed_to_recompute(model, gp_index_changing)
+
+        if len(cache_inds) == 0:
+            return []
+        
+        answer = [ind for ind in range(self.num_circuits) if ind in cache_inds]
+        return answer
+
 
     def from_other_eval_tree(self, other: EvalTreeBasedUponLongestCommonSubstring, qubit_label_exchange: dict[int, int]):
         """
@@ -805,13 +815,20 @@ class EvalTreeBasedUponLongestCommonSubstring():
             if cache_inds:
                 # Invalidate all gate labels that we saved just in case.
                 # Invalidate every index in the which we know to be influenced by my_op.
-                local_changes = {k: v.copy() for k, v in self.results.items() \
-                                    if ((k not in cache_inds) and (not isinstance(k, Label)))} # Could just invalidate only the lbl with the index.
+                # local_changes = {k: v for k, v in self.results.items() \
+                #                     if ((k not in cache_inds) and (not isinstance(k, Label)))} # Could just invalidate only the lbl with the index.
 
-                for cache_ind in cache_inds:
+                # Iterating over all the cache will take too long.
+                # So we need to handle the invalidness of certain cache inds when we encounter them.
+                local_changes = {}
+
+                # Ignore the last index which is the Label that matched the gpindex.
+                # We assume that only one will match.
+                for cache_ind in cache_inds[:-1]:
                     cumulative_term = None
                     for term in self.cache[cache_ind]:
-                        cumulative_term = self._collapse_cache_line(model, cumulative_term, term, local_changes, num_qubits_in_default)
+                        cumulative_term = self._collapse_cache_line(model, cumulative_term, term, local_changes,
+                                                                    num_qubits_in_default, cache_inds)
 
                     # Save locally.
                     if cumulative_term is None:
@@ -842,11 +859,12 @@ class EvalTreeBasedUponLongestCommonSubstring():
 
                 round_keys = pos_keys + neg_keys + _np.array([0])
             
+            empty = []
             for key in round_keys:
                 for cache_ind in self.sequence_intro[key]:
                     cumulative_term = None
                     for term in self.cache[cache_ind]:
-                        cumulative_term = self._collapse_cache_line(model, cumulative_term, term, self.results, num_qubits_in_default)
+                        cumulative_term = self._collapse_cache_line(model, cumulative_term, term, self.results, num_qubits_in_default, empty)
                             
                     if cumulative_term is None:
                         self.results[cache_ind] = _np.eye(4**num_qubits_in_default)
@@ -859,7 +877,6 @@ class EvalTreeBasedUponLongestCommonSubstring():
                 assert key in self.results
         
         # {tuple(self.trace_through_cache_to_build_circuit(icir)): icir for icir in range(len(self.orig_circuit_list)) if icir < self.num_circuits}
-    
         return self.results, self.circuit_to_save_location
     
     def compute_depends_on(self, val: int | LabelTupTup, visited: dict[int, set[LabelTupTup]]) -> set[LabelTupTup]:
@@ -893,18 +910,39 @@ class EvalTreeBasedUponLongestCommonSubstring():
     def handle_results_cache_lookup_and_product(self,
                             cumulative_term: None | _np.ndarray,
                             term_to_extend_with: int | LabelTupTup,
-                            results_cache: dict[int | LabelTupTup, _np.ndarray]) -> _np.ndarray:
+                            results_cache: dict[int | LabelTupTup, _np.ndarray],
+                            globally_invalid_cache_inds: list[Union[int, Label]]) -> _np.ndarray:
 
+        if isinstance(term_to_extend_with, int):
+            if term_to_extend_with in globally_invalid_cache_inds[:-1]:
+                # look up the result in the local results cache.
+                # This is just for that derivative step.
+                if cumulative_term is None:
+                    return results_cache[term_to_extend_with]
+                return results_cache[term_to_extend_with] @ cumulative_term
+        else:
+            if term_to_extend_with in globally_invalid_cache_inds[-1:]:
+                # Only one label gets invalidated and that is stored at the end of the list.
+
+                # look up the result in the local results cache.
+                # This is just for that derivative step.
+                if cumulative_term is None:
+                    return results_cache[term_to_extend_with]
+                return results_cache[term_to_extend_with] @ cumulative_term
+        
+        # We should use the cache for all the probs calculation.
         if cumulative_term is None:
             # look up result.
-            return results_cache[term_to_extend_with]
-        return results_cache[term_to_extend_with] @ cumulative_term 
+            return self.results[term_to_extend_with]
+        return self.results[term_to_extend_with] @ cumulative_term 
 
 
     def _collapse_cache_line(self, model, cumulative_term: None | _np.ndarray,
                             term_to_extend_with: int | LabelTupTup,
-                            results_cache: dict[int | LabelTupTup, _np.ndarray],
-                            num_qubits_in_default: int) -> _np.ndarray:
+                            local_results_cache: dict[int | LabelTupTup, _np.ndarray],
+                            num_qubits_in_default: int,
+                            globally_invalid_cache_inds: list[Union[int, LabelTupTup]]
+                            ) -> _np.ndarray:
         """
         Reduce a cache line to a single process matrix.
 
@@ -912,18 +950,15 @@ class EvalTreeBasedUponLongestCommonSubstring():
 
         """
 
-        if isinstance(term_to_extend_with, int):
-            if term_to_extend_with not in results_cache:
-                breakpoint()
-                assert term_to_extend_with in results_cache, f"Term {term_to_extend_with} not in cache: {results_cache.keys()}"
-            return self.handle_results_cache_lookup_and_product(cumulative_term, term_to_extend_with, results_cache)
-        if term_to_extend_with in results_cache:
-            return self.handle_results_cache_lookup_and_product(cumulative_term, term_to_extend_with, results_cache)
+        if (term_to_extend_with in local_results_cache) or (term_to_extend_with in self.results):
+            # It is in one of the caches.
+            return self.handle_results_cache_lookup_and_product(cumulative_term, term_to_extend_with,
+                                                local_results_cache, globally_invalid_cache_inds)
         else:
             val = 1
             qubits_available = [i + self.qubit_start_point for i in range(num_qubits_in_default)]
             matrix_reps = {op.qubits: get_dense_representation_of_gate_with_perfect_swap_gates(model, op,
-                                            results_cache, self.swap_gate) for op in term_to_extend_with}
+                                            local_results_cache, self.swap_gate) for op in term_to_extend_with}
             qubit_used = []
             for key in matrix_reps.keys():
                 qubit_used.extend(key)
@@ -933,7 +968,7 @@ class EvalTreeBasedUponLongestCommonSubstring():
 
             implicit_idle_reps = {(qu,): get_dense_representation_of_gate_with_perfect_swap_gates(model,
                                         Label("Fake_Gate_To_Get_Tensor_Size_Right", qu), # A fake gate to look up and use the appropriate idle gate.
-                                        results_cache, self.swap_gate) for qu in unused_qubits}
+                                        local_results_cache, self.swap_gate) for qu in unused_qubits}
 
             while qubits_available:
 
@@ -948,11 +983,11 @@ class EvalTreeBasedUponLongestCommonSubstring():
 
                     qubits_available = qubits_available[len(gatekey):]
 
-            results_cache[term_to_extend_with] = val
+            local_results_cache[term_to_extend_with] = val
             if cumulative_term is None:
                 return val
             # Cache if off.
-            return results_cache[term_to_extend_with] @ cumulative_term
+            return local_results_cache[term_to_extend_with] @ cumulative_term
 
 
     def trace_through_cache_to_build_circuit(self, cache_ind: int) -> list[tuple]:
@@ -1060,7 +1095,10 @@ class CollectionOfLCSEvalTrees():
             self.saved_results[key] = out1
             self.sub_cir_to_ind_in_results[key] = out2
 
-    def reconstruct_full_matrices(self) -> Optional[List[KronStructured]]:
+    def reconstruct_full_matrices(self,
+                                  model = None,
+                                  gp_index_changing: Optional[int] = None) -> \
+                                    Optional[Tuple[List[Union[KronStructured, _np.ndarray]], List[int]]]:
         """
         Construct a tensor product structure for each individual circuit
         """
@@ -1068,21 +1106,40 @@ class CollectionOfLCSEvalTrees():
         if len(self.saved_results) == 0:
             return
 
-        # Now we can do the combination.
-
         num_cirs = len(self.cir_id_and_lane_id_to_sub_cir)
+        cir_inds = _np.arange(num_cirs, dtype=_np.int32)
+        if (gp_index_changing is not None) and (model is not None):
+            cir_changes = set()
+
+            for key in self.trees:
+                cir_changes = cir_changes.union(self.trees[key]._which_full_circuits_will_change_due_to_gpindex_changing(model, gp_index_changing))
+
+            cir_inds = _np.array(sorted(list(cir_changes)), dtype=_np.int32)
 
         output = []
-        for icir in range(num_cirs):
+
+        # Now we can do the combination.
+
+        for icir in cir_inds:
             lane_circuits = []
             for i in range(len(self.cir_id_and_lane_id_to_sub_cir[icir])):
                 cir = self.cir_id_and_lane_id_to_sub_cir[icir][i]
                 lblkey = cir._line_labels
 
                 ind_in_results = self.sub_cir_to_ind_in_results[lblkey][cir.layertup]
-                lane_circuits.append(self.saved_results[lblkey][ind_in_results])
-            output.append(KronStructured(lane_circuits))
-        return output
+                if ind_in_results not in self.saved_results[lblkey]:
+                    # We have only the local changes.
+                    # This will be stored in the results file of the subtree.
+                    lane_circuits.append(self.trees[lblkey].results[ind_in_results])
+                else:
+                    lane_circuits.append(self.saved_results[lblkey][ind_in_results])
+            if len(lane_circuits) > 1:
+               output.append(KronStructured(lane_circuits))
+            elif len(lane_circuits) == 1:
+                output.append(lane_circuits[0]) # gate_sequence[i] @ rho needs to work for i in range(num_circs).
+            else:
+                raise ValueError()
+        return output, cir_inds
     
     def flop_estimate(self, return_collapse: bool = False, return_tensor_matvec: bool = False):
 

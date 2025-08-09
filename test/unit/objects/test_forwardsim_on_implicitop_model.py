@@ -24,8 +24,11 @@ def assert_probability_densities_are_equal(op_dict: dict, exp_dict: dict, cir: C
 
     for key, val in op_dict.items():
         assert key in exp_dict
-        assert np.allclose(exp_dict[key], val), f"Circuit {cir}, Outcome {key}, Expected: {exp_dict[key]}, Got: {val}"
-
+        try:
+            assert np.allclose(exp_dict[key], val), f"Circuit {cir}, Outcome {key}, Expected: {exp_dict[key]}, Got: {val}"
+        except:
+            breakpoint()
+            raise AssertionError()
 
 #region Model Construction
 def construct_arbitrary_single_qubit_unitary(alpha, beta, gamma, delta):
@@ -410,6 +413,23 @@ def test_tensor_product_two_qubit_gates_dprobs():
 
         assert_probability_densities_are_equal(probs, exp, cir)
 
+def test_tensor_product_two_qubit_gates_dprobs_bulk():
+
+    num_qubits = 4
+
+    under_test, expected_model = build_models_for_testing(num_qubits, simplify_for_dprobs=True)
+
+    circuitECR01 = Circuit([[("Gecr", 0, 1), ("Gi", 2), ("Gzpi2", 3)]])
+    circuitECR10 = Circuit([[("Gecr", 1, 0), ("Gi", 2), ("Gzpi2", 3)]])
+
+    circ_list = [circuitECR01, circuitECR10]
+    dprobs = under_test.sim.bulk_dprobs(circ_list)
+    exp = expected_model.sim.bulk_dprobs(circ_list)
+
+
+    for cir in circ_list:
+        assert_probability_densities_are_equal(dprobs[cir], exp[cir], cir)
+
 
 def test_tensor_product_single_unitaries_yield_right_results_dprobs():
 
@@ -507,22 +527,5 @@ def test_tensor_product_multi_qubit_gates_with_structured_lanes_dprobs():
 
         assert_probability_densities_are_equal(probs, exp, circuit)
 
-# test_tensor_product_gates_with_implicit_idles_dprobs()
 #endregion Derivative of Probabilities consistencies.
 
-
-
-def test_matrices_are_close():
-
-    num_qubits = 3
-    under_test, expected_model = build_models_for_testing(num_qubits, independent_gates=True,
-                                                          simplify_for_dprobs=True)
-    
-    cir = Circuit([[("Gxpi2", 1)]], num_lines=num_qubits)
-
-    expected_model.sim = MatrixForwardSimulator()
-
-    expected_dproduct = expected_model.sim.bulk_dproduct([cir])
-    actual_dproduct = under_test.sim.bulk_dproduct([cir])
-
-    assert np.allclose(actual_dproduct, expected_dproduct)
