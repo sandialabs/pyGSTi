@@ -1,10 +1,43 @@
-# right now this file is functioning as a wrapper for a bunch of functionality that exists in pygsti.protocols.mirror_edesign. A refactor is probably in order.
+"""
+B-Sqale is a software tool for creating scalable, robust benchmarks from any quantum circuit.
+Please see <paper link forthcoming> for more information.
+"""
 
-from pygsti.protocols import mirror_edesign as _mirror, vbdataframe as _vbdf
+# TODO: add copyright assertion
 
-def noise_mirror_edesign(qk_circs, # yes transpiled
-                            mirroring_kwargs_dict={}
-                            ):
+from __future__ import annotations
+from typing import Tuple, Optional, Dict, List, Union, Any
+import warnings as _warnings
+
+from pygsti.protocols import (
+    ProtocolData as _ProtocolData,
+    FreeformDesign as _FreeformDesign,
+    CombinedExperimentDesign as _CombinedExperimentDesign,
+    VBDataFrame as _VBDataFrame,
+    mirror_edesign as _mirror
+)
+
+import numpy as _np
+
+
+try:
+    import qiskit
+    if qiskit.__version__ != '1.1.1':
+        _warnings.warn("The B-Sqale functions 'qiskit_circuits_to_mirror_edesign'," \
+        "'qiskit_circuits_to_fullstack_mirror_edesign', and" \
+        "'qiskit_circuits_to_subcircuit_mirror_edesign are designed for qiskit 1.1.1. Your version is " + qiskit.__version__)
+
+    from qiskit import transpile
+except:
+    _warnings.warn("qiskit does not appear to be installed, and is required for the B-Sqale functions" \
+                   "'qiskit_circuits_to_mirror_edesign'," \
+                   "'qiskit_circuits_to_fullstack_mirror_edesign', and" \
+                   "'qiskit_circuits_to_subcircuit_mirror_edesign'.")
+    
+
+def noise_mirror_edesign(qk_circs: Union[Dict[Any, qiskit.QuantumCircuit], List[qiskit.QuantumCircuit]],
+                         mirroring_kwargs_dict: Optional[Dict[str, Any]] = {}
+                         ) -> Tuple[_FreeformDesign, _CombinedExperimentDesign]:
 
     """
     Create a noise benchmark from transpiled Qiskit circuits.
@@ -45,16 +78,15 @@ def noise_mirror_edesign(qk_circs, # yes transpiled
     return _mirror.qiskit_circuits_to_mirror_edesign(qk_circs, mirroring_kwargs_dict)
 
 
-def fullstack_mirror_edesign(qk_circs, #not transpiled
-                            qk_backend=None,
-                            coupling_map=None,
-                            basis_gates=None,
-                            transpiler_kwargs_dict={},
-                            mirroring_kwargs_dict={},
-                            num_transpilation_attempts=100,
-                            return_qiskit_time=False
-                            ):
-
+def fullstack_mirror_edesign(qk_circs: Union[Dict[Any, qiskit.QuantumCircuit], List[qiskit.QuantumCircuit]],
+                             qk_backend: Optional[qiskit.providers.BackendV2] = None,
+                             coupling_map: Optional[qiskit.transpiler.CouplingMap] = None,
+                             basis_gates: Optional[List[str]] = None,
+                             transpiler_kwargs_dict: Optional[Dict[str, Any]] = {},
+                             mirroring_kwargs_dict: Optional[Dict[str, Any]] = {},
+                             num_transpilation_attempts: Optional[int] = 100,
+                             return_qiskit_time: Optional[bool] = False
+                             ) -> Tuple[_FreeformDesign, _CombinedExperimentDesign]:
     """
     Create a full-stack benchmark from high-level Qiskit circuits.
 
@@ -128,8 +160,7 @@ def fullstack_mirror_edesign(qk_circs, #not transpiled
                 in order to perform mirror circuit fidelity estimation.
 
             float, optional
-                amount of time spent in Qiskit transpiler.
-                
+                amount of time spent in Qiskit transpiler.            
     """
 
     return _mirror.qiskit_circuits_to_fullstack_mirror_edesign(qk_circs, #not transpiled
@@ -143,15 +174,14 @@ def fullstack_mirror_edesign(qk_circs, #not transpiled
                                                     )
 
 
-def svb_mirror_edesign(qk_circs,
-                        aggregate_subcircs,
-                        width_depth_dict,
-                        coupling_map,
-                        instruction_durations,
-                        subcirc_kwargs_dict={},
-                        mirroring_kwargs_dict={}
-                        ): # qk_circs must already be transpiled to the device
-    
+def subcircuit_mirror_edesign(qk_circs: Union[Dict[Any, qiskit.QuantumCircuit], List[qiskit.QuantumCircuit]],
+                              aggregate_subcircs: bool,
+                              width_depth_dict: Dict[int, List[int]],
+                              coupling_map: qiskit.transpiler.CouplingMap,
+                              instruction_durations: qiskit.transpiler.InstructionDurations,
+                              subcirc_kwargs_dict: Optional[Dict[str, Any]] = {},
+                              mirroring_kwargs_dict: Optional[Dict[str, Any]] = {}
+                              ) -> Tuple[_FreeformDesign, _CombinedExperimentDesign]:
     """
     Create a subcircuit benchmark from transpiled Qiskit circuits.
 
@@ -221,7 +251,6 @@ def svb_mirror_edesign(qk_circs,
                 Experiment design(s) containing all mirror circuits that must be executed
                 in order to perform mirror circuit fidelity estimation. A dictionary is returned
                 if `aggregate_subcircs` is False, otherwise a FreeformDesign is returned.
-
     """
 
     return _mirror.qiskit_circuits_to_subcircuit_mirror_edesign(qk_circs,
@@ -234,14 +263,14 @@ def svb_mirror_edesign(qk_circs,
                                               ) # qk_circs must already be transpiled to the device
 
 
-def calculate_mirror_benchmark_results(unmirrored_design, mirrored_data,
-                                       dropped_gates=False,
-                                       bootstrap=True,
-                                       num_bootstraps=50,
-                                       rand_state=None,
-                                       verbose=False
-            ):
-
+def calculate_mirror_benchmark_results(unmirrored_design: _FreeformDesign,
+                                       mirrored_data: _ProtocolData,
+                                       dropped_gates: bool = False,
+                                       bootstrap: bool = True,
+                                       num_bootstraps: int = 50,
+                                       rand_state: _np.random.RandomState = None,
+                                       verbose: bool = False,
+                                       ) -> _VBDataFrame:
     """
         Create a dataframe from MCFE data and edesigns.
 
@@ -273,10 +302,9 @@ def calculate_mirror_benchmark_results(unmirrored_design, mirrored_data,
         ---------
         VBDataFrame
             A VBDataFrame whose dataframe contains calculated MCFE values and circuit statistics.
-        
         """
 
-    return _vbdf.VBDataFrame.from_mirror_experiment(unmirrored_design, mirrored_data,
+    return _VBDataFrame.from_mirror_experiment(unmirrored_design, mirrored_data,
                                                           dropped_gates,
                                                           bootstrap,
                                                           num_bootstraps,

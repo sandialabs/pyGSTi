@@ -36,6 +36,112 @@ except:
                    "'qiskit_circuits_to_subcircuit_mirror_edesign'.")
 
 
+def qiskit_circuits_to_mirror_edesign(qk_circs: Union[Dict[Any, qiskit.QuantumCircuit], List[qiskit.QuantumCircuit]],
+                                    mirroring_kwargs_dict: Optional[Dict[str, Any]] = {}
+                                    ) -> Tuple[_FreeformDesign, _CombinedExperimentDesign]:
+    """
+    Create a noise benchmark from transpiled Qiskit circuits.
+
+    Parameters
+    ----------
+    qk_circs : List[qiskit.QuantumCircuit] | Dict[qiskit.QuantumCircuit]
+        Qiskit QuantumCircuits from which a noise benchmark is to be created.
+        If a dictionary is provided, those keys are used.
+        If a list is provided, default integer keys are used.
+
+    mirroring_kwargs_dict : dict, optional
+        dictionary of keyword arguments to be used in circuit mirroring. If an arg
+        is not provided, a default value is used.
+        The args are:
+            'mirror_circuits_per_circ': default 10. The number of mirror circuits of the
+            test-exact and exact-exact varieties to be used for the process fidelity estimation
+            of each provided Qiskit circuit.
+
+            'num_ref_per_qubit_subset': default 10. The number of SPAM reference circuits to use
+            for each qubit subset that is represented among the provided Qiskit circuits.
+
+            'rand_state': default None. np.random.RandomState to be used for circuit mirroring.
+
+    Returns
+    ---------
+        Tuple
+            pygsti.protocols.FreeformDesign
+                Experiment design containing the pyGSTi conversion of all Qiskit circuits that
+                were passed in. Does not need executed, but is needed for fidelity calculations.
+
+            pygsti.protocols.CombinedExperimentDesign
+                Experiment design containing all mirror circuits that must be executed
+                in order to perform mirror circuit fidelity estimation.         
+    """
+
+    test_circ_dict = defaultdict(list)
+    ref_circ_dict = defaultdict(list)
+
+    ref_circ_id_lookup_dict = {}
+
+    if isinstance(qk_circs, list):
+        qk_circs = {i: qk_circ for i, qk_circ in enumerate(qk_circs)}
+
+    for k, qk_test_circ in qk_circs.items():
+
+        qk_ref_circ = transpile(qk_test_circ,
+                                basis_gates=['u3', 'cz'],
+                                layout_method='trivial',
+                                routing_method='none',
+                                optimization_level=1,
+                                approximation_degree=1.0,
+                                seed_transpiler=0)
+        
+        # elapsed = time.time() - start
+        # print(f'transpilation time: {elapsed}')
+        
+        ps_test_circ, _ = _Circuit.from_qiskit(qk_test_circ, allow_different_gates_in_same_layer=True)
+        ps_ref_circ, _ = _Circuit.from_qiskit(qk_ref_circ, allow_different_gates_in_same_layer=False)
+
+        
+
+        ps_test_circ = ps_test_circ.delete_idling_lines()
+        # ps_test_circ = ps_test_circ.reorder_lines(sorted(ps_test_circ.line_labels))
+
+        ps_ref_circ = ps_ref_circ.delete_idling_lines()
+        # ps_ref_circ = ps_ref_circ.reorder_lines(sorted(ps_ref_circ.line_labels))
+
+
+        test_circ_metadata = {
+            'id': k,
+            'width': ps_test_circ.width,
+            'depth': ps_test_circ.depth,
+            # other information as it becomes necessary
+        }
+
+        test_circ_dict[ps_test_circ] += [test_circ_metadata]
+
+        ref_circ_metadata = {
+                            'id': k,
+                            }
+        
+        ref_circ_dict[ps_ref_circ] += [ref_circ_metadata]
+
+        ref_circ_id_lookup_dict[k] = ps_ref_circ
+
+        test_edesign = _FreeformDesign(test_circ_dict)
+        ref_edesign = _FreeformDesign(ref_circ_dict)
+    
+    start = time.time()
+
+    mirror_edesign = make_mirror_edesign(test_edesign=test_edesign,
+                                         ref_edesign=ref_edesign,
+                                         ref_id_lookup_dict=ref_circ_id_lookup_dict,
+                                         account_for_routing=False,
+                                         **mirroring_kwargs_dict
+                                         )
+
+    elapsed = time.time() - start
+    print(f'mirroring time: {elapsed}')
+    
+    return test_edesign, mirror_edesign
+
+
 def qiskit_circuits_to_fullstack_mirror_edesign(qk_circs: Union[Dict[Any, qiskit.QuantumCircuit], List[qiskit.QuantumCircuit]],
                                                 qk_backend: Optional[qiskit.providers.BackendV2] = None,
                                                 coupling_map: Optional[qiskit.transpiler.CouplingMap] = None,
@@ -343,112 +449,6 @@ def qiskit_circuits_to_fullstack_mirror_edesign(qk_circs: Union[Dict[Any, qiskit
         return test_edesign, mirror_edesign, qiskit_time
     else:
         return test_edesign, mirror_edesign
-
-
-def qiskit_circuits_to_mirror_edesign(qk_circs: Union[Dict[Any, qiskit.QuantumCircuit], List[qiskit.QuantumCircuit]],
-                                    mirroring_kwargs_dict: Optional[Dict[str, Any]] = {}
-                                    ) -> Tuple[_FreeformDesign, _CombinedExperimentDesign]:
-    """
-    Create a noise benchmark from transpiled Qiskit circuits.
-
-    Parameters
-    ----------
-    qk_circs : List[qiskit.QuantumCircuit] | Dict[qiskit.QuantumCircuit]
-        Qiskit QuantumCircuits from which a noise benchmark is to be created.
-        If a dictionary is provided, those keys are used.
-        If a list is provided, default integer keys are used.
-
-    mirroring_kwargs_dict : dict, optional
-        dictionary of keyword arguments to be used in circuit mirroring. If an arg
-        is not provided, a default value is used.
-        The args are:
-            'mirror_circuits_per_circ': default 10. The number of mirror circuits of the
-            test-exact and exact-exact varieties to be used for the process fidelity estimation
-            of each provided Qiskit circuit.
-
-            'num_ref_per_qubit_subset': default 10. The number of SPAM reference circuits to use
-            for each qubit subset that is represented among the provided Qiskit circuits.
-
-            'rand_state': default None. np.random.RandomState to be used for circuit mirroring.
-
-    Returns
-    ---------
-        Tuple
-            pygsti.protocols.FreeformDesign
-                Experiment design containing the pyGSTi conversion of all Qiskit circuits that
-                were passed in. Does not need executed, but is needed for fidelity calculations.
-
-            pygsti.protocols.CombinedExperimentDesign
-                Experiment design containing all mirror circuits that must be executed
-                in order to perform mirror circuit fidelity estimation.         
-    """
-
-    test_circ_dict = defaultdict(list)
-    ref_circ_dict = defaultdict(list)
-
-    ref_circ_id_lookup_dict = {}
-
-    if isinstance(qk_circs, list):
-        qk_circs = {i: qk_circ for i, qk_circ in enumerate(qk_circs)}
-
-    for k, qk_test_circ in qk_circs.items():
-
-        qk_ref_circ = transpile(qk_test_circ,
-                                basis_gates=['u3', 'cz'],
-                                layout_method='trivial',
-                                routing_method='none',
-                                optimization_level=1,
-                                approximation_degree=1.0,
-                                seed_transpiler=0)
-        
-        # elapsed = time.time() - start
-        # print(f'transpilation time: {elapsed}')
-        
-        ps_test_circ, _ = _Circuit.from_qiskit(qk_test_circ, allow_different_gates_in_same_layer=True)
-        ps_ref_circ, _ = _Circuit.from_qiskit(qk_ref_circ, allow_different_gates_in_same_layer=False)
-
-        
-
-        ps_test_circ = ps_test_circ.delete_idling_lines()
-        # ps_test_circ = ps_test_circ.reorder_lines(sorted(ps_test_circ.line_labels))
-
-        ps_ref_circ = ps_ref_circ.delete_idling_lines()
-        # ps_ref_circ = ps_ref_circ.reorder_lines(sorted(ps_ref_circ.line_labels))
-
-
-        test_circ_metadata = {
-            'id': k,
-            'width': ps_test_circ.width,
-            'depth': ps_test_circ.depth,
-            # other information as it becomes necessary
-        }
-
-        test_circ_dict[ps_test_circ] += [test_circ_metadata]
-
-        ref_circ_metadata = {
-                            'id': k,
-                            }
-        
-        ref_circ_dict[ps_ref_circ] += [ref_circ_metadata]
-
-        ref_circ_id_lookup_dict[k] = ps_ref_circ
-
-        test_edesign = _FreeformDesign(test_circ_dict)
-        ref_edesign = _FreeformDesign(ref_circ_dict)
-    
-    start = time.time()
-
-    mirror_edesign = make_mirror_edesign(test_edesign=test_edesign,
-                                         ref_edesign=ref_edesign,
-                                         ref_id_lookup_dict=ref_circ_id_lookup_dict,
-                                         account_for_routing=False,
-                                         **mirroring_kwargs_dict
-                                         )
-
-    elapsed = time.time() - start
-    print(f'mirroring time: {elapsed}')
-    
-    return test_edesign, mirror_edesign
 
 
 def qiskit_circuits_to_subcircuit_mirror_edesign(qk_circs: Union[Dict[Any, qiskit.QuantumCircuit], List[qiskit.QuantumCircuit]],
