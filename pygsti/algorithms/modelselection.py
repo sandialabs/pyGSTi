@@ -5,25 +5,8 @@ from pygsti.objectivefns import objectivefns as _objfns
 import warnings
 import time
 from pygsti.tools.modelselectiontools import create_red_model as _create_red_model, reduced_model_approx_GST_fast as _reduced_model_approx_GST_fast
-from pygsti.tools.modelselectiontools import parallel_GST as _parallel_GST, AMSCheckpoint as _AMSCheckpoint
-
-def create_projector_matrix_from_trace(graph_levels, projector_matrix = None):
-    """TODO
-
-    Args:
-        graph_levels (_type_): _description_
-        projector_matrix (_type_, optional): _description_. Defaults to None.
-
-    Returns:
-        _type_: _description_
-    """
-    if projector_matrix is None:
-        projector_matrix = np.eye(len(graph_levels[0][0][0]))
-    for level in graph_levels[1:]:
-        param_to_remove = level[0][2]
-        projector_matrix = np.delete(projector_matrix, param_to_remove, axis=1)
-    return projector_matrix
-
+from pygsti.tools.modelselectiontools import parallel_GST as _parallel_GST, AMSCheckpoint as _AMSCheckpoint, remove_param
+import os as _os
 
 def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, maxiter=100, tol=1.0, prob_clip=1e-3, recompute_H_thresh_percentage = .2, disable_checkpoints = False, checkpoint = None, comm = None, mem_limit = None):
     """
@@ -127,7 +110,7 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
                             op_label_aliases, comm, mem_limit, ('percircuit',), (), mdc_store)
         return obj
     
-    print('doing AMS ', comm.Get_rank())
+    print('doing AMS ', rank)
     recompute_Hessian = False
     graph_levels = []
     target_model.param_interposer.full_span_inv_transform_matrix = target_model.param_interposer.inv_transform_matrix
@@ -159,12 +142,13 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
             print("computing Hessian")
         
         H = pygsti.tools.logl_hessian(target_model_fit, data.dataset, comm=comm, mem_limit=mem_limit, verbosity = verbosity)
+        #TODO how to make this work without mpiexec call
         H = comm.bcast(H, root = 0)
         x0 = target_model_fit.to_vector()
         if not disable_checkpoints:
             new_checkpoint = _AMSCheckpoint(target_model, data.dataset.to_str(), er_thresh, maxiter, tol, prob_clip,  recompute_H_thresh_percentage, H, x0)
-            #new_checkpoint.save()
-    
+            new_checkpoint.save()
+    red_model = target_model.copy()
     logl_fn = create_logl_obj_fn(target_model_fit, data.dataset)
     original_logl = -logl_fn.fn()
     prev_logl = original_logl
@@ -198,7 +182,9 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
                 reduced_model_projector_matrix = np.delete(parent_model_projector, i, axis=1)
                 
                 #vec = reduced_model_approx_GST(H,reduced_model_projector_matrix.T, x0)
-                vec = _reduced_model_approx_GST_fast(red_rowandcol_H, red_row_H, x0, i)
+                #vec = _reduced_model_approx_GST_fast(red_rowandcol_H, red_row_H, x0, i)
+
+                vec = _parallel_GST(remove_param(red_model, i), data, prob_clip, tol, maxiter, verbosity, comm=comm, mem_limit=mem_limit).estimates['GateSetTomography'].models['final iteration estimate'].to_vector()
                 logl_fn.model.from_vector(reduced_model_projector_matrix @ vec)
 
                 quantity = (prev_logl + logl_fn.fn())*2
@@ -234,7 +220,7 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
             finalists = [finalist for finalist in finalists if finalist[2] != -1]
             
             sorted_finalists = sorted(finalists, key=lambda x: x[1])
-
+        red_model = remove_param(red_model, sorted_finalists[0][2])
         if recompute_Hessian:
             if verbosity > 0:
                 print("Recomputing Hessian, approximation error is ")
@@ -300,4 +286,6 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
             print("next level")
             end = time.time()
             print('time this level ', end-start)
+    if not disable_checkpoints:
+        _os.remove(new_checkpoint.path)
     return graph_levels

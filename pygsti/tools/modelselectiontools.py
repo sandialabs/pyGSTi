@@ -35,7 +35,7 @@ class AMSCheckpoint(_NicelySerializable):
     TODO
     """ 
 
-    def __init__(self, target_model, datasetstr, er_thresh, maxiter, tol, prob_clip, recompute_H_thresh_percent, H, x0, time = None):
+    def __init__(self, target_model, datasetstr, er_thresh, maxiter, tol, prob_clip, recompute_H_thresh_percent, H, x0, time=None, path=None):
         super().__init__()
         self.target_model = target_model
         self.datasetstr = datasetstr
@@ -50,6 +50,16 @@ class AMSCheckpoint(_NicelySerializable):
             self.last_update_time = _time.ctime()
         else:
              self.last_update_time = time
+
+        if path is None:
+            self.path = './ams_checkpoints/' + _datetime.datetime.now().strftime('%Y-%m-%d|%H.%M.%S') + '.json'
+        if 'ams_checkpoints' in self.path.split('/')[0:2]:
+            try:
+                os.mkdir('./ams_checkpoints/')
+            except FileExistsError:
+                 pass
+            except Exception as e:
+                print(f"Error creating checkpoint folder: {e}")
     
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
@@ -69,19 +79,25 @@ class AMSCheckpoint(_NicelySerializable):
     def _from_nice_serialization(cls, state):
         return cls(Model.from_nice_serialization(state['target_model']), state['datasetstr'], state['er_thresh'], state['maxiter'], state['tol'], state['prob_clip'], state['recompute_H_thresh_percent'] ,cls._decodemx(state['H']), cls._decodemx(state['x0']), state['time'])
     def save(self, path=None):
-        if path is None:
-            path = './ams_checkpoints/' + _datetime.datetime.now().strftime('%Y-%m-%d|%H.%M.%S') + '.json'
-        if 'ams_checkpoints' in path.split('/')[0:2]:
-            try:
-                os.mkdir('./ams_checkpoints/')
-            except FileExistsError:
-                 pass
-            except Exception as e:
-                print(f"Error creating checkpoint folder: {e}")
-        self.write(path)
+        """
+        Saves self to memory. If path is not specified, a default one is created.
+
+        Parameters
+        ----------
+        path : str
+            file path to save checkpoint.
+        """
+        
+        self.write(self.path)
 
     def checkpoint_settings(self):
-         return [self.target_model, self.datasetstr, self.er_thresh, self.maxiter, self.tol, self.prob_clip, self.recompute_H_thresh_percent]
+        """
+        Returns a list of all fast AMS settings, typically used to check if the checkpoint is valid
+
+        Returns:
+            list of target_model, datasetstr, er_thresh, maxiter, tol, prob_clip, recompute_H_thresh_percent]
+        """
+        return [self.target_model, self.datasetstr, self.er_thresh, self.maxiter, self.tol, self.prob_clip, self.recompute_H_thresh_percent]
          
     def check_valid_checkpoint(self, target_model, datasetstr, er_thresh, maxiter, tol, prob_clip, recompute_H_thresh_percent):
         """Check if self is a checkpoint with the same settings as the ones passed in. This is only compatible with FOGI model checkpoints.
@@ -124,14 +140,96 @@ class AMSCheckpoint(_NicelySerializable):
              return True
         else:
              return False
+
+def remove_param(parent_model, param_to_remove):
+    next_model = parent_model.copy()
+    projector_matrix = _np.delete(parent_model.param_interposer.projector_matrix, param_to_remove, axis=1)
+    next_model.param_interposer.transform_matrix = parent_model.param_interposer.full_span_transform_matrix @ projector_matrix
+    next_model.param_interposer.projector_matrix = projector_matrix
+    reduced_inv_matrix = _np.delete(parent_model.param_interposer.inv_transform_matrix, param_to_remove, axis=0)
+    next_model.param_interposer.inv_transform_matrix = reduced_inv_matrix
+    next_model._paramvec = _np.delete(parent_model._paramvec, param_to_remove)
+    next_model.from_vector(next_model._paramvec)
+
+    next_model._need_to_rebuild = True
+    next_model._clean_paramvec()
+    assert next_model.num_params < parent_model.num_params
+    param_to_remove += 1
+    return next_model
+
+def create_projector_matrix_from_trace(graph_levels, projector_matrix = None):
+    """
+    Given a trace (graph_levels) representing a path through a directed model graph, where traversing to an adjacent node corresponds to
+    removing a parameter, create a projector matrix that appropriately embeds a reduced vector up in the space of parent (full) model
+    used to seed graph_levels.
     
+    Parameters
+    ----------
+    
+    graph_levels : a list of lists of lists 
+        Let us look at every index from this object separately, call them i,j,k such that graph_levels[i][j][k]
+
+          -  i: AMS works by traversing different "levels" of all possible reduced models. Each level considers 
+                a subset of reduced models where they each lack a single parameter from a shared parent model. 
+                After every model in a level is evaulated, one is picked to begin the next level. Variable 'i' 
+                indexes into a specific level within AMS, with i=0 being the first level which contains only one 
+                model, the seed model, and the rest of the levels contain reduced models from the level above.
+
+          -  j: indexes between all models considered in level i. These are sorted by evidence ratio, so i=a, j=0
+                is the model that was chosen to create reduced models for level a+1
+
+          -  k: At every level of AMS, only the most important features of each model is saved. This constitutes:
+
+                [param_vec , evidence_ratio, parameter_that_was_removed]. k indexes within this list.
+
+                param_vec : numpy array
+                    the parameter vector of the corresponding reduced model
+
+                evidence_ratio : float
+                    2 * (log-L(parent) - log-L(this model))
+                
+                parameter_that_was_removed : int
+                    index of parameter from parent model which is missing in this corresponding reduced model
+                
+
+        projector_matrix (optional, defaults to None): numpy array
+            If this function is used to further reduce down a projector matrix, then an initial one must be provided.
+            Otherwise, it initializes to the identity.
+
+
+    Returns:
+        projector_matrix : numpy array
+            An identity matrix, whose columns are missing for every parameter that was removed in AMS
+    """
+    if projector_matrix is None:
+        projector_matrix = _np.eye(len(graph_levels[0][0][0]))
+    for level in graph_levels[1:]:
+        param_to_remove = level[0][2]
+        projector_matrix = _np.delete(projector_matrix, param_to_remove, axis=1)
+    return projector_matrix
+
+def compare_parameters_simple(parent_model_vec, red_model_vec, projector_matrix):
+    
+    projector = projector_matrix @ projector_matrix.T
+    assert len(parent_model_vec) == len(projector)
+    table_data = [['Full', 'Reduced']]
+    j = 0
+    for i in range(len(parent_model_vec)):
+          
+        if projector[i][i] == 0:
+            table_data.append([parent_model_vec[i], 'removed'])
+        else:
+            table_data.append([parent_model_vec[i], red_model_vec[j]])
+            j += 1
+    assert len(red_model_vec) == j
+    for row in table_data:
+        print("{: <25} {: <25}".format(*row), '\n')
+
 def parallel_GST(target_model, data, min_prob_clip, tol, maxiter, verbosity, comm=None, mem_limit=None):
     """
     Wrapper to run GST with MPI with custom builders where the tolerance, probability clip and max iterations
     are easily accesible. The seed model, "target model", gets reset to its error-less version before doing
     GST. This function is specifically made to be used for FOGI AMS, but should work with non-FOGI models too.
-
-    TODO: This function assumes global access to comm and mem_limit, to be changed in the future.
     
     Parameters
     ----------
