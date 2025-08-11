@@ -19,7 +19,6 @@ from pygsti.protocols import (
 
 import numpy as _np
 
-
 try:
     import qiskit
     if qiskit.__version__ != '1.1.1':
@@ -38,7 +37,6 @@ except:
 def noise_mirror_edesign(qk_circs: Union[Dict[Any, qiskit.QuantumCircuit], List[qiskit.QuantumCircuit]],
                          mirroring_kwargs_dict: Optional[Dict[str, Any]] = {}
                          ) -> Tuple[_FreeformDesign, _CombinedExperimentDesign]:
-
     """
     Create a noise benchmark from transpiled Qiskit circuits.
 

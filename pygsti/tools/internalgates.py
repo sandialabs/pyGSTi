@@ -12,6 +12,7 @@ The standard unitaries and gate names, used internal compilers and short-hand mo
 
 from __future__ import annotations
 from typing import Dict, List, Tuple
+import warnings as _warnings
 
 import numpy as _np
 import scipy.linalg as _spl
@@ -20,6 +21,18 @@ from pygsti.tools import optools as _ot
 from pygsti.tools import symplectic as _symp
 from pygsti.baseobjs.unitarygatefunction import UnitaryGateFunction as _UnitaryGateFunction
 from pygsti.tools.gatetools import sigmax, sigmay, sigmaz, sigmaxz
+
+try:
+    import qiskit
+    from qiskit.circuit import Delay
+    from qiskit.circuit.library import standard_gates
+
+    if qiskit.__version__ != '1.1.1':
+        _warnings.warn("function 'standard_gatenames_qiskit_conversions()' is designed for qiskit version 1.1.1 \
+                and may not function properly for your qiskit version, which is " + qiskit.__version__)
+        
+except ImportError:
+    _warnings.warn("function 'standard_gatenames_qiskit_conversions()' requires qiskit, which does not appear to be installed.")
 
 
 class Gzr(_UnitaryGateFunction):
@@ -219,7 +232,7 @@ def standard_gatename_unitaries():
       * 'Gt', 'Gtdag' : the T and inverse T gates (T is a Z rotation by pi/4).
       * 'Gzr' : a parameterized gate that is a Z rotation by an angle, where when the angle = pi then it equals Z.
       * 'Gn' : N gate, pi/2 rotation about the (np.sqrt(3)/2, 0, -1/2) axis of the Bloch sphere, native gate in some spin qubit systems.
-      * 'Gu3' : parameterized gate that can encode any single-qubit rotatio with three parameters (theta, phi, lambda).
+      * 'Gu3' : parameterized gate that can encode any single-qubit rotation with three parameters (theta, phi, lambda).
       
     Mostly, pyGSTi does not assume that a gate with one of these names is indeed
     the unitary specified here. Instead, these names are intended as short-hand
@@ -873,15 +886,6 @@ def qiskit_gatenames_standard_conversions() -> Dict[str, List[str, bool]]:
     Dictionary mapping qiskit gate names to pyGSTi gate names and a flag
     for whether or not the gate has parameters.
     """
-
-    try:
-        import qiskit
-        if qiskit.__version__ != '1.1.1':
-            print("warning: function 'qiskit_gatenames_standard_conversions()' is designed for qiskit version 1.1.1 \
-                    and may not function properly for your qiskit version, which is " + qiskit.__version__)
-            
-    except ImportError:
-        raise ImportError("Qiskit is required for this operation, and it does not appear to be installed.")
     
     qiskit_to_standard_mapping = {}
 
@@ -930,18 +934,6 @@ def standard_gatenames_qiskit_conversions() -> Dict[str, Tuple[qiskit.circuit.In
         that indicates whether the append of the gate to the circuit can be accelerated in
         a later version of qiskit.
     """
-
-    try:
-        import qiskit
-        from qiskit.circuit import Delay
-        from qiskit.circuit.library import standard_gates
-
-        if qiskit.__version__ != '1.1.1':
-            print("warning: function 'standard_gatenames_qiskit_conversions()' is designed for qiskit version 1.1.1 \
-                    and may not function properly for your qiskit version, which is " + qiskit.__version__)
-            
-    except ImportError:
-        raise ImportError("Qiskit is required for this operation, and it does not appear to be installed.")
 
     std_gatenames_to_qiskit = {}
 
