@@ -10,6 +10,9 @@ The standard unitaries and gate names, used internal compilers and short-hand mo
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
+from typing import Dict, List, Tuple
+
 import numpy as _np
 import scipy.linalg as _spl
 
@@ -379,8 +382,8 @@ def unitary_to_standard_gatename(unitary, up_to_phase = False, return_phase = Fa
                         return std_name, phase
                     else:
                         return std_name
-
     return None
+
 def standard_gatenames_stim_conversions():
     """
     A dictionary converting the gates with standard names to stim tableus for these gates. Currently is only capable of converting
@@ -854,7 +857,7 @@ def standard_gatenames_openqasm_conversions(version='u3'):
     return std_gatenames_to_qasm, std_gatenames_to_argmap
 
 
-def qiskit_gatenames_standard_conversions():   
+def qiskit_gatenames_standard_conversions() -> Dict[str, List[str, bool]]:   
     """
     A dictionary converting Qiskit gates (based on Instruction.name)
     to built-in pyGSTi names for these gates.
@@ -904,7 +907,7 @@ def qiskit_gatenames_standard_conversions():
     return qiskit_to_standard_mapping
 
 
-def standard_gatenames_qiskit_conversions():
+def standard_gatenames_qiskit_conversions() -> Dict[str, Tuple[qiskit.circuit.Instruction, str, bool]]:
     """
     A dictionary converting the gates with standard names to the Qiskit gates/names.
 
@@ -919,7 +922,10 @@ def standard_gatenames_qiskit_conversions():
 
     Returns
     -------
-    dict mapping strings to strings.
+    dict[str, tuple[qiskit.circuit.Instruction, str, bool]]
+        Maps pyGSTi gatenames to tuples of the qiskit gate class, gatename, and a boolean
+        that indicates whether the append of the gate to the circuit can be accelerated in
+        a later version of qiskit.
     """
 
     try:

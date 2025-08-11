@@ -9,9 +9,27 @@ Techniques for manipulating benchmarking data stored in a Pandas DataFrame.
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
+from __future__ import annotations
+from typing import Callable, Union, Literal, Optional, Tuple
+
+import warnings as _warnings
+
 import pandas as _pandas
 import numpy as _np
 import tqdm as _tqdm
+
+try:
+    import matplotlib.pyplot as _plt
+    import matplotlib as _mp
+except:
+    _warnings.warn('matplotlib is required for dataframe plotting, and does not appear to be installed.')
+
+from pygsti.protocols import (
+    ExperimentDesign as _ExperimentDesign,
+    FreeformDesign as _FreeformDesign,
+    CombinedExperimentDesign as _CombinedExperimentDesign,
+    ProtocolData as _ProtocolData
+)
 
 
 from scipy.stats import chi2 as _chi2
@@ -152,8 +170,13 @@ class VBDataFrame(object):
     A class for storing a DataFrame that contains volumetric benchmarking data, and that
     has methods for manipulating that data and creating volumetric-benchmarking-like plots.
     """
-    def __init__(self, df, x_axis='Depth', y_axis='Width', x_values=None, y_values=None,
-                 edesign=None):
+    def __init__(self,
+                 df: _pandas.DataFrame,
+                 x_axis: str = 'Depth',
+                 y_axis: str = 'Width',
+                 x_values: Optional[str] = None,
+                 y_values: Optional[str] = None,
+                 edesign: Optional[_ExperimentDesign] = None):
         """
         Initialize a VBDataFrame object.
 
@@ -199,12 +222,14 @@ class VBDataFrame(object):
             self.y_values = y_values
 
     @classmethod
-    def from_mirror_experiment(cls, unmirrored_design, mirrored_data,
-                               dropped_gates=False,
-                               bootstrap=True,
-                               num_bootstraps=50,
-                               rand_state=None,
-                               verbose=False,
+    def from_mirror_experiment(cls,
+                               unmirrored_design: _FreeformDesign,
+                               mirrored_data: _ProtocolData,
+                               dropped_gates: bool = False,
+                               bootstrap: bool = True,
+                               num_bootstraps: int = 50,
+                               rand_state: _np.random.RandomState = None,
+                               verbose: bool = False,
                                ):
         """
         Create a dataframe from MCFE data and edesigns.
@@ -693,18 +718,67 @@ class VBDataFrame(object):
     
 
 
-    def create_vb_plot(self, title, accumulator=_np.mean, cp_or_rc='rc',
-                       show_dropped_gates=False, dg_accumulator=_np.mean,
-                       cmap=None, margin=0.15,
-                       save_fig=False, fig_path=None, fig_format=None):
+    def create_vb_plot(self,
+                       title: str,
+                       accumulator: Callable = _np.mean,
+                       cp_or_rc: str = 'rc',
+                       show_dropped_gates: bool = False,
+                       dg_accumulator: Callable = _np.mean,
+                       cmap: _mp.colors.Colormap = None,
+                       margin: float = 0.15,
+                       save_fig: bool = False,
+                       fig_path: str = None,
+                       fig_format: str = None):
 
-        # TODO: add docstring
+        """
+        Generate process fidelity volumetric benchmarking (VB) plot from dataframe.
+        This function is designed with subcircuit volumetric benchmarking in mind,
+        where the x-axis is the subicrcuit depth and the y-axis is the subcircuit
+        width.
 
-        try:
-            import matplotlib.pyplot as _plt
-            import matplotlib as _mp
-        except:
-            raise RuntimeError('matplotlib is required for this operation, and does not appear to be installed.')
+        Parameters
+        ------------
+        title : str
+            The title of the plot.
+
+        accumulator : callable, optional
+            Function used to accumulate process fidelities for a (width, depth) pair
+            on the VB plot. Default is np.mean.
+
+        cp_or_rc : str, optional
+            Whether the process fidelities were computed via randomly compiled
+            circuits ('rc') or central Pauli mirroring ('cp'). Default is 'rc'.
+
+        show_dropped_gates : bool, optional
+            Whether the plot should visualize the average (see dg_accumulator)
+            number of dropped gates for each subcircuit width-depth pair. 
+            Subcircuit sampling can drop gates when a gate has only partial support
+            on the qubits in the selected width subset.
+
+        dg_accumulator : callable, optional
+            Function used to accumulate the dropped gate counts
+            for a (width, depth) pair on the VB plot. Default is np.mean.
+
+        cmap : matplotlib.colors.Colormap, optional
+            Colormap to use for plotting process fidelities. Default is spectral.
+
+        margin : float, optional
+            Margin between adjacent width-depth pairs in the VB plot.
+            Default is 0.15.
+
+        save_fig : bool, optional
+            Whether to write the generated VB plot to file. Default is False.
+
+        fig_path : str, optional
+            If `save_fig` is set to True, this argument is used as the path
+            the figure is saved to. If `save_fig` is False, this argument
+            is ignored. Default is None
+
+        fig_format : str, optional
+            If `save_fig` is set to True, this argument is the file format
+            for the generated VB plot. If `save_fig` is False, this argument
+            is ignored. Acceptable values are any file format recognized by matplotlib.
+        """
         
         if cmap is None:
             cmap = _mp.colormaps['Spectral']
@@ -761,32 +835,6 @@ class VBDataFrame(object):
             tout = _plt.Polygon(outer_points, edgecolor='k', fill=None)
             ax.add_patch(tout)
         
-        # cbar = _plt.colorbar()
-        # cbar.set_clim(0.0, 1.0)
-        # # Bravyi-Kitaev (lower right triange)
-        # acc_values = bk_df.groupby([x_axis, y_axis])[c_axis].apply(accumulator)
-        # dg_values = bk_df.groupby([x_axis, y_axis])["Dropped Gates"].apply(dg_accumulator)
-        # for xlbl, ylbl in acc_values.keys():
-        #     x = xmap[xlbl]
-        #     y = ymap[ylbl]
-
-        #     side = 0.5-margin
-            
-        #     cval = acc_values[(xlbl, ylbl)]
-        #     dgval = dg_values[(xlbl, ylbl)]
-
-        #     # Inner triange: Smaller by ratio of dropped gates
-        #     inside = side * (xlbl-dgval)/xlbl
-            
-        #     inpoints = [(x-side, y-side), (x+inside, y-side), (x+inside, y+inside)]
-        #     tin = plt.Polygon(inpoints, color=cmap(cval))
-        #     ax.add_patch(tin)
-            
-        #     # Outer Triangle
-        #     outer_points = [(x-side, y-side), (x+side, y-side), (x+side, y+side)]
-        #     tout = plt.Polygon(outer_points, edgecolor='k', fill=None)
-        #     ax.add_patch(tout)
-        
         _plt.xlabel(x_axis, {'size': 20})
         _plt.ylabel(y_axis, {'size': 20})
         _plt.xticks(list(range(len(xticks))), labels=xticks)
@@ -798,5 +846,3 @@ class VBDataFrame(object):
 
         if save_fig:
             _plt.savefig(fig_path, format=fig_format)
-
-        # return fig

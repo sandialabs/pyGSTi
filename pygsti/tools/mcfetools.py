@@ -4,12 +4,17 @@ Tools for analyzing MCFE data
 
 # TODO: add copyright statement
 
+from __future__ import annotations
+from typing import Optional
+
 import numpy as _np
 
 from pygsti.tools.rbtools import hamming_distance
 
+from pygsti.data.dataset import _DataSetRow
+from pygsti.circuits import Circuit as _Circuit
 
-def success_probability_to_polarization(s, n):
+def success_probability_to_polarization(s: float, n: int) -> float:
     """
     Utility function for MCFE VBDataFrame creation.
 
@@ -40,7 +45,7 @@ def success_probability_to_polarization(s, n):
         return s
     
 
-def polarization_to_success_probability(p, n):
+def polarization_to_success_probability(p: float, n: int) -> float:
     """
     Utility function for MCFE VBDataFrame creation.
 
@@ -71,7 +76,7 @@ def polarization_to_success_probability(p, n):
         return p
 
 
-def _polarization_to_fidelity(p, n):
+def polarization_to_fidelity(p: float, n: int) -> float:
     """
     Utility function for MCFE VBDataFrame creation.
 
@@ -102,7 +107,7 @@ def _polarization_to_fidelity(p, n):
         return p
 
 
-def fidelity_to_polarization(f, n):
+def fidelity_to_polarization(f: float, n: int) -> float:
     """
     Utility function for MCFE VBDataFrame creation.
 
@@ -133,7 +138,7 @@ def fidelity_to_polarization(f, n):
         return f
 
 
-def hamming_distance_counts(dsrow, circ, idealout):
+def hamming_distance_counts(dsrow: _DataSetRow, circ: _Circuit, idealout: str) -> _np.ndarray:
     """
     Utility function for MCFE VBDataFrame creation.
 
@@ -180,7 +185,7 @@ def hamming_distance_counts(dsrow, circ, idealout):
     return hamming_distance_counts
 
 
-def _adjusted_success_probability(hamming_distance_counts):
+def adjusted_success_probability(hamming_distance_counts: _np.ndarray) -> float:
     """
     Utility function for MCFE VBDataFrame creation.
 
@@ -213,7 +218,7 @@ def _adjusted_success_probability(hamming_distance_counts):
         return adjSP
     
 
-def effective_polarization(hamming_distance_counts):
+def effective_polarization(hamming_distance_counts: _np.ndarray) -> float:
     """
     Utility function for MCFE VBDataFrame creation.
 
@@ -240,7 +245,7 @@ def effective_polarization(hamming_distance_counts):
     """
 
     n = len(hamming_distance_counts) - 1 
-    asp = _adjusted_success_probability(hamming_distance_counts)
+    asp = adjusted_success_probability(hamming_distance_counts)
 
     if n < 20:
         return (4**n * asp - 1)/(4**n - 1)
@@ -248,7 +253,10 @@ def effective_polarization(hamming_distance_counts):
         return asp
 
 
-def rc_predicted_process_fidelity(bare_rc_effective_pols, rc_rc_effective_pols, reference_effective_pols, n):
+def rc_predicted_process_fidelity(bare_rc_effective_pols: _np.ndarray,
+                                  rc_rc_effective_pols: _np.ndarray,
+                                  reference_effective_pols: _np.ndarray,
+                                  n: int) -> float:
     """
     Utility function for MCFE VBDataFrame creation.
 
@@ -302,7 +310,7 @@ def rc_predicted_process_fidelity(bare_rc_effective_pols, rc_rc_effective_pols, 
     elif b <= 0:
         return 0.
     else:
-        pfid = _polarization_to_fidelity(a / _np.sqrt(b * c), n)
+        pfid = polarization_to_fidelity(a / _np.sqrt(b * c), n)
         if pfid < 0.0:
             return 0.0
         elif pfid > 1.0:
@@ -312,7 +320,9 @@ def rc_predicted_process_fidelity(bare_rc_effective_pols, rc_rc_effective_pols, 
         # return pfid
 
 
-def predicted_process_fidelity_for_central_pauli_mcs(central_pauli_effective_pols, reference_effective_pols, n):
+def predicted_process_fidelity_for_central_pauli_mcs(central_pauli_effective_pols: _np.ndarray,
+                                                     reference_effective_pols: _np.ndarray,
+                                                     n: int) -> float:
     """
     Utility function for MCFE VBDataFrame creation.
 
@@ -353,10 +363,16 @@ def predicted_process_fidelity_for_central_pauli_mcs(central_pauli_effective_pol
     elif a <= 0:
         return 0.
     else:
-        return _polarization_to_fidelity(_np.sqrt(a / c), n)
+        return polarization_to_fidelity(_np.sqrt(a / c), n)
     
 
-def rc_bootstrap_predicted_pfid(brs, rrs, refs, n, num_bootstraps=50, rand_state=None):
+def rc_bootstrap_predicted_pfid(brs: _np.ndarray,
+                                rrs: _np.ndarray,
+                                refs: _np.ndarray,
+                                n: int,
+                                num_bootstraps: Optional[int] = 50,
+                                rand_state: Optional[_np.random.RandomState] = None
+                                ) -> float:
     """
     Utility function for MCFE VBDataFrame creation.
 

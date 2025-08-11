@@ -5,54 +5,46 @@ Functions for creating mirror experiment designs for mirror circuit fidelity est
 #TODO: add copyright statement
 
 from __future__ import annotations
-from typing import Callable, Union, Literal, Optional, Tuple
+from typing import Callable, Union, Literal, Optional, Tuple, List, Dict, Any
 
 import numpy as _np
 import tqdm as _tqdm
 import warnings as _warnings
+import time
 
 from collections import defaultdict
 
 from pygsti.circuits.circuit import Circuit as _Circuit
-
+from pygsti.circuits import subcircuit_selection as _subcircsel
 from pygsti.protocols.protocol import FreeformDesign as _FreeformDesign
 from pygsti.protocols.protocol import CombinedExperimentDesign as _CombinedExperimentDesign
-
 from pygsti.processors import random_compilation as _rc
 
-from pygsti.circuits import subcircuit_selection as _subcircsel
 
-import time
+try:
+    import qiskit
+    if qiskit.__version__ != '1.1.1':
+        _warnings.warn("The mirroring functions 'qiskit_circuits_to_mirror_edesign'," \
+        "'qiskit_circuits_to_fullstack_mirror_edesign', and" \
+        "'qiskit_circuits_to_subcircuit_mirror_edesign are designed for qiskit 1.1.1. Your version is " + qiskit.__version__)
 
-
-# def get_active_qubits(circ, ignore=None):
-#     from qiskit.converters.circuit_to_dag import circuit_to_dag
-
-#     dag = circuit_to_dag(circ)
-#     active_qubits = [qubit for qubit in circ.qubits if qubit not in dag.idle_wires(ignore=ignore)]
-    
-#     return(active_qubits)
-
-def get_active_qubits_no_dag(circ, ignore=set()):
-    active_qubits = set()
-    for instruction, qargs, _ in circ.data:
-        if instruction.name in ignore:
-            continue
-        for qubit in qargs:
-            active_qubits.add(qubit)
-
-    return active_qubits
+    from qiskit import transpile
+except:
+    _warnings.warn("qiskit does not appear to be installed, and is required for the mirroring functions" \
+                   "'qiskit_circuits_to_mirror_edesign'," \
+                   "'qiskit_circuits_to_fullstack_mirror_edesign', and" \
+                   "'qiskit_circuits_to_subcircuit_mirror_edesign'.")
 
 
-def qiskit_circuits_to_fullstack_mirror_edesign(qk_circs, #not transpiled
-                                                    qk_backend=None,
-                                                    coupling_map=None,
-                                                    basis_gates=None,
-                                                    transpiler_kwargs_dict={},
-                                                    mirroring_kwargs_dict={},
-                                                    num_transpilation_attempts=100,
-                                                    return_qiskit_time=False
-                                                    ):
+def qiskit_circuits_to_fullstack_mirror_edesign(qk_circs: Union[Dict[Any, qiskit.QuantumCircuit], List[qiskit.QuantumCircuit]],
+                                                qk_backend: Optional[qiskit.providers.BackendV2] = None,
+                                                coupling_map: Optional[qiskit.transpiler.CouplingMap] = None,
+                                                basis_gates: Optional[List[str]] = None,
+                                                transpiler_kwargs_dict: Optional[Dict[str, Any]] = {},
+                                                mirroring_kwargs_dict: Optional[Dict[str, Any]] = {},
+                                                num_transpilation_attempts: Optional[int] = 100,
+                                                return_qiskit_time: Optional[bool] = False
+                                                ) -> Tuple[_FreeformDesign, _CombinedExperimentDesign]:
     """
     Create a full-stack benchmark from high-level Qiskit circuits.
 
@@ -126,21 +118,45 @@ def qiskit_circuits_to_fullstack_mirror_edesign(qk_circs, #not transpiled
                 in order to perform mirror circuit fidelity estimation.
 
             float, optional
-                amount of time spent in Qiskit transpiler.
-                
+                amount of time spent in Qiskit transpiler.        
     """
-
-    try:
-        import qiskit
-        if qiskit.__version__ != '1.1.1':
-            print("warning: 'qiskit_circuits_to_fullstack_mirror_edesign' is designed for qiskit 1.1.1. Your version is " + qiskit.__version__)
-
-        from qiskit import transpile
-    except:
-        raise RuntimeError('qiskit is required for this operation, and does not appear to be installed.')
 
     if qk_backend is None:
         assert coupling_map is not None and basis_gates is not None, "'coupling_map' and 'basis_gates' must be provided if 'qk_backend is not provided."
+
+
+    def get_active_qubits_no_dag(circ: qiskit.QuantumCircuit,
+                                 ignore: set = set()
+                                 ) -> List[qiskit.circuit.Qubit]:
+        """
+        Utility function for determining how many qubits are
+        active. A qubit is defined as active if there exists at
+        least one gate, excluding those in `ignore`,
+        that has support on that qubit.
+
+        Parameters
+        ------------
+        circ: pygsti.circuits.Circuit
+            Qiskit circuit whose active qubits are to be determined.
+
+        ignore: set, optional
+            set of Qiskit instruction names that are ignored for the
+            purposes of determining activity. For instance, it may be
+            reasonable to exclude barriers and measures.
+
+        Returns
+        ----------
+        List
+        """
+
+        active_qubits = set()
+        for instruction, qargs, _ in circ.data:
+            if instruction.name in ignore:
+                continue
+            for qubit in qargs:
+                active_qubits.add(qubit)
+
+        return active_qubits
 
     test_circ_dict = defaultdict(list)
     ref_circ_dict = defaultdict(list)
@@ -328,9 +344,10 @@ def qiskit_circuits_to_fullstack_mirror_edesign(qk_circs, #not transpiled
     else:
         return test_edesign, mirror_edesign
 
-def qiskit_circuits_to_mirror_edesign(qk_circs, # yes transpiled
-                                          mirroring_kwargs_dict={}
-                                          ):
+
+def qiskit_circuits_to_mirror_edesign(qk_circs: Union[Dict[Any, qiskit.QuantumCircuit], List[qiskit.QuantumCircuit]],
+                                    mirroring_kwargs_dict: Optional[Dict[str, Any]] = {}
+                                    ) -> Tuple[_FreeformDesign, _CombinedExperimentDesign]:
     """
     Create a noise benchmark from transpiled Qiskit circuits.
 
@@ -363,20 +380,8 @@ def qiskit_circuits_to_mirror_edesign(qk_circs, # yes transpiled
 
             pygsti.protocols.CombinedExperimentDesign
                 Experiment design containing all mirror circuits that must be executed
-                in order to perform mirror circuit fidelity estimation.
-                
+                in order to perform mirror circuit fidelity estimation.         
     """
-
-    try:
-        import qiskit
-        if qiskit.__version__ != '1.1.1':
-            print("warning: 'qiskit_circuits_to_mirror_edesign' is designed for qiskit 1.1.1. Your version is " + qiskit.__version__)
-
-        from qiskit import transpile
-
-    except:
-        raise RuntimeError('qiskit is required for this operation, and does not appear to be installed.')
-
 
     test_circ_dict = defaultdict(list)
     ref_circ_dict = defaultdict(list)
@@ -446,14 +451,14 @@ def qiskit_circuits_to_mirror_edesign(qk_circs, # yes transpiled
     return test_edesign, mirror_edesign
 
 
-def qiskit_circuits_to_subcircuit_mirror_edesign(qk_circs,
-                                              aggregate_subcircs,
-                                              width_depth_dict,
-                                              coupling_map,
-                                              instruction_durations,
-                                              subcirc_kwargs_dict={},
-                                              mirroring_kwargs_dict={}
-                                              ): # qk_circs must already be transpiled to the device
+def qiskit_circuits_to_subcircuit_mirror_edesign(qk_circs: Union[Dict[Any, qiskit.QuantumCircuit], List[qiskit.QuantumCircuit]],
+                                              aggregate_subcircs: bool,
+                                              width_depth_dict: Dict[int, List[int]],
+                                              coupling_map: qiskit.transpiler.CouplingMap,
+                                              instruction_durations: qiskit.transpiler.InstructionDurations,
+                                              subcirc_kwargs_dict: Optional[Dict[str, Any]] = {},
+                                              mirroring_kwargs_dict: Optional[Dict[str, Any]] = {}
+                                              ) -> Tuple[_FreeformDesign, _CombinedExperimentDesign]:
     """
     Create a subcircuit benchmark from transpiled Qiskit circuits.
 
@@ -522,18 +527,8 @@ def qiskit_circuits_to_subcircuit_mirror_edesign(qk_circs,
                 Experiment design(s) containing all mirror circuits that must be executed
                 in order to perform mirror circuit fidelity estimation. A dictionary is returned
                 if `aggregate_subcircs` is False, otherwise a FreeformDesign is returned.
-
     """
     
-    try:
-        import qiskit
-        if qiskit.__version__ != '1.1.1':
-            print("warning: 'qiskit_circuits_to_svb_mirror_edesign' is designed for qiskit 1.1.1. Your version is " + qiskit.__version__)
-
-        from qiskit import transpile
-    except:
-        raise RuntimeError('qiskit is required for this operation, and does not appear to be installed.')
-
     if isinstance(qk_circs, list):
         qk_circs = {i: qk_circ for i, qk_circ in enumerate(qk_circs)}
 
@@ -964,7 +959,7 @@ def compute_inverse(circ: _Circuit,
     
     return circ_inv
 
-def init_layer(qubits,
+def init_layer(qubits: List[str],
                gate_set: str,
                state_initialization: Optional[Union[str, Callable[..., _Circuit]]] = None,
                state_init_kwargs: Optional[dict] = None,

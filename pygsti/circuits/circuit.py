@@ -10,6 +10,9 @@ Defines the Circuit class
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
+from typing import Dict, Tuple, Union, Optional, List
+
 import collections as _collections
 import itertools as _itertools
 import warnings as _warnings
@@ -21,6 +24,16 @@ from pygsti.baseobjs import outcomelabeldict as _ld, _compatibility as _compat
 from pygsti.tools import internalgates as _itgs
 from pygsti.tools import slicetools as _slct
 from pygsti.tools.legacytools import deprecate as _deprecate_fn
+
+try:
+    import qiskit
+    if qiskit.__version__ != '1.1.1':
+        _warnings.warn("Circuit class method `from_qiskit()` and method `convert_to_qiskit`"
+                       "is designed for qiskit version 1.1.1 and may not \
+                        function properly for your qiskit version, which is " + qiskit.__version__)
+except ImportError:
+    _warnings.warn("Circuit class method `from_qiskit()` and method `convert_to_qiskit` require Qiskit," \
+    "which does not appear to be installed.")
 
 #Externally, we'd like to do thinks like:
 # c = Circuit( LabelList )
@@ -4073,12 +4086,14 @@ class Circuit(object):
             return cls(circuit_layers)        
 
     @classmethod
-    def from_qiskit(cls, circuit,
-                    qubit_conversion=None,
-                    qiskit_gate_conversion=None,
-                    use_standard_gate_conversion_as_backup=True,
-                    allow_different_gates_in_same_layer=True,
-                    verbose=False):
+    def from_qiskit(cls,
+                    circuit: qiskit.QuantumCircuit,
+                    qubit_conversion: Optional[Dict[qiskit.circuit.Qubit, str]] = None,
+                    qiskit_gate_conversion: Optional[Dict[str, str]] = None,
+                    use_standard_gate_conversion_as_backup: Optional[bool] = True,
+                    allow_different_gates_in_same_layer: Optional[bool] = True,
+                    verbose: Optional[bool] = False
+                    ) -> Tuple[Circuit, Dict[int, str]]:
         """
         Converts and instantiates a pyGSTi Circuit object from a Qiskit QuantumCircuit object.
 
@@ -4121,14 +4136,6 @@ class Circuit(object):
                 to the corresponding pyGSTi qubit.
         """
 
-        try:
-            import qiskit
-            if qiskit.__version__ != '1.1.1':
-                print("warning: Circuit class method 'from_qiskit()' is designed for qiskit version 1.1.1 and may not \
-                       function properly for your qiskit version, which is " + qiskit.__version__)
-        except ImportError:
-            raise ImportError("Qiskit is required for this operation, and it does not appear to be installed.")
-        
         #mapping between qiskit gates and pygsti gate names:
         if qiskit_gate_conversion is not None:
             if use_standard_gate_conversion_as_backup == True:
@@ -4150,7 +4157,6 @@ class Circuit(object):
 
         qubits = circuit.qubits
 
-        
         #ensure all of these have a conversion available.
         if qubit_conversion is not None:
             unmapped_qubits = set(qubits).difference(set(qubit_conversion.keys()))
@@ -4438,12 +4444,13 @@ class Circuit(object):
         return quil
 
 
-    def convert_to_qiskit(self, num_qubits=None,
-                          qubit_conversion=None,
-                          gatename_conversion=None,
-                          block_between_layers=True,
-                          qubits_to_measure=None,
-                          ):
+    def convert_to_qiskit(self,
+                          num_qubits: int = None,
+                          qubit_conversion: Optional[Union[str, Dict[str, Union[int, qiskit.circuit.Qubit]]]] = None,
+                          gatename_conversion: Optional[Dict[str, qiskit.circuit.Instruction]] = None,
+                          block_between_layers: Optional[bool] = True,
+                          qubits_to_measure: Optional[Union[str, List[str]]] = None,
+                          ) -> qiskit.QuantumCircuit:
 
         """
         Convert a pyGSTi circuit to a Qiskit QuantumCircuit.
