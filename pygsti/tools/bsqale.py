@@ -34,7 +34,7 @@ except:
                    "'qiskit_circuits_to_subcircuit_mirror_edesign'.")
     
 
-def noise_mirror_edesign(qk_circs: Union[Dict[Any, qiskit.QuantumCircuit], List[qiskit.QuantumCircuit]],
+def noise_mirror_benchmark(qk_circs: Union[Dict[Any, qiskit.QuantumCircuit], List[qiskit.QuantumCircuit]],
                          mirroring_kwargs_dict: Optional[Dict[str, Any]] = {}
                          ) -> Tuple[_FreeformDesign, _CombinedExperimentDesign]:
     """
@@ -76,7 +76,7 @@ def noise_mirror_edesign(qk_circs: Union[Dict[Any, qiskit.QuantumCircuit], List[
     return _mirror.qiskit_circuits_to_mirror_edesign(qk_circs, mirroring_kwargs_dict)
 
 
-def fullstack_mirror_edesign(qk_circs: Union[Dict[Any, qiskit.QuantumCircuit], List[qiskit.QuantumCircuit]],
+def fullstack_mirror_benchmark(qk_circs: Union[Dict[Any, qiskit.QuantumCircuit], List[qiskit.QuantumCircuit]],
                              qk_backend: Optional[qiskit.providers.BackendV2] = None,
                              coupling_map: Optional[qiskit.transpiler.CouplingMap] = None,
                              basis_gates: Optional[List[str]] = None,
@@ -172,7 +172,7 @@ def fullstack_mirror_edesign(qk_circs: Union[Dict[Any, qiskit.QuantumCircuit], L
                                                     )
 
 
-def subcircuit_mirror_edesign(qk_circs: Union[Dict[Any, qiskit.QuantumCircuit], List[qiskit.QuantumCircuit]],
+def subcircuit_mirror_benchmark(qk_circs: Union[Dict[Any, qiskit.QuantumCircuit], List[qiskit.QuantumCircuit]],
                               aggregate_subcircs: bool,
                               width_depth_dict: Dict[int, List[int]],
                               coupling_map: qiskit.transpiler.CouplingMap,
