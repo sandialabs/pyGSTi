@@ -61,8 +61,7 @@ ibmq = [
     'qiskit>1',
     'qiskit-ibm-runtime>=0.17.1',
     'tqdm>=4.42.0',
-    'dill',
-    'pathos'
+    'dill'
 ]
 interpygate = ['csaps']
 linting = [

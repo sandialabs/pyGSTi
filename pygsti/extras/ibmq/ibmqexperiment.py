@@ -12,8 +12,6 @@ from datetime import datetime as _datetime
 from functools import partial as _partial
 import json as _json
 import numpy as _np
-import os as _os
-from pathos import multiprocessing as _mp
 import pathlib as _pathlib
 import pickle as _pickle
 import time as _time
@@ -175,7 +173,6 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
 
         self.auxfile_types = {}
         _HasPSpec.__init__(self, pspec)
-
         self.edesign = edesign
         self.remove_duplicates = remove_duplicates
         self.randomized_order = randomized_order
