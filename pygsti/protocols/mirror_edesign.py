@@ -37,7 +37,7 @@ except:
 
 
 def qiskit_circuits_to_mirror_edesign(qk_circs: Union[Dict[Any, qiskit.QuantumCircuit], List[qiskit.QuantumCircuit]],
-                                    mirroring_kwargs_dict: Optional[Dict[str, Any]] = {}
+                                    mirroring_kwargs_dict: Dict[str, Any] = {}
                                     ) -> Tuple[_FreeformDesign, _CombinedExperimentDesign]:
     """
     Create a noise benchmark from transpiled Qiskit circuits.
@@ -146,10 +146,10 @@ def qiskit_circuits_to_fullstack_mirror_edesign(qk_circs: Union[Dict[Any, qiskit
                                                 qk_backend: Optional[qiskit.providers.BackendV2] = None,
                                                 coupling_map: Optional[qiskit.transpiler.CouplingMap] = None,
                                                 basis_gates: Optional[List[str]] = None,
-                                                transpiler_kwargs_dict: Optional[Dict[str, Any]] = {},
-                                                mirroring_kwargs_dict: Optional[Dict[str, Any]] = {},
-                                                num_transpilation_attempts: Optional[int] = 100,
-                                                return_qiskit_time: Optional[bool] = False
+                                                transpiler_kwargs_dict: Dict[str, Any] = {},
+                                                mirroring_kwargs_dict: Dict[str, Any] = {},
+                                                num_transpilation_attempts: int = 100,
+                                                return_qiskit_time: bool = False
                                                 ) -> Tuple[_FreeformDesign, _CombinedExperimentDesign]:
     """
     Create a full-stack benchmark from high-level Qiskit circuits.
@@ -456,8 +456,8 @@ def qiskit_circuits_to_subcircuit_mirror_edesign(qk_circs: Union[Dict[Any, qiski
                                               width_depth_dict: Dict[int, List[int]],
                                               coupling_map: qiskit.transpiler.CouplingMap,
                                               instruction_durations: qiskit.transpiler.InstructionDurations,
-                                              subcirc_kwargs_dict: Optional[Dict[str, Any]] = {},
-                                              mirroring_kwargs_dict: Optional[Dict[str, Any]] = {}
+                                              subcirc_kwargs_dict: Dict[str, Any] = {},
+                                              mirroring_kwargs_dict: Dict[str, Any] = {}
                                               ) -> Tuple[_FreeformDesign, _CombinedExperimentDesign]:
     """
     Create a subcircuit benchmark from transpiled Qiskit circuits.

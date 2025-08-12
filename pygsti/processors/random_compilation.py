@@ -4,6 +4,9 @@ Randomized circuit compilation via random compiling and central Pauli propagatio
 
 #TODO: add copyright statement
 
+from __future__ import annotations
+from typing import Literal, Optional, Union, List, Iterable, Dict, Tuple
+
 import numpy as _np
 
 from pygsti.circuits.circuit import Circuit as _Circuit
@@ -36,7 +39,11 @@ class RandomCompilation(object):
         A random state for reproducibility of random operations.
     """
 
-    def __init__(self, rc_strategy=None, return_bs=False, testing=False, rand_state=None): #pauli_rc, central_pauli are currently the supported options
+    def __init__(self,
+                 rc_strategy: Optional[Literal['rc', 'cp']] = None,
+                 return_bs: Optional[bool] = False,
+                 testing: Optional[bool] = False,
+                 rand_state: Optional[_np.random.RandomState] = None): #pauli_rc, central_pauli are currently the supported options
         """
         Initialize the RandomCompilation object.
 
@@ -44,8 +51,10 @@ class RandomCompilation(object):
         ----------
         rc_strategy : str
             The strategy used for randomized compilation. Currently,
-            'pauli_rc' (pauli randomized compiling on a U3-CX-CZ gate set) and
-            'central_pauli' (central Pauli propagation for a U3-CX-CZ gate set)
+            'pauli_rc' (pauli randomized compiling on a U3-CX-CZ gate set, see
+            https://arxiv.org/abs/2204.07568) and 'central_pauli'
+            (central Pauli propagation for a U3-CX-CZ gate set, see 
+            https://www.nature.com/articles/s41567-021-01409-7)
             are supported. Defaults to 'pauli_rc'.
 
         return_bs : bool
@@ -73,17 +82,26 @@ class RandomCompilation(object):
             self.rand_state = _np.random.RandomState()
 
 
-    def compile(self, circ: _Circuit, test_layers=None): # may need to a kwarg dict parameter to this function to allow for things to be passed to a given compilation choice
+    def compile(self,
+                circ: _Circuit,
+                test_layers: Optional[Union[List[_np.ndarray], _np.ndarray]] = None
+                ) -> _Circuit:
         """
         Compiles the given circuit using the specified randomized compilation strategy.
 
         Parameters
         -------------
         circ : pygsti.circuits.Circuit
-            The circuit to be compiled.
+            The n-qubit circuit to be compiled.
+
         test_layers : list[np.ndarray[int]], optional
             A list of test layers to be used in the random compilation
-            if `self.testing` is True. Default is None.
+            if `self.testing` is True. Layers are specified by a length-2*n array
+            whose entries are either 0 or 2. Indices 0:n correspond to Pauli Z errors:
+            a 2 indicates the presence an error. Likewise indices n:2*n indicate a
+            Pauli Z error. If using central Pauli, only one layer must be provided.
+            If using random compilation, a number of layers equal to the number of 
+            layers of single-qubit gates must be provided. Default is None.
 
         Returns
         --------
@@ -132,7 +150,13 @@ class RandomCompilation(object):
             raise ValueError(f"unknown compilation strategy '{self.rc_strategy}'!")
 
 
-def pauli_randomize_circuit(circ, rand_state=None, return_bs=False, return_target_pauli=False, insert_test_layers=False, test_layers=None):
+def pauli_randomize_circuit(circ: _Circuit,
+                            rand_state: Optional[_np.random.RandomState] = None,
+                            return_bs: bool = False,
+                            return_target_pauli: bool = False,
+                            insert_test_layers: bool = False,
+                            test_layers: Optional[List[_np.ndarray]] = None
+                            ) -> _Circuit:
     """
     Performs random compilation on a given circuit by inserting Pauli gates between layers.
 
@@ -255,7 +279,13 @@ def pauli_randomize_circuit(circ, rand_state=None, return_bs=False, return_targe
     return out
     
 
-def randomize_central_pauli(circ: _Circuit, rand_state=None, return_bs=False, return_target_pauli=False, insert_test_layer=False, test_layer=None):
+def randomize_central_pauli(circ: _Circuit,
+                            rand_state: Optional[_np.random.RandomState] = None,
+                            return_bs: bool = False,
+                            return_target_pauli: bool = False,
+                            insert_test_layer: bool = False,
+                            test_layer: Optional[_np.ndarray] = None
+                            ) -> _Circuit:
     """
     Perform circuit randomization by propagating a central Pauli layer through the circuit.
     This function is designed to handle the "back half" of the mirror circuit: i.e., given a circuit C
@@ -354,7 +384,11 @@ def randomize_central_pauli(circ: _Circuit, rand_state=None, return_bs=False, re
     return out
 
 
-def update_u3_parameters(layer, p, q, qubit_map):
+def update_u3_parameters(layer: Iterable[_Label],
+                         p: _np.ndarray,
+                         q: _np.ndarray,
+                         qubit_map: Union[Dict[str, int], Dict[int, int]]
+                         ) -> List[_Label]:
     """
     Updates the parameters of U3 gates in a given layer based on the provided Pauli random compiling vectors.
 
@@ -443,7 +477,7 @@ def update_u3_parameters(layer, p, q, qubit_map):
 
     return new_layer
 
-def mod_2pi(theta):
+def mod_2pi(theta: float) -> float:
     """
     Modifies an angle to be within the range of -π to π.
 
@@ -466,7 +500,9 @@ def mod_2pi(theta):
     return theta
 
 
-def pauli_vector_to_u3_layer(p, qubits):
+def pauli_vector_to_u3_layer(p: _np.ndarray,
+                             qubits: Union[List[str], List[int]]
+                             ) -> _Label:
     """
     Converts a Pauli vector into a corresponding layer of U3 gates.
 
@@ -512,7 +548,9 @@ def pauli_vector_to_u3_layer(p, qubits):
 
     return _Label(layer)
 
-def haar_random_u3_layer(qubits, rand_state=None):
+def haar_random_u3_layer(qubits: Union[List[str], List[int]],
+                         rand_state: Optional[_np.random.RandomState] = None
+                         ) -> _Label:
     """
     Generates a layer of Haar-random U3 gates.
 
@@ -531,7 +569,9 @@ def haar_random_u3_layer(qubits, rand_state=None):
     
     return _Label([haar_random_u3(q, rand_state) for q in qubits])
 
-def haar_random_u3(q, rand_state=None):
+def haar_random_u3(q: Union[str, int],
+                   rand_state: Optional[_np.random.RandomState] = None
+                   ) -> _Label:
     """
     Generates a Haar-random U3 gate.
 
@@ -586,7 +626,7 @@ def u3_cx_cz_inv(circ: _Circuit) -> _Circuit:
 
     return inverse_circ
 
-def gate_inverse(label):
+def gate_inverse(label: _Label) -> _Label:
     """
     Computes the inverse of a given gate label.
 
@@ -612,7 +652,7 @@ def gate_inverse(label):
     else:
         raise RuntimeError(f'cannot compute gate inverse for {label}')
 
-def inverse_u3(args):
+def inverse_u3(args: Tuple[float, float, float]) -> Tuple[float, float, float]:
     """
     Computes the inverse parameters for a U3 gate given its parameters.
 
@@ -633,7 +673,9 @@ def inverse_u3(args):
     return (theta_inv, phi_inv, lambda_inv)
 
 
-def pad_layer(layer, qubits):
+def pad_layer(layer: Iterable[_Label],
+              qubits: Union[List[str], List[int]]
+              ) -> List[_Label]:
     """
     Pads a layer of gates with idle gates for any unused qubits.
 

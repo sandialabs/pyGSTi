@@ -10,7 +10,7 @@ Techniques for manipulating benchmarking data stored in a Pandas DataFrame.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 from __future__ import annotations
-from typing import Callable, Union, Literal, Optional, Tuple
+from typing import Callable, Literal, Optional, Self
 
 import warnings as _warnings
 
@@ -228,9 +228,9 @@ class VBDataFrame(object):
                                dropped_gates: bool = False,
                                bootstrap: bool = True,
                                num_bootstraps: int = 50,
-                               rand_state: _np.random.RandomState = None,
+                               rand_state: Optional[_np.random.RandomState] = None,
                                verbose: bool = False,
-                               ) -> VBDataFrame:
+                               ) -> Self:
         """
         Create a dataframe from MCFE data and edesigns.
 
@@ -721,7 +721,7 @@ class VBDataFrame(object):
     def create_vb_plot(self,
                        title: str,
                        accumulator: Callable = _np.mean,
-                       cp_or_rc: str = 'rc',
+                       cp_or_rc: Literal['cp', 'rc'] = 'rc',
                        show_dropped_gates: bool = False,
                        dg_accumulator: Callable = _np.mean,
                        cmap: _mp.colors.Colormap = None,

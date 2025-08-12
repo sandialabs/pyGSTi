@@ -5,7 +5,7 @@ Utility functions for subcircuit selection
 #TODO: add copyright statement
 
 from __future__ import annotations
-from typing import Dict, List, Tuple, Callable, Union, Optional, Any
+from typing import Dict, List, Tuple, Callable, Union, Optional, Any, Protocol, Literal, Set
 
 
 import warnings as _warnings
@@ -18,25 +18,38 @@ import tqdm as _tqdm
 import numpy as _np
 import json as _json
 
-
 from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.protocols.protocol import FreeformDesign as _FreeformDesign
 from pygsti.tools import internalgates as _itgs
 
+try:
+    import qiskit
+    if qiskit.__version__ != '1.1.1':
+        _warnings.warn("The qiskit functionality of subcircuit selection is designed for qiskit 1.1.1." \
+        "Your version is " + qiskit.__version__)
+except:
+    _warnings.warn("Qiskit does not appear to be installed." \
+    "If providing a CouplingMap for `coupling_map`, qiskit must be installed.")
+
+
+class HasGetMethod(Protocol):
+    def get(gate_name: str, qubits: List[int]) -> float:
+        pass
+
 
 def sample_subcircuits(full_circs: Union[_Circuit, List[_Circuit]],
                        width_depths: Dict[int, List[int]],
-                       instruction_durations,
-                       coupling_map,
+                       instruction_durations: Union[qiskit.transpiler.InstructionDurations, HasGetMethod],
+                       coupling_map: Union[str, List[int], List[str], qiskit.transpiler.CouplingMap],
                        num_samples_per_width_depth: int = 10,
-                       strategy: Union[str, Callable[..., Any]] = 'simple',
-                       strategy_args: Dict = None,
-                       depth_metric = 'layer_count',
-                       num_test_samples: int = None,
+                       strategy: Union[Literal['simple', 'greedy'], Callable[..., Any]] = 'simple',
+                       strategy_args: Optional[dict] = None,
+                       depth_metric: Literal['layer_count', 'falcon_depth'] = 'layer_count',
+                       num_test_samples: Optional[int] = None,
                     #    subgraph_cache = None,
                        rand_state: Optional[_np.random.RandomState] = None,
-                       ):    
+                       ) -> _FreeformDesign:    
     """
     Samples subcircuits from a full circuit based on specified width and depth pairs.
 
@@ -148,16 +161,24 @@ def sample_subcircuits(full_circs: Union[_Circuit, List[_Circuit]],
 
     return _FreeformDesign(subcircuits)
 
-def simple_weighted_subcirc_selection(full_circ, width, depth, num_subcircs,
-                                      coupling_map,
-                                      instruction_durations,
-                                      depth_metric='layer_count',
+def simple_weighted_subcirc_selection(full_circ: _Circuit,
+                                      width: int,
+                                      depth: int,
+                                      num_subcircs: int,
+                                      coupling_map: Union[str, List[int], List[str], qiskit.transpiler.CouplingMap],
+                                      instruction_durations: Union[qiskit.transpiler.InstructionDurations, HasGetMethod],
+                                      depth_metric: Literal['layer_count', 'falcon_depth'] = 'layer_count',
                                     #   subgraph_cache=None,
-                                      rand_state=None,
-                                      return_depth_info=False,
-                                      stochastic_2q_drops=False,
-                                      verbosity=1,
-                                      ):
+                                      rand_state: Optional[_np.random.RandomState] = None,
+                                      return_depth_info: bool = False,
+                                      stochastic_2q_drops: bool = False,
+                                      verbosity: Literal[0, 1] = 1,
+                                      ) -> List[List[_Circuit], 
+                                                List[int],
+                                                Optional[List[int]],
+                                                Optional[List[Tuple[int, int]]],
+                                                Optional[List[int]],
+                                                Optional[List[List[int]]]]:
     """
     Samples subcircuits from a full circuit using a simple approach. The simple approach
     is to identify a starting layer, along with a connected subset of active qubits, and
@@ -241,23 +262,15 @@ def simple_weighted_subcirc_selection(full_circ, width, depth, num_subcircs,
         qubit_subset = random_connected_subgraph(G, width, rand_state)
 
     else: # likely the coupling_map is a CouplingMap instance
-        try:
-            import qiskit
-            if qiskit.__version__ != '1.1.1':
-                print("warning: 'qiskit_circuits_to_svb_mirror_edesign' is designed for qiskit 1.1.1. Your version is " + qiskit.__version__)
-        except:
-            raise RuntimeError('qiskit is required for this operation, and does not appear to be installed.')
-        
-        if isinstance(coupling_map, qiskit.transpiler.CouplingMap):
-            edges = []
-            for cs in coupling_map:
-                qubits = [f'Q{c}' for c in cs]
-                if all([q in full_circ.line_labels for q in qubits]):
-                    edges.append(qubits)
-    
-            G = _nx.Graph()
-            G.add_edges_from(edges)
-            qubit_subset = random_connected_subgraph(G, width, rand_state) 
+        edges = []
+        for cs in coupling_map:
+            qubits = [f'Q{c}' for c in cs]
+            if all([q in full_circ.line_labels for q in qubits]):
+                edges.append(qubits)
+
+        G = _nx.Graph()
+        G.add_edges_from(edges)
+        qubit_subset = random_connected_subgraph(G, width, rand_state) 
 
     # generate subgraph of desired width
 
@@ -450,8 +463,16 @@ def simple_weighted_subcirc_selection(full_circ, width, depth, num_subcircs,
     
     return returns
 
-def greedy_growth_subcirc_selection(full_circ, width, depth, num_subcircs=1, num_test_subcircs=10,
-        rand_state=None, verbosity=1, return_depth_info=False):    
+def greedy_growth_subcirc_selection(full_circ: _Circuit,
+                                    width: int,
+                                    depth: int,
+                                    num_subcircs: int = 1,
+                                    num_test_subcircs: int = 10,
+                                    rand_state: Optional[_np.random.RandomState] = None,
+                                    verbosity: Literal[0, 1] = 1,
+                                    return_depth_info: bool = False
+                                    ) -> Tuple[List[_Circuit], List[int],
+                                            Optional[List[int]], Optional[List[Tuple[int,int]]]]:    
     """
     Selects subcircuits using a greedy growth strategy, starting with one gate in one layer
     and adding gates with overlapping support in subsequent layers.
@@ -550,7 +571,12 @@ def greedy_growth_subcirc_selection(full_circ, width, depth, num_subcircs=1, num
     return list(selected_subcircs), dropped_counts
 
 # Workhorse function for greedy growth subcircuit selection
-def _greedy_growth_subcirc(circ, width, depth, rand_state, verbosity=0):
+def _greedy_growth_subcirc(circ: _Circuit,
+                           width: int,
+                           depth: int,
+                           rand_state: _np.random.RandomState,
+                           verbosity: Literal[0, 1] = 0
+                           ) -> Tuple[_Circuit, int, int, Tuple[int, int]]:
     """
     Workhorse function for greedy generation of candidate subcircuits.
 
@@ -590,7 +616,7 @@ def _greedy_growth_subcirc(circ, width, depth, rand_state, verbosity=0):
     physical_depth = 2 if ops[op_idx].name == 'Gu3' else 1
     
     # Helper function for adding new layers to our subcircuit
-    def add_new_layer(layer_idx):
+    def add_new_layer(layer_idx: int) -> Tuple[Set[_Label], int, int]:
         """
         Helper function for adding new layers to the subcircuit.
 
@@ -721,26 +747,10 @@ def _greedy_growth_subcirc(circ, width, depth, rand_state, verbosity=0):
     return _Circuit(subcirc_layers, line_labels=qubit_subset), total_dropped_gates, physical_depth, (start, end)
 
 
-# def test_strategy(full_circ, width, depth, test_param, num_subcircs=1,
-#                 #   arch=None,
-#                 #   subgraph_cache=None,
-#                                       rand_state=None, verbosity=1, return_depth_info=False,
-#                                       stochastic_2q_drops=False):
-    
-#     """
-#     TODO: add docstring
-#     """
-
-#     print(test_param)
-#     subcircs, drops = simple_weighted_subcirc_selection(full_circ, width, depth, num_subcircs=num_subcircs,
-#                                                       rand_state=rand_state,
-#                                                     #   arch=arch, subgraph_cache=subgraph_cache,
-#                                                       verbosity=0)
-    
-#     return subcircs, drops
-
-
-def random_connected_subgraph(G, width, rand_state=None):
+def random_connected_subgraph(G: _nx.Graph,
+                              width: int,
+                              rand_state: Optional[_np.random.RandomState] = None
+                              ) -> Union[Set[int], Set[str]]:
     """
     Generates a random set of nodes that form a 
     connected subgraph of a specified width from a given graph.

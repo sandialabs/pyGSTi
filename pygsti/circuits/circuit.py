@@ -11,7 +11,7 @@ Defines the Circuit class
 #***************************************************************************************************
 
 from __future__ import annotations
-from typing import Dict, Tuple, Union, Optional, List
+from typing import Dict, Tuple, Union, Optional, List, Self
 
 import collections as _collections
 import itertools as _itertools
@@ -4090,10 +4090,10 @@ class Circuit(object):
                     circuit: qiskit.QuantumCircuit,
                     qubit_conversion: Optional[Dict[qiskit.circuit.Qubit, str]] = None,
                     qiskit_gate_conversion: Optional[Dict[str, str]] = None,
-                    use_standard_gate_conversion_as_backup: Optional[bool] = True,
-                    allow_different_gates_in_same_layer: Optional[bool] = True,
-                    verbose: Optional[bool] = False
-                    ) -> Tuple[Circuit, Dict[int, str]]:
+                    use_standard_gate_conversion_as_backup: bool = True,
+                    allow_different_gates_in_same_layer: bool = True,
+                    verbose: bool = False
+                    ) -> Tuple[Self, Dict[int, str]]:
         """
         Converts and instantiates a pyGSTi Circuit object from a Qiskit QuantumCircuit object.
 
@@ -4448,7 +4448,7 @@ class Circuit(object):
                           num_qubits: int = None,
                           qubit_conversion: Optional[Union[str, Dict[str, Union[int, qiskit.circuit.Qubit]]]] = None,
                           gatename_conversion: Optional[Dict[str, qiskit.circuit.Instruction]] = None,
-                          block_between_layers: Optional[bool] = True,
+                          block_between_layers: bool = True,
                           qubits_to_measure: Optional[Union[str, List[str]]] = None,
                           ) -> qiskit.QuantumCircuit:
 
