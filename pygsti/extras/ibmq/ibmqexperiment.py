@@ -112,6 +112,9 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
             exp_dir = p / 'ibmqexperiment'
             attributes_from_meta = _io.load_meta_based_dir(exp_dir)
 
+            if attributes_from_meta['batch_results'] is None:
+                attributes_from_meta['batch_results'] = []
+
             # Don't override checkpoint during this construction
             ret = cls(edesign, None, disable_checkpointing=True)
             ret.__dict__.update(attributes_from_meta)
