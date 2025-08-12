@@ -10,7 +10,7 @@ Techniques for manipulating benchmarking data stored in a Pandas DataFrame.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 from __future__ import annotations
-from typing import Callable, Literal, Optional, Self
+from typing import Callable, Literal, Optional
 
 import warnings as _warnings
 

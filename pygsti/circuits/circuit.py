@@ -11,7 +11,7 @@ Defines the Circuit class
 #***************************************************************************************************
 
 from __future__ import annotations
-from typing import Dict, Tuple, Union, Optional, List, Self
+from typing import Dict, Tuple, Union, Optional, List
 
 import collections as _collections
 import itertools as _itertools
