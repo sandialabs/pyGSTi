@@ -4093,7 +4093,7 @@ class Circuit(object):
                     use_standard_gate_conversion_as_backup: bool = True,
                     allow_different_gates_in_same_layer: bool = True,
                     verbose: bool = False
-                    ) -> Tuple[Self, Dict[int, str]]:
+                    ) -> Tuple[Circuit, Dict[int, str]]:
         """
         Converts and instantiates a pyGSTi Circuit object from a Qiskit QuantumCircuit object.
 

@@ -230,7 +230,7 @@ class VBDataFrame(object):
                                num_bootstraps: int = 50,
                                rand_state: Optional[_np.random.RandomState] = None,
                                verbose: bool = False,
-                               ) -> Self:
+                               ) -> VBDataFrame:
         """
         Create a dataframe from MCFE data and edesigns.
 

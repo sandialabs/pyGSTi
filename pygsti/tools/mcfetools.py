@@ -19,9 +19,9 @@ def success_probability_to_polarization(s: float, n: int) -> float:
     Utility function for MCFE VBDataFrame creation.
 
     Maps a success probablity `s` for an n-qubit circuit to
-    the polarization `s`, defined by `p = (s - 1/4^n)/(1 - 1/4^n)`.
+    the polarization `s`, defined by `p = (s - 1/2^n)/(1 - 1/2^n)`.
     For large n, the difference between `p` and `s` is negligible
-    and the calculation of 4**n is prohibitive, so we impose
+    and the calculation of 2**n is prohibitive, so we impose
     a cutoff above which we assert `p = s`.
     
     Parameters
@@ -40,7 +40,7 @@ def success_probability_to_polarization(s: float, n: int) -> float:
     """
 
     if n < 20:
-        return (s - 1 / 4**n) / (1 - 1 / 4**n) 
+        return (s - 1 / 2**n) / (1 - 1 / 2**n) 
     else:
         return s
     
@@ -50,7 +50,7 @@ def polarization_to_success_probability(p: float, n: int) -> float:
     Utility function for MCFE VBDataFrame creation.
 
     Maps a polarization `p` for an n-qubit circuit to
-    the success probability `s`, defined by `s = p * (1 - 1/4**n) + 1/4**n`.
+    the success probability `s`, defined by `s = p * (1 - 1/2**n) + 1/2**n`.
     For large n, the difference between `p` and `s` is negligible
     and the calculation of 2**n is prohibitive, so we impose
     a cutoff above which we assert `s = p`.
@@ -71,7 +71,7 @@ def polarization_to_success_probability(p: float, n: int) -> float:
     """
 
     if n < 20:
-        return p * (1 - 1 / 4**n) + 1 / 4**n
+        return p * (1 - 1 / 2**n) + 1 / 2**n
     else:
         return p
 
