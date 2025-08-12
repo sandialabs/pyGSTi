@@ -559,10 +559,6 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         # We want to use transpile_batch and it's the same pm/convert kwargs, so create a new function with partially applied kwargs
         # This function now only takes circs as an argument (which are our task elements above)
         task_fn = _partial(_transpile_batch, pass_manager=pm, qasm_convert_kwargs=qasm_convert_kwargs)
-
-        # Run in parallel (p.imap) with progress bars (tqdm)
-        #with _mp.Pool(num_workers) as p:
-        #    isa_circuits = list(_tqdm.tqdm(p.imap(task_fn, tasks), total=len(tasks)))
         for task in _tqdm.tqdm(tasks):
             self.qiskit_isa_circuit_batches.append(task_fn(task))
 
