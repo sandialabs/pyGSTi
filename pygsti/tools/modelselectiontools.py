@@ -388,3 +388,17 @@ def compare_parameters_simple(parent_model_vec, red_model_vec, projector_matrix)
     assert len(red_model_vec) == j
     for row in table_data:
         print("{: <25} {: <25}".format(*row), '\n')
+
+def approx_logl(x, x0, embedder, H, expansion_point_logl):
+    embedded_x = embedder @ x
+    return .5*(embedded_x - x0).T  @ H  @ (embedded_x - x0) + expansion_point_logl
+
+def create_approx_logl_fn(H, x0, initial_logl):
+    constant_term = x0.T @ H @ x0 + initial_logl
+    def approx_logl(red_row_H, red_rowandcol_H, param_to_remove):
+        red_rowandcol_H = _np.delete(_np.delete(red_rowandcol_H, param_to_remove, axis=0), param_to_remove, axis=1)
+        red_row_H = _np.delete(red_row_H, param_to_remove, axis=0)
+        return constant_term - x0.T @ red_row_H.T @ _np.linalg.inv(red_rowandcol_H) @ red_row_H @ x0
+    
+    return approx_logl
+    
