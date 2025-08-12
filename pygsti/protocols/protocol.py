@@ -951,7 +951,7 @@ class ExperimentDesign(_TreeNode, _MongoSerializable):
         """
         raise NotImplementedError("This protocol edesign cannot create any subdata!")
 
-    def promote_to_combined(self, name="**0"):
+    def promote_to_combined(self, name="subdesign-0"):
         """
         Promote this experiment design to be a combined experiment design.
 
@@ -1311,7 +1311,7 @@ class CombinedExperimentDesign(CanCreateAllCircuitsDesign):  # for multiple desi
         A dictionary of other :class:`ExperimentDesign` objects whose keys
         are names for each sub-edesign (used for directories and to index
         the sub-edesigns from this experiment design).  If a list is given instead,
-        a default names of the form " `**<number>` " are used.
+        a default names of the form " `subdesign-<number>` " are used.
 
     all_circuits : list, optional
         A list of :class:`Circuit`s, specifying all the circuits needing
@@ -1407,7 +1407,7 @@ class CombinedExperimentDesign(CanCreateAllCircuitsDesign):  # for multiple desi
             A dictionary of other :class:`ExperimentDesign` objects whose keys
             are names for each sub-edesign (used for directories and to index
             the sub-edesigns from this experiment design).  If a list is given instead,
-            a default names of the form " `**<number>` " are used.
+            a default names of the form " `subdesign-<number>` " are used.
 
         all_circuits : list, optional
             A list of :class:`Circuit`s, specifying all the circuits needing
@@ -1436,7 +1436,7 @@ class CombinedExperimentDesign(CanCreateAllCircuitsDesign):  # for multiple desi
         """
 
         if not isinstance(sub_designs, dict):
-            sub_designs = {("**%d" % i): des for i, des in enumerate(sub_designs)}
+            sub_designs = {f'subdesign-{i}': des for i, des in enumerate(sub_designs)}
 
         if all_circuits is None:
             all_circuits = self._create_all_circuits_needing_data(sub_designs, interleave)
