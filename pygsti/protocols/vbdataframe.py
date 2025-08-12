@@ -225,7 +225,7 @@ class VBDataFrame(object):
     def from_mirror_experiment(cls,
                                unmirrored_design: _FreeformDesign,
                                mirrored_data: _ProtocolData,
-                               dropped_gates: bool = False,
+                               include_dropped_gates: bool = False,
                                bootstrap: bool = True,
                                num_bootstraps: int = 50,
                                rand_state: Optional[_np.random.RandomState] = None,
@@ -243,9 +243,11 @@ class VBDataFrame(object):
             Data object containing the full mirror edesign and the outcome counts for each
             circuit in the full mirror edesign.
 
-        verbose: bool
-            Toggle print statements with debug information. If True, print statements are
-            turned on. If False, print statements are omitted.
+        include_dropped_gates: bool
+            Whether to include the number of gates dropped from each subcircuit during
+            subcircuit creation. This flag should be set to False for noise benchmark and
+            fullstack benchmark analysis, but can be set to True for subcircuit benchmark
+            analysis. Default is False.
 
         bootstrap: bool
             Toggle the calculation of error bars from bootstrapped process fidelity calculations. If True,
@@ -257,6 +259,10 @@ class VBDataFrame(object):
 
         rand_state: np.random.RandomState
             random state used to seed bootstrapping. If 'bootstrap' is set to False, this argument is ignored.
+
+        verbose: bool
+            Toggle print statements with debug information. If True, print statements are
+            turned on. If False, print statements are omitted.
 
         Returns
         ---------
@@ -350,7 +356,7 @@ class VBDataFrame(object):
                     # TODO: add 2Q gate density metric
                     # pygsti_depths[key] = orig_circ.depth
                     # idling_qubits[key] = len(orig_circ.idling_lines())
-                    if dropped_gates:
+                    if include_dropped_gates:
                         dropped_gates[key] = aux['base_aux']['dropped_gates']
                     occurrences[key] = len(auxlist)
 
@@ -421,7 +427,7 @@ class VBDataFrame(object):
                         # 'Total Counts': 1024 # Reevaluate whether this 'Total Counts' key should be hard-coded, especially if we run circuits with more shots.
                         }
             
-            if dropped_gates:
+            if include_dropped_gates:
                 data_dict['Dropped Gates'] = dropped_gates[key]
                 
         # Depth is doubled for conventions (same happens for RMC/PMC)
@@ -806,7 +812,6 @@ class VBDataFrame(object):
         xmap = {j: i for i, j in enumerate(xticks)}
         ymap = {j: i for i, j in enumerate(yticks)}
         
-        # Jordan-Wigner (upper left triangle)
         acc_values = self.dataframe.groupby([x_axis, y_axis])[c_axis].apply(accumulator)
         if show_dropped_gates:
             dg_values = self.dataframe.groupby([x_axis, y_axis])["Dropped Gates"].apply(dg_accumulator)
@@ -820,7 +825,7 @@ class VBDataFrame(object):
             cval = acc_values[(xlbl, ylbl)]
             if show_dropped_gates:
                 dgval = dg_values[(xlbl, ylbl)]
-            # Inner triange: Smaller by ratio of dropped gates
+                # Inner square: Smaller by ratio of dropped gates
                 inside = side * (xlbl-dgval)/xlbl
 
             else:
@@ -830,7 +835,7 @@ class VBDataFrame(object):
             tin = _plt.Polygon(inpoints, color=cmap(cval))
             ax.add_patch(tin)
             
-            # Outer Triangle
+            # Outer square
             outer_points = [(x-side, y-side), (x-side, y+side), (x+side, y+side), (x+side, y-side)]
             tout = _plt.Polygon(outer_points, edgecolor='k', fill=None)
             ax.add_patch(tout)

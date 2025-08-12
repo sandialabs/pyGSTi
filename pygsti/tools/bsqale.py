@@ -263,7 +263,7 @@ def subcircuit_mirror_benchmark(qk_circs: Union[Dict[Any, qiskit.QuantumCircuit]
 
 def calculate_mirror_benchmark_results(unmirrored_design: _FreeformDesign,
                                        mirrored_data: _ProtocolData,
-                                       dropped_gates: bool = False,
+                                       include_dropped_gates: bool = False,
                                        bootstrap: bool = True,
                                        num_bootstraps: int = 50,
                                        rand_state: _np.random.RandomState = None,
@@ -281,9 +281,11 @@ def calculate_mirror_benchmark_results(unmirrored_design: _FreeformDesign,
             Data object containing the full mirror edesign and the outcome counts for each
             circuit in the full mirror edesign.
 
-        verbose: bool
-            Toggle print statements with debug information. If True, print statements are
-            turned on. If False, print statements are omitted.
+        include_dropped_gates: bool
+            Whether to include the number of gates dropped from each subcircuit during
+            subcircuit creation. This flag should be set to False for noise benchmark and
+            fullstack benchmark analysis, but can be set to True for subcircuit benchmark
+            analysis. Default is False.
 
         bootstrap: bool
             Toggle the calculation of error bars from bootstrapped process fidelity calculations. If True,
@@ -296,14 +298,19 @@ def calculate_mirror_benchmark_results(unmirrored_design: _FreeformDesign,
         rand_state: np.random.RandomState
             random state used to seed bootstrapping. If 'bootstrap' is set to False, this argument is ignored.
 
+        verbose: bool
+            Toggle print statements with debug information. If True, print statements are
+            turned on. If False, print statements are omitted.
+
         Returns
         ---------
         VBDataFrame
             A VBDataFrame whose dataframe contains calculated MCFE values and circuit statistics.
+        
         """
 
     return _VBDataFrame.from_mirror_experiment(unmirrored_design, mirrored_data,
-                                                          dropped_gates,
+                                                          include_dropped_gates,
                                                           bootstrap,
                                                           num_bootstraps,
                                                           rand_state,
