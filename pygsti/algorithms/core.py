@@ -765,19 +765,21 @@ def run_iterative_gst(dataset, start_model, circuit_lists,
 
     models = []
     optimums = []
+    mdc_store_list = []
 
     for i in range(len(circuit_lists)):
         #then do the final iteration slightly differently since the generator should
         #give three return values.
         if i==len(circuit_lists)-1:
-            mdl_iter, opt_iter, final_objfn =  next(gst_iter_gen)
+                mdl_iter, opt_iter, mdc_store_iter, final_objfn = next(gst_iter_gen)
         else:
-            mdl_iter, opt_iter =  next(gst_iter_gen)
+            mdl_iter, opt_iter, mdc_store_iter =  next(gst_iter_gen)
 
         models.append(mdl_iter)
         optimums.append(opt_iter)
+        mdc_store_list.append(mdc_store_iter)
         
-    return models, optimums, final_objfn
+    return models, optimums, final_objfn, mdc_store_list
 
 def iterative_gst_generator(dataset, start_model, circuit_lists,
                       optimizer, iteration_objfn_builders, final_objfn_builders,
@@ -927,7 +929,6 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
                     first_iter_optimizer = _copy.deepcopy(optimizer)  # use a separate copy of optimizer, as it
                     first_iter_optimizer.fditer = optimizer.first_fditer  # is a persistent object (so don't modify!)
                     opt_result, mdc_store = run_gst_fit(mdc_store, first_iter_optimizer, obj_fn_builder, printer - 1)
-
                 else:
                     opt_result, mdc_store = run_gst_fit(mdc_store, optimizer, obj_fn_builder, printer - 1)
                 profiler.add_time('run_iterative_gst: iter %d %s-opt' % (i + 1, obj_fn_builder.name), tNxt)
@@ -944,7 +945,6 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
                     mdl.basis = start_model.basis
                     opt_result, mdc_store = run_gst_fit(mdc_store, optimizer, obj_fn_builder, printer - 1)
                     profiler.add_time('run_iterative_gst: final %s opt' % obj_fn_builder.name, tNxt)
-
                 tNxt = _time.time()
                 printer.log("Final optimization took %.1fs\n" % (tNxt - tRef), 2)
                 tRef = tNxt
@@ -954,11 +954,13 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
                 # Note: initial_mdc_store is *not* an objective fn (it's just a store) so don't send it back.
                 if mdc_store is not initial_mdc_store:
                     final_objfn = mdc_store
-
-                yield (mdc_store.model, opt_result, final_objfn)
+                yield (mdc_store.model, opt_result, mdc_store, final_objfn)
             else:
-                #If not the final iteration then only send back a copy of the model and the optimizer results
-                yield (mdc_store.model.copy(), opt_result)
+                #If not the final iteration then send back a copy of the model and the optimizer results
+                #mdc_store gets re-initialized at the start of each circuit list iteration, and doesn't appear
+                #to get propagated beyond that point so sending it back directly without copying (which would
+                #probably require implementing a custom method for MDC store objects) should be fairly safe.
+                yield (mdc_store.model.copy(), opt_result, mdc_store)
 
     printer.log('Iterative GST Total Time: %.1fs' % (_time.time() - tStart))
     profiler.add_time('run_iterative_gst: total time', tStart)

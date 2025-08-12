@@ -17,7 +17,7 @@ from pygsti.modelmembers.states.state import State as _State
 from pygsti.modelmembers.states.staticstate import StaticState as _StaticState
 from pygsti.modelmembers import modelmember as _modelmember, term as _term
 from pygsti.modelmembers.errorgencontainer import ErrorMapContainer as _ErrorMapContainer
-
+from pygsti import SpaceT
 
 class ComposedState(_State):  # , _ErrorMapContainer
     """
@@ -115,7 +115,7 @@ class ComposedState(_State):  # , _ErrorMapContainer
         self.local_term_poly_coeffs = {}
         super().set_gpindices(gpindices, parent, memo)
 
-    def to_dense(self, on_space='minimal', scratch=None):
+    def to_dense(self, on_space: SpaceT='minimal', scratch=None):
         """
         Return this state vector as a (dense) numpy array.
 
@@ -291,7 +291,7 @@ class ComposedState(_State):  # , _ErrorMapContainer
         numpy array
             Array of derivatives, shape == (dimension, num_params)
         """
-        dmVec = self.state_vec.to_dense(on_space='minimal')
+        dmVec = self.state_vec.to_dense("minimal")
 
         derrgen = self.error_map.deriv_wrt_params(wrt_filter)  # shape (dim*dim, n_params)
         derrgen.shape = (self.dim, self.dim, derrgen.shape[1])  # => (dim,dim,n_params)
@@ -323,7 +323,7 @@ class ComposedState(_State):  # , _ErrorMapContainer
         numpy array
             Hessian with shape (dimension, num_params1, num_params2)
         """
-        dmVec = self.state_vec.to_dense(on_space='minimal')
+        dmVec = self.state_vec.to_dense("minimal")
 
         herrgen = self.error_map.hessian_wrt_params(wrt_filter1, wrt_filter2)  # shape (dim*dim, nParams1, nParams2)
         herrgen.shape = (self.dim, self.dim, herrgen.shape[1], herrgen.shape[2])  # => (dim,dim,nParams1, nParams2)
@@ -446,17 +446,25 @@ class ComposedState(_State):  # , _ErrorMapContainer
         self.error_map.depolarize(amount)
         self._update_rep()
 
-    def errorgen_coefficient_labels(self):
+    def errorgen_coefficient_labels(self, label_type='global'):
         """
         The elementary error-generator labels corresponding to the elements of :meth:`errorgen_coefficients_array`.
 
+        Parameters
+        ----------
+        label_type : str, optional (default 'global')
+            String specifying which type of `ElementaryErrorgenLabel` to use
+            as the keys for the returned dictionary. Allowed options are
+            'global' for `GlobalElementaryErrorgenLabel` and 'local' for
+            `LocalElementaryErrorgenLabel`.
+        
         Returns
         -------
         tuple
             A tuple of (<type>, <basisEl1> [,<basisEl2]) elements identifying the elementary error
             generators of this gate.
         """
-        return self.error_map.errorgen_coefficient_labels()
+        return self.error_map.errorgen_coefficient_labels(label_type)
 
     def errorgen_coefficients_array(self):
         """
@@ -474,7 +482,7 @@ class ComposedState(_State):  # , _ErrorMapContainer
         """
         return self.error_map.errorgen_coefficients_array()
 
-    def errorgen_coefficients(self, return_basis=False, logscale_nonham=False):
+    def errorgen_coefficients(self, return_basis=False, logscale_nonham=False, label_type='global'):
         """
         Constructs a dictionary of the Lindblad-error-generator coefficients of this state.
 
@@ -497,6 +505,12 @@ class ComposedState(_State):  # , _ErrorMapContainer
             channel where all stochastic generators had this same coefficient.
             This is the value returned by :meth:`error_rates`.
 
+        label_type : str, optional (default 'global')
+            String specifying which type of `ElementaryErrorgenLabel` to use
+            as the keys for the returned dictionary. Allowed options are
+            'global' for `GlobalElementaryErrorgenLabel` and 'local' for
+            `LocalElementaryErrorgenLabel`.
+
         Returns
         -------
         lindblad_term_dict : dict
@@ -512,7 +526,7 @@ class ComposedState(_State):  # , _ErrorMapContainer
             A Basis mapping the basis labels used in the
             keys of `lindblad_term_dict` to basis matrices.
         """
-        return self.error_map.errorgen_coefficients(return_basis, logscale_nonham)
+        return self.error_map.errorgen_coefficients(return_basis, logscale_nonham, label_type)
 
     def set_errorgen_coefficients(self, lindblad_term_dict, action="update", logscale_nonham=False, truncate=True):
         """

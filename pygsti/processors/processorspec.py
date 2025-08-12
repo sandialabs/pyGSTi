@@ -309,7 +309,7 @@ class QuditProcessorSpec(ProcessorSpec):
 
         nonstd_preps = {k: _serialize_state(obj) for k, obj in self.nonstd_preps.items()}
         nonstd_povms = {k: _serialize_povm(obj) for k, obj in self.nonstd_povms.items()}
-        nonstd_instruments = {':'.join(k): _serialize_instrument(obj) for k, obj in self.nonstd_instruments.items()}
+        nonstd_instruments = {':'.join(map(str, k)): _serialize_instrument(obj) for k, obj in self.nonstd_instruments.items()}
 
         state.update({'qudit_labels': list(self.qudit_labels),
                       'qudit_udims': list(self.qudit_udims),
@@ -535,9 +535,9 @@ class QuditProcessorSpec(ProcessorSpec):
             return new_gate_name if (nm == existing_gate_name) else nm
 
         self.gate_names = tuple([rename(nm) for nm in self.gate_names])
-        self.nonstd_gate_unitaries = {rename(k): v for k, v in self.nonstd_gate_unitaries}
-        self.gate_unitaries = {rename(k): v for k, v in self.gate_unitaries}
-        self.availability = {rename(k): v for k, v in self.availability}
+        self.nonstd_gate_unitaries = {rename(k): v for k, v in self.nonstd_gate_unitaries.items()}
+        self.gate_unitaries = {rename(k): v for k, v in self.gate_unitaries.items()}
+        self.availability = {rename(k): v for k, v in self.availability.items()}
 
     def resolved_availability(self, gate_name, tuple_or_function="auto"):
         """

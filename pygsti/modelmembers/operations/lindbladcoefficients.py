@@ -87,6 +87,11 @@ class LindbladCoefficientBlock(_NicelySerializable):
         self._cache_mx = _np.zeros((len(self._bel_labels), len(self._bel_labels)), 'complex') \
             if self._block_type == 'other' else None
 
+        #this would get set to True in the very next method call anyway
+        self._coefficients_need_update = True
+        self._cached_elementary_errorgens = None
+        self._cached_elementary_errorgen_indices = None
+
         self._set_block_data(initial_block_data, truncate)
 
     def _set_block_data(self, block_data, truncate):
@@ -115,6 +120,11 @@ class LindbladCoefficientBlock(_NicelySerializable):
 
         self._truncate_block_data(truncate)
 
+        #set a flag to indicate that the coefficients (as returned by elementary_errorgens)
+        #need to be updated.
+        self._coefficients_need_update = True
+
+
     @property
     def basis_element_labels(self):
         return self._bel_labels
@@ -136,7 +146,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
 
     def create_lindblad_term_superoperators(self, mx_basis='pp', sparse="auto", include_1norms=False, flat=False):
         """
-        Compute the superoperator-generators corresponding to the Lindblad coefficiens in this block.
+        Compute the superoperator-generators corresponding to the Lindblad coefficients in this block.
         TODO: docstring update
 
         Returns
@@ -335,7 +345,6 @@ class LindbladCoefficientBlock(_NicelySerializable):
 
         return Lterms
 
-    #TODO: could cache this and update only when needed (would need to add dirty flag logic)
     @property
     def elementary_errorgen_indices(self):
         """
@@ -380,6 +389,9 @@ class LindbladCoefficientBlock(_NicelySerializable):
         # this coefficient block's coefficients that product the given (by the key)
         # elementary error generator.  Values are lists of (c_i, index_i) pairs,
         # such that the given elementary generator == sum_i c_i * coefficients_in_flattened_block[index_i]
+        if not self._coefficients_need_update and self._cached_elementary_errorgen_indices is not None:
+            return self._cached_elementary_errorgen_indices
+        
         from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LEEL
 
         elem_errgen_indices = _collections.OrderedDict()
@@ -411,6 +423,8 @@ class LindbladCoefficientBlock(_NicelySerializable):
                     elem_errgen_indices[_LEEL('A', (lbl1, lbl2))] = [(0.5j, ij), (-0.5j, ji)]  # A_PQ contributions
         else:
             raise ValueError("Internal error: invalid block type!")
+
+        self._cached_elementary_errorgen_indices = elem_errgen_indices
 
         return elem_errgen_indices
 
@@ -457,7 +471,6 @@ class LindbladCoefficientBlock(_NicelySerializable):
 
         return block_data_indices
 
-    #TODO: could cache this and update only when needed (would need to add dirty flag logic)
     @property
     def elementary_errorgens(self):
         """
@@ -479,7 +492,10 @@ class LindbladCoefficientBlock(_NicelySerializable):
             Specifies `block_data` as a linear combination of elementary error generators.
             Keys are :class:`LocalElementaryErrorgenLabel` objects and values are floats.
         """
-        elementary_errorgens = _collections.OrderedDict()
+        if not self._coefficients_need_update and self._cached_elementary_errorgens is not None:
+            return self._cached_elementary_errorgens
+
+        elementary_errorgens = dict()
         eeg_indices = self.elementary_errorgen_indices
         flat_data = self.block_data.ravel()
 
@@ -487,6 +503,9 @@ class LindbladCoefficientBlock(_NicelySerializable):
             val = _np.sum([coeff * flat_data[index] for coeff, index in linear_combo])
             elementary_errorgens[eeg_lbl] = _np.real_if_close(val).item()  # item() -> scalar
             #set_basis_el(lbl, basis[lbl])  # REMOVE
+        #cache the error generator dictionary for future use
+        self._cached_elementary_errorgens = elementary_errorgens
+        self._coefficients_need_update = False
 
         return elementary_errorgens
 
@@ -509,8 +528,12 @@ class LindbladCoefficientBlock(_NicelySerializable):
                     raise ValueError("Missing entry for %s in dictionary of elementary errorgens." % str(eeg_lbl))
             flat_data[i] = val
 
-        self.block_data[(slice(None, None),) * self.block_data.ndim] = flat_data.reshape(self.block_data.shape)
+        self.block_data[:] = flat_data.reshape(self.block_data.shape)
         self._truncate_block_data(truncate)
+
+        #set a flag to indicate that the coefficients (as returned by elementary_errorgens)
+        #need to be updated.
+        self._coefficients_need_update = True
 
         return unused_elementary_errorgens
 
@@ -523,6 +546,11 @@ class LindbladCoefficientBlock(_NicelySerializable):
         elementary_errorgens = out[0] if return_projected_errorgen else out
         unused = self.set_elementary_errorgens(elementary_errorgens, on_missing='raise', truncate=truncate)
         assert(len(unused) == 0)
+
+        #set a flag to indicate that the coefficients (as returned by elementary_errorgens)
+        #need to be updated.
+        self._coefficients_need_update = True
+
         return out[1] if return_projected_errorgen else None
 
     @property
@@ -624,7 +652,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
             in the case of `'other'` blocks.
         """
         if truncate is False:
-            ttol = -1e-15  # (was -1e-12) # truncation tolerance
+            ttol = -1e-14  # (was -1e-12) # truncation tolerance
         elif truncate is True:
             ttol = -_np.inf
         else:
@@ -697,25 +725,24 @@ class LindbladCoefficientBlock(_NicelySerializable):
                 nonzero_block_data = perm_block_data[0:num_nonzero, 0:num_nonzero]
                 assert(_np.isclose(_np.linalg.norm(self.block_data), _np.linalg.norm(nonzero_block_data)))
 
-                #evals, U = _np.linalg.eigh(nonzero_block_data)  # works too (assert hermiticity above)
-                evals, U = _np.linalg.eig(nonzero_block_data)
+                evals, U = _np.linalg.eigh(nonzero_block_data)
 
                 assert(all([ev > ttol for ev in evals])), \
                     ("Lindblad coefficients are not CPTP (truncate == %s)! (largest neg = %g)"
-                     % (str(truncate), min(evals.real)))
+                     % (str(truncate), min(evals)))
 
                 if ttol < 0:  # if we're truncating and assert above allows *negative* eigenvalues
                     #push any slightly negative evals of other_projs positive so that
                     # the Cholesky decomp will work.
-                    Ui = _np.linalg.inv(U)
+                    Ui = U.T.conj()
                     pos_evals = evals.clip(1e-16, None)
-                    nonzero_block_data = _np.dot(U, _np.dot(_np.diag(pos_evals), Ui))
+                    nonzero_block_data = U @ (pos_evals[:, None] * Ui)
                     try:
                         nonzero_Lmx = _np.linalg.cholesky(nonzero_block_data)
                         # if Lmx not postitive definite, try again with 1e-12 (same lines as above)
-                    except _np.linalg.LinAlgError:                         # pragma: no cover
+                    except _np.linalg.LinAlgError:                          # pragma: no cover
                         pos_evals = evals.clip(1e-12, 1e100)                # pragma: no cover
-                        nonzero_block_data = _np.dot(U, _np.dot(_np.diag(pos_evals), Ui))  # pragma: no cover
+                        nonzero_block_data = U @ (pos_evals[:, None] * Ui)  # pragma: no cover
                         nonzero_Lmx = _np.linalg.cholesky(nonzero_block_data)
                 else:  # truncate == False or == 0 case
                     nonzero_Lmx = _np.linalg.cholesky(nonzero_block_data)
@@ -725,7 +752,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
                 Lmx = perm.T @ perm_Lmx @ perm
 
                 for i in range(num_bels):
-                    assert(_np.linalg.norm(_np.imag(Lmx[i, i])) < IMAG_TOL)
+                    assert(_np.abs(Lmx[i, i].imag) < IMAG_TOL)
                     params[i, i] = Lmx[i, i].real
                     for j in range(i):
                         params[i, j] = Lmx[i, j].real
@@ -733,7 +760,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
 
             elif self._param_mode == "elements":  # params mx stores block_data (hermitian) directly
                 for i in range(num_bels):
-                    assert(_np.linalg.norm(_np.imag(self.block_data[i, i])) < IMAG_TOL)
+                    assert(_np.abs(self.block_data[i, i].imag) < IMAG_TOL)
                     params[i, i] = self.block_data[i, i].real
                     for j in range(i):
                         params[i, j] = self.block_data[i, j].real
@@ -780,6 +807,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
         v : numpy.ndarray
             A 1D array of real parameter values.
         """
+
         if self._param_mode == 'static':
             assert(len(v) == 0), "'static' paramterized blocks should have zero parameters!"
             return  # self.block_data remains the same - no update
@@ -859,6 +887,10 @@ class LindbladCoefficientBlock(_NicelySerializable):
                                  % (self._param_mode, self._block_type))
         else:
             raise ValueError("Internal error: invalid block type!")
+        
+        #set a flag to indicate that the coefficients (as returned by elementary_errorgens)
+        #need to be updated.
+        self._coefficients_need_update = True
 
     def deriv_wrt_params(self, v=None):
         """

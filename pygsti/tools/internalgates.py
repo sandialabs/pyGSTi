@@ -73,33 +73,31 @@ def internal_gate_unitaries():
     std_unitaries['HP'] = _np.dot(std_unitaries['H'], std_unitaries['P'])
     std_unitaries['PH'] = _np.dot(std_unitaries['P'], std_unitaries['H'])
     std_unitaries['HPH'] = _np.dot(std_unitaries['H'], _np.dot(std_unitaries['P'], std_unitaries['H']))
-    # The 1-qubit Clifford group. The labelling is the same as in the the 1-qubit Clifford group generated
-    # in pygsti.extras.rb.group, with the mapping 'Ci' - > 'Gci'. (we keep with the convention here of not have
-    # hard-coded unitaries starting with a 'G'.)
-    std_unitaries['C0'] = _np.array([[1, 0], [0, 1]], complex)
-    std_unitaries['C1'] = _np.array([[1, -1j], [1, 1j]], complex) / _np.sqrt(2)
-    std_unitaries['C2'] = _np.array([[1, 1], [1j, -1j]], complex) / _np.sqrt(2)
-    std_unitaries['C3'] = _np.array([[0, 1], [1, 0]], complex)
-    std_unitaries['C4'] = _np.array([[-1, -1j], [1, -1j]], complex) / _np.sqrt(2)
-    std_unitaries['C5'] = _np.array([[1, 1], [-1j, 1j]], complex) / _np.sqrt(2)
-    std_unitaries['C6'] = _np.array([[0, -1j], [1j, 0]], complex)
-    std_unitaries['C7'] = _np.array([[1j, 1], [-1j, 1]], complex) / _np.sqrt(2)
-    std_unitaries['C8'] = _np.array([[1j, -1j], [1, 1]], complex) / _np.sqrt(2)
-    std_unitaries['C9'] = _np.array([[1, 0], [0, -1]], complex)
-    std_unitaries['C10'] = _np.array([[1, 1j], [1, -1j]], complex) / _np.sqrt(2)
-    std_unitaries['C11'] = _np.array([[1, -1], [1j, 1j]], complex) / _np.sqrt(2)
-    std_unitaries['C12'] = _np.array([[1, 1], [1, -1]], complex) / _np.sqrt(2)
-    std_unitaries['C13'] = _np.array([[0.5 - 0.5j, 0.5 + 0.5j], [0.5 + 0.5j, 0.5 - 0.5j]], complex)
-    std_unitaries['C14'] = _np.array([[1, 0], [0, 1j]], complex)
-    std_unitaries['C15'] = _np.array([[1, 1], [-1, 1]], complex) / _np.sqrt(2)
-    std_unitaries['C16'] = _np.array([[0.5 + 0.5j, 0.5 - 0.5j], [0.5 - 0.5j, 0.5 + 0.5j]], complex)
-    std_unitaries['C17'] = _np.array([[0, 1], [1j, 0]], complex)
-    std_unitaries['C18'] = _np.array([[1j, -1j], [-1j, -1j]], complex) / _np.sqrt(2)
-    std_unitaries['C19'] = _np.array([[0.5 + 0.5j, -0.5 + 0.5j], [0.5 - 0.5j, -0.5 - 0.5j]], complex)
-    std_unitaries['C20'] = _np.array([[0, -1j], [-1, 0]], complex)
-    std_unitaries['C21'] = _np.array([[1, -1], [1, 1]], complex) / _np.sqrt(2)
-    std_unitaries['C22'] = _np.array([[0.5 + 0.5j, 0.5 - 0.5j], [-0.5 + 0.5j, -0.5 - 0.5j]], complex)
-    std_unitaries['C23'] = _np.array([[1, 0], [0, -1j]], complex)
+    # The 1-qubit Clifford group.
+    std_unitaries['C0'] = _np.array([[1, 0], [0, 1]], complex)                                         # This is Gi
+    std_unitaries['C1'] = _np.array([[1, -1j], [1, 1j]], complex) / _np.sqrt(2)                        # This is H Pdag
+    std_unitaries['C2'] = _np.array([[1, 1], [1j, -1j]], complex) / _np.sqrt(2)                        # This is P H
+    std_unitaries['C3'] = _np.array([[0, 1], [1, 0]], complex)                                         # This is Gxpi (up to phase)
+    std_unitaries['C4'] = _np.array([[-1, -1j], [1, -1j]], complex) / _np.sqrt(2)                      # This is H Pdag X
+    std_unitaries['C5'] = _np.array([[1, 1], [-1j, 1j]], complex) / _np.sqrt(2)                        # This is Pdag H
+    std_unitaries['C6'] = _np.array([[0, -1j], [1j, 0]], complex)                                      # This is Gypi (up to phase)
+    std_unitaries['C7'] = _np.array([[1j, 1], [-1j, 1]], complex) / _np.sqrt(2)                        # This is H P X
+    std_unitaries['C8'] = _np.array([[1j, -1j], [1, 1]], complex) / _np.sqrt(2)                        # This is Pdag X H
+    std_unitaries['C9'] = _np.array([[1, 0], [0, -1]], complex)                                        # This is Gzpi
+    std_unitaries['C10'] = _np.array([[1, 1j], [1, -1j]], complex) / _np.sqrt(2)                       # This is H P
+    std_unitaries['C11'] = _np.array([[1, -1], [1j, 1j]], complex) / _np.sqrt(2)                       # This is P X H
+    std_unitaries['C12'] = _np.array([[1, 1], [1, -1]], complex) / _np.sqrt(2)                         # This is Gh
+    std_unitaries['C13'] = _np.array([[0.5 - 0.5j, 0.5 + 0.5j], [0.5 + 0.5j, 0.5 - 0.5j]], complex)    # This is Gxmpi2 (up to phase)
+    std_unitaries['C14'] = _np.array([[1, 0], [0, 1j]], complex)                                       # This is Gzpi2 / Gp (up to phase)
+    std_unitaries['C15'] = _np.array([[1, 1], [-1, 1]], complex) / _np.sqrt(2)                         # This is Gympi2 (up to phase)
+    std_unitaries['C16'] = _np.array([[0.5 + 0.5j, 0.5 - 0.5j], [0.5 - 0.5j, 0.5 + 0.5j]], complex)    # This is Gxpi2 (up to phase)
+    std_unitaries['C17'] = _np.array([[0, 1], [1j, 0]], complex)                                       # This is P X
+    std_unitaries['C18'] = _np.array([[1j, -1j], [-1j, -1j]], complex) / _np.sqrt(2)                   # This is Y H
+    std_unitaries['C19'] = _np.array([[0.5 + 0.5j, -0.5 + 0.5j], [0.5 - 0.5j, -0.5 - 0.5j]], complex)  # This is Pdag H P
+    std_unitaries['C20'] = _np.array([[0, -1j], [-1, 0]], complex)                                     # This is Pdag X
+    std_unitaries['C21'] = _np.array([[1, -1], [1, 1]], complex) / _np.sqrt(2)                         # This is Gypi2 (up to phase)
+    std_unitaries['C22'] = _np.array([[0.5 + 0.5j, 0.5 - 0.5j], [-0.5 + 0.5j, -0.5 - 0.5j]], complex)  # This is P H Pdag
+    std_unitaries['C23'] = _np.array([[1, 0], [0, -1j]], complex)                                      # This is Gzmpi2 / Gpdag (up to phase)
     # Standard 2-qubit gates.
     std_unitaries['CPHASE'] = _np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [
                                         0., 0., 1., 0.], [0., 0., 0., -1.]], complex)
@@ -198,7 +196,8 @@ def standard_gatename_unitaries():
       * 'Gsqrtiswap' : square-root of ISWAP gate, used in some superconducting qubit platforms.
       * 'Gxx', 'Gzz' : MS-style parity gates
       * 'Gcres', 'Gecres' : Cross-resonance and echoed cross-resonance gates. Native gate operations common on transmon systems (including IBM).
-      
+      * 'Gecr' : alternative name for the echoed cross-resonance gate, matching OpenQASM / IBM conventions.
+
     * Non-Clifford gates:
 
       * 'Gt', 'Gtdag' : the T and inverse T gates (T is a Z rotation by pi/4).
@@ -256,34 +255,31 @@ def standard_gatename_unitaries():
     #native gate in some spin qubit systems.
     std_unitaries['Gn'] = _spl.expm(-1j*(_np.pi/4)*((_np.sqrt(3)/2)*sigmax - (.5)*sigmaz))
 
-    # The 1-qubit Clifford group. The labelling is the same as in the the 1-qubit Clifford group generated
-    # in pygsti.extras.rb.group, and also in the internal standard unitary (but with 'Gci' -> 'Ci')
-    std_unitaries['Gc0'] = _np.array([[1, 0], [0, 1]], complex)  # This is Gi
-    std_unitaries['Gc1'] = _np.array([[1, -1j], [1, 1j]], complex) / _np.sqrt(2)
-    std_unitaries['Gc2'] = _np.array([[1, 1], [1j, -1j]], complex) / _np.sqrt(2)
-    std_unitaries['Gc3'] = _np.array([[0, 1], [1, 0]], complex)  # This is Gxpi (up to phase)
-    std_unitaries['Gc4'] = _np.array([[-1, -1j], [1, -1j]], complex) / _np.sqrt(2)
-    std_unitaries['Gc5'] = _np.array([[1, 1], [-1j, 1j]], complex) / _np.sqrt(2)
-    std_unitaries['Gc6'] = _np.array([[0, -1j], [1j, 0]], complex)  # This is Gypi (up to phase)
-    std_unitaries['Gc7'] = _np.array([[1j, 1], [-1j, 1]], complex) / _np.sqrt(2)
-    std_unitaries['Gc8'] = _np.array([[1j, -1j], [1, 1]], complex) / _np.sqrt(2)
-    std_unitaries['Gc9'] = _np.array([[1, 0], [0, -1]], complex)  # This is Gzpi
-    std_unitaries['Gc10'] = _np.array([[1, 1j], [1, -1j]], complex) / _np.sqrt(2)
-    std_unitaries['Gc11'] = _np.array([[1, -1], [1j, 1j]], complex) / _np.sqrt(2)
-    std_unitaries['Gc12'] = _np.array([[1, 1], [1, -1]], complex) / _np.sqrt(2)  # This is Gh
-    std_unitaries['Gc13'] = _np.array([[0.5 - 0.5j, 0.5 + 0.5j], [0.5 + 0.5j, 0.5 - 0.5j]],
-                                      complex)  # This is Gxmpi2 (up to phase)
-    std_unitaries['Gc14'] = _np.array([[1, 0], [0, 1j]], complex)  # THis is Gzpi2 / Gp (up to phase)
-    std_unitaries['Gc15'] = _np.array([[1, 1], [-1, 1]], complex) / _np.sqrt(2)  # This is Gympi2 (up to phase)
-    std_unitaries['Gc16'] = _np.array([[0.5 + 0.5j, 0.5 - 0.5j], [0.5 - 0.5j, 0.5 + 0.5j]],
-                                      complex)  # This is Gxpi2 (up to phase)
-    std_unitaries['Gc17'] = _np.array([[0, 1], [1j, 0]], complex)
-    std_unitaries['Gc18'] = _np.array([[1j, -1j], [-1j, -1j]], complex) / _np.sqrt(2)
-    std_unitaries['Gc19'] = _np.array([[0.5 + 0.5j, -0.5 + 0.5j], [0.5 - 0.5j, -0.5 - 0.5j]], complex)
-    std_unitaries['Gc20'] = _np.array([[0, -1j], [-1, 0]], complex)
-    std_unitaries['Gc21'] = _np.array([[1, -1], [1, 1]], complex) / _np.sqrt(2)  # This is Gypi2 (up to phase)
-    std_unitaries['Gc22'] = _np.array([[0.5 + 0.5j, 0.5 - 0.5j], [-0.5 + 0.5j, -0.5 - 0.5j]], complex)
-    std_unitaries['Gc23'] = _np.array([[1, 0], [0, -1j]], complex)  # This is Gzmpi2 / Gpdag (up to phase)
+    # The 1-qubit Clifford group.
+    std_unitaries['Gc0'] = _np.array([[1, 0], [0, 1]], complex)                                         # This is Gi
+    std_unitaries['Gc1'] = _np.array([[1, -1j], [1, 1j]], complex) / _np.sqrt(2)                        # This is H Pdag
+    std_unitaries['Gc2'] = _np.array([[1, 1], [1j, -1j]], complex) / _np.sqrt(2)                        # This is P H
+    std_unitaries['Gc3'] = _np.array([[0, 1], [1, 0]], complex)                                         # This is Gxpi (up to phase)
+    std_unitaries['Gc4'] = _np.array([[-1, -1j], [1, -1j]], complex) / _np.sqrt(2)                      # This is H Pdag X
+    std_unitaries['Gc5'] = _np.array([[1, 1], [-1j, 1j]], complex) / _np.sqrt(2)                        # This is Pdag H
+    std_unitaries['Gc6'] = _np.array([[0, -1j], [1j, 0]], complex)                                      # This is Gypi (up to phase)
+    std_unitaries['Gc7'] = _np.array([[1j, 1], [-1j, 1]], complex) / _np.sqrt(2)                        # This is H P X
+    std_unitaries['Gc8'] = _np.array([[1j, -1j], [1, 1]], complex) / _np.sqrt(2)                        # This is Pdag X H
+    std_unitaries['Gc9'] = _np.array([[1, 0], [0, -1]], complex)                                        # This is Gzpi
+    std_unitaries['Gc10'] = _np.array([[1, 1j], [1, -1j]], complex) / _np.sqrt(2)                       # This is H P
+    std_unitaries['Gc11'] = _np.array([[1, -1], [1j, 1j]], complex) / _np.sqrt(2)                       # This is P X H
+    std_unitaries['Gc12'] = _np.array([[1, 1], [1, -1]], complex) / _np.sqrt(2)                         # This is Gh
+    std_unitaries['Gc13'] = _np.array([[0.5 - 0.5j, 0.5 + 0.5j], [0.5 + 0.5j, 0.5 - 0.5j]], complex)    # This is Gxmpi2 (up to phase)
+    std_unitaries['Gc14'] = _np.array([[1, 0], [0, 1j]], complex)                                       # This is Gzpi2 / Gp (up to phase)
+    std_unitaries['Gc15'] = _np.array([[1, 1], [-1, 1]], complex) / _np.sqrt(2)                         # This is Gympi2 (up to phase)
+    std_unitaries['Gc16'] = _np.array([[0.5 + 0.5j, 0.5 - 0.5j], [0.5 - 0.5j, 0.5 + 0.5j]], complex)    # This is Gxpi2 (up to phase)
+    std_unitaries['Gc17'] = _np.array([[0, 1], [1j, 0]], complex)                                       # This is P X
+    std_unitaries['Gc18'] = _np.array([[1j, -1j], [-1j, -1j]], complex) / _np.sqrt(2)                   # This is Y H
+    std_unitaries['Gc19'] = _np.array([[0.5 + 0.5j, -0.5 + 0.5j], [0.5 - 0.5j, -0.5 - 0.5j]], complex)  # This is Pdag H P
+    std_unitaries['Gc20'] = _np.array([[0, -1j], [-1, 0]], complex)                                     # This is Pdag X
+    std_unitaries['Gc21'] = _np.array([[1, -1], [1, 1]], complex) / _np.sqrt(2)                         # This is Gypi2 (up to phase)
+    std_unitaries['Gc22'] = _np.array([[0.5 + 0.5j, 0.5 - 0.5j], [-0.5 + 0.5j, -0.5 - 0.5j]], complex)  # This is P H Pdag
+    std_unitaries['Gc23'] = _np.array([[1, 0], [0, -1j]], complex)                                      # This is Gzmpi2 / Gpdag (up to phase)
     
     # Two-qubit gates
     std_unitaries['Gcphase'] = _np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [
@@ -307,7 +303,8 @@ def standard_gatename_unitaries():
     std_unitaries['Gcres'] = _spl.expm(-1j*_np.pi/4*sigmaxz)
     std_unitaries['Gecres'] = _np.array([[0, 1, 0., 1j], [1., 0, -1j, 0.],
                                         [0., 1j, 0, 1], [-1j, 0., 1, 0]], complex)/_np.sqrt(2)
-
+    std_unitaries['Gecr'] = std_unitaries['Gecres']  # alias
+    
     std_unitaries['Gzr'] = Gzr()
     std_unitaries['Gczr'] = Gczr()
 
@@ -370,7 +367,47 @@ def unitary_to_standard_gatename(unitary, up_to_phase = False, return_phase = Fa
                         return std_name
 
     return None
+def standard_gatenames_stim_conversions():
+    """
+    A dictionary converting the gates with standard names to stim tableus for these gates. Currently is only capable of converting
+    clifford gates, no capability for T gates
 
+    TODO: Add all standard clifford gate names in
+
+    Returns
+    -------
+    A dict mapping string to tableu
+    """
+    try:
+        import stim
+    except ImportError:
+        raise ImportError("Stim is required for this operation, and it does not appear to be installed.")
+    gate_dict = {
+    'Gi'    : stim.Tableau.from_named_gate('I'),
+    'Gxpi'  : stim.Tableau.from_named_gate('X'),
+    'Gypi'  : stim.Tableau.from_named_gate('Y'),
+    'Gzpi'  : stim.Tableau.from_named_gate('Z'),
+    'Gxpi2' : stim.Tableau.from_named_gate('SQRT_X'),
+    'Gypi2' : stim.Tableau.from_named_gate('SQRT_Y'),
+    'Gzpi2' : stim.Tableau.from_named_gate('SQRT_Z'),
+    'Gxmpi2': stim.Tableau.from_named_gate('SQRT_X_DAG'),
+    'Gympi2': stim.Tableau.from_named_gate('SQRT_Y_DAG'),
+    'Gzmpi2': stim.Tableau.from_named_gate('SQRT_Z_DAG'),
+    'Gs'    : stim.Tableau.from_named_gate('S'),
+    'Gsm'   : stim.Tableau.from_named_gate('S_DAG'),
+    'Gh'    : stim.Tableau.from_named_gate('H'),
+    'Gxx'   : stim.Tableau.from_named_gate('SQRT_XX'),
+    'Gzz'   : stim.Tableau.from_named_gate('SQRT_ZZ'),
+    'Gcnot' : stim.Tableau.from_named_gate('CNOT'),
+    'Gswap' : stim.Tableau.from_named_gate('SWAP'),
+    'Gcphase' : stim.Tableau.from_named_gate('CZ')
+    }
+    ecr_unitary = _np.array([[0, 1, 0., 1j], [1., 0, -1j, 0.],
+                             [0., 1j, 0, 1], [-1j, 0., 1, 0]], complex)/_np.sqrt(2)
+    gate_dict['Gecres'] = stim.Tableau.from_unitary_matrix(ecr_unitary, endian='big')
+    gate_dict['Gecr'] = gate_dict['Gecres']
+
+    return gate_dict
 
 def standard_gatenames_cirq_conversions():
     """
@@ -730,6 +767,7 @@ def standard_gatenames_openqasm_conversions(version='u3'):
         std_gatenames_to_qasm['Gc23'] = ['u3(0, 0, 4.71238898038469)']  # [0, 0, 3] * pi/2 (this is Gzmpi2 / Gpdag)
 
         std_gatenames_to_qasm['Gecr'] = ['ecr']
+        std_gatenames_to_qasm['Gecres'] = ['ecr']
 
         std_gatenames_to_argmap = {}
         std_gatenames_to_argmap['Gzr'] = lambda gatearg: ['u3(0, 0, ' + str(gatearg[0]) + ')']
@@ -786,6 +824,7 @@ def standard_gatenames_openqasm_conversions(version='u3'):
         std_gatenames_to_qasm['Gtdag'] = ['rz(5.497787143782138)']
 
         std_gatenames_to_qasm['Gecr'] = ['ecr']
+        std_gatenames_to_qasm['Gecres'] = ['ecr']
 
         std_gatenames_to_argmap = {}
         std_gatenames_to_argmap['Gzr'] = lambda gatearg: ['rz(' + str(gatearg[0]) + ')']
