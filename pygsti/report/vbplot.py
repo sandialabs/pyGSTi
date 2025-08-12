@@ -178,9 +178,9 @@ def volumetric_boundary_plot(data, y_values=None, x_values=None, boundary=None, 
     if boundary is not None:
         boundaries = _np.array([-1 if boundary[d] == 0 else y_values.index(boundary[d]) for d in x_values])
         # x-values for a jagged line that outlines the boxes (one pair for each box)
-        xvals = [y for x in range(len(x_values)) for y in [x - .5, x + .5]]
+        xvals = [y for x in range(len(x_values)) for y in [x - 0.5, x + 0.5]]
         # y-values for a jagged line that outlines the boxes (one pair for each box)
-        yvals = [y + .5 for boundary in boundaries for y in [boundary, boundary]]
+        yvals = [y + 0.5 for boundary in boundaries for y in [boundary, boundary]]
 
     else:
         # For each depth, find the widest circuit that achieves the threshold performance (return -1 if none)
@@ -188,9 +188,9 @@ def volumetric_boundary_plot(data, y_values=None, x_values=None, boundary=None, 
             boundaries = _np.array([_np.max([-1] + [y_values.index(w) for w in y_values if (d, w) in data.keys()
                                                     and data[d, w] >= threshold]) for d in x_values])
             # x-values for a jagged line that outlines the boxes (one pair for each box)
-            xvals = [y for x in range(len(x_values)) for y in [x - .5, x + .5]]
+            xvals = [y for x in range(len(x_values)) for y in [x - 0.5, x + 0.5]]
             # y-values for a jagged line that outlines the boxes (one pair for each box)
-            yvals = [y + .5 for boundary in boundaries for y in [boundary, boundary]]
+            yvals = [y + 0.5 for boundary in boundaries for y in [boundary, boundary]]
 
         elif missing_data_action == 'continue' or missing_data_action == 'hedge':
             boundaries = []
@@ -213,9 +213,9 @@ def volumetric_boundary_plot(data, y_values=None, x_values=None, boundary=None, 
 
             if missing_data_action == 'continue':
                 # x-values for a jagged line that outlines the boxes (one pair for each box)
-                xvals = [y for x in range(len(x_values)) for y in [x - .5, x + .5]]
+                xvals = [y for x in range(len(x_values)) for y in [x - 0.5, x + 0.5]]
                 # y-values for a jagged line that outlines the boxes (one pair for each box)
-                yvals = [y + .5 for boundary in boundaries for y in [boundary, boundary]]
+                yvals = [y + 0.5 for boundary in boundaries for y in [boundary, boundary]]
 
             elif missing_data_action == 'hedge':
                 # x-values for a jagged line that outlines the boxes (one pair for each box)
@@ -228,10 +228,10 @@ def volumetric_boundary_plot(data, y_values=None, x_values=None, boundary=None, 
                         # Only hedge when there's actually some data at larger x_values.
                         if not all([d in hedged_x_values for d in x_values[x:]]):
                             xvals += [last_xval, x]
-                            yvals += [boundary + .5, boundary + .5]
+                            yvals += [boundary + 0.5, boundary + 0.5]
                     else:
-                        xvals += [last_xval, x + .5]
-                        yvals += [boundary + .5, boundary + .5]
+                        xvals += [last_xval, x + 0.5]
+                        yvals += [boundary + 0.5, boundary + 0.5]
                     last_xval = xvals[-1]
 
     if monotonic:

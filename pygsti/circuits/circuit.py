@@ -3724,7 +3724,7 @@ class Circuit(object):
         f.write("\\documentclass{article}\n")
         f.write("\\usepackage{mathtools}\n")
         f.write("\\usepackage{xcolor}\n")
-        f.write("\\usepackage[paperwidth=" + str(5. + d * .3)
+        f.write("\\usepackage[paperwidth=" + str(5. + d * 0.3)
                 + "in, paperheight=" + str(2 + n * 0.2) + "in,margin=0.5in]{geometry}")
         f.write("\\input{Qcircuit}\n")
         f.write("\\begin{document}\n")

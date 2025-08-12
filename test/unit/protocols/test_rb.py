@@ -461,7 +461,7 @@ class TestBiRBProtocol(BaseCase):
                                                       seed=self.seed, verbosity=0)
         
         self.target_model =  pygsti.models.create_crosstalk_free_model(self.pspec)
-        self.noisy_model =  pygsti.models.create_crosstalk_free_model(self.pspec, depolarization_strengths={name: .01 for name in gate_names})
+        self.noisy_model =  pygsti.models.create_crosstalk_free_model(self.pspec, depolarization_strengths={name: 0.01 for name in gate_names})
 
         self.ds = pygsti.data.datasetconstruction.simulate_data(self.target_model, self.design.all_circuits_needing_data, 
                                                                 num_samples = 100, seed= self.seed)
@@ -517,7 +517,7 @@ class TestCliffordRBProtocol(BaseCase):
                                            verbosity=self.verbosity, num_processes=1)
         
         self.target_model =  pygsti.models.create_crosstalk_free_model(self.pspec)
-        self.noisy_model =  pygsti.models.create_crosstalk_free_model(self.pspec, depolarization_strengths={name: .01 for name in gate_names})
+        self.noisy_model =  pygsti.models.create_crosstalk_free_model(self.pspec, depolarization_strengths={name: 0.01 for name in gate_names})
 
         self.ds = pygsti.data.datasetconstruction.simulate_data(self.target_model, self.design.all_circuits_needing_data, 
                                                                 num_samples = 100, seed=self.seed)
@@ -581,7 +581,7 @@ class TestDirectRBProtocol(BaseCase):
                                     
         
         self.target_model =  pygsti.models.create_crosstalk_free_model(self.pspec)
-        self.noisy_model =  pygsti.models.create_crosstalk_free_model(self.pspec, depolarization_strengths={name: .01 for name in gate_names})
+        self.noisy_model =  pygsti.models.create_crosstalk_free_model(self.pspec, depolarization_strengths={name: 0.01 for name in gate_names})
 
         self.ds = pygsti.data.datasetconstruction.simulate_data(self.target_model, self.design.all_circuits_needing_data, 
                                                                 num_samples = 100, seed=self.seed)
@@ -636,7 +636,7 @@ class TestMirrorRBProtocol(BaseCase):
                                         num_processes=1)
         
         self.target_model =  pygsti.models.create_crosstalk_free_model(self.pspec)
-        self.noisy_model =  pygsti.models.create_crosstalk_free_model(self.pspec, depolarization_strengths={name: .01 for name in gate_names})
+        self.noisy_model =  pygsti.models.create_crosstalk_free_model(self.pspec, depolarization_strengths={name: 0.01 for name in gate_names})
 
         self.ds = pygsti.data.datasetconstruction.simulate_data(self.target_model, self.design.all_circuits_needing_data, 
                                                                 num_samples = 100, seed=self.seed)
@@ -686,7 +686,7 @@ class TestInterleavedRBProtocol(BaseCase):
         self.target_model =  pygsti.models.create_crosstalk_free_model(pspec)
         self.target_model.sim = 'map'
         depolarization_strengths={g:0.01 for g in pspec.gate_names if g!= 'Gxpi2'}
-        depolarization_strengths['Gxpi2'] = .02
+        depolarization_strengths['Gxpi2'] = 0.02
         self.noisy_model =  pygsti.models.create_crosstalk_free_model(pspec, depolarization_strengths=depolarization_strengths)
         self.noisy_model.sim = 'map'
         self.ds = pygsti.data.datasetconstruction.simulate_data(self.target_model, self.design.all_circuits_needing_data, 

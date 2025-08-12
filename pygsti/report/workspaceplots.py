@@ -269,8 +269,8 @@ def _nested_color_boxplot(plt_data_list_of_lists, colormap,
     #add boundaries between plaquettes.
     #if either of these is length 1 then the diff will be empty
     #this should stick the boundaries halfway between the ticks.
-    x_boundaries = _np.array(xtics[:-1]) + .5*(xtics[1]-xtics[0]) if len(xtics)>1 else []
-    y_boundaries = _np.array(ytics[:-1]) + .5*(ytics[1]-ytics[0]) if len(ytics)>1 else []
+    x_boundaries = _np.array(xtics[:-1]) + 0.5*(xtics[1]-xtics[0]) if len(xtics)>1 else []
+    y_boundaries = _np.array(ytics[:-1]) + 0.5*(ytics[1]-ytics[0]) if len(ytics)>1 else []
     
     plaquette_boundary_lines = []
 
@@ -291,7 +291,7 @@ def _nested_color_boxplot(plt_data_list_of_lists, colormap,
     #get some reference points, but we need to include the endpoints here.
     if len(xtics)>1:
         x_ref = _np.zeros(len(xtics)+1)
-        x_ref[1:] = _np.array(xtics) + .5*(xtics[1]-xtics[0])
+        x_ref[1:] = _np.array(xtics) + 0.5*(xtics[1]-xtics[0])
         #The left edge of the figure isn't zero, since we've shifted that
         #in _color_boxplot, so shift the first reference point back a bit.
         x_ref[0] = -1
@@ -299,7 +299,7 @@ def _nested_color_boxplot(plt_data_list_of_lists, colormap,
         x_ref = _np.array([-1, 2*xtics[0]+1])
     if len(ytics)>1:
         y_ref = _np.zeros(len(ytics)+1)
-        y_ref[1:] = _np.array(ytics) + .5*(ytics[1]-ytics[0])
+        y_ref[1:] = _np.array(ytics) + 0.5*(ytics[1]-ytics[0])
         #The bottom edge of the figure isn't zero, since we've shifted that
         #in _color_boxplot, so shift the first reference point back a bit.
         y_ref[0] = -1
@@ -350,7 +350,7 @@ def _nested_color_boxplot(plt_data_list_of_lists, colormap,
             #place an annotation at the very edge of the plotable area, and then semi-manually shift it over.
             
             if hoverLabels[j][i]: #unpopulated squares should have the empty string as their hover labels, skip those.
-                on_click_annotations.append(dict(x= data.shape[1], y= .5*data.shape[0],
+                on_click_annotations.append(dict(x= data.shape[1], y= 0.5*data.shape[0],
                                             yanchor= 'middle', xanchor= 'left',
                                             text = hoverLabels[j][i], align= 'left',
                                             bordercolor= 'black', borderwidth= 1,
@@ -3833,10 +3833,10 @@ class ProjectionsBoxPlot(WorkspacePlot):
             new_lmargin = fig.plotlyfig.layout.margin.l - 20
 
             #add annotations for the upper and lower triangles.
-            fig.plotlyfig.add_annotation(x= .92, y= -.16, xref= 'paper', yref= 'paper',
+            fig.plotlyfig.add_annotation(x= 0.92, y= -.16, xref= 'paper', yref= 'paper',
                                          text= 'A', showarrow=False, xanchor='center',
                                          yanchor='middle', font=dict(color='#2cb802'))
-            fig.plotlyfig.add_annotation(x= 1.16, y= .1, xref= 'paper', yref= 'paper',
+            fig.plotlyfig.add_annotation(x= 1.16, y= 0.1, xref= 'paper', yref= 'paper',
                                          text= 'C', showarrow=False, xanchor='center',
                                          yanchor='middle', font=dict(color='#6002b8'))
 
