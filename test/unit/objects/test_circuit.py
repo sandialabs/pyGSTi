@@ -521,7 +521,7 @@ MEASURE 2 ro[2]
         #Manually build this circuit directly in cirq and compare.
         qubit_00 = cirq.GridQubit(0,0)
         qubit_01 = cirq.GridQubit(0,1)
-        moment1 = cirq.Moment([cirq.XPowGate(exponent=.5).on(qubit_00), cirq.I(qubit_01)])
+        moment1 = cirq.Moment([cirq.XPowGate(exponent=0.5).on(qubit_00), cirq.I(qubit_01)])
         moment2 = cirq.Moment([cirq.I(qubit_00), cirq.I(qubit_01)])
         moment3 = cirq.Moment([cirq.PhasedXZGate(axis_phase_exponent=0.14758361765043326, 
                                                             x_exponent=0.4195693767448338, 
@@ -541,7 +541,7 @@ MEASURE 2 ro[2]
 
         qubit_00 = cirq.GridQubit(0,0)
         qubit_01 = cirq.GridQubit(0,1)
-        moment1 = cirq.Moment([cirq.XPowGate(exponent=.5).on(qubit_00), cirq.I(qubit_01)])
+        moment1 = cirq.Moment([cirq.XPowGate(exponent=0.5).on(qubit_00), cirq.I(qubit_01)])
         moment2 = cirq.Moment([cirq.I(qubit_00), cirq.I(qubit_01)])
         moment3 = cirq.Moment([cirq.PhasedXZGate(axis_phase_exponent=0.14758361765043326, 
                                                  x_exponent=0.4195693767448338, 

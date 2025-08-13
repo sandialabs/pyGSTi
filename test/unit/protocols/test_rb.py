@@ -718,4 +718,4 @@ class TestInterleavedRBProtocol(BaseCase):
         estimated_irb_num = result.for_protocol['InterleavedRandomizedBenchmarking'].irb_numbers['full'] 
         print(result.for_protocol['InterleavedRandomizedBenchmarking'].irb_numbers)
 
-        self.assertTrue(abs(estimated_irb_num-.02) <= 5e-3)
+        self.assertTrue(abs(estimated_irb_num-0.02) <= 5e-3)

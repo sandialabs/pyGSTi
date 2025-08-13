@@ -253,7 +253,7 @@ def standard_gatename_unitaries():
     
     #N gate, pi/2 rotation about the (np.sqrt(3)/2, 0, -1/2) axis of the Bloch sphere
     #native gate in some spin qubit systems.
-    std_unitaries['Gn'] = _spl.expm(-1j*(_np.pi/4)*((_np.sqrt(3)/2)*sigmax - (.5)*sigmaz))
+    std_unitaries['Gn'] = _spl.expm(-1j*(_np.pi/4)*((_np.sqrt(3)/2)*sigmax - (0.5)*sigmaz))
 
     # The 1-qubit Clifford group.
     std_unitaries['Gc0'] = _np.array([[1, 0], [0, 1]], complex)                                         # This is Gi
@@ -465,8 +465,8 @@ def standard_gatenames_cirq_conversions():
     std_gatenames_to_cirq['Gcphase'] = cirq.CZ
     std_gatenames_to_cirq['Gcnot'] = cirq.CNOT
     std_gatenames_to_cirq['Gswap'] = cirq.SWAP
-    std_gatenames_to_cirq['Gzz'] = cirq.ZZPowGate(exponent=.5, global_shift=-.5)
-    std_gatenames_to_cirq['Gxx'] = cirq.XXPowGate(exponent=.5, global_shift=-.5)
+    std_gatenames_to_cirq['Gzz'] = cirq.ZZPowGate(exponent=0.5, global_shift=-0.5)
+    std_gatenames_to_cirq['Gxx'] = cirq.XXPowGate(exponent=0.5, global_shift=-0.5)
     std_gatenames_to_cirq['Giswap'] = cirq.ISWAP
     std_gatenames_to_cirq['Gsqrtiswap'] = cirq.SQRT_ISWAP
     #I don't presently see a one-to-one conversion for cross-resonance

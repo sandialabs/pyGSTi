@@ -20,7 +20,7 @@ class TestHessianMethods(BaseTestCase):
 
         self.model = smq1Q_XY.target_model()
         self.model = self.model.depolarize(spam_noise = 0.01, op_noise = 0.001)
-        self.model = self.model.rotate(max_rotate=.005, seed=1234)
+        self.model = self.model.rotate(max_rotate=0.005, seed=1234)
 
         prep_fiducials = smq1Q_XY.prep_fiducials()
         meas_fiducials = smq1Q_XY.meas_fiducials()

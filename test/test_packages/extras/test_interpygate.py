@@ -136,8 +136,8 @@ class InterpygateTestCase(BaseTestCase):
             target_op = _comm.bcast(None, root=0)
 
         param_ranges = ([(0.9, 1.1, 2),  # omega
-                         (-.1, 0, 2),   # phase
-                         (-.2, -.1, 2),   # detuning
+                         (-0.1, 0, 2),   # phase
+                         (-0.2, -0.1, 2),   # detuning
                          (0, 0.1, 2),    # dephasing
                          (0.1, 0.2, 2),    # decoherence
                          _np.linspace(_np.pi / 2, _np.pi / 2 + 0.5, 10)  # time
@@ -181,8 +181,8 @@ class InterpygateTestCase(BaseTestCase):
                       (0.9, 1.1, 2)  # omega
                       ]
 
-        param_ranges = [(-.1, 0.1, 2),  # phase
-                        (-.1, 0.1, 2),  # detuning
+        param_ranges = [(-0.1, 0.1, 2),  # phase
+                        (-0.1, 0.1, 2),  # detuning
                         (0, 0.1, 2),   # dephasing
                         (0, 0.1, 2)    # decoherence
                         ]
@@ -227,8 +227,8 @@ class InterpygateTestCase(BaseTestCase):
             target_op = _comm.bcast(None, root=0)
 
         param_ranges = ([(0.9, 1.1, 2),  # omega
-                         (-.1, 0, 2),   # phase
-                         (-.2, -.1, 2),   # detuning
+                         (-0.1, 0, 2),   # phase
+                         (-0.2, -0.1, 2),   # detuning
                          (0, 0.1, 2),    # dephasing
                          (0.1, 0.2, 2),    # decoherence
                          _np.linspace(_np.pi / 2, _np.pi / 2 + 0.5, 10)  # time
@@ -272,8 +272,8 @@ class InterpygateTestCase(BaseTestCase):
                       (0.9, 1.1, 2)  # omega
                       ]
 
-        param_ranges = [(-.1, 0.1, 2),  # phase
-                        (-.1, 0.1, 2),  # detuning
+        param_ranges = [(-0.1, 0.1, 2),  # phase
+                        (-0.1, 0.1, 2),  # detuning
                         (0, 0.1, 2),   # dephasing
                         (0, 0.1, 2)    # decoherence
                         ]

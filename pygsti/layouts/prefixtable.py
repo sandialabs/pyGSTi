@@ -152,7 +152,7 @@ class PrefixTable(object):
         return sum(self.num_state_propagations_by_circuit_no_caching().values())
 
     def find_splitting_new(self, max_sub_table_size=None, num_sub_tables=None, initial_cost_metric='size',
-                           rebalancing_cost_metric='propagations', imbalance_threshold=1.2, minimum_improvement_threshold=.1,
+                           rebalancing_cost_metric='propagations', imbalance_threshold=1.2, minimum_improvement_threshold=0.1,
                            verbosity=0):
         """
         Find a partition of the indices of this table to define a set of sub-tables with the desire properties.
@@ -1756,7 +1756,7 @@ def _refinement_pass(partitioned_tree, roots, weight_key, imbalance_threshold=1.
             #lighter tree in line.
             root_cost =  partitioned_tree_nodes[heavy_light_pairs[i][0][0]][weight_key] if weight_key == 'prop_cost' else 0
 
-            rebalancing_target_fraction = (.5*(heavy_light_weights[i][0] - heavy_light_weights[i][1]))/heavy_light_weights[i][0]
+            rebalancing_target_fraction = (0.5*(heavy_light_weights[i][0] - heavy_light_weights[i][1]))/heavy_light_weights[i][0]
             cut_edge, new_subtree_weights =_bisect_tree(partitioned_tree, heavy_light_pairs[i][0][0], heavy_light_pairs[i][0][1], 
                                                         weight_key, root_cost = root_cost,
                                                         target_proportion = rebalancing_target_fraction)

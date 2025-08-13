@@ -278,13 +278,13 @@ class ApproxStabilizerMethodTester(BaseCase):
         amp0000 = _eprop.amplitude_of_state(self.circuit_tableau, '0000')
         amp1111 = _eprop.amplitude_of_state(self.circuit_tableau, '1111')
         self.assertTrue(abs(amp0000)<1e-7)
-        self.assertTrue(abs(amp1111 -(-1j*np.sqrt(.125)))<1e-7)
+        self.assertTrue(abs(amp1111 -(-1j*np.sqrt(0.125)))<1e-7)
         
         amp0000 = _eprop.amplitude_of_state(self.circuit_tableau_alt, '0000')
         amp1111 = _eprop.amplitude_of_state(self.circuit_tableau_alt, '1111')
         
         self.assertTrue(abs(amp0000)<1e-7)
-        self.assertTrue(abs(amp1111 - (-1j*np.sqrt(.125)))<1e-7)
+        self.assertTrue(abs(amp1111 - (-1j*np.sqrt(0.125)))<1e-7)
 
     def test_bitstring_to_tableau(self):
         tableau = _eprop.bitstring_to_tableau('1010')

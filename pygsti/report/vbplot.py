@@ -162,7 +162,7 @@ def volumetric_plot(data, y_values=None, x_values=None, title=None, fig=None, ax
     return fig, ax
 
 
-def volumetric_boundary_plot(data, y_values=None, x_values=None, boundary=None, threshold=.5,
+def volumetric_boundary_plot(data, y_values=None, x_values=None, boundary=None, threshold=0.5,
                              missing_data_action='continue', monotonic=True, color='k', linewidth=4,
                              linestyle='-', dashing=None, fig=None, ax=None, figsize=None, title=None,
                              label=None):

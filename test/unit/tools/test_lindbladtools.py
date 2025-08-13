@@ -140,7 +140,7 @@ class RandomErrorgenRatesTester(BaseCase):
         #test generator_infidelity
         random_errorgen_rates = lt.random_CPTP_error_generator_rates(num_qubits=2, errorgen_types=('H','S'), 
                                                                 error_metric= 'generator_infidelity', 
-                                                                error_metric_value=.99, seed=1234)
+                                                                error_metric_value=0.99, seed=1234)
         #confirm this has the correct generator infidelity.
         gen_infdl = 0
         for coeff, rate in random_errorgen_rates.items():
@@ -149,12 +149,12 @@ class RandomErrorgenRatesTester(BaseCase):
             elif coeff.errorgen_type == 'S':
                 gen_infdl+=rate
         
-        assert abs(gen_infdl-.99)<1e-5
+        assert abs(gen_infdl-0.99)<1e-5
 
         #test generator_error
         random_errorgen_rates = lt.random_CPTP_error_generator_rates(num_qubits=2, errorgen_types=('H','S'), 
                                                                 error_metric= 'total_generator_error', 
-                                                                error_metric_value=.99, seed=1234)
+                                                                error_metric_value=0.99, seed=1234)
         #confirm this has the correct generator infidelity.
         gen_error = 0
         for coeff, rate in random_errorgen_rates.items():
@@ -163,13 +163,13 @@ class RandomErrorgenRatesTester(BaseCase):
             elif coeff.errorgen_type == 'S':
                 gen_error+=rate
         
-        assert abs(gen_error-.99)<1e-5
+        assert abs(gen_error-0.99)<1e-5
 
         #test relative_HS_contribution:
         random_errorgen_rates = lt.random_CPTP_error_generator_rates(num_qubits=2, errorgen_types=('H','S'), 
                                                                 error_metric= 'generator_infidelity', 
-                                                                error_metric_value=.99, 
-                                                                relative_HS_contribution=(.5, 0.5), seed=1234)
+                                                                error_metric_value=0.99, 
+                                                                relative_HS_contribution=(0.5, 0.5), seed=1234)
         #confirm this has the correct generator infidelity contributions.
         gen_infdl_H = 0
         gen_infdl_S = 0
@@ -183,8 +183,8 @@ class RandomErrorgenRatesTester(BaseCase):
 
         random_errorgen_rates = lt.random_CPTP_error_generator_rates(num_qubits=2, errorgen_types=('H','S'), 
                                                                 error_metric= 'total_generator_error', 
-                                                                error_metric_value=.99, 
-                                                                relative_HS_contribution=(.5, 0.5), seed=1234)
+                                                                error_metric_value=0.99, 
+                                                                relative_HS_contribution=(0.5, 0.5), seed=1234)
         #confirm this has the correct generator error contributions.
         gen_error_H = 0
         gen_error_S = 0
