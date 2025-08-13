@@ -4244,7 +4244,7 @@ class Circuit(object):
                             gatename_conversion=None, qubit_conversion=None,
                             block_between_layers=True,
                             block_between_gates=False,
-                            include_delay_on_idle=True,
+                            include_delay_on_idle=False,
                             gateargs_map=None):  # TODO
         """
         Converts this circuit to an openqasm string.
@@ -4289,9 +4289,9 @@ class Circuit(object):
         include_delay_on_idle: bool, optional
             When `True`, includes a delay operation on implicit idles in each layer, as per
             Qiskit's OpenQASM 2.0 convention after the deprecation of the id operation.
-            Defaults to True, which is commensurate with legacy usage of this function.
-            However, this can now be set to False to avoid this behaviour if generating
+            Defaults to False, to avoid this behaviour if generating
             actually valid OpenQASM (with no opaque delay instruction) is desired.
+            Can be set to True, which is commensurate with legacy usage of this function.
 
         gateargs_map : dict, optional
             If not None, a dict that maps strings (representing pyGSTi standard gate names) to
@@ -4428,6 +4428,7 @@ class Circuit(object):
                         # Delay 0 works because of the barrier
                         # In OpenQASM3, this should probably be a stretch instead
                         openqasm += 'delay(0)' + ' q[' + str(qubit_conversion[q]) + '];\n'
+                        pass
 
             # Add in a barrier after every circuit layer if block_between_layers==True.
             # Including barriers is critical for QCVV testing, circuits should usually
