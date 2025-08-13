@@ -309,8 +309,8 @@ def _nested_color_boxplot(plt_data_list_of_lists, colormap,
     #Now we want to construct pairs of end points. We can do this by iterating
     #through the x_ref and y_ref lists pairwise and then adjusting their values
     #to match the size of the plaquette.
-    x_endpoints = [(x_ref[i-1]+.5 , x_ref[i]-0.5) for i in range(1, len(x_ref))]
-    y_endpoints = [(y_ref[i-1]+.5 , y_ref[i]-0.5) for i in range(1, len(y_ref))]
+    x_endpoints = [(x_ref[i-1]+0.5 , x_ref[i]-0.5) for i in range(1, len(x_ref))]
+    y_endpoints = [(y_ref[i-1]+0.5 , y_ref[i]-0.5) for i in range(1, len(y_ref))]
 
     #also create a flattened list of these endpoints for use in the next filtering
     #step.
