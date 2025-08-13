@@ -17,7 +17,7 @@ class TestCliffordRBDesign(BaseCase):
     def setUp(self):
         self.num_qubits = 2
         self.qubit_labels = ['Q'+str(i) for i in range(self.num_qubits)]
-        
+
         gate_names = ['Gi', 'Gxpi2', 'Gxmpi2', 'Gypi2', 'Gympi2', 'Gcphase']
         availability = {'Gcphase':[('Q'+str(i),'Q'+str((i+1) % self.num_qubits)) for i in range(self.num_qubits)]}
 
@@ -72,7 +72,7 @@ class TestCliffordRBDesign(BaseCase):
 
         [[self.assertAlmostEqual(c.simulate(tmodel)[bs],1.) for c, bs in zip(cl, bsl)] for cl, bsl in zip(mp_design.circuit_lists, mp_design.idealout_lists)]
 
-    def test_deterministic_compilation(self):        
+    def test_deterministic_compilation(self):
         # TODO: Figure out good test for this. Full circuit is a synthetic idle, we need to somehow check the non-inverted
         # Clifford is the same as the random case?
         abs_design = _rb.CliffordRBDesign(
@@ -80,7 +80,7 @@ class TestCliffordRBDesign(BaseCase):
             randomizeout=self.randomizeout, interleaved_circuit=self.interleaved_circuit,
             citerations=self.citerations, compilerargs=self.compiler_args, seed=self.seed,
             verbosity=self.verbosity, exact_compilation_key='absolute')
-        
+
         peq_design = _rb.CliffordRBDesign(
             self.pspec1Q, self.compilations1Q, self.depths, self.circuits_per_depth, qubit_labels=self.qubit_labels1Q,
             randomizeout=self.randomizeout, interleaved_circuit=self.interleaved_circuit,
@@ -126,7 +126,7 @@ class TestInterleavedRBDesign(BaseCase):
     def setUp(self):
         self.num_qubits = 2
         self.qubit_labels = ['Q'+str(i) for i in range(self.num_qubits)]
-        
+
         gate_names = ['Gi', 'Gxpi2', 'Gxmpi2', 'Gypi2', 'Gympi2', 'Gcphase']
         availability = {'Gcphase':[('Q'+str(i),'Q'+str((i+1) % self.num_qubits)) for i in range(self.num_qubits)]}
 
@@ -158,10 +158,10 @@ class TestInterleavedRBDesign(BaseCase):
     def test_combined_design_access(self):
         assert(isinstance(self.irb_design['crb'], _rb.CliffordRBDesign))
         assert(isinstance(self.irb_design['icrb'], _rb.CliffordRBDesign))
-        
-        self.assertEqual(set(self.irb_design.all_circuits_needing_data), 
+
+        self.assertEqual(set(self.irb_design.all_circuits_needing_data),
                          set(self.irb_design['crb'].all_circuits_needing_data)|  set(self.irb_design['icrb'].all_circuits_needing_data))
-    
+
         self.assertEqual(self.irb_design['icrb'].interleaved_circuit, self.interleaved_circuit)
 
     def test_serialization(self):
@@ -180,7 +180,7 @@ class TestDirectRBDesign(BaseCase):
     def setUp(self):
         self.num_qubits = 2
         self.qubit_labels = ['Q'+str(i) for i in range(self.num_qubits)]
-        
+
         gate_names = ['Gxpi2', 'Gxmpi2', 'Gypi2', 'Gympi2', 'Gcphase']
         availability = {'Gcphase':[('Q'+str(i),'Q'+str((i+1) % self.num_qubits)) for i in range(self.num_qubits)]}
 
@@ -206,13 +206,13 @@ class TestDirectRBDesign(BaseCase):
 
     def test_design_construction(self):
         num_mp_procs = 4
-        
+
         serial_design = _rb.DirectRBDesign(self.pspec, self.compilations, self.depths, self.circuits_per_depth,
             qubit_labels=self.qubits, sampler=self.sampler, samplerargs=self.samplerargs,
             addlocal=False, lsargs=(), randomizeout=self.randomizeout, cliffordtwirl=True,
             conditionaltwirl=True, citerations=self.citerations, compilerargs=self.compiler_args,
             partitioned=False, seed=self.seed, verbosity=self.verbosity, num_processes=1)
-        
+
         # Test parallel circuit generation works and is seeded properly
         mp_design = _rb.DirectRBDesign(self.pspec, self.compilations, self.depths, self.circuits_per_depth,
             qubit_labels=self.qubits, sampler=self.sampler, samplerargs=self.samplerargs,
@@ -220,7 +220,7 @@ class TestDirectRBDesign(BaseCase):
             conditionaltwirl=True, citerations=self.citerations, compilerargs=self.compiler_args,
             partitioned=False, seed=self.seed, verbosity=self.verbosity, num_processes=num_mp_procs)
 
-        
+
         tmodel = pygsti.models.create_crosstalk_free_model(self.pspec)
 
         [[self.assertAlmostEqual(c.simulate(tmodel)[bs],1.) for c, bs in zip(cl, bsl)] for cl, bsl in zip(mp_design.circuit_lists, mp_design.idealout_lists)]
@@ -242,7 +242,7 @@ class TestDirectRBDesign(BaseCase):
 
         self.assertTrue(all([str(sd) == str(md) for sd, md in zip(serial_design.all_circuits_needing_data,
                                                                   mp_design.all_circuits_needing_data)]))
-        
+
     def test_serialization(self):
 
         drb_design = _rb.DirectRBDesign(self.pspec, self.compilations, self.depths, self.circuits_per_depth,
@@ -263,7 +263,7 @@ class TestMirrorRBDesign(BaseCase):
         self.num_qubits = 2
         self.qubit_labels = ['Q'+str(i) for i in range(self.num_qubits)]
 
-        gate_names = ['Gi', 'Gxpi2', 'Gxpi', 'Gxmpi2', 'Gypi2', 'Gypi', 'Gympi2', 'Gzpi2', 'Gzpi', 'Gzmpi2', 'Gcphase'] 
+        gate_names = ['Gi', 'Gxpi2', 'Gxpi', 'Gxmpi2', 'Gypi2', 'Gypi', 'Gympi2', 'Gzpi2', 'Gzpi', 'Gzmpi2', 'Gcphase']
         availability = {'Gcphase':[('Q'+str(i),'Q'+str((i+1) % self.num_qubits)) for i in range(self.num_qubits)]}
 
         self.pspec = pygsti.processors.QubitProcessorSpec(self.num_qubits, gate_names, availability=availability,
@@ -285,20 +285,20 @@ class TestMirrorRBDesign(BaseCase):
 
     def test_design_construction(self):
         num_mp_procs = 4
-        
+
         serial_design = _rb.MirrorRBDesign(self.pspec, self.depths, self.circuits_per_depth,
             qubit_labels=self.qubits, circuit_type=self.circuit_type, clifford_compilations=self.clifford_compilations,
             sampler=self.sampler, samplerargs=self.samplerargs,
             localclifford=True, paulirandomize=True, seed=self.seed, verbosity=self.verbosity,
             num_processes=1)
-        
+
         # Test parallel circuit generation works and is seeded properly
         mp_design = _rb.MirrorRBDesign(self.pspec, self.depths, self.circuits_per_depth,
             qubit_labels=self.qubits, circuit_type=self.circuit_type, clifford_compilations=self.clifford_compilations,
             sampler=self.sampler, samplerargs=self.samplerargs,
             localclifford=True, paulirandomize=True, seed=self.seed, verbosity=self.verbosity,
             num_processes=num_mp_procs)
-            
+
         self.assertTrue(all([str(sd) == str(md) for sd, md in zip(serial_design.all_circuits_needing_data,
                                                         mp_design.all_circuits_needing_data)]))
 
@@ -346,7 +346,7 @@ class TestMirrorRBDesign(BaseCase):
 
 
         [[self.assertAlmostEqual(c.simulate(tmodel2)[bs],1.) for c, bs in zip(cl, bsl)] for cl, bsl in zip(design2.circuit_lists, design2.idealout_lists)]
- 
+
     def test_nonclifford_design_type2_construction(self):
 
         n = 2
@@ -360,7 +360,7 @@ class TestMirrorRBDesign(BaseCase):
         depths = [0, 2, 8]
         q_set = ('Q0', 'Q1')
 
-        
+
         design3 = _rb.MirrorRBDesign(pspec3, depths, 3, qubit_labels=q_set, circuit_type='cz(theta)+zxzxz-haar',
                                        clifford_compilations=None, sampler='edgegrab', samplerargs=(0.25,),
                                        localclifford=True, paulirandomize=True, descriptor='A mirror RB experiment',
@@ -390,7 +390,7 @@ class TestBiRBDesign(BaseCase):
         self.num_qubits = 2
         self.qubit_labels = ['Q'+str(i) for i in range(self.num_qubits)]
 
-        gate_names = ['Gi', 'Gxpi2', 'Gxpi', 'Gxmpi2', 'Gypi2', 'Gypi', 'Gympi2', 'Gzpi2', 'Gzpi', 'Gzmpi2', 'Gcphase'] 
+        gate_names = ['Gi', 'Gxpi2', 'Gxpi', 'Gxmpi2', 'Gypi2', 'Gypi', 'Gympi2', 'Gzpi2', 'Gzpi', 'Gzmpi2', 'Gcphase']
         availability = {'Gcphase':[('Q'+str(i),'Q'+str((i+1) % self.num_qubits)) for i in range(self.num_qubits)]}
 
         self.pspec = pygsti.processors.QubitProcessorSpec(self.num_qubits, gate_names, availability=availability,
@@ -409,36 +409,36 @@ class TestBiRBDesign(BaseCase):
 
     def test_birb_design_construction_mixed1q2q(self):
 
-        design = pygsti.protocols.BinaryRBDesign(self.pspec, self.clifford_compilations, self.depths, 
+        design = pygsti.protocols.BinaryRBDesign(self.pspec, self.clifford_compilations, self.depths,
                                                  self.circuits_per_depth, qubit_labels=self.qubits, layer_sampling='mixed1q2q',
-                                                 sampler=self.sampler, samplerargs=self.samplerargs, 
+                                                 sampler=self.sampler, samplerargs=self.samplerargs,
                                                  seed=self.seed, verbosity=0)
-        
+
     def test_birb_design_construction_alternating1q2q(self):
 
-        design = pygsti.protocols.BinaryRBDesign(self.pspec, self.clifford_compilations, self.depths, 
+        design = pygsti.protocols.BinaryRBDesign(self.pspec, self.clifford_compilations, self.depths,
                                                  self.circuits_per_depth, qubit_labels=self.qubits, layer_sampling='alternating1q2q',
-                                                 sampler=self.sampler, samplerargs=self.samplerargs, 
+                                                 sampler=self.sampler, samplerargs=self.samplerargs,
                                                  seed=self.seed, verbosity=0)
-        
+
     def test_serialization(self):
-        birb_design = pygsti.protocols.BinaryRBDesign(self.pspec, self.clifford_compilations, self.depths, 
+        birb_design = pygsti.protocols.BinaryRBDesign(self.pspec, self.clifford_compilations, self.depths,
                                                  self.circuits_per_depth, qubit_labels=self.qubits, layer_sampling='mixed1q2q',
-                                                 sampler=self.sampler, samplerargs=self.samplerargs, 
+                                                 sampler=self.sampler, samplerargs=self.samplerargs,
                                                  seed=self.seed, verbosity=0)
-        
+
         birb_design.write(f'{FILE_PATH}/../../test_packages/temp_test_files/test_BinaryRBDesign_serialization')
         #then read this back in
         birb_design_read = _rb.BinaryRBDesign.from_dir(f'{FILE_PATH}/../../test_packages/temp_test_files/test_BinaryRBDesign_serialization')
 
         self.assertEqual(birb_design.all_circuits_needing_data, birb_design_read.all_circuits_needing_data)
-        
+
 class TestBiRBProtocol(BaseCase):
     def setUp(self):
         self.num_qubits = 2
         self.qubit_labels = ['Q'+str(i) for i in range(self.num_qubits)]
 
-        gate_names = ['Gi', 'Gxpi2', 'Gxpi', 'Gxmpi2', 'Gypi2', 'Gypi', 'Gympi2', 'Gzpi2', 'Gzpi', 'Gzmpi2', 'Gcphase'] 
+        gate_names = ['Gi', 'Gxpi2', 'Gxpi', 'Gxmpi2', 'Gypi2', 'Gypi', 'Gympi2', 'Gzpi2', 'Gzpi', 'Gzmpi2', 'Gcphase']
         availability = {'Gcphase':[('Q'+str(i),'Q'+str((i+1) % self.num_qubits)) for i in range(self.num_qubits)]}
 
         self.pspec = pygsti.processors.QubitProcessorSpec(self.num_qubits, gate_names, availability=availability,
@@ -455,33 +455,33 @@ class TestBiRBProtocol(BaseCase):
         self.seed = 2021
         self.verbosity = 0
 
-        self.design = pygsti.protocols.BinaryRBDesign(self.pspec, self.clifford_compilations, self.depths, 
+        self.design = pygsti.protocols.BinaryRBDesign(self.pspec, self.clifford_compilations, self.depths,
                                                       self.circuits_per_depth, qubit_labels=self.qubits, layer_sampling='mixed1q2q',
-                                                      sampler=self.sampler, samplerargs=self.samplerargs, 
+                                                      sampler=self.sampler, samplerargs=self.samplerargs,
                                                       seed=self.seed, verbosity=0)
-        
+
         self.target_model =  pygsti.models.create_crosstalk_free_model(self.pspec)
         self.noisy_model =  pygsti.models.create_crosstalk_free_model(self.pspec, depolarization_strengths={name: 0.01 for name in gate_names})
 
-        self.ds = pygsti.data.datasetconstruction.simulate_data(self.target_model, self.design.all_circuits_needing_data, 
+        self.ds = pygsti.data.datasetconstruction.simulate_data(self.target_model, self.design.all_circuits_needing_data,
                                                                 num_samples = 100, seed= self.seed)
-        self.ds_noisy = pygsti.data.datasetconstruction.simulate_data(self.noisy_model, self.design.all_circuits_needing_data, 
+        self.ds_noisy = pygsti.data.datasetconstruction.simulate_data(self.noisy_model, self.design.all_circuits_needing_data,
                                                                 num_samples = 100, seed=self.seed)
-        
+
         self.data = pygsti.protocols.ProtocolData(self.design, self.ds)
         self.data_noisy = pygsti.protocols.ProtocolData(self.design, self.ds_noisy)
-        
+
     def test_birb_protocol_ideal(self):
         proto = pygsti.protocols.rb.RandomizedBenchmarking(datatype='energies', defaultfit='A-fixed', rtype='EI',
                  seed=(0.8, 0.95), bootstrap_samples=200, depths='all', name=None)
-        
+
         result = proto.run(self.data)
         self.assertTrue(abs(result.fits['A-fixed'].estimates['r'])<=3e-5)
-        
+
     def test_birb_protocol_noisy(self):
         proto = pygsti.protocols.rb.RandomizedBenchmarking(datatype='energies', defaultfit='A-fixed', rtype='EI',
                  seed=(0.8, 0.95), bootstrap_samples=200, depths='all', name=None)
-        
+
         result = proto.run(self.data_noisy)
 
 
@@ -489,7 +489,7 @@ class TestCliffordRBProtocol(BaseCase):
     def setUp(self):
         self.num_qubits = 2
         self.qubit_labels = ['Q'+str(i) for i in range(self.num_qubits)]
-        
+
         gate_names = ['Gxpi2', 'Gxmpi2', 'Gypi2', 'Gympi2', 'Gcphase']
         availability = {'Gcphase':[('Q'+str(i),'Q'+str((i+1) % self.num_qubits)) for i in range(self.num_qubits)]}
 
@@ -515,22 +515,22 @@ class TestCliffordRBProtocol(BaseCase):
                                            randomizeout=self.randomizeout, interleaved_circuit=self.interleaved_circuit,
                                            citerations=self.citerations, compilerargs=self.compiler_args, seed=self.seed,
                                            verbosity=self.verbosity, num_processes=1)
-        
+
         self.target_model =  pygsti.models.create_crosstalk_free_model(self.pspec)
         self.noisy_model =  pygsti.models.create_crosstalk_free_model(self.pspec, depolarization_strengths={name: 0.01 for name in gate_names})
 
-        self.ds = pygsti.data.datasetconstruction.simulate_data(self.target_model, self.design.all_circuits_needing_data, 
+        self.ds = pygsti.data.datasetconstruction.simulate_data(self.target_model, self.design.all_circuits_needing_data,
                                                                 num_samples = 100, seed=self.seed)
-        self.ds_noisy = pygsti.data.datasetconstruction.simulate_data(self.noisy_model, self.design.all_circuits_needing_data, 
+        self.ds_noisy = pygsti.data.datasetconstruction.simulate_data(self.noisy_model, self.design.all_circuits_needing_data,
                                                                 num_samples = 100, seed=self.seed)
-        
+
         self.data = pygsti.protocols.ProtocolData(self.design, self.ds)
         self.data_noisy = pygsti.protocols.ProtocolData(self.design, self.ds_noisy)
-        
+
     def test_cliffordrb_protocol_ideal(self):
         proto = pygsti.protocols.rb.RandomizedBenchmarking(datatype='success_probabilities', defaultfit='A-fixed', rtype='EI',
                  seed=(0.8, 0.95), bootstrap_samples=200, depths='all', name=None)
-        
+
         result = proto.run(self.data)
 
         self.assertTrue(abs(result.fits['A-fixed'].estimates['r'])<=3e-5)
@@ -538,18 +538,18 @@ class TestCliffordRBProtocol(BaseCase):
         #also test writing and reading the results from disk.
         result.write(f'{FILE_PATH}/../../test_packages/temp_test_files/test_RandomizedBenchmarking_results')
         result_read = pygsti.io.read_results_from_dir(f'{FILE_PATH}/../../test_packages/temp_test_files/test_RandomizedBenchmarking_results')
-        
+
     def test_cliffordrb_protocol_noisy(self):
         proto = pygsti.protocols.rb.RandomizedBenchmarking(datatype='success_probabilities', defaultfit='A-fixed', rtype='EI',
                  seed=(0.8, 0.95), bootstrap_samples=200, depths='all', name=None)
-        
+
         result = proto.run(self.data_noisy)
 
 class TestDirectRBProtocol(BaseCase):
     def setUp(self):
         self.num_qubits = 2
         self.qubit_labels = ['Q'+str(i) for i in range(self.num_qubits)]
-        
+
         gate_names = ['Gxpi2', 'Gxmpi2', 'Gypi2', 'Gympi2', 'Gcphase']
         availability = {'Gcphase':[('Q'+str(i),'Q'+str((i+1) % self.num_qubits)) for i in range(self.num_qubits)]}
 
@@ -578,30 +578,30 @@ class TestDirectRBProtocol(BaseCase):
                                         addlocal=False, lsargs=(), randomizeout=self.randomizeout, cliffordtwirl=True,
                                         conditionaltwirl=True, citerations=self.citerations, compilerargs=self.compiler_args,
                                         partitioned=False, seed=self.seed, verbosity=self.verbosity, num_processes=1)
-                                    
-        
+
+
         self.target_model =  pygsti.models.create_crosstalk_free_model(self.pspec)
         self.noisy_model =  pygsti.models.create_crosstalk_free_model(self.pspec, depolarization_strengths={name: 0.01 for name in gate_names})
 
-        self.ds = pygsti.data.datasetconstruction.simulate_data(self.target_model, self.design.all_circuits_needing_data, 
+        self.ds = pygsti.data.datasetconstruction.simulate_data(self.target_model, self.design.all_circuits_needing_data,
                                                                 num_samples = 100, seed=self.seed)
-        self.ds_noisy = pygsti.data.datasetconstruction.simulate_data(self.noisy_model, self.design.all_circuits_needing_data, 
+        self.ds_noisy = pygsti.data.datasetconstruction.simulate_data(self.noisy_model, self.design.all_circuits_needing_data,
                                                                 num_samples = 100, seed=self.seed)
-        
+
         self.data = pygsti.protocols.ProtocolData(self.design, self.ds)
         self.data_noisy = pygsti.protocols.ProtocolData(self.design, self.ds_noisy)
-        
+
     def test_directrb_protocol_ideal(self):
         proto = pygsti.protocols.rb.RandomizedBenchmarking(datatype='success_probabilities', defaultfit='A-fixed', rtype='EI',
                  seed=(0.8, 0.95), bootstrap_samples=200, depths='all', name=None)
-        
+
         result = proto.run(self.data)
         self.assertTrue(abs(result.fits['A-fixed'].estimates['r'])<=3e-5)
-        
+
     def test_directrb_protocol_noisy(self):
         proto = pygsti.protocols.rb.RandomizedBenchmarking(datatype='success_probabilities', defaultfit='A-fixed', rtype='EI',
                  seed=(0.8, 0.95), bootstrap_samples=200, depths='all', name=None)
-        
+
         result = proto.run(self.data_noisy)
 
 class TestMirrorRBProtocol(BaseCase):
@@ -609,7 +609,7 @@ class TestMirrorRBProtocol(BaseCase):
         self.num_qubits = 2
         self.qubit_labels = ['Q'+str(i) for i in range(self.num_qubits)]
 
-        gate_names = ['Gi', 'Gxpi2', 'Gxpi', 'Gxmpi2', 'Gypi2', 'Gypi', 'Gympi2', 'Gzpi2', 'Gzpi', 'Gzmpi2', 'Gcphase'] 
+        gate_names = ['Gi', 'Gxpi2', 'Gxpi', 'Gxmpi2', 'Gypi2', 'Gypi', 'Gympi2', 'Gzpi2', 'Gzpi', 'Gzmpi2', 'Gcphase']
         availability = {'Gcphase':[('Q'+str(i),'Q'+str((i+1) % self.num_qubits)) for i in range(self.num_qubits)]}
 
         self.pspec = pygsti.processors.QubitProcessorSpec(self.num_qubits, gate_names, availability=availability,
@@ -634,29 +634,29 @@ class TestMirrorRBProtocol(BaseCase):
                                         sampler=self.sampler, samplerargs=self.samplerargs,
                                         localclifford=True, paulirandomize=True, seed=self.seed, verbosity=self.verbosity,
                                         num_processes=1)
-        
+
         self.target_model =  pygsti.models.create_crosstalk_free_model(self.pspec)
         self.noisy_model =  pygsti.models.create_crosstalk_free_model(self.pspec, depolarization_strengths={name: 0.01 for name in gate_names})
 
-        self.ds = pygsti.data.datasetconstruction.simulate_data(self.target_model, self.design.all_circuits_needing_data, 
+        self.ds = pygsti.data.datasetconstruction.simulate_data(self.target_model, self.design.all_circuits_needing_data,
                                                                 num_samples = 100, seed=self.seed)
-        self.ds_noisy = pygsti.data.datasetconstruction.simulate_data(self.noisy_model, self.design.all_circuits_needing_data, 
+        self.ds_noisy = pygsti.data.datasetconstruction.simulate_data(self.noisy_model, self.design.all_circuits_needing_data,
                                                                 num_samples = 100, seed=self.seed)
-        
+
         self.data = pygsti.protocols.ProtocolData(self.design, self.ds)
         self.data_noisy = pygsti.protocols.ProtocolData(self.design, self.ds_noisy)
-        
+
     def test_mirrorrb_protocol_ideal(self):
         proto = pygsti.protocols.rb.RandomizedBenchmarking(datatype='adjusted_success_probabilities', defaultfit='A-fixed', rtype='EI',
                  seed=(0.8, 0.95), bootstrap_samples=200, depths='all', name=None)
-        
+
         result = proto.run(self.data)
         self.assertTrue(abs(result.fits['A-fixed'].estimates['r'])<=3e-5)
-        
+
     def test_mirrorrb_protocol_noisy(self):
         proto = pygsti.protocols.rb.RandomizedBenchmarking(datatype='adjusted_success_probabilities', defaultfit='A-fixed', rtype='EI',
                  seed=(0.8, 0.95), bootstrap_samples=200, depths='all', name=None)
-        
+
         result = proto.run(self.data_noisy)
 
 
@@ -666,7 +666,7 @@ class TestInterleavedRBProtocol(BaseCase):
         qubit_labels = ['Q0']
         gate_names = ['Gxpi2', 'Gxmpi2', 'Gypi2', 'Gympi2']
         pspec = QPS(n_qubits, gate_names, qubit_labels=qubit_labels)
-        compilations = {'absolute': CCR.create_standard(pspec, 'absolute', ('paulis', '1Qcliffords'), verbosity=0),            
+        compilations = {'absolute': CCR.create_standard(pspec, 'absolute', ('paulis', '1Qcliffords'), verbosity=0),
                         'paulieq': CCR.create_standard(pspec, 'paulieq', ('1Qcliffords', 'allcnots'), verbosity=0)}
         interleaved_circuit = Circuit([Label('Gxpi2', 'Q0')], line_labels=('Q0',))
 
@@ -682,40 +682,40 @@ class TestInterleavedRBProtocol(BaseCase):
         self.design = _rb.InterleavedRBDesign(pspec, compilations, depths, circuits_per_depth, interleaved_circuit, qubit_labels,
                                            randomizeout=randomizeout, citerations=citerations, compilerargs=compiler_args, seed=seed,
                                            verbosity=verbosity, num_processes=1)
-        
+
         self.target_model =  pygsti.models.create_crosstalk_free_model(pspec)
         self.target_model.sim = 'map'
         depolarization_strengths={g:0.01 for g in pspec.gate_names if g!= 'Gxpi2'}
         depolarization_strengths['Gxpi2'] = 0.02
         self.noisy_model =  pygsti.models.create_crosstalk_free_model(pspec, depolarization_strengths=depolarization_strengths)
         self.noisy_model.sim = 'map'
-        self.ds = pygsti.data.datasetconstruction.simulate_data(self.target_model, self.design.all_circuits_needing_data, 
+        self.ds = pygsti.data.datasetconstruction.simulate_data(self.target_model, self.design.all_circuits_needing_data,
                                                                 num_samples = 1000, seed=seed)
-        self.ds_noisy = pygsti.data.datasetconstruction.simulate_data(self.noisy_model, self.design.all_circuits_needing_data, 
+        self.ds_noisy = pygsti.data.datasetconstruction.simulate_data(self.noisy_model, self.design.all_circuits_needing_data,
                                                                 num_samples = 1000, seed=seed)
-        
+
         self.data = pygsti.protocols.ProtocolData(self.design, self.ds)
         self.data_noisy = pygsti.protocols.ProtocolData(self.design, self.ds_noisy)
-        
+
     def test_interleavedrb_protocol_ideal(self):
         #running with all default settings
         proto = _rb.InterleavedRandomizedBenchmarking()
-        
+
         result = proto.run(self.data)
-        estimated_irb_num = result.for_protocol['InterleavedRandomizedBenchmarking'].irb_numbers['full'] 
+        estimated_irb_num = result.for_protocol['InterleavedRandomizedBenchmarking'].irb_numbers['full']
         self.assertTrue(abs(estimated_irb_num) <= 1e-5)
 
         #also test writing and reading the results from disk.
         result.write(f'{FILE_PATH}/../../test_packages/temp_test_files/test_InterleavedRandomizedBenchmarking_results')
         result_read = pygsti.io.read_results_from_dir(f'{FILE_PATH}/../../test_packages/temp_test_files/test_InterleavedRandomizedBenchmarking_results')
-        
-        
+
+
     def test_interleavedrb_protocol_noisy(self):
         #running with all default settings
         proto = _rb.InterleavedRandomizedBenchmarking()
-        
+
         result = proto.run(self.data_noisy)
-        estimated_irb_num = result.for_protocol['InterleavedRandomizedBenchmarking'].irb_numbers['full'] 
+        estimated_irb_num = result.for_protocol['InterleavedRandomizedBenchmarking'].irb_numbers['full']
         print(result.for_protocol['InterleavedRandomizedBenchmarking'].irb_numbers)
 
         self.assertTrue(abs(estimated_irb_num-0.02) <= 5e-3)
