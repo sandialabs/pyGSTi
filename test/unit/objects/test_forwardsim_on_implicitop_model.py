@@ -24,11 +24,23 @@ def assert_probability_densities_are_equal(op_dict: dict, exp_dict: dict, cir: C
 
     for key, val in op_dict.items():
         assert key in exp_dict
-        try:
-            assert np.allclose(exp_dict[key], val), f"Circuit {cir}, Outcome {key}, Expected: {exp_dict[key]}, Got: {val}"
-        except:
-            breakpoint()
-            raise AssertionError()
+        assert np.allclose(val, exp_dict[key]), f"Circuit {cir}, Outcome {key}, Expected: {exp_dict[key]}, Got: {val}"
+        # try:
+        # except:
+            # breakpoint()
+            # raise AssertionError()
+
+def convert_dict_of_dist_to_array(my_dictionary: dict) -> np.ndarray:
+
+    out = [[] for _ in my_dictionary.keys()]
+
+    for i, key in enumerate(sorted(my_dictionary.keys())):
+        val = my_dictionary[key]
+        if isinstance(val, dict):
+            val = convert_dict_of_dist_to_array(val)
+        out[i] = val
+
+    return np.array(out)
 
 #region Model Construction
 def construct_arbitrary_single_qubit_unitary(alpha, beta, gamma, delta):
@@ -324,6 +336,24 @@ def test_tensor_product_single_unitaries_random_collection_of_xyz():
         assert_probability_densities_are_equal(probs, exp, circuit100)
 
 
+def test_tensor_product_two_qubit_gates_bulk():
+
+    num_qubits = 4
+
+    under_test, expected_model = build_models_for_testing(num_qubits)
+
+    circuitECR01 = Circuit([[("Gecr", 0, 1), ("Gi", 2), ("Gzpi2", 3)]])
+    circuitECR10 = Circuit([[("Gecr", 1, 0), ("Gi", 2), ("Gzpi2", 3)]])
+
+    circ_list = [circuitECR01, circuitECR10]
+
+    probs = under_test.sim.bulk_probs(circ_list)
+    exp = expected_model.sim.bulk_probs(circ_list)
+
+    for cir in circ_list:
+        assert_probability_densities_are_equal(probs[cir], exp[cir], cir)
+
+
 def test_tensor_product_two_qubit_gates():
 
     num_qubits = 4
@@ -417,19 +447,22 @@ def test_tensor_product_two_qubit_gates_dprobs_bulk():
 
     num_qubits = 4
 
-    under_test, expected_model = build_models_for_testing(num_qubits, simplify_for_dprobs=True)
+    under_test, expected_model = build_models_for_testing(num_qubits, independent_gates=True, simplify_for_dprobs=True)
 
     circuitECR01 = Circuit([[("Gecr", 0, 1), ("Gi", 2), ("Gzpi2", 3)]])
     circuitECR10 = Circuit([[("Gecr", 1, 0), ("Gi", 2), ("Gzpi2", 3)]])
 
     circ_list = [circuitECR01, circuitECR10]
-    dprobs = under_test.sim.bulk_dprobs(circ_list)
     exp = expected_model.sim.bulk_dprobs(circ_list)
+
+    breakpoint()
+    dprobs = under_test.sim.bulk_dprobs(circ_list)
 
 
     for cir in circ_list:
         assert_probability_densities_are_equal(dprobs[cir], exp[cir], cir)
 
+test_tensor_product_two_qubit_gates_dprobs_bulk()
 
 def test_tensor_product_single_unitaries_yield_right_results_dprobs():
 
@@ -455,6 +488,31 @@ def test_tensor_product_single_unitaries_yield_right_results_dprobs():
 
         assert_probability_densities_are_equal(probs, exp, cir)
 
+def test_tensor_product_single_unitaries_yield_right_results_dprobs_bulk():
+
+    import importlib as _importlib
+
+    num_qubits = 2
+
+    under_test, expected_model = build_models_for_testing(num_qubits, independent_gates=True, simplify_for_dprobs=True)
+
+    circuitNone = Circuit([], num_lines=num_qubits)
+    single_layer = tuple([("Gxpi2", i) for i in range(num_qubits)])
+    circuitX = Circuit([single_layer], num_lines=num_qubits)
+    circuitY = Circuit([("Gypi2", i) for i in range(num_qubits)], num_lines=num_qubits)
+    circuitZ = Circuit([("Gzpi2", i) for i in range(num_qubits)], num_lines=num_qubits)
+    circuitIdle = Circuit([("Gi", i) for i in range(num_qubits)], num_lines=num_qubits)
+
+    circuits = [circuitNone, circuitX, circuitY, circuitZ, circuitIdle]
+
+    probs = under_test.sim.bulk_dprobs(circuits)
+    exp = expected_model.sim.bulk_dprobs(circuits)
+
+
+    for cir in circuits:
+        assert_probability_densities_are_equal(probs[cir], exp[cir], cir)
+
+# test_tensor_product_single_unitaries_yield_right_results_dprobs_bulk()
 
 def test_tensor_product_single_unitaries_random_collection_of_xyz_dprobs():
 
@@ -529,3 +587,136 @@ def test_tensor_product_multi_qubit_gates_with_structured_lanes_dprobs():
 
 #endregion Derivative of Probabilities consistencies.
 
+
+
+
+def test_reconstruct_full_matrices_returns_in_correct_order():
+
+    num_qubits = 4
+    under_test, expected_model = build_models_for_testing(num_qubits, independent_gates=True)
+
+    circ_list = []
+    circuitX = Circuit([("Gxpi2", i) for i in range(num_qubits)], num_lines=num_qubits)
+    circuitY = Circuit([("Gypi2", i) for i in range(num_qubits)], num_lines=num_qubits)
+    circuitZ = Circuit([("Gzpi2", i) for i in range(num_qubits)], num_lines=num_qubits)
+    circuitIdle = Circuit([("Gi", i) for i in range(num_qubits)], num_lines=num_qubits)
+    circuitECR01 = Circuit([[("Gecr", 0, 1), ("Gi", 2), ("Gzpi2", 3)]])
+    circuitECR10 = Circuit([[("Gecr", 1, 0), ("Gi", 2), ("Gzpi2", 3)]])
+
+    circ_list = [circuitX, circuitY, circuitZ, circuitIdle, circuitECR10, circuitECR01]
+
+    layout = under_test.sim.create_layout(circ_list, array_types='ep')
+
+    atom = layout.atoms[0]
+    atom.tree.collapse_circuits_to_process_matrices(under_test, None)
+
+    Gs, _ = atom.tree.reconstruct_full_matrices(under_test, None)
+
+    expected_vals = []
+    for cir in circ_list:
+        val = np.eye(4**num_qubits)
+        for i in range(len(cir)):
+            term = expected_model.circuit_layer_operator(cir[i]).to_dense()
+            val = term @ val
+
+        expected_vals.append(val)
+
+    
+    for i, cir in enumerate(circ_list):
+
+        kron_version = Gs[i].to_full_array()
+        assert np.allclose(kron_version, expected_vals[i])
+
+    print()
+
+def test_application_is_equivalent():
+
+    num_qubits = 4
+    under_test, expected_model = build_models_for_testing(num_qubits, independent_gates=True)
+
+    circ_list = []
+    circuitX = Circuit([("Gxpi2", i) for i in range(num_qubits)], num_lines=num_qubits)
+    circuitY = Circuit([("Gypi2", i) for i in range(num_qubits)], num_lines=num_qubits)
+    circuitZ = Circuit([("Gzpi2", i) for i in range(num_qubits)], num_lines=num_qubits)
+    circuitIdle = Circuit([("Gi", i) for i in range(num_qubits)], num_lines=num_qubits)
+    circuitECR01 = Circuit([[("Gecr", 0, 1), ("Gi", 2), ("Gzpi2", 3)]])
+    circuitECR10 = Circuit([[("Gecr", 1, 0), ("Gi", 2), ("Gzpi2", 3)]])
+
+    circ_list = [circuitX, circuitY, circuitZ, circuitIdle, circuitECR10, circuitECR01]
+
+    layout = under_test.sim.create_layout(circ_list, array_types='ep')
+
+    atom = layout.atoms[0]
+    atom.tree.collapse_circuits_to_process_matrices(under_test, None)
+
+    Gs, _ = atom.tree.reconstruct_full_matrices(under_test, None)
+
+    rhs = np.eye(4**num_qubits)
+    for i, cir in enumerate(circ_list):
+
+        kron_version = Gs[i].to_full_array()
+        
+        full = kron_version @ rhs
+        the_trick = Gs[i] @ rhs
+
+        assert np.allclose(the_trick, full)
+
+    print()
+    
+def test_reconstructed_vals_update_with_dprobs():
+
+    num_qubits = 4
+    under_test, expected_model = build_models_for_testing(num_qubits, independent_gates=True)
+
+    circ_list = []
+    circuitX = Circuit([("Gxpi2", i) for i in range(num_qubits)], num_lines=num_qubits)
+    circuitY = Circuit([("Gypi2", i) for i in range(num_qubits)], num_lines=num_qubits)
+    circuitZ = Circuit([("Gzpi2", i) for i in range(num_qubits)], num_lines=num_qubits)
+    circuitIdle = Circuit([("Gi", i) for i in range(num_qubits)], num_lines=num_qubits)
+    circuitECR01 = Circuit([[("Gecr", 0, 1), ("Gi", 2), ("Gzpi2", 3)]])
+    circuitECR10 = Circuit([[("Gecr", 1, 0), ("Gi", 2), ("Gzpi2", 3)]])
+
+    circ_list = [circuitX, circuitY, circuitZ, circuitIdle, circuitECR10, circuitECR01]
+    circ_list = [circuitX, circuitY, circuitIdle, circuitECR01, circuitECR10]
+
+    layout = under_test.sim.create_layout(circ_list, array_types='ep')
+
+    atom = layout.atoms[0]
+    atom.tree.collapse_circuits_to_process_matrices(under_test, None)
+
+    original_Gs, _ = atom.tree.reconstruct_full_matrices(under_test, None)
+
+    eps = 1e-7
+
+    orig_vec = under_test.to_vector().copy()
+    for i in range(under_test.num_params):
+
+        new_vec = orig_vec.copy()
+        new_vec[i] += eps
+
+        under_test.from_vector(new_vec)
+        expected_model.from_vector(new_vec)
+
+        atom.tree.collapse_circuits_to_process_matrices(under_test, i)
+
+        new_Gs, _ = atom.tree.reconstruct_full_matrices(under_test, None) # Return all of them
+
+        expected_vals = []
+        for cir in circ_list:
+            val = np.eye(4**num_qubits)
+            for j in range(len(cir)):
+                term = expected_model.circuit_layer_operator(cir[j]).to_dense()
+                val = term @ val
+
+            expected_vals.append(val)
+
+    
+        for j, cir in enumerate(circ_list):
+
+            kron_version = new_Gs[j].to_full_array()
+            assert np.allclose(kron_version, expected_vals[j])
+
+    print()
+
+
+test_reconstructed_vals_update_with_dprobs()

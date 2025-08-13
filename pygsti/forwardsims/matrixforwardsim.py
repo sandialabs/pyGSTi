@@ -2509,6 +2509,7 @@ class LCSEvalTreeMatrixForwardSimulator(MatrixForwardSimulator):
 
         _, rho_gpindices = self._process_wrt_filter(param_indices, sp_obj)
         for i in range(len(rho_gpindices)):
+            probs2[:] = base_probs[:]
             iFinal = iParamToFinal[rho_gpindices[i]]
             
             new_vec = orig_vec.copy()
@@ -2525,6 +2526,7 @@ class LCSEvalTreeMatrixForwardSimulator(MatrixForwardSimulator):
  
         _, povm_gpindices = self._process_wrt_filter(param_indices, self.model.circuit_layer_operator(self.model.primitive_povm_labels[0], "povm"))
         for i in range(len(povm_gpindices)):
+            probs2[:] = base_probs[:]
             iFinal = iParamToFinal[povm_gpindices[i]]
             new_vec = orig_vec.copy()
             new_vec[povm_gpindices[i]] += eps
@@ -2559,7 +2561,7 @@ class LCSEvalTreeMatrixForwardSimulator(MatrixForwardSimulator):
 
             for j in range(len(inds_to_update)):
                 for k in range(len(elm_indices)):
-                    probs2[elm_indices[k][inds_to_update[j]]] = tmp[k, inds_to_update[j]]
+                    probs2[elm_indices[k][inds_to_update[j]]] = tmp[k, j]
 
 
             # if len(Gs) > 0:
