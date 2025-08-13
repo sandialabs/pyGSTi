@@ -178,7 +178,7 @@ class PrefixTable(object):
             to the lightest subtree such that ratios below this value are considered sufficiently
             balanced and processing stops.
 
-        minimum_improvement_threshold : float, optional (default .1)
+        minimum_improvement_threshold : float, optional (default 0.1)
             A parameter for the final load balancing refinement process that sets a minimum balance
             improvement (improvement to the ratio of the sizes of two subtrees) such that a rebalancing
             step is considered worth performing (even if it would otherwise bring the imbalance parameter
