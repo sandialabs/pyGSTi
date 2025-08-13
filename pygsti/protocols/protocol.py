@@ -951,7 +951,7 @@ class ExperimentDesign(_TreeNode, _MongoSerializable):
         """
         raise NotImplementedError("This protocol edesign cannot create any subdata!")
 
-    def promote_to_combined(self, name="**0"):
+    def promote_to_combined(self, name="subdesign-0"):
         """
         Promote this experiment design to be a combined experiment design.
 
@@ -1330,7 +1330,7 @@ class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the
         A dictionary of other :class:`ExperimentDesign` objects whose keys
         are names for each sub-edesign (used for directories and to index
         the sub-edesigns from this experiment design).  If a list is given instead,
-        a default names of the form " `**<number>` " are used.
+        a default names of the form " `subdesign-<number>` " are used.
 
     all_circuits : list, optional
         A list of :class:`Circuit`s, specifying all the circuits needing
@@ -1354,7 +1354,7 @@ class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the
         form the circuit ordering of this experiment design. DEPRECATED
     """
 
-    def _create_all_circuits_needing_data(self, subdesigns=None):
+    def _create_all_circuits_needing_data(self, sub_designs=None, interleave=False):
         """Create all_circuits_needing_data for other information.
 
         This interface is needed to ensure that all_circuits_needing_data
@@ -1372,11 +1372,19 @@ class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the
         all_circuits: list of Circuits
             Union of all_circuits_needing_data from subdesigns without duplicates
         """
-        subdesigns = self._vals if subdesigns is None else subdesigns
+        sub_designs = self._vals if sub_designs is None else sub_designs
         all_circuits = []
-        for des in subdesigns.values():
-            all_circuits.extend(des.all_circuits_needing_data)
-        _lt.remove_duplicates_in_place(all_circuits)  # Maybe don't always do this?
+        if interleave:
+            subdesign_circuit_lists = [sub_design.all_circuits_needing_data for sub_design in sub_designs.values()]
+            #zip_longest is like zip, but if the iterables are of different lengths it returns a specified fill value
+            #(default None) in place of the missing elements once an iterable has been exhausted.
+            for circuits in _itertools.zip_longest(*subdesign_circuit_lists):
+                for circuit in circuits:
+                    if circuit is not None:
+                        all_circuits.append(circuit)
+        else:
+            for des in sub_designs.values():
+                all_circuits.extend(des.all_circuits_needing_data)
         return all_circuits
 
     @classmethod
@@ -1418,7 +1426,7 @@ class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the
             A dictionary of other :class:`ExperimentDesign` objects whose keys
             are names for each sub-edesign (used for directories and to index
             the sub-edesigns from this experiment design).  If a list is given instead,
-            a default names of the form " `**<number>` " are used.
+            a default names of the form " `subdesign-<number>` " are used.
 
         all_circuits : list, optional
             A list of :class:`Circuit`s, specifying all the circuits needing
@@ -1447,22 +1455,10 @@ class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the
         """
 
         if not isinstance(sub_designs, dict):
-            sub_designs = {("**%d" % i): des for i, des in enumerate(sub_designs)}
+            sub_designs = {f'subdesign-{i}': des for i, des in enumerate(sub_designs)}
 
         if all_circuits is None:
-            all_circuits = []
-            if interleave:
-                subdesign_circuit_lists = [sub_design.all_circuits_needing_data for sub_design in sub_designs.values()]
-                #zip_longest is like zip, but if the iterables are of different lengths it returns a specified fill value
-                #(default None) in place of the missing elements once an iterable has been exhausted.
-                for circuits in _itertools.zip_longest(*subdesign_circuit_lists):
-                    for circuit in circuits:
-                        if circuit is not None:
-                            all_circuits.append(circuit)
-            else:
-                for des in sub_designs.values():
-                    all_circuits.extend(des.all_circuits_needing_data)
-            _lt.remove_duplicates_in_place(all_circuits)  # Maybe don't always do this?
+            all_circuits = self._create_all_circuits_needing_data(sub_designs, interleave)
 
         if qubit_labels is None and len(sub_designs) > 0:
             first = sub_designs[list(sub_designs.keys())[0]].qubit_labels

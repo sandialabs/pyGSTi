@@ -12,8 +12,6 @@ from datetime import datetime as _datetime
 from functools import partial as _partial
 import json as _json
 import numpy as _np
-import os as _os
-from pathos import multiprocessing as _mp
 import pathlib as _pathlib
 import pickle as _pickle
 import time as _time
@@ -30,24 +28,22 @@ except:
     _qiskit = None
 
 # Try to load IBM Runtime
-# try: 
-#     from qiskit_ibm_runtime import SamplerV2 as _Sampler
-#     from qiskit_ibm_runtime import Session as _Session
-#     from qiskit_ibm_runtime import RuntimeJobV2 as _RuntimeJobV2
-#     from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager as _pass_manager
-# except: _Sampler = None
-from qiskit_ibm_runtime import SamplerV2 as _Sampler
-from qiskit_ibm_runtime import Session as _Session
-from qiskit_ibm_runtime import RuntimeJobV2 as _RuntimeJobV2
-from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager as _pass_manager
+try: 
+    from qiskit_ibm_runtime import SamplerV2 as _Sampler
+    from qiskit_ibm_runtime import Session as _Session
+    from qiskit_ibm_runtime import RuntimeJobV2 as _RuntimeJobV2
+    from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager as _pass_manager
+except: _Sampler = None
 
-# Most recent version of QisKit that this has been tested on:
-#qiskit.__version__ = '1.1.1'
-#qiskit_ibm_runtime.__version__ = '0.25.0'
-# Note that qiskit<1.0 is going EOL in August 2024,
-# and v1 backends are also being deprecated (we now support only v2)
-# Also qiskit-ibm-provider is ALSO being deprecated,
-# so I'm only supporting runtime here
+# Tim updated to Qiskit 2.1.0
+# OLD COMMENT FROM STEFAN?
+# # Most recent version of QisKit that this has been tested on:
+# # qiskit.__version__ = '1.1.1'
+# # qiskit_ibm_runtime.__version__ = '0.25.0'
+# # Note that qiskit<1.0 is going EOL in August 2024,
+# # and v1 backends are also being deprecated (we now support only v2)
+# # Also qiskit-ibm-provider is ALSO being deprecated,
+# # so I'm only supporting runtime here
 
 try:
     from bson import json_util as _json_util
@@ -123,6 +119,9 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
             exp_dir = p / 'ibmqexperiment'
             attributes_from_meta = _io.load_meta_based_dir(exp_dir)
 
+            if attributes_from_meta['batch_results'] is None:
+                attributes_from_meta['batch_results'] = []
+
             # Don't override checkpoint during this construction
             ret = cls(edesign, None, disable_checkpointing=True)
             ret.__dict__.update(attributes_from_meta)
@@ -184,7 +183,6 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
 
         self.auxfile_types = {}
         _HasPSpec.__init__(self, pspec)
-
         self.edesign = edesign
         self.remove_duplicates = remove_duplicates
         self.randomized_order = randomized_order
@@ -298,12 +296,13 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
                 #     output_dict[new_string] = input_dict[bitstring]
             return output_dict
 
-        if len(self.batch_results):
-            print(f'Already retrieved results of {len(self.batch_results)}/{len(self.qiskit_isa_circuit_batches)} circuit batches')
+        #if len(self.batch_results):
+        #    print(f'Already retrieved results of {len(self.batch_results)}/{len(self.qiskit_isa_circuit_batches)} circuit batches')
 
         #get results from backend jobs and add to dict
         ds = _data.DataSet()
-        for exp_idx in range(len(self.batch_results), len(self.qjobs)):
+        # for exp_idx in range(len(self.batch_results), len(self.qjobs)):
+        for exp_idx in range(0, len(self.qjobs)):
             qjob = self.qjobs[exp_idx]
             print(f"Querying IBMQ for results objects for batch {exp_idx + 1}...")
             batch_result = qjob.result()
@@ -329,7 +328,7 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         if not self.disable_checkpointing:
             self.data.write(self.checkpoint_path, edesign_already_written=True)
 
-    def submit(self, ibmq_backend, is_simulator=False, start=None, stop=None, ignore_job_limit=True, wait_time=5, max_attempts=10):
+    def submit(self, ibmq_backend, is_simulator=False, start=None, stop=None, ignore_job_limit=True, wait_time=5, max_attempts=10, ibmq_session=None):
         """
         Submits the jobs to IBM Q, that implements the experiment specified by the ExperimentDesign
         used to create this object.
@@ -367,6 +366,9 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         wait_steps: int
             Number of steps to take before retrying job submission.
 
+        ibmq_session: IBMQuantumRuntimeSession
+            IBMQuantumRuntime Session to use 
+
         Returns
         -------
         None
@@ -399,7 +401,9 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
 
             stop = min(start + allowed_jobs, stop)
         
-        ibmq_session = _Session(backend = ibmq_backend)
+        if ibmq_session is None: 
+            ibmq_session = _Session(backend = ibmq_backend)
+
         sampler = _Sampler(mode=ibmq_session)
         
         for batch_idx, batch in enumerate(self.qiskit_isa_circuit_batches):
@@ -513,7 +517,6 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
                   qiskit_pass_kwargs=None,
                   qasm_convert_kwargs=None,
                   qiskit_convert_kwargs=None,
-                  do_parallel=False,
                   num_workers=1,
                   ):
         """Transpile pyGSTi circuits into Qiskit circuits for submission to IBMQ.
@@ -548,10 +551,6 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
             If not defined, the default is {'num_qubits': self.processor_spec.num_qubits,
             'qubit_conversion': 'remove-Q', 'block_between_layers': True,
             'qubits_to_measure': 'active'}.
-
-        do_parallel: bool
-            Toggle multiprocessing. If True, checkpointing is not performed until all
-            circuits have been transpiled.
 
         num_workers: int, optional
             Number of workers to use for parallel (by batch) transpilation
@@ -630,32 +629,22 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
                         direct_to_qiskit=direct_to_qiskit,
                         qiskit_convert_kwargs=qiskit_convert_kwargs)
 
-        if do_parallel:
-        # Run in parallel (p.imap) with progress bars (tqdm)
-            with _mp.Pool(num_workers) as p:
-                isa_circuits = list(_tqdm.tqdm(p.imap(task_fn, tasks), total=len(tasks)))
-
-            self.qiskit_isa_circuit_batches += isa_circuits
-
-            #TODO: add checkpointing once all circuits are transpiled.
-
-        else:
-            for task in _tqdm.tqdm(tasks):
-                self.qiskit_isa_circuit_batches.append(task_fn(task))
+        for task in _tqdm.tqdm(tasks):
+            self.qiskit_isa_circuit_batches.append(task_fn(task))
 
                 # Save single batch
-                if not self.disable_checkpointing:
-                    chkpt_path = _pathlib.Path(self.checkpoint_path) / "ibmqexperiment"
-                    with open(chkpt_path / 'meta.json', 'r') as f:
-                        metadata = _json.load(f)
+            if not self.disable_checkpointing:
+                chkpt_path = _pathlib.Path(self.checkpoint_path) / "ibmqexperiment"
+                with open(chkpt_path / 'meta.json', 'r') as f:
+                    metadata = _json.load(f)
 
-                    filenm = f"qiskit_isa_circuit_batches{len(self.qiskit_isa_circuit_batches)-1}"
-                    _metadir._write_auxfile_member(chkpt_path, filenm, 'qpy', self.qiskit_isa_circuit_batches[-1])    
-                    if 'qiskit_isa_circuit_batches' in metadata:
-                        metadata['qiskit_isa_circuit_batches'].append(None)
-                    
-                    with open(chkpt_path / 'meta.json', 'w') as f:
-                        _json.dump(metadata, f)
+                filenm = f"qiskit_isa_circuit_batches{len(self.qiskit_isa_circuit_batches)-1}"
+                _metadir._write_auxfile_member(chkpt_path, filenm, 'qpy', self.qiskit_isa_circuit_batches[-1])    
+                if 'qiskit_isa_circuit_batches' in metadata:
+                    metadata['qiskit_isa_circuit_batches'].append(None)
+                
+                with open(chkpt_path / 'meta.json', 'w') as f:
+                    _json.dump(metadata, f)
 
     def write(self, dirname=None):
         """
