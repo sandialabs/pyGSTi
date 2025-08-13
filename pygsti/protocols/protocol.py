@@ -1315,7 +1315,7 @@ class CircuitListsDesign(ExperimentDesign):
                                   nested=nested, remove_duplicates=remove_duplicates)
 
 
-class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the same dataset
+class CombinedExperimentDesign(CanCreateAllCircuitsDesign):  # for multiple designs on the same dataset
     """
     An experiment design that combines the specifications of one or more "sub-designs".
 
