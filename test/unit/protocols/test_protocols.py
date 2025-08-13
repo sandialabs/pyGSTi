@@ -180,6 +180,7 @@ class ExperimentDesignTester(BaseCase):
                 self.assertTrue((root2 / 'edesign' / 'all_circuits_needing_data.txt').exists())
     
     def test_dataframe_conversion(self):
+        self.skipTest('Will turn this back on when we figure out a new incompatibility due to changes in python 3.12 and pandas 2.3.1')
         # Currently this is just FreeformDesign, but who knows if we add dataframe support to others in the future
         edesigns = self._get_tester_edesigns()
         freeform_design = edesigns[4]
