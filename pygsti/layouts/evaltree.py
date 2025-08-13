@@ -617,7 +617,6 @@ class EvalTreeBasedUponLongestCommonSubstring():
             cache_pos = -1
             while max_rounds > 1:
 
-                breakpoint()
                 tmp = simplify_internal_first_one_round(new_circuit_list, 
                                                         internal_matches,
                                                         cache_pos,
@@ -836,6 +835,7 @@ class EvalTreeBasedUponLongestCommonSubstring():
                         # NOTE: unclear when (if ever) this should be a noisy idle gate.
                     else:
                         local_changes[cache_ind] = cumulative_term
+
                 return local_changes, self.circuit_to_save_location
 
             return self.results, self.circuit_to_save_location
@@ -913,6 +913,10 @@ class EvalTreeBasedUponLongestCommonSubstring():
                             results_cache: dict[int | LabelTupTup, _np.ndarray],
                             globally_invalid_cache_inds: list[Union[int, Label]]) -> _np.ndarray:
 
+        if cumulative_term is None:
+            return results_cache[term_to_extend_with]
+        return results_cache[term_to_extend_with] @ cumulative_term
+
         if isinstance(term_to_extend_with, int):
             if term_to_extend_with in globally_invalid_cache_inds[:-1]:
                 # look up the result in the local results cache.
@@ -950,10 +954,27 @@ class EvalTreeBasedUponLongestCommonSubstring():
 
         """
 
-        if (term_to_extend_with in local_results_cache) or (term_to_extend_with in self.results):
-            # It is in one of the caches.
+        if (term_to_extend_with in local_results_cache):
             return self.handle_results_cache_lookup_and_product(cumulative_term, term_to_extend_with,
-                                                local_results_cache, globally_invalid_cache_inds)
+                                                                local_results_cache, globally_invalid_cache_inds)
+        elif isinstance(term_to_extend_with, int) and \
+            (term_to_extend_with not in globally_invalid_cache_inds[:-1]) and \
+                (term_to_extend_with in self.results):
+            
+            return self.handle_results_cache_lookup_and_product(cumulative_term, term_to_extend_with,
+                                                                self.results, globally_invalid_cache_inds)
+        elif isinstance(term_to_extend_with, LabelTupTup) and \
+            not (any([t in globally_invalid_cache_inds[-1:] for t in term_to_extend_with])) \
+                and (term_to_extend_with in self.results):        
+            return self.handle_results_cache_lookup_and_product(cumulative_term, term_to_extend_with,
+                                                                self.results, globally_invalid_cache_inds)
+        
+        # elif isinstance(term_to_extend_with, LabelTup) and \
+        #     (term_to_extend_with not in globally_invalid_cache_inds[-1:]) \
+        #         and (term_to_extend_with in self.results):        
+        #     return self.handle_results_cache_lookup_and_product(cumulative_term, term_to_extend_with,
+        #                                                         local_results_cache, globally_invalid_cache_inds)
+
         else:
             val = 1
             qubits_available = [i + self.qubit_start_point for i in range(num_qubits_in_default)]

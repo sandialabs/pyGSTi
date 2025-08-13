@@ -122,5 +122,5 @@ class KronStructured(RealLinOp):
         """
         output = 1
         for i in range(len(self.kron_operands)):
-            output = np.kron(self.kron_operands[i], output)
+            output = np.kron(output, self.kron_operands[i])
         return output

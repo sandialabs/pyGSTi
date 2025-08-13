@@ -2247,12 +2247,12 @@ class LCSEvalTreeMatrixForwardSimulator(MatrixForwardSimulator):
 
         assert e.ndim == 2
         ## WHY ??? assert e[0] > 1
-        out = _np.zeros((len(gs), len(e)))
+        out = _np.zeros((len(e), len(gs)))
         for i in range(len(gs)):
-            out[i] = _np.squeeze(e @ (gs[i] @ rho), axis=(1))
+            out[:, i] = _np.squeeze(e @ (gs[i] @ rho), axis=(1))
 
         if not return_two_D:
-            out = out.reshape((len(gs)*len(e)), order="C")
+            out = out.reshape((len(gs)*len(e)))
         return out
         return _np.squeeze(e @ (gs @ rho), axis=(2)) # only one rho.
 
@@ -2498,7 +2498,9 @@ class LCSEvalTreeMatrixForwardSimulator(MatrixForwardSimulator):
 
         probs2 = _np.empty(layout_atom.num_elements, 'd')
         
-        sp_obj, povm_objs, _, tree_indices = self._layout_atom_to_rho_es_elm_inds_and_tree_inds_objs(layout_atom)
+        sp_obj, povm_objs, elm_indices, tree_indices = self._layout_atom_to_rho_es_elm_inds_and_tree_inds_objs(layout_atom)
+
+        elm_indices = [_slct.indices(elm) for elm in elm_indices]
 
         orig_dense_sp = sp_obj.to_dense(on_space="minimal")[:,None] # To maintain expected shape.
         dense_povms = _np.vstack([_np.conjugate(_np.transpose(povm.to_dense(on_space='minimal')[:, None])) for povm in povm_objs])
@@ -2553,16 +2555,21 @@ class LCSEvalTreeMatrixForwardSimulator(MatrixForwardSimulator):
             layout_atom.tree.collapse_circuits_to_process_matrices(self.model, remaining_param_inds[i])
             Gs, inds_to_update = layout_atom.tree.reconstruct_full_matrices(self.model, remaining_param_inds[i])
 
-
-            probs2 = probs2.reshape((layout_atom.num_elements // len(tVals), len(tVals)), order="C")
-            probs2 = probs2.T
-        
             tmp = self._probs_from_rho_e(orig_dense_sp, dense_povms, Gs, return_two_D=True)
-            if len(inds_to_update) > 0:
-                breakpoint()
-            probs2[inds_to_update] = tmp
-            probs2 = probs2.T
-            probs2 = probs2.reshape(layout_atom.num_elements, order="C")
+
+            for j in range(len(inds_to_update)):
+                for k in range(len(elm_indices)):
+                    probs2[elm_indices[k][inds_to_update[j]]] = tmp[k, inds_to_update[j]]
+
+
+            # if len(Gs) > 0:
+            #     probs2 = probs2.reshape((layout_atom.num_elements // len(tVals), len(tVals)), order="F")
+            
+            #     tmp = self._probs_from_rho_e(orig_dense_sp, dense_povms, Gs, return_two_D=True)
+                
+            #     if len(tmp) > 0:
+            #         probs2[:, inds_to_update] = tmp
+            #     probs2 = probs2.reshape(layout_atom.num_elements, order="F")
 
             array_to_fill[:, iFinal] = (probs2 - base_probs) / eps
 
