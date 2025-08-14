@@ -702,7 +702,7 @@ class EvalTreeBasedUponLongestCommonSubstring():
 
         self.alphabet_val_to_sorted_cache_inds: dict[LabelTup, list[int]] = {}
 
-        self.gpindex_to_cache_vals: dict[int, list[int]] = {}
+        self.gpindex_to_cache_vals: dict[int, tuple[list[int], list[Label]]] = {}
         # This will be filled later by _gpindex_to_cache_inds_needed_to_recompute when we have access to the model.
         # Warning that changing the model paramvec will result in this cache becoming invalidated.
         # The user is currently in charge of resetting this cache.
@@ -728,7 +728,9 @@ class EvalTreeBasedUponLongestCommonSubstring():
         if gp_index_changing in self.gpindex_to_cache_vals:
             return self.gpindex_to_cache_vals[gp_index_changing]
 
-        cache_inds = []
+        cache_inds: list[int] = []
+        all_op_inds: list[int] = []
+        invalid_lbls: list[Label] = []
         for lbl in self.alphabet_val_to_sorted_cache_inds.keys():
             # my_op = get_dense_op_of_gate_with_perfect_swap_gates(model, lbl, None, None)
             try:
@@ -738,15 +740,17 @@ class EvalTreeBasedUponLongestCommonSubstring():
                 continue
             op_inds = my_op.gpindices_as_array()
             if gp_index_changing in op_inds:
-                cache_inds = self.alphabet_val_to_sorted_cache_inds[lbl] + [lbl] # We also invalidate the lbl.
-                for ind in op_inds: # Save off all the values we know about.
-                    self.gpindex_to_cache_vals[ind] = cache_inds
-                return cache_inds
-        return cache_inds
+                cache_inds.extend(self.alphabet_val_to_sorted_cache_inds[lbl])
+                invalid_lbls.append(lbl)  # We also invalidate the lbl.
+                all_op_inds.extend(op_inds)
+
+        for ind in all_op_inds:
+            self.gpindex_to_cache_vals[ind] = (cache_inds, invalid_lbls)
+        return cache_inds, invalid_lbls
     
     def _which_full_circuits_will_change_due_to_gpindex_changing(self, model, gp_index_changing: int) -> list[int]:
 
-        cache_inds = self._gpindex_to_cache_inds_needed_to_recompute(model, gp_index_changing)
+        cache_inds, _ = self._gpindex_to_cache_inds_needed_to_recompute(model, gp_index_changing)
 
         if len(cache_inds) == 0:
             return []
@@ -809,7 +813,7 @@ class EvalTreeBasedUponLongestCommonSubstring():
 
             # Dig through the tree to see if we have a matching
 
-            cache_inds = self._gpindex_to_cache_inds_needed_to_recompute(model, gp_index_changing)
+            cache_inds, invalid_lbls = self._gpindex_to_cache_inds_needed_to_recompute(model, gp_index_changing)
 
             if cache_inds:
                 # Invalidate all gate labels that we saved just in case.
@@ -823,11 +827,11 @@ class EvalTreeBasedUponLongestCommonSubstring():
 
                 # Ignore the last index which is the Label that matched the gpindex.
                 # We assume that only one will match.
-                for cache_ind in cache_inds[:-1]:
+                for cache_ind in cache_inds:
                     cumulative_term = None
                     for term in self.cache[cache_ind]:
                         cumulative_term = self._collapse_cache_line(model, cumulative_term, term, local_changes,
-                                                                    num_qubits_in_default, cache_inds)
+                                                                    num_qubits_in_default, cache_inds, invalid_lbls)
 
                     # Save locally.
                     if cumulative_term is None:
@@ -864,7 +868,8 @@ class EvalTreeBasedUponLongestCommonSubstring():
                 for cache_ind in self.sequence_intro[key]:
                     cumulative_term = None
                     for term in self.cache[cache_ind]:
-                        cumulative_term = self._collapse_cache_line(model, cumulative_term, term, self.results, num_qubits_in_default, empty)
+                        cumulative_term = self._collapse_cache_line(model, cumulative_term, term, self.results,
+                                                                    num_qubits_in_default, empty, empty)
                             
                     if cumulative_term is None:
                         self.results[cache_ind] = _np.eye(4**num_qubits_in_default)
@@ -910,8 +915,7 @@ class EvalTreeBasedUponLongestCommonSubstring():
     def handle_results_cache_lookup_and_product(self,
                             cumulative_term: None | _np.ndarray,
                             term_to_extend_with: int | LabelTupTup,
-                            results_cache: dict[int | LabelTupTup, _np.ndarray],
-                            globally_invalid_cache_inds: list[Union[int, Label]]) -> _np.ndarray:
+                            results_cache: dict[int | LabelTupTup, _np.ndarray]) -> _np.ndarray:
 
         if cumulative_term is None:
             return results_cache[term_to_extend_with]
@@ -945,7 +949,8 @@ class EvalTreeBasedUponLongestCommonSubstring():
                             term_to_extend_with: int | LabelTupTup,
                             local_results_cache: dict[int | LabelTupTup, _np.ndarray],
                             num_qubits_in_default: int,
-                            globally_invalid_cache_inds: list[Union[int, LabelTupTup]]
+                            globally_invalid_cache_inds: Optional[list[int]] = None,
+                            globally_invalid_labels: Optional[list[LabelTupTup]] = None
                             ) -> _np.ndarray:
         """
         Reduce a cache line to a single process matrix.
@@ -955,19 +960,24 @@ class EvalTreeBasedUponLongestCommonSubstring():
         """
 
         if (term_to_extend_with in local_results_cache):
-            return self.handle_results_cache_lookup_and_product(cumulative_term, term_to_extend_with,
-                                                                local_results_cache, globally_invalid_cache_inds)
+            return self.handle_results_cache_lookup_and_product(cumulative_term,
+                                                                term_to_extend_with,
+                                                                local_results_cache)
         elif isinstance(term_to_extend_with, int) and \
-            (term_to_extend_with not in globally_invalid_cache_inds[:-1]) and \
+            (globally_invalid_cache_inds is not None) and \
+            (term_to_extend_with not in globally_invalid_cache_inds) and \
                 (term_to_extend_with in self.results):
             
-            return self.handle_results_cache_lookup_and_product(cumulative_term, term_to_extend_with,
-                                                                self.results, globally_invalid_cache_inds)
+            return self.handle_results_cache_lookup_and_product(cumulative_term,
+                                                                term_to_extend_with,
+                                                                self.results)
         elif isinstance(term_to_extend_with, LabelTupTup) and \
-            not (any([t in globally_invalid_cache_inds[-1:] for t in term_to_extend_with])) \
+            (globally_invalid_labels is not None) and \
+            not (any([t in globally_invalid_labels for t in term_to_extend_with])) \
                 and (term_to_extend_with in self.results):        
-            return self.handle_results_cache_lookup_and_product(cumulative_term, term_to_extend_with,
-                                                                self.results, globally_invalid_cache_inds)
+            return self.handle_results_cache_lookup_and_product(cumulative_term,
+                                                                term_to_extend_with,
+                                                                self.results)
         
         # elif isinstance(term_to_extend_with, LabelTup) and \
         #     (term_to_extend_with not in globally_invalid_cache_inds[-1:]) \
@@ -978,6 +988,8 @@ class EvalTreeBasedUponLongestCommonSubstring():
         else:
             val = 1
             qubits_available = [i + self.qubit_start_point for i in range(num_qubits_in_default)]
+            if isinstance(term_to_extend_with, int):
+                breakpoint()
             matrix_reps = {op.qubits: get_dense_representation_of_gate_with_perfect_swap_gates(model, op,
                                             local_results_cache, self.swap_gate) for op in term_to_extend_with}
             qubit_used = []
@@ -1088,7 +1100,7 @@ class CollectionOfLCSEvalTrees():
     def do_I_need_to_recompute_portions_if_I_change_this_index(self, model, gp_index_changing: int) -> bool:
 
         for key in self.trees:
-            inds = self.trees[key]._gpindex_to_cache_inds_needed_to_recompute(model, gp_index_changing)
+            inds, lbls = self.trees[key]._gpindex_to_cache_inds_needed_to_recompute(model, gp_index_changing)
             if len(inds) > 0:
                 return True
         return False

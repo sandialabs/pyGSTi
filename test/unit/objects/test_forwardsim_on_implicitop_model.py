@@ -455,7 +455,6 @@ def test_tensor_product_two_qubit_gates_dprobs_bulk():
     circ_list = [circuitECR01, circuitECR10]
     exp = expected_model.sim.bulk_dprobs(circ_list)
 
-    breakpoint()
     dprobs = under_test.sim.bulk_dprobs(circ_list)
 
 
@@ -465,9 +464,6 @@ def test_tensor_product_two_qubit_gates_dprobs_bulk():
 test_tensor_product_two_qubit_gates_dprobs_bulk()
 
 def test_tensor_product_single_unitaries_yield_right_results_dprobs():
-
-    import importlib as _importlib
-
     num_qubits = 2
 
     under_test, expected_model = build_models_for_testing(num_qubits, independent_gates=True, simplify_for_dprobs=True)
@@ -482,15 +478,11 @@ def test_tensor_product_single_unitaries_yield_right_results_dprobs():
     circuits = [circuitNone, circuitX, circuitY, circuitZ, circuitIdle]
     for cir in circuits:
         probs = under_test.sim.dprobs(cir)
-        # expected_model.sim.calclib = _importlib.import_module("pygsti.forwardsims.mapforwardsim_calc_generic")
-
         exp = expected_model.sim.dprobs(cir)
 
         assert_probability_densities_are_equal(probs, exp, cir)
 
 def test_tensor_product_single_unitaries_yield_right_results_dprobs_bulk():
-
-    import importlib as _importlib
 
     num_qubits = 2
 
