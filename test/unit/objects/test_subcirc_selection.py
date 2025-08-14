@@ -177,11 +177,11 @@ class TestSubcircuitSelection(BaseCase):
 
         class CustomInstructions(object):
             def get(self, *args):
-                if args[0] == 'u':
+                if args[0] == 'Gu3':
                     return 5.0
-                elif args[0] == 'cx':
+                elif args[0] == 'Gcnot':
                     return 12.0
-                elif args[0] == 'cz':
+                elif args[0] == 'Gcphase':
                     return 13.0
                 else:
                     raise RuntimeError(f'No duration known for instruction {args[0]}')

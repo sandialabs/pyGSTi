@@ -32,8 +32,15 @@ try:
     from qiskit_ibm_runtime import SamplerV2 as _Sampler
     from qiskit_ibm_runtime import Session as _Session
     from qiskit_ibm_runtime import RuntimeJobV2 as _RuntimeJobV2
+    from qiskit_ibm_runtime import IBMBackend as _IBMBackend
     from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager as _pass_manager
-except: _Sampler = None
+except:
+    _Sampler = None
+
+try:
+    from qiskit_aer import AerSimulator as _AerSimulator
+except:
+    _AerSimulator = None
 
 # Tim updated to Qiskit 2.1.0
 # OLD COMMENT FROM STEFAN?
@@ -328,20 +335,16 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         if not self.disable_checkpointing:
             self.data.write(self.checkpoint_path, edesign_already_written=True)
 
-    def submit(self, ibmq_backend, is_simulator=False, start=None, stop=None, ignore_job_limit=True, wait_time=5, max_attempts=10, ibmq_session=None):
+    def submit(self, ibmq_backend, start=None, stop=None, ignore_job_limit=True, wait_time=5, max_attempts=10, ibmq_session=None):
         """
         Submits the jobs to IBM Q, that implements the experiment specified by the ExperimentDesign
         used to create this object.
 
         Parameters
         ----------
-        ibmq_backend: qiskit.providers.ibmq.ibmqbackend.IBMQBackend
+        ibmq_backend: qiskit.providers.ibmq.ibmqbackend.IBMQBackend or qiskit_aer.AerSimulator
             The IBM Q backend to submit the jobs to. Should be the backend corresponding to the
             processor that this experiment has been designed for.
-
-        is_simulator: bool
-            Indicates whether the backend is a simulator or a real device. If True,
-            no attempt is made to determine device status.
 
         start: int, optional
             Batch index to start submission (inclusive). Defaults to None,
@@ -380,9 +383,18 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
             "Transpilation missing! Either run .transpile() first, or if loading from file, " + \
             "use the regen_qiskit_circs=True option in from_dir()."
         
+
         #Get the backend version
         backend_version = ibmq_backend.version
         assert backend_version >= 2, "IBMQExperiment no longer supports v1 backends due to their deprecation by IBM"
+
+        if isinstance(ibmq_backend, _IBMBackend):
+            is_simulator = ibmq_backend.simulator 
+        elif _AerSimulator is not None:
+            if isinstance(ibmq_backend, _AerSimulator):
+                is_simulator = True
+        else:
+            raise ValueError(f'ibmq_backend has an unsupported type, {type(ibmq_backend)}. Support is currently only available for arguments which are instances of `IBMBackend` or `AerSimulator`.')
         
         total_waits = 0
         self.qjobs = [] if self.qjobs is None else self.qjobs

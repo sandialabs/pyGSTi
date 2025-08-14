@@ -1,12 +1,23 @@
 """
 Utility functions for subcircuit selection
 """
-
-#TODO: add copyright statement
+#***************************************************************************************************
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
 
 from __future__ import annotations
-from typing import Dict, List, Tuple, Callable, Union, Optional, Any, Protocol, Literal, Set
+from typing import Dict, List, Tuple, Callable, Union, Optional, Any, Protocol, Literal, Set, TYPE_CHECKING
 
+if TYPE_CHECKING:
+    try:
+        import qiskit
+    except:
+        pass
 
 import warnings as _warnings
 from collections import Counter as _Counter, defaultdict as _defaultdict
@@ -23,31 +34,23 @@ from pygsti.baseobjs.label import Label as _Label
 from pygsti.protocols.protocol import FreeformDesign as _FreeformDesign
 from pygsti.tools import internalgates as _itgs
 
-try:
-    import qiskit
-    if qiskit.__version__ != '2.1.1':
-        _warnings.warn("The qiskit functionality of subcircuit selection is designed for qiskit 2.1.1." \
-        "Your version is " + qiskit.__version__)
-except:
-    _warnings.warn("Qiskit does not appear to be installed." \
-    "If providing a CouplingMap for `coupling_map`, qiskit must be installed.")
+MAX_STARTING_LAYER_ATTEMPTS = 1000
 
 
 class HasGetMethod(Protocol):
     def get(gate_name: str, qubits: List[int]) -> float:
         pass
 
-
 def sample_subcircuits(full_circs: Union[_Circuit, List[_Circuit]],
                        width_depths: Dict[int, List[int]],
-                       instruction_durations: Union[qiskit.transpiler.InstructionDurations, HasGetMethod],
                        coupling_map: Union[str, List[int], List[str], qiskit.transpiler.CouplingMap],
+                       instruction_durations: Union[qiskit.transpiler.InstructionDurations, HasGetMethod],
+                       use_qiskit_for_instruction_durations: Optional[bool] = None,
                        num_samples_per_width_depth: int = 10,
                        strategy: Union[Literal['simple', 'greedy'], Callable[..., Any]] = 'simple',
                        strategy_args: Optional[dict] = None,
                        depth_metric: Literal['layer_count', 'falcon_depth'] = 'layer_count',
                        num_test_samples: Optional[int] = None,
-                    #    subgraph_cache = None,
                        rand_state: Optional[_np.random.RandomState] = None,
                        ) -> _FreeformDesign:    
     """
@@ -63,13 +66,21 @@ def sample_subcircuits(full_circs: Union[_Circuit, List[_Circuit]],
         to sample for that subcircuit depth. Defines a list of (width, depth) pairs for
         subcircuits.
 
+    coupling_map : Union[str, qiskit.transpiler.CouplingMap]
+        The coupling map defining the connectivity of qubits. Can be 'all-to-all', 'linear',
+        or a qiskit CouplingMap object.
+
     instruction_durations : qiskit.transpiler.InstructionDurations
         A qiskit InstructionDurations object used to determine delay times for
         idle subcircuit layers.
 
-    coupling_map : Union[str, qiskit.transpiler.CouplingMap]
-        The coupling map defining the connectivity of qubits. Can be 'all-to-all', 'linear',
-        or a qiskit CouplingMap object.
+    use_qiskit_for_instruction_durations : bool, optional
+        Whether to use qiskit gatenames instead of pyGSTi gatenames when looking
+        up instruction durations in `instruction_durations`. If this argument
+        is not provided, then the lookup gatename is based on the type of
+        `instruction_durations`. If `instruction_durations` is an
+        InstructionDurations object, the qiskit gatenames are used, else
+        the pyGSTi gatenames are used.
 
     num_samples_per_width_depth : int, optional
         The number of subcircuits to sample for each width-depth combination. Default is 10.
@@ -93,9 +104,6 @@ def sample_subcircuits(full_circs: Union[_Circuit, List[_Circuit]],
         If `strategy` is not `greedy`, this argument is ignored.
         Default is None.
 
-    subgraph_cache : Dict[int, List[List[int]]], optional
-        Cache for subgraph information to avoid recomputation. Default is None.
-
     rand_state : _np.random.RandomState, optional
         A random state for reproducibility. Default is None.
 
@@ -105,13 +113,19 @@ def sample_subcircuits(full_circs: Union[_Circuit, List[_Circuit]],
         A FreeformDesign object containing the sampled subcircuits and auxiliary
         information, including a circuit ID and depth.
     """
+    try:
+        import qiskit
+        if qiskit.__version__ != '2.1.1':
+            _warnings.warn("Subcircuit selection with a qiskit CouplingMap and/or InstructionDurations object "
+            "is designed for qiskit version 2.1.1 "
+            "and may not function properly for your qiskit version, which is " + qiskit.__version__)
+    except:
+        _warnings.warn('Qiskit is required if using a CouplingMap or InstructionDurations object '
+        'for subcircuit selection, and does not appear to be installed.')
     
     if rand_state is None:
         rand_state = _np.random.RandomState()
     
-    # if subgraph_cache is None:
-    #     subgraph_cache = {}
-
     # Build unmirrored circuit
     subcircuits = _defaultdict(list)
     counter = 0
@@ -120,26 +134,19 @@ def sample_subcircuits(full_circs: Union[_Circuit, List[_Circuit]],
         full_circs = [full_circs]
 
     for full_circ in _tqdm.tqdm(full_circs, ascii=True, desc='sampling subcircuits'):
-        # print(f'sampling circuit {name}')
         for w, ds in width_depths.items():
             print(f'Width: {w}, Depth: ', end='')
             for d in ds:
                 print(d, end=' ')
                 if strategy == 'simple':
 
-                    # if arch is None:
-                    #     assert placer_json is not None, "Must provide path to placer_json if no arch provided"
-                    #     with placer_json.open() as f:
-                    #         placer_dict = json.load(f)
-                    #     arch = Architecture.from_dict(placer_dict['architecture'])
-
                     subcircs, drops = simple_weighted_subcirc_selection(full_circ,
                                                                         w, d,
                                                                         num_subcircs=num_samples_per_width_depth,
                                                                         depth_metric=depth_metric,
-                                                                        instruction_durations=instruction_durations,
                                                                         coupling_map=coupling_map,
-                                                                        # subgraph_cache=subgraph_cache,
+                                                                        instruction_durations=instruction_durations,
+                                                                        use_qiskit_for_instruction_durations=use_qiskit_for_instruction_durations,
                                                                         rand_state=rand_state,
                                                                         verbosity=0)
                                                                         
@@ -153,7 +160,6 @@ def sample_subcircuits(full_circs: Union[_Circuit, List[_Circuit]],
                     raise ValueError("'strategy' is not a function or known string")
                 
                 for subcirc, drop in zip(subcircs, drops):
-                    # print(subcirc)
                     subcircuits[subcirc].append({'width': w, 'depth': d, 'dropped_gates': drop, 'id': counter})
                     counter += 1
                 
@@ -167,8 +173,8 @@ def simple_weighted_subcirc_selection(full_circ: _Circuit,
                                       num_subcircs: int,
                                       coupling_map: Union[str, List[int], List[str], qiskit.transpiler.CouplingMap],
                                       instruction_durations: Union[qiskit.transpiler.InstructionDurations, HasGetMethod],
+                                      use_qiskit_for_instruction_durations: Optional[bool] = None,
                                       depth_metric: Literal['layer_count', 'falcon_depth'] = 'layer_count',
-                                    #   subgraph_cache=None,
                                       rand_state: Optional[_np.random.RandomState] = None,
                                       return_depth_info: bool = False,
                                       stochastic_2q_drops: bool = False,
@@ -206,11 +212,16 @@ def simple_weighted_subcirc_selection(full_circ: _Circuit,
         A qiskit InstructionDurations object used to determine delay times for
         idle subcircuit layers.
 
+    use_qiskit_for_instruction_durations : bool, optional
+        Whether to use qiskit gatenames instead of pyGSTi gatenames when looking
+        up instruction durations in `instruction_durations`. If this argument
+        is not provided, then the lookup gatename is based on the type of
+        `instruction_durations`. If `instruction_durations` is an
+        InstructionDurations object, the qiskit gatenames are used, else
+        the pyGSTi gatenames are used.
+
     rand_state : _np.random.RandomState, optional
         A random state for reproducibility. Default is None.
-
-    subgraph_cache : Dict[int, List[List[int]]], optional
-        Cache for subgraph information to avoid recomputation. Default is None.
 
     return_depth_info : bool, optional
         Whether to include compiled depths and the start and end layer for
@@ -238,6 +249,16 @@ def simple_weighted_subcirc_selection(full_circ: _Circuit,
         the number of dangling gates in each subcircuit and the indices of added layers.
     """
 
+    try:
+        import qiskit
+        if qiskit.__version__ != '2.1.1':
+            _warnings.warn("Simple subcircuit selection with a qiskit CouplingMap and/or InstructionDurations object "
+            "is designed for qiskit version 2.1.1 "
+            "and may not function properly for your qiskit version, which is " + qiskit.__version__)
+    except:
+        _warnings.warn('Qiskit is required if using a CouplingMap or InstructionDurations object '
+        'for simple subcircuit selection, and does not appear to be installed.')
+
     full_width = len(full_circ.line_labels)
     full_depth = len(full_circ)
     assert width > 1 and depth > 1, "Target width and depth must be greater than 1"
@@ -252,7 +273,7 @@ def simple_weighted_subcirc_selection(full_circ: _Circuit,
 
     possible_starts = list(range(full_depth - depth + 1))
 
-    while (len(subcircs) < num_subcircs) and (failures < 1000): #1000 is an arbitrary cutoff for the moment
+    while (len(subcircs) < num_subcircs) and (failures < MAX_STARTING_LAYER_ATTEMPTS):
         # Sample depth with cumulative layer weights
         start = rand_state.choice(possible_starts)
 
@@ -283,29 +304,38 @@ def simple_weighted_subcirc_selection(full_circ: _Circuit,
         
         if compiled_depth > depth:
             # We overshot (added a Gu3 at the end with only one space)
-            # print("we overshot. whoops.")
             failures += 1
             # Skip this and try again
             continue
-            
-        # Now compute full weights for each allowed qubit subset (subgraph)
-        #subset_weights = np.zeros(len(subgraphs))
-        #for i, sg in enumerate(subgraphs):
-        #    for q in sg:
-        #        subset_weights[i] += cumul_line_weights[qubit_mapping[q]]
 
         # calculate layer durations to be used for any idle layers
         layer_durations = []
-        gate_name_conversions = _itgs.standard_gatenames_qiskit_conversions() # TODO: make this gate mapping more customizable
+
+        if use_qiskit_for_instruction_durations is None:
+            try:
+                if isinstance(instruction_durations, qiskit.transpiler.InstructionDurations):
+                    use_qiskit_for_instruction_durations = True
+                    gate_name_conversions = _itgs.standard_gatenames_qiskit_conversions() 
+                else:
+                    use_qiskit_for_instruction_durations = False
+            except:
+                use_qiskit_for_instruction_durations = False
+
 
         for layer_idx in range(start, end+1):
             max_comp_duration = 0
             for comp in full_circ._layer_components(layer_idx):
-                backend_comp_name = gate_name_conversions[comp.name][1]
-                backend_comp_qubits = [int(q[1:]) for q in comp.qubits]
+                if use_qiskit_for_instruction_durations:
+                    backend_comp_name = gate_name_conversions[comp.name][1]
+                    backend_comp_qubits = [int(q[1:]) for q in comp.qubits]
+                else:
+                    backend_comp_name = comp.name
+                    backend_comp_qubits = comp.qubits
+
                 comp_duration = instruction_durations.get(backend_comp_name, backend_comp_qubits)
                 if comp_duration > max_comp_duration:
                     max_comp_duration = comp_duration
+
             layer_durations.append(max_comp_duration)
 
         # Determine a width subset to snip out.
@@ -322,7 +352,15 @@ def simple_weighted_subcirc_selection(full_circ: _Circuit,
             G.add_edges_from(coupling_map)
             qubit_subset = random_connected_subgraph(G, width, rand_state)
 
-        else: # likely the coupling_map is a CouplingMap instance
+        else: # likely the coupling_map is a CouplingMap instance    
+            try:
+                if not isinstance(coupling_map, qiskit.transpiler.CouplingMap):
+                    raise RuntimeError("If `coupling_map` is not 'all-to-all, 'linear', or a list," \
+                    "it must be a qiskit CouplingMap object.")
+            except:
+                raise ImportError('Qiskit is required when providing a CouplingMap for subcircuit selection,' \
+                'and does not appear to be installed.')
+
             edges = []
             for cs in coupling_map:
                 qubits = [f'Q{c}' for c in cs]
@@ -377,7 +415,6 @@ def simple_weighted_subcirc_selection(full_circ: _Circuit,
                         offset += 1
                         new_layer = []
                         
-
                     last_added_layer = layer_idx
                 
                 # Add the dangling gate back to the current subcirc layer
@@ -397,22 +434,20 @@ def simple_weighted_subcirc_selection(full_circ: _Circuit,
 
         for i in range(len(subcirc_layers)):
             scl = subcirc_layers[i]
-            if len(scl) == 0: #layer is empty. add delay of appropriate duration
-                # handle the addition of a delay instruction based on the maximum duration of an instruction in this circuit layer
+            if len(scl) == 0: # layer is empty. add delay of appropriate duration
                 delay_layer = [_Label('Gdelay', qubit, args=[layer_durations[i]]) for qubit in qubit_subset]
                 subcirc_layers[i] = delay_layer
 
         # Build subcircuit
-        subcirc = _Circuit(subcirc_layers, line_labels=sorted(list(qubit_subset)))
+        subcirc = _Circuit(subcirc_layers, line_labels=sorted(qubit_subset))
 
-        # print(subcirc)
         subcircs.append((subcirc, total_dropped_gates, compiled_depth, (start, end), total_dangling_gates, added_layer_indices))
     
         if verbosity > 0:
             print(f'Found subcircuit with {total_dropped_gates} dropped gates, {compiled_depth} depth, and {total_dangling_gates} dangling gates')
 
-    if (failures == 1000):
-        raise RuntimeError("Failed to find a valid starting layer 1000 times!")
+    if (failures == MAX_STARTING_LAYER_ATTEMPTS):
+        raise RuntimeError(f"Failed to find a valid starting layer {MAX_STARTING_LAYER_ATTEMPTS} times!")
     
     # Unpacking to match greedy growth function
     selected_subcircs, dropped_counts, compiled_depths, start_ends, dangling_counts, added_layers = list(zip(*subcircs))
@@ -422,9 +457,7 @@ def simple_weighted_subcirc_selection(full_circ: _Circuit,
         print(f'Compiled depths for selected circuits: {compiled_depths}')
         print(f'Dangling gate counts for selected circuits: {dangling_counts}')
 
-    returns = [list(selected_subcircs), dropped_counts,
-            #    subgraph_cache
-               ]
+    returns = [list(selected_subcircs), dropped_counts]
 
     if return_depth_info:
         returns.extend([compiled_depths, start_ends])

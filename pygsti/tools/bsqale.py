@@ -2,11 +2,24 @@
 B-Sqale is a software tool for creating scalable, robust benchmarks from any quantum circuit.
 Please see <paper link forthcoming> for more information.
 """
-
-# TODO: add copyright assertion
+#***************************************************************************************************
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
 
 from __future__ import annotations
-from typing import Tuple, Optional, Dict, List, Union, Any
+from typing import Tuple, Optional, Dict, List, Union, Any, TYPE_CHECKING
+if TYPE_CHECKING:
+    try:
+        import qiskit
+    except:
+        pass
+
+
 import warnings as _warnings
 
 from pygsti.protocols import (
@@ -19,20 +32,6 @@ from pygsti.protocols import (
 
 import numpy as _np
 
-try:
-    import qiskit
-    if qiskit.__version__ != '2.1.1':
-        _warnings.warn("The B-Sqale functions 'qiskit_circuits_to_mirror_edesign'," \
-        "'qiskit_circuits_to_fullstack_mirror_edesign', and" \
-        "'qiskit_circuits_to_subcircuit_mirror_edesign are designed for qiskit 2.1.1. Your version is " + qiskit.__version__)
-    from qiskit import transpile
-
-except:
-    _warnings.warn("qiskit does not appear to be installed, and is required for the B-Sqale functions" \
-                   "'qiskit_circuits_to_mirror_edesign'," \
-                   "'qiskit_circuits_to_fullstack_mirror_edesign', and" \
-                   "'qiskit_circuits_to_subcircuit_mirror_edesign'.")
-    
 
 def noise_mirror_benchmark(qk_circs: Union[Dict[Any, qiskit.QuantumCircuit], List[qiskit.QuantumCircuit]],
                          mirroring_kwargs_dict: Dict[str, Any] = {}
@@ -70,8 +69,16 @@ def noise_mirror_benchmark(qk_circs: Union[Dict[Any, qiskit.QuantumCircuit], Lis
             pygsti.protocols.CombinedExperimentDesign
                 Experiment design containing all mirror circuits that must be executed
                 in order to perform mirror circuit fidelity estimation.
-                
     """
+
+    try:
+        import qiskit
+        if qiskit.__version__ != '2.1.1':
+            _warnings.warn("The function 'noise_mirror_benchmark' is designed for qiskit 2.1.1." \
+            "Your version is " + qiskit.__version__)
+
+    except:
+        raise RuntimeError('Qiskit is required for this operation, and does not appear to be installed.')
 
     return _mirror.qiskit_circuits_to_mirror_edesign(qk_circs, mirroring_kwargs_dict)
 
@@ -160,6 +167,15 @@ def fullstack_mirror_benchmark(qk_circs: Union[Dict[Any, qiskit.QuantumCircuit],
             float, optional
                 amount of time spent in Qiskit transpiler.            
     """
+
+    try:
+        import qiskit
+        if qiskit.__version__ != '2.1.1':
+            _warnings.warn("The function 'fullstack_mirror_benchmark' is designed for qiskit 2.1.1." \
+            "Your version is " + qiskit.__version__)
+
+    except:
+        raise RuntimeError('Qiskit is required for this operation, and does not appear to be installed.')
 
     return _mirror.qiskit_circuits_to_fullstack_mirror_edesign(qk_circs, #not transpiled
                                                     qk_backend,
@@ -250,6 +266,15 @@ def subcircuit_mirror_benchmark(qk_circs: Union[Dict[Any, qiskit.QuantumCircuit]
                 in order to perform mirror circuit fidelity estimation. A dictionary is returned
                 if `aggregate_subcircs` is False, otherwise a FreeformDesign is returned.
     """
+
+    try:
+        import qiskit
+        if qiskit.__version__ != '2.1.1':
+            _warnings.warn("The function 'noise_mirror_benchmark' is designed for qiskit 2.1.1." \
+            "Your version is " + qiskit.__version__)
+
+    except:
+        raise RuntimeError('Qiskit is required for this operation, and does not appear to be installed.')
 
     return _mirror.qiskit_circuits_to_subcircuit_mirror_edesign(qk_circs,
                                               aggregate_subcircs,

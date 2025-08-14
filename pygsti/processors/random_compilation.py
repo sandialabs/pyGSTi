@@ -1,8 +1,14 @@
 """
 Randomized circuit compilation via random compiling and central Pauli propagation.
 """
-
-#TODO: add copyright statement
+#***************************************************************************************************
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
 
 from __future__ import annotations
 from typing import Literal, Optional, Union, List, Iterable, Dict, Tuple
@@ -11,9 +17,6 @@ import numpy as _np
 
 from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.baseobjs.label import Label as _Label
-from pygsti.baseobjs.unitarygatefunction import UnitaryGateFunction as _UnitaryGateFunction
-from pygsti.tools.internalgates import standard_gatename_unitaries as _standard_gatename_unitaries
-
 
 class RandomCompilation(object):
     """
@@ -43,7 +46,7 @@ class RandomCompilation(object):
                  rc_strategy: Optional[Literal['rc', 'cp']] = None,
                  return_bs: Optional[bool] = False,
                  testing: Optional[bool] = False,
-                 rand_state: Optional[_np.random.RandomState] = None): #pauli_rc, central_pauli are currently the supported options
+                 rand_state: Optional[_np.random.RandomState] = None):
         """
         Initialize the RandomCompilation object.
 
@@ -195,11 +198,7 @@ def pauli_randomize_circuit(circ: _Circuit,
     d = circ.depth
     n = circ.width
     p = _np.zeros(2*n, int)
-    # q = _np.zeros(2*n, int) # fixes a bug that occurs if there are no U3 layers in the entire circuit (but tbh this should be fixed a different way)
 
-    # print(d)
-
-    return_0_bs = False
 
     if insert_test_layers:
         num_u3_layers = 0
@@ -207,8 +206,6 @@ def pauli_randomize_circuit(circ: _Circuit,
             layer = circ.layer_label(i).components
             if layer[0].name == 'Gu3':
                 num_u3_layers += 1
-        # print(len(test_layers))
-        # print(num_u3_layers)
         assert len(test_layers) == num_u3_layers, f'expected {num_u3_layers} Pauli vectors but got {len(test_layers)} instead'
 
     if return_bs:
@@ -221,13 +218,9 @@ def pauli_randomize_circuit(circ: _Circuit,
     layers = []
 
     for i in range(d):
-
         layer = circ.layer_label(i).components
 
-        # print(layer)
-
-        if layer[0].name in ['Gi', 'Gdelay']: #making this explicit for the sake of clarity
-            # should we be tacking a Pauli on at the end (as though this were RC of u3(0,0,0) layers?)
+        if layer[0].name in ['Gi', 'Gdelay']: # making this explicit for the sake of clarity
             layers.append(layer)
 
         elif len(layer) == 0 or layer[0].name == 'Gu3':
@@ -235,34 +228,27 @@ def pauli_randomize_circuit(circ: _Circuit,
                 q = test_layers.pop(0)
                 if len(q) != 2*n:
                     raise ValueError(f"test layer {q} should have length {2*n} but has length {len(q)} instead")
-                # print(q)
 
             else:
                 q = 2 * rand_state.randint(0, 2, 2*n)
             # update_u3_parameters now twirls/adds label for empty qubits, so don't prepad for speed
-            #padded_layer = pad_layer(layer, qubits)
             rc_layer = update_u3_parameters(layer, p, q, qubit_map)
-            # print(rc_layer)
             layers.append(rc_layer)
             p = q
-            # last_layer_u3 = True
             
-        else: # this must be a layer of 2Q gates. this implementation allows for Gcnot and Gcphase gates in the same layer.
+        else: # we must have a layer of 2Q gates. this implementation allows for Gcnot and Gcphase gates in the same layer.
             layers.append(layer)
             for g in layer:
                 if g.name == 'Gcnot':
                     (control, target) = g.qubits
                     p[qubit_map[control]] = (p[qubit_map[control]] + p[qubit_map[target]]) % 4
                     p[n + qubit_map[target]] = (p[n + qubit_map[control]] + p[n + qubit_map[target]]) % 4
-                    # q = p
                 elif g.name == 'Gcphase':
                     (control, target) = g.qubits
                     p[qubit_map[control]] = (p[qubit_map[control]] + p[n + qubit_map[target]]) % 4
                     p[qubit_map[target]] = (p[n + qubit_map[control]] + p[qubit_map[target]]) % 4
                 else:
                     raise ValueError("Circuit can only contain Gcnot, Gcphase, Gu3, and Gi gates in separate layers!")
-            # last_layer_u3 = False
-
 
     bs = ''.join([str(b // 2) for b in p[n:]])
 
@@ -348,7 +334,6 @@ def randomize_central_pauli(circ: _Circuit,
         layer = circ.layer_label(i).components
 
         if layer[0].name in ['Gi', 'Gdelay']: #making this explicit for the sake of clarity
-            # should we be tacking a Pauli on at the end (as though this were RC of u3(0,0,0) layers?)
             layers.append(layer)
 
         elif len(layer) == 0 or layer[0].name == 'Gu3':
@@ -613,7 +598,6 @@ def u3_cx_cz_inv(circ: _Circuit) -> _Circuit:
         A new circuit representing the inverse of the input circuit.
     """
 
-    # Is this function duplicative of existing functionality in pyGSTi?
     inverse_layers = []
     d = circ.depth
 

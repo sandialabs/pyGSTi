@@ -10,30 +10,24 @@ Techniques for manipulating benchmarking data stored in a Pandas DataFrame.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 from __future__ import annotations
-from typing import Callable, Literal, Optional
+from typing import Callable, Literal, Optional, TYPE_CHECKING
+if TYPE_CHECKING:
+    try:
+        import matplotlib as _mp
+    except:
+        pass
 
-import warnings as _warnings
 
 import pandas as _pandas
 import numpy as _np
 import tqdm as _tqdm
-
-try:
-    import matplotlib.pyplot as _plt
-    import matplotlib as _mp
-except:
-    _warnings.warn('matplotlib is required for dataframe plotting, and does not appear to be installed.')
+from scipy.stats import chi2 as _chi2
 
 from pygsti.protocols import (
     ExperimentDesign as _ExperimentDesign,
     FreeformDesign as _FreeformDesign,
-    CombinedExperimentDesign as _CombinedExperimentDesign,
     ProtocolData as _ProtocolData
 )
-
-
-from scipy.stats import chi2 as _chi2
-
 
 from pygsti.tools.mcfetools import (hamming_distance_counts,
                                     effective_polarization,
@@ -43,7 +37,6 @@ from pygsti.tools.mcfetools import (hamming_distance_counts,
                                     rc_predicted_process_fidelity,
                                     rc_bootstrap_predicted_pfid
                                     )
-
 
 def _calculate_summary_statistic(x, statistic, lower_cutoff=None):
     """
@@ -274,12 +267,6 @@ class VBDataFrame(object):
         eff_pols = {k: {} for k in mirrored_data.edesign.keys()}
     
         # Stats about the base circuit
-        u3_densities = {}
-        cnot_densities = {}
-        cnot_counts = {}
-        cnot_depths = {}
-        pygsti_depths = {}
-        idling_qubits = {}
         dropped_gates = {}
         occurrences = {}
 
@@ -293,11 +280,9 @@ class VBDataFrame(object):
                     reverse_circ_ids[entry['id']] = k
         seen_keys = set()
 
-        num_circs = len(mirrored_data.dataset)
         for c in _tqdm.tqdm(mirrored_data.dataset, ascii=True, desc='Calculating effective polarizations'):
             for edkey, ed in mirrored_data.edesign.items():
                 auxlist = ed.aux_info.get(c, None)
-                # print(auxlist)
                 if auxlist is None:
                     continue
                 elif isinstance(auxlist, dict):
@@ -306,9 +291,7 @@ class VBDataFrame(object):
                 for aux in auxlist:
                     if edkey.endswith('ref'):
                         # For reference circuits, only width matters, so aggregate on that now
-                        # print(f'edkey: {edkey}')
                         key = (aux['width'], c.line_labels)
-
                     else:
                         key = (aux['base_aux']['width'], aux['base_aux']['depth'], aux['base_aux']['id'], c.line_labels)
 
@@ -331,31 +314,8 @@ class VBDataFrame(object):
                         # Skip statistic gathering for reference circuits or base circuits we've seen already
                         continue
 
-                    # orig_circ = reverse_circ_ids[key[2]]
-
-                    # u3_count = 0
-                    # cnot_count = 0
-                    # cnot_depth = 0
-                    # for i in range(orig_circ.depth):
-                    #     layer_cnot_depth = 0
-                    #     for gate in orig_circ._layer_components(i):
-                    #         if gate.name == 'Gu3':
-                    #             u3_count += 1
-                    #         elif gate.name == 'Gcnot':
-                    #             cnot_count += 2
-                    #             layer_cnot_depth = 1
-                    #     cnot_depth += layer_cnot_depth
-                    
-                    # if cnot_count == 0:
-                    #     cnot_count = 0.01
-                        
-                    # u3_densities[key] = u3_count / (key[0]*key[1])
-                    # cnot_densities[key] = cnot_count / (key[0]*key[1])
-                    # cnot_counts[key] = cnot_count / 2 # Want 1 for each CNOT
-                    # cnot_depths[key] = cnot_depth
                     # TODO: add 2Q gate density metric
-                    # pygsti_depths[key] = orig_circ.depth
-                    # idling_qubits[key] = len(orig_circ.idling_lines())
+
                     if include_dropped_gates:
                         dropped_gates[key] = aux['base_aux']['dropped_gates']
                     occurrences[key] = len(auxlist)
@@ -372,7 +332,7 @@ class VBDataFrame(object):
                                                                            eff_pols['cpref'][(key[0], key[3])],
                                                                            key[0])
                 
-                cp_pol = fidelity_to_polarization(cp_pfid, key[0]) # should this be fidelity_to_polarization?
+                cp_pol = fidelity_to_polarization(cp_pfid, key[0])
                 cp_success_prob = polarization_to_success_probability(cp_pol, key[0])
                 
             rc_pfid = rc_pol = rc_success_prob = rc_pfid_stdev = None
@@ -384,17 +344,6 @@ class VBDataFrame(object):
                     spam_ref_key = (key[0], key[3])
                     print(spam_ref_key)
                     print(len(eff_pols['ref'][spam_ref_key]))
-
-
-                # print(key)
-                # print(_np.mean(eff_pols['br'][key]))
-                # print(_np.std(eff_pols['br'][key]))
-                # print(_np.mean(eff_pols['rr'][key]))
-                # print(_np.std(eff_pols['rr'][key]))
-                # print(_np.mean(eff_pols['ref'][(key[0], key[3])]))
-                # print(_np.std(eff_pols['ref'][(key[0], key[3])]))
-
-                # ipdb.set_trace()
 
                 rc_pfid = rc_predicted_process_fidelity(eff_pols['br'][key],
                                                      eff_pols['rr'][key],
@@ -415,16 +364,11 @@ class VBDataFrame(object):
                                                             )
 
             data_dict = {'Width': key[0], 'Depth': key[1], 'Circuit Id': key[2],
-                        # 'U3 Density': u3_densities[key], 'CNOT Density': cnot_densities[key],
-                        # 'CNOT Counts': cnot_counts[key], 'CNOT Depth': cnot_depths[key],
-                        # 'U3+CNOT Depth': pygsti_depths[key],
-                        # 'Effective Width': key[0] - idling_qubits[key],
                         'CP Process Fidelity': cp_pfid,
                         'CP Polarization': cp_pol, 'CP Success Probability': cp_success_prob,
                         'RC Process Fidelity': rc_pfid, 'RC Process Fidelity stdev': rc_pfid_stdev,
                         'RC Polarization': rc_pol, 'RC Success Probability': rc_success_prob,
                         'Occurrences': occurrences[key],
-                        # 'Total Counts': 1024 # Reevaluate whether this 'Total Counts' key should be hard-coded, especially if we run circuits with more shots.
                         }
             
             if include_dropped_gates:
@@ -785,6 +729,11 @@ class VBDataFrame(object):
             for the generated VB plot. If `save_fig` is False, this argument
             is ignored. Acceptable values are any file format recognized by matplotlib.
         """
+        try:
+            import matplotlib.pyplot as _plt
+            import matplotlib as _mp
+        except:
+            raise RuntimeError('matplotlib is required for dataframe plotting, and does not appear to be installed.')
         
         if cmap is None:
             cmap = _mp.colormaps['Spectral']
@@ -806,8 +755,6 @@ class VBDataFrame(object):
         
         xticks = self.dataframe[x_axis].unique()
         yticks = self.dataframe[y_axis].unique()
-        # assert np.allclose(xticks, bk_df[x_axis].unique()), "Dataframes must have same x-axis values"
-        # assert np.allclose(yticks, bk_df[y_axis].unique()), "Dataframes must have same y-axis values"
         
         xmap = {j: i for i, j in enumerate(xticks)}
         ymap = {j: i for i, j in enumerate(yticks)}

@@ -11,7 +11,13 @@ The standard unitaries and gate names, used internal compilers and short-hand mo
 #***************************************************************************************************
 
 from __future__ import annotations
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, TYPE_CHECKING
+if TYPE_CHECKING:
+    try:
+        import qiskit
+    except:
+        pass
+    
 import warnings as _warnings
 
 import numpy as _np
@@ -21,19 +27,6 @@ from pygsti.tools import optools as _ot
 from pygsti.tools import symplectic as _symp
 from pygsti.baseobjs.unitarygatefunction import UnitaryGateFunction as _UnitaryGateFunction
 from pygsti.tools.gatetools import sigmax, sigmay, sigmaz, sigmaxz
-
-try:
-    import qiskit
-    from qiskit.circuit import Delay
-    from qiskit.circuit.library import standard_gates
-
-    if qiskit.__version__ != '2.1.1':
-        _warnings.warn("function 'standard_gatenames_qiskit_conversions()' is designed for qiskit version 2.1.1 \
-                and may not function properly for your qiskit version, which is " + qiskit.__version__)
-        
-except ImportError:
-    _warnings.warn("function 'standard_gatenames_qiskit_conversions()' requires qiskit, which does not appear to be installed.")
-
 
 class Gzr(_UnitaryGateFunction):
     shape = (2, 2)
@@ -885,7 +878,7 @@ def qiskit_gatenames_standard_conversions() -> Dict[str, List[str, bool]]:
     Dictionary mapping qiskit gate names to pyGSTi gate names and a flag
     for whether or not the gate has parameters.
     """
-    
+
     qiskit_to_standard_mapping = {}
 
     qiskit_to_standard_mapping['id'] = ['Gi', False]
@@ -924,7 +917,7 @@ def standard_gatenames_qiskit_conversions() -> Dict[str, Tuple[qiskit.circuit.In
     as, say, defined 'Gh' to be something other than the Hadamard gate this
     conversion dictionary will be incorrect.
 
-    Later versions of qiskit can utilize an accelerated circuit append.
+    Later versions of qiskit may be able to utilize an accelerated circuit append.
 
     Returns
     -------
@@ -933,6 +926,18 @@ def standard_gatenames_qiskit_conversions() -> Dict[str, Tuple[qiskit.circuit.In
         that indicates whether the append of the gate to the circuit can be accelerated in
         a later version of qiskit.
     """
+
+    try:
+        import qiskit
+        from qiskit.circuit import Delay
+        from qiskit.circuit.library import standard_gates
+
+        if qiskit.__version__ != '2.1.1':
+            _warnings.warn("function 'standard_gatenames_qiskit_conversions()' is designed for qiskit version 2.1.1 \
+                    and may not function properly for your qiskit version, which is " + qiskit.__version__)
+            
+    except ImportError:
+        _warnings.warn("This operation requires qiskit, which does not appear to be installed.")
 
     std_gatenames_to_qiskit = {}
 
@@ -955,7 +960,6 @@ def standard_gatenames_qiskit_conversions() -> Dict[str, Tuple[qiskit.circuit.In
     std_gatenames_to_qiskit['Gdelay'] = (Delay, 'delay', False)
 
     
-
     return std_gatenames_to_qiskit
 
 
