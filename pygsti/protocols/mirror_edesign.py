@@ -23,10 +23,10 @@ from pygsti.processors import random_compilation as _rc
 
 try:
     import qiskit
-    if qiskit.__version__ != '1.1.1':
+    if qiskit.__version__ != '2.1.1':
         _warnings.warn("The mirroring functions 'qiskit_circuits_to_mirror_edesign'," \
         "'qiskit_circuits_to_fullstack_mirror_edesign', and" \
-        "'qiskit_circuits_to_subcircuit_mirror_edesign are designed for qiskit 1.1.1. Your version is " + qiskit.__version__)
+        "'qiskit_circuits_to_subcircuit_mirror_edesign are designed for qiskit 2.1.1. Your version is " + qiskit.__version__)
 
     from qiskit import transpile
 except:
@@ -405,7 +405,7 @@ def qiskit_circuits_to_fullstack_mirror_edesign(qk_circs: Union[Dict[Any, qiskit
 
         qk_ref_circ = qk_ref_inv_circ.inverse()
 
-        qubit_map = {qk_ref_inv_circ.qbit_argument_conversion(i)[0]: f'Q{qk_final_opt_layout[i]}'
+        qubit_map = {qk_ref_inv_circ._qbit_argument_conversion(i)[0]: f'Q{qk_final_opt_layout[i]}'
                          for i in qk_init_ref_inv_reduced_layout}
 
         ps_ref_circ, qubit_idx_map = _Circuit.from_qiskit(qk_ref_circ, qubit_conversion=qubit_map, allow_different_gates_in_same_layer=False)
@@ -588,7 +588,7 @@ def qiskit_circuits_to_subcircuit_mirror_edesign(qk_circs: Union[Dict[Any, qiski
     
 
             # convert those reference circuits back to pyGSTi (layer blocking required to separate u3 and cz)
-            qubit_mapping_dict_2 = {qk_test_circ.qbit_argument_conversion(i)[0]: sslbl for sslbl, i in qubit_mapping_dict.items()} # now map back
+            qubit_mapping_dict_2 = {qk_test_circ._qbit_argument_conversion(i)[0]: sslbl for sslbl, i in qubit_mapping_dict.items()} # now map back
             # in Qiskit 1.1.1, the method is called qbit_argument_conversion. In Qiskit >=1.2 (as far as Noah can tell), the method is called _qbit_argument_conversion.
 
             ps_ref_circ, _ = _Circuit.from_qiskit(qk_ref_circ,

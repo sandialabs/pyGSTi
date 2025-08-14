@@ -25,8 +25,8 @@ from pygsti.tools import internalgates as _itgs
 
 try:
     import qiskit
-    if qiskit.__version__ != '1.1.1':
-        _warnings.warn("The qiskit functionality of subcircuit selection is designed for qiskit 1.1.1." \
+    if qiskit.__version__ != '2.1.1':
+        _warnings.warn("The qiskit functionality of subcircuit selection is designed for qiskit 2.1.1." \
         "Your version is " + qiskit.__version__)
 except:
     _warnings.warn("Qiskit does not appear to be installed." \

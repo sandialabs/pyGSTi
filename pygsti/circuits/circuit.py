@@ -27,9 +27,9 @@ from pygsti.tools.legacytools import deprecate as _deprecate_fn
 
 try:
     import qiskit
-    if qiskit.__version__ != '1.1.1':
+    if qiskit.__version__ != '2.1.1':
         _warnings.warn("Circuit class method `from_qiskit()` and method `convert_to_qiskit`"
-                       "is designed for qiskit version 1.1.1 and may not \
+                       "is designed for qiskit version 2.1.1 and may not \
                         function properly for your qiskit version, which is " + qiskit.__version__)
 except ImportError:
     _warnings.warn("Circuit class method `from_qiskit()` and method `convert_to_qiskit` require Qiskit," \
@@ -4162,12 +4162,12 @@ class Circuit(object):
             unmapped_qubits = set(qubits).difference(set(qubit_conversion.keys()))
             assert len(unmapped_qubits) == 0, f'Missing Qiskit to pygsti conversions for some qubits: {unmapped_qubits}'
 
-            qubit_idx_conversion = {i: qubit_conversion[circuit.qbit_argument_conversion(i)[0]] for i in range(circuit.num_qubits)}
+            qubit_idx_conversion = {i: qubit_conversion[circuit._qbit_argument_conversion(i)[0]] for i in range(circuit.num_qubits)}
                     
         #if it is None, build a default mapping.
         else:
             #default mapping is the identity mapping: qubit i in the Qiskit circuit maps to qubit i in the pyGSTi circuit
-            qubit_conversion = {circuit.qbit_argument_conversion(i)[0]: f'Q{i}' for i in range(circuit.num_qubits)} # in Qiskit 1.1.1, the method is called qbit_argument_conversion. In Qiskit >=1.2 (as far as Noah can tell), the method is called _qbit_argument_conversion. 
+            qubit_conversion = {circuit._qbit_argument_conversion(i)[0]: f'Q{i}' for i in range(circuit.num_qubits)} # in Qiskit 1.1.1, the method is called qbit_argument_conversion. In Qiskit >=1.2 (as far as Noah can tell), the method is called _qbit_argument_conversion. 
 
             qubit_idx_conversion = {i: f'Q{i}' for i in range(circuit.num_qubits)}
 

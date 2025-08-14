@@ -21,10 +21,10 @@ import numpy as _np
 
 try:
     import qiskit
-    if qiskit.__version__ != '1.1.1':
+    if qiskit.__version__ != '2.1.1':
         _warnings.warn("The B-Sqale functions 'qiskit_circuits_to_mirror_edesign'," \
         "'qiskit_circuits_to_fullstack_mirror_edesign', and" \
-        "'qiskit_circuits_to_subcircuit_mirror_edesign are designed for qiskit 1.1.1. Your version is " + qiskit.__version__)
+        "'qiskit_circuits_to_subcircuit_mirror_edesign are designed for qiskit 2.1.1. Your version is " + qiskit.__version__)
     from qiskit import transpile
 
 except:

@@ -27,8 +27,8 @@ try:
     from qiskit.circuit import Delay
     from qiskit.circuit.library import standard_gates
 
-    if qiskit.__version__ != '1.1.1':
-        _warnings.warn("function 'standard_gatenames_qiskit_conversions()' is designed for qiskit version 1.1.1 \
+    if qiskit.__version__ != '2.1.1':
+        _warnings.warn("function 'standard_gatenames_qiskit_conversions()' is designed for qiskit version 2.1.1 \
                 and may not function properly for your qiskit version, which is " + qiskit.__version__)
         
 except ImportError:
