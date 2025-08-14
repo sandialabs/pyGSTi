@@ -244,65 +244,8 @@ def simple_weighted_subcirc_selection(full_circ: _Circuit,
     assert width <= full_width, f"Target width has to be less than full circuit width ({full_width})"
     assert depth <= full_depth, f"Target depth has to be less than full circuit depth ({full_depth})"
 
-
     if rand_state is None:
         rand_state = _np.random.RandomState()
-
-    if coupling_map == 'all-to-all':
-        qubit_subset = set(rand_state.choice(full_circ.line_labels, size=width, replace=False))
-
-    elif coupling_map == 'linear':
-        start = rand_state.choice(full_width - width)
-        end = start + width
-        qubit_subset = set(full_circ.line_labels[start:end])
-
-    elif isinstance(coupling_map, list): # this list needs to already include the 'Q' prefix on the qubits
-        G = _nx.Graph()
-        G.add_edges_from(coupling_map)
-        qubit_subset = random_connected_subgraph(G, width, rand_state)
-
-    else: # likely the coupling_map is a CouplingMap instance
-        edges = []
-        for cs in coupling_map:
-            qubits = [f'Q{c}' for c in cs]
-            if all([q in full_circ.line_labels for q in qubits]):
-                edges.append(qubits)
-
-        G = _nx.Graph()
-        G.add_edges_from(edges)
-        qubit_subset = random_connected_subgraph(G, width, rand_state) 
-
-    # generate subgraph of desired width
-
-    qubit_subset = set(str(qubit) for qubit in qubit_subset)
-
-    # # Check for connected graphs in cache (can be expensive)
-    # if subgraph_cache is None:
-    #     subgraph_cache = {}
-    
-    # subgraphs = []
-    # if subgraph_cache is not None and width in subgraph_cache:
-    #     if verbosity > 0: print('Reusing subgraph cache for qubit connectivity')
-    #     subgraphs = subgraph_cache[width]
-    # elif coupling_map is not None:
-    #     if verbosity > 0: print('Computing subgraphs for qubit connectivity... ', end='')
-    #     # coupling_map = coupling_map.get_edges()
-
-
-
-
-    #     for nodes in _itertools.combinations(G.nodes, width):
-    #         subgraph = G.subgraph(nodes)
-    #         if _nx.is_connected(subgraph):
-    #             subgraphs.append(list(subgraph.nodes.keys()))
-        
-    #     if subgraph_cache is not None:
-    #         subgraph_cache[width] = subgraphs
-    #     if verbosity > 0: print('Done!')      
-    # else:
-    #     raise RuntimeError('Either subgraph_cache with proper width or coupling map must be provided')
-    
-    # assert len(subgraphs), "Subgraphs provided but empty!"
 
     subcircs = []
     failures = 0
@@ -312,6 +255,8 @@ def simple_weighted_subcirc_selection(full_circ: _Circuit,
     while (len(subcircs) < num_subcircs) and (failures < 1000): #1000 is an arbitrary cutoff for the moment
         # Sample depth with cumulative layer weights
         start = rand_state.choice(possible_starts)
+
+        # Identify layer subset to snip out.
 
         # Calculate physical depth
         compiled_depth = 0
@@ -363,9 +308,34 @@ def simple_weighted_subcirc_selection(full_circ: _Circuit,
                     max_comp_duration = comp_duration
             layer_durations.append(max_comp_duration)
 
+        # Determine a width subset to snip out.
+        if coupling_map == 'all-to-all':
+            qubit_subset = set(rand_state.choice(full_circ.line_labels, size=width, replace=False))
+
+        elif coupling_map == 'linear':
+            start = rand_state.choice(full_width - width)
+            end = start + width
+            qubit_subset = set(full_circ.line_labels[start:end])
+
+        elif isinstance(coupling_map, list): # this list needs to already include the 'Q' prefix on the qubits
+            G = _nx.Graph()
+            G.add_edges_from(coupling_map)
+            qubit_subset = random_connected_subgraph(G, width, rand_state)
+
+        else: # likely the coupling_map is a CouplingMap instance
+            edges = []
+            for cs in coupling_map:
+                qubits = [f'Q{c}' for c in cs]
+                if all([q in full_circ.line_labels for q in qubits]):
+                    edges.append(qubits)
+
+            G = _nx.Graph()
+            G.add_edges_from(edges)
+            qubit_subset = random_connected_subgraph(G, width, rand_state) 
+
+        qubit_subset = set(str(qubit) for qubit in qubit_subset)
 
         # We have identified a width/depth to snip out, so do so now
-        # But under the assumption that we fill out width pretty quickly, it should be close
         subcirc_layers = []
         possible_dropped_gates = []
         for layer_idx in range(start, end+1):
