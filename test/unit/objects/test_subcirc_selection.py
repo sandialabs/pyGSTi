@@ -88,7 +88,6 @@ class TestSubcircuitSelection(BaseCase):
                                                 rand_state=rand_state
                                                 )
         
-
         # check that the width and depth metadata agree with the circuit width and depth for each circuit in the design.
         for subcirc, auxlist in design.aux_info.items():
             self.assertTrue(all(subcirc.width == aux['width'] for aux in auxlist))

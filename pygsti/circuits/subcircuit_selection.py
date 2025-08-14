@@ -313,9 +313,9 @@ def simple_weighted_subcirc_selection(full_circ: _Circuit,
             qubit_subset = set(rand_state.choice(full_circ.line_labels, size=width, replace=False))
 
         elif coupling_map == 'linear':
-            start = rand_state.choice(full_width - width)
-            end = start + width
-            qubit_subset = set(full_circ.line_labels[start:end])
+            q_start = rand_state.choice(full_width - width)
+            q_end = q_start + width
+            qubit_subset = set(full_circ.line_labels[q_start:q_end])
 
         elif isinstance(coupling_map, list): # this list needs to already include the 'Q' prefix on the qubits
             G = _nx.Graph()
