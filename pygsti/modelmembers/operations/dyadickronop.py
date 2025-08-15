@@ -1,3 +1,4 @@
+from __future__ import annotations
 import numpy as np
 import scipy.sparse.linalg as sparla
 
@@ -38,14 +39,6 @@ class RealLinOp:
     
     def __rmatmul__(self, other):
         return other @ self._linop
-
-
-def is_2d_square(arg):
-    if not hasattr(arg, 'shape'):
-        return False
-    if len(arg.shape) != 2:
-        return False
-    return arg.shape[0] == arg.shape[1]
 
 
 class DyadicKronStructed(RealLinOp):
@@ -92,7 +85,7 @@ class DyadicKronStructed(RealLinOp):
         return out
     
     @staticmethod
-    def build_polyadic(kron_operands):
+    def build_polyadic(kron_operands) -> DyadicKronStructed:
         if len(kron_operands) == 2:
             out = DyadicKronStructed(kron_operands[0], kron_operands[1])
             return out
@@ -106,12 +99,12 @@ class KronStructured(RealLinOp):
 
     def __init__(self, kron_operands):
         self.kron_operands = kron_operands
-        assert all([op.ndim == 2 for op in kron_operands])
+        # assert all([op.ndim == 2 for op in kron_operands])
         self.shapes = np.array([op.shape for op in kron_operands])
         self._shape = tuple(int(i) for i in np.prod(self.shapes, axis=0))
-        forward = DyadicKronStructed.build_polyadic(self.kron_operands)
-        self._linop   = forward._linop
-        self._adjoint = forward.T
+        self.dyadic_struct = DyadicKronStructed.build_polyadic(self.kron_operands)
+        self._linop   = self.dyadic_struct._linop
+        self._adjoint = self.dyadic_struct.T
         self._dtype = self.kron_operands[0].dtype
 
     def to_full_array(self) -> np.ndarray:
@@ -124,3 +117,42 @@ class KronStructured(RealLinOp):
         for i in range(len(self.kron_operands)):
             output = np.kron(output, self.kron_operands[i])
         return output
+    
+    def update_operand(self, lane: int, matrix: np.ndarray) -> None:
+        """
+        Replace a specific matrix with a new matrix of the same size and layout.
+        """
+
+        assert lane >= 0 and lane < len(self.kron_operands)
+
+        # Iterate through the structure and replace the A matrix of the appropriate index with the new matrix.
+
+        def walk_forward(curr_loc: int, dydadic_struct: DyadicKronStructed, mat: np.ndarray):
+            if curr_loc == lane:
+                dydadic_struct.A = mat
+                breakpoint()
+                return
+            elif lane == len(self.kron_operands) - 1 and (curr_loc == lane -1):
+                # We have hit the leaf node.
+                dydadic_struct.B = mat
+                return
+            return walk_forward(curr_loc + 1, dydadic_struct.B, mat) 
+        
+        walk_forward(0, self.dyadic_struct, matrix)
+        walk_forward(0, self._adjoint, matrix.T)
+
+
+
+class KronStructuredPath:
+    """
+    This class is for making a path for computing a matvec and adjoint of a kron structured matrix.
+
+    When those functions are called you need to specify the actual dense operands being used.
+    This way we can just swap out one the matrices each time we update the representation of a gate.
+    """
+
+
+    def __init__(self, shapes: list[tuple[int, int]]):
+
+
+        pass

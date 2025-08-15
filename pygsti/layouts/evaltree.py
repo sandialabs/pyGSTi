@@ -1096,6 +1096,9 @@ class CollectionOfLCSEvalTrees():
 
         self.saved_results: dict[Union[LabelTupTup, int], _np.ndarray] = {}
         self.sub_cir_to_ind_in_results: dict[tuple[int, ...], dict[_Circuit, int]] = {}
+        self.original_matrices: dict[int, dict[int, _np.ndarray]] = {}
+        self.full_matrices: list[KronStructured] = []
+        self.process_matrices_which_will_need_to_update_for_index: _np.ndarray = []
 
     def do_I_need_to_recompute_portions_if_I_change_this_index(self, model, gp_index_changing: int) -> bool:
 
@@ -1128,6 +1131,29 @@ class CollectionOfLCSEvalTrees():
             self.saved_results[key] = out1
             self.sub_cir_to_ind_in_results[key] = out2
 
+    def determine_which_circuits_will_update_for_what_gpindices(self, model):
+
+        dirty_circuits = _np.zeros((model.num_params, len(self.trees), len(self.cir_id_and_lane_id_to_sub_cir)))
+        for ind in range(model.num_params):
+
+            for ikey, key in enumerate(self.trees):
+                dirty_circuits[ind, ikey, self.trees[key]._which_full_circuits_will_change_due_to_gpindex_changing(model, ind)] = 1
+
+        self.process_matrices_which_will_need_to_update_for_index = dirty_circuits
+        return dirty_circuits
+
+    def reset_full_matrices_to_base_probs_version(self) -> None:
+        """
+        Any matrix which was updated previously reset to the original version.
+        """
+
+        for icir in self.original_matrices:
+            for lane_in_cir in self.original_matrices[icir]:
+                self.full_matrices[icir].update_operand(lane_in_cir, self.original_matrices[icir][lane_in_cir])
+        self.original_matrices = {}
+        return
+
+
     def reconstruct_full_matrices(self,
                                   model = None,
                                   gp_index_changing: Optional[int] = None) -> \
@@ -1142,36 +1168,58 @@ class CollectionOfLCSEvalTrees():
         num_cirs = len(self.cir_id_and_lane_id_to_sub_cir)
         cir_inds = _np.arange(num_cirs, dtype=_np.int32)
         if (gp_index_changing is not None) and (model is not None):
-            cir_changes = set()
+            
+            cir_inds = _np.where(_np.sum(self.process_matrices_which_will_need_to_update_for_index[gp_index_changing], axis=0) >= 1)[0] # At least one lane changed.
 
-            for key in self.trees:
-                cir_changes = cir_changes.union(self.trees[key]._which_full_circuits_will_change_due_to_gpindex_changing(model, gp_index_changing))
+            lane_key_to_ind: dict[tuple[int, ...], int] = {key: ikey for ikey, key in enumerate(self.trees)}
 
-            cir_inds = _np.array(sorted(list(cir_changes)), dtype=_np.int32)
+            output = []
+            if len(cir_inds) > 0:
+                self.original_matrices = {} # Reset the cache of updated process matrices.
 
-        output = []
+            for icir in cir_inds:
+                for i in range(len(self.cir_id_and_lane_id_to_sub_cir[icir])):
+                    cir: _Circuit = self.cir_id_and_lane_id_to_sub_cir[icir][i]
+                    lblkey = cir._line_labels
 
-        # Now we can do the combination.
+                    lane_ind = lane_key_to_ind[lblkey]
+                    if self.process_matrices_which_will_need_to_update_for_index[gp_index_changing, lane_ind, icir]:
+                        ind_in_results = self.sub_cir_to_ind_in_results[lblkey][cir.layertup]
+                        if icir in self.original_matrices:
+                            self.original_matrices[icir][i] = self.full_matrices[icir].kron_operands[i]
+                        else:
+                            self.original_matrices[icir] = {lane_ind: self.full_matrices[icir].kron_operands[i]}
+                        self.full_matrices[icir].update_operand(i, self.trees[lblkey].results[ind_in_results])
+                        output.append(self.full_matrices[icir])
 
-        for icir in cir_inds:
-            lane_circuits = []
-            for i in range(len(self.cir_id_and_lane_id_to_sub_cir[icir])):
-                cir = self.cir_id_and_lane_id_to_sub_cir[icir][i]
-                lblkey = cir._line_labels
+            return output, cir_inds
 
-                ind_in_results = self.sub_cir_to_ind_in_results[lblkey][cir.layertup]
-                if ind_in_results not in self.saved_results[lblkey]:
-                    # We have only the local changes.
-                    # This will be stored in the results file of the subtree.
-                    lane_circuits.append(self.trees[lblkey].results[ind_in_results])
+        else:
+            output = []
+
+            # Now we can do the combination.
+
+            for icir in cir_inds:
+                lane_circuits = []
+                for i in range(len(self.cir_id_and_lane_id_to_sub_cir[icir])):
+                    cir = self.cir_id_and_lane_id_to_sub_cir[icir][i]
+                    lblkey = cir._line_labels
+
+                    ind_in_results = self.sub_cir_to_ind_in_results[lblkey][cir.layertup]
+                    if ind_in_results not in self.saved_results[lblkey]:
+                        # We have only the local changes.
+                        # This will be stored in the results file of the subtree.
+                        lane_circuits.append(self.trees[lblkey].results[ind_in_results])
+                    else:
+                        lane_circuits.append(self.saved_results[lblkey][ind_in_results])
+                if len(lane_circuits) > 1:
+                    output.append(KronStructured(lane_circuits))
+                elif len(lane_circuits) == 1:
+                    output.append(lane_circuits[0]) # gate_sequence[i] @ rho needs to work for i in range(num_circs).
                 else:
-                    lane_circuits.append(self.saved_results[lblkey][ind_in_results])
-            if len(lane_circuits) > 1:
-               output.append(KronStructured(lane_circuits))
-            elif len(lane_circuits) == 1:
-                output.append(lane_circuits[0]) # gate_sequence[i] @ rho needs to work for i in range(num_circs).
-            else:
-                raise ValueError()
+                    raise ValueError()
+            
+        self.full_matrices = output
         return output, cir_inds
     
     def flop_estimate(self, return_collapse: bool = False, return_tensor_matvec: bool = False):

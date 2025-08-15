@@ -2500,7 +2500,7 @@ class LCSEvalTreeMatrixForwardSimulator(MatrixForwardSimulator):
         
         sp_obj, povm_objs, elm_indices, tree_indices = self._layout_atom_to_rho_es_elm_inds_and_tree_inds_objs(layout_atom)
 
-        elm_indices = [_slct.indices(elm) for elm in elm_indices]
+        elm_indices = _np.array([_slct.indices(elm) for elm in elm_indices])
 
         orig_dense_sp = sp_obj.to_dense(on_space="minimal")[:,None] # To maintain expected shape.
         dense_povms = _np.vstack([_np.conjugate(_np.transpose(povm.to_dense(on_space='minimal')[:, None])) for povm in povm_objs])
@@ -2544,8 +2544,8 @@ class LCSEvalTreeMatrixForwardSimulator(MatrixForwardSimulator):
 
         remaining_param_inds = sorted(list(set(param_indices) - set(_slct.to_array(povm_gpindices)) - set(_slct.to_array(rho_gpindices))))
 
+        dirty_circuits = layout_atom.tree.determine_which_circuits_will_update_for_what_gpindices(self.model)
 
-        tVals = _slct.indices(tree_indices)
         for i in range(len(remaining_param_inds)):
             probs2[:] = base_probs[:] # Copy off the data
             iFinal = iParamToFinal[remaining_param_inds[i]]
@@ -2559,21 +2559,11 @@ class LCSEvalTreeMatrixForwardSimulator(MatrixForwardSimulator):
 
             tmp = self._probs_from_rho_e(orig_dense_sp, dense_povms, Gs, return_two_D=True)
 
-            for j in range(len(inds_to_update)):
-                for k in range(len(elm_indices)):
-                    probs2[elm_indices[k][inds_to_update[j]]] = tmp[k, j]
-
-
-            # if len(Gs) > 0:
-            #     probs2 = probs2.reshape((layout_atom.num_elements // len(tVals), len(tVals)), order="F")
-            
-            #     tmp = self._probs_from_rho_e(orig_dense_sp, dense_povms, Gs, return_two_D=True)
-                
-            #     if len(tmp) > 0:
-            #         probs2[:, inds_to_update] = tmp
-            #     probs2 = probs2.reshape(layout_atom.num_elements, order="F")
+            probs2[elm_indices[:, inds_to_update]] = tmp
 
             array_to_fill[:, iFinal] = (probs2 - base_probs) / eps
+
+            layout_atom.tree.reset_full_matrices_to_base_probs_version()
 
             if return_sequence_matrices:
                 output.append(Gs)
