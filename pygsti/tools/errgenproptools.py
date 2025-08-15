@@ -25,7 +25,7 @@ from pygsti.baseobjs import QubitSpace as _QubitSpace
 from pygsti.baseobjs.basis import BuiltinBasis as _BuiltinBasis
 from pygsti.baseobjs.errorgenbasis import CompleteElementaryErrorgenBasis as _CompleteElementaryErrorgenBasis, ExplicitElementaryErrorgenBasis as _ExplicitElementaryErrorgenBasis
 from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE
-from pygsti.errorgenpropagation.errorpropagator import ErrorGeneratorPropagator as _EGP
+import pygsti.errorgenpropagation.errorpropagator as _epropagator
 from pygsti.modelmembers.operations import LindbladErrorgen as _LinbladErrorgen
 from pygsti.circuits import Circuit as _Circuit
 from pygsti.tools.optools import create_elementary_errorgen_nqudit, state_to_dmvec
@@ -6858,7 +6858,7 @@ def pairwise_bch_numerical(mat1, mat2, order=1):
         bch_result += (1/120)*(commutator21212 - commutator12112)
     return bch_result
 
-def magnus_numerical(propagated_errorgen_layers: list[dict[_EEL, float]], error_propagator: _EGP, 
+def magnus_numerical(propagated_errorgen_layers: list[dict[_EEL, float]], error_propagator: _epropagator.ErrorGeneratorPropagator, 
                      magnus_order: Literal[1,2,3] = 1) -> _np.ndarray:
     """
     Compute effective error generator layer produced by applying the magnus expansions
