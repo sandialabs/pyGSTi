@@ -317,7 +317,6 @@ def rc_predicted_process_fidelity(bare_rc_effective_pols: _np.ndarray,
             return 1.0
         else:
             return pfid
-        # return pfid
 
 
 def predicted_process_fidelity_for_central_pauli_mcs(central_pauli_effective_pols: _np.ndarray,
@@ -370,7 +369,7 @@ def rc_bootstrap_predicted_pfid(brs: _np.ndarray,
                                 rrs: _np.ndarray,
                                 refs: _np.ndarray,
                                 n: int,
-                                num_bootstraps: Optional[int] = 50,
+                                num_bootstraps: int = 50,
                                 rand_state: Optional[_np.random.RandomState] = None
                                 ) -> float:
     """
