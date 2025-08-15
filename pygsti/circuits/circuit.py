@@ -9,7 +9,7 @@ Defines the Circuit class
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
-
+from __future__ import annotations
 import collections as _collections
 import itertools as _itertools
 import warnings as _warnings
@@ -21,6 +21,8 @@ from pygsti.baseobjs import outcomelabeldict as _ld, _compatibility as _compat
 from pygsti.tools import internalgates as _itgs
 from pygsti.tools import slicetools as _slct
 from pygsti.tools.legacytools import deprecate as _deprecate_fn
+
+from typing import Union, Optional
 
 #Externally, we'd like to do thinks like:
 # c = Circuit( LabelList )
@@ -3762,7 +3764,9 @@ class Circuit(object):
         f.close()
 
 
-    def convert_to_stim_tableau_layers(self, gate_name_conversions=None, num_qubits=None, qubit_label_conversions=None):
+    def convert_to_stim_tableau_layers(self, gate_name_conversions: Optional[dict[str, stim.Tableau]] = None, 
+                                       num_qubits: Optional[int] = None, 
+                                       qubit_label_conversions: Optional[dict[Union[str, int], int]] = None) -> list[stim.Tableau]:
         """
         Converts this circuit to a list of stim tableau layers
 
@@ -3873,7 +3877,9 @@ class Circuit(object):
             stim_layers.append(stim_layer)
         return stim_layers
     
-    def convert_to_stim_tableau(self, gate_name_conversions=None, num_qubits=None, qubit_label_conversions=None):
+    def convert_to_stim_tableau(self, gate_name_conversions: Optional[dict[str, stim.Tableau]] = None, 
+                                       num_qubits: Optional[int] = None, 
+                                       qubit_label_conversions: Optional[dict[Union[str, int], int]] = None) -> stim.Tableau:
         """
         Converts this circuit to a stim tableau
 

@@ -9,7 +9,7 @@ Tools for the propagation of error generators through circuits.
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
-
+from __future__ import annotations
 import warnings
 try:
     import stim
@@ -20,17 +20,19 @@ except ImportError:
     warnings.warn(msg)
 
 import numpy as _np
-from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GEEL, LocalElementaryErrorgenLabel as _LEEL
+from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GEEL, LocalElementaryErrorgenLabel as _LEEL, ElementaryErrorgenLabel as _EEL
 from pygsti.baseobjs import QubitSpace as _QubitSpace
 from pygsti.baseobjs.basis import BuiltinBasis as _BuiltinBasis
 from pygsti.baseobjs.errorgenbasis import CompleteElementaryErrorgenBasis as _CompleteElementaryErrorgenBasis, ExplicitElementaryErrorgenBasis as _ExplicitElementaryErrorgenBasis
 from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE
+from pygsti.errorgenpropagation.errorpropagator import ErrorGeneratorPropagator as _EGP
 from pygsti.modelmembers.operations import LindbladErrorgen as _LinbladErrorgen
 from pygsti.circuits import Circuit as _Circuit
 from pygsti.tools.optools import create_elementary_errorgen_nqudit, state_to_dmvec
 from functools import reduce
 from itertools import chain, product
 from math import factorial
+from typing import Literal
 
 def errgen_coeff_label_to_stim_pauli_strs(err_gen_coeff_label, num_qubits):
     """
@@ -459,10 +461,12 @@ def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1, truncation_th
 
     return new_errorgen_layer_dict
 
-def magnus_expansion(errorgen_layers, magnus_order=1, truncation_threshold=1e-14):
-
+def magnus_expansion(errorgen_layers: list[dict[_LSE, float]], magnus_order: Literal[1,2,3] = 1, 
+                     truncation_threshold: float = 1e-14) -> dict[_LSE, float]:
     """
     Function for computing the nth-order magnus expansion for a set of error generator layers.
+    Please see https://arxiv.org/abs/0810.5488 or https://en.wikipedia.org/wiki/Magnus_expansion
+    for more information on this approximation.
 
     Parameters
     ----------
@@ -708,7 +712,6 @@ def _error_generator_layer_pairwise_commutator(errorgen_layer_1, errorgen_layer_
                                                                 weight= weight, identity=identity)
             commuted_errgen_list.extend(commuted_errgen_sublist)
     return commuted_errgen_list
-
 
 
 def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight=1.0, identity=None):
@@ -6412,7 +6415,7 @@ def stim_pauli_string_less_than(pauli1, pauli2):
     
     return unsigned_pauli1_str < unsigned_pauli2_str
 
-def errorgen_pauli_action(errorgen, pauli):
+def errorgen_pauli_action(errorgen: _LSE, pauli: stim.PauliString) -> tuple[float, stim.PauliString]:
     """
     Apply the specified error generator to a given Pauli operator.
 
@@ -6855,7 +6858,8 @@ def pairwise_bch_numerical(mat1, mat2, order=1):
         bch_result += (1/120)*(commutator21212 - commutator12112)
     return bch_result
 
-def magnus_numerical(propagated_errorgen_layers, error_propagator, magnus_order=1):
+def magnus_numerical(propagated_errorgen_layers: list[dict[_EEL, float]], error_propagator: _EGP, 
+                     magnus_order: Literal[1,2,3] = 1) -> _np.ndarray:
     """
     Compute effective error generator layer produced by applying the magnus expansions
     to the list of input error generator matrices. Note this is primarily intended
@@ -6938,7 +6942,7 @@ def magnus_numerical(propagated_errorgen_layers, error_propagator, magnus_order=
         
     return magnus  
 
-def errorgen_pauli_action_numerical(errorgen, pauli):
+def errorgen_pauli_action_numerical(errorgen: _EEL, pauli: stim.PauliString) -> _np.ndarray:
     """
     Apply the specified error generator to a given Pauli operator. This implementation
     performs the application of the error generator numerically and is primarily

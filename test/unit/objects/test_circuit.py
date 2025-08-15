@@ -605,6 +605,9 @@ MEASURE 2 ro[2]
         
     def test_convert_to_stim_tableau(self):
         #TODO: Add correctness checks for generated Tableaus.
+        #these tests (with the exception of two explicitly meant to raise caught exceptions)
+        #are intended to simply check that these methods run to completion with each of these configurations
+        #and should only fail with an uncaught exception.
         try:
             import stim
         except ImportError:
