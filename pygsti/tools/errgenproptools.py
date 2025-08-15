@@ -63,17 +63,17 @@ def errgen_coeff_label_to_stim_pauli_strs(err_gen_coeff_label, num_qubits):
         return tuple([stim.PauliString(bel) for bel in err_gen_coeff_label.basis_element_labels])
 
     elif isinstance(err_gen_coeff_label, _GEEL):
-        #the coefficient label is a tuple with 3 elements. 
-        #The first element is the error generator type.
-        #the second element is a tuple of paulis either of length 1 or 2 depending on the error gen type.
-        #the third element is a tuple of subsystem labels.
+        # the coefficient label is a tuple with 3 elements. 
+        # The first element is the error generator type.
+        # the second element is a tuple of paulis either of length 1 or 2 depending on the error gen type.
+        # the third element is a tuple of subsystem labels.
         errorgen_typ = err_gen_coeff_label.errorgen_type
         pauli_lbls = err_gen_coeff_label.basis_element_labels
         sslbls = err_gen_coeff_label.support
 
-        #double check that the number of qubits specified is greater than or equal to the length of the
-        #basis element labels.
-        #assert len(pauli_lbls) >= num_qubits, 'Specified `num_qubits` is less than the length of the basis element labels.'
+        # double check that the number of qubits specified is greater than or equal to the length of the
+        # basis element labels.
+        # assert len(pauli_lbls) >= num_qubits, 'Specified `num_qubits` is less than the length of the basis element labels.'
 
         if errorgen_typ == 'H' or errorgen_typ == 'S':
             pauli_string = num_qubits*['I']
@@ -84,7 +84,7 @@ def errgen_coeff_label_to_stim_pauli_strs(err_gen_coeff_label, num_qubits):
             return (pauli_string,)
         elif errorgen_typ == 'C' or errorgen_typ == 'A':
             pauli_strings = []
-            for pauli_lbl in pauli_lbls: #iterate through both pauli labels
+            for pauli_lbl in pauli_lbls: # iterate through both pauli labels
                 pauli_string = num_qubits*['I']
                 for i, sslbl in enumerate(sslbls):
                     pauli_string[sslbl] = pauli_lbl[i]
@@ -95,7 +95,7 @@ def errgen_coeff_label_to_stim_pauli_strs(err_gen_coeff_label, num_qubits):
     else:
         raise ValueError('Only `GlobalElementaryErrorgenLabel and LocalElementaryErrorgenLabel is currently supported.')
 
-#------- Error Generator Math -------------#
+# ------- Error Generator Math -------------# 
 
 def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1, truncation_threshold=1e-14):
     """
@@ -127,75 +127,75 @@ def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1, truncation_th
     """
     new_errorgen_layer=[]
     for curr_order in range(0, bch_order):
-        #add first order terms into new layer
+        # add first order terms into new layer
         if curr_order == 0:
-            #Get a combined set of error generator coefficient labels for these two
-            #dictionaries.
+            # Get a combined set of error generator coefficient labels for these two
+            # dictionaries.
             current_combined_coeff_lbls = {key: None for key in chain(errgen_layer_1, errgen_layer_2)}            
 
             first_order_dict = dict()
-            #loop through the combined set of coefficient labels and add them to the new dictionary for the current BCH
-            #approximation order. If present in both we sum the rates.
+            # loop through the combined set of coefficient labels and add them to the new dictionary for the current BCH
+            # approximation order. If present in both we sum the rates.
             for coeff_lbl in current_combined_coeff_lbls:
-                #only add to the first order dictionary if the coefficient exceeds the truncation threshold.
+                # only add to the first order dictionary if the coefficient exceeds the truncation threshold.
                 first_order_rate = errgen_layer_1.get(coeff_lbl, 0) + errgen_layer_2.get(coeff_lbl, 0)
                 if abs(first_order_rate) > truncation_threshold:
                     first_order_dict[coeff_lbl] = first_order_rate
             
-            #allow short circuiting to avoid an expensive bunch of recombination logic when only using first order BCH
-            #which will likely be a common use case.
+            # allow short circuiting to avoid an expensive bunch of recombination logic when only using first order BCH
+            # which will likely be a common use case.
             if bch_order==1:
                 return first_order_dict
             new_errorgen_layer.append(first_order_dict)
         
-        #second order BCH terms.
-        # (1/2)*[X,Y]
+        # second order BCH terms.
+        #  (1/2)*[X,Y]
         elif curr_order == 1:
-            #calculate the pairwise commutators between each of the error generators in current_errgen_dict_1 and
-            #current_errgen_dict_2.
-            #precompute an identity string for comparisons in commutator calculations.
+            # calculate the pairwise commutators between each of the error generators in current_errgen_dict_1 and
+            # current_errgen_dict_2.
+            # precompute an identity string for comparisons in commutator calculations.
             if errgen_layer_1:
                 identity = stim.PauliString('I'*len(next(iter(errgen_layer_1)).basis_element_labels[0]))
             commuted_errgen_list = []
             for error1, error1_val in errgen_layer_1.items():
                 for error2, error2_val in errgen_layer_2.items():
-                    #get the list of error generator labels
+                    # get the list of error generator labels
                     weight = .5*error1_val*error2_val
-                    #avoid computing commutators which will be effectively zero.
+                    # avoid computing commutators which will be effectively zero.
                     if abs(weight) < truncation_threshold:
                         continue
                     commuted_errgen_sublist = error_generator_commutator(error1, error2, 
                                                                          weight= weight, identity=identity)
                     commuted_errgen_list.extend(commuted_errgen_sublist)
-            #loop through all of the elements of commuted_errorgen_list and instantiate a dictionary with the requisite keys.
+            # loop through all of the elements of commuted_errorgen_list and instantiate a dictionary with the requisite keys.
             second_order_comm_dict = {error_tuple[0]: 0 for error_tuple in commuted_errgen_list}
 
-            #Add all of these error generators to the working dictionary of updated error generators and weights.
-            #There may be duplicates, which should be summed together.
+            # Add all of these error generators to the working dictionary of updated error generators and weights.
+            # There may be duplicates, which should be summed together.
             for error_tuple in commuted_errgen_list:
                 second_order_comm_dict[error_tuple[0]] += error_tuple[1]
             
-            #truncate any terms which are below the truncation threshold following
-            #aggregation.
+            # truncate any terms which are below the truncation threshold following
+            # aggregation.
             second_order_comm_dict = {key: val for key, val in second_order_comm_dict.items() if abs(val)>truncation_threshold}
 
             new_errorgen_layer.append(second_order_comm_dict)
 
-        #third order BCH terms
-        # (1/12)*([X,[X,Y]] - [Y,[X,Y]])
-        #TODO: Can make this more efficient by using linearity of commutators
+        # third order BCH terms
+        #  (1/12)*([X,[X,Y]] - [Y,[X,Y]])
+        # TODO: Can make this more efficient by using linearity of commutators
         elif curr_order == 2:
-            #we've already calculated (1/2)*[X,Y] in the previous order, so reuse this result.
-            #two different lists for the two different commutators so that we can more easily reuse
-            #this at higher order if needed.
+            # we've already calculated (1/2)*[X,Y] in the previous order, so reuse this result.
+            # two different lists for the two different commutators so that we can more easily reuse
+            # this at higher order if needed.
             commuted_errgen_list_1 = []
             commuted_errgen_list_2 = []
             for error1a, error1a_val in errgen_layer_1.items():
                 for error2, error2_val in second_order_comm_dict.items():
-                    #only need a factor of 1/6 because new_errorgen_layer[1] is 1/2 the commutator 
+                    # only need a factor of 1/6 because new_errorgen_layer[1] is 1/2 the commutator 
                     weighta = (1/6)*error1a_val*error2_val
 
-                    #avoid computing commutators which will be effectively zero.
+                    # avoid computing commutators which will be effectively zero.
                     if not abs(weighta) < truncation_threshold:
                         commuted_errgen_sublist = error_generator_commutator(error1a, error2, 
                                                                              weight=weighta, identity=identity)
@@ -203,7 +203,7 @@ def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1, truncation_th
 
             for error1b, error1b_val in errgen_layer_2.items():
                 for error2, error2_val in second_order_comm_dict.items():
-                    #only need a factor of -1/6 because new_errorgen_layer[1] is 1/2 the commutator 
+                    # only need a factor of -1/6 because new_errorgen_layer[1] is 1/2 the commutator 
                     weightb = -(1/6)*error1b_val*error2_val
                     if not abs(weightb) < truncation_threshold:                    
                         commuted_errgen_sublist = error_generator_commutator(error1b, error2, 
@@ -211,19 +211,19 @@ def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1, truncation_th
                         commuted_errgen_list_2.extend(commuted_errgen_sublist)              
 
 
-            #turn the two new commuted error generator lists into dictionaries.
-            #loop through all of the elements of commuted_errorgen_list and instantiate a dictionary with the requisite keys.
+            # turn the two new commuted error generator lists into dictionaries.
+            # loop through all of the elements of commuted_errorgen_list and instantiate a dictionary with the requisite keys.
             third_order_comm_dict_1 = {error_tuple[0]:0 for error_tuple in commuted_errgen_list_1}
             third_order_comm_dict_2 = {error_tuple[0]:0 for error_tuple in commuted_errgen_list_2}
             
-            #Add all of these error generators to the working dictionary of updated error generators and weights.
-            #There may be duplicates, which should be summed together.
+            # Add all of these error generators to the working dictionary of updated error generators and weights.
+            # There may be duplicates, which should be summed together.
             for error_tuple in commuted_errgen_list_1:
                 third_order_comm_dict_1[error_tuple[0]] += error_tuple[1]
             for error_tuple in commuted_errgen_list_2:
                 third_order_comm_dict_2[error_tuple[0]] += error_tuple[1]
             
-            #finally sum these two dictionaries, keeping only terms which are greater than the threshold.
+            # finally sum these two dictionaries, keeping only terms which are greater than the threshold.
             third_order_comm_dict = dict()
             current_combined_coeff_lbls = {key: None for key in chain(third_order_comm_dict_1, third_order_comm_dict_2)}
             for lbl in current_combined_coeff_lbls:
@@ -232,18 +232,18 @@ def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1, truncation_th
                     third_order_comm_dict[lbl] = third_order_rate
             new_errorgen_layer.append(third_order_comm_dict)
                          
-        #fourth order BCH terms
-        # -(1/24)*[Y,[X,[X,Y]]]
+        # fourth order BCH terms
+        #  -(1/24)*[Y,[X,[X,Y]]]
         elif curr_order == 3:
-            #we've already calculated (1/12)*[X,[X,Y]] so reuse this result.
-            #this is stored in third_order_comm_dict_1
+            # we've already calculated (1/12)*[X,[X,Y]] so reuse this result.
+            # this is stored in third_order_comm_dict_1
             commuted_errgen_list = []
             for error1, error1_val in errgen_layer_2.items():
                 for error2, error2_val in third_order_comm_dict_1.items():
-                    #I *think* you can pick up at most around a factor of 8 from the commutator
-                    #itself. Someone should validate that. Set this conservatively, but also
-                    #avoid computing commutators which will be effectively zero.
-                    #only need a factor of -1/2 because third_order_comm_dict_1 is 1/12 the nested commutator
+                    # I *think* you can pick up at most around a factor of 8 from the commutator
+                    # itself. Someone should validate that. Set this conservatively, but also
+                    # avoid computing commutators which will be effectively zero.
+                    # only need a factor of -1/2 because third_order_comm_dict_1 is 1/12 the nested commutator
                     weight = -.5*error1_val*error2_val
                     if abs(weight) < truncation_threshold:
                         continue
@@ -251,62 +251,62 @@ def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1, truncation_th
                                                                          weight=weight, identity=identity)
                     commuted_errgen_list.extend(commuted_errgen_sublist)
             
-            #loop through all of the elements of commuted_errorgen_list and instantiate a dictionary with the requisite keys.
+            # loop through all of the elements of commuted_errorgen_list and instantiate a dictionary with the requisite keys.
             fourth_order_comm_dict = {error_tuple[0]:0 for error_tuple in commuted_errgen_list}
 
-            #Add all of these error generators to the working dictionary of updated error generators and weights.
-            #There may be duplicates, which should be summed together.
+            # Add all of these error generators to the working dictionary of updated error generators and weights.
+            # There may be duplicates, which should be summed together.
             for error_tuple in commuted_errgen_list:
                 fourth_order_comm_dict[error_tuple[0]] += error_tuple[1]
 
-            #drop any terms below the truncation threshold after aggregation
+            # drop any terms below the truncation threshold after aggregation
             fourth_order_comm_dict = {key: val for key, val in fourth_order_comm_dict.items() if abs(val)>truncation_threshold}
             new_errorgen_layer.append(fourth_order_comm_dict)
 
-        #Note for fifth order and beyond we can save a bunch of commutators
-        #by using the results of https://doi.org/10.1016/j.laa.2003.09.010
-        #Revisit this if going up to high-order ever becomes a regular computation.
-        #fifth-order BCH terms:
-        #-(1/720)*([X,F] - [Y, E]) + (1/360)*([Y,F] - [X,E]) + (1/120)*([Y,G] - [X,D])
-        # Where: E = [Y,C]; F = [X,B]; G=[X,C]
-        # B = [X,[X,Y]]; C = [Y,[X,Y]]; D = [Y,[X,[X,Y]]]
-        # B, C and D have all been previously calculated (up to the leading constant). 
-        # B is proportional to third_order_comm_dict_1, C is proportional to third_order_comm_dict_2
-        # D is proportional to fourth_order_comm_dict
-        # This gives 9 new commutators to calculate (7 if you used linearity, and even fewer would be needed
-        # using the result from the paper above, but we won't here atm).
+        # Note for fifth order and beyond we can save a bunch of commutators
+        # by using the results of https://doi.org/10.1016/j.laa.2003.09.010
+        # Revisit this if going up to high-order ever becomes a regular computation.
+        # fifth-order BCH terms:
+        # -(1/720)*([X,F] - [Y, E]) + (1/360)*([Y,F] - [X,E]) + (1/120)*([Y,G] - [X,D])
+        #  Where: E = [Y,C]; F = [X,B]; G=[X,C]
+        #  B = [X,[X,Y]]; C = [Y,[X,Y]]; D = [Y,[X,[X,Y]]]
+        #  B, C and D have all been previously calculated (up to the leading constant). 
+        #  B is proportional to third_order_comm_dict_1, C is proportional to third_order_comm_dict_2
+        #  D is proportional to fourth_order_comm_dict
+        #  This gives 9 new commutators to calculate (7 if you used linearity, and even fewer would be needed
+        #  using the result from the paper above, but we won't here atm).
         elif curr_order == 4:
-            B = third_order_comm_dict_1 #has a factor of 1/12 folded in already.
-            C = third_order_comm_dict_2 #has a factor of -1/12 folded in already.
-            D = fourth_order_comm_dict  #has a factor of -1/24 folded in already.
-            #Compute the new commutators E, F and G as defined above.
-            #Start with E:
+            B = third_order_comm_dict_1 # has a factor of 1/12 folded in already.
+            C = third_order_comm_dict_2 # has a factor of -1/12 folded in already.
+            D = fourth_order_comm_dict  # has a factor of -1/24 folded in already.
+            # Compute the new commutators E, F and G as defined above.
+            # Start with E:
             commuted_errgen_list_E = []
             for error1, error1_val in errgen_layer_2.items():
                 for error2, error2_val in C.items():
-                    #Won't add any weight adjustments at this stage, will do that for next commutator.
+                    # Won't add any weight adjustments at this stage, will do that for next commutator.
                     weight = error1_val*error2_val
                     if abs(weight) < truncation_threshold:
                         continue
                     commuted_errgen_sublist = error_generator_commutator(error1, error2, 
                                                                          weight=weight, identity=identity)
                     commuted_errgen_list_E.extend(commuted_errgen_sublist)
-            #Next F:
+            # Next F:
             commuted_errgen_list_F = []
             for error1, error1_val in errgen_layer_1.items():
                 for error2, error2_val in B.items():
-                    #Won't add any weight adjustments at this stage, will do that for next commutator.
+                    # Won't add any weight adjustments at this stage, will do that for next commutator.
                     weight = error1_val*error2_val
                     if abs(weight) < truncation_threshold:
                         continue
                     commuted_errgen_sublist = error_generator_commutator(error1, error2, 
                                                                          weight=weight, identity=identity)
                     commuted_errgen_list_F.extend(commuted_errgen_sublist)
-            #Then G:
+            # Then G:
             commuted_errgen_list_G = []
             for error1, error1_val in errgen_layer_1.items():
                 for error2, error2_val in C.items():
-                    #Won't add any weight adjustments at this stage, will do that for next commutator.
+                    # Won't add any weight adjustments at this stage, will do that for next commutator.
                     weight = error1_val*error2_val
                     if abs(weight) < truncation_threshold:
                         continue
@@ -314,14 +314,14 @@ def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1, truncation_th
                                                                          weight=weight, identity=identity)
                     commuted_errgen_list_G.extend(commuted_errgen_sublist)
 
-            #Turn the commutator lists into dictionaries:
-            #loop through all of the elements of commuted_errorgen_list and instantiate a dictionary with the requisite keys.
+            # Turn the commutator lists into dictionaries:
+            # loop through all of the elements of commuted_errorgen_list and instantiate a dictionary with the requisite keys.
             E_comm_dict = {error_tuple[0]:0 for error_tuple in commuted_errgen_list_E}
             F_comm_dict = {error_tuple[0]:0 for error_tuple in commuted_errgen_list_F}
             G_comm_dict = {error_tuple[0]:0 for error_tuple in commuted_errgen_list_G}
             
-            #Add all of these error generators to the working dictionary of updated error generators and weights.
-            #There may be duplicates, which should be summed together.
+            # Add all of these error generators to the working dictionary of updated error generators and weights.
+            # There may be duplicates, which should be summed together.
             for error_tuple in commuted_errgen_list_E:
                 E_comm_dict[error_tuple[0]] += error_tuple[1]
             for error_tuple in commuted_errgen_list_F:
@@ -329,77 +329,77 @@ def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1, truncation_th
             for error_tuple in commuted_errgen_list_G:
                 G_comm_dict[error_tuple[0]] += error_tuple[1]
 
-            #drop any terms below the truncation threshold after aggregation
+            # drop any terms below the truncation threshold after aggregation
             E_comm_dict = {key: val for key, val in E_comm_dict.items() if abs(val)>truncation_threshold}
             F_comm_dict = {key: val for key, val in F_comm_dict.items() if abs(val)>truncation_threshold}
             G_comm_dict = {key: val for key, val in G_comm_dict.items() if abs(val)>truncation_threshold}
-            #-(1/720)*([X,F] - [Y, E]) + (1/360)*([Y,F] - [X,E]) + (1/120)*([Y,G] - [X,D])
-            #Now do the next round of 6 commutators: [X,F], [Y,E], [Y,F], [X,E], [Y,G] and [X,D]
-            #We also need the following weight factors. F has a leading factor of (1/12)
-            #E and G have a leading factor of (-1/12). D has a leading factor of (-1/24) 
-            #This gives the following additional weight multipliers:
-            #[X,F] = (-1/60); [Y,E] = (-1/60); [Y,F]= (1/30); [X,E]= (1/30); [Y,G] = (-1/10); [X,D] = (1/5)
+            # -(1/720)*([X,F] - [Y, E]) + (1/360)*([Y,F] - [X,E]) + (1/120)*([Y,G] - [X,D])
+            # Now do the next round of 6 commutators: [X,F], [Y,E], [Y,F], [X,E], [Y,G] and [X,D]
+            # We also need the following weight factors. F has a leading factor of (1/12)
+            # E and G have a leading factor of (-1/12). D has a leading factor of (-1/24) 
+            # This gives the following additional weight multipliers:
+            # [X,F] = (-1/60); [Y,E] = (-1/60); [Y,F]= (1/30); [X,E]= (1/30); [Y,G] = (-1/10); [X,D] = (1/5)
 
-            #[X,F]:
+            # [X,F]:
             commuted_errgen_list_XF = []
             for error1, error1_val in errgen_layer_1.items():
                 for error2, error2_val in F_comm_dict.items():
-                    #Won't add any weight adjustments at this stage, will do that for next commutator.
+                    # Won't add any weight adjustments at this stage, will do that for next commutator.
                     weight = -(1/60)*error1_val*error2_val
                     if abs(weight) < truncation_threshold:
                         continue
                     commuted_errgen_sublist = error_generator_commutator(error1, error2, 
                                                                          weight=weight, identity=identity)
                     commuted_errgen_list_XF.extend(commuted_errgen_sublist)
-            #[Y,E]:
+            # [Y,E]:
             commuted_errgen_list_YE = []
             for error1, error1_val in errgen_layer_2.items():
                 for error2, error2_val in E_comm_dict.items():
-                    #Won't add any weight adjustments at this stage, will do that for next commutator.
+                    # Won't add any weight adjustments at this stage, will do that for next commutator.
                     weight = -(1/60)*error1_val*error2_val
                     if abs(weight) < truncation_threshold:
                         continue
                     commuted_errgen_sublist = error_generator_commutator(error1, error2, 
                                                                          weight=weight, identity=identity)
                     commuted_errgen_list_YE.extend(commuted_errgen_sublist)
-            #[Y,F]:
+            # [Y,F]:
             commuted_errgen_list_YF = []
             for error1, error1_val in errgen_layer_2.items():
                 for error2, error2_val in F_comm_dict.items():
-                    #Won't add any weight adjustments at this stage, will do that for next commutator.
+                    # Won't add any weight adjustments at this stage, will do that for next commutator.
                     weight = (1/30)*error1_val*error2_val
                     if abs(weight) < truncation_threshold:
                         continue
                     commuted_errgen_sublist = error_generator_commutator(error1, error2, 
                                                                          weight=weight, identity=identity)
                     commuted_errgen_list_YF.extend(commuted_errgen_sublist)
-            #[X,E]:
+            # [X,E]:
             commuted_errgen_list_XE = []
             for error1, error1_val in errgen_layer_1.items():
                 for error2, error2_val in E_comm_dict.items():
-                    #Won't add any weight adjustments at this stage, will do that for next commutator.
+                    # Won't add any weight adjustments at this stage, will do that for next commutator.
                     weight = (1/30)*error1_val*error2_val
                     if abs(weight) < truncation_threshold:
                         continue
                     commuted_errgen_sublist = error_generator_commutator(error1, error2, 
                                                                          weight=weight, identity=identity)
                     commuted_errgen_list_XE.extend(commuted_errgen_sublist)
-            #[Y,G]:
+            # [Y,G]:
             commuted_errgen_list_YG = []
             for error1, error1_val in errgen_layer_2.items():
                 for error2, error2_val in G_comm_dict.items():
-                    #Won't add any weight adjustments at this stage, will do that for next commutator.
+                    # Won't add any weight adjustments at this stage, will do that for next commutator.
                     weight = -.1*error1_val*error2_val
                     if abs(weight) < truncation_threshold:
                         continue
                     commuted_errgen_sublist = error_generator_commutator(error1, error2, 
                                                                          weight=weight, identity=identity)
                     commuted_errgen_list_YG.extend(commuted_errgen_sublist)
-            #[X,D]:
+            # [X,D]:
             commuted_errgen_list_XD = []
             for error1, error1_val in errgen_layer_1.items():
                 for error2, error2_val in D.items():
-                    #Won't add any weight adjustments at this stage, will do that for next commutator.
+                    # Won't add any weight adjustments at this stage, will do that for next commutator.
                     weight = .2*error1_val*error2_val
                     if abs(weight) < truncation_threshold:
                         continue
@@ -407,8 +407,8 @@ def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1, truncation_th
                                                                          weight=weight, identity=identity)
                     commuted_errgen_list_XD.extend(commuted_errgen_sublist)
 
-            #Turn the commutator lists into dictionaries:
-            #loop through all of the elements of commuted_errorgen_list and instantiate a dictionary with the requisite keys.
+            # Turn the commutator lists into dictionaries:
+            # loop through all of the elements of commuted_errorgen_list and instantiate a dictionary with the requisite keys.
             XF_comm_dict = {error_tuple[0]:0 for error_tuple in commuted_errgen_list_XF}
             YE_comm_dict = {error_tuple[0]:0 for error_tuple in commuted_errgen_list_YE}
             YF_comm_dict = {error_tuple[0]:0 for error_tuple in commuted_errgen_list_YF}
@@ -416,8 +416,8 @@ def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1, truncation_th
             YG_comm_dict = {error_tuple[0]:0 for error_tuple in commuted_errgen_list_YG}
             XD_comm_dict = {error_tuple[0]:0 for error_tuple in commuted_errgen_list_XD}
 
-            #Add all of these error generators to the working dictionary of updated error generators and weights.
-            #There may be duplicates, which should be summed together.
+            # Add all of these error generators to the working dictionary of updated error generators and weights.
+            # There may be duplicates, which should be summed together.
             for error_tuple in commuted_errgen_list_XF:
                 XF_comm_dict[error_tuple[0]] += error_tuple[1]
             for error_tuple in commuted_errgen_list_YE:
@@ -431,7 +431,7 @@ def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1, truncation_th
             for error_tuple in commuted_errgen_list_XD:
                 XD_comm_dict[error_tuple[0]] += error_tuple[1]
 
-            #finally sum these six dictionaries, keeping only terms which are greater than the threshold.
+            # finally sum these six dictionaries, keeping only terms which are greater than the threshold.
             fifth_order_comm_dict = dict()
             fifth_order_dicts = [XF_comm_dict, YE_comm_dict, YF_comm_dict, XE_comm_dict, YG_comm_dict, XD_comm_dict]
             current_combined_coeff_lbls = {key: None for key in chain(*fifth_order_dicts)}
@@ -444,20 +444,20 @@ def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1, truncation_th
         else:
             raise NotImplementedError("Higher orders beyond fifth order are not implemented yet.")
 
-    #Finally accumulate all of the dictionaries in new_errorgen_layer into a single one, summing overlapping terms.   
+    # Finally accumulate all of the dictionaries in new_errorgen_layer into a single one, summing overlapping terms.   
     errorgen_labels_by_order = [{key: None for key in order_dict} for order_dict in new_errorgen_layer]
     complete_errorgen_labels = errorgen_labels_by_order[0]
     for order_dict in errorgen_labels_by_order[1:]:
         complete_errorgen_labels.update(order_dict)
 
-    #initialize a dictionary with requisite keys
+    # initialize a dictionary with requisite keys
     new_errorgen_layer_dict = {lbl: 0 for lbl in complete_errorgen_labels}
 
     for order_dict in new_errorgen_layer:
         for lbl, rate in order_dict.items():
             new_errorgen_layer_dict[lbl] += rate.real
 
-    #Future: Possibly do one last truncation pass in case any of the different order cancel out when aggregated?
+    # Future: Possibly do one last truncation pass in case any of the different order cancel out when aggregated?
 
     return new_errorgen_layer_dict
 
@@ -500,176 +500,176 @@ def magnus_expansion(errorgen_layers: list[dict[_LSE, float]], magnus_order: Lit
     new_errorgen_layer = []
 
     for curr_order in range(magnus_order):
-        #first-order magnus terms:
-        #\sum_{t1} A_{t1}
+        # first-order magnus terms:
+        # \sum_{t1} A_{t1}
         if curr_order == 0:
-            #Get a combined set of error generator coefficient labels for the list of dictionaries.
+            # Get a combined set of error generator coefficient labels for the list of dictionaries.
             current_combined_coeff_lbls = {key: None for key in chain(*errorgen_layers)}            
 
             first_order_dict = dict()
-            #loop through the combined set of coefficient labels and add them to the new dictionary for the current BCH
-            #approximation order. If present in both we sum the rates.
+            # loop through the combined set of coefficient labels and add them to the new dictionary for the current BCH
+            # approximation order. If present in both we sum the rates.
             for coeff_lbl in current_combined_coeff_lbls:
-                #only add to the first order dictionary if the coefficient exceeds the truncation threshold.
+                # only add to the first order dictionary if the coefficient exceeds the truncation threshold.
                 first_order_rate = sum([errgen_layer.get(coeff_lbl, 0) for errgen_layer in errorgen_layers])  
                 if abs(first_order_rate) > truncation_threshold:
                     first_order_dict[coeff_lbl] = first_order_rate
             
-            #allow short circuiting to avoid an expensive bunch of recombination logic when only using first order BCH
-            #which will likely be a common use case.
+            # allow short circuiting to avoid an expensive bunch of recombination logic when only using first order BCH
+            # which will likely be a common use case.
             if magnus_order==1:
                 return first_order_dict
             new_errorgen_layer.append(first_order_dict)
         
-        #second-order magnus terms:
-        #(1/2)\sum_{t1=1}^n \sum_{t2=1}^{t1-1} [A(t1), A(t2)]
+        # second-order magnus terms:
+        # (1/2)\sum_{t1=1}^n \sum_{t2=1}^{t1-1} [A(t1), A(t2)]
         elif curr_order == 1:
-            #construct a list of all of the pairs of error generator layers we need the
-            #commutators for.
+            # construct a list of all of the pairs of error generator layers we need the
+            # commutators for.
             errorgen_pairs = []
             for i in range(len(errorgen_layers)):
                 for j in range(i):
                     errorgen_pairs.append((errorgen_layers[i], errorgen_layers[j]))
             
-            #precompute an identity string for comparisons in commutator calculations.
+            # precompute an identity string for comparisons in commutator calculations.
             if errorgen_layers:
                 for layer in errorgen_layers:
                     if layer:
                         identity = stim.PauliString('I'*len(next(iter(layer)).basis_element_labels[0]))
                         break
             
-            #compute second-order BCH correction for each pair of error generators in the
-            #errorgen_pairs list.
+            # compute second-order BCH correction for each pair of error generators in the
+            # errorgen_pairs list.
             commuted_errgen_list = []
             for errorgen_pair in errorgen_pairs:
                 for error1, error1_val in errorgen_pair[0].items():
                     for error2, error2_val in errorgen_pair[1].items():
-                        #get the list of error generator labels
+                        # get the list of error generator labels
                         weight = .5*error1_val*error2_val
-                        #avoid computing commutators which will be effectively zero.
+                        # avoid computing commutators which will be effectively zero.
                         if abs(weight) < truncation_threshold:
                             continue
                         commuted_errgen_sublist = error_generator_commutator(error1, error2, 
                                                                             weight= weight, identity=identity)
                         commuted_errgen_list.extend(commuted_errgen_sublist)
-            #loop through all of the elements of commuted_errorgen_list and instantiate a dictionary with the requisite keys.
+            # loop through all of the elements of commuted_errorgen_list and instantiate a dictionary with the requisite keys.
             second_order_comm_dict = {error_tuple[0]: 0 for error_tuple in commuted_errgen_list}
 
-            #Add all of these error generators to the working dictionary of updated error generators and weights.
-            #There may be duplicates, which should be summed together.
+            # Add all of these error generators to the working dictionary of updated error generators and weights.
+            # There may be duplicates, which should be summed together.
             for error_tuple in commuted_errgen_list:
                 second_order_comm_dict[error_tuple[0]] += error_tuple[1]
-            #truncate any terms which are below the truncation threshold following
-            #aggregation.
+            # truncate any terms which are below the truncation threshold following
+            # aggregation.
             second_order_comm_dict = {key: val for key, val in second_order_comm_dict.items() if abs(val)>truncation_threshold}
 
             new_errorgen_layer.append(second_order_comm_dict)
 
-        #third order magnus terms
-        #(1/6)*\sum_{t1=1}^{n} \sum_{t2=1}^{t1} \sum_{t3=1}^{t2} ( [A(t1), [A(t2), A(t3)]] - [A(t3), [A(t1), A(t2)]] )
-        # -> (1/6)*\sum_{t1=1}^{n} \sum_{t2=1}^{t1} \sum_{t3=1}^{t2} [A(t1), [A(t2), A(t3)]]  
-        #   -(1/6)*\sum_{t1=1}^{n} \sum_{t2=1}^{t1} \sum_{t3=1}^{t2} [A(t3), [A(t1), A(t2)]]
-        #First term is zero when t2=t3, so last sum upper bound can be set to t2-1
-        #Second term is zero when t1=t2, so second sum upperbound can be set to t1-1.
-        #We've already computed the commutator [A(t1), A(t2)] in the second term (up to a factor of 1/2) and can reuse that here. 
+        # third order magnus terms
+        # (1/6)*\sum_{t1=1}^{n} \sum_{t2=1}^{t1} \sum_{t3=1}^{t2} ( [A(t1), [A(t2), A(t3)]] - [A(t3), [A(t1), A(t2)]] )
+        #  -> (1/6)*\sum_{t1=1}^{n} \sum_{t2=1}^{t1} \sum_{t3=1}^{t2} [A(t1), [A(t2), A(t3)]]  
+        #    -(1/6)*\sum_{t1=1}^{n} \sum_{t2=1}^{t1} \sum_{t3=1}^{t2} [A(t3), [A(t1), A(t2)]]
+        # First term is zero when t2=t3, so last sum upper bound can be set to t2-1
+        # Second term is zero when t1=t2, so second sum upperbound can be set to t1-1.
+        # We've already computed the commutator [A(t1), A(t2)] in the second term (up to a factor of 1/2) and can reuse that here. 
         elif curr_order == 2:
             commuted_errgen_list_1 = []
             commuted_errgen_list_2 = []
 
-            #(1/6) \sum_{t1=1}^{n} \sum_{t2=1}^{t1} \sum_{t3=1}^{t2} [A(t1), [A(t2), A(t3)]] #use linearity
-            #-> (1/6) \sum_{t1=1}^{n} [A(t1), \sum_{t2=1}^{t1} \sum_{t3=1}^{t2} [A(t2), A(t3)]]
-            #when t1=t2 we pick up an extra factor of 1/2 from boundary effect in the discretization of the time-ordered integral.
+            # (1/6) \sum_{t1=1}^{n} \sum_{t2=1}^{t1} \sum_{t3=1}^{t2} [A(t1), [A(t2), A(t3)]] # use linearity
+            # -> (1/6) \sum_{t1=1}^{n} [A(t1), \sum_{t2=1}^{t1} \sum_{t3=1}^{t2} [A(t2), A(t3)]]
+            # when t1=t2 we pick up an extra factor of 1/2 from boundary effect in the discretization of the time-ordered integral.
 
-            #this is a version of the running sum without the extra 1/2 from boundaries, in the time-ordered integral which is what will get propagated
-            #forward through the computation.
+            # this is a version of the running sum without the extra 1/2 from boundaries, in the time-ordered integral which is what will get propagated
+            # forward through the computation.
             running_23_commutator_sum = {} 
-            for i in range(len(errorgen_layers)): #t1
+            for i in range(len(errorgen_layers)): # t1
                 new_23_commutator_terms = []
-                j=i #new t2 value, can remove this and just replace j with i, keeping temporatily for clarity.
-                for k in range(j): #t3
+                j=i # new t2 value, can remove this and just replace j with i, keeping temporatily for clarity.
+                for k in range(j): # t3
                     new_23_commutator_terms.extend(_error_generator_layer_pairwise_commutator(errorgen_layers[j], errorgen_layers[k], 
                                                                                               addl_weight=(1/12), 
                                                                                               identity=identity, 
                                                                                               truncation_threshold=truncation_threshold))
-                #with the way terms are being accumulated it is always the case at this point that j=i, so we need the extra
-                #factor of 1/2 on the new terms for the computation of the outer commutator with A(t1) with running_23_sum, 
-                #but for future iterations we want to adjust the weights we added to undo this factor of 1/2 for later iterations.
+                # with the way terms are being accumulated it is always the case at this point that j=i, so we need the extra
+                # factor of 1/2 on the new terms for the computation of the outer commutator with A(t1) with running_23_sum, 
+                # but for future iterations we want to adjust the weights we added to undo this factor of 1/2 for later iterations.
                 
-                #loop through all of the elements of new_23_commutator_terms and instantiate any new keys in running_23_commutator_sum
+                # loop through all of the elements of new_23_commutator_terms and instantiate any new keys in running_23_commutator_sum
                 for error_tuple in new_23_commutator_terms:
                     if error_tuple[0] not in running_23_commutator_sum:
                         running_23_commutator_sum[error_tuple[0]] = 0
 
-                #Now that keys are instantiated add all of these error generators to the working dictionary of updated error generators and weights.
-                #There may be duplicates, which should be summed together.
+                # Now that keys are instantiated add all of these error generators to the working dictionary of updated error generators and weights.
+                # There may be duplicates, which should be summed together.
                 for error_tuple in new_23_commutator_terms:
                     running_23_commutator_sum[error_tuple[0]] += error_tuple[1]
-                #truncate any terms which are below the truncation threshold following aggregation. 
+                # truncate any terms which are below the truncation threshold following aggregation. 
                 curr_iter_23_commutator_sum = {key: val for key, val in running_23_commutator_sum.items() if abs(val)>truncation_threshold}
                 
-                #and finally compute the commutator of the running sum with the t1 error generator layer
+                # and finally compute the commutator of the running sum with the t1 error generator layer
                 commuted_errgen_list_1.extend(_error_generator_layer_pairwise_commutator(errorgen_layers[i], curr_iter_23_commutator_sum, 
                                                                                          identity=identity, 
                                                                                          truncation_threshold=truncation_threshold))
-                #adjust the weights in running_23_commutator_sum to double to contribution added earlier bringing the weight from the Magnus expansion up to 1/6 for
-                #future iterations.
+                # adjust the weights in running_23_commutator_sum to double to contribution added earlier bringing the weight from the Magnus expansion up to 1/6 for
+                # future iterations.
                 for error_tuple in new_23_commutator_terms:
                     running_23_commutator_sum[error_tuple[0]] += error_tuple[1]
-                #truncate any terms which are below the truncation threshold following aggregation. 
+                # truncate any terms which are below the truncation threshold following aggregation. 
                 running_23_commutator_sum = {key: val for key, val in running_23_commutator_sum.items() if abs(val)>truncation_threshold}
 
-            #TODO: Cache intermediate values for [A(t1), A(t2)] when doing the second-order computation to reuse here.            
-            #-(1/6) \sum_{t1=1}^{n} \sum_{t2=1}^{t1} \sum_{t3=1}^{t2} [A(t3), [A(t1), A(t2)]] 
-            #This sum can be reordered as follows (this was nonobvious to me until I confirmed explicitly)
-            #-(1/6) \sum_{t3=1}^{n-1} \sum_{t2=t3}^{n-1} \sum_{t1=t2+1}^{n} [A(t3), [A(t1), A(t2)]]
-            #-(1/6) \sum_{t3=1}^{n-1} \sum_{t1=t2+1}^{n} [A(t3), \sum_{t2=t3}^{n-1} [A(t1), A(t2)]] #applying linearity
-            #when t3=t2 we pick up an extra factor of 1/2 from the discretization of the time-ordered integral. (see computation of previous term for implementation details).
-            #The inner commutator sum can be accumulated in a running fashion, and this is easiest done if we run over the outer sum index in reverse.            
+            # TODO: Cache intermediate values for [A(t1), A(t2)] when doing the second-order computation to reuse here.            
+            # -(1/6) \sum_{t1=1}^{n} \sum_{t2=1}^{t1} \sum_{t3=1}^{t2} [A(t3), [A(t1), A(t2)]] 
+            # This sum can be reordered as follows (this was nonobvious to me until I confirmed explicitly)
+            # -(1/6) \sum_{t3=1}^{n-1} \sum_{t2=t3}^{n-1} \sum_{t1=t2+1}^{n} [A(t3), [A(t1), A(t2)]]
+            # -(1/6) \sum_{t3=1}^{n-1} \sum_{t1=t2+1}^{n} [A(t3), \sum_{t2=t3}^{n-1} [A(t1), A(t2)]] # applying linearity
+            # when t3=t2 we pick up an extra factor of 1/2 from the discretization of the time-ordered integral. (see computation of previous term for implementation details).
+            # The inner commutator sum can be accumulated in a running fashion, and this is easiest done if we run over the outer sum index in reverse.            
             running_12_commutator_sum = {}
-            for k in range(len(errorgen_layers)-2, -1, -1): #t3
+            for k in range(len(errorgen_layers)-2, -1, -1): # t3
                 new_12_commutator_terms = []
-                j=k #new t2 value, can remove this and just replace j with k, keeping temporarily for clarity.
-                for i in range(j+1, len(errorgen_layers)): #t1
+                j=k # new t2 value, can remove this and just replace j with k, keeping temporarily for clarity.
+                for i in range(j+1, len(errorgen_layers)): # t1
                     new_12_commutator_terms.extend(_error_generator_layer_pairwise_commutator(errorgen_layers[i], errorgen_layers[j], 
                                                                                               addl_weight=(-1/12), identity=identity, 
                                                                                               truncation_threshold=truncation_threshold))
-                #loop through all of the elements of new_12_commutator_terms and instantiate any new keys in running_12_commutator_sum
+                # loop through all of the elements of new_12_commutator_terms and instantiate any new keys in running_12_commutator_sum
                 for error_tuple in new_12_commutator_terms:
                     if error_tuple[0] not in running_12_commutator_sum:
                         running_12_commutator_sum[error_tuple[0]] = 0
 
-                #Now that keys are instantiated add all of these error generators to the working dictionary of updated error generators and weights.
-                #There may be duplicates, which should be summed together.
+                # Now that keys are instantiated add all of these error generators to the working dictionary of updated error generators and weights.
+                # There may be duplicates, which should be summed together.
                 for error_tuple in new_12_commutator_terms:
                     running_12_commutator_sum[error_tuple[0]] += error_tuple[1]
-                #truncate any terms which are below the truncation threshold following
-                #aggregation.
+                # truncate any terms which are below the truncation threshold following
+                # aggregation.
                 curr_iter_12_commutator_sum = {key: val for key, val in running_12_commutator_sum.items() if abs(val)>truncation_threshold}
 
-                #and finally compute the commutator of the running sum with the t3 error generator layer
+                # and finally compute the commutator of the running sum with the t3 error generator layer
                 commuted_errgen_list_2.extend(_error_generator_layer_pairwise_commutator(errorgen_layers[k], curr_iter_12_commutator_sum, 
                                                                                          identity=identity, 
                                                                                          truncation_threshold=truncation_threshold))
                 for error_tuple in new_12_commutator_terms:
                     running_12_commutator_sum[error_tuple[0]] += error_tuple[1]
-                #truncate any terms which are below the truncation threshold following
-                #aggregation.
+                # truncate any terms which are below the truncation threshold following
+                # aggregation.
                 running_12_commutator_sum = {key: val for key, val in running_12_commutator_sum.items() if abs(val)>truncation_threshold}
 
-            #finally combine the contents of commuted_errgen_list_1 and commuted_errgen_list_2 
-            #turn the two new commuted error generator lists into dictionaries.
-            #loop through all of the elements of commuted_errorgen_list and instantiate a dictionary with the requisite keys.
+            # finally combine the contents of commuted_errgen_list_1 and commuted_errgen_list_2 
+            # turn the two new commuted error generator lists into dictionaries.
+            # loop through all of the elements of commuted_errorgen_list and instantiate a dictionary with the requisite keys.
             third_order_comm_dict_1 = {error_tuple[0]:0 for error_tuple in commuted_errgen_list_1}
             third_order_comm_dict_2 = {error_tuple[0]:0 for error_tuple in commuted_errgen_list_2}
             
-            #Add all of these error generators to the working dictionary of updated error generators and weights.
-            #There may be duplicates, which should be summed together.
+            # Add all of these error generators to the working dictionary of updated error generators and weights.
+            # There may be duplicates, which should be summed together.
             for error_tuple in commuted_errgen_list_1:
                 third_order_comm_dict_1[error_tuple[0]] += error_tuple[1]
             for error_tuple in commuted_errgen_list_2:
                 third_order_comm_dict_2[error_tuple[0]] += error_tuple[1]
             
-            #finally sum these two dictionaries, keeping only terms which are greater than the threshold.
+            # finally sum these two dictionaries, keeping only terms which are greater than the threshold.
             third_order_comm_dict = dict()
             current_combined_coeff_lbls = {key: None for key in chain(third_order_comm_dict_1, third_order_comm_dict_2)}
             for lbl in current_combined_coeff_lbls:
@@ -681,31 +681,31 @@ def magnus_expansion(errorgen_layers: list[dict[_LSE, float]], magnus_order: Lit
         else: 
             raise NotImplementedError("Magnus expansions beyond third order are not implemented yet.")
 
-    #Finally accumulate all of the dictionaries in new_errorgen_layer into a single one, summing overlapping terms.   
+    # Finally accumulate all of the dictionaries in new_errorgen_layer into a single one, summing overlapping terms.   
     errorgen_labels_by_order = [{key: None for key in order_dict} for order_dict in new_errorgen_layer]
     complete_errorgen_labels = errorgen_labels_by_order[0]
     for order_dict in errorgen_labels_by_order[1:]:
         complete_errorgen_labels.update(order_dict)
 
-    #initialize a dictionary with requisite keys
+    # initialize a dictionary with requisite keys
     new_errorgen_layer_dict = {lbl: 0 for lbl in complete_errorgen_labels}
 
     for order_dict in new_errorgen_layer:
         for lbl, rate in order_dict.items():
             new_errorgen_layer_dict[lbl] += rate.real
 
-    #Future: Possibly do one last truncation pass in case any of the different orders cancel out when aggregated?
+    # Future: Possibly do one last truncation pass in case any of the different orders cancel out when aggregated?
     return new_errorgen_layer_dict
 
-#TODO: Refactor a bunch of the code in this module to use this helper function.
-#define a helper function to do a layerwise commutator accumulating all of the pairwise terms into a single list.
+# TODO: Refactor a bunch of the code in this module to use this helper function.
+# define a helper function to do a layerwise commutator accumulating all of the pairwise terms into a single list.
 def _error_generator_layer_pairwise_commutator(errorgen_layer_1, errorgen_layer_2, addl_weight=1.0, identity=None, truncation_threshold=1e-14):
     commuted_errgen_list = []
     for error1, error1_val in errorgen_layer_1.items():
         for error2, error2_val in errorgen_layer_2.items():
-            #get the list of error generator labels
+            # get the list of error generator labels
             weight = addl_weight*error1_val*error2_val
-            #avoid computing commutators which will be effectively zero.
+            # avoid computing commutators which will be effectively zero.
             if abs(weight) < truncation_threshold:
                 continue
             commuted_errgen_sublist = error_generator_commutator(error1, error2, 
@@ -754,8 +754,8 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
     errorgen_1_type = errorgen_1.errorgen_type
     errorgen_2_type = errorgen_2.errorgen_type
 
-    #The first basis element label is always well defined, 
-    #the second we'll define only of the error generator is C or A type.
+    # The first basis element label is always well defined, 
+    # the second we'll define only of the error generator is C or A type.
     errorgen_1_bel_0 = errorgen_1.basis_element_labels[0] 
     errorgen_2_bel_0 = errorgen_2.basis_element_labels[0] 
     
@@ -764,7 +764,7 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
     if errorgen_2_type == 'C' or errorgen_2_type == 'A':
         errorgen_2_bel_1 = errorgen_2.basis_element_labels[1]
 
-    #create the identity stim.PauliString for later comparisons.
+    # create the identity stim.PauliString for later comparisons.
     if identity is None:
         identity = stim.PauliString('I'*len(errorgen_1_bel_0))
         
@@ -827,7 +827,7 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
         errorgens = error_generator_commutator(errorgen_2, errorgen_1, flip_weight=True, weight=weight)
 
     elif errorgen_1_type=='S' and errorgen_2_type=='S':
-        #Commutator of S with S is zero.
+        # Commutator of S with S is zero.
         pass
                          
     elif errorgen_1_type=='S' and errorgen_2_type=='C':
@@ -841,7 +841,7 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
                     errorgens.append((_LSE('A', [ptup2[1], ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
             elif ptup1[1] == identity:
                 errorgens.append((_LSE('H', [ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
-            else: #ptup2[1] == identity
+            else: # ptup2[1] == identity
                 errorgens.append((_LSE('H', [ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
 
         ptup1 = pauli_product(errorgen_1_bel_0, errorgen_2_bel_1)
@@ -854,14 +854,14 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
                     errorgens.append((_LSE('A', [ptup2[1], ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
             elif ptup1[1] == identity:
                 errorgens.append((_LSE('H', [ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
-            else: #ptup2[1] == identity
+            else: # ptup2[1] == identity
                 errorgens.append((_LSE('H', [ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
 
         ptup1 = acom(errorgen_2_bel_0, errorgen_2_bel_1)
         if ptup1 is not None:
             ptup2 = pauli_product(ptup1[1], errorgen_1_bel_0)
-            #it shouldn't be possible for ptup2[1] to equal errorgen_1_bel_0,
-            #as that would imply that errorgen_1_bel_0 was the identity.
+            # it shouldn't be possible for ptup2[1] to equal errorgen_1_bel_0,
+            # as that would imply that errorgen_1_bel_0 was the identity.
             if ptup2[1] == identity:
                 errorgens.append((_LSE('H', [errorgen_1_bel_0]), -1j*.5*w*ptup1[0]*ptup2[0]))
             else:
@@ -870,8 +870,8 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
                 else:
                     errorgens.append((_LSE('A', [errorgen_1_bel_0, ptup2[1]]) , 1j*.5*w*ptup1[0]*ptup2[0]))
 
-            #ptup3 is just the product from ptup2 in reverse, so this can be done
-            #more efficiently, but I'm not going to do that at present...
+            # ptup3 is just the product from ptup2 in reverse, so this can be done
+            # more efficiently, but I'm not going to do that at present...
             ptup3 = pauli_product(errorgen_1_bel_0, ptup1[1])
             if ptup3[1] == identity:
                 errorgens.append((_LSE('H', [errorgen_1_bel_0]), 1j*.5*w*ptup1[0]*ptup3[0]) )
@@ -909,13 +909,13 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
         if ptup1 is not None:
             ptup2 = com(errorgen_1_bel_0, ptup1[1])
             if ptup2 is not None:
-                #it shouldn't be possible for errorgen_1_bel_0 to be equal to ptup2,
-                #since that would imply 
-                #com(errorgen_1_bel_0,com(errorgen_2_bel_0, errorgen_2_bel_1)) == errorgen_1_bel_0
-                #Which I don't think is possible when these come from valid error genator indices.
-                #errorgen_1_bel_0 can't be the identity,
-                #And com(errorgen_1_bel_0,com(errorgen_2_bel_0, errorgen_2_bel_1)) can't be by the same
-                #argument that it can't be errorgen_1_bel_0
+                # it shouldn't be possible for errorgen_1_bel_0 to be equal to ptup2,
+                # since that would imply 
+                # com(errorgen_1_bel_0,com(errorgen_2_bel_0, errorgen_2_bel_1)) == errorgen_1_bel_0
+                # Which I don't think is possible when these come from valid error genator indices.
+                # errorgen_1_bel_0 can't be the identity,
+                # And com(errorgen_1_bel_0,com(errorgen_2_bel_0, errorgen_2_bel_1)) can't be by the same
+                # argument that it can't be errorgen_1_bel_0
                 if stim_pauli_string_less_than(errorgen_1_bel_0, ptup2[1]):
                     errorgens.append((_LSE('A', [errorgen_1_bel_0, ptup2[1]]), -.5*w*ptup1[0]*ptup2[0]))
                 else:
@@ -935,7 +935,7 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
                     errorgens.append((_LSE('A', [ptup2[1], ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
             elif ptup1[1] == identity: 
                 errorgens.append((_LSE('H', [ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
-            else: #ptup2[1] == identity
+            else: # ptup2[1] == identity
                 errorgens.append((_LSE('H', [ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
 
         ptup1 = pauli_product(errorgen_1_bel_0, errorgen_2_bel_1)
@@ -948,7 +948,7 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
                     errorgens.append((_LSE('A', [ptup2[1], ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
             elif ptup1[1] == identity:
                 errorgens.append((_LSE('H', [ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
-            else: #ptup2[1] == identity
+            else: # ptup2[1] == identity
                 errorgens.append((_LSE('H', [ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
 
         ptup1 = pauli_product(errorgen_1_bel_1,errorgen_2_bel_0)
@@ -961,7 +961,7 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
                     errorgens.append((_LSE('A', [ptup2[1], ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))        
             elif ptup1[1] == identity:
                 errorgens.append((_LSE('H', [ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
-            else: #ptup2[1] == identity
+            else: # ptup2[1] == identity
                 errorgens.append((_LSE('H', [ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
 
         ptup1 = pauli_product(errorgen_1_bel_1, errorgen_2_bel_1)
@@ -974,7 +974,7 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
                     errorgens.append((_LSE('A', [ptup2[1], ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
             elif ptup1[1] == identity:
                 errorgens.append((_LSE('H', [ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
-            else: #ptup2[1] == identity
+            else: # ptup2[1] == identity
                 errorgens.append((_LSE('H', [ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
         
         ptup1 = acom(errorgen_1_bel_0, errorgen_1_bel_1)
@@ -982,8 +982,8 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
             ptup2 = com(errorgen_2_bel_0, ptup1[1])
             if ptup2 is not None:
                 if ptup2[1] != errorgen_2_bel_1:
-                    #errorgen_2_bel_1 can't be the identity,
-                    #And com(errorgen_2_bel_0, acom(errorgen_1_bel_0, errorgen_1_bel_1)) can't be either.
+                    # errorgen_2_bel_1 can't be the identity,
+                    # And com(errorgen_2_bel_0, acom(errorgen_1_bel_0, errorgen_1_bel_1)) can't be either.
                     if stim_pauli_string_less_than(ptup2[1], errorgen_2_bel_1):
                         errorgens.append((_LSE('A', [ptup2[1], errorgen_2_bel_1]), -.5*1j*w*ptup1[0]*ptup2[0]))
                     else:
@@ -994,8 +994,8 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
             ptup2 = com(errorgen_2_bel_1, ptup1[1])
             if ptup2 is not None:
                 if ptup2[1] != errorgen_2_bel_0:
-                    #errorgen_2_bel_0 can't be the identity.
-                    #And com(errorgen_2_bel_1, acom(errorgen_1_bel_0, errorgen_1_bel_1)) can't be either.
+                    # errorgen_2_bel_0 can't be the identity.
+                    # And com(errorgen_2_bel_1, acom(errorgen_1_bel_0, errorgen_1_bel_1)) can't be either.
                     if stim_pauli_string_less_than(ptup2[1], errorgen_2_bel_0):
                         errorgens.append((_LSE('A', [ptup2[1], errorgen_2_bel_0]), -.5*1j*w*ptup1[0]*ptup2[0]))
                     else:
@@ -1006,8 +1006,8 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
             ptup2 = com(ptup1[1], errorgen_1_bel_0)
             if ptup2 is not None:
                 if ptup2[1] != errorgen_1_bel_1:
-                    #errorgen_1_bel_1 can't be the identity.
-                    #And com(acom(errorgen_2_bel_0, errorgen_2_bel_1), errorgen_2_bel_0) can't be either
+                    # errorgen_1_bel_1 can't be the identity.
+                    # And com(acom(errorgen_2_bel_0, errorgen_2_bel_1), errorgen_2_bel_0) can't be either
                     if stim_pauli_string_less_than(ptup2[1], errorgen_1_bel_1):
                         errorgens.append((_LSE('A', [ptup2[1], errorgen_1_bel_1]), -.5*1j*w*ptup1[0]*ptup2[0]))
                     else:
@@ -1018,8 +1018,8 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
             ptup2 = com(ptup1[1], errorgen_1_bel_1)
             if ptup2 is not None:
                 if ptup2[1] != errorgen_1_bel_0:
-                    #errorgen_1_bel_0 can't be the identity.
-                    #And com(acom(errorgen_2_bel_0, errorgen_2_bel_1), errorgen_2_bel_1) can't be either
+                    # errorgen_1_bel_0 can't be the identity.
+                    # And com(acom(errorgen_2_bel_0, errorgen_2_bel_1), errorgen_2_bel_1) can't be either
                     if stim_pauli_string_less_than(ptup2[1], errorgen_1_bel_0):
                         errorgens.append((_LSE('A', [ptup2[1], errorgen_1_bel_0]), -.5*1j*w*ptup1[0]*ptup2[0]))
                     else:
@@ -1031,7 +1031,7 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
             if ptup2 is not None:
                 ptup3 = com(ptup1[1], ptup2[1])
                 if ptup3 is not None:
-                    #It shouldn't be possible for ptup3 to be the identity given valid error generator indices.
+                    # It shouldn't be possible for ptup3 to be the identity given valid error generator indices.
                     errorgens.append((_LSE('H', [ptup3[1]]), .25*1j*w*ptup1[0]*ptup2[0]*ptup3[0]))
 
     elif errorgen_1_type == 'C' and errorgen_2_type == 'A':
@@ -1041,7 +1041,7 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
             if ptup1[1] != identity and ptup2[1] != identity:
                 new_bels = [ptup1[1], ptup2[1]] if stim_pauli_string_less_than(ptup1[1], ptup2[1]) else [ptup2[1], ptup1[1]]
                 errorgens.append((_LSE('C', new_bels), 1j*w*ptup1[0]*ptup2[0]))
-        else: #ptup[1] == ptup[2]
+        else: # ptup[1] == ptup[2]
             if ptup1[1] != identity:
                 errorgens.append((_LSE('S', [ptup1[1]]), 2*1j*w*ptup1[0]*ptup2[0]))
 
@@ -1051,7 +1051,7 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
             if ptup1[1] != identity and ptup2[1] != identity:
                 new_bels = [ptup1[1], ptup2[1]] if stim_pauli_string_less_than(ptup1[1], ptup2[1]) else [ptup2[1], ptup1[1]]
                 errorgens.append((_LSE('C', new_bels), -1j*w*ptup1[0]*ptup2[0]))
-        else: #ptup[1] == ptup[2]
+        else: # ptup[1] == ptup[2]
             if ptup1[1] != identity:
                 errorgens.append((_LSE('S', [ptup1[1]]), -2*1j*w*ptup1[0]*ptup2[0]))
 
@@ -1061,7 +1061,7 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
             if ptup1[1] != identity and ptup2[1] != identity:
                 new_bels = [ptup1[1], ptup2[1]] if stim_pauli_string_less_than(ptup1[1], ptup2[1]) else [ptup2[1], ptup1[1]]
                 errorgens.append((_LSE('C', new_bels), 1j*w*ptup1[0]*ptup2[0]))
-        else: #ptup[1] == ptup[2]
+        else: # ptup[1] == ptup[2]
             if ptup1[1] != identity:
                 errorgens.append((_LSE('S', [ptup1[1]]), 2*1j*w*ptup1[0]*ptup2[0]))
 
@@ -1071,7 +1071,7 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
             if ptup1[1] != identity and ptup2[1] != identity:
                 new_bels = [ptup1[1], ptup2[1]] if stim_pauli_string_less_than(ptup1[1], ptup2[1]) else [ptup2[1], ptup1[1]]
                 errorgens.append((_LSE('C', new_bels), -1j*w*ptup1[0]*ptup2[0]))
-        else: #ptup[1] == ptup[2]
+        else: # ptup[1] == ptup[2]
             if ptup1[1] != identity:
                 errorgens.append((_LSE('S', [ptup1[1]]), -2*1j*w*ptup1[0]*ptup2[0]))
 
@@ -1080,8 +1080,8 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
             ptup2 = com(errorgen_1_bel_0, ptup1[1])
             if ptup2 is not None:
                 if ptup2[1] != errorgen_1_bel_1:
-                    #errorgen_1_bel_1 can't be the identity.
-                    #com(errorgen_1_bel_0, com(errorgen_2_bel_0, errorgen_2_bel_1)) can't be either.
+                    # errorgen_1_bel_1 can't be the identity.
+                    # com(errorgen_1_bel_0, com(errorgen_2_bel_0, errorgen_2_bel_1)) can't be either.
                     if stim_pauli_string_less_than(ptup2[1], errorgen_1_bel_1):
                         errorgens.append((_LSE('A', [ptup2[1], errorgen_1_bel_1]), .5*w*ptup1[0]*ptup2[0]))
                     else:
@@ -1092,8 +1092,8 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
             ptup2 = com(errorgen_1_bel_1, ptup1[1])
             if ptup2 is not None:
                 if ptup2[1] != errorgen_1_bel_0:
-                    #errorgen_1_bel_0 can't be the identity.
-                    #com(errorgen_1_bel_1, com(errorgen_2_bel_0, errorgen_2_bel_1)) can't be either.
+                    # errorgen_1_bel_0 can't be the identity.
+                    # com(errorgen_1_bel_1, com(errorgen_2_bel_0, errorgen_2_bel_1)) can't be either.
                     if stim_pauli_string_less_than(ptup2[1], errorgen_1_bel_0):
                         errorgens.append((_LSE('A', [ptup2[1], errorgen_1_bel_0]), .5*w*ptup1[0]*ptup2[0]))
                     else:
@@ -1104,11 +1104,11 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
             ptup2 = com(errorgen_2_bel_0, ptup1[1])
             if ptup2 is not None:
                 if ptup2[1] != errorgen_2_bel_1:
-                    #errorgen_2_bel_1 can't be the identity.
-                    #com(errorgen_2_bel_1, acom(errorgen_1_bel_0, errorgen_1_bel_1)) can't be either
+                    # errorgen_2_bel_1 can't be the identity.
+                    # com(errorgen_2_bel_1, acom(errorgen_1_bel_0, errorgen_1_bel_1)) can't be either
                     new_bels = [ptup2[1], errorgen_2_bel_1] if stim_pauli_string_less_than(ptup2[1], errorgen_2_bel_1) else [errorgen_2_bel_1, ptup2[1]]
                     errorgens.append((_LSE('C', new_bels), .5*1j*w*ptup1[0]*ptup2[0]))
-                else: #ptup2[1] == errorgen_2_bel_1, don't need to check that errorgen_2_bel_1 isn't identity.
+                else: # ptup2[1] == errorgen_2_bel_1, don't need to check that errorgen_2_bel_1 isn't identity.
                     errorgens.append((_LSE('S', [errorgen_2_bel_1]), 1j*w*ptup1[0]*ptup2[0]))
 
 
@@ -1117,11 +1117,11 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
             ptup2 = com(errorgen_2_bel_1, ptup1[1])
             if ptup2 is not None:
                 if ptup2[1] != errorgen_2_bel_0:
-                    #errorgen_2_bel_0 can't be the identity.
-                    #com(errorgen_2_bel_1, acom(errorgen_1_bel_0, errorgen_1_bel_1)) can't be either
+                    # errorgen_2_bel_0 can't be the identity.
+                    # com(errorgen_2_bel_1, acom(errorgen_1_bel_0, errorgen_1_bel_1)) can't be either
                     new_bels = [ptup2[1], errorgen_2_bel_0] if stim_pauli_string_less_than(ptup2[1], errorgen_2_bel_0) else [errorgen_2_bel_0, ptup2[1]]
                     errorgens.append((_LSE('C', new_bels), -.5*1j*w*ptup1[0]*ptup2[0]))
-                else: #ptup2[1] == errorgen_2_bel_0, don't need to check that errorgen_2_bel_0 isn't identity.
+                else: # ptup2[1] == errorgen_2_bel_0, don't need to check that errorgen_2_bel_0 isn't identity.
                     errorgens.append((_LSE('S', [errorgen_2_bel_0]), -1j*w*ptup1[0]*ptup2[0]))
 
         ptup1 = com(errorgen_2_bel_0, errorgen_2_bel_1)
@@ -1130,8 +1130,8 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
             if ptup2 is not None:
                 ptup3= com(ptup1[1], ptup2[1])
                 if ptup3 is not None:
-                    #it shouldn't be possible for ptup3 to be identity given valid error generator
-                    #indices.
+                    # it shouldn't be possible for ptup3 to be identity given valid error generator
+                    # indices.
                     errorgens.append((_LSE('H', [ptup3[1]]), -.25*w*ptup1[0]*ptup2[0]*ptup3[0]))
     
     elif errorgen_1_type == 'A' and errorgen_2_type == 'C':
@@ -1149,7 +1149,7 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
                     errorgens.append((_LSE('A', [ptup2[1], ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
             elif ptup1[1] == identity:
                 errorgens.append((_LSE('H', [ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
-            else: #ptup2[1] == identity
+            else: # ptup2[1] == identity
                 errorgens.append((_LSE('H', [ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
 
         ptup1 = pauli_product(errorgen_2_bel_0, errorgen_1_bel_0)
@@ -1162,7 +1162,7 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
                     errorgens.append((_LSE('A', [ptup2[1], ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
             elif ptup1[1] == identity:
                 errorgens.append((_LSE('H', [ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
-            else: #ptup2[1] == identity
+            else: # ptup2[1] == identity
                 errorgens.append((_LSE('H', [ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
 
         ptup1 = pauli_product(errorgen_1_bel_1, errorgen_2_bel_0)
@@ -1175,7 +1175,7 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
                     errorgens.append((_LSE('A', [ptup2[1], ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
             elif ptup1[1] == identity:
                 errorgens.append((_LSE('H', [ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
-            else: #ptup2[1] == identity
+            else: # ptup2[1] == identity
                 errorgens.append((_LSE('H', [ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
 
         ptup1 = pauli_product(errorgen_1_bel_0, errorgen_2_bel_1)
@@ -1188,7 +1188,7 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
                     errorgens.append((_LSE('A', [ptup2[1], ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
             elif ptup1[1] == identity:
                 errorgens.append((_LSE('H', [ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
-            else: #ptup2[1] == identity
+            else: # ptup2[1] == identity
                 errorgens.append((_LSE('H', [ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
 
         ptup1 = com(errorgen_2_bel_0, errorgen_2_bel_1)
@@ -1196,11 +1196,11 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
             ptup2 = com(errorgen_1_bel_1, ptup1[1])
             if ptup2 is not None:
                 if ptup2[1] != errorgen_1_bel_0:
-                    #errorgen_1_bel_0 can't be the identity.
-                    #com(errorgen_1_bel_1, com(errorgen_2_bel_0, errorgen_2_bel_1)) can't be either.
+                    # errorgen_1_bel_0 can't be the identity.
+                    # com(errorgen_1_bel_1, com(errorgen_2_bel_0, errorgen_2_bel_1)) can't be either.
                     new_bels = [ptup2[1], errorgen_1_bel_0] if stim_pauli_string_less_than(ptup2[1], errorgen_1_bel_0) else [errorgen_1_bel_0, ptup2[1]]
                     errorgens.append((_LSE('C', new_bels), .5*w*ptup1[0]*ptup2[0]))
-                else: #ptup2[1] == errorgen_1_bel_0
+                else: # ptup2[1] == errorgen_1_bel_0
                     errorgens.append((_LSE('S', [errorgen_1_bel_0]), w*ptup1[0]*ptup2[0]))
 
         ptup1 = com(errorgen_2_bel_0, errorgen_2_bel_1)
@@ -1208,11 +1208,11 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
             ptup2 = com(errorgen_1_bel_0, ptup1[1])
             if ptup2 is not None:
                 if ptup2[1] != errorgen_1_bel_1:
-                    #errorgen_1_bel_1 can't be the identity.
-                    #com(errorgen_1_bel_0, com(errorgen_2_bel_0, errorgen_2_bel_1)) can't be either.
+                    # errorgen_1_bel_1 can't be the identity.
+                    # com(errorgen_1_bel_0, com(errorgen_2_bel_0, errorgen_2_bel_1)) can't be either.
                     new_bels = [ptup2[1], errorgen_1_bel_1] if stim_pauli_string_less_than(ptup2[1], errorgen_1_bel_1) else [errorgen_1_bel_1, ptup2[1]]
                     errorgens.append((_LSE('C', new_bels), -.5*w*ptup1[0]*ptup2[0]))
-                else: #ptup2[1] == errorgen_1_bel_1
+                else: # ptup2[1] == errorgen_1_bel_1
                     errorgens.append((_LSE('S', [errorgen_1_bel_1]), -1*w*ptup1[0]*ptup2[0]))
         
         ptup1 = com(errorgen_1_bel_0, errorgen_1_bel_1)
@@ -1220,11 +1220,11 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
             ptup2 = com(errorgen_2_bel_0, ptup1[1])
             if ptup2 is not None:
                 if ptup2[1] != errorgen_2_bel_1:
-                    #errorgen_2_bel_1 can't be the identity.
-                    #com(errorgen_2_bel_0, com(errorgen_1_bel_0, errorgen_1_bel_1)) can't be either.
+                    # errorgen_2_bel_1 can't be the identity.
+                    # com(errorgen_2_bel_0, com(errorgen_1_bel_0, errorgen_1_bel_1)) can't be either.
                     new_bels = [ptup2[1], errorgen_2_bel_1] if stim_pauli_string_less_than(ptup2[1], errorgen_2_bel_1) else [errorgen_2_bel_1, ptup2[1]]
                     errorgens.append((_LSE('C', new_bels), .5*w*ptup1[0]*ptup2[0]))
-                else: #ptup2[1] == errorgen_2_bel_1
+                else: # ptup2[1] == errorgen_2_bel_1
                     errorgens.append((_LSE('S', [errorgen_2_bel_1]), w*ptup1[0]*ptup2[0]))
 
 
@@ -1233,11 +1233,11 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
             ptup2 = com(errorgen_2_bel_1, ptup1[1])
             if ptup2 is not None:
                 if ptup2[1] != errorgen_2_bel_0:
-                    #errorgen_2_bel_0 can't be the identity.
-                    #com(errorgen_2_bel_1, com(errorgen_1_bel_0,errorgen_1_bel_1)) can't be either.
+                    # errorgen_2_bel_0 can't be the identity.
+                    # com(errorgen_2_bel_1, com(errorgen_1_bel_0,errorgen_1_bel_1)) can't be either.
                     new_bels = [ptup2[1], errorgen_2_bel_0] if stim_pauli_string_less_than(ptup2[1], errorgen_2_bel_0) else [errorgen_2_bel_0, ptup2[1]]
                     errorgens.append((_LSE('C', new_bels), -.5*w*ptup1[0]*ptup2[0]))
-                else: #ptup2[1] == errorgen_2_bel_0
+                else: # ptup2[1] == errorgen_2_bel_0
                     errorgens.append((_LSE('S', [errorgen_2_bel_0]), -1*w*ptup1[0]*ptup2[0]))
 
         ptup1 = com(errorgen_2_bel_0, errorgen_2_bel_1)
@@ -1246,8 +1246,8 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
             if ptup2 is not None:
                 ptup3 = com(ptup1[1], ptup2[1])
                 if ptup3 is not None:
-                    #it shouldn't be possible for ptup3 to be identity given valid error generator
-                    #indices.
+                    # it shouldn't be possible for ptup3 to be identity given valid error generator
+                    # indices.
                     errorgens.append((_LSE('H', [ptup3[1]]), .25*1j*w*ptup1[0]*ptup2[0]*ptup3[0]))
            
     return errorgens
@@ -1288,8 +1288,8 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
     errorgen_1_type = errorgen_1.errorgen_type
     errorgen_2_type = errorgen_2.errorgen_type
 
-    #The first basis element label is always well defined, 
-    #the second we'll define only of the error generator is C or A type.
+    # The first basis element label is always well defined, 
+    # the second we'll define only of the error generator is C or A type.
     errorgen_1_bel_0 = errorgen_1.basis_element_labels[0] 
     errorgen_2_bel_0 = errorgen_2.basis_element_labels[0] 
     
@@ -1298,12 +1298,12 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
     if errorgen_2_type == 'C' or errorgen_2_type == 'A':
         errorgen_2_bel_1 = errorgen_2.basis_element_labels[1]
 
-    #create the identity stim.PauliString for later comparisons.
+    # create the identity stim.PauliString for later comparisons.
     if identity is None:
         identity = stim.PauliString('I'*len(errorgen_1_bel_0))
 
     if errorgen_1_type == 'H' and errorgen_2_type == 'H':
-        #H_P[H_Q] P->errorgen_1_bel_0, Q -> errorgen_2_bel_0
+        # H_P[H_Q] P->errorgen_1_bel_0, Q -> errorgen_2_bel_0
         P = errorgen_1_bel_0
         Q = errorgen_2_bel_0
         P_eq_Q = (P==Q)
@@ -1317,7 +1317,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
             composed_errorgens.append((_LSE(new_eg_type, new_bels), addl_factor*w))
 
     elif errorgen_1_type == 'H' and errorgen_2_type == 'S':
-        #H_P[S_Q] P->errorgen_1_bel_0, Q -> errorgen_2_bel_0
+        # H_P[S_Q] P->errorgen_1_bel_0, Q -> errorgen_2_bel_0
         P = errorgen_1_bel_0
         Q = errorgen_2_bel_0
         PQ = pauli_product(P, Q)
@@ -1328,40 +1328,40 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
             if new_eg_type is not None:
                 composed_errorgens.append((_LSE(new_eg_type, new_bels), -PQ[0]*addl_factor*w))
             composed_errorgens.append((_LSE('H', [P]), -w))   
-        else: #if errorgen_1_bel_0 and errorgen_2_bel_0 only multiply to identity they are equal (in which case they commute).
+        else: # if errorgen_1_bel_0 and errorgen_2_bel_0 only multiply to identity they are equal (in which case they commute).
             new_eg_type, new_bels, addl_factor = _ordered_new_bels_C(PQ[1], Q, PQ_ident, False, PQ_eq_Q)
             if new_eg_type is not None:
                 composed_errorgens.append((_LSE(new_eg_type, new_bels), -1j*PQ[0]*addl_factor*w))
             composed_errorgens.append((_LSE('H', [P]), -w))
 
     elif errorgen_1_type == 'H' and errorgen_2_type == 'C':
-        #H_A[C_{P,Q}] A->errorgen_1_bel_0, P,Q -> errorgen_2_bel_0, errorgen_2_bel_1
+        # H_A[C_{P,Q}] A->errorgen_1_bel_0, P,Q -> errorgen_2_bel_0, errorgen_2_bel_1
         P = errorgen_2_bel_0
         Q = errorgen_2_bel_1
         A = errorgen_1_bel_0 
-        #also precompute whether pairs commute or anticommute
+        # also precompute whether pairs commute or anticommute
         com_AP = A.commutes(P)
         com_AQ = A.commutes(Q)
 
-        #Case 1: [P,Q]=0
+        # Case 1: [P,Q]=0
         if P.commutes(Q):
-            #precompute some products we'll need.
+            # precompute some products we'll need.
             PA = pauli_product(P, A)
             QA = pauli_product(Q, A)
             PQ = pauli_product(P, Q)
             APQ = pauli_product(A, PQ[0]*PQ[1])
 
-            #also precompute whether any of these products are the identity
+            # also precompute whether any of these products are the identity
             PA_ident = (PA[1] == identity)
             QA_ident = (QA[1] == identity)
             PQ_ident = (PQ[1] == identity)
             APQ_ident = (APQ[1] == identity)
-            #also also precompute whether certain relevant pauli pairs are equal.
+            # also also precompute whether certain relevant pauli pairs are equal.
             PA_eq_Q = (PA[1]==Q)
             QA_eq_P = (QA[1]==P)
             PQ_eq_A = (PQ[1]==A)
             
-            #Case 1a: [A,P]=0, [A,Q]=0
+            # Case 1a: [A,P]=0, [A,Q]=0
             if com_AP and com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], Q, PA_ident, False, PA_eq_Q)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], P, QA_ident, False, QA_eq_P)
@@ -1374,7 +1374,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1*PQ[0]*addl_factor_2*w))
                 if not APQ_ident:
                     composed_errorgens.append((_LSE('H', [APQ[1]]), -1*APQ[0]*w))
-            #Case 1b: {A,P}=0, {A,Q}=0
+            # Case 1b: {A,P}=0, {A,Q}=0
             elif not com_AP and not com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], Q, PA_ident, False, PA_eq_Q)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], P, QA_ident, False, QA_eq_P)
@@ -1387,7 +1387,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1*PQ[0]*addl_factor_2*w))
                 if not APQ_ident:
                     composed_errorgens.append((_LSE('H', [APQ[1]]), -1*APQ[0]*w))
-            #Case 1c: [A,P]=0, {A,Q}=0
+            # Case 1c: [A,P]=0, {A,Q}=0
             elif com_AP and not com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], Q, PA_ident, False, PA_eq_Q)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], P, QA_ident, False, QA_eq_P)
@@ -1398,7 +1398,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), 1j*QA[0]*addl_factor_1*w))
                 if new_eg_type_2 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1*PQ[0]*addl_factor_2*w))
-            #Case 1d: {A,P}=0, [A,Q]=0
+            # Case 1d: {A,P}=0, [A,Q]=0
             elif not com_AP and com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], Q, PA_ident, False, PA_eq_Q)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], P, QA_ident, False, QA_eq_P)
@@ -1409,17 +1409,17 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1*QA[0]*addl_factor_1*w))
                 if new_eg_type_2 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1*PQ[0]*addl_factor_2*w))
-        else: #Case 2: {P,Q}=0
-            #precompute some products we'll need.
+        else: # Case 2: {P,Q}=0
+            # precompute some products we'll need.
             PA = pauli_product(P, A)
             QA = pauli_product(Q, A)
-            #also precompute whether any of these products are the identity
+            # also precompute whether any of these products are the identity
             PA_ident = (PA[1] == identity)
             QA_ident = (QA[1] == identity)
-            #also also precompute whether certain relevant pauli pairs are equal.
+            # also also precompute whether certain relevant pauli pairs are equal.
             PA_eq_Q = (PA[1]==Q)
             QA_eq_P = (QA[1]==P)
-            #Case 2a: [A,P]=0, [A,Q]=0
+            # Case 2a: [A,P]=0, [A,Q]=0
             if com_AP and com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], Q, PA_ident, False, PA_eq_Q)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], P, QA_ident, False, QA_eq_P)
@@ -1427,7 +1427,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1*PA[0]*addl_factor_0*w))
                 if new_eg_type_1 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1*QA[0]*addl_factor_1*w))
-            #Case 2b: {A,P}=0, {A,Q}=0
+            # Case 2b: {A,P}=0, {A,Q}=0
             elif not com_AP and not com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], Q, PA_ident, False, PA_eq_Q)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], P, QA_ident, False, QA_eq_P)
@@ -1435,7 +1435,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1j*PA[0]*addl_factor_0*w))
                 if new_eg_type_1 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), 1j*QA[0]*addl_factor_1*w))
-            #Case 2c: [A,P]=0, {A,Q}=0
+            # Case 2c: [A,P]=0, {A,Q}=0
             elif com_AP and not com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], Q, PA_ident, False, PA_eq_Q)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], P, QA_ident, False, QA_eq_P)
@@ -1443,7 +1443,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1*PA[0]*addl_factor_0*w))
                 if new_eg_type_1 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), 1j*QA[0]*addl_factor_1*w))
-            #Case 2d: {A,P}=0, [A,Q]=0
+            # Case 2d: {A,P}=0, [A,Q]=0
             elif not com_AP and com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], Q, PA_ident, False, PA_eq_Q)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], P, QA_ident, False, QA_eq_P)
@@ -1453,25 +1453,25 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1*QA[0]*addl_factor_1*w))
 
     elif errorgen_1_type == 'H' and errorgen_2_type == 'A':
-        #H_A[A_{P,Q}] A->errorgen_1_bel_0, P,Q -> errorgen_2_bel_0, errorgen_2_bel_1
+        # H_A[A_{P,Q}] A->errorgen_1_bel_0, P,Q -> errorgen_2_bel_0, errorgen_2_bel_1
         P = errorgen_2_bel_0
         Q = errorgen_2_bel_1
         A = errorgen_1_bel_0
-        #precompute whether pairs commute or anticommute
+        # precompute whether pairs commute or anticommute
         com_AP = A.commutes(P)
         com_AQ = A.commutes(Q)
-        #Case 1: P and Q commute.
+        # Case 1: P and Q commute.
         if P.commutes(Q):
-            #precompute some products we'll need.
+            # precompute some products we'll need.
             PA = pauli_product(P, A)
             QA = pauli_product(Q, A)
-            #also precompute whether any of these products are the identity
+            # also precompute whether any of these products are the identity
             PA_ident = (PA[1] == identity)
             QA_ident = (QA[1] == identity)
-            #also also precompute whether certain relevant pauli pairs are equal.
+            # also also precompute whether certain relevant pauli pairs are equal.
             PA_eq_Q = (PA[1]==Q)
             QA_eq_P = (QA[1]==P)
-            #Case 1a: [A,P]=0, [A,Q]=0
+            # Case 1a: [A,P]=0, [A,Q]=0
             if com_AP and com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], Q, PA_ident, False, PA_eq_Q)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], P, QA_ident, False, QA_eq_P)
@@ -1479,7 +1479,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1*PA[0]*addl_factor_0*w))
                 if new_eg_type_1 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1*QA[0]*addl_factor_1*w))
-            #Case 1b: {A,P}=0, {A,Q}=0
+            # Case 1b: {A,P}=0, {A,Q}=0
             elif not com_AP and not com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], Q, PA_ident, False, PA_eq_Q)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], P, QA_ident, False, QA_eq_P)
@@ -1487,7 +1487,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1j*PA[0]*addl_factor_0*w))
                 if new_eg_type_1 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1j*QA[0]*addl_factor_1*w))
-            #Case 1c: [A,P]=0, {A,Q}=0
+            # Case 1c: [A,P]=0, {A,Q}=0
             elif com_AP and not com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], Q, PA_ident, False, PA_eq_Q)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], P, QA_ident, False, QA_eq_P)
@@ -1495,7 +1495,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), PA[0]*addl_factor_0*w))
                 if new_eg_type_1 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1j*QA[0]*addl_factor_1*w))
-            #Case 1d: {A,P}=0, [A,Q]=0
+            # Case 1d: {A,P}=0, [A,Q]=0
             elif not com_AP and com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], Q, PA_ident, False, PA_eq_Q)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], P, QA_ident, False, QA_eq_P)
@@ -1503,23 +1503,23 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1j*PA[0]*addl_factor_0*w))
                 if new_eg_type_1 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1*QA[0]*addl_factor_1*w))
-        else: #Case 2: {P,Q}=0
-            #precompute some products we'll need.
+        else: # Case 2: {P,Q}=0
+            # precompute some products we'll need.
             PA = pauli_product(P, A)
             QA = pauli_product(Q, A)
             PQ = pauli_product(P, Q)
             APQ = pauli_product(A, PQ[0]*PQ[1])
-            #also also precompute whether any of these products are the identity
+            # also also precompute whether any of these products are the identity
             PA_ident = (PA[1] == identity)
             QA_ident = (QA[1] == identity)
             PQ_ident = (PQ[1] == identity)
             APQ_ident = (APQ[1] == identity)
-            #also also also precompute whether certain relevant pauli pairs are equal.
+            # also also also precompute whether certain relevant pauli pairs are equal.
             PA_eq_Q = (PA[1]==Q)
             QA_eq_P = (QA[1]==P)
             PQ_eq_A = (PQ[1]==A)
             
-            #Case 2a: [A,P]=0, [A,Q]=0
+            # Case 2a: [A,P]=0, [A,Q]=0
             if com_AP and com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], Q, PA_ident, False, PA_eq_Q)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], P, QA_ident, False, QA_eq_P)
@@ -1532,7 +1532,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), 1j*PQ[0]*addl_factor_2*w))
                 if not APQ_ident:
                     composed_errorgens.append((_LSE('H', [APQ[1]]), 1j*APQ[0]*w))
-            #Case 2b: {A,P}=0, {A,Q}=0
+            # Case 2b: {A,P}=0, {A,Q}=0
             elif not com_AP and not com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], Q, PA_ident, False, PA_eq_Q)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], P, QA_ident, False, QA_eq_P)
@@ -1545,7 +1545,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), 1j*PQ[0]*addl_factor_2*w))
                 if not APQ_ident:
                     composed_errorgens.append((_LSE('H', [APQ[1]]), 1j*APQ[0]*w))
-            #Case 2c: [A,P]=0, {A,Q}=0
+            # Case 2c: [A,P]=0, {A,Q}=0
             elif com_AP and not com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], Q, PA_ident, False, PA_eq_Q)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], P, QA_ident, False, QA_eq_P)
@@ -1556,7 +1556,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1j*QA[0]*addl_factor_1*w))
                 if new_eg_type_2 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), 1j*PQ[0]*addl_factor_2*w))
-            #Case 2d: {A,P}=0, [A,Q]=0
+            # Case 2d: {A,P}=0, [A,Q]=0
             elif not com_AP and com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], Q, PA_ident, False, PA_eq_Q)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], P, QA_ident, False, QA_eq_P)
@@ -1568,10 +1568,10 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                 if new_eg_type_2 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), 1j*PQ[0]*addl_factor_2*w))
 
-    #Note: This could be done by leveraging the commutator code, but that adds
-    #additional overhead which I am opting to avoid.
+    # Note: This could be done by leveraging the commutator code, but that adds
+    # additional overhead which I am opting to avoid.
     elif errorgen_1_type == 'S' and errorgen_2_type == 'H':
-        #S_P[H_Q] P->errorgen_1_bel_0, Q -> errorgen_2_bel_0
+        # S_P[H_Q] P->errorgen_1_bel_0, Q -> errorgen_2_bel_0
         P = errorgen_1_bel_0
         Q = errorgen_2_bel_0
         PQ = pauli_product(P, Q)
@@ -1582,14 +1582,14 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
             if new_eg_type is not None:
                 composed_errorgens.append((_LSE(new_eg_type, new_bels), -PQ[0]*addl_factor*w))
             composed_errorgens.append((_LSE('H', [Q]), -w))   
-        else: #if errorgen_1_bel_0 and errorgen_2_bel_0 only multiply to identity they are equal (in which case they commute).
+        else: # if errorgen_1_bel_0 and errorgen_2_bel_0 only multiply to identity they are equal (in which case they commute).
             new_eg_type, new_bels, addl_factor = _ordered_new_bels_C(PQ[1], P, PQ_ident, False, PQ_eq_Q)
             if new_eg_type is not None:
                 composed_errorgens.append((_LSE(new_eg_type, new_bels), -1j*PQ[0]*addl_factor*w))
             composed_errorgens.append((_LSE('H', [Q]), -w))
 
     elif errorgen_1_type == 'S' and errorgen_2_type == 'S':
-        #S_P[S_Q] P->errorgen_1_bel_0, Q -> errorgen_2_bel_0
+        # S_P[S_Q] P->errorgen_1_bel_0, Q -> errorgen_2_bel_0
         P = errorgen_1_bel_0
         Q = errorgen_2_bel_0
         PQ = pauli_product(P, Q)
@@ -1600,30 +1600,30 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
         composed_errorgens.append((_LSE('S', [Q]),- w))
 
     elif errorgen_1_type == 'S' and errorgen_2_type == 'C':
-        #S_A[C_P,Q] A-> errorgen_1_bel_0, P->errorgen_2_bel_0, Q -> errorgen_2_bel_1
+        # S_A[C_P,Q] A-> errorgen_1_bel_0, P->errorgen_2_bel_0, Q -> errorgen_2_bel_1
         A = errorgen_1_bel_0
         P = errorgen_2_bel_0
         Q = errorgen_2_bel_1
 
-        #also precompute whether pairs commute or anticommute
+        # also precompute whether pairs commute or anticommute
         com_AP = A.commutes(P)
         com_AQ = A.commutes(Q)
 
-        if P.commutes(Q): #Case 1: [P,Q] = 0
-            #precompute some products we'll need.
+        if P.commutes(Q): # Case 1: [P,Q] = 0
+            # precompute some products we'll need.
             PA = pauli_product(P, A)
             QA = pauli_product(Q, A)
             PQ = pauli_product(P, Q)
             APQ = pauli_product(A, PQ[0]*PQ[1])
-            #also precompute whether any of these products are the identity
+            # also precompute whether any of these products are the identity
             PA_ident = (PA[1] == identity)
             QA_ident = (QA[1] == identity)
             APQ_ident = (APQ[1] == identity)
-            #also also precompute whether certain relevant pauli pairs are equal.
+            # also also precompute whether certain relevant pauli pairs are equal.
             PA_eq_QA = (PA[1]==QA[1])
-            #APQ can't equal A since that implies P==Q, which would be an invalid C term input.
+            # APQ can't equal A since that implies P==Q, which would be an invalid C term input.
 
-            #Case 1a: [A,P]=0, [A,Q]=0
+            # Case 1a: [A,P]=0, [A,Q]=0
             if com_AP and com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], QA[1], PA_ident, QA_ident, PA_eq_QA)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(APQ[1], A, APQ_ident, False, False)
@@ -1634,7 +1634,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1*APQ[0]*addl_factor_1*w))
                 if new_eg_type_2 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1*addl_factor_2*w))
-            #Case 1b: {A,P}=0, {A,Q}=0
+            # Case 1b: {A,P}=0, {A,Q}=0
             elif not com_AP and not com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], QA[1], PA_ident, QA_ident, PA_eq_QA)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(APQ[1], A, APQ_ident, False, False)
@@ -1645,7 +1645,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1*APQ[0]*addl_factor_1*w))
                 if new_eg_type_2 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1*addl_factor_2*w))
-            #Case 1c: [A,P]=0, {A,Q}=0
+            # Case 1c: [A,P]=0, {A,Q}=0
             elif com_AP and not com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], QA[1], PA_ident, QA_ident, PA_eq_QA)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(APQ[1], A, APQ_ident, False, False)
@@ -1656,7 +1656,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), 1j*APQ[0]*addl_factor_1*w))
                 if new_eg_type_2 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1*addl_factor_2*w))
-            #Case 1d: {A,P}=0, [A,Q]=0
+            # Case 1d: {A,P}=0, [A,Q]=0
             elif not com_AP and com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], QA[1], PA_ident, QA_ident, PA_eq_QA)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(APQ[1], A, APQ_ident, False, False)
@@ -1667,19 +1667,19 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), 1j*APQ[0]*addl_factor_1*w))
                 if new_eg_type_2 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1*addl_factor_2*w))
-            #TODO: Cases (1a,1b) and (1c,1d) only differ by the leading sign, can compress this code a bit.
-        else: #Case 2: {P,Q}=0
-            #precompute some products we'll need.
+            # TODO: Cases (1a,1b) and (1c,1d) only differ by the leading sign, can compress this code a bit.
+        else: # Case 2: {P,Q}=0
+            # precompute some products we'll need.
             PA = pauli_product(P, A)
             QA = pauli_product(Q, A)
-            #also precompute whether any of these products are the identity
+            # also precompute whether any of these products are the identity
             PA_ident = (PA[1] == identity)
             QA_ident = (QA[1] == identity)
-            #also also precompute whether certain relevant pauli pairs are equal.
+            # also also precompute whether certain relevant pauli pairs are equal.
             PA_eq_QA = (PA[1]==QA[1])
-            assert not PA_eq_QA #(I'm almost positive this should be true)
+            assert not PA_eq_QA # (I'm almost positive this should be true)
 
-            #Case 2a: [A,P]=0, [A,Q]=0
+            # Case 2a: [A,P]=0, [A,Q]=0
             if com_AP and com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], QA[1], PA_ident, QA_ident, PA_eq_QA)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(P, Q, False, False, False)
@@ -1687,7 +1687,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1*PA[0]*QA[0]*addl_factor_0*w))
                 if new_eg_type_1 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1*addl_factor_1*w))
-            #Case 2b: {A,P}=0, {A,Q}=0
+            # Case 2b: {A,P}=0, {A,Q}=0
             elif not com_AP and not com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], QA[1], PA_ident, QA_ident, PA_eq_QA)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(P, Q, False, False, False)
@@ -1695,7 +1695,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1*PA[0]*QA[0]*addl_factor_0*w))
                 if new_eg_type_1 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1*addl_factor_1*w))
-            #Case 2c: [A,P]=0, {A,Q}=0
+            # Case 2c: [A,P]=0, {A,Q}=0
             elif com_AP and not com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], QA[1], PA_ident, QA_ident, PA_eq_QA)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(P, Q, False, False, False)
@@ -1703,7 +1703,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1j*PA[0]*QA[0]*addl_factor_0*w))
                 if new_eg_type_1 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1*addl_factor_1*w))
-            #Case 2d: {A,P}=0, [A,Q]=0
+            # Case 2d: {A,P}=0, [A,Q]=0
             elif not com_AP and com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], QA[1], PA_ident, QA_ident, PA_eq_QA)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(P, Q, False, False, False)
@@ -1711,31 +1711,31 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1j*PA[0]*QA[0]*addl_factor_0*w))
                 if new_eg_type_1 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1*addl_factor_1*w))
-            #TODO: Cases (2a,2b) and (2c,2d) only differ by the leading sign, can compress this code a bit.
+            # TODO: Cases (2a,2b) and (2c,2d) only differ by the leading sign, can compress this code a bit.
 
     elif errorgen_1_type == 'S' and errorgen_2_type == 'A':
-        #S_A[A_P,Q] A-> errorgen_1_bel_0, P->errorgen_2_bel_0, Q -> errorgen_2_bel_1
+        # S_A[A_P,Q] A-> errorgen_1_bel_0, P->errorgen_2_bel_0, Q -> errorgen_2_bel_1
         A = errorgen_1_bel_0
         P = errorgen_2_bel_0
         Q = errorgen_2_bel_1
 
-        #precompute whether pairs commute or anticommute
+        # precompute whether pairs commute or anticommute
         com_AP = A.commutes(P)
         com_AQ = A.commutes(Q)
 
-        if P.commutes(Q): #Case 1: [P,Q]=0
-            #precompute some products we'll need.
+        if P.commutes(Q): # Case 1: [P,Q]=0
+            # precompute some products we'll need.
             PA = pauli_product(P, A)
             QA = pauli_product(Q, A)
 
-            #also precompute whether any of these products are the identity
+            # also precompute whether any of these products are the identity
             PA_ident = (PA[1] == identity)
             QA_ident = (QA[1] == identity)
-            #also also precompute whether certain relevant pauli pairs are equal.
+            # also also precompute whether certain relevant pauli pairs are equal.
             PA_eq_QA = (PA[1]==QA[1])
-            assert not PA_eq_QA #(I'm almost positive this should be true)
+            assert not PA_eq_QA # (I'm almost positive this should be true)
 
-            #Case 1a: [A,P]=0, [A,Q]=0
+            # Case 1a: [A,P]=0, [A,Q]=0
             if com_AP and com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], QA[1], PA_ident, QA_ident, PA_eq_QA)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(P, Q, False, False, False)
@@ -1743,7 +1743,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1*PA[0]*QA[0]*addl_factor_0*w))
                 if new_eg_type_1 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1*addl_factor_1*w))
-            #Case 1b: {A,P}=0, {A,Q}=0
+            # Case 1b: {A,P}=0, {A,Q}=0
             elif not com_AP and not com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], QA[1], PA_ident, QA_ident, PA_eq_QA)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(P, Q, False, False, False)
@@ -1751,7 +1751,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1*PA[0]*QA[0]*addl_factor_0*w))
                 if new_eg_type_1 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1*addl_factor_1*w))
-            #Case 1c: [A,P]=0, {A,Q}=0
+            # Case 1c: [A,P]=0, {A,Q}=0
             elif com_AP and not com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], QA[1], PA_ident, QA_ident, PA_eq_QA)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(P, Q, False, False, False)
@@ -1759,7 +1759,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1j*PA[0]*QA[0]*addl_factor_0*w))
                 if new_eg_type_1 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1*addl_factor_1*w))
-            #Case 1d: {A,P}=0, [A,Q]=0
+            # Case 1d: {A,P}=0, [A,Q]=0
             elif not com_AP and com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], QA[1], PA_ident, QA_ident, PA_eq_QA)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(P, Q, False, False, False)
@@ -1767,22 +1767,22 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1j*PA[0]*QA[0]*addl_factor_0*w))
                 if new_eg_type_1 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1*addl_factor_1*w))
-            #TODO: Cases (1a,1b) and (1c,1d) only differ by the leading sign, can compress this code a bit.
+            # TODO: Cases (1a,1b) and (1c,1d) only differ by the leading sign, can compress this code a bit.
         else:
-            #precompute some products we'll need.
+            # precompute some products we'll need.
             PA = pauli_product(P, A)
             QA = pauli_product(Q, A)
             PQ = pauli_product(P, Q)
             APQ = pauli_product(A, PQ[0]*PQ[1])
-            #also precompute whether any of these products are the identity
+            # also precompute whether any of these products are the identity
             PA_ident = (PA[1] == identity)
             QA_ident = (QA[1] == identity)
             APQ_ident = (APQ[1] == identity)
-            #also also precompute whether certain relevant pauli pairs are equal.
+            # also also precompute whether certain relevant pauli pairs are equal.
             PA_eq_QA = (PA[1]==QA[1])
-            #APQ can't equal A since that implies P==Q, which would be an invalid C term input.
+            # APQ can't equal A since that implies P==Q, which would be an invalid C term input.
 
-            #Case 2a: [A,P]=0, [A,Q]=0
+            # Case 2a: [A,P]=0, [A,Q]=0
             if com_AP and com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], QA[1], PA_ident, QA_ident, PA_eq_QA)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(APQ[1], A, APQ_ident, False, False)
@@ -1794,7 +1794,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                 if new_eg_type_2 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1*addl_factor_2*w))
 
-            #Case 2b: {A,P}=0, {A,Q}=0
+            # Case 2b: {A,P}=0, {A,Q}=0
             elif not com_AP and not com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], QA[1], PA_ident, QA_ident, PA_eq_QA)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(APQ[1], A, APQ_ident, False, False)
@@ -1806,7 +1806,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                 if new_eg_type_2 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1*addl_factor_2*w))
 
-            #Case 2c: [A,P]=0, {A,Q}=0
+            # Case 2c: [A,P]=0, {A,Q}=0
             elif com_AP and not com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], QA[1], PA_ident, QA_ident, PA_eq_QA)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(APQ[1], A, APQ_ident, False, False)
@@ -1817,7 +1817,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), APQ[0]*addl_factor_1*w))
                 if new_eg_type_2 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1*addl_factor_2*w))
-            #Case 2d: {A,P}=0, [A,Q]=0
+            # Case 2d: {A,P}=0, [A,Q]=0
             elif not com_AP and com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], QA[1], PA_ident, QA_ident, PA_eq_QA)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(APQ[1], A, APQ_ident, False, False)
@@ -1828,35 +1828,35 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), APQ[0]*addl_factor_1*w))
                 if new_eg_type_2 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1*addl_factor_2*w))
-            #TODO: Cases (2a,2b) and (2c,2d) only differ by the leading sign, can compress this code a bit.
+            # TODO: Cases (2a,2b) and (2c,2d) only differ by the leading sign, can compress this code a bit.
     
     elif errorgen_1_type == 'C' and errorgen_2_type == 'H':
-        #C_P,Q[H_A]: P -> errorgen_1_bel_0, Q-> errorgen_1_bel_1, A -> errorgen_2_bel_0
-        #TODO: This only differs from H-C by a few signs, should be able to combine the two implementations to save space.
+        # C_P,Q[H_A]: P -> errorgen_1_bel_0, Q-> errorgen_1_bel_1, A -> errorgen_2_bel_0
+        # TODO: This only differs from H-C by a few signs, should be able to combine the two implementations to save space.
         P = errorgen_1_bel_0
         Q = errorgen_1_bel_1
         A = errorgen_2_bel_0
-        #precompute whether pairs commute or anticommute
+        # precompute whether pairs commute or anticommute
         com_AP = A.commutes(P)
         com_AQ = A.commutes(Q)
 
-        if P.commutes(Q): #[P,Q]=0
-            #precompute some products we'll need.
+        if P.commutes(Q): # [P,Q]=0
+            # precompute some products we'll need.
             PA = pauli_product(P, A)
             QA = pauli_product(Q, A)
             PQ = pauli_product(P, Q)
             APQ = pauli_product(A, PQ[0]*PQ[1])
-            #also precompute whether any of these products are the identity (PQ can't be the identity if this is a valid C term).
+            # also precompute whether any of these products are the identity (PQ can't be the identity if this is a valid C term).
             PA_ident = (PA[1] == identity)
             QA_ident = (QA[1] == identity)
             PQ_ident = (PQ[1] == identity)
             APQ_ident = (APQ[1] == identity)
-            #also also precompute whether certain relevant pauli pairs are equal.
+            # also also precompute whether certain relevant pauli pairs are equal.
             PA_eq_Q = (PA[1]==Q)
             QA_eq_P = (QA[1]==P)
             PQ_eq_A = (PQ[1]==A)
             
-            #Case 1a: [A,P]=0, [A,Q]=0
+            # Case 1a: [A,P]=0, [A,Q]=0
             if com_AP and com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], Q, PA_ident, False, PA_eq_Q)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], P, QA_ident, False, QA_eq_P)
@@ -1869,7 +1869,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1*PQ[0]*addl_factor_2*w))
                 if not APQ_ident:
                     composed_errorgens.append((_LSE('H', [APQ[1]]), -1*APQ[0]*w))
-            #Case 1b: {A,P}=0, {A,Q}=0
+            # Case 1b: {A,P}=0, {A,Q}=0
             elif not com_AP and not com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], Q, PA_ident, False, PA_eq_Q)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], P, QA_ident, False, QA_eq_P)
@@ -1882,7 +1882,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1*PQ[0]*addl_factor_2*w))
                 if not APQ_ident:
                     composed_errorgens.append((_LSE('H', [APQ[1]]), -1*APQ[0]*w))
-            #Case 1c: [A,P]=0, {A,Q}=0
+            # Case 1c: [A,P]=0, {A,Q}=0
             elif com_AP and not com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], Q, PA_ident, False, PA_eq_Q)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], P, QA_ident, False, QA_eq_P)
@@ -1893,7 +1893,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1j*QA[0]*addl_factor_1*w))
                 if new_eg_type_2 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1*PQ[0]*addl_factor_2*w))
-            #Case 1d: {A,P}=0, [A,Q]=0
+            # Case 1d: {A,P}=0, [A,Q]=0
             elif not com_AP and com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], Q, PA_ident, False, PA_eq_Q)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], P, QA_ident, False, QA_eq_P)
@@ -1904,17 +1904,17 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1*QA[0]*addl_factor_1*w))
                 if new_eg_type_2 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1*PQ[0]*addl_factor_2*w))
-        else: #Case 2: {P,Q}=0
-            #precompute some products we'll need.
+        else: # Case 2: {P,Q}=0
+            # precompute some products we'll need.
             PA = pauli_product(P, A)
             QA = pauli_product(Q, A)
-            #also precompute whether any of these products are the identity
+            # also precompute whether any of these products are the identity
             PA_ident = (PA[1] == identity)
             QA_ident = (QA[1] == identity)
-            #also also precompute whether certain relevant pauli pairs are equal.
+            # also also precompute whether certain relevant pauli pairs are equal.
             PA_eq_Q = (PA[1]==Q)
             QA_eq_P = (QA[1]==P)
-            #Case 2a: [A,P]=0, [A,Q]=0
+            # Case 2a: [A,P]=0, [A,Q]=0
             if com_AP and com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], Q, PA_ident, False, PA_eq_Q)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], P, QA_ident, False, QA_eq_P)
@@ -1922,7 +1922,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1*PA[0]*addl_factor_0*w))
                 if new_eg_type_1 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1*QA[0]*addl_factor_1*w))
-            #Case 2b: {A,P}=0, {A,Q}=0
+            # Case 2b: {A,P}=0, {A,Q}=0
             elif not com_AP and not com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], Q, PA_ident, False, PA_eq_Q)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], P, QA_ident, False, QA_eq_P)
@@ -1930,7 +1930,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1j*PA[0]*addl_factor_0*w))
                 if new_eg_type_1 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1j*QA[0]*addl_factor_1*w))
-            #Case 2c: [A,P]=0, {A,Q}=0
+            # Case 2c: [A,P]=0, {A,Q}=0
             elif com_AP and not com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], Q, PA_ident, False, PA_eq_Q)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], P, QA_ident, False, QA_eq_P)
@@ -1938,7 +1938,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1*PA[0]*addl_factor_0*w))
                 if new_eg_type_1 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1j*QA[0]*addl_factor_1*w))
-            #Case 2d: {A,P}=0, [A,Q]=0
+            # Case 2d: {A,P}=0, [A,Q]=0
             elif not com_AP and com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], Q, PA_ident, False, PA_eq_Q)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], P, QA_ident, False, QA_eq_P)
@@ -1947,30 +1947,30 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                 if new_eg_type_1 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1*QA[0]*addl_factor_1*w))
 
-    elif errorgen_1_type == 'C' and errorgen_2_type == 'S': #TODO: This differs from S-C by just a few signs. Should be able to combine and significantly compress code.
-        #C_P,Q[S_A] P-> errorgen_1_bel_0, Q -> errorgen_1_bel_1, A->errorgen_2_bel_0
+    elif errorgen_1_type == 'C' and errorgen_2_type == 'S': # TODO: This differs from S-C by just a few signs. Should be able to combine and significantly compress code.
+        # C_P,Q[S_A] P-> errorgen_1_bel_0, Q -> errorgen_1_bel_1, A->errorgen_2_bel_0
         P = errorgen_1_bel_0
         Q = errorgen_1_bel_1
         A = errorgen_2_bel_0
-        #also precompute whether pairs commute or anticommute
+        # also precompute whether pairs commute or anticommute
         com_AP = A.commutes(P)
         com_AQ = A.commutes(Q)
 
-        if P.commutes(Q): #Case 1: [P,Q] = 0
-            #precompute some products we'll need.
+        if P.commutes(Q): # Case 1: [P,Q] = 0
+            # precompute some products we'll need.
             PA = pauli_product(P, A)
             QA = pauli_product(Q, A)
             PQ = pauli_product(P, Q)
             APQ = pauli_product(A, PQ[0]*PQ[1])
-            #also precompute whether any of these products are the identity
+            # also precompute whether any of these products are the identity
             PA_ident = (PA[1] == identity)
             QA_ident = (QA[1] == identity)
             APQ_ident = (APQ[1] == identity)
-            #also also precompute whether certain relevant pauli pairs are equal.
+            # also also precompute whether certain relevant pauli pairs are equal.
             PA_eq_QA = (PA[1]==QA[1])
-            #APQ can't equal A since that implies P==Q, which would be an invalid C term input.
+            # APQ can't equal A since that implies P==Q, which would be an invalid C term input.
 
-            #Case 1a: [A,P]=0, [A,Q]=0
+            # Case 1a: [A,P]=0, [A,Q]=0
             if com_AP and com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], QA[1], PA_ident, QA_ident, PA_eq_QA)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(APQ[1], A, APQ_ident, False, False)
@@ -1981,7 +1981,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1*APQ[0]*addl_factor_1*w))
                 if new_eg_type_2 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1*addl_factor_2*w))
-            #Case 1b: {A,P}=0, {A,Q}=0
+            # Case 1b: {A,P}=0, {A,Q}=0
             elif not com_AP and not com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], QA[1], PA_ident, QA_ident, PA_eq_QA)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(APQ[1], A, APQ_ident, False, False)
@@ -1992,7 +1992,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1*APQ[0]*addl_factor_1*w))
                 if new_eg_type_2 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1*addl_factor_2*w))
-            #Case 1c: [A,P]=0, {A,Q}=0
+            # Case 1c: [A,P]=0, {A,Q}=0
             elif com_AP and not com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], QA[1], PA_ident, QA_ident, PA_eq_QA)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(APQ[1], A, APQ_ident, False, False)
@@ -2003,7 +2003,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1j*APQ[0]*addl_factor_1*w))
                 if new_eg_type_2 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1*addl_factor_2*w))
-            #Case 1d: {A,P}=0, [A,Q]=0
+            # Case 1d: {A,P}=0, [A,Q]=0
             elif not com_AP and com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], QA[1], PA_ident, QA_ident, PA_eq_QA)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(APQ[1], A, APQ_ident, False, False)
@@ -2014,19 +2014,19 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1j*APQ[0]*addl_factor_1*w))
                 if new_eg_type_2 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1*addl_factor_2*w))
-            #TODO: Cases (1a,1b) and (1c,1d) only differ by the leading sign, can compress this code a bit.
-        else: #Case 2: {P,Q}=0
-            #precompute some products we'll need.
+            # TODO: Cases (1a,1b) and (1c,1d) only differ by the leading sign, can compress this code a bit.
+        else: # Case 2: {P,Q}=0
+            # precompute some products we'll need.
             PA = pauli_product(P, A)
             QA = pauli_product(Q, A)
-            #also precompute whether any of these products are the identity
+            # also precompute whether any of these products are the identity
             PA_ident = (PA[1] == identity)
             QA_ident = (QA[1] == identity)
-            #also also precompute whether certain relevant pauli pairs are equal.
+            # also also precompute whether certain relevant pauli pairs are equal.
             PA_eq_QA = (PA[1]==QA[1])
-            assert not PA_eq_QA #(I'm almost positive this should be true)
+            assert not PA_eq_QA # (I'm almost positive this should be true)
 
-            #Case 2a: [A,P]=0, [A,Q]=0
+            # Case 2a: [A,P]=0, [A,Q]=0
             if com_AP and com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], QA[1], PA_ident, QA_ident, PA_eq_QA)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(P, Q, False, False, False)
@@ -2034,7 +2034,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1*PA[0]*QA[0]*addl_factor_0*w))
                 if new_eg_type_1 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1*addl_factor_1*w))
-            #Case 2b: {A,P}=0, {A,Q}=0
+            # Case 2b: {A,P}=0, {A,Q}=0
             elif not com_AP and not com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], QA[1], PA_ident, QA_ident, PA_eq_QA)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(P, Q, False, False, False)
@@ -2042,7 +2042,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1*PA[0]*QA[0]*addl_factor_0*w))
                 if new_eg_type_1 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1*addl_factor_1*w))
-            #Case 2c: [A,P]=0, {A,Q}=0
+            # Case 2c: [A,P]=0, {A,Q}=0
             elif com_AP and not com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], QA[1], PA_ident, QA_ident, PA_eq_QA)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(P, Q, False, False, False)
@@ -2050,7 +2050,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1j*PA[0]*QA[0]*addl_factor_0*w))
                 if new_eg_type_1 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1*addl_factor_1*w))
-            #Case 2d: {A,P}=0, [A,Q]=0
+            # Case 2d: {A,P}=0, [A,Q]=0
             elif not com_AP and com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], QA[1], PA_ident, QA_ident, PA_eq_QA)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(P, Q, False, False, False)
@@ -2058,25 +2058,25 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1j*PA[0]*QA[0]*addl_factor_0*w))
                 if new_eg_type_1 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1*addl_factor_1*w))
-            #TODO: Cases (2a,2b) and (2c,2d) only differ by the leading sign, can compress this code a bit.
+            # TODO: Cases (2a,2b) and (2c,2d) only differ by the leading sign, can compress this code a bit.
 
     elif errorgen_1_type == 'C' and errorgen_2_type == 'C':
-        #C_A,B[C_P,Q]: A -> errorgen_1_bel_0, B -> errorgen_1_bel_1, P -> errorgen_2_bel_0, Q -> errorgen_2_bel_1 
+        # C_A,B[C_P,Q]: A -> errorgen_1_bel_0, B -> errorgen_1_bel_1, P -> errorgen_2_bel_0, Q -> errorgen_2_bel_1 
         A = errorgen_1_bel_0
         B = errorgen_1_bel_1
         P = errorgen_2_bel_0
         Q = errorgen_2_bel_1
-        #precompute commutation relations we'll need.
+        # precompute commutation relations we'll need.
         com_PQ = P.commutes(Q)
         com_AP = A.commutes(P)
         com_AQ = A.commutes(Q)
         com_BP = B.commutes(P)
         com_BQ = B.commutes(Q)
 
-        #There are 64 separate cases, so this is gonna suck...
+        # There are 64 separate cases, so this is gonna suck...
         if A.commutes(B):
             if com_PQ:
-                #precompute some products we'll need.
+                # precompute some products we'll need.
                 PA = pauli_product(P, A)
                 QA = pauli_product(Q, A)
                 PB = pauli_product(P, B)
@@ -2089,7 +2089,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                 QAB = pauli_product(Q, AB[0]*AB[1])
                 ABPQ = pauli_product(AB[0]*AB[1], PQ[0]*PQ[1])
 
-                #precompute whether any of these products are identities.
+                # precompute whether any of these products are identities.
                 PA_ident  = (PA[1] == identity) 
                 QA_ident  = (QA[1] == identity) 
                 PB_ident  = (PB[1] == identity) 
@@ -2099,7 +2099,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                 PAB_ident = (PAB[1] == identity)
                 QAB_ident = (QAB[1] == identity)
                 ABPQ_ident= (ABPQ[1] == identity)
-                #precompute which of the pairs of products might be equal
+                # precompute which of the pairs of products might be equal
                 PA_eq_QB = (PA[1] == QB[1])
                 QA_eq_PB = (QA[1] == PB[1])
                 PQ_eq_AB = (PQ[1] == AB[1])
@@ -2477,8 +2477,8 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     if new_eg_type_6 is not None:
                         composed_errorgens.append((_LSE(new_eg_type_6, new_bels_6), -QAB[0]*addl_factor_6*w))
                 
-            else: #[P,Q] !=0
-                #precompute some products we'll need.
+            else: # [P,Q] !=0
+                # precompute some products we'll need.
                 PA = pauli_product(P, A)
                 QA = pauli_product(Q, A)
                 PB = pauli_product(P, B)
@@ -2486,14 +2486,14 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                 AB = pauli_product(A, B)
                 ABP = pauli_product(AB[0]*AB[1], P)
                 ABQ = pauli_product(AB[0]*AB[1], Q)
-                #precompute whether any of these products are identities.
+                # precompute whether any of these products are identities.
                 PA_ident  = (PA[1] == identity) 
                 QA_ident  = (QA[1] == identity) 
                 PB_ident  = (PB[1] == identity) 
                 QB_ident  = (QB[1] == identity)
                 ABP_ident = (ABP[1] == identity)
                 ABQ_ident = (ABQ[1] == identity)
-                #precompute which of the pairs of products might be equal
+                # precompute which of the pairs of products might be equal
                 PA_eq_QB = (PA[1] == QB[1])
                 QA_eq_PB = (QA[1] == PB[1])
                 ABP_eq_Q = (ABP[1] == Q)
@@ -2720,9 +2720,9 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                         composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -ABP[0]*addl_factor_2*w))
                     if new_eg_type_3 is not None:
                         composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -ABQ[0]*addl_factor_3*w))
-        else: #[A,B] != 0
+        else: # [A,B] != 0
             if com_PQ:
-                #precompute some products we'll need.
+                # precompute some products we'll need.
                 PA = pauli_product(P, A)
                 QA = pauli_product(Q, A)
                 PB = pauli_product(P, B)
@@ -2730,14 +2730,14 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                 PQ = pauli_product(P, Q)
                 PQB = pauli_product(PQ[0]*PQ[1], B)
                 PQA = pauli_product(PQ[0]*PQ[1], A)
-                #precompute whether any of these products are identities.
+                # precompute whether any of these products are identities.
                 PA_ident  = (PA[1] == identity) 
                 QA_ident  = (QA[1] == identity) 
                 PB_ident  = (PB[1] == identity) 
                 QB_ident  = (QB[1] == identity)
                 PQB_ident = (PQB[1] == identity)
                 PQA_ident = (PQA[1] == identity)
-                #precompute which of the pairs of products might be equal
+                # precompute which of the pairs of products might be equal
                 PA_eq_QB = (PA[1] == QB[1])
                 QA_eq_PB = (QA[1] == PB[1])
                 PQB_eq_A = (PQB[1] == A)
@@ -2951,18 +2951,18 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                         composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -PQB[0]*addl_factor_2*w))
                     if new_eg_type_3 is not None:
                         composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -PQA[0]*addl_factor_3*w))
-            else: #[P,Q]!=0
-                #precompute some products we'll need.
+            else: # [P,Q]!=0
+                # precompute some products we'll need.
                 PA = pauli_product(P, A)
                 QA = pauli_product(Q, A)
                 PB = pauli_product(P, B)
                 QB = pauli_product(Q, B)
-                #precompute whether any of these products are identities.
+                # precompute whether any of these products are identities.
                 PA_ident  = (PA[1] == identity) 
                 QA_ident  = (QA[1] == identity) 
                 PB_ident  = (PB[1] == identity) 
                 QB_ident  = (QB[1] == identity)
-                #precompute which of the pairs of products might be equal
+                # precompute which of the pairs of products might be equal
                 PA_eq_QB = (PA[1] == QB[1])
                 QA_eq_PB = (QA[1] == PB[1])
 
@@ -3080,12 +3080,12 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                         composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -QA[0]*PB[0]*addl_factor_1*w))
 
     elif errorgen_1_type == 'C' and errorgen_2_type == 'A':
-        #C_A,B[A_P,Q]: A -> errorgen_1_bel_0, B -> errorgen_1_bel_1, P -> errorgen_2_bel_0, Q -> errorgen_2_bel_1 
+        # C_A,B[A_P,Q]: A -> errorgen_1_bel_0, B -> errorgen_1_bel_1, P -> errorgen_2_bel_0, Q -> errorgen_2_bel_1 
         A = errorgen_1_bel_0
         B = errorgen_1_bel_1
         P = errorgen_2_bel_0
         Q = errorgen_2_bel_1
-        #precompute commutation relations we'll need.
+        # precompute commutation relations we'll need.
         com_PQ = P.commutes(Q)
         com_AP = A.commutes(P)
         com_AQ = A.commutes(Q)
@@ -3094,7 +3094,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
 
         if A.commutes(B):
             if com_PQ:
-                #precompute some products we'll need.
+                # precompute some products we'll need.
                 PA = pauli_product(P, A)
                 QA = pauli_product(Q, A)
                 PB = pauli_product(P, B)
@@ -3102,14 +3102,14 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                 AB = pauli_product(A, B)
                 PAB = pauli_product(P, AB[0]*AB[1])
                 QAB = pauli_product(Q, AB[0]*AB[1])
-                #precompute whether any of these products are identities.
+                # precompute whether any of these products are identities.
                 PA_ident  = (PA[1] == identity) 
                 QA_ident  = (QA[1] == identity) 
                 PB_ident  = (PB[1] == identity) 
                 QB_ident  = (QB[1] == identity)
                 PAB_ident = (PAB[1] == identity)
                 QAB_ident = (QAB[1] == identity)
-                #precompute which of the pairs of products might be equal
+                # precompute which of the pairs of products might be equal
                 PA_eq_QB = (PA[1] == QB[1])
                 QA_eq_PB = (QA[1] == PB[1])
                 PAB_eq_Q = (PAB[1] == Q)
@@ -3323,8 +3323,8 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                         composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -PAB[0]*addl_factor_2*w))
                     if new_eg_type_3 is not None:
                         composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), QAB[0]*addl_factor_3*w))
-            else: #[P,Q]!=0
-                #precompute some products we'll need.
+            else: # [P,Q]!=0
+                # precompute some products we'll need.
                 PA = pauli_product(P, A)
                 QA = pauli_product(Q, A)
                 PB = pauli_product(P, B)
@@ -3337,7 +3337,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                 QAB = pauli_product(Q, AB[0]*AB[1])
                 ABPQ = pauli_product(AB[0]*AB[1], PQ[0]*PQ[1])
 
-                #precompute whether any of these products are identities.
+                # precompute whether any of these products are identities.
                 PA_ident  = (PA[1] == identity) 
                 QA_ident  = (QA[1] == identity) 
                 PB_ident  = (PB[1] == identity) 
@@ -3347,7 +3347,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                 PAB_ident = (PAB[1] == identity)
                 QAB_ident = (QAB[1] == identity)
                 ABPQ_ident= (ABPQ[1] == identity)
-                #precompute which of the pairs of products might be equal
+                # precompute which of the pairs of products might be equal
                 PA_eq_QB = (PA[1] == QB[1])
                 QA_eq_PB = (QA[1] == PB[1])
                 PQ_eq_AB = (PQ[1] == AB[1])
@@ -3724,19 +3724,19 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                         composed_errorgens.append((_LSE(new_eg_type_5, new_bels_5), -PAB[0]*addl_factor_5*w))
                     if new_eg_type_6 is not None:
                         composed_errorgens.append((_LSE(new_eg_type_6, new_bels_6), QAB[0]*addl_factor_6*w))
-        else: #[A,B] != 0
+        else: # [A,B] != 0
             if com_PQ:
-                #precompute some products we'll need.
+                # precompute some products we'll need.
                 PA = pauli_product(P, A)
                 QA = pauli_product(Q, A)
                 PB = pauli_product(P, B)
                 QB = pauli_product(Q, B)
-                #precompute whether any of these products are identities.
+                # precompute whether any of these products are identities.
                 PA_ident  = (PA[1] == identity) 
                 QA_ident  = (QA[1] == identity) 
                 PB_ident  = (PB[1] == identity) 
                 QB_ident  = (QB[1] == identity)
-                #precompute which of the pairs of products might be equal
+                # precompute which of the pairs of products might be equal
                 PA_eq_QB = (PA[1] == QB[1])
                 QA_eq_PB = (QA[1] == PB[1])
 
@@ -3853,7 +3853,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     if new_eg_type_1 is not None:
                         composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), QA[0]*PB[0]*addl_factor_1*w))
             else:
-                #precompute some products we'll need.
+                # precompute some products we'll need.
                 PA = pauli_product(P, A)
                 QA = pauli_product(Q, A)
                 PB = pauli_product(P, B)
@@ -3861,14 +3861,14 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                 PQ = pauli_product(P, Q)
                 APQ = pauli_product(A, PQ[0]*PQ[1])
                 BPQ = pauli_product(B, PQ[0]*PQ[1])
-                #precompute whether any of these products are identities.
+                # precompute whether any of these products are identities.
                 PA_ident  = (PA[1] == identity) 
                 QA_ident  = (QA[1] == identity) 
                 PB_ident  = (PB[1] == identity) 
                 QB_ident  = (QB[1] == identity)
                 APQ_ident = (APQ[1] == identity)
                 BPQ_ident = (BPQ[1] == identity)
-                #precompute which of the pairs of products might be equal
+                # precompute which of the pairs of products might be equal
                 PA_eq_QB = (PA[1] == QB[1])
                 QA_eq_PB = (QA[1] == PB[1])
                 APQ_eq_B = (APQ[1] == B)
@@ -4084,25 +4084,25 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                         composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), 1j*BPQ[0]*addl_factor_3*w))
 
     elif errorgen_1_type == 'A' and errorgen_2_type == 'H':
-        #A_{P,Q}[H_A] P->errorgen_1_bel_0, Q->errorgen_1_bel_1 A -> errorgen_2_bel_0
+        # A_{P,Q}[H_A] P->errorgen_1_bel_0, Q->errorgen_1_bel_1 A -> errorgen_2_bel_0
         A = errorgen_2_bel_0
         P = errorgen_1_bel_0
         Q = errorgen_1_bel_1
-        #precompute whether pairs commute or anticommute
+        # precompute whether pairs commute or anticommute
         com_AP = A.commutes(P)
         com_AQ = A.commutes(Q)
-        #Case 1: P and Q commute.
+        # Case 1: P and Q commute.
         if P.commutes(Q):
-            #precompute some products we'll need.
+            # precompute some products we'll need.
             PA = pauli_product(P, A)
             QA = pauli_product(Q, A)
-            #also precompute whether any of these products are the identity
+            # also precompute whether any of these products are the identity
             PA_ident = (PA[1] == identity)
             QA_ident = (QA[1] == identity)
-            #also also precompute whether certain relevant pauli pairs are equal.
+            # also also precompute whether certain relevant pauli pairs are equal.
             PA_eq_Q = (PA[1]==Q)
             QA_eq_P = (QA[1]==P)
-            #Case 1a: [A,P]=0, [A,Q]=0
+            # Case 1a: [A,P]=0, [A,Q]=0
             if com_AP and com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], Q, PA_ident, False, PA_eq_Q)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], P, QA_ident, False, QA_eq_P)
@@ -4110,7 +4110,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1*PA[0]*addl_factor_0*w))
                 if new_eg_type_1 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1*QA[0]*addl_factor_1*w))
-            #Case 1b: {A,P}=0, {A,Q}=0
+            # Case 1b: {A,P}=0, {A,Q}=0
             elif not com_AP and not com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], Q, PA_ident, False, PA_eq_Q)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], P, QA_ident, False, QA_eq_P)
@@ -4118,7 +4118,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1j*PA[0]*addl_factor_0*w))
                 if new_eg_type_1 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), 1j*QA[0]*addl_factor_1*w))
-            #Case 1c: [A,P]=0, {A,Q}=0
+            # Case 1c: [A,P]=0, {A,Q}=0
             elif com_AP and not com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], Q, PA_ident, False, PA_eq_Q)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], P, QA_ident, False, QA_eq_P)
@@ -4126,7 +4126,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), PA[0]*addl_factor_0*w))
                 if new_eg_type_1 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), 1j*QA[0]*addl_factor_1*w))
-            #Case 1d: {A,P}=0, [A,Q]=0
+            # Case 1d: {A,P}=0, [A,Q]=0
             elif not com_AP and com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], Q, PA_ident, False, PA_eq_Q)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], P, QA_ident, False, QA_eq_P)
@@ -4134,23 +4134,23 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1j*PA[0]*addl_factor_0*w))
                 if new_eg_type_1 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1*QA[0]*addl_factor_1*w))
-        else: #Case 2: {P,Q}=0
-            #precompute some products we'll need.
+        else: # Case 2: {P,Q}=0
+            # precompute some products we'll need.
             PA = pauli_product(P, A)
             QA = pauli_product(Q, A)
             PQ = pauli_product(P, Q)
             APQ = pauli_product(A, PQ[0]*PQ[1])
-            #also also precompute whether any of these products are the identity
+            # also also precompute whether any of these products are the identity
             PA_ident = (PA[1] == identity)
             QA_ident = (QA[1] == identity)
             PQ_ident = (PQ[1] == identity)
             APQ_ident = (APQ[1] == identity)
-            #also also also precompute whether certain relevant pauli pairs are equal.
+            # also also also precompute whether certain relevant pauli pairs are equal.
             PA_eq_Q = (PA[1]==Q)
             QA_eq_P = (QA[1]==P)
             PQ_eq_A = (PQ[1]==A)
             
-            #Case 2a: [A,P]=0, [A,Q]=0
+            # Case 2a: [A,P]=0, [A,Q]=0
             if com_AP and com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], Q, PA_ident, False, PA_eq_Q)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], P, QA_ident, False, QA_eq_P)
@@ -4163,7 +4163,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), 1j*PQ[0]*addl_factor_2*w))
                 if not APQ_ident:
                     composed_errorgens.append((_LSE('H', [APQ[1]]), 1j*APQ[0]*w))
-            #Case 2b: {A,P}=0, {A,Q}=0
+            # Case 2b: {A,P}=0, {A,Q}=0
             elif not com_AP and not com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], Q, PA_ident, False, PA_eq_Q)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], P, QA_ident, False, QA_eq_P)
@@ -4176,7 +4176,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), 1j*PQ[0]*addl_factor_2*w))
                 if not APQ_ident:
                     composed_errorgens.append((_LSE('H', [APQ[1]]), 1j*APQ[0]*w))
-            #Case 2c: [A,P]=0, {A,Q}=0
+            # Case 2c: [A,P]=0, {A,Q}=0
             elif com_AP and not com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], Q, PA_ident, False, PA_eq_Q)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], P, QA_ident, False, QA_eq_P)
@@ -4187,7 +4187,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), 1j*QA[0]*addl_factor_1*w))
                 if new_eg_type_2 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), 1j*PQ[0]*addl_factor_2*w))
-            #Case 2d: {A,P}=0, [A,Q]=0
+            # Case 2d: {A,P}=0, [A,Q]=0
             elif not com_AP and com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], Q, PA_ident, False, PA_eq_Q)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], P, QA_ident, False, QA_eq_P)
@@ -4200,28 +4200,28 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), 1j*PQ[0]*addl_factor_2*w))
 
     elif errorgen_1_type == 'A' and errorgen_2_type == 'S':
-        #A_P,Q[S_A] P->errorgen_1_bel_0, Q->errorgen_1_bel_1, A -> errorgen_2_bel_0
+        # A_P,Q[S_A] P->errorgen_1_bel_0, Q->errorgen_1_bel_1, A -> errorgen_2_bel_0
         P = errorgen_1_bel_0
         Q = errorgen_1_bel_1
         A = errorgen_2_bel_0
 
-        #precompute whether pairs commute or anticommute
+        # precompute whether pairs commute or anticommute
         com_AP = A.commutes(P)
         com_AQ = A.commutes(Q)
 
-        if P.commutes(Q): #Case 1: [P,Q]=0
-            #precompute some products we'll need.
+        if P.commutes(Q): # Case 1: [P,Q]=0
+            # precompute some products we'll need.
             PA = pauli_product(P, A)
             QA = pauli_product(Q, A)
 
-            #also precompute whether any of these products are the identity
+            # also precompute whether any of these products are the identity
             PA_ident = (PA[1] == identity)
             QA_ident = (QA[1] == identity)
-            #also also precompute whether certain relevant pauli pairs are equal.
+            # also also precompute whether certain relevant pauli pairs are equal.
             PA_eq_QA = (PA[1]==QA[1])
-            assert not PA_eq_QA #(I'm almost positive this should be true)
+            assert not PA_eq_QA # (I'm almost positive this should be true)
 
-            #Case 1a: [A,P]=0, [A,Q]=0
+            # Case 1a: [A,P]=0, [A,Q]=0
             if com_AP and com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], QA[1], PA_ident, QA_ident, PA_eq_QA)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(P, Q, False, False, False)
@@ -4229,7 +4229,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1*PA[0]*QA[0]*addl_factor_0*w))
                 if new_eg_type_1 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1*addl_factor_1*w))
-            #Case 1b: {A,P}=0, {A,Q}=0
+            # Case 1b: {A,P}=0, {A,Q}=0
             elif not com_AP and not com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], QA[1], PA_ident, QA_ident, PA_eq_QA)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(P, Q, False, False, False)
@@ -4237,7 +4237,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1*PA[0]*QA[0]*addl_factor_0*w))
                 if new_eg_type_1 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1*addl_factor_1*w))
-            #Case 1c: [A,P]=0, {A,Q}=0
+            # Case 1c: [A,P]=0, {A,Q}=0
             elif com_AP and not com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], QA[1], PA_ident, QA_ident, PA_eq_QA)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(P, Q, False, False, False)
@@ -4245,7 +4245,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1j*PA[0]*QA[0]*addl_factor_0*w))
                 if new_eg_type_1 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1*addl_factor_1*w))
-            #Case 1d: {A,P}=0, [A,Q]=0
+            # Case 1d: {A,P}=0, [A,Q]=0
             elif not com_AP and com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], QA[1], PA_ident, QA_ident, PA_eq_QA)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(P, Q, False, False, False)
@@ -4253,22 +4253,22 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1j*PA[0]*QA[0]*addl_factor_0*w))
                 if new_eg_type_1 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1*addl_factor_1*w))
-            #TODO: Cases (1a,1b) and (1c,1d) only differ by the leading sign, can compress this code a bit.
+            # TODO: Cases (1a,1b) and (1c,1d) only differ by the leading sign, can compress this code a bit.
         else:
-            #precompute some products we'll need.
+            # precompute some products we'll need.
             PA = pauli_product(P, A)
             QA = pauli_product(Q, A)
             PQ = pauli_product(P, Q)
             APQ = pauli_product(A, PQ[0]*PQ[1])
-            #also precompute whether any of these products are the identity
+            # also precompute whether any of these products are the identity
             PA_ident = (PA[1] == identity)
             QA_ident = (QA[1] == identity)
             APQ_ident = (APQ[1] == identity)
-            #also also precompute whether certain relevant pauli pairs are equal.
+            # also also precompute whether certain relevant pauli pairs are equal.
             PA_eq_QA = (PA[1]==QA[1])
-            #APQ can't equal A since that implies P==Q, which would be an invalid C term input.
+            # APQ can't equal A since that implies P==Q, which would be an invalid C term input.
 
-            #Case 2a: [A,P]=0, [A,Q]=0
+            # Case 2a: [A,P]=0, [A,Q]=0
             if com_AP and com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], QA[1], PA_ident, QA_ident, PA_eq_QA)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(APQ[1], A, APQ_ident, False, False)
@@ -4280,7 +4280,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                 if new_eg_type_2 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1*addl_factor_2*w))
 
-            #Case 2b: {A,P}=0, {A,Q}=0
+            # Case 2b: {A,P}=0, {A,Q}=0
             elif not com_AP and not com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], QA[1], PA_ident, QA_ident, PA_eq_QA)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(APQ[1], A, APQ_ident, False, False)
@@ -4292,7 +4292,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                 if new_eg_type_2 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1*addl_factor_2*w))
 
-            #Case 2c: [A,P]=0, {A,Q}=0
+            # Case 2c: [A,P]=0, {A,Q}=0
             elif com_AP and not com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], QA[1], PA_ident, QA_ident, PA_eq_QA)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(APQ[1], A, APQ_ident, False, False)
@@ -4303,7 +4303,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -APQ[0]*addl_factor_1*w))
                 if new_eg_type_2 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1*addl_factor_2*w))
-            #Case 2d: {A,P}=0, [A,Q]=0
+            # Case 2d: {A,P}=0, [A,Q]=0
             elif not com_AP and com_AQ:
                 new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], QA[1], PA_ident, QA_ident, PA_eq_QA)
                 new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(APQ[1], A, APQ_ident, False, False)
@@ -4314,15 +4314,15 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -APQ[0]*addl_factor_1*w))
                 if new_eg_type_2 is not None:
                     composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1*addl_factor_2*w))
-            #TODO: Cases (2a,2b) and (2c,2d) only differ by the leading sign, can compress this code a bit.
+            # TODO: Cases (2a,2b) and (2c,2d) only differ by the leading sign, can compress this code a bit.
 
     elif errorgen_1_type == 'A' and errorgen_2_type == 'C':
-        #A_A,B[C_P,Q]: A -> errorgen_1_bel_0, B -> errorgen_1_bel_1, P -> errorgen_2_bel_0, Q -> errorgen_2_bel_1 
+        # A_A,B[C_P,Q]: A -> errorgen_1_bel_0, B -> errorgen_1_bel_1, P -> errorgen_2_bel_0, Q -> errorgen_2_bel_1 
         A = errorgen_1_bel_0
         B = errorgen_1_bel_1
         P = errorgen_2_bel_0
         Q = errorgen_2_bel_1
-        #precompute commutation relations we'll need.
+        # precompute commutation relations we'll need.
         com_PQ = P.commutes(Q)
         com_AP = A.commutes(P)
         com_AQ = A.commutes(Q)
@@ -4331,7 +4331,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
 
         if A.commutes(B):
             if com_PQ:
-                #precompute some products we'll need.
+                # precompute some products we'll need.
                 PA = pauli_product(P, A)
                 QA = pauli_product(Q, A)
                 PB = pauli_product(P, B)
@@ -4339,14 +4339,14 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                 PQ = pauli_product(P, Q)
                 APQ = pauli_product(A, PQ[0]*PQ[1])
                 BPQ = pauli_product(B, PQ[0]*PQ[1])
-                #precompute whether any of these products are identities.
+                # precompute whether any of these products are identities.
                 PA_ident  = (PA[1] == identity) 
                 QA_ident  = (QA[1] == identity) 
                 PB_ident  = (PB[1] == identity) 
                 QB_ident  = (QB[1] == identity)
                 APQ_ident = (APQ[1] == identity)
                 BPQ_ident = (BPQ[1] == identity)
-                #precompute which of the pairs of products might be equal
+                # precompute which of the pairs of products might be equal
                 PA_eq_QB = (PA[1] == QB[1])
                 QA_eq_PB = (QA[1] == PB[1])
                 APQ_eq_B = (APQ[1] == B)
@@ -4560,18 +4560,18 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                         composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -APQ[0]*addl_factor_2*w))
                     if new_eg_type_3 is not None:
                         composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), BPQ[0]*addl_factor_3*w))
-            else: #[P,Q]!=0
-                #precompute some products we'll need.
+            else: # [P,Q]!=0
+                # precompute some products we'll need.
                 PA = pauli_product(P, A)
                 QA = pauli_product(Q, A)
                 PB = pauli_product(P, B)
                 QB = pauli_product(Q, B)
-                #precompute whether any of these products are identities.
+                # precompute whether any of these products are identities.
                 PA_ident  = (PA[1] == identity) 
                 QA_ident  = (QA[1] == identity) 
                 PB_ident  = (PB[1] == identity) 
                 QB_ident  = (QB[1] == identity)
-                #precompute which of the pairs of products might be equal
+                # precompute which of the pairs of products might be equal
                 PA_eq_QB = (PA[1] == QB[1])
                 QA_eq_PB = (QA[1] == PB[1])
 
@@ -4687,9 +4687,9 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                         composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -PA[0]*QB[0]*addl_factor_0*w))
                     if new_eg_type_1 is not None:
                         composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -QA[0]*PB[0]*addl_factor_1*w))
-        else: #[A,B] != 0
+        else: # [A,B] != 0
             if com_PQ:
-                #precompute some products we'll need.
+                # precompute some products we'll need.
                 PA = pauli_product(P, A)
                 QA = pauli_product(Q, A)
                 PB = pauli_product(P, B)
@@ -4702,7 +4702,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                 QAB = pauli_product(Q, AB[0]*AB[1])
                 ABPQ = pauli_product(AB[0]*AB[1], PQ[0]*PQ[1])
 
-                #precompute whether any of these products are identities.
+                # precompute whether any of these products are identities.
                 PA_ident  = (PA[1] == identity) 
                 QA_ident  = (QA[1] == identity) 
                 PB_ident  = (PB[1] == identity) 
@@ -4712,7 +4712,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                 PAB_ident = (PAB[1] == identity)
                 QAB_ident = (QAB[1] == identity)
                 ABPQ_ident= (ABPQ[1] == identity)
-                #precompute which of the pairs of products might be equal
+                # precompute which of the pairs of products might be equal
                 PA_eq_QB = (PA[1] == QB[1])
                 QA_eq_PB = (QA[1] == PB[1])
                 PQ_eq_AB = (PQ[1] == AB[1])
@@ -5090,7 +5090,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     if new_eg_type_6 is not None:
                         composed_errorgens.append((_LSE(new_eg_type_6, new_bels_6), 1j*QAB[0]*addl_factor_6*w))
             else:
-                #precompute some products we'll need.
+                # precompute some products we'll need.
                 PA = pauli_product(P, A)
                 QA = pauli_product(Q, A)
                 PB = pauli_product(P, B)
@@ -5098,14 +5098,14 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                 AB = pauli_product(A, B)
                 PAB = pauli_product(P, AB[0]*AB[1])
                 QAB = pauli_product(Q, AB[0]*AB[1])
-                #precompute whether any of these products are identities.
+                # precompute whether any of these products are identities.
                 PA_ident  = (PA[1] == identity) 
                 QA_ident  = (QA[1] == identity) 
                 PB_ident  = (PB[1] == identity) 
                 QB_ident  = (QB[1] == identity)
                 PAB_ident = (PAB[1] == identity)
                 QAB_ident = (QAB[1] == identity)
-                #precompute which of the pairs of products might be equal
+                # precompute which of the pairs of products might be equal
                 PA_eq_QB = (PA[1] == QB[1])
                 QA_eq_PB = (QA[1] == PB[1])
                 PAB_eq_Q = (PAB[1] == Q)
@@ -5321,12 +5321,12 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                         composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), 1j*QAB[0]*addl_factor_3*w))
 
     elif errorgen_1_type == 'A' and errorgen_2_type == 'A':
-        #A_A,B[A_P,Q]: A -> errorgen_1_bel_0, B -> errorgen_1_bel_1, P -> errorgen_2_bel_0, Q -> errorgen_2_bel_1 
+        # A_A,B[A_P,Q]: A -> errorgen_1_bel_0, B -> errorgen_1_bel_1, P -> errorgen_2_bel_0, Q -> errorgen_2_bel_1 
         A = errorgen_1_bel_0
         B = errorgen_1_bel_1
         P = errorgen_2_bel_0
         Q = errorgen_2_bel_1
-        #precompute commutation relations we'll need.
+        # precompute commutation relations we'll need.
         com_PQ = P.commutes(Q)
         com_AP = A.commutes(P)
         com_AQ = A.commutes(Q)
@@ -5334,17 +5334,17 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
         com_BQ = B.commutes(Q)
         if A.commutes(B):
             if com_PQ:
-                #precompute some products we'll need.
+                # precompute some products we'll need.
                 PA = pauli_product(P, A)
                 QA = pauli_product(Q, A)
                 PB = pauli_product(P, B)
                 QB = pauli_product(Q, B)
-                #precompute whether any of these products are identities.
+                # precompute whether any of these products are identities.
                 PA_ident  = (PA[1] == identity) 
                 QA_ident  = (QA[1] == identity) 
                 PB_ident  = (PB[1] == identity) 
                 QB_ident  = (QB[1] == identity)
-                #precompute which of the pairs of products might be equal
+                # precompute which of the pairs of products might be equal
                 PA_eq_QB = (PA[1] == QB[1])
                 QA_eq_PB = (QA[1] == PB[1])
 
@@ -5461,7 +5461,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     if new_eg_type_1 is not None:
                         composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -QA[0]*PB[0]*addl_factor_1*w))
             else:
-                #precompute some products we'll need.
+                # precompute some products we'll need.
                 PA = pauli_product(P, A)
                 QA = pauli_product(Q, A)
                 PB = pauli_product(P, B)
@@ -5469,14 +5469,14 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                 PQ = pauli_product(P, Q)
                 APQ = pauli_product(A, PQ[0]*PQ[1])
                 BPQ = pauli_product(B, PQ[0]*PQ[1])
-                #precompute whether any of these products are identities.
+                # precompute whether any of these products are identities.
                 PA_ident  = (PA[1] == identity) 
                 QA_ident  = (QA[1] == identity) 
                 PB_ident  = (PB[1] == identity) 
                 QB_ident  = (QB[1] == identity)
                 APQ_ident = (APQ[1] == identity)
                 BPQ_ident = (BPQ[1] == identity)
-                #precompute which of the pairs of products might be equal
+                # precompute which of the pairs of products might be equal
                 PA_eq_QB = (PA[1] == QB[1])
                 QA_eq_PB = (QA[1] == PB[1])
                 APQ_eq_B = (APQ[1] == B)
@@ -5692,7 +5692,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                         composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -1j*BPQ[0]*addl_factor_3*w))
         else:
             if com_PQ:
-                #precompute some products we'll need.
+                # precompute some products we'll need.
                 PA = pauli_product(P, A)
                 QA = pauli_product(Q, A)
                 PB = pauli_product(P, B)
@@ -5700,14 +5700,14 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                 AB = pauli_product(A, B)
                 PAB = pauli_product(P, AB[0]*AB[1])
                 QAB = pauli_product(Q, AB[0]*AB[1])
-                #precompute whether any of these products are identities.
+                # precompute whether any of these products are identities.
                 PA_ident  = (PA[1] == identity) 
                 QA_ident  = (QA[1] == identity) 
                 PB_ident  = (PB[1] == identity) 
                 QB_ident  = (QB[1] == identity)
                 PAB_ident = (PAB[1] == identity)
                 QAB_ident = (QAB[1] == identity)
-                #precompute which of the pairs of products might be equal
+                # precompute which of the pairs of products might be equal
                 PA_eq_QB = (PA[1] == QB[1])
                 QA_eq_PB = (QA[1] == PB[1])
                 PAB_eq_Q = (PAB[1] == Q)
@@ -5922,7 +5922,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                     if new_eg_type_3 is not None:
                         composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -1j*QAB[0]*addl_factor_3*w))
             else:
-                #precompute some products we'll need.
+                # precompute some products we'll need.
                 PA = pauli_product(P, A)
                 QA = pauli_product(Q, A)
                 PB = pauli_product(P, B)
@@ -5935,7 +5935,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                 QAB = pauli_product(Q, AB[0]*AB[1])
                 ABPQ = pauli_product(AB[0]*AB[1], PQ[0]*PQ[1])
 
-                #precompute whether any of these products are identities.
+                # precompute whether any of these products are identities.
                 PA_ident  = (PA[1] == identity) 
                 QA_ident  = (QA[1] == identity) 
                 PB_ident  = (PB[1] == identity) 
@@ -5945,7 +5945,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                 PAB_ident = (PAB[1] == identity)
                 QAB_ident = (QAB[1] == identity)
                 ABPQ_ident= (ABPQ[1] == identity)
-                #precompute which of the pairs of products might be equal
+                # precompute which of the pairs of products might be equal
                 PA_eq_QB = (PA[1] == QB[1])
                 QA_eq_PB = (QA[1] == PB[1])
                 PQ_eq_AB = (PQ[1] == AB[1])
@@ -6325,8 +6325,8 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
 
     return composed_errorgens
 
-#helper function for getting the new (properly ordered) basis element labels, error generator type (A can turn into H with certain index combinations), and additional signs.
-#reduces code repetition in composition code.
+# helper function for getting the new (properly ordered) basis element labels, error generator type (A can turn into H with certain index combinations), and additional signs.
+# reduces code repetition in composition code.
 def _ordered_new_bels_A(pauli1, pauli2, first_pauli_ident, second_pauli_ident, pauli_eq):
     """
     Helper function for managing new basis element labels, error generator types and proper basis element label ordering. Returns None
@@ -6370,31 +6370,31 @@ def _ordered_new_bels_C(pauli1, pauli2, first_pauli_ident, second_pauli_ident, p
     return new_eg_type, new_bels, addl_factor
 
 def com(P1, P2):
-    #P1 and P2 either commute or anticommute.
+    # P1 and P2 either commute or anticommute.
     if P1.commutes(P2):
         return None
     else:
         P3 = P1*P2
         return (P3.sign*2, P3 / P3.sign)
-    #return (sign(P3) * 2 if P1 and P2 anticommute, 0 o.w.,
-    #        unsigned P3)
+    # return (sign(P3) * 2 if P1 and P2 anticommute, 0 o.w.,
+    #         unsigned P3)
              
 def acom(P1, P2):
-    #P1 and P2 either commute or anticommute.
+    # P1 and P2 either commute or anticommute.
     if P1.commutes(P2):
         P3 = P1*P2
         return (P3.sign*2, P3 / P3.sign)
     else:
         return  None
     
-    #return (sign(P3) * 2 if P1 and P2 commute, 0 o.w.,
-    #        unsigned P3)
+    # return (sign(P3) * 2 if P1 and P2 commute, 0 o.w.,
+    #         unsigned P3)
 
 def pauli_product(P1, P2):
     P3 = P1*P2
     return (P3.sign, P3 / P3.sign)
-    #return (sign(P3),
-    #        unsigned P3)
+    # return (sign(P3),
+    #         unsigned P3)
 
 def stim_pauli_string_less_than(pauli1, pauli2):
     """
@@ -6406,7 +6406,7 @@ def stim_pauli_string_less_than(pauli1, pauli2):
         Paulis to compare.
     """
 
-    #remove the signs.
+    # remove the signs.
     unsigned_pauli1 = pauli1/pauli1.sign
     unsigned_pauli2 = pauli2/pauli2.sign
 
@@ -6437,19 +6437,19 @@ def errorgen_pauli_action(errorgen: _LSE, pauli: stim.PauliString) -> tuple[floa
     errgen_type = errorgen.errorgen_type
     basis_element_labels = errorgen.basis_element_labels
 
-    #H_P[A] = -i[P,A]
+    # H_P[A] = -i[P,A]
     if errgen_type == 'H':
         ret = com(basis_element_labels[0], pauli)
         if ret is not None:
             ret = (_np.real_if_close(-1j*ret[0]).item(), ret[1]) 
-    #S_P[A] = PAP - A
+    # S_P[A] = PAP - A
     elif errgen_type == 'S':
-        #if P and A commute this gives 0. if they anticommute you get -2A.
+        # if P and A commute this gives 0. if they anticommute you get -2A.
         if pauli.commutes(basis_element_labels[0]):
             ret = None
         else:
             ret = (-2, pauli)
-    #C_P,Q[A] = PAQ + QAP - (1/2){{P,Q},A}
+    # C_P,Q[A] = PAQ + QAP - (1/2){{P,Q},A}
     elif errgen_type == 'C':
         P = basis_element_labels[0]
         Q = basis_element_labels[1]
@@ -6461,18 +6461,18 @@ def errorgen_pauli_action(errorgen: _LSE, pauli: stim.PauliString) -> tuple[floa
             else:
                 ret = None
         else:
-            if P.commutes(pauli) ^ Q.commutes(pauli): #xor
+            if P.commutes(pauli) ^ Q.commutes(pauli): # xor
                 PA = pauli_product(P, pauli)
                 PAQ = pauli_product(PA[0]*PA[1], Q)
                 ret = (_np.real_if_close(2*PAQ[0]).item(), PAQ[1])
             else:
                 ret = None
-    #A_P,Q[A] = i(PAQ - QAP + (1/2){[P,Q],A})
+    # A_P,Q[A] = i(PAQ - QAP + (1/2){[P,Q],A})
     elif errgen_type == 'A':
         P = basis_element_labels[0]
         Q = basis_element_labels[1]
         if P.commutes(Q):
-            if P.commutes(pauli) ^ Q.commutes(pauli): #xor
+            if P.commutes(pauli) ^ Q.commutes(pauli): # xor
                 PA = pauli_product(P, pauli)
                 PAQ = pauli_product(PA[0]*PA[1], Q)
                 ret = (_np.real_if_close(2*1j*PAQ[0]).item(), PAQ[1])
@@ -6524,22 +6524,22 @@ def errorgen_layer_to_matrix(errorgen_layer, num_qubits, errorgen_matrix_dict=No
         ndarray for the dense representation of the specified error generator in the standard basis.
     """
 
-    #if the list is empty return all zeros
-    #initialize empty array for accumulation.
+    # if the list is empty return all zeros
+    # initialize empty array for accumulation.
     mat = _np.zeros((4**num_qubits, 4**num_qubits), dtype=_np.complex128)
     if not errorgen_layer:
         return mat
     
     if errorgen_matrix_dict is None:
-        #create an error generator basis.
+        # create an error generator basis.
         errorgen_basis = _CompleteElementaryErrorgenBasis('PP', _QubitSpace(num_qubits), default_label_type='local')
         
-        #use this basis to construct a dictionary from error generator labels to their
-        #matrices.
+        # use this basis to construct a dictionary from error generator labels to their
+        # matrices.
         errorgen_lbls = errorgen_basis.labels
         errorgen_matrix_dict = {lbl: mat for lbl, mat in zip(errorgen_lbls, errorgen_basis.elemgen_matrices)}
 
-    #infer the correct label type.
+    # infer the correct label type.
     if errorgen_matrix_dict:
         first_label = next(iter(errorgen_matrix_dict))
         if isinstance(first_label, _LEEL):
@@ -6553,7 +6553,7 @@ def errorgen_layer_to_matrix(errorgen_layer, num_qubits, errorgen_matrix_dict=No
     else:
         raise ValueError('Non-empty errorgen_layer, but errorgen_matrix_dict is empty. Cannot convert.')
         
-    #loop through errorgen_layer and accumulate the weighted error generators prescribed.
+    # loop through errorgen_layer and accumulate the weighted error generators prescribed.
     if isinstance(errorgen_layer, (list, tuple)):
         first_coefficient_lbl = errorgen_layer[0][0]
         errorgen_layer_iter = errorgen_layer
@@ -6630,10 +6630,10 @@ def iterative_error_generator_composition(errorgen_labels, rates):
         new_rate_tuples_to_process = []
 
         for label_tup, rate_tup in zip(label_tuples_to_process, rate_tuples_to_process):
-            #grab the last two elements of each of these and do the composition.
+            # grab the last two elements of each of these and do the composition.
             new_labels_and_rates = error_generator_composition(label_tup[-2], label_tup[-1], rate_tup[-2]*rate_tup[-1])
 
-            #if the new labels and rates sum to zero overall then we can kill this branch of the tree.
+            # if the new labels and rates sum to zero overall then we can kill this branch of the tree.
             aggregated_labels_and_rates_dict = dict()
             for lbl, rate in new_labels_and_rates:
                 if aggregated_labels_and_rates_dict.get(lbl, None) is None:
@@ -6659,7 +6659,7 @@ def iterative_error_generator_composition(errorgen_labels, rates):
     
     return fully_processed_label_rate_tuples
 
-#Helper functions for doing numeric commutators, compositions and BCH.
+# Helper functions for doing numeric commutators, compositions and BCH.
 
 def error_generator_commutator_numerical(errorgen1, errorgen2, errorgen_matrix_dict=None, num_qubits=None):
     """
@@ -6691,11 +6691,11 @@ def error_generator_commutator_numerical(errorgen1, errorgen2, errorgen_matrix_d
     assert type(errorgen1) == type(errorgen2), "The elementary error generator labels have mismatched types."
     
     if errorgen_matrix_dict is None:
-        #create an error generator basis.
+        # create an error generator basis.
         errorgen_basis = _CompleteElementaryErrorgenBasis('PP', _QubitSpace(num_qubits), default_label_type='local')
         
-        #use this basis to construct a dictionary from error generator labels to their
-        #matrices.
+        # use this basis to construct a dictionary from error generator labels to their
+        # matrices.
         errorgen_lbls = errorgen_basis.labels
         errorgen_matrix_dict = {lbl: mat for lbl, mat in zip(errorgen_lbls, errorgen_basis.elemgen_matrices)}
 
@@ -6745,11 +6745,11 @@ def error_generator_composition_numerical(errorgen1, errorgen2, errorgen_matrix_
     assert type(errorgen1) == type(errorgen2), "The elementary error generator labels have mismatched types."
     
     if errorgen_matrix_dict is None:
-        #create an error generator basis.
+        # create an error generator basis.
         errorgen_basis = _CompleteElementaryErrorgenBasis('PP', _QubitSpace(num_qubits), default_label_type='local')
         
-        #use this basis to construct a dictionary from error generator labels to their
-        #matrices.
+        # use this basis to construct a dictionary from error generator labels to their
+        # matrices.
         errorgen_lbls = errorgen_basis.labels
         errorgen_matrix_dict = {lbl: mat for lbl, mat in zip(errorgen_lbls, errorgen_basis.elemgen_matrices)}
 
@@ -6790,13 +6790,13 @@ def bch_numerical(propagated_errorgen_layers, error_propagator, bch_order=1):
         A dense numpy array corresponding to the result of the iterative application of the BCH
         approximation.
     """
-    #Need to build an appropriate basis for getting the error generator matrices.
-    #accumulate the error generator coefficients needed.
+    # Need to build an appropriate basis for getting the error generator matrices.
+    # accumulate the error generator coefficients needed.
     collected_coeffs = []
     for layer in propagated_errorgen_layers:
         for coeff in layer.keys():
             collected_coeffs.append(coeff.to_local_eel())
-    #only want the unique ones.
+    # only want the unique ones.
     unique_coeffs = list(set(collected_coeffs))
     
     num_qubits = len(error_propagator.model.state_space.qubit_labels)
@@ -6804,20 +6804,20 @@ def bch_numerical(propagated_errorgen_layers, error_propagator, bch_order=1):
     errorgen_basis = _ExplicitElementaryErrorgenBasis(_QubitSpace(num_qubits), unique_coeffs, basis_1q=_BuiltinBasis('PP', 4))
     errorgen_lbl_matrix_dict = {lbl:mat for lbl,mat in zip(errorgen_basis.labels, errorgen_basis.elemgen_matrices)}
     
-    #iterate through each of the propagated error generator layers and turn these into dense numpy arrays
+    # iterate through each of the propagated error generator layers and turn these into dense numpy arrays
     errorgen_layer_mats = []
     for layer in propagated_errorgen_layers:
         errorgen_layer_mats.append(error_propagator.errorgen_layer_dict_to_errorgen(layer, mx_basis='pp'))
     
-    #initialize a matrix for storing the result of doing BCH.
+    # initialize a matrix for storing the result of doing BCH.
     bch_result = _np.zeros((4**num_qubits, 4**num_qubits), dtype=_np.complex128)
     
     if len(errorgen_layer_mats)==1:
         return errorgen_layer_mats[0]
         
-    #otherwise iterate through in reverse order (the propagated layers are
-    #in circuit ordering and not matrix multiplication ordering at the moment)
-    #and combine the terms pairwise
+    # otherwise iterate through in reverse order (the propagated layers are
+    # in circuit ordering and not matrix multiplication ordering at the moment)
+    # and combine the terms pairwise
     combined_err_layer = errorgen_layer_mats[-1]
     for i in range(len(errorgen_layer_mats)-2, -1, -1):
         combined_err_layer = pairwise_bch_numerical(combined_err_layer, errorgen_layer_mats[i], order=bch_order)
@@ -6885,36 +6885,36 @@ def magnus_numerical(propagated_errorgen_layers: list[dict[_EEL, float]], error_
         A dense numpy array corresponding to the result of Magnus expansion.
     """
 
-    #Need to build an appropriate basis for getting the error generator matrices.
-    #accumulate the error generator coefficients needed.
+    # Need to build an appropriate basis for getting the error generator matrices.
+    # accumulate the error generator coefficients needed.
     collected_coeffs = []
     for layer in propagated_errorgen_layers:
         for coeff in layer.keys():
             collected_coeffs.append(coeff.to_local_eel())
-    #only want the unique ones.
+    # only want the unique ones.
     unique_coeffs = list(set(collected_coeffs))
     
     num_qubits = len(error_propagator.model.state_space.qubit_labels)
     
     errorgen_basis = _ExplicitElementaryErrorgenBasis(_QubitSpace(num_qubits), unique_coeffs, basis_1q=_BuiltinBasis('PP', 4))
     
-    #iterate through each of the propagated error generator layers and turn these into dense numpy arrays
+    # iterate through each of the propagated error generator layers and turn these into dense numpy arrays
     errorgen_layer_mats = []
     for layer in propagated_errorgen_layers:
         errorgen_layer_mats.append(error_propagator.errorgen_layer_dict_to_errorgen(layer, mx_basis='pp'))
     
-    #initialize a matrix for storing the result of doing magnus.
+    # initialize a matrix for storing the result of doing magnus.
     magnus = _np.zeros((4**num_qubits, 4**num_qubits), dtype=_np.complex128)
     
     for curr_order in range(magnus_order):
-        #first-order magnus terms:
-        #\sum_{t1} A_{t1}
+        # first-order magnus terms:
+        # \sum_{t1} A_{t1}
         if curr_order == 0:
             for mat in errorgen_layer_mats:
                 magnus += mat
         
-        #second-order magnus terms:
-        #(1/2) \sum_{t1=1}^n \sum_{t2=1}^{t2} [A(t1), A(t2)]
+        # second-order magnus terms:
+        # (1/2) \sum_{t1=1}^n \sum_{t2=1}^{t2} [A(t1), A(t2)]
         elif curr_order == 1:
             errorgen_pairs = []
             for i in range(len(errorgen_layer_mats)):
@@ -6923,8 +6923,8 @@ def magnus_numerical(propagated_errorgen_layers: list[dict[_EEL, float]], error_
             for errorgen_pair in errorgen_pairs:
                 magnus += .5*_matrix_commutator(errorgen_pair[0], errorgen_pair[1])
         
-        #third-order magnus terms:
-        #(1/6) \sum_{t1=1}^{n} \sum_{t2=1}^{t1} \sum_{t3=1}^{t2} ([A(t1), [A(t2),A(t3)]] + [A(t3), [A(t2), A(t1)]])
+        # third-order magnus terms:
+        # (1/6) \sum_{t1=1}^{n} \sum_{t2=1}^{t1} \sum_{t3=1}^{t2} ([A(t1), [A(t2),A(t3)]] + [A(t3), [A(t2), A(t1)]])
         elif curr_order == 2:
             for i in range(len(errorgen_layer_mats)):
                 for j in range(i+1):
@@ -6965,7 +6965,7 @@ def errorgen_pauli_action_numerical(errorgen: _EEL, pauli: stim.PauliString) -> 
         of the specified error generator to the input pauli.
     """
 
-    #also get the superoperator (in the standard basis) corresponding to the elementary error generator
+    # also get the superoperator (in the standard basis) corresponding to the elementary error generator
     if isinstance(errorgen, _LSE):
         local_eel = errorgen.to_local_eel()
     elif isinstance(errorgen, _GEEL):
@@ -7020,11 +7020,11 @@ def iterative_error_generator_composition_numerical(errorgen_labels, rates, erro
     """
     
     if errorgen_matrix_dict is None:
-        #create an error generator basis.
+        # create an error generator basis.
         errorgen_basis = _CompleteElementaryErrorgenBasis('PP', _QubitSpace(num_qubits), default_label_type='local')
         
-        #use this basis to construct a dictionary from error generator labels to their
-        #matrices.
+        # use this basis to construct a dictionary from error generator labels to their
+        # matrices.
         errorgen_lbls = errorgen_basis.labels
         errorgen_matrix_dict = {lbl: mat for lbl, mat in zip(errorgen_lbls, errorgen_basis.elemgen_matrices)}
 
@@ -7034,7 +7034,7 @@ def iterative_error_generator_composition_numerical(errorgen_labels, rates, erro
     composition *= _np.prod(rates)
     return composition
 
-#-----------First-Order Approximate Error Generator Probabilities and Expectation Values---------------#
+# -----------First-Order Approximate Error Generator Probabilities and Expectation Values---------------# 
 
 def random_support(tableau, return_support=False):
     """ 
@@ -7051,7 +7051,7 @@ def random_support(tableau, return_support=False):
         If True also returns a list of qubit indices over which the distribution of outcome
         bit strings is random.
     """
-    #TODO Test for correctness on support
+    # TODO Test for correctness on support
     sim = stim.TableauSimulator()
     sim.set_inverse_tableau(tableau**-1)
     num_random = 0
@@ -7061,13 +7061,13 @@ def random_support(tableau, return_support=False):
         if z == 0:
             num_random+=1
             support.append(i)
-            # For a phase reference, use the smallest state with non-zero amplitude.
+            #  For a phase reference, use the smallest state with non-zero amplitude.
         forced_bit = z == -1
         sim.postselect_z(i, desired_value=forced_bit)
     return (num_random, support) if return_support else num_random
 
-#Courtesy of Gidney 
-#https://quantumcomputing.stackexchange.com/questions/38826/how-do-i-efficiently-compute-the-fidelity-between-two-stabilizer-tableau-states
+# Courtesy of Gidney 
+# https://quantumcomputing.stackexchange.com/questions/38826/how-do-i-efficiently-compute-the-fidelity-between-two-stabilizer-tableau-states
 def tableau_fidelity(tableau1, tableau2):
     """
     Calculate the fidelity between the stabilizer states corresponding to the given stim
@@ -7085,9 +7085,9 @@ def tableau_fidelity(tableau1, tableau2):
     sim = stim.TableauSimulator()
     sim.set_inverse_tableau(t3)
     p = 1
-    #note to future selves: stim uses little endian convention by default, and we typically use
-    #big endian. That doesn't make a difference in this case, but does elsewhere to be mindful to
-    #save on grief.
+    # note to future selves: stim uses little endian convention by default, and we typically use
+    # big endian. That doesn't make a difference in this case, but does elsewhere to be mindful to
+    # save on grief.
     for q in range(len(t3)):
         e = sim.peek_z(q)
         if e == -1:
@@ -7113,13 +7113,13 @@ def bitstring_to_tableau(bitstring):
         Tableau which maps the all zero string to this computational basis state
     """
     pauli_string = stim.PauliString(''.join(['I' if bit=='0' else 'X' for bit in bitstring]))
-    #convert this to a stim.Tableau
+    # convert this to a stim.Tableau
     pauli_tableau = pauli_string.to_tableau()
     return pauli_tableau
 
 
-#Modified from Gidney 
-#https://quantumcomputing.stackexchange.com/questions/34610/get-the-amplitude-of-a-computational-basis-in-stim
+# Modified from Gidney 
+# https://quantumcomputing.stackexchange.com/questions/34610/get-the-amplitude-of-a-computational-basis-in-stim
 def amplitude_of_state(tableau, desired_state):
     """
     Get the amplitude of a particular computational basis state for given
@@ -7139,10 +7139,10 @@ def amplitude_of_state(tableau, desired_state):
     sim.set_inverse_tableau(tableau**-1)
     n = sim.num_qubits
     
-    #convert desired state into a list of bools
+    # convert desired state into a list of bools
     desired_state = [desired_state[i] == '1' for i in range(n)]
     
-    # Determine the magnitude of the target state.
+    #  Determine the magnitude of the target state.
     copy = sim.copy()
     num_random = 0
     for q in range(n):
@@ -7151,11 +7151,11 @@ def amplitude_of_state(tableau, desired_state):
         forced_bit = z == -1
         if z == 0:
             num_random += 1
-        elif desired_bit != forced_bit: #forced bit is true if the state is |1>, so this is checking whether the bits match.
+        elif desired_bit != forced_bit: # forced bit is true if the state is |1>, so this is checking whether the bits match.
             return 0
         copy.postselect_z(q, desired_value=desired_bit)
     magnitude = 2**-(num_random / 2)
-    # For a phase reference, use the smallest state with non-zero amplitude.
+    #  For a phase reference, use the smallest state with non-zero amplitude.
     copy = sim.copy()
     ref_state = [False]*n
     for q in range(n):
@@ -7166,8 +7166,8 @@ def amplitude_of_state(tableau, desired_state):
     if ref_state == desired_state:
         return magnitude
 
-    # Postselect away states that aren't the desired or reference states.
-    # Also move the ref state to |00..00> and the desired state to |00..01>.
+    #  Postselect away states that aren't the desired or reference states.
+    #  Also move the ref state to |00..00> and the desired state to |00..01>.
     copy = sim.copy()
     found_difference = False
     for q in range(n):
@@ -7184,12 +7184,12 @@ def amplitude_of_state(tableau, desired_state):
             if ref_bit:
                 copy.x(0)
         else:
-            # Remove difference between target state and ref state at this bit.
+            #  Remove difference between target state and ref state at this bit.
             copy.cnot(0, q)
             copy.postselect_z(q, desired_value=ref_bit)
 
-    # The phase difference between |00..00> and |00..01> is what we want.
-    # Since other states are gone, this is the bloch vector phase of qubit 0.
+    #  The phase difference between |00..00> and |00..01> is what we want.
+    #  Since other states are gone, this is the bloch vector phase of qubit 0.
     assert found_difference
     s = str(copy.peek_bloch(0))
     
@@ -7230,23 +7230,23 @@ def pauli_phase_update(pauli, bitstring, dual=False):
     
     bitstring = [False if bit=='0' else True for bit in bitstring]
     if not dual:
-        #list of phase correction for each pauli (conditional on 0)
-        #Read [I, X, Y, Z]
+        # list of phase correction for each pauli (conditional on 0)
+        # Read [I, X, Y, Z]
         pauli_phases_0 = [1, 1, 1j, 1]
         
-        #list of the phase correction for each pauli (conditional on 1)
-        #Read [I, X, Y, Z]
+        # list of the phase correction for each pauli (conditional on 1)
+        # Read [I, X, Y, Z]
         pauli_phases_1 = [1, 1, -1j, -1]
     else:
-        #list of phase correction for each pauli (conditional on 0)
-        #Read [I, X, Y, Z]
+        # list of phase correction for each pauli (conditional on 0)
+        # Read [I, X, Y, Z]
         pauli_phases_0 = [1, 1, -1j, 1]
         
-        #list of the phase correction for each pauli (conditional on 1)
-        #Read [I, X, Y, Z]
+        # list of the phase correction for each pauli (conditional on 1)
+        # Read [I, X, Y, Z]
         pauli_phases_1 = [1, 1, 1j, -1]
 
-    #list of bools corresponding to whether each pauli flips the target bit
+    # list of bools corresponding to whether each pauli flips the target bit
     pauli_flips = [False, True, True, False]
     
     overall_phase = 1
@@ -7258,18 +7258,18 @@ def pauli_phase_update(pauli, bitstring, dual=False):
             overall_phase*=pauli_phases_0[elem]
         if pauli_flips[elem]:
             indices_to_flip.append(i)
-    #if the input pauli had any overall phase associated with it add that back
-    #in too.
+    # if the input pauli had any overall phase associated with it add that back
+    # in too.
     overall_phase*=pauli.sign
-    #apply the flips to get the output bit string.
+    # apply the flips to get the output bit string.
     for idx in indices_to_flip:
         bitstring[idx] = not bitstring[idx]
-    #turn this back into a string
+    # turn this back into a string
     output_bitstring = ''.join(['1' if bit else '0' for bit in bitstring])
     
     return overall_phase, output_bitstring
 
-#TODO: This function needs a more evocative name
+# TODO: This function needs a more evocative name
 def phi(tableau, desired_bitstring, P, Q):
     """
     This function computes a quantity whose value is used in expression for the sensitivity of probabilities to error generators.
@@ -7293,38 +7293,38 @@ def phi(tableau, desired_bitstring, P, Q):
     A complex number corresponding to the value of the phi function.
     """
     
-    #start by getting the pauli string which maps the all-zeros string to the target bitstring.
+    # start by getting the pauli string which maps the all-zeros string to the target bitstring.
     initial_pauli_string = stim.PauliString(''.join(['I' if bit=='0' else 'X' for bit in desired_bitstring]))
-    #map P and Q to stim.PauliString if needed.
+    # map P and Q to stim.PauliString if needed.
     if isinstance(P, str):
         P = stim.PauliString(P)
     if isinstance(Q, str):
         Q = stim.PauliString(Q)
     
-    #combine this initial pauli string with the two input paulis
+    # combine this initial pauli string with the two input paulis
     eff_P = initial_pauli_string*P
     eff_Q = Q*initial_pauli_string
 
-    #now get the bit strings which need their amplitudes extracted from the input stabilizer state and get
-    #the corresponding phase corrections.
+    # now get the bit strings which need their amplitudes extracted from the input stabilizer state and get
+    # the corresponding phase corrections.
     all_zeros = '0'*len(eff_P)
     phase1, bitstring1 = pauli_phase_update(eff_P, all_zeros, dual=True)
     phase2, bitstring2 = pauli_phase_update(eff_Q, all_zeros)
 
-    #get the amplitude of these two bitstrings in the stabilizer state.
+    # get the amplitude of these two bitstrings in the stabilizer state.
     amp1 = amplitude_of_state(tableau, bitstring1)
-    amp2 = amplitude_of_state(tableau, bitstring2).conjugate()  #The second amplitude also needs a complex conjugate applied
+    amp2 = amplitude_of_state(tableau, bitstring2).conjugate()  # The second amplitude also needs a complex conjugate applied
         
-    #now apply the phase corrections. 
+    # now apply the phase corrections. 
     amp1*=phase1
     amp2*=phase2
      
-    #calculate phi.
+    # calculate phi.
     phi = amp1*amp2
     
-    #phi should ultimately be either 0, +/-1 or +/-i, scaling might overflow
-    #so avoid scaling and just identify which of these it should be. For really
-    #tiny phi this may still have an issue...
+    # phi should ultimately be either 0, +/-1 or +/-i, scaling might overflow
+    # so avoid scaling and just identify which of these it should be. For really
+    # tiny phi this may still have an issue...
     if abs(phi)>1e-14:
         if abs(phi.real) > 1e-14:
             if phi.real > 0:
@@ -7339,7 +7339,7 @@ def phi(tableau, desired_bitstring, P, Q):
     else:
         return complex(0)
 
-#helper function for numerically computing phi, primarily used for testing.
+# helper function for numerically computing phi, primarily used for testing.
 def phi_numerical(tableau, desired_bitstring, P, Q):
     """
     This function computes a quantity whose value is used in expression for the sensitivity of probabilities to error generators.
@@ -7363,11 +7363,11 @@ def phi_numerical(tableau, desired_bitstring, P, Q):
     A complex number corresponding to the value of the phi function.
     """
     
-    #start by getting the pauli string which maps the all-zeros string to the target bitstring.
+    # start by getting the pauli string which maps the all-zeros string to the target bitstring.
     initial_pauli_string = stim.PauliString(''.join(['I' if bit=='0' else 'X' for bit in desired_bitstring])).to_unitary_matrix(endian = 'big')
     
 
-    #map P and Q to stim.PauliString if needed.
+    # map P and Q to stim.PauliString if needed.
     if isinstance(P, str):
         P = stim.PauliString(P)
     if isinstance(Q, str):
@@ -7375,17 +7375,17 @@ def phi_numerical(tableau, desired_bitstring, P, Q):
     
     stabilizer_state = tableau.to_state_vector(endian = 'big')
     stabilizer_state.reshape((len(stabilizer_state),1))
-    #combine this initial pauli string with the two input paulis
+    # combine this initial pauli string with the two input paulis
     eff_P = initial_pauli_string@P.to_unitary_matrix(endian = 'big')
     eff_Q = Q.to_unitary_matrix(endian = 'big')@initial_pauli_string
     
-    #now get the bit strings which need their amplitudes extracted from the input stabilizer state and get
-    #the corresponding phase corrections.
-    #all_zeros = '0'*len(eff_P)
+    # now get the bit strings which need their amplitudes extracted from the input stabilizer state and get
+    # the corresponding phase corrections.
+    # all_zeros = '0'*len(eff_P)
     all_zeros = _np.zeros((2**len(desired_bitstring),1))
     all_zeros[0] = 1  
-    #calculate phi.
-    #The second amplitude also needs a complex conjugate applied
+    # calculate phi.
+    # The second amplitude also needs a complex conjugate applied
     phi = (all_zeros.T@eff_P@stabilizer_state) * (stabilizer_state.conj().T@eff_Q@all_zeros)
     
     num_random = random_support(tableau)
@@ -7428,7 +7428,7 @@ def alpha(errorgen, tableau, desired_bitstring):
         if basis_element_labels[0].commutes(basis_element_labels[1]):
             second_term = 2*phi(tableau, desired_bitstring, basis_element_labels[0]*basis_element_labels[1], identity_pauli)
             sensitivity -= second_term.real
-    else: #A
+    else: # A
         first_term = phi(tableau, desired_bitstring, basis_element_labels[1], basis_element_labels[0])
         if not basis_element_labels[0].commutes(basis_element_labels[1]):
             second_term = phi(tableau, desired_bitstring, basis_element_labels[1]*basis_element_labels[0], identity_pauli)
@@ -7455,11 +7455,11 @@ def alpha_numerical(errorgen, tableau, desired_bitstring):
         Bit string to calculate the sensitivity for.
     """
     
-    #get the stabilizer state corresponding to the tableau.
+    # get the stabilizer state corresponding to the tableau.
     stabilizer_state = tableau.to_state_vector(endian='big')
     stabilizer_state_dmvec = state_to_dmvec(stabilizer_state)
     stabilizer_state_dmvec.reshape((len(stabilizer_state_dmvec),1))
-    #also get the superoperator (in the standard basis) corresponding to the elementary error generator
+    # also get the superoperator (in the standard basis) corresponding to the elementary error generator
     if isinstance(errorgen, _LSE):
         local_eel = errorgen.to_local_eel()
     elif isinstance(errorgen, _GEEL):
@@ -7473,7 +7473,7 @@ def alpha_numerical(errorgen, tableau, desired_bitstring):
     errorgen_superop = create_elementary_errorgen_nqudit(errgen_type, basis_element_labels, basis_1q, normalize=False, sparse=False,
                                                          tensorprod_basis=False)
     
-    #also need a superbra for the desired bitstring.
+    # also need a superbra for the desired bitstring.
     desired_bitstring_vec = _np.zeros(2**len(desired_bitstring))
     desired_bitstring_vec[_bitstring_to_int(desired_bitstring)] = 1
     desired_bitstring_dmvec = state_to_dmvec(desired_bitstring_vec)
@@ -7481,7 +7481,7 @@ def alpha_numerical(errorgen, tableau, desired_bitstring):
     num_random = random_support(tableau)
     scale = 2**(num_random)
     
-    #compute the needed trace inner product.
+    # compute the needed trace inner product.
     alpha = _np.real_if_close(scale*(desired_bitstring_dmvec.conj().T@errorgen_superop@stabilizer_state_dmvec))
     
     return alpha
@@ -7531,7 +7531,7 @@ def alpha_pauli(errorgen, tableau, pauli):
         A = basis_element_labels[0]
         B = basis_element_labels[1]
         com_AP = A.commutes(pauli)
-        com_BP = B.commutes(pauli) #TODO: can skip computing this in some cases for minor performance boost.
+        com_BP = B.commutes(pauli) # TODO: can skip computing this in some cases for minor performance boost.
         if A.commutes(B):
             if com_AP:
                 return 0
@@ -7542,7 +7542,7 @@ def alpha_pauli(errorgen, tableau, pauli):
                     ABP = pauli_product(A*B, pauli)
                     expectation = ABP[0]*sim.peek_observable_expectation(ABP[1])
                     return _np.real_if_close(-4*expectation)
-        else: #{A,B} = 0
+        else: # {A,B} = 0
             if com_AP:
                 if com_BP:
                     return 0
@@ -7557,11 +7557,11 @@ def alpha_pauli(errorgen, tableau, pauli):
                     return _np.real_if_close(2*expectation)
                 else:
                     return 0
-    else: #A
+    else: # A
         A = basis_element_labels[0]
         B = basis_element_labels[1]
         com_AP = A.commutes(pauli)
-        com_BP = B.commutes(pauli) #TODO: can skip computing this in some cases for minor performance boost.
+        com_BP = B.commutes(pauli) # TODO: can skip computing this in some cases for minor performance boost.
         if A.commutes(B):
             if com_AP:
                 if com_BP:
@@ -7577,7 +7577,7 @@ def alpha_pauli(errorgen, tableau, pauli):
                     return _np.real_if_close(-1j*2*expectation)
                 else:
                     return 0
-        else: #{A,B} = 0
+        else: # {A,B} = 0
             if com_AP:
                 return 0
             else:
@@ -7606,11 +7606,11 @@ def alpha_pauli_numerical(errorgen, tableau, pauli):
         Pauli to calculate the sensitivity for.
     """
     
-    #get the stabilizer state corresponding to the tableau.
+    # get the stabilizer state corresponding to the tableau.
     stabilizer_state = tableau.to_state_vector(endian='big')
     stabilizer_state_dmvec = state_to_dmvec(stabilizer_state)
     stabilizer_state_dmvec.reshape((len(stabilizer_state_dmvec),1))
-    #also get the superoperator (in the standard basis) corresponding to the elementary error generator
+    # also get the superoperator (in the standard basis) corresponding to the elementary error generator
     if isinstance(errorgen, _LSE):
         local_eel = errorgen.to_local_eel()
     elif isinstance(errorgen, _GEEL):
@@ -7624,23 +7624,23 @@ def alpha_pauli_numerical(errorgen, tableau, pauli):
     errorgen_superop = create_elementary_errorgen_nqudit(errgen_type, basis_element_labels, basis_1q, normalize=False, sparse=False,
                                                          tensorprod_basis=False)
     
-    #finally need the superoperator for the selected pauli.
+    # finally need the superoperator for the selected pauli.
     pauli_unitary = pauli.to_unitary_matrix(endian='big')
-    #flatten this row-wise
+    # flatten this row-wise
     pauli_vec = _np.ravel(pauli_unitary)
     pauli_vec.reshape((len(pauli_vec),1))
     
-    #compute the needed trace inner product.
+    # compute the needed trace inner product.
     alpha = _np.real_if_close(pauli_vec.conj().T@errorgen_superop@stabilizer_state_dmvec).item()
     
     return alpha
 
 def _bitstring_to_int(bitstring) -> int:
     if isinstance(bitstring, str):
-        # If the input is a string, convert it directly
+        #  If the input is a string, convert it directly
         return int(bitstring, 2)
     elif isinstance(bitstring, tuple):
-        # If the input is a tuple, join the elements to form a string
+        #  If the input is a tuple, join the elements to form a string
         return int(''.join(bitstring), 2)
     else:
         raise ValueError("Input must be either a string or a tuple of '0's and '1's")
@@ -7677,10 +7677,10 @@ def stabilizer_probability_correction(errorgen_dict, tableau, desired_bitstring,
     """
     
     num_random = random_support(tableau)
-    scale = 1/2**(num_random) #TODO: This might overflow
+    scale = 1/2**(num_random) # TODO: This might overflow
     
-    #do the first order correction separately since it doesn't require composition logic:
-    #now get the sum over the alphas and the error generator rate products needed.
+    # do the first order correction separately since it doesn't require composition logic:
+    # now get the sum over the alphas and the error generator rate products needed.
     alpha_errgen_prods = _np.zeros(len(errorgen_dict))
     
 
@@ -7689,17 +7689,17 @@ def stabilizer_probability_correction(errorgen_dict, tableau, desired_bitstring,
             alpha_errgen_prods[i] = alpha(lbl, tableau, desired_bitstring)*rate
     correction = scale*_np.sum(alpha_errgen_prods)
     if order > 1:
-        #The order of the approximation determines the combinations of error generators
-        #which need to be composed. (given by cartesian products of labels in errorgen_dict).
+        # The order of the approximation determines the combinations of error generators
+        # which need to be composed. (given by cartesian products of labels in errorgen_dict).
         labels_by_order = [list(product(errorgen_dict.keys(), repeat = i+1)) for i in range(1,order)]
-        #Get a similar structure for the corresponding rates
+        # Get a similar structure for the corresponding rates
         rates_by_order = [list(product(errorgen_dict.values(), repeat = i+1)) for i in range(1,order)]
         for current_order, (current_order_labels, current_order_rates) in enumerate(zip(labels_by_order, rates_by_order), start=2):
             current_order_scale = 1/factorial(current_order)
             composition_results = []
             for label_tup, rate_tup in zip(current_order_labels, current_order_rates):
                 composition_results.extend(iterative_error_generator_composition(label_tup, rate_tup))
-            #aggregate together any overlapping terms in composition_results
+            # aggregate together any overlapping terms in composition_results
             composition_results_dict = dict()
             for lbl, rate in composition_results:
                 if composition_results_dict.get(lbl,None) is None:
@@ -7715,9 +7715,9 @@ def stabilizer_probability_correction(errorgen_dict, tableau, desired_bitstring,
 
     return correction
 
-#TODO: The implementations for the pauli expectation value correction and probability correction
-#are basically identical modulo some additional scale factors and the alpha function used. Should be able to combine
-#the implementations into one function.
+# TODO: The implementations for the pauli expectation value correction and probability correction
+# are basically identical modulo some additional scale factors and the alpha function used. Should be able to combine
+# the implementations into one function.
 def stabilizer_pauli_expectation_correction(errorgen_dict, tableau, pauli, order = 1, truncation_threshold = 1e-14):
     """
     Compute the kth-order correction to the expectation value of the specified pauli.
@@ -7749,8 +7749,8 @@ def stabilizer_pauli_expectation_correction(errorgen_dict, tableau, pauli, order
         selected pauli operator induced by the error generator (to specified order).
     """
     
-    #do the first order correction separately since it doesn't require composition logic:
-    #now get the sum over the alphas and the error generator rate products needed.
+    # do the first order correction separately since it doesn't require composition logic:
+    # now get the sum over the alphas and the error generator rate products needed.
     alpha_errgen_prods = _np.zeros(len(errorgen_dict))
     
     for i, (lbl, rate) in enumerate(errorgen_dict.items()):
@@ -7758,17 +7758,17 @@ def stabilizer_pauli_expectation_correction(errorgen_dict, tableau, pauli, order
             alpha_errgen_prods[i] = alpha_pauli(lbl, tableau, pauli)*rate
     correction = _np.sum(alpha_errgen_prods)
     if order > 1:
-        #The order of the approximation determines the combinations of error generators
-        #which need to be composed. (given by cartesian products of labels in errorgen_dict).
+        # The order of the approximation determines the combinations of error generators
+        # which need to be composed. (given by cartesian products of labels in errorgen_dict).
         labels_by_order = [list(product(errorgen_dict.keys(), repeat = i+1)) for i in range(1,order)]
-        #Get a similar structure for the corresponding rates
+        # Get a similar structure for the corresponding rates
         rates_by_order = [list(product(errorgen_dict.values(), repeat = i+1)) for i in range(1,order)]
         for current_order, (current_order_labels, current_order_rates) in enumerate(zip(labels_by_order, rates_by_order), start=2):
             current_order_scale = 1/factorial(current_order)
             composition_results = []
             for label_tup, rate_tup in zip(current_order_labels, current_order_rates):
                 composition_results.extend(iterative_error_generator_composition(label_tup, rate_tup))
-            #aggregate together any overlapping terms in composition_results
+            # aggregate together any overlapping terms in composition_results
             composition_results_dict = dict()
             for lbl, rate in composition_results:
                 if composition_results_dict.get(lbl,None) is None:
@@ -7819,13 +7819,13 @@ def stabilizer_pauli_expectation_correction_numerical(errorgen_dict, errorgen_pr
     stabilizer_state_dmvec = state_to_dmvec(stabilizer_state)
     stabilizer_state_dmvec.reshape((len(stabilizer_state_dmvec),1))
     
-    #also get the superoperator (in the standard basis) corresponding to the taylor series
-    #expansion of the specified error generator dictionary.
+    # also get the superoperator (in the standard basis) corresponding to the taylor series
+    # expansion of the specified error generator dictionary.
     taylor_expanded_errorgen = error_generator_taylor_expansion_numerical(errorgen_dict, errorgen_propagator, order=order, mx_basis='std')
     
-    #finally need the superoperator for the selected pauli.
+    # finally need the superoperator for the selected pauli.
     pauli_unitary = pauli.to_unitary_matrix(endian='big')
-    #flatten this row-wise
+    # flatten this row-wise
     pauli_vec = _np.ravel(pauli_unitary)
     pauli_vec.reshape((len(pauli_vec),1))
     
@@ -7852,7 +7852,7 @@ def stabilizer_probability(tableau, desired_bitstring):
     p : float
         probability of desired bitstring.
     """
-    #compute what Gidney calls the tableau fidelity (which in this case gives the probability).
+    # compute what Gidney calls the tableau fidelity (which in this case gives the probability).
     return tableau_fidelity(tableau, bitstring_to_tableau(desired_bitstring))
 
 def stabilizer_pauli_expectation(tableau, pauli):
@@ -7922,7 +7922,7 @@ def approximate_stabilizer_probability(errorgen_dict, circuit, desired_bitstring
     else:
         raise ValueError('`circuit` should either be a pygsti `Circuit` or a stim.Tableau.')
 
-    #recast keys to local stim ones if needed.
+    # recast keys to local stim ones if needed.
     first_lbl = next(iter(errorgen_dict))
     if isinstance(first_lbl, (_GEEL, _LEEL)):
         errorgen_dict = {_LSE.cast(lbl):val for lbl,val in errorgen_dict.items()}
@@ -7972,7 +7972,7 @@ def approximate_stabilizer_pauli_expectation(errorgen_dict, circuit, pauli, orde
     if isinstance(pauli, str):
         pauli = stim.PauliString(pauli)
 
-    #recast keys to local stim ones if needed.
+    # recast keys to local stim ones if needed.
     first_lbl = next(iter(errorgen_dict))
     if isinstance(first_lbl, (_GEEL, _LEEL)):
         errorgen_dict = {_LSE.cast(lbl):val for lbl,val in errorgen_dict.items()}
@@ -8018,7 +8018,7 @@ def approximate_stabilizer_pauli_expectation_numerical(errorgen_dict, errorgen_p
     
     tableau = circuit.convert_to_stim_tableau()
 
-    #recast keys to local stim ones if needed.
+    # recast keys to local stim ones if needed.
     first_lbl = next(iter(errorgen_dict))
     if isinstance(first_lbl, (_GEEL, _LEEL)):
         errorgen_dict = {_LSE.cast(lbl):val for lbl,val in errorgen_dict.items()}
@@ -8063,11 +8063,11 @@ def approximate_stabilizer_probabilities(errorgen_dict, circuit, order=1, trunca
     else:
         raise ValueError('`circuit` should either be a pygsti `Circuit` or a stim.Tableau.')
 
-    #get set of all bit strings
+    # get set of all bit strings
     num_qubits = len(tableau)
     bitstrings = ["".join(bitstring) for bitstring in product(['0','1'], repeat=num_qubits)]
 
-    #initialize an array for the probabilities
+    # initialize an array for the probabilities
     probs = _np.zeros(2**num_qubits)
 
     for i, bitstring in enumerate(bitstrings):
@@ -8110,17 +8110,17 @@ def error_generator_taylor_expansion(errorgen_dict, order = 1, truncation_thresh
             taylor_order_terms[0][lbl] = rate
 
     if order > 1:
-        #The order of the approximation determines the combinations of error generators
-        #which need to be composed. (given by cartesian products of labels in errorgen_dict).
+        # The order of the approximation determines the combinations of error generators
+        # which need to be composed. (given by cartesian products of labels in errorgen_dict).
         labels_by_order = [list(product(errorgen_dict.keys(), repeat = i+1)) for i in range(1,order)]
-        #Get a similar structure for the corresponding rates
+        # Get a similar structure for the corresponding rates
         rates_by_order = [list(product(errorgen_dict.values(), repeat = i+1)) for i in range(1,order)]
         for current_order, (current_order_labels, current_order_rates) in enumerate(zip(labels_by_order, rates_by_order), start=2):
             order_scale = 1/factorial(current_order)
             composition_results = []
             for label_tup, rate_tup in zip(current_order_labels, current_order_rates):
                 composition_results.extend(iterative_error_generator_composition(label_tup, rate_tup))
-            #aggregate together any overlapping terms in composition_results
+            # aggregate together any overlapping terms in composition_results
             composition_results_dict = dict()
             for lbl, rate in composition_results:
                 if composition_results_dict.get(lbl,None) is None:
