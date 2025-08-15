@@ -27,6 +27,7 @@ from pygsti.baseobjs.basis import Basis as _Basis, ExplicitBasis as _ExplicitBas
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LocalElementaryErrorgenLabel
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
+from pygsti import SpaceT
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 
@@ -163,13 +164,6 @@ def fidelity(a, b):
             """
             _warnings.warn(message)
         evals[evals < 0] = 0.0
-        tr = _np.sum(evals)
-        if abs(tr - 1) > __VECTOR_TOL__:
-            message = f"""
-            The PSD part of the input matrix is not trace-1 up to tolerance {__VECTOR_TOL__}.
-            Beware result!
-            """
-            _warnings.warn(message)
         sqrt_mat = U @ (_np.sqrt(evals).reshape((-1, 1)) * U.T.conj())
         return sqrt_mat
     
@@ -305,10 +299,7 @@ def diamonddist(a, b, mx_basis='pp', return_x=False):
     mx_basis = _bt.create_basis_for_matrix(a, mx_basis)
 
     # currently cvxpy is only needed for this function, so don't import until here
-    import cvxpy as _cvxpy
-    old_cvxpy = bool(tuple(map(int, _cvxpy.__version__.split('.'))) < (1, 0))
-    if old_cvxpy:
-        raise RuntimeError('CVXPY 0.4 is no longer supported. Please upgrade to CVXPY 1.0 or higher.')
+    import cvxpy as _cp
 
     # _jam code below assumes *un-normalized* Jamiol-isomorphism.
     # It will convert a & b to a "single-block" basis representation
@@ -325,19 +316,29 @@ def diamonddist(a, b, mx_basis='pp', return_x=False):
     J = JBstd - JAstd
     prob, vars = _diamond_norm_model(dim, smallDim, J)
 
-    try:
-        prob.solve(solver='CVXOPT')
-    except _cvxpy.error.SolverError as e:
-        _warnings.warn("CVXPY failed: %s - diamonddist returning -2!" % str(e))
-        return (-2, _np.zeros((dim, dim))) if return_x else -2
-    except:
-        _warnings.warn("CVXOPT failed (unknown err) - diamonddist returning -2!")
-        return (-2, _np.zeros((dim, dim))) if return_x else -2
+    objective_val = -2
+    varvals = [_np.zeros_like(J), None, None]
+    sdp_solvers = ['MOSEK', 'CLARABEL', 'CVXOPT']
+    for i, solver in enumerate(sdp_solvers):
+        try:
+            prob.solve(solver=solver)
+            objective_val = prob.value
+            varvals = [v.value for v in vars]
+            break
+        except (AssertionError, _cp.SolverError) as e:
+            if solver != 'MOSEK':
+                msg = f"Received error {e} when trying to use solver={solver}."
+                if i + 1 == len(sdp_solvers):
+                    failure_msg = "Out of solvers. Returning -2 for diamonddist."
+                else:
+                    failure_msg = f"Trying {sdp_solvers[i+1]} next."
+                msg += f'\n{failure_msg}'
+                _warnings.warn(msg)
 
     if return_x:
-        return prob.value, vars[0].value
+        return objective_val, varvals
     else:
-        return prob.value
+        return objective_val
 
 
 def _diamond_norm_model(dim, smallDim, J):
@@ -491,8 +492,8 @@ def entanglement_fidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
     
     #if the tp flag isn't set we'll calculate whether it is true here
     if is_tp is None:
-        def is_tp_fn(x): return _np.isclose(x[0, 0], 1.0) and all(
-        [_np.isclose(x[0, i], 0) for i in range(1,d2)])
+        def is_tp_fn(x):
+            return _np.isclose(x[0, 0], 1.0) and _np.allclose(x[0, 1:d2], 0)
         
         is_tp= (is_tp_fn(a) and is_tp_fn(b))
    
@@ -662,6 +663,55 @@ def entanglement_infidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
     """
     return 1 - float(entanglement_fidelity(a, b, mx_basis, is_tp, is_unitary))
 
+def generator_infidelity(a, b, mx_basis = 'pp'):
+    """
+    Returns the generator infidelity between a and b, where b is the "target" operation.
+    Generator infidelity is given by the sum of the squared hamiltonian error generator
+    rates plus the sum of the stochastic error generator rates.
+
+    GI = sum_k(H_k**2) + sum_k(S_k)
+
+    Parameters
+    ----------
+    a : numpy.ndarray
+        The first process (transfer) matrix.
+
+    b : numpy.ndarray
+        The second process (transfer) matrix.
+
+    mx_basis : mx_basis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The basis that `a` and `b` are in. Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).
+
+    Returns
+    -------
+    float
+    """
+    #stick import here to sidestep circular import problem.
+    from pygsti.modelmembers.operations.lindbladerrorgen import LindbladErrorgen as _LindbladErrorgen
+
+    # Compute error generator
+    try:
+        errgen_mat = error_generator(a, b, mx_basis, 'logGTi')
+        errgen = _LindbladErrorgen.from_error_generator(errgen_mat, parameterization = 'GLND')
+    except Exception as e:
+        msg = 'Failed to construct an error generator from inputs. Will return NaN. Encountered the following exception while' \
+         + ' attempting:\n' + str(e)
+        return _np.nan
+
+    # Loop through coefficient blocks and index into the
+    #block_data attributes for each to pull out the H and S terms.
+    gen_infid = 0
+    for coeff_block in errgen.coefficient_blocks:
+        if coeff_block._block_type == 'ham': #H terms, get squared
+            gen_infid+= _np.sum(coeff_block.block_data**2)
+        if coeff_block._block_type == 'other_diagonal': #S terms, added directly
+            gen_infid+= _np.sum(coeff_block.block_data)
+        if coeff_block._block_type == 'other': #S terms on diagonal, added directly
+            gen_infid+= _np.sum(_np.diag(coeff_block.block_data))
+
+    return _np.real_if_close(gen_infid)
 
 def gateset_infidelity(model, target_model, itype='EI',
                        weights=None, mx_basis=None, is_tp=None, is_unitary=None):
@@ -917,9 +967,14 @@ def povm_fidelity(model, target_model, povmlbl):
     -------
     float
     """
-    povm_mx = compute_povm_map(model, povmlbl)
-    target_povm_mx = compute_povm_map(target_model, povmlbl)
-    return entanglement_fidelity(povm_mx, target_povm_mx, target_model.basis)
+    try:
+        povm_mx = compute_povm_map(model, povmlbl)
+        target_povm_mx = compute_povm_map(target_model, povmlbl)
+        return entanglement_fidelity(povm_mx, target_povm_mx, target_model.basis)
+    except AssertionError as e:
+        se = str(e)
+        assert '`dim` must be a perfect square' in se, se
+        return _np.nan
 
 
 def povm_jtracedist(model, target_model, povmlbl):
@@ -941,9 +996,14 @@ def povm_jtracedist(model, target_model, povmlbl):
     -------
     float
     """
-    povm_mx = compute_povm_map(model, povmlbl)
-    target_povm_mx = compute_povm_map(target_model, povmlbl)
-    return jtracedist(povm_mx, target_povm_mx, target_model.basis)
+    try:
+        povm_mx = compute_povm_map(model, povmlbl)
+        target_povm_mx = compute_povm_map(target_model, povmlbl)
+        return jtracedist(povm_mx, target_povm_mx, target_model.basis)
+    except AssertionError as e:
+        se = str(e)
+        assert '`dim` must be a perfect square' in se, se
+        return _np.nan
 
 
 def povm_diamonddist(model, target_model, povmlbl):
@@ -965,9 +1025,14 @@ def povm_diamonddist(model, target_model, povmlbl):
     -------
     float
     """
-    povm_mx = compute_povm_map(model, povmlbl)
-    target_povm_mx = compute_povm_map(target_model, povmlbl)
-    return diamonddist(povm_mx, target_povm_mx, target_model.basis)
+    try:
+        povm_mx = compute_povm_map(model, povmlbl)
+        target_povm_mx = compute_povm_map(target_model, povmlbl)
+        return diamonddist(povm_mx, target_povm_mx, target_model.basis)
+    except AssertionError as e:
+        assert '`dim` must be a perfect square' in str(e)
+        return _np.NaN
+
 
 def instrument_infidelity(a, b, mx_basis):
     """
@@ -1023,8 +1088,8 @@ def instrument_diamonddist(a, b, mx_basis):
         aa, bb = i * adim, (i + 1) * adim
         for j in range(nComps):
             cc, dd = j * adim, (j + 1) * adim
-            composite_op[aa:bb, cc:dd] = a[clbl].to_dense(on_space='HilbertSchmidt')
-            composite_top[aa:bb, cc:dd] = b[clbl].to_dense(on_space='HilbertSchmidt')
+            composite_op[aa:bb, cc:dd] = a[clbl].to_dense("HilbertSchmidt")
+            composite_top[aa:bb, cc:dd] = b[clbl].to_dense("HilbertSchmidt")
     return diamonddist(composite_op, composite_top, sumbasis)
 
 
@@ -1689,18 +1754,55 @@ def elementary_errorgens_dual(dim, typ, basis):
     return elem_errgens
 
 
-def extract_elementary_errorgen_coefficients(errorgen, elementary_errorgen_labels, elementary_errorgen_basis='pp',
+def extract_elementary_errorgen_coefficients(errorgen, elementary_errorgen_labels, elementary_errorgen_basis='PP',
                                              errorgen_basis='pp', return_projected_errorgen=False):
-    """ TODO: docstring """
+    """ 
+    Extract a dictionary of elemenary error generator coefficients and rates fromt he specified dense error generator
+    matrix.
+
+    Parameters
+    ----------
+    errorgen : numpy.ndarray
+        Error generator matrix
+    
+    elementary_errorgen_labels : list of `ElementaryErrorgenLabel`s
+        A list of `ElementaryErrorgenLabel`s corresponding to the coefficients
+        to extract from the input error generator.
+
+    elementary_errorgen_basis : str or `Basis`, optional (default 'PP')
+        Basis used in construction of elementary error generator dual matrices.
+
+    errorgen_basis : str or `Basis`, optional (default 'pp')
+        Basis of the input matrix specified in `errorgen`.
+
+    return_projected_errorgen : bool, optional (default False)
+        If True return a new dense error generator matrix which has been
+        projected onto the subspace of error generators spanned by
+        `elementary_errorgen_labels`.
+
+    Returns
+    -------
+    projections : dict
+        Dictionary whose keys are the coefficients specified in `elementary_errorgen_labels`
+        (cast to `LocalElementaryErrorgenLabel`), and values are corresponding rates.
+
+    projected_errorgen : np.ndarray
+        Returned if return_projected_errorgen is True, a new dense error generator matrix which has been
+        projected onto the subspace of error generators spanned by
+        `elementary_errorgen_labels`.
+
+    """
     # the same as decompose_errorgen but given a dict/list of elementary errorgens directly instead of a basis and type
     if isinstance(errorgen_basis, _Basis):
-        errorgen_std = _bt.change_basis(errorgen, errorgen_basis, errorgen_basis.create_equivalent('std'))
+        std_basis = errorgen_basis.create_equivalent('std')
+        errorgen_std = _bt.change_basis(errorgen, errorgen_basis, std_basis)
 
-        #expand operation matrix so it acts on entire space of dmDim x dmDim density matrices
-        errorgen_std = _bt.resize_std_mx(errorgen_std, 'expand', errorgen_basis.create_equivalent('std'),
-                                         errorgen_basis.create_simple_equivalent('std'))
+        # Expand operation matrix so it acts on entire space of dmDim x dmDim density matrices
+        expanded_std_basis = errorgen_basis.create_simple_equivalent('std')
+        errorgen_std = _bt.resize_std_mx(errorgen_std, 'expand', std_basis, expanded_std_basis)
     else:
         errorgen_std = _bt.change_basis(errorgen, errorgen_basis, "std")
+
     flat_errorgen_std = errorgen_std.toarray().ravel() if _sps.issparse(errorgen_std) else errorgen_std.ravel()
 
     d2 = errorgen_std.shape[0]
@@ -1718,7 +1820,8 @@ def extract_elementary_errorgen_coefficients(errorgen, elementary_errorgen_label
         bmx0 = elementary_errorgen_basis[bel_lbls[0]]
         bmx1 = elementary_errorgen_basis[bel_lbls[1]] if (len(bel_lbls) > 1) else None
         flat_projector = _lt.create_elementary_errorgen_dual(key.errorgen_type, bmx0, bmx1, sparse=False).ravel()
-        projections[key] = _np.real_if_close(_np.vdot(flat_projector, flat_errorgen_std), tol=1000)
+        projections[key] = _np.real_if_close(_np.vdot(flat_projector, flat_errorgen_std), tol=1000).item()
+
         if return_projected_errorgen:
             space_projector[:, i] = flat_projector
 
@@ -1875,55 +1978,216 @@ def _assert_shape(ar, shape, sparse=False):
 def create_elementary_errorgen_nqudit(typ, basis_element_labels, basis_1q, normalize=False,
                                       sparse=False, tensorprod_basis=False):
     """
-    TODO: docstring  - labels can be, e.g. ('H', 'XX') and basis should be a 1-qubit basis w/single-char labels
-    """
-    return _create_elementary_errorgen_nqudit(typ, basis_element_labels, basis_1q,
-                                              normalize, sparse, tensorprod_basis, create_dual=False)
+    Construct the elementary error generator matrix, either in a dense or sparse representation,
+    corresponding to the specified type and basis element subscripts.
 
+    Parameters
+    ----------
+    typ : str
+        String specifying the type of error generator to be constructed. Can be either 'H', 'S', 'C' or 'A'.
+
+    basis_element_labels : list or tuple of str
+        A list or tuple of strings corresponding to the basis element labels subscripting the desired elementary
+        error generators. If `typ` is 'H' or 'S' this should be length-1, and for 'C' and 'A' length-2. 
+
+    basis_1q : `Basis`
+        A one-qubit `Basis` object used in the construction of the elementary error generator.
+
+    normalize : bool, optional (default False)
+        If True the elementary error generator is normalized to have unit Frobenius norm.
+
+    sparse : bool, optional (default False)
+        If True the elementary error generator is returned as a sparse array.
+    
+    tensorprod_basis : bool, optional (default False)
+        If True, the returned array is given in a basis consisting of the appropriate tensor product of
+        single-qubit standard bases, as opposed to the N=2^n dimensional standard basis (the values are the same
+        but this may result in some reordering of entries). 
+
+    Returns
+    -------
+    np.ndarray or Scipy CSR matrix
+    """
+    eglist =  _create_elementary_errorgen_nqudit([typ], [basis_element_labels], basis_1q,
+                                              normalize, sparse, tensorprod_basis, create_dual=False)
+    return eglist[0]
 
 def create_elementary_errorgen_nqudit_dual(typ, basis_element_labels, basis_1q, normalize=False,
                                            sparse=False, tensorprod_basis=False):
     """
-    TODO: docstring  - labels can be, e.g. ('H', 'XX') and basis should be a 1-qubit basis w/single-char labels
-    """
-    return _create_elementary_errorgen_nqudit(typ, basis_element_labels, basis_1q,
-                                              normalize, sparse, tensorprod_basis, create_dual=True)
+    Construct the dual elementary error generator matrix, either in a dense or sparse representation,
+    corresponding to the specified type and basis element subscripts.
 
+    Parameters
+    ----------
+    typ : str
+        String specifying the type of dual error generator to be constructed. Can be either 'H', 'S', 'C' or 'A'.
+
+    basis_element_labels : list or tuple of str
+        A list or tuple of strings corresponding to the basis element labels subscripting the desired dual elementary
+        error generators. If `typ` is 'H' or 'S' this should be length-1, and for 'C' and 'A' length-2. 
+
+    basis_1q : `Basis`
+        A one-qubit `Basis` object used in the construction of the dual elementary error generator.
+
+    normalize : bool, optional (default False)
+        If True the dual elementary error generator is normalized to have unit Frobenius norm.
+
+    sparse : bool, optional (default False)
+        If True the dual elementary error generator is returned as a sparse array.
+    
+    tensorprod_basis : bool, optional (default False)
+        If True, the returned array is given in a basis consisting of the appropriate tensor product of
+        single-qubit standard bases, as opposed to the N=2^n dimensional standard basis (the values are the same
+        but this may result in some reordering of entries). 
+
+    Returns
+    -------
+    np.ndarray or Scipy CSR matrix
+    """
+    eglist =  _create_elementary_errorgen_nqudit([typ], [basis_element_labels], basis_1q,
+                                              normalize, sparse, tensorprod_basis, create_dual=True)
+    return eglist[0]
+
+def bulk_create_elementary_errorgen_nqudit(typ, basis_element_labels, basis_1q, normalize=False,
+                                           sparse=False, tensorprod_basis=False):
+    """
+    Construct the elementary error generator matrices, either in a dense or sparse representation,
+    corresponding to the specified types and list of basis element subscripts.
+
+    Parameters
+    ----------
+    typ : list of str
+        List of strings specifying the types of error generator to be constructed. Entries can be 'H', 'S', 'C' or 'A'.
+
+    basis_element_labels : list of lists or tuples of str
+        A list containing sublists or subtuple of strings corresponding to the basis element labels subscripting the desired elementary
+        error generators. For each sublist, if the corresponding entry of `typ` is 'H' or 'S' this should be length-1, 
+        and for 'C' and 'A' length-2. 
+
+    basis_1q : `Basis`
+        A one-qubit `Basis` object used in the construction of the elementary error generators.
+
+    normalize : bool, optional (default False)
+        If True the elementary error generators are normalized to have unit Frobenius norm.
+
+    sparse : bool, optional (default False)
+        If True the elementary error generators are returned as a sparse array.
+    
+    tensorprod_basis : bool, optional (default False)
+        If True, the returned arrays are given in a basis consisting of the appropriate tensor product of
+        single-qubit standard bases, as opposed to the N=2^n dimensional standard basis (the values are the same
+        but this may result in some reordering of entries). 
+
+    Returns
+    -------
+    list of np.ndarray or Scipy CSR matrix
+    """
+
+    return _create_elementary_errorgen_nqudit(typ, basis_element_labels, basis_1q, normalize,
+                                              sparse, tensorprod_basis, create_dual=False)
+
+    
+def bulk_create_elementary_errorgen_nqudit_dual(typ, basis_element_labels, basis_1q, normalize=False,
+                                                sparse=False, tensorprod_basis=False):
+    """
+    Construct the dual elementary error generator matrices, either in a dense or sparse representation,
+    corresponding to the specified types and list of basis element subscripts.
+
+    Parameters
+    ----------
+    typ : list of str
+        List of strings specifying the types of dual error generators to be constructed. Entries can be 'H', 'S', 'C' or 'A'.
+
+    basis_element_labels : list of lists or tuples of str
+        A list containing sublists or subtuple of strings corresponding to the basis element labels subscripting the desired dual elementary
+        error generators. For each sublist, if the corresponding entry of `typ` is 'H' or 'S' this should be length-1, 
+        and for 'C' and 'A' length-2. 
+
+    basis_1q : `Basis`
+        A one-qubit `Basis` object used in the construction of the dual elementary error generators.
+
+    normalize : bool, optional (default False)
+        If True the dual elementary error generators are normalized to have unit Frobenius norm.
+
+    sparse : bool, optional (default False)
+        If True the dual elementary error generators are returned as a sparse array.
+    
+    tensorprod_basis : bool, optional (default False)
+        If True, the returned arrays are given in a basis consisting of the appropriate tensor product of
+        single-qubit standard bases, as opposed to the N=2^n dimensional standard basis (the values are the same
+        but this may result in some reordering of entries). 
+
+    Returns
+    -------
+    list of np.ndarray or Scipy CSR matrix
+    """
+
+    return _create_elementary_errorgen_nqudit(typ, basis_element_labels, basis_1q, normalize,
+                                              sparse, tensorprod_basis, create_dual=True)
 
 def _create_elementary_errorgen_nqudit(typ, basis_element_labels, basis_1q, normalize=False,
                                        sparse=False, tensorprod_basis=False, create_dual=False):
-    create_fn = _lt.create_elementary_errorgen_dual if create_dual else _lt.create_elementary_errorgen
-    if typ in 'HS':
-        B = _functools.reduce(_np.kron, [basis_1q[bel] for bel in basis_element_labels[0]])
-        ret = create_fn(typ, B, sparse=sparse)  # in std basis
-    elif typ in 'CA':
-        B = _functools.reduce(_np.kron, [basis_1q[bel] for bel in basis_element_labels[0]])
-        C = _functools.reduce(_np.kron, [basis_1q[bel] for bel in basis_element_labels[1]])
-        ret = create_fn(typ, B, C, sparse=sparse)  # in std basis
+    #See docstrings for `bulk_create_elementary_errorgen_nqudit` and `bulk_create_elementary_errorgen_nqudit_dual`.
+
+    #check if we're using the pauli basis
+    is_pauli = set(basis_1q.name.split('*')) == set(['PP'])
+    if create_dual:
+        if is_pauli:
+            create_fn = _lt.create_elementary_errorgen_dual_pauli
+        else:
+            create_fn = _lt.create_elementary_errorgen_dual
     else:
-        raise ValueError("Invalid elementary error generator type: %s" % str(typ))
+        if is_pauli:
+            create_fn = _lt.create_elementary_errorgen_pauli
+        else:
+            create_fn = _lt.create_elementary_errorgen
 
-    if normalize:
-        normfn = _spsl.norm if sparse else _np.linalg.norm
-        norm = normfn(ret)  # same as norm(term.flat)
-        if not _np.isclose(norm, 0):
-            ret /= norm  # normalize projector
-            assert(_np.isclose(normfn(ret), 1.0))
-
+    normfn = _spsl.norm if sparse else _np.linalg.norm
+    
     if tensorprod_basis:
         # convert from "flat" std basis to tensorprod of std bases (same elements but in
         # a different order).  Important if want to also construct ops by kroneckering the
         # returned maps with, e.g., identities
-        nQubits = int(round(_np.log(ret.shape[0]) / _np.log(4))); assert(ret.shape[0] == 4**nQubits)
-        current_basis = _Basis.cast('std', ret.shape[0])
-        tensorprod_basis = _Basis.cast('std', [(4,) * nQubits])
-        ret = _bt.change_basis(ret, current_basis, tensorprod_basis)
+        orig_bases = dict() #keys will be numbers of qubits, values basis objects.
+        tensorprod_bases = dict()
 
-    return ret
+    eglist = []
+    for egtyp, bels in zip(typ, basis_element_labels):
+        if egtyp in 'HS':
+            B = _functools.reduce(_np.kron, [basis_1q[bel] for bel in bels[0]])
+            ret = create_fn(egtyp, B, sparse=sparse)  # in std basis
+        elif egtyp in 'CA':
+            B = _functools.reduce(_np.kron, [basis_1q[bel] for bel in bels[0]])
+            C = _functools.reduce(_np.kron, [basis_1q[bel] for bel in bels[1]])
+            ret = create_fn(egtyp, B, C, sparse=sparse)  # in std basis
+        else:
+            raise ValueError("Invalid elementary error generator type: %s" % str(typ))
+
+        if normalize:
+            norm = normfn(ret)  # same as norm(term.flat)
+            if not _np.isclose(norm, 0):
+                ret /= norm  # normalize projector
+                assert(_np.isclose(normfn(ret), 1.0))
+
+        if tensorprod_basis:
+            num_qudits = int(round(_np.log(ret.shape[0]) / _np.log(basis_1q.dim))); 
+            assert(ret.shape[0] == basis_1q.dim**num_qudits)
+            current_basis = orig_bases.get(num_qudits, None)
+            tensorprod_basis = tensorprod_bases.get(num_qudits, None)
+            if current_basis is None:
+                current_basis = _Basis.cast('std', basis_1q.dim**num_qudits)
+                orig_bases[num_qudits] = current_basis
+            if tensorprod_basis is None:
+                tensorprod_basis = _Basis.cast('std', [(basis_1q.dim,)*num_qudits])
+                tensorprod_bases[num_qudits] = tensorprod_basis
+            
+            ret = _bt.change_basis(ret, current_basis, tensorprod_basis)
+        eglist.append(ret)
+
+    return eglist
 
 
-#TODO: replace two_qubit_gate, one_qubit_gate, unitary_to_pauligate_* with
-# calls to this one and unitary_to_std_processmx
 def rotation_gate_mx(r, mx_basis="gm"):
     """
     Construct a rotation operation matrix.
@@ -2019,16 +2283,6 @@ def project_model(model, target_model,
     basis = model.basis
     proj_basis = basis  # just use the same basis here (could make an arg later?)
 
-    #OLD REMOVE
-    ##The projection basis needs to be a basis for density matrices
-    ## (i.e. 2x2 mxs in 1Q case) rather than superoperators (4x4 mxs
-    ## in 1Q case) - whcih is what model.basis is.  So, we just extract
-    ## a builtin basis name for the projection basis.
-    #if basis.name in ('pp', 'gm', 'std', 'qt'):
-    #    proj_basis_name = basis.name
-    #else:
-    #    proj_basis_name = 'pp'  # model.basis is weird so just use paulis as projection basis
-
     if basis.name != target_model.basis.name:
         raise ValueError("Basis mismatch between model (%s) and target (%s)!"
                          % (model.basis.name, target_model.basis.name))
@@ -2069,8 +2323,6 @@ def project_model(model, target_model,
             otherGens = otherBlk.create_lindblad_term_superoperators(mx_basis=basis)
 
             #Note: return values *can* be None if an empty/None basis is given
-            #lnd_error_gen = _np.einsum('i,ijk', HProj, HGens) + \
-            #                _np.einsum('ij,ijkl', OProj, OGens)
             lnd_error_gen = _np.tensordot(HBlk.block_data, HGens, (0, 0)) + \
                 _np.tensordot(otherBlk.block_data, otherGens, ((0, 1), (0, 1)))
 
@@ -2101,31 +2353,12 @@ def project_model(model, target_model,
             pos_evals = evals.clip(0, 1e100)  # clip negative eigenvalues to 0
             OProj_cp = _np.dot(U, _np.dot(_np.diag(pos_evals), _np.linalg.inv(U)))
             #OProj_cp is now a pos-def matrix
-            #lnd_error_gen_cp = _np.einsum('i,ijk', HProj, HGens) + \
-            #                   _np.einsum('ij,ijkl', OProj_cp, OGens)
             lnd_error_gen_cp = _np.tensordot(HBlk.block_data, HGens, (0, 0)) + \
                 _np.tensordot(OProj_cp, otherGens, ((0, 1), (0, 1)))
-            #lnd_error_gen_cp = _bt.change_basis(lnd_error_gen_cp, "std", basis)
 
             gsDict['LND'].operations[gl] = operation_from_error_generator(
                 lnd_error_gen_cp, targetOp, basis, gen_type)
             NpDict['LND'] += HBlk.block_data.size + otherBlk.block_data.size
-
-        #Removed attempt to contract H+S to CPTP by removing positive stochastic projections,
-        # but this doesn't always return the gate to being CPTP (maybe b/c of normalization)...
-        #sto_error_gen_cp = _np.einsum('i,ijk', stoProj.clip(None,0), stoGens)
-        #  # (only negative stochastic projections OK)
-        #sto_error_gen_cp = _tools.std_to_pp(sto_error_gen_cp)
-        #gsHSCP.operations[gl] = _tools.operation_from_error_generator(
-        #    ham_error_gen, targetOp, gen_type) #+sto_error_gen_cp
-
-    #DEBUG!!!
-    #print("DEBUG: BEST sum neg evals = ",_tools.sum_of_negative_choi_eigenvalues(model))
-    #print("DEBUG: LNDCP sum neg evals = ",_tools.sum_of_negative_choi_eigenvalues(gsDict['LND']))
-
-    #Check for CPTP where expected
-    #assert(_tools.sum_of_negative_choi_eigenvalues(gsHSCP) < 1e-6)
-    #assert(_tools.sum_of_negative_choi_eigenvalues(gsDict['LND']) < 1e-6)
 
     #Collect and return requrested results:
     ret_gs = [gsDict[p] for p in projectiontypes]
@@ -2422,8 +2655,8 @@ def project_to_target_eigenspace(model, target_model, eps=1e-6):
         #Essentially, we want to replace the eigenvalues of `tgt_gate`
         # (and *only* the eigenvalues) with those of `gate`.  This is what
         # a "best gate gauge transform does" (by definition)
-        gate_mx = gate.to_dense(on_space='minimal')
-        Ugauge = compute_best_case_gauge_transform(gate_mx, tgt_gate.to_dense(on_space='minimal'))
+        gate_mx = gate.to_dense("minimal")
+        Ugauge = compute_best_case_gauge_transform(gate_mx, tgt_gate.to_dense("minimal"))
         Ugauge_inv = _np.linalg.inv(Ugauge)
 
         epgate = _np.dot(Ugauge, _np.dot(gate_mx, Ugauge_inv))

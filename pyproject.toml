@@ -24,7 +24,8 @@ authors = [
 dependencies=[
     'numpy>=1.15.0',
     'scipy',
-    'plotly',
+    'stim',
+    'plotly>=3.8.0',
     'pandas',
     'networkx'
 ]
@@ -51,12 +52,17 @@ license = "Apache-2.0"
 
 [project.optional-dependencies]
 diamond_norm = [
-    'cvxopt',
-    'cvxpy'
+    'cvxpy>=1.4.0'
 ]
 evolutionary_optimization = ['deap']
 extensions = ['cython']
 html_reports = ['jinja2', 'MarkupSafe']
+ibmq = [
+    'qiskit>1',
+    'qiskit-ibm-runtime>=0.17.1',
+    'tqdm>=4.42.0',
+    'dill'
+]
 interpygate = ['csaps']
 linting = [
     'autopep8',
@@ -84,7 +90,7 @@ testing_no_cython_mpi = [
     'seaborn',
     'ply',
     'cirq-core',
-    'pygsti[diamond_norm,interpygate,memory_profiling,msgpack,notebooks,pytorch,reports]'
+    'pygsti[diamond_norm,ibmq,interpygate,memory_profiling,msgpack,notebooks,pytorch,reports]'
 ]
 testing_no_cython = ['pygsti[multiprocessor,testing_no_cython_mpi]']
 testing = ['pygsti[extensions,testing_no_cython]']
@@ -95,3 +101,8 @@ complete = ['pygsti[multiprocessor,no_mpi]']
 Homepage = 'https://www.pygsti.info'
 Repository = 'https://github.com/sandialabs/pyGSTi'
 Download ='https://github.com/sandialabs/pyGSTi/tarball/master'
+
+[tool.setuptools_scm]
+version_file = "pygsti/_version.py"
+version_scheme = "only-version"
+local_scheme = "no-local-version"

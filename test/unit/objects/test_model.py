@@ -15,8 +15,10 @@ from pygsti.modelmembers.operations import LinearOperator, FullArbitraryOp
 from pygsti.models import ExplicitOpModel
 from pygsti.circuits import Circuit
 from pygsti.models.gaugegroup import FullGaugeGroupElement
+from pygsti.modelpacks import smq1Q_XYI
+from pygsti.processors import QubitProcessorSpec
+from pygsti.models import create_crosstalk_free_model, create_cloud_crosstalk_model
 from ..util import BaseCase, needs_cvxpy
-
 SKIP_DIAMONDIST_ON_WIN = True
 
 
@@ -67,12 +69,12 @@ class ModelBase(object):
         self.assertEqual(list(self.model.povms.keys()), ["Mdefault"])
 
         # Test default prep/effects
-        self.assertArraysAlmostEqual(self.model.prep, self.model.preps["rho0"])
+        self.assertArraysAlmostEqual(self.model.prep.to_dense(), self.model.preps["rho0"].to_dense())
         self.assertEqual(set(self.model.effects.keys()), set(['0', '1']))
 
         self.assertTrue(isinstance(self.model['Gi'], LinearOperator))
 
-
+#TODO: Add tests between more combinations of parameterizations
 class FullModelBase(ModelBase):
     """Base class for test cases using a full-parameterized model"""
     build_options = {'gate_type': 'full'}
@@ -87,7 +89,9 @@ class StaticModelBase(ModelBase):
     """Base class for test cases using a static-parameterized model"""
     build_options = {'gate_type': 'static'}
 
-
+class GLNDModelBase(ModelBase):
+    """Base class for test cases using a static-parameterized model"""
+    build_options = {'gate_type': 'GLND'}
 ##
 # Method base classes, controlling which methods will be tested
 #
@@ -96,10 +100,25 @@ class GeneralMethodBase(object):
         nParams = nOperations * nParamsPerGate + nSPVecs * nParamsPerSP + nEVecs * 4
         print("num params = ", self.model.num_params)
         self.assertEqual(self.model.num_params, nParams)
-        # TODO does this actually assert correctness?
+
+    def _assert_model_ops(self, oldModel):
+        #test operations
+        for (_, gate),(_,gate2) in zip(self.model.operations.items(), oldModel.operations.items() ):
+            assert np.allclose(gate.to_dense(), gate2.to_dense()), "Discrepancy in operation process matrices when converting parameterizations"
+
+    def _assert_model_SPAM(self, oldModel):
+        for (_, povm1), (_, povm2) in zip(self.model.povms.items(), oldModel.povms.items()):
+            for element1, element2 in zip(povm1.items(), povm2.items()):
+                assert np.allclose(element1[1].to_dense(), element2[1].to_dense()), "Discrepancy in POVM superbra when converting parameterizations"
+        
+        for (_, prep1), (_, prep2) in zip(self.model.preps.items(), oldModel.preps.items()):
+            assert np.allclose(prep1.to_dense(), prep2.to_dense()), "Discrepancy in state prep superket when converting parameterizations"
 
     def test_set_all_parameterizations_full(self):
+        model_copy = self.model.copy()
         self.model.set_all_parameterizations("full")        
+        self._assert_model_ops(model_copy)
+        self._assert_model_SPAM(model_copy)
         self._assert_model_params(
             nOperations=3,
             nSPVecs=1,
@@ -109,7 +128,10 @@ class GeneralMethodBase(object):
         )
 
     def test_set_all_parameterizations_TP(self):
+        model_copy = self.model.copy()
         self.model.set_all_parameterizations("full TP")
+        self._assert_model_ops(model_copy)
+        self._assert_model_SPAM(model_copy)
         self._assert_model_params(
             nOperations=3,
             nSPVecs=1,
@@ -119,7 +141,10 @@ class GeneralMethodBase(object):
         )
 
     def test_set_all_parameterizations_static(self):
+        model_copy = self.model.copy()
         self.model.set_all_parameterizations("static")
+        self._assert_model_ops(model_copy)
+        self._assert_model_SPAM(model_copy)
         self._assert_model_params(
             nOperations=0,
             nSPVecs=0,
@@ -129,21 +154,25 @@ class GeneralMethodBase(object):
         )
 
     def test_set_all_parameterizations_HS(self):
+        model_copy = self.model.copy()
         self.model.set_all_parameterizations("H+S")
-        self._assert_model_params(
-            nOperations=3,
-            nSPVecs=2,
-            nEVecs=0,
-            nParamsPerGate=6,
-            nParamsPerSP=6
-        )
+        self._assert_model_ops(model_copy)
+        self._assert_model_SPAM(model_copy)
+        assert self.model.num_params == 6 * (3 + 1 + 1)
+
+    def test_set_all_parameterizations_GLND(self):
+        model_copy = self.model.copy()
+        self.model.set_all_parameterizations("GLND")
+        self._assert_model_ops(model_copy)
+        self._assert_model_SPAM(model_copy)
+        assert self.model.num_params == 12 * (3 + 1 + 1)
 
     def test_element_accessors(self):
         # XXX what does this test cover and is it useful?  EGN: covers the __getitem__/__setitem__ functions of model
         v = np.array([[1.0 / np.sqrt(2)], [0], [0], [1.0 / np.sqrt(2)]], 'd')
         self.model['rho1'] = v
         w = self.model['rho1']
-        self.assertArraysAlmostEqual(w, v)
+        self.assertArraysAlmostEqual(w.to_dense(), v.T)
 
         del self.model.preps['rho1']
         # TODO assert correctness
@@ -152,17 +181,6 @@ class GeneralMethodBase(object):
         self.model["Iz"] = Iz  # set an instrument
         Iz2 = self.model["Iz"]  # get an instrument
         # TODO assert correctness if needed (can the underlying model even mutate this?)
-
-    def test_set_operation_matrix(self):
-        # TODO no random
-        Gi_test_matrix = np.random.random((4, 4))
-        Gi_test_matrix[0, :] = [1, 0, 0, 0]  # so TP mode works
-        self.model["Gi"] = Gi_test_matrix  # set operation matrix
-        self.assertArraysAlmostEqual(self.model['Gi'], Gi_test_matrix)
-
-        Gi_test_dense_op = FullArbitraryOp(Gi_test_matrix)
-        self.model["Gi"] = Gi_test_dense_op  # set gate object
-        self.assertArraysAlmostEqual(self.model['Gi'], Gi_test_matrix)
 
     def test_strdiff(self):
         other = models.create_explicit_model_from_expressions(
@@ -175,7 +193,9 @@ class GeneralMethodBase(object):
 
     def test_copy(self):
         gs2 = self.model.copy()
-        # TODO assert correctness
+        #TODO: Uncomment when issue #600 is resolved
+        #self.assertTrue(gs2.is_equivalent(self.model))
+        
 
     def test_deriv_wrt_params(self):
         deriv = self.model.deriv_wrt_params()
@@ -204,6 +224,18 @@ class GeneralMethodBase(object):
         v = cp.to_vector()
         cp.from_vector(v)
         self.assertAlmostEqual(self.model.frobeniusdist(cp), 0)
+
+    def test_set_parameter_values(self):
+        if self.model.num_params > 0:
+            cp = self.model.copy()
+            cp2 = self.model.copy()
+            test_vec = np.arange(self.model.num_params) * 1e-3
+            cp.set_parameter_values(np.arange(self.model.num_params), test_vec)
+            cp2.from_vector(test_vec)
+            self.assertAlmostEqual(np.linalg.norm(cp2.to_vector() - cp.to_vector()), 0)
+            #TODO: Uncomment when issue #600 is resolved, remove line above
+            #self.assertTrue(cp.is_equivalent(cp2))
+
 
     def test_pickle(self):
         # XXX what exactly does this cover and is it needed?  EGN: this tests that the individual pieces (~dicts) within a model can be pickled; it's useful for debuggin b/c often just one of these will break.
@@ -328,14 +360,14 @@ class ThresholdMethodBase(object):
 
     def test_product(self):
         circuit = ('Gx', 'Gy')
-        p1 = np.dot(self.model['Gy'], self.model['Gx'])
+        p1 = self.model['Gy'].to_dense() @ self.model['Gx'].to_dense()
         p2 = self.model.sim.product(circuit, scale=False)
         p3, scale = self.model.sim.product(circuit, scale=True)
         self.assertArraysAlmostEqual(p1, p2)
         self.assertArraysAlmostEqual(p1, scale * p3)
 
         circuit = ('Gx', 'Gy', 'Gy')
-        p1 = np.dot(self.model['Gy'], np.dot(self.model['Gy'], self.model['Gx']))
+        p1 = self.model['Gy'].to_dense() @ self.model['Gy'].to_dense() @ self.model['Gx'].to_dense()
         p2 = self.model.sim.product(circuit, scale=False)
         p3, scale = self.model.sim.product(circuit, scale=True)
         self.assertArraysAlmostEqual(p1, p2)
@@ -346,8 +378,8 @@ class ThresholdMethodBase(object):
         gatestring2 = ('Gx', 'Gy', 'Gy')
         circuits = [gatestring1, gatestring2]
 
-        p1 = np.dot(self.model['Gy'], self.model['Gx'])
-        p2 = np.dot(self.model['Gy'], np.dot(self.model['Gy'], self.model['Gx']))
+        p1 = self.model['Gy'].to_dense() @ self.model['Gx'].to_dense()
+        p2 = self.model['Gy'].to_dense() @ self.model['Gy'].to_dense() @ self.model['Gx'].to_dense()
 
         bulk_prods = self.model.sim.bulk_product(circuits)
         bulk_prods_scaled, scaleVals = self.model.sim.bulk_product(circuits, scale=True)
@@ -389,15 +421,15 @@ class SimMethodBase(object):
         cls.gatestring1 = ('Gx', 'Gy')
         cls.gatestring2 = ('Gx', 'Gy', 'Gy')
         cls._expected_probs = {
-            cls.gatestring1: np.dot(np.transpose(cls._model.povms['Mdefault']['0']),
-                                    np.dot(cls._model['Gy'],
-                                           np.dot(cls._model['Gx'],
-                                                  cls._model.preps['rho0']))).reshape(-1)[0],
-            cls.gatestring2: np.dot(np.transpose(cls._model.povms['Mdefault']['0']),
-                                    np.dot(cls._model['Gy'],
-                                           np.dot(cls._model['Gy'],
-                                                  np.dot(cls._model['Gx'],
-                                                         cls._model.preps['rho0'])))).reshape(-1)[0]
+            cls.gatestring1: (np.transpose(cls._model.povms['Mdefault']['0'].to_dense()) @
+                                    cls._model['Gy'].to_dense() @
+                                           cls._model['Gx'].to_dense() @
+                                                  cls._model.preps['rho0'].to_dense()).reshape(-1)[0],
+            cls.gatestring2: (np.transpose(cls._model.povms['Mdefault']['0'].to_dense()) @
+                                    cls._model['Gy'].to_dense() @
+                                           cls._model['Gy'].to_dense() @
+                                                  cls._model['Gx'].to_dense() @
+                                                         cls._model.preps['rho0'].to_dense()).reshape(-1)[0]
         }
         # TODO expected dprobs & hprobs
 
@@ -595,12 +627,12 @@ class FullModelTester(FullModelBase, StandardMethodBase, BaseCase):
 
         # TODO is this needed?
         for opLabel in cp.operations:
-            self.assertArraysAlmostEqual(cp[opLabel], np.dot(Tinv, np.dot(self.model[opLabel], T)))
+            self.assertArraysAlmostEqual(cp[opLabel], Tinv @ self.model[opLabel] @ T)
         for prepLabel in cp.preps:
-            self.assertArraysAlmostEqual(cp[prepLabel], np.dot(Tinv, self.model[prepLabel]))
+            self.assertArraysAlmostEqual(cp[prepLabel], Tinv @ self.model[prepLabel])
         for povmLabel in cp.povms:
             for effectLabel, eVec in cp.povms[povmLabel].items():
-                self.assertArraysAlmostEqual(eVec, np.dot(np.transpose(T), self.model.povms[povmLabel][effectLabel]))
+                self.assertArraysAlmostEqual(eVec, np.transpose(T) @ self.model.povms[povmLabel][effectLabel])
 
     def test_gpindices(self):
         # Test instrument construction with elements whose gpindices
@@ -637,6 +669,16 @@ class FullModelTester(FullModelBase, StandardMethodBase, BaseCase):
 class TPModelTester(TPModelBase, StandardMethodBase, BaseCase):
     def test_tp_dist(self):
         self.assertAlmostEqual(self.model._tpdist(), 3.52633900335e-16, 5)
+    def test_set_operation_matrix(self):
+        # TODO no random
+        Gi_test_matrix = np.random.random((4, 4))
+        Gi_test_matrix[0, :] = [1, 0, 0, 0]  # so TP mode works
+        self.model["Gi"] = Gi_test_matrix  # set operation matrix
+        self.assertArraysAlmostEqual(self.model['Gi'], Gi_test_matrix)
+
+        Gi_test_dense_op = FullArbitraryOp(Gi_test_matrix)
+        self.model["Gi"] = Gi_test_dense_op  # set gate object
+        self.assertArraysAlmostEqual(self.model['Gi'], Gi_test_matrix)
 
 
 class StaticModelTester(StaticModelBase, StandardMethodBase, BaseCase):
@@ -656,7 +698,8 @@ class StaticModelTester(StaticModelBase, StandardMethodBase, BaseCase):
     def test_iter_hprobs_by_rectangle(self):
         self.skipTest("TODO should probably warn user?")
 
-
+class LindbladModelTester(GLNDModelBase, StandardMethodBase, BaseCase):
+    pass
 class FullMapSimMethodTester(FullModelBase, SimMethodBase, BaseCase):
     def setUp(self):
         super(FullMapSimMethodTester, self).setUp()
@@ -703,3 +746,55 @@ class FullHighThresholdMethodTester(FullModelBase, ThresholdMethodBase, BaseCase
 #    def test_randomize_with_unitary_raises(self):
 #        with self.assertRaises(AssertionError):
 #            self.model.randomize_with_unitary(1, rand_state=np.random.RandomState())  # scale shouldn't matter
+
+class ModelEquivalenceTester(BaseCase):
+
+    def setUp(self):
+        nQubits = 2
+        self.pspec_2Q = QubitProcessorSpec(nQubits, ('Gx', 'Gy', 'Gcnot'), geometry="line",
+                                           qubit_labels=['qb{}'.format(i) for i in range(nQubits)])
+
+    def check_model(self, mdl):
+        mcopy = mdl.copy()
+        self.assertFalse(mdl is mcopy)
+        self.assertTrue(mcopy.is_similar(mdl))
+        self.assertTrue(mcopy.is_equivalent(mdl))
+
+        if mdl.num_params > 0:
+            r = np.random.random(mdl.num_params)
+            if np.linalg.norm(r) < 1e6:  # just in case we randomly get all zeros!
+                r = 0.1 * np.ones(mcopy.num_params)
+            v_prime = mdl.to_vector() + r
+            mcopy.from_vector(v_prime)
+            self.assertTrue(mcopy.is_similar(mdl))
+            self.assertFalse(mcopy.is_equivalent(mdl))
+
+    def test_explicit_model_equal(self):
+        mdl_explicit = smq1Q_XYI.target_model()
+        self.check_model(mdl_explicit)
+
+    def test_local_model_equal(self):
+        mdl_local = create_crosstalk_free_model(self.pspec_2Q,
+                                                ideal_gate_type='H+S', ideal_spam_type='tensor product H+S',
+                                                independent_gates=False,
+                                                ensure_composed_gates=False)
+        self.check_model(mdl_local)
+
+        mdl_local = create_crosstalk_free_model(self.pspec_2Q,
+                                                ideal_gate_type='H+S', ideal_spam_type='computational',
+                                                independent_gates=True,
+                                                ensure_composed_gates=True)
+        self.check_model(mdl_local)
+
+    def test_cloud_model_equal(self):
+        mdl_cloud = create_cloud_crosstalk_model(self.pspec_2Q, depolarization_strengths={'Gx': 0.05},
+                                                 stochastic_error_probs={'Gy': (0.01, 0.02, 0.03)},
+                                                 lindblad_error_coeffs={'Gcnot': {('H','ZZ'): 0.07, ('S','XX'): 0.10}},
+                                                 independent_gates=False, independent_spam=True, verbosity=2)
+        self.check_model(mdl_cloud)
+
+        mdl_cloud = create_cloud_crosstalk_model(self.pspec_2Q, depolarization_strengths={'Gx': 0.05},
+                                                 stochastic_error_probs={'Gy': (0.01, 0.02, 0.03)},
+                                                 lindblad_error_coeffs={'Gcnot': {('H','ZZ'): 0.07, ('S','XX'): 0.10}},
+                                                 independent_gates=True, independent_spam=True, verbosity=2)
+        self.check_model(mdl_cloud)

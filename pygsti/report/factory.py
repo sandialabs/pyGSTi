@@ -248,12 +248,18 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
     switchBd.add("mdl_all_modvi", (0, 1))
     switchBd.add("circuits_all", (0,))  # a list of circuit lists, one per L-val (iteration)
     switchBd.add("mdl_final_grid", (2,))
-
     switchBd.add("idtresults", (0,))
+    
+
+    switchBd.add('current_mdc_store', (0, 1, 3))#mdc stores for this estimate/dataset indexed by L
+    switchBd.add('mdc_store_all', (0,1)) #list of all the mdc stores for this estimate/dataset
+    switchBd.add('final_mdc_store', (0, 1))
+    switchBd.add('mdl_final_modvi', (0, 1))
 
     if confidence_level is not None:
         switchBd.add("cri", (0, 1, 2))
         switchBd.add("cri_gaugeinv", (0, 1))
+        switchBd.add("cri_target_and_final", (0, 1, 2)) 
 
     for d, dslbl in enumerate(dataset_labels):
         results = results_dict[dslbl]
@@ -310,7 +316,12 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
             switchBd.objfn_builder_modvi[d, i] = est_modvi.parameters.get(
                 'final_objfn_builder', _objfns.ObjectiveFunctionBuilder.create_from('logl'))
             switchBd.params[d, i] = est.parameters
+            
+            #add the final mdc store
+            switchBd.final_mdc_store[d,i]= est.parameters.get('final_mdc_store', None)
+            switchBd.mdc_store_all[d,i] = est.parameters.get('per_iter_mdc_store', None)
 
+            #TODO: Fix this next block
             switchBd.clifford_compilation[d, i] = est.parameters.get("clifford compilation", 'auto')
             if switchBd.clifford_compilation[d, i] == 'auto':
                 switchBd.clifford_compilation[d, i] = find_std_clifford_compilation(
@@ -367,6 +378,9 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
 
             switchBd.mdl_target[d, i] = est.models['target']
             switchBd.mdl_gaugeinv[d, i] = est.models[GIRepLbl]
+            
+            switchBd.mdl_final_modvi[d, i]= est.models['final iteration estimate']
+            
             try:
                 switchBd.mdl_gaugeinv_ep[d, i] = _tools.project_to_target_eigenspace(est.models[GIRepLbl],
                                                                                      est.models['target'])
@@ -391,6 +405,11 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
                     k = loc_Ls.index(L)
                     switchBd.mdl_current[d, i, iL] = est.models['iteration %d estimate' % k]
                     switchBd.mdl_current_modvi[d, i, iL] = est_modvi.models['iteration %d estimate' % k]
+                    #add the intermediate iteration mdc stores.
+                    if est.parameters.get('per_iter_mdc_store', None):
+                        switchBd.current_mdc_store[d,i,iL] = est.parameters['per_iter_mdc_store'][k]
+                    else:
+                        switchBd.current_mdc_store[d,i,iL] = None
             switchBd.mdl_all[d, i] = [est.models['iteration %d estimate' % k] for k in range(est.num_iterations)]
             switchBd.mdl_all_modvi[d, i] = [est_modvi.models['iteration %d estimate' % k]
                                             for k in range(est_modvi.num_iterations)]
@@ -401,6 +420,7 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
                 for il, l in enumerate(gauge_opt_labels):
                     if l in est.models:
                         switchBd.cri[d, i, il] = None  # default
+                        switchBd.cri_target_and_final[d, i, il] = [None, None] #default
                         crf = _get_viewable_crf(est, lbl, l, printer - 2)
 
                         if crf is not None:
@@ -411,8 +431,13 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
                             region_type = "normal" if misfit_sigma <= nmthreshold \
                                           else "non-markovian"
                             switchBd.cri[d, i, il] = crf.view(confidence_level, region_type)
+                            #Now that we have identifies the gauge-optimization with the CRI
+                            #add this to the switchboard.
+                            switchBd.cri_target_and_final[d,i,il] = [None, crf.view(confidence_level, region_type)]
+                    else: 
+                        switchBd.cri[d, i, il] = NA
+                        switchBd.cri_target_and_final[d, i, il] = NA
 
-                    else: switchBd.cri[d, i, il] = NA
 
                 # "Gauge Invariant Representation" model
                 # If we can't compute CIs for this, ignore SILENTLY, since any
@@ -1172,13 +1197,36 @@ def construct_standard_report(results, title="auto",
         - idt_idle_oplabel : Label, optional
             The label identifying the idle gate (for use with idle tomography).
 
+        - skip_sections : tuple[str], optional
+             Contains names of standard report sections that should be skipped
+             in this particular report. Strings will be cast to lowercase, 
+             stripped of white space, and then mapped to omitted Section classes
+             as follows
+                {
+                    'summary'         : SummarySection,
+                    'goodness'        : GoodnessSection,
+                    'colorbox'        : GoodnessColorBoxPlotSection,
+                    'invariantgates'  : GaugeInvariantsGatesSection,
+                    'invariantgerms'  : GaugeInvariantsGermsSection,
+                    'variant'         : GaugeVariantSection,
+                    'variantraw'      : GaugeVariantsRawSection,
+                    'variantdecomp'   : GaugeVariantsDecompSection,
+                    'varianterrorgen' : GaugeVariantsErrorGenSection,
+                    'input'           : InputSection,
+                    'meta'            : MetaSection,
+                    'help'            : HelpSection
+                }
+            
+            A KeyError will be raised if skip_sections contains a string
+            that is not in the keys of the above dict (after casting to
+            lower case and stripping white space).
+
     verbosity : int, optional
         How much detail to send to stdout.
 
     Returns
     -------
-    Workspace
-        The workspace object used to create the report
+    Report
     """
 
     printer = _VerbosityPrinter.create_printer(verbosity, comm=comm)
@@ -1240,20 +1288,30 @@ def construct_standard_report(results, title="auto",
         flags.add('CombineRobust')
 
     # build section list
-    sections = [
-        _section.SummarySection(),
-        _section.GoodnessSection(),
-        _section.GoodnessColorBoxPlotSection(),
-        _section.GaugeInvariantsGatesSection(),
-        _section.GaugeInvariantsGermsSection(),
-        _section.GaugeVariantSection(),
-        _section.GaugeVariantsRawSection(),
-        _section.GaugeVariantsDecompSection(),
-        _section.GaugeVariantsErrorGenSection(),
-        _section.InputSection(),
-        _section.MetaSection(),
-        _section.HelpSection()
-    ]
+    possible_sections = {
+        'summary'         : _section.SummarySection(),
+        'goodness'        : _section.GoodnessSection(),
+        'colorbox'        : _section.GoodnessColorBoxPlotSection(),
+        'invariantgates'  : _section.GaugeInvariantsGatesSection(),
+        'invariantgerms'  : _section.GaugeInvariantsGermsSection(),
+        'variant'         : _section.GaugeVariantSection(),
+        'variantraw'      : _section.GaugeVariantsRawSection(),
+        'variantdecomp'   : _section.GaugeVariantsDecompSection(),
+        'varianterrorgen' : _section.GaugeVariantsErrorGenSection(),
+        'input'           : _section.InputSection(),
+        'meta'            : _section.MetaSection(),
+        'help'            : _section.HelpSection()
+    }
+
+    skip_sections = advanced_options.get('skip_sections', tuple())
+    if skip_sections:
+        if isinstance(skip_sections, str):
+            skip_sections = [skip_sections]
+        skip_sections = [s.lower().replace(' ','') for s in skip_sections]
+        for s in skip_sections:
+            possible_sections.pop(s)
+    sections = list(possible_sections.values())
+    # ^ This whole process won't affect ordering of objects in "sections".
 
     if 'ShowScaling' in flags:
         sections.append(_section.GoodnessScalingSection())

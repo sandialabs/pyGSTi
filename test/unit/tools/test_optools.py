@@ -14,8 +14,6 @@ from pygsti.modelmembers.operations.lindbladcoefficients import LindbladCoeffici
 from pygsti.modelpacks.legacy import std2Q_XXYYII
 from ..util import BaseCase, needs_cvxpy
 
-SKIP_DIAMONDIST_ON_WIN = True
-
 
 def fake_minimize(fn):
     """Mock scipy.optimize.minimize in the underlying function call to reduce optimization overhead"""
@@ -50,7 +48,7 @@ class OpToolsTester(BaseCase):
         # U_2Q is 4x4 unitary matrix operating on isolated two-qubit space (CX(pi) rotation)
 
         op_2Q = ot.unitary_to_pauligate(U_2Q)
-        op_2Q_inv = ot.process_mx_to_unitary(bt.change_basis(op_2Q, 'pp', 'std'))
+        op_2Q_inv = ot.std_process_mx_to_unitary(bt.change_basis(op_2Q, 'pp', 'std'))
         self.assertArraysAlmostEqual(U_2Q, op_2Q_inv)
 
     def test_decompose_gate_matrix(self):
@@ -387,7 +385,6 @@ class GateOpsTester(BaseCase):
 
     @needs_cvxpy
     def test_diamond_distance(self):
-        if SKIP_DIAMONDIST_ON_WIN and sys.platform.startswith('win'): return
         val = ot.diamonddist(self.A_TP, self.A_TP, mx_basis="pp")
         self.assertAlmostEqual(val, 0.0)
         val = ot.diamonddist(self.A_TP, self.B_unitary, mx_basis="pp")

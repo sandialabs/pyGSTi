@@ -117,6 +117,7 @@ class TestReportables(BaseTestCase):
             rptbl.Eigenvalue_diamondnorm,
             rptbl.Eigenvalue_nonunitary_diamondnorm,
             rptbl.Avg_gate_infidelity,
+            rptbl.Generator_infidelity,
             rptbl.Model_model_angles_btwn_axes,
             rptbl.Rel_eigvals,
             rptbl.Rel_logTiG_eigvals,

@@ -27,11 +27,8 @@ from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.circuits.circuitstructure import GermFiducialPairPlaquette as _GermFiducialPairPlaquette, \
     PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
 
-from pygsti.tools import basistools as _bt
-from pygsti.tools import internalgates as _itgs
 from pygsti.tools import listtools as _lt
 from pygsti.tools import mpitools as _mpit
-from pygsti.tools import optools as _ot
 from pygsti.tools import slicetools as _slct
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
 

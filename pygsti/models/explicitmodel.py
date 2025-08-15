@@ -23,6 +23,7 @@ from pygsti.models import model as _mdl, gaugegroup as _gg
 from pygsti.models.memberdict import OrderedMemberDict as _OrderedMemberDict
 from pygsti.models.layerrules import LayerRules as _LayerRules
 from pygsti.models.modelparaminterposer import ModelParamsInterposer as _ModelParamsInterposer
+from pygsti.models.fogistore import FirstOrderGaugeInvariantStore as _FirstOrderGaugeInvariantStore
 from pygsti.models.gaugegroup import GaugeGroup as _GaugeGroup
 from pygsti.forwardsims.forwardsim import ForwardSimulator as _FSim
 from pygsti.forwardsims import matrixforwardsim as _matrixfwdsim
@@ -43,6 +44,7 @@ from pygsti.tools import optools as _ot
 from pygsti.tools import fogitools as _fogit
 from pygsti.tools import slicetools as _slct
 from pygsti.tools import listtools as _lt
+from pygsti import SpaceT
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
 
 
@@ -330,7 +332,7 @@ class ExplicitOpModel(_mdl.OpModel):
             raise KeyError("Key %s has an invalid prefix" % label)
 
     def convert_members_inplace(self, to_type, categories_to_convert='all', labels_to_convert='all',
-                                ideal_model=None, flatten_structure=False, set_default_gauge_group=False, cptp_truncation_tol= 1e-6):
+                                ideal_model=None, flatten_structure=False, set_default_gauge_group=False, cptp_truncation_tol= 1e-7, spam_cp_penalty = 1e-7):
         """
         TODO: docstring -- like set_all_parameterizations but doesn't set default gauge group by default
         """
@@ -349,12 +351,12 @@ class ExplicitOpModel(_mdl.OpModel):
             for lbl, prep in self.preps.items():
                 if labels_to_convert == 'all' or lbl in labels_to_convert:
                     ideal = ideal_model.preps.get(lbl, None) if (ideal_model is not None) else None
-                    self.preps[lbl] = _state.convert(prep, to_type, self.basis, ideal, flatten_structure)
+                    self.preps[lbl] = _state.convert(prep, to_type, self.basis, ideal, flatten_structure, cp_penalty=spam_cp_penalty)
         if any([c in categories_to_convert for c in ('all', 'povms')]):
             for lbl, povm in self.povms.items():
                 if labels_to_convert == 'all' or lbl in labels_to_convert:
                     ideal = ideal_model.povms.get(lbl, None) if (ideal_model is not None) else None
-                    self.povms[lbl] = _povm.convert(povm, to_type, self.basis, ideal, flatten_structure)
+                    self.povms[lbl] = _povm.convert (povm, to_type, self.basis, ideal, flatten_structure, cp_penalty=spam_cp_penalty)
 
         self._clean_paramvec()  # param indices were probabaly updated
         if set_default_gauge_group:
@@ -372,7 +374,7 @@ class ExplicitOpModel(_mdl.OpModel):
             self.default_gauge_group = _gg.TrivialGaugeGroup(self.state_space)
 
     def set_all_parameterizations(self, gate_type, prep_type="auto", povm_type="auto",
-                                  instrument_type="auto", ideal_model=None, cptp_truncation_tol = 1e-6):
+                                  instrument_type="auto", ideal_model=None, cptp_truncation_tol = 1e-6, spam_cp_penalty = 1e-7):
         """
         Convert all gates, states, and POVMs to a specific parameterization type.
 
@@ -414,6 +416,13 @@ class ExplicitOpModel(_mdl.OpModel):
             indicates the maximum amount of truncation induced deviation from the original operations
             (measured by frobenius distance) we're willing to accept without marking the conversion
             as failed.
+        spam_cp_penalty : float, optional (default .5)
+            Converting SPAM operations to an error generator representation may 
+            introduce trivial gauge degrees of freedom. These gauge degrees of freedom 
+            are called trivial because they quite literally do not change the dense representation 
+            (i.e. Hilbert-Schmidt vectors) at all. Despite being trivial, error generators along 
+            this trivial gauge orbit may be non-CP, so this cptp penalty is used to favor channels 
+            within this gauge orbit which are CPTP.
 
         Returns
         -------
@@ -434,8 +443,8 @@ class ExplicitOpModel(_mdl.OpModel):
         try:
             self.convert_members_inplace(typ, 'operations', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol)
             self.convert_members_inplace(ityp, 'instruments', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol)
-            self.convert_members_inplace(rtyp, 'preps', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol)
-            self.convert_members_inplace(povmtyp, 'povms', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol)
+            self.convert_members_inplace(rtyp, 'preps', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol, spam_cp_penalty = spam_cp_penalty)
+            self.convert_members_inplace(povmtyp, 'povms', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol, spam_cp_penalty = spam_cp_penalty)
         except ValueError as e:
             raise ValueError("Failed to convert members. If converting to CPTP-based models, " +
                 "try providing an ideal_model to avoid possible branch cuts.") from e
@@ -1522,7 +1531,7 @@ class ExplicitOpModel(_mdl.OpModel):
                     #    observed_sslbls.update(sslbls)
 
                 if gn not in gate_unitaries or gate_unitaries[gn] is None:
-                    U = _ot.superop_to_unitary(op.to_dense('HilbertSchmidt'), self.basis) \
+                    U = _ot.superop_to_unitary(op.to_dense("HilbertSchmidt"), self.basis) \
                         if (op is not None) else None  # U == None indicates "unknown, up until this point"
 
                     Ulocal = extract_unitary(U, all_sslbls, sslbls)
@@ -1596,7 +1605,9 @@ class ExplicitOpModel(_mdl.OpModel):
                       'default_gauge_group': (self.default_gauge_group.to_nice_serialization()
                                               if (self.default_gauge_group is not None) else None),
                       'parameter_interposer': (self._param_interposer.to_nice_serialization()
-                                               if (self._param_interposer is not None) else None)
+                                               if (self._param_interposer is not None) else None),
+                      'fogi_store': (self.fogi_store.to_nice_serialization()
+                                               if (self.fogi_store is not None) else None)
                       })
 
         mmgraph = self.create_modelmember_graph()
@@ -1612,6 +1623,8 @@ class ExplicitOpModel(_mdl.OpModel):
             if (state['default_gauge_group'] is not None) else None
         param_interposer = _ModelParamsInterposer.from_nice_serialization(state['parameter_interposer']) \
             if (state['parameter_interposer'] is not None) else None
+        fogi_store = _FirstOrderGaugeInvariantStore.from_nice_serialization(state['fogi_store']) \
+            if (state['fogi_store'] is not None) else None
         param_labels = state.get('parameter_labels', None)
         param_bounds = state.get('parameter_bounds', None)
 
@@ -1630,6 +1643,7 @@ class ExplicitOpModel(_mdl.OpModel):
         mdl._clean_paramvec()
         mdl.default_gauge_group = default_gauge_group
         mdl.param_interposer = param_interposer
+        mdl.fogi_store = fogi_store
 
         Np = len(mdl._paramlbls)  # _clean_paramvec sets up ._paramlbls so its length == # of params
         if param_labels and len(param_labels) == Np:
