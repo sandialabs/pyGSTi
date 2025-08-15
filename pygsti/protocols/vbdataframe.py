@@ -343,7 +343,7 @@ class VBDataFrame(object):
                 if verbose:
                     spam_ref_key = (key[0], key[3])
                     print(f'key for SPAM reference circuits: {spam_ref_key}')
-                    print(f'number of SPAM reference circuits: {len(eff_pols['ref'][spam_ref_key])}')
+                    print(f"number of SPAM reference circuits: {len(eff_pols['ref'][spam_ref_key])}")
 
                 rc_pfid = rc_predicted_process_fidelity(eff_pols['br'][key],
                                                      eff_pols['rr'][key],

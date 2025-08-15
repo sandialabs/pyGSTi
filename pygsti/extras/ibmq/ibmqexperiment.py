@@ -24,8 +24,10 @@ from collections import defaultdict as _defaultdict
 try:
     import qiskit as _qiskit
     from qiskit.providers import JobStatus as _JobStatus
+    from qiskit.providers.fake_provider import GenericBackendV2 as _GenericBackendV2
 except:
     _qiskit = None
+    _GenericBackendV2 = None
 
 # Try to load IBM Runtime
 try: 
@@ -388,13 +390,15 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         backend_version = ibmq_backend.version
         assert backend_version >= 2, "IBMQExperiment no longer supports v1 backends due to their deprecation by IBM"
 
+
         if isinstance(ibmq_backend, _IBMBackend):
             is_simulator = ibmq_backend.simulator 
-        elif _AerSimulator is not None:
-            if isinstance(ibmq_backend, _AerSimulator):
-                is_simulator = True
+        elif _AerSimulator is not None and isinstance(ibmq_backend, _AerSimulator): # without lazy evaluation, this expression would throw an error if _AerSimulator is None
+            is_simulator = True
+        elif _GenericBackendV2 is not None and isinstance(ibmq_backend, _GenericBackendV2): # without lazy evaluation, this expression would throw an error if _AerSimulator is None
+            is_simulator = True
         else:
-            raise ValueError(f'ibmq_backend has an unsupported type, {type(ibmq_backend)}. Support is currently only available for arguments which are instances of `IBMBackend` or `AerSimulator`.')
+            raise ValueError(f'ibmq_backend has an unsupported type, {type(ibmq_backend)}. Support is currently only available for arguments which are instances of `IBMBackend`, `AerSimulator`, or `GenericBackendV2`.')
         
         total_waits = 0
         self.qjobs = [] if self.qjobs is None else self.qjobs
