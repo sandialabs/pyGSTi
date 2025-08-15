@@ -204,7 +204,8 @@ class InterpygateGSTTester(BaseCase):
         datagen_params = datagen_model.to_vector()
         datagen_params[-2:] = [1.1,1.1]
 
-        self.assertRaises(ValueError, datagen_model._check_paramvec())
+        with self.assertRaises(ValueError):
+            datagen_model._check_paramvec()
         # Modify a copy of the parameter array instead!
 
 
