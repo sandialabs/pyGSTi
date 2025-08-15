@@ -389,9 +389,9 @@ def compare_parameters_simple(parent_model_vec, red_model_vec, projector_matrix)
     for row in table_data:
         print("{: <25} {: <25}".format(*row), '\n')
 
-def approx_logl(x, x0, embedder, H, expansion_point_logl):
-    embedded_x = embedder @ x
-    return .5*(embedded_x - x0).T  @ H  @ (embedded_x - x0) + expansion_point_logl
+#def approx_logl(x, x0, embedder, H, expansion_point_logl):
+#    embedded_x = embedder @ x
+#    return .5*(embedded_x - x0).T  @ H  @ (embedded_x - x0) + expansion_point_logl
 
 def create_approx_logl_fn(H, x0, initial_logl):
     constant_term = x0.T @ H @ x0 + initial_logl

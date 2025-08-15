@@ -154,7 +154,10 @@ def nullspace(m, tol=1e-7):
     -------
     An matrix of shape (M,K) whose columns contain nullspace basis vectors.
     """
-    _, s, vh = _np.linalg.svd(m)
+    try:
+        _, s, vh = _np.linalg.svd(m)
+    except:
+         _, s, vh = _spl.svd(m, lapack_driver='gesvd')
     rank = (s > tol).sum()
     return vh[rank:].T.conjugate()
 

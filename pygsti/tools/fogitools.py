@@ -349,7 +349,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
     """
     assert(dependent_fogi_action in ('drop', 'mark'))
     orthogonalize_relationals = True
-
+    set_size_dims = {}
     #Get lists of the present (existing within the model) labels for each operation
     if op_label_abbrevs is None: op_label_abbrevs = {}
 
@@ -461,6 +461,8 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
         new_fogi_dirs = _sps.lil_matrix((num_elem_errgens, local_fogi_dirs.shape[1]), dtype=local_fogi_dirs.dtype)
         new_fogi_dirs[op_errgen_indices[op_label], :] = local_fogi_dirs  # "juice" this op
         fogi_dirs = _sps.hstack((fogi_dirs, new_fogi_dirs.tocsc()))
+        ops_key = (op_label,)
+        set_size_dims[ops_key] = new_fogi_dirs.shape[1]
 
         #assert(_mt.columns_are_orthogonal(fogi_dirs))  # sparse version?
 
@@ -484,10 +486,10 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
         #print("Commutant:"); _mt.print_mx(commutant)
         #print("Names: ", errgen_names)
         #print("Complement:"); _mt.print_mx(complement)
-
+    
     smaller_sets = [(op_label,) for op_label in primitive_op_labels]
     max_size = len(primitive_op_labels)
-    set_size_dims = _np.zeros(max_size)
+    
     for set_size in range(1, max_size):
         larger_sets = []
         num_indep_vecs_from_smaller_sets = fogi_dirs.shape[1]
@@ -511,7 +513,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                     #Don't orthogonalize these - instead orthogonalize fogi_dirs and find what these should be (below)
                     #intersection_space, _ = _np.linalg.qr(intersection_space)  # gram-schmidt orthogonalize cols
                     #assert(_mt.columns_are_orthogonal(intersection_space))  # Not always true
-
+                    new_indep_cols = []
                     if intersection_space.shape[1] > 0:
                         #FOGI DEBUG print(" ==> intersection space dim = ", intersection_space.shape[1])
                         # Then each basis vector of the intersection space defines a gauge-invariant ("fogi")
@@ -709,7 +711,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
 
                         # figure out which directions are independent
                         indep_cols = _mt.independent_columns(new_fogi_dirs.toarray(), fogi_dirs.toarray())
-                        set_size_dims[set_size] += len(indep_cols)
+                        
                         #FOGI DEBUG print(" ==> %d independent columns" % len(indep_cols))
 
                         if dependent_fogi_action == "drop":
@@ -723,7 +725,10 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                             dep_cols_to_add = [i for i in smallset_indep_cols if i not in indep_cols_set]
                         else:
                             raise ValueError("Invalid `dependent_fogi_action` value: %s" % str(dependent_fogi_action))
-
+                        
+        
+                        new_indep_cols = _mt.independent_columns(new_fogi_dirs.toarray(), fogi_dirs[:, 0:num_indep_vecs_from_smaller_sets].toarray())
+                        
                         # add new_fogi_dirs[:, indep_cols] to fogi_dirs w/meta data
                         fogi_dirs = add_relational_fogi_dirs(new_fogi_dirs[:, indep_cols],
                                                              _np.take(int_vecs, indep_cols, axis=1),
@@ -745,6 +750,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                         #print("Ham Intersection names: ", intersection_names)
 
                     ccomms[new_set] = union_space
+                    set_size_dims[new_set] = len(new_indep_cols)
                     #print("Complement:\n"); _mt.print_mx(union_space)
 
                 larger_sets.append(new_set)
@@ -762,7 +768,21 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
         fogi_dirs = fogi_dirs.real
     if _spsl.norm(dep_fogi_dirs.imag) < 1e-6:
         dep_fogi_dirs = dep_fogi_dirs.real
-    print('Dimensions of FOGI subspaces: ', set_size_dims)
+    keys = list(set_size_dims.keys())
+    gate_abbrevs = {'Gxpi2:0':'X', 'Gypi2:0': 'Y','Gzpi2:0':'Z', 'rho0':'rho', 'Mdefault': 'M'}
+    key_strings = {}
+    for key in keys:
+        key_strings[key] = [gate_abbrevs[label.__str__()] for label in key]
+    print(list(key_strings.values()))
+    keys.sort(key = lambda x: -len(x))
+    curr_length = 1
+    for key in keys:
+        if len(key) != curr_length:
+            print('\n')
+            curr_length = len(key)
+        print(key_strings[key], set_size_dims[key], end='     ')
+    
+
     return (fogi_dirs, fogi_meta, dep_fogi_dirs, dep_fogi_meta)
 
 

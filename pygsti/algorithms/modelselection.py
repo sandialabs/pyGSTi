@@ -8,7 +8,7 @@ from pygsti.tools.modelselectiontools import create_red_model as _create_red_mod
 from pygsti.tools.modelselectiontools import parallel_GST as _parallel_GST, AMSCheckpoint as _AMSCheckpoint, remove_param, create_approx_logl_fn
 import os as _os
 
-def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, maxiter=100, tol=1.0, prob_clip=1e-3, recompute_H_thresh_percentage = .05, disable_checkpoints = False, checkpoint = None, comm = None, mem_limit = None):
+def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, maxiter=100, tol=1.0, prob_clip=1e-3, recompute_H_thresh_percentage = .1, disable_checkpoints = False, checkpoint = None, comm = None, mem_limit = None):
     """
     An automated model selection greedy algorithm. Specifically made for FOGI models, but it should be compatible
     with any model that has a linear interposer. It is considered "fast" because on most model fits, GST analysis is
@@ -88,7 +88,6 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
     if comm is not None:
         rank = comm.Get_rank()
         size = comm.Get_size()
-        print(rank, size)
     else:
         rank = 0
         size = 1
@@ -110,7 +109,6 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
                             op_label_aliases, comm, mem_limit, ('percircuit',), (), mdc_store)
         return obj
     
-    print('doing AMS ', rank)
     recompute_Hessian = False
     graph_levels = []
     target_model.param_interposer.full_span_inv_transform_matrix = target_model.param_interposer.inv_transform_matrix
@@ -134,6 +132,7 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
     else:
         if rank == 0:
                 print('starting GST')
+        target_model.sim = pygsti.forwardsims.MapForwardSimulator(param_blk_sizes=(100,100))
         result = _parallel_GST(target_model, data, prob_clip, tol, maxiter, verbosity, comm=comm, mem_limit=mem_limit)
         
         target_model_fit = result.estimates['GateSetTomography'].models['final iteration estimate']
@@ -158,6 +157,7 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
     exceeded_threshold = False
     red_row_H = H
     red_rowandcol_H = H
+    counter = 0
     while not exceeded_threshold:
         if rank == 0:
             print(f'>> Working on level {len(graph_levels)} <<',flush = True)
@@ -186,7 +186,7 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
                 #vec = _parallel_GST(remove_param(red_model, i), data, prob_clip, tol, maxiter, verbosity=0, comm=None, mem_limit=None).estimates['GateSetTomography'].models['final iteration estimate'].to_vector()
                 logl_fn.model.from_vector(reduced_model_projector_matrix @ vec)
                 quantity = (prev_logl + logl_fn.fn())*2
-                if i  % 1 == 0:
+                if i  % 50 == 0:
                     print('Model ', i, ' has ev. ratio of ', quantity, flush=True)
                 if lowest_quantity == None or lowest_quantity > quantity:
                     lowest_quantity = quantity
@@ -196,7 +196,7 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
             left_over_start_index = size * bucket_size
 
             if (left_over_start_index + rank) < num_total_models:
-                assert False
+
                 i = left_over_start_index + rank
                 reduced_model_projector_matrix = np.delete(parent_model_projector, i, axis=1)     
                 vec = _reduced_model_approx_GST_fast(red_rowandcol_H, red_row_H, x0, i)
@@ -226,10 +226,12 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
         finalist_real_logl = pygsti.tools.logl(red_model, data.dataset, poisson_picture=False, min_prob_clip=prob_clip)
         finalist_approx_logl = approx_logl_fn(red_row_H, red_rowandcol_H, sorted_finalists[0][2])
         error = finalist_real_logl - finalist_approx_logl
-        print(f'{error=}', 'compared to ', recompute_H_thresh_percentage*er_thresh)
+        if rank == 0:
+            print(f'{error=}', 'compared to ', recompute_H_thresh_percentage*er_thresh)
 
         if  np.abs(error) > recompute_H_thresh_percentage*er_thresh:
             recompute_Hessian = True
+            counter += 1
             
 
         if recompute_Hessian:
@@ -286,7 +288,6 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
             if recompute_Hessian:
                 red_row_H = H
                 red_rowandcol_H = H
-                #parent_model_projector = np.eye(H.shape[0])
                 recompute_Hessian = False
             else:
                 red_row_H = np.delete(red_row_H, sorted_finalists[0][2], axis=0)
@@ -305,6 +306,7 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
             print("next level")
             end = time.time()
             print('time this level ', end-start)
-    if not disable_checkpoints:
+    if not disable_checkpoints and rank == 0:
         _os.remove(new_checkpoint.path)
+    print(f'{counter=}')
     return graph_levels
