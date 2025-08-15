@@ -22,7 +22,9 @@ from pygsti.tools import internalgates as _itgs
 from pygsti.tools import slicetools as _slct
 from pygsti.tools.legacytools import deprecate as _deprecate_fn
 
-from typing import Union, Optional
+from typing import Union, Optional, TYPE_CHECKING
+if TYPE_CHECKING:
+    import stim
 
 #Externally, we'd like to do thinks like:
 # c = Circuit( LabelList )
