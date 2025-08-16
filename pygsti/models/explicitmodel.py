@@ -332,9 +332,49 @@ class ExplicitOpModel(_mdl.OpModel):
             raise KeyError("Key %s has an invalid prefix" % label)
 
     def convert_members_inplace(self, to_type, categories_to_convert='all', labels_to_convert='all',
-                                ideal_model=None, flatten_structure=False, set_default_gauge_group=False, cptp_truncation_tol= 1e-7, spam_cp_penalty = 1e-7):
+                                ideal_model=None, flatten_structure=False, set_default_gauge_group=False, 
+                                cptp_truncation_tol= 1e-7, spam_cp_penalty = 1e-7):
         """
-        TODO: docstring -- like set_all_parameterizations but doesn't set default gauge group by default
+        Method for converting the parameterizations of modelmembers within this model to new ones in-place.
+
+        Parameters
+        ----------
+        to_type :  str
+            String specifier for the parameterization type to convert to.
+        
+        categories_to_convert : str or list of str, optional (default 'all')
+            Categories of modelmembers to perform conversion on. Allowed options are:
+            'all', 'ops' or 'operations' (these two are aliases for the same option),
+            'instruments', 'povms' or 'preps'.
+        
+        labels_to_convert : str or list of `Label`, optional (default 'all')
+            A string specifier, or list of `Label` objects, specifying the set
+            of objects (state preparations, operations, instruments, etc.) within the model 
+            to apply the conversion to.
+
+         ideal_model : `Model`, optional (default None)
+            A model containing modelmembers instantiated such that they all correspond to the ideal
+            actions of the given gate set elements. It is recommended that this be specified when
+            converting to an error-generator-based parameterization.
+        
+        flatten_structure : bool, optional (default False)
+            When `False`, the sub-members of composed and embedded operations
+            are separately converted, leaving the original modelmember structure
+            unchanged.  When `True`, composed and embedded operations are "flattened"
+            into a single modelmember parameterized according to the requested `to_type`.
+
+        set_default_gauge_group : bool, optional (default False)
+            A flag specifying whether the default gauge group for the model should be updated
+            to the default value associated with the specified value of `to_type`.
+            See `set_default_gauge_group_for_member_type` for more on these default gauge groups.
+
+        cptp_truncation_tol : float, optional (default 1e-7)
+            Tolerance term used to enforce the CPTP constraint on gates when moving between different
+            parameterizations.
+
+        spam_cp_penalty : float, optional (default 1e-7)
+            Penalty term used to enforce the CP constraint on SPAM when moving between different
+            parameterizations.        
         """
         if isinstance(categories_to_convert, str): categories_to_convert = (categories_to_convert,)
         if any([c in categories_to_convert for c in ('all', 'ops', 'operations')]):
@@ -356,21 +396,34 @@ class ExplicitOpModel(_mdl.OpModel):
             for lbl, povm in self.povms.items():
                 if labels_to_convert == 'all' or lbl in labels_to_convert:
                     ideal = ideal_model.povms.get(lbl, None) if (ideal_model is not None) else None
-                    self.povms[lbl] = _povm.convert (povm, to_type, self.basis, ideal, flatten_structure, cp_penalty=spam_cp_penalty)
+                    self.povms[lbl] = _povm.convert(povm, to_type, self.basis, ideal, flatten_structure, cp_penalty=spam_cp_penalty)
 
         self._clean_paramvec()  # param indices were probabaly updated
         if set_default_gauge_group:
             self.set_default_gauge_group_for_member_type(to_type)
 
     def set_default_gauge_group_for_member_type(self, member_type):
-        """ TODO: docstring """
+        """ 
+        Updates the default gauge group to the default value for the specified modelmember type.
+
+        Parameters
+        ----------
+        member_type : str
+            A string specifier for the modelmember type used to select the gauge group type.
+            Mapping is the following:
+
+            - 'full' -> `FullGaugeGroup`
+            - 'full TP', 'TP', `TPGaugeGroup`
+            - 'CPTP' or Anything that is a valid lindblad type -> `UnitaryGaugeGroup`
+            - Otherwise -> `TrivialGaugeGroup`
+        """
         if member_type == 'full':
             self.default_gauge_group = _gg.FullGaugeGroup(self.state_space, self.basis, self.evotype)
-        elif member_type in ['full TP', 'TP']:  # TODO: get from verbose_conversion dictionary of modelmembers?
+        elif member_type in ('full TP', 'TP'):  # TODO: get from verbose_conversion dictionary of modelmembers?
             self.default_gauge_group = _gg.TPGaugeGroup(self.state_space, self.basis, self.evotype)
-        elif member_type == 'CPTP':
+        elif _ot.is_valid_lindblad_paramtype(member_type) or member_type == 'CPTP':
             self.default_gauge_group = _gg.UnitaryGaugeGroup(self.state_space, self.basis, self.evotype)
-        else:  # typ in ('static','H+S','S', 'H+S terms', ...)
+        else:  
             self.default_gauge_group = _gg.TrivialGaugeGroup(self.state_space)
 
     def set_all_parameterizations(self, gate_type, prep_type="auto", povm_type="auto",
@@ -440,14 +493,14 @@ class ExplicitOpModel(_mdl.OpModel):
         povmtyp = _povm.povm_type_from_op_type(gate_type) if povm_type == "auto" else povm_type
         ityp = _instrument.instrument_type_from_op_type(gate_type) if instrument_type == "auto" else instrument_type
 
-        try:
-            self.convert_members_inplace(typ, 'operations', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol)
-            self.convert_members_inplace(ityp, 'instruments', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol)
-            self.convert_members_inplace(rtyp, 'preps', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol, spam_cp_penalty = spam_cp_penalty)
-            self.convert_members_inplace(povmtyp, 'povms', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol, spam_cp_penalty = spam_cp_penalty)
-        except ValueError as e:
-            raise ValueError("Failed to convert members. If converting to CPTP-based models, " +
-                "try providing an ideal_model to avoid possible branch cuts.") from e
+        #try:
+        self.convert_members_inplace(typ, 'operations', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol)
+        self.convert_members_inplace(ityp, 'instruments', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol)
+        self.convert_members_inplace(rtyp, 'preps', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol, spam_cp_penalty = spam_cp_penalty)
+        self.convert_members_inplace(povmtyp, 'povms', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol, spam_cp_penalty = spam_cp_penalty)
+        #except ValueError as e:
+        #    raise ValueError("Failed to convert members. If converting to CPTP-based models, " +
+        #        "try providing an ideal_model to avoid possible branch cuts.") from e
         
         self.set_default_gauge_group_for_member_type(typ)
 
