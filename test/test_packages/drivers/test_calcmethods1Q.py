@@ -202,7 +202,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         target_model.from_vector(1e-10 * np.ones(target_model.num_params))  # to seed term calc (starting with perfect zeros causes trouble)
         results = pygsti.run_long_sequence_gst(self.ds, target_model, std.prep_fiducials(), std.meas_fiducials(),
                                                std.germs(lite=False), self.maxLengths, verbosity=0,
-                                               disable_checkpointing=True)
+                                               disable_checkpointing=True, gauge_opt_suite_name='none')
 
         #RUN BELOW LINES TO SAVE GATESET (SAVE)
         if regenerate_references():
@@ -222,9 +222,9 @@ class CalcMethods1QTestCase(BaseTestCase):
 
         #A direct vector comparison works if python (&numpy?) versions are identical, but
         # gauge freedoms make this incorrectly fail in other cases - so just check sigmas
-        print("VEC DIFF = ",(results.estimates[results.name].models['go0'].to_vector()
+        print("VEC DIFF = ",(results.estimates[results.name].models['trivial_gauge_opt'].to_vector()
                                                - mdl_compare.to_vector()))
-        self.assertAlmostEqual( np.linalg.norm(results.estimates[results.name].models['go0'].to_vector()
+        self.assertAlmostEqual( np.linalg.norm(results.estimates[results.name].models['trivial_gauge_opt'].to_vector()
                                                - mdl_compare.to_vector()), 0, places=1)
         # Note: used to be places=3 above when comparing with cython-built files, but to match cython with
         # non-cython builds we loosen to places=1
@@ -240,7 +240,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         target_model.from_vector(1e-10 * np.ones(target_model.num_params))  # to seed term calc (starting with perfect zeros causes trouble)
         results = pygsti.run_long_sequence_gst(self.ds, target_model, std.prep_fiducials(), std.meas_fiducials(),
                                                std.germs(lite=False), self.maxLengths, verbosity=3,
-                                               disable_checkpointing=True)
+                                               disable_checkpointing=True, gauge_opt_suite_name='none')
 
         #RUN BELOW LINES TO SAVE GATESET (SAVE)
         if regenerate_references():
@@ -275,7 +275,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                                self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
                                                verbosity=4, advanced_options={'tolerance': 1e-3},
-                                               disable_checkpointing=True)
+                                               disable_checkpointing=True, gauge_opt_suite_name='none')
 
         #RUN BELOW LINES TO SAVE GATESET (SAVE)
         if regenerate_references():
