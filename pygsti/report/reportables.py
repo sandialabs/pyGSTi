@@ -560,7 +560,7 @@ if _CVXPY_AVAILABLE:
                 nearby_model.sim.product(self.circuit), mxBasis)
             JBstd = self.d * _tools.fast_jamiolkowski_iso_std(self.B, mxBasis)
             J = JBstd - JAstd
-            val = 0.5 * (_np.vdot(J.real, self.W.real) + _np.vdot(J.imag, self.W.imag))
+            val = 0.5 * (_np.vdot(J.real, self.W[0].real) + _np.vdot(J.imag, self.W[0].imag))
             return val
 
 else:
@@ -1274,7 +1274,7 @@ if _CVXPY_AVAILABLE:
             JAstd = self.d * _tools.fast_jamiolkowski_iso_std(A, mxBasis)
             JBstd = self.d * _tools.fast_jamiolkowski_iso_std(self.B, mxBasis)
             J = JBstd - JAstd
-            val = 0.5 * (_np.vdot(J.real, self.W.real) + _np.vdot(J.imag, self.W.imag))
+            val = 0.5 * (_np.vdot(J.real, self.W[0].real) + _np.vdot(J.imag, self.W[0].imag))
             return val
 
     def half_diamond_norm(a, b, mx_basis):
