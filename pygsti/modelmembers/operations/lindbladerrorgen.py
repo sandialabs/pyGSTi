@@ -1161,6 +1161,8 @@ class LindbladErrorgen(_LinearOperator):
         -------
         None
         """
+        if not elementary_errorgens:
+            return
         #check the first key, if local then no need to convert, otherwise convert from global.
         first_key = next(iter(elementary_errorgens))
         if isinstance(first_key, (_GlobalElementaryErrorgenLabel, tuple)):
