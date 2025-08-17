@@ -637,8 +637,8 @@ class ComposedOp(_LinearOperator):
             #SPECIAL CASE / HACK: for 1 & 2Q, when holding e^L * T, where T is a static gate
             # then try to gauge transform by setting e^L directly and leaving T alone:
             Smx = s.transform_matrix; Si = s.transform_matrix_inverse
-            Tinv = _np.linalg.inv(self.factorops[0].to_dense("minimal"))
-            trans_eLT = _np.dot(Si, _np.dot(self.to_dense("minimal"), Smx))
+            Tinv = _np.linalg.inv(self.factorops[0].to_dense("HilbertSchmidt"))
+            trans_eLT = _np.dot(Si, _np.dot(self.to_dense("HilbertSchmidt"), Smx))
             self.factorops[1].set_dense(_np.dot(trans_eLT, Tinv))  # set_dense(trans_eL)
             return
 
