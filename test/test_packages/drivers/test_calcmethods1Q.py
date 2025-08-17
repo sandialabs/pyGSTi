@@ -13,7 +13,6 @@ from pygsti.processors.processorspec import QubitProcessorSpec as _ProcessorSpec
 from pygsti.modelpacks import smq1Q_XY as std
 from pygsti.baseobjs import Label as L
 from pygsti.circuits import Circuit
-from pygsti.serialization import json
 from pygsti.models import ExplicitOpModel, CloudNoiseModel
 
 import os
