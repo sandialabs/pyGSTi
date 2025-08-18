@@ -359,7 +359,8 @@ class CalcMethods1QTestCase(BaseTestCase):
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                                self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
                                                verbosity=4, advanced_options={'tolerance': 1e-3},
-                                               disable_checkpointing=True)
+                                               disable_checkpointing=True,
+                                               gauge_opt_suite_name='none')
 
         print("MISFIT nSigma = ",results.estimates[results.name].misfit_sigma())
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 0.0, delta=1.0)
