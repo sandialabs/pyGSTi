@@ -47,11 +47,11 @@ class ErrorgenPropTester(BaseCase):
 
     def test_approx_propagation_probabilities_BCH(self):
         error_propagator = ErrorGeneratorPropagator(self.error_model.copy())
-        probabilities_BCH_order_1 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=1)
-        probabilities_BCH_order_2 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=2)
-        probabilities_BCH_order_3 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=3)
-        probabilities_BCH_order_4 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=4)
-        probabilities_BCH_order_5 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=5)
+        probabilities_BCH_order_1 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=1, bch_mode='pairwise')
+        probabilities_BCH_order_2 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=2, bch_mode='pairwise')
+        probabilities_BCH_order_3 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=3, bch_mode='pairwise')
+        probabilities_BCH_order_4 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=4, bch_mode='pairwise')
+        probabilities_BCH_order_5 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=5, bch_mode='pairwise')
         probabilities_forward_simulation = probabilities_fwdsim(self.error_model, self.circuit)
 
         #use a much looser constraint on the agreement between the BCH results and forward simulation. Mostly testing to catch things exploding.
@@ -70,6 +70,26 @@ class ErrorgenPropTester(BaseCase):
 
         #also assert that the TVDs get smaller in general as you go up in order.
         self.assertTrue((TVD_order_1>TVD_order_2) and (TVD_order_2>TVD_order_3) and (TVD_order_3>TVD_order_4) and (TVD_order_4>TVD_order_5))
+        
+    def test_approx_propagation_probabilities_magnus(self):
+        error_propagator = ErrorGeneratorPropagator(self.error_model.copy())
+        probabilities_BCH_order_1 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=1, bch_mode='magnus')
+        probabilities_BCH_order_2 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=2, bch_mode='magnus')
+        probabilities_BCH_order_3 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=3, bch_mode='magnus')
+        probabilities_forward_simulation = probabilities_fwdsim(self.error_model, self.circuit)
+
+        #use a much looser constraint on the agreement between the BCH results and forward simulation. Mostly testing to catch things exploding.
+        TVD_order_1 = np.linalg.norm(probabilities_BCH_order_1 - probabilities_forward_simulation, ord=1)
+        TVD_order_2 = np.linalg.norm(probabilities_BCH_order_2 - probabilities_forward_simulation, ord=1)
+        TVD_order_3 = np.linalg.norm(probabilities_BCH_order_3 - probabilities_forward_simulation, ord=1)
+        
+        #loose bound is just to make sure nothing exploded.
+        self.assertTrue(TVD_order_1 < 1e-2)
+        self.assertTrue(TVD_order_2 < 1e-2)
+        self.assertTrue(TVD_order_3 < 1e-2)
+
+        #also assert that the TVDs get smaller in general as you go up in order.
+        self.assertTrue((TVD_order_1>TVD_order_2) and (TVD_order_2>TVD_order_3))
         
     def test_eoc_error_channel(self):
         error_propagator = ErrorGeneratorPropagator(self.error_model.copy())
@@ -171,12 +191,13 @@ class LocalStimErrorgenLabelTester(BaseCase):
         self.assertEqual(propagated_lse, (_LSE('S', [stim.PauliString('ZI')]), 1))
 
 #Helper Functions:
-def probabilities_errorgen_prop(error_propagator, target_model, circuit, use_bch=False, bch_order=1, truncation_threshold=1e-14):
+def probabilities_errorgen_prop(error_propagator, target_model, circuit, use_bch=False, bch_order=1, truncation_threshold=1e-14, bch_mode='magnus'):
     #get the eoc error channel, and the process matrix for the ideal circuit:
     if use_bch:
         eoc_channel = error_propagator.eoc_error_channel(circuit, include_spam=True, use_bch=use_bch,
                                                         bch_kwargs={'bch_order':bch_order,
-                                                                    'truncation_threshold':truncation_threshold})
+                                                                    'truncation_threshold':truncation_threshold,
+                                                                    'mode':bch_mode})
     else:
         eoc_channel = error_propagator.eoc_error_channel(circuit, include_spam=True)
     ideal_channel = target_model.sim.product(circuit)

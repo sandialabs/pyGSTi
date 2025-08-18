@@ -1207,6 +1207,7 @@ def _draw_graph(G, node_label_key='label', edge_label_key='promotion_cost', figu
         An optional size specifier passed into the matplotlib figure
         constructor to set the plot size.
     """
+
     try:
         import matplotlib.pyplot as plt
     except ImportError as e:
