@@ -632,7 +632,6 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False, cp_p
             else:
                 raise ValueError("Invalid to_type argument: %s" % to_type)
         except Exception as e:
-            raise e
             error_msgs[to_type] = str(e)  # try next to_type
 
     raise ValueError("Could not convert POVM to to type(s): %s\n%s" % (str(to_types), str(error_msgs)))

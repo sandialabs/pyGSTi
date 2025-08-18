@@ -493,14 +493,14 @@ class ExplicitOpModel(_mdl.OpModel):
         povmtyp = _povm.povm_type_from_op_type(gate_type) if povm_type == "auto" else povm_type
         ityp = _instrument.instrument_type_from_op_type(gate_type) if instrument_type == "auto" else instrument_type
 
-        #try:
-        self.convert_members_inplace(typ, 'operations', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol)
-        self.convert_members_inplace(ityp, 'instruments', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol)
-        self.convert_members_inplace(rtyp, 'preps', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol, spam_cp_penalty = spam_cp_penalty)
-        self.convert_members_inplace(povmtyp, 'povms', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol, spam_cp_penalty = spam_cp_penalty)
-        #except ValueError as e:
-        #    raise ValueError("Failed to convert members. If converting to CPTP-based models, " +
-        #        "try providing an ideal_model to avoid possible branch cuts.") from e
+        try:
+            self.convert_members_inplace(typ, 'operations', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol)
+            self.convert_members_inplace(ityp, 'instruments', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol)
+            self.convert_members_inplace(rtyp, 'preps', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol, spam_cp_penalty = spam_cp_penalty)
+            self.convert_members_inplace(povmtyp, 'povms', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol, spam_cp_penalty = spam_cp_penalty)
+        except ValueError as e:
+            raise ValueError("Failed to convert members. If converting to CPTP-based models, " +
+                "try providing an ideal_model to avoid possible branch cuts.") from e
         
         self.set_default_gauge_group_for_member_type(typ)
 
