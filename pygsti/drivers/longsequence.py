@@ -491,19 +491,17 @@ def run_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
 
     assert not (gauge_opt_suite_name and gauge_opt_params), 'Can only specify one of `gauge_opt_suite_name` or `gauge_opt_params`'
 
-    if gauge_opt_params is None and gauge_opt_suite_name is None:
-        gauge_opt_params = {'item_weights': {'gates': 1.0, 'spam': 0.001}}
-        gopt_suite = _proto.GSTGaugeOptSuite(
-            gaugeopt_argument_dicts= {'go0': gauge_opt_params},
-            gaugeopt_target=target_model)
-    elif gauge_opt_suite_name is not None:
+    if gauge_opt_suite_name is not None:
         gopt_suite = _proto.GSTGaugeOptSuite(
             gaugeopt_suite_names= gauge_opt_suite_name,
             gaugeopt_target=target_model)
     else:
+        if gauge_opt_params is None:
+            gauge_opt_params = {'item_weights': {'gates': 1.0, 'spam': 0.001}}
         gopt_suite = _proto.GSTGaugeOptSuite(
             gaugeopt_argument_dicts={'go0': gauge_opt_params},
             gaugeopt_target=target_model)
+       
         
     initial_model = _get_gst_initial_model(target_model, advanced_options)
     proto = _proto.GateSetTomography(initial_model, gopt_suite,
@@ -533,7 +531,8 @@ def run_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_ob
                                advanced_options=None, comm=None, mem_limit=None,
                                output_pkl=None, verbosity=2, checkpoint=None, checkpoint_path=None,
                                disable_checkpointing=False,
-                               simulator: Optional[ForwardSimulator.Castable]=None):
+                               simulator: Optional[ForwardSimulator.Castable]=None,
+                               gauge_opt_suite_name: Optional[str] = 'stdgaugeopt'):
     """
     A more fundamental interface for performing end-to-end GST.
 
@@ -624,6 +623,9 @@ def run_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_ob
             fwdsim = ForwardSimulator.cast(simulator),
         and we set the .sim attribute of every Model we encounter to fwdsim.
 
+    gauge_opt_suite_name : str, optional (default 'stdgaugeopt')
+        An optional string specifying a named gauge optimization suite.
+
     Returns
     -------
     Results
@@ -638,9 +640,19 @@ def run_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_ob
     ds = _load_dataset(data_filename_or_set, comm, printer)
     data = _proto.ProtocolData(exp_design, ds)
 
-    if gauge_opt_params is None:
-        gauge_opt_params = {'item_weights': {'gates': 1.0, 'spam': 0.001}}
-    gopt_suite = {'go0': gauge_opt_params} if gauge_opt_params else None
+    assert not (gauge_opt_suite_name and gauge_opt_params), 'Can only specify one of `gauge_opt_suite_name` or `gauge_opt_params`'
+
+    if gauge_opt_suite_name is not None:
+        gopt_suite = _proto.GSTGaugeOptSuite(
+            gaugeopt_suite_names= gauge_opt_suite_name,
+            gaugeopt_target=target_model)
+    else:
+        if gauge_opt_params is None:
+            gauge_opt_params = {'item_weights': {'gates': 1.0, 'spam': 0.001}}
+        gopt_suite = _proto.GSTGaugeOptSuite(
+            gaugeopt_argument_dicts={'go0': gauge_opt_params},
+            gaugeopt_target=target_model)
+
     initial_model = _get_gst_initial_model(target_model, advanced_options)
 
     proto = _proto.GateSetTomography(initial_model, gopt_suite,
