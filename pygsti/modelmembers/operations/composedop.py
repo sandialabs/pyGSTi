@@ -910,6 +910,8 @@ class ComposedOp(_LinearOperator):
                         #implicitly assuming there is only a single tensor product block in the case where it is an ExplicitStateSpace object.
                         sslbls = self.state_space.qudit_labels if isinstance(self.state_space, _statespace.QuditSpace) else self.state_space.labels[0]
                         updated_values_to_set[available_factor_coeffs_first_lbl_type.cast(key, sslbls)] = val
+                    else:
+                        updated_values_to_set[key] = val
                 values_to_set = updated_values_to_set
             Ltermdict_local = {k:v for k, v in values_to_set.items() if k in available_factor_coeffs}
             op.set_errorgen_coefficients(Ltermdict_local, action, logscale_nonham, truncate)
