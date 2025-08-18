@@ -425,12 +425,40 @@ def standard_gatenames_stim_conversions():
     'Gzz'   : stim.Tableau.from_named_gate('SQRT_ZZ'),
     'Gcnot' : stim.Tableau.from_named_gate('CNOT'),
     'Gswap' : stim.Tableau.from_named_gate('SWAP'),
-    'Gcphase' : stim.Tableau.from_named_gate('CZ')
+    'Gcphase' : stim.Tableau.from_named_gate('CZ'),
+    'Giswap' : stim.Tableau.from_named_gate('ISWAP')
+
     }
     ecr_unitary = _np.array([[0, 1, 0., 1j], [1., 0, -1j, 0.],
                              [0., 1j, 0, 1], [-1j, 0., 1, 0]], complex)/_np.sqrt(2)
     gate_dict['Gecres'] = stim.Tableau.from_unitary_matrix(ecr_unitary, endian='big')
     gate_dict['Gecr'] = gate_dict['Gecres']
+
+    gate_dict['Gc0']  = stim.Tableau.from_unitary_matrix(_np.array([[1, 0], [0, 1]], complex), endian='big')   # This is Gi
+    gate_dict['Gc1']  = stim.Tableau.from_unitary_matrix(_np.array([[1, -1j], [1, 1j]], complex) / _np.sqrt(2), endian='big')   # This is H Pdag
+    gate_dict['Gc2']  = stim.Tableau.from_unitary_matrix(_np.array([[1, 1], [1j, -1j]], complex) / _np.sqrt(2), endian='big')   # This is P H
+    gate_dict['Gc3']  = stim.Tableau.from_unitary_matrix(_np.array([[0, 1], [1, 0]], complex), endian='big')   # This is Gxpi (up to phase)
+    gate_dict['Gc4']  = stim.Tableau.from_unitary_matrix(_np.array([[-1, -1j], [1, -1j]], complex) / _np.sqrt(2), endian='big')   # This is H Pdag X
+    gate_dict['Gc5']  = stim.Tableau.from_unitary_matrix(_np.array([[1, 1], [-1j, 1j]], complex) / _np.sqrt(2), endian='big')   # This is Pdag H
+    gate_dict['Gc6']  = stim.Tableau.from_unitary_matrix(_np.array([[0, -1j], [1j, 0]], complex), endian='big')   # This is Gypi (up to phase)
+    gate_dict['Gc7']  = stim.Tableau.from_unitary_matrix(_np.array([[1j, 1], [-1j, 1]], complex) / _np.sqrt(2), endian='big')   # This is H P X
+    gate_dict['Gc8']  = stim.Tableau.from_unitary_matrix(_np.array([[1j, -1j], [1, 1]], complex) / _np.sqrt(2), endian='big')   # This is Pdag X H
+    gate_dict['Gc9']  = stim.Tableau.from_unitary_matrix(_np.array([[1, 0], [0, -1]], complex), endian='big')   # This is Gzpi
+    gate_dict['Gc10'] = stim.Tableau.from_unitary_matrix(_np.array([[1, 1j], [1, -1j]], complex) / _np.sqrt(2), endian='big')  # This is H P
+    gate_dict['Gc11'] = stim.Tableau.from_unitary_matrix(_np.array([[1, -1], [1j, 1j]], complex) / _np.sqrt(2), endian='big')  # This is P X H
+    gate_dict['Gc12'] = stim.Tableau.from_unitary_matrix(_np.array([[1, 1], [1, -1]], complex) / _np.sqrt(2), endian='big')  # This is Gh
+    gate_dict['Gc13'] = stim.Tableau.from_unitary_matrix(_np.array([[0.5 - 0.5j, 0.5 + 0.5j], [0.5 + 0.5j, 0.5 - 0.5j]], complex), endian='big')  # This is Gxmpi2 (up to phase)
+    gate_dict['Gc14'] = stim.Tableau.from_unitary_matrix(_np.array([[1, 0], [0, 1j]], complex), endian='big')  # This is Gzpi2 / Gp (up to phase)
+    gate_dict['Gc15'] = stim.Tableau.from_unitary_matrix(_np.array([[1, 1], [-1, 1]], complex) / _np.sqrt(2), endian='big')  # This is Gympi2 (up to phase)
+    gate_dict['Gc16'] = stim.Tableau.from_unitary_matrix(_np.array([[0.5 + 0.5j, 0.5 - 0.5j], [0.5 - 0.5j, 0.5 + 0.5j]], complex), endian='big')  # This is Gxpi2 (up to phase)
+    gate_dict['Gc17'] = stim.Tableau.from_unitary_matrix(_np.array([[0, 1], [1j, 0]], complex), endian='big')  # This is P X
+    gate_dict['Gc18'] = stim.Tableau.from_unitary_matrix(_np.array([[1j, -1j], [-1j, -1j]], complex) / _np.sqrt(2), endian='big')  # This is Y H
+    gate_dict['Gc19'] = stim.Tableau.from_unitary_matrix(_np.array([[0.5 + 0.5j, -0.5 + 0.5j], [0.5 - 0.5j, -0.5 - 0.5j]], complex), endian='big')  # This is Pdag H P
+    gate_dict['Gc20'] = stim.Tableau.from_unitary_matrix(_np.array([[0, -1j], [-1, 0]], complex), endian='big')  # This is Pdag X
+    gate_dict['Gc21'] = stim.Tableau.from_unitary_matrix(_np.array([[1, -1], [1, 1]], complex) / _np.sqrt(2), endian='big')  # This is Gypi2 (up to phase)
+    gate_dict['Gc22'] = stim.Tableau.from_unitary_matrix(_np.array([[0.5 + 0.5j, 0.5 - 0.5j], [-0.5 + 0.5j, -0.5 - 0.5j]], complex), endian='big')  # This is P H Pdag
+    gate_dict['Gc23'] = stim.Tableau.from_unitary_matrix(_np.array([[1, 0], [0, -1j]], complex), endian='big') # This is Gzmpi2 / Gpdag (up to phase)
+
 
     return gate_dict
 
