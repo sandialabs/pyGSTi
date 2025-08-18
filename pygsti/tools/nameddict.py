@@ -90,6 +90,8 @@ class NamedDict(dict, _NicelySerializable):
                 return x
             elif isinstance(x, (_np.int64, _np.int32)):
                 return int(x)
+            elif isinstance(x, (_np.float64, _np.float32)):
+                return float(x)
             elif isinstance(x, _NicelySerializable):
                 return x.to_nice_serialization()
             elif isinstance(x, _np.ndarray):
