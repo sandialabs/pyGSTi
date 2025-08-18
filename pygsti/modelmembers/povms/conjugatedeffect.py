@@ -81,6 +81,12 @@ class DenseEffectInterface(object):
         ret = self.columnvec.__setitem__(key, val)
         self._ptr_has_changed()
         return ret
+    
+    def __getstate__(self):
+        return self.__dict__
+    
+    def __setstate__(self, d):
+        self.__dict__.update(d)
 
     def __getattr__(self, attr):
         #use __dict__ so no chance for recursive __getattr__
