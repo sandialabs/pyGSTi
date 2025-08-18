@@ -768,6 +768,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
         fogi_dirs = fogi_dirs.real
     if _spsl.norm(dep_fogi_dirs.imag) < 1e-6:
         dep_fogi_dirs = dep_fogi_dirs.real
+    '''
     keys = list(set_size_dims.keys())
     gate_abbrevs = {'Gxpi2:0':'X', 'Gypi2:0': 'Y','Gzpi2:0':'Z', 'rho0':'rho', 'Mdefault': 'M'}
     key_strings = {}
@@ -781,6 +782,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
             print('\n')
             curr_length = len(key)
         print(key_strings[key], set_size_dims[key], end='     ')
+        '''
     
 
     return (fogi_dirs, fogi_meta, dep_fogi_dirs, dep_fogi_meta)
