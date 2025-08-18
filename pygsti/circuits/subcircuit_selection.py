@@ -557,10 +557,6 @@ def greedy_growth_subcirc_selection(full_circ: _Circuit,
     
     selected_subcircs, dropped_counts, physical_depths, start_ends = list(zip(*sorted_test_subcircs[:num_subcircs]))
 
-    # try:
-    #     selected_subcircs, dropped_counts, physical_depths, start_ends = list(zip(*sorted_test_subcircs[:num_subcircs]))
-    # except ValueError as e:
-    #     raise ValueError("Probably did not find enough valid subcircuits, trying increasing num_test_subcircs") from e
     
     print(f'number of subcircuits (greedy): {len(selected_subcircs)}')
     
