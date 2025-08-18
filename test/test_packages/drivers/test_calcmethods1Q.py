@@ -150,21 +150,21 @@ class CalcMethods1QTestCase(BaseTestCase):
         #CHECK that copy gives identical models - this is checked by other
         # unit tests but here we're using a true "GST model" - so do it again:
         print("CHECK COPY")
-        mdl = results.estimates[results.name].models['go0']
+        mdl = results.estimates[results.name].models['stdgaugeopt']
         mdl_copy = mdl.copy()
         print(mdl.strdiff(mdl_copy))
         self.assertAlmostEqual( mdl.frobeniusdist(mdl_copy), 0, places=2)
 
         #RUN BELOW LINES TO SAVE GATESET (SAVE)
         if regenerate_references():
-            results.estimates[results.name].models['go0'].write(compare_files + "/test1Qcalc_std_exact.json")
+            results.estimates[results.name].models['stdgaugeopt'].write(compare_files + "/test1Qcalc_std_exact.json")
 
         print("MISFIT nSigma = ",results.estimates[results.name].misfit_sigma())
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 1.0, delta=2.0)
         mdl_compare = ExplicitOpModel.read(compare_files + "/test1Qcalc_std_exact.json")
 
         #gauge opt before compare
-        gsEstimate = results.estimates[results.name].models['go0'].copy()
+        gsEstimate = results.estimates[results.name].models['stdgaugeopt'].copy()
         gsEstimate.set_all_parameterizations("full")
         gsEstimate = pygsti.algorithms.gaugeopt_to_target(gsEstimate, mdl_compare)
         print(gsEstimate.strdiff(mdl_compare))
@@ -183,7 +183,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 1.0, delta=2.0)
         mdl_compare = ExplicitOpModel.read(compare_files + "/test1Qcalc_std_exact.json")
 
-        gsEstimate = results.estimates[results.name].models['go0'].copy()
+        gsEstimate = results.estimates[results.name].models['stdgaugeopt'].copy()
         gsEstimate.set_all_parameterizations("full")
         gsEstimate = pygsti.algorithms.gaugeopt_to_target(gsEstimate, mdl_compare)
         self.assertAlmostEqual( gsEstimate.frobeniusdist(mdl_compare), 0, places=0)
@@ -205,7 +205,7 @@ class CalcMethods1QTestCase(BaseTestCase):
 
         #RUN BELOW LINES TO SAVE GATESET (SAVE)
         if regenerate_references():
-            results.estimates[results.name].models['go0'].write(compare_files + "/test1Qcalc_std_terms.json")
+            results.estimates[results.name].models['trivial_gauge_opt'].write(compare_files + "/test1Qcalc_std_terms.json")
             
         print("MISFIT nSigma = ",results.estimates[results.name].misfit_sigma())
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 1, delta=12)
@@ -214,7 +214,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         # can't easily gauge opt b/c term-based models can't be converted to "full"
         #mdl_compare.set_all_parameterizations("full")
         #
-        #gsEstimate = results.estimates[results.name].models['go0'].copy()
+        #gsEstimate = results.estimates[results.name].models['stdgaugeopt'].copy()
         #gsEstimate.set_all_parameterizations("full")
         #gsEstimate = pygsti.algorithms.gaugeopt_to_target(gsEstimate, mdl_compare)
         #self.assertAlmostEqual( gsEstimate.frobeniusdist(mdl_compare), 0, places=0)
@@ -243,7 +243,7 @@ class CalcMethods1QTestCase(BaseTestCase):
 
         #RUN BELOW LINES TO SAVE GATESET (SAVE)
         if regenerate_references():
-            results.estimates[results.name].models['go0'].write(compare_files + "/test1Qcalc_std_prunedpath.json")
+            results.estimates[results.name].models['trivial_gauge_opt'].write(compare_files + "/test1Qcalc_std_prunedpath.json")
 
         print("MISFIT nSigma = ",results.estimates[results.name].misfit_sigma())
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 1, delta=2)
@@ -253,9 +253,9 @@ class CalcMethods1QTestCase(BaseTestCase):
 
         #A direct vector comparison works if python (&numpy?) versions are identical, but
         # gauge freedoms make this incorrectly fail in other cases - so just check sigmas
-        #print("VEC DIFF = ",(results.estimates[results.name].models['go0'].to_vector()
+        #print("VEC DIFF = ",(results.estimates[results.name].models['stdgaugeopt'].to_vector()
         #                                       - mdl_compare.to_vector()))
-        #self.assertAlmostEqual( np.linalg.norm(results.estimates[results.name].models['go0'].to_vector()
+        #self.assertAlmostEqual( np.linalg.norm(results.estimates[results.name].models['stdgaugeopt'].to_vector()
         #                                       - mdl_compare.to_vector()), 0, places=3)
 
 
@@ -278,12 +278,12 @@ class CalcMethods1QTestCase(BaseTestCase):
 
         #RUN BELOW LINES TO SAVE GATESET (SAVE)
         if regenerate_references():
-            results.estimates[results.name].models['go0'].write(compare_files + "/test1Qcalc_redmod_exact.json")
+            results.estimates[results.name].models['trivial_gauge_opt'].write(compare_files + "/test1Qcalc_redmod_exact.json")
 
         print("MISFIT nSigma = ",results.estimates[results.name].misfit_sigma())
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 0.0, delta=1.0)
         #mdl_compare = pygsti.io.json.load( open(compare_files + "/test1Qcalc_redmod_exact.json"))
-        #self.assertAlmostEqual( results.estimates[results.name].models['go0'].frobeniusdist(mdl_compare), 0, places=3)
+        #self.assertAlmostEqual( results.estimates[results.name].models['stdgaugeopt'].frobeniusdist(mdl_compare), 0, places=3)
         #NO frobeniusdist for implicit models (yet)
 
     def test_reducedmod_map1(self):
@@ -296,12 +296,13 @@ class CalcMethods1QTestCase(BaseTestCase):
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                                self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
                                                verbosity=4, advanced_options={'tolerance': 1e-3},
-                                               disable_checkpointing=True)
+                                               disable_checkpointing=True,
+                                               gauge_opt_suite_name='none')
 
         print("MISFIT nSigma = ",results.estimates[results.name].misfit_sigma())
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 0.0, delta=1.0)
         #mdl_compare = pygsti.io.json.load( open(compare_files + "/test1Qcalc_redmod_exact.json"))
-        #self.assertAlmostEqual( results.estimates[results.name].models['go0'].frobeniusdist(mdl_compare), 0, places=1)
+        #self.assertAlmostEqual( results.estimates[results.name].models['stdgaugeopt'].frobeniusdist(mdl_compare), 0, places=1)
         #NO frobeniusdist for implicit models (yet)
           #Note: models aren't necessarily exactly equal given gauge freedoms that we don't know
           # how to optimizize over exactly - so this is a very loose test...
@@ -318,7 +319,8 @@ class CalcMethods1QTestCase(BaseTestCase):
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                                self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
                                                verbosity=4, advanced_options={'tolerance': 1e-3},
-                                               disable_checkpointing=True)
+                                               disable_checkpointing=True,
+                                               gauge_opt_suite_name='none')
 
         print("MISFIT nSigma = ",results.estimates[results.name].misfit_sigma())
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 0.0, delta=1.0)
@@ -334,12 +336,13 @@ class CalcMethods1QTestCase(BaseTestCase):
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                                self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
                                                verbosity=4, advanced_options={'tolerance': 1e-3},
-                                               disable_checkpointing=True)
+                                               disable_checkpointing=True,
+                                               gauge_opt_suite_name='none')
 
         print("MISFIT nSigma = ",results.estimates[results.name].misfit_sigma())
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 0.0, delta=1.0)
         mdl_compare = CloudNoiseModel.read(compare_files + "/test1Qcalc_redmod_exact.json")
-        self.assertAlmostEqual( np.linalg.norm(results.estimates[results.name].models['go0'].to_vector()
+        self.assertAlmostEqual( np.linalg.norm(results.estimates[results.name].models['trivial_gauge_opt'].to_vector()
                                                - mdl_compare.to_vector()), 0, places=1)
           #Note: models aren't necessarily exactly equal given gauge freedoms that we don't know
           # how to optimizize over exactly - so this is a very loose test...
@@ -375,16 +378,17 @@ class CalcMethods1QTestCase(BaseTestCase):
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                                self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
                                                verbosity=4, advanced_options={'tolerance': 1e-3}, 
-                                               disable_checkpointing=True)
+                                               disable_checkpointing=True,
+                                               gauge_opt_suite_name='none')
 
         #RUN BELOW LINES TO SAVE GATESET (SAVE)
         if regenerate_references():
-            results.estimates[results.name].models['go0'].write(compare_files + "/test1Qcalc_redmod_terms.json")
+            results.estimates[results.name].models['trivial_gauge_opt'].write(compare_files + "/test1Qcalc_redmod_terms.json")
 
         print("MISFIT nSigma = ",results.estimates[results.name].misfit_sigma())
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 0.0, delta=1.0)
         mdl_compare = CloudNoiseModel.read(compare_files + "/test1Qcalc_redmod_terms.json")
-        self.assertAlmostEqual( np.linalg.norm(results.estimates[results.name].models['go0'].to_vector()
+        self.assertAlmostEqual( np.linalg.norm(results.estimates[results.name].models['trivial_gauge_opt'].to_vector()
                                                - mdl_compare.to_vector()), 0, places=3)
 
     def test_reducedmod_svterm_errorgens(self):
@@ -400,7 +404,8 @@ class CalcMethods1QTestCase(BaseTestCase):
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                                self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
                                                verbosity=4, advanced_options={'tolerance': 1e-3},
-                                               disable_checkpointing=True)
+                                               disable_checkpointing=True,
+                                               gauge_opt_suite_name='none')
 
         print("MISFIT nSigma = ",results.estimates[results.name].misfit_sigma())
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 0.0, delta=1.0)
@@ -423,7 +428,8 @@ class CalcMethods1QTestCase(BaseTestCase):
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                                self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
                                                verbosity=4, advanced_options={'tolerance': 1e-3},
-                                               disable_checkpointing=True)
+                                               disable_checkpointing=True,
+                                               gauge_opt_suite_name='none')
 
         print("MISFIT nSigma = ",results.estimates[results.name].misfit_sigma())
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 0.0, delta=1.0)
@@ -443,12 +449,13 @@ class CalcMethods1QTestCase(BaseTestCase):
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                                self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
                                                verbosity=4, advanced_options={'tolerance': 1e-3},
-                                               disable_checkpointing=True)
+                                               disable_checkpointing=True,
+                                               gauge_opt_suite_name='none')
 
         print("MISFIT nSigma = ",results.estimates[results.name].misfit_sigma())
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 0.0, delta=1.0)
         mdl_compare = CloudNoiseModel.read(compare_files + "/test1Qcalc_redmod_terms.json")
-        self.assertAlmostEqual( np.linalg.norm(results.estimates[results.name].models['go0'].to_vector()
+        self.assertAlmostEqual( np.linalg.norm(results.estimates[results.name].models['trivial_gauge_opt'].to_vector()
                                                - mdl_compare.to_vector()), 0, places=1)  #TODO: why this isn't more similar to svterm case??
 
     def test_reducedmod_cterm_errorgens(self):
@@ -464,7 +471,8 @@ class CalcMethods1QTestCase(BaseTestCase):
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                                self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
                                                verbosity=4, advanced_options={'tolerance': 1e-3},
-                                               disable_checkpointing=True)
+                                               disable_checkpointing=True,
+                                               gauge_opt_suite_name='none')
 
         print("MISFIT nSigma = ",results.estimates[results.name].misfit_sigma())
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 0.0, delta=1.0)

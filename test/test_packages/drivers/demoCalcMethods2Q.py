@@ -94,14 +94,14 @@ class CalcMethods2QTestCase(BaseTestCase):
                                                self.germs, self.maxLengths, advanced_options=self.advOpts,
                                                verbosity=4)
         #RUN BELOW LINES TO SAVE GATESET (UNCOMMENT to regenerate)
-        #pygsti.io.write_model(results.estimates['default'].models['go0'],
+        #pygsti.io.write_model(results.estimates['default'].models['stdgaugeopt'],
         #                        compare_files + "/test2Qcalc_std_exact.model","Saved Standard-Calc 2Q test model")
 
         # Note: expected nSigma of 143 is so high b/c we use very high tol of 1e-2 => result isn't very good
         print("MISFIT nSigma = ", results.estimates['default'].misfit_sigma())
         self.assertAlmostEqual(results.estimates['default'].misfit_sigma(), 143, delta=2.0)
         mdl_compare = pygsti.io.load_model(compare_files + "/test2Qcalc_std_exact.model")
-        self.assertAlmostEqual(results.estimates['default'].models['go0'].frobeniusdist(mdl_compare), 0, places=3)
+        self.assertAlmostEqual(results.estimates['default'].models['stdgaugeopt'].frobeniusdist(mdl_compare), 0, places=3)
 
     def test_stdgst_map(self):
         # Using map-based calculation
@@ -116,7 +116,7 @@ class CalcMethods2QTestCase(BaseTestCase):
         print("MISFIT nSigma = ", results.estimates['default'].misfit_sigma())
         self.assertAlmostEqual(results.estimates['default'].misfit_sigma(), 143, delta=2.0)
         mdl_compare = pygsti.io.load_model(compare_files + "/test2Qcalc_std_exact.model")
-        self.assertAlmostEqual(results.estimates['default'].models['go0'].frobeniusdist(mdl_compare), 0, places=3)
+        self.assertAlmostEqual(results.estimates['default'].models['stdgaugeopt'].frobeniusdist(mdl_compare), 0, places=3)
 
     def test_stdgst_terms(self):
         # Using term-based (path integral) calculation
@@ -128,13 +128,13 @@ class CalcMethods2QTestCase(BaseTestCase):
                                                self.germs, self.maxLengths, verbosity=4)
 
         #RUN BELOW LINES TO SAVE GATESET (UNCOMMENT to regenerate)
-        #pygsti.io.json.dump(results.estimates['default'].models['go0'],
+        #pygsti.io.json.dump(results.estimates['default'].models['stdgaugeopt'],
         #                    open(compare_files + "/test2Qcalc_std_terms.model",'w'))
 
         print("MISFIT nSigma = ", results.estimates['default'].misfit_sigma())
         self.assertAlmostEqual(results.estimates['default'].misfit_sigma(), 5, delta=1.0)
         mdl_compare = pygsti.serialization.json.load(open(compare_files + "/test2Qcalc_std_terms.model"))
-        self.assertAlmostEqual(np.linalg.norm(results.estimates['default'].models['go0'].to_vector()
+        self.assertAlmostEqual(np.linalg.norm(results.estimates['default'].models['stdgaugeopt'].to_vector()
                                               - mdl_compare.to_vector()), 0, places=3)
 
     # ## GST using "reduced" models
@@ -153,13 +153,13 @@ class CalcMethods2QTestCase(BaseTestCase):
                                                verbosity=4, advanced_options={'tolerance': 1e-3})
 
         #RUN BELOW LINES TO SAVE GATESET (UNCOMMENT to regenerate)
-        #pygsti.io.json.dump(results.estimates['default'].models['go0'],
+        #pygsti.io.json.dump(results.estimates['default'].models['stdgaugeopt'],
         #                    open(compare_files + "/test2Qcalc_redmod_exact.model",'w'))
 
         print("MISFIT nSigma = ", results.estimates['default'].misfit_sigma())
         self.assertAlmostEqual(results.estimates['default'].misfit_sigma(), 1.0, delta=1.0)
         mdl_compare = pygsti.serialization.json.load(open(compare_files + "/test2Qcalc_redmod_exact.model"))
-        self.assertAlmostEqual(results.estimates['default'].models['go0'].frobeniusdist(mdl_compare), 0, places=3)
+        self.assertAlmostEqual(results.estimates['default'].models['stdgaugeopt'].frobeniusdist(mdl_compare), 0, places=3)
 
     def test_reducedmod_map1(self):
         # Using dense embedded matrices and map-based calcs (maybe not really necessary to include?)
@@ -174,7 +174,7 @@ class CalcMethods2QTestCase(BaseTestCase):
         print("MISFIT nSigma = ", results.estimates['default'].misfit_sigma())
         self.assertAlmostEqual(results.estimates['default'].misfit_sigma(), 1.0, delta=1.0)
         mdl_compare = pygsti.serialization.json.load(open(compare_files + "/test2Qcalc_redmod_exact.model"))
-        self.assertAlmostEqual(results.estimates['default'].models['go0'].frobeniusdist(mdl_compare), 0, places=1)
+        self.assertAlmostEqual(results.estimates['default'].models['stdgaugeopt'].frobeniusdist(mdl_compare), 0, places=1)
         #Note: models aren't necessarily exactly equal given gauge freedoms that we don't know
         # how to optimizize over exactly - so this is a very loose test...
 
@@ -191,7 +191,7 @@ class CalcMethods2QTestCase(BaseTestCase):
         print("MISFIT nSigma = ", results.estimates['default'].misfit_sigma())
         self.assertAlmostEqual(results.estimates['default'].misfit_sigma(), 1.0, delta=1.0)
         mdl_compare = pygsti.serialization.json.load(open(compare_files + "/test2Qcalc_redmod_exact.model"))
-        self.assertAlmostEqual(np.linalg.norm(results.estimates['default'].models['go0'].to_vector()
+        self.assertAlmostEqual(np.linalg.norm(results.estimates['default'].models['stdgaugeopt'].to_vector()
                                               - mdl_compare.to_vector()), 0, places=1)
         #Note: models aren't necessarily exactly equal given gauge freedoms that we don't know
         # how to optimizize over exactly - so this is a very loose test...
@@ -207,13 +207,13 @@ class CalcMethods2QTestCase(BaseTestCase):
                                                verbosity=4, advanced_options={'tolerance': 1e-3})
 
         #RUN BELOW LINES TO SAVE GATESET (UNCOMMENT to regenerate)
-        #pygsti.io.json.dump(results.estimates['default'].models['go0'],
+        #pygsti.io.json.dump(results.estimates['default'].models['stdgaugeopt'],
         #                    open(compare_files + "/test2Qcalc_redmod_terms.model",'w'))
 
         print("MISFIT nSigma = ", results.estimates['default'].misfit_sigma())
         self.assertAlmostEqual(results.estimates['default'].misfit_sigma(), 3.0, delta=1.0)
         mdl_compare = pygsti.serialization.json.load(open(compare_files + "/test2Qcalc_redmod_terms.model"))
-        self.assertAlmostEqual(np.linalg.norm(results.estimates['default'].models['go0'].to_vector()
+        self.assertAlmostEqual(np.linalg.norm(results.estimates['default'].models['stdgaugeopt'].to_vector()
                                               - mdl_compare.to_vector()), 0, places=3)
 
     def test_reducedmod_cterm(self):
@@ -229,7 +229,7 @@ class CalcMethods2QTestCase(BaseTestCase):
         print("MISFIT nSigma = ", results.estimates['default'].misfit_sigma())
         self.assertAlmostEqual(results.estimates['default'].misfit_sigma(), 3.0, delta=1.0)
         mdl_compare = pygsti.serialization.json.load(open(compare_files + "/test2Qcalc_redmod_terms.model"))
-        self.assertAlmostEqual(np.linalg.norm(results.estimates['default'].models['go0'].to_vector()
+        self.assertAlmostEqual(np.linalg.norm(results.estimates['default'].models['stdgaugeopt'].to_vector()
                                               - mdl_compare.to_vector()), 0, places=3)
 
     def test_circuitsim_stabilizer_2Qcheck(self):

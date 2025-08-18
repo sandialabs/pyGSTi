@@ -63,7 +63,7 @@ class CodecsTestCase(BaseTestCase):
 
         #make a confidence region factory
         estLbl = self.results.name
-        crfact = self.results.estimates[estLbl].add_confidence_region_factory('go0', 'final')
+        crfact = self.results.estimates[estLbl].add_confidence_region_factory('stdgaugeopt', 'final')
         crfact.compute_hessian(comm=None)
         crfact.project_hessian('std')
 
