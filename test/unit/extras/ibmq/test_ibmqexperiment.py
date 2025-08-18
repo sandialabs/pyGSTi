@@ -1,9 +1,9 @@
+from ...util import BaseCase
+
 import pygsti
 from pygsti.extras.devices.experimentaldevice import ExperimentalDevice
 from pygsti.extras import ibmq
 from pygsti.processors import CliffordCompilationRules as CCR
-from qiskit.providers.fake_provider import GenericBackendV2
-from qiskit_ibm_runtime import QiskitRuntimeService
 from pygsti.protocols import MirrorRBDesign as RMCDesign
 from pygsti.protocols import PeriodicMirrorCircuitDesign as PMCDesign
 from pygsti.protocols import ByDepthSummaryStatistics
@@ -11,9 +11,26 @@ from pygsti.modelpacks import smq1Q_XY
 from pygsti.protocols import StandardGSTDesign
 import numpy as np
 
+try:
+    from qiskit.providers.fake_provider import GenericBackendV2
+except:
+    GenericBackendV2 = None
+
+try:
+    from qiskit_ibm_runtime import QiskitRuntimeService
+except:
+    QiskitRuntimeService = None
+
+import pytest
+
 class IBMQExperimentTester():
     @classmethod
     def setup_class(cls):
+        if GenericBackendV2 is None:
+            pytest.skip('Qiskit is required for this operation, and does not appear to be installed.')
+        elif QiskitRuntimeService is None:
+            pytest.skip('Qiskit Runtime is required for this operation, and does not appear to be installed.')
+            
         cls.backend = GenericBackendV2(num_qubits=4)
         cls.device = ExperimentalDevice.from_qiskit_backend(cls.backend)
         cls.pspec = cls.device.create_processor_spec(['Gc{}'.format(i) for i in range(24)] + ['Gcphase'])
