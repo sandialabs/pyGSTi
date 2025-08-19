@@ -35,6 +35,8 @@ from scipy.sparse import kron as sparse_kron
 from typing import List, Optional, Iterable, Union, TYPE_CHECKING, Tuple
 from pygsti.tools.tqdm import our_tqdm
 
+LANE = tuple[int, ...]
+
 #region Split circuit list into lists of subcircuits
 
 def _add_in_idle_gates_to_circuit(circuit: _Circuit, idle_gate_name: Union[str, Label] = 'I') -> _Circuit:
@@ -58,7 +60,7 @@ def setup_circuit_list_for_LCS_computations(
     ) -> tuple[
         dict[int, dict[int, _Circuit]],
         dict[LayerTupLike, list[tuple[int, int]]],
-        dict[tuple[int, ...],list[LayerTupLike]]
+        dict[LANE,list[LayerTupLike]]
     ]:
     """
     Split a circuit list into a list of subcircuits by lanes. These lanes are non-interacting partions of a circuit.
@@ -72,7 +74,7 @@ def setup_circuit_list_for_LCS_computations(
 
     cir_ind_and_lane_id_to_sub_cir: dict[int, dict[int, _Circuit]] = {}
     sub_cir_to_cir_id_and_lane_id:  dict[LayerTupLike, list[tuple[int, int]]] = {}
-    line_labels_to_layertup_lists:  dict[tuple[int, ...], list[LayerTupLike]] = {}
+    line_labels_to_layertup_lists:  dict[LANE, list[LayerTupLike]] = {}
 
     for i, cir in enumerate(circuit_list):
 
@@ -167,7 +169,7 @@ def get_dense_op_of_gate_with_perfect_swap_gates(model, op: LabelTup, saved: dic
 class EvalTreeBasedUponLongestCommonSubstring():
     """
     This class will convert a circuit list into an evaluation cache specifying the order in which to compute
-    the matrix matrix products.
+    the matrix matrix products. We assume that each circuit operates on the same qubits.
 
     To build the tree we run D rounds of simplification, where D is the length of the longest common subsequence
     between any pair of circuits or within a circuit.
@@ -205,7 +207,7 @@ class EvalTreeBasedUponLongestCommonSubstring():
         - cache_ind_to_alphabet_vals_referenced: dict[int, set(LabelTup)] - map from cache index to the gates used in that circuit.
                 TODO: Extract this method to circuit.py
 
-        - alphabet_val_to_sorted_cache_inds: dict[LabelTup, sorted[tuple[int, ...]]] -
+        - alphabet_val_to_sorted_cache_inds: dict[LabelTup, sorted[LANE]] -
                 Which indices do you need to recompute if the model interpretation of the label L changed, but everything else stayed the same.
 
         - gpindex_to_cache_vals: dict[int, tuple[sorted[list[int]], list[Label]]] - once the cache has been evaluated with a model and you are changing only
@@ -647,16 +649,44 @@ class EvalTreeBasedUponLongestCommonSubstring():
 
 
 class CollectionOfLCSEvalTrees():
+    """
+    A collection of LCS Eval Trees is a group of trees designed to evaluate a list of circuits which have been split into lanes.
+    A lane is a set of quibts which do not interact with any qubits in another lane.
 
-    def __init__(self, line_lbls_to_circuit_list: dict[tuple[int, ...], list[LabelTupTup]],
+    CollectionOfLCSEvalTrees assumes that you have already split the circuits into such lanes.
+
+    - Properties:
+
+        - trees - dict[lane, EvalTreeLCS] - mapping of lane to LCS evaluation tree.
+        - _assume_matching_tree_for_matching_num_qubits - bool - Are we assuming that if two lanes have the same size,
+                then they will have the same distribution of circuits to test. This can dramatically reduce the cost of computing the orderings.
+        - line_lbls_to_circuit_list - dict[LANE, list[LabelTupTup]] - lanes to circuits to evaluate.
+        - sub_cir_to_full_cir_id_and_lane_id - dict[tuple[LabelTupTup], tuple[int, int]] - map from sub circuit to which lane they are from and the whole circuit.
+        - cir_id_and_lane_id_to_sub_cir - reverse of sub_cir_to_full_cir_id_and_lane_id
+        - process_matrices_which_will_need_to_update_for_index - _np.ndarray - (params, trees, all_circuits)
+                - True False map for if that sub circuit needs to be updated if a param changes.
+    
+                
+    - Methods:
+        - collapse_circuits_to_process_matrices: PUBLIC - main method for evaluating the trees.
+        - reconstruct_full_matrices: PUBLIC - combine the lanes for each circuit into something which can be multiplied against full system SPAM layers.
+        - flop_estimate: PUBLIC - compute the number of flops needed to evaluate the tree fully or partially as in the case of a derivative in one direction.
+        - determine_which_circuits_will_update_for_what_gpindices: PUBLIC - learn the circuits which will get modified for a specific model and index change.
+        - compute_tensor_orders: Private - what would be the best tensor orders for all the circuits?
+        - best_order_for_tensor_contraction: Private - for a single circuit?
+        - _tensor_cost_model: Private - The cost to compute A \otimes B as full dense matrix.
+    """
+
+
+    def __init__(self, line_lbls_to_circuit_list: dict[LANE, list[LabelTupTup]],
                  sub_cir_to_full_cir_id_and_lane_id,
                  cir_id_and_lane_id_to_sub_cir):
         
-        self.trees: dict[tuple[int, ...], EvalTreeBasedUponLongestCommonSubstring] = {}
+        self.trees: dict[LANE, EvalTreeBasedUponLongestCommonSubstring] = {}
 
-        ASSUME_MATCHING_QUBIT_SIZE_MATCHING_TREE = False
+        self._assume_matching_tree_for_matching_num_qubits = False
 
-        size_to_tree: dict[int, tuple[int, ...]] = {}
+        size_to_tree: dict[int, LANE] = {}
 
         self.line_lbls_to_cir_list = line_lbls_to_circuit_list
 
@@ -665,7 +695,7 @@ class CollectionOfLCSEvalTrees():
             sub_cirs = []
             for cir in vals:
                 sub_cirs.append(list(cir))
-            if ASSUME_MATCHING_QUBIT_SIZE_MATCHING_TREE:
+            if self._assume_matching_tree_for_matching_num_qubits:
                 if len(key) not in size_to_tree:
                     self.trees[key] = EvalTreeBasedUponLongestCommonSubstring(sub_cirs)
                     size_to_tree[len(key)] = key
@@ -689,18 +719,8 @@ class CollectionOfLCSEvalTrees():
         self.compute_tensor_orders()
 
         self.saved_results: dict[Union[LabelTupTup, int], _np.ndarray] = {}
-        self.sub_cir_to_ind_in_results: dict[tuple[int, ...], dict[_Circuit, int]] = {}
-        self.original_matrices: dict[int, dict[int, _np.ndarray]] = {}
-        self.full_matrices: list[KronStructured] = []
+        self.sub_cir_to_ind_in_results: dict[LANE, dict[_Circuit, int]] = {}
         self.process_matrices_which_will_need_to_update_for_index: _np.ndarray = []
-
-    def do_I_need_to_recompute_portions_if_I_change_this_index(self, model, gp_index_changing: int) -> bool:
-
-        for key in self.trees:
-            inds, lbls = self.trees[key]._gpindex_to_cache_inds_needed_to_recompute(model, gp_index_changing)
-            if len(inds) > 0:
-                return True
-        return False
 
 
     def collapse_circuits_to_process_matrices(self, model, gp_index_changing: Optional[int] = None):
@@ -736,18 +756,6 @@ class CollectionOfLCSEvalTrees():
         self.process_matrices_which_will_need_to_update_for_index = dirty_circuits
         return dirty_circuits
 
-    def reset_full_matrices_to_base_probs_version(self) -> None:
-        """
-        Any matrix which was updated previously reset to the original version.
-        """
-
-        for icir in self.original_matrices:
-            for lane_in_cir in self.original_matrices[icir]:
-                self.full_matrices[icir].update_operand(lane_in_cir, self.original_matrices[icir][lane_in_cir])
-        self.original_matrices = {}
-        return
-
-
     def reconstruct_full_matrices(self,
                                   model = None,
                                   gp_index_changing: Optional[int] = None) -> \
@@ -765,11 +773,9 @@ class CollectionOfLCSEvalTrees():
             
             cir_inds = _np.where(_np.sum(self.process_matrices_which_will_need_to_update_for_index[gp_index_changing], axis=0) >= 1)[0] # At least one lane changed.
 
-            lane_key_to_ind: dict[tuple[int, ...], int] = {key: ikey for ikey, key in enumerate(self.trees)}
+            lane_key_to_ind: dict[LANE, int] = {key: ikey for ikey, key in enumerate(self.trees)}
 
             output = []
-            if len(cir_inds) > 0:
-                self.original_matrices = {} # Reset the cache of updated process matrices.
 
             for icir in cir_inds:
                 lane_circuits = []
@@ -785,8 +791,7 @@ class CollectionOfLCSEvalTrees():
                     else:
                         lane_circuits.append(self.saved_results[lblkey][ind_in_results])
                 if len(lane_circuits) > 1:
-                    output.append(self.recurse_to_build_sparse_kron_matrix(lane_circuits))
-                    # output.append(KronStructured(lane_circuits))
+                    output.append(KronStructured(lane_circuits))
                 elif len(lane_circuits) == 1:
                     output.append(lane_circuits[0]) # gate_sequence[i] @ rho needs to work for i in range(num_circs).
                 else:
@@ -796,8 +801,6 @@ class CollectionOfLCSEvalTrees():
 
         else:
             output = []
-
-
             # Now we can do the combination.
 
             for icir in cir_inds:
@@ -814,22 +817,13 @@ class CollectionOfLCSEvalTrees():
                     else:
                         lane_circuits.append(self.saved_results[lblkey][ind_in_results])
                 if len(lane_circuits) > 1:
-                    output.append(self.recurse_to_build_sparse_kron_matrix(lane_circuits))
-                    # output.append(KronStructured(lane_circuits))
+                    output.append(KronStructured(lane_circuits))
                 elif len(lane_circuits) == 1:
                     output.append(lane_circuits[0]) # gate_sequence[i] @ rho needs to work for i in range(num_circs).
                 else:
                     raise ValueError()
             
-        self.full_matrices = output
         return output, cir_inds
-
-
-    def recurse_to_build_sparse_kron_matrix(self, operands: list[_np.ndarray]):
-        if len(operands) == 1:
-            return operands[0]
-        return sparse_kron(operands[0], self.recurse_to_build_sparse_kron_matrix(operands[1:]))
-
 
     def flop_estimate(self, return_collapse: bool = False, return_tensor_matvec: bool = False, model = None, gp_index_changing: Optional[int] = None):
 
@@ -886,8 +880,8 @@ class CollectionOfLCSEvalTrees():
         return
             
     def best_order_for_tensor_contraction(self,
-                    qubit_list: tuple[int, ...],
-                    cache: dict[tuple[int, ...], tuple[list[int], int]]) -> tuple[list[int], int]:
+                    qubit_list: LANE,
+                    cache: dict[LANE, tuple[list[int], int]]) -> tuple[list[int], int]:
         """
         Find the tensor contraction order that minizes the cost of contracting to a dense system with
         a total number of qubits equal to the len(qubit_list)
@@ -937,36 +931,3 @@ class CollectionOfLCSEvalTrees():
         """
 
         return (4**num_qubits1)**2 * (4**num_qubits2)**2
-    
-    def _flop_estimate_to_collapse_to_each_circuit_to_process_matrix(self) -> tuple[int, list[int], list[int]]:
-        """
-        Compute the number of flops needed to collapse each circuit into a single process matrix.
-
-        Returns:
-        ---------
-            cost - int total cost to collapse and reform
-            collapse_lane_cost - list[int] cost to collapse a lane
-            tensor_cost - list[int] cost to recombine a circuit into its full size.
-        """
-
-
-        num_cirs = len(self.cir_id_and_lane_id_to_sub_cir)
-
-        collapse_lane_cost = []
-
-        for lbl_key, my_tree in self.trees.items():
-            collapse_lane_cost.append(my_tree.flop_cost_of_evaluating_tree([4**len(lbl_key), 4**len(lbl_key)]))
-
-        tensor_cost = []
-        for icir in range(num_cirs):
-            
-            _order, cost = self.cir_id_to_tensor_order[icir]
-            tensor_cost.append(cost)
-
-        return sum(tensor_cost) + sum(collapse_lane_cost), collapse_lane_cost, tensor_cost
-    
-
-
-
-
-
