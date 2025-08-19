@@ -359,27 +359,27 @@ def leaky_qubit_model_from_pspec(ps_2level: QubitProcessorSpec, mx_basis: Union[
 
 def transform_composed_model(mdl: ExplicitOpModel, s : GaugeGroupElement) -> ExplicitOpModel:
     """
-    Gauge transform this model.
-
-    Update each of the operation matrices G in this model with inv(s) * G * s,
-    each rhoVec with inv(s) * rhoVec, and each EVec with EVec * s
-
-    Parameters
-    ----------
-    s : GaugeGroupElement
-        A gauge group element which specifies the "s" matrix
-        (and it's inverse) used in the above similarity transform.
-
-    Returns
-    -------
-    ExplicitOpModel
+    Return a copy of `mdl` whose members have been gauge-transformed by `s`,
+    while retaining the parameterization of `mdl`.
+    
+    This function's implementation requires that `mdl` use ComposedState for
+    stateprep and ComposedPOVM for measurements. It does NOT require that
+    operations be represented with ComposedOp. It ignores any factories that
+    might be present in mdl.
     """
     from pygsti.models import ExplicitOpModel
     assert isinstance(mdl, ExplicitOpModel)
+    if len(mdl.factories) > 0:
+        warnings.warn('The returned model will not retain the factories in mdl.')
+    if len(mdl.instruments) > 0:
+        raise NotImplementedError('Models with instruments are not supported.')
 
     oldmdl = mdl
 
     def mycopy(_m):
+        # This function is a hack. It makes us robust to errors
+        # arising from copy.deepcopy in (re)linking model members
+        # to parent model objects.
         s = _m.to_nice_serialization()
         t = ExplicitOpModel.from_nice_serialization(s)
         return t
@@ -393,47 +393,74 @@ def transform_composed_model(mdl: ExplicitOpModel, s : GaugeGroupElement) -> Exp
     U    = StaticArbitraryOp(s.transform_matrix,         basis=oldmdl.basis)
     invU = StaticArbitraryOp(s.transform_matrix_inverse, basis=oldmdl.basis) 
 
+    # NOTE: the operations passed to ComposedOp are interpreted in
+    # reverse order. For example, ComposedOp([X,Y,Z]) is applied to
+    # a vector v as Z @ Y @ X @ v.
+
     for key, rho in oldmdl.preps.items():
+        # replace each ComposedState superket `rhoVec` with `invU @ rhoVec`;
+        # do this by packing invU into a new ComposedState's error map.
         assert isinstance(rho, ComposedState)
         static_rho = rho.state_vec
         errmap  = ComposedOp([rho.error_map, invU])
         mdl.preps[key] = ComposedState(static_rho, errmap)
 
     for key, povm in oldmdl.povms.items():
+        # replace each ComposedPOVM `p` with another ComposedPOVM `q`, where
+        # effects `Evec` belonging to `p` are mapped to effects `EVec @ U` 
+        # belonging to `q`. Do this by packing U into the error map of `q`.
         assert isinstance(povm, ComposedPOVM)
         static_povm = povm.base_povm
         errmap = ComposedOp([U, povm.error_map])
         mdl.povms[key] = ComposedPOVM(errmap, static_povm, mx_basis=oldmdl.basis)
 
     for key, op in oldmdl.operations.items():
+        # replace each operation `G` with `invU @ G @ U`.
         op_s = ComposedOp([U, op, invU])
         mdl.operations[key] = op_s
-
-    assert len(oldmdl.factories) == 0
-    assert len(oldmdl.instruments) == 0
 
     mdl._clean_paramvec()  # transform may leave dirty members
     return mdl
 
 
-def lagoified_gopparams_dicts(gopparams_dicts: List[Dict]):
+def lagoified_gopparams_dicts(gopparams_dicts: List[Dict]) -> List[Dict]:
+    """
+    Return a modified deep-copy of gopparams_dicts, where the modifications
+    strip out gauge optimization over the TPSpam gauge group and apply a 
+    few other changes appropriate for leakage modeling.
+    """
     gopparams_dicts = [gp for gp in gopparams_dicts if 'TPSpam' not in str(type(gp['_gaugeGroupEl']))]
     gopparams_dicts = copy.deepcopy(gopparams_dicts)
     for inner_dict in gopparams_dicts:
-        inner_dict['method'] = 'L-BFGS-B'
         inner_dict['n_leak'] = 1
+        # ^ This function could accept n_leak as an argument instead. However,
+        #   downstream functions for gauge optimization only support n_leak=0 or 1.
+        # 
+        #   When n_leak=1 we use subspace-restricted loss functions that only care
+        #   about mismatches between an estimate and a target when restricted to the
+        #   computational subspace. We have code for evaluating the loss functions
+        #   themselves, but not their gradients.
+        inner_dict['method'] = 'L-BFGS-B'
+        # ^ We need this optimizer because it doesn't require a gradient oracle.
         inner_dict['gates_metric'] = 'frobenius squared'
         inner_dict['spam_metric']  = 'frobenius squared'
+        # ^ We have other metrics for leakage-aware gauge optimization, but they
+        #   aren't really useful.
         inner_dict['convert_model_to']['to_type'] = 'full'
+        # ^ The natural basis for Hilbert-Schmidt space in leakage modeling doesn't
+        #   have the identity matrix as its first element. This means we can't use
+        #   the full TP parameterization. There's no real harm in taking "full" as
+        #   our default because add_lago_models uses parameterization-preserving
+        #   gauge optimization.
     return gopparams_dicts
 
 
-def std_lago_gopsuite(model: ExplicitOpModel) -> dict:
+def std_lago_gopsuite(model: ExplicitOpModel) -> dict[str, list[dict]]:
     """
-    The returned dictionary is a singleton of the form {'LAGO': v},
-    where v is a dictionary representation of a gauge optimization suite.
+    Return a dictionary of the form {'LAGO': v}, where v is a
+    list-of-dicts representation of a gauge optimization suite.
 
-    We construct v by getting the dictionary representation of the
+    We construct v by getting the list-of-dicts representation of the
     "stdgaugeopt" suite for `model`, and then changing some of its 
     options to be suitable for leakage-aware gauge optimization. These
     changes are made in the `lagoified_gopparams_dicts` function.
@@ -447,6 +474,15 @@ def std_lago_gopsuite(model: ExplicitOpModel) -> dict:
 
 
 def add_param_preserving_gauge_opt(results: ModelEstimateResults, est_key: str, gop_params: GSTGaugeOptSuite, verbosity: int = 0):
+    """
+    This function adds one or more models to the `results[est_key].estimates` dict,
+    in a way that's similar to the _add_gauge_opt function in gst.py.
+    
+    It starts by calling _add_gauge_opt with (results, est_key, gop_params, verbosity),
+    then it extracts the gauge group elements from each step of the gauge-optimization
+    suite, computes their composition, and finally applies a parameterization-preserving
+    gauge transformation with that composition.
+    """
     from pygsti.protocols.gst import _add_gauge_opt
     from pygsti.models.gaugegroup import FullGaugeGroupElement
     from pygsti.models import ExplicitOpModel
@@ -472,6 +508,15 @@ def add_param_preserving_gauge_opt(results: ModelEstimateResults, est_key: str, 
 
 
 def add_lago_models(results: ModelEstimateResults, est_key: Optional[str] = None, gos: Optional[GSTGaugeOptSuite] = None, verbosity: int = 0):
+    """
+    Update each estimate in results.estimates (or just results.estimates[est_key],
+    if est_key is not None) with a model obtained by parameterization-preserving
+    gauge optimization.
+    
+    If no gauge optimization suite is provided, then we construct one by starting
+    with "stdgaugeopt" suite and then changing the settings to be suitable for 
+    leakage-aware gauge optimization.
+    """
     from pygsti.protocols.gst import GSTGaugeOptSuite
     if gos is None:
         existing_est  = results.estimates[est_key]
