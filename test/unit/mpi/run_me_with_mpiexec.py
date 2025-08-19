@@ -10,8 +10,11 @@ from mpi4py import MPI
 
 import pygsti
 from pygsti.modelpacks import smq1Q_XYI as std
+from pygsti.optimize import customsolve
 
+customsolve.CUSTOM_SOLVE_THRESHOLD = 10
 wcomm = MPI.COMM_WORLD
+print(f'Running with CUSTOM_SOLVE_THRESHOLD = {customsolve.CUSTOM_SOLVE_THRESHOLD}')
 
 
 class ParallelTest(object):
