@@ -334,9 +334,8 @@ def leaky_qubit_model_from_pspec(ps_2level: QubitProcessorSpec, mx_basis: Union[
 
     ss = ExplicitStateSpace([0],[3])
     tm_3level = ExplicitOpModel(ss, mx_basis) # type: ignore
-    tm_3level._strict = False  # < That lets us set model members by indexing into tm_3level.
-    tm_3level['rho0']     =  FullState(stdmx_to_vec(rho0, mx_basis))
-    tm_3level['Mdefault'] =  UnconstrainedPOVM(
+    tm_3level.preps['rho0']     =  FullState(stdmx_to_vec(rho0, mx_basis))
+    tm_3level.povms['Mdefault'] =  UnconstrainedPOVM(
         [("0", stdmx_to_vec(E0, mx_basis)), ("1", stdmx_to_vec(E1, mx_basis))], evotype="default",
     )
 
@@ -349,7 +348,7 @@ def leaky_qubit_model_from_pspec(ps_2level: QubitProcessorSpec, mx_basis: Union[
 
     for gatename, unitary in Us.items():
         gatekey = (gatename, 0) if gatename != '{idle}' else ('Gi',0)
-        tm_3level[gatekey] = u2x2_to_9x9_superoperator(unitary)
+        tm_3level.operations[gatekey] = u2x2_to_9x9_superoperator(unitary)
 
     tm_3level.sim = 'map'  # can use 'matrix', if that's preferred for whatever reason.
     return tm_3level
