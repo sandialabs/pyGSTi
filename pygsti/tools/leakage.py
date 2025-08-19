@@ -278,7 +278,7 @@ def subspace_superop_fro_dist(op_x, op_y, op_basis, n_leak=0):
 
 # MARK: model construction
 
-def leaky_qubit_model_from_pspec(ps_2level: QubitProcessorSpec, mx_basis: Union[str, Basis]='l2p1', levels_readout_zero=(0,)):
+def leaky_qubit_model_from_pspec(ps_2level: QubitProcessorSpec, mx_basis: Union[str, Basis]='l2p1', levels_readout_zero=(0,)) -> ExplicitOpModel:
     """
     Return an ExplicitOpModel `m` with three-dimensional Hilbert space, whose members are represented
     in `mx_basis`, constructed as follows:
@@ -428,7 +428,16 @@ def lagoified_gopparams_dicts(gopparams_dicts: List[Dict]):
     return gopparams_dicts
 
 
-def std_lago_gopsuite(model):
+def std_lago_gopsuite(model: ExplicitOpModel) -> dict:
+    """
+    The returned dictionary is a singleton of the form {'LAGO': v},
+    where v is a dictionary representation of a gauge optimization suite.
+
+    We construct v by getting the dictionary representation of the
+    "stdgaugeopt" suite for `model`, and then changing some of its 
+    options to be suitable for leakage-aware gauge optimization. These
+    changes are made in the `lagoified_gopparams_dicts` function.
+    """
     from pygsti.protocols.gst import GSTGaugeOptSuite
     std_gop_suite = GSTGaugeOptSuite(gaugeopt_suite_names=('stdgaugeopt',))
     std_gos_lods  = std_gop_suite.to_dictionary(model)['stdgaugeopt']  # list of dictionaries
