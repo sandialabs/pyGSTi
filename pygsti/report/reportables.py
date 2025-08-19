@@ -1073,7 +1073,8 @@ def pergate_leakrate_reduction(op, ignore, mx_basis, reduction):
     lfb = _BuiltinBasis('l2p1', 9)
     op_lfb = _tools.change_basis(op, mx_basis, lfb)
     elinds = lfb.elindlookup
-    leakage_effect_superket = op_lfb[elinds['L'],['I','X','Y','Z']]
+    compinds = [elinds[sslbl] for sslbl in ['I','X','Y','Z'] ]
+    leakage_effect_superket = op_lfb[elinds['L'], compinds]
     leakage_effect = _tools.vec_to_stdmx(leakage_effect_superket, 'pp')
     leakage_rates = _np.linalg.eigvalsh(leakage_effect)
     return reduction(leakage_rates)
@@ -1172,7 +1173,7 @@ def subspace_entanglement_fidelity(a, b, mx_basis):
     n_leak = 1
     return _tools.subspace_entanglement_fidelity(a, b, mx_basis, n_leak)
 
-subspace_entanglement_fidelity = _modf.opsfn_factory(subspace_entanglement_fidelity)
+Subspace_entanglement_fidelity = _modf.opsfn_factory(subspace_entanglement_fidelity)
 
 
 def entanglement_infidelity(a, b, mx_basis):
