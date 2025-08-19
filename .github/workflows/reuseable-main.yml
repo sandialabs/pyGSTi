@@ -67,7 +67,11 @@ jobs:
         python -m pip install -e .[testing]
         python setup.py build_ext --inplace
     - name: Install package (No Cython)
-      if: ${{ inputs.use-cython != 'true' }}
+      if: ${{ inputs.use-cython != 'true' }} && ${{ inputs.os == 'windows-latest' }}
+      run: |
+        set PYGSTI_CYTHON_SKIP=1
+        python -m pip install -e .[testing_no_cython]
+      if: ${{ inputs.use-cython != 'true' }} && (${{ inputs.os == 'ubuntu-latest' }} || ${{ inputs.os == 'macos-latest' }})
       run: |
         PYGSTI_CYTHON_SKIP=1 python -m pip install -e .[testing_no_cython]
     - name: Lint with flake8 (Linux only)
