@@ -17,11 +17,7 @@ import time as _time
 import numpy as _np
 import scipy.optimize as _spo
 
-try:
-    from scipy.optimize import Result as _optResult  # for earlier scipy versions
-except:
-    from scipy.optimize import OptimizeResult as _optResult  # for later scipy versions
-
+from scipy.optimize import OptimizeResult as _optResult
 from pygsti.optimize.customcg import fmax_cg
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 
