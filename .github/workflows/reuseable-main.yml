@@ -66,12 +66,11 @@ jobs:
       run: |
         python -m pip install -e .[testing]
         python setup.py build_ext --inplace
-    - name: Install package (No Cython, Windows)
+    - name: Install package (No Cython)
       if: ${{ inputs.use-cython != 'true' }} && ${{ inputs.os == 'windows-latest' }}
       run: |
         set PYGSTI_CYTHON_SKIP=1
         python -m pip install -e .[testing_no_cython]
-    - name: Install package (No Cython, Ubuntu and MacOS)        
       if: ${{ inputs.use-cython != 'true' }} && (${{ inputs.os == 'ubuntu-latest' }} || ${{ inputs.os == 'macos-latest' }})
       run: |
         PYGSTI_CYTHON_SKIP=1 python -m pip install -e .[testing_no_cython]
