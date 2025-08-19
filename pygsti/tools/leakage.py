@@ -334,6 +334,7 @@ def leaky_qubit_model_from_pspec(ps_2level: QubitProcessorSpec, mx_basis: Union[
 
     ss = ExplicitStateSpace([0],[3])
     tm_3level = ExplicitOpModel(ss, mx_basis) # type: ignore
+    tm_3level._strict = False  # < That lets us set model members by indexing into tm_3level.
     tm_3level['rho0']     =  FullState(stdmx_to_vec(rho0, mx_basis))
     tm_3level['Mdefault'] =  UnconstrainedPOVM(
         [("0", stdmx_to_vec(E0, mx_basis)), ("1", stdmx_to_vec(E1, mx_basis))], evotype="default",
