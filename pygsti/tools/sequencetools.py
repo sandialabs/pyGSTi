@@ -1,4 +1,4 @@
-from typing import Sequence, Any, List, Literal, Tuple, MutableSequence, Optional
+from typing import Sequence, Any, List, Tuple, MutableSequence, Optional
 import numpy as _np
 from tqdm import tqdm
 
@@ -40,10 +40,12 @@ def _lcs_dp_version(A: Sequence, B: Sequence) -> _np.ndarray:
     return table
 
 
-def conduct_one_round_of_lcs_simplification(sequences: MutableSequence[MutableSequence[Any]], table_data_and_sequences,
-                                            internal_tables_and_sequences,
-                                            starting_cache_num,
-                                            cache_struct, sequence_ind_to_cache_ind: Optional[dict[int, int]] = None):
+def conduct_one_round_of_lcs_simplification(sequences: MutableSequence[MutableSequence[Any]],
+                                            table_data_and_sequences: tuple[_np.ndarray, dict[tuple[int, int], Sequence[Any]]],
+                                            internal_tables_and_sequences: tuple[_np.ndarray, dict[tuple[int, int], Sequence[Any]]],
+                                            starting_cache_num: int,
+                                            cache_struct: dict[int, Any],
+                                            sequence_ind_to_cache_ind: Optional[dict[int, int]] = None):
     """
     Simplify the set of sequences by contracting the set of longest common subsequences.
 
@@ -141,10 +143,14 @@ def conduct_one_round_of_lcs_simplification(sequences: MutableSequence[MutableSe
     return updated_sequences, cache_num, cache_struct, sequences_introduced_in_this_round, table, external_sequences, dirty_inds
 
 def simplify_internal_first_one_round(sequences: MutableSequence[MutableSequence[Any]],
-            internal_tables_and_sequences, starting_cache_num, cache_struct,
+            internal_tables_and_sequences: tuple[_np.ndarray, dict[tuple[int, int], Sequence[Any]]],
+            starting_cache_num: int,
+            cache_struct: dict[int, Any],
             seq_ind_to_cache_ind: Optional[dict[int, int]]):
     """
-    Simplify the set of sequences by contracting the set of longest common subsequences.
+    Simplify the set of sequences by contracting the set of longest common subsequences internal subsequences.
+
+    e.g. ["AAAA"] will be replaced with cache_num cache_num. But ["BAR", "BAC"] will not update here because "BA" is split between 2 sequences.
 
     Will update the list of sequences and the cache struct to hold the longest common subsequences as new sequences.
     
