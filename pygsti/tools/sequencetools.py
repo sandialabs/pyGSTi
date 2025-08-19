@@ -1,8 +1,19 @@
+"""
+Tools for finding and using the longest common substrings in order to cache and evaluation order.
+"""
+#***************************************************************************************************
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
+
 from typing import Sequence, Any, List, Tuple, MutableSequence, Optional
 import numpy as _np
 from tqdm import tqdm
 
-#region Longest Common Subsequence
 
 def len_lcp(A: Sequence, B: Sequence) -> int:
     """
@@ -349,5 +360,3 @@ def create_tables_for_internal_LCS(
             the_table[i], seq_table[i] = _longest_common_internal_subsequence(sequences[i])
             curr_best = max(curr_best, the_table[i])
     return the_table, seq_table
-
-#endregion Longest Common Subsequence
