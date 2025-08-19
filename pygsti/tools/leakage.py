@@ -278,12 +278,54 @@ def subspace_superop_fro_dist(op_x, op_y, op_basis, n_leak=0):
 
 # MARK: model construction
 
-def leaky_qubit_model_from_pspec(ps_2level: QubitProcessorSpec, basis: Union[str, Basis], levels_readout_zero=(0,)):
+def leaky_qubit_model_from_pspec(ps_2level: QubitProcessorSpec, mx_basis: Union[str, Basis]='l2p1', levels_readout_zero=(0,)):
+    """
+    Return an ExplicitOpModel `m` with three-dimensional Hilbert space, whose members are represented
+    in `mx_basis`, constructed as follows:
+
+        The Hermitian matrix representation of m['rho0'] is the 3-by-3 matrix with a 1 in the upper-left
+        corner and all other entries equal to zero.
+    
+        Operations in `m` are defined by taking each 2-by-2 unitary `u2` from ps_2level, and promoting it
+        to a 3-by-3 unitary according to 
+
+            u3 = [u2[0, 0], u2[0, 1], 0]
+                 [u2[1, 0], u2[1, 1], 0]
+                 [       0,       0,  1]
+
+        m['Mdefault'] has two effects, labeled "0" and "1". If E0 is the Hermitian matrix representation of
+        effect "0", then E0[i,i]=1 for all i in levels_readout_zero, and E0 is zero in all other components.
+
+    This function might be called in a workflow like the following:
+
+        from pygsti.models     import create_explicit_model
+        from pygsti.algorithms import find_fiducials, find_germs
+        from pygsti.protocols  import StandardGST, StandardGSTDesign, ProtocolData
+
+        # Step 1: Make the experiment design for the 1-qubit system.
+        tm_2level = create_explicit_model( ps_2level, ideal_spam_type='CPTPLND', ideal_gate_type='CPTPLND' )
+        fids    = find_fiducials( tm_2level )
+        germs   = find_germs( tm_2level )
+        lengths = [1, 2, 4, 8, 16, 32]
+        design  = StandardGSTDesign( tm_2level, fids[0], fids[1], germs, lengths )   
+        
+        # Step 2: ... run the experiment specified by "design"; store results in a directory "dir" ...
+
+        # Step 3: read in the experimental data and run GST.
+        pd  = ProtocolData.from_dir(dir)
+        tm_3level = leaky_qubit_model_from_pspec( ps_2level, basis='l2p1' )
+        gst = StandardGST( modes=('CPTPLND',), target_model=tm_3level, verbosity=4 )
+        res = gst.run(pd)
+    """
     from pygsti.models.explicitmodel import ExplicitOpModel
     from pygsti.baseobjs.statespace import ExplicitStateSpace
     from pygsti.modelmembers.povms import UnconstrainedPOVM
     from pygsti.modelmembers.states import FullState
     assert ps_2level.num_qubits == 1
+
+    if isinstance(mx_basis, str):
+        mx_basis = BuiltinBasis(mx_basis, 9)
+    assert isinstance(mx_basis, Basis)
     
     Us = ps_2level.gate_unitaries
     rho0 = np.array([[1, 0, 0], [0, 0, 0], [0, 0, 0]], complex)
@@ -292,17 +334,17 @@ def leaky_qubit_model_from_pspec(ps_2level: QubitProcessorSpec, basis: Union[str
     E1   = np.eye(3, dtype=complex) - E0
 
     ss = ExplicitStateSpace([0],[3])
-    tm_3level = ExplicitOpModel(ss, basis)
-    tm_3level['rho0']     =  FullState(stdmx_to_vec(rho0, basis))
+    tm_3level = ExplicitOpModel(ss, mx_basis)
+    tm_3level['rho0']     =  FullState(stdmx_to_vec(rho0, mx_basis))
     tm_3level['Mdefault'] =  UnconstrainedPOVM(
-        [("0", stdmx_to_vec(E0, basis)), ("1", stdmx_to_vec(E1, basis))], evotype="default",
+        [("0", stdmx_to_vec(E0, mx_basis)), ("1", stdmx_to_vec(E1, mx_basis))], evotype="default",
     )
 
     def u2x2_to_9x9_superoperator(u2x2):
         u3x3 = np.eye(3, dtype=np.complex128)
         u3x3[:2,:2] = u2x2
         superop_std = pgot.unitary_to_std_process_mx(u3x3)
-        superop = pgbt.change_basis(superop_std, 'std', basis)
+        superop = pgbt.change_basis(superop_std, 'std', mx_basis)
         return superop
 
     for gatename, unitary in Us.items():
