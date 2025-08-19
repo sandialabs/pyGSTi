@@ -988,7 +988,6 @@ class OpModel(Model):
                 if num_new_params > 0:
                     memo = set()
                     # If so, before allocating anything, make the necessary space in the parameter arrays:
-                    memo = set()
                     for _, o in self._iter_parameterized_objs():
                         o.shift_gpindices(insertion_point, num_new_params, self, memo)
                     w = _np.insert(w, insertion_point, _np.empty(num_new_params, 'd'))
