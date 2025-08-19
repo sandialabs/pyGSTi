@@ -69,11 +69,13 @@ jobs:
     - name: Install package (No Cython, Windows)
       if: ${{ inputs.use-cython != 'true' }} && ${{ inputs.os == 'windows-latest' }}
       run: |
-        set PYGSTI_CYTHON_SKIP=1
+        echo "the value of inputs.use-cython!= true and inputs.os == windows-latest are ${{ inputs.use-cython != 'true' }} and ${{ inputs.os == 'windows-latest' }}"
+        $Env:PYGSTI_CYTHON_SKIP=1
         python -m pip install -e .[testing_no_cython]
-    - name: Install package (No Cython, Ubuntu and MacOS)        
+    - name: Install package (No Cython, Ubuntu and MacOS)
       if: ${{ inputs.use-cython != 'true' }} && (${{ inputs.os == 'ubuntu-latest' }} || ${{ inputs.os == 'macos-latest' }})
       run: |
+        echo "the value of inputs.use-cython!= true and inputs.os == ubuntu-latest are ${{ inputs.use-cython != 'true' }} and ${{ inputs.os == 'ubuntu-latest' }}"
         PYGSTI_CYTHON_SKIP=1 python -m pip install -e .[testing_no_cython]
     - name: Lint with flake8 (Linux only)
       if: ${{ inputs.os == 'ubuntu-latest'}}
