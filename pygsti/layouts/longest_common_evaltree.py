@@ -52,10 +52,6 @@ def _add_in_idle_gates_to_circuit(circuit: _Circuit, idle_gate_name: Union[str, 
         tmp.done_editing()
     return tmp
 
-
-
-
-
 def setup_circuit_list_for_LCS_computations(
         circuit_list: list[_Circuit],
         implicit_idle_gate_name: Union[str, Label] = 'I'
@@ -111,6 +107,32 @@ def setup_circuit_list_for_LCS_computations(
 
 #endregion Split Circuits by lanes helpers
 
+def cost_to_compute_tensor_matvec_without_reordering(qubit_list: list[int], total_num_qubits: int) -> int:
+
+    assert _np.sum(qubit_list) == total_num_qubits
+
+    if len(qubit_list) == 1:
+        # Basic matvec.
+        cost = 2 * (4**qubit_list[0]**2)
+        return cost
+    
+    elif len(qubit_list) == 2:
+        # vec((A \tensor B) u) = vec(B U A.T)
+        term1 = 2*(4**qubit_list[1]**2) * (4**qubit_list[0]) # MM of BU.
+        term2 = 2 * (4**qubit_list[0]**2) * (4**qubit_list[1]) # MM of U A.T
+        return term1 + term2
+    
+    else:
+        # Just pop off the last term
+        # (B_1 \tensor B_2 ... \tensor B_n) u = (B_n \tensor B_n-1 ... \tensor B_2) U (B_1).T
+
+        right = cost_to_compute_tensor_matvec_without_reordering(qubit_list[:1], qubit_list[0])
+        right *= 4**(_np.sum(qubit_list[1:]))
+        left = cost_to_compute_tensor_matvec_without_reordering(qubit_list[1:],
+                                                                total_num_qubits - qubit_list[0])
+        left *= 4**(qubit_list[0])
+        return left + right
+
 
 #region Lane Collapsing Helpers
 
@@ -139,11 +161,81 @@ def get_dense_op_of_gate_with_perfect_swap_gates(model, op: LabelTup, saved: dic
     """
     return model._layer_rules.get_dense_process_matrix_represention_for_gate(model, op)
 
-
 #endregion Lane Collapsing Helpers
 
 
 class EvalTreeBasedUponLongestCommonSubstring():
+    """
+    This class will convert a circuit list into an evaluation cache specifying the order in which to compute
+    the matrix matrix products.
+
+    To build the tree we run D rounds of simplification, where D is the length of the longest common subsequence
+    between any pair of circuits or within a circuit.
+
+    In each round of the cache construction, we replace all of the longest common subsequences with a cache number.
+    Before continuing to the next round of the caching algorithm we add the newly chosen subsequences to the list of
+    circuits to cache. Note that cache construction each round can take O(C^2 * L^3) where C is the number of
+    circuits in that round and L is the length of the longest circuit in that round.
+
+    Alternate Constructors:
+        - from_other_eval_tree - Construct new tree from another where there is a mapping from the qubits
+                                active in one to the qubits active in the other.
+
+    Properties:
+        - circuit_to_save_location: dict[tuple[LabelTupTup, ...], int] - maps an initial circuit to its starting location in the cache.
+        - qubit_start_point: int - If this tree is for a LANE of a bigger circuit, where does this lane start.
+        - sequence_intro: dict[int, list[int]] - 
+                a list of indices introduced each round. Note that an cache index, i, which is introduced
+                in the same round as a different cache index, j, cannot depend on j. Each round the indices introduced correspond to
+                longest common sequences that round. Different i, and j, implies different sequences which by construction must be the same length.
+                Therefore, if you have computed all of the indices introduced in the previous rounds you can compute all of the indices in
+                the current round, concurrently.
+
+                This invariant is broken for round 0 if you initially pass 2 or more identical circuits.
+                We do not check if the circuits are identical.
+
+        - cache: dict[int, tuple[Union[LabelTupTup, int], ...]] - the actual tree which will be evaluated to compute the process matrices for each of the circuits.
+                The original circuits are stored in their original order in the keys 0, 1, ..., num_circuits - 1
+        - num_circuits: int - How many circuits are in the unaltered list.
+        
+        - _swap_gate: The two qubit representation of a swap gate which for example would swap the effective region from qubit 0 to qubit 1 in S(Gxpi2:0)S.T .
+
+        - _results: dict[Union[int, LabelTup], _np.ndarray] - dictionary of the process matrices after evaluation with a specific model configuration.
+
+        - cache_ind_to_alphabet_vals_referenced: dict[int, set(LabelTup)] - map from cache index to the gates used in that circuit.
+                TODO: Extract this method to circuit.py
+
+        - alphabet_val_to_sorted_cache_inds: dict[LabelTup, sorted[tuple[int, ...]]] -
+                Which indices do you need to recompute if the model interpretation of the label L changed, but everything else stayed the same.
+
+        - gpindex_to_cache_vals: dict[int, tuple[sorted[list[int]], list[Label]]] - once the cache has been evaluated with a model and you are changing only
+                one parameter at a time, which cache indices do you need to recompute and which labels do you need to reinterpret within the model.
+
+    Methods:
+
+        - collapse_circuits_to_process_matrices - PUBLIC. Evaluate the tree based upon the input model.
+                This will only recompute the portions necessary if the optional index term passed is not None.
+                This method will invalidate the results cache if called with the optional index term passed as None.
+        
+        - _collapse_cache_line - PRIVATE. A line in the cache is a subsequence that needs to be calculated. It may contain more than 2 terms,
+                if the specific subsequence is only referenced once. This method handles reducing the line to a single process matrix and storing
+                the result in the appropriate results cache.
+
+        - _which_full_circuits_will_change_due_to_gpindex_changing - PRIVATE. This populates gpindex_to_cache_vals for a given model.
+
+        - visualize_circuit - PUBLIC. Trace through the tree to see what the circuit is that starts at that location.
+
+        - _handle_results_cache_lookup_and_product - Private. Look up the index in the results cache and multiply with current term.
+
+        - _compute_which_labels_index_depends_on - Private. Used to fill the cache_ind_to_alphabet_vals_referenced dictionary.
+        - flop_cost_of_evaluating_tree - PUBLIC. Given a specific matrix size representation and a specific model, compute how many
+                flops it will take to evaluate the cache assuming that matrix multiplication is the only cost.
+                If you are doing a derivative calculation this will also compute the cost to evaluate the tree in that condition.
+
+
+    Options available during construction
+    """
+
 
     def __init__(self, circuit_list: list[LabelTupTup], qubit_starting_loc: int = 0):
         """
@@ -152,7 +244,6 @@ class EvalTreeBasedUponLongestCommonSubstring():
 
         self.circuit_to_save_location = {tuple(cir): i for i,cir in enumerate(circuit_list)}
 
-        self.orig_circuits = {i: circuit_list[i] for i in range(len(circuit_list))}
         self.qubit_start_point = qubit_starting_loc
 
 
@@ -161,39 +252,18 @@ class EvalTreeBasedUponLongestCommonSubstring():
 
         max_rounds = best_internal_match
 
-        C = len(circuit_list)
-        sequence_intro = {0: _np.arange(C)}
+        self.num_circuits = len(circuit_list)
 
-        cache_pos = C
+        sequence_intro = {0: _np.arange(self.num_circuits)}
+
+        cache_pos = self.num_circuits
         cache = {i: circuit_list[i] for i in range(len(circuit_list))}
 
         new_circuit_list = [cir for cir in circuit_list] # Get a deep copy since we will modify it here.
 
         # Let's try simplifying internally first.
-        self.internal_first = False  # TODO: Fix.
-        seq_ind_to_cache_index = {i: i for i in range(C)}
-        if self.internal_first:
-            i = 0
-            cache_pos = -1
-            while max_rounds > 1:
-
-                tmp = simplify_internal_first_one_round(new_circuit_list, 
-                                                        internal_matches,
-                                                        cache_pos,
-                                                        cache,
-                                                        seq_ind_to_cache_index)
-                new_circuit_list, cache_pos, cache, sequence_intro[i-1] = tmp
-                i -= 1
-                internal_matches = create_tables_for_internal_LCS(new_circuit_list)
-
-                max_rounds = _np.max(internal_matches[0])
-        external_matches = _compute_lcs_for_every_pair_of_sequences(new_circuit_list,
-                                                                    None,
-                                                                    None,
-                                                                    set(_np.arange(len(new_circuit_list))),
-                                                                    max([len(cir) for cir in new_circuit_list])-1)
-
-
+        seq_ind_to_cache_index = {i: i for i in range(self.num_circuits)}
+        
         best_external_match = _np.max(external_matches[0])
 
         max_rounds = int(max(best_external_match,best_internal_match))
@@ -227,20 +297,19 @@ class EvalTreeBasedUponLongestCommonSubstring():
             max_rounds = int(max(best_external_match,best_internal_match))
 
         self.cache = cache
-        self.num_circuits = C
         self.from_other = False
 
         self.sequence_intro = sequence_intro
 
         from pygsti.modelmembers.operations import StaticStandardOp
-        self.swap_gate = StaticStandardOp('Gswap', basis='pp').to_dense().round(16)
+        self._swap_gate = StaticStandardOp('Gswap', basis='pp').to_dense()
 
         self.cache_ind_to_alphabet_vals_referenced: dict[int, set[LabelTupTup]] = {}
 
 
         # Useful for repeated calculations seen in a derivative calculation.
         for key in self.cache:
-            self.compute_depends_on(key, self.cache_ind_to_alphabet_vals_referenced)
+            self._compute_which_labels_index_depends_on(key, self.cache_ind_to_alphabet_vals_referenced)
 
         alphabet_val_to_cache_inds_to_update: dict[LabelTup, set[int]] = {}
 
@@ -258,7 +327,7 @@ class EvalTreeBasedUponLongestCommonSubstring():
                     else:
                         alphabet_val_to_cache_inds_to_update[val] = set([cache_ind])
 
-        self.results: dict[int | LabelTupTup, _np.ndarray] = {}
+        self._results: dict[Union[int, LabelTupTup], _np.ndarray] = {}
 
         self.alphabet_val_to_sorted_cache_inds: dict[LabelTup, list[int]] = {}
 
@@ -327,8 +396,7 @@ class EvalTreeBasedUponLongestCommonSubstring():
         self.cache = other.cache
         self.num_circuits = other.num_circuits
         self.sequence_intro = other.sequence_intro
-        self.swap_gate = other.swap_gate
-        self.orig_circuit_list = other.orig_circuit_list
+        self._swap_gate = other._swap_gate
         self.circuit_to_save_location = other.circuit_to_save_location
         self.from_other = other
 
@@ -343,10 +411,6 @@ class EvalTreeBasedUponLongestCommonSubstring():
                         new_op = (op.name, *new_qu)
                         new_term = (*new_term, new_op)
                     self.cache[ind][i] = Label(new_term)
-
-        
-        for icir in range(len(self.orig_circuit_list)):
-            self.orig_circuit_list[icir] = self.trace_through_cache_to_build_circuit(icir)
 
         updated = {}
         for cir, loc in self.circuit_to_save_location.items():
@@ -378,7 +442,7 @@ class EvalTreeBasedUponLongestCommonSubstring():
             if cache_inds:
                 # Invalidate all gate labels that we saved just in case.
                 # Invalidate every index in the which we know to be influenced by my_op.
-                # local_changes = {k: v for k, v in self.results.items() \
+                # local_changes = {k: v for k, v in self._results.items() \
                 #                     if ((k not in cache_inds) and (not isinstance(k, Label)))} # Could just invalidate only the lbl with the index.
 
                 # Iterating over all the cache will take too long.
@@ -402,12 +466,12 @@ class EvalTreeBasedUponLongestCommonSubstring():
 
                 return local_changes, self.circuit_to_save_location
 
-            return self.results, self.circuit_to_save_location
+            return self._results, self.circuit_to_save_location
 
         else:
-            self.results = {} # We are asking to reset all the calculations.
+            self._results = {} # We are asking to reset all the calculations.
             round_keys = sorted(_np.unique(list(self.sequence_intro.keys())))[::-1]
-            # saved: dict[int | LabelTupTup, _np.ndarray] = {}
+            # saved: dict[Union[int, LabelTupTup], _np.ndarray] = {}
 
             if self.internal_first:
 
@@ -428,23 +492,24 @@ class EvalTreeBasedUponLongestCommonSubstring():
                 for cache_ind in self.sequence_intro[key]:
                     cumulative_term = None
                     for term in self.cache[cache_ind]:
-                        cumulative_term = self._collapse_cache_line(model, cumulative_term, term, self.results,
+                        cumulative_term = self._collapse_cache_line(model, cumulative_term, term, self._results,
                                                                     num_qubits_in_default, empty, empty)
                             
                     if cumulative_term is None:
-                        self.results[cache_ind] = _np.eye(4**num_qubits_in_default)
+                        self._results[cache_ind] = _np.eye(4**num_qubits_in_default)
                         # NOTE: unclear when (if ever) this should be a noisy idle gate.
                     else:
-                        self.results[cache_ind] = cumulative_term
+                        self._results[cache_ind] = cumulative_term
         if __debug__:
             # We may store more in the cache in order to handle multi-qubit gates which are out of the normal order.
             for key in self.cache:
-                assert key in self.results
-        
-        # {tuple(self.trace_through_cache_to_build_circuit(icir)): icir for icir in range(len(self.orig_circuit_list)) if icir < self.num_circuits}
-        return self.results, self.circuit_to_save_location
+                assert key in self._results
+        return self._results, self.circuit_to_save_location
     
-    def compute_depends_on(self, val: int | LabelTupTup, visited: dict[int, set[LabelTupTup]]) -> set[LabelTupTup]:
+    def _compute_which_labels_index_depends_on(self, val: Union[int, LabelTupTup], visited: dict[int, set[LabelTupTup]]) -> set[LabelTupTup]:
+        """
+        Determine which labels the specific index in the cache depends on.
+        """
 
         if not isinstance(val, int):
             return set([val])
@@ -453,14 +518,16 @@ class EvalTreeBasedUponLongestCommonSubstring():
         else:
             tmp = set()
             for child in self.cache[val]:
-                ret_val = self.compute_depends_on(child, visited)
+                ret_val = self._compute_which_labels_index_depends_on(child, visited)
                 tmp = tmp.union(ret_val)
             visited[val] = tmp
             return tmp
 
 
-    def combine_for_visualization(self, val, visited):
-
+    def visualize_circuit(self, val: Union[int, LabelTupTup], visited) -> list[LabelTupTup]:
+        """
+        Recombine circuit by traversing the cache.
+        """
         if not isinstance(val, int):
             return [val]
         elif val in visited:
@@ -468,46 +535,26 @@ class EvalTreeBasedUponLongestCommonSubstring():
         else:
             tmp = []
             for child in self.cache[val]:
-                tmp.append(self.combine_for_visualization(child, visited))
+                tmp.append(self.visualize_circuit(child, visited))
             visited[val] = tmp
             return tmp
 
-    def handle_results_cache_lookup_and_product(self,
-                            cumulative_term: None | _np.ndarray,
-                            term_to_extend_with: int | LabelTupTup,
-                            results_cache: dict[int | LabelTupTup, _np.ndarray]) -> _np.ndarray:
+    def _handle_results_cache_lookup_and_product(self,
+                            cumulative_term: Optional[_np.ndarray],
+                            term_to_extend_with: Union[int, LabelTupTup],
+                            results_cache: dict[Union[int, LabelTupTup], _np.ndarray]) -> _np.ndarray:
+        """
+        When combining terms in cache for evaluation handle the lookup from the results cache.
+        """
 
         if cumulative_term is None:
             return results_cache[term_to_extend_with]
         return results_cache[term_to_extend_with] @ cumulative_term
 
-        if isinstance(term_to_extend_with, int):
-            if term_to_extend_with in globally_invalid_cache_inds[:-1]:
-                # look up the result in the local results cache.
-                # This is just for that derivative step.
-                if cumulative_term is None:
-                    return results_cache[term_to_extend_with]
-                return results_cache[term_to_extend_with] @ cumulative_term
-        else:
-            if term_to_extend_with in globally_invalid_cache_inds[-1:]:
-                # Only one label gets invalidated and that is stored at the end of the list.
 
-                # look up the result in the local results cache.
-                # This is just for that derivative step.
-                if cumulative_term is None:
-                    return results_cache[term_to_extend_with]
-                return results_cache[term_to_extend_with] @ cumulative_term
-        
-        # We should use the cache for all the probs calculation.
-        if cumulative_term is None:
-            # look up result.
-            return self.results[term_to_extend_with]
-        return self.results[term_to_extend_with] @ cumulative_term 
-
-
-    def _collapse_cache_line(self, model, cumulative_term: None | _np.ndarray,
-                            term_to_extend_with: int | LabelTupTup,
-                            local_results_cache: dict[int | LabelTupTup, _np.ndarray],
+    def _collapse_cache_line(self, model, cumulative_term: Optional[_np.ndarray],
+                            term_to_extend_with: Union[int, LabelTupTup],
+                            local_results_cache: dict[Union[int, LabelTupTup], _np.ndarray],
                             num_qubits_in_default: int,
                             globally_invalid_cache_inds: Optional[list[int]] = None,
                             globally_invalid_labels: Optional[list[LabelTupTup]] = None
@@ -516,34 +563,29 @@ class EvalTreeBasedUponLongestCommonSubstring():
         Reduce a cache line to a single process matrix.
 
         This should really only be called from collapse_circuits_to_process_matrices.
-
+        The method will handle looking in the appropriate cache in the case of a derivative
+        approximation.
         """
 
         if (term_to_extend_with in local_results_cache):
-            return self.handle_results_cache_lookup_and_product(cumulative_term,
+            return self._handle_results_cache_lookup_and_product(cumulative_term,
                                                                 term_to_extend_with,
                                                                 local_results_cache)
         elif isinstance(term_to_extend_with, int) and \
             (globally_invalid_cache_inds is not None) and \
             (term_to_extend_with not in globally_invalid_cache_inds) and \
-                (term_to_extend_with in self.results):
+                (term_to_extend_with in self._results):
             
-            return self.handle_results_cache_lookup_and_product(cumulative_term,
+            return self._handle_results_cache_lookup_and_product(cumulative_term,
                                                                 term_to_extend_with,
-                                                                self.results)
+                                                                self._results)
         elif isinstance(term_to_extend_with, LabelTupTup) and \
             (globally_invalid_labels is not None) and \
             not (any([t in globally_invalid_labels for t in term_to_extend_with])) \
-                and (term_to_extend_with in self.results):        
-            return self.handle_results_cache_lookup_and_product(cumulative_term,
+                and (term_to_extend_with in self._results):        
+            return self._handle_results_cache_lookup_and_product(cumulative_term,
                                                                 term_to_extend_with,
-                                                                self.results)
-        
-        # elif isinstance(term_to_extend_with, LabelTup) and \
-        #     (term_to_extend_with not in globally_invalid_cache_inds[-1:]) \
-        #         and (term_to_extend_with in self.results):        
-        #     return self.handle_results_cache_lookup_and_product(cumulative_term, term_to_extend_with,
-        #                                                         local_results_cache, globally_invalid_cache_inds)
+                                                                self._results)
 
         else:
             val = 1
@@ -551,7 +593,7 @@ class EvalTreeBasedUponLongestCommonSubstring():
             if isinstance(term_to_extend_with, int):
                 breakpoint()
             matrix_reps = {op.qubits: get_dense_representation_of_gate_with_perfect_swap_gates(model, op,
-                                            local_results_cache, self.swap_gate) for op in term_to_extend_with}
+                                            local_results_cache, self._swap_gate) for op in term_to_extend_with}
             qubit_used = []
             for key in matrix_reps.keys():
                 qubit_used.extend(key)
@@ -561,7 +603,7 @@ class EvalTreeBasedUponLongestCommonSubstring():
 
             implicit_idle_reps = {(qu,): get_dense_representation_of_gate_with_perfect_swap_gates(model,
                                         Label("Fake_Gate_To_Get_Tensor_Size_Right", qu), # A fake gate to look up and use the appropriate idle gate.
-                                        local_results_cache, self.swap_gate) for qu in unused_qubits}
+                                        local_results_cache, self._swap_gate) for qu in unused_qubits}
 
             while qubits_available:
 
@@ -581,21 +623,6 @@ class EvalTreeBasedUponLongestCommonSubstring():
                 return val
             # Cache if off.
             return local_results_cache[term_to_extend_with] @ cumulative_term
-
-
-    def trace_through_cache_to_build_circuit(self, cache_ind: int) -> list[tuple]:
-
-        output = ()
-        for term in self.cache[cache_ind]:
-
-            if isinstance(term, Label):
-                output = (*output, term)
-            elif isinstance(term, int):
-                # Recurse down.
-                next_term = self.trace_through_cache_to_build_circuit(term)
-                output = (*output, *next_term)
-
-        return list(output)
 
     def flop_cost_of_evaluating_tree(self, matrix_size: tuple[int, int], model = None, gp_index_changing: Optional[int] = None) -> int:
         """
@@ -943,29 +970,3 @@ class CollectionOfLCSEvalTrees():
 
 
 
-def cost_to_compute_tensor_matvec_without_reordering(qubit_list: list[int], total_num_qubits: int) -> int:
-
-    assert _np.sum(qubit_list) == total_num_qubits
-
-    if len(qubit_list) == 1:
-        # Basic matvec.
-        cost = 2 * (4**qubit_list[0]**2)
-        return cost
-    
-    elif len(qubit_list) == 2:
-        # vec((A \tensor B) u) = vec(B U A.T)
-        term1 = 2*(4**qubit_list[1]**2) * (4**qubit_list[0]) # MM of BU.
-        term2 = 2 * (4**qubit_list[0]**2) * (4**qubit_list[1]) # MM of U A.T
-        return term1 + term2
-    
-    else:
-        # Just pop off the last term
-        # (B_1 \tensor B_2 ... \tensor B_n) u = (B_n \tensor B_n-1 ... \tensor B_2) U (B_1).T
-
-        right = cost_to_compute_tensor_matvec_without_reordering(qubit_list[:1], qubit_list[0])
-        right *= 4**(_np.sum(qubit_list[1:]))
-        left = cost_to_compute_tensor_matvec_without_reordering(qubit_list[1:],
-                                                                total_num_qubits - qubit_list[0])
-        left *= 4**(qubit_list[0])
-        return left + right
-    
