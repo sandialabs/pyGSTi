@@ -14,7 +14,7 @@ from __future__ import annotations
 import collections as _collections
 import itertools as _itertools
 import warnings as _warnings
-from typing import List, Sequence, Literal, Tuple, Any, Hashable, Union, Optional, TypeAlias, TYPE_CHECKING
+from typing import List, Sequence, Literal, Tuple, Any, Hashable, Union, Optional, TYPE_CHECKING
 if TYPE_CHECKING:
     import stim
     from cirq.circuits.circuit import Circuit as CirqCircuit
