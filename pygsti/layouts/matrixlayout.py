@@ -10,16 +10,16 @@ Defines the MatrixCOPALayout class.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import collections as _collections
 
 import numpy as _np
 
 from pygsti.layouts.distlayout import DistributableCOPALayout as _DistributableCOPALayout
 from pygsti.layouts.distlayout import _DistributableAtom
-from pygsti.layouts.evaltree import CollectionOfLCSEvalTrees as _CollectionOfLCSEvalTrees
-from pygsti.layouts.evaltree import EvalTreeBasedUponLongestCommonSubstring as _EvalTreeLCS
-from pygsti.layouts.evaltree import EvalTree as _EvalTree
-from pygsti.layouts.evaltree import setup_circuit_list_for_LCS_computations as _setup_circuit_list_for_LCS_computations
+from pygsti.layouts.evaltree import (
+    CollectionOfLCSEvalTrees as _CollectionOfLCSEvalTrees,
+    EvalTree as _EvalTree,
+    setup_circuit_list_for_LCS_computations as _setup_circuit_list_for_LCS_computations,
+)
 from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.tools import listtools as _lt
 from pygsti.tools import slicetools as _slct
@@ -102,7 +102,7 @@ class _MatrixCOPALayoutAtom(_DistributableAtom):
 
                         #Now add these outcomes to `expanded_nospam_circuit_outcomes` - note that multiple "unique_i"'s
                         # may exist for the same expanded & without-spam circuit (exp_nospam_c) and so we need to
-                        # keep track of a list of unique_i indices for each circut and spam tuple below.
+                        # keep track of a list of unique_i indices for each circuit and spam tuple below.
                         if exp_nospam_c not in _expanded_nospam_circuit_outcomes:
                             _expanded_nospam_circuit_outcomes[exp_nospam_c] = {st:(outcome, [unique_i]) for st, outcome in zip(spam_tuples, outcomes)}
                         else:
@@ -304,7 +304,7 @@ class _MatrixCOPALayoutAtomWithLCS(_DistributableAtom):
 
                         #Now add these outcomes to `expanded_nospam_circuit_outcomes` - note that multiple "unique_i"'s
                         # may exist for the same expanded & without-spam circuit (exp_nospam_c) and so we need to
-                        # keep track of a list of unique_i indices for each circut and spam tuple below.
+                        # keep track of a list of unique_i indices for each circuit and spam tuple below.
                         if exp_nospam_c not in _expanded_nospam_circuit_outcomes:
                             _expanded_nospam_circuit_outcomes[exp_nospam_c] = {st:(outcome, [unique_i]) for st, outcome in zip(spam_tuples, outcomes)}
                         else:
@@ -479,7 +479,7 @@ class MatrixCOPALayout(_DistributableCOPALayout):
         A 1- or 2-tuple of integers specifying how many parameter-block processors are
         used when dividing the physical processors into a grid.  The first and second
         elements correspond to counts for the first and second parameter dimensions,
-        respecively.
+        respectively.
 
     param_dimensions : tuple, optional
         The number of parameters along each parameter dimension.  Can be an
@@ -510,7 +510,7 @@ class MatrixCOPALayout(_DistributableCOPALayout):
                  layout_creation_circuit_cache = None, use_old_tree_style: bool = True):
         
         if not use_old_tree_style:
-            # NOTE: ERrror out if we are useing new tree and have an explicit op model. Explain why this is bad.
+            # NOTE: Error out if we are using new tree and have an explicit op model. Explain why this is bad.
             from pygsti.models import ExplicitOpModel, ImplicitOpModel
             if isinstance(model, ExplicitOpModel):
                 raise ValueError(f"Model: {model.__class__} does not support creation of embedded op process matrices." +
@@ -525,7 +525,7 @@ class MatrixCOPALayout(_DistributableCOPALayout):
         #    - heuristically find groups of circuits that meet criteria
         # 3. separately create a tree of no-spam expanded circuits originating from each group => self.atoms
         # 4. assign "cache" and element indices so that a) all elements of a tree are contiguous
-        #    and b) elements with the same spam-tuple are continguous.
+        #    and b) elements with the same spam-tuple are contiguous.
         # 5. initialize base class with given per-original-circuit element indices.
 
         unique_circuits, to_unique = self._compute_unique_circuits(circuits)
