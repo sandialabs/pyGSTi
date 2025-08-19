@@ -1,3 +1,16 @@
+"""
+Tools for working with Kronecker Products especially the Dyadic forms.
+"""
+#***************************************************************************************************
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
+
+
 from __future__ import annotations
 import numpy as np
 import scipy.sparse.linalg as sparla
@@ -117,42 +130,3 @@ class KronStructured(RealLinOp):
         for i in range(len(self.kron_operands)):
             output = np.kron(output, self.kron_operands[i])
         return output
-    
-    def update_operand(self, lane: int, matrix: np.ndarray) -> None:
-        """
-        Replace a specific matrix with a new matrix of the same size and layout.
-        """
-
-        assert lane >= 0 and lane < len(self.kron_operands)
-
-        # Iterate through the structure and replace the A matrix of the appropriate index with the new matrix.
-
-        def walk_forward(curr_loc: int, dydadic_struct: DyadicKronStructed, mat: np.ndarray):
-            if curr_loc == lane:
-                dydadic_struct.A = mat
-                breakpoint()
-                return
-            elif lane == len(self.kron_operands) - 1 and (curr_loc == lane -1):
-                # We have hit the leaf node.
-                dydadic_struct.B = mat
-                return
-            return walk_forward(curr_loc + 1, dydadic_struct.B, mat) 
-        
-        walk_forward(0, self.dyadic_struct, matrix)
-        walk_forward(0, self._adjoint, matrix.T)
-
-
-
-class KronStructuredPath:
-    """
-    This class is for making a path for computing a matvec and adjoint of a kron structured matrix.
-
-    When those functions are called you need to specify the actual dense operands being used.
-    This way we can just swap out one the matrices each time we update the representation of a gate.
-    """
-
-
-    def __init__(self, shapes: list[tuple[int, int]]):
-
-
-        pass
