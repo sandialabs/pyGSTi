@@ -184,7 +184,6 @@ def mapfill_dprobs_atom(fwdsim, mx_to_fill, dest_indices, dest_param_indices, la
         iFinal = iParamToFinal[param_indices[i]]
         fwdsim.model.set_parameter_values([param_indices[i-1], param_indices[i]], 
                                           [orig_vec[param_indices[i-1]], orig_vec[param_indices[i]]+eps])
-
         #mapfill_probs_atom(fwdsim, probs2, slice(0, nEls), layout_atom, resource_alloc)
         cond_update_probs_atom(fwdsim, probs2, slice(0, nEls), layout_atom, param_indices[i], resource_alloc)
         #assert _np.linalg.norm(probs2_test-probs2) < 1e-10
