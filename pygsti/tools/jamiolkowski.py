@@ -229,7 +229,7 @@ def fast_jamiolkowski_iso_std(operation_mx: _np.ndarray, op_mx_basis: BasisLike,
 
     This routine *only* computes the case of the Choi matrix being in the
     standard (matrix unit) basis, but does so more quickly than
-    :func:`jamiolkowski_iso` and so is particuarly useful when only the
+    :func:`jamiolkowski_iso` and so is particularly useful when only the
     eigenvalues of the Choi matrix are needed.
 
     Parameters
@@ -350,7 +350,7 @@ def sum_of_negative_choi_eigenvalues(model, weights=None):
     """
     Compute the amount of non-CP-ness of a model.
 
-    This is defined (somewhat arbitarily) by summing the negative
+    This is defined (somewhat arbitrarily) by summing the negative
     eigenvalues of the Choi matrix for each gate in `model`.
 
     Parameters
@@ -381,7 +381,7 @@ def sums_of_negative_choi_eigenvalues(model):
     """
     Compute the amount of non-CP-ness of a model.
 
-    This is defined (somewhat arbitarily) by summing the negative
+    This is defined (somewhat arbitrarily) by summing the negative
     eigenvalues of the Choi matrix for each gate in model separately.
     This function is different from :func:`sum_of_negative_choi_eigenvalues`
     in that it returns sums separately for each operation of `model`.
@@ -410,7 +410,7 @@ def sums_of_negative_choi_eigenvalues(model):
 
 def magnitudes_of_negative_choi_eigenvalues(model):
     """
-    Compute the magnitudes of the negative eigenvalues of the Choi matricies for each gate in `model`.
+    Compute the magnitudes of the negative eigenvalues of the Choi matrices for each gate in `model`.
 
     Parameters
     ----------

@@ -1070,9 +1070,9 @@ def instrument_diamonddist(a, b, mx_basis):
 #decompose operation matrix into axis of rotation, etc
 def decompose_gate_matrix(operation_mx):
     """
-    Decompse a gate matrix into fixed points, axes of rotation, angles of rotation, and decay rates.
+    Decompose a gate matrix into fixed points, axes of rotation, angles of rotation, and decay rates.
 
-    This funtion computes how the action of a operation matrix can be is
+    This function computes how the action of a operation matrix can be is
     decomposed into fixed points, axes of rotation, angles of rotation, and
     decays.  Also determines whether a gate appears to be valid and/or unitary.
 
@@ -1731,7 +1731,7 @@ def elementary_errorgens_dual(dim, typ, basis):
 def extract_elementary_errorgen_coefficients(errorgen, elementary_errorgen_labels, elementary_errorgen_basis='PP',
                                              errorgen_basis='pp', return_projected_errorgen=False):
     """ 
-    Extract a dictionary of elemenary error generator coefficients and rates fromt he specified dense error generator
+    Extract a dictionary of elemenary error generator coefficients and rates from the specified dense error generator
     matrix.
 
     Parameters
@@ -1849,7 +1849,7 @@ def project_errorgen(errorgen, elementary_errorgen_type, elementary_errorgen_bas
         projection values themseves.
 
     return_scale_fctr : bool, optional
-        If True, also return the scaling factor that was used to multply the
+        If True, also return the scaling factor that was used to multiply the
         projections onto *normalized* error generators to get the returned
         values.
 
@@ -1863,7 +1863,7 @@ def project_errorgen(errorgen, elementary_errorgen_type, elementary_errorgen_bas
         Only returned when `return_generators == True`.  An array of shape
         (#basis-els,op_dim,op_dim) such that  `generators[i]` is the
         generator corresponding to the i-th basis element.  Note
-        that these matricies are in the *std* (matrix unit) basis.
+        that these matrices are in the *std* (matrix unit) basis.
     """
 
     if isinstance(errorgen_basis, _Basis):
@@ -2180,7 +2180,7 @@ def rotation_gate_mx(r, mx_basis="gm"):
     Parameters
     ----------
     r : tuple
-        A tuple of coeffiecients, one per non-identity
+        A tuple of coefficients, one per non-identity
         Pauli-product basis element
 
     mx_basis : {'std', 'gm', 'pp', 'qt'} or Basis object
@@ -2334,7 +2334,7 @@ def project_model(model, target_model,
                 lnd_error_gen_cp, targetOp, basis, gen_type)
             NpDict['LND'] += HBlk.block_data.size + otherBlk.block_data.size
 
-    #Collect and return requrested results:
+    #Collect and return requested results:
     ret_gs = [gsDict[p] for p in projectiontypes]
     ret_Nps = [NpDict[p] for p in projectiontypes]
     return ret_gs, ret_Nps
@@ -2678,7 +2678,7 @@ def is_valid_lindblad_paramtype(typ):
     Parameters
     ----------
     typ : str
-        A paramterization type.
+        A parameterization type.
 
     Returns
     -------

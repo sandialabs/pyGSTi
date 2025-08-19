@@ -37,7 +37,7 @@ class ExplicitOpModelCalc(object):
     Performs calculations with explicitly-represented objects.
 
     This class performs calculations with *simplified* objects (so don't
-    need to worry abount POVMs or Instruments, just preps, ops, & effects),
+    need to worry about POVMs or Instruments, just preps, ops, & effects),
     but, unlike forward simulators, these calculations require knowledge of *all*
     of the possible operations in each category (not just the ones in a given
     circuti).  As such, instances of `ExplicitOpModelCalc` are almost always
@@ -46,7 +46,7 @@ class ExplicitOpModelCalc(object):
     Parameters
     ----------
     dim : int
-        The dimenstion of the Hilbert-Schmidt space upon which the
+        The dimension of the Hilbert-Schmidt space upon which the
         various operators act.
 
     simplified_preps : dict
@@ -70,7 +70,7 @@ class ExplicitOpModelCalc(object):
         Parameters
         ----------
         dim : int
-            The dimenstion of the Hilbert-Schmidt space upon which the
+            The dimension of the Hilbert-Schmidt space upon which the
             various operators act.
 
         simplified_preps, simplified_ops, simplified_effects : dict
@@ -511,7 +511,7 @@ class ExplicitOpModelCalc(object):
                     #    #use acton... maybe throw error if dim is too large (maybe above?)
                     #    deriv = _np.zeros((dim,dim),'d')
                     #    uv = _np.zeros((dim,1),'d') # unit vec
-                    #    for k in range(dim): #FUTURE: could optimize this by bookeeping and pulling this loop outward
+                    #    for k in range(dim): #FUTURE: could optimize this by bookkeeping and pulling this loop outward
                     #        uv[k] = 1.0; Guv = gate.acton(uv); uv[k] = 0.0 #get k-th col of operation matrix
                     #        # termA_mn = sum( U_mk*Gkn ) so U locks m=i,k=j => termA_in = 1.0*Gjn
                     #        # termB_mn = sum( Gmk*U_kn ) so U locks k=i,n=j => termB_mj = 1.0*Gmi
@@ -569,7 +569,7 @@ class ExplicitOpModelCalc(object):
             orthog_to = gauge_space + _np.dot(nonGaugeDirections, non_gauge_mix_mx)  # add non-gauge components in
             # dims: (nParams,n_gauge_params) + (nParams,n_non_gauge_params) * (n_non_gauge_params,n_gauge_params)
             # non_gauge_mix_mx is a (n_non_gauge_params,n_gauge_params) matrix whose i-th column specifies the
-            #  coefficents to multipy each of the non-gauge directions by before adding them to the i-th
+            #  coefficients to multiply each of the non-gauge directions by before adding them to the i-th
             #  direction to project out (i.e. what were the pure gauge directions).
 
         elif item_weights is not None:
@@ -698,7 +698,7 @@ class ExplicitOpModelCalc(object):
         item_weights : dict, optional
             Dictionary of weighting factors for individual gates and spam operators.
             Keys can be gate, state preparation, POVM effect, spam labels, or the
-            special strings "gates" or "spam" whic represent the entire set of gate
+            special strings "gates" or "spam" which represent the entire set of gate
             or SPAM operators, respectively.  Values are floating point numbers.
             These weights define the metric used to compute the non-gauge space,
             *orthogonal* the gauge space, that is projected onto.
@@ -735,7 +735,7 @@ class ExplicitOpModelCalc(object):
         #  An element of the gauge group can be written gg = exp(-K), where K is a n x n matrix.  If K is
         #   hermitian then gg is unitary, but this need not be the case.  A gauge transform acts on a
         #   gatset via Model => gg^-1 G gg, i.e. G => exp(K) G exp(-K).  We care about the action of
-        #   infinitesimal gauge tranformations (b/c the *derivative* vectors span the tangent space),
+        #   infinitesimal gauge transformations (b/c the *derivative* vectors span the tangent space),
         #   which act as:
         #    G => (I+K) G (I-K) = G + [K,G] + ignored(K^2), where [K,G] := KG-GK
         #
@@ -779,18 +779,18 @@ class ExplicitOpModelCalc(object):
         #     x[0:nOpParams] is the basis vector for the intersection space within the gate parameter space,
         #     that is, the analogue of dParams_ij in the single-dG_ij introduction above.
         #
-        #   Still, we just substitue these dParams_ij vectors (as many as the nullspace dimension) for dG_ij
+        #   Still, we just substitute these dParams_ij vectors (as many as the nullspace dimension) for dG_ij
         #   above to get the general case projector.
         gen_ndG, _ = self.nongauge_and_gauge_spaces(item_weights, non_gauge_mix_mx)
 
-        # ORIG WAY: use psuedo-inverse to normalize projector.  Ran into problems where
+        # ORIG WAY: use pseudo-inverse to normalize projector.  Ran into problems where
         #  default rcond == 1e-15 didn't work for 2-qubit case, but still more stable than inv method below
         P = _np.dot(gen_ndG, _np.transpose(gen_ndG))  # almost a projector, but cols of dG are not orthonormal
         Pp = _np.dot(_np.linalg.pinv(P, rcond=1e-7), P)  # make P into a true projector (onto gauge space)
 
         # ALT WAY: use inverse of dG^T*dG to normalize projector (see wikipedia on projectors, dG => A)
         #  This *should* give the same thing as above, but numerical differences indicate the pinv method
-        #  is prefereable (so long as rcond=1e-7 is ok in general...)
+        #  is preferable (so long as rcond=1e-7 is ok in general...)
         #  Check: P'*P' = (dG (dGT dG)^1 dGT)(dG (dGT dG)^-1 dGT) = (dG (dGT dG)^1 dGT) = P'
         #invGG = _np.linalg.inv(_np.dot(_np.transpose(gen_ndG), gen_ndG))
         #Pp_alt = _np.dot(gen_ndG, _np.dot(invGG, _np.transpose(gen_ndG))) # a true projector (onto gauge space)

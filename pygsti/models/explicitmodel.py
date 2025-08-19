@@ -594,7 +594,7 @@ class ExplicitOpModel(_mdl.OpModel):
         item_weights : dict, optional
             Dictionary of weighting factors for individual gates and spam operators.
             Keys can be gate, state preparation, POVM effect, spam labels, or the
-            special strings "gates" or "spam" whic represent the entire set of gate
+            special strings "gates" or "spam" which represent the entire set of gate
             or SPAM operators, respectively.  Values are floating point numbers.
             These weights define the metric used to compute the non-gauge space,
             *orthogonal* the gauge space, that is projected onto.

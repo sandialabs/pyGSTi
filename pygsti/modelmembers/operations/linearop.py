@@ -29,7 +29,7 @@ from typing import Any
 # 3) the LinearOperator is assigned/added to a dict within the Model.  As a part of this
 #    process, the LinearOperator's 'gpindices' member is set, if it isn't already, and the
 #    Model's "global" parameter vector (and number of params) is updated as
-#    needed to accomodate new parameters.
+#    needed to accommodate new parameters.
 #
 # Note: gpindices may be None (before initialization) or any valid index
 #  into a 1D numpy array (e.g. a slice or integer array).  It may NOT have
@@ -397,7 +397,7 @@ class LinearOperator(_modelmember.ModelMember):
 
         Optionally transforms this operation first using matrices
         `transform` and `inv_transform`.  Specifically, this operation gets
-        transfomed as: `O => inv_transform * O * transform` before comparison with
+        transformed as: `O => inv_transform * O * transform` before comparison with
         `other_op`.
 
         Parameters
@@ -429,7 +429,7 @@ class LinearOperator(_modelmember.ModelMember):
 
         Optionally transforms this operation first using matrices
         `transform` and `inv_transform`.  Specifically, this operation gets
-        transfomed as: `O => inv_transform * O * transform` before comparison with
+        transformed as: `O => inv_transform * O * transform` before comparison with
         `other_op`.
 
         Parameters
