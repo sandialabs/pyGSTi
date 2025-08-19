@@ -9,6 +9,8 @@ Defines the OpFactory class
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
+
+from __future__ import annotations
 import numpy as _np
 
 from pygsti.modelmembers.operations.staticunitaryop import StaticUnitaryOp as _StaticUnitaryOp
@@ -24,9 +26,10 @@ from pygsti.baseobjs import statespace as _statespace
 from pygsti.baseobjs import basis as _basis
 from pygsti.evotypes import Evotype as _Evotype
 from pygsti.tools import optools as _ot
+from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
 
 
-def op_from_factories(factory_dict, lbl):
+def op_from_factories(factory_dict: dict[_Lbl, OpFactory], lbl: _Lbl) -> _LinearOperator:
     """
     Create an operator for `lbl` from the factories in `factory_dict`.
 
