@@ -13,8 +13,8 @@ class LogLTestCase(BaseTestCase):
     def test_memory(self):
 
         model = smq1Q_XY.target_model()
-        model = model.depolarize(spam_noise = .01, op_noise = .001)
-        model = model.rotate(max_rotate=.005, seed=1234)
+        model = model.depolarize(spam_noise = 0.01, op_noise = 0.001)
+        model = model.rotate(max_rotate=0.005, seed=1234)
 
         prep_fiducials = smq1Q_XY.prep_fiducials()
         meas_fiducials = smq1Q_XY.meas_fiducials()

@@ -27,8 +27,8 @@ class ErrgenCompositionCommutationTester(BaseCase):
         pspec = QubitProcessorSpec(num_qubits, gate_names, availability=availability)
         self.target_model = create_crosstalk_free_model(processor_spec = pspec)
         self.circuit = create_random_circuit(pspec, 4, sampler='edgegrab', samplerargs=[0.4,], rand_state=12345)
-        max_strengths = {1: {'S': 0, 'H': .0001},
-                         2: {'S': 0, 'H': .0001}}
+        max_strengths = {1: {'S': 0, 'H': 0.0001},
+                         2: {'S': 0, 'H': 0.0001}}
         error_rates_dict = sample_error_rates_dict(pspec, max_strengths, seed=12345)
         self.error_model = create_crosstalk_free_model(pspec, lindblad_error_coeffs=error_rates_dict)
         self.errorgen_propagator = ErrorGeneratorPropagator(self.error_model.copy())
@@ -261,8 +261,8 @@ class ApproxStabilizerMethodTester(BaseCase):
         self.target_model = create_crosstalk_free_model(processor_spec = pspec)
         self.circuit = create_random_circuit(pspec, 4, sampler='edgegrab', samplerargs=[0.4,], rand_state=12345)
         self.circuit_alt = create_random_circuit(pspec, 4, sampler='edgegrab', samplerargs=[0.4,], rand_state=12345)
-        max_strengths = {1: {'S': .0005, 'H': .0001},
-                         2: {'S': .0005, 'H': .0001}}
+        max_strengths = {1: {'S': 0.0005, 'H': 0.0001},
+                         2: {'S': 0.0005, 'H': 0.0001}}
         error_rates_dict = sample_error_rates_dict(pspec, max_strengths, seed=12345)
         self.error_model = create_crosstalk_free_model(pspec, lindblad_error_coeffs=error_rates_dict)
         self.error_propagator = ErrorGeneratorPropagator(self.error_model.copy())
@@ -318,13 +318,13 @@ class ApproxStabilizerMethodTester(BaseCase):
         amp0000 = _eprop.amplitude_of_state(self.circuit_tableau, '0000')
         amp1111 = _eprop.amplitude_of_state(self.circuit_tableau, '1111')
         self.assertTrue(abs(amp0000)<1e-7)
-        self.assertTrue(abs(amp1111 -(-1j*np.sqrt(.125)))<1e-7)
+        self.assertTrue(abs(amp1111 -(-1j*np.sqrt(0.125)))<1e-7)
         
         amp0000 = _eprop.amplitude_of_state(self.circuit_tableau_alt, '0000')
         amp1111 = _eprop.amplitude_of_state(self.circuit_tableau_alt, '1111')
         
         self.assertTrue(abs(amp0000)<1e-7)
-        self.assertTrue(abs(amp1111 - (-1j*np.sqrt(.125)))<1e-7)
+        self.assertTrue(abs(amp1111 - (-1j*np.sqrt(0.125)))<1e-7)
 
     def test_bitstring_to_tableau(self):
         tableau = _eprop.bitstring_to_tableau('1010')

@@ -2468,7 +2468,7 @@ def _compute_1d_reference_values_and_name(estimate, badfit_options, gaugeopt_sui
                     dd[key] = _tools.jtracedist(op.to_dense(), targetops_dict[key].to_dense())
             
             for key, op in insts_dict.items():
-                inst_dd = .5* _tools.instrument_diamonddist(op, targetinsts_dict[key])
+                inst_dd = 0.5* _tools.instrument_diamonddist(op, targetinsts_dict[key])
                 if inst_dd < 0: # indicates that instrument_diamonddist failed
                     _warnings.warn(("Diamond distance failed to compute %s reference value for 1D wildcard budget!"
                                     "No fallback presently available for instruments, so skipping.") % str(key))
@@ -2500,7 +2500,7 @@ def _compute_1d_reference_values_and_name(estimate, badfit_options, gaugeopt_sui
                         dd[lbl][key] = _tools.jtracedist(op.to_dense(), target_model.operations[key].to_dense())
 
                 for key, op in gaugeopt_model.instruments.items():
-                    inst_dd = .5* _tools.instrument_diamonddist(op, target_model.instruments[key], gaugeopt_model.basis)
+                    inst_dd = 0.5* _tools.instrument_diamonddist(op, target_model.instruments[key], gaugeopt_model.basis)
                     if inst_dd < 0: # indicates that instrument_diamonddist failed
                         _warnings.warn(("Diamond distance failed to compute %s reference value for 1D wildcard budget!"
                                         "No fallback presently available for instruments, so skipping.") % str(key))
