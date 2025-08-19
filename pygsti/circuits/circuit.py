@@ -23,6 +23,10 @@ from pygsti.tools import internalgates as _itgs
 from pygsti.tools import slicetools as _slct
 from pygsti.tools.legacytools import deprecate as _deprecate_fn
 
+from typing import Union, Optional, TYPE_CHECKING
+if TYPE_CHECKING:
+    import stim
+
 #Externally, we'd like to do thinks like:
 # c = Circuit( LabelList )
 # c.append_line("Q0")
@@ -3822,7 +3826,7 @@ class Circuit(object):
         f.write("\\documentclass{article}\n")
         f.write("\\usepackage{mathtools}\n")
         f.write("\\usepackage{xcolor}\n")
-        f.write("\\usepackage[paperwidth=" + str(5. + d * .3)
+        f.write("\\usepackage[paperwidth=" + str(5. + d * 0.3)
                 + "in, paperheight=" + str(2 + n * 0.2) + "in,margin=0.5in]{geometry}")
         f.write("\\input{Qcircuit}\n")
         f.write("\\begin{document}\n")
@@ -3860,7 +3864,9 @@ class Circuit(object):
         f.close()
 
 
-    def convert_to_stim_tableau_layers(self, gate_name_conversions=None, num_qubits=None):
+    def convert_to_stim_tableau_layers(self, gate_name_conversions: Optional[dict[str, stim.Tableau]] = None, 
+                                       num_qubits: Optional[int] = None, 
+                                       qubit_label_conversions: Optional[dict[Union[str, int], int]] = None) -> list[stim.Tableau]:
         """
         Converts this circuit to a list of stim tableau layers
 
@@ -3870,6 +3876,41 @@ class Circuit(object):
             A map from pygsti gatenames to standard stim tableaus. 
             If None a standard set of gate names is used from 
             `pygsti.tools.internalgates`
+
+        num_qubits : int, optional (default None)
+            Number of qubits which should be included in the each Tableau.
+            If None this value will be attempted to be inferred from the
+            Circuit's line_labels. 
+
+        qubit_label_conversions : dict, optional (default None)
+            A map from the circuit's qubit labels into integers in the range 0 to N-1,
+            where N is the number of qubits, where the integer indices indicate
+            which qubit in the stim Tableau to map a given circuit operation into.
+            If not specified an attempt will be made to infer this mapping based on the
+            circuit's qubit labels and an exception will be made if this inference is not possible.
+
+            Note: in the following line_labels = self.line_labels.
+
+            Inference is supported for line labels with the following format.
+
+            - Qubit labels that are either integers, or string representations of integers, prefixed by
+              the character 'Q' or 'q', that are monotonically increasing.
+
+            If num_qubits is not specified, then these qubit labels will be mapped into the range [0,N-1] based
+            on their index.
+
+            If num_qubits is specified then there are different subcases:
+                If num_qubits == len(line_labels) then these qubit labels will be mapped into the range [0,N-1] based
+                on their index.
+                If num_qubit > len(line_labels) we have two possibilities:
+                    1. If max(line_labels) <= num_qubits then the line_labels are mapped directly into their value
+                       in the range [0, N-1].
+                    2. If max(line_labels) > num_qubits then the line_labels are mapped into [0,N-1] using their index.
+                Note if num_qubits<len(line_labels) then an exception is raised.
+               
+            If the default conversion behavior doesn't suit your needs, or doesn't support your label format then
+            a manual dictionary should be specified.
+
 
         Returns
         -------
@@ -3881,12 +3922,46 @@ class Circuit(object):
             raise ImportError("Stim is required for this operation, and it does not appear to be installed.")
         if gate_name_conversions is None:
             gate_name_conversions = _itgs.standard_gatenames_stim_conversions()
+        line_labels = self._line_labels
 
         if num_qubits is None:
-            line_labels = self._line_labels
             assert line_labels != ('*',), "Cannot convert circuits with placeholder line label to stim Tableau unless number of qubits is specified."
             num_qubits=len(line_labels)
-        
+
+        if qubit_label_conversions is None: #attempt to infer this.
+            assert len(line_labels)<=num_qubits, 'More line labels specified than qubits, cannot infer qubit label conversion mapping.'
+
+            #case 1: qubit labels are monotonically increasing integers and span a range of length num_qubits.
+            if all([isinstance(lbl, int) for lbl in line_labels]) and all([(line_labels[i+1]-line_labels[i])>0 for i in range(len(line_labels)-1)]):
+                if len(line_labels) == num_qubits or max(line_labels)>num_qubits:
+                    qubit_label_conversions = {lbl:i for i, lbl in enumerate(line_labels)}
+                elif max(line_labels)<=num_qubits:
+                    qubit_label_conversions = {lbl:lbl for lbl in line_labels}                
+                
+            #Case 2: qubit labels are strings of the form 'Qi' or 'qi' where the i's are string representations of integers otherwise matching the constraints of
+            #case 1.          
+            elif all([isinstance(lbl,str) for lbl in line_labels]):
+                if all([lbl[0]=='Q' or lbl[0]=='q' for lbl in line_labels]) and all([lbl[1:].isnumeric() for lbl in line_labels]):
+                    int_line_labels = [int(lbl[1:]) for lbl in line_labels]
+                    if all([(int_line_labels[i+1] - int_line_labels[i])>0 for i in range(len(line_labels)-1)]):
+                        if len(int_line_labels) == num_qubits or max(int_line_labels)>num_qubits:
+                            qubit_label_conversions = {lbl:i for i, lbl in enumerate(line_labels)}
+                        elif max(int_line_labels)<=num_qubits:
+                            qubit_label_conversions = {str(lbl):lbl for lbl in int_line_labels}                        
+            else:
+                raise ValueError(f'Unsupported line_label type {type(line_labels[0])}, only str or int supported.')
+
+            if qubit_label_conversions is None: #then no automatic conversion was inferred.
+                msg = 'Unable to infer a mapping from line labels of this circuit into integers in the range [0,N-1] '\
+                      +'as required for conversion to a stim.Tableau object. Please see the docstring for this method for the '\
+                      +'supported automatic inferencing. Please manually specify a qubit_label_conversions dictionary.'
+                raise RuntimeError(msg)
+        else: #validate qubit_label_conversion dictionary has the keys we need.
+            msg = 'qubit_label_conversions does not contain keys for all of the line_labels in this circuit.'
+            assert all([lbl in qubit_label_conversions for lbl in line_labels]), msg
+            msg1 = 'All qubit_label_conversions values should be ints in the range [0, num_qubits-1]'
+            assert all([isinstance(val,int) and (0 <= val <=num_qubits-1) for val in qubit_label_conversions.values()]), msg1
+
         stim_layers=[]
 
         if self._static:
@@ -3898,11 +3973,13 @@ class Circuit(object):
             stim_layer = empty_tableau.copy()
             for sub_lbl in layer:
                 temp = gate_name_conversions[sub_lbl.name]    
-                stim_layer.append(temp, sub_lbl.qubits)
+                stim_layer.append(temp, [qubit_label_conversions[qubit_lbl] for qubit_lbl in sub_lbl.qubits])
             stim_layers.append(stim_layer)
         return stim_layers
     
-    def convert_to_stim_tableau(self, gate_name_conversions=None):
+    def convert_to_stim_tableau(self, gate_name_conversions: Optional[dict[str, stim.Tableau]] = None, 
+                                       num_qubits: Optional[int] = None, 
+                                       qubit_label_conversions: Optional[dict[Union[str, int], int]] = None) -> stim.Tableau:
         """
         Converts this circuit to a stim tableau
 
@@ -3912,12 +3989,46 @@ class Circuit(object):
             A map from pygsti gatenames to standard stim tableaus. 
             If None a standard set of gate names is used from 
             `pygsti.tools.internalgates`
+        
+        num_qubits : int, optional (default None)
+            Number of qubits which should be included in the overall Tableau.
+            If None this value will be attempted to be inferred from the
+            Circuit's line_labels. 
+
+        qubit_label_conversions : dict, optional (default None)    
+            A map from the circuit's qubit labels into integers in the range 0 to N-1,
+            where N is the number of qubits, where the integer indices indicate
+            which qubit in the stim Tableau to map a given circuit operation into.
+            If not specified an attempt will be made to infer this mapping based on the
+            circuit's qubit labels and an exception will be made if this inference is not possible.
+
+            Note: in the following line_labels = self.line_labels.
+
+            Inference is supported for line labels with the following format.
+
+            - Qubit labels that are either integers, or string representations of integers, prefixed by
+              the character 'Q' or 'q', that are monotonically increasing.
+
+            If num_qubits is not specified, then these qubit labels will be mapped into the range [0,N-1] based
+            on their index.
+
+            If num_qubits is specified then there are different subcases:
+                If num_qubits == len(line_labels) then these qubit labels will be mapped into the range [0,N-1] based
+                on their index.
+                If num_qubit > len(line_labels) we have two possibilities:
+                    1. If max(line_labels) <= num_qubits then the line_labels are mapped directly into their value
+                       in the range [0, N-1].
+                    2. If max(line_labels) > num_qubits then the line_labels are mapped into [0,N-1] using their index.
+                Note if num_qubits<len(line_labels) then an exception is raised.
+               
+            If the default conversion behavior doesn't suit your needs, or doesn't support your label format then
+            a manual dictionary should be specified.
 
         Returns
         -------
         A single stim.Tableau representing the entire circuit.
         """
-        layers=self.convert_to_stim_tableau_layers(gate_name_conversions)
+        layers=self.convert_to_stim_tableau_layers(gate_name_conversions, num_qubits, qubit_label_conversions)
         if layers:        
             tableau=layers[0]
             for layer in layers[1:]:
@@ -4342,7 +4453,7 @@ class Circuit(object):
                             gatename_conversion=None, qubit_conversion=None,
                             block_between_layers=True,
                             block_between_gates=False,
-                            include_delay_on_idle=True,
+                            include_delay_on_idle=False,
                             gateargs_map=None):  # TODO
         """
         Converts this circuit to an openqasm string.
@@ -4387,9 +4498,9 @@ class Circuit(object):
         include_delay_on_idle: bool, optional
             When `True`, includes a delay operation on implicit idles in each layer, as per
             Qiskit's OpenQASM 2.0 convention after the deprecation of the id operation.
-            Defaults to True, which is commensurate with legacy usage of this function.
-            However, this can now be set to False to avoid this behaviour if generating
+            Defaults to False, to avoid this behaviour if generating
             actually valid OpenQASM (with no opaque delay instruction) is desired.
+            Can be set to True, which is commensurate with legacy usage of this function.
 
         gateargs_map : dict, optional
             If not None, a dict that maps strings (representing pyGSTi standard gate names) to
@@ -4526,6 +4637,7 @@ class Circuit(object):
                         # Delay 0 works because of the barrier
                         # In OpenQASM3, this should probably be a stretch instead
                         openqasm += 'delay(0)' + ' q[' + str(qubit_conversion[q]) + '];\n'
+                        pass
 
             # Add in a barrier after every circuit layer if block_between_layers==True.
             # Including barriers is critical for QCVV testing, circuits should usually

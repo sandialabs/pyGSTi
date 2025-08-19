@@ -197,7 +197,7 @@ def standard_gatename_unitaries():
       * 'Gxx', 'Gzz' : MS-style parity gates
       * 'Gcres', 'Gecres' : Cross-resonance and echoed cross-resonance gates. Native gate operations common on transmon systems (including IBM).
       * 'Gecr' : alternative name for the echoed cross-resonance gate, matching OpenQASM / IBM conventions.
-      
+
     * Non-Clifford gates:
 
       * 'Gt', 'Gtdag' : the T and inverse T gates (T is a Z rotation by pi/4).
@@ -253,7 +253,7 @@ def standard_gatename_unitaries():
     
     #N gate, pi/2 rotation about the (np.sqrt(3)/2, 0, -1/2) axis of the Bloch sphere
     #native gate in some spin qubit systems.
-    std_unitaries['Gn'] = _spl.expm(-1j*(_np.pi/4)*((_np.sqrt(3)/2)*sigmax - (.5)*sigmaz))
+    std_unitaries['Gn'] = _spl.expm(-1j*(_np.pi/4)*((_np.sqrt(3)/2)*sigmax - (0.5)*sigmaz))
 
     # The 1-qubit Clifford group.
     std_unitaries['Gc0'] = _np.array([[1, 0], [0, 1]], complex)                                         # This is Gi
@@ -304,6 +304,7 @@ def standard_gatename_unitaries():
     std_unitaries['Gecres'] = _np.array([[0, 1, 0., 1j], [1., 0, -1j, 0.],
                                         [0., 1j, 0, 1], [-1j, 0., 1, 0]], complex)/_np.sqrt(2)
     std_unitaries['Gecr'] = std_unitaries['Gecres']  # alias
+    
     std_unitaries['Gzr'] = Gzr()
     std_unitaries['Gczr'] = Gczr()
 
@@ -399,12 +400,41 @@ def standard_gatenames_stim_conversions():
     'Gzz'   : stim.Tableau.from_named_gate('SQRT_ZZ'),
     'Gcnot' : stim.Tableau.from_named_gate('CNOT'),
     'Gswap' : stim.Tableau.from_named_gate('SWAP'),
-    'Gcphase' : stim.Tableau.from_named_gate('CZ')
+    'Gcphase' : stim.Tableau.from_named_gate('CZ'),
+    'Giswap' : stim.Tableau.from_named_gate('ISWAP')
+
     }
     ecr_unitary = _np.array([[0, 1, 0., 1j], [1., 0, -1j, 0.],
                              [0., 1j, 0, 1], [-1j, 0., 1, 0]], complex)/_np.sqrt(2)
     gate_dict['Gecres'] = stim.Tableau.from_unitary_matrix(ecr_unitary, endian='big')
     gate_dict['Gecr'] = gate_dict['Gecres']
+
+    gate_dict['Gc0']  = stim.Tableau.from_unitary_matrix(_np.array([[1, 0], [0, 1]], complex), endian='big')   # This is Gi
+    gate_dict['Gc1']  = stim.Tableau.from_unitary_matrix(_np.array([[1, -1j], [1, 1j]], complex) / _np.sqrt(2), endian='big')   # This is H Pdag
+    gate_dict['Gc2']  = stim.Tableau.from_unitary_matrix(_np.array([[1, 1], [1j, -1j]], complex) / _np.sqrt(2), endian='big')   # This is P H
+    gate_dict['Gc3']  = stim.Tableau.from_unitary_matrix(_np.array([[0, 1], [1, 0]], complex), endian='big')   # This is Gxpi (up to phase)
+    gate_dict['Gc4']  = stim.Tableau.from_unitary_matrix(_np.array([[-1, -1j], [1, -1j]], complex) / _np.sqrt(2), endian='big')   # This is H Pdag X
+    gate_dict['Gc5']  = stim.Tableau.from_unitary_matrix(_np.array([[1, 1], [-1j, 1j]], complex) / _np.sqrt(2), endian='big')   # This is Pdag H
+    gate_dict['Gc6']  = stim.Tableau.from_unitary_matrix(_np.array([[0, -1j], [1j, 0]], complex), endian='big')   # This is Gypi (up to phase)
+    gate_dict['Gc7']  = stim.Tableau.from_unitary_matrix(_np.array([[1j, 1], [-1j, 1]], complex) / _np.sqrt(2), endian='big')   # This is H P X
+    gate_dict['Gc8']  = stim.Tableau.from_unitary_matrix(_np.array([[1j, -1j], [1, 1]], complex) / _np.sqrt(2), endian='big')   # This is Pdag X H
+    gate_dict['Gc9']  = stim.Tableau.from_unitary_matrix(_np.array([[1, 0], [0, -1]], complex), endian='big')   # This is Gzpi
+    gate_dict['Gc10'] = stim.Tableau.from_unitary_matrix(_np.array([[1, 1j], [1, -1j]], complex) / _np.sqrt(2), endian='big')  # This is H P
+    gate_dict['Gc11'] = stim.Tableau.from_unitary_matrix(_np.array([[1, -1], [1j, 1j]], complex) / _np.sqrt(2), endian='big')  # This is P X H
+    gate_dict['Gc12'] = stim.Tableau.from_unitary_matrix(_np.array([[1, 1], [1, -1]], complex) / _np.sqrt(2), endian='big')  # This is Gh
+    gate_dict['Gc13'] = stim.Tableau.from_unitary_matrix(_np.array([[0.5 - 0.5j, 0.5 + 0.5j], [0.5 + 0.5j, 0.5 - 0.5j]], complex), endian='big')  # This is Gxmpi2 (up to phase)
+    gate_dict['Gc14'] = stim.Tableau.from_unitary_matrix(_np.array([[1, 0], [0, 1j]], complex), endian='big')  # This is Gzpi2 / Gp (up to phase)
+    gate_dict['Gc15'] = stim.Tableau.from_unitary_matrix(_np.array([[1, 1], [-1, 1]], complex) / _np.sqrt(2), endian='big')  # This is Gympi2 (up to phase)
+    gate_dict['Gc16'] = stim.Tableau.from_unitary_matrix(_np.array([[0.5 + 0.5j, 0.5 - 0.5j], [0.5 - 0.5j, 0.5 + 0.5j]], complex), endian='big')  # This is Gxpi2 (up to phase)
+    gate_dict['Gc17'] = stim.Tableau.from_unitary_matrix(_np.array([[0, 1], [1j, 0]], complex), endian='big')  # This is P X
+    gate_dict['Gc18'] = stim.Tableau.from_unitary_matrix(_np.array([[1j, -1j], [-1j, -1j]], complex) / _np.sqrt(2), endian='big')  # This is Y H
+    gate_dict['Gc19'] = stim.Tableau.from_unitary_matrix(_np.array([[0.5 + 0.5j, -0.5 + 0.5j], [0.5 - 0.5j, -0.5 - 0.5j]], complex), endian='big')  # This is Pdag H P
+    gate_dict['Gc20'] = stim.Tableau.from_unitary_matrix(_np.array([[0, -1j], [-1, 0]], complex), endian='big')  # This is Pdag X
+    gate_dict['Gc21'] = stim.Tableau.from_unitary_matrix(_np.array([[1, -1], [1, 1]], complex) / _np.sqrt(2), endian='big')  # This is Gypi2 (up to phase)
+    gate_dict['Gc22'] = stim.Tableau.from_unitary_matrix(_np.array([[0.5 + 0.5j, 0.5 - 0.5j], [-0.5 + 0.5j, -0.5 - 0.5j]], complex), endian='big')  # This is P H Pdag
+    gate_dict['Gc23'] = stim.Tableau.from_unitary_matrix(_np.array([[1, 0], [0, -1j]], complex), endian='big') # This is Gzmpi2 / Gpdag (up to phase)
+
+
     return gate_dict
 
 def standard_gatenames_cirq_conversions():
@@ -463,8 +493,8 @@ def standard_gatenames_cirq_conversions():
     std_gatenames_to_cirq['Gcphase'] = cirq.CZ
     std_gatenames_to_cirq['Gcnot'] = cirq.CNOT
     std_gatenames_to_cirq['Gswap'] = cirq.SWAP
-    std_gatenames_to_cirq['Gzz'] = cirq.ZZPowGate(exponent=.5, global_shift=-.5)
-    std_gatenames_to_cirq['Gxx'] = cirq.XXPowGate(exponent=.5, global_shift=-.5)
+    std_gatenames_to_cirq['Gzz'] = cirq.ZZPowGate(exponent=0.5, global_shift=-0.5)
+    std_gatenames_to_cirq['Gxx'] = cirq.XXPowGate(exponent=0.5, global_shift=-0.5)
     std_gatenames_to_cirq['Giswap'] = cirq.ISWAP
     std_gatenames_to_cirq['Gsqrtiswap'] = cirq.SQRT_ISWAP
     #I don't presently see a one-to-one conversion for cross-resonance
@@ -765,12 +795,14 @@ def standard_gatenames_openqasm_conversions(version='u3'):
         std_gatenames_to_qasm['Gc23'] = ['u3(0, 0, 4.71238898038469)']  # [0, 0, 3] * pi/2 (this is Gzmpi2 / Gpdag)
 
         std_gatenames_to_qasm['Gecr'] = ['ecr']
+        std_gatenames_to_qasm['Gecres'] = ['ecr']
 
         std_gatenames_to_argmap = {}
         std_gatenames_to_argmap['Gzr'] = lambda gatearg: ['u3(0, 0, ' + str(gatearg[0]) + ')']
         std_gatenames_to_argmap['Gczr'] = lambda gatearg: ['crz(' + str(gatearg[0]) + ')']
         std_gatenames_to_argmap['Gu3'] = lambda gatearg: ['u3(' + str(gatearg[0]) + ', '
                                                           + str(gatearg[1]) + ', ' + str(gatearg[2]) + ')']
+        std_gatenames_to_argmap['Gdelay'] = lambda gatearg: ['delay(' + str(gatearg[0]) + ')']
 
     elif version == 'x-sx-rz':
         std_gatenames_to_qasm = {}
@@ -820,6 +852,7 @@ def standard_gatenames_openqasm_conversions(version='u3'):
         std_gatenames_to_qasm['Gtdag'] = ['rz(5.497787143782138)']
 
         std_gatenames_to_qasm['Gecr'] = ['ecr']
+        std_gatenames_to_qasm['Gecres'] = ['ecr']
 
         std_gatenames_to_argmap = {}
         std_gatenames_to_argmap['Gzr'] = lambda gatearg: ['rz(' + str(gatearg[0]) + ')']
@@ -827,6 +860,7 @@ def standard_gatenames_openqasm_conversions(version='u3'):
         std_gatenames_to_argmap['Gu3'] = lambda gatearg: ['rz(' + str(gatearg[2]) + ')', 'sx',
                                                           'rz(' + str(float(gatearg[0]) + _np.pi) + ')', 'sx',
                                                           'rz(' + str(float(gatearg[1]) + _np.pi) + ')']
+        std_gatenames_to_argmap['Gdelay'] = lambda gatearg: ['delay(' + str(gatearg[0]) + ')']
     else:
         raise ValueError("Unknown version!")
 

@@ -316,12 +316,12 @@ def create_elementary_errorgen(typ, p, q=None, sparse=False):
                 elif typ == 'S':
                     pdag_p = (pdag @ p)
                     rho1 = p[:,i].reshape((d,1))@pdag[j,:].reshape((1,d))
-                    rho1[:, j] += -.5*pdag_p[:, i]
-                    rho1[i, :] += -.5*pdag_p[j, :]
+                    rho1[:, j] += -0.5*pdag_p[:, i]
+                    rho1[i, :] += -0.5*pdag_p[j, :]
                 elif typ == 'C':
                     rho1 = p[:,i].reshape((d,1))@qdag[j,:].reshape((1,d)) + q[:,i].reshape((d,1))@pdag[j,:].reshape((1,d))
-                    rho1[:, j] += -.5*pq_plus_qp[:, i]
-                    rho1[i, :] += -.5*pq_plus_qp[j, :]
+                    rho1[:, j] += -0.5*pq_plus_qp[:, i]
+                    rho1[i, :] += -0.5*pq_plus_qp[j, :]
                 elif typ == 'A':
                     rho1 = 1j*(p[:,i].reshape((d,1))@ qdag[j,:].reshape((1,d))) - 1j*(q[:,i].reshape((d,1))@pdag[j,:].reshape((1,d)))
                     rho1[:, j] += 1j*.5*pq_minus_qp[:, i]
@@ -424,8 +424,8 @@ def create_elementary_errorgen_pauli(typ, p, q=None, sparse=False):
             for i in range(d): 
                 for j in range(d):
                     rho1 = p[:,i].reshape((d,1))@q[j,:].reshape((1,d)) + q[:,i].reshape((d,1))@p[j,:].reshape((1,d))
-                    rho1[:, j] += -.5*pq_plus_qp[:, i]
-                    rho1[i, :] += -.5*pq_plus_qp[j, :]
+                    rho1[:, j] += -0.5*pq_plus_qp[:, i]
+                    rho1[i, :] += -0.5*pq_plus_qp[j, :]
                     elem_errgen[:, d*i+j] = rho1.flatten()[:, None] if sparse else rho1.flatten()
         else:
             # Loop through the standard basis as all possible input density matrices

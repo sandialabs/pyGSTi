@@ -30,7 +30,7 @@ from pygsti.baseobjs.label import Label as _Lbl
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LEEL
 from pygsti.modelmembers.operations.lindbladcoefficients import LindbladCoefficientBlock as _LindbladCoefficientBlock
 from pygsti.models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
-
+from pygsti import SpaceT
 
 _CVXPY_AVAILABLE = importlib.util.find_spec('cvxpy') is not None
 
@@ -121,8 +121,8 @@ def spam_dotprods(rho_vecs, povms):
         j = 0
         for povm in povms:
             for EVec in povm.values():
-                ret[i, j] = _np.vdot(EVec.to_dense(on_space='HilbertSchmidt'),
-                                     rhoVec.to_dense(on_space='HilbertSchmidt'))
+                ret[i, j] = _np.vdot(EVec.to_dense("HilbertSchmidt"),
+                                     rhoVec.to_dense("HilbertSchmidt"))
                 j += 1
                 # to_dense() gives a 1D array, so no need to transpose EVec
     return ret
@@ -230,7 +230,7 @@ class GateEigenvalues(_modf.ModelFunction):
         -------
         numpy.ndarray
         """
-        evals, evecs = _np.linalg.eig(model.operations[self.oplabel].to_dense(on_space='HilbertSchmidt'))
+        evals, evecs = _np.linalg.eig(model.operations[self.oplabel].to_dense("HilbertSchmidt"))
 
         ev_list = list(enumerate(evals))
         ev_list.sort(key=lambda tup: abs(tup[1]), reverse=True)
@@ -353,8 +353,7 @@ def rel_circuit_eigenvalues(model_a, model_b, circuit):
     """
     A = model_a.sim.product(circuit)  # "gate"
     B = model_b.sim.product(circuit)  # "target gate"
-    rel_op = _np.dot(_np.linalg.pinv(B), A)  # "relative gate" == target^{-1} * gate
-    return _np.linalg.eigvals(rel_op)
+    return rel_eigenvalues(A, B, None)
 
 
 Rel_circuit_eigenvalues = _modf.modelfn_factory(rel_circuit_eigenvalues)
@@ -921,13 +920,16 @@ def upper_bound_fidelity(gate, mx_basis):
     gate : numpy.ndarray
         the transfer-matrix specifying a gate's action.
 
-    mx_basis : Basis or {'pp', 'gm', 'std'}
-        the basis that `gate` is in.
+    mx_basis : Basis or string
+        Currently restricted to Pauli-product
 
     Returns
     -------
     float
     """
+    basis_str = mx_basis if isinstance(mx_basis, str) else mx_basis.name
+    if basis_str != 'pp':
+        raise NotImplementedError(f'Basis must be Pauli-Product, got {mx_basis}.')
     return _tools.fidelity_upper_bound(gate)[0]
 
 
@@ -1029,7 +1031,7 @@ def angles_btwn_rotn_axes(model):
     angles_btwn_rotn_axes = _np.zeros((len(opLabels), len(opLabels)), 'd')
 
     for i, gl in enumerate(opLabels):
-        decomp = _tools.decompose_gate_matrix(model.operations[gl].to_dense(on_space='HilbertSchmidt'))
+        decomp = _tools.decompose_gate_matrix(model.operations[gl].to_dense("HilbertSchmidt"))
         rotnAngle = decomp.get('pi rotations', 'X')
         axisOfRotn = decomp.get('axis of rotation', None)
 
@@ -1220,9 +1222,9 @@ if _CVXPY_AVAILABLE:
         def __init__(self, model_a, model_b, oplabel):
             self.oplabel = oplabel
             if isinstance(model_b, _ExplicitOpModel):
-                self.B = model_b.operations[oplabel].to_dense(on_space='HilbertSchmidt')
+                self.B = model_b.operations[oplabel].to_dense("HilbertSchmidt")
             else:
-                self.B = model_b.operation_blks['gates'][oplabel].to_dense(on_space='HilbertSchmidt')
+                self.B = model_b.operation_blks['gates'][oplabel].to_dense("HilbertSchmidt")
             self.d = int(round(_np.sqrt(model_a.dim)))
             _modf.ModelFunction.__init__(self, model_a, [("gate", oplabel)])
 
@@ -1241,10 +1243,10 @@ if _CVXPY_AVAILABLE:
             """
             gl = self.oplabel
             if isinstance(model, _ExplicitOpModel):
-                dm, W = _tools.diamonddist(model.operations[gl].to_dense(on_space='HilbertSchmidt'),
+                dm, W = _tools.diamonddist(model.operations[gl].to_dense("HilbertSchmidt"),
                                            self.B, model.basis, return_x=True)
             else:
-                dm, W = _tools.diamonddist(model.operation_blks['gates'][gl].to_dense(on_space='HilbertSchmidt'),
+                dm, W = _tools.diamonddist(model.operation_blks['gates'][gl].to_dense("HilbertSchmidt"),
                                            self.B, 'pp', return_x=True)  # HACK - need to get basis from model 'pp' HARDCODED for now
 
             self.W = W
@@ -1265,9 +1267,9 @@ if _CVXPY_AVAILABLE:
             """
             mxBasis = nearby_model.basis
             if isinstance(nearby_model, _ExplicitOpModel):
-                A = nearby_model.operations[self.oplabel].to_dense(on_space='HilbertSchmidt')
+                A = nearby_model.operations[self.oplabel].to_dense("HilbertSchmidt")
             else:
-                A = nearby_model.operation_blks['gates'][self.oplabel].to_dense(on_space='HilbertSchmidt')
+                A = nearby_model.operation_blks['gates'][self.oplabel].to_dense("HilbertSchmidt")
                 mxBasis = 'pp'  # HACK need to set mxBasis based on model but not the full model basis
             JAstd = self.d * _tools.fast_jamiolkowski_iso_std(A, mxBasis)
             JBstd = self.d * _tools.fast_jamiolkowski_iso_std(self.B, mxBasis)
@@ -1318,8 +1320,12 @@ def std_unitarity(a, b, mx_basis):
     -------
     float
     """
-    Lambda = _np.dot(a, _np.linalg.pinv(b))
-    return _tools.unitarity(Lambda, mx_basis)
+    try:
+        Lambda = _np.dot(a, _np.linalg.inv(b))
+        return _tools.unitarity(Lambda, mx_basis)
+    except _np.linalg.LinAlgError as e:
+        _warnings.warn(str(e))
+        return _np.nan
 
 
 def eigenvalue_unitarity(a, b):
@@ -1339,12 +1345,13 @@ def eigenvalue_unitarity(a, b):
     float
     """
     try:
-        Lambda = _np.dot(a, _np.linalg.pinv(b))
+        Lambda = _np.dot(a, _np.linalg.inv(b))
         d2 = Lambda.shape[0]
         lmb = _np.linalg.eigvals(Lambda)
         return float(_np.real(_np.linalg.norm(lmb)**2) - 1.0) / (d2 - 1.0)
-    except _np.linalg.LinAlgError:
-        return -1
+    except _np.linalg.LinAlgError as e:
+        _warnings.warn(str(e))
+        return _np.nan
 
 
 def nonunitary_entanglement_infidelity(a, b, mx_basis):
@@ -1703,9 +1710,13 @@ def rel_eigenvalues(a, b, mx_basis):
     -------
     numpy.ndarray
     """
-    target_op_inv = _np.linalg.pinv(b)
-    rel_op = _np.dot(target_op_inv, a)
-    return _np.linalg.eigvals(rel_op).astype("complex")  # since they generally *can* be complex
+    try:
+        target_op_inv = _np.linalg.inv(b)
+        rel_op = _np.dot(target_op_inv, a)
+        return _np.linalg.eigvals(rel_op).astype("complex")  # since they generally *can* be complex
+    except _np.linalg.LinAlgError as e:
+        _warnings.warn(str(e))
+        return _np.nan * _np.ones(a.shape)
 
 
 Rel_eigvals = _modf.opsfn_factory(rel_eigenvalues)
@@ -1793,28 +1804,8 @@ Rel_logGmlogT_eigvals = _modf.opsfn_factory(rel_log_diff_eigenvalues)
 # init args == (model1, model2, op_label)
 
 
-def rel_gate_eigenvalues(a, b, mx_basis):  # DUPLICATE of rel_eigenvalues TODO
-    """
-    Eigenvalues of b^{-1} * a
-
-    Parameters
-    ----------
-    a : numpy.ndarray
-        The first process (transfer) matrix.
-
-    b : numpy.ndarray
-        The second process (transfer) matrix.
-
-    mx_basis : Basis or {'pp', 'gm', 'std'}
-        the basis that `a` and `b` are in.
-
-    Returns
-    -------
-    numpy.ndarray
-    """
-    rel_op = _np.dot(_np.linalg.pinv(b), a)  # "relative gate" == target^{-1} * gate
-    return _np.linalg.eigvals(rel_op).astype("complex")  # since they generally *can* be complex
-
+rel_gate_eigenvalues = rel_eigenvalues
+# ^ An alias.
 
 Rel_gate_eigenvalues = _modf.opsfn_factory(rel_gate_eigenvalues)
 # init args == (model1, model2, op_label)
@@ -2155,26 +2146,42 @@ def general_decomposition(model_a, model_b):
     mxBasis = model_b.basis  # B is usually the target which has a well-defined basis
 
     for gl in opLabels:
-        gate = model_a.operations[gl].to_dense(on_space='HilbertSchmidt')
-        targetOp = model_b.operations[gl].to_dense(on_space='HilbertSchmidt')
+        gate = model_a.operations[gl].to_dense("HilbertSchmidt")
+        targetOp = model_b.operations[gl].to_dense("HilbertSchmidt")
         gl = str(gl)  # Label -> str for decomp-dict keys
 
         target_evals = _np.linalg.eigvals(targetOp)
-        if _np.any(_np.isclose(target_evals, -1.0)):
-            target_logG = _tools.unitary_superoperator_matrix_log(targetOp, mxBasis)
-            logG = _tools.approximate_matrix_log(gate, target_logG)
-        else:
-            logG = _tools.real_matrix_log(gate, "warn")
-            if _np.linalg.norm(logG.imag) > 1e-6:
-                _warnings.warn("Truncating imaginary logarithm!")
-                logG = _np.real(logG)
+        failed = False
+        try:
+            if _np.any(_np.isclose(target_evals, -1.0)):
+                target_logG = _tools.unitary_superoperator_matrix_log(targetOp, mxBasis)
+                logG = _tools.approximate_matrix_log(gate, target_logG)
+            else:
+                logG = _tools.real_matrix_log(gate, "warn")
+                if _np.linalg.norm(logG.imag) > 1e-6:
+                    _warnings.warn("Truncating imaginary logarithm!")
+                    logG = _np.real(logG)
+        except (_np.linalg.LinAlgError, AssertionError) as e:
+            _warnings.warn(str(e))
+            logG = _np.nan * _np.ones(gate.shape)
+            failed = True
+
+        proj_basis = _Basis.cast('PP', model_a.dim) if model_a.state_space.is_entirely_qubits else mxBasis
+        basis_mxs = proj_basis.elements
+        blk = _LindbladCoefficientBlock('ham', proj_basis)
+        num_elem_errgens = len(blk.elementary_errorgens)
+
+        if failed:
+            decomp[gl + ' log inexactness'] = _np.nan
+            decomp[gl + ' axis' ] = _np.nan * _np.ones(num_elem_errgens)
+            decomp[gl + ' angle'] = _np.nan
+            decomp[gl + ' hamiltonian eigenvalues'] = _np.nan * _np.ones(basis_mxs[0].shape[0])
+            continue
 
         decomp[gl + ' log inexactness'] = _np.linalg.norm(_spl.expm(logG) - gate)
 
         #hamProjs, hamGens = _tools.std_errorgen_projections(
         #    logG, "hamiltonian", mxBasis, mxBasis, return_generators=True)
-        proj_basis = _Basis.cast('PP', model_a.dim) if model_a.state_space.is_entirely_qubits else mxBasis
-        blk = _LindbladCoefficientBlock('ham', proj_basis)
         blk.set_from_errorgen_projections(logG, mxBasis)
         hamProjs = blk.block_data
         #hamGens = blk.create_lindblad_term_superoperators(mxBasis)
@@ -2188,7 +2195,6 @@ def general_decomposition(model_a, model_b):
         # to *twice* this coefficient (e.g. a X(pi/2) rotn is exp( i pi/4 X ) ),
         # thus the factor of 2.0 above.
 
-        basis_mxs = proj_basis.elements
         # REMOVE scalings = [(_np.linalg.norm(hamGens[i]) / _np.linalg.norm(_tools.hamiltonian_to_lindbladian(mx))
         # REMOVE              if _np.linalg.norm(hamGens[i]) > 1e-10 else 0.0)
         # REMOVE             for i, mx in enumerate(basis_mxs)]
@@ -2201,6 +2207,9 @@ def general_decomposition(model_a, model_b):
         for gl_other in opLabels:
             rotnAngle = decomp[str(gl) + ' angle']
             rotnAngle_other = decomp[str(gl_other) + ' angle']
+            if _np.isnan(rotnAngle) or _np.isnan(rotnAngle_other):
+                decomp[str(gl) + "," + str(gl_other) + " axis angle"] = _np.nan
+                continue
 
             if gl == gl_other or abs(rotnAngle) < 1e-4 or abs(rotnAngle_other) < 1e-4:
                 decomp[str(gl) + "," + str(gl_other) + " axis angle"] = 10000.0  # sentinel for irrelevant angle
@@ -2442,7 +2451,7 @@ def info_of_opfn_by_name(name):
                  'respectively'),
         "trace": ("1/2 Trace|Distance",
                   "0.5 | Chi(A) - Chi(B) |_tr"),
-        "diamond": ("1/2 Diamond-Dist",
+        "diamond": ("1/2 Diamond|Distance",
                     "0.5 sup | (1 x (A-B))(rho) |_tr"),
         "nuinf": ("Non-unitary|Ent. Infidelity",
                   "(d^2-1)/d^2 [1 - sqrt( unitarity(A B^-1) )]"),
@@ -2612,8 +2621,8 @@ def instrument_half_diamond_norm(a, b, mx_basis):
         aa, bb = i * adim, (i + 1) * adim
         for j in range(nComps):
             cc, dd = j * adim, (j + 1) * adim
-            composite_op[aa:bb, cc:dd] = a[clbl].to_dense(on_space='HilbertSchmidt')
-            composite_top[aa:bb, cc:dd] = b[clbl].to_dense(on_space='HilbertSchmidt')
+            composite_op[aa:bb, cc:dd] = a[clbl].to_dense("HilbertSchmidt")
+            composite_top[aa:bb, cc:dd] = b[clbl].to_dense("HilbertSchmidt")
     return half_diamond_norm(composite_op, composite_top, sumbasis)
 
 

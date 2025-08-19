@@ -28,6 +28,7 @@ from pygsti.tools import sharedmemtools as _smt
 from pygsti.tools import slicetools as _slct
 from pygsti.tools.matrixtools import _fas
 from pygsti.tools import listtools as _lt
+from pygsti import SpaceT
 from pygsti.circuits import CircuitList as _CircuitList
 
 _dummy_profiler = _DummyProfiler()
@@ -239,7 +240,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
             Allowed options are 'size', which corresponds to balancing the number of circuits, 
             and 'propagations', which corresponds to balancing the number of state propagations.
 
-        load_balancing_parameters : tuple of floats, optional (default (1.15, .1))
+        load_balancing_parameters : tuple of floats, optional (default (1.15, 0.1))
             A tuple of floats used as load balancing parameters when splitting a layout across atoms,
             as in the multi-processor setting when using MPI. These parameters correspond to the `imbalance_threshold`
             and `minimum_improvement_threshold` parameters described in the method `find_splitting_new`
@@ -747,7 +748,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
             G = _np.identity(self.model.evotype.minimal_dim(self.model.state_space))
             for lOp in circuit:
                 if lOp not in scaledGatesAndExps:
-                    opmx = self.model.circuit_layer_operator(lOp, 'op').to_dense(on_space='minimal')
+                    opmx = self.model.circuit_layer_operator(lOp, 'op').to_dense("minimal")
                     ng = max(_nla.norm(opmx), 1.0)
                     scaledGatesAndExps[lOp] = (opmx / ng, _np.log(ng))
 
@@ -768,6 +769,6 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         else:
             G = _np.identity(self.model.evotype.minimal_dim(self.model.state_space))
             for lOp in circuit:
-                G = _np.dot(self.model.circuit_layer_operator(lOp, 'op').to_dense(on_space='minimal'), G)
+                G = _np.dot(self.model.circuit_layer_operator(lOp, 'op').to_dense("minimal"), G)
                 # above line: LEXICOGRAPHICAL VS MATRIX ORDER
             return G

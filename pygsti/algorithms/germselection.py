@@ -24,8 +24,6 @@ from pygsti.algorithms import scoring as _scoring
 from pygsti import circuits as _circuits
 from pygsti import baseobjs as _baseobjs
 from pygsti.tools import mpitools as _mpit
-from pygsti.baseobjs.statespace import ExplicitStateSpace as _ExplicitStateSpace
-from pygsti.baseobjs.statespace import QuditSpace as _QuditSpace
 from pygsti.models import ExplicitOpModel as _ExplicitOpModel
 from pygsti.forwardsims import MatrixForwardSimulator as _MatrixForwardSimulator
 
@@ -234,7 +232,7 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
         #if missing append to the list of available germs.
         if isinstance(force, list):
             for forced_germ in force:
-                if not forced_germ in availableGermsList:
+                if forced_germ not in availableGermsList:
                     availableGermsList.append(forced_germ)
         printer.log('Length Available Germ List After Adding Back In Forced Germs: '+ str(len(availableGermsList)), 1)
     
@@ -254,7 +252,7 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
     dim = target_model.dim
     #Np = model_list[0].num_params #wrong:? includes spam...
     Np = target_model.num_params
-    if randomize==False:
+    if not randomize:
         num_gs_copies=1
     memEstimatealljac = FLOATSIZE * num_gs_copies * len(availableGermsList) * Np**2
     # for _compute_bulk_twirled_ddd
@@ -3489,7 +3487,7 @@ def minamide_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=
         try:
             central_mat_chol= _np.linalg.cholesky(central_mat)
             cholesky_success=True
-        except _np.linalg.LinAlgError as err:
+        except _np.linalg.LinAlgError:
             #Cholesky decomposition probably failed.
             #I'm not sure why it failed though so print some diagnostic info:
             cholesky_success=False
@@ -3541,7 +3539,7 @@ def minamide_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=
         try:
             Dinv_chol= _np.linalg.cholesky(_np.linalg.inv(_np.eye(pinv_R_update.shape[0]) + B@(pinv_E_beta.T@pinv_E_beta)@B))
             cholesky_success=True
-        except _np.linalg.LinAlgError as err:
+        except _np.linalg.LinAlgError:
             #Cholesky decomposition probably failed.
             #I'm not sure why it failed though so print some diagnostic info:
             #Is B symmetric or hermitian?
@@ -4655,7 +4653,7 @@ def germ_set_spanning_vectors(target_model, germ_list, assume_real=False, float_
             if prev_update_cache is None:
                 current_update_cache = construct_update_cache_rank_one(currentDDD, evd_tol=evd_tol)
             else:
-                if update_cache_low_rank == True:
+                if update_cache_low_rank:
                     #do a rank one psuedoinverse update wrt the best vector from the prior round
                     current_update_cache = construct_update_cache_rank_one(currentDDD, evd_tol=evd_tol, 
                                                                            prev_update_cache = prev_update_cache,
@@ -4721,7 +4719,7 @@ def germ_set_spanning_vectors(target_model, germ_list, assume_real=False, float_
             #compare these to the results of the greedy search and raise and error if they are significantly different.
             #Hardcoded tolerance is primarily meant to detect catastrophic failures, hence it being pretty large.
             if (abs(final_test_pinv - best_vec_score.minor) > 1) or (final_test_rank != best_vec_score.N): #HARDCODED
-                raise ValueError(f'Final test failed. Either the psuedoinverse traces are different or the final ranks are different. \n'
+                raise ValueError('Final test failed. Either the psuedoinverse traces are different or the final ranks are different. \n'
                                  + f'The final psuedoinverse-trace from the test is: {final_test_pinv} and the final rank from the test is: {final_test_rank} \n'
                                  + f'The final psuedoinverse-trace from the greedy search is: {best_vec_score.minor} and the final rank from the greedy search is: {best_vec_score.N}')
             

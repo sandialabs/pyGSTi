@@ -42,13 +42,13 @@ keywords=[
 classifiers=[
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python",
     "Topic :: Scientific/Engineering :: Physics",
     "Operating System :: Microsoft :: Windows",
     "Operating System :: MacOS :: MacOS X",
     "Operating System :: Unix"
 ]
+license = "Apache-2.0"
 
 [project.optional-dependencies]
 diamond_norm = [
@@ -57,6 +57,12 @@ diamond_norm = [
 evolutionary_optimization = ['deap']
 extensions = ['cython']
 html_reports = ['jinja2', 'MarkupSafe']
+ibmq = [
+    'qiskit>1',
+    'qiskit-ibm-runtime>=0.17.1',
+    'tqdm>=4.42.0',
+    'dill'
+]
 interpygate = ['csaps']
 linting = [
     'autopep8',
@@ -84,7 +90,7 @@ testing_no_cython_mpi = [
     'seaborn',
     'ply',
     'cirq-core',
-    'pygsti[diamond_norm,interpygate,memory_profiling,msgpack,notebooks,pytorch,reports]'
+    'pygsti[diamond_norm,ibmq,interpygate,memory_profiling,msgpack,notebooks,pytorch,reports]'
 ]
 testing_no_cython = ['pygsti[multiprocessor,testing_no_cython_mpi]']
 testing = ['pygsti[extensions,testing_no_cython]']

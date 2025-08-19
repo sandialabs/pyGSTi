@@ -12,6 +12,7 @@ class CompleteElementaryErrorgenBasisTester(BaseCase):
         
         #create a complete basis with default settings for reuse.
         self.complete_errorgen_basis_default_1Q = CompleteElementaryErrorgenBasis(self.basis_1q, self.state_space_1Q)
+        self.complete_errorgen_basis_default_2Q = CompleteElementaryErrorgenBasis(self.basis_1q, self.state_space_2Q)
 
     def test_default_construction(self):
         assert len(self.complete_errorgen_basis_default_1Q.labels) == 12
@@ -104,20 +105,51 @@ class CompleteElementaryErrorgenBasisTester(BaseCase):
         duals = self.complete_errorgen_basis_default_1Q.elemgen_dual_matrices
 
     def test_label_index(self):
+        
+        #1 qubit tests
         labels = self.complete_errorgen_basis_default_1Q.labels
+        test_eg = GlobalElementaryErrorgenLabel('A', ['X', 'Y'], (0,))
+        lbl_idx = self.complete_errorgen_basis_default_1Q.label_index(test_eg)
+        assert lbl_idx ==  labels.index(test_eg)
 
-        test_eg = GlobalElementaryErrorgenLabel('C', ['X', 'Y'], (0,))
-        test_eg_local = LocalElementaryErrorgenLabel('C', ['XI', 'YI'])
+        #Test missing label
         test_eg_missing = GlobalElementaryErrorgenLabel('C', ['X', 'Y'], (1,))
 
+        with self.assertRaises(KeyError):
+            self.complete_errorgen_basis_default_1Q.label_index(test_eg_missing)
+        assert self.complete_errorgen_basis_default_1Q.label_index(test_eg_missing, ok_if_missing=True) is None
+
+        #Test embedding 
+        test_eg = GlobalElementaryErrorgenLabel('C', ['X', 'Y'], (0,))
+        test_eg_local = LocalElementaryErrorgenLabel('C', ['XI', 'YI'])
+        
         lbl_idx = self.complete_errorgen_basis_default_1Q.label_index(test_eg)
         lbl_idx_1 = self.complete_errorgen_basis_default_1Q.label_index(test_eg_local)
         assert lbl_idx == lbl_idx_1
         assert lbl_idx ==  labels.index(test_eg)
 
+        # 2 qubit tests
+        labels = self.complete_errorgen_basis_default_2Q.labels
+
+        test_eg = GlobalElementaryErrorgenLabel('A', ['X', 'Y'], (0,))
+        lbl_idx = self.complete_errorgen_basis_default_2Q.label_index(test_eg)
+        assert lbl_idx ==  labels.index(test_eg)
+
+        #Test missing label
+        test_eg_missing = GlobalElementaryErrorgenLabel('C', ['X', 'Y'], (2,))
+
         with self.assertRaises(KeyError):
-            self.complete_errorgen_basis_default_1Q.label_index(test_eg_missing)
-        assert self.complete_errorgen_basis_default_1Q.label_index(test_eg_missing, ok_if_missing=True) is None
+            self.complete_errorgen_basis_default_2Q.label_index(test_eg_missing)
+        assert self.complete_errorgen_basis_default_2Q.label_index(test_eg_missing, ok_if_missing=True) is None
+
+        #Test embedding for 2 qubit labels
+        test_eg = GlobalElementaryErrorgenLabel('C', ['X', 'Y'], (1,))
+        test_eg_local = LocalElementaryErrorgenLabel('C', ['IX', 'IY'])
+
+        lbl_idx = self.complete_errorgen_basis_default_2Q.label_index(test_eg)
+        lbl_idx_1 = self.complete_errorgen_basis_default_2Q.label_index(test_eg_local)
+        assert lbl_idx == lbl_idx_1
+        assert lbl_idx ==  labels.index(test_eg)
 
     def test_create_subbasis(self):
         errorgen_basis = CompleteElementaryErrorgenBasis(self.basis_1q, self.state_space_2Q)

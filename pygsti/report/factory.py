@@ -1214,7 +1214,6 @@ def construct_standard_report(results, title="auto",
              in this particular report. Strings will be cast to lowercase, 
              stripped of white space, and then mapped to omitted Section classes
              as follows
-
                 {
                     'summary'         : SummarySection,
                     'goodness'        : GoodnessSection,
@@ -1234,14 +1233,12 @@ def construct_standard_report(results, title="auto",
             that is not in the keys of the above dict (after casting to
             lower case and stripping white space).
 
-
     verbosity : int, optional
         How much detail to send to stdout.
 
     Returns
     -------
-    Workspace
-        The workspace object used to create the report
+    Report
     """
 
     printer = _VerbosityPrinter.create_printer(verbosity, comm=comm)

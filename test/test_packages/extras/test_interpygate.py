@@ -136,11 +136,11 @@ class InterpygateTestCase(BaseTestCase):
             target_op = _comm.bcast(None, root=0)
 
         param_ranges = ([(0.9, 1.1, 2),  # omega
-                         (-.1, 0, 2),   # phase
-                         (-.2, -.1, 2),   # detuning
+                         (-0.1, 0, 2),   # phase
+                         (-0.2, -0.1, 2),   # detuning
                          (0, 0.1, 2),    # dephasing
                          (0.1, 0.2, 2),    # decoherence
-                         _np.linspace(_np.pi / 2, _np.pi / 2 + .5, 10)  # time
+                         _np.linspace(_np.pi / 2, _np.pi / 2 + 0.5, 10)  # time
                         ])
         interp_op = interp.InterpolatedDenseOp.create_by_interpolating_physical_process(
             target_op, example_process, param_ranges, comm=_comm,
@@ -177,12 +177,12 @@ class InterpygateTestCase(BaseTestCase):
                 mx = self.process.create_process_matrices(_np.array([omega, 0.0, 0.0, 0.0, 0.0]), [[t]], comm=None)[0]
                 return pygsti.modelmembers.operations.StaticArbitraryOp(mx)
 
-        arg_ranges = [_np.linspace(_np.pi / 2, _np.pi / 2 + .5, 10),  # time
+        arg_ranges = [_np.linspace(_np.pi / 2, _np.pi / 2 + 0.5, 10),  # time
                       (0.9, 1.1, 2)  # omega
                       ]
 
-        param_ranges = [(-.1, .1, 2),  # phase
-                        (-.1, .1, 2),  # detuning
+        param_ranges = [(-0.1, 0.1, 2),  # phase
+                        (-0.1, 0.1, 2),  # detuning
                         (0, 0.1, 2),   # dephasing
                         (0, 0.1, 2)    # decoherence
                         ]
@@ -227,11 +227,11 @@ class InterpygateTestCase(BaseTestCase):
             target_op = _comm.bcast(None, root=0)
 
         param_ranges = ([(0.9, 1.1, 2),  # omega
-                         (-.1, 0, 2),   # phase
-                         (-.2, -.1, 2),   # detuning
+                         (-0.1, 0, 2),   # phase
+                         (-0.2, -0.1, 2),   # detuning
                          (0, 0.1, 2),    # dephasing
                          (0.1, 0.2, 2),    # decoherence
-                         _np.linspace(_np.pi / 2, _np.pi / 2 + .5, 10)  # time
+                         _np.linspace(_np.pi / 2, _np.pi / 2 + 0.5, 10)  # time
                          ])
         interp_op = interp.InterpolatedDenseOp.create_by_interpolating_physical_process(
             target_op, example_process, param_ranges, comm=_comm,
@@ -268,12 +268,12 @@ class InterpygateTestCase(BaseTestCase):
                 mx = self.process.create_process_matrix(_np.array([omega, 0.0, 0.0, 0.0, 0.0, t]), comm=None)
                 return pygsti.modelmembers.operations.StaticArbitraryOp(mx)
 
-        arg_ranges = [_np.linspace(_np.pi / 2, _np.pi / 2 + .5, 10),  # time
+        arg_ranges = [_np.linspace(_np.pi / 2, _np.pi / 2 + 0.5, 10),  # time
                       (0.9, 1.1, 2)  # omega
                       ]
 
-        param_ranges = [(-.1, .1, 2),  # phase
-                        (-.1, .1, 2),  # detuning
+        param_ranges = [(-0.1, 0.1, 2),  # phase
+                        (-0.1, 0.1, 2),  # detuning
                         (0, 0.1, 2),   # dephasing
                         (0, 0.1, 2)    # decoherence
                         ]
@@ -310,7 +310,7 @@ class InterpygateTestCase(BaseTestCase):
         sigX = _np.array([[0, 1], [1, 0]], dtype='complex')
         sigY = _np.array([[0, -1.j], [1.j, 0]], dtype='complex')
         sigZ = _np.array([[1, 0], [0, -1]], dtype='complex')
-        theta = .32723
+        theta = 0.32723
         u = _np.cos(theta) * sigI + 1.j * _np.sin(theta) * sigX
         v = _np.sin(theta) * sigI - 1.j * _np.cos(theta) * sigX
 
