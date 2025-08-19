@@ -84,7 +84,7 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
     lowest_vec : numpy array
         vector corresponding to the fitted best reduced model found at its corresponding level
     """
-
+    new_checkpoint = None
     if comm is not None:
         rank = comm.Get_rank()
         size = comm.Get_size()
@@ -147,6 +147,7 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
         if not disable_checkpoints:
             new_checkpoint = _AMSCheckpoint(target_model, data.dataset.to_str(), er_thresh, maxiter, tol, prob_clip,  recompute_H_thresh_percentage, H, x0)
             new_checkpoint.save()
+            print('Checkpoint saved in', new_checkpoint.path)
     red_model = target_model.copy()
     logl_fn = create_logl_obj_fn(target_model_fit, data.dataset)
     original_dlogl = -logl_fn.fn()
@@ -159,7 +160,7 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
     red_rowandcol_H = H
     counter = 0
     while not exceeded_threshold:
-        if rank == 0:
+        if rank == 0 and verbosity >1:
             print(f'>> Working on level {len(graph_levels)} <<',flush = True)
             start = time.time()
         
@@ -186,7 +187,7 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
                 #vec = _parallel_GST(remove_param(red_model, i), data, prob_clip, tol, maxiter, verbosity=0, comm=None, mem_limit=None).estimates['GateSetTomography'].models['final iteration estimate'].to_vector()
                 logl_fn.model.from_vector(reduced_model_projector_matrix @ vec)
                 quantity = (prev_logl + logl_fn.fn())*2
-                if i  % 50 == 0:
+                if i  % 50 == 0 and verbosity > 1:
                     print('Model ', i, ' has ev. ratio of ', quantity, flush=True)
                 if lowest_quantity == None or lowest_quantity > quantity:
                     lowest_quantity = quantity
@@ -226,7 +227,8 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
         finalist_real_logl = pygsti.tools.logl(red_model, data.dataset, poisson_picture=False, min_prob_clip=prob_clip)
         finalist_approx_logl = approx_logl_fn(red_row_H, red_rowandcol_H, sorted_finalists[0][2])
         error = finalist_real_logl - finalist_approx_logl
-        if rank == 0:
+        #DEBUG Delete
+        if False: #rank == 0:
             print(f'{error=}', 'compared to ', recompute_H_thresh_percentage*er_thresh)
 
         if  np.abs(error) > recompute_H_thresh_percentage*er_thresh:
@@ -255,7 +257,6 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
         if verbosity and rank == 0:
             print(f'Model {sorted_finalists[0][2]} has lowest evidence ratio {sorted_finalists[0][1]:.4f}')
         
-        print(len(sorted_finalists))
         if sorted_finalists[0][1] > er_thresh or len(sorted_finalists[0][0]) == 1:
                 if rank == 0 and verbosity > 0:
                     print('All models from this level exceeded evidence ratio threshold, model rejected. Stopping!')
@@ -302,11 +303,10 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
             
         # Generate next level
         
-        if rank == 0 and exceeded_threshold == False:
+        if rank == 0 and exceeded_threshold == False and verbosity > 1:
             print("next level")
             end = time.time()
             print('time this level ', end-start)
-    if not disable_checkpoints and rank == 0:
+    if not disable_checkpoints and rank == 0 and new_checkpoint is not None:
         _os.remove(new_checkpoint.path)
-    print(f'{counter=}')
     return graph_levels
