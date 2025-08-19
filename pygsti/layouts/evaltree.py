@@ -10,34 +10,14 @@ Defines the EvalTree class.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from __future__ import annotations
 import bisect as _bisect
 import time as _time  # DEBUG TIMERS
 import warnings as _warnings
 
 import numpy as _np
 
-from pygsti.circuits.circuit import Circuit as _Circuit, LayerTupLike
+from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from pygsti.baseobjs.label import LabelTupTup, Label, LabelTup
-import itertools
-from pygsti.tools.sequencetools import (
-    conduct_one_round_of_lcs_simplification,
-    _compute_lcs_for_every_pair_of_sequences,
-    create_tables_for_internal_LCS,
-    simplify_internal_first_one_round
-)
-from pygsti.tools.dyadickronop import KronStructured
-from pygsti.circuits.split_circuits_into_lanes import (
-    compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit,
-    compute_subcircuits
-)
-
-import scipy.linalg as la
-import scipy.sparse.linalg as sparla
-from scipy.sparse import kron as sparse_kron
-from typing import List, Optional, Iterable, Union, TYPE_CHECKING, Tuple
-from pygsti.tools.tqdm import our_tqdm
 
 
 def _walk_subtree(treedict, indx, running_inds):
@@ -360,7 +340,7 @@ class EvalTree(list):
                             (_time.time() - tm)); tm = _time.time()
 
                 #merge_method = "fast"
-                #Another possible algorithm (but slower)
+                #Another possible algorith (but slower)
                 #if merge_method == "best":
                 #    while len(indicesLeft) > 0:
                 #        iToMergeInto,_ = min(enumerate(map(len,subTreeSetList)),
