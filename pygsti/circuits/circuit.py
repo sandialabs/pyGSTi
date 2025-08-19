@@ -9,22 +9,26 @@ Defines the Circuit class
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
+
 from __future__ import annotations
 import collections as _collections
 import itertools as _itertools
 import warnings as _warnings
+from typing import List, Sequence, Literal, Tuple, Any, Hashable, Union, Optional, TypeAlias, TYPE_CHECKING
+if TYPE_CHECKING:
+    import stim
+    from cirq.circuits.circuit import Circuit as CirqCircuit
 
 import numpy as _np
-from pygsti.baseobjs.label import Label as _Label, CircuitLabel as _CircuitLabel
+from pygsti.baseobjs.label import Label as _Label, CircuitLabel as _CircuitLabel, LabelTupTup as _LabelTupTup
+
 
 from pygsti.baseobjs import outcomelabeldict as _ld, _compatibility as _compat
 from pygsti.tools import internalgates as _itgs
 from pygsti.tools import slicetools as _slct
 from pygsti.tools.legacytools import deprecate as _deprecate_fn
 
-from typing import Union, Optional, TYPE_CHECKING
-if TYPE_CHECKING:
-    import stim
+
 
 #Externally, we'd like to do thinks like:
 # c = Circuit( LabelList )
@@ -46,6 +50,19 @@ if TYPE_CHECKING:
 msg = 'Could not find matching standard gate name in provided dictionary. Falling back to try and find a'\
      +' unitary from standard_gatename_unitaries which matches up to a global phase.'
 _warnings.filterwarnings('module', message=msg, category=UserWarning)
+
+
+##############################################################################################
+# NOTE(Riley): these types are work-in-progress. They don't make a whole lot of sense to me
+# right now. It might be possible that they just _DONT_ make sense, and yet they're correct
+# in the context of the current implementation.
+_NestedLabelSeq = List[Union[_Label, Sequence[_Label]]]
+#   ^ An alias to make it easier to see how subsequent types relate.
+#     Don't use this in function signatures.
+LayerTupLike = Union[Tuple[_LabelTupTup,    ...], _NestedLabelSeq, Tuple[_Label, ...]]
+LabelsLike   = Union[Tuple[_NestedLabelSeq, ...], _NestedLabelSeq]
+##############################################################################################
+
 
 def _np_to_quil_def_str(name, input_array):
     """
@@ -271,9 +288,11 @@ class Circuit(object):
         else:
             return cls(tup)
 
-    def __init__(self, layer_labels=(), line_labels='auto', num_lines=None, editable=False,
-                 stringrep=None, name='', check=True, expand_subcircuits="default",
-                 occurrence=None, compilable_layer_indices=None):
+    def __init__(self,
+            layer_labels=(), line_labels: Union[str,Tuple[Any,...]] = 'auto', num_lines: Optional[int] = None,
+            editable=False, stringrep=None, name='', check=True, expand_subcircuits="default", occurrence=None,
+            compilable_layer_indices=None
+        ):
         """
         Creates a new Circuit object, encapsulating a quantum circuit.
 
@@ -517,7 +536,7 @@ class Circuit(object):
     #Note: If editing _bare_init one should also check _copy_init in case changes must be propagated.
     def _bare_init(self, labels, line_labels, editable, name='', stringrep=None, occurrence=None,
                    compilable_layer_indices_tup=()):
-        self._labels = labels
+        self._labels : LabelsLike = labels
         self._line_labels = tuple(line_labels)
         self._occurrence_id = occurrence
         self._compilable_layer_indices_tup = compilable_layer_indices_tup # always a tuple, but can be empty.
@@ -647,7 +666,7 @@ class Circuit(object):
         self._str = None  # regenerate string rep (it may have updated)
 
     @property
-    def layertup(self):
+    def layertup(self) -> LayerTupLike:
         """
         This Circuit's layers as a standard Python tuple of layer Labels.
 
@@ -1024,7 +1043,7 @@ class Circuit(object):
         """
         return len(self._line_labels)
     
-    def copy(self, editable='auto'):
+    def copy(self, editable: Union[bool, Literal['auto']] = 'auto') -> Circuit:
         """
         Returns a copy of the circuit.
 
@@ -1223,7 +1242,7 @@ class Circuit(object):
                     return self._labels[layers]
                 if isinstance(layers, slice) and strict is True:  # if strict=False, then need to recompute line labels
                     #can speed this up a measurably by manually computing the new hashable tuple value and hash
-                    if not self._line_labels in (('*',), ()):
+                    if self._line_labels not in (('*',), ()):
                         new_hashable_tup = self._labels[layers] + ('@',) + self._line_labels
                     else:
                         new_hashable_tup = self._labels[layers]
@@ -1387,7 +1406,7 @@ class Circuit(object):
         else:  # single layer using integer layer index (so lbls is a single Label)
             self._labels[layers[0]].extend(_label_to_nested_lists_of_simple_labels(lbls, def_sslbls))
 
-    def insert_idling_layers(self, insert_before, num_to_insert, lines=None):
+    def insert_idling_layers(self, insert_before: int, num_to_insert: int, lines=None) -> Circuit:
         """
         Inserts into this circuit one or more idling (blank) layers,
         returning a copy.
@@ -1450,8 +1469,10 @@ class Circuit(object):
         None
         """
         assert(not self._static), "Cannot edit a read-only circuit!"
-        if insert_before is None: insert_before = len(self._labels)
-        elif insert_before < 0: insert_before = len(self._labels) + insert_before
+        if insert_before is None:
+            insert_before = len(self._labels)
+        elif insert_before < 0:
+            insert_before = len(self._labels) + insert_before
 
         if lines is None:  # insert complete layers
             for i in range(num_to_insert):
@@ -1459,6 +1480,9 @@ class Circuit(object):
 
             #Shift compilable layer indices as needed
             if self._compilable_layer_indices_tup:
+                if num_to_insert <= 0 and insert_before < len(self._labels):
+                    raise ValueError('Undefined behavior (at least until the ' \
+                    'documentation is updated).')
                 shifted_inds = [i if (i < insert_before) else (i + num_to_insert)
                                 for i in self._compilable_layer_indices_tup]
                 self._compilable_layer_indices_tup = tuple(shifted_inds)
@@ -2235,7 +2259,7 @@ class Circuit(object):
 
         self.insert_labels_into_layers_inplace([circuit_layer], j)
 
-    def insert_circuit(self, circuit, j):
+    def insert_circuit(self, circuit: Circuit, j: int) -> Circuit:
         """
         Inserts a circuit into this circuit, returning a copy.
 
@@ -2263,7 +2287,7 @@ class Circuit(object):
         if self._static: cpy.done_editing()
         return cpy
 
-    def insert_circuit_inplace(self, circuit, j):
+    def insert_circuit_inplace(self, circuit: Circuit, j: int):
         """
         Inserts a circuit into this circuit.
 
@@ -2298,7 +2322,7 @@ class Circuit(object):
         labels_to_insert = circuit.extract_labels(layers=None, lines=lines_to_insert)
         self.insert_labels_into_layers_inplace(labels_to_insert, j)
 
-    def append_circuit(self, circuit):
+    def append_circuit(self, circuit: Circuit) -> Circuit:
         """
         Append a circuit to the end of this circuit, returning a copy.
 
@@ -2316,7 +2340,7 @@ class Circuit(object):
         """
         return self.insert_circuit(circuit, self.num_layers)
 
-    def append_circuit_inplace(self, circuit):
+    def append_circuit_inplace(self, circuit: Circuit):
         """
         Append a circuit to the end of this circuit.
 
@@ -2335,7 +2359,7 @@ class Circuit(object):
         assert(not self._static), "Cannot edit a read-only circuit!"
         self.insert_circuit_inplace(circuit, self.num_layers)
 
-    def prefix_circuit(self, circuit):
+    def prefix_circuit(self, circuit: Circuit) -> Circuit:
         """
         Prefix a circuit to the beginning of this circuit, returning a copy.
 
@@ -2353,7 +2377,7 @@ class Circuit(object):
         """
         return self.insert_circuit(circuit, 0)
 
-    def prefix_circuit_inplace(self, circuit):
+    def prefix_circuit_inplace(self, circuit: Circuit):
         """
         Prefix a circuit to the beginning of this circuit.
 
@@ -2372,7 +2396,7 @@ class Circuit(object):
         assert(not self._static), "Cannot edit a read-only circuit!"
         self.insert_circuit_inplace(circuit, 0)
 
-    def tensor_circuit_inplace(self, circuit, line_order=None):
+    def tensor_circuit_inplace(self, circuit: Circuit, line_order=None):
         """
         The tensor product of this circuit and `circuit`.
 
@@ -2426,7 +2450,7 @@ class Circuit(object):
         self.insert_labels_as_lines_inplace(circuit._labels, line_labels=circuit.line_labels)
         self._line_labels = new_line_labels  # essentially just reorders labels if needed
 
-    def tensor_circuit(self, circuit, line_order=None):
+    def tensor_circuit(self, circuit: Circuit, line_order=None) -> Circuit:
         """
         The tensor product of this circuit and `circuit`, returning a copy.
 
@@ -2454,7 +2478,7 @@ class Circuit(object):
         if self._static: cpy.done_editing()
         return cpy
 
-    def replace_layer_with_circuit_inplace(self, circuit, j):
+    def replace_layer_with_circuit_inplace(self, circuit: Circuit, j):
         """
         Replaces the `j`-th layer of this circuit with `circuit`.
 
@@ -2474,7 +2498,7 @@ class Circuit(object):
         del self[j]
         self.insert_labels_into_layers_inplace(circuit, j)
 
-    def replace_layer_with_circuit(self, circuit, j):
+    def replace_layer_with_circuit(self, circuit: Circuit, j) -> Circuit:
         """
         Replaces the `j`-th layer of this circuit with `circuit`,
         returning a copy.
@@ -2523,14 +2547,23 @@ class Circuit(object):
             if isinstance(obj, _Label):
                 if obj.name == old_gatename:
                     newobj = _Label(new_gatename, obj.sslbls)
-                else: newobj = obj
+                else:
+                    newobj = obj
+            elif obj == old_gatename:
+                if len(obj) == 0:
+                    sslbls = self.line_labels
+                else:
+                    import warnings
+                    warnings.warn(f'Cannot infer target of gate(s) of {obj}.')
+                    sslbls = tuple()
+                newobj = _Label((new_gatename,) + sslbls)
             else:
                 newobj = [replace(sub) for sub in obj]
             return newobj
 
         self._labels = replace(self._labels)
 
-    def replace_gatename(self, old_gatename, new_gatename):
+    def replace_gatename(self, old_gatename, new_gatename) -> Circuit:
         """
         Returns a copy of this Circuit except that `old_gatename` is changed to `new_gatename`.
 
@@ -2591,7 +2624,7 @@ class Circuit(object):
 
         self._labels = replace(self._labels)
 
-    def replace_gatename_with_idle(self, gatename):
+    def replace_gatename_with_idle(self, gatename) -> Circuit:
         """
         Returns a copy of this Circuit with a given gatename treated as an idle gate.
 
@@ -2613,7 +2646,7 @@ class Circuit(object):
         if self._static: cpy.done_editing()
         return cpy
 
-    def replace_layer(self, old_layer, new_layer):
+    def replace_layer(self, old_layer, new_layer) -> Circuit:
         """
         Returns a copy of this Circuit except that `old_layer` is changed to `new_layer`.
 
@@ -2644,7 +2677,7 @@ class Circuit(object):
                            occurrence=self._occurrence_id, 
                            compilable_layer_indices=self._compilable_layer_indices_tup)
 
-    def replace_layers_with_aliases(self, alias_dict):
+    def replace_layers_with_aliases(self, alias_dict) -> Circuit:
         """
         Performs a find and replace using layer aliases.
 
@@ -2844,7 +2877,7 @@ class Circuit(object):
             return newobj
         self._labels = map_sslbls(self._labels)
 
-    def map_state_space_labels(self, mapper):
+    def map_state_space_labels(self, mapper) -> Circuit:
         """
         Creates a new Circuit whose line labels are updated according to the mapping function `mapper`.
 
@@ -2885,7 +2918,7 @@ class Circuit(object):
         assert(set(order) == set(self._line_labels)), "The line labels must be the same!"
         self._line_labels = tuple(order)
 
-    def reorder_lines(self, order):
+    def reorder_lines(self, order: Sequence[_Label]) -> Circuit:
         """
         Reorders the lines (wires/qubits) of the circuit, returning a copy.
 
@@ -3002,7 +3035,7 @@ class Circuit(object):
         self._line_labels = tuple([x for x in self._line_labels
                                    if x in all_sslbls])  # preserve order
 
-    def delete_idling_lines(self, idle_layer_labels=None):
+    def delete_idling_lines(self, idle_layer_labels : Optional[Sequence[_Label]]=None) -> Circuit:
         """
         Removes from this circuit all lines that are idling at every layer,
         returning a copy.
@@ -3320,7 +3353,7 @@ class Circuit(object):
                ), "Circuit layer label invalid! Circuit is only of depth {}".format(self.num_layers)
         return self[j]
 
-    def layer_with_idles(self, j, idle_gate_name='I'):
+    def layer_with_idles(self, j, idle_gate_name: Union[str, _Label]='I'):
         """
         Returns a tuple of the components of the layer at depth `j`, with `idle_gate_name` at empty circuit locations.
 
@@ -3342,7 +3375,7 @@ class Circuit(object):
         """
         return tuple(self.layer_label_with_idles(j, idle_gate_name).components)
 
-    def layer_label_with_idles(self, j, idle_gate_name='I'):
+    def layer_label_with_idles(self, j, idle_gate_name: Union[str, _Label]='I'):
         """
         Returns the layer, as a :class:`Label`, at depth j, with `idle_gate_name` at empty circuit locations.
 
@@ -3765,7 +3798,6 @@ class Circuit(object):
         f.write("\\end{document}")
         f.close()
 
-
     def convert_to_stim_tableau_layers(self, gate_name_conversions: Optional[dict[str, stim.Tableau]] = None, 
                                        num_qubits: Optional[int] = None, 
                                        qubit_label_conversions: Optional[dict[Union[str, int], int]] = None) -> list[stim.Tableau]:
@@ -3937,7 +3969,6 @@ class Circuit(object):
                 tableau= layer*tableau
             return tableau
         
-
     def convert_to_cirq(self,
                         qubit_conversion,
                         wait_duration=None,
@@ -3999,9 +4030,9 @@ class Circuit(object):
 
         return cirq.Circuit(moments)
     
-    @classmethod
-    def from_cirq(cls, circuit, qubit_conversion=None, cirq_gate_conversion= None,
-                  remove_implied_idles = True, global_idle_replacement_label = 'auto'):
+    @staticmethod
+    def from_cirq(circuit: CirqCircuit, qubit_conversion=None, cirq_gate_conversion=None,
+                  remove_implied_idles=True, global_idle_replacement_label='auto') -> Circuit:
         """
         Converts and instantiates a pyGSTi Circuit object from a Cirq Circuit object.
 
@@ -4633,10 +4664,13 @@ class Circuit(object):
         """
         if not self._static:
             self._static = True
-            self._labels = tuple([layer_lbl if isinstance(layer_lbl, _Label) 
-                                  else _Label(layer_lbl) for layer_lbl in self._labels])
+            t = [LL if isinstance(LL, _Label) else _Label(LL) for LL in self._labels]
+            self._labels = tuple(t) # type: ignore
         self._hashable_tup = self.tup
         self._hash = hash(self._hashable_tup)
+        self._str = None
+        self._str = self.str # this accessor recomputes the value of self._str
+
 
 class CompressedCircuit(object):
     """
@@ -4667,7 +4701,7 @@ class CompressedCircuit(object):
         takes more time but could result in better compressing.
     """
 
-    def __init__(self, circuit, min_len_to_compress=20, max_period_to_look_for=20):
+    def __init__(self, circuit: Circuit, min_len_to_compress=20, max_period_to_look_for=20):
         """
         Create a new CompressedCircuit object
 
