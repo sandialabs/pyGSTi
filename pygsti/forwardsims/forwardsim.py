@@ -21,7 +21,10 @@ from pygsti.baseobjs import outcomelabeldict as _ld
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.tools import slicetools as _slct
-from typing import Union, Callable, Literal
+from typing import Union, Callable, Literal, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pygsti.models.model import OpModel
 
 
 class ForwardSimulator(_NicelySerializable):
@@ -96,7 +99,7 @@ class ForwardSimulator(_NicelySerializable):
             return ('ep', 'ep') + cls._array_types_for_method('_bulk_fill_dprobs_block')
         return ()
 
-    def __init__(self, model=None):
+    def __init__(self, model: Optional[OpModel] = None):
         super().__init__()
         #self.dim = model.dim
         self.model = model
@@ -128,11 +131,11 @@ class ForwardSimulator(_NicelySerializable):
         return state_dict
 
     @property
-    def model(self):
+    def model(self) -> Union[OpModel, None]:
         return self._model
 
     @model.setter
-    def model(self, val):
+    def model(self, val: OpModel):
         self._model = val
         try:
             evotype = None if val is None else self._model.evotype
