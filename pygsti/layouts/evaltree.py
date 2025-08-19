@@ -36,6 +36,7 @@ from pygsti.circuits.split_circuits_into_lanes import compute_qubit_to_lane_and_
 import time
 import scipy.linalg as la
 import scipy.sparse.linalg as sparla
+from scipy.sparse import kron as sparse_kron
 from typing import List, Optional, Iterable, Union, TYPE_CHECKING, Tuple
 from pygsti.tools.tqdm import our_tqdm
 
@@ -1037,7 +1038,7 @@ class EvalTreeBasedUponLongestCommonSubstring():
 
         return list(output)
 
-    def flop_cost_of_evaluating_tree(self, matrix_size: tuple[int, int]):
+    def flop_cost_of_evaluating_tree(self, matrix_size: tuple[int, int], model = None, gp_index_changing: Optional[int] = None) -> int:
         """
         We assume that each matrix matrix multiply is the same size.
         """
@@ -1045,7 +1046,14 @@ class EvalTreeBasedUponLongestCommonSubstring():
         assert matrix_size[0] == matrix_size[1]
 
         total_flop_cost = 0
-        for cache_ind in self.cache:
+        if (model is not None) and (gp_index_changing is not None):
+
+            cache_inds, invalid_lbls = self._gpindex_to_cache_inds_needed_to_recompute(model, gp_index_changing)
+
+        else:
+            cache_inds = list(self.cache.keys())
+
+        for cache_ind in cache_inds:
             num_mm_on_this_cache_line = len(self.cache[cache_ind]) - 1
             total_flop_cost += (matrix_matrix_cost_estimate(matrix_size)) * num_mm_on_this_cache_line
 
@@ -1178,24 +1186,31 @@ class CollectionOfLCSEvalTrees():
                 self.original_matrices = {} # Reset the cache of updated process matrices.
 
             for icir in cir_inds:
+                lane_circuits = []
                 for i in range(len(self.cir_id_and_lane_id_to_sub_cir[icir])):
-                    cir: _Circuit = self.cir_id_and_lane_id_to_sub_cir[icir][i]
+                    cir = self.cir_id_and_lane_id_to_sub_cir[icir][i]
                     lblkey = cir._line_labels
 
-                    lane_ind = lane_key_to_ind[lblkey]
-                    if self.process_matrices_which_will_need_to_update_for_index[gp_index_changing, lane_ind, icir]:
-                        ind_in_results = self.sub_cir_to_ind_in_results[lblkey][cir.layertup]
-                        if icir in self.original_matrices:
-                            self.original_matrices[icir][i] = self.full_matrices[icir].kron_operands[i]
-                        else:
-                            self.original_matrices[icir] = {lane_ind: self.full_matrices[icir].kron_operands[i]}
-                        self.full_matrices[icir].update_operand(i, self.trees[lblkey].results[ind_in_results])
-                        output.append(self.full_matrices[icir])
-
+                    ind_in_results = self.sub_cir_to_ind_in_results[lblkey][cir.layertup]
+                    if ind_in_results not in self.saved_results[lblkey]:
+                        # We have only the local changes.
+                        # This will be stored in the results file of the subtree.
+                        lane_circuits.append(self.trees[lblkey].results[ind_in_results])
+                    else:
+                        lane_circuits.append(self.saved_results[lblkey][ind_in_results])
+                if len(lane_circuits) > 1:
+                    output.append(self.recurse_to_build_sparse_kron_matrix(lane_circuits))
+                    # output.append(KronStructured(lane_circuits))
+                elif len(lane_circuits) == 1:
+                    output.append(lane_circuits[0]) # gate_sequence[i] @ rho needs to work for i in range(num_circs).
+                else:
+                    raise ValueError()
+        
             return output, cir_inds
 
         else:
             output = []
+
 
             # Now we can do the combination.
 
@@ -1213,7 +1228,8 @@ class CollectionOfLCSEvalTrees():
                     else:
                         lane_circuits.append(self.saved_results[lblkey][ind_in_results])
                 if len(lane_circuits) > 1:
-                    output.append(KronStructured(lane_circuits))
+                    output.append(self.recurse_to_build_sparse_kron_matrix(lane_circuits))
+                    # output.append(KronStructured(lane_circuits))
                 elif len(lane_circuits) == 1:
                     output.append(lane_circuits[0]) # gate_sequence[i] @ rho needs to work for i in range(num_circs).
                 else:
@@ -1221,21 +1237,35 @@ class CollectionOfLCSEvalTrees():
             
         self.full_matrices = output
         return output, cir_inds
-    
-    def flop_estimate(self, return_collapse: bool = False, return_tensor_matvec: bool = False):
+
+
+    def recurse_to_build_sparse_kron_matrix(self, operands: list[_np.ndarray]):
+        if len(operands) == 1:
+            return operands[0]
+        return sparse_kron(operands[0], self.recurse_to_build_sparse_kron_matrix(operands[1:]))
+
+
+    def flop_estimate(self, return_collapse: bool = False, return_tensor_matvec: bool = False, model = None, gp_index_changing: Optional[int] = None):
 
 
         cost_collapse = 0
         for key in self.trees:
             num_qubits = len(key) if key[0] != ('*',) else key[1] # Stored in the data structure.
             tree = self.trees[key]
-            cost_collapse += tree.flop_cost_of_evaluating_tree(tuple([4**num_qubits, 4**num_qubits]))
+            cost_collapse += tree.flop_cost_of_evaluating_tree(tuple([4**num_qubits, 4**num_qubits]), model, gp_index_changing)
         
 
         tensor_cost = 0
         num_cirs = len(self.cir_id_and_lane_id_to_sub_cir)
+        cir_inds = _np.arange(num_cirs, dtype=_np.int32)
 
-        for cir_id in range(num_cirs):
+        if (model is not None) and (gp_index_changing is not None):
+
+            dirty_circuits = self.determine_which_circuits_will_update_for_what_gpindices(model)
+            cir_inds = _np.where(_np.sum(self.process_matrices_which_will_need_to_update_for_index[gp_index_changing], axis=0) >= 1)[0] # At least one lane changed.
+
+        
+        for cir_id in cir_inds:
             qubit_list = ()
             for lane_id in range(len(self.cir_id_and_lane_id_to_sub_cir[cir_id])):
                 subcir = self.cir_id_and_lane_id_to_sub_cir[cir_id][lane_id]
@@ -1249,6 +1279,8 @@ class CollectionOfLCSEvalTrees():
             return tensor_cost + cost_collapse, cost_collapse
         elif return_tensor_matvec:
             return tensor_cost + cost_collapse, tensor_cost
+        elif gp_index_changing is not None:
+            return tensor_cost + cost_collapse, len(cir_inds)  # Since you are not updating all of the representations we do not need to update the state props either for those.
 
         return tensor_cost + cost_collapse
 
@@ -1352,7 +1384,7 @@ class CollectionOfLCSEvalTrees():
 
 
 
-def cost_to_compute_tensor_matvec_without_reordering(qubit_list: list[int], total_num_qubits: int):
+def cost_to_compute_tensor_matvec_without_reordering(qubit_list: list[int], total_num_qubits: int) -> int:
 
     assert _np.sum(qubit_list) == total_num_qubits
 
