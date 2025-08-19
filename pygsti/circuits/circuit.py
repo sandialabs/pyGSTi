@@ -4277,9 +4277,9 @@ class Circuit(object):
         #labels to include all of the qubits appearing in the cirq circuit, otherwise
         #we'll let the Circuit constructor figure this out.
         if seen_global_idle:
-            return cls(circuit_layers, line_labels = tuple(sorted([qubit_conversion[qubit] for qubit in all_cirq_qubits])))
+            return Circuit(circuit_layers, line_labels = tuple(sorted([qubit_conversion[qubit] for qubit in all_cirq_qubits])))
         else:
-            return cls(circuit_layers)        
+            return Circuit(circuit_layers)        
 
     def convert_to_quil(self,
                         num_qubits=None,
