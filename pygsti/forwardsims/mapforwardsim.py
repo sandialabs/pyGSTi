@@ -15,6 +15,7 @@ import warnings as _warnings
 
 import numpy as _np
 from numpy import linalg as _nla
+import time
 
 from pygsti.forwardsims.distforwardsim import DistributableForwardSimulator as _DistributableForwardSimulator
 from pygsti.forwardsims.forwardsim import ForwardSimulator as _ForwardSimulator
@@ -360,13 +361,16 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
 
     def _bulk_fill_probs_atom(self, array_to_fill, layout_atom, resource_alloc):
         # Note: *don't* set dest_indices arg = layout.element_slice, as this is already done by caller
-        resource_alloc.check_can_allocate_memory(layout_atom.cache_size * self.model.dim)
+        # resource_alloc.check_can_allocate_memory(layout_atom.cache_size * self.model.dim)
+        start_time = time.time()
         self.calclib.mapfill_probs_atom(self, array_to_fill, slice(0, array_to_fill.shape[0]),  # all indices
                                         layout_atom, resource_alloc)
+        end_time = time.time()
+        print("Time to compute forward probs with map Forward after fixed layout (s): ", end_time - start_time)
 
     def _bulk_fill_dprobs_atom(self, array_to_fill, dest_param_slice, layout_atom, param_slice, resource_alloc):
         # Note: *don't* set dest_indices arg = layout.element_slice, as this is already done by caller
-        resource_alloc.check_can_allocate_memory(layout_atom.cache_size * self.model.dim * _slct.length(param_slice))
+        # resource_alloc.check_can_allocate_memory(layout_atom.cache_size * self.model.dim * _slct.length(param_slice))
         self.calclib.mapfill_dprobs_atom(self, array_to_fill, slice(0, array_to_fill.shape[0]), dest_param_slice,
                                          layout_atom, param_slice, resource_alloc, self.derivative_eps)
 

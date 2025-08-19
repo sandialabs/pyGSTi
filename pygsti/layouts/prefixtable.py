@@ -15,6 +15,7 @@ import networkx as _nx
 from math import ceil
 from pygsti.baseobjs import Label as _Label
 from pygsti.circuits.circuit import SeparatePOVMCircuit as _SeparatePOVMCircuit
+from pygsti.tools.tqdm import our_tqdm
 
 
 class PrefixTable(object):
@@ -685,11 +686,10 @@ def _cache_hits(circuit_reps, circuit_lengths):
     # Not: this logic could be much better, e.g. computing a cost savings for each
     #  potentially-cached item and choosing the best ones, and proper accounting
     #  for chains of cached items.
-    
     cacheIndices = []  # indices into circuits_to_evaluate of the results to cache
     cache_hits = [0]*len(circuit_reps)
 
-    for i in range(len(circuit_reps)):
+    for i in our_tqdm(range(len(circuit_reps)), 'Prefix table : _cache_hits '):
         circuit = circuit_reps[i] 
         L = circuit_lengths[i]  # can be a Circuit or a label tuple
         for cached_index in reversed(cacheIndices):
@@ -707,10 +707,11 @@ def _build_table(sorted_circuits_to_evaluate, cache_hits, max_cache_size, circui
 
     # Build prefix table: construct list, only caching items with hits > 0 (up to max_cache_size)
     cacheIndices = []  # indices into circuits_to_evaluate of the results to cache
-    table_contents = [None]*len(sorted_circuits_to_evaluate)
+    num_sorted_circuits = len(sorted_circuits_to_evaluate)
+    table_contents = [None]*num_sorted_circuits
     curCacheSize = 0
-    for j, (i, _) in zip(orig_indices,enumerate(sorted_circuits_to_evaluate)):
-        
+    for i in our_tqdm(range(num_sorted_circuits), 'Prefix table : _build_table '):
+        j = orig_indices[i]
         circuit_rep = circuit_reps[i] 
         L = circuit_lengths[i]
 

@@ -9,16 +9,23 @@ from pygsti.forwardsims import ForwardSimulator, \
     MapForwardSimulator, SimpleMapForwardSimulator, \
     MatrixForwardSimulator,  SimpleMatrixForwardSimulator, \
     TorchForwardSimulator
+from pygsti.forwardsims.matrixforwardsim import LCSEvalTreeMatrixForwardSimulator
 from pygsti.models import ExplicitOpModel
 from pygsti.circuits import Circuit, create_lsgst_circuit_lists
 from pygsti.baseobjs import Label as L
-from ..util import BaseCase
+try:
+    from ..util import BaseCase
+except ImportError:
+    BaseCase = object
 
 from pygsti.data import simulate_data
-from pygsti.modelpacks import smq1Q_XYI
+from pygsti.modelpacks import smq1Q_XYI, smq1Q_XY, smq2Q_XYZICNOT, smq2Q_XYCNOT
 from pygsti.protocols import gst
 from pygsti.protocols.protocol import ProtocolData
 from pygsti.tools import two_delta_logl
+
+
+GLOBAL_MODEL_PACK = smq1Q_XY
 
 
 def Ls(*args):
@@ -149,8 +156,8 @@ class BaseProtocolData:
 
     @classmethod
     def setUpClass(cls):
-        cls.gst_design = smq1Q_XYI.create_gst_experiment_design(max_max_length=16)
-        cls.mdl_target = smq1Q_XYI.target_model()
+        cls.gst_design = GLOBAL_MODEL_PACK.create_gst_experiment_design(max_max_length=16)
+        cls.mdl_target = GLOBAL_MODEL_PACK.target_model()
         cls.mdl_datagen = cls.mdl_target.depolarize(op_noise=0.05, spam_noise=0.025)
 
         ds = simulate_data(cls.mdl_datagen, cls.gst_design.all_circuits_needing_data, 20000, sample_error='none')
@@ -255,23 +262,23 @@ class ForwardSimTestHelper:
             colinearities *= -1
         return colinearities
 
-    
 
 class ForwardSimConsistencyTester(TestCase):
 
     PROBS_TOL = 1e-14
     JACS_TOL = 1e-10
 
+    
     def setUp(self):
-        self.model_ideal = smq1Q_XYI.target_model()
+        self.model_ideal = GLOBAL_MODEL_PACK.target_model()
         if TorchForwardSimulator.ENABLED:
             # TorchFowardSimulator can only work with TP modelmembers.
             self.model_ideal.convert_members_inplace(to_type='full TP')
         
         self.model_noisy = self.model_ideal.depolarize(op_noise=0.05, spam_noise=0.025)
-        prep_fiducials = smq1Q_XYI.prep_fiducials()
-        meas_fiducials = smq1Q_XYI.meas_fiducials()
-        germs = smq1Q_XYI.germs()
+        prep_fiducials = GLOBAL_MODEL_PACK.prep_fiducials()
+        meas_fiducials = GLOBAL_MODEL_PACK.meas_fiducials()
+        germs = GLOBAL_MODEL_PACK.germs()
         max_lengths = [4]
         circuits = create_lsgst_circuit_lists(
             self.model_noisy, prep_fiducials, meas_fiducials, germs, max_lengths
@@ -280,7 +287,8 @@ class ForwardSimConsistencyTester(TestCase):
             SimpleMapForwardSimulator(),
             SimpleMatrixForwardSimulator(),
             MapForwardSimulator(),
-            MatrixForwardSimulator()
+            MatrixForwardSimulator(),
+            LCSEvalTreeMatrixForwardSimulator()
         ]
         if TorchForwardSimulator.ENABLED:
             sims.append(TorchForwardSimulator())
@@ -334,9 +342,9 @@ class ForwardSimIntegrationTester(BaseProtocolData):
 
     def _run(self, obj : ForwardSimulator.Castable):
         self.setUpClass()
-        proto = gst.GateSetTomography(smq1Q_XYI.target_model("full TP"), 'stdgaugeopt', name="testGST")
+        proto = gst.GateSetTomography(GLOBAL_MODEL_PACK.target_model("full TP"), name="testGST")
         results = proto.run(self.gst_data, simulator=obj)
-        mdl_result = results.estimates["testGST"].models['stdgaugeopt']
+        mdl_result = results.estimates["testGST"].models["final iteration estimate"]
         twoDLogL = two_delta_logl(mdl_result, self.gst_data.dataset)
         assert twoDLogL <= 0.05  # should be near 0 for perfect data
         pass
@@ -359,3 +367,11 @@ class ForwardSimIntegrationTester(BaseProtocolData):
     def test_matrix_fwdsim(self):
         self._run(MatrixForwardSimulator)
 
+    def test_lcs_matrix_fwdsim(self):
+        self._run(LCSEvalTreeMatrixForwardSimulator)
+
+
+if __name__ == '__main__':
+    tester = ForwardSimConsistencyTester()
+    tester.test_consistent_probs()
+    print()

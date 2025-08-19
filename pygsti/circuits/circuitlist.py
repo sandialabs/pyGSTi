@@ -201,6 +201,14 @@ class CircuitList(_NicelySerializable):
         self.__dict__.update(state_dict)
         if 'uuid' not in state_dict:  # backward compatibility
             self.uuid = _uuid.uuid4()  # create a new uuid
+    
+    def tensor_circuits(self, other_circuitlist, new_name=None):
+        assert len(self) == len(other_circuitlist)
+        circuits = []
+        for c1,c2 in zip(self._circuits, other_circuitlist._circuits):
+            circuits.append(c1.tensor_circuit(c2))
+        out = CircuitList(circuits, name=new_name)
+        return out
 
     def elementvec_to_array(self, elementvec, layout, mergeop="sum"):
         """

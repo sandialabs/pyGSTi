@@ -31,6 +31,7 @@ from .linearop import LinearOperator
 from .linearop import finite_difference_deriv_wrt_params, finite_difference_hessian_wrt_params
 from .lpdenseop import LinearlyParamArbitraryOp
 from .opfactory import OpFactory, EmbeddedOpFactory, EmbeddingOpFactory, ComposedOpFactory
+from .permutationop import PermutationOperator
 from .repeatedop import RepeatedOp
 from .staticarbitraryop import StaticArbitraryOp
 from .staticcliffordop import StaticCliffordOp

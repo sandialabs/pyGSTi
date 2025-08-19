@@ -10,10 +10,12 @@ Defines the MatrixForwardSimulator calculator class
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import time
 import collections as _collections
 import time as _time
 import warnings as _warnings
 
+from tqdm import tqdm
 import numpy as _np
 import numpy.linalg as _nla
 
@@ -21,7 +23,10 @@ from pygsti.forwardsims.distforwardsim import DistributableForwardSimulator as _
 from pygsti.forwardsims.forwardsim import ForwardSimulator as _ForwardSimulator
 from pygsti.forwardsims.forwardsim import _bytes_for_array_types
 from pygsti.layouts.evaltree import EvalTree as _EvalTree
+from pygsti.layouts.evaltree import EvalTreeBasedUponLongestCommonSubstring as _EvalTreeLCS
+from pygsti.layouts.evaltree import setup_circuit_list_for_LCS_computations, CollectionOfLCSEvalTrees
 from pygsti.layouts.matrixlayout import MatrixCOPALayout as _MatrixCOPALayout
+from pygsti.layouts.matrixlayout import _MatrixCOPALayoutAtomWithLCS
 from pygsti.baseobjs.profiler import DummyProfiler as _DummyProfiler
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
@@ -31,7 +36,13 @@ from pygsti.tools import slicetools as _slct
 from pygsti.tools.matrixtools import _fas
 from pygsti import SpaceT
 from pygsti.tools import listtools as _lt
-from pygsti.circuits import CircuitList as _CircuitList
+from pygsti.circuits import CircuitList as _CircuitList, Circuit as _Circuit
+from pygsti.tools.internalgates import internal_gate_unitaries
+from pygsti.tools.optools import unitary_to_superop
+from pygsti.baseobjs.label import LabelTup, LabelTupTup, Label
+
+from typing import Sequence, Optional
+
 
 _dummy_profiler = _DummyProfiler()
 
@@ -696,8 +707,9 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         return super()._array_types_for_method(method_name)
 
     def __init__(self, model=None, distribute_by_timestamp=False, num_atoms=None, processor_grid=None,
-                 param_blk_sizes=None):
+                 param_blk_sizes=None, cache_doperations=True):
         super().__init__(model, num_atoms, processor_grid, param_blk_sizes)
+        self._cache_dops = cache_doperations
         self._mode = "distribute_by_timestamp" if distribute_by_timestamp else "time_independent"
 
     def _to_nice_serialization(self):
@@ -739,6 +751,9 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         eval_tree = layout_atom_tree
         cacheSize = len(eval_tree)
         prodCache = _np.zeros((cacheSize, dim, dim), 'd')
+        # ^ This assumes assignments prodCache[i] = <2d numpy array>.
+        #   It would be better for this to be a dict (mapping _most likely_
+        #   to ndarrays) if we don't need slicing or other axis indexing.
         scaleCache = _np.zeros(cacheSize, 'd')
 
         for iDest, iRight, iLeft in eval_tree:
@@ -752,7 +767,10 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
                 else:
                     gate = self.model.circuit_layer_operator(opLabel, 'op').to_dense("minimal")
                     nG = max(_nla.norm(gate), 1.0)
+                    # ^ This indicates a need to compute norms of the operation matrices. Can't do this
+                    #   with scipy.linalg if gate is represented implicitly. 
                     prodCache[iDest] = gate / nG
+                    # ^ Indicates a need to overload division by scalars.
                     scaleCache[iDest] = _np.log(nG)
                 continue
 
@@ -765,10 +783,12 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             scaleCache[iDest] = scaleCache[iLeft] + scaleCache[iRight]
 
             if prodCache[iDest].max() < _PSMALL and prodCache[iDest].min() > -_PSMALL:
-                nL, nR = max(_nla.norm(L), _np.exp(-scaleCache[iLeft]),
-                             1e-300), max(_nla.norm(R), _np.exp(-scaleCache[iRight]), 1e-300)
+                nL = max(_nla.norm(L), _np.exp(-scaleCache[iLeft]), 1e-300)
+                nR = max(_nla.norm(R), _np.exp(-scaleCache[iRight]), 1e-300)
                 sL, sR = L / nL, R / nR
-                prodCache[iDest] = _np.dot(sL, sR); scaleCache[iDest] += _np.log(nL) + _np.log(nR)
+                # ^ Again, shows the need to overload division by scalars.
+                prodCache[iDest] = sL @ sR
+                scaleCache[iDest] += _np.log(nL) + _np.log(nR)
 
         nanOrInfCacheIndices = (~_np.isfinite(prodCache)).nonzero()[0]  # may be duplicates (a list, not a set)
         # since all scaled gates start with norm <= 1, products should all have norm <= 1
@@ -839,6 +859,8 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
         tSerialStart = _time.time()
         dProdCache = _np.zeros((cacheSize,) + deriv_shape)
+        # ^ I think that deriv_shape will be a tuple of length > 2.
+        #   (Based on how swapaxes is used in the loop below ...)
         wrtIndices = _slct.indices(wrt_slice) if (wrt_slice is not None) else None
 
         for iDest, iRight, iLeft in eval_tree:
@@ -852,6 +874,9 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
                     #doperation = self.dproduct( (opLabel,) , wrt_filter=wrtIndices)
                     doperation = self._doperation(opLabel, wrt_filter=wrtIndices)
                     dProdCache[iDest] = doperation / _np.exp(scale_cache[iDest])
+                    # ^ Need a way to track tensor product structure in whatever's 
+                    #   being returned by self._doperation (presumably it's a tensor ...)
+
                 continue
 
             tm = _time.time()
@@ -862,8 +887,18 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             # since then matrixOf(circuit[i]) = matrixOf(circuit[iLeft]) * matrixOf(circuit[iRight])
             L, R = prod_cache[iLeft], prod_cache[iRight]
             dL, dR = dProdCache[iLeft], dProdCache[iRight]
-            dProdCache[iDest] = _np.dot(dL, R) + \
-                _np.swapaxes(_np.dot(L, dR), 0, 1)  # dot(dS, T) + dot(S, dT)
+            term1 = _np.dot(dL, R)
+            term2 = _np.swapaxes(_np.dot(L, dR), 0, 1) 
+            # ^ From the numpy docs on .dot :
+            #
+            #   If a is an N-D array and b is an M-D array (where M>=2),
+            #   it is a sum product over the last axis of a and the second-to-last axis of b:
+            #
+            #       dot(a, b)[i,j,k,m] = sum(a[i,j,:] * b[k,:,m])
+            #
+            dProdCache[iDest] = term1 +  term2  # dot(dS, T) + dot(S, dT)
+            # ^ We need addition of tensor-product-structured "doperators."
+
             profiler.add_time("compute_dproduct_cache: dots", tm)
             profiler.add_count("compute_dproduct_cache: dots")
 
@@ -871,9 +906,12 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             if abs(scale) > 1e-8:  # _np.isclose(scale,0) is SLOW!
                 dProdCache[iDest] /= _np.exp(scale)
                 if dProdCache[iDest].max() < _DSMALL and dProdCache[iDest].min() > -_DSMALL:
+                    # ^ Need the tensor-product-structured "doperators" to have .max() and .min()
+                    #   methods.
                     _warnings.warn("Scaled dProd small in order to keep prod managable.")
             elif (_np.count_nonzero(dProdCache[iDest]) and dProdCache[iDest].max() < _DSMALL
                   and dProdCache[iDest].min() > -_DSMALL):
+                # ^ Need to bypass the call to _np.count_nonzero(...).
                 _warnings.warn("Would have scaled dProd but now will not alter scale_cache.")
 
         #profiler.print_mem("DEBUGMEM: POINT2"); profiler.comm.barrier()
@@ -1034,7 +1072,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         return hProdCache
 
     def create_layout(self, circuits, dataset=None, resource_alloc=None, array_types=('E',),
-                      derivative_dimensions=None, verbosity=0, layout_creation_circuit_cache= None):
+                      derivative_dimensions=None, verbosity=0, layout_creation_circuit_cache= None, use_old_tree_style: bool = True):
         """
         Constructs an circuit-outcome-probability-array (COPA) layout for a list of circuits.
 
@@ -1121,7 +1159,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
         layout = _MatrixCOPALayout(circuits, self.model, dataset, natoms,
                                    na, npp, param_dimensions, param_blk_sizes, resource_alloc, verbosity, 
-                                   layout_creation_circuit_cache=layout_creation_circuit_cache)
+                                   layout_creation_circuit_cache=layout_creation_circuit_cache, use_old_tree_style=use_old_tree_style)
 
         if mem_limit is not None:
             loc_nparams1 = num_params / npp[0] if len(npp) > 0 else 0
@@ -1220,6 +1258,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         #  vp[i] = sum_k e[0,k] dot(gs, rho)[i,k,0]  * scale_vals[i]
         #  vp[i] = dot( e, dot(gs, rho))[0,i,0]      * scale_vals[i]
         #  vp    = squeeze( dot( e, dot(gs, rho)), axis=(0,2) ) * scale_vals
+        # breakpoint()
         return _np.squeeze(_np.dot(e, _np.dot(gs, rho)), axis=(0, 2)) * scale_vals
         # shape == (len(circuit_list),) ; may overflow but OK
 
@@ -1491,6 +1530,32 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         _np.seterr(**old_err)
 
     def _bulk_fill_dprobs_atom(self, array_to_fill, dest_param_slice, layout_atom, param_slice, resource_alloc):
+        if not self._cache_dops:
+            # This call errors because it tries to compute layout_atom.as_layout(resource_alloc),
+            # which isn't implemented. Looking at how layout_atom is used in the other branch
+            # of this if-statement it isn't clear how to work around this. Can look at 
+            # MapForwardSimulator._bulk_fill_dprobs_atom(...).
+            # 
+            # Verbatim contents:
+            #
+            #       resource_alloc.check_can_allocate_memory(layout_atom.cache_size * self.model.dim * _slct.length(param_slice))
+            #       self.calclib.mapfill_dprobs_atom(self, array_to_fill, slice(0, array_to_fill.shape[0]), dest_param_slice,
+            #                                  layout_atom, param_slice, resource_alloc, self.derivative_eps)
+            #
+            # where
+            #
+            #       self.calclib = _importlib.import_module("pygsti.forwardsims.mapforwardsim_calc_" + evotype.name).
+            # 
+            # and an implementation can be found at
+            #
+            #       /Users/rjmurr/Documents/pg-xfgst/repo/pygsti/forwardsims/mapforwardsim_calc_generic.py.
+            #
+            # Specifically, in mapfill_probs_atom. But that doesn't do anything like layout_atom.as_layout(resource_alloc) .... :(
+            # 
+
+            _DistributableForwardSimulator._bulk_fill_dprobs_atom(self, array_to_fill, dest_param_slice, layout_atom, param_slice, resource_alloc)
+            return
+        
         dim = self.model.evotype.minimal_dim(self.model.state_space)
         resource_alloc.check_can_allocate_memory(layout_atom.cache_size * dim * dim * _slct.length(param_slice))
         prodCache, scaleCache = self._compute_product_cache(layout_atom.tree, resource_alloc)
@@ -2104,3 +2169,407 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
                                                   layout.resource_alloc())
         return self._bulk_fill_timedep_dobjfn(raw_obj, array_to_fill, layout, ds_circuits, num_total_outcomes,
                                               dataset, ds_cache)
+
+
+class LCSEvalTreeMatrixForwardSimulator(MatrixForwardSimulator):
+
+    def bulk_product(self, circuits, scale=False, resource_alloc=None):
+        """
+        Compute the products of many circuits at once.
+
+        Parameters
+        ----------
+        circuits : list of Circuits
+            The circuits to compute products for.  These should *not* have any preparation or
+            measurement layers.
+
+        scale : bool, optional
+            When True, return a scaling factor (see below).
+
+        resource_alloc : ResourceAllocation
+            Available resources for this computation. Includes the number of processors
+            (MPI comm) and memory limit.
+
+        Returns
+        -------
+        prods : numpy array
+            Array of shape S x G x G, where:
+            - S == the number of operation sequences
+            - G == the linear dimension of a operation matrix (G x G operation matrices).
+        scaleValues : numpy array
+            Only returned when scale == True. A length-S array specifying
+            the scaling that needs to be applied to the resulting products
+            (final_product[i] = scaleValues[i] * prods[i]).
+        """
+        resource_alloc = _ResourceAllocation.cast(resource_alloc)
+
+        my_data = setup_circuit_list_for_LCS_computations(circuits, None)
+
+        full_tree = CollectionOfLCSEvalTrees(my_data[2], my_data[1], my_data[0])
+
+        full_tree.collapse_circuits_to_process_matrices(self.model, None)
+        Gs = full_tree.reconstruct_full_matrices()
+
+        return Gs
+
+    def _bulk_fill_probs_atom(self, array_to_fill, layout_atom: _MatrixCOPALayoutAtomWithLCS, resource_alloc):
+        
+        # Overestimate the amount of cache usage by assuming everything is the same size.
+        dim = self.model.evotype.minimal_dim(self.model.state_space)
+        # resource_alloc.check_can_allocate_memory(len(layout_atom.tree.cache) * dim**2)  # prod cache
+
+        layout_atom.tree.collapse_circuits_to_process_matrices(self.model, None)
+
+        Gs, all_circuits = layout_atom.tree.reconstruct_full_matrices()
+
+        sp_val, povm_vals, element_indices, tree_indices = self._rho_es_elm_inds_and_tree_inds_from_spam_tuples(layout_atom)
+        old_err = _np.seterr(over='ignore')
+        # for spam_tuple, (element_indices, tree_indices) in layout_atom.indices_by_spamtuple.items():
+        #     # "element indices" index a circuit outcome probability in array_to_fill's first dimension
+        #     # "tree indices" index a quantity for a no-spam circuit in a computed cache, which correspond
+        #     #  to the the element indices when `spamtuple` is used.
+        #     # (Note: *don't* set dest_indices arg = layout.element_slice, as this is already done by caller)
+        #     rho, E = self._rho_e_from_spam_tuple(spam_tuple)
+        #     _fas(array_to_fill, [element_indices],
+        #          self._probs_from_rho_e(rho, E, Gs[tree_indices], 1))
+        probs = self._probs_from_rho_e(sp_val, povm_vals, Gs[tree_indices], 1)
+        # if not isinstance(element_indices, list):
+        #     element_indices = [element_indices]
+        # collapse element list
+        
+        # _fas(array_to_fill, element_indices, probs)
+        array_to_fill[:] = probs
+        _np.seterr(**old_err)
+
+    def _probs_from_rho_e(self, rho, e: _np.ndarray, gs, scale_vals = 1, return_two_D: bool = False):
+        """
+        Compute the probabilities from rho, a set of povms, the circuits defined by gs, and then scale appropriately.
+        """
+
+        assert e.ndim == 2
+        ## WHY ??? assert e[0] > 1
+        out = _np.zeros((len(e), len(gs)))
+        for i in range(len(gs)):
+            out[:, i] = _np.squeeze(e @ (gs[i] @ rho), axis=(1))
+
+        if not return_two_D:
+            out = out.reshape((len(gs)*len(e)))
+        return out
+        return _np.squeeze(e @ (gs @ rho), axis=(2)) # only one rho.
+
+        return super()._probs_from_rho_e(rho, e, gs, scale_vals)
+
+    def _layout_atom_to_rho_es_elm_inds_and_tree_inds_objs(self,
+                        layout_atom: _MatrixCOPALayoutAtomWithLCS):
+        
+        """
+        Assumes one state prep and many measurements.
+
+        We assume that there will be only one set of tree indices used throughout.
+        Also, we assume that we can find a slice 
+        """
+
+        sp_val = None
+        povm_vals: list[Label] = []
+        elm_inds: list[slice] = [] # This will get collapsed since we are assuming that each povm appears once.
+        tree_inds: list[slice] = [] # I am assuming that this will 
+        for spam_tuple, (element_indices, tree_indices) in layout_atom.indices_by_spamtuple.items():
+            if spam_tuple[0] != sp_val and sp_val is not None:
+                raise ValueError("More than one state prep is being used.")
+            else:
+                sp_val = spam_tuple[0]
+
+            
+            povm_vals.append(spam_tuple[1])
+            elm_inds.append(element_indices)
+            tree_inds.append(tree_indices)
+
+        sp_val = self.model.circuit_layer_operator(sp_val, "prep")
+
+        povm_vals = [self.model.circuit_layer_operator(elabel, 'povm') for elabel in povm_vals]
+
+        tree_inds = _np.unique(tree_inds)[0]
+        return sp_val, povm_vals, elm_inds, tree_inds        
+
+    def _rho_es_elm_inds_and_tree_inds_from_spam_tuples(self,
+                    layout_atom: _MatrixCOPALayoutAtomWithLCS) -> tuple[_np.ndarray, _np.ndarray]:
+        """
+        Assumes one state prep and many measurements.
+
+        We assume that there will be only one set of tree indices used throughout.
+        Also, we assume that we can find a slice 
+        """
+
+        sp_val = None
+        povm_vals: list[Label] = []
+        elm_inds: list[slice] = [] # This will get collapsed since we are assuming that each povm appears once.
+        tree_inds: list[slice] = [] # I am assuming that this will 
+        for spam_tuple, (element_indices, tree_indices) in layout_atom.indices_by_spamtuple.items():
+            if spam_tuple[0] != sp_val and sp_val is not None:
+                raise ValueError("More than one state prep is being used.")
+            else:
+                sp_val = spam_tuple[0]
+
+            
+            povm_vals.append(spam_tuple[1])
+            elm_inds.append(element_indices)
+            tree_inds.append(tree_indices)
+
+        sp_val, povm_vals = self._rho_es_from_spam_tuples(sp_val, povm_vals)
+        povm_vals = _np.vstack(povm_vals)
+        tree_inds = _np.unique(tree_inds)[0]
+        return sp_val, povm_vals, elm_inds, tree_inds
+
+    def _bulk_fill_dprobs_atom(self, array_to_fill, dest_param_slice: Optional[slice],
+                               layout_atom: _MatrixCOPALayoutAtomWithLCS, param_slice: Optional[slice], resource_alloc):
+        eps = 1e-7
+        if param_slice is None:
+            param_slice = slice(0, self.model.num_params)
+        param_indices = _slct.to_array(param_slice)
+
+        if dest_param_slice is None:
+            dest_param_slice = slice(0, len(param_indices))
+        dest_param_indices = _slct.to_array(dest_param_slice)
+
+        iParamToFinal = {i: dest_param_indices[ii] for ii, i in enumerate(param_indices)}
+
+        probs = _np.empty(layout_atom.num_elements, 'd')
+        self._bulk_fill_probs_atom(probs, layout_atom, resource_alloc)
+        orig_vec = self.model.to_vector().copy()
+
+        # CALL_BASIC = False
+        # CALL_BASIC_SET_PARAM_VALS = False
+        # CALL_SPLIT_OFF_SPAM_REDO_ALL_OF_TREE = False
+        # CALL_SPLIT_OFF_SPAM_PARTIAL_CACHE_TREE = True
+
+        # if CALL_BASIC:
+        #     return self._bulk_fill_dprobs_atom_using_from_vector(array_to_fill, layout_atom, param_indices, resource_alloc, iParamToFinal, probs, orig_vec, eps)
+        # elif CALL_BASIC_SET_PARAM_VALS:
+        #     return self._bulk_fill_dprobs_atom_using_set_param_vals_no_cache(array_to_fill, layout_atom, param_indices, resource_alloc, iParamToFinal, probs, orig_vec, eps)
+        # elif CALL_SPLIT_OFF_SPAM_REDO_ALL_OF_TREE:
+        #     return self._bulk_fill_dprobs_atom_with_from_vector_split_SPAM_off(array_to_fill, layout_atom, param_indices, resource_alloc, iParamToFinal, probs, orig_vec, eps)
+        # elif CALL_SPLIT_OFF_SPAM_PARTIAL_CACHE_TREE:
+        return self._bulk_fill_dprobs_atom_using_from_vector_but_cache_collapse(array_to_fill, layout_atom, param_indices, resource_alloc, iParamToFinal, probs, orig_vec, eps)
+
+    def create_layout(self, circuits : Sequence[_Circuit] | _CircuitList, dataset=None, resource_alloc=None, array_types=('E', ), derivative_dimensions=None, verbosity=0, layout_creation_circuit_cache=None):
+        return super().create_layout(circuits, dataset, resource_alloc, array_types, derivative_dimensions, verbosity, layout_creation_circuit_cache, use_old_tree_style=False)
+
+
+
+    def _bulk_fill_dprobs_atom_using_from_vector(self, array_to_fill, layout_atom: _MatrixCOPALayoutAtomWithLCS, param_indices,
+                resource_alloc, iParamToFinal: dict[int, int], base_probs: _np.ndarray, orig_vec: _np.ndarray, eps: float = 1e-7):
+        """
+        Specifically use the from_vector method to update the model before the finite difference scheme.
+        """
+
+        probs2 = _np.empty(layout_atom.num_elements, 'd')
+
+        for i in range(len(param_indices)):
+
+            new_vec = orig_vec.copy()
+            new_vec[param_indices[i]] += eps
+            self.model.from_vector(new_vec)
+
+            self._bulk_fill_probs_atom(probs2, layout_atom, resource_alloc)
+
+            array_to_fill[:, iParamToFinal[param_indices[i]]] = (probs2 - base_probs) / eps
+
+        self.model.from_vector(orig_vec)
+
+    def _bulk_fill_dprobs_atom_using_set_param_vals_no_cache(self, array_to_fill, layout_atom: _MatrixCOPALayoutAtomWithLCS, param_indices,
+                resource_alloc, iParamToFinal: dict[int, int], base_probs: _np.ndarray, orig_vec: _np.ndarray, eps: float = 1e-7):
+        """
+        Specifically use the set_parameter_values method to update the model before the finite difference scheme which will recompute the whole LCS tree.
+        """
+        
+        # THIS METHOD FAILS TO PRODUCE THE CORRECT RESULTS! THIS IS BECAUSE THE SET_PARAMETER_VALUES call still does not work.
+
+        probs2 = _np.empty(layout_atom.num_elements, 'd')
+        
+        if len(param_indices) > 0:
+
+            first_ind = param_indices[0]
+            new_vec = orig_vec.copy()
+            new_vec[first_ind] += eps
+
+            self.model.set_parameter_value(first_ind, orig_vec[first_ind] + eps)
+
+            self._bulk_fill_probs_atom(probs2, layout_atom, resource_alloc)
+
+            array_to_fill[:, iParamToFinal[first_ind]] = (probs2 - base_probs) / eps
+
+        for i in range(1, len(param_indices)):
+            self.model.set_parameter_values([param_indices[i - 1], param_indices[i]],
+                                            [orig_vec[i-1], orig_vec[i] + eps])
+            new_vec = self.model.to_vector()
+            assert new_vec[i] == (orig_vec[i] + eps)
+            assert _np.allclose(new_vec[:i], orig_vec[:i] )
+            assert _np.allclose(new_vec[i+1:], orig_vec[i+1:])
+
+            self._bulk_fill_probs_atom(probs2, layout_atom, resource_alloc)
+
+            array_to_fill[:, iParamToFinal[first_ind]] = (probs2 - base_probs) / eps
+
+        self.model.from_vector(orig_vec)
+
+    def _bulk_fill_dprobs_atom_with_from_vector_split_SPAM_off(self, array_to_fill, layout_atom: _MatrixCOPALayoutAtomWithLCS,
+                                                               param_indices: _np.ndarray, resource_alloc,
+                                                               iParamToFinal: dict[int, int], base_probs: _np.ndarray,
+                                                               orig_vec: _np.ndarray, eps: float = 1e-7,
+                                                               return_sequence_matrices: bool = False, recompute_whole_tree: bool = False):
+
+        original_Gs = layout_atom.tree.reconstruct_full_matrices()
+
+        probs2 = _np.empty(layout_atom.num_elements, 'd')
+        
+        sp_obj, povm_objs, _, tree_indices = self._layout_atom_to_rho_es_elm_inds_and_tree_inds_objs(layout_atom)
+
+        orig_dense_sp = sp_obj.to_dense(on_space="minimal")[:,None] # To maintain expected shape.
+        dense_povms = _np.vstack([_np.conjugate(_np.transpose(povm.to_dense(on_space='minimal')[:, None])) for povm in povm_objs])
+
+        if return_sequence_matrices:
+            output = []
+
+        _, rho_gpindices = self._process_wrt_filter(param_indices, sp_obj)
+        for i in range(len(rho_gpindices)):
+            iFinal = iParamToFinal[rho_gpindices[i]]
+            
+            new_vec = orig_vec.copy()
+            new_vec[rho_gpindices[i]] += eps
+            self.model.from_vector(new_vec)
+
+            dense_sp = sp_obj.to_dense(on_space="minimal")[:, None]
+            probs2 = self._probs_from_rho_e(dense_sp, dense_povms, original_Gs[tree_indices])
+
+            array_to_fill[:, iFinal] = (probs2 - base_probs) / eps
+
+            if return_sequence_matrices:
+                output.append(original_Gs)
+ 
+        _, povm_gpindices = self._process_wrt_filter(param_indices, self.model.circuit_layer_operator(self.model.primitive_povm_labels[0], "povm"))
+        for i in range(len(povm_gpindices)):
+            iFinal = iParamToFinal[povm_gpindices[i]]
+            new_vec = orig_vec.copy()
+            new_vec[povm_gpindices[i]] += eps
+            self.model.from_vector(new_vec)
+
+            # We are only varying the POVMs.
+            effects = _np.vstack([_np.conjugate(_np.transpose(povm.to_dense(on_space='minimal')[:, None])) for povm in povm_objs])
+
+            probs2 = self._probs_from_rho_e(orig_dense_sp, effects, original_Gs[tree_indices])
+            
+            array_to_fill[:, iFinal] = (probs2 - base_probs) / eps
+
+            if return_sequence_matrices:
+                output.append(original_Gs)
+
+        remaining_param_inds = sorted(list(set(param_indices) - set(_slct.to_array(povm_gpindices)) - set(_slct.to_array(rho_gpindices))))
+
+        for i in range(len(remaining_param_inds)):
+            iFinal = iParamToFinal[remaining_param_inds[i]]
+
+            new_vec = orig_vec.copy()
+            new_vec[remaining_param_inds[i]] += eps
+            self.model.from_vector(new_vec)
+
+            layout_atom.tree.collapse_circuits_to_process_matrices(self.model, None)
+            Gs = layout_atom.tree.reconstruct_full_matrices()
+
+            probs2 = self._probs_from_rho_e(orig_dense_sp, dense_povms, Gs[tree_indices])
+
+            array_to_fill[:, iFinal] = (probs2 - base_probs) / eps
+
+            if return_sequence_matrices:
+                output.append(Gs)
+
+        self.model.from_vector(orig_vec) # reset to the original model.
+
+        if return_sequence_matrices:
+            return output
+
+
+    def _bulk_fill_dprobs_atom_using_from_vector_but_cache_collapse(self, array_to_fill, layout_atom: _MatrixCOPALayoutAtomWithLCS,
+                param_indices: _np.ndarray, resource_alloc, iParamToFinal: dict[int, int], base_probs: _np.ndarray,
+                orig_vec: _np.ndarray, eps: float = 1e-7, return_sequence_matrices: bool = False):
+        """
+        Use from_vector to update the model. Then, recompute only the part of the tree which you need to recompute.
+        """
+
+        original_Gs, all_cirs = layout_atom.tree.reconstruct_full_matrices()
+
+        probs2 = _np.empty(layout_atom.num_elements, 'd')
+        
+        sp_obj, povm_objs, elm_indices, tree_indices = self._layout_atom_to_rho_es_elm_inds_and_tree_inds_objs(layout_atom)
+
+        elm_indices = _np.array([_slct.indices(elm) for elm in elm_indices])
+
+        orig_dense_sp = sp_obj.to_dense(on_space="minimal")[:,None] # To maintain expected shape.
+        dense_povms = _np.vstack([_np.conjugate(_np.transpose(povm.to_dense(on_space='minimal')[:, None])) for povm in povm_objs])
+        if return_sequence_matrices:
+            output = []
+
+        _, rho_gpindices = self._process_wrt_filter(param_indices, sp_obj)
+        for i in range(len(rho_gpindices)):
+            probs2[:] = base_probs[:]
+            iFinal = iParamToFinal[rho_gpindices[i]]
+            
+            new_vec = orig_vec.copy()
+            new_vec[rho_gpindices[i]] += eps
+            self.model.from_vector(new_vec)
+
+            dense_sp = sp_obj.to_dense(on_space="minimal")[:, None]
+            probs2 = self._probs_from_rho_e(dense_sp, dense_povms, original_Gs[tree_indices])
+
+            array_to_fill[:, iFinal] = (probs2 - base_probs) / eps
+
+            if return_sequence_matrices:
+                output.append(original_Gs)
+ 
+        _, povm_gpindices = self._process_wrt_filter(param_indices, self.model.circuit_layer_operator(self.model.primitive_povm_labels[0], "povm"))
+        for i in range(len(povm_gpindices)):
+            probs2[:] = base_probs[:]
+            iFinal = iParamToFinal[povm_gpindices[i]]
+            new_vec = orig_vec.copy()
+            new_vec[povm_gpindices[i]] += eps
+            self.model.from_vector(new_vec)
+
+            # We are only varying the POVMs.
+            effects = _np.vstack([_np.conjugate(_np.transpose(povm.to_dense(on_space='minimal')[:, None])) for povm in povm_objs])
+
+            probs2 = self._probs_from_rho_e(orig_dense_sp, effects, original_Gs[tree_indices])
+            
+            array_to_fill[:, iFinal] = (probs2 - base_probs) / eps
+
+            if return_sequence_matrices:
+                output.append(original_Gs)
+
+        remaining_param_inds = sorted(list(set(param_indices) - set(_slct.to_array(povm_gpindices)) - set(_slct.to_array(rho_gpindices))))
+
+        dirty_circuits = layout_atom.tree.determine_which_circuits_will_update_for_what_gpindices(self.model)
+
+        for i in range(len(remaining_param_inds)):
+            probs2[:] = base_probs[:] # Copy off the data
+            iFinal = iParamToFinal[remaining_param_inds[i]]
+
+            new_vec = orig_vec.copy()
+            new_vec[remaining_param_inds[i]] += eps
+            self.model.from_vector(new_vec)
+
+            layout_atom.tree.collapse_circuits_to_process_matrices(self.model, remaining_param_inds[i])
+            Gs, inds_to_update = layout_atom.tree.reconstruct_full_matrices(self.model, remaining_param_inds[i])
+
+            tmp = self._probs_from_rho_e(orig_dense_sp, dense_povms, Gs, return_two_D=True)
+
+            probs2[elm_indices[:, inds_to_update]] = tmp
+
+            array_to_fill[:, iFinal] = (probs2 - base_probs) / eps
+
+            layout_atom.tree.reset_full_matrices_to_base_probs_version()
+
+            if return_sequence_matrices:
+                output.append(Gs)
+
+        self.model.from_vector(orig_vec) # reset to the original model.
+
+        if return_sequence_matrices:
+            return output

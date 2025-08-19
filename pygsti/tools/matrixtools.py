@@ -894,8 +894,9 @@ def real_matrix_log(m, action_if_imaginary="raise", tol=1e-8):
             pass
         else:
             assert(False), "Invalid 'action_if_imaginary' argument: %s" % action_if_imaginary
-    else:
-        assert(imMag <= tol), "real_matrix_log failed to construct a real logarithm!"
+    elif imMag <= tol:
+        import warnings
+        warnings.warn("real_matrix_log failed to construct a real logarithm!")
         logM = _np.real(logM)
 
     return logM
@@ -1277,11 +1278,18 @@ def _fas(a, inds, rhs, add=False):
     # index-list index is fine too.  The case we need to
     # deal with is indexing a multi-dimensional array with
     # one or more index-lists
-    if all([isinstance(i, (int, slice)) for i in inds]) or len(inds) == 1:
+    if len(inds) == 1:
         if add:
-            a[inds] += rhs  # all integers or slices behave nicely
+            a[inds] += rhs
         else:
-            a[inds] = rhs  # all integers or slices behave nicely
+            a[inds] = rhs
+    elif all([isinstance(i, (int, slice)) for i in inds]):
+        assert len(inds) == rhs.shape[1]
+        for ind, rhs_vec in zip(inds, rhs.T):
+            if add:
+                a[ind] += rhs_vec  # all integers or slices behave nicely
+            else:
+                a[ind]  = rhs_vec  # all integers or slices behave nicely
     else:
         #convert each dimension's index to a list, take a product of
         # these lists, and flatten the right hand side to get the

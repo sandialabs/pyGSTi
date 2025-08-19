@@ -184,8 +184,7 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
     Ls = None
 
     for results in results_dict.values():
-        est_labels = _add_new_estimate_labels(est_labels, results.estimates,
-                                              combine_robust)
+        est_labels = _add_new_estimate_labels(est_labels, results.estimates, combine_robust)
         loc_Ls = results.circuit_lists['final'].xs \
             if isinstance(results.circuit_lists['final'], _PlaquetteGridCircuitStructure) else [0]
         Ls = _add_new_labels(Ls, loc_Ls)
@@ -311,10 +310,8 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
             else:
                 est_modvi = est
 
-            switchBd.objfn_builder[d, i] = est.parameters.get(
-                'final_objfn_builder', _objfns.ObjectiveFunctionBuilder.create_from('logl'))
-            switchBd.objfn_builder_modvi[d, i] = est_modvi.parameters.get(
-                'final_objfn_builder', _objfns.ObjectiveFunctionBuilder.create_from('logl'))
+            switchBd.objfn_builder[d, i] = est.parameters.get('final_objfn_builder', _objfns.ObjectiveFunctionBuilder.create_from('logl'))
+            switchBd.objfn_builder_modvi[d, i] = _objfns.ObjectiveFunctionBuilder.create_from('logl')
             switchBd.params[d, i] = est.parameters
             
             #add the final mdc store

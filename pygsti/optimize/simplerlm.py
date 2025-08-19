@@ -16,6 +16,7 @@ import time as _time
 
 import numpy as _np
 import scipy as _scipy
+from scipy import stats as _stats
 
 from pygsti.optimize import arraysinterface as _ari
 from pygsti.optimize.customsolve import custom_solve as _custom_solve
@@ -107,6 +108,7 @@ class Optimizer(_NicelySerializable):
             return cls(**obj) if obj else cls()
 
     def __init__(self):
+        self.tol = dict()
         super().__init__()
 
 
@@ -191,10 +193,10 @@ class SimplerLMOptimizer(Optimizer):
                  oob_action="reject", oob_check_mode=0, serial_solve_proc_threshold=100, lsvec_mode="normal"):
 
         super().__init__()
-        if isinstance(tol, float): tol = {'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol, 'maxdx': 1.0}
+        if isinstance(tol, float): tol = {'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol, 'maxdx': 1.0, 'chi2_icdf_tol': 0.0, 'critval_discount': 1.0}
         self.maxiter = maxiter
         self.maxfev = maxfev
-        self.tol = tol
+        self.tol.update(tol)
         self.fditer = fditer
         self.first_fditer = first_fditer
         self.init_munu = init_munu
@@ -283,6 +285,13 @@ class SimplerLMOptimizer(Optimizer):
         else:
             ari = _ari.UndistributedArraysInterface(nEls, nP)
 
+        chi2_icdf_tol    = self.tol.get('chi2_icdf_tol', 1e-6)
+        critical_value   = _stats.chi2.ppf(chi2_icdf_tol, objective.num_data_params() - objective.model.num_params)
+        critval_discount = self.tol.get('critval_discount', 1.0)
+        def chi2_stopper(norm_f):
+            chi2val = objective.chi2k_distributed_qty(norm_f)
+            return chi2val < critval_discount * critical_value
+
         opt_x, converged, msg, mu, nu, norm_f, f = simplish_leastsq(
             objective_func, jacobian, x0,
             max_iter=self.maxiter,
@@ -291,6 +300,7 @@ class SimplerLMOptimizer(Optimizer):
             jac_norm_tol=self.tol.get('jac', 1e-6),
             rel_ftol=self.tol.get('relf', 1e-6),
             rel_xtol=self.tol.get('relx', 1e-8),
+            chi2_stopper=chi2_stopper,
             max_dx_scale=self.tol.get('maxdx', 1.0),
             init_munu=self.init_munu,
             oob_check_interval=self.oob_check_interval,
@@ -300,7 +310,8 @@ class SimplerLMOptimizer(Optimizer):
             arrays_interface=ari,
             serial_solve_proc_threshold=self.serial_solve_proc_threshold,
             x_limits=x_limits,
-            verbosity=printer - 1, profiler=profiler)
+            verbosity=printer - 1, profiler=profiler,
+            )
 
         printer.log("Least squares message = %s" % msg, 2)
         assert(converged), "Failed to converge: %s" % msg
@@ -372,7 +383,7 @@ def jac_guarded(k: int, num_fd_iters: int, obj_fn: Callable, jac_fn: Callable, f
 
 def simplish_leastsq(
     obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
-    rel_ftol=1e-6, rel_xtol=1e-6, max_iter=100, num_fd_iters=0, max_dx_scale=1.0,
+    rel_ftol=1e-6, rel_xtol=1e-6, chi2_stopper=None, max_iter=100, num_fd_iters=0, max_dx_scale=1.0,
     init_munu="auto", oob_check_interval=0, oob_action="reject", oob_check_mode=0,
     resource_alloc=None, arrays_interface=None, serial_solve_proc_threshold=100,
     x_limits=None, verbosity=0, profiler=None
@@ -413,6 +424,10 @@ def simplish_leastsq(
     rel_xtol : float, optional
         Tolerance on the relative value of `|x|`, so that if
         `d(|x|)/|x| < rel_xtol` then mark converged.
+
+    chi2_stopper : Callable[float] -> float, optional
+        Terminate if chi2_stopper( norm( sum(obj_fn(x)**2) ) ) is True.
+        If None, then we set to a lambda function that always returns False.
 
     max_iter : int, optional
         The maximum number of (outer) interations.
@@ -518,10 +533,17 @@ def simplish_leastsq(
     max_norm_dx = (max_dx_scale**2) * len(global_x) if max_dx_scale else None
     # ^ don't let any component change by more than ~max_dx_scale
 
+    if chi2_stopper is None:
+        chi2_stopper = lambda _: False
 
     f = obj_fn(global_x)  # 'E'-type array
     norm_f = ari.norm2_f(f)
     if not _np.isfinite(norm_f):
+        # TODO: this path can be hit when f contains NaNs. We should
+        # really have a separate error message for that. Performing
+        # the check will require updating our ArraysInterface API
+        # (which isn't hard but is beside the point as I'm writing this)
+        #   -Riley.
         msg = "Infinite norm of objective function at initial point!"
 
     if len(global_x) == 0:  # a model with 0 parameters - nothing to optimize
@@ -542,6 +564,18 @@ def simplish_leastsq(
 
             if len(msg) > 0:
                 break  # exit outer loop if an exit-message has been set
+
+            if chi2_stopper(norm_f):
+                if oob_check_interval <= 1:
+                    msg = "Critical value for chi2 statistic acheived."
+                    converged = True
+                    break
+                else:
+                    printer.log(("** Converged with out-of-bounds with check interval=%d, reverting to last know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
+                    oob_check_interval = 1
+                    x[:] = best_x[:]
+                    mu, nu, norm_f, f[:] = best_x_state
+                    continue   
 
             if norm_f < f_norm2_tol:
                 if oob_check_interval <= 1:

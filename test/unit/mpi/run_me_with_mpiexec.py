@@ -1,3 +1,4 @@
+
 # This file is designed to be run via: mpiexec -np 4 python -W ignore run_me_with_mpiexec.py
 # This does not use nosetests because I want to set verbosity differently based on rank (quiet if not rank 0)
 # By wrapping asserts in comm.rank == 0, only rank 0 should fail (should help with output)
@@ -11,7 +12,9 @@ from mpi4py import MPI
 import pygsti
 from pygsti.modelpacks import smq1Q_XYI as std
 
+pygsti.optimize.customsolve.CUSTOM_SOLVE_THRESHOLD = 10
 wcomm = MPI.COMM_WORLD
+print(f'Running with CUSTOM_SOLVE_THRESHOLD = {pygsti.optimize.customsolve.CUSTOM_SOLVE_THRESHOLD}')
 
 
 class ParallelTest(object):
