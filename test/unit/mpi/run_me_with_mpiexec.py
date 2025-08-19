@@ -14,7 +14,8 @@ from pygsti.optimize import customsolve
 
 customsolve.CUSTOM_SOLVE_THRESHOLD = 10
 wcomm = MPI.COMM_WORLD
-print(f'Running with CUSTOM_SOLVE_THRESHOLD = {customsolve.CUSTOM_SOLVE_THRESHOLD}')
+ALLOWED_MESSAGE = f'Running with CUSTOM_SOLVE_THRESHOLD = {customsolve.CUSTOM_SOLVE_THRESHOLD}'
+print(ALLOWED_MESSAGE)
 
 
 class ParallelTest(object):

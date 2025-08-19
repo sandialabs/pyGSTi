@@ -10,6 +10,7 @@ try:
 except (ImportError, RuntimeError):
     MPI = None
 
+from run_me_with_mpiexec import ALLOWED_MESSAGE
 
 class MPITester:
 
@@ -36,7 +37,9 @@ class MPITester:
             raise RuntimeError(msg)
         result = subprocess.run(subprocess_args, capture_output=False, text=True)
         out, err = capfd.readouterr()
-        if len(out) + len(err) > 0:
+        tmp = out + err
+        tmp = [t for t in tmp if t != ALLOWED_MESSAGE]
+        if len(tmp) > 0:
             msg = out + '\n'+ 80*'-' + err
             raise RuntimeError(msg)
         return
