@@ -91,6 +91,8 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
     else:
         rank = 0
         size = 1
+    if not disable_checkpoints:
+        new_checkpoint = _AMSCheckpoint(None, data.dataset.to_str(), er_thresh, maxiter, tol, prob_clip,  recompute_H_thresh_percentage, None, None)
     #logl function will not change throughout this algorithm, so we can save a lot of time
     #by setting it up once, and recomputing its value with different inputs throughout AMS
     def create_logl_obj_fn(parent_model, dataset, min_prob_clip = 1e-6, comm = None, mem_limit = None):
@@ -114,6 +116,9 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
     target_model.param_interposer.full_span_inv_transform_matrix = target_model.param_interposer.inv_transform_matrix
     target_model.param_interposer.inv_transform_matrix_projector = np.eye(target_model.num_params)
     parent_model_projector = target_model.param_interposer.projector_matrix.copy()
+    target_model_fit = None
+    H = None
+    x0 = None
 
     if checkpoint is not None:
         #TODO: maybe not have all MPI processes read from memory in the future
@@ -129,23 +134,30 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
             if rank == 0:
                 raise ValueError('Invalid AMS checkpoint provided. The checkpoint settings are:', f"{loaded_checkpoint.er_thresh=}, {loaded_checkpoint.maxiter=}, {loaded_checkpoint.tol=}, {loaded_checkpoint.prob_clip=}, {loaded_checkpoint.recompute_H_thresh_percent=}", ' make sure that these match the arguments provided match these, and that the target model and data are correct.')
     
-    else:
-        if rank == 0:
-                print('starting GST')
-        target_model.sim = pygsti.forwardsims.MapForwardSimulator(param_blk_sizes=(100,100))
+    
+    
+    if target_model_fit is None:
+        if rank == 0 and verbosity > 0:
+            print('starting GST')
+        #target_model.sim = pygsti.forwardsims.MapForwardSimulator(param_blk_sizes=(100,100))
         result = _parallel_GST(target_model, data, prob_clip, tol, maxiter, verbosity, comm=comm, mem_limit=mem_limit)
-        
+    
         target_model_fit = result.estimates['GateSetTomography'].models['final iteration estimate']
         target_model_fit.sim = pygsti.forwardsims.MapForwardSimulator(param_blk_sizes=(100,100))
-        if rank == 0 : 
+        x0 = target_model_fit.to_vector()
+        if not disable_checkpoints and rank == 0:
+            new_checkpoint.target_model_fit = target_model_fit
+            new_checkpoint.x0 = x0
+            new_checkpoint.save()
+            print('Checkpoint saved in', new_checkpoint.path)
+    if H is None:
+        if rank == 0 and verbosity > 0: 
             print("computing Hessian")
-        
         H = pygsti.tools.logl_hessian(target_model_fit, data.dataset, comm=comm, mem_limit=mem_limit, verbosity = verbosity)
         #TODO how to make this work without mpiexec call
         H = comm.bcast(H, root = 0)
-        x0 = target_model_fit.to_vector()
-        if not disable_checkpoints:
-            new_checkpoint = _AMSCheckpoint(target_model, data.dataset.to_str(), er_thresh, maxiter, tol, prob_clip,  recompute_H_thresh_percentage, H, x0)
+        if not disable_checkpoints and rank == 0:
+            new_checkpoint.H = H
             new_checkpoint.save()
             print('Checkpoint saved in', new_checkpoint.path)
     red_model = target_model.copy()
