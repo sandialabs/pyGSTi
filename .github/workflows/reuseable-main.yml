@@ -87,7 +87,7 @@ jobs:
       if: ${{ inputs.run-extra-tests == 'true' }}
       run: |
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-        python -m pytest -v -n auto --dist loadscope --ignore=test/test_packages/mpi --ignore=test/test_packages/notebooks --durations=25 test/test_packages
+        python -m pytest -v -n auto --dist loadscope --ignore=test/test_packages/notebooks --durations=25 test/test_packages
     - name: Run notebook regression
       if: ${{ inputs.run-notebook-tests == 'true' }}
       run: |
