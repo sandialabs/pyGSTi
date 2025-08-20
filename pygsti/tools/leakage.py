@@ -15,7 +15,6 @@ import copy
 from pygsti.tools import optools as pgot
 from pygsti.tools import basistools as pgbt
 from pygsti.tools.basistools import stdmx_to_vec
-from pygsti.processors import QubitProcessorSpec
 from pygsti.baseobjs.basis import TensorProdBasis, Basis, BuiltinBasis
 import numpy as np
 import warnings
@@ -24,6 +23,8 @@ from typing import Union, Dict, Optional, List, Any, TYPE_CHECKING
 if TYPE_CHECKING:
     from pygsti.protocols.gst import ModelEstimateResults, GSTGaugeOptSuite
     from pygsti.models import ExplicitOpModel
+    from pygsti.processors import QubitProcessorSpec
+
 
 
 # Question: include the parenthetical in the heading below?
