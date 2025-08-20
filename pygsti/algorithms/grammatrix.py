@@ -100,7 +100,7 @@ def max_gram_rank_and_eigenvalues(dataset, target_model, max_basis_string_length
     if fixed_lists is not None:
         maxRhoStrs, maxEStrs = fixed_lists
     else:
-        maxRhoStrs = maxEStrs = max_gram_basis(dataset.gate_labels(),
+        maxRhoStrs = maxEStrs = max_gram_basis(target_model.primitive_op_labels,
                                                dataset, max_basis_string_length)
 
     return _gram_rank_and_evals(dataset, maxRhoStrs, maxEStrs, target_model)
