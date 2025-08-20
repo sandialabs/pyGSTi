@@ -3,12 +3,14 @@ from pathlib import Path
 import pytest
 import subprocess
 import sys
+import shutil
 
 try:
     from mpi4py import MPI
 except (ImportError, RuntimeError):
     MPI = None
 
+from run_me_with_mpiexec import ALLOWED_MESSAGE
 
 class MPITester:
 
@@ -23,9 +25,21 @@ class MPITester:
         if sys.platform == "darwin":
             subprocess_args.insert(3, "-oversubscribe")
         
+        if shutil.which('mpiexec') is None:
+            msg = \
+            """
+            mpi4py is installed, but mpiexec is not available. We're exitng this test
+            with an error.
+            
+            If you think mpiexec should be available in this shell, perhaps you need to run
+            `module load mpi` or `spack load mpi` (or something similar) first.
+            """
+            raise RuntimeError(msg)
         result = subprocess.run(subprocess_args, capture_output=False, text=True)
         out, err = capfd.readouterr()
-        if len(out) + len(err) > 0:
+        tmp = out + err
+        tmp = [t for t in tmp if t != ALLOWED_MESSAGE]
+        if len(tmp) > 0:
             msg = out + '\n'+ 80*'-' + err
             raise RuntimeError(msg)
         return

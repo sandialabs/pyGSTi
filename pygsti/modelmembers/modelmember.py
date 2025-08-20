@@ -314,7 +314,7 @@ class ModelMember(ModelChild, _NicelySerializable):
         assert(self._parent is None), "Cannot relink parent: parent is not None!"
         self._parent = parent  # assume no dependent objects
 
-    def unlink_parent(self, force=False):
+    def unlink_parent(self, force: bool=False):
         """
         Remove the parent-link of this member.
 
@@ -330,12 +330,14 @@ class ModelMember(ModelChild, _NicelySerializable):
             parent still contains references to it.  If `False`, the parent
             is only set to `None` when its parent contains no reference to it.
 
+            Passed through to unlink_parent calls for submembers of this model member.
+
         Returns
         -------
         None
         """
         for subm in self.submembers():
-            subm.unlink_parent()
+            subm.unlink_parent(force)
 
         if (self.parent is not None) and (force or self.parent._obj_refcount(self) == 0):
             self._parent = None

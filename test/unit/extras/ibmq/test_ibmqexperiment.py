@@ -2,16 +2,23 @@ import pygsti
 from pygsti.extras.devices.experimentaldevice import ExperimentalDevice
 from pygsti.extras import ibmq
 from pygsti.processors import CliffordCompilationRules as CCR
-from qiskit.providers.fake_provider import GenericBackendV2
-from qiskit_ibm_runtime import QiskitRuntimeService
+
+try:
+    from qiskit.providers.fake_provider import GenericBackendV2
+    from qiskit_ibm_runtime import QiskitRuntimeService
+    HAVE_QISKIT = True
+except ImportError:
+    HAVE_QISKIT = False
 from pygsti.protocols import MirrorRBDesign as RMCDesign
 from pygsti.protocols import PeriodicMirrorCircuitDesign as PMCDesign
 from pygsti.protocols import ByDepthSummaryStatistics
 from pygsti.modelpacks import smq1Q_XY
 from pygsti.protocols import StandardGSTDesign
 import numpy as np
+import pytest
 
-class IBMQExperimentTester():
+@pytest.mark.skipif(not HAVE_QISKIT, reason="IBMQ experiment tests require qiskit.")
+class IBMQExperimentTester:
     @classmethod
     def setup_class(cls):
         cls.backend = GenericBackendV2(num_qubits=4)
