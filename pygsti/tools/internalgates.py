@@ -407,9 +407,6 @@ def standard_gatenames_stim_conversions():
     ecr_unitary = _np.array([[0, 1, 0., 1j], [1., 0, -1j, 0.],
                              [0., 1j, 0, 1], [-1j, 0., 1, 0]], complex)/_np.sqrt(2)
     gate_dict['Gecres'] = stim.Tableau.from_unitary_matrix(ecr_unitary, endian='big')
-<<<<<<< HEAD
-    gate_dict['Gecr'] = stim.Tableau.from_unitary_matrix(ecr_unitary, endian='big')
-=======
     gate_dict['Gecr'] = gate_dict['Gecres']
 
     gate_dict['Gc0']  = stim.Tableau.from_unitary_matrix(_np.array([[1, 0], [0, 1]], complex), endian='big')   # This is Gi
@@ -436,9 +433,6 @@ def standard_gatenames_stim_conversions():
     gate_dict['Gc21'] = stim.Tableau.from_unitary_matrix(_np.array([[1, -1], [1, 1]], complex) / _np.sqrt(2), endian='big')  # This is Gypi2 (up to phase)
     gate_dict['Gc22'] = stim.Tableau.from_unitary_matrix(_np.array([[0.5 + 0.5j, 0.5 - 0.5j], [-0.5 + 0.5j, -0.5 - 0.5j]], complex), endian='big')  # This is P H Pdag
     gate_dict['Gc23'] = stim.Tableau.from_unitary_matrix(_np.array([[1, 0], [0, -1j]], complex), endian='big') # This is Gzmpi2 / Gpdag (up to phase)
-
->>>>>>> origin/develop
-
     return gate_dict
 
 def standard_gatenames_cirq_conversions():
