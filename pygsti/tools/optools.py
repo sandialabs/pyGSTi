@@ -10,7 +10,8 @@ Utility functions operating on operation matrices
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import collections as _collections
+from __future__ import annotations
+
 import warnings as _warnings
 
 import numpy as _np
@@ -23,11 +24,21 @@ from pygsti.tools import basistools as _bt
 from pygsti.tools import jamiolkowski as _jam
 from pygsti.tools import lindbladtools as _lt
 from pygsti.tools import matrixtools as _mt
-from pygsti.baseobjs.basis import Basis as _Basis, ExplicitBasis as _ExplicitBasis, DirectSumBasis as _DirectSumBasis
+from pygsti.tools import sdptools as _sdps
+from pygsti.baseobjs import basis as _pgb
+from pygsti.baseobjs.basis import (
+    Basis as _Basis,
+    BuiltinBasis as _BuiltinBasis,
+    DirectSumBasis as _DirectSumBasis,
+    TensorProdBasis as _TensorProdBasis
+)
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LocalElementaryErrorgenLabel
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
 from pygsti import SpaceT
+
+from typing import Union, Optional, Any
+BasisLike = Union[str, _Basis]
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 
@@ -173,7 +184,7 @@ def fidelity(a, b):
     return f
 
 
-def frobeniusdist(a, b):
+def frobeniusdist(a, b) -> _np.floating[Any]:
     """
     Returns the frobenius distance between arrays: ||a - b||_Fro.
 
@@ -296,25 +307,17 @@ def diamonddist(a, b, mx_basis='pp', return_x=False):
         Only returned if `return_x = True`.  Encodes the state rho, such that
         `dm = trace( |(J(a)-J(b)).T * W| )`.
     """
-    mx_basis = _bt.create_basis_for_matrix(a, mx_basis)
-
-    # currently cvxpy is only needed for this function, so don't import until here
+    assert _sdps.CVXPY_ENABLED
     import cvxpy as _cp
 
+    assert a.shape == b.shape
+    mx_basis = _bt.create_basis_for_matrix(a, mx_basis)
+    c = b - a
     # _jam code below assumes *un-normalized* Jamiol-isomorphism.
-    # It will convert a & b to a "single-block" basis representation
-    # when mx_basis has multiple blocks. So after we call it, we need
-    # to multiply by mx dimension (`smallDim`).
-    JAstd = _jam.fast_jamiolkowski_iso_std(a, mx_basis)
-    JBstd = _jam.fast_jamiolkowski_iso_std(b, mx_basis)
-    dim = JAstd.shape[0]
-    smallDim = int(_np.sqrt(dim))
-    JAstd *= smallDim
-    JBstd *= smallDim
-    assert(dim == JAstd.shape[1] == JBstd.shape[0] == JBstd.shape[1])
-
-    J = JBstd - JAstd
-    prob, vars = _diamond_norm_model(dim, smallDim, J)
+    # It will convert c a "single-block" basis representation
+    # when mx_basis has multiple blocks.
+    J = _jam.fast_jamiolkowski_iso_std(c, mx_basis, normalized=False)
+    prob, vars = _sdps.diamond_norm_model_jamiolkowski(J)
 
     objective_val = -2
     varvals = [_np.zeros_like(J), None, None]
@@ -339,62 +342,6 @@ def diamonddist(a, b, mx_basis='pp', return_x=False):
         return objective_val, varvals
     else:
         return objective_val
-
-
-def _diamond_norm_model(dim, smallDim, J):
-    # return a model for computing the diamond norm.
-    #
-    # Uses the primal SDP from arXiv:1207.5726v2, Sec 3.2
-    #
-    # Maximize 1/2 ( < J(phi), X > + < J(phi).dag, X.dag > )
-    # Subject to  [[ I otimes rho0,       X        ],
-    #              [      X.dag   ,   I otimes rho1]] >> 0
-    #              rho0, rho1 are density matrices
-    #              X is linear operator
-
-    import cvxpy as _cp
-
-    rho0 = _cp.Variable((smallDim, smallDim), name='rho0', hermitian=True)
-    rho1 = _cp.Variable((smallDim, smallDim), name='rho1', hermitian=True)
-    X = _cp.Variable((dim, dim), name='X', complex=True)
-    Y = _cp.real(X)
-    Z = _cp.imag(X)
-
-    K = J.real
-    L = J.imag
-    if hasattr(_cp, 'scalar_product'):
-        objective_expr = _cp.scalar_product(K, Y) + _cp.scalar_product(L, Z)
-    else:
-        Kf = K.flatten(order='F')
-        Yf = Y.flatten(order='F')
-        Lf = L.flatten(order='F')
-        Zf = Z.flatten(order='F')
-        objective_expr = Kf @ Yf + Lf @ Zf
-
-    objective = _cp.Maximize(objective_expr)
-
-    ident = _np.identity(smallDim, 'd')
-    kr_tau0 = _cp.kron(ident, _cp.imag(rho0))
-    kr_tau1 = _cp.kron(ident, _cp.imag(rho1))
-    kr_sig0 = _cp.kron(ident, _cp.real(rho0))
-    kr_sig1 = _cp.kron(ident, _cp.real(rho1))
-
-    block_11 = _cp.bmat([[kr_sig0 ,    Y   ],
-                         [   Y.T  , kr_sig1]])
-    block_21 = _cp.bmat([[kr_tau0 ,    Z   ],
-                         [   -Z.T , kr_tau1]])
-    block_12 = block_21.T
-    mat_joint = _cp.bmat([[block_11, block_12],
-                          [block_21, block_11]])
-    constraints = [
-        mat_joint >> 0,
-        rho0 >> 0,
-        rho1 >> 0,
-        _cp.trace(rho0) == 1.,
-        _cp.trace(rho1) == 1.
-    ]
-    prob = _cp.Problem(objective, constraints)
-    return prob, [X, rho0, rho1]
 
 
 def jtracedist(a, b, mx_basis='pp'):  # Jamiolkowski trace distance:  Tr(|J(a)-J(b)|)
@@ -430,7 +377,7 @@ def jtracedist(a, b, mx_basis='pp'):  # Jamiolkowski trace distance:  Tr(|J(a)-J
     return tracedist(JA, JB)
 
 
-def entanglement_fidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
+def entanglement_fidelity(a, b, mx_basis: BasisLike='pp', is_tp=None, is_unitary=None):
     """
     Returns the "entanglement" process fidelity between gate  matrices.
 
@@ -519,6 +466,33 @@ def entanglement_fidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
     return fidelity(JA, JB)
 
 
+def tensorized_with_eye(op: _np.ndarray, op_basis: _Basis, ten_basis: Optional[_Basis]=None, std_basis: Optional[_Basis]=None, ten_std_basis: Optional[_Basis]=None):
+    """
+    `op` is a linear operator on a Hilbert-Schmidt space, S, represented as a matrix in the `op_basis` basis.
+
+    Returns a matrix representing a linear operator *** AND *** a basis in which to interpret that matrix.
+    The linear operator itself is the tensor product operator `op`⨂I_S, where I_S is the identity on S.
+    The basis is either ten_basis (if provided) or _TensorProdBasis((op_basis, op_basis)).
+
+    Notes
+    -----
+    We accept std_basis and ten_std_basis for efficiency reasons.
+     * If std_basis is provided,     it must be equivalent to `_BuiltinBasis('std', op_basis.size)`.
+     * If ten_std_basis is provided, it must be equivalent to `_TensorProdBasis((std_basis, std_basis))`.
+    """
+    if ten_basis is None:
+        ten_basis = _TensorProdBasis((op_basis, op_basis))
+    if std_basis is None:
+        std_basis = _BuiltinBasis('std', op_basis.size)
+    if ten_std_basis is None:
+        ten_std_basis = _TensorProdBasis((std_basis, std_basis))
+    op_std = _bt.change_basis(op, op_basis, std_basis)
+    eye = _np.eye(op_basis.size)
+    ten_op_std = _np.kron(op_std, eye)
+    ten_op = _bt.change_basis(ten_op_std, ten_std_basis, ten_basis)
+    return ten_op, ten_basis
+
+
 def average_gate_fidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
     """
     Computes the average gate fidelity (AGF) between two gates.
@@ -571,7 +545,7 @@ def average_gate_fidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
     d = int(round(_np.sqrt(a.shape[0])))
     PF = entanglement_fidelity(a, b, mx_basis, is_tp, is_unitary)
     AGF = (d * PF + 1) / (1 + d)
-    return float(AGF)
+    return AGF
 
 
 def average_gate_infidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
@@ -619,7 +593,7 @@ def average_gate_infidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
     return 1 - average_gate_fidelity(a, b, mx_basis, is_tp, is_unitary)
 
 
-def entanglement_infidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
+def entanglement_infidelity(a, b, mx_basis: BasisLike = 'pp', is_tp=None, is_unitary=None):
     """
     Returns the entanglement infidelity (EI) between gate matrices.
 
@@ -661,7 +635,7 @@ def entanglement_infidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
     EI : float
         The EI of a to b.
     """
-    return 1 - float(entanglement_fidelity(a, b, mx_basis, is_tp, is_unitary))
+    return 1 - entanglement_fidelity(a, b, mx_basis, is_tp, is_unitary)
 
 def generator_infidelity(a, b, mx_basis = 'pp'):
     """
@@ -1096,9 +1070,9 @@ def instrument_diamonddist(a, b, mx_basis):
 #decompose operation matrix into axis of rotation, etc
 def decompose_gate_matrix(operation_mx):
     """
-    Decompse a gate matrix into fixed points, axes of rotation, angles of rotation, and decay rates.
+    Decompose a gate matrix into fixed points, axes of rotation, angles of rotation, and decay rates.
 
-    This funtion computes how the action of a operation matrix can be is
+    This function computes how the action of a operation matrix can be is
     decomposed into fixed points, axes of rotation, angles of rotation, and
     decays.  Also determines whether a gate appears to be valid and/or unitary.
 
@@ -1757,7 +1731,7 @@ def elementary_errorgens_dual(dim, typ, basis):
 def extract_elementary_errorgen_coefficients(errorgen, elementary_errorgen_labels, elementary_errorgen_basis='PP',
                                              errorgen_basis='pp', return_projected_errorgen=False):
     """ 
-    Extract a dictionary of elemenary error generator coefficients and rates fromt he specified dense error generator
+    Extract a dictionary of elemenary error generator coefficients and rates from the specified dense error generator
     matrix.
 
     Parameters
@@ -1875,7 +1849,7 @@ def project_errorgen(errorgen, elementary_errorgen_type, elementary_errorgen_bas
         projection values themseves.
 
     return_scale_fctr : bool, optional
-        If True, also return the scaling factor that was used to multply the
+        If True, also return the scaling factor that was used to multiply the
         projections onto *normalized* error generators to get the returned
         values.
 
@@ -1889,7 +1863,7 @@ def project_errorgen(errorgen, elementary_errorgen_type, elementary_errorgen_bas
         Only returned when `return_generators == True`.  An array of shape
         (#basis-els,op_dim,op_dim) such that  `generators[i]` is the
         generator corresponding to the i-th basis element.  Note
-        that these matricies are in the *std* (matrix unit) basis.
+        that these matrices are in the *std* (matrix unit) basis.
     """
 
     if isinstance(errorgen_basis, _Basis):
@@ -2206,7 +2180,7 @@ def rotation_gate_mx(r, mx_basis="gm"):
     Parameters
     ----------
     r : tuple
-        A tuple of coeffiecients, one per non-identity
+        A tuple of coefficients, one per non-identity
         Pauli-product basis element
 
     mx_basis : {'std', 'gm', 'pp', 'qt'} or Basis object
@@ -2360,7 +2334,7 @@ def project_model(model, target_model,
                 lnd_error_gen_cp, targetOp, basis, gen_type)
             NpDict['LND'] += HBlk.block_data.size + otherBlk.block_data.size
 
-    #Collect and return requrested results:
+    #Collect and return requested results:
     ret_gs = [gsDict[p] for p in projectiontypes]
     ret_Nps = [NpDict[p] for p in projectiontypes]
     return ret_gs, ret_Nps
@@ -2704,7 +2678,7 @@ def is_valid_lindblad_paramtype(typ):
     Parameters
     ----------
     typ : str
-        A paramterization type.
+        A parameterization type.
 
     Returns
     -------

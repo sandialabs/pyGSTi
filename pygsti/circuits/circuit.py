@@ -981,11 +981,10 @@ class Circuit(object):
         if isinstance(x, Circuit):
             if len(self) != len(x):
                 return False
+            elif self._static and x._static and self._hash != x._hash:
+                return False
             else:
-                if self._static and x._static:
-                    return self._hash == x._hash
-                else:
-                    return self.tup == x.tup
+                return self.tup == x.tup
         elif x is None: 
             return False
         else:

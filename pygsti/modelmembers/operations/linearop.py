@@ -17,6 +17,8 @@ from pygsti.modelmembers import modelmember as _modelmember
 from pygsti.tools import optools as _ot
 from pygsti import SpaceT
 
+from typing import Any
+
 #Note on initialization sequence of Operations within a Model:
 # 1) a Model is constructed (empty)
 # 2) a LinearOperator is constructed - apart from a Model if it's locally parameterized,
@@ -27,7 +29,7 @@ from pygsti import SpaceT
 # 3) the LinearOperator is assigned/added to a dict within the Model.  As a part of this
 #    process, the LinearOperator's 'gpindices' member is set, if it isn't already, and the
 #    Model's "global" parameter vector (and number of params) is updated as
-#    needed to accomodate new parameters.
+#    needed to accommodate new parameters.
 #
 # Note: gpindices may be None (before initialization) or any valid index
 #  into a 1D numpy array (e.g. a slice or integer array).  It may NOT have
@@ -44,7 +46,7 @@ from pygsti import SpaceT
 
 class LinearOperator(_modelmember.ModelMember):
     """
-    Base class for all operation representations
+    Base class for all *square* operation representations
 
     Parameters
     ----------
@@ -91,6 +93,14 @@ class LinearOperator(_modelmember.ModelMember):
         int
         """
         return (self.dim)**2
+
+    @property
+    def shape(self) -> tuple[int, int]:
+        # Provide this function to mimic numpy array semantics.
+        #
+        # We can't rely on self._rep.shape since superclasses
+        # are given broad freedom to define semantics of self._rep.
+        return (self.dim, self.dim)
 
     def set_dense(self, m):
         """
@@ -381,13 +391,13 @@ class LinearOperator(_modelmember.ModelMember):
 
         return [t for t in terms_at_order if t.magnitude >= min_term_mag]
 
-    def frobeniusdist_squared(self, other_op, transform=None, inv_transform=None):
+    def frobeniusdist_squared(self, other_op, transform=None, inv_transform=None) -> _np.floating[Any]:
         """
         Return the squared frobenius difference between this operation and `other_op`
 
         Optionally transforms this operation first using matrices
         `transform` and `inv_transform`.  Specifically, this operation gets
-        transfomed as: `O => inv_transform * O * transform` before comparison with
+        transformed as: `O => inv_transform * O * transform` before comparison with
         `other_op`.
 
         Parameters
@@ -405,12 +415,13 @@ class LinearOperator(_modelmember.ModelMember):
         -------
         float
         """
-        if transform is None and inv_transform is None:
-            return _ot.frobeniusdist_squared(self.to_dense("minimal"), other_op.to_dense("minimal"))
-        else:
-            return _ot.frobeniusdist_squared(_np.dot(
-                inv_transform, _np.dot(self.to_dense("minimal"), transform)),
-                other_op.to_dense("minimal"))
+        self_mx = self.to_dense("minimal")
+        if transform is not None:
+            self_mx = self_mx @ transform
+        if inv_transform is not None:
+            self_mx = inv_transform @ self_mx
+        return _ot.frobeniusdist_squared(self_mx, other_op.to_dense("minimal"))
+
 
     def frobeniusdist(self, other_op, transform=None, inv_transform=None):
         """
@@ -418,7 +429,7 @@ class LinearOperator(_modelmember.ModelMember):
 
         Optionally transforms this operation first using matrices
         `transform` and `inv_transform`.  Specifically, this operation gets
-        transfomed as: `O => inv_transform * O * transform` before comparison with
+        transformed as: `O => inv_transform * O * transform` before comparison with
         `other_op`.
 
         Parameters

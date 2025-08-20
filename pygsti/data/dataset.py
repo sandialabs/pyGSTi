@@ -26,6 +26,7 @@ import numpy as _np
 from pygsti.circuits import circuit as _cir
 from pygsti.baseobjs import outcomelabeldict as _ld, _compatibility as _compat
 from pygsti.baseobjs.mongoserializable import MongoSerializable as _MongoSerializable
+from pygsti.baseobjs.label import Label as _Label
 from pygsti.tools import NamedDict as _NamedDict
 from pygsti.tools import listtools as _lt
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
@@ -1176,7 +1177,6 @@ class DataSet(_MongoSerializable):
         # needed because name-only Labels don't hash the same as strings
         # so key lookups need to be done at least with tuples of Labels.
         circuit = _cir.Circuit.cast(circuit)
-
         #Note: cirIndex value is either an int (non-static) or a slice (static)
         cirIndex = self.cirIndex[circuit]
         repData = self.repData[cirIndex] if (self.repData is not None) else None
@@ -1292,11 +1292,28 @@ class DataSet(_MongoSerializable):
         list of strings
             A list where each element is a operation label.
         """
-        opLabels = []
-        for opLabelString in self:
-            for opLabel in opLabelString:
-                if not prefix or opLabel.name.startswith(prefix):
-                    if opLabel not in opLabels: opLabels.append(opLabel)
+        opLabels = set()
+        empty_label = _Label(())
+        for circuit in self:
+            for layer in circuit.layertup:
+                if isinstance(layer, list):
+                    for lbl in layer:
+                        if lbl.name.startswith(prefix):
+                            opLabels.add(lbl.name)
+                        elif lbl == empty_label:
+                            opLabels.add('[]')
+                elif isinstance(layer, _Label):
+                    if layer.name.startswith(prefix):
+                        opLabels.add(layer.name)
+                else:
+                    raise ValueError()
+
+        bracket_idle = '[]' in opLabels
+        opLabels = [op for op in opLabels if op != '[]']
+        opLabels.sort()
+        if bracket_idle:
+            opLabels = ['[]'] + opLabels
+
         return opLabels
 
     def degrees_of_freedom(self, circuits=None, method="present_outcomes-1",

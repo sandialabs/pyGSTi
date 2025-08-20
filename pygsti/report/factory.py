@@ -184,8 +184,7 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
     Ls = None
 
     for results in results_dict.values():
-        est_labels = _add_new_estimate_labels(est_labels, results.estimates,
-                                              combine_robust)
+        est_labels = _add_new_estimate_labels(est_labels, results.estimates, combine_robust)
         loc_Ls = results.circuit_lists['final'].xs \
             if isinstance(results.circuit_lists['final'], _PlaquetteGridCircuitStructure) else [0]
         Ls = _add_new_labels(Ls, loc_Ls)
@@ -311,10 +310,8 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
             else:
                 est_modvi = est
 
-            switchBd.objfn_builder[d, i] = est.parameters.get(
-                'final_objfn_builder', _objfns.ObjectiveFunctionBuilder.create_from('logl'))
-            switchBd.objfn_builder_modvi[d, i] = est_modvi.parameters.get(
-                'final_objfn_builder', _objfns.ObjectiveFunctionBuilder.create_from('logl'))
+            switchBd.objfn_builder[d, i] = est.parameters.get('final_objfn_builder', _objfns.ObjectiveFunctionBuilder.create_from('logl'))
+            switchBd.objfn_builder_modvi[d, i] = _objfns.ObjectiveFunctionBuilder.create_from('logl')
             switchBd.params[d, i] = est.parameters
             
             #add the final mdc store
@@ -1233,6 +1230,9 @@ def construct_standard_report(results, title="auto",
     ws = ws or _ws.Workspace()
 
     advanced_options = advanced_options or {}
+    n_leak = advanced_options.get('n_leak', 0)
+    # ^ It would be preferable to store n_leak in a Basis object, or something similar.
+    #   We're using this for now since it's simple and gets the job done.
     linlogPercentile = advanced_options.get('linlog percentile', 5)
     nmthreshold = advanced_options.get('nmthreshold', DEFAULT_NONMARK_ERRBAR_THRESHOLD)
     embed_figures = advanced_options.get('embed_figures', True)
@@ -1324,7 +1324,11 @@ def construct_standard_report(results, title="auto",
     try:
         idt_results = _construct_idtresults(idtIdleOp, idtPauliDicts, results, printer)
     except Exception as e:
-        _warnings.warn("Idle tomography failed:\n" + str(e))
+        if isinstance(e, ValueError) and 'Expected matrix of shape' in str(e):
+            msg = "Idle tomography skipped. Currently, this is only supported for 2-level systems."
+            printer.log(msg)
+        else:
+            _warnings.warn("Idle tomography unexpectedly failed:\n" + str(e))
         idt_results = {}
     if len(idt_results) > 0:
         sections.append(_section.IdleTomographySection())
@@ -1375,7 +1379,8 @@ def construct_standard_report(results, title="auto",
         'gauge_opt_labels': tuple(gauge_opt_labels),
         'max_lengths': tuple(Ls),
         'switchbd_maxlengths': tuple(swLs),
-        'show_unmodeled_error': bool('ShowUnmodeledError' in flags)
+        'show_unmodeled_error': bool('ShowUnmodeledError' in flags),
+        'n_leak' : n_leak
     }
 
     templates = dict(

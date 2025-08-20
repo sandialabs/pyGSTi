@@ -19,8 +19,8 @@ from pygsti.modelmembers.modelmember import ModelMember
 class ModelMemberGraph(object):
     """A directed acyclic graph of dependencies of ModelMembers"""
 
-    @classmethod
-    def load_modelmembers_from_serialization_dict(cls, sdict, parent_model):
+    @staticmethod
+    def load_modelmembers_from_serialization_dict(sdict, parent_model):
         """Create a nested dictionary of model members from a previously serialized graph.
 
         Parameters
