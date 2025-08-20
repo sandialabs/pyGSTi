@@ -521,7 +521,7 @@ MEASURE 2 ro[2]
         #Manually build this circuit directly in cirq and compare.
         qubit_00 = cirq.GridQubit(0,0)
         qubit_01 = cirq.GridQubit(0,1)
-        moment1 = cirq.Moment([cirq.XPowGate(exponent=.5).on(qubit_00), cirq.I(qubit_01)])
+        moment1 = cirq.Moment([cirq.XPowGate(exponent=0.5).on(qubit_00), cirq.I(qubit_01)])
         moment2 = cirq.Moment([cirq.I(qubit_00), cirq.I(qubit_01)])
         moment3 = cirq.Moment([cirq.PhasedXZGate(axis_phase_exponent=0.14758361765043326, 
                                                             x_exponent=0.4195693767448338, 
@@ -541,7 +541,7 @@ MEASURE 2 ro[2]
 
         qubit_00 = cirq.GridQubit(0,0)
         qubit_01 = cirq.GridQubit(0,1)
-        moment1 = cirq.Moment([cirq.XPowGate(exponent=.5).on(qubit_00), cirq.I(qubit_01)])
+        moment1 = cirq.Moment([cirq.XPowGate(exponent=0.5).on(qubit_00), cirq.I(qubit_01)])
         moment2 = cirq.Moment([cirq.I(qubit_00), cirq.I(qubit_01)])
         moment3 = cirq.Moment([cirq.PhasedXZGate(axis_phase_exponent=0.14758361765043326, 
                                                  x_exponent=0.4195693767448338, 
@@ -602,6 +602,64 @@ MEASURE 2 ro[2]
         self.assertEqual(ckt_global_idle_custom, converted_pygsti_circuit_global_idle_custom)
         self.assertEqual(ckt_global_idle_custom, converted_pygsti_circuit_global_idle_custom_1)
         self.assertEqual(ckt_global_idle_none, converted_pygsti_circuit_global_idle_none)
+
+
+    def test_from_qiskit(self):
+        try:
+            import qiskit
+        except ImportError:
+            self.skipTest('Qiskit is required for this operation, and does not appear to be installed.')
+
+        qc = qiskit.QuantumCircuit(4)
+
+        qc.x(0)
+        qc.cx(0,1)
+        qc.h(3)
+        qc.cz(2,3)
+        qc.rz(0.5, 2)
+        qc.rz(0.5, 3)
+        qc.rz(0.5, 0)
+        qc.barrier(0,1)
+        qc.z(3)
+        qc.cz(0,2)
+
+        expected_ps_circ = circuit.Circuit([Label([Label('Gxpi', 'Q0'), Label('Gh', 'Q3')]),
+                                            Label([Label('Gcnot', ('Q0', 'Q1')), Label('Gcphase', ('Q2','Q3'))]),
+                                            Label([Label('Gzr', 'Q2', args=[0.5]), Label('Gzr', 'Q3', args=[0.5]), Label('Gzr', 'Q0', args=[0.5])]),
+                                            Label([Label('Gzpi', 'Q3'), Label('Gcphase', ('Q0', 'Q2'))])
+                                            ], line_labels=('Q0', 'Q1', 'Q2', 'Q3'))
+        
+        expected_mapping = {i: f'Q{i}' for i in range(4)}
+
+        observed_ps_circ, observed_mapping = circuit.Circuit.from_qiskit(qc)
+
+        self.assertEqual(expected_ps_circ, observed_ps_circ)
+
+        self.assertEqual(expected_mapping, observed_mapping)
+
+
+    def test_to_from_qiskit_round_trip(self):
+        try:
+            import qiskit
+        except ImportError:
+            self.skipTest('Qiskit is required for this operation, and does not appear to be installed.')
+
+        
+        expected_ps_circ = circuit.Circuit([Label([Label('Gxpi', 'Q0'), Label('Gh', 'Q3')]),
+                                            Label([Label('Gcnot', ('Q0', 'Q1')), Label('Gcphase', ('Q2','Q3'))]),
+                                            Label([Label('Gzr', 'Q2', args=[0.5]), Label('Gzr', 'Q3', args=[0.5]), Label('Gzr', 'Q0', args=[0.5])]),
+                                            Label([Label('Gzpi', 'Q3'), Label('Gcphase', ('Q0', 'Q2'))])
+                                            ], line_labels=('Q0', 'Q1', 'Q2', 'Q3'))
+        
+    
+        qk_circ = expected_ps_circ.convert_to_qiskit(qubit_conversion='remove-Q')
+        observed_ps_circ, observed_mapping = circuit.Circuit.from_qiskit(qk_circ)
+        
+        expected_mapping = {i: f'Q{i}' for i in range(4)}
+
+        self.assertEqual(expected_ps_circ, observed_ps_circ)
+        self.assertEqual(expected_mapping, observed_mapping)   
+
         
     def test_convert_to_stim_tableau(self):
         #TODO: Add correctness checks for generated Tableaus.

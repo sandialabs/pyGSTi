@@ -24,7 +24,10 @@ from pygsti.models.memberdict import OrderedMemberDict as _OrderedMemberDict
 from pygsti.models.layerrules import LayerRules as _LayerRules
 from pygsti.models.modelparaminterposer import ModelParamsInterposer as _ModelParamsInterposer
 from pygsti.models.fogistore import FirstOrderGaugeInvariantStore as _FirstOrderGaugeInvariantStore
-from pygsti.models.gaugegroup import GaugeGroup as _GaugeGroup
+from pygsti.models.gaugegroup import (
+    GaugeGroup as _GaugeGroup,
+    GaugeGroupElement as _GaugeGroupElement
+)
 from pygsti.forwardsims.forwardsim import ForwardSimulator as _FSim
 from pygsti.forwardsims import matrixforwardsim as _matrixfwdsim
 from pygsti.modelmembers import instruments as _instrument
@@ -469,7 +472,7 @@ class ExplicitOpModel(_mdl.OpModel):
             indicates the maximum amount of truncation induced deviation from the original operations
             (measured by frobenius distance) we're willing to accept without marking the conversion
             as failed.
-        spam_cp_penalty : float, optional (default .5)
+        spam_cp_penalty : float, optional (default 0.5)
             Converting SPAM operations to an error generator representation may 
             introduce trivial gauge degrees of freedom. These gauge degrees of freedom 
             are called trivial because they quite literally do not change the dense representation 
@@ -644,7 +647,7 @@ class ExplicitOpModel(_mdl.OpModel):
         item_weights : dict, optional
             Dictionary of weighting factors for individual gates and spam operators.
             Keys can be gate, state preparation, POVM effect, spam labels, or the
-            special strings "gates" or "spam" whic represent the entire set of gate
+            special strings "gates" or "spam" which represent the entire set of gate
             or SPAM operators, respectively.  Values are floating point numbers.
             These weights define the metric used to compute the non-gauge space,
             *orthogonal* the gauge space, that is projected onto.
@@ -1742,6 +1745,72 @@ class ExplicitOpModel(_mdl.OpModel):
     def _op_decomposition(self, op_label):
         """Returns the target and error-generator-containing error map parts of the operation for `op_label` """
         return self.operations[op_label], self.operations[op_label]
+
+
+def transform_composed_model(mdl: ExplicitOpModel, s : _GaugeGroupElement) -> ExplicitOpModel:
+    """
+    Return a copy of `mdl` whose members have been gauge-transformed by `s`,
+    while retaining the parameterization of `mdl`.
+    
+    This function's implementation requires that `mdl` use ComposedState for
+    stateprep and ComposedPOVM for measurements. It does NOT require that
+    operations be represented with ComposedOp. It ignores any factories that
+    might be present in mdl.
+    """
+    from pygsti.models import ExplicitOpModel
+    assert isinstance(mdl, ExplicitOpModel)
+    if len(mdl.factories) > 0:
+        _warnings.warn('The returned model will not retain the factories in mdl.')
+    if len(mdl.instruments) > 0:
+        raise NotImplementedError('Models with instruments are not supported.')
+
+    oldmdl = mdl
+
+    def mycopy(_m):
+        # This function is a hack. It makes us robust to errors
+        # arising from copy.deepcopy in (re)linking model members
+        # to parent model objects.
+        s = _m.to_nice_serialization()
+        t = ExplicitOpModel.from_nice_serialization(s)
+        return t
+    
+    mdl = mycopy(oldmdl)
+
+    from pygsti.modelmembers.operations import ComposedOp, StaticArbitraryOp
+    from pygsti.modelmembers.povms import ComposedPOVM
+    from pygsti.modelmembers.states import ComposedState
+
+    U    = StaticArbitraryOp(s.transform_matrix,         basis=oldmdl.basis)
+    invU = StaticArbitraryOp(s.transform_matrix_inverse, basis=oldmdl.basis) 
+
+    # NOTE: the operations passed to ComposedOp are interpreted in
+    # reverse order. For example, ComposedOp([X,Y,Z]) is applied to
+    # a vector v as Z @ Y @ X @ v.
+
+    for key, rho in oldmdl.preps.items():
+        # replace each ComposedState superket `rhoVec` with `invU @ rhoVec`;
+        # do this by packing invU into a new ComposedState's error map.
+        assert isinstance(rho, ComposedState)
+        static_rho = rho.state_vec
+        errmap  = ComposedOp([rho.error_map, invU])
+        mdl.preps[key] = ComposedState(static_rho, errmap)
+
+    for key, povm in oldmdl.povms.items():
+        # replace each ComposedPOVM `p` with another ComposedPOVM `q`, where
+        # effects `Evec` belonging to `p` are mapped to effects `EVec @ U` 
+        # belonging to `q`. Do this by packing U into the error map of `q`.
+        assert isinstance(povm, ComposedPOVM)
+        static_povm = povm.base_povm
+        errmap = ComposedOp([U, povm.error_map])
+        mdl.povms[key] = ComposedPOVM(errmap, static_povm, mx_basis=oldmdl.basis)
+
+    for key, op in oldmdl.operations.items():
+        # replace each operation `G` with `invU @ G @ U`.
+        op_s = ComposedOp([U, op, invU])
+        mdl.operations[key] = op_s
+
+    mdl._clean_paramvec()  # transform may leave dirty members
+    return mdl
 
 
 class ExplicitLayerRules(_LayerRules):

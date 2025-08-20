@@ -39,7 +39,11 @@ from pygsti.processors import QuditProcessorSpec as _QuditProcessorSpec
 from pygsti.modelmembers import operations as _op
 from pygsti.models import Model as _Model
 from pygsti.models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
-from pygsti.models.gaugegroup import GaugeGroup as _GaugeGroup, GaugeGroupElement as _GaugeGroupElement
+from pygsti.models.gaugegroup import (
+    GaugeGroup as _GaugeGroup,
+    GaugeGroupElement as _GaugeGroupElement,
+    FullGaugeGroupElement as _FullGaugeGroupElement
+)
 from pygsti.objectivefns import objectivefns as _objfns, wildcardbudget as _wild
 from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
@@ -2468,7 +2472,7 @@ def _compute_1d_reference_values_and_name(estimate, badfit_options, gaugeopt_sui
                     dd[key] = _tools.jtracedist(op.to_dense(), targetops_dict[key].to_dense())
             
             for key, op in insts_dict.items():
-                inst_dd = .5* _tools.instrument_diamonddist(op, targetinsts_dict[key])
+                inst_dd = 0.5* _tools.instrument_diamonddist(op, targetinsts_dict[key])
                 if inst_dd < 0: # indicates that instrument_diamonddist failed
                     _warnings.warn(("Diamond distance failed to compute %s reference value for 1D wildcard budget!"
                                     "No fallback presently available for instruments, so skipping.") % str(key))
@@ -2500,7 +2504,7 @@ def _compute_1d_reference_values_and_name(estimate, badfit_options, gaugeopt_sui
                         dd[lbl][key] = _tools.jtracedist(op.to_dense(), target_model.operations[key].to_dense())
 
                 for key, op in gaugeopt_model.instruments.items():
-                    inst_dd = .5* _tools.instrument_diamonddist(op, target_model.instruments[key], gaugeopt_model.basis)
+                    inst_dd = 0.5* _tools.instrument_diamonddist(op, target_model.instruments[key], gaugeopt_model.basis)
                     if inst_dd < 0: # indicates that instrument_diamonddist failed
                         _warnings.warn(("Diamond distance failed to compute %s reference value for 1D wildcard budget!"
                                         "No fallback presently available for instruments, so skipping.") % str(key))
@@ -3262,7 +3266,44 @@ class ModelEstimateResults(_proto.ProtocolResults):
         s += "  " + "\n  ".join(list(self.estimates.keys())) + "\n"
         s += "\n"
         return s
+
+
+def _add_param_preserving_gauge_opt(results: ModelEstimateResults, est_key: str, gop_params: GSTGaugeOptSuite, verbosity: int = 0):
+    """
+    This function adds one or more models to the `results[est_key].estimates` dict, in a way
+    that's similar to _add_gauge_opt. It requires that the model
+
+        results[est_key].models['final iteration estimate']
+
+    use ComposedState for stateprep and ComposedPOVM for measurement.
     
+    It starts by calling _add_gauge_opt with (results, est_key, gop_params, verbosity),
+    then it extracts the gauge group elements from each step of the gauge-optimization
+    suite, computes their composition, and finally applies a parameterization-preserving
+    gauge transformation with that composition.
+    """
+    from pygsti.models.explicitmodel import transform_composed_model
+    est = results.estimates[est_key]
+    seed_mdl = est.models['final iteration estimate']
+    seed_mdl = _ExplicitOpModel.from_nice_serialization(seed_mdl._to_nice_serialization())
+    _add_gauge_opt(results, est_key, gop_params, seed_mdl, unreliable_ops=(), verbosity=verbosity)
+    # ^ That can convert to whatever parameterization it wants
+    #   It'll write to est._gaugeopt_suite.
+    for gop_name, gop_dictorlist in est._gaugeopt_suite.gaugeopt_argument_dicts.items():
+        if isinstance(gop_dictorlist, list):
+            ggel_mx = _np.eye(seed_mdl.basis.dim)
+            for sub_gopdict in gop_dictorlist:
+                assert isinstance(sub_gopdict, dict)
+                assert '_gaugeGroupEl' in sub_gopdict
+                ggel_mx = ggel_mx @ sub_gopdict['_gaugeGroupEl'].transform_matrix
+            ggel = _FullGaugeGroupElement(ggel_mx)
+        else:
+            ggel = gop_dictorlist['_gaugeGroupEl']
+        model_implicit_gauge = transform_composed_model(est.models['final iteration estimate'], ggel)
+        est.models[gop_name] = model_implicit_gauge
+    return
+
+
 class GateSetTomographyCheckpoint(_proto.ProtocolCheckpoint):
     """
     A class for storing intermediate results associated with running
@@ -3327,7 +3368,6 @@ class GateSetTomographyCheckpoint(_proto.ProtocolCheckpoint):
         return cls(mdl_list, last_completed_iter, last_completed_circuit_list, 
                    final_objfn, name)
     
-
 
 class StandardGSTCheckpoint(_proto.ProtocolCheckpoint):
     """
