@@ -2,7 +2,7 @@
 State representation classes for the `statevec_slow` evolution type.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -18,6 +18,7 @@ from .. import basereps as _basereps
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from ...tools import basistools as _bt
 from ...tools import optools as _ot
+from pygsti import SpaceT
 
 try:
     from ...tools import fastcalc as _fastcalc
@@ -48,7 +49,7 @@ class StateRep(_basereps.StateRep):
         # a probability/amplitude by POVM effect reps.
         return self  # for most classes, the rep itself is actionable
 
-    def to_dense(self, on_space):
+    def to_dense(self, on_space: SpaceT):
         if on_space in ('minimal', 'Hilbert'):
             return self.data
         elif on_space == 'HilbertSchmidt':
@@ -107,7 +108,7 @@ class StateRepComposed(StateRep):
         self.op_rep = op_rep
         if state_space is None:
             state_space = op_rep.state_space if (op_rep is not None) else state_rep.state_space
-        super(StateRepComposed, self).__init__(state_rep.to_dense('Hilbert'), state_space, self.state_rep.basis)
+        super(StateRepComposed, self).__init__(state_rep.to_dense("Hilbert"), state_space, self.state_rep.basis)
         self.reps_have_changed()
 
     def reps_have_changed(self):
@@ -132,7 +133,7 @@ class StateRepTensorProduct(StateRep):
         if len(self.factor_reps) == 0:
             vec = _np.empty(0, complex)
         else:
-            vec = self.factor_reps[0].to_dense('Hilbert')
+            vec = self.factor_reps[0].to_dense("Hilbert")
             for i in range(1, len(self.factors_reps)):
-                vec = _np.kron(vec, self.factor_reps[i].to_dense('Hilbert'))
+                vec = _np.kron(vec, self.factor_reps[i].to_dense("Hilbert"))
         self.base[:] = vec

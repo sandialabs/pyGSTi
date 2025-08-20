@@ -2,7 +2,7 @@
 Defines the ElementaryErrorgenLabel class and supporting functionality.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -34,9 +34,20 @@ class LocalElementaryErrorgenLabel(ElementaryErrorgenLabel):
 
         Parameters
         ----------
-        obj : `LocalElementaryErrorgenLabel`, `GlobalElementaryErrorgenLabel`, tuple or list
-            Object to cast.
+        obj : `LocalElementaryErrorgenLabel`, `GlobalElementaryErrorgenLabel`, str, tuple or list
+            Object to cast. If a `GlobalElementaryErrorgenLabel` then a value for the `sslbls`
+            argument should be passed with the full list of state space labels for the system.
+            Other castable options include:
 
+            -str: A string formatted as '<type>(<bel1>[,<bel2>])'. E.g. 'H(XX)' or
+             'C(X,Y)'
+            -tuple/list: These can be specified either in 'global-style' or 'local-style'.
+                - local-style: format is (<type>, <bel1>[,<bel2>])
+                - global-style:format is (<type>, (<bel1>,[<bel2>]), (<sslbls>))
+                  Where sslbls above is specifically the subset of state space labels this error
+                  generator acts on nontrivially. When specifying global-style tuple labels the sslbls kwarg of this method
+                  which contains the complete set of state-space labels must also be specified.
+            
         sslbls : tuple or list, optional (default None)
             A complete set of state space labels. Used when casting from a GlobalElementaryErrorgenLabel
             or from a tuple of length 3 (wherein the final element is interpreted as the set of ssblbs the error
@@ -97,7 +108,8 @@ class LocalElementaryErrorgenLabel(ElementaryErrorgenLabel):
             This is either length-1 for 'H' and 'S' type error generators, or length-2 for 'C' and 'A'
             type.
         """
-
+        #TODO: Store non-standard identity labels with object so we don't need to specify this in
+        #support_indices.
         self.errorgen_type = str(errorgen_type)
         self.basis_element_labels = tuple(basis_element_labels)
         self._hash = hash((self.errorgen_type, self.basis_element_labels))
@@ -146,7 +158,47 @@ class GlobalElementaryErrorgenLabel(ElementaryErrorgenLabel):
 
     @classmethod
     def cast(cls, obj, sslbls=None, identity_label='I'):
-        """ TODO: docstring - lots in this module """
+        """
+        Method for casting an object to an instance of GlobalElementaryErrorgenLabel
+
+        Parameters
+        ----------
+        obj : `GlobalElementaryErrorgenLabel`, `LocalElementaryErrorgenLabel`, tuple or list
+            Object to cast. If a `LocalElementaryErrorgenLabel` then a value for the `sslbls`
+            argument should be passed with the full list of state space labels for the system.
+            Other castable options include:
+
+            -str: Following formatting options are supported.
+                - A string formatted as '<type>(<bel1>[,<bel2>]:(<sslbls>))' where <sslbls>
+                  is the subset of state-space labels this error generator acts on nontrivially
+                  specified as a comma-separated list. E.g. 'H(XX:0,1)' or 'S(XIY):0,2'.
+                - A string formatted as <type><bel>:<sslbls>, where <sslbls>
+                  is the subset of state-space labels this error generator acts on nontrivially
+                  specified as a comma-separated list. E.g. 'HXX:0,1' or 'SIX:1'. Note this style
+                  is only compatible with basis element label error generators, and this only H and S.
+                - A string formatted as <type><bel>. For this style the basis element label
+                  is assumed to correspond to the entire state space, and as such the sslbls kwarg
+                  for this method must also be specified. Like the previous example this is also
+                  only compatible with H and S terms.
+            -tuple/list: These can be specified either in 'global-style' or 'local-style'.
+                - local-style: format is (<type>, <bel1>[,<bel2>])
+                - global-style:format is (<type>, (<bel1>,[<bel2>]), (<sslbls>))
+                  Where sslbls above is specifically the subset of state space labels this error
+                  generator acts on nontrivially. When specifying global-style tuple labels the sslbls kwarg of this method
+                  which contains the complete set of state-space labels must also be specified.
+
+        sslbls : tuple or list, optional (default None)
+            A complete set of state space labels. Used when casting from a LocalElementaryErrorgenLabel
+            or from a tuple of length 2 (wherein the final element is interpreted as the set of ssblbs the error
+            generator acts upon).
+        
+        identity_label : str, optional (default 'I')
+            An optional string specifying the label used to denote the identity in basis element labels.
+
+        Returns
+        -------
+        GlobalElementaryErrorgenLabel
+        """
         if isinstance(obj, GlobalElementaryErrorgenLabel):
             return obj
         elif isinstance(obj, LocalElementaryErrorgenLabel):
@@ -171,7 +223,7 @@ class GlobalElementaryErrorgenLabel(ElementaryErrorgenLabel):
                     return cls.cast(LocalElementaryErrorgenLabel.cast(obj), sslbls, identity_label)
             else:  # no parenthesis, assume of form "HXX:Q0,Q1" or local label, e.g. "HXX"
                 if ':' in obj:
-                    typ_bel_str, sslbl_str = in_parens.split(':')
+                    typ_bel_str, sslbl_str = obj.split(':')
                     sslbls = [_to_int_or_strip(x) for x in sslbl_str.split(',')]
                     return cls(typ_bel_str[0], (typ_bel_str[1:],), sslbls)
                 else:  # treat as a local label

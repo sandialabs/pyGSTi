@@ -1,14 +1,17 @@
 from ..util import BaseCase
-from pygsti.algorithms.randomcircuit import create_random_circuit
+from pygsti.circuits import Circuit
+from pygsti.algorithms.randomcircuit import create_random_circuit, find_all_sets_of_compatible_two_q_gates
 from pygsti.errorgenpropagation.errorpropagator import ErrorGeneratorPropagator
 from pygsti.processors import QubitProcessorSpec
-from pygsti.models.modelconstruction import create_crosstalk_free_model
-from pygsti.baseobjs import Label, BuiltinBasis, QubitSpace, CompleteElementaryErrorgenBasis
+from pygsti.models.modelconstruction import create_crosstalk_free_model, create_cloud_crosstalk_model
+from pygsti.baseobjs import Label, BuiltinBasis, QubitSpace, CompleteElementaryErrorgenBasis, QubitGraph
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel, LocalElementaryErrorgenLabel
 from pygsti.tools import errgenproptools as _eprop
 from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE
 from pygsti.tools.matrixtools import print_mx
 from itertools import product
+from math import floor
+from pygsti.modelpacks import smq2Q_XYCPHASE
 import numpy as np
 import stim
 
@@ -22,7 +25,7 @@ class ErrorgenPropTester(BaseCase):
         pspec = QubitProcessorSpec(num_qubits, gate_names, availability=availability)
         self.target_model = create_crosstalk_free_model(processor_spec = pspec)
         self.circuit = create_random_circuit(pspec, 4, sampler='edgegrab', samplerargs=[0.4,], rand_state=12345)
-
+        self.circuit_length_1 = create_random_circuit(pspec, 1, sampler='edgegrab', samplerargs=[0.4,], rand_state=12345)
         typ = 'H'
         max_stochastic = {'S': .0005, 'H': 0, 'H+S': .0001}
         max_hamiltonian = {'S': 0, 'H': .00005, 'H+S': .0001}
@@ -44,11 +47,11 @@ class ErrorgenPropTester(BaseCase):
 
     def test_approx_propagation_probabilities_BCH(self):
         error_propagator = ErrorGeneratorPropagator(self.error_model.copy())
-        probabilities_BCH_order_1 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=1)
-        probabilities_BCH_order_2 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=2)
-        probabilities_BCH_order_3 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=3)
-        probabilities_BCH_order_4 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=4)
-        probabilities_BCH_order_5 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=5)
+        probabilities_BCH_order_1 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=1, bch_mode='pairwise')
+        probabilities_BCH_order_2 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=2, bch_mode='pairwise')
+        probabilities_BCH_order_3 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=3, bch_mode='pairwise')
+        probabilities_BCH_order_4 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=4, bch_mode='pairwise')
+        probabilities_BCH_order_5 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=5, bch_mode='pairwise')
         probabilities_forward_simulation = probabilities_fwdsim(self.error_model, self.circuit)
 
         #use a much looser constraint on the agreement between the BCH results and forward simulation. Mostly testing to catch things exploding.
@@ -68,6 +71,26 @@ class ErrorgenPropTester(BaseCase):
         #also assert that the TVDs get smaller in general as you go up in order.
         self.assertTrue((TVD_order_1>TVD_order_2) and (TVD_order_2>TVD_order_3) and (TVD_order_3>TVD_order_4) and (TVD_order_4>TVD_order_5))
         
+    def test_approx_propagation_probabilities_magnus(self):
+        error_propagator = ErrorGeneratorPropagator(self.error_model.copy())
+        probabilities_BCH_order_1 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=1, bch_mode='magnus')
+        probabilities_BCH_order_2 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=2, bch_mode='magnus')
+        probabilities_BCH_order_3 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=3, bch_mode='magnus')
+        probabilities_forward_simulation = probabilities_fwdsim(self.error_model, self.circuit)
+
+        #use a much looser constraint on the agreement between the BCH results and forward simulation. Mostly testing to catch things exploding.
+        TVD_order_1 = np.linalg.norm(probabilities_BCH_order_1 - probabilities_forward_simulation, ord=1)
+        TVD_order_2 = np.linalg.norm(probabilities_BCH_order_2 - probabilities_forward_simulation, ord=1)
+        TVD_order_3 = np.linalg.norm(probabilities_BCH_order_3 - probabilities_forward_simulation, ord=1)
+        
+        #loose bound is just to make sure nothing exploded.
+        self.assertTrue(TVD_order_1 < 1e-2)
+        self.assertTrue(TVD_order_2 < 1e-2)
+        self.assertTrue(TVD_order_3 < 1e-2)
+
+        #also assert that the TVDs get smaller in general as you go up in order.
+        self.assertTrue((TVD_order_1>TVD_order_2) and (TVD_order_2>TVD_order_3))
+        
     def test_eoc_error_channel(self):
         error_propagator = ErrorGeneratorPropagator(self.error_model.copy())
         eoc_error_channel = error_propagator.eoc_error_channel(self.circuit)
@@ -78,8 +101,66 @@ class ErrorgenPropTester(BaseCase):
         eoc_error_channel_exact = noisy_channel_exact@ideal_channel.conj().T  
 
         assert np.linalg.norm(eoc_error_channel - eoc_error_channel_exact) < 1e-10
+    
+    def test_propagation_length_zero_one(self):
+        error_propagator = ErrorGeneratorPropagator(self.error_model.copy())
+        empty_circuit = Circuit([], line_labels=(0,1,2,3))
+        error_propagator.propagate_errorgens(self.circuit_length_1)
+        error_propagator.propagate_errorgens(empty_circuit, include_spam=True)
+        error_propagator.propagate_errorgens(empty_circuit, include_spam=False)
 
-            
+    def test_errorgen_transform_map(self):
+        error_propagator = ErrorGeneratorPropagator(self.error_model.copy())
+        errorgen_input_output_map = error_propagator.errorgen_transform_map(self.circuit, include_spam=True)
+
+        assert errorgen_input_output_map[(_LSE('H', (stim.PauliString("+___X"),)), 1)] == (_LSE('H', (stim.PauliString("+__ZY"),)), 1.0)
+        assert errorgen_input_output_map[(_LSE('S', (stim.PauliString("+X___"),)), 2)] == (_LSE('S', (stim.PauliString("+Z___"),)),  1.0)
+        assert errorgen_input_output_map[(_LSE('H', (stim.PauliString("+X___"),)), 3)] == (_LSE('H', (stim.PauliString("+Z___"),)), -1.0)
+
+    def test_errorgen_gate_contributors(self):
+        error_propagator = ErrorGeneratorPropagator(self.error_model.copy())
+        test_1 = error_propagator.errorgen_gate_contributors(LocalElementaryErrorgenLabel('H', ['XIII']), self.circuit, 1, include_spam=True) 
+        assert test_1 == [Label(('Gypi2', 0))]
+    
+        test_2 = error_propagator.errorgen_gate_contributors(LocalElementaryErrorgenLabel('H', ['IYII']), self.circuit, 2, include_spam=False) 
+        assert test_2 == [Label(('Gypi2', 1))]
+
+        test_3 = error_propagator.errorgen_gate_contributors(LocalElementaryErrorgenLabel('H', ['IIIX']), self.circuit, 3, include_spam=True) 
+        assert test_3 == [Label(('Gxpi2', 3))]
+
+        test_4 = error_propagator.errorgen_gate_contributors(LocalElementaryErrorgenLabel('H', ['IIYX']), self.circuit, 4, include_spam=True) 
+        assert test_4 == [Label(('Gcphase', 2, 3))]
+
+    def test_explicit_model(self):
+        
+        target_model = smq2Q_XYCPHASE.target_model('full TP')
+        noisy_model = target_model.copy()
+        noisy_model = noisy_model.rotate(max_rotate = .01)
+        noisy_model.set_all_parameterizations('GLND')
+        errorgen_propagator = ErrorGeneratorPropagator(noisy_model)
+        circuit_2Q = list(smq2Q_XYCPHASE.create_gst_experiment_design(4).all_circuits_needing_data)[-1]
+
+        #make sure that the various methods don't die.
+        propagated_errorgens = errorgen_propagator.propagate_errorgens(circuit_2Q)
+        gate_contributors = errorgen_propagator.errorgen_gate_contributors(LocalElementaryErrorgenLabel('H', ['XI']), circuit_2Q, 1, include_spam=True) 
+
+    def test_cloud_crosstalk_model(self):
+        oq=['Gxpi2','Gypi2','Gzpi2']
+        qbts=4
+        gate_names=oq+['Gcphase']
+        max_strengths = {1: {'S': 10**(-3), 'H': 10**(-2)},
+                        2: {'S': (1/6)*10**(-2), 'H': 2*10**(-3)}
+                        }
+
+        #Build circuit models
+        qubit_labels =range(qbts)
+        gate_names = ['Gxpi2','Gzpi2','Gcphase','Gypi2']
+        ps = QubitProcessorSpec(qbts, gate_names,availability= {'Gcphase':[(i,(i+1)%qbts) for i in range(qbts)]} , qubit_labels=qubit_labels)
+        lindblad_error_coeffs=sample_error_rates_cloud_crosstalk(max_strengths,4,gate_names)
+        mdl_cloudnoise = create_cloud_crosstalk_model(ps, lindblad_error_coeffs=lindblad_error_coeffs, errcomp_type="errorgens")
+        errorgen_prop=ErrorGeneratorPropagator(mdl_cloudnoise)
+        propagated_errorgens = errorgen_prop.propagate_errorgens(self.circuit)
+        gate_contributors = errorgen_prop.errorgen_gate_contributors(LocalElementaryErrorgenLabel('H', ['IZZI']), self.circuit, 1, include_spam=True) 
 
 class LocalStimErrorgenLabelTester(BaseCase):
     def setUp(self):
@@ -92,7 +173,7 @@ class LocalStimErrorgenLabelTester(BaseCase):
         correct_lse = _LSE('C', [stim.PauliString('XX'), stim.PauliString('YY')])
 
         self.assertEqual(correct_lse, _LSE.cast(self.local_eel))
-        self.assertEqual(correct_lse, _LSE.cast(self.global_eel, self.sslbs))
+        self.assertEqual(correct_lse, _LSE.cast(self.global_eel, self.sslbls))
 
     def test_to_local_global_eel(self):
         lse = _LSE('C', [stim.PauliString('XX'), stim.PauliString('YY')])
@@ -110,12 +191,13 @@ class LocalStimErrorgenLabelTester(BaseCase):
         self.assertEqual(propagated_lse, (_LSE('S', [stim.PauliString('ZI')]), 1))
 
 #Helper Functions:
-def probabilities_errorgen_prop(error_propagator, target_model, circuit, use_bch=False, bch_order=1, truncation_threshold=1e-14):
+def probabilities_errorgen_prop(error_propagator, target_model, circuit, use_bch=False, bch_order=1, truncation_threshold=1e-14, bch_mode='magnus'):
     #get the eoc error channel, and the process matrix for the ideal circuit:
     if use_bch:
         eoc_channel = error_propagator.eoc_error_channel(circuit, include_spam=True, use_bch=use_bch,
                                                         bch_kwargs={'bch_order':bch_order,
-                                                                    'truncation_threshold':truncation_threshold})
+                                                                    'truncation_threshold':truncation_threshold,
+                                                                    'mode':bch_mode})
     else:
         eoc_channel = error_propagator.eoc_error_channel(circuit, include_spam=True)
     ideal_channel = target_model.sim.product(circuit)
@@ -229,4 +311,61 @@ def error_generator_commutator_numerical(errorgen_1, errorgen_2, errorgen_matrix
     return errorgen_matrix_dict[errorgen_1]@errorgen_matrix_dict[errorgen_2] - errorgen_matrix_dict[errorgen_2]@errorgen_matrix_dict[errorgen_1]
 
 
+#--------- Cloud crosstalk helper functions---------------------#
+def sample_error_rates_cloud_crosstalk(strengths,qbts, gates):
+    error_rates_dict = {}
+    for gate in gates:
+        if not gate =='Gcphase':
+            for el in range(qbts):
+                stochastic_strength = strengths[1]['S']*np.random.random()
+                hamiltonian_strength = 2*strengths[1]['H']*np.random.random()-strengths[1]['H']        
+                paulis=['X','Y','Z']
+                error_rates_dict[(gate,el)]=dict()
+                for pauli_label in paulis:
+                    if (gate=='Gxpi2' and pauli_label=='X') or (gate=='Gypi2' and pauli_label=='Y') or (gate=='Gzpi2' and pauli_label=='Z'):
+                        error_rates_dict[(gate,el)].update({('H', pauli_label+':'+str(el)):hamiltonian_strength})
+                        error_rates_dict[(gate,el)].update({('S', pauli_label+':'+str(el)): stochastic_strength})
+                    else:
+                        error_rates_dict[(gate,el)].update({('H', pauli_label+':'+str(el)):0.0})
+                        error_rates_dict[(gate,el)].update({('S', pauli_label+':'+str(el)): 0.0})
+        else:
+            for qbt in range(qbts):
+                
+                gate_lbl=('Gcphase',qbt,(qbt+1)%4)
+                error_rates_dict[gate_lbl]=dict()
+                for qbt1 in range(qbts):
+                    for qbt2 in range(qbts):
+                        if qbt1 < qbt2:
+                            hamiltonian_strength = 2*strengths[2]['H']*np.random.random()-strengths[2]['H']
+                            for pauli in two_qbt_pauli_str():
+                                if pauli =='ZZ':
+                                    error_rates_dict[gate_lbl].update({('H',pauli+':'+str(qbt1)+','+str(qbt2)):hamiltonian_strength})
+                                else:
+                                    error_rates_dict[gate_lbl].update({('H',pauli+':'+str(qbt1)+','+str(qbt2)):0.0})
+                
+                for qbt1 in range(qbts):
+                    hamiltonian_strength = 2*strengths[2]['H']*np.random.random()-strengths[2]['H']
+                    for pauli in ['X','Y','Z']:
+                        if pauli=='Z':
+                            error_rates_dict[gate_lbl].update({('H',pauli+':'+str(qbt1)):hamiltonian_strength})
+                        else:
+                            error_rates_dict[gate_lbl].update({('H',pauli+':'+str(qbt1)):0.0})
 
+
+                stochastic_strength = strengths[2]['S']*np.random.random()
+                error_rates_dict[gate_lbl].update({('S', 'ZZ:'+str(gate_lbl[1])+','+str(gate_lbl[2])): stochastic_strength})
+                stochastic_strength = strengths[2]['S']*np.random.random()
+                error_rates_dict[gate_lbl].update({('S', 'Z:'+str(gate_lbl[1])): stochastic_strength})
+                stochastic_strength = strengths[2]['S']*np.random.random()
+                error_rates_dict[gate_lbl].update({('S', 'Z:'+str(gate_lbl[2])): stochastic_strength})
+
+    return error_rates_dict
+
+def two_qbt_pauli_str():
+    paulis=['I','X','Y','Z']
+    pauli_strs=[]
+    for p1 in paulis:
+        for p2 in paulis:
+            pauli_strs.append(p1+p2)
+    pauli_strs.remove('II')
+    return pauli_strs

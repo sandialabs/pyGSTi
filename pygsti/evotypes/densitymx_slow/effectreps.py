@@ -2,7 +2,7 @@
 POVM effect representation classes for the `densitymx_slow` evolution type.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -13,12 +13,13 @@ POVM effect representation classes for the `densitymx_slow` evolution type.
 import numpy as _np
 
 # import functools as _functools
-from .. import basereps as _basereps
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from ...tools import matrixtools as _mt
+from pygsti import SpaceT
 
+class EffectRep:
+    """Any representation of an "effect" in the sense of a POVM."""
 
-class EffectRep(_basereps.EffectRep):
     def __init__(self, state_space):
         self.state_space = _StateSpace.cast(state_space)
 
@@ -27,6 +28,10 @@ class EffectRep(_basereps.EffectRep):
 
 
 class EffectRepConjugatedState(EffectRep):
+    """
+    A real superket representation of an "effect" in the sense of a POVM.
+    Internally uses a StateRepDense object to hold the real superket.
+    """
 
     def __init__(self, state_rep):
         self.state_rep = state_rep
@@ -39,7 +44,7 @@ class EffectRepConjugatedState(EffectRep):
         # can assume state is a StateRep and self.state_rep is
         return _np.dot(self.state_rep.data, state.data)  # not vdot b/c *real* data
 
-    def to_dense(self, on_space):
+    def to_dense(self, on_space: SpaceT):
         return self.state_rep.to_dense(on_space)
 
 
@@ -74,7 +79,7 @@ class EffectRepComputational(EffectRep):
         Edense = self.to_dense('HilbertSchmidt', scratch)
         return _np.dot(Edense, state.data)  # not vdot b/c data is *real*
 
-    def to_dense(self, on_space, outvec=None):
+    def to_dense(self, on_space: SpaceT, outvec=None):
         if on_space not in ('minimal', 'HilbertSchmidt'):
             raise ValueError("'densitymx' evotype cannot produce Hilbert-space ops!")
         return _mt.zvals_int64_to_dense(self.zvals_int, self.nfactors, outvec, False, self.abs_elval)
@@ -100,12 +105,7 @@ class EffectRepTensorProduct(EffectRep):
         super(EffectRepTensorProduct, self).__init__(state_space)
         self.factor_effects_have_changed()
 
-    #TODO: fix this:
-    #def __reduce__(self):
-    #    return (EffectRepTensorProduct,
-    #            (self.kron_array, self.factor_dims, self.nfactors, self.max_factor_dim, self.dim))
-
-    def to_dense(self, on_space, outvec=None):
+    def to_dense(self, on_space: SpaceT, outvec=None):
 
         if on_space not in ('minimal', 'HilbertSchmidt'):
             raise ValueError("'densitymx' evotype cannot produce Hilbert-space ops!")
@@ -158,22 +158,6 @@ class EffectRepTensorProduct(EffectRep):
 
     def factor_effects_have_changed(self):
         self._fill_fast_kron()  # updates effect reps
-
-    #def to_dense(self):
-    #    if len(self.factors) == 0: return _np.empty(0, complex if self._evotype == "statevec" else 'd')
-    #        #NOTE: moved a fast version of to_dense to replib - could use that if need a fast to_dense call...
-    #
-    #        factorPOVMs = self.factors
-    #        ret = factorPOVMs[0][self.effectLbls[0]].to_dense()
-    #        for i in range(1, len(factorPOVMs)):
-    #            ret = _np.kron(ret, factorPOVMs[i][self.effectLbls[i]].to_dense())
-    #        return ret
-    #    elif self._evotype == "stabilizer":
-    #        # each factor is a StabilizerEffectVec
-    #        raise ValueError("Cannot convert Stabilizer tensor product effect to an array!")
-    #    # should be using effect.outcomes property...
-    #    else:  # self._evotype in ("svterm","cterm")
-    #        raise NotImplementedError("to_dense() not implemented for %s evolution type" % self._evotype)
 
 
 class EffectRepComposed(EffectRep):

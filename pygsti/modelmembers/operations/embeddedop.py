@@ -2,7 +2,7 @@
 The EmbeddedOp class and supporting functionality.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -10,7 +10,6 @@ The EmbeddedOp class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import collections as _collections
 import itertools as _itertools
 
 import numpy as _np
@@ -18,11 +17,9 @@ import scipy.sparse as _sps
 
 from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
 from pygsti.modelmembers import modelmember as _modelmember
-from pygsti.baseobjs.basis import EmbeddedBasis as _EmbeddedBasis
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GlobalElementaryErrorgenLabel, LocalElementaryErrorgenLabel as _LocalElementaryErrorgenLabel
-
-
+from pygsti import SpaceT
 class EmbeddedOp(_LinearOperator):
     """
     An operation containing a single lower (or equal) dimensional operation within it.
@@ -97,7 +94,7 @@ class EmbeddedOp(_LinearOperator):
     def _update_denserep(self):
         """Performs additional update for the case when we use a dense underlying representation."""
         self._rep.base.flags.writeable = True
-        self._rep.base[:, :] = self.to_dense(on_space='minimal')
+        self._rep.base[:, :] = self.to_dense("minimal")
         self._rep.base.flags.writeable = False
 
     def _update_submember_state_spaces(self, old_parent_state_space, new_parent_state_space):
@@ -242,7 +239,7 @@ class EmbeddedOp(_LinearOperator):
                     self._iter_elements_cache[on_space].append(item)
                     yield item
 
-    def to_sparse(self, on_space='minimal'):
+    def to_sparse(self, on_space: SpaceT='minimal'):
         """
         Return the operation as a sparse matrix
 
@@ -264,7 +261,7 @@ class EmbeddedOp(_LinearOperator):
             finalOp[i, j] = embedded_sparse[gi, gj]
         return finalOp.tocsr()
 
-    def to_dense(self, on_space='minimal'):
+    def to_dense(self, on_space: SpaceT='minimal'):
         """
         Return the operation as a dense matrix
 
@@ -557,6 +554,7 @@ class EmbeddedOp(_LinearOperator):
         # s and Sinv matrices... but haven't needed it yet.
         raise NotImplementedError("Cannot transform an EmbeddedOp yet...")
 
+    #TODO: I don't think the return_basis flag actually works atm. Maybe remove?
     def errorgen_coefficients(self, return_basis=False, logscale_nonham=False, label_type='global', identity_label='I'):
         """
         Constructs a dictionary of the Lindblad-error-generator coefficients of this operation.
@@ -595,48 +593,19 @@ class EmbeddedOp(_LinearOperator):
 
         Returns
         -------
-        lindblad_term_dict : dict
-            Keys are `(termType, basisLabel1, <basisLabel2>)`
-            tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
-            or `"A"` (Affine).  Hamiltonian and Affine terms always have a
-            single basis label (so key is a 2-tuple) whereas Stochastic tuples
-            have 1 basis label to indicate a *diagonal* term and otherwise have
-            2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
-            terms.  Basis labels are integers starting at 0.  Values are complex
-            coefficients.
-        basis : Basis
-            A Basis mapping the basis labels used in the
-            keys of `lindblad_term_dict` to basis matrices.
+        embedded_coeffs : dict
+            Keys are instances of `ElementaryErrorgenLabel`, which wrap the 
+            `(termType, basisLabel1, <basisLabel2>)` information for each coefficient.
+            Where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
+            `"C"`(Correlation)  or `"A"` (Affine).  Hamiltonian and S terms always have a
+            single basis label while 'C' and 'A' terms have two. 
         """
         #*** Note: this function is nearly identical to EmbeddedErrorgen.coefficients() ***
         coeffs_to_embed = self.embedded_op.errorgen_coefficients(return_basis, logscale_nonham, label_type)
-        #print(f'{embedded_coeffs=}')
         
         if coeffs_to_embed:
             embedded_labels = self.errorgen_coefficient_labels(label_type=label_type, identity_label=identity_label)
             embedded_coeffs = {lbl:val for lbl, val in zip(embedded_labels, coeffs_to_embed.values())}
-            #first_coeff_lbl = next(iter(coeffs_to_embed))
-            #if isinstance(first_coeff_lbl, _GlobalElementaryErrorgenLabel):
-#        if self.target_labels != self.embedded_op.state_space.sole_tensor_product_block_labels:
-                #mapdict = {loc: tgt for loc, tgt in zip(self.embedded_op.state_space.sole_tensor_product_block_labels,
-                #                                        self.target_labels)}
-                #embedded_coeffs = {k.map_state_space_labels(mapdict): v for k, v in coeffs_to_embed.items()}
-            #elif isinstance(first_coeff_lbl, _LocalElementaryErrorgenLabel):
-            #    embedded_labels = self.errorgen_coefficient_labels()
-            #    #use different embedding scheme for local labels
-            #    base_label = [identity_label for _ in range(self.state_space.num_qudits)]
-            #    embedded_labels = []
-            #    for lbl in coeff_lbls_to_embed:
-            #        new_bels = []
-            #        for bel in lbl.basis_element_labels:
-            #            base_label = [identity_label for _ in range(self.state_space.num_qudits)]
-            #            for target, pauli in zip(self.target_labels, bel):
-            #                base_label[target] = pauli
-            #            new_bels.append(''.join(base_label))
-            #        embedded_labels.append(_LocalElementaryErrorgenLabel(lbl.errorgen_type, tuple(new_bels)))
-            #    embedded_coeffs = {lbl:val for lbl, val in zip(embedded_labels, coeffs_to_embed.values())}
-            #else:
-            #    raise ValueError(f'Invalid error generator label type {first_coeff_lbl}')
         else:
             embedded_coeffs = dict()
 
@@ -673,11 +642,12 @@ class EmbeddedOp(_LinearOperator):
             return self._cached_embedded_errorgen_labels_local
 
         labels_to_embed = self.embedded_op.errorgen_coefficient_labels(label_type)
-        #print(f'{embedded_labels=}')
+        embedded_labels = self._embed_labels(labels_to_embed, label_type, identity_label)
+
+        return embedded_labels
     
-        #if self.target_labels != self.embedded_op.state_space.sole_tensor_product_block_labels:
-        #print(f'{self.target_labels=}')
-        #print(f'{self.embedded_op.state_space.sole_tensor_product_block_labels=}')
+    def _embed_labels(self, labels_to_embed, label_type='global', identity_label='I'):
+        """Helper function encapsulating error generator coefficient emedding logic"""
         if len(labels_to_embed)>0:
             if isinstance(labels_to_embed[0], _GlobalElementaryErrorgenLabel):
                 mapdict = {loc: tgt for loc, tgt in zip(self.embedded_op.state_space.sole_tensor_product_block_labels,
@@ -703,7 +673,6 @@ class EmbeddedOp(_LinearOperator):
                 raise ValueError(f'Invalid error generator label type {labels_to_embed[0]}')
         else:
             embedded_labels = tuple()
-
         return embedded_labels
 
     def errorgen_coefficients_array(self):
@@ -776,14 +745,11 @@ class EmbeddedOp(_LinearOperator):
         Returns
         -------
         lindblad_term_dict : dict
-            Keys are `(termType, basisLabel1, <basisLabel2>)`
-            tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
-            or `"A"` (Affine).  Hamiltonian and Affine terms always have a
-            single basis label (so key is a 2-tuple) whereas Stochastic tuples
-            have 1 basis label to indicate a *diagonal* term and otherwise have
-            2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
-            terms.  Values are real error rates except for the 2-basis-label
-            case.
+            Keys are instances of `ElementaryErrorgenLabel`, which wrap the 
+            `(termType, basisLabel1, <basisLabel2>)` information for each coefficient.
+            Where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
+            `"C"`(Correlation)  or `"A"` (Affine).  Hamiltonian and S terms always have a
+            single basis label while 'C' and 'A' terms have two.
         """
         return self.errorgen_coefficients(return_basis=False, logscale_nonham=True, label_type=label_type, identity_label=identity_label)
 
@@ -797,14 +763,11 @@ class EmbeddedOp(_LinearOperator):
         Parameters
         ----------
         lindblad_term_dict : dict
-            Keys are `(termType, basisLabel1, <basisLabel2>)`
-            tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
-            or `"A"` (Affine).  Hamiltonian and Affine terms always have a
-            single basis label (so key is a 2-tuple) whereas Stochastic tuples
-            have 1 basis label to indicate a *diagonal* term and otherwise have
-            2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
-            terms.  Values are the coefficients of these error generators,
-            and should be real except for the 2-basis-label case.
+            Keys are instances of `ElementaryErrorgenLabel`, which wrap the 
+            `(termType, basisLabel1, <basisLabel2>)` information for each coefficient.
+            Where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
+            `"C"`(Correlation)  or `"A"` (Affine).  Hamiltonian and S terms always have a
+            single basis label while 'C' and 'A' terms have two. Values are corresponding rates.
 
         action : {"update","add","reset"}
             How the values in `lindblad_term_dict` should be combined with existing
@@ -831,37 +794,45 @@ class EmbeddedOp(_LinearOperator):
         """
         #determine is we need to unembed the error generator labels in lindblad_term_dict.
         if lindblad_term_dict: 
-            first_coeff_lbl = next(iter(lindblad_term_dict))
-            if isinstance(first_coeff_lbl, _GlobalElementaryErrorgenLabel):
-                if self.target_labels != self.embedded_op.state_space.sole_tensor_product_block_labels:
-                    mapdict = {tgt: loc for loc, tgt in zip(self.embedded_op.state_space.sole_tensor_product_block_labels,
-                                                            self.target_labels)}
-                    unembedded_coeffs = {k.map_state_space_labels(mapdict): v for k, v in lindblad_term_dict.items()}
-                else:
-                    unembedded_coeffs = lindblad_term_dict
-            elif isinstance(first_coeff_lbl, _LocalElementaryErrorgenLabel):
-                #if the length of the basis element labels are the same as the length of this
-                #embedded op's target labels then assume those are associated.
-                if len(first_coeff_lbl.basis_element_labels[0]) == len(self.target_labels):
-                    unembedded_coeffs = lindblad_term_dict
-                #if the length is equal to the number of qudits then we need to unembed.
-                elif len(first_coeff_lbl.basis_element_labels[0]) == self.state_space.num_qudits:
-                    unembedded_labels = list(lindblad_term_dict.keys())
-                    for lbl in unembedded_labels:
-                        new_bels = []
-                        for bel in lbl.basis_element_labels:
-                            new_bels.append("".join(bel[target] for target in self.target_labels))
-                        lbl.basis_element_labels = tuple(new_bels)
-                    unembedded_coeffs = {lbl:val for lbl, val in zip(unembedded_labels, lindblad_term_dict.values())}
-                else:
-                    msg = "Could not parse error generator labels. Expected either length equal to this embedded op's"\
-                         +" target_labels or equal to the number of qudits."
-                    raise ValueError(msg)
-
+            unembedded_coeffs = self._unembed_coeff_dict_labels(lindblad_term_dict)
             self.embedded_op.set_errorgen_coefficients(unembedded_coeffs, action, logscale_nonham, truncate)
             if self._rep_type == 'dense': self._update_denserep()
             self.dirty = True
 
+    def _unembed_coeff_dict_labels(self, lindblad_term_dict):
+        """
+        Helper function encapsulating unembedding logic for error generator labels.
+        Returns a new dictionary of error generator coefficient rate with unembedded labels.
+        """
+        first_coeff_lbl = next(iter(lindblad_term_dict))
+        if isinstance(first_coeff_lbl, _GlobalElementaryErrorgenLabel):
+            if self.target_labels != self.embedded_op.state_space.sole_tensor_product_block_labels:
+                mapdict = {tgt: loc for loc, tgt in zip(self.embedded_op.state_space.sole_tensor_product_block_labels,
+                                                        self.target_labels)}
+                unembedded_coeffs = {k.map_state_space_labels(mapdict): v for k, v in lindblad_term_dict.items()}
+            else:
+                unembedded_coeffs = lindblad_term_dict
+        elif isinstance(first_coeff_lbl, _LocalElementaryErrorgenLabel):
+            #if the length of the basis element labels are the same as the length of this
+            #embedded op's target labels then assume those are associated.
+            if len(first_coeff_lbl.basis_element_labels[0]) == len(self.target_labels):
+                unembedded_coeffs = lindblad_term_dict
+            #if the length is equal to the number of qudits then we need to unembed.
+            elif len(first_coeff_lbl.basis_element_labels[0]) == self.state_space.num_qudits:
+                unembedded_labels = list(lindblad_term_dict.keys())
+                for lbl in unembedded_labels:
+                    new_bels = []
+                    for bel in lbl.basis_element_labels:
+                        new_bels.append("".join(bel[target] for target in self.target_labels))
+                    lbl.basis_element_labels = tuple(new_bels)
+                unembedded_coeffs = {lbl:val for lbl, val in zip(unembedded_labels, lindblad_term_dict.values())}
+            else:
+                msg = "Could not parse error generator labels. Expected either length equal to this embedded op's"\
+                        +" target_labels or equal to the number of qudits."
+                raise ValueError(msg)
+        return unembedded_coeffs
+            
+        
     def set_error_rates(self, lindblad_term_dict, action="update"):
         """
         Sets the coeffcients of terms in the error generator of this operation.

@@ -1,25 +1,42 @@
-import stim
+#***************************************************************************************************
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
+import warnings
+try:
+    import stim
+except ImportError:
+    msg = "Stim is required for use of the error generator propagation module, " \
+          "and it does not appear to be installed. If you intend to use this module please update" \
+          " your environment."
+    warnings.warn(msg)
 import numpy as _np
 import scipy.linalg as _spl
 from .localstimerrorgen import LocalStimErrorgenLabel as _LSE
-from numpy import abs,zeros, complex128
+from numpy import zeros, complex128
 from numpy.linalg import multi_dot
 from scipy.linalg import expm
 from pygsti.tools.internalgates import standard_gatenames_stim_conversions
 import copy as _copy
 from pygsti.baseobjs import Label, ExplicitElementaryErrorgenBasis as _ExplicitElementaryErrorgenBasis, BuiltinBasis as _BuiltinBasis
-from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LocalElementaryErrogenLabel 
+from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LocalElementaryErrorgenLabel 
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GlobalElementaryErrorgenLabel
 import pygsti.tools.errgenproptools as _eprop
 import pygsti.tools.basistools as _bt
 import pygsti.tools.matrixtools as _mt
 import pygsti.tools.optools as _ot
+from pygsti.models.model import OpModel as _OpModel
+from pygsti.models import ExplicitOpModel as _ExplicitOpModel, ImplicitOpModel as _ImplicitOpModel
 from pygsti.modelmembers.operations import LindbladErrorgen as _LindbladErrorgen
 from itertools import islice
 
 class ErrorGeneratorPropagator:
 
-    def __init__(self, model, state_space=None, multi_gate_dict=None, nonmarkovian=False, multi_gate=False):
+    def __init__(self, model):
         """
         Initialize an instance of `ErrorGeneratorPropagator`. This class is instantiated with a noise model
         and manages operations related to propagating error generators through circuits, and constructing
@@ -27,37 +44,14 @@ class ErrorGeneratorPropagator:
 
         Parameters
         ----------
-        model: `OpModel` or dict
-            If an `OpModel` this model is used to construct error generators for each layer of a circuit
-            through which error generators are to be propagated. If a dictionary is passed in then this
-            dictionary should be an error generator coefficient dictionary, with keys that are 
-            `ElementaryErrorgenLabel`s and values that are rates. This dictionary is then used as the
-            fixed per-circuit error generator independent of the circuit layers. (Dictionary support in development).
-        
-        state_space: `StateSpace`, optional (default None)
-            Only used if specifying a dictionary for `model` whose keys are 
-            `GlobalElementaryErrorgenLabel`s.      
-        """
-        if isinstance(model, dict):
-            #convert this to one where the keys are `LocalStimErrorgenLabel`s. 
-            if isinstance(next(iter(model)), _GlobalElementaryErrorgenLabel):
-                if state_space is None:
-                    msg = 'When specifying a fixed error generator dictionary as the noise model using keys which are'\
-                        + '`GlobalElementaryErrorgenLabel` a corresponding `StateSpace` much be specified too.'
-                    raise ValueError(msg)
-                else:
-                    sslbls = state_space.qubit_labels
-                    lse_dict = {_LSE.cast(lbl, sslbls): rate for lbl, rate in model.items()}
-            elif isinstance(next(iter(model)), _LocalElementaryErrogenLabel):
-                lse_dict = {_LSE.cast(lbl): rate for lbl, rate in model.items()}
-            else:
-                lse_dict = model  
-            self.model = lse_dict
-        else:              
-            self.model = model
+        model: `OpModel` 
+            This model is used to construct error generators for each layer of a circuit
+            through which error generators are to be propagated.   
+        """   
+        self.model = model
 
-    def eoc_error_channel(self, circuit, multi_gate_dict=None, include_spam=True, use_bch=False,
-                          bch_kwargs=None, mx_basis='pp'):
+    def eoc_error_channel(self, circuit, include_spam=True, use_bch=False,
+                          bch_kwargs=None, mx_basis='pp', circuit_conversion_kwargs=None):
         """
         Propagate all of the error generators for each circuit layer to the end of the circuit
         and return the result of exponentiating these error generators, and if necessary taking
@@ -67,10 +61,6 @@ class ErrorGeneratorPropagator:
         ----------
         circuit : `Circuit`
             Circuit to construct a set of post gate error generators for.
-
-        multi_gate_dict : dict, optional (default None)
-            An optional dictionary mapping between gate name aliases and their
-            standard name counterparts.
 
         include_spam : bool, optional (default True)
             If True then we include in the propagation the error generators associated
@@ -87,6 +77,12 @@ class ErrorGeneratorPropagator:
             Either a `Basis` object, or a string which can be cast to a `Basis`, specifying the
             basis in which to return the process matrix for the error channel.
 
+        circuit_conversion_kwargs : dict, optional (default None)
+            A set of optional kwargs which will be passed into the `convert_to_stim_tableau_layers`
+            method of the `Circuit` class to control the behavior of the conversion. Please see the
+            documentation for this method for additional information on supported arguments and
+            values.
+
         Returns
         -------
         eoc_error_channel : numpy.ndarray
@@ -96,13 +92,12 @@ class ErrorGeneratorPropagator:
 
         if use_bch:
             #should return a single dictionary of error generator rates
-            propagated_error_generator = self.propagate_errorgens_bch(circuit, multi_gate_dict=multi_gate_dict,
-                                                                       **bch_kwargs)
+            propagated_error_generator = self.propagate_errorgens_bch(circuit, **bch_kwargs, circuit_conversion_kwargs=circuit_conversion_kwargs)
             #convert this to a process matrix
-            return _spl.expm(self.errorgen_layer_dict_to_errorgen(propagated_error_generator, mx_basis='pp', return_dense=True))
+            return _spl.expm(self.errorgen_layer_dict_to_errorgen(propagated_error_generator, mx_basis='pp'))
             
         else:
-            propagated_error_generators = self.propagate_errorgens(circuit, multi_gate_dict, include_spam)
+            propagated_error_generators = self.propagate_errorgens(circuit, include_spam, circuit_conversion_kwargs=circuit_conversion_kwargs)
             #loop though the propagated error generator layers and construct their error generators.
             #Then exponentiate
             exp_error_generators = []
@@ -110,7 +105,7 @@ class ErrorGeneratorPropagator:
                 if err_gen_layer: #if not empty.
                     #Keep the error generator in the standard basis until after the end-of-circuit
                     #channel is constructed so we can reduce the overhead of changing basis.
-                    exp_error_generators.append(_spl.expm(self.errorgen_layer_dict_to_errorgen(err_gen_layer, mx_basis='pp', return_dense=True)))
+                    exp_error_generators.append(_spl.expm(self.errorgen_layer_dict_to_errorgen(err_gen_layer, mx_basis='pp')))
             #Next take the product of these exponentiated error generators.
             #These are in circuit ordering, so reverse for matmul.
             exp_error_generators.reverse()
@@ -123,73 +118,66 @@ class ErrorGeneratorPropagator:
                 eoc_error_channel = _bt.change_basis(eoc_error_channel, from_basis='pp', to_basis=mx_basis)
 
         return eoc_error_channel
-    
-    def averaged_eoc_error_channel(self, circuit, multi_gate_dict=None, include_spam=True, mx_basis='pp'):
-        """
-        Propagate all of the error generators for each circuit layer to the end of the circuit,
-        then apply a second order cumulant expansion to approximate the average of the end of circuit
-        error channel over the values error generator rates that are stochastic processes.
+    #
+    #def averaged_eoc_error_channel(self, circuit, include_spam=True, mx_basis='pp'):
+    #    """
+    #    Propagate all of the error generators for each circuit layer to the end of the circuit,
+    #    then apply a second order cumulant expansion to approximate the average of the end of circuit
+    #    error channel over the values error generator rates that are stochastic processes.
+#
+    #    Parameters
+    #    ----------
+    #    circuit : `Circuit`
+    #        Circuit to construct a set of post gate error generators for.
+#
+    #    include_spam : bool, optional (default True)
+    #        If True then we include in the propagation the error generators associated
+    #        with state preparation and measurement.
+#
+    #    mx_basis : Basis or str, optional (default 'pp')
+    #        Either a `Basis` object, or a string which can be cast to a `Basis`, specifying the
+    #        basis in which to return the process matrix for the error channel.
+#
+    #    Returns
+    #    -------
+    #    avg_eoc_error_channel : numpy.ndarray
+    #        A numpy array corresponding to the end-of-circuit error channel resulting
+    #        from the propagated error generators and averaging over the stochastic processes
+    #        for the error generator rates using a second order cumulant approximation.
+    #    """
+#
+    #    #propagate_errorgens_nonmarkovian returns a list of list of 
+    #    propagated_error_generators = self.propagate_errorgens_nonmarkovian(circuit, include_spam)
+    #    
+    #    #construct the nonmarkovian propagators
+    #    for i in range(len(propagated_error_generators)):
+    #        for j in range(i+1):
+    #            if i==j:
+    #                #<L_s> term:
+    #                pass
+    #                #prop_contrib = amam
+    #            else:
+    #                pass
+    #          
+    #    
+    #    #loop though the propagated error generator layers and construct their error generators.
+    #    #Then exponentiate
+    #    exp_error_generators = []
+    #    for err_gen_layer_list in propagated_error_generators:
+    #        if err_gen_layer_list: #if not empty. Should be length one if not empty.
+    #            #Keep the error generator in the standard basis until after the end-of-circuit
+    #            #channel is constructed so we can reduce the overhead of changing basis.
+    #            exp_error_generators.append(_spl.expm(self.errorgen_layer_dict_to_errorgen(err_gen_layer_list[0], mx_basis='std')))
+    #    #Next take the product of these exponentiated error generators.
+    #    #These are in circuit ordering, so reverse for matmul.
+    #    exp_error_generators.reverse()
+    #    eoc_error_channel = _np.linalg.multi_dot(exp_error_generators)
+    #    eoc_error_channel = _bt.change_basis(eoc_error_channel, from_basis='std', to_basis='pp')
+#
+    #    return eoc_error_channel
+#
 
-        Parameters
-        ----------
-        circuit : `Circuit`
-            Circuit to construct a set of post gate error generators for.
-
-        multi_gate_dict : dict, optional (default None)
-            An optional dictionary mapping between gate name aliases and their
-            standard name counterparts.
-
-        include_spam : bool, optional (default True)
-            If True then we include in the propagation the error generators associated
-            with state preparation and measurement.
-
-        mx_basis : Basis or str, optional (default 'pp')
-            Either a `Basis` object, or a string which can be cast to a `Basis`, specifying the
-            basis in which to return the process matrix for the error channel.
-
-        Returns
-        -------
-        avg_eoc_error_channel : numpy.ndarray
-            A numpy array corresponding to the end-of-circuit error channel resulting
-            from the propagated error generators and averaging over the stochastic processes
-            for the error generator rates using a second order cumulant approximation.
-        """
-
-        #propagate_errorgens_nonmarkovian returns a list of list of 
-        propagated_error_generators = self.propagate_errorgens_nonmarkovian(circuit, multi_gate_dict, include_spam)
-        
-        #construct the nonmarkovian propagators
-        for i in range(len(propagated_error_generators)):
-            for j in range(i+1):
-                if i==j:
-                    #<L_s> term:
-                    pass
-                    #prop_contrib = amam
-                else:
-                    pass
-        
-        
-        
-        
-        
-        #loop though the propagated error generator layers and construct their error generators.
-        #Then exponentiate
-        exp_error_generators = []
-        for err_gen_layer_list in propagated_error_generators:
-            if err_gen_layer_list: #if not empty. Should be length one if not empty.
-                #Keep the error generator in the standard basis until after the end-of-circuit
-                #channel is constructed so we can reduce the overhead of changing basis.
-                exp_error_generators.append(_spl.expm(self.errorgen_layer_dict_to_errorgen(err_gen_layer_list[0], mx_basis='std')))
-        #Next take the product of these exponentiated error generators.
-        #These are in circuit ordering, so reverse for matmul.
-        exp_error_generators.reverse()
-        eoc_error_channel = _np.linalg.multi_dot(exp_error_generators)
-        eoc_error_channel = _bt.change_basis(eoc_error_channel, from_basis='std', to_basis='pp')
-
-        return eoc_error_channel
-
-
-    def propagate_errorgens(self, circuit, multi_gate_dict=None, include_spam=True):
+    def propagate_errorgens(self, circuit, include_spam=True, circuit_conversion_kwargs=None):
         """
         Propagate all of the error generators for each circuit layer to the end without
         any recombinations or averaging.
@@ -199,13 +187,15 @@ class ErrorGeneratorPropagator:
         circuit : `Circuit`
             Circuit to construct a set of post gate error generators for.
 
-        multi_gate_dict : dict, optional (default None)
-            An optional dictionary mapping between gate name aliases and their
-            standard name counterparts.
-
         include_spam : bool, optional (default True)
             If True then we include in the propagation the error generators associated
             with state preparation and measurement.
+
+        circuit_conversion_kwargs : dict, optional (default None)
+            A set of optional kwargs which will be passed into the `convert_to_stim_tableau_layers`
+            method of the `Circuit` class to control the behavior of the conversion. Please see the
+            documentation for this method for additional information on supported arguments and
+            values.
 
         Returns
         -------
@@ -217,7 +207,7 @@ class ErrorGeneratorPropagator:
 
         #start by converting the input circuit into a list of stim Tableaus with the 
         #first element dropped.
-        stim_layers = self.construct_stim_layers(circuit, multi_gate_dict, drop_first_layer = not include_spam)
+        stim_layers = self.construct_stim_layers(circuit, drop_first_layer = not include_spam, circuit_conversion_kwargs=circuit_conversion_kwargs)
         
         #We next want to construct a new set of Tableaus corresponding to the cumulative products
         #of each of the circuit layers with those that follow. These Tableaus correspond to the
@@ -237,8 +227,7 @@ class ErrorGeneratorPropagator:
         return propagated_errorgen_layers
         
 
-    def propagate_errorgens_bch(self, circuit, bch_order=1, multi_gate_dict=None,
-                                include_spam=True, truncation_threshold=1e-14):
+    def propagate_errorgens_bch(self, circuit, bch_order=1, include_spam=True, truncation_threshold=1e-14, mode='magnus', circuit_conversion_kwargs=None):
         """
         Propagate all of the error generators for each circuit to the end,
         performing approximation/recombination using the BCH approximation.
@@ -252,10 +241,6 @@ class ErrorGeneratorPropagator:
             Order of the BCH approximation to use. A maximum value of 4 is
             currently supported.
  
-        multi_gate_dict : dict, optional (default None)
-            An optional dictionary mapping between gate name aliases and their
-            standard name counterparts.
-        
         include_spam : bool, optional (default True)
             If True then we include in the propagation the error generators associated
             with state preparation and measurement.
@@ -263,58 +248,118 @@ class ErrorGeneratorPropagator:
         truncation_threshold : float, optional (default 1e-14)
             Threshold below which any error generators with magnitudes below this value
             are truncated during the BCH approximation.
+        
+        mode : str, optional ('magnus' default)
+            This specifies whether to apply the BCH approximation using a given order
+            of the Magnus expansion (default mode of 'magnus') or via repeated application of
+            the pairwise BCH of the given order 'pairwise'. 'magnus' mode supports up to 
+            the third-order Magnus expansion, while 'pairwise' supports up to fifth-order
+            in the BCH approximation.
+        
+        circuit_conversion_kwargs : dict, optional (default None)
+            A set of optional kwargs which will be passed into the `convert_to_stim_tableau_layers`
+            method of the `Circuit` class to control the behavior of the conversion. Please see the
+            documentation for this method for additional information on supported arguments and
+            values.
         """
 
-        propagated_errorgen_layers = self.propagate_errorgens(circuit, multi_gate_dict, 
-                                                                include_spam=include_spam)
+        propagated_errorgen_layers = self.propagate_errorgens(circuit, include_spam=include_spam, circuit_conversion_kwargs=circuit_conversion_kwargs)
         #if length one no need to do anything.
         if len(propagated_errorgen_layers)==1:
             return propagated_errorgen_layers[0]
         
-        #otherwise iterate through in reverse order (the propagated layers are
-        #in circuit ordering and not matrix multiplication ordering at the moment)
-        #and combine the terms pairwise
-        combined_err_layer = propagated_errorgen_layers[-1]
-        for i in range(len(propagated_errorgen_layers)-2, -1, -1):
-            combined_err_layer = _eprop.bch_approximation(combined_err_layer, propagated_errorgen_layers[i],
-                                                            bch_order=bch_order, truncation_threshold=truncation_threshold)
+        if mode == 'magnus':
+            assert bch_order<=3, 'The highest order Magnus expansion supported is currently third-order, requested {bch_order}.'
+            combined_err_layer = _eprop.magnus_expansion(propagated_errorgen_layers, magnus_order=bch_order, truncation_threshold=truncation_threshold)
+
+        elif mode == 'pairwise':
+            assert bch_order<=5, 'The highest order pairwise BCH expansion supported is currently fifth-order, requested {bch_order}.'
+            #iterate through in reverse order (the propagated layers are
+            #in circuit ordering and not matrix multiplication ordering at the moment)
+            #and combine the terms pairwise
+            combined_err_layer = propagated_errorgen_layers[-1]
+            for i in range(len(propagated_errorgen_layers)-2, -1, -1):
+                combined_err_layer = _eprop.bch_approximation(combined_err_layer, propagated_errorgen_layers[i],
+                                                                bch_order=bch_order, truncation_threshold=truncation_threshold)
+        else:
+            NotImplementedError(f'Unrecognized mode {mode}')
 
         return combined_err_layer
         
         
-    def propagate_errorgens_nonmarkovian(self, circuit, multi_gate_dict=None, include_spam=True):
+#    def propagate_errorgens_nonmarkovian(self, circuit, include_spam=True):
+#        """
+#        Propagate all of the error generators for each circuit layer to the end without
+#        any recombinations or averaging. This version also only track the overall modifier/weighting
+#        factor picked up by each of the final error generators over the course of the optimization,
+#        with the actual rates introduced in subsequent stages.
+#
+#        Parameters
+#        ----------
+#        circuit : `Circuit`
+#            Circuit to construct a set of post gate error generators for.
+#
+#        include_spam : bool, optional (default True)
+#            If True then we include in the propagation the error generators associated
+#            with state preparation and measurement.
+#
+#        Returns
+#        -------
+#        propagated_errorgen_layers : list of lists of dictionaries
+#            A list of lists of dictionaries, each corresponding to the result of propagating
+#            an error generator layer through to the end of the circuit.
+#
+#        """
+#        #start by converting the input circuit into a list of stim Tableaus with the 
+#        #first element dropped.
+#        stim_layers = self.construct_stim_layers(circuit, drop_first_layer = not include_spam)
+#        
+#        #We next want to construct a new set of Tableaus corresponding to the cumulative products
+#        #of each of the circuit layers with those that follow. These Tableaus correspond to the
+#        #clifford operations each error generator will be propagated through in order to reach the
+#        #end of the circuit.
+#        propagation_layers = self.construct_propagation_layers(stim_layers)
+#
+#        #Next we take the input circuit and construct a list of dictionaries, each corresponding
+#        #to the error generators for a particular gate layer.
+#        #TODO: Add proper inferencing for number of qubits:
+#        assert circuit.line_labels is not None and circuit.line_labels != ('*',)
+#        errorgen_layers = self.construct_errorgen_layers(circuit, len(circuit.line_labels), include_spam, 
+#                                                         include_circuit_time=True, fixed_rate=1)
+#        #propagate the errorgen_layers through the propagation_layers to get a list
+#        #of end of circuit error generator dictionaries.
+#        propagated_errorgen_layers = self._propagate_errorgen_layers(errorgen_layers, propagation_layers, include_spam)
+#
+#        #in the context of doing propagation for nonmarkovianity we won't be using BCH, so do a partial flattening
+#        #of this data structure.
+#        propagated_errorgen_layers = [errorgen_layers[0] for errorgen_layers in propagated_errorgen_layers]
+#
+#        return propagated_errorgen_layers
+
+
+    def errorgen_transform_map(self, circuit, include_spam=True, circuit_conversion_kwargs=None):
         """
-        Propagate all of the error generators for each circuit layer to the end without
-        any recombinations or averaging. This version also only track the overall modifier/weighting
-        factor picked up by each of the final error generators over the course of the optimization,
-        with the actual rates introduced in subsequent stages.
+        Construct a map giving the relationship between input error generators and their final
+        value following propagation through the circuit.  
 
         Parameters
         ----------
         circuit : `Circuit`
-            Circuit to construct a set of post gate error generators for.
-
-        multi_gate_dict : dict, optional (default None)
-            An optional dictionary mapping between gate name aliases and their
-            standard name counterparts.
+            Circuit to construct error generator transform map for.
 
         include_spam : bool, optional (default True)
             If True then we include in the propagation the error generators associated
             with state preparation and measurement.
 
-        Returns
-        -------
-        propagated_errorgen_layers : list of lists of dictionaries
-            A list of lists of dictionaries, each corresponding to the result of propagating
-            an error generator layer through to the end of the circuit.
-
+        circuit_conversion_kwargs : dict, optional (default None)
+            A set of optional kwargs which will be passed into the `convert_to_stim_tableau_layers`
+            method of the `Circuit` class to control the behavior of the conversion. Please see the
+            documentation for this method for additional information on supported arguments and
+            values.
         """
-
-        #TODO: Check for proper handling of empty circuit and length 1 circuits.
-
         #start by converting the input circuit into a list of stim Tableaus with the 
         #first element dropped.
-        stim_layers = self.construct_stim_layers(circuit, multi_gate_dict, drop_first_layer = not include_spam)
+        stim_layers = self.construct_stim_layers(circuit, drop_first_layer = not include_spam, circuit_conversion_kwargs=circuit_conversion_kwargs)
         
         #We next want to construct a new set of Tableaus corresponding to the cumulative products
         #of each of the circuit layers with those that follow. These Tableaus correspond to the
@@ -326,45 +371,112 @@ class ErrorGeneratorPropagator:
         #to the error generators for a particular gate layer.
         #TODO: Add proper inferencing for number of qubits:
         assert circuit.line_labels is not None and circuit.line_labels != ('*',)
-        errorgen_layers = self.construct_errorgen_layers(circuit, len(circuit.line_labels), include_spam, 
-                                                         include_circuit_time=True, fixed_rate=1)
-
+        errorgen_layers = self.construct_errorgen_layers(circuit, len(circuit.line_labels), include_spam, fixed_rate=1)
         #propagate the errorgen_layers through the propagation_layers to get a list
         #of end of circuit error generator dictionaries.
         propagated_errorgen_layers = self._propagate_errorgen_layers(errorgen_layers, propagation_layers, include_spam)
 
-        #in the context of doing propagation for nonmarkovianity we won't be using BCH, so do a partial flattening
-        #of this data structure.
-        propagated_errorgen_layers = [errorgen_layers[0] for errorgen_layers in propagated_errorgen_layers]
+        #there should be a one-to-one mapping between the index into propagated_errorgen_layers and the
+        #index of the circuit layer where the error generators in that propagated layer originated.
+        #Moreover, LocalStimErrorgenLabels remember who they were at instantiation.
+        input_output_errgen_map = dict()
+        for i, output_layer in enumerate(propagated_errorgen_layers):
+            for output_label, output_rate in output_layer.items():
+                original_label = _LSE.cast(output_label.initial_label)
+                input_output_errgen_map[(original_label, i)] = (output_label, output_rate)
 
-        return propagated_errorgen_layers
+        return input_output_errgen_map
+    
+    def errorgen_gate_contributors(self, errorgen, circuit, layer_idx, include_spam=True):
+        """
+        Walks through the gates in the specified circuit layer and query the parent 
+        model to figure out which gates could have given rise to a particular error generator
+        in a layer.
+        
+        Parameters
+        ----------
+        errorgen : `ElementaryErrorgenLabel`
+            Error generator layer to find instance of.
+            
+        circuit : `Circuit`
+            Circuit to identify potential gates in.
+        
+        layer_idx : int
+            Index of circuit layer.
+        
+        include_spam : bool, optional (default True)
+            If True include the spam circuit layers at the beginning and 
+            end of the circuit.
+        
+        Returns
+        -------
+        label_list_for_errorgen : list of `Label`
+            A list of gate labels contained within this circuit layer that could have
+            contributed this error generator.   
+        """
+        
+        if not isinstance(self.model, _OpModel):
+            raise ValueError('This method does not work for non-OpModel models.')
+        
+        if include_spam:
+            circuit = self.model.complete_circuit(circuit)
+            
+        assert layer_idx < len(circuit), f'layer_idx {layer_idx} is out of range for circuit with length {len(circuit)}'
+        
+        if isinstance(errorgen, _GlobalElementaryErrorgenLabel):
+            errorgen = _LocalElementaryErrorgenLabel.cast(errorgen, sslbls = self.model.state_space.qubit_labels)
+        elif isinstance(errorgen, _LSE):
+            errorgen = errorgen.to_local_eel()
+        else:
+            assert isinstance(errorgen, _LocalElementaryErrorgenLabel), f'Unsupported `errorgen` type {type(errorgen)}.'
+        
+        circuit_layer = circuit.layer(layer_idx)
 
+        if isinstance(self.model, _ExplicitOpModel):
+            #check if this error generator is in the error generator coefficient dictionary for this layer, and if not return the empty dictionary.
+            layer_errorgen_coeff_dict = self.model.circuit_layer_operator(circuit_layer).errorgen_coefficients(label_type='local')
+            if errorgen in layer_errorgen_coeff_dict:
+                label_list_for_errorgen = [circuit_layer]
+            else:
+                label_list_for_errorgen = []
+            
+        elif isinstance(self.model, _ImplicitOpModel):
+            #Loop through each label in this layer and ask for the circuit layer operator
+            #for each. Then query this for the error generator coefficients associated
+            #with that layer.
+            #Note: This may not be 100% robust, I'm assuming there aren't any exotic layer rules
+            #that would, e.g., add in totally new error generators when certain pairs of gates appear in a layer.
+            label_list_for_errorgen = []
+            for lbl in circuit_layer:
+                circuit_layer_operator = self.model.circuit_layer_operator(lbl)
+                label_errorgen_coeff_dict = circuit_layer_operator.errorgen_coefficients(label_type='local')
+                if errorgen in label_errorgen_coeff_dict:
+                    label_list_for_errorgen.append(lbl)    
+        else:
+            raise ValueError(f'Type of model {type(self.model)=} is not supported with this method.')
+        
+        return label_list_for_errorgen
 
-
-    def propagate_errorgens_analytic(self, circuit):
-        pass
-
-    def construct_stim_layers(self, circuit, multi_gate_dict=None, drop_first_layer=True):
+    def construct_stim_layers(self, circuit, drop_first_layer=True, circuit_conversion_kwargs=None):
         """
         Converts a `Circuit` to a list of stim Tableau objects corresponding to each
         gate layer.
-
-        TODO: Move to a tools module? Locality of behavior considerations.
 
         Parameters
         ----------
         circuit : `Circuit`
             Circuit to convert.
-        multi_gate_dict : dict, optional (default None)
-            If specified this augments the standard dictionary for conversion between
-            pygsti gate labels and stim (found in `pygsti.tools.internalgates.standard_gatenames_stim_conversions`)
-            with additional entries corresponding to aliases for the entries of the standard dictionary.
-            This is presently used in the context of non-Markovian applications where tracking
-            circuit time for gate labels is required.
+        
         drop_first_layer : bool, optional (default True)
             If True the first Tableau for the first gate layer is dropped in the returned output.
             This default setting is what is primarily used in the context of error generator 
             propagation.
+        
+        circuit_conversion_kwargs : dict, optional (default None)
+            A set of optional kwargs which will be passed into the `convert_to_stim_tableau_layers`
+            method of the `Circuit` class to control the behavior of the conversion. Please see the
+            documentation for this method for additional information on supported arguments and
+            values.
 
         Returns
         -------
@@ -373,11 +485,12 @@ class ErrorGeneratorPropagator:
             for each layer of the input pygsti `Circuit`, with the first layer optionally dropped.
         """
 
-        stim_dict=standard_gatenames_stim_conversions()
-        if multi_gate_dict is not None:
-            for key in multi_gate_dict:
-                stim_dict[key]=stim_dict[multi_gate_dict[key]]
-        stim_layers=circuit.convert_to_stim_tableau_layers(gate_name_conversions=stim_dict)
+        if circuit_conversion_kwargs is None:
+            circuit_conversion_kwargs = {}
+        if 'gate_name_conversions' not in circuit_conversion_kwargs:
+            circuit_conversion_kwargs['gate_name_conversions'] = standard_gatenames_stim_conversions()
+
+        stim_layers=circuit.convert_to_stim_tableau_layers(**circuit_conversion_kwargs)
         if drop_first_layer and len(stim_layers)>0:
             stim_layers = stim_layers[1:]
         return stim_layers
@@ -488,7 +601,7 @@ class ErrorGeneratorPropagator:
             for errgen_coeff_lbl, rate in layer_errorgen_coeff_dict.items(): #for an error in the accompanying error dictionary 
                 #only track this error generator if its rate is not exactly zero. #TODO: Add more flexible initial truncation logic.
                 if rate !=0 or fixed_rate is not None:
-                    #if isinstance(errgen_coeff_lbl, _LocalElementaryErrogenLabel):
+                    #if isinstance(errgen_coeff_lbl, _LocalElementaryErrorgenLabel):
                     initial_label = errgen_coeff_lbl
                     #else:
                     #    initial_label = None
@@ -561,7 +674,7 @@ class ErrorGeneratorPropagator:
         return fully_propagated_layers
     
     
-    def errorgen_layer_dict_to_errorgen(self, errorgen_layer, mx_basis='pp', return_dense=False):
+    def errorgen_layer_dict_to_errorgen(self, errorgen_layer, mx_basis='pp'):
         """
         Helper method for converting from an error generator dictionary in the format
         utilized in the `errorgenpropagation` module into a numpy array.
@@ -615,111 +728,28 @@ class ErrorGeneratorPropagator:
         return errorgen
 
 
-def ErrorPropagatorAnalytic(circ,errorModel,ErrorLayerDef=False,startingErrors=None):
-    stim_layers=circ.convert_to_stim_tableau_layers()
-    
-    if startingErrors is None:
-        stim_layers.pop(0)
-
-    propagation_layers=[]
-    while len(stim_layers)>0:
-        top_layer=stim_layers.pop(0)
-        for layer in stim_layers:
-            top_layer = layer*top_layer
-        propagation_layers.append(top_layer)
-    
-    if not ErrorLayerDef:
-        errorLayers=buildErrorlayers(circ,errorModel,len(circ.line_labels))
-    else:
-        errorLayers=[[_copy.deepcopy(eg) for eg in errorModel] for i in range(circ.depth)]
-    
-    if not startingErrors is None:
-        errorLayers.insert(0,startingErrors)
-    
-    fully_propagated_layers=[]
-    for (idx,layer) in enumerate(errorLayers):
-        new_error_dict=dict()
-        if idx <len(errorLayers)-1:
-
-            for error in layer:    
-                propagated_error_gen=error.propagate_error_gen_tableau(propagation_layers[idx],1.)
-                new_error_dict[error]=propagated_error_gen   
-        else:
-            for error in layer:
-                new_error_dict[error]=(error,1)
-        fully_propagated_layers.append(new_error_dict)
-
-    return fully_propagated_layers
-    
-def InverseErrorMap(errorMap):
-    InvertedMap=dict()
-    for layer_no,layer in enumerate(errorMap):
-        for key in layer:
-            if layer[key][0] in InvertedMap:
-                errgen=_copy.copy(key)
-                errgen.label=layer_no
-                InvertedMap[layer[key][0]].append(tuple([errgen,layer[key][1]**(-1)]))
-            else:
-                errgen=_copy.copy(key)
-                errgen.label=layer_no
-                InvertedMap[layer[key][0]]=[tuple([errgen,layer[key][1]**(-1)])]
-    return InvertedMap
-
-def InvertedNumericMap(errorMap,errorValues):
-    numeric_map=dict()
-    for layer_no,layer in enumerate(errorMap):
-        for key in layer:
-            if layer[key][0] in numeric_map and key in errorValues[layer_no]:
-                numeric_map[layer[key][0]]+=errorValues[layer_no][key]*layer[key][1]**(-1)
-            elif key in errorValues[layer_no]:
-                numeric_map[layer[key][0]]=errorValues[layer_no][key]*layer[key][1]**(-1)
-            else:
-                continue
-    return numeric_map
-
-
 # There's a factor of a half missing in here. 
-def nm_propagators(corr, Elist,qubits):
-    Kms = []
-    for idm in range(len(Elist)):
-        Am=zeros([4**qubits,4**qubits],dtype=complex128)
-        for key in Elist[idm][0]:
-            Am += key.toWeightedErrorBasisMatrix()
-            # This assumes that Elist is in reverse chronological order
-        partials = []
-        for idn in range(idm, len(Elist)):
-            An=zeros([4**qubits,4**qubits],dtype=complex128)
-            for key2 in Elist[idn][0]:
-                An = key2.toWeightedErrorBasisMatrix()
-            partials += [corr[idm,idn] * Am @ An]
-        partials[0] = partials[0]/2
-        Kms += [sum(partials,0)]
-    return Kms
+#def nm_propagators(corr, Elist,qubits):
+#    Kms = []
+#    for idm in range(len(Elist)):
+#        Am=zeros([4**qubits,4**qubits],dtype=complex128)
+#        for key in Elist[idm][0]:
+#            Am += key.toWeightedErrorBasisMatrix()
+#            # This assumes that Elist is in reverse chronological order
+#        partials = []
+#        for idn in range(idm, len(Elist)):
+#            An=zeros([4**qubits,4**qubits],dtype=complex128)
+#            for key2 in Elist[idn][0]:
+#                An = key2.toWeightedErrorBasisMatrix()
+#            partials += [corr[idm,idn] * Am @ An]
+#        partials[0] = partials[0]/2
+#        Kms += [sum(partials,0)]
+#    return Kms
 
-def averaged_evolution(corr, Elist,qubits):
-    Kms = nm_propagators(corr, Elist,qubits)
-    return multi_dot([expm(Km) for Km in Kms])
-
-def error_stitcher(first_error,second_error):
-    link_dict=second_error.pop(0)
-    new_errors=[]
-    for layer in first_error:
-        new_layer=dict()
-        for key in layer:
-            if layer[key][0] in link_dict:
-                new_error=link_dict[layer[key][0]]
-                new_layer[key]=(new_error[0],new_error[1]*layer[key][1])
-            elif layer[key][0].errorgen_type =='Z':
-                new_layer[key]=layer[key]
-            else:
-                continue
-            
-        new_errors.append(new_layer)
-    for layer in second_error:
-        new_errors.append(layer)
-    return new_errors
-
-        
+#def averaged_evolution(corr, Elist,qubits):
+#    Kms = nm_propagators(corr, Elist,qubits)
+#    return multi_dot([expm(Km) for Km in Kms])
+       
 
 def _batched(iterable, n):
     """

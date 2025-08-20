@@ -2,7 +2,7 @@
 Tools for manipulating classical probability distributions.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -71,28 +71,3 @@ def classical_fidelity(p, q):
     #    sqrt_fidelity += _np.sqrt(x * y)
 
     return _np.sum([_np.sqrt(x * q.get(event, 0.)) for (event, x) in p.items()]) ** 2
-
-    #return root_fidelity ** 2
-
-
-# def Hoyer_sparsity_measure(p, n):
-#     """
-#     Computes a measure of the sparsity ("spikyness") of a probability distribution (or a
-#     general real vector).
-
-#     Parameters
-#     ----------
-#     p : dict
-#         The distribution
-
-#     n : the number of possible events (zero probability events do not need to be included in `p`)
-
-#     Returns
-#     -------
-#     float
-#     """
-#     plist = _np.array(list(p.values()))
-#     twonorm = _np.sqrt(_np.sum(plist**2))
-#     onenorm = _np.sum(_np.abs(plist))
-#     max_onenorm_over_twonorm = _np.sqrt(n)
-#     return (max_onenorm_over_twonorm - onenorm/twonorm) / (max_onenorm_over_twonorm - 1)

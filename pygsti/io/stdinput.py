@@ -2,7 +2,7 @@
 Text-parsing classes and functions to read input files.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -525,7 +525,7 @@ class StdInputParser(object):
                         looking_for = "circuit_line"
                         if ignore_zero_count_lines is False and last_circuit is not None:
                             dataset.add_count_list(last_circuit, [], [], aux=last_commentDict,
-                                                   record_zero_counts=record_zero_counts, update_ol=False, unsafe=True)
+                                                   record_zero_counts=record_zero_counts, update_ol=False)
 
                 if looking_for == "circuit_line":
                     if len(dataline) == 0: continue

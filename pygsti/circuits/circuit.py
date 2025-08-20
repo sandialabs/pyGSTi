@@ -2,14 +2,14 @@
 Defines the Circuit class
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
-
+from __future__ import annotations
 import collections as _collections
 import itertools as _itertools
 import warnings as _warnings
@@ -21,6 +21,10 @@ from pygsti.baseobjs import outcomelabeldict as _ld, _compatibility as _compat
 from pygsti.tools import internalgates as _itgs
 from pygsti.tools import slicetools as _slct
 from pygsti.tools.legacytools import deprecate as _deprecate_fn
+
+from typing import Union, Optional, TYPE_CHECKING
+if TYPE_CHECKING:
+    import stim
 
 #Externally, we'd like to do thinks like:
 # c = Circuit( LabelList )
@@ -549,6 +553,24 @@ class Circuit(object):
 
         return self
     
+    #pickle management functions
+    def __getstate__(self):
+        state_dict = self.__dict__
+        #if state_dict.get('_hash', None) is not None:
+        #    del state_dict['_hash'] #don't store the hash, recompute at unpickling time
+        return state_dict
+
+    def __setstate__(self, state_dict):
+        for k, v in state_dict.items():
+            self.__dict__[k] = v
+        if self.__dict__['_static']:
+            #reinitialize the hash
+            if self.__dict__.get('_hashable_tup', None) is not None:
+                self._hash = hash(self._hashable_tup)
+            else: #legacy support
+                self._hashable_tup = self.tup
+                self._hash = hash(self._hashable_tup)
+
 
     def to_label(self, nreps=1):
         """
@@ -636,7 +658,6 @@ class Circuit(object):
         if self._static:
             return self._labels
         else:
-            #return tuple([to_label(layer_lbl) for layer_lbl in self._labels])
             return tuple([layer_lbl if isinstance(layer_lbl, _Label) 
                           else _Label(layer_lbl) for layer_lbl in self._labels])
     @property
@@ -1095,13 +1116,12 @@ class Circuit(object):
     def _proc_key_arg(self, key):
         """ Pre-process the key argument used by many methods """
         if isinstance(key, tuple):
-            if len(key) != 2: return IndexError("Index must be of the form <layerIndex>,<lineIndex>")
-            layers = key[0]
-            lines = key[1]
+            if len(key) != 2: 
+                return IndexError("Index must be of the form <layerIndex>,<lineIndex>")
+            else:
+                return key[0], key[1]
         else:
-            layers = key
-            lines = None
-        return layers, lines
+            return key, None
 
     def _layer_components(self, ilayer):
         """ Get the components of the `ilayer`-th layer as a list/tuple. """
@@ -1191,22 +1211,41 @@ class Circuit(object):
             `layers` is a single integer and as a `Circuit` otherwise.
             Note: if you want a `Circuit` when only selecting one layer,
             set `layers` to a slice or tuple containing just a single index.
+            Note that the returned circuit doesn't retain any original
+            metadata, such as the compilable layer indices or occurence id.
         """
         nonint_layers = not isinstance(layers, int)
 
         #Shortcut for common case when lines == None and when we're only taking a layer slice/index
-        if lines is None:
-            assert(layers is not None)
-            if nonint_layers is False: return self.layertup[layers]
-            if isinstance(layers, slice) and strict is True:  # if strict=False, then need to recompute line labels
-                return Circuit._fastinit(self._labels[layers], self._line_labels, not self._static)
+        if lines is None and layers is not None:
+            if self._static:
+                if not nonint_layers:
+                    return self._labels[layers]
+                if isinstance(layers, slice) and strict is True:  # if strict=False, then need to recompute line labels
+                    #can speed this up a measurably by manually computing the new hashable tuple value and hash
+                    if not self._line_labels in (('*',), ()):
+                        new_hashable_tup = self._labels[layers] + ('@',) + self._line_labels
+                    else:
+                        new_hashable_tup = self._labels[layers]
+                    ret = Circuit.__new__(Circuit)
+                    return ret._copy_init(self._labels[layers], self._line_labels, not self._static, hashable_tup= new_hashable_tup, precomp_hash=hash(new_hashable_tup))
+            else:
+                if not nonint_layers:
+                    return self.layertup[layers]
+                if isinstance(layers, slice) and strict is True:  # if strict=False, then need to recompute line labels
+                    return Circuit._fastinit(self._labels[layers], self._line_labels, not self._static)
+        #otherwise assert both are not None:
+
 
         layers = self._proc_layers_arg(layers)
         lines = self._proc_lines_arg(lines)
         if len(layers) == 0 or len(lines) == 0:
-            return Circuit._fastinit(() if self._static else [],
-                                     tuple(lines) if self._static else lines,
-                                     not self._static) if nonint_layers else None  # zero-area region
+            if self._static:
+                return Circuit._fastinit((), tuple(lines), False)  # zero-area region
+            else:
+                return Circuit._fastinit(() if self._static else [],
+                                        tuple(lines) if self._static else lines,
+                                        not self._static)  # zero-area region
 
         ret = []
         if self._static:
@@ -2632,7 +2671,6 @@ class Circuit(object):
                 layers = layers[:i] + c._labels + layers[i + 1:]
         return Circuit._fastinit(layers, self._line_labels, editable=False, occurrence=self._occurrence_id)
 
-
     def change_gate_library(self, compilation, allowed_filter=None, allow_unchanged_gates=False, depth_compression=True,
                             one_q_gate_relations=None):
         """
@@ -3521,7 +3559,6 @@ class Circuit(object):
 
         return sum([cnt(layer_lbl) for layer_lbl in self._labels])
     
-
     def _togrid(self, identity_name):
         """ return a list-of-lists rep? """
         d = self.num_layers
@@ -3729,7 +3766,9 @@ class Circuit(object):
         f.close()
 
 
-    def convert_to_stim_tableau_layers(self, gate_name_conversions=None, num_qubits=None):
+    def convert_to_stim_tableau_layers(self, gate_name_conversions: Optional[dict[str, stim.Tableau]] = None, 
+                                       num_qubits: Optional[int] = None, 
+                                       qubit_label_conversions: Optional[dict[Union[str, int], int]] = None) -> list[stim.Tableau]:
         """
         Converts this circuit to a list of stim tableau layers
 
@@ -3739,6 +3778,41 @@ class Circuit(object):
             A map from pygsti gatenames to standard stim tableaus. 
             If None a standard set of gate names is used from 
             `pygsti.tools.internalgates`
+
+        num_qubits : int, optional (default None)
+            Number of qubits which should be included in the each Tableau.
+            If None this value will be attempted to be inferred from the
+            Circuit's line_labels. 
+
+        qubit_label_conversions : dict, optional (default None)
+            A map from the circuit's qubit labels into integers in the range 0 to N-1,
+            where N is the number of qubits, where the integer indices indicate
+            which qubit in the stim Tableau to map a given circuit operation into.
+            If not specified an attempt will be made to infer this mapping based on the
+            circuit's qubit labels and an exception will be made if this inference is not possible.
+
+            Note: in the following line_labels = self.line_labels.
+
+            Inference is supported for line labels with the following format.
+
+            - Qubit labels that are either integers, or string representations of integers, prefixed by
+              the character 'Q' or 'q', that are monotonically increasing.
+
+            If num_qubits is not specified, then these qubit labels will be mapped into the range [0,N-1] based
+            on their index.
+
+            If num_qubits is specified then there are different subcases:
+                If num_qubits == len(line_labels) then these qubit labels will be mapped into the range [0,N-1] based
+                on their index.
+                If num_qubit > len(line_labels) we have two possibilities:
+                    1. If max(line_labels) <= num_qubits then the line_labels are mapped directly into their value
+                       in the range [0, N-1].
+                    2. If max(line_labels) > num_qubits then the line_labels are mapped into [0,N-1] using their index.
+                Note if num_qubits<len(line_labels) then an exception is raised.
+               
+            If the default conversion behavior doesn't suit your needs, or doesn't support your label format then
+            a manual dictionary should be specified.
+
 
         Returns
         -------
@@ -3750,12 +3824,46 @@ class Circuit(object):
             raise ImportError("Stim is required for this operation, and it does not appear to be installed.")
         if gate_name_conversions is None:
             gate_name_conversions = _itgs.standard_gatenames_stim_conversions()
+        line_labels = self._line_labels
 
         if num_qubits is None:
-            line_labels = self._line_labels
             assert line_labels != ('*',), "Cannot convert circuits with placeholder line label to stim Tableau unless number of qubits is specified."
             num_qubits=len(line_labels)
-        
+
+        if qubit_label_conversions is None: #attempt to infer this.
+            assert len(line_labels)<=num_qubits, 'More line labels specified than qubits, cannot infer qubit label conversion mapping.'
+
+            #case 1: qubit labels are monotonically increasing integers and span a range of length num_qubits.
+            if all([isinstance(lbl, int) for lbl in line_labels]) and all([(line_labels[i+1]-line_labels[i])>0 for i in range(len(line_labels)-1)]):
+                if len(line_labels) == num_qubits or max(line_labels)>num_qubits:
+                    qubit_label_conversions = {lbl:i for i, lbl in enumerate(line_labels)}
+                elif max(line_labels)<=num_qubits:
+                    qubit_label_conversions = {lbl:lbl for lbl in line_labels}                
+                
+            #Case 2: qubit labels are strings of the form 'Qi' or 'qi' where the i's are string representations of integers otherwise matching the constraints of
+            #case 1.          
+            elif all([isinstance(lbl,str) for lbl in line_labels]):
+                if all([lbl[0]=='Q' or lbl[0]=='q' for lbl in line_labels]) and all([lbl[1:].isnumeric() for lbl in line_labels]):
+                    int_line_labels = [int(lbl[1:]) for lbl in line_labels]
+                    if all([(int_line_labels[i+1] - int_line_labels[i])>0 for i in range(len(line_labels)-1)]):
+                        if len(int_line_labels) == num_qubits or max(int_line_labels)>num_qubits:
+                            qubit_label_conversions = {lbl:i for i, lbl in enumerate(line_labels)}
+                        elif max(int_line_labels)<=num_qubits:
+                            qubit_label_conversions = {str(lbl):lbl for lbl in int_line_labels}                        
+            else:
+                raise ValueError(f'Unsupported line_label type {type(line_labels[0])}, only str or int supported.')
+
+            if qubit_label_conversions is None: #then no automatic conversion was inferred.
+                msg = 'Unable to infer a mapping from line labels of this circuit into integers in the range [0,N-1] '\
+                      +'as required for conversion to a stim.Tableau object. Please see the docstring for this method for the '\
+                      +'supported automatic inferencing. Please manually specify a qubit_label_conversions dictionary.'
+                raise RuntimeError(msg)
+        else: #validate qubit_label_conversion dictionary has the keys we need.
+            msg = 'qubit_label_conversions does not contain keys for all of the line_labels in this circuit.'
+            assert all([lbl in qubit_label_conversions for lbl in line_labels]), msg
+            msg1 = 'All qubit_label_conversions values should be ints in the range [0, num_qubits-1]'
+            assert all([isinstance(val,int) and (0 <= val <=num_qubits-1) for val in qubit_label_conversions.values()]), msg1
+
         stim_layers=[]
 
         if self._static:
@@ -3767,11 +3875,13 @@ class Circuit(object):
             stim_layer = empty_tableau.copy()
             for sub_lbl in layer:
                 temp = gate_name_conversions[sub_lbl.name]    
-                stim_layer.append(temp, sub_lbl.qubits)
+                stim_layer.append(temp, [qubit_label_conversions[qubit_lbl] for qubit_lbl in sub_lbl.qubits])
             stim_layers.append(stim_layer)
         return stim_layers
     
-    def convert_to_stim_tableau(self, gate_name_conversions=None):
+    def convert_to_stim_tableau(self, gate_name_conversions: Optional[dict[str, stim.Tableau]] = None, 
+                                       num_qubits: Optional[int] = None, 
+                                       qubit_label_conversions: Optional[dict[Union[str, int], int]] = None) -> stim.Tableau:
         """
         Converts this circuit to a stim tableau
 
@@ -3781,12 +3891,46 @@ class Circuit(object):
             A map from pygsti gatenames to standard stim tableaus. 
             If None a standard set of gate names is used from 
             `pygsti.tools.internalgates`
+        
+        num_qubits : int, optional (default None)
+            Number of qubits which should be included in the overall Tableau.
+            If None this value will be attempted to be inferred from the
+            Circuit's line_labels. 
+
+        qubit_label_conversions : dict, optional (default None)    
+            A map from the circuit's qubit labels into integers in the range 0 to N-1,
+            where N is the number of qubits, where the integer indices indicate
+            which qubit in the stim Tableau to map a given circuit operation into.
+            If not specified an attempt will be made to infer this mapping based on the
+            circuit's qubit labels and an exception will be made if this inference is not possible.
+
+            Note: in the following line_labels = self.line_labels.
+
+            Inference is supported for line labels with the following format.
+
+            - Qubit labels that are either integers, or string representations of integers, prefixed by
+              the character 'Q' or 'q', that are monotonically increasing.
+
+            If num_qubits is not specified, then these qubit labels will be mapped into the range [0,N-1] based
+            on their index.
+
+            If num_qubits is specified then there are different subcases:
+                If num_qubits == len(line_labels) then these qubit labels will be mapped into the range [0,N-1] based
+                on their index.
+                If num_qubit > len(line_labels) we have two possibilities:
+                    1. If max(line_labels) <= num_qubits then the line_labels are mapped directly into their value
+                       in the range [0, N-1].
+                    2. If max(line_labels) > num_qubits then the line_labels are mapped into [0,N-1] using their index.
+                Note if num_qubits<len(line_labels) then an exception is raised.
+               
+            If the default conversion behavior doesn't suit your needs, or doesn't support your label format then
+            a manual dictionary should be specified.
 
         Returns
         -------
         A single stim.Tableau representing the entire circuit.
         """
-        layers=self.convert_to_stim_tableau_layers(gate_name_conversions)
+        layers=self.convert_to_stim_tableau_layers(gate_name_conversions, num_qubits, qubit_label_conversions)
         if layers:        
             tableau=layers[0]
             for layer in layers[1:]:
@@ -4211,7 +4355,7 @@ class Circuit(object):
                             gatename_conversion=None, qubit_conversion=None,
                             block_between_layers=True,
                             block_between_gates=False,
-                            include_delay_on_idle=True,
+                            include_delay_on_idle=False,
                             gateargs_map=None):  # TODO
         """
         Converts this circuit to an openqasm string.
@@ -4256,9 +4400,9 @@ class Circuit(object):
         include_delay_on_idle: bool, optional
             When `True`, includes a delay operation on implicit idles in each layer, as per
             Qiskit's OpenQASM 2.0 convention after the deprecation of the id operation.
-            Defaults to True, which is commensurate with legacy usage of this function.
-            However, this can now be set to False to avoid this behaviour if generating
+            Defaults to False, to avoid this behaviour if generating
             actually valid OpenQASM (with no opaque delay instruction) is desired.
+            Can be set to True, which is commensurate with legacy usage of this function.
 
         gateargs_map : dict, optional
             If not None, a dict that maps strings (representing pyGSTi standard gate names) to
@@ -4312,6 +4456,9 @@ class Circuit(object):
             # Include a delay instruction
             openqasm += 'opaque delay(t) q;\n\n'
 
+        # Add a template for ECR commands that we will replace/remove later
+        openqasm += "ECRPLACEHOLDER"
+
         openqasm += 'qreg q[{0}];\n'.format(str(num_qubits))
         # openqasm += 'creg cr[{0}];\n'.format(str(num_qubits))
         openqasm += 'creg cr[{0}];\n'.format(str(num_qubits + num_IMs))
@@ -4339,7 +4486,7 @@ class Circuit(object):
                     if openqasmlist_for_gate is None:
                         # Try to look up the operation in mapping dict instead
                         openqasmfn_for_gate = gateargs_map.get(gate.name, None)
-                        assert openqasmfn_for_gate is not None, "Could not look up {} as qasm list or func" % gate.name
+                        assert openqasmfn_for_gate is not None, f"Could not look up {gate.name} as qasm list or func"
                         openqasmlist_for_gate = openqasmfn_for_gate(gate.args)
 
                     openqasm_for_gate = ''
@@ -4392,6 +4539,7 @@ class Circuit(object):
                         # Delay 0 works because of the barrier
                         # In OpenQASM3, this should probably be a stretch instead
                         openqasm += 'delay(0)' + ' q[' + str(qubit_conversion[q]) + '];\n'
+                        pass
 
             # Add in a barrier after every circuit layer if block_between_layers==True.
             # Including barriers is critical for QCVV testing, circuits should usually
@@ -4411,6 +4559,13 @@ class Circuit(object):
             # openqasm += "measure q[{0}] -> cr[{1}];\n".format(str(qubit_conversion[q]), str(qubit_conversion[q]))
             openqasm += "measure q[{0}] -> cr[{1}];\n".format(str(qubit_conversion[q]),
                                                               str(num_IMs_used + qubit_conversion[q]))
+        
+        # Replace ECR placeholder
+        ecr_replace_str = ""
+        if 'ecr' in openqasm:
+            ecr_replace_str = "gate rzx(param0) q0,q1 { h q1; cx q0,q1; rz(param0) q1; cx q0,q1; h q1; }\n"
+            ecr_replace_str += "gate ecr q0,q1 { rzx(pi/4) q0,q1; x q0; rzx(-pi/4) q0,q1; }\n\n"
+        openqasm = openqasm.replace("ECRPLACEHOLDER", ecr_replace_str)
 
         return openqasm
     
@@ -4482,107 +4637,6 @@ class Circuit(object):
                                   else _Label(layer_lbl) for layer_lbl in self._labels])
         self._hashable_tup = self.tup
         self._hash = hash(self._hashable_tup)
-
-    def expand_instruments_and_separate_povm(self, model, observed_outcomes=None):
-        """
-        Creates a dictionary of :class:`SeparatePOVMCircuit` objects from expanding the instruments of this circuit.
-
-        Each key of the returned dictionary replaces the instruments in this circuit with a selection
-        of their members.  (The size of the resulting dictionary is the product of the sizes of
-        each instrument appearing in this circuit when `observed_outcomes is None`).  Keys are stored
-        as :class:`SeparatePOVMCircuit` objects so it's easy to keep track of which POVM outcomes (effects)
-        correspond to observed data.  This function is, for the most part, used internally to process
-        a circuit before computing its outcome probabilities.
-
-        Parameters
-        ----------
-        model : Model
-            The model used to provide necessary details regarding the expansion, including:
-
-            - default SPAM layers
-            - definitions of instrument-containing layers
-            - expansions of individual instruments and POVMs
-
-        Returns
-        -------
-        OrderedDict
-            A dict whose keys are :class:`SeparatePOVMCircuit` objects and whose
-            values are tuples of the outcome labels corresponding to this circuit,
-            one per POVM effect held in the key.
-        """
-        complete_circuit = model.complete_circuit(self)
-        expanded_circuit_outcomes = _collections.OrderedDict()
-        povm_lbl = complete_circuit[-1]  # "complete" circuits always end with a POVM label
-        circuit_without_povm = complete_circuit[0:len(complete_circuit) - 1]
-
-        def create_tree(lst):
-            subs = _collections.OrderedDict()
-            for el in lst:
-                if len(el) > 0:
-                    if el[0] not in subs: subs[el[0]] = []
-                    subs[el[0]].append(el[1:])
-            return _collections.OrderedDict([(k, create_tree(sub_lst)) for k, sub_lst in subs.items()])
-
-        def add_expanded_circuit_outcomes(circuit, running_outcomes, ootree, start):
-            """
-            """
-            cir = circuit if start == 0 else circuit[start:]  # for performance, avoid uneeded slicing
-            for k, layer_label in enumerate(cir, start=start):
-                components = layer_label.components
-                #instrument_inds = _np.nonzero([model._is_primitive_instrument_layer_lbl(component)
-                #                               for component in components])[0]  # SLOWER than statement below
-                instrument_inds = _np.array([i for i, component in enumerate(components)
-                                             if model._is_primitive_instrument_layer_lbl(component)])
-                if instrument_inds.size > 0:
-                    # This layer contains at least one instrument => recurse with instrument(s) replaced with
-                    #  all combinations of their members.
-                    component_lookup = {i: comp for i, comp in enumerate(components)}
-                    instrument_members = [model._member_labels_for_instrument(components[i])
-                                          for i in instrument_inds]  # also components of outcome labels
-                    for selected_instrmt_members in _itertools.product(*instrument_members):
-                        expanded_layer_lbl = component_lookup.copy()
-                        expanded_layer_lbl.update({i: components[i] + "_" + sel
-                                                   for i, sel in zip(instrument_inds, selected_instrmt_members)})
-                        expanded_layer_lbl = _Label([expanded_layer_lbl[i] for i in range(len(components))])
-
-                        if ootree is not None:
-                            new_ootree = ootree
-                            for sel in selected_instrmt_members:
-                                new_ootree = new_ootree.get(sel, {})
-                            if len(new_ootree) == 0: continue  # no observed outcomes along this outcome-tree path
-                        else:
-                            new_ootree = None
-
-                        add_expanded_circuit_outcomes(circuit[0:k] + Circuit((expanded_layer_lbl,)) + circuit[k + 1:],
-                                                      running_outcomes + selected_instrmt_members, new_ootree, k + 1)
-                    break
-
-            else:  # no more instruments to process: `cir` contains no instruments => add an expanded circuit
-                assert(circuit not in expanded_circuit_outcomes)  # shouldn't be possible to generate duplicates...
-                elabels = model._effect_labels_for_povm(povm_lbl) if (observed_outcomes is None) \
-                    else tuple(ootree.keys())
-                outcomes = tuple((running_outcomes + (elabel,) for elabel in elabels))
-                expanded_circuit_outcomes[SeparatePOVMCircuit(circuit, povm_lbl, elabels)] = outcomes
-
-        ootree = create_tree(observed_outcomes) if observed_outcomes is not None else None  # tree of observed outcomes
-        # e.g. [('0','00'), ('0','01'), ('1','10')] ==> {'0': {'00': {}, '01': {}}, '1': {'10': {}}}
-
-        if model._has_instruments():
-            add_expanded_circuit_outcomes(circuit_without_povm, (), ootree, start=0)
-        else:
-            # It may be helpful to cache the set of elabels for a POVM (maybe within the model?) because
-            # currently the call to _effect_labels_for_povm may be a bottleneck.  It's needed, even when we have
-            # observed outcomes, because there may be some observed outcomes that aren't modeled (e.g. leakage states)
-            if observed_outcomes is None:
-                elabels = model._effect_labels_for_povm(povm_lbl)
-            else:
-                possible_lbls = set(model._effect_labels_for_povm(povm_lbl))
-                elabels = tuple([oo for oo in ootree.keys() if oo in possible_lbls])
-            outcomes = tuple(((elabel,) for elabel in elabels))
-            expanded_circuit_outcomes[SeparatePOVMCircuit(circuit_without_povm, povm_lbl, elabels)] = outcomes
-
-        return expanded_circuit_outcomes
-
 
 class CompressedCircuit(object):
     """

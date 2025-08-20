@@ -2,7 +2,7 @@
 The POVMEffect class and supporting functionality.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -170,11 +170,9 @@ class POVMEffect(_modelmember.ModelMember):
         float
         """
         vec = self.to_dense()
-        if transform is None:
-            return _ot.residuals(vec, other_spam_vec.to_dense())
-        else:
-            return _ot.residuals(_np.dot(_np.transpose(transform),
-                                         vec), other_spam_vec.to_dense())
+        if transform is not None:
+            vec = transform.T @ vec
+        return (vec - other_spam_vec.to_dense()).ravel()
 
     def transform_inplace(self, s):
         """

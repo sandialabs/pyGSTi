@@ -2,7 +2,7 @@
 The FullTPOp class and supporting functionality.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -10,21 +10,33 @@ The FullTPOp class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import numpy as _np
+from __future__ import annotations
+from typing import Tuple, TYPE_CHECKING
+if TYPE_CHECKING:
+    import torch as _torch
+try:
+    import torch as _torch
+except ImportError:
+    pass
 
+import numpy as _np
 from pygsti.modelmembers.operations.denseop import DenseOperator as _DenseOperator
 from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
 from pygsti.baseobjs.protectedarray import ProtectedArray as _ProtectedArray
+from pygsti.modelmembers.torchable import Torchable as _Torchable
 
 
-class FullTPOp(_DenseOperator):
+
+
+class FullTPOp(_DenseOperator, _Torchable):
     """
     A trace-preserving operation matrix.
 
     An operation matrix that is fully parameterized except for
     the first row, which is frozen to be [1 0 ... 0] so that the action
     of the operation, when interpreted in the Pauli or Gell-Mann basis, is
-    trace preserving (TP).
+    trace preserving (TP). Bases other than Pauli or Gell-Mann are supported
+    only if their first element is the identity matrix.
 
     Parameters
     ----------
@@ -32,7 +44,7 @@ class FullTPOp(_DenseOperator):
         a square 2D array-like or LinearOperator object representing the operation action.
         The shape of m sets the dimension of the operation.
 
-    basis : Basis or {'pp','gm','std'} or None
+    basis : Basis or {'pp','gm'} or None
         The basis used to construct the Hilbert-Schmidt space representation
         of this state as a super-operator.  If None, certain functionality,
         such as access to Kraus operators, will be unavailable.
@@ -52,18 +64,20 @@ class FullTPOp(_DenseOperator):
     """
 
     def __init__(self, m, basis=None, evotype="default", state_space=None):
-        #LinearOperator.__init__(self, LinearOperator.convert_to_matrix(m))
         mx = _LinearOperator.convert_to_matrix(m)
         assert(_np.isrealobj(mx)), "FullTPOp must have *real* values!"
-        if not (_np.isclose(mx[0, 0], 1.0)
-                and _np.allclose(mx[0, 1:], 0.0)):
+        if not (_np.isclose(mx[0, 0], 1.0) and _np.allclose(mx[0, 1:], 0.0)):
             raise ValueError("Cannot create FullTPOp: "
                              "invalid form for 1st row!")
         _DenseOperator.__init__(self, mx, basis, evotype, state_space)
         assert(self._rep.base.flags['C_CONTIGUOUS'] and self._rep.base.flags['OWNDATA'])
         assert(isinstance(self._ptr, _ProtectedArray))
-        self._paramlbls = _np.array(["MxElement %d,%d" % (i, j) for i in range(1, self.dim) for j in range(self.dim)],
-                                    dtype=object)
+        self._paramlbls = _np.array(
+            ["MxElement %d,%d" % (i, j) for i in range(1, self.dim) for j in range(self.dim)], dtype=object
+        )
+        if self._basis is not None:
+            assert self._basis.first_element_is_identity  # type: ignore
+        return
 
     @property
     def _ptr(self):
@@ -122,7 +136,7 @@ class FullTPOp(_DenseOperator):
         numpy array
             The operation parameters as a 1D array with length num_params().
         """
-        return self._ptr.flatten()[self.dim:]  # .real in case of complex matrices?
+        return self._ptr.ravel()[self.dim:].copy()  # .real in case of complex matrices?
 
     def from_vector(self, v, close=False, dirty_value=True):
         """
@@ -154,6 +168,19 @@ class FullTPOp(_DenseOperator):
         self._rep.base.flat[self.dim:] = v  # faster still
         self._ptr_has_changed()  # because _rep.base == _ptr (same memory)
         self.dirty = dirty_value
+
+    def stateless_data(self) -> Tuple[int]:
+        return (self.dim,)
+
+    @staticmethod
+    def torch_base(sd: Tuple[int], t_param: _torch.Tensor) -> _torch.Tensor:
+        dim = sd[0]
+        t_const = _torch.zeros(size=(1, dim), dtype=_torch.double)
+        t_const[0,0] = 1.0
+        t_param_mat = t_param.reshape((dim - 1, dim))
+        t = _torch.row_stack((t_const, t_param_mat))
+        return t
+
 
     def deriv_wrt_params(self, wrt_filter=None):
         """

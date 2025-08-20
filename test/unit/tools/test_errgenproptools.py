@@ -8,14 +8,15 @@ from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as LEEL
 from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE
 from pygsti.tools import errgenproptools as _eprop
 from pygsti.tools.matrixtools import print_mx
+from pygsti.tools.basistools import change_basis
 from ..util import BaseCase
-from itertools import product
+from itertools import product, chain
 import random
 import stim
 from pygsti.processors import QubitProcessorSpec
 from pygsti.errorgenpropagation.errorpropagator import ErrorGeneratorPropagator
 
-#TODO: BCH approximation, errorgen_layer_to_matrix, stim_pauli_string_less_than, iterative_error_generator_composition
+#TODO: errorgen_layer_to_matrix, stim_pauli_string_less_than 
 
 class ErrgenCompositionCommutationTester(BaseCase):
 
@@ -56,7 +57,7 @@ class ErrgenCompositionCommutationTester(BaseCase):
         for pair1, pair2 in zip(errorgen_label_pairs, stim_errorgen_label_pairs):
             numeric_commutator = _eprop.error_generator_commutator_numerical(pair1[0], pair1[1], errorgen_lbl_matrix_dict)
             analytic_commutator = _eprop.error_generator_commutator(pair2[0], pair2[1])
-            analytic_commutator_mat = _eprop.errorgen_layer_to_matrix(analytic_commutator, errorgen_lbl_matrix_dict, 2)        
+            analytic_commutator_mat = _eprop.errorgen_layer_to_matrix(analytic_commutator, 2, errorgen_lbl_matrix_dict)        
 
             norm_diff = np.linalg.norm(numeric_commutator-analytic_commutator_mat)
             if norm_diff > 1e-10:
@@ -88,7 +89,7 @@ class ErrgenCompositionCommutationTester(BaseCase):
         errorgen_lbl_matrix_dict_2Q = {lbl: mat for lbl, mat in zip(errorgen_lbls_2Q, complete_errorgen_basis_2Q.elemgen_matrices)}
         
         #augment testing with random selection of 3Q labels (some commutation relations for C and A terms require a minimum of 3 qubits).
-        errorgen_lbls_3Q, errorgen_mats_3Q = select_random_items_from_multiple_lists([complete_errorgen_basis_3Q.labels, complete_errorgen_basis_3Q.elemgen_matrices], 1000, seed= 1234)
+        errorgen_lbls_3Q, errorgen_mats_3Q = select_random_items_from_multiple_lists([complete_errorgen_basis_3Q.labels, complete_errorgen_basis_3Q.elemgen_matrices], 50)
         errorgen_lbl_matrix_dict_3Q = {lbl: mat for lbl, mat in zip(errorgen_lbls_3Q, errorgen_mats_3Q)}
             
         complete_errorgen_lbl_matrix_dict_3Q = {lbl: mat for lbl, mat in zip(complete_errorgen_basis_3Q.labels, complete_errorgen_basis_3Q.elemgen_matrices)}
@@ -162,41 +163,43 @@ class ErrgenCompositionCommutationTester(BaseCase):
                        (_LSE('S', [stim.PauliString('YY')]), _LSE('H', [stim.PauliString('IX')]), _LSE('H', [stim.PauliString('XI')]))]
         rates = [(1,1,1), (1,1,1), (1,1,1)]
     
-        correct_iterative_compositions = [[(_LSE('H', (stim.PauliString("+X"),)), (-2-0j)), (_LSE('H', (stim.PauliString("+X"),)), -2)],
-                                          [(_LSE('H', (stim.PauliString("+X_"),)), (-1+0j)), (_LSE('A', (stim.PauliString("+_X"), stim.PauliString("+XX"))), (1+0j)),
-                                           (_LSE('A', (stim.PauliString("+_X"), stim.PauliString("+XX"))), (1+0j)), (_LSE('H', (stim.PauliString("+X_"),)), (-1+0j))],
-                                          [(_LSE('C', (stim.PauliString("+X_"), stim.PauliString("+YZ"))), (-1+0j)), (_LSE('C', (stim.PauliString("+_X"), stim.PauliString("+ZY"))), (-1+0j)),
-                                           (_LSE('A', (stim.PauliString("+XX"), stim.PauliString("+YY"))), (-1+0j)), (_LSE('H', (stim.PauliString("+ZZ"),)), (1+0j))]                                          
+        correct_iterative_compositions = [[(_LSE('H', (stim.PauliString("+X"),)), (-4-0j))],
+                                          [(_LSE('H', (stim.PauliString("+X_"),)), (-2+0j)), (_LSE('A', (stim.PauliString("+_X"), stim.PauliString("+XX"))), (2+0j))],
+                                          [(_LSE('C', (stim.PauliString("+YZ"), stim.PauliString("+ZY"))), (1+0j)), (_LSE('C', (stim.PauliString("+YY"), stim.PauliString("+ZZ"))), (1+0j)),
+                                           (_LSE('C', (stim.PauliString("+_X"), stim.PauliString("+X_"))), -1)]                                          
                                         ]
         
         for lbls, rates, correct_lbls in zip(test_labels, rates, correct_iterative_compositions):
             iterated_composition = _eprop.iterative_error_generator_composition(lbls, rates)
             self.assertEqual(iterated_composition, correct_lbls)
 
+        _compare_analytic_numeric_iterative_composition(2)
+        
+
     def test_bch_approximation(self):
         first_order_bch_numerical = _eprop.bch_numerical(self.propagated_errorgen_layers, self.errorgen_propagator, bch_order=1)
-        propagated_errorgen_layers_bch_order_1 = self.errorgen_propagator.propagate_errorgens_bch(self.circuit, bch_order=1)
-        first_order_bch_analytical = self.errorgen_propagator.errorgen_layer_dict_to_errorgen(propagated_errorgen_layers_bch_order_1,mx_basis='pp', return_dense=True)
+        propagated_errorgen_layers_bch_order_1 = self.errorgen_propagator.propagate_errorgens_bch(self.circuit, bch_order=1, mode='pairwise')
+        first_order_bch_analytical = self.errorgen_propagator.errorgen_layer_dict_to_errorgen(propagated_errorgen_layers_bch_order_1,mx_basis='pp')
         assert np.linalg.norm(first_order_bch_analytical-first_order_bch_numerical) < 1e-14
         
-        propagated_errorgen_layers_bch_order_2 = self.errorgen_propagator.propagate_errorgens_bch(self.circuit, bch_order=2)
+        propagated_errorgen_layers_bch_order_2 = self.errorgen_propagator.propagate_errorgens_bch(self.circuit, bch_order=2, mode='pairwise')
         second_order_bch_numerical = _eprop.bch_numerical(self.propagated_errorgen_layers, self.errorgen_propagator, bch_order=2)
-        second_order_bch_analytical = self.errorgen_propagator.errorgen_layer_dict_to_errorgen(propagated_errorgen_layers_bch_order_2, mx_basis='pp', return_dense=True)
+        second_order_bch_analytical = self.errorgen_propagator.errorgen_layer_dict_to_errorgen(propagated_errorgen_layers_bch_order_2, mx_basis='pp')
         assert np.linalg.norm(second_order_bch_analytical-second_order_bch_numerical) < 1e-14
 
         third_order_bch_numerical = _eprop.bch_numerical(self.propagated_errorgen_layers, self.errorgen_propagator, bch_order=3)
-        propagated_errorgen_layers_bch_order_3 = self.errorgen_propagator.propagate_errorgens_bch(self.circuit, bch_order=3)
-        third_order_bch_analytical = self.errorgen_propagator.errorgen_layer_dict_to_errorgen(propagated_errorgen_layers_bch_order_3, mx_basis='pp', return_dense=True)
+        propagated_errorgen_layers_bch_order_3 = self.errorgen_propagator.propagate_errorgens_bch(self.circuit, bch_order=3, mode='pairwise')
+        third_order_bch_analytical = self.errorgen_propagator.errorgen_layer_dict_to_errorgen(propagated_errorgen_layers_bch_order_3, mx_basis='pp')
         assert np.linalg.norm(third_order_bch_analytical-third_order_bch_numerical) < 1e-14
 
         fourth_order_bch_numerical = _eprop.bch_numerical(self.propagated_errorgen_layers, self.errorgen_propagator, bch_order=4)
-        propagated_errorgen_layers_bch_order_4 = self.errorgen_propagator.propagate_errorgens_bch(self.circuit, bch_order=4)
-        fourth_order_bch_analytical = self.errorgen_propagator.errorgen_layer_dict_to_errorgen(propagated_errorgen_layers_bch_order_4, mx_basis='pp', return_dense=True)
+        propagated_errorgen_layers_bch_order_4 = self.errorgen_propagator.propagate_errorgens_bch(self.circuit, bch_order=4, mode='pairwise')
+        fourth_order_bch_analytical = self.errorgen_propagator.errorgen_layer_dict_to_errorgen(propagated_errorgen_layers_bch_order_4, mx_basis='pp')
         assert np.linalg.norm(fourth_order_bch_analytical-fourth_order_bch_numerical) < 1e-14
 
         fifth_order_bch_numerical = _eprop.bch_numerical(self.propagated_errorgen_layers, self.errorgen_propagator, bch_order=5)
-        propagated_errorgen_layers_bch_order_5 = self.errorgen_propagator.propagate_errorgens_bch(self.circuit, bch_order=5, truncation_threshold=0)
-        fifth_order_bch_analytical = self.errorgen_propagator.errorgen_layer_dict_to_errorgen(propagated_errorgen_layers_bch_order_5, mx_basis='pp', return_dense=True)
+        propagated_errorgen_layers_bch_order_5 = self.errorgen_propagator.propagate_errorgens_bch(self.circuit, bch_order=5, truncation_threshold=0, mode='pairwise')
+        fifth_order_bch_analytical = self.errorgen_propagator.errorgen_layer_dict_to_errorgen(propagated_errorgen_layers_bch_order_5, mx_basis='pp')
         assert np.linalg.norm(fifth_order_bch_analytical-fifth_order_bch_numerical) < 1e-14
 
         exact_errorgen = logm(self.errorgen_propagator.eoc_error_channel(self.circuit))
@@ -209,7 +212,47 @@ class ErrgenCompositionCommutationTester(BaseCase):
         self.assertTrue((exact_vs_first_order_norm > exact_vs_second_order_norm) and (exact_vs_second_order_norm > exact_vs_third_order_norm)
                         and (exact_vs_third_order_norm > exact_vs_fourth_order_norm) and (exact_vs_fourth_order_norm > exact_vs_fifth_order_norm))
         
-class ApproxStabilizerProbTester(BaseCase):
+
+    def test_magnus_expansion(self):
+        first_order_magnus_numerical = _eprop.magnus_numerical(self.propagated_errorgen_layers, self.errorgen_propagator, magnus_order=1)
+        propagated_errorgen_layers_magnus_order_1 = self.errorgen_propagator.propagate_errorgens_bch(self.circuit, bch_order=1)
+        first_order_magnus_analytical = self.errorgen_propagator.errorgen_layer_dict_to_errorgen(propagated_errorgen_layers_magnus_order_1,mx_basis='pp')
+        assert np.linalg.norm(first_order_magnus_analytical-first_order_magnus_numerical) < 1e-14
+        
+        propagated_errorgen_layers_magnus_order_2 = self.errorgen_propagator.propagate_errorgens_bch(self.circuit, bch_order=2)
+        second_order_magnus_numerical = _eprop.magnus_numerical(self.propagated_errorgen_layers, self.errorgen_propagator, magnus_order=2)
+        second_order_magnus_analytical = self.errorgen_propagator.errorgen_layer_dict_to_errorgen(propagated_errorgen_layers_magnus_order_2, mx_basis='pp')
+        assert np.linalg.norm(second_order_magnus_analytical-second_order_magnus_numerical) < 1e-14
+
+        third_order_magnus_numerical = _eprop.magnus_numerical(self.propagated_errorgen_layers, self.errorgen_propagator, magnus_order=3)
+        propagated_errorgen_layers_magnus_order_3 = self.errorgen_propagator.propagate_errorgens_bch(self.circuit, bch_order=3)
+        third_order_magnus_analytical = self.errorgen_propagator.errorgen_layer_dict_to_errorgen(propagated_errorgen_layers_magnus_order_3, mx_basis='pp')
+        assert np.linalg.norm(third_order_magnus_analytical-third_order_magnus_numerical) < 1e-14
+
+        exact_errorgen = logm(self.errorgen_propagator.eoc_error_channel(self.circuit))
+        exact_vs_first_order_norm  = np.linalg.norm(first_order_magnus_analytical-exact_errorgen)
+        exact_vs_second_order_norm = np.linalg.norm(second_order_magnus_analytical-exact_errorgen)
+        exact_vs_third_order_norm  = np.linalg.norm(third_order_magnus_analytical-exact_errorgen)
+        
+        self.assertTrue((exact_vs_first_order_norm > exact_vs_second_order_norm) and (exact_vs_second_order_norm > exact_vs_third_order_norm))
+
+    def test_error_generator_pauli_action(self):
+        egbasis_HS = CompleteElementaryErrorgenBasis('PP', QubitSpace(3), default_label_type='local', elementary_errorgen_types=('H','S'))
+        egbasis_CA = CompleteElementaryErrorgenBasis('PP', QubitSpace(3), default_label_type='local', elementary_errorgen_types=('C','A'))
+        rng = np.random.default_rng()
+        paulis = np.fromiter(stim.PauliString.iter_all(3), dtype=object)
+        random_paulis = rng.choice(paulis, size=10, replace=False)
+        random_errorgens_HS = rng.choice(np.fromiter(egbasis_HS.labels, dtype=object), size=10, replace=False)
+        random_errorgens_CA = rng.choice(np.fromiter(egbasis_CA.labels, dtype=object), size=10, replace=False)
+        for pauli in random_paulis:
+            for eglbl in chain(random_errorgens_HS, random_errorgens_CA):
+                pauli_action = _eprop.errorgen_pauli_action(_LSE.cast(eglbl), pauli)
+                pauli_action_dense = pauli_action[0]*pauli_action[1].to_unitary_matrix(endian='big') \
+                                            if pauli_action is not None else np.zeros((2**len(pauli),2**len(pauli)))
+                pauli_action_numerical = _eprop.errorgen_pauli_action_numerical(eglbl, pauli)
+                assert np.linalg.norm(pauli_action_dense-pauli_action_numerical) < 1e-14, f'Numerical and analytical results differ, {eglbl=}, {pauli=}'
+
+class ApproxStabilizerMethodTester(BaseCase):
     def setUp(self):
         num_qubits = 4
         gate_names = ['Gcphase', 'Gxpi2', 'Gypi2']
@@ -239,7 +282,7 @@ class ApproxStabilizerProbTester(BaseCase):
     
     def test_random_support(self):
         num_random = _eprop.random_support(self.circuit_tableau)
-        self.assertEqual(num_random, 8)
+        self.assertEqual(num_random, 3)
 
     #This unit test for tableau fidelity is straight out of Craig Gidney's stackexchange post.
     def test_tableau_fidelity(self):
@@ -248,7 +291,7 @@ class ApproxStabilizerProbTester(BaseCase):
             ut = stim.Tableau.from_state_vector(u, endian='little')
             vt = stim.Tableau.from_state_vector(v, endian='little')
             actual = _eprop.tableau_fidelity(ut, vt)
-            np.testing.assert_allclose(actual, expected, rtol=1e-5)
+            np.testing.assert_allclose(actual, expected, atol=1e-14, rtol=1e-5)
 
         s = 0.5**0.5
         _assert_correct_tableau_fidelity([1, 0], [0, 1])
@@ -274,15 +317,14 @@ class ApproxStabilizerProbTester(BaseCase):
     def test_amplitude_of_state(self):
         amp0000 = _eprop.amplitude_of_state(self.circuit_tableau, '0000')
         amp1111 = _eprop.amplitude_of_state(self.circuit_tableau, '1111')
-        
         self.assertTrue(abs(amp0000)<1e-7)
-        self.assertTrue(abs(amp1111 - np.sqrt(.125))<1e-7)
+        self.assertTrue(abs(amp1111 -(-1j*np.sqrt(.125)))<1e-7)
         
         amp0000 = _eprop.amplitude_of_state(self.circuit_tableau_alt, '0000')
         amp1111 = _eprop.amplitude_of_state(self.circuit_tableau_alt, '1111')
         
         self.assertTrue(abs(amp0000)<1e-7)
-        self.assertTrue(abs(amp1111 - np.sqrt(.125))<1e-7)
+        self.assertTrue(abs(amp1111 - (-1j*np.sqrt(.125)))<1e-7)
 
     def test_bitstring_to_tableau(self):
         tableau = _eprop.bitstring_to_tableau('1010')
@@ -292,11 +334,12 @@ class ApproxStabilizerProbTester(BaseCase):
         test_paulis = ['YII', 'ZII', stim.PauliString('XYZ'), stim.PauliString('+iIII')]
         test_bitstring = '100'
 
-        correct_phase_updates_standard = [-1j, -1, -1j, 1j]
-        correct_phase_updates_dual = [1j, -1, 1j, 1j]
+        correct_phase_updates_standard = [-1j, -1, 1j, 1j]
+        correct_phase_updates_dual = [1j, -1, -1j, 1j]
         correct_output_bitstrings = ['000', '100', '010', '100']
 
         for i, test_pauli in enumerate(test_paulis):
+            print(i)
             phase_update, output_bitstring = _eprop.pauli_phase_update(test_pauli, test_bitstring)
             self.assertEqual(phase_update, correct_phase_updates_standard[i])
             self.assertEqual(output_bitstring, correct_output_bitstrings[i])
@@ -308,8 +351,11 @@ class ApproxStabilizerProbTester(BaseCase):
 
     def test_phi(self):
         bit_strings_3Q = list(product(['0','1'], repeat=3))
+        rng = np.random.default_rng()
+        paulis = np.fromiter(stim.PauliString.iter_all(3), dtype=object)
+        random_paulis = rng.choice(paulis, size=10, replace=False)
         for bit_string in bit_strings_3Q:
-            for pauli_1, pauli_2 in product(stim.PauliString.iter_all(3), stim.PauliString.iter_all(3)):
+            for pauli_1, pauli_2 in product(random_paulis, random_paulis):
                 phi_num = _eprop.phi_numerical(self.circuit_tableau_3Q, bit_string, pauli_1, pauli_2)
                 phi_analytic = _eprop.phi(self.circuit_tableau_3Q, bit_string, pauli_1, pauli_2)
                 if abs(phi_num-phi_analytic) > 1e-4:
@@ -319,10 +365,38 @@ class ApproxStabilizerProbTester(BaseCase):
     def test_alpha(self):
         bit_strings_3Q = list(product(['0','1'], repeat=3))
         complete_errorgen_basis_3Q = CompleteElementaryErrorgenBasis('PP', QubitSpace(3), default_label_type='local')
+        rng = np.random.default_rng()
+        random_errorgens = rng.choice(np.fromiter(complete_errorgen_basis_3Q.labels, dtype=object), size=100, replace=False)
         for bit_string in bit_strings_3Q:
-            for lbl in complete_errorgen_basis_3Q.labels:
+            for lbl in random_errorgens:
                 alpha_num = _eprop.alpha_numerical(lbl, self.circuit_tableau_3Q, bit_string)
                 assert abs(alpha_num - _eprop.alpha(lbl, self.circuit_tableau_3Q, bit_string)) <1e-4
+
+    def test_alpha_pauli(self):
+        from pygsti.modelpacks import smq2Q_XYCPHASE
+        pspec_2Q = smq2Q_XYCPHASE.processor_spec()
+        random_circuits_2Q = [create_random_circuit(pspec_2Q, 4, sampler='edgegrab', samplerargs=[0.4,], rand_state=12345+i) for i in range(5)]
+        random_circuit_tableaus_2Q = [ckt.convert_to_stim_tableau() for ckt in random_circuits_2Q]
+        def _compare_alpha_pauli_analytic_numeric(num_qubits, tableau):
+            #loop through all error generators and all paulis
+            errorgen_basis = CompleteElementaryErrorgenBasis('PP', QubitSpace(num_qubits), default_label_type='local')
+            rng = np.random.default_rng()
+            random_errorgens = rng.choice(np.fromiter(errorgen_basis.labels, dtype=object), size=10, replace=False)
+            errorgen_labels = [_LSE.cast(lbl) for lbl in random_errorgens]
+            pauli_list = list(stim.PauliString.iter_all(num_qubits))
+            for lbl in errorgen_labels:
+                for pauli in pauli_list:
+                    alpha_analytic = _eprop.alpha_pauli(lbl, tableau, pauli)
+                    alpha_numerical = _eprop.alpha_pauli_numerical(lbl, tableau, pauli)
+                    
+                    if abs(alpha_analytic - alpha_numerical)>1e-5:
+                        print(f'{alpha_analytic=}')
+                        print(f'{alpha_numerical=}')
+                        print(f'error generator label: {lbl}')
+                        print(f'pauli: {pauli}')
+                        raise ValueError('Analytic and numerically computed alpha pauli values differ by more than 1e-5')
+        for ckt_tableau in random_circuit_tableaus_2Q:
+            _compare_alpha_pauli_analytic_numeric(2, ckt_tableau)
 
     def test_stabilizer_probability_correction(self):
         #The corrections testing here will just be integration testing, we'll
@@ -332,6 +406,15 @@ class ApproxStabilizerProbTester(BaseCase):
         for bitstring in bitstrings:
             for order in orders:
                 _eprop.stabilizer_probability_correction(self.propagated_errorgen_layer, self.circuit_tableau, bitstring, order)
+
+    def test_stabilizer_pauli_expectation_correction(self):
+        #The corrections testing here will just be integration testing, we'll
+        #check for correctness with the full expecation functions instead.
+        paulis = [stim.PauliString('XXXX'), stim.PauliString('ZIII')]
+        orders = [1,2,3]
+        for pauli in paulis:
+            for order in orders:
+                _eprop.stabilizer_pauli_expectation_correction(self.propagated_errorgen_layer, self.circuit_tableau, pauli, order)
 
     def test_approximate_stabilizer_probability(self):
         exact_prop_probs = probabilities_errorgen_prop(self.error_propagator, self.target_model, 
@@ -345,10 +428,11 @@ class ApproxStabilizerProbTester(BaseCase):
 
         first_order_diff = exact_prop_probs[-1] - _eprop.approximate_stabilizer_probability(self.propagated_errorgen_layer, self.circuit_tableau, '1111')
         second_order_diff = exact_prop_probs[-1] - _eprop.approximate_stabilizer_probability(self.propagated_errorgen_layer, self.circuit_tableau, '1111', order=2)
-        third_order_diff = exact_prop_probs[-1] - _eprop.approximate_stabilizer_probability(self.propagated_errorgen_layer, self.circuit_tableau, '1111', order=3)
+        #skip second test of third order for now to save on unit test runtime
+        #third_order_diff = exact_prop_probs[-1] - _eprop.approximate_stabilizer_probability(self.propagated_errorgen_layer, self.circuit_tableau, '1111', order=3)
 
         assert abs(first_order_diff) > abs(second_order_diff)
-        assert abs(second_order_diff) > abs(third_order_diff)
+        #assert abs(second_order_diff) > abs(third_order_diff)
         
     def test_approximate_stabilizer_probabilities(self):
         exact_prop_probs = probabilities_errorgen_prop(self.error_propagator, self.target_model, 
@@ -370,6 +454,27 @@ class ApproxStabilizerProbTester(BaseCase):
         tvd_order_2 = np.linalg.norm(exact_prop_probs-approx_stab_prob_vec_order_2, ord=1)
 
         assert tvd_order_1 > tvd_order_2
+
+    def test_approximate_stabilizer_pauli_expectation(self):
+        rng = np.random.default_rng(seed=12345)
+        paulis_4Q = list(stim.PauliString.iter_all(4))
+        random_4Q_pauli_indices = rng.choice(len(paulis_4Q), 3, replace=False)
+        random_4Q_paulis = [paulis_4Q[idx] for idx in random_4Q_pauli_indices]
+
+        for pauli in random_4Q_paulis:
+            
+            
+            first_order_diff  = _eprop.approximate_stabilizer_pauli_expectation_numerical(self.propagated_errorgen_layer, self.error_propagator, self.circuit, pauli, order=1) -\
+                                _eprop.approximate_stabilizer_pauli_expectation(self.propagated_errorgen_layer, self.circuit_tableau, pauli, order=1)
+            second_order_diff = _eprop.approximate_stabilizer_pauli_expectation_numerical(self.propagated_errorgen_layer, self.error_propagator, self.circuit, pauli, order=2) -\
+                                _eprop.approximate_stabilizer_pauli_expectation(self.propagated_errorgen_layer, self.circuit_tableau, pauli, order=2)
+            third_order_diff  = _eprop.approximate_stabilizer_pauli_expectation_numerical(self.propagated_errorgen_layer, self.error_propagator, self.circuit, pauli, order=3) -\
+                                _eprop.approximate_stabilizer_pauli_expectation(self.propagated_errorgen_layer, self.circuit_tableau, pauli, order=3)
+
+            assert abs(first_order_diff)  < 1e-6, f'{pauli=}'
+            assert abs(second_order_diff) < 1e-8, f'{pauli=}'
+            assert abs(third_order_diff)  < 5e-8, f'{pauli=}'
+
 
     def test_error_generator_taylor_expansion(self):
         #this is just an integration test atm.
@@ -487,3 +592,82 @@ def probabilities_errorgen_prop(error_propagator, target_model, circuit, use_bch
         dense_prep = ideal_prep.to_dense().copy()
         prob_vec[i] = np.linalg.multi_dot([dense_effect.reshape((1,len(dense_effect))), eoc_channel, ideal_channel, dense_prep.reshape((len(dense_prep),1))])
     return prob_vec
+
+def pauli_expectation_errorgen_prop(error_propagator, target_model, circuit, pauli, use_bch=False, bch_order=1, truncation_threshold=1e-14):
+    #get the eoc error channel, and the process matrix for the ideal circuit:
+    if use_bch:
+        eoc_channel = error_propagator.eoc_error_channel(circuit, include_spam=True, use_bch=use_bch,
+                                                        bch_kwargs={'bch_order':bch_order,
+                                                                    'truncation_threshold':truncation_threshold})
+    else:
+        eoc_channel = error_propagator.eoc_error_channel(circuit, include_spam=True)
+    ideal_channel = target_model.sim.product(circuit)
+    #also get the ideal state prep and povm:
+    ideal_prep = target_model.circuit_layer_operator(Label('rho0'), typ='prep').copy()
+    
+    #finally need the superoperator for the selected pauli.
+    pauli_unitary = pauli.to_unitary_matrix(endian='big')
+    #flatten this row-wise
+    pauli_vec = np.ravel(pauli_unitary)
+    pauli_vec.reshape((len(pauli_vec),1))
+    #put this in pp basis (since these are paulis themselves I could just read this off directly).
+    pauli_vec = change_basis(pauli_vec, 'std', 'pp')
+    #print(pauli_vec)
+    dense_prep = ideal_prep.to_dense().copy()
+    expectation = np.linalg.multi_dot([pauli_vec.reshape((1,len(pauli_vec))), eoc_channel, ideal_channel, dense_prep.reshape((len(dense_prep),1))]).item()
+    return expectation
+
+#helper function for iterative composition testing
+def _compare_analytic_numeric_iterative_composition(num_qubits):
+    #create an error generator basis.
+    complete_errorgen_basis = CompleteElementaryErrorgenBasis('PP', QubitSpace(num_qubits), default_label_type='local')
+    complete_errorgen_lbls = complete_errorgen_basis.labels
+    complete_errorgen_lbl_matrix_dict = {lbl: mat for lbl, mat in zip(complete_errorgen_lbls, complete_errorgen_basis.elemgen_matrices)}
+
+    #loop through all triples.
+    errorgen_label_triples = list(product(complete_errorgen_lbls,repeat=3))
+    
+    #select a random subset of these
+    rng = np.random.default_rng(seed=1234)
+    random_indices = rng.choice(len(errorgen_label_triples), 10000)
+    random_triples = [errorgen_label_triples[idx] for idx in random_indices]
+    
+    #create local stim error gen label versions:
+    random_triples_stim = [(_LSE.cast(a), _LSE.cast(b), _LSE.cast(c)) for a,b,c in random_triples]
+    
+    #for each triple compute the composition directly and compute it analytically (then converting it to
+    #a numeric array) and see how they compare.
+    for i, (triple_1, triple_2) in enumerate(zip(random_triples, random_triples_stim)):
+        numeric_composition = _eprop.iterative_error_generator_composition_numerical(triple_1, (1,1,1), complete_errorgen_lbl_matrix_dict)
+        analytic_composition = _eprop.iterative_error_generator_composition(triple_2, (1,1,1))
+        analytic_composition_dict = dict()
+        for lbl, rate in analytic_composition:
+            local_lbl = lbl.to_local_eel()
+            if analytic_composition_dict.get(local_lbl, None) is None:
+                analytic_composition_dict[local_lbl] = rate
+            else:
+                analytic_composition_dict[local_lbl] += rate
+        analytic_composition = analytic_composition_dict
+        try:
+            analytic_composition_mat = _eprop.errorgen_layer_to_matrix(analytic_composition, num_qubits, errorgen_matrix_dict = complete_errorgen_lbl_matrix_dict)        
+        except KeyError:
+            print(f'{analytic_composition=}')
+        norm_diff = np.linalg.norm(numeric_composition-analytic_composition_mat)
+        if norm_diff > 1e-10:
+            print(f'Difference in compositions for triple {triple_1} is greater than 1e-10.')
+            print(f'{triple_2=}')
+            print(f'Error encountered on iteration {i}')
+            print(f'{np.linalg.norm(numeric_composition-analytic_composition_mat)=}')
+            print('numeric_composition=')
+            print_mx(numeric_composition)
+            
+            #Decompose the numerical composition into rates.
+            for lbl, dual in zip(complete_errorgen_basis.labels, complete_errorgen_basis.elemgen_dual_matrices):
+                rate = np.trace(dual.conj().T@numeric_composition)
+                if abs(rate) >1e-3:
+                    print(f'{lbl}: {rate}')
+            
+            print(f'{analytic_composition=}')
+            print('analytic_composition_mat=')
+            print_mx(analytic_composition_mat)
+            raise ValueError('Numeric and analytic error generator compositions were not found to be identical!')

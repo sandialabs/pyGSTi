@@ -2,7 +2,7 @@
 Defines the TPInstrument class
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -77,8 +77,6 @@ class TPInstrument(_mm.ModelMember, _collections.OrderedDict):
         self._readonly = False  # until init is done
         if len(items) > 0:
             assert(op_matrices is None), "`items` was given when op_matrices != None"
-
-        evotype = _Evotype.cast(evotype)
         self.param_ops = []  # first element is TP sum (MT), following
         #elements are fully-param'd (Mi-Mt) for i=0...n-2
 
@@ -98,6 +96,7 @@ class TPInstrument(_mm.ModelMember, _collections.OrderedDict):
                 "Must specify `state_space` when there are no instrument members!"
             state_space = _statespace.default_space_for_dim(matrix_list[0][1].shape[0]) if (state_space is None) \
                 else _statespace.StateSpace.cast(state_space)
+            evotype = _Evotype.cast(evotype, state_space=state_space)
 
             # Create gate objects that are used to parameterize this instrument
             MT_mx = sum([v for k, v in matrix_list])  # sum-of-instrument-members matrix
@@ -125,6 +124,7 @@ class TPInstrument(_mm.ModelMember, _collections.OrderedDict):
             #    print(k,":\n",v)
         else:
             assert(state_space is not None), "`state_space` cannot be `None` when there are no members!"
+            evotype = _Evotype.cast(evotype, state_space=state_space)
 
         _collections.OrderedDict.__init__(self, items)
         _mm.ModelMember.__init__(self, state_space, evotype)
@@ -174,7 +174,7 @@ class TPInstrument(_mm.ModelMember, _collections.OrderedDict):
         lbl_member_pairs = [(lbl, serial_memo[subm_serial_id])
                             for lbl, subm_serial_id in zip(mm_dict['member_labels'], mm_dict['submembers'])]
         MT_member = next(filter(lambda pair: pair[1].index == len(lbl_member_pairs) - 1, lbl_member_pairs))
-        param_ops = MT_member.submembers()  # the final (TP) member has all the param_ops as its submembers
+        param_ops = MT_member[-1].submembers()  # the final (TP) member has all the param_ops as its submembers
 
         ret = TPInstrument.__new__(TPInstrument)
         ret.param_ops = param_ops

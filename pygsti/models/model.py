@@ -2,7 +2,7 @@
 Defines the Model class and supporting functionality.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -16,7 +16,6 @@ import itertools as _itertools
 import uuid as _uuid
 import warnings as _warnings
 import collections as _collections
-
 import numpy as _np
 
 from pygsti.baseobjs import statespace as _statespace
@@ -27,11 +26,13 @@ from pygsti.evotypes import Evotype as _Evotype
 from pygsti.forwardsims import forwardsim as _fwdsim
 from pygsti.modelmembers import modelmember as _gm
 from pygsti.modelmembers import operations as _op
+from pygsti.modelmembers.povms import POVM as _POVM, POVMEffect as _POVMEffect
 from pygsti.baseobjs.basis import Basis as _Basis, TensorProdBasis as _TensorProdBasis
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.tools import slicetools as _slct
 from pygsti.tools import matrixtools as _mt
+from pygsti.circuits import Circuit as _Circuit, SeparatePOVMCircuit as _SeparatePOVMCircuit
 
 MEMLIMIT_FOR_NONGAUGE_PARAMS = None
 
@@ -176,7 +177,8 @@ class Model(_NicelySerializable):
         if lower_bound == -_np.inf and upper_bound == _np.inf:
             return  # do nothing
 
-        if self._param_bounds is None:
+        #Note, this property call will also invoke a param vector rebuild if needed.
+        if self.parameter_bounds is None:
             self._param_bounds = _default_param_bounds(self.num_params)
         self._param_bounds[index, :] = (lower_bound, upper_bound)
 
@@ -432,27 +434,6 @@ class OpModel(Model):
     possible to build up layer operations in an on-demand fashion from pieces
     within the model.
 
-    Parameters
-    ----------
-    state_space : StateSpace
-        The state space for this model.
-
-    basis : Basis
-        The basis used for the state space by dense operator representations.
-
-    evotype : Evotype or str, optional
-        The evolution type of this model, describing how states are
-        represented.  The special value `"default"` is equivalent
-        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
-
-    layer_rules : LayerRules
-        The "layer rules" used for constructing operators for circuit
-        layers.  This functionality is essential to using this model to
-        simulate ciruits, and is typically supplied by derived classes.
-
-    simulator : ForwardSimulator or {"auto", "matrix", "map"}
-        The forward simulator (or typ) that this model should use.  `"auto"`
-        tries to determine the best type automatically.
     """
 
     #Whether to perform extra parameter-vector integrity checks
@@ -464,10 +445,31 @@ class OpModel(Model):
     def __init__(self, state_space, basis, evotype, layer_rules, simulator="auto"):
         """
         Creates a new OpModel.  Rarely used except from derived classes `__init__` functions.
+        Parameters
+        ----------
+        state_space : StateSpace
+            The state space for this model.
+
+        basis : Basis
+            The basis used for the state space by dense operator representations.
+
+        evotype : Evotype or str, optional
+            The evolution type of this model, describing how states are
+            represented.  The special value `"default"` is equivalent
+            to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
+
+        layer_rules : LayerRules
+            The "layer rules" used for constructing operators for circuit
+            layers.  This functionality is essential to using this model to
+            simulate ciruits, and is typically supplied by derived classes.
+
+        simulator : ForwardSimulator or {"auto", "matrix", "map"}
+            The forward simulator (or typ) that this model should use.  `"auto"`
+            tries to determine the best type automatically.
         """
-        self._evotype = _Evotype.cast(evotype)
         self._set_state_space(state_space, basis)
         #sets self._state_space, self._basis
+        self._evotype = _Evotype.cast(evotype, state_space=self.state_space)
 
         super(OpModel, self).__init__(self.state_space)  # do this as soon as possible
 
@@ -479,6 +481,8 @@ class OpModel(Model):
         self._param_interposer = None
         self._reinit_opcaches()
         self.fogi_store = None
+        self._index_mm_map = None
+        self._index_mm_label_map = None
 
     def __setstate__(self, state_dict):
         self.__dict__.update(state_dict)
@@ -603,6 +607,56 @@ class OpModel(Model):
         self._clean_paramvec()
         return len(self._paramvec)
 
+    @property
+    def parameter_labels(self):
+        """
+        A list of labels, usually of the form `(op_label, string_description)` describing this model's parameters.
+        """
+        self._clean_paramvec()
+        return self._ops_paramlbls_to_model_paramlbls(self._paramlbls)
+    
+    def set_parameter_label(self, index, label):
+        """
+        Set the label of a single model parameter.
+
+        Parameters
+        ----------
+        index : int
+            The index of the paramter whose label should be set.
+
+        label : object
+            An object that serves to label this parameter.  Often a string.
+
+        Returns
+        -------
+        None
+        """
+        self._clean_paramvec()
+        self._paramlbls[index] = label
+    
+    @property
+    def parameter_bounds(self):
+        """ Upper and lower bounds on the values of each parameter, utilized by optimization routines """
+        self._clean_paramvec()
+        return self._param_bounds
+    
+    @property
+    def num_modeltest_params(self):
+        """
+        The parameter count to use when testing this model against data.
+
+        Often times, this is the same as :meth:`num_params`, but there are times
+        when it can convenient or necessary to use a parameter count different than
+        the actual number of parameters in this model.
+
+        Returns
+        -------
+        int
+            the number of model parameters.
+        """
+        self._clean_paramvec()
+        return Model.num_modeltest_params.fget(self)
+
     def _iter_parameterized_objs(self):
         raise NotImplementedError("Derived Model classes should implement _iter_parameterized_objs")
         #return # default is to have no parameterized objects
@@ -611,6 +665,10 @@ class OpModel(Model):
     def _check_paramvec(self, debug=False):
         if debug: print("---- Model._check_paramvec ----")
 
+        ops_paramvec = self._model_paramvec_to_ops_paramvec(self._paramvec)
+        if debug: 
+            print(f'{ops_paramvec=}')
+            print(f'{self._paramvec=}')
         TOL = 1e-8
         for lbl, obj in self._iter_parameterized_objs():
             if debug: print(lbl, ":", obj.num_params, obj.gpindices)
@@ -618,14 +676,14 @@ class OpModel(Model):
             msg = "None" if (obj.parent is None) else id(obj.parent)
             assert(obj.parent is self), "%s's parent is not set correctly (%s)!" % (lbl, msg)
             if obj.gpindices is not None and len(w) > 0:
-                if _np.linalg.norm(self._paramvec[obj.gpindices] - w) > TOL:
+                if _np.linalg.norm(ops_paramvec[obj.gpindices] - w) > TOL:
                     if debug: print(lbl, ".to_vector() = ", w, " but Model's paramvec = ",
-                                    self._paramvec[obj.gpindices])
-                    raise ValueError("%s is out of sync with paramvec!!!" % lbl)
+                                    ops_paramvec[obj.gpindices])
+                    raise ValueError(f"{str(lbl)} is out of sync with paramvec!!!")
             if not self.dirty and obj.dirty:
-                raise ValueError("%s is dirty but Model.dirty=False!!" % lbl)
+                raise ValueError(f"{str(lbl)} is dirty but Model.dirty=False!!")
 
-    def _clean_paramvec(self):
+    def _clean_paramvec(self, debug=False):
         """ Updates _paramvec corresponding to any "dirty" elements, which may
             have been modified without out knowing, leaving _paramvec out of
             sync with the element's internal data.  It *may* be necessary
@@ -646,10 +704,6 @@ class OpModel(Model):
         #    flag as a result of this call.  `False` is the safe option, as
         #    this call potentially changes this operation's parameters.
 
-        #print("Cleaning Paramvec (dirty=%s, rebuild=%s)" % (self.dirty, self._need_to_rebuild))
-        #import inspect, pprint
-        #pprint.pprint([(x.filename,x.lineno,x.function) for x in inspect.stack()[0:7]])
-
         if self._need_to_rebuild:
             self._rebuild_paramvec()
             self._need_to_rebuild = False
@@ -658,22 +712,32 @@ class OpModel(Model):
         if self.dirty:  # if any member object is dirty (ModelMember.dirty setter should set this value)
             TOL = 1e-8
             ops_paramvec = self._model_paramvec_to_ops_paramvec(self._paramvec)
-
             #Note: lbl args used *just* for potential debugging - could strip out once
             # we're confident this code always works.
             def clean_single_obj(obj, lbl):  # sync an object's to_vector result w/_paramvec
                 if obj.dirty:
-                    w = obj.to_vector()
+                    try:
+                        w = obj.to_vector()
+                    except RuntimeError as e:
+                        chk_message = 'ComplementPOVMEffect.to_vector() should never be called' 
+                        # ^ Defined in complementeffect.py::ComplementPOVMEffect::to_vector().
+                        if chk_message in str(e):
+                            return   # there's nothing to do in this call to clean_single_obj().
+                        else:
+                            raise e  # we don't know what went wrong.
                     chk_norm = _np.linalg.norm(ops_paramvec[obj.gpindices] - w)
-                    #print(lbl, " is dirty! vec = ", w, "  chk_norm = ",chk_norm)
+                    if debug:
+                        print(f"{lbl} is dirty! vec = {w}, chk_norm = {chk_norm} gpindices = {obj.gpindices}")
                     if (not _np.isfinite(chk_norm)) or chk_norm > TOL:
                         ops_paramvec[obj.gpindices] = w
                     obj.dirty = False
+                return
 
             def clean_obj(obj, lbl):  # recursive so works with objects that have sub-members
                 for i, subm in enumerate(obj.submembers()):
                     clean_obj(subm, _Label(lbl.name + ":%d" % i, lbl.sslbls))
                 clean_single_obj(obj, lbl)
+                return
 
             for lbl, obj in self._iter_parameterized_objs():
                 clean_obj(obj, lbl)
@@ -887,6 +951,13 @@ class OpModel(Model):
         w = self._model_paramvec_to_ops_paramvec(self._paramvec)
         Np = len(w)  # NOT self.num_params since the latter calls us!
         wl = self._paramlbls
+        
+        if self._param_bounds is not None:
+            msg = 'Internal Model attributes are being rebuilt. This is likely because a modelmember has been '\
+                  + 'either added or removed. If you have manually set parameter bounds values at the Model level '\
+                  + '(not the model member level), for example using the `set_parameter_bounds` method, these values '\
+                  + 'will be overwritten by the parameter bounds found in each of the modelmembers.' 
+            _warnings.warn(msg)
         wb = self._param_bounds if (self._param_bounds is not None) else _default_param_bounds(Np)
         #NOTE: interposer doesn't quite work with parameter bounds yet, as we need to convert "model"
         # bounds to "ops" bounds like we do the parameter vector.  Need something like:
@@ -917,9 +988,10 @@ class OpModel(Model):
                 max_index_processed_so_far = max(max_index_processed_so_far, max_existing_index)
                 insertion_point = max_index_processed_so_far + 1
                 if num_new_params > 0:
+                    memo = set()
                     # If so, before allocating anything, make the necessary space in the parameter arrays:
                     for _, o in self._iter_parameterized_objs():
-                        o.shift_gpindices(insertion_point, num_new_params, self)
+                        o.shift_gpindices(insertion_point, num_new_params, self, memo)
                     w = _np.insert(w, insertion_point, _np.empty(num_new_params, 'd'))
                     wl = _np.insert(wl, insertion_point, _np.empty(num_new_params, dtype=object))
                     wb = _np.insert(wb, insertion_point, _default_param_bounds(num_new_params), axis=0)
@@ -1004,7 +1076,6 @@ class OpModel(Model):
         Np = len(w)  # reset Np from possible new params (NOT self.num_params since the latter calls us!)
         indices_to_remove = sorted(set(range(Np)) - used_gpindices)
         if debug: print("Indices to remove = ", indices_to_remove, " of ", Np)
-
         if len(indices_to_remove) > 0:
             #if debug: print("DEBUG: Removing %d params:"  % len(indices_to_remove), indices_to_remove)
             w = _np.delete(w, indices_to_remove)
@@ -1027,9 +1098,13 @@ class OpModel(Model):
                 obj.set_gpindices(new_inds, self, memo)
 
         self._paramvec = self._ops_paramvec_to_model_paramvec(w)
-        self._paramlbls = self._ops_paramlbls_to_model_paramlbls(wl)
+        self._paramlbls = wl
         self._param_bounds = wb if _param_bounds_are_nontrivial(wb) else None
         if debug: print("DEBUG: Done rebuild: %d op params" % len(w))
+        
+        #rebuild the model index to model member map if needed.
+        self._build_index_mm_map()
+
 
     def _init_virtual_obj(self, obj):
         """
@@ -1056,6 +1131,33 @@ class OpModel(Model):
         for _, o in self._iter_parameterized_objs():
             cnt += o._obj_refcount(obj)
         return cnt
+    
+    def _build_index_mm_map(self):
+        """
+        Build a map between indices into a model's parameter vector and the corresponding children.
+        The map is a list whose indices are indexes into the model's parameter vector and whose values are
+        lists (because there can be more than one with parameter collection) of references to the 
+        corresponding child model members who's gpindices correspond it.
+        """
+
+        #Mapping between the model index and the corresponding model members will be more complicated
+        #when there is a parameter interposer, so table implementing this for that case.
+        
+
+        ops_param_vec = self._model_paramvec_to_ops_paramvec(self._paramvec)
+        index_mm_map = [[] for _ in range(len(ops_param_vec))]
+        index_mm_label_map = [[] for _ in range(len(ops_param_vec))]
+        
+        for lbl, obj in self._iter_parameterized_objs():
+            #if the gpindices are a slice then convert to a list of indices.
+            gpindices = _slct.indices(obj.gpindices) if isinstance(obj.gpindices, slice) else obj.gpindices
+            for gpidx in gpindices:
+                index_mm_map[gpidx].append(obj)
+                index_mm_label_map[gpidx].append(lbl)
+        self._index_mm_map = index_mm_map
+        self._index_mm_label_map = index_mm_label_map
+        #Note to future selves. If we add a flag indicating the presence of collected parameters
+        #then we can improve the performance of this by using a simpler structure when no collected
 
     def to_vector(self):
         """
@@ -1104,6 +1206,122 @@ class OpModel(Model):
 
         if OpModel._pcheck: self._check_paramvec()
 
+    def set_parameter_value(self, index, val, close=False):
+        """
+        This method allows for updating the value of a single model parameter at the
+        specified parameter index.
+
+        Parameters
+        ----------
+        index : int or tuple
+            Index of the parameter value in the model's parameter vector to update.
+            If a tuple this instead indexes by the corresponding parameter label.
+        
+        val : float
+            Updated parameter value.
+
+        close : bool, optional
+            Set to `True` if val is close to the current parameter vector.
+            This can make some operations more efficient.  
+
+        Returns
+        -------
+        None
+        """
+        
+        self.set_parameter_values([index], [val], close)
+        
+        
+
+    def set_parameter_values(self, indices, values, close=False):
+        """
+        This method allows for updating the values of multiple model parameter at the
+        specified parameter indices.
+
+        Parameters
+        ----------
+        indices : list of ints or tuples
+            Indices of the parameter values in the model's parameter vector to update.
+            If tuples this instead indexes by the corresponding parameter label.
+            Mixing integer indices and parameter label tuples is not supported.
+            Note: In the event that the parameter labels vector for this model contains
+            duplicates the update may only apply to the first instance.
+        
+        values : list or tuple of floats
+            Updated parameter values.
+
+        close : bool, optional
+            Set to `True` if values are close to the current parameter vector.
+            This can make some operations more efficient.  
+
+        Returns
+        -------
+        None
+        """
+        orig_param_vec = self._paramvec.copy()
+
+        if isinstance(indices[0], tuple):
+            #parse the strings into integer indices.
+            param_labels_list = self.parameter_labels.tolist()
+            indices = [param_labels_list.index(lbl) for lbl in indices]
+            
+
+        for idx, val in zip(indices, values):
+            self._paramvec[idx] = val
+
+        if self._index_mm_map is None:
+            self.from_vector(self._paramvec)
+            return
+
+        if self._param_interposer is not None:
+            
+            original_errgen_vec = self._param_interposer.transform_matrix @ orig_param_vec
+            new_errgen_vec = self._param_interposer.transform_matrix @ self._paramvec
+            diff_vec =  original_errgen_vec -  new_errgen_vec
+            diff_vec[_np.abs(diff_vec) < 1e-14] = 0
+            non_zero_errgens = _np.nonzero(diff_vec)
+
+            indices = non_zero_errgens[0]
+            values = new_errgen_vec[indices]
+            vec_to_access = new_errgen_vec
+        else:
+            vec_to_access = self._paramvec.copy()
+
+        #get all of the model members which need to be be updated and loop through them to update their
+        #parameters.
+        #test_model = self.copy()
+        #test_model.from_vector(self._paramvec)
+        unique_mms = {lbl:val for idx in indices for lbl, val in zip(self._index_mm_label_map[idx], self._index_mm_map[idx])}
+        for obj in unique_mms.values():
+            obj.from_vector(vec_to_access[obj.gpindices].copy(), close, dirty_value=False)
+        
+        #go through the model members which have been updated and identify whether any of them have children
+        #which may be present in the _opcaches which have already been updated by the parents. I think the
+        #conditions under which this should be safe are: a) the layer rules are ExplicitLayerRules,
+        #b) The parent is a POVM (it should be safe to assume that POVMs update their children, 
+        #and c) the effect is a child of that POVM.
+        
+        if isinstance(self._layer_rules, _ExplicitLayerRules):
+            updated_children = []
+            for obj in unique_mms.values():
+                if isinstance(obj, _POVM):
+                    updated_children.extend(obj.values())
+        else:
+            updated_children = None
+
+        # Call from_vector on elements of the cache
+        if self._call_fromvector_on_cache:
+            for opcache in self._opcaches.values():
+                for obj in opcache.values():
+                    opcache_elem_gpindices = _slct.indices(obj.gpindices) if isinstance(obj.gpindices, slice) else obj.gpindices
+                    if any([idx in opcache_elem_gpindices for idx in indices]):
+                        #check whether we have already updated this object.
+                        if updated_children is not None and any([child is obj for child in updated_children]):
+                            continue
+                        obj.from_vector(vec_to_access[obj.gpindices].copy(), close, dirty_value=False)
+
+        if OpModel._pcheck: self._check_paramvec()
+
     @property
     def param_interposer(self):
         return self._param_interposer
@@ -1114,7 +1332,13 @@ class OpModel(Model):
             self._paramvec = self._model_paramvec_to_ops_paramvec(self._paramvec)
         self._param_interposer = interposer
         if interposer is not None:  # add new interposer
+            #the clean_paramvec call below happens at a point between when we've set the interposer 
+            #attribute, but before we've used it to set the model's parameter vector, which will results
+            #in an edge case in the parameter vector integrity logic, so disable temporarily.
+            pcheck = self._pcheck
+            OpModel._pcheck = False
             self._clean_paramvec()
+            OpModel._pcheck = pcheck
             self._paramvec = self._ops_paramvec_to_model_paramvec(self._paramvec)
 
     def _model_paramvec_to_ops_paramvec(self, v):
@@ -1129,6 +1353,8 @@ class OpModel(Model):
         return self.param_interposer.ops_paramlbls_to_model_paramlbls(w) \
             if (self.param_interposer is not None) else w
 
+#------Model-Specific Circuit Operations------------#
+
     def circuit_outcomes(self, circuit):
         """
         Get all the possible outcome labels produced by simulating this circuit.
@@ -1140,10 +1366,45 @@ class OpModel(Model):
 
         Returns
         -------
-        tuple
+        tuple corresponding to the possible outcomes for circuit.
         """
-        outcomes = circuit.expand_instruments_and_separate_povm(self)  # dict w/keys=sep-povm-circuits, vals=outcomes
+        outcomes = self.expand_instruments_and_separate_povm(circuit)  # dict w/keys=sep-povm-circuits, vals=outcomes
         return tuple(_itertools.chain(*outcomes.values()))  # concatenate outputs from all sep-povm-circuits
+    
+    def bulk_circuit_outcomes(self, circuits, split_circuits=None, completed_circuits=None):
+        """
+        Get all the possible outcome labels produced by simulating each of the circuits
+        in this list of circuits.
+
+        Parameters
+        ----------
+        circuits : list of Circuits
+            list of Circuits to get outcomes of.
+        
+        split_circuits : list of tuples, optional (default None)
+            If specified, this is a list of tuples for each circuit corresponding to the splitting of
+            the circuit into the prep label, spam-free circuit, and povm label. This is the same format
+            produced by the :meth:split_circuit(s) method, and so this option can allow for accelerating this
+            method when that has previously been run. When using this kwarg only one of this or 
+            the `complete_circuits` kwargs should be used.
+
+        completed_circuits : list of Circuits, optional (default None)
+            If specified, this is a list of compeleted circuits with prep and povm labels included.
+            This is the format produced by the :meth:complete_circuit(s) method, and this can
+            be used to accelerate this method call when that has been previously run. Should not
+            be used in conjunction with `split_circuits`.
+
+        Returns
+        -------
+        list of tuples corresponding to the possible outcomes for each circuit.
+        """
+
+        # list of dict w/keys=sep-povm-circuits, vals=outcomes
+        outcomes_list = self.bulk_expand_instruments_and_separate_povm(circuits, 
+                                                                       split_circuits=split_circuits,
+                                                                       completed_circuits=completed_circuits)  
+        
+        return [tuple(_itertools.chain(*outcomes.values())) for outcomes in outcomes_list]  # concatenate outputs from all sep-povm-circuits
 
     def split_circuit(self, circuit, erroron=('prep', 'povm'), split_prep=True, split_povm=True):
         """
@@ -1346,9 +1607,185 @@ class OpModel(Model):
         Circuit
             Possibly the same object as `circuit`, if no additions are needed.
         """
-
         comp_circuit = self.complete_circuits([circuit], prep_lbl_to_prepend, povm_lbl_to_append, False)
         return comp_circuit[0]
+    
+    def expand_instruments_and_separate_povm(self, circuit, observed_outcomes=None):
+        """
+        Creates a dictionary of :class:`SeparatePOVMCircuit` objects from expanding the instruments of this circuit.
+
+        Each key of the returned dictionary replaces the instruments in this circuit with a selection
+        of their members.  (The size of the resulting dictionary is the product of the sizes of
+        each instrument appearing in this circuit when `observed_outcomes is None`).  Keys are stored
+        as :class:`SeparatePOVMCircuit` objects so it's easy to keep track of which POVM outcomes (effects)
+        correspond to observed data.  This function is, for the most part, used internally to process
+        a circuit before computing its outcome probabilities.
+
+        Parameters
+        ----------
+        circuit : Circuit
+            The circuit to expand, using necessary details regarding the expansion from this model, including:
+
+            - default SPAM layers
+            - definitions of instrument-containing layers
+            - expansions of individual instruments and POVMs
+
+        observed_outcomes : iterable, optional (default None)
+            If specified an iterable over the subset of outcomes empirically observed for this circuit.
+
+        Returns
+        -------
+        OrderedDict
+            A dict whose keys are :class:`SeparatePOVMCircuit` objects and whose
+            values are tuples of the outcome labels corresponding to this circuit,
+            one per POVM effect held in the key.
+        """
+        expanded_circuit_outcomes = self.bulk_expand_instruments_and_separate_povm([circuit], [observed_outcomes])
+        return expanded_circuit_outcomes[0]
+    
+    def bulk_expand_instruments_and_separate_povm(self, circuits, observed_outcomes_list=None, split_circuits = None, 
+                                                  completed_circuits = None):
+        """
+        Creates a list of dictionaries mapping from :class:`SeparatePOVMCircuit` 
+        objects from expanding the instruments of this circuit.
+
+        Each key of the returned dictionary replaces the instruments in this circuit with a selection
+        of their members.  (The size of the resulting dictionary is the product of the sizes of
+        each instrument appearing in this circuit when `observed_outcomes is None`).  Keys are stored
+        as :class:`SeparatePOVMCircuit` objects so it's easy to keep track of which POVM outcomes (effects)
+        correspond to observed data.  This function is, for the most part, used internally to process
+        a circuit before computing its outcome probabilities.
+
+        This function works similarly to expand_instruments_and_separate_povm, except it operates on
+        an entire list of circuits at once, and provides additional kwargs to accelerate computation.
+
+        Parameters
+        ----------
+        circuit : Circuit
+            The circuit to expand, using necessary details regarding the expansion from this model, including:
+
+            - default SPAM layers
+            - definitions of instrument-containing layers
+            - expansions of individual instruments and POVMs
+
+        observed_outcomes_list : list of iterables, optional (default None)
+            If specified a list of iterables over the subset of outcomes empirically observed for each circuit.
+        
+        split_circuits : list of tuples, optional (default None)
+            If specified, this is a list of tuples for each circuit corresponding to the splitting of
+            the circuit into the prep label, spam-free circuit, and povm label. This is the same format
+            produced by the :meth:split_circuit(s) method, and so this option can allow for accelerating this
+            method when that has previously been run. When using this kwarg only one of this or 
+            the `complete_circuits` kwargs should be used.
+
+        completed_circuits : list of Circuits, optional (default None)
+            If specified, this is a list of compeleted circuits with prep and povm labels included.
+            This is the format produced by the :meth:complete_circuit(s) method, and this can
+            be used to accelerate this method call when that has been previously run. Should not
+            be used in conjunction with `split_circuits`.
+
+        Returns
+        -------
+        list of OrderedDicts
+            A list of dictionaries whose keys are :class:`SeparatePOVMCircuit` objects and whose
+            values are tuples of the outcome labels corresponding to each circuit,
+            one per POVM effect held in the key.
+        """
+
+        assert(not (completed_circuits is not None and split_circuits is not None)), "Inclusion of non-trivial values"\
+              +" for both `complete_circuits` and `split_circuits` is not supported. Please use only one of these two arguments."
+
+        if split_circuits is not None:
+            povm_lbls = [split_ckt[2] for split_ckt in split_circuits]
+            circuits_without_povm = [(split_ckt[0],) + split_ckt[1] for split_ckt in split_circuits]
+        elif completed_circuits is not None:
+            povm_lbls = [comp_ckt[-1] for comp_ckt in completed_circuits]
+            circuits_without_povm = [comp_ckt[:-1] for comp_ckt in completed_circuits]
+        else:
+            completed_circuits = self.complete_circuits(circuits)
+            povm_lbls = [comp_ckt[-1] for comp_ckt in completed_circuits]
+            circuits_without_povm = [comp_ckt[:-1] for comp_ckt in completed_circuits]
+        
+        if observed_outcomes_list is None:
+            observed_outcomes_list = [None]*len(circuits)
+
+
+        expanded_circuit_outcomes_list = [_collections.OrderedDict() for _ in range(len(circuits))]
+
+        def create_tree(lst):
+            subs = _collections.OrderedDict()
+            for el in lst:
+                if len(el) > 0:
+                    if el[0] not in subs: subs[el[0]] = []
+                    subs[el[0]].append(el[1:])
+            return _collections.OrderedDict([(k, create_tree(sub_lst)) for k, sub_lst in subs.items()])
+
+        def add_expanded_circuit_outcomes(circuit, running_outcomes, ootree, start):
+            """
+            """
+            cir = circuit if start == 0 else circuit[start:]  # for performance, avoid uneeded slicing
+            for k, layer_label in enumerate(cir, start=start):
+                components = layer_label.components
+                #instrument_inds = _np.nonzero([model._is_primitive_instrument_layer_lbl(component)
+                #                               for component in components])[0]  # SLOWER than statement below
+                instrument_inds = _np.array([i for i, component in enumerate(components)
+                                             if self._is_primitive_instrument_layer_lbl(component)])
+                if instrument_inds.size > 0:
+                    # This layer contains at least one instrument => recurse with instrument(s) replaced with
+                    #  all combinations of their members.
+                    component_lookup = {i: comp for i, comp in enumerate(components)}
+                    instrument_members = [self._member_labels_for_instrument(components[i])
+                                          for i in instrument_inds]  # also components of outcome labels
+                    for selected_instrmt_members in _itertools.product(*instrument_members):
+                        expanded_layer_lbl = component_lookup.copy()
+                        expanded_layer_lbl.update({i: components[i] + "_" + sel
+                                                   for i, sel in zip(instrument_inds, selected_instrmt_members)})
+                        expanded_layer_lbl = _Label([expanded_layer_lbl[i] for i in range(len(components))])
+
+                        if ootree is not None:
+                            new_ootree = ootree
+                            for sel in selected_instrmt_members:
+                                new_ootree = new_ootree.get(sel, {})
+                            if len(new_ootree) == 0: continue  # no observed outcomes along this outcome-tree path
+                        else:
+                            new_ootree = None
+
+                        add_expanded_circuit_outcomes(circuit[0:k] + _Circuit((expanded_layer_lbl,)) + circuit[k + 1:],
+                                                      running_outcomes + selected_instrmt_members, new_ootree, k + 1)
+                    break
+
+            else:  # no more instruments to process: `cir` contains no instruments => add an expanded circuit
+                assert(circuit not in expanded_circuit_outcomes)  # shouldn't be possible to generate duplicates...
+                elabels = self._effect_labels_for_povm(povm_lbl) if (observed_outcomes is None) \
+                    else tuple(ootree.keys())
+                outcomes = tuple((running_outcomes + (elabel,) for elabel in elabels))
+                expanded_circuit_outcomes[_SeparatePOVMCircuit(circuit, povm_lbl, elabels)] = outcomes
+
+        has_instruments = self._has_instruments()
+        unique_povm_labels = set(povm_lbls)
+        effect_label_dict = {povm_lbl: self._effect_labels_for_povm(povm_lbl) for povm_lbl in unique_povm_labels}
+
+        for povm_lbl, circuit_without_povm, expanded_circuit_outcomes, observed_outcomes in zip(povm_lbls, circuits_without_povm, 
+                                                                                                expanded_circuit_outcomes_list, 
+                                                                                                observed_outcomes_list):
+            ootree = create_tree(observed_outcomes) if observed_outcomes is not None else None  # tree of observed outcomes
+            # e.g. [('0','00'), ('0','01'), ('1','10')] ==> {'0': {'00': {}, '01': {}}, '1': {'10': {}}}
+
+            if has_instruments:
+                add_expanded_circuit_outcomes(circuit_without_povm, (), ootree, start=0)
+            else:
+                # It may be helpful to cache the set of elabels for a POVM (maybe within the model?) because
+                # currently the call to _effect_labels_for_povm may be a bottleneck.  It's needed, even when we have
+                # observed outcomes, because there may be some observed outcomes that aren't modeled (e.g. leakage states)
+                if observed_outcomes is None:
+                    elabels = effect_label_dict[povm_lbl]
+                else:
+                    possible_lbls = set(effect_label_dict[povm_lbl])
+                    elabels = tuple([oo for oo in ootree.keys() if oo in possible_lbls])
+                outcomes = tuple(((elabel,) for elabel in elabels))
+                expanded_circuit_outcomes[_SeparatePOVMCircuit(circuit_without_povm, povm_lbl, elabels)] = outcomes
+
+        return expanded_circuit_outcomes_list
 
     def complete_circuits(self, circuits, prep_lbl_to_prepend=None, povm_lbl_to_append=None, return_split = False):
         """
@@ -1442,6 +1879,91 @@ class OpModel(Model):
         else:
             return comp_circuits
         
+    def circuit_parameter_dependence(self, circuits, return_param_circ_map = False):
+        """
+        Calculate the which model parameters each of the input circuits depends upon.
+        Return this result in the the form of a dictionary whose keys are circuits,
+        and whose values are lists of parameters upon which that circuit depends.
+        Optionally a reverse mapping from model parameters to the input circuits
+        which depend on that parameter.
+
+        Note: This methods does not work with models using parameter interposers presently.
+
+        Parameters
+        ----------
+        circuits : list of Circuits
+            List of circuits to determine parameter dependence for.
+        
+        return_param_circ_map : bool, optional (default False)
+            A flag indicating whether to return a reverse mapping from parameters
+            to circuits depending on those parameters.
+        
+        Returns
+        -------
+        circuit_parameter_map : dict
+            Dictionary with keys given by Circuits and values giving the list of
+            model parameter indices upon which that circuit depends.
+
+        param_to_circuit_map : dict, optional
+            Dictionary with keys given by model parameter indices, and values
+            giving the list of input circuits dependent upon that parameter.
+        """
+
+        if self.param_interposer is not None:
+            msg = 'Circuit parameter dependence evaluation is not currently implemented for models with parameter interposers.'
+            raise NotImplementedError(msg)
+        #start by completing the model:
+        #Here we want to do this for all of the different primitive prep and
+        #measurement layers present.
+        circuit_parameter_map = {}
+        
+        completed_circuits_by_prep_povm = []
+        prep_povm_pairs = list(_itertools.product(self.primitive_prep_labels, self.primitive_povm_labels))
+        for prep_lbl, povm_lbl in prep_povm_pairs:
+            completed_circuits_by_prep_povm.append(self.complete_circuits(circuits, prep_lbl_to_prepend=prep_lbl, povm_lbl_to_append=povm_lbl))
+        
+        #we should now have in completed_circuits_by_prep_povm a list of completed circuits
+        #for each prep, povm pair. Unique layers by circuit will then be the union of these
+        #accross each of the sublists.
+
+        unique_layers_by_circuit = []
+        for circuits_by_prep_povm in zip(*completed_circuits_by_prep_povm):    
+            #Take the complete set of circuits and get the unique layers which appear accross all of them
+            #then use this to pre-compute circuit_layer_operators and gpindices.
+            unique_layers_by_circuit.append(set(sum([ckt.layertup for ckt in circuits_by_prep_povm], ())))
+
+        #then aggregate these:
+        unique_layers = set()
+        unique_layers = unique_layers.union(*unique_layers_by_circuit)
+
+        #Now pre-compute the gpindices for all of these unique layers
+        unique_layers_gpindices_dict = {layer:_slct.indices(self.circuit_layer_operator(layer).gpindices) for layer in unique_layers}
+        
+        #loop through the circuit layers and get the circuit layer operators.
+        #from each of the circuit layer operators we'll get their gpindices. 
+        
+        for circuit, ckt_layer_set in zip(circuits, unique_layers_by_circuit):
+            seen_gpindices = []
+            for layer in ckt_layer_set:
+                gpindices_for_layer = unique_layers_gpindices_dict[layer]
+                seen_gpindices.extend(gpindices_for_layer)
+                    
+            seen_gpindices = sorted(set(seen_gpindices))
+
+            circuit_parameter_map[circuit] = seen_gpindices
+        
+        #We can also optionally compute the reverse map, from parameters to circuits which touch that parameter.
+        #it would be more efficient to do this in parallel with the other maps construction, so refactor this later.
+        if return_param_circ_map:
+            param_to_circuit_map = [[] for _ in range(self.num_params)]
+            #keys in circuit_parameter_map should be in the same order as in circuits.
+            for param_list in circuit_parameter_map.values():
+                for param_idx in param_list:
+                    param_to_circuit_map[param_idx].append(circuit)
+
+            return circuit_parameter_map, param_to_circuit_map
+        else:
+            return circuit_parameter_map
 
     # ---- Operation container interface ----
     # These functions allow oracle access to whether a label of a given type
@@ -2008,8 +2530,6 @@ class OpModel(Model):
                    dependent_fogi_action='drop', include_spam=True, primitive_op_labels=None):
 
         from pygsti.baseobjs.errorgenbasis import CompleteElementaryErrorgenBasis as _CompleteElementaryErrorgenBasis
-        from pygsti.baseobjs.errorgenbasis import ExplicitElementaryErrorgenBasis as _ExplicitElementaryErrorgenBasis
-        from pygsti.baseobjs.errorgenspace import ErrorgenSpace as _ErrorgenSpace
 
         from pygsti.tools import basistools as _bt
         from pygsti.tools import fogitools as _fogit
@@ -2158,11 +2678,12 @@ class OpModel(Model):
 
         norm_order = "auto"  # NOTE - should be 1 for normalizing 'S' quantities and 2 for 'H',
         # so 'auto' utilizes intelligence within FOGIStore
-        self.fogi_store = _FOGIStore(gauge_action_matrices, gauge_action_gauge_spaces,
-                                     errorgen_coefficient_labels,  # gauge_errgen_space_labels,
-                                     op_label_abbrevs, reduce_to_model_space, dependent_fogi_action,
-                                     norm_order=norm_order)
 
+
+        self.fogi_store = _FOGIStore.from_gauge_action_matrices(gauge_action_matrices, gauge_action_gauge_spaces,
+                                     errorgen_coefficient_labels, 
+                                     op_label_abbrevs, dependent_fogi_action,
+                                     norm_order=norm_order)
         if reparameterize:
             self.param_interposer = self._add_reparameterization(
                 primitive_op_labels + primitive_prep_labels + primitive_povm_labels,
@@ -2444,3 +2965,6 @@ def _default_param_bounds(num_params):
 def _param_bounds_are_nontrivial(param_bounds):
     """Checks whether a parameter-bounds array holds any actual bounds, or if all are just +-inf """
     return _np.any(param_bounds[:, 0] != -_np.inf) or _np.any(param_bounds[:, 1] != _np.inf)
+
+#stick this on the bottom to resolve a circular import issue:
+from pygsti.models.explicitmodel import ExplicitLayerRules as _ExplicitLayerRules

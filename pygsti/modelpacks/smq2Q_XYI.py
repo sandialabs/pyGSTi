@@ -2,10 +2,10 @@
 A standard multi-qubit gate set module.
 
 Variables for working with the 2-qubit model containing the gates
-I*X(pi/2), I*Y(pi/2), X(pi/2)*I, Y(pi/2)*I, and CPHASE.
+I*X(pi/2), I*Y(pi/2), X(pi/2)*I, Y(pi/2)*I, and Idle.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -19,7 +19,7 @@ from pygsti.modelpacks._modelpack import GSTModelPack
 
 
 class _Module(GSTModelPack):
-    description = "I*I, I*X(pi/2), I*Y(pi/2), X(pi/2)*I, and Y(pi/2)*I gates"
+    description = "I*I, I*X(pi/2), I*Y(pi/2), X(pi/2)*I, and Y(pi/2)*I gates and Idle"
 
     gates = [(), ('Gxpi2', 1), ('Gypi2', 1), ('Gxpi2', 0), ('Gypi2', 0)]
 

@@ -2,7 +2,7 @@
 Defines the ElementaryErrorgenBasis class and supporting functionality.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -16,11 +16,12 @@ import itertools as _itertools
 from pygsti.baseobjs import Basis as _Basis
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GlobalElementaryErrorgenLabel,\
 LocalElementaryErrorgenLabel as _LocalElementaryErrorgenLabel
-
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.tools import optools as _ot
+from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 
 
-class ElementaryErrorgenBasis(object):
+class ElementaryErrorgenBasis(_NicelySerializable):
     """
     A basis for error-generator space defined by a set of elementary error generators.
 
@@ -49,6 +50,7 @@ class ElementaryErrorgenBasis(object):
         Number of elementary errorgen elements in this basis.
         """
         return len(self.labels)
+    
 
 #helper function for checking label types.
 def _all_elements_same_type(lst):
@@ -61,7 +63,6 @@ def _all_elements_same_type(lst):
             return False
     return True
 
-#TODO: Unit Testing
 class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
     """
     This basis object contains the information  necessary for building, 
@@ -89,6 +90,7 @@ class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
             comprise the basis element labels for the values of the
             `ElementaryErrorgenLabels` in `labels`.
         """
+        super().__init__()
         labels = tuple(labels)
 
         #add an assertion that the labels are ElementaryErrorgenLabels and that all of the labels are the same type.
@@ -117,6 +119,34 @@ class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
         self._cached_dual_matrices = None
         self._cached_supports = None
 
+    def __eq__(self, other):
+        """Compare self with other. Return true only if they are identical, including the order of their labels.
+
+        Args:
+            other (ExplicitElementaryErrorgenBasis): Error generator basis to compare against
+
+        Returns:
+            Boolean: True if they are identical, False otherwise
+        """
+        if not isinstance(other, ExplicitElementaryErrorgenBasis):
+            return False
+        return self.state_space.__eq__(other.state_space) and [label.__str__() for label in self.labels] == [label.__str__() for label in other.labels] and self._basis_1q.__eq__(other._basis_1q)
+    
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'state_space' : self.state_space._to_nice_serialization(),
+                      'labels' : [label.__str__() for label in self.labels],
+                      'label_type' : 'global' if isinstance(self.labels[0], _GlobalElementaryErrorgenLabel) else 'local',
+                      '_basis_1q' : self._basis_1q if isinstance(self._basis_1q, str) else self._basis_1q._to_nice_serialization()
+        })
+        return state
+    @classmethod
+    def from_nice_serialization(cls, state):
+        if state['label_type'] == 'global':
+            cast = _GlobalElementaryErrorgenLabel.cast
+        else:
+            cast = _LocalElementaryErrorgenLabel.cast
+        return cls(_StateSpace.from_nice_serialization(state['state_space']), [cast(label) for label in state['labels']], state['_basis_1q'] if isinstance(state['_basis_1q'], str) else _Basis.from_nice_serialization(state['_basis_1q']))
     @property
     def labels(self):
         return self._labels
@@ -222,17 +252,29 @@ class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
             one of these qudits) in order to be included in this subbasis.
 
         """
-        sub_sslbls = set(sslbl_overlap)
+        #need different logic for LocalElementaryErrorgenLabels
+        if isinstance(self.labels[0], _GlobalElementaryErrorgenLabel):
+            sub_sslbls = set(sslbl_overlap)
+            def overlaps(sslbls):
+                ret = len(set(sslbls).intersection(sslbl_overlap)) > 0
+                if ret: sub_sslbls.update(sslbls)  # keep track of all overlaps
+                return ret
 
-        def overlaps(sslbls):
-            ret = len(set(sslbls).intersection(sslbl_overlap)) > 0
-            if ret: sub_sslbls.update(sslbls)  # keep track of all overlaps
-            return ret
+            sub_labels, sub_indices = zip(*[(lbl, i) for i, lbl in enumerate(self._labels)
+                                            if overlaps(lbl[0])])
+            sub_sslbls = sorted(sub_sslbls)
+            sub_state_space = self.state_space.create_subspace(sub_sslbls)
+        else:
+            sub_labels = []
+            for lbl in self.labels:
+                non_trivial_bel_indices = lbl.support_indices()
+                for sslbl in sslbl_overlap:
+                    if sslbl in non_trivial_bel_indices:
+                        sub_labels.append(lbl)
+                        break
+            #since using local labels keep the full original state space (the labels won't have gotten any shorter).
+            sub_state_space = self.state_space.copy()    
 
-        sub_labels, sub_indices = zip(*[(lbl, i) for i, lbl in enumerate(self._labels)
-                                        if overlaps(lbl[0])])
-
-        sub_state_space = self.state_space.create_subspace(sub_sslbls)
         return ExplicitElementaryErrorgenBasis(sub_state_space, sub_labels, self._basis_1q)
 
     def union(self, other_basis):
@@ -248,11 +290,11 @@ class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
         #assert that these two bases have compatible label types.
         msg = 'Incompatible `ElementaryErrrogenLabel` types, the two `ElementaryErrorgenBasis` should have the same label type.'
         assert type(self._labels[0]) == type(other_basis.labels[0]), msg
-        
+
         #Get the union of the two bases labels.
         union_labels = set(self._labels) | set(other_basis.labels)
         union_state_space = self.state_space.union(other_basis.state_space)
-        return ExplicitElementaryErrorgenBasis(union_state_space, union_labels, self._basis_1q)
+        return ExplicitElementaryErrorgenBasis(union_state_space, sorted(union_labels, key=lambda label: label.__str__()), self._basis_1q)
 
     def intersection(self, other_basis):
         """
@@ -267,7 +309,7 @@ class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
 
         intersection_labels = set(self._labels) & set(other_basis.labels)
         intersection_state_space = self.state_space.intersection(other_basis.state_space)
-        return ExplicitElementaryErrorgenBasis(intersection_state_space, intersection_labels, self._basis_1q)
+        return ExplicitElementaryErrorgenBasis(intersection_state_space, sorted(intersection_labels, key=lambda label: label.__str__()), self._basis_1q)
 
     def difference(self, other_basis):
         """
@@ -285,7 +327,7 @@ class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
         #that relied on the old (kind of incorrect behavior). Revert back to old version temporarily.
         #difference_state_space = self.state_space.difference(other_basis.state_space)
         difference_state_space = self.state_space
-        return ExplicitElementaryErrorgenBasis(difference_state_space, difference_labels, self._basis_1q)
+        return ExplicitElementaryErrorgenBasis(difference_state_space, sorted(difference_labels, key=lambda label: label.__str__()), self._basis_1q)
 
 class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
     """
@@ -505,7 +547,7 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
             `GlobalElementaryErrorgenLabel` and `LocalElementaryErrorgenLabel`,
             respectively.
         """
-
+        super().__init__()
         if isinstance(basis_1q, _Basis):
             self._basis_1q = basis_1q
         elif isinstance(basis_1q, str):
@@ -578,6 +620,24 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
         #                      (IXX,XXI) #   on right, loop over all possible choices of at least one, an at most m,
         #                      (IXX,XXX) #    nontrivial indices to place within the m nontriv left indices (1 & 2 here)
 
+    def _to_nice_serialization(self):
+         
+        state = super()._to_nice_serialization()
+        state.update({'basis_1q' : self._basis_1q.to_nice_serialization(),
+                      'state_space' : self.state_space.to_nice_serialization(),
+                      'elementary_errorgen_types': self._elementary_errorgen_types,
+                      'max_weights' : self.max_weights,
+                      'sslbl_overlap' : self._sslbl_overlap,
+                      'default_label_type': self._default_lbl_typ 
+        })
+        return state
+    
+    @classmethod
+    def from_nice_serialization(cls, state):
+        
+        return cls(_Basis.from_nice_serialization(state['basis_1q']), _StateSpace.from_nice_serialization(state['state_space']), \
+                   state['elementary_errorgen_types'], max_weights=state['max_weights'], sslbl_overlap=state['sslbl_overlap'], \
+                    default_label_type=state['default_label_type'])
     def __len__(self):
         """ Number of elementary errorgen elements in this basis """
         return self._offsets[self._elementary_errorgen_types[-1]]['END']
@@ -714,7 +774,7 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
         """
         return  tuple(zip(self.elemgen_supports, self.elemgen_matrices))
 
-    def label_index(self, label, ok_if_missing=False):
+    def label_index(self, label, ok_if_missing=False, identity_label='I'):
         """
         Return the index of the specified elementary error generator label
         in this basis' `labels` list.
@@ -726,12 +786,14 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
         
         ok_if_missing : bool
            If True, then returns `None` instead of an integer when the given label is not present.
-        """
-        #CIO: I don't entirely understand the intention behind this method, so rather than trying to make it work
-        #using `LocalElementaryErrorgenLabel` I'll just assert it is a global one for now...
-        if isinstance(label, _LocalElementaryErrorgenLabel):
-            raise NotImplementedError('This method is not currently implemented for `LocalElementaryErrorgenLabel` inputs.')
         
+        identity_label : str, optional (default 'I')
+            An optional string specifying the label used to denote the identity in basis element labels.
+        """
+        
+        if isinstance(label, _LocalElementaryErrorgenLabel):
+            label = _GlobalElementaryErrorgenLabel.cast(label, self.sslbls, identity_label=identity_label)
+
         support = label.sslbls
         eetype = label.errorgen_type
         bels = label.basis_element_labels
@@ -750,8 +812,10 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
         elif eetype in ('C', 'A'):
             assert(len(trivial_bel) == 1)  # assumes this is a single character
             nontrivial_inds = [i for i, letter in enumerate(bels[0]) if letter != trivial_bel]
-            left_support = tuple([self.sslbls[i] for i in nontrivial_inds])
-
+            left_support = tuple([label.sslbls[i] for i in nontrivial_inds])
+            #left_support = tuple([self.sslbls[i] for i in nontrivial_inds])
+            #This line above is supposed to be a bugfix, I want to verify this with
+            #Corey before removing this comment
             if ok_if_missing and (support, left_support) not in self._offsets[eetype]:
                 return None
             base = self._offsets[eetype][(support, left_support)]
@@ -760,7 +824,6 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
                 support, left_support, eetype, [trivial_bel], nontrivial_bels))}
         else:
             raise ValueError("Invalid elementary errorgen type: %s" % str(eetype))
-
         return base + indices[label]
 
     def create_subbasis(self, sslbl_overlap, retain_max_weights=True):

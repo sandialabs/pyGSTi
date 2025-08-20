@@ -1,9 +1,108 @@
 
 [build-system]
 # see https://github.com/cvxgrp/cvxpy/issues/968 for numpy version
-requires = ["setuptools>=45", "wheel", "setuptools_scm>=6.2", "cython", "numpy>=1.16.0"]
+requires = ["setuptools>=61", "wheel", "setuptools_scm>=6.2", "cython", "numpy>=1.16.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pygsti"
+dynamic = ["version"]
+description = 'A python implementation of Gate Set Tomography'
+readme = "README.md"
+authors = [
+    {email = 'pygsti@sandia.gov'},
+    {name = 'Erik Nielsen'},
+    {name = 'Stefan Seritan'},
+    {name = 'Corey Ostrove'},
+    {name = 'Riley Murray'},
+    {name = 'Jordan Hines'},
+    {name = 'Kenneth Rudinger'},
+    {name = 'Timothy Proctor'},
+    {name = 'John Gamble'},
+    {name = 'Robin Blume-Kohout'}
+]
+dependencies=[
+    'numpy>=1.15.0',
+    'scipy',
+    'stim',
+    'plotly>=3.8.0',
+    'pandas',
+    'networkx'
+]
+requires-python='>=3.9'
+keywords=[
+    'pygsti',
+    'tomography',
+    'gate set',
+    'pigsty',
+    'pig',
+    'quantum',
+    'qubit'
+]
+classifiers=[
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: Unix"
+]
+license = "Apache-2.0"
+
+[project.optional-dependencies]
+diamond_norm = [
+    'cvxpy>=1.4.0'
+]
+evolutionary_optimization = ['deap']
+extensions = ['cython']
+html_reports = ['jinja2', 'MarkupSafe']
+ibmq = [
+    'qiskit>1',
+    'qiskit-ibm-runtime>=0.17.1',
+    'tqdm>=4.42.0',
+    'dill'
+]
+interpygate = ['csaps']
+linting = [
+    'autopep8',
+    'flake8'
+]
+memory_profiling = ['psutil']
+mongodb = ['pymongo']
+msgpack = ['msgpack']
+multiprocessor = ['mpi4py']
+notebooks = [
+    'ipython',
+    'notebook',
+    'jupyter_server'
+]
+pytorch = ['torch']
+report_pdf_figures = ['matplotlib']
+reports = ['pygsti[html_reports,report_pdf_figures]']
+testing_no_cython_mpi = [
+    'pytest',
+    'pytest-xdist',
+    'pytest-cov',
+    'nbval',
+    'packaging',
+    'zmq',
+    'seaborn',
+    'ply',
+    'cirq-core',
+    'pygsti[diamond_norm,ibmq,interpygate,memory_profiling,msgpack,notebooks,pytorch,reports]'
+]
+testing_no_cython = ['pygsti[multiprocessor,testing_no_cython_mpi]']
+testing = ['pygsti[extensions,testing_no_cython]']
+no_mpi = ['pygsti[evolutionary_optimization,extensions,linting,mongodb,testing_no_cython_mpi]']
+complete = ['pygsti[multiprocessor,no_mpi]']
+
+[project.urls]
+Homepage = 'https://www.pygsti.info'
+Repository = 'https://github.com/sandialabs/pyGSTi'
+Download ='https://github.com/sandialabs/pyGSTi/tarball/master'
 
 [tool.setuptools_scm]
-write_to = "pygsti/_version.py"
-version_scheme = "post-release"
-local_scheme = "no-local-version"  # because pypi doesn't suppport it
+version_file = "pygsti/_version.py"
+version_scheme = "only-version"
+local_scheme = "no-local-version"

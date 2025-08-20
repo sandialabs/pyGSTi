@@ -2,7 +2,7 @@
 The ComposedErrorgen class and supporting functionality.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -23,7 +23,7 @@ from pygsti.baseobjs import statespace as _statespace
 from pygsti.baseobjs.basis import ExplicitBasis as _ExplicitBasis
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GlobalElementaryErrorgenLabel, LocalElementaryErrorgenLabel as _LocalElementaryErrorgenLabel
 from pygsti.tools import matrixtools as _mt
-
+from pygsti import SpaceT
 
 class ComposedErrorgen(_LinearOperator):
     """
@@ -64,7 +64,7 @@ class ComposedErrorgen(_LinearOperator):
 
         if evotype == "auto":
             evotype = errgens_to_compose[0]._evotype
-        evotype = _Evotype.cast(evotype)
+        evotype = _Evotype.cast(evotype, state_space=state_space)
         assert(all([evotype == eg._evotype for eg in errgens_to_compose])), \
             "All error generators must have the same evolution type (%s expected)!" % evotype
 
@@ -549,7 +549,7 @@ class ComposedErrorgen(_LinearOperator):
             self.parent._mark_for_rebuild(self)  # of our params may have changed
             self._parent = None  # mark this object for re-allocation
 
-    def to_sparse(self, on_space='minimal'):
+    def to_sparse(self, on_space: SpaceT='minimal'):
         """
         Return this error generator as a sparse matrix
 
@@ -564,7 +564,7 @@ class ComposedErrorgen(_LinearOperator):
             mx += eg.to_sparse(on_space)
         return mx
 
-    def to_dense(self, on_space='minimal'):
+    def to_dense(self, on_space: SpaceT='minimal'):
         """
         Return this error generator as a dense matrix
 

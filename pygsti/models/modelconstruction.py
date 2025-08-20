@@ -2,7 +2,7 @@
 Functions for the construction of new models.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -47,6 +47,7 @@ from pygsti.tools import basistools as _bt
 from pygsti.tools import internalgates as _itgs
 from pygsti.tools import optools as _ot
 from pygsti.tools import listtools as _lt
+from pygsti import SpaceT
 from pygsti.baseobjs.basisconstructors import sqrt2, id2x2, sigmax, sigmay, sigmaz
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
@@ -99,7 +100,7 @@ def create_spam_vector(vec_expr, state_space, basis):
     std_basis = basis.create_equivalent('std')
     vecInSimpleStdBasis = _np.zeros(std_basis.elshape, 'd')  # a matrix, but flattened it is our spamvec
     vecInSimpleStdBasis[index, index] = 1.0  # now a matrix with just a single 1 on the diag
-    vecInReducedStdBasis = _np.dot(std_basis.from_elementstd_transform_matrix, vecInSimpleStdBasis.flatten())
+    vecInReducedStdBasis = std_basis.from_elementstd_transform_matrix @ vecInSimpleStdBasis.ravel()
     # translates the density matrix / state vector to the std basis with our desired block structure
 
     vec = _bt.change_basis(vecInReducedStdBasis, std_basis, basis)
@@ -252,7 +253,7 @@ def create_operation(op_expr, state_space, basis="pp", parameterization="full", 
             # a complex 2*num_qubits x 2*num_qubits mx unitary on full space in Pauli-product basis
             Uop_embed = _op.EmbeddedOp(state_space, labels, Uop)
             # a real 4*num_qubits x 4*num_qubits mx superoperator in final basis
-            superop_mx_pp = Uop_embed.to_dense(on_space='HilbertSchmidt')
+            superop_mx_pp = Uop_embed.to_dense("HilbertSchmidt")
             # a real 4*num_qubits x 4*num_qubits mx superoperator in final basis
             superop_mx_in_basis = _bt.change_basis(superop_mx_pp, 'pp', basis)
 
@@ -299,7 +300,7 @@ def create_operation(op_expr, state_space, basis="pp", parameterization="full", 
             # a complex 2*num_qubits x 2*num_qubits mx unitary on full space in Pauli-product basis
             Uop_embed = _op.EmbeddedOp(state_space, (label,), Uop)
             # a real 4*num_qubits x 4*num_qubits mx superoperator in Pauli-product basis
-            superop_mx_pp = Uop_embed.to_dense(on_space='HilbertSchmidt')
+            superop_mx_pp = Uop_embed.to_dense("HilbertSchmidt")
             # a real 4*num_qubits x 4*num_qubits mx superoperator in final basis
             superop_mx_in_basis = _bt.change_basis(superop_mx_pp, 'pp', basis)
 
@@ -319,7 +320,7 @@ def create_operation(op_expr, state_space, basis="pp", parameterization="full", 
             # a complex 2*num_qubits x 2*num_qubits mx unitary on full space in Pauli-product basis
             Uop_embed = _op.EmbeddedOp(state_space, (label,), Uop)
             # a real 4*num_qubits x 4*num_qubits mx superoperator in Pauli-product basis
-            superop_mx_pp = Uop_embed.to_dense(on_space='HilbertSchmidt')
+            superop_mx_pp = Uop_embed.to_dense("HilbertSchmidt")
             # a real 4*num_qubits x 4*num_qubits mx superoperator in final basis
             superop_mx_in_basis = _bt.change_basis(superop_mx_pp, 'pp', basis)
 
@@ -362,7 +363,7 @@ def create_operation(op_expr, state_space, basis="pp", parameterization="full", 
             # a complex 2*num_qubits x 2*num_qubits mx unitary on full space
             Uop_embed = _op.EmbeddedOp(state_space, [label1, label2], Uop)
             # a real 4*num_qubits x 4*num_qubits mx superoperator in Pauli-product basis
-            superop_mx_pp = Uop_embed.to_dense(on_space='HilbertSchmidt')
+            superop_mx_pp = Uop_embed.to_dense("HilbertSchmidt")
             # a real 4*num_qubits x 4*num_qubits mx superoperator in final basis
             superop_mx_in_basis = _bt.change_basis(superop_mx_pp, 'pp', basis)
 
@@ -752,7 +753,7 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
     state_space = _statespace.QubitSpace(qudit_labels) if all([udim == 2 for udim in processor_spec.qudit_udims]) \
         else _statespace.QuditSpace(qudit_labels, processor_spec.qudit_udims)
     std_gate_unitaries = _itgs.standard_gatename_unitaries()
-    evotype = _Evotype.cast(evotype)
+    evotype = _Evotype.cast(evotype, state_space=state_space)
     modelnoise = _OpModelNoise.cast(modelnoise)
     modelnoise.reset_access_counters()
 
@@ -883,7 +884,7 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
             key = _label.Label(instrument_name, inds)
 
             if isinstance(instrument_spec, str):
-                if instrument_spec == "Iz":
+                if instrument_spec == "Iz": #TODO: Create a set of standard instruments the same way we handle gates.
                     #NOTE: this is very inefficient currently - there should be a better way of
                     # creating an Iz instrument in the FUTURE
                     inst_members = {}
@@ -891,7 +892,7 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
                         raise NotImplementedError("'Iz' instrument can only be constructed on a space of *qubits*")
                     for ekey, effect_vec in _povm.ComputationalBasisPOVM(nqubits=len(qudit_labels), evotype=evotype,
                                                                          state_space=state_space).items():
-                        E = effect_vec.to_dense('HilbertSchmidt').reshape((state_space.dim, 1))
+                        E = effect_vec.to_dense("HilbertSchmidt").reshape((state_space.dim, 1))
                         inst_members[ekey] = _np.dot(E, E.T)  # (effect vector is a column vector)
                     ideal_instrument = _instrument.Instrument(inst_members)
                 else:
@@ -903,7 +904,17 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
                     num_qudits = len(qudit_labels)
                     if isinstance(spec, str):
                         if spec.isdigit():  # all([l in ('0', '1') for l in spec]): for qubits
-                            bydigit_index = effect_spec
+                            bydigit_index = spec
+                            assert (len(bydigit_index) == num_qudits), \
+                                "Wrong number of qudits in '%s': expected %d" % (spec, num_qudits)
+                            #Map a (possibly possibly mixed-base) string qudit state specifiers to a
+                            #integer mapping into the corresponding standard basis state.
+                            v = _np.zeros(state_space.udim)
+                            inc = _np.flip(_np.cumprod(list(reversed(processor_spec.qudit_udims[1:] + (1,)))))
+                            index = _np.dot(inc, list(map(int, bydigit_index)))
+                            v[index] = 1.0
+                        elif (not is_prep) and spec.startswith("E_") and spec[len('E_'):].isdigit():
+                            bydigit_index = spec[len('E_'):]
                             assert (len(bydigit_index) == num_qudits), \
                                 "Wrong number of qudits in '%s': expected %d" % (spec, num_qudits)
                             v = _np.zeros(state_space.udim)
@@ -915,6 +926,14 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
                             assert (0 <= index < state_space.udim), \
                                 "Index in '%s' out of bounds for state space with udim %d" % (spec, state_space.udim)
                             v = _np.zeros(state_space.udim); v[index] = 1.0
+                        elif is_prep and spec.startswith("rho_") and spec[len('rho_'):].isdigit():
+                            bydigit_index = spec[len('rho_'):]
+                            assert (len(bydigit_index) == num_qudits), \
+                                "Wrong number of qudits in '%s': expected %d" % (spec, num_qudits)
+                            v = _np.zeros(state_space.udim)
+                            inc = _np.flip(_np.cumprod(list(reversed(processor_spec.qudit_udims[1:] + (1,)))))
+                            index = _np.dot(inc, list(map(int, bydigit_index)))
+                            v[index] = 1.0
                         elif is_prep and spec.startswith("rho") and spec[len('rho'):].isdigit():
                             index = int(effect_spec[len('rho'):])
                             assert (0 <= index < state_space.udim), \
@@ -932,22 +951,27 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
 
                     return _bt.change_basis(_ot.state_to_dmvec(v), 'std', basis)
 
-                # elements are key, list-of-2-tuple pairs
+                # elements are key, list-of-2-tuple pairs or numpy array 
                 inst_members = {}
-                for k, lst in instrument_spec.items():
+                for k, inst_effect_spec in instrument_spec.items():
+                    #one option is to specify the full dense instrument effect as a numpy array.
+                    if isinstance(inst_effect_spec, _np.ndarray):
+                        inst_members[k] = inst_effect_spec.copy()
+                        continue
                     member = None
-                    if len(lst) == 2:
-                        for effect_spec, prep_spec in lst:
+                    if isinstance(inst_effect_spec, tuple):
+                        inst_effect_spec = [inst_effect_spec]
+                    elif isinstance(inst_effect_spec, list):
+                        #elements should be 2-tuples corresponding to effect specs and prep effects respectively.
+                        for (effect_spec, prep_spec) in inst_effect_spec:
                             effect_vec = _spec_to_densevec(effect_spec, is_prep=False)
                             prep_vec = _spec_to_densevec(prep_spec, is_prep=True)
                             if member is None:
                                 member = _np.outer(effect_vec, prep_vec)
                             else:
                                 member += _np.outer(effect_vec, prep_vec)
-                    else: # elements are key, array of outer product already
-                        # TODO: This appears to be the new standard format. Deprecate outer prod code above?
-                        # But old code could still be useful.
-                        member = lst.copy()
+                    else:
+                        raise ValueError('Unsupported instrument effect specification. See documentation of `QuditProcessorSpec` or `QubitProcessorSpec` for supported formats.')
 
                     assert (member is not None), \
                         "You must provide at least one rank-1 specifier for each instrument member!"
@@ -974,7 +998,7 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
     local_noise = False; independent_gates = True; independent_spam = True
     prep_layers, povm_layers = _create_spam_layers(processor_spec, modelnoise, local_noise,
                                                    ideal_prep_type, ideal_povm_type, evotype,
-                                                   state_space, independent_gates, independent_spam, basis)
+                                                   state_space, independent_spam, basis)
     for k, v in prep_layers.items():
         ret.preps[k] = v
     for k, v in povm_layers.items():
@@ -997,7 +1021,7 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
 
 
 def _create_spam_layers(processor_spec, modelnoise, local_noise,
-                        ideal_prep_type, ideal_povm_type, evotype, state_space, independent_gates, independent_spam,
+                        ideal_prep_type, ideal_povm_type, evotype, state_space, independent_spam,
                         basis='pp'):
     """ local_noise=True creates lindblad ops that are embedded & composed 1Q ops, and assumes
         that modelnoise specifies 1Q noise.  local_noise=False assumes modelnoise specifies n-qudit noise"""
@@ -1099,7 +1123,8 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
            or ideal_prep_type.startswith('1+(') or ideal_prep_type.startswith('lindblad ')):
 
             if isinstance(prep_spec, str):
-                # Notes on conventions:  When there are multiple qubits, the leftmost in a string (or, intuitively,
+                """
+                Notes on conventions:  When there are multiple qubits, the leftmost in a string (or, intuitively,
                 # the first element in a list, e.g. [Q0_item, Q1_item, etc]) is "qubit 0".  For example, in the
                 # outcome string "01" qubit0 is 0 and qubit1 is 1.  To create the full state/projector, 1Q operations
                 # are tensored together in the same order, i.e., kron(Q0_item, Q1_item, ...).  When a state is specified
@@ -1108,6 +1133,7 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
                 # where i is written normally, with the least significant bit on the right (but, perhaps
                 # counterintuitively, this bit corresponds to the highest-indexed qubit).  For example, "rho6" in a
                 # 3-qubit system corresponds to "rho_110", that is |1> otimes |1> otimes |0> or |110>.
+                """
                 if not all([udim == 2 for udim in processor_spec.qudit_udims]):
                     raise NotImplementedError(("State preps can currently only be constructed on a space of *qubits*"
                                                " when `ideal_prep_type == 'computational'` or is a Lindblad type"))
@@ -1153,10 +1179,11 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
 
             def _create_ideal_1Q_prep(ud, i):
                 v = _np.zeros(ud, 'd'); v[i] = 1.0
-                return _state.create_from_pure_vector(v, vectype, 'pp', evotype, state_space=None)
+                return _state.create_from_pure_vector(v, vectype, basis, evotype, state_space=None)
 
             if isinstance(prep_spec, str):
-                if prep_spec.startswith('rho_') and all([l in ('0', '1') for l in prep_spec[len('rho_'):]]):
+                if prep_spec.startswith('rho_') and \
+                    all([l in [str(j) for j in processor_spec.qudit_udims[i]] for i,l in enumerate(prep_spec[len('rho_'):])]):
                     bydigit_index = prep_spec[len('rho_'):]
                     assert (len(bydigit_index) == num_qudits), \
                         "Wrong number of qudits in '%s': expected %d" % (prep_spec, num_qudits)
@@ -1269,7 +1296,7 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
 
             def _create_ideal_1Q_povm(ud):
                 effect_vecs = [(str(i), _1vec(ud, i)) for i in range(ud)]
-                return _povm.create_from_pure_vectors(effect_vecs, vectype, 'pp',
+                return _povm.create_from_pure_vectors(effect_vecs, vectype, basis,
                                                       evotype, state_space=None)
 
             if isinstance(povm_spec, str):
@@ -1322,11 +1349,12 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
                         "You must provide at least one component effect specifier for each POVM effect!"
 
                     effect_components = []
-                    if len(effect_spec) > 1: convert_to_dmvecs = True
+                    if len(effect_spec) > 1: 
+                        convert_to_dmvecs = True
                     for comp_espec in effect_spec:
                         if isinstance(comp_espec, str):
-                            if comp_espec.isdigit():  # all([l in ('0', '1') for l in comp_espec]) for qubits
-                                bydigit_index = comp_espec
+                            if comp_espec.isdigit() or (comp_espec.startswith("E_") and comp_espec[len('E_'):].isdigit()):  # all([l in ('0', '1') for l in comp_espec]) for qubits
+                                bydigit_index = comp_espec if comp_espec.isdigit() else comp_espec[len('E_'):]
                                 assert (len(bydigit_index) == num_qudits), \
                                     "Wrong number of qudits in '%s': expected %d" % (comp_espec, num_qudits)
                                 v = _np.zeros(state_space.udim)
@@ -1351,7 +1379,6 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
                         else:
                             raise ValueError("Invalid POVM effect spec: %s" % str(comp_espec))
                         effects_components.append((k, effect_components))
-
                 if convert_to_dmvecs:
                     effects = []
                     for k, effect_components in effects_components:
@@ -1676,7 +1703,7 @@ def _create_crosstalk_free_model(processor_spec, modelnoise, custom_gates=None, 
     qudit_labels = processor_spec.qudit_labels
     state_space = _statespace.QubitSpace(qudit_labels) if all([udim == 2 for udim in processor_spec.qudit_udims]) \
         else _statespace.QuditSpace(qudit_labels, processor_spec.qudit_udims)
-    evotype = _Evotype.cast(evotype)
+    evotype = _Evotype.cast(evotype, state_space=state_space)
     modelnoise = _OpModelNoise.cast(modelnoise)
     modelnoise.reset_access_counters()
 
@@ -1695,7 +1722,7 @@ def _create_crosstalk_free_model(processor_spec, modelnoise, custom_gates=None, 
     local_noise = True
     prep_layers, povm_layers = _create_spam_layers(processor_spec, modelnoise, local_noise,
                                                    ideal_prep_type, ideal_povm_type, evotype,
-                                                   state_space, independent_gates, independent_spam, basis)
+                                                   state_space, independent_spam, basis)
 
     modelnoise.warn_about_zero_counters()
     return _LocalNoiseModel(processor_spec, gatedict, prep_layers, povm_layers,
@@ -1867,7 +1894,7 @@ def _create_cloud_crosstalk_model(processor_spec, modelnoise, custom_gates=None,
     qudit_labels = processor_spec.qudit_labels
     state_space = _statespace.QubitSpace(qudit_labels) if all([udim == 2 for udim in processor_spec.qudit_udims]) \
         else _statespace.QuditSpace(qudit_labels, processor_spec.qudit_udims)  # FUTURE: allow more types of spaces
-    evotype = _Evotype.cast(evotype)
+    evotype = _Evotype.cast(evotype, state_space=state_space)
     modelnoise = _OpModelNoise.cast(modelnoise)
     modelnoise.reset_access_counters()
     printer = _VerbosityPrinter.create_printer(verbosity)
@@ -1884,7 +1911,7 @@ def _create_cloud_crosstalk_model(processor_spec, modelnoise, custom_gates=None,
     local_noise = False
     prep_layers, povm_layers = _create_spam_layers(processor_spec, modelnoise, local_noise,
                                                    'computational', 'computational', evotype, state_space,
-                                                   independent_gates, independent_spam, basis)
+                                                   independent_spam, basis)
 
     if errcomp_type == 'gates':
         create_stencil_fn = modelnoise.create_errormap_stencil

@@ -2,7 +2,7 @@
 Core GST algorithms
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -31,8 +31,9 @@ from pygsti.modelmembers import instruments as _instrument
 from pygsti.modelmembers import states as _state
 from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
-from pygsti.optimize.customlm import CustomLMOptimizer as _CustomLMOptimizer
-from pygsti.optimize.customlm import Optimizer as _Optimizer
+from pygsti.optimize.simplerlm import Optimizer as _Optimizer, SimplerLMOptimizer as _SimplerLMOptimizer
+from pygsti import forwardsims as _fwdsims
+from pygsti import layouts as _layouts
 
 _dummy_profiler = _DummyProfiler()
 
@@ -400,7 +401,7 @@ def _construct_ab(prep_fiducials, effect_fiducials, model, dataset, op_label_ali
         for j, rhostr in enumerate(prep_fiducials):
             opLabelString = rhostr + estr  # LEXICOGRAPHICAL VS MATRIX ORDER
             dsStr = opLabelString.replace_layers_with_aliases(op_label_aliases)
-            expd_circuit_outcomes = opLabelString.expand_instruments_and_separate_povm(model)
+            expd_circuit_outcomes = model.expand_instruments_and_separate_povm(opLabelString)
             assert(len(expd_circuit_outcomes) == 1), "No instruments are allowed in LGST fiducials!"
             unique_key = next(iter(expd_circuit_outcomes.keys()))
             outcomes = expd_circuit_outcomes[unique_key]
@@ -429,7 +430,7 @@ def _construct_x_matrix(prep_fiducials, effect_fiducials, model, op_label_tuple,
         for j, rhostr in enumerate(prep_fiducials):
             opLabelString = rhostr + _circuits.Circuit(op_label_tuple, line_labels=rhostr.line_labels) + estr
             dsStr = opLabelString.replace_layers_with_aliases(op_label_aliases)
-            expd_circuit_outcomes = opLabelString.expand_instruments_and_separate_povm(model)
+            expd_circuit_outcomes = model.expand_instruments_and_separate_povm(opLabelString)
             dsRow_fractions = dataset[dsStr].fractions
             assert(len(expd_circuit_outcomes) == nVariants)
 
@@ -617,7 +618,7 @@ def run_gst_fit_simple(dataset, start_model, circuits, optimizer, objective_func
     model : Model
         the best-fit model.
     """
-    optimizer = optimizer if isinstance(optimizer, _Optimizer) else _CustomLMOptimizer.cast(optimizer)
+    optimizer = optimizer if isinstance(optimizer, _Optimizer) else _SimplerLMOptimizer.cast(optimizer)
     objective_function_builder = _objfns.ObjectiveFunctionBuilder.cast(objective_function_builder)
     array_types = optimizer.array_types + \
         objective_function_builder.compute_array_types(optimizer.called_objective_methods, start_model.sim)
@@ -664,7 +665,7 @@ def run_gst_fit(mdc_store, optimizer, objective_function_builder, verbosity=0):
     objfn_store : MDCObjectiveFunction
         the objective function and store containing the best-fit model evaluated at the best-fit point.
     """
-    optimizer = optimizer if isinstance(optimizer, _Optimizer) else _CustomLMOptimizer.cast(optimizer)
+    optimizer = optimizer if isinstance(optimizer, _Optimizer) else _SimplerLMOptimizer.cast(optimizer)
     comm = mdc_store.resource_alloc.comm
     profiler = mdc_store.resource_alloc.profiler
     printer = VerbosityPrinter.create_printer(verbosity, comm)
@@ -677,16 +678,10 @@ def run_gst_fit(mdc_store, optimizer, objective_function_builder, verbosity=0):
         if _np.linalg.norm(mdc_store.model.to_vector() - v_cmp) > 1e-6:
             raise ValueError("MPI ERROR: *different* MC2GST start models"
                              " given to different processors!")                   # pragma: no cover
-
-    #MEM from ..baseobjs.profiler import Profiler
-    #MEM debug_prof = Profiler(comm)
-    #MEM debug_prof.print_memory("run_gst_fit1", True)
-
+        
     if objective_function_builder is not None:
         objective_function_builder = _objfns.ObjectiveFunctionBuilder.cast(objective_function_builder)
-        #MEM debug_prof.print_memory("run_gst_fit2", True)
         objective = objective_function_builder.build_from_store(mdc_store, printer)  # (objective is *also* a store)
-        #MEM debug_prof.print_memory("run_gst_fit3", True)
     else:
         assert(isinstance(mdc_store, _objfns.ObjectiveFunction)), \
             "When `objective_function_builder` is None, `mdc_store` must be an objective fn!"
@@ -705,14 +700,8 @@ def run_gst_fit(mdc_store, optimizer, objective_function_builder, verbosity=0):
 
     printer.log("Completed in %.1fs" % (_time.time() - tStart), 1)
 
-    #if target_model is not None:
-    #  target_vec = target_model.to_vector()
-    #  targetErrVec = _objective_func(target_vec)
-    #  return minErrVec, soln_gs, targetErrVec
     profiler.add_time("do_mc2gst: total time", tStart)
-    #TODO: evTree.permute_computation_to_original(minErrVec) #Doesn't work b/c minErrVec is flattened
-    # but maybe best to just remove minErrVec from return value since this isn't very useful
-    # anyway?
+
     return opt_result, objective
 
 
@@ -776,19 +765,21 @@ def run_iterative_gst(dataset, start_model, circuit_lists,
 
     models = []
     optimums = []
+    mdc_store_list = []
 
     for i in range(len(circuit_lists)):
         #then do the final iteration slightly differently since the generator should
         #give three return values.
         if i==len(circuit_lists)-1:
-            mdl_iter, opt_iter, final_objfn =  next(gst_iter_gen)
+                mdl_iter, opt_iter, mdc_store_iter, final_objfn = next(gst_iter_gen)
         else:
-            mdl_iter, opt_iter =  next(gst_iter_gen)
+            mdl_iter, opt_iter, mdc_store_iter =  next(gst_iter_gen)
 
         models.append(mdl_iter)
         optimums.append(opt_iter)
+        mdc_store_list.append(mdc_store_iter)
         
-    return models, optimums, final_objfn
+    return models, optimums, final_objfn, mdc_store_list
 
 def iterative_gst_generator(dataset, start_model, circuit_lists,
                       optimizer, iteration_objfn_builders, final_objfn_builders,
@@ -853,7 +844,7 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
           (an "evaluated" model-dataset-circuits store).
     """
     resource_alloc = _ResourceAllocation.cast(resource_alloc)
-    optimizer = optimizer if isinstance(optimizer, _Optimizer) else _CustomLMOptimizer.cast(optimizer)
+    optimizer = optimizer if isinstance(optimizer, _Optimizer) else _SimplerLMOptimizer.cast(optimizer)
     comm = resource_alloc.comm
     profiler = resource_alloc.profiler
     printer = VerbosityPrinter.create_printer(verbosity, comm)
@@ -888,10 +879,30 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
     #The ModelDatasetCircuitsStore
     printer.log('Precomputing CircuitOutcomeProbabilityArray layouts for each iteration.', 2)
     precomp_layouts = []
+
+    #pre-compute a dictionary caching completed circuits for layout construction performance.
+    unique_circuits = list({ckt for circuit_list in circuit_lists for ckt in circuit_list})
+    if isinstance(mdl.sim, (_fwdsims.MatrixForwardSimulator, _fwdsims.MapForwardSimulator)):
+        precomp_layout_circuit_cache = mdl.sim.create_copa_layout_circuit_cache(unique_circuits, mdl, dataset=dataset)
+    else:
+        precomp_layout_circuit_cache = None
+
     for i, circuit_list in enumerate(circuit_lists):
         printer.log(f'Layout for iteration {i}', 2)
-        precomp_layouts.append(mdl.sim.create_layout(circuit_list, dataset, resource_alloc, array_types, verbosity= printer - 1))
-    
+        precomp_layouts.append(mdl.sim.create_layout(circuit_list, dataset, resource_alloc, array_types, verbosity= printer - 1,
+                                                    layout_creation_circuit_cache = precomp_layout_circuit_cache))
+        
+    #precompute a cache of possible outcome counts for each circuits to accelerate MDC store creation
+    if isinstance(mdl, _models.model.OpModel):
+        if precomp_layout_circuit_cache is not None: #then grab the split circuits from there.
+            expanded_circuit_outcome_list = mdl.bulk_expand_instruments_and_separate_povm(unique_circuits, 
+                                                                                          completed_circuits= precomp_layout_circuit_cache['completed_circuits'].values())
+        else:
+            expanded_circuit_outcome_list = mdl.bulk_expand_instruments_and_separate_povm(unique_circuits)        
+        outcome_count_by_circuit_cache = {ckt: len(outcome_tup) for ckt,outcome_tup in zip(unique_circuits, expanded_circuit_outcome_list)}
+    else:
+        outcome_count_by_circuit_cache = {ckt: mdl.compute_num_outcomes(ckt) for ckt in unique_circuits}
+
     with printer.progress_logging(1):
         for i in range(starting_index, len(circuit_lists)):
             circuitsToEstimate = circuit_lists[i]
@@ -908,7 +919,8 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
             mdl.basis = start_model.basis  # set basis in case of CPTP constraints (needed?)
             initial_mdc_store = _objfns.ModelDatasetCircuitsStore(mdl, dataset, circuitsToEstimate, resource_alloc,
                                                                   array_types=array_types, verbosity=printer - 1, 
-                                                                  precomp_layout = precomp_layouts[i])
+                                                                  precomp_layout = precomp_layouts[i],
+                                                                  outcome_count_by_circuit=outcome_count_by_circuit_cache)
             mdc_store = initial_mdc_store
 
             for j, obj_fn_builder in enumerate(iteration_objfn_builders):
@@ -917,7 +929,6 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
                     first_iter_optimizer = _copy.deepcopy(optimizer)  # use a separate copy of optimizer, as it
                     first_iter_optimizer.fditer = optimizer.first_fditer  # is a persistent object (so don't modify!)
                     opt_result, mdc_store = run_gst_fit(mdc_store, first_iter_optimizer, obj_fn_builder, printer - 1)
-
                 else:
                     opt_result, mdc_store = run_gst_fit(mdc_store, optimizer, obj_fn_builder, printer - 1)
                 profiler.add_time('run_iterative_gst: iter %d %s-opt' % (i + 1, obj_fn_builder.name), tNxt)
@@ -934,7 +945,6 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
                     mdl.basis = start_model.basis
                     opt_result, mdc_store = run_gst_fit(mdc_store, optimizer, obj_fn_builder, printer - 1)
                     profiler.add_time('run_iterative_gst: final %s opt' % obj_fn_builder.name, tNxt)
-
                 tNxt = _time.time()
                 printer.log("Final optimization took %.1fs\n" % (tNxt - tRef), 2)
                 tRef = tNxt
@@ -944,11 +954,13 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
                 # Note: initial_mdc_store is *not* an objective fn (it's just a store) so don't send it back.
                 if mdc_store is not initial_mdc_store:
                     final_objfn = mdc_store
-
-                yield (mdc_store.model, opt_result, final_objfn)
+                yield (mdc_store.model, opt_result, mdc_store, final_objfn)
             else:
-                #If not the final iteration then only send back a copy of the model and the optimizer results
-                yield (mdc_store.model.copy(), opt_result)
+                #If not the final iteration then send back a copy of the model and the optimizer results
+                #mdc_store gets re-initialized at the start of each circuit list iteration, and doesn't appear
+                #to get propagated beyond that point so sending it back directly without copying (which would
+                #probably require implementing a custom method for MDC store objects) should be fairly safe.
+                yield (mdc_store.model.copy(), opt_result, mdc_store)
 
     printer.log('Iterative GST Total Time: %.1fs' % (_time.time() - tStart))
     profiler.add_time('run_iterative_gst: total time', tStart)
@@ -1139,8 +1151,6 @@ def find_closest_unitary_opmx(operation_mx):
     # d = _np.sqrt(operation_mx.shape[0])
     # I = _np.identity(d)
 
-    #def getu_1q(basisVec):  # 1 qubit version
-    #    return _spl.expm( 1j * (basisVec[0]*_tools.sigmax + basisVec[1]*_tools.sigmay + basisVec[2]*_tools.sigmaz) )
     def _get_gate_mx_1q(basis_vec):  # 1 qubit version
         return _tools.single_qubit_gate(basis_vec[0],
                                         basis_vec[1],

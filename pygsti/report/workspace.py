@@ -2,7 +2,7 @@
 Defines the Workspace class and supporting functionality.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -15,7 +15,6 @@ import inspect as _inspect
 import itertools as _itertools
 import os as _os
 import pickle as _pickle
-# import uuid        as _uuid
 import random as _random
 import shutil as _shutil
 import subprocess as _subprocess
@@ -62,7 +61,7 @@ def display_ipynb(content):
     -------
     None
     """
-    from IPython.core.display import display, HTML
+    from IPython.display import display, HTML
     display(HTML(content))
 
 
@@ -1444,13 +1443,8 @@ class SwitchValue(object):
         #use __dict__ so no chance for recursive __getattr__
         return getattr(self.__dict__['base'], attr)
 
-    def __len__(self): return len(self.base)
-    #Future - arithmetic ops should return a new SwitchValue
-    #def __add__(self,x):       return self.base + x
-    #def __sub__(self,x):       return self.base - x
-    #def __mul__(self,x):       return self.base * x
-    #def __truediv__(self, x):  return self.base / x
-
+    def __len__(self):
+        return len(self.base)
 
 class WorkspaceOutput(object):
     """
@@ -2452,7 +2446,7 @@ class WorkspacePlot(WorkspaceOutput):
 
     def __init__(self, ws, fn, *args):
         """
-        Create a new WorkspaceTable.  Usually not called directly.
+        Create a new WorkspacePlot.  Usually not called directly.
 
         Parameters
         ----------
@@ -2466,6 +2460,9 @@ class WorkspacePlot(WorkspaceOutput):
             The arguments to `fn`.
         """
         super(WorkspacePlot, self).__init__(ws)
+        #add a plot specific option for aspect ratios
+        self.options['lock_aspect_ratio'] = True 
+
         '''
         # LSaldyt: removed plotfn for easier pickling? It doesn't seem to be used anywhere
         self.plotfn = fn
@@ -2502,6 +2499,7 @@ class WorkspacePlot(WorkspaceOutput):
         overrideIDs = self.options.get('switched_item_id_overrides', {})
         switched_item_mode = self.options.get('switched_item_mode', 'inline')
         output_dir = self.options.get('output_dir', None)
+        lock_aspect_ratio = self.options.get('lock_aspect_ratio', True)
 
         if valign == 'top':
             abswrap_cls = 'abswrap'
@@ -2516,13 +2514,6 @@ class WorkspacePlot(WorkspaceOutput):
         plotID = "plot_" + id
 
         if typ == "html":
-
-            #def getPlotlyDivID(html):
-            #    #could make this more robust using lxml or something later...
-            #    iStart = html.index('div id="')
-            #    iEnd = html.index('"', iStart+8)
-            #    return html[iStart+8:iEnd]
-
             ##pick "master" plot, whose resizing dictates the resizing of other plots,
             ## as the largest-height plot.
             #iMaster = None; maxH = 0;
@@ -2552,7 +2543,7 @@ class WorkspacePlot(WorkspaceOutput):
                     #fig.plotlyfig.update_layout(template=DEFAULT_PLOTLY_TEMPLATE)  #slow: set default theme in plot_ex
                     fig_dict = _plotly_ex.plot_ex(
                         fig.plotlyfig, show_link=False, resizable=resizable,
-                        lock_aspect_ratio=True, master=True, validate=VALIDATE_PLOTLY,  # bool(i==iMaster)
+                        lock_aspect_ratio=lock_aspect_ratio, master=True, validate=VALIDATE_PLOTLY,  # bool(i==iMaster)
                         click_to_display=self.options['click_to_display'],
                         link_to=self.options['link_to'], link_to_id=plotDivID,
                         rel_figure_dir=_os.path.basename(

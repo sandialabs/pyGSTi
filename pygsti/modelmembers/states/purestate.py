@@ -2,7 +2,7 @@
 The EmbeddedPureState class and supporting functionality.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -20,6 +20,7 @@ from pygsti.evotypes import Evotype as _Evotype
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
 from pygsti.tools import basistools as _bt
 from pygsti.tools import optools as _ot
+from pygsti import SpaceT
 
 
 #TODO: figure out what to do with this class when we wire up term calcs??
@@ -64,7 +65,7 @@ class EmbeddedPureState(_State):
         self.pure_state = pure_state
         self.basis = dm_basis  # only used for dense conversion
 
-        evotype = _Evotype.cast(evotype)
+        evotype = _Evotype.cast(evotype, state_space=self.pure_state.state_space)
         #rep = evotype.create_state_rep()
         #rep.init_from_dense_purevec(pure_state)
         raise NotImplementedError("Maybe this class isn't even needed, or need to create a static pure state class?")
@@ -86,7 +87,7 @@ class EmbeddedPureState(_State):
         #_State.__init__(self, rep, evotype)
         #self.init_gpindices()  # initialize our gpindices based on sub-members
 
-    def to_dense(self, on_space='minimal', scratch=None):
+    def to_dense(self, on_space: SpaceT='minimal', scratch=None):
         """
         Return this state vector as a (dense) numpy array.
 
@@ -108,7 +109,7 @@ class EmbeddedPureState(_State):
         numpy.ndarray
         """
         assert(on_space in ('minimal', 'HilbertSchmidt'))
-        dmVec_std = _ot.state_to_dmvec(self.pure_state.to_dense(on_space='Hilbert'))
+        dmVec_std = _ot.state_to_dmvec(self.pure_state.to_dense("Hilbert"))
         return _bt.change_basis(dmVec_std, 'std', self.basis)
 
     def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):
