@@ -146,7 +146,7 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
         target_model_fit.sim = pygsti.forwardsims.MapForwardSimulator(param_blk_sizes=(100,100))
         x0 = target_model_fit.to_vector()
         if not disable_checkpoints and rank == 0:
-            new_checkpoint.target_model_fit = target_model_fit
+            new_checkpoint.target_model = target_model_fit
             new_checkpoint.x0 = x0
             new_checkpoint.save()
             print('Checkpoint saved in', new_checkpoint.path)

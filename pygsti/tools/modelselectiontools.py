@@ -63,7 +63,7 @@ class AMSCheckpoint(_NicelySerializable):
     
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
-        state.update({'target_model' : self.target_model._to_nice_serialization(),
+        state.update({'target_model' : self.target_model._to_nice_serialization() if self.target_model is not None else None,
                         'datasetstr' : self.datasetstr,
                         'er_thresh' : self.er_thresh,
                         'maxiter' : self.maxiter,
