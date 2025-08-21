@@ -225,7 +225,7 @@ def compare_parameters_simple(parent_model_vec, red_model_vec, projector_matrix)
     for row in table_data:
         print("{: <25} {: <25}".format(*row), '\n')
 
-def parallel_GST(target_model, data, min_prob_clip, tol, maxiter, verbosity, comm=None, mem_limit=None):
+def parallel_GST(target_model, data, min_prob_clip=1e-7, tol=1e-10, maxiter=300, verbosity=0, comm=None, mem_limit=None):
     """
     Wrapper to run GST with MPI with custom builders where the tolerance, probability clip and max iterations
     are easily accesible. The seed model, "target model", gets reset to its error-less version before doing

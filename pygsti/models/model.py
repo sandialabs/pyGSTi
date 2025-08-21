@@ -1303,13 +1303,15 @@ class OpModel(Model):
                     updated_children.extend(obj.values())
         else:
             updated_children = None
-
+        #TODO profile to see if this makes errgen GST slower
+        indices_set = set(indices)
         # Call from_vector on elements of the cache
         if self._call_fromvector_on_cache:
             for opcache in self._opcaches.values():
                 for obj in opcache.values():
                     opcache_elem_gpindices = _slct.indices(obj.gpindices) if isinstance(obj.gpindices, slice) else obj.gpindices
-                    if any([idx in opcache_elem_gpindices for idx in indices]):
+                    opcache_elem_gpindices_set = set(opcache_elem_gpindices)
+                    if indices_set.intersection(opcache_elem_gpindices_set):
                         #check whether we have already updated this object.
                         if updated_children is not None and any([child is obj for child in updated_children]):
                             continue
