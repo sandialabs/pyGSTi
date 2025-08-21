@@ -11,8 +11,6 @@ import collections
 
 import pygsti
 from pygsti.modelpacks.legacy import std1Q_XY as std
-import pygsti.serialization.json as json
-import pygsti.serialization.msgpack as msgpack
 from pygsti.baseobjs.label import CircuitLabel
 
 from ..testutils import BaseTestCase, temp_files
@@ -65,7 +63,7 @@ class CodecsTestCase(BaseTestCase):
 
         #make a confidence region factory
         estLbl = self.results.name
-        crfact = self.results.estimates[estLbl].add_confidence_region_factory('go0', 'final')
+        crfact = self.results.estimates[estLbl].add_confidence_region_factory('stdgaugeopt', 'final')
         crfact.compute_hessian(comm=None)
         crfact.project_hessian('std')
 
@@ -82,127 +80,6 @@ class CodecsTestCase(BaseTestCase):
 
 
 class TestCodecs(CodecsTestCase):
-
-    def test_json(self):
-
-        #basic types
-        s = json.dumps(range(10))
-        x = json.loads(s)
-        s = json.dumps(4 + 3.0j)
-        x = json.loads(s)
-        s = json.dumps(np.array([1, 2, 3, 4], 'd'))
-        x = json.loads(s)
-        s = json.dumps(testObj)
-        x = json.loads(s)
-
-        #string list
-        s = json.dumps(self.lsgstStrings)
-        x = json.loads(s)
-        self.assertEqual(x, self.lsgstStrings)
-
-        # DataSet
-        s = json.dumps(self.ds)
-        x = json.loads(s)
-        self.assertEqual(list(x.keys()), list(self.ds.keys()))
-        self.assertEqual(x[('Gx',)].to_dict(), self.ds[('Gx',)].to_dict())
-
-        # Model
-        s = json.dumps(self.datagen_gateset)
-        with open(temp_files + "/model.json",'w') as f:
-            json.dump(self.datagen_gateset, f)
-        with open(temp_files + "/model.json",'r') as f:
-            x = json.load(f)
-        s = json.dumps(self.mdl_withInst)
-        x = json.loads(s)
-        self.assertAlmostEqual(self.mdl_withInst.frobeniusdist(x),0)
-
-        #print(s)
-        x._check_paramvec(True)
-        self.assertAlmostEqual(self.datagen_gateset.frobeniusdist(x),0)
-
-        # Results (containing confidence region)
-        std.target_model()._check_paramvec()
-        print("target_model = ",id(std.target_model()))
-        print("rho0 parent = ",id(std.target_model().preps['rho0'].parent))
-
-        #import bpdb; bpdb.set_trace()
-        with open(temp_files + "/results.json",'w') as f:
-            json.dump(self.results, f)
-        print("mdl_target2 = ",id(std.target_model()))
-        print("rho0 parent2 = ",id(std.target_model().preps['rho0'].parent))
-        std.target_model()._check_paramvec()
-        with open(temp_files + "/results.json",'r') as f:
-            x = json.load(f)
-        self.assertEqual(list(x.estimates.keys()), list(self.results.estimates.keys()))
-        self.assertEqual(list(x.estimates[x.name].confidence_region_factories.keys()),
-                         list(self.results.estimates[self.results.name].confidence_region_factories.keys()))
-
-        # Workspace
-        s = json.dumps(self.ws)
-        x = json.loads(s)
-         #TODO: comparison (?)
-
-        #Misc other objects
-        for obj in self.miscObjects:
-            s = json.dumps(obj)
-            x = json.loads(s)
-
-
-
-    def test_msgpack(self):
-
-        #basic types
-        s = msgpack.dumps(range(10))
-        x = msgpack.loads(s)
-        s = msgpack.dumps(4 + 3.0j)
-        x = msgpack.loads(s)
-        s = msgpack.dumps(np.array([1, 2, 3, 4], 'd'))
-        x = msgpack.loads(s)
-        s = msgpack.dumps(testObj)
-        x = msgpack.loads(s)
-
-        #string list
-        s = msgpack.dumps(self.lsgstStrings)
-        x = msgpack.loads(s)
-        self.assertEqual(x, self.lsgstStrings)
-
-        # DataSet
-        s = msgpack.dumps(self.ds)
-        x = msgpack.loads(s)
-        self.assertEqual(list(x.keys()), list(self.ds.keys()))
-        self.assertEqual(x[('Gx',)].to_dict(), self.ds[('Gx',)].to_dict())
-
-        # Model
-        s = msgpack.dumps(self.datagen_gateset)
-        with open(temp_files + "/model.mpk",'wb') as f:
-            msgpack.dump(self.datagen_gateset, f)
-        with open(temp_files + "/model.mpk",'rb') as f:
-            x = msgpack.load(f)
-        self.assertAlmostEqual(self.datagen_gateset.frobeniusdist(x),0)
-        s = msgpack.dumps(self.mdl_withInst)
-        x = msgpack.loads(s)
-        self.assertAlmostEqual(self.mdl_withInst.frobeniusdist(x),0)
-
-        # Results (containing confidence region)
-        with open(temp_files + "/results.mpk",'wb') as f:
-            msgpack.dump(self.results, f)
-        with open(temp_files + "/results.mpk",'rb') as f:
-            x = msgpack.load(f)
-        self.assertEqual(list(x.estimates.keys()), list(self.results.estimates.keys()))
-        self.assertEqual(list(x.estimates[x.name].confidence_region_factories.keys()),
-                         list(self.results.estimates[self.results.name].confidence_region_factories.keys()))
-
-        # Workspace
-        s = msgpack.dumps(self.ws)
-        x = msgpack.loads(s)
-         #TODO: comparison (?)
-
-        #Misc other objects
-        for obj in self.miscObjects:
-            s = msgpack.dumps(obj)
-            x = msgpack.loads(s)
-
-
 
     def test_pickle(self):
 

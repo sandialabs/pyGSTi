@@ -113,32 +113,6 @@ class ReportBaseCase(BaseTestCase):
                                                                         'bad_fit_threshold': -1.0},
                                                                         disable_checkpointing= True)
 
-        #OLD
-        #lsgst_gatesets_TP = pygsti.do_iterative_mlgst(cls.ds, cls.mdl_clgst_tp, cls.lsgstStrings, verbosity=0,
-        #                                           min_prob_clip=1e-4, prob_clip_interval=(-1e6,1e6),
-        #                                           returnAll=True) #TP initial model => TP output models
-        #cls.results_logL = pygsti.objects.Results()
-        #cls.results_logL.init_dataset(cls.ds)
-        #cls.results_logL.init_circuits(cls.lsgstStructs)
-        #cls.results_logL.add_estimate(target_model, cls.mdl_clgst_tp,
-        #                         lsgst_gatesets_TP,
-        #                         {'objective': "logl",
-        #                          'min_prob_clip': 1e-4,
-        #                          'prob_clip_interval': (-1e6,1e6), 'radius': 1e-4,
-        #                          'weights': None, 'defaultDirectory': temp_files + "",
-        #                          'defaultBasename': "MyDefaultReportName"})
-        #
-        #tp_target = target_model.copy(); tp_target.set_all_parameterizations("full TP")
-        #gaugeOptParams = gaugeOptParams.copy() #just to be safe
-        #gaugeOptParams['model'] = lsgst_gatesets_TP[-1]  #so can gauge-propagate CIs
-        #gaugeOptParams['target_model'] = tp_target  #so can gauge-propagate CIs
-        #_, gaugeEl, go_final_gateset = pygsti.gaugeopt_to_target(**gaugeOptParams)
-        #gaugeOptParams['_gaugeGroupEl'] = gaugeEl #so can gauge-propagate CIs
-        #cls.results_logL.estimates['default'].add_gaugeoptimized(gaugeOptParams, go_final_gateset)
-        #
-        ##self.results_logL.options.precision = 3
-        ##self.results_logL.options.polar_precision = 2
-
         os.chdir(orig_cwd)
 
     def setUp(self):

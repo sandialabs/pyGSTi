@@ -531,7 +531,7 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False, cp_p
                 #Collect all ideal effects
                 base_dense_effects = []
                 for item in base_items:
-                    dense_effect = item[1].to_dense()
+                    dense_effect = item[1].to_dense(on_space='HilbertSchmidt')
                     base_dense_effects.append(dense_effect.reshape((1,len(dense_effect))))
 
                 dense_ideal_povm = _np.concatenate(base_dense_effects, axis=0)
@@ -539,7 +539,7 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False, cp_p
                 #Collect all noisy effects
                 dense_effects = []
                 for effect in povm.values():
-                    dense_effect = effect.to_dense()
+                    dense_effect = effect.to_dense(on_space='HilbertSchmidt')
                     dense_effects.append(dense_effect.reshape((1,len(dense_effect))))
 
                 dense_povm = _np.concatenate(dense_effects, axis=0)

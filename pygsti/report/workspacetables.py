@@ -128,7 +128,10 @@ class SpamTable(WorkspaceTable):
         
         if confidence_region_infos is None:
             confidence_region_infos = [None]*len(models)
-        
+        elif not isinstance(confidence_region_infos, list):
+            confidence_region_infos = [confidence_region_infos]
+
+
         rhoLabels = list(models[0].preps.keys())  # use labels of 1st model
         povmLabels = list(models[0].povms.keys())  # use labels of 1st model
 
@@ -460,6 +463,9 @@ class GatesTable(WorkspaceTable):
         
         if confidence_region_infos is None:
             confidence_region_infos = [None]*len(models)
+        elif not isinstance(confidence_region_infos, list):
+            confidence_region_infos = [confidence_region_infos]
+        
 
         opLabels = models[0].primitive_op_labels  # use labels of 1st model
         instLabels = list(models[0].instruments.keys())  # requires an explicit model!

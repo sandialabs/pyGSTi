@@ -45,7 +45,7 @@ go_annotation = go.layout.Annotation
 
 
 def _color_boxplot(plt_data, colormap, colorbar=False, box_label_size=0,
-                   prec=0, hover_label_fn=None, hover_labels=None):
+                   prec=0, hover_label_fn=None, hover_labels=None, return_hover_labels=False):
     """
     Create a color box plot.
 
@@ -84,6 +84,10 @@ def _color_boxplot(plt_data, colormap, colorbar=False, box_label_size=0,
         Strings specifying the hover labels for each element of `plt_data`.
         E.g. `hover_labels[i,j]` is the string for the i-th row (y-value)
         and j-th column (x-value) of the plot.
+
+    return_hover_labels : bool, optional (default False)
+        If True, additionally return the parsed (nested) lists of
+        hover labels for each point.
 
     Returns
     -------
@@ -167,8 +171,11 @@ def _color_boxplot(plt_data, colormap, colorbar=False, box_label_size=0,
     )
 
     fig = go.Figure(data=data, layout=layout)
-    
-    return ReportFigure(fig, colormap, plt_data, plt_data=plt_data)
+    rfig = ReportFigure(fig, colormap, plt_data, plt_data=plt_data)
+    if return_hover_labels: 
+        return rfig, hover_labels
+    else:
+        return rfig
 
 
 def _nested_color_boxplot(plt_data_list_of_lists, colormap,
@@ -349,8 +356,8 @@ def _nested_color_boxplot(plt_data_list_of_lists, colormap,
             #but, it looks like adding in a manual xshift value hacks around this limitation, since we *can*
             #place an annotation at the very edge of the plotable area, and then semi-manually shift it over.
             
-            if hoverLabels[j][i]: #unpopulated squares should have the empty string as their hover labels, skip those.
-                on_click_annotations.append(dict(x= data.shape[1], y= 0.5*data.shape[0],
+            if hoverLabels is not None and hoverLabels[j][i]: #unpopulated squares should have the empty string as their hover labels, skip those.
+                on_click_annotations.append(dict(x= data.shape[1], y= .5*data.shape[0],
                                             yanchor= 'middle', xanchor= 'left',
                                             text = hoverLabels[j][i], align= 'left',
                                             bordercolor= 'black', borderwidth= 1,
@@ -558,8 +565,8 @@ def _summable_color_boxplot(sub_mxs, xlabels, ylabels, xlabel, ylabel,
         else: hover_label_fn = None
 
         boxLabelSize = 8 * scale if box_labels else 0
-        fig = _color_boxplot(subMxSums, colormap, colorbar, boxLabelSize,
-                             prec, hover_label_fn)
+        fig, hover_labels = _color_boxplot(subMxSums, colormap, colorbar, boxLabelSize,
+                             prec, hover_label_fn, return_hover_labels=True)
         #update tickvals b/c _color_boxplot doesn't do this (unlike _nested_color_boxplot)
         if fig is not None:
             fig.plotlyfig['layout']['xaxis'].update(tickvals=list(range(nXs)))
@@ -567,7 +574,7 @@ def _summable_color_boxplot(sub_mxs, xlabels, ylabels, xlabel, ylabel,
 
         xBoxes = nXs
         yBoxes = nYs
-
+        
     else:  # not summing up
 
         if hover_info is True:
@@ -643,7 +650,9 @@ def _summable_color_boxplot(sub_mxs, xlabels, ylabels, xlabel, ylabel,
                     hover_label_widths.extend([font.getlength(substring) for substring in split_label])
             #Now get the maximum width.
             max_annotation_width = max(hover_label_widths)
-                
+        else:
+            max_annotation_width = 0
+
         width = lmargin + 10 * xBoxes + rmargin + max_annotation_width
         rmargin +=max_annotation_width
         #manually add in some additional bottom margin for the new toggle buttons for controlling
@@ -677,10 +686,11 @@ def _summable_color_boxplot(sub_mxs, xlabels, ylabels, xlabel, ylabel,
         new_y_1 = -y_abs_1/plottable_height
         #Now let's update the updatemenus
         #updatemenus should be a tuple, but for some reason this looks like
-        #it works...
-        pfig['layout']['updatemenus'][0]['y'] = new_y_0
-        pfig['layout']['updatemenus'][1]['y'] = new_y_0
-        pfig['layout']['updatemenus'][2]['y'] = new_y_1
+        #it works...   
+        if pfig['layout']['updatemenus']:     
+            pfig['layout']['updatemenus'][0]['y'] = new_y_0
+            pfig['layout']['updatemenus'][1]['y'] = new_y_0
+            pfig['layout']['updatemenus'][2]['y'] = new_y_1
         
     else:  # fig is None => use a "No data to display" placeholder figure
         trace = go.Heatmap(z=_np.zeros((10, 10), 'd'),

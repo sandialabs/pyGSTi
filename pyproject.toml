@@ -48,7 +48,6 @@ classifiers=[
     "Operating System :: MacOS :: MacOS X",
     "Operating System :: Unix"
 ]
-license = "Apache-2.0"
 
 [project.optional-dependencies]
 diamond_norm = [

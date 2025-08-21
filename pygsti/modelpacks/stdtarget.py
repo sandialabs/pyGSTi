@@ -43,7 +43,7 @@ def _get_cachefile_names(std_module, param_type, simulator, py_version):
 
 
 # XXX apparently only used from _make_hs_cache_for_std_model which itself looks unused
-def _write_calccache(calc_cache, key_fn, val_fn, json_too=False, comm=None):
+def _write_calccache(calc_cache, key_fn, val_fn, comm=None):
     """
     Write `caclcache`, a dictionary of compact polys, to disk in two files,
     one for the keys and one for the values.
@@ -58,10 +58,6 @@ def _write_calccache(calc_cache, key_fn, val_fn, json_too=False, comm=None):
 
     key_fn, val_fn : str
         key and value filenames.
-
-    json_too : bool, optional
-        When true, the keys are also written in JSON format (to facilitate
-        python2 & 3 compatibility)
 
     comm : mpi4py.MPI.comm
         Communicator for synchronizing across multiple ranks (each with different
@@ -92,13 +88,6 @@ def _write_calccache(calc_cache, key_fn, val_fn, json_too=False, comm=None):
         with _gzip.open(key_fn, 'wb') as f:
             _pickle.dump(ckeys, f, protocol=_pickle.HIGHEST_PROTOCOL)
         print("Wrote %s" % key_fn)
-
-        if json_too:  # for Python 2 & 3 compatibility
-            from pygsti.serialization import json as _json
-            key_fn_json = _os.path.splitext(key_fn)[0] + ".json"
-            with open(key_fn_json, 'w') as f:
-                _json.dump(ckeys, f)
-            print("Wrote %s" % key_fn_json)
 
     if len(keys) > 0:  # some procs might have 0 keys (e.g. the "scheduler")
         values = [calc_cache[k] for k in keys]
