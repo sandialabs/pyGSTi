@@ -1004,7 +1004,7 @@ def _do_runopt(objective, optimizer, printer):
     profiler.add_time("run_gst_fit: optimize", tm)
 
     if printer.verbosity > 0:
-        nModelParams = mdl.num_params  # *don't* use num_modeltest_params here because it could be very slow
+        nModelParams = mdl.num_modeltest_params  # *don't* use num_modeltest_params here because it could be very slow
 
         #Get number of maximal-model parameter ("dataset params") if needed for print messages
         # -> number of independent parameters in dataset (max. model # of params)
