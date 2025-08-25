@@ -913,8 +913,7 @@ def compute_povm_map(model, povmlbl):
     Sk_embedding_in_std = _np.zeros((model.dim, nV))
     for i in range(nV):
         Sk_embedding_in_std[:, i] = _flat_mut_blks(i, i, blkDims)
-
-    std_basis = _Basis.cast('std', model.dim)  # make sure std basis is just straight-up d-dimension
+    std_basis = _Basis.cast_from_name_and_statespace('std', state_space=model.state_space)  # make sure std basis is just straight-up d-dimension
     std_to_basis = model.basis.reverse_transform_matrix(std_basis)
     # OLD: _bt.create_transform_matrix("std", model.basis, blkDims)
     assert(std_to_basis.shape == (model.dim, model.dim))

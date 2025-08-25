@@ -2465,14 +2465,14 @@ def _compute_1d_reference_values_and_name(estimate, badfit_options, gaugeopt_sui
 
             dd = {}
             for key, op in operations_dict.items():
-                dd[key] = 0.5 * _tools.diamonddist(op.to_dense(), targetops_dict[key].to_dense())
+                dd[key] = 0.5 * _tools.diamonddist(op.to_dense(), targetops_dict[key].to_dense(), mx_basis=gaugeopt_model.basis)
                 if dd[key] < 0:  # indicates that diamonddist failed (cvxpy failure)
                     _warnings.warn(("Diamond distance failed to compute %s reference value for 1D wildcard budget!"
                                     " Falling back to trace distance.") % str(key))
                     dd[key] = _tools.jtracedist(op.to_dense(), targetops_dict[key].to_dense())
             
             for key, op in insts_dict.items():
-                inst_dd = 0.5* _tools.instrument_diamonddist(op, targetinsts_dict[key])
+                inst_dd = 0.5* _tools.instrument_diamonddist(op, targetinsts_dict[key], mx_basis=gaugeopt_model.basis)
                 if inst_dd < 0: # indicates that instrument_diamonddist failed
                     _warnings.warn(("Diamond distance failed to compute %s reference value for 1D wildcard budget!"
                                     "No fallback presently available for instruments, so skipping.") % str(key))
@@ -2481,9 +2481,8 @@ def _compute_1d_reference_values_and_name(estimate, badfit_options, gaugeopt_sui
 
             spamdd = {}
             for key, op in preps_dict.items():
-                spamdd[key] = _tools.tracedist(_tools.vec_to_stdmx(op.to_dense(), 'pp'),
-                                               _tools.vec_to_stdmx(targetpreps_dict[key].to_dense(), 'pp'))
-
+                spamdd[key] = _tools.tracedist(_tools.vec_to_stdmx(op.to_dense(), basis = gaugeopt_model.basis),
+                                               _tools.vec_to_stdmx(targetpreps_dict[key].to_dense(), basis = gaugeopt_model.basis))
             for key in povmops_dict.keys():
                 spamdd[key] = 0.5 * _tools.optools.povm_diamonddist(gaugeopt_model, target_model, key)
 
@@ -2497,11 +2496,13 @@ def _compute_1d_reference_values_and_name(estimate, badfit_options, gaugeopt_sui
             dd = {lbl: {} for lbl in gaugeopt_suite.gaugeopt_suite_names}
             for gaugeopt_model, lbl in zip(gaugeopt_models, gaugeopt_suite.gaugeopt_suite_names):
                 for key, op in gaugeopt_model.operations.items():
-                    dd[lbl][key] = 0.5 * _tools.diamonddist(op.to_dense(), target_model.operations[key].to_dense())
+                    dd[lbl][key] = 0.5 * _tools.diamonddist(op.to_dense(), target_model.operations[key].to_dense(),
+                                                            mx_basis=gaugeopt_model.basis)
                     if dd[lbl][key] < 0:  # indicates that diamonddist failed (cvxpy failure)
                         _warnings.warn(("Diamond distance failed to compute %s reference value for 1D wildcard budget!"
                                         " Falling back to trace distance.") % str(key))
-                        dd[lbl][key] = _tools.jtracedist(op.to_dense(), target_model.operations[key].to_dense())
+                        dd[lbl][key] = _tools.jtracedist(op.to_dense(), target_model.operations[key].to_dense(),
+                                                         mx_basis=gaugeopt_model.basis)
 
                 for key, op in gaugeopt_model.instruments.items():
                     inst_dd = 0.5* _tools.instrument_diamonddist(op, target_model.instruments[key], gaugeopt_model.basis)
@@ -2512,8 +2513,8 @@ def _compute_1d_reference_values_and_name(estimate, badfit_options, gaugeopt_sui
                         dd[lbl][key] = inst_dd
                 spamdd = {}
                 for key, op in gaugeopt_model.preps.items():
-                    spamdd[key] = _tools.tracedist(_tools.vec_to_stdmx(op.to_dense(), 'pp'),
-                                                _tools.vec_to_stdmx(target_model.preps[key].to_dense(), 'pp'))
+                    spamdd[key] = _tools.tracedist(_tools.vec_to_stdmx(op.to_dense(), gaugeopt_model.basis),
+                                                _tools.vec_to_stdmx(target_model.preps[key].to_dense(), gaugeopt_model.basis))
 
                 for key in gaugeopt_model.povms.keys():
                     spamdd[key] = 0.5 * _tools.optools.povm_diamonddist(gaugeopt_model, target_model, key)
