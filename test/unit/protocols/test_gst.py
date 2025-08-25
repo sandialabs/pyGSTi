@@ -67,7 +67,7 @@ class GSTUtilTester(BaseCase):
         builder = PoissonPicDeltaLogLFunction.builder()
         opt = SimplerLMOptimizer()
         badfit_opts = gst.GSTBadFitOptions(threshold=-10, actions=("robust", "Robust", "robust+", "Robust+",
-                                                                   "wildcard", "do nothing"))
+                                                                   "wildcard", "do nothing", 'wildcard1d'))
         res = self.results.copy()
         res.estimates['test-estimate'].parameters['final_objfn_builder'] = builder
         gst._add_badfit_estimates(res, 'test-estimate', badfit_opts, opt)
