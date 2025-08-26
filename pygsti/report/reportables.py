@@ -25,12 +25,16 @@ from pygsti.report.reportableqty import ReportableQty as _ReportableQty
 from pygsti.report import modelfunction as _modf
 from pygsti import algorithms as _alg
 from pygsti import tools as _tools
-from pygsti.baseobjs.basis import Basis as _Basis, DirectSumBasis as _DirectSumBasis
+from pygsti.baseobjs.basis import (
+    Basis as _Basis,
+    DirectSumBasis as _DirectSumBasis,
+    BuiltinBasis as _BuiltinBasis
+)
 from pygsti.baseobjs.label import Label as _Lbl
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LEEL
 from pygsti.modelmembers.operations.lindbladcoefficients import LindbladCoefficientBlock as _LindbladCoefficientBlock
 from pygsti.models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
-
+from pygsti import SpaceT
 
 _CVXPY_AVAILABLE = importlib.util.find_spec('cvxpy') is not None
 
@@ -121,8 +125,8 @@ def spam_dotprods(rho_vecs, povms):
         j = 0
         for povm in povms:
             for EVec in povm.values():
-                ret[i, j] = _np.vdot(EVec.to_dense(on_space='HilbertSchmidt'),
-                                     rhoVec.to_dense(on_space='HilbertSchmidt'))
+                ret[i, j] = _np.vdot(EVec.to_dense("HilbertSchmidt"),
+                                     rhoVec.to_dense("HilbertSchmidt"))
                 j += 1
                 # to_dense() gives a 1D array, so no need to transpose EVec
     return ret
@@ -230,7 +234,7 @@ class GateEigenvalues(_modf.ModelFunction):
         -------
         numpy.ndarray
         """
-        evals, evecs = _np.linalg.eig(model.operations[self.oplabel].to_dense(on_space='HilbertSchmidt'))
+        evals, evecs = _np.linalg.eig(model.operations[self.oplabel].to_dense("HilbertSchmidt"))
 
         ev_list = list(enumerate(evals))
         ev_list.sort(key=lambda tup: abs(tup[1]), reverse=True)
@@ -560,7 +564,7 @@ if _CVXPY_AVAILABLE:
                 nearby_model.sim.product(self.circuit), mxBasis)
             JBstd = self.d * _tools.fast_jamiolkowski_iso_std(self.B, mxBasis)
             J = JBstd - JAstd
-            val = 0.5 * (_np.vdot(J.real, self.W.real) + _np.vdot(J.imag, self.W.imag))
+            val = 0.5 * (_np.vdot(J.real, self.W[0].real) + _np.vdot(J.imag, self.W[0].imag))
             return val
 
 else:
@@ -1012,6 +1016,88 @@ def maximum_trace_dist(gate, mx_basis):
 Maximum_trace_dist = _modf.opfn_factory(maximum_trace_dist)
 # init args == (model, op_label)
 
+def leaky_maximum_trace_dist(gate, mx_basis):
+    closestUOpMx = _alg.find_closest_unitary_opmx(gate)
+    _tools.jamiolkowski_iso(closestUOpMx, mx_basis, mx_basis)
+    n_leak = 1
+    return _tools.subspace_jtracedist(gate, closestUOpMx, mx_basis, n_leak)
+
+Leaky_maximum_trace_dist = _modf.opfn_factory(leaky_maximum_trace_dist)
+
+def diamonddist_to_leakfree_cptp(op, ignore, mx_basis):
+    import pygsti.tools.sdptools as _sdps
+    prob, _, solvers = _sdps.diamond_distance_projection_model(
+        op, mx_basis, leakfree=True, seepfree=False, n_leak=1, cptp=True, subspace_diamond=False
+    )
+    for s in solvers:
+        try:
+            prob.solve(solver=s)
+            return prob.value
+        except _sdps.cp.SolverError:
+            continue
+    return -1
+
+Diamonddist_to_leakfree_cptp = _modf.opsfn_factory(diamonddist_to_leakfree_cptp)
+
+def subspace_diamonddist_to_leakfree_cptp(op, ignore, mx_basis):
+    import pygsti.tools.sdptools as _sdps
+    prob, _, solvers = _sdps.diamond_distance_projection_model(
+        op, mx_basis, leakfree=True, seepfree=False, n_leak=1, cptp=True, subspace_diamond=True
+    )
+    for s in solvers:
+        try:
+            prob.solve(solver=s)
+            return prob.value
+        except _sdps.cp.SolverError:
+            continue
+    return -1
+
+SubspaceDiamonddist_to_leakfree_cptp = _modf.opsfn_factory(subspace_diamonddist_to_leakfree_cptp)
+
+def subspace_diamonddist(op_a, op_b, basis):
+    dim_mixed = op_a.shape[0]
+    dim_pure  = int(dim_mixed**0.5)
+    dim_pure_compsub = dim_pure - 1
+    from pygsti.tools.leakage import leading_dxd_submatrix_basis_vectors
+    U = leading_dxd_submatrix_basis_vectors(dim_pure_compsub, dim_pure, basis)
+    P = U @ U.T.conj()
+    assert _np.linalg.norm(P - P.real) < 1e-10
+    P = P.real
+    from pygsti.tools.optools import diamonddist
+    return diamonddist(op_a @ P, op_b @ P, basis) / 2
+
+SubspaceDiamonddist = _modf.opsfn_factory(subspace_diamonddist)
+
+def pergate_leakrate_reduction(op, ignore, mx_basis, reduction):
+    assert op.shape == (9, 9)
+    lfb = _BuiltinBasis('l2p1', 9)
+    op_lfb = _tools.change_basis(op, mx_basis, lfb)
+    elinds = lfb.elindlookup
+    compinds = [elinds[sslbl] for sslbl in ['I','X','Y','Z'] ]
+    leakage_effect_superket = op_lfb[elinds['L'], compinds]
+    leakage_effect = _tools.vec_to_stdmx(leakage_effect_superket, 'pp')
+    leakage_rates = _np.linalg.eigvalsh(leakage_effect)
+    return reduction(leakage_rates)
+
+def pergate_leakrate_max(op, ignore, mx_basis):
+    return pergate_leakrate_reduction(op, ignore, mx_basis, max)
+
+def pergate_leakrate_min(op, ignore, mx_basis):
+    return pergate_leakrate_reduction(op, ignore, mx_basis, min)
+
+PerGateLeakRateMax = _modf.opsfn_factory(pergate_leakrate_max)
+PerGateLeakRateMin = _modf.opsfn_factory(pergate_leakrate_min)
+
+def pergate_seeprate(op, ignore, mx_basis):
+    assert op.shape == (9, 9)
+    lfb = _BuiltinBasis('l2p1', 9)
+    op_lfb = _tools.change_basis(op, mx_basis, lfb)
+    elinds = lfb.elindlookup
+    seeprate = op_lfb[elinds['I'], elinds['L']]
+    return seeprate
+
+PerGateSeepRate = _modf.opsfn_factory(pergate_seeprate)
+
 
 def angles_btwn_rotn_axes(model):
     """
@@ -1031,7 +1117,7 @@ def angles_btwn_rotn_axes(model):
     angles_btwn_rotn_axes = _np.zeros((len(opLabels), len(opLabels)), 'd')
 
     for i, gl in enumerate(opLabels):
-        decomp = _tools.decompose_gate_matrix(model.operations[gl].to_dense(on_space='HilbertSchmidt'))
+        decomp = _tools.decompose_gate_matrix(model.operations[gl].to_dense("HilbertSchmidt"))
         rotnAngle = decomp.get('pi rotations', 'X')
         axisOfRotn = decomp.get('axis of rotation', None)
 
@@ -1083,6 +1169,12 @@ def entanglement_fidelity(a, b, mx_basis):
 Entanglement_fidelity = _modf.opsfn_factory(entanglement_fidelity)
 # init args == (model1, model2, op_label)
 
+def subspace_entanglement_fidelity(a, b, mx_basis):
+    n_leak = 1
+    return _tools.subspace_entanglement_fidelity(a, b, mx_basis, n_leak)
+
+Subspace_entanglement_fidelity = _modf.opsfn_factory(subspace_entanglement_fidelity)
+
 
 def entanglement_infidelity(a, b, mx_basis):
     """
@@ -1108,6 +1200,11 @@ def entanglement_infidelity(a, b, mx_basis):
 
 Entanglement_infidelity = _modf.opsfn_factory(entanglement_infidelity)
 # init args == (model1, model2, op_label)
+
+def leaky_entanglement_infidelity(a, b, mx_basis):
+    return 1 - subspace_entanglement_fidelity(a, b, mx_basis)
+
+Leaky_entanglement_infidelity = _modf.opsfn_factory(leaky_entanglement_infidelity)
 
 
 def closest_unitary_fidelity(a, b, mx_basis):  # assume vary model1, model2 fixed
@@ -1175,6 +1272,14 @@ Fro_diff = _modf.opsfn_factory(frobenius_diff)
 # init args == (model1, model2, op_label)
 
 
+def leaky_gate_frob_dist(a, b, mx_basis):
+    n_leak = 1
+    return _tools.subspace_superop_fro_dist(a, b, mx_basis, n_leak)
+
+
+Leaky_gate_frob_dist = _modf.opsfn_factory(leaky_gate_frob_dist)
+
+
 def jtrace_diff(a, b, mx_basis):  # assume vary model1, model2 fixed
     """
     Jamiolkowski trace distance between a and b
@@ -1200,6 +1305,12 @@ def jtrace_diff(a, b, mx_basis):  # assume vary model1, model2 fixed
 Jt_diff = _modf.opsfn_factory(jtrace_diff)
 # init args == (model1, model2, op_label)
 
+def leaky_jtrace_diff(a, b, mx_basis):
+    n_leak = 1
+    return _tools.subspace_jtracedist(a, b, mx_basis, n_leak)
+
+Leaky_Jt_diff = _modf.opsfn_factory(leaky_jtrace_diff)
+
 
 if _CVXPY_AVAILABLE:
 
@@ -1222,9 +1333,9 @@ if _CVXPY_AVAILABLE:
         def __init__(self, model_a, model_b, oplabel):
             self.oplabel = oplabel
             if isinstance(model_b, _ExplicitOpModel):
-                self.B = model_b.operations[oplabel].to_dense(on_space='HilbertSchmidt')
+                self.B = model_b.operations[oplabel].to_dense("HilbertSchmidt")
             else:
-                self.B = model_b.operation_blks['gates'][oplabel].to_dense(on_space='HilbertSchmidt')
+                self.B = model_b.operation_blks['gates'][oplabel].to_dense("HilbertSchmidt")
             self.d = int(round(_np.sqrt(model_a.dim)))
             _modf.ModelFunction.__init__(self, model_a, [("gate", oplabel)])
 
@@ -1243,10 +1354,10 @@ if _CVXPY_AVAILABLE:
             """
             gl = self.oplabel
             if isinstance(model, _ExplicitOpModel):
-                dm, W = _tools.diamonddist(model.operations[gl].to_dense(on_space='HilbertSchmidt'),
+                dm, W = _tools.diamonddist(model.operations[gl].to_dense("HilbertSchmidt"),
                                            self.B, model.basis, return_x=True)
             else:
-                dm, W = _tools.diamonddist(model.operation_blks['gates'][gl].to_dense(on_space='HilbertSchmidt'),
+                dm, W = _tools.diamonddist(model.operation_blks['gates'][gl].to_dense("HilbertSchmidt"),
                                            self.B, 'pp', return_x=True)  # HACK - need to get basis from model 'pp' HARDCODED for now
 
             self.W = W
@@ -1267,14 +1378,14 @@ if _CVXPY_AVAILABLE:
             """
             mxBasis = nearby_model.basis
             if isinstance(nearby_model, _ExplicitOpModel):
-                A = nearby_model.operations[self.oplabel].to_dense(on_space='HilbertSchmidt')
+                A = nearby_model.operations[self.oplabel].to_dense("HilbertSchmidt")
             else:
-                A = nearby_model.operation_blks['gates'][self.oplabel].to_dense(on_space='HilbertSchmidt')
+                A = nearby_model.operation_blks['gates'][self.oplabel].to_dense("HilbertSchmidt")
                 mxBasis = 'pp'  # HACK need to set mxBasis based on model but not the full model basis
             JAstd = self.d * _tools.fast_jamiolkowski_iso_std(A, mxBasis)
             JBstd = self.d * _tools.fast_jamiolkowski_iso_std(self.B, mxBasis)
             J = JBstd - JAstd
-            val = 0.5 * (_np.vdot(J.real, self.W.real) + _np.vdot(J.imag, self.W.imag))
+            val = 0.5 * (_np.vdot(J.real, self.W[0].real) + _np.vdot(J.imag, self.W[0].imag))
             return val
 
     def half_diamond_norm(a, b, mx_basis):
@@ -2146,8 +2257,8 @@ def general_decomposition(model_a, model_b):
     mxBasis = model_b.basis  # B is usually the target which has a well-defined basis
 
     for gl in opLabels:
-        gate = model_a.operations[gl].to_dense(on_space='HilbertSchmidt')
-        targetOp = model_b.operations[gl].to_dense(on_space='HilbertSchmidt')
+        gate = model_a.operations[gl].to_dense("HilbertSchmidt")
+        targetOp = model_b.operations[gl].to_dense("HilbertSchmidt")
         gl = str(gl)  # Label -> str for decomp-dict keys
 
         target_evals = _np.linalg.eigvals(targetOp)
@@ -2435,6 +2546,17 @@ def info_of_opfn_by_name(name):
         - "frob" :    frobenius distance
         - "unmodeled" : unmodeled "wildcard" budget
 
+        - "sub-inf"         : subspace entanglement infidelity
+        - "sub-trace"       : subspace trace distance
+        - "sub-diamond"     : subspace diamond distance
+        - "sub-frob"        : subspace Frobenius distance
+        - "plf-diamond"     : diamond distance to the set of leakage-free CPTP maps
+        - "plf-sub-diamond" : subspace diamond distance to the set of leakage-free CPTP maps
+        - "leak-rate-max"   : maximum transport of population out of the computational subspace
+        - "leak-rate-min"   : minimum transport of population out of the computational subspace, assuming all population starts in that subspace.
+        - "seep-rate"       : maximum transport of population into the computational subspace 
+
+
     Returns
     -------
     nicename : str
@@ -2476,7 +2598,20 @@ def info_of_opfn_by_name(name):
         "frob": ("Frobenius|Distance",
                  "sqrt( sum( (A_ij - B_ij)^2 ) )"),
         "unmodeled": ("Un-modeled|Error",
-                      "The per-operation budget used to account for un-modeled errors (model violation)")
+                      "The per-operation budget used to account for un-modeled errors (model violation)"),
+        "sub-inf": ("Entanglement|Infidelity (subspace)",
+                   "1.0 - <psi| 1 x Lambda(psi) |psi>, where |psi> is the standard test state supported U x U, and U denotes the computational subspace."),
+        "sub-trace" : ("1/2 Trace|Distance (subspace)",
+                      "0.5 | Chi(A|U) - Chi(B|U) |_tr, where U is the computational subspace and Chi(G|U) is the image of (1 x G) on the standard test state supported on U x U."),
+        "sub-diamond": ("1/2 Diamond|Distance (subspace)",
+                    "0.5 sup | (1 x (A-B))(rho) |_tr, rho in subspace"),
+        "sub-frob": ("Frobenius|Distance (subspace)",
+                    "| (A - B) P |_Fro, where P is the projector onto the computational subspace."),
+        "plf-diamond" : ("1/2 Diamond|Distance to|No-leak Channel", "0.5 min |A - X|_◆, X is CPTP and leakage-free."),
+        "plf-sub-diamond" : ("Leakage:|1/2 Min|Diamond|Dist.|to a No-leak|Channel|", "0.5 min |A - X|_{subspace ◆}, X is CPTP and leakage-free."),
+        "seep-rate": ("Seepage:|Max TOP", "This gate's maximum transport of population INTO the computational subspace. This is only an error metric insofar as seepage implies leakage under unitary dynamics."),
+        "leak-rate-max": ("Leakage:|Max TOP", "This gate's maximum transport of population OUT of the computational subspace."),
+        "leak-rate-min": ("Leakage:|Min TOP|(subspace)", "This gate's minimum transport of population OUT of the computational subspace, assuming the entire population starts in the computational subspace.")
     }
     if name in info:
         return info[name]
@@ -2520,6 +2655,9 @@ def evaluate_opfn_by_name(name, model, target_model, op_label_or_string,
     if name == "inf":
         fn = Entanglement_infidelity if b else \
             Circuit_entanglement_infidelity
+    elif name == "sub-inf":
+        assert b
+        fn = Leaky_entanglement_infidelity
     elif name == "agi":
         fn = Avg_gate_infidelity if b else \
             Circuit_avg_gate_infidelity
@@ -2529,9 +2667,30 @@ def evaluate_opfn_by_name(name, model, target_model, op_label_or_string,
     elif name == "trace":
         fn = Jt_diff if b else \
             Circuit_jt_diff
+    elif name == "sub-trace":
+        assert b
+        fn = Leaky_Jt_diff
     elif name == "diamond":
         fn = HalfDiamondNorm if b else \
             CircuitHalfDiamondNorm
+    elif name == 'sub-diamond':
+        assert b
+        fn = SubspaceDiamonddist
+    elif name == 'plf-sub-diamond':
+        assert b
+        fn = SubspaceDiamonddist_to_leakfree_cptp
+    elif name == 'plf-diamond':
+        assert b
+        fn = Diamonddist_to_leakfree_cptp
+    elif name == 'leak-rate-max':
+        assert b
+        fn = PerGateLeakRateMax
+    elif name == 'leak-rate-min':
+        assert b
+        fn = PerGateLeakRateMin
+    elif name == 'seep-rate':
+        assert b
+        fn = PerGateSeepRate
     elif name == "nuinf":
         fn = Nonunitary_entanglement_infidelity if b else \
             Circuit_nonunitary_entanglement_infidelity
@@ -2556,6 +2715,9 @@ def evaluate_opfn_by_name(name, model, target_model, op_label_or_string,
     elif name == "evnudiamond":
         fn = Eigenvalue_nonunitary_diamondnorm if b else \
             Circuit_eigenvalue_nonunitary_diamondnorm
+    elif name == "sub-frob":
+        assert b
+        fn = Leaky_gate_frob_dist
     elif name == "frob":
         fn = Fro_diff if b else \
             Circuit_fro_diff
@@ -2621,8 +2783,8 @@ def instrument_half_diamond_norm(a, b, mx_basis):
         aa, bb = i * adim, (i + 1) * adim
         for j in range(nComps):
             cc, dd = j * adim, (j + 1) * adim
-            composite_op[aa:bb, cc:dd] = a[clbl].to_dense(on_space='HilbertSchmidt')
-            composite_top[aa:bb, cc:dd] = b[clbl].to_dense(on_space='HilbertSchmidt')
+            composite_op[aa:bb, cc:dd] = a[clbl].to_dense("HilbertSchmidt")
+            composite_top[aa:bb, cc:dd] = b[clbl].to_dense("HilbertSchmidt")
     return half_diamond_norm(composite_op, composite_top, sumbasis)
 
 

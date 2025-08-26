@@ -33,6 +33,7 @@ from pygsti.objectivefns import objectivefns as _objfns
 from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LEEL
 from pygsti.data import DataSet as _DataSet
+from pygsti import SpaceT
 
 
 class BlankTable(WorkspaceTable):
@@ -127,7 +128,10 @@ class SpamTable(WorkspaceTable):
         
         if confidence_region_infos is None:
             confidence_region_infos = [None]*len(models)
-        
+        elif not isinstance(confidence_region_infos, list):
+            confidence_region_infos = [confidence_region_infos]
+
+
         rhoLabels = list(models[0].preps.keys())  # use labels of 1st model
         povmLabels = list(models[0].povms.keys())  # use labels of 1st model
 
@@ -459,6 +463,9 @@ class GatesTable(WorkspaceTable):
         
         if confidence_region_infos is None:
             confidence_region_infos = [None]*len(models)
+        elif not isinstance(confidence_region_infos, list):
+            confidence_region_infos = [confidence_region_infos]
+        
 
         opLabels = models[0].primitive_op_labels  # use labels of 1st model
         instLabels = list(models[0].instruments.keys())  # requires an explicit model!
@@ -528,7 +535,7 @@ class GatesTable(WorkspaceTable):
                     intervalMx = None
 
                 #turn the op matrix into a ReportableQty
-                op_matrix = _ReportableQty(op.to_dense('HilbertSchmidt'), errbar=intervalMx)
+                op_matrix = _ReportableQty(op.to_dense("HilbertSchmidt"), errbar=intervalMx)
 
                 if display_as == "numbers":
                     row_data.append(op_matrix)
@@ -835,8 +842,8 @@ class GaugeRobustModelTable(WorkspaceTable):
         op_decomps = {}
         for gl in opLabels:
             try:
-                op_decomps[gl] = _get_gig_decomp(model.operations[gl].to_dense(on_space='HilbertSchmidt'),
-                                                 target_model.operations[gl].to_dense(on_space='HilbertSchmidt'))
+                op_decomps[gl] = _get_gig_decomp(model.operations[gl].to_dense("HilbertSchmidt"),
+                                                 target_model.operations[gl].to_dense("HilbertSchmidt"))
                 M = max(M, max(_np.abs((op_decomps[gl][1] - I).flat)))  # update max
             except Exception as e:
                 _warnings.warn("Failed gauge-robust decomposition of %s op:\n%s" % (gl, str(e)))
@@ -1018,8 +1025,8 @@ class GaugeRobustMetricTable(WorkspaceTable):
         mdl_in_best_gauge = []
         target_mdl_in_best_gauge = []
         for lbl in opLabels:
-            gate_mx = orig_model.operations[lbl].to_dense(on_space='HilbertSchmidt')
-            target_gate_mx = target_model.operations[lbl].to_dense(on_space='HilbertSchmidt')
+            gate_mx = orig_model.operations[lbl].to_dense("HilbertSchmidt")
+            target_gate_mx = target_model.operations[lbl].to_dense("HilbertSchmidt")
             Ugauge = _tools.compute_best_case_gauge_transform(gate_mx, target_gate_mx)
             Ugg = _models.gaugegroup.FullGaugeGroupElement(_np.linalg.inv(Ugauge))
             # transforms gates as Ugauge * gate * Ugauge_inv
@@ -2557,7 +2564,7 @@ class GateEigenvalueTable(WorkspaceTable):
 
                 if isinstance(gl, _baseobjs.Label) or isinstance(gl, str):
                     # no error bars
-                    target_evals = _np.linalg.eigvals(target_model.operations[gl].to_dense(on_space='HilbertSchmidt'))
+                    target_evals = _np.linalg.eigvals(target_model.operations[gl].to_dense("HilbertSchmidt"))
                 else:
                     target_evals = _np.linalg.eigvals(target_model.sim.product(gl))  # no error bars
 
@@ -2672,11 +2679,11 @@ class GateEigenvalueTable(WorkspaceTable):
                 row_formatters = [None]
 
                 #FUTURE: use reportables to get instrument eigenvalues
-                evals = _ReportableQty(_np.linalg.eigvals(comp.to_dense(on_space='HilbertSchmidt')))
+                evals = _ReportableQty(_np.linalg.eigvals(comp.to_dense("HilbertSchmidt")))
                 evals = evals.reshape(evals.size, 1)
 
                 if target_model is not None:
-                    target_evals = _np.linalg.eigvals(tcomp.to_dense(on_space='HilbertSchmidt'))  # no error bars
+                    target_evals = _np.linalg.eigvals(tcomp.to_dense("HilbertSchmidt"))  # no error bars
                     #Note: no support for relative eigenvalues of instruments (yet)
 
                     # permute target eigenvalues according to min-weight matching

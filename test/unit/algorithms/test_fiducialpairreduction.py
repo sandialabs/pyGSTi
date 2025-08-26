@@ -59,7 +59,7 @@ class FindSufficientFiducialPairsBase(object):
         fiducial_pairs = fpr.find_sufficient_fiducial_pairs(
             self.model, self.preps, self.effects, self.germs,
             search_mode='sequential', minimum_pairs=4,
-            test_lengths = (64, 512), tol = .5
+            test_lengths = (64, 512), tol = 0.5
         )
 
         self.assertTrue(fiducial_pairs == self.fiducial_pairs_global)
@@ -68,7 +68,7 @@ class FindSufficientFiducialPairsBase(object):
         fiducial_pairs = fpr.find_sufficient_fiducial_pairs(
             self.model, self.preps, self.effects, self.germs,
             search_mode='random', n_random=5, seed=_SEED, minimum_pairs=4,
-            test_lengths = (64, 512), tol = .5
+            test_lengths = (64, 512), tol = 0.5
         )
         # TODO assert correctness
 
@@ -143,7 +143,7 @@ class StdDataFindSufficientFiducialPairsTester(FindSufficientFiducialPairsBase,
         fiducial_pairs = fpr.find_sufficient_fiducial_pairs(
             self.model, self.preps, self.effects, self.germs,
             test_pair_list=test_pair_list, test_lengths = (64, 512), 
-            tol = .5
+            tol = 0.5
         )
         # TODO assert correctness
 
@@ -162,14 +162,14 @@ class _TestFiducialPairsBase(object):
     def test_test_fiducial_pairs_from_list(self):
         n_amplified = fpr.test_fiducial_pairs(
             self.fiducial_pairs_global, self.model, self.preps, self.effects,
-            self.germs, test_lengths=(64, 512), tol = .5
+            self.germs, test_lengths=(64, 512), tol = 0.5
         )
         self.assertEqual(n_amplified, self.expected_amplified_global)
 
     def test_test_fiducial_pairs_from_dict(self):
         n_amplified = fpr.test_fiducial_pairs(
             self.fiducial_pairs_per_germ, self.model, self.preps, self.effects,
-            self.germs, test_lengths=(64, 512), tol = .5
+            self.germs, test_lengths=(64, 512), tol = 0.5
         )
         self.assertEqual(n_amplified, self.expected_amplified_per_germ)
 

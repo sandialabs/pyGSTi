@@ -224,7 +224,7 @@ def create_bootstrap_models(num_models, input_data_set, generation_method,
                 datasetList[run], target_model,
                 fiducial_prep, fiducial_measure, germs, max_lengths,
                 verbosity=verbosity)
-        modelList.append(results.estimates.get('default', next(iter(results.estimates.values()))).models['go0'])
+        modelList.append(results.estimates.get('default', next(iter(results.estimates.values()))).models['stdgaugeopt'])
 
     if not return_data:
         return modelList

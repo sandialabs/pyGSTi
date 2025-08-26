@@ -16,6 +16,8 @@ from pygsti.modelmembers import modelmember as _modelmember
 from pygsti.tools import optools as _ot
 from pygsti.baseobjs.opcalc import bulk_eval_compact_polynomials_complex as _bulk_eval_compact_polynomials_complex
 
+from typing import Any
+
 
 class POVMEffect(_modelmember.ModelMember):
     """
@@ -117,13 +119,11 @@ class POVMEffect(_modelmember.ModelMember):
 
     ## PUT term calc methods here if appropriate...
 
-    def frobeniusdist_squared(self, other_spam_vec, transform=None,
-                              inv_transform=None):
+    def frobeniusdist_squared(self, other_spam_vec, transform=None, inv_transform=None) -> _np.floating[Any]:
         """
-        Return the squared frobenius difference between this operation and `other_spam_vec`.
+        Return the squared frobenius difference between this effect and `other_spam_vec`.
 
-        Optionally transforms this vector first using `transform` and
-        `inv_transform`.
+        Optionally transforms this vector first using `transform`.
 
         Parameters
         ----------
@@ -134,18 +134,17 @@ class POVMEffect(_modelmember.ModelMember):
             Transformation matrix.
 
         inv_transform : numpy.ndarray, optional
-            Inverse of `tranform`.
+            Ignored. (We keep this as a positional argument for consistency with
+            the frobeniusdist_squared method of pyGSTi's LinearOperator objects.)
 
         Returns
         -------
         float
         """
         vec = self.to_dense()
-        if transform is None:
-            return _ot.frobeniusdist_squared(vec, other_spam_vec.to_dense())
-        else:
-            return _ot.frobeniusdist_squared(_np.dot(_np.transpose(transform),
-                                                     vec), other_spam_vec.to_dense())
+        if transform is not None:
+            vec = transform.T @ vec
+        return _ot.frobeniusdist_squared(vec, other_spam_vec.to_dense())
 
     def residuals(self, other_spam_vec, transform=None, inv_transform=None):
         """

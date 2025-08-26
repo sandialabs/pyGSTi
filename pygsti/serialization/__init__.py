@@ -9,10 +9,3 @@ pyGSTi Serialization Python Package
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
-
-from . import json
-
-#Users may not have msgpack, which is fine.
-try:
-    from . import msgpack
-except ImportError: pass

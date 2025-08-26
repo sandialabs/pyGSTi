@@ -1893,7 +1893,7 @@ class LabelTupWithArgs(Label, tuple):
         """
         return tuple(self)
 
-    def replacename(self, oldname, newname):
+    def replace_name(self, oldname, newname):
         """
         Returns a label with `oldname` replaced by `newname`.
 
