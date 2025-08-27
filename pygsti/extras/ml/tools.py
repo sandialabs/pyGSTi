@@ -13,7 +13,6 @@ from pygsti.errorgenpropagation.errorpropagator import ErrorGeneratorPropagator
 from tensorflow import unique
 import tensorflow as _tf
 
-
 def layer_snipper_from_qubit_graph(error_gen, num_qubits, num_channels, qubit_graph_laplacian, num_hops):
     """
 
@@ -43,106 +42,42 @@ def layer_snipper_from_qubit_graph(error_gen, num_qubits, num_channels, qubit_gr
 
     return indices_for_error
 
-def grid_adj_matrix(grid_width: int):
-    num_qubits = grid_width**2
-    adj_matrix = np.zeros((num_qubits, num_qubits))
-    for i in range(num_qubits):
-        if i % grid_width == grid_width - 1 and i != grid_width*grid_width - 1:
-            # far right column, not the bottom left corner
-            # print(i)
-            # print('first')
-            adj_matrix[i, i+grid_width] = 1
-        elif i // grid_width == grid_width - 1 and i != grid_width*grid_width - 1:
-            # bottom row, not the bottom left corner
-            adj_matrix[i, i+1] = 1
-        elif i != num_qubits - 1:
-            # print(i)
-            # print('third')
-            # not the bottom right corner
-            adj_matrix[i, i+grid_width] = 1
-            adj_matrix[i, i+1] = 1
-    adj_matrix = adj_matrix + adj_matrix.T
-    return  adj_matrix
+        
+# @_keras.utils.register_keras_serializable()
+def layer_snipper_from_qubit_graph_with_lookback(error_gen, num_qubits, num_channels, qubit_graph_laplacian, 
+                                                 num_hops, lookback=-1):
+    """
 
-def ring_adj_matrix(num_qubits: int):
-    adj_matrix = np.zeros((num_qubits, num_qubits))
-    for i in range(num_qubits):
-        adj_matrix[i, (i-1) % num_qubits] = 1
-        adj_matrix[i, (i+1) % num_qubits] = 1
-    return adj_matrix
+    """
+    encoding_indices_for_error = layer_snipper_from_qubit_graph(error_gen=error_gen, num_qubits=num_qubits, 
+                                                                num_channels=num_channels, 
+                                                                qubit_graph_laplacian= qubit_graph_laplacian,
+                                                                num_hops=num_hops)
 
-def melbourne_adj_matrix(num_qubits = 14):
-    assert(num_qubits == 14), "We only support 5 qubits"
-    adj_matrix = np.zeros((num_qubits, num_qubits))
-    adj_matrix[0,1] = 1
-    adj_matrix[1,2], adj_matrix[1,13] = 1,1
-    adj_matrix[2,3], adj_matrix[2,12] = 1,1
-    adj_matrix[3,4], adj_matrix[3,11] = 1,1
-    adj_matrix[4,5], adj_matrix[4,10] = 1,1
-    adj_matrix[5,6], adj_matrix[5,9] = 1,1
-    adj_matrix[6,8] = 1
-    adj_matrix[7,8] = 1
-    adj_matrix[8,9] = 1
-    adj_matrix[9,10] = 1
-    adj_matrix[10,11] = 1
-    adj_matrix[11,12] = 1
-    adj_matrix[12,13] = 1
-    adj_matrix = adj_matrix + adj_matrix.T
-    return adj_matrix
+    indices_for_error = []
+    for relative_layer_index in range(lookback, 1):
+        indices_for_error += [[relative_layer_index, i] for i in encoding_indices_for_error]
 
-def bowtie_adj_matrix(num_qubits = 5):
-    '''
-    Builds the adjacency matrix for a five-qubit bowtie graph:
+    return np.array(indices_for_error)
 
-    0 - 1
-     \ /
-      2
-     / \
-    3 - 4 
-    '''
-    assert(num_qubits == 5), "We only support 5 qubits"
-    adj_matrix = np.zeros((num_qubits, num_qubits))
-    adj_matrix[0, 1], adj_matrix[0, 2] = 1, 1
-    adj_matrix[1, 2] = 1
-    adj_matrix[2, 3], adj_matrix[2, 4] = 1, 1
-    adj_matrix[3, 4] = 1
-    adj_matrix = adj_matrix + adj_matrix.T
-    return adj_matrix
 
-def t_bar_adj_matrix(num_qubits = 5):
-    '''
-    Builds the adjacency matrix for a five-qubit T-bar graph:
+# @_keras.utils.register_keras_serializable()
+def layer_snipper_from_qubit_graph_with_simplified_lookback(error_gen, num_qubits, num_channels, qubit_graph_laplacian, 
+                                                 num_hops, lookback=-1):
+    """
 
-    0 - 1 - 2
-        |
-        3
-        |
-        4
-    '''
-    assert(num_qubits == 5), "We only support 5 qubits"
-    adj_matrix = np.zeros((num_qubits, num_qubits))
-    adj_matrix[0, 1] = 1
-    adj_matrix[1, 2], adj_matrix[1, 3] = 1, 1
-    adj_matrix[3, 4] = 1
-    adj_matrix = adj_matrix + adj_matrix.T
-    return adj_matrix
+    """
+    encoding_indices_for_error = layer_snipper_from_qubit_graph(error_gen=error_gen, num_qubits=num_qubits, 
+                                                                num_channels=num_channels, 
+                                                                qubit_graph_laplacian= qubit_graph_laplacian,
+                                                                num_hops=num_hops)
 
-def algiers_t_bar_adj_matrix():
-    '''
-    Builds the adjacency matrix for a five-qubit T-bar graph:
+    indices_for_error = []
+    for i in range(0, np.abs(lookback)):
+        indices_for_error += list(encoding_indices_for_error + ((num_qubits * num_channels) * i))
 
-    0 - 1 - 4
-        |
-        2
-        |
-        3
-    '''
-    adj_matrix = np.zeros((5,5))
-    adj_matrix[0, 1] = 1
-    adj_matrix[1, 2], adj_matrix[1, 4] = 1, 1
-    adj_matrix[2, 3] = 1
-    adj_matrix = adj_matrix + adj_matrix.T
-    return adj_matrix
+    return np.array(indices_for_error)
+    
 
 def laplace_from_qubit_graph(adj_matrix: np.array) -> np.array: 
     """
@@ -390,10 +325,6 @@ def create_error_propagation_matrix(c, error_gens, stim_dict = None):
 
     propagated_errorgen_layers = error_propagator._propagate_errorgen_layers(errorgen_layers, propagation_layers, include_spam=False) # list of dicts of error generators
 
-    # propagated_errors = _ep.ErrorPropagator(c, error_gen_objs, NonMarkovian=True, ErrorLayerDef=True, stim_dict = stim_dict)
-
-    # print(propagated_errorgen_layers)
-
     # indices references error generators
     # create matrix same shape and indices and signs and populate with alpha calculations for each index. this is bitstring dependent. for small qubits, can go ahead and precompute 2**n bitstrings
     # with signs and alphas, can convert to signed_alphas
@@ -409,13 +340,13 @@ def create_error_propagation_matrix(c, error_gens, stim_dict = None):
 
     return indices, signs
 
-def remap_indices(c_indices):
-    # Takes in a permutation matrix for a circuit and
-    # remaps the entries.
-    # e.g., P = [[1,256], [1, 0]]   ---> [[0, 1], [0, 3]]
-    flat_indices = c_indices.flatten()
-    unique_values, idx = np.unique(flat_indices, return_inverse = True)
-    return idx.reshape(c_indices.shape)
+# def remap_indices(c_indices):
+#     # Takes in a permutation matrix for a circuit and
+#     # remaps the entries.
+#     # e.g., P = [[1,256], [1, 0]]   ---> [[0, 1], [0, 3]]
+#     flat_indices = c_indices.flatten()
+#     unique_values, idx = np.unique(flat_indices, return_inverse = True)
+#     return idx.reshape(c_indices.shape)
 
 def clockwise_cnot(g):
     return (g.qubits[0] - g.qubits[1]) % num_qubits == num_qubits - 1
@@ -439,17 +370,17 @@ def gate_to_index(g, q):
     else:
         raise ValueError('Invalid gate name for this encoding!')
         
-def layer_to_matrix(layer):
-    mat = np.zeros((num_qubits, num_channels), float)
-    for g in layer:
-        for q in g.qubits:
-            mat[q, gate_to_index(g, q)] = 1
-    return mat
+# def layer_to_matrix(layer):
+#     mat = np.zeros((num_qubits, num_channels), float)
+#     for g in layer:
+#         for q in g.qubits:
+#             mat[q, gate_to_index(g, q)] = 1
+#     return mat
 
-def circuit_to_tensor(circ, depth=None):
+# def circuit_to_tensor(circ, depth=None):
     
-    if depth is None: depth = circ.depth
-    ctensor = np.zeros((num_qubits, depth, num_channels), float)
-    for i in range(circ.depth):
-        ctensor[:, i, :] = layer_to_matrix(circ.layer(i))
-    return ctensor
+#     if depth is None: depth = circ.depth
+#     ctensor = np.zeros((num_qubits, depth, num_channels), float)
+#     for i in range(circ.depth):
+#         ctensor[:, i, :] = layer_to_matrix(circ.layer(i))
+#     return ctensor
