@@ -92,13 +92,13 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
         rank = 0
         size = 1
     if not disable_checkpoints:
-        new_checkpoint = _AMSCheckpoint(None, data.dataset.to_str(), er_thresh, maxiter, tol, prob_clip,  recompute_H_thresh_percentage, None, None)
+        new_checkpoint = _AMSCheckpoint(None, data.dataset.to_str(), er_thresh, maxiter, tol, prob_clip, None, None)
     #logl function will not change throughout this algorithm, so we can save a lot of time
     #by setting it up once, and recomputing its value with different inputs throughout AMS
     def create_logl_obj_fn(parent_model, dataset, min_prob_clip = 1e-6, comm = None, mem_limit = None):
         prob_clip_interval=(-1e6, 1e6) 
         radius=1e-4
-        poisson_picture = True
+        poisson_picture = False
         regularization = {'min_prob_clip': min_prob_clip, 'radius': radius} if poisson_picture \
             else {'min_prob_clip': min_prob_clip}
         op_label_aliases = None 
@@ -123,7 +123,7 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
     if checkpoint is not None:
         #TODO: maybe not have all MPI processes read from memory in the future
         loaded_checkpoint = _AMSCheckpoint.read(checkpoint)
-        if loaded_checkpoint.check_valid_checkpoint(target_model, data.dataset.to_str(), er_thresh, maxiter, tol, prob_clip, recompute_H_thresh_percent=recompute_H_thresh_percentage):
+        if loaded_checkpoint.check_valid_checkpoint(target_model, data.dataset.to_str(), er_thresh, maxiter, tol, prob_clip):
             H = loaded_checkpoint.H
             x0 = loaded_checkpoint.x0
             target_model_fit = target_model.copy()
@@ -150,6 +150,8 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
             new_checkpoint.x0 = x0
             new_checkpoint.save()
             print('Checkpoint saved in', new_checkpoint.path)
+    if rank == 2:
+        print(x0)
     if H is None:
         if rank == 0 and verbosity > 0: 
             print("computing Hessian")
@@ -163,6 +165,7 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
     red_model = target_model.copy()
     logl_fn = create_logl_obj_fn(target_model_fit, data.dataset)
     original_dlogl = -logl_fn.fn()
+    print(f'{original_dlogl=}')
     expansion_point_logl = pygsti.tools.logl(target_model_fit, data.dataset, poisson_picture=False)
     approx_logl_fn = create_approx_logl_fn(H, x0, expansion_point_logl)
     prev_logl = original_dlogl
@@ -188,7 +191,7 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
             lowest_imdl = -1
             lowest_quantity = None
             lowest_vec = None
-            
+            print(chunk_range)
             for i in chunk_range:
 
                 reduced_model_projector_matrix = np.delete(parent_model_projector, i, axis=1)
@@ -198,8 +201,9 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
 
                 #vec = _parallel_GST(remove_param(red_model, i), data, prob_clip, tol, maxiter, verbosity=0, comm=None, mem_limit=None).estimates['GateSetTomography'].models['final iteration estimate'].to_vector()
                 logl_fn.model.from_vector(reduced_model_projector_matrix @ vec)
+
                 quantity = (prev_logl + logl_fn.fn())*2
-                if i  % 50 == 0 and verbosity > 1:
+                if i  % 223 == 0 and verbosity > 1:
                     print('Model ', i, ' has ev. ratio of ', quantity, flush=True)
                 if lowest_quantity == None or lowest_quantity > quantity:
                     lowest_quantity = quantity
@@ -233,12 +237,13 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
             
             sorted_finalists = sorted(finalists, key=lambda x: x[1])
 
-            
-        red_model = remove_param(red_model, sorted_finalists[0][2])
-        red_model.from_vector(sorted_finalists[0][0])
-        finalist_real_logl = pygsti.tools.logl(red_model, data.dataset, poisson_picture=False, min_prob_clip=prob_clip)
-        finalist_approx_logl = approx_logl_fn(red_row_H, red_rowandcol_H, sorted_finalists[0][2])
-        error = finalist_real_logl - finalist_approx_logl
+
+            red_model = remove_param(red_model, sorted_finalists[0][2])
+            red_model.from_vector(sorted_finalists[0][0])
+            finalist_real_logl = pygsti.tools.logl(red_model, data.dataset, poisson_picture=False, min_prob_clip=prob_clip)
+            finalist_approx_logl = approx_logl_fn(red_row_H, red_rowandcol_H, sorted_finalists[0][2])
+            error = finalist_real_logl - finalist_approx_logl
+
         #DEBUG Delete
         if False: #rank == 0:
             print(f'{error=}', 'compared to ', recompute_H_thresh_percentage*er_thresh)
@@ -249,7 +254,9 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
             
 
         if recompute_Hessian:
-            if verbosity > 0:
+            if verbosity and rank == 0:
+                print(f'Model {sorted_finalists[0][2]} has lowest evidence ratio {sorted_finalists[0][1]:.4f}')
+            if verbosity > 0 and rank == 0:
                 print("Recomputing Hessian, approximation error is ", error)
 
             result = _parallel_GST(red_model, data, prob_clip, tol, maxiter, verbosity, comm=comm, mem_limit=mem_limit)
@@ -265,6 +272,8 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
             sorted_finalists[0][1] = (prev_logl + logl_fn.fn())*2
             expansion_point_logl = pygsti.tools.logl(red_model_fit, data.dataset, poisson_picture=False)
             approx_logl_fn = create_approx_logl_fn(H, x0, expansion_point_logl)
+            if rank == 0 and verbosity > 0:
+                print('New exact evidence ratio is ', sorted_finalists[0][1])
             
         if verbosity and rank == 0:
             print(f'Model {sorted_finalists[0][2]} has lowest evidence ratio {sorted_finalists[0][1]:.4f}')

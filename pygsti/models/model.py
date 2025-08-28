@@ -1264,6 +1264,7 @@ class OpModel(Model):
         for idx, val in zip(indices, values):
             self._paramvec[idx] = val
 
+
         if self._index_mm_map is None:
             self.from_vector(self._paramvec)
             return
@@ -1279,6 +1280,18 @@ class OpModel(Model):
             indices = non_zero_errgens[0]
             values = new_errgen_vec[indices]
             vec_to_access = new_errgen_vec
+
+            '''
+            unique_mms = {}
+            ops_changed = set()
+            for fogi_index in indices:
+                for op in self.fogi_store.fogi_metadata[fogi_index]['opset']:
+                    ops_changed.add(op)
+            all_ops = dict(self.all_objects())
+            for op in ops_changed:
+                unique_mms[op] = all_ops[op]
+            '''
+
         else:
             vec_to_access = self._paramvec.copy()
 
@@ -1287,6 +1300,7 @@ class OpModel(Model):
         #test_model = self.copy()
         #test_model.from_vector(self._paramvec)
         unique_mms = {lbl:val for idx in indices for lbl, val in zip(self._index_mm_label_map[idx], self._index_mm_map[idx])}
+
         for obj in unique_mms.values():
             obj.from_vector(vec_to_access[obj.gpindices].copy(), close, dirty_value=False)
         
@@ -1318,6 +1332,16 @@ class OpModel(Model):
                         obj.from_vector(vec_to_access[obj.gpindices].copy(), close, dirty_value=False)
 
         if OpModel._pcheck: self._check_paramvec()
+        #DEBUG delete
+        '''
+        for obj1, obj2 in zip(test_model.all_objects(), self.all_objects()):
+            if 'Mdefault' in obj1[0]:
+                for effect1, effect2 in zip(obj1[1], obj2[1]):
+                    assert _np.allclose(obj2[1][effect2].to_dense(), obj1[1][effect1].to_dense())
+            else:
+                assert _np.allclose(obj1[1].to_dense(), obj2[1].to_dense())
+        assert _np.allclose(self.to_vector(), test_model.to_vector())
+        '''
 
     @property
     def param_interposer(self):
@@ -2480,7 +2504,7 @@ class OpModel(Model):
         nOpParams = self.num_params  # the number of parameters *before* any reparameterization.  TODO: better way?
         errgenset_space_labels_indx = _collections.OrderedDict(
             [(lbl, i) for i, lbl in enumerate(errgenset_space_labels)])
-
+        print(errgenset_space_labels[9])
         invDeriv = _np.zeros((nOpParams, fogi_dirs.shape[0]), 'd')
 
         used_param_indices = set()
@@ -2502,7 +2526,7 @@ class OpModel(Model):
             prefix_mx[indx, j] = 1.0
 
         fogi_vecs = _np.linalg.pinv(fogi_dirs.T)
-
+        fogi_vecs[_np.abs(fogi_vecs) < 1e-10] = 0
         #DEBUG REMOVE - debugging locality of fogi_vecs not matching that of fogi_dirs...
         #assert(_np.allclose(fogi_dirs.T @ fogi_vecs, _np.identity(fogi_vecs.shape[1], 'd')))
         #import bpdb; bpdb.set_trace()
@@ -2676,10 +2700,12 @@ class OpModel(Model):
                                      op_label_abbrevs, dependent_fogi_action,
                                      norm_order=norm_order)
         if reparameterize:
+            
             self.param_interposer = self._add_reparameterization(
                 primitive_op_labels + primitive_prep_labels + primitive_povm_labels,
                 self.fogi_store.fogi_directions.toarray(),  # DENSE now (leave sparse in FUTURE?)
                 self.fogi_store.errorgen_space_op_elem_labels)
+            #self.param_interposer = _LinearInterposer
 
     def fogi_errorgen_component_labels(self, include_fogv=False, typ='normal'):
         labels = self.fogi_store.fogi_errorgen_direction_labels(typ)

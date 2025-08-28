@@ -34,7 +34,7 @@ class FirstOrderGaugeInvariantStore(_NicelySerializable):
     Currently, it is only compatible with :class:`ExplicitOpModel` objects.
     """
     def __init__(self, primitive_op_labels, gauge_space, elem_errorgen_labels_by_op, op_errorgen_indices, fogi_directions, 
-                 fogi_metadata, dependent_dir_indices, fogv_directions, allop_gauge_action, gauge_space_directions, 
+                 fogi_metadata, dependent_dir_indices, fogv_directions, allop_gauge_action, gauge_space_directions, fogv_labels, 
                  norm_order='auto', dependent_fogi_action='drop'):
         """
 
@@ -125,7 +125,7 @@ class FirstOrderGaugeInvariantStore(_NicelySerializable):
 
         self.errorgen_space_op_elem_labels = tuple([(op_label, elem_lbl) for op_label in self.primitive_op_labels
                                                     for elem_lbl in self.elem_errorgen_labels_by_op[op_label]])
-        self.fogv_labels = ["%d gauge action" % i for i in range(self.fogv_directions.shape[1])]
+        self.fogv_labels = fogv_labels
     
     @classmethod
     def from_gauge_action_matrices(cls, gauge_action_matrices_by_op, gauge_action_gauge_spaces_by_op, errorgen_coefficient_labels_by_op,
@@ -259,14 +259,14 @@ class FirstOrderGaugeInvariantStore(_NicelySerializable):
         #fogv_directions = _mt.nice_nullspace(self.fogi_directions.T)  # can be dependent!
         fogv_directions = _mt.nullspace(fogi_directions.toarray().T)  # complement of fogi directions
         fogv_directions = _sps.csc_matrix(fogv_directions)  # as though we used sparse math above
-        #self.fogv_labels = ["%s gauge action" % nm
-        #                    for nm in _fogit.elem_vec_names(gauge_space_directions, gauge_elemgen_labels)]
+        
 
         #Get gauge-space directions corresponding to the fogv directions
         # (pinv_allop_gauge_action takes errorgen-set -> gauge-gen space)
         pinv_allop_gauge_action = _np.linalg.pinv(allop_gauge_action.toarray(), rcond=1e-7)
         gauge_space_directions = pinv_allop_gauge_action @ fogv_directions.toarray()  # in gauge-generator space
-
+        fogv_labels = ["%s gauge action" % nm
+                            for nm in _fogit.elem_vec_names(gauge_space_directions, common_gauge_space.elemgen_basis.labels)]
         #Notes on error-gen vs gauge-gen space:
         # self.fogi_directions and self.fogv_directions are dual vectors in error-generator space,
         # i.e. with elements corresponding to the elementary error generators given by
@@ -278,7 +278,7 @@ class FirstOrderGaugeInvariantStore(_NicelySerializable):
         # (or sets of operations).
 
         
-        fogi_store = cls(primitive_op_labels, gauge_space, elem_errorgen_labels_by_op, op_errorgen_indices, fogi_directions, fogi_metadata, dependent_dir_indices, fogv_directions, allop_gauge_action, gauge_space_directions, norm_order, dependent_fogi_action)
+        fogi_store = cls(primitive_op_labels, gauge_space, elem_errorgen_labels_by_op, op_errorgen_indices, fogi_directions, fogi_metadata, dependent_dir_indices, fogv_directions, allop_gauge_action, gauge_space_directions, norm_order, dependent_fogi_action, fogv_labels)
         fogi_store._check_fogi_store()
         return fogi_store
         #Assertions to check that everything looks good

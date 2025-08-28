@@ -35,7 +35,7 @@ class AMSCheckpoint(_NicelySerializable):
     TODO
     """ 
 
-    def __init__(self, target_model, datasetstr, er_thresh, maxiter, tol, prob_clip, recompute_H_thresh_percent, H, x0, time=None, path=None):
+    def __init__(self, target_model, datasetstr, er_thresh, maxiter, tol, prob_clip, H, x0, time=None, path=None):
         super().__init__()
         self.target_model = target_model
         self.datasetstr = datasetstr
@@ -43,7 +43,6 @@ class AMSCheckpoint(_NicelySerializable):
         self.maxiter = maxiter
         self.tol = tol
         self.prob_clip = prob_clip
-        self.recompute_H_thresh_percent = recompute_H_thresh_percent
         self.H = H
         self.x0 = x0
         if time is None:
@@ -68,8 +67,7 @@ class AMSCheckpoint(_NicelySerializable):
                         'er_thresh' : self.er_thresh,
                         'maxiter' : self.maxiter,
                         'tol' : self.tol,
-                        'prob_clip' : self.prob_clip,
-                        'recompute_H_thresh_percent' : self.recompute_H_thresh_percent,
+                        'prob_clip' : self.prob_clip,                        
                         'H' : self._encodemx(self.H),
                         'x0' : self._encodemx(self.x0),
                         'time': self.last_update_time})
@@ -77,7 +75,7 @@ class AMSCheckpoint(_NicelySerializable):
         return state
     @classmethod
     def _from_nice_serialization(cls, state):
-        return cls(Model.from_nice_serialization(state['target_model']), state['datasetstr'], state['er_thresh'], state['maxiter'], state['tol'], state['prob_clip'], state['recompute_H_thresh_percent'] ,cls._decodemx(state['H']), cls._decodemx(state['x0']), state['time'])
+        return cls(Model.from_nice_serialization(state['target_model']), state['datasetstr'], state['er_thresh'], state['maxiter'], state['tol'], state['prob_clip'] ,cls._decodemx(state['H']), cls._decodemx(state['x0']), state['time'])
     def save(self, path=None):
         """
         Saves self to memory. If path is not specified, a default one is created.
@@ -136,7 +134,7 @@ class AMSCheckpoint(_NicelySerializable):
         def equal_fogi_models(fogi_model, fogi_model2):
             return fogi_model.fogi_store.__eq__(fogi_model2.fogi_store) and fogi_model.param_interposer.__eq__(fogi_model2.param_interposer)
         
-        if equal_fogi_models(target_model, self.target_model) and datasetstr == self.datasetstr and er_thresh == self.er_thresh and maxiter == self.maxiter and tol == self.tol and prob_clip == self.prob_clip and recompute_H_thresh_percent == self.recompute_H_thresh_percent:
+        if equal_fogi_models(target_model, self.target_model) and datasetstr == self.datasetstr and er_thresh == self.er_thresh and maxiter == self.maxiter and tol == self.tol and prob_clip == self.prob_clip:# and recompute_H_thresh_percent == self.recompute_H_thresh_percent:
              return True
         else:
              return False
