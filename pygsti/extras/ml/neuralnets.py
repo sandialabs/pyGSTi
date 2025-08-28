@@ -111,7 +111,7 @@ class DenseToErrVec(_keras.layers.Layer):
         super().build(input_shape)
     
     def old_call(self, inputs):
-        print('circuit_input', inputs.shape)
+        # print('circuit_input', inputs.shape)
         max_len_gate_encoding = max([len(layer_encoding) for layer_encoding in self.layer_encoding_indices_for_error_gen])
         indices_tensor = tf.ragged.constant(self.layer_encoding_indices_for_error_gen).to_tensor(
             default_value=-1, 
@@ -271,84 +271,16 @@ class EinsumToErrVec(_keras.layers.Layer):
         # Apply the mask to zero out the gathered slices at the padding positions
         gathered_slices_masked = gathered_slices * mask
 
-        print('gathered_slices_masked', gathered_slices_masked.shape)
+        # print('gathered_slices_masked', gathered_slices_masked.shape)
 
         # Reshape the gathered slices to concatenate along the last axis
         gathered_slices_flat = tf.reshape(gathered_slices_masked, [batch_size, self.num_tracked_error_gens, -1])
 
-        print('gathered_slices_flat', gathered_slices_flat.shape)
+        # print('gathered_slices_flat', gathered_slices_flat.shape)
 
         # Dense network to learn error rates
         x = tf.reshape(self.dense(gathered_slices_masked), [-1, self.num_tracked_error_gens])
         return x
-
-
-# @_keras.utils.register_keras_serializable()
-# def layer_snipper_from_qubit_graph(error_gen, num_qubits, num_channels, qubit_graph_laplacian, num_hops):
-#     """
-
-#     """
-
-#     laplace_power = _np.linalg.matrix_power(qubit_graph_laplacian, num_hops)
-#     nodes_within_hops = []
-#     for i in range(num_qubits):
-#         print(i)
-#         nodes_within_hops.append(_np.arange(num_qubits)[abs(laplace_power[i, :]) > 0])
-
-#     # These next few lines assumes only 'H' and 'S' errors because it only looks at the *first* Pauli that labels 
-#     # the error generator, but there are two Paulis for 'A' and 'C'
-    
-#     # The Pauli that labels the error gen, as a string of length num_qubits containing 'I', 'X', 'Y', and 'Z'.
-#     pauli_string = error_gen[1][0]
-#     print(pauli_string)
-#     pauli_string = pauli_string[::-1] # for reverse indexing
-#     # The indices of `pauli` that are not equal to 'I'.
-#     qubits_acted_on_by_error = _np.where(_np.array(list(pauli_string)) != 'I')[0]
-#     qubits_acted_on_by_error = list(qubits_acted_on_by_error)
-
-#     # All the qubits that are within `hops` steps, of the qubits acted on by the error, on the connectivity
-#     # graph of the qubits
-#     relevant_qubits = _np.unique(_np.concatenate([nodes_within_hops[i] for i in qubits_acted_on_by_error]))
-#     indices_for_error = _np.concatenate([[num_channels * q + i for i in range(num_channels)] for q in relevant_qubits])
-
-#     return indices_for_error
-
-        
-# # @_keras.utils.register_keras_serializable()
-# def layer_snipper_from_qubit_graph_with_lookback(error_gen, num_qubits, num_channels, qubit_graph_laplacian, 
-#                                                  num_hops, lookback=-1):
-#     """
-
-#     """
-#     encoding_indices_for_error = layer_snipper_from_qubit_graph(error_gen=error_gen, num_qubits=num_qubits, 
-#                                                                 num_channels=num_channels, 
-#                                                                 qubit_graph_laplacian= qubit_graph_laplacian,
-#                                                                 num_hops=num_hops)
-
-#     indices_for_error = []
-#     for relative_layer_index in range(lookback, 1):
-#         indices_for_error += [[relative_layer_index, i] for i in encoding_indices_for_error]
-
-#     return _np.array(indices_for_error)
-
-
-# # @_keras.utils.register_keras_serializable()
-# def layer_snipper_from_qubit_graph_with_simplified_lookback(error_gen, num_qubits, num_channels, qubit_graph_laplacian, 
-#                                                  num_hops, lookback=-1):
-#     """
-
-#     """
-#     encoding_indices_for_error = layer_snipper_from_qubit_graph(error_gen=error_gen, num_qubits=num_qubits, 
-#                                                                 num_channels=num_channels, 
-#                                                                 qubit_graph_laplacian= qubit_graph_laplacian,
-#                                                                 num_hops=num_hops)
-
-#     indices_for_error = []
-#     for i in range(0, _np.abs(lookback)):
-#         indices_for_error += list(encoding_indices_for_error + ((num_qubits * num_channels) * i))
-
-#     return _np.array(indices_for_error)
-
 
 @_keras.utils.register_keras_serializable(package='Blah1')
 class DenseCircuitErrorVec(_keras.Model):
@@ -469,9 +401,6 @@ class GraphCircuitErrorVec(_keras.Model):
 
     def build(self):
         self.local_dense = GraphToErrVec(self.layer_snipper, self.layer_snipper_args, self.tracked_error_gens, self.dense_units)
-        # self.dense = _keras.Sequential(
-        #     [_keras.layers.Dense(i, activation='gelu') for i in [2**5, 2**5]] +
-        #     [_keras.layers.Dense([1], activation='sigmoid', kernel_initializer=_keras.initializers.RandomUniform(minval=-0.00001, maxval=0.00001), bias_initializer=_keras.initializers.RandomUniform(minval=-0.00001, maxval=0.00001))])
     
     # @tf.function
     def calc_end_of_circ_error_rates(self, M, P, S, scaled_alpha_matrix):
@@ -621,12 +550,12 @@ class EndOfCircFidelityLayer(_keras.layers.Layer):
         return None
         
     def calc_masked_err_rates(M, P, mask):
-        masked_M = _tf.math.multiply(_tf.cast(mask, _tf.float32), M)
-        masked_P = _tf.math.multiply(mask, P)
-        flat_masked_M, flat_masked_P = _tf.reshape(masked_M, [-1]), _tf.reshape(masked_P, [-1])
-        unique_masked_P, idx = _tf.unique(flat_masked_P)
-        num_segments = _tf.reduce_max(idx) + 1
-        return _tf.math.unsorted_segment_sum(flat_masked_M, idx, num_segments)
+        masked_M = tf.math.multiply(tf.cast(mask, tf.float32), M)
+        masked_P = tf.math.multiply(mask, P)
+        flat_masked_M, flat_masked_P = tf.reshape(masked_M, [-1]), tf.reshape(masked_P, [-1])
+        unique_masked_P, idx = tf.unique(flat_masked_P)
+        num_segments = tf.reduce_max(idx) + 1
+        return tf.math.unsorted_segment_sum(flat_masked_M, idx, num_segments)
     
     def call(self, inputs):
         """
@@ -640,14 +569,165 @@ class EndOfCircFidelityLayer(_keras.layers.Layer):
             'Incorrectly formatted inputs. Should be (M, P, S, stochastic_mask, hamiltonian_mask)'
 
 
-        signed_M = _tf.math.multiply(S, M)
+        signed_M = tf.math.multiply(S, M)
         final_stochastic_error_rates = calc_masked_err_rates(signed_M, P, stochastic_mask)
         final_hamiltonian_error_rates = calc_masked_err_rates(signed_M, P, hamiltonian_mask)
-        return _tf.reduce_sum(final_stochastic_error_rates) + _tf.reduce_sum(_tf.square(final_hamiltonian_error_rates))
+        return tf.reduce_sum(final_stochastic_error_rates) + tf.reduce_sum(tf.square(final_hamiltonian_error_rates))
 
 
+@_keras.utils.register_keras_serializable(package='Blah1')
+class GraphCircuitErrorVecLookback(_keras.Model):
+    def __init__(self, num_qubits: int, num_channels: int, tracked_error_gens: list, 
+                 layer_snipper, layer_snipper_args: list,
+                 dense_units=[30, 20, 10, 5, 5], **kwargs):
+        """
+        num_qubits: int
+            The number of qubits that this neural network models.
 
+        num_channels: int
+            The number of gate channels in the tensor encoding of the circuits whose fidelity this network
+            predicts.
+
+        tracked_error_gens: list
+            The primitive error generators that this neural network internally models.
+
+        layer_snipper: func
+            A function that takes a primitive error generator and maps it to a list that encodes which parts
+            of a circuit layer to `snip out` as input to dense neural network that predicts the error rate
+            of that primitive error generator.
 
         
+        dense_units: list
+        """
+        super().__init__()
+        self.num_qubits = num_qubits
+        self.tracked_error_gens = _copy.deepcopy(tracked_error_gens)
+        self.num_tracked_error_gens = len(self.tracked_error_gens)
+        self.num_channels = num_channels
+        self.len_gate_encoding = self.num_qubits * self.num_channels
+        self.dense_units = dense_units
+        self.layer_snipper = layer_snipper
+        self.layer_snipper_args = layer_snipper_args
+
+    def get_config(self):
+        config = super(CircuitErrorVec, self).get_config()
+        config.update({
+            'num_qubits': self.num_qubits,
+            'tracked_error_gens': self.tracked_error_gens,
+            'num_channels': self.num_channels,
+            'dense_units': self.dense_units,
+            'layer_snipper': _keras.utils.serialize_keras_object(self.layer_snipper),
+            'layer_snipper_args': self.layer_snipper_args,
+        })
+        return config
+
+    def build(self):
+        self.local_dense = GraphToErrVecLookback(self.layer_snipper, self.layer_snipper_args, self.tracked_error_gens, self.dense_units)
+    
+    # @tf.function
+    def calc_end_of_circ_error_rates(self, M, P, S, scaled_alpha_matrix):
+        """
+        A function that maps the error rates (M) to an end-of-circuit error generator
+        using the permutation matrix P.
+        """
+        signed_M = tf.math.multiply(S, M) 
+        flat_signed_M, flat_P = tf.reshape(signed_M, [-1]), tf.reshape(P, [-1])
+        unique_P, idx = tf.unique(flat_P) # unique_P values [0, num_error_generators]
+        num_segments = tf.reduce_max(idx)+1
+        error_rates = tf.math.unsorted_segment_sum(flat_signed_M, idx, num_segments)
+        gathered_alpha = tf.gather(scaled_alpha_matrix, unique_P, axis=1)
+        first_order_correction = gathered_alpha*error_rates
+        return first_order_correction
+
+    # @tf.function
+    def circuit_to_probability(self, inputs): # will replace this with circ to probability dist
+        """
+        A function that maps a single circuit to the prediction of a 1st order approximate probability vector for each of 2^Q bitstrings.
+        """  
         
+        circuit_encoding = inputs[0] # circuit
+        S = tf.cast(inputs[1], tf.float32) # sign matrix
+        P = tf.cast(inputs[2], tf.int32) # permutation matrix
+        scaled_alpha_matrix = inputs[3] # alphas (shape is number of tracked error gens, typically 132. Very sparse, could use sparse LA at a later time)
+        Px_ideal = inputs[4] # ideal (no error) probabilities
+        
+        epsilon_matrix = self.local_dense(circuit_encoding) # depth * num_tracked_error
+        first_order_correction = self.calc_end_of_circ_error_rates(epsilon_matrix, P, S, scaled_alpha_matrix)
+        Px_approximate = tf.reduce_sum(first_order_correction, 1) + Px_ideal
+        # Px_approximate_clipped = tf.reshape(tf.clip_by_value(Px_approximate, 0, 1), [32])
+        return Px_approximate
+
+    # @tf.function
+    def call(self, inputs):
+        output = tf.map_fn(self.circuit_to_probability, inputs, fn_output_signature=tf.float32)
+        return output
+        # print(output.shape, output.dtype, type(self.dense))
+        # return self.dense(output)
+
+        
+class GraphToErrVecLookback(_keras.layers.Layer):
+    def __init__(self, layer_snipper, layer_snipper_args, tracked_error_gens, dense_units = [30, 20, 10, 5, 5], **kwargs):
+        """
+        layer_snipper: func
+            A function that takes a primitive error generator and maps it to a list that encodes which parts
+            of a circuit layer to `snip out` as input to dense neural network that predicts the error rate
+            of that primitive error generator.
+
+        tracked_error_gens: list
+            A list of the primitive error generators that are to be predicted.
+        """
+        super().__init__()
+        
+        self.num_tracked_error_gens = len(tracked_error_gens)  # This is the output dimenision of the network
+        self.tracked_error_gens = tracked_error_gens  
+        self.layer_encoding_indices_for_error_gen = [layer_snipper(error_gen, *layer_snipper_args) for error_gen in tracked_error_gens]
+        self.dense_units = dense_units + [1]
+        self.layer_snipper = layer_snipper
+        self.layer_snipper_args = layer_snipper_args
+
+    def get_config(self):
+        config = super(LocalizedDenseToErrVec, self).get_config()
+        config.update({
+            'tracked_error_gens': self.tracked_error_gens,
+            'dense_units': self.dense_units,
+            'layer_snipper': _keras.utils.serialize_keras_object(self.layer_snipper),
+            'layer_snipper_args': self.layer_snipper_args
+        })
+        return config
+    
+    def compute_output_shape(self, input_shape):
+        # Define the output shape based on the input shape and the number of tracked error generators
+        return (None, input_shape[0], self.num_tracked_error_gens)
+
+    @classmethod
+    def from_config(cls, config):
+        layer_snipper_config = config.pop("layer_snipper")
+        layer_snipper = _keras.utils.deserialize_keras_object(layer_snipper_config)
+        return cls(layer_snipper, **config)
+    
+    def build(self, input_shape):
+        # self.dense = {error_gen_idx: DenseSubNetwork(1, self.dense_units) for error_gen_idx in range(self.num_tracked_error_gens)}
+        self.dense = [DenseSubNetwork(self.dense_units) for error_gen_idx in range(self.num_tracked_error_gens)]
+        super().build(input_shape)
+
+    def call(self, inputs):
+        x = []
+        zero_layer = tf.zeros_like(tf.gather(inputs, self.layer_encoding_indices_for_error_gen[0], axis=-1))
+        for i in range(self.num_tracked_error_gens):
+            curr_layers = tf.gather(inputs, self.layer_encoding_indices_for_error_gen[i], axis=-1)
+            prev_layers = tf.gather(tf.roll(inputs, shift=1, axis=-2), self.layer_encoding_indices_for_error_gen[i], axis=-1)
+            # Mask to remove the last circuit layer that has been rolled to the start
+            mask = tf.concat([tf.zeros_like(prev_layers[..., 0:1, :]), tf.ones_like(prev_layers[..., 1:, :])], axis=-2)
+            # Multiply the rolled tensor by the mask to set the layer that corresponds to the "-1 layer" of circuit to zero
+            prev_layers = prev_layers * mask
+            input_pair = tf.concat([curr_layers, prev_layers], axis=-1)
+ 
+            x.append(self.dense[i](input_pair))
+        x = tf.concat(x, axis=-1)
+ 
+        #indices_tensor = self.layer_encoding_indices_for_error_gen
+        #x = [self.dense[i](tf.gather(inputs, self.layer_encoding_indices_for_error_gen[i], axis=-1)) 
+        #     for i in range(0, self.num_tracked_error_gens)]
+        #x = tf.concat(x, axis=-1)
+        return x
         
