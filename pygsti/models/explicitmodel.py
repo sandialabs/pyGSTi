@@ -1622,8 +1622,11 @@ class ExplicitOpModel(_mdl.OpModel):
             if (state['default_gauge_group'] is not None) else None
         param_interposer = _ModelParamsInterposer.from_nice_serialization(state['parameter_interposer']) \
             if (state['parameter_interposer'] is not None) else None
-        fogi_store = _FirstOrderGaugeInvariantStore.from_nice_serialization(state['fogi_store']) \
-            if (state['fogi_store'] is not None) else None
+        if 'fogi_store' in state.keys():
+            fogi_store = _FirstOrderGaugeInvariantStore.from_nice_serialization(state['fogi_store']) \
+                if (state['fogi_store'] is not None) else None
+        else:
+            fogi_store = None
         param_labels = state.get('parameter_labels', None)
         param_bounds = state.get('parameter_bounds', None)
 
