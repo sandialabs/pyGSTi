@@ -136,12 +136,11 @@ class IBMQExperimentTester():
         # Computes the summary statistics for each circuit
         results = stats_generator.run(data)
 
-        #TODO: Turn back on correctness checks when I figure out the pandas 2.3.1 and python 3.12 incompatibilities here.
         # Turns the results into a data frame.
-        #df = results.to_dataframe('ValueName', drop_columns=['ProtocolName','ProtocolType'])
+        df = results.to_dataframe('ValueName', drop_columns=['ProtocolName','ProtocolType'])
 
         # Here's a simple test that everything worked correctly (it's a noise-free simulation)
-        #assert(all(1. == df['success_probabilities']))
+        assert(all(1. == df['success_probabilities']))
 
     #End-to-end integration test for MCM GST.
     def test_e2e_MCM_gst(self):
