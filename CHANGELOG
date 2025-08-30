@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## [0.9.14.1] - 2025-08-30
+
+This is a bugfix release patching two issues: 
+
+- Bugfix for issue reported in #636 with dataframe construction from experiment designs and VB results related to recent changes in newer versions of pandas in conjunction with python 3.12. (#646, @enielse)
+- Fixes for regressions (a visual issue with overlapping plots in tables, and a performance regression in operation matrix plots) in HTML report generation introduced in 0.9.14. These issues became apparent in multi-qubit GST contexts.
+
+
 ## [0.9.14] - 2025-08-25
 
 This release introduces a series of new major features: 
