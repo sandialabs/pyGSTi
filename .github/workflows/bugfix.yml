@@ -40,6 +40,7 @@ jobs:
         token: ${{ secrets.PYGSTI_TOKEN }}
     - name: Merge changes to develop branch
       run: |
+        curl -H "Authorization: token ${{ secrets.PYGSTI_TOKEN }}" https://api.github.com/user
         git config --global user.name 'PyGSTi'
         git config --global user.email 'pygsti@noreply.github.com'
         git checkout develop
