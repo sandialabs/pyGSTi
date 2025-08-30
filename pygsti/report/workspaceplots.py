@@ -1348,6 +1348,14 @@ def _opmatrices_color_boxplot(op_matrices, color_min, color_max, mx_basis_x=None
     row_col_indices = list(_product(range(1,num_rows+1), range(1,num_cols+1)))
     fig = make_subplots(rows=num_rows, cols=num_cols, subplot_titles=subtitles)
 
+    #Need to bump up the height of the subtitles
+    #if the annotation is one of the subtitles we need to bump up
+    #the y value a bit.
+    if subtitles is not None:
+        for annotation in fig.layout.annotations:
+            if annotation['text'] in subtitles:
+                annotation['y']+=0.06
+
     if isinstance(mx_basis_x, str):
         mx_basis_x = _baseobjs.BuiltinBasis(mx_basis_x, op_matrices[0].shape[1])
     if isinstance(mx_basis_y, str):
@@ -1383,7 +1391,11 @@ def _opmatrices_color_boxplot(op_matrices, color_min, color_max, mx_basis_x=None
                                                                 xlabel, ylabel, box_labels, thickLineInterval,
                                                                 colorbar, colormap, prec, scale,
                                                                 eb_matrix, None))
-
+    remapped_annotations = []
+    remapped_shapes = []
+    #add in the existing annotations in fig to start (should at minimum include "Real" and "Imag" headings).
+    remapped_annotations.extend(fig.layout['annotations'])
+    remapped_shapes.extend(fig.layout['shapes'])
     for i, row in enumerate(op_matrix_plots):
         for j, matrix in enumerate(row):
             #add the first trace (data[0]) to figure
@@ -1399,14 +1411,15 @@ def _opmatrices_color_boxplot(op_matrices, color_min, color_max, mx_basis_x=None
             for shape in matrix_shapes:
                 shape['xref'] = f'x{flattened_idx}'
                 shape['yref'] = f'y{flattened_idx}'
-                fig.add_shape(shape)
+                remapped_shapes.append(shape)
             #do this same remapping with the annotations
             matrix_annotations = matrix_dict_layout['annotations']
             for annotation in matrix_annotations:
                 annotation['xref'] = f'x{flattened_idx}'
                 annotation['yref'] = f'y{flattened_idx}'
-                fig.add_annotation(annotation)
-            
+                remapped_annotations.append(annotation)
+    fig.update_layout(annotations=remapped_annotations, shapes=remapped_shapes)
+
     #set the width of the composite figure to be equal to the width of the widest row.
     row_widths = [[] for _ in range(num_rows)]
     for i, row in enumerate(op_matrix_plots):
@@ -1442,13 +1455,7 @@ def _opmatrices_color_boxplot(op_matrices, color_min, color_max, mx_basis_x=None
     )
 
     fig.update_layout(layout)
-    #Need to bump up the height of the subtitles
-    #if the annotation is one of the subtitles we need to bump up
-    #the y value a bit.
-    for annotation in fig.layout.annotations:
-        if annotation['text'] in subtitles:
-            annotation['y']+=0.06
-
+    
     return ReportFigure(fig)
 
 

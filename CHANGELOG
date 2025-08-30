@@ -1,5 +1,103 @@
 # CHANGELOG
 
+## [0.9.14.1] - 2025-08-30
+
+This is a bugfix release patching two issues: 
+
+- Bugfix for issue reported in #636 with dataframe construction from experiment designs and VB results related to recent changes in newer versions of pandas in conjunction with python 3.12. (#646, @enielse)
+- Fixes for regressions (a visual issue with overlapping plots in tables, and a performance regression in operation matrix plots) in HTML report generation introduced in 0.9.14. These issues became apparent in multi-qubit GST contexts.
+
+
+## [0.9.14] - 2025-08-25
+
+This release introduces a series of new major features: 
+
+- Fast simulation of noisy clifford circuits using error generator propagation.
+- A brand new module for performing mirror circuit fidelity estimation (MCFE) and subcircuit volumetric benchmarking.
+- Significant advances in pyGSTi's leakage modeling capabilities.
+
+As well as numerous enhancements to existing functionality:
+
+- Checkpointing and serialization for FOGI models.
+- Visual/UI improvements for HTML reports, as well as associated performance improvements.
+- Checkpointing and serialization of `IBMQExperiment`s, along with associated quality of life improvements to associate experiment design classes.  
+
+In addition to these changes, this release includes a number smaller changes, bugfixes, expired deprecations, and developer maintenance/CI improvements. For more details on these changes please see below. 
+
+### Added
+* **Error Generator Propagation Module** (#538, #625): This module implements the algorithm developed in [https://arxiv.org/abs/2504.15128](https://arxiv.org/abs/2504.15128) for efficiently simulating noisy clifford circuits under general (small) Markovian noise using an analytic technique called error generator propagation. This includes the ability to compute approximate circuit outcome probabilities, expectation values of pauli observables, as well as effective noise process aggregating the impact of noise on an entire quantum circuit. Please see the linked paper, and the new [tutorial](https://github.com/sandialabs/pyGSTi/blob/master/jupyter_notebooks/Tutorials/algorithms/ErrorGeneratorPropagation.ipynb) for more on these capabilities and their use. 
+* **Mirror Circuit Fidelity Estimation** and scalable algorithmic benchmarks using subcircuit sampling (#628, @ndsieki): This module adds support for the construction and analysis of holistic and application-oriented benchmarks based on a family of techniques called mirror circuit benchmarking. Mirror circuits provide a method for constructing efficient proxy circuits from which one can take essentially any circuit of interest and construct reliable estimates for the fidelity of circuit. Also included with this module is:
+    * Initial support for randomized compiling.
+    * Support for subcircuit volumetric benchmarking (SVB), a method for constructing fidelity estimates for application circuits at scales larger than existing devices based on the analysis of smaller subcircuits sampled from the full one. This technique will be discussed in greater detail in an upcoming publication.
+    * Initial introduction of B-Sqale (name subject to change), a tool which will eventually enable end-to-end construction of scalable mirror circuit fidelity estimation experiments from an application circuit of interest.
+   * Direct interfaces for conversion to and from qiskit circuits (w/o needing to go through OpenQASM as an intermediary).   
+ * **Leakage-aware GST** (#410, #616, @rileyjmurray): pyGSTi's capabilities for modeling leakage and quantifying its impact have been significantly enhance with new capabilities for performing what we're calling leakage aware GST. For more on using these new capabilities in practice please see the new example [notebook](https://github.com/sandialabs/pyGSTi/blob/master/jupyter_notebooks/Examples/Leakage-automagic.ipynb). This includes:
+    * New leakage-targeted bases for representing quantum process matrices which naturally delineate between computational space and leakage space dynamics. 
+    * Several new metrics for quantifying leakage, and new metrics for quantifying computational space gate performance in the presence of leakage.
+    * New algorithms for performing leakage aware gauge optimization (LAGO), which addresses a previously known shortcoming in traditional gauge optimization approaches in the presence of leakage where a well-defined target action for a gate on the leakage space is not available.
+    * Significant improvements to usability. In many cases these new leakage-aware analyses can be enabled in a nearly turn key fashion, from model construction to report generation, with just a few lines of code, or with just one additional keyword argument to many functions (see tutorial to see more).
+
+
+### Fixed
+
+* Certain LGST circuits missing from per-sequence detail plots when using FPR (Color Boxplot Fix) (#561 
+* Fixed issue whch resulted in nondeterminism in the construction of FOGI models (#580 @juangmendoza19)
+* Fixed a bug in the reparameterization of models when converting to an error-generator based parameterization at a point in parameter space other than the target model. (#480, @juangmendoza19) 
+* Fix issue related to deprecations in Ipython 9.0 (#594, @liuyichao82)
+* Serialization issue with PlaquetteGridCircuitStructure from issue #484, (#591)
+* Plotly 6 Per-Sequence Detail Plot Rendering Bugfix (#603)
+* Fixed a bug in fiducial selection which would often result in an extra (unnecessary) measurement fiducial being included in the final set. With this patch users this should result in slightly smaller GST experiment designs when using default settings. (#563) 
+*Fixed build issue related to version file directive in pyproject.toml (#602)
+* Fix for circuit to OpenQASM conversion when using ECR gates (#609, @judealnas) 
+* Fix dictionary comprehension for gate unitary renaming in QuditProcessorSpec (#610, @judealnas)
+* Fixed incorrect (the incorrect ones were still IC, but had inadvertantly effectively doubled up one fiducial pair) XZ Modelpack (#618)
+* Fixed per-sequence detail plot threshold and miscellaneous QI serialization fixes (#626, @pcwysoc)
+* Patched bug which resulted in gpindices for layers and their gate referents becoming out of sync when using `ImplicitOpModel`s (#612,  @nkoskelo)
+
+
+### Changed
+* Significant quality-of-life improvements have been made to the `IBMQExperiment` class, as well as to the `FreeformDesign` and `CombinedExperimentDesign` classes, aimed at improving the usability and reliability of deploying characterization and benchmarking experiments on IBM hardware (though the improvements to the `FreeformDesign` and `CombinedExperimentDesign` classes are more broadly useful too).  This includes (#379, @sserita):
+    * Compatibility with qiskit 2.x (@tjproct)
+    * `IBMQExperiments` are now serializable, and checkpointing functionality now exists to enable better recovery in the event of errors during expensive jobs (transpilation, etc.). 
+    * Backend changes to  `FreeformDesign` and `CombinedExperimentDesign` which drastically reduce their size when serialized and written to disk.
+    * A new suite of unit/integration tests. (@tjproct, @pcwysoc)
+* UI and performance improvements for HTML reports, changes include (#572):
+    * Updated UI to improve readability and utility of per-sequence detail plots.
+    * Updated error generator tables. Improvements to figures when generating reports with error bars (many figures now have this information more readily available (previously you needed to mouse over many plots to see the error bars). New TVD histogram plot. SPAM estimates now include their Hilbert-Schmidt vector representation. The display of SPAM operations no longer uses an idiosyncratic format.
+    * Bugfix for#569.
+    * Report generation for high-depth experiment designs should be somewhat improved (~40% faster at depth 2048)
+    * Thanks to @pcwysoc, @kmrudin and @robinbk for their valuable feedback and discussions regarding these improvements! 
+* Additional built-in gate names have been added for all single-qubit cliffords. (#574, @omaupin) 
+* Improved compatibility with unitary state spaces. (#584, @nkoskelo) 
+* Wildcard models now work with `LocalNoiseModel`s, and error reporting has been improved to enable better debugging. (#597, @enielse)
+* New `merge_with` method added to CircuitListsDesign, ByDepthDesign, BenchmarkingDesign, and MirrorRBDesign so make it easy to combine multiple of these experiment designs. (#597, @enielse)
+* The ability to directly add and validate compilations rules with a `CliffordCompilationRules` object has been added. A new built-in compilation rule for iSWAP->CNOT has been added. (#597, @enielse)
+* GST reports can now be constructed in an à la carte fashion, with the option to exclude undesired or unnecessary sections of the report added to the `construct_standard_report function`. Additionally, report generation has been made more robust with additional exception handling for computing metrics. (#615, @rileyjmurray) 
+* FOGI model are now natively serializable, and the performance of FOGI model construction has been significantly improved (reducing FOGI parameterization construction by multiple orders-of-magnitude for two-qubits). (#598, @juangmendoza19) 
+* The default behavior for the 'stdgaugeopt' suite has changes to convert to a 'full' model rather than a 'full TP' model before performing gauge optimization. While this will result in the type of parameterization changing for gauge-optimized models vs. 0.9.13, the actual gauge groups used have remained the same and so the actual model should be effectively the same as before. (#622, @rileyjmurray)
+* Replaced certain explicity checks with truthy ones to make them less fragile. (#639, @nkoskelo)
+* Improved readability by adding implicit zero to fractions where applicable. (#635, @sandialabs/hemlock 
+* The default gauge optimization suite for the function-based GST routines, `run_long_sequence_gst` and `run_long_sequence_gst_base` have been changes to 'stdgaugeopt', bringing their behavior in line with their OOP counterpart in the `GateSetTomography` protocol class.
+
+#### Developer-Oriented Changes
+
+* We have begun the process of trying to incrementally improve the readability of the pyGSTi source code by adding in type annotations and flagging their absence as part of the regular review process. Thank you to @nkoskelo for their effort spearheading this. See PRs #617, #621, #605, #629 for examples of this process, and discussions on their deployment.
+
+* CLI options for controlling Cython extension compliation have been added. While primarily aimed at improving our CI unit test coverage, this will also enable users to more easily control their build settings in situations where building cython extensions is not possible. (#567, @sserita)
+* We now show the top 25 test durations in continuous integration runs for additional profiling and debugging context. (#624, @rileyjmurray) 
+
+### Expired Deprecations
+* The dependency on CVXOPT for diamond distance calculations has been expired. We now use the solver CLARABEL, available by default with newer versions of cvxpy. Users may still choose to use CVXOPT if desired and installed on their system, but we no longer require it. (#588)
+* Support for serialization using the deprecated legacy json and msgpack options have been expired. (#640)
+
+
+## [0.9.13.3] - 2025-07-06
+This is a bugfix/developer maintenance release addressing configuration errors with the pyproject.toml file which resulted in missing auto-generated _version.py files on 0.9.13.2. See the release notes for v0.9.13.1 for the most recent substantive release.
+
+## [0.9.13.2] - 2025-06-20
+This is a bugfix/developer maintenance release addressing configuration errors which resulted in incomplete deployment of the pyGSTi source distribution and certain pre-built wheels associated with the 0.9.13.1. This resulted in users who pip installed pyGSTi from pypi defaulting back to the older 0.9.13 release when using newer versions of pyGSTi. See the release notes for v0.9.13.1 for the most recent substantive release.
+
+
 ## [0.9.13.1] - 2025-03-18
 
 ### Added
