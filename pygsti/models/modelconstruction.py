@@ -736,7 +736,80 @@ def create_explicit_model(processor_spec, custom_gates=None,
                           lindblad_parameterization='auto',
                           evotype="default", simulator="auto",
                           ideal_gate_type='auto', ideal_spam_type='computational',
-                          embed_gates=False, basis='pp'):
+                          embed_gates=False, basis='pp'):    
+    """
+    Build a new :class:ExplicitOpModel from a processor specification and noise parameters.
+    
+    Parameters
+    ----------
+    processor_spec : `ProcessorSpec`
+        A specification object describing the processor. This includes qudit (or qubit)
+        labels, gate definitions, gate availability, and other processor-specific properties.
+
+    custom_gates : dict, optional (default None)
+        A dictionary mapping gate labels to custom gate objects (e.g., numpy arrays,
+        `LinearOperator`, or `OpFactory` instances). These custom gate definitions override
+        the default gate constructions based on the processor specification.
+
+    depolarization_strengths : dict, optional (default None)
+        A dictionary whose keys are gate names and whose values specify depolarization strengths.
+        Values can be scalars (uniform application) or dictionaries mapping specific state space
+        labels to scalar strengths.
+
+    stochastic_error_probs : dict, optional (default None)
+        A dictionary mapping gate names to tuples of probabilities for Pauli-stochastic errors.
+        Each tuple specifies probabilities for non-trivial Pauli errors for the corresponding gate.
+        Optionally, values can be dictionaries mapping state space labels to such tuples. Default is None.
+
+    lindblad_error_coeffs : dict, optional (default None)
+        A dictionary whose keys are `Label`s corresponding to gate layers, and whose values are 
+        dictionaries of Lindblad error coefficients. These coefficients specify error generators for Lindblad noise.
+
+    depolarization_parameterization : {'depolarize', 'stochastic', 'lindblad'}, optional (default, 'depolarize')
+        Specifies the parameterization for depolarization noise. When set to 'depolarize' (default),
+        noise is represented by a `DepolarizeOp`. Alternative values construct noise operators based on
+        stochastic or Lindblad error generator parameterizations.
+
+    stochastic_parameterization : {'stochastic', 'lindblad'}, optional (default, "stochastic")
+        Determines whether stochastic noise is represented by a StochasticNoiseOp or via a Lindblad
+        error generator.
+
+    lindblad_parameterization : str, optional (default, "auto")
+        Specifies the parameterization type for Lindblad error generators. See `LindbladParameterization`
+        for supported casting options. When set to 'auto' (default),
+        the parameterization is inferred from the structure of the coefficients.
+
+    evotype : `Evotype` or str, optional (default, 'default')
+        The evolution type, specifying how states and operations are represented.
+
+    simulator : ForwardSimulator or {"auto", "matrix", "map"}, optional (default, "auto")
+        The simulator used for computing predicted probabilities. Specifying "auto" (default) allows
+        the model to choose an appropriate simulator based on the processor size.
+
+    ideal_gate_type : str, optional (default, 'auto')
+        Specifies the ideal gate type used for constructing gates in the model.
+
+    ideal_spam_type : str, optional (default, 'computational')
+        Specifies the ideal state preparation and measurement (SPAM) type used in the model. When set to
+        'computational' (default), SPAM elements are constructed using `ComputationalBasisState` and
+        `computationalBasisPOVM` parameterizations.
+
+    embed_gates : bool, optional
+        Indicates whether locally defined gates should be embedded into a larger state space according to
+        the processor specification. Default is False.
+
+    basis : str or Basis, optional (default, 'pp')
+        The operator basis in which the model is represented. If a string is provided, it is cast to a 
+        `Basis object`. Default is 'pp' (pauli-product).
+
+    Returns
+    -------
+    ExplicitOpModel
+        A new explicit operation model constructed from the given processor specification and noise
+        parameters. The model includes gates, state preparations (SPAM), and POVMs, with their behavior
+        modified according to the specified noise parameterizations.
+    """
+
 
     modelnoise = _build_modelnoise_from_args(depolarization_strengths, stochastic_error_probs, lindblad_error_coeffs,
                                              depolarization_parameterization, stochastic_parameterization,
