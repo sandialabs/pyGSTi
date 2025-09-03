@@ -317,7 +317,7 @@ def create_error_propagation_matrix(c, error_gens, stim_dict = None):
     # error_gen_objs = [_peg.propagatableerrorgen(egen[0], egen[1], 1) for egen in error_gens]
 
     error_propagator = ErrorGeneratorPropagator(None)
-    stim_layers = error_propagator.construct_stim_layers(c, None, drop_first_layer=True)
+    stim_layers = error_propagator.construct_stim_layers(c, drop_first_layer=True)
     propagation_layers = error_propagator.construct_propagation_layers(stim_layers)
     error_gen_objs = {LocalStimErrorgenLabel.cast(lbl):1 for lbl in error_gens} # dict to iterate over
 
