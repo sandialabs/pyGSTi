@@ -13,7 +13,7 @@ from pygsti.errorgenpropagation.errorpropagator import ErrorGeneratorPropagator
 from tensorflow import unique
 import tensorflow as _tf
 
-def _snipper_from_qubit_graph(error_gen, num_qubits, num_channels, qubit_graph_laplacian, num_hops):
+def layer_snipper_from_qubit_graph(error_gen, num_qubits, num_channels, qubit_graph_laplacian, num_hops):
     """
 
     """
