@@ -2343,7 +2343,8 @@ class OpModel(Model):
         """
         self._clean_paramvec()  # ensure _paramvec is rebuilt if needed
         if OpModel._pcheck: self._check_paramvec()
-        ret = Model.copy(self)
+        state = self.to_nice_serialization()
+        ret = type(self).from_nice_serialization(state)
         if self._param_bounds is not None and self.parameter_labels is not None:
             ret._clean_paramvec()  # will *always* rebuild paramvec; do now so we can preserve param bounds
             assert _np.all(self.parameter_labels == ret.parameter_labels)  # ensure ordering is the same
