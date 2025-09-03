@@ -28,7 +28,18 @@ from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LocalElementaryErrorgenLabel
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
 
-IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
+
+__SCALAR_TOL_EXPONENT__ = 0.75
+"""^
+__SCALAR_TOL_EXPONENT__ is used when checking properties of matrices and vectors.
+It's intended only when we can check the property without incurring rounding
+errors from some reduction (like a sum or a matrix-vector product). If we're
+working with a matrix whose dtype is `d`, then we set
+
+    __SCALAR_TOL__ = d.eps ** __SCALAR_TOL_EXPONENT__,
+
+or a modest multiple thereof.
+"""
 
 
 def _flat_mut_blks(i, j, block_dims):
@@ -70,7 +81,7 @@ def fidelity(a, b):
     float
         The resulting fidelity.
     """
-    __SCALAR_TOL__ = _np.finfo(a.dtype).eps ** 0.75
+    __SCALAR_TOL__ = _np.finfo(a.dtype).eps ** __SCALAR_TOL_EXPONENT__
     # ^ use for checks that have no dimensional dependence; about 1e-12 for double precision.
     __VECTOR_TOL__ = (a.shape[0] ** 0.5) * __SCALAR_TOL__
     # ^ use for checks that do have dimensional dependence (will naturally increase for larger matrices)
