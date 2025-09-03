@@ -21,7 +21,6 @@ import tensorflow as _tf
     laplace_power = np.linalg.matrix_power(qubit_graph_laplacian, num_hops)
     nodes_within_hops = []
     for i in range(num_qubits):
-        #print(i)
         nodes_within_hops.append(np.arange(num_qubits)[abs(laplace_power[i, :]) > 0])
 
     # These next few lines assumes only 'H' and 'S' errors because it only looks at the *first* Pauli that labels 
@@ -29,7 +28,6 @@ import tensorflow as _tf
     
     # The Pauli that labels the error gen, as a string of length num_qubits containing 'I', 'X', 'Y', and 'Z'.
     pauli_string = error_gen[1][0]
-    #print(pauli_string)
     pauli_string = pauli_string[::-1] # for reverse indexing
     # The indices of `pauli` that are not equal to 'I'.
     qubits_acted_on_by_error = np.where(np.array(list(pauli_string)) != 'I')[0]
