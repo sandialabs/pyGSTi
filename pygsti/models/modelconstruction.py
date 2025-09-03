@@ -567,20 +567,25 @@ def _create_explicit_model_from_expressions(state_space, basis,
             ret.povms[povmLbl] = _povm.create_from_dmvecs(effect_vecs, povm_type, basis, evotype, state_space)
 
     from pygsti.circuits.circuitparser import parse_label
-    from pygsti.baseobjs.label import LabelStr
-    for (opLabel, opExpr) in zip(op_labels, op_expressions):
-        # Before calling create_operation(...) we check that we'll be able
-        # to deserialize the model correctly, should serialization and
-        # deserialization be attempted.
-        # 
-        # It's good to perform this check here because it's much easier
-        # to diagnose the source of the error than if we made the check during 
-        # deserialization.
-        #
-        parsed = parse_label(opLabel)
-        if isinstance(parsed, LabelStr):
-            assert opLabel in parsed
-        ret.operations[opLabel] = create_operation(opExpr, state_space, basis, gate_type, evotype)
+
+    parsed_op_labels = [parse_label(opLabel) for opLabel in op_labels]
+    if len(set(parsed_op_labels)) != len(op_labels):
+        msg = f"""
+        There are fewer unique Label objects after parsing op_labels than
+        there are elements in op_labels. If we proceeded with the current
+        op_labels then we would not be able to return a model that could
+        be serialized and subequently deserialized (specifically,
+        deserialization would fail). Since all pyGSTi Model objects implement
+        the NicelySerializable API, we're raising an error.
+
+            The initial op_labels are {op_labels}.
+
+            The parsed op_labels are {parsed_op_labels}.
+        """
+        raise ValueError(msg)
+
+    for (lbl, opExpr) in zip(parsed_op_labels, op_expressions):
+        ret.operations[lbl] = create_operation(opExpr, state_space, basis, gate_type, evotype)
 
     if gate_type == "full":
         ret.default_gauge_group = _gg.FullGaugeGroup(ret.state_space, basis, evotype)

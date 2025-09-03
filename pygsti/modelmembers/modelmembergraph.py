@@ -40,18 +40,37 @@ class ModelMemberGraph(object):
 
         for mm_node_serialized_id_str, mm_node_dict in sdict.items():
             mm_node_serialized_id = int(mm_node_serialized_id_str)  # convert string keys back to integers
-            mm_class = ModelMember._state_class(mm_node_dict)  # checks this is a ModelMember-derived class
+            mm_class = ModelMember._state_class(mm_node_dict)       # checks this is a ModelMember-derived class
             mm_serial[mm_node_serialized_id] = mm_class.from_memoized_dict(mm_node_dict, mm_serial, parent_model)
-            if 'memberdict_types' in mm_node_dict and 'memberdict_labels' in mm_node_dict:
-                for mm_type, lbl_str in zip(mm_node_dict['memberdict_types'], mm_node_dict['memberdict_labels']):
-                    lbl = _parse_label(lbl_str)
-                    if isinstance(lbl, str):
-                        # This is a sanity check that we can deserialize correctly. Without this check
-                        # it's possible to silently return incorrect results.
-                        assert lbl_str in lbl
-                    if mm_type not in mm_nodes:
-                        mm_nodes[mm_type] = {}
-                    mm_nodes[mm_type][lbl] = mm_serial[mm_node_serialized_id]
+
+            md_types  = mm_node_dict.get('memberdict_types',  dict())
+            md_labels = mm_node_dict.get('memberdict_labels', dict())
+
+            assert len(md_types) == len(md_labels)
+        
+            for mm_type, lbl_str in zip(md_types, md_labels):
+                lbl = _parse_label(lbl_str)
+                if mm_type not in mm_nodes:
+                    mm_nodes[mm_type] = {}
+                d = mm_nodes[mm_type]
+                if lbl in d:
+                    msg = f"""
+                    We've encountered a collision during deserialization. The 
+                    string-valued {mm_type} label "{lbl_str}" was mapped to the
+                    Label object `{lbl}`, but data has already been recorded for
+                    a(n) {mm_type} with this Label.
+
+                    This can happen when a string-valued modelmember label doesn't
+                    follow formatting rules required by the parse_labels function
+                    in pygsti.circuits.circuitparser.
+
+                    We're raising an error because we can't gaurantee correctness
+                    of the result if we proceeded.
+                    """
+                    raise RuntimeError(msg)
+                    # ^ Another approach would be to raise an error when `lbl_str not in lbl`
+                    #   if `lbl = parse_label(lbl_str)` is a LabelStr.
+                d[lbl] = mm_serial[mm_node_serialized_id]
 
         return mm_nodes
 
