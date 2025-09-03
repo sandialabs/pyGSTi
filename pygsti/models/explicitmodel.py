@@ -1109,7 +1109,7 @@ class ExplicitOpModel(_mdl.OpModel):
         newModel._clean_paramvec()  # rotate may leave dirty members
         return newModel
 
-    def randomize_with_unitary(self, scale, seed=None, rand_state=None, transform_spam=False):
+    def randomize_with_unitary(self, scale, seed=None, rand_state=None, transform_spam=False, param_preserving=False):
         """
         Create a new model with random unitary perturbations.
 
@@ -1132,6 +1132,12 @@ class ExplicitOpModel(_mdl.OpModel):
             instead of `seed` if you want reproducible distribution samples
             across multiple random function calls but you don't want to bother
             with manually incrementing seeds between those calls.
+
+        param_preserving : bool
+            If False, then all members of the returned model will have "full" parameterization.
+
+            If True, then we use ComposedOp (and ComposedState and ComposedPOVM) to define a 
+            model with unitarily-transformed members while retaining the parameterization of `self`.
 
         Returns
         -------
@@ -1158,30 +1164,46 @@ class ExplicitOpModel(_mdl.OpModel):
             rand_unitary = _scipy.linalg.expm(-1j * rand_herm)
             rand_op = _op.StaticUnitaryOp(rand_unitary, self.basis)
             return rand_op
-        
+
+        if param_preserving:
+            from pygsti.modelmembers.states import ComposedState
+            from pygsti.modelmembers.povms import ComposedPOVM
+            def transformed_gate(rand_op, gate): # type: ignore
+                ops_to_compose = gate.factorops if hasattr(gate, 'factorops') else [gate]
+                ops_to_compose.append(rand_op)
+                return _op.ComposedOp(ops_to_compose)    
+            def transformed_stateprep(rand_op, rho): # type: ignore
+                return ComposedState(rho, rand_op)
+            def transformed_povm(rand_op, M): # type: ignore
+                return ComposedPOVM(rand_op, M)
+        else:
+            from pygsti.modelmembers.states import FullState
+            from pygsti.modelmembers.povms import create_from_dmvecs
+            def transformed_gate(rand_op, gate):
+                rand_op = rand_op.to_dense()
+                return _op.FullArbitraryOp(rand_op @ gate)
+            def transformed_stateprep(rand_op, rho):
+                rand_op = rand_op.to_dense()
+                return FullState(rand_op @ rho)
+            def transformed_povm(rand_op, M):
+                rand_op = rand_op.to_dense()
+                dmvecs = {elbl: rand_op @ e.to_dense() for elbl, e in M.items()}
+                return create_from_dmvecs(dmvecs, 'full')
+
         for opLabel, gate in self.operations.items():
             rand_op = rand_unitary_as_superop()
-            ops_to_compose = []
-            if hasattr(gate, 'factorops'):
-                ops_to_compose.extend(gate.factorops)
-            else:
-                ops_to_compose.append(gate)
-            ops_to_compose.append(rand_op)
-            mdl_randomized.operations[opLabel] = _op.ComposedOp(ops_to_compose)
+            mdl_randomized.operations[opLabel] = transformed_gate(rand_op, gate)
 
-        if not transform_spam:
-            return mdl_randomized
+        if transform_spam:
     
-        from pygsti.modelmembers.states import ComposedState
-        for preplbl, rho in self.preps.items():
-            rand_op = rand_unitary_as_superop()
-            mdl_randomized.preps[preplbl] = ComposedState(rho, rand_op)
+            for preplbl, rho in self.preps.items():
+                rand_op = rand_unitary_as_superop()
+                mdl_randomized.preps[preplbl] = transformed_stateprep(rand_op, rho)
 
-        from pygsti.modelmembers.povms import ComposedPOVM
-        for povmlbl, M in self.povms.items():
-            rand_op = rand_unitary_as_superop()
-            mdl_randomized.povms[povmlbl] = ComposedPOVM(rand_op, M)
-            
+            for povmlbl, M in self.povms.items():
+                rand_op = rand_unitary_as_superop()
+                mdl_randomized.povms[povmlbl] = transformed_povm(rand_op, M)
+                
         # Note: this function does NOT randomize instruments
 
         return mdl_randomized
