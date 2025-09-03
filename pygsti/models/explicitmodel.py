@@ -1156,26 +1156,33 @@ class ExplicitOpModel(_mdl.OpModel):
             rand_herm /= _scipy.linalg.norm(rand_herm)
             rand_herm *= scale * _np.sqrt(unitary_dim)
             rand_unitary = _scipy.linalg.expm(-1j * rand_herm)
-            rand_op = _ot.unitary_to_superop(rand_unitary, self.basis)
+            rand_op = _op.StaticUnitaryOp(rand_unitary, self.basis)
             return rand_op
         
         for opLabel, gate in self.operations.items():
             rand_op = rand_unitary_as_superop()
-            mdl_randomized.operations[opLabel] = _op.FullArbitraryOp(rand_op @ gate)
+            ops_to_compose = []
+            if hasattr(gate, 'factorops'):
+                ops_to_compose.extend(gate.factorops)
+            else:
+                ops_to_compose.append(gate)
+            ops_to_compose.append(rand_op)
+            mdl_randomized.operations[opLabel] = _op.ComposedOp(ops_to_compose)
 
-        if transform_spam:
-            from pygsti.modelmembers.states import FullState
-            for preplbl, rho in self.preps.items():
-                rand_op = rand_unitary_as_superop()
-                mdl_randomized.preps[preplbl] = FullState(rand_op @ rho)
-            from pygsti.modelmembers.povms import create_from_dmvecs
-            for povmlbl, M in self.povms.items():
-                rand_op = rand_unitary_as_superop()
-                dmvecs = {elbl: rand_op @ e.to_dense() for elbl, e in M.items()}
-                mdl_randomized.povms[povmlbl] = create_from_dmvecs(dmvecs, 'full')
+        if not transform_spam:
+            return mdl_randomized
+    
+        from pygsti.modelmembers.states import ComposedState
+        for preplbl, rho in self.preps.items():
+            rand_op = rand_unitary_as_superop()
+            mdl_randomized.preps[preplbl] = ComposedState(rho, rand_op)
+
+        from pygsti.modelmembers.povms import ComposedPOVM
+        for povmlbl, M in self.povms.items():
+            rand_op = rand_unitary_as_superop()
+            mdl_randomized.povms[povmlbl] = ComposedPOVM(rand_op, M)
             
-
-        #Note: this function does NOT randomize instruments
+        # Note: this function does NOT randomize instruments
 
         return mdl_randomized
 
