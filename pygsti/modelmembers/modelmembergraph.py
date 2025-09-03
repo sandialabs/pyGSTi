@@ -45,6 +45,10 @@ class ModelMemberGraph(object):
             if 'memberdict_types' in mm_node_dict and 'memberdict_labels' in mm_node_dict:
                 for mm_type, lbl_str in zip(mm_node_dict['memberdict_types'], mm_node_dict['memberdict_labels']):
                     lbl = _parse_label(lbl_str)
+                    if isinstance(lbl, str):
+                        # This is a sanity check that we can deserialize correctly. Without this check
+                        # it's possible to silently return incorrect results.
+                        assert lbl_str in lbl
                     if mm_type not in mm_nodes:
                         mm_nodes[mm_type] = {}
                     mm_nodes[mm_type][lbl] = mm_serial[mm_node_serialized_id]
