@@ -475,6 +475,7 @@ class EinsumCircuitErrorVec(_keras.Model):
         self.dense_units = dense_units
         self.layer_snipper = layer_snipper
         self.layer_snipper_args = layer_snipper_args
+        self.s_mask = tf.constant([tev[0] == 'S' for tev in self.tracked_error_gens])
 
     def get_config(self):
         config = super(CircuitErrorVec, self).get_config()
@@ -500,7 +501,25 @@ class EinsumCircuitErrorVec(_keras.Model):
         Px_ideal = inputs[4]  # ideal (no error) probabilities
         # C = tf.reshape(self.dense_correction(tf.reshape(circuit_encoding, [1, -1])), [-1])
         epsilon_matrix = self.dense_layer(circuit_encoding)  # depth * num_tracked_error
-        Px_approximate = self.probability_approximation_layer([epsilon_matrix, P, S, scaled_alpha_matrix, Px_ideal]) #+C
+
+        # Define the function to apply
+        def custom_function(row):
+          return row ** 2
+
+        # Create a mask to select specific rows (e.g., rows with index 1 and 3)
+        # You can define your condition based on row index or content
+        #mask = self.s_mask
+
+        # Expand the mask to match the tensor's shape for broadcasting
+        mask_expanded = tf.expand_dims(tf.expand_dims(self.s_mask, axis=0), axis=0)
+
+        # Apply the function conditionally using tf.where
+        # If mask_expanded is True, apply custom_function, otherwise keep original row
+        s_squared_epsilon_matrix = tf.where(mask_expanded, custom_function(epsilon_matrix), epsilon_matrix)
+
+        Px_approximate = self.probability_approximation_layer([ s_squared_epsilon_matrix, P, S, scaled_alpha_matrix, Px_ideal]) #+C
+
+        #Px_approximate = self.probability_approximation_layer([epsilon_matrix, P, S, scaled_alpha_matrix, Px_ideal]) #+C
         
         return Px_approximate #/ tf.reduce_sum(Px_approximate)
 
