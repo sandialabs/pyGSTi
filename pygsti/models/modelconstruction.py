@@ -566,7 +566,20 @@ def _create_explicit_model_from_expressions(state_space, basis,
         if len(effect_vecs) > 0:  # don't add POVMs with 0 effects
             ret.povms[povmLbl] = _povm.create_from_dmvecs(effect_vecs, povm_type, basis, evotype, state_space)
 
+    from pygsti.circuits.circuitparser import parse_label
+    from pygsti.baseobjs.label import LabelStr
     for (opLabel, opExpr) in zip(op_labels, op_expressions):
+        # Before calling create_operation(...) we check that we'll be able
+        # to deserialize the model correctly, should serialization and
+        # deserialization be attempted.
+        # 
+        # It's good to perform this check here because it's much easier
+        # to diagnose the source of the error than if we made the check during 
+        # deserialization.
+        #
+        parsed = parse_label(opLabel)
+        if isinstance(parsed, LabelStr):
+            assert opLabel in parsed
         ret.operations[opLabel] = create_operation(opExpr, state_space, basis, gate_type, evotype)
 
     if gate_type == "full":
