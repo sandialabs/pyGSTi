@@ -10,7 +10,6 @@ Utility functions operating on operation matrices
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import collections as _collections
 import warnings as _warnings
 
 import numpy as _np
@@ -131,7 +130,11 @@ def fidelity(a, b):
         """
         n = mat.shape[0]
 
-        if _np.linalg.norm(mat) < __VECTOR_TOL__:
+        ZERO_THRESHOLD = n * _np.finfo(mat.dtype).eps**0.75
+        # ^ This value affects correctness, not just when we raise an error or a warning.
+        #   Don't change from the value given here.
+
+        if _np.linalg.norm(mat) < ZERO_THRESHOLD:
             # We prefer to return the zero vector instead of None to simplify how we handle
             # this function's output.
             return 0, _np.zeros(n, dtype=complex)
@@ -145,7 +148,7 @@ def fidelity(a, b):
         alpha = _np.real(candidate_v.conj() @ mat @ candidate_v)
         reconstruction = alpha * _np.outer(candidate_v, candidate_v.conj())
 
-        if _np.linalg.norm(mat - reconstruction) > __VECTOR_TOL__:
+        if _np.linalg.norm(mat - reconstruction) > ZERO_THRESHOLD:
             # We can't certify that mat is rank-1.
             return 2, None
         
@@ -155,9 +158,9 @@ def fidelity(a, b):
             return 0, _np.zeros(n)
         
         if abs(alpha - 1) > __SCALAR_TOL__:
-            message = f"The input matrix is not trace-1 up to tolerance {__SCALAR_TOL__}. Beware result!"
+            message = f"The input matrix is not trace-1 up to tolerance {__SCALAR_TOL__}."
             _warnings.warn(message)
-            candidate_v *= _np.sqrt(alpha)
+        candidate_v *= _np.sqrt(alpha)
 
         return 1, candidate_v
   
