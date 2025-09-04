@@ -65,7 +65,7 @@ def parse_circuit(code, create_subcircuits=True, integerize_sslbls=True):
     return tuple(result), labels, occurrence_id, compilable_indices
 
 
-def parse_label(code, integerize_sslbls=True):
+def parse_label(code: str, integerize_sslbls=True) -> _lbl.Label:
     create_subcircuits = False
     segment = 0  # segment for gates/instruments vs. preps vs. povms: 0 = *any*
     interlayer_marker = u''  # matches nothing - no interlayer markerg
@@ -171,6 +171,11 @@ def _get_next_simple_lbl(s, start, end, integerize_sslbls, segment):
     else:
         while i < end:
             c = s[i]
+            if c != 'G':
+                # We need to convert to lowercase in case there are strings like
+                # "GXI" "GXX", "GIGY", or "GCNOT". We don't convert 'G' because
+                # that's a special character for our purposes.
+                c = c.lower()
             if 'a' <= c <= 'z' or '0' <= c <= '9' or c == '_':
                 i += 1
             else:
@@ -183,6 +188,9 @@ def _get_next_simple_lbl(s, start, end, integerize_sslbls, segment):
         last = i
         while i < end:
             c = s[i]
+            if c != 'G':
+                # We convert to lowercase here for the same reason as above.
+                c = c.lower()
             if 'a' <= c <= 'z' or '0' <= c <= '9' or c == '_' or c == 'Q' or c == '.' or c == '/' or c == '-':
                 i += 1
             else:
@@ -199,6 +207,9 @@ def _get_next_simple_lbl(s, start, end, integerize_sslbls, segment):
         last = i
         while i < end:
             c = s[i]
+            if c != 'G':
+                # We convert to lowercase here for the same reason as above.
+                c = c.lower()
             if 'a' <= c <= 'z' or '0' <= c <= '9' or c == '_' or c == 'Q':
                 i += 1
             else:
