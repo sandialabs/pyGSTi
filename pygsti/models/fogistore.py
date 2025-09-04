@@ -99,6 +99,8 @@ class FirstOrderGaugeInvariantStore(_NicelySerializable):
             (or sets of operations). TODO: How does one know the corresponding fogi direction? each
             one of these is computed from fogv_directions.
 
+        fogv_labels: TODO
+
         norm_order : str or int
 
             Defines the order of the norm to normalize FOGI directions. It should be 1 for normalizing 'S' quantities and 2 for 'H',
@@ -265,8 +267,9 @@ class FirstOrderGaugeInvariantStore(_NicelySerializable):
         # (pinv_allop_gauge_action takes errorgen-set -> gauge-gen space)
         pinv_allop_gauge_action = _np.linalg.pinv(allop_gauge_action.toarray(), rcond=1e-7)
         gauge_space_directions = pinv_allop_gauge_action @ fogv_directions.toarray()  # in gauge-generator space
+        #TODO fix gauge labels
         fogv_labels = ["%s gauge action" % nm
-                            for nm in _fogit.elem_vec_names(gauge_space_directions, common_gauge_space.elemgen_basis.labels)]
+                            for nm in range(fogv_directions.shape[1])]#_fogit.elem_vec_names(gauge_space_directions, common_gauge_space.elemgen_basis.labels)]
         #Notes on error-gen vs gauge-gen space:
         # self.fogi_directions and self.fogv_directions are dual vectors in error-generator space,
         # i.e. with elements corresponding to the elementary error generators given by
@@ -278,7 +281,7 @@ class FirstOrderGaugeInvariantStore(_NicelySerializable):
         # (or sets of operations).
 
         
-        fogi_store = cls(primitive_op_labels, gauge_space, elem_errorgen_labels_by_op, op_errorgen_indices, fogi_directions, fogi_metadata, dependent_dir_indices, fogv_directions, allop_gauge_action, gauge_space_directions, norm_order, dependent_fogi_action, fogv_labels)
+        fogi_store = cls(primitive_op_labels, gauge_space, elem_errorgen_labels_by_op, op_errorgen_indices, fogi_directions, fogi_metadata, dependent_dir_indices, fogv_directions, allop_gauge_action, gauge_space_directions , fogv_labels, dependent_fogi_action=dependent_fogi_action, norm_order=norm_order)
         fogi_store._check_fogi_store()
         return fogi_store
         #Assertions to check that everything looks good
@@ -331,7 +334,8 @@ class FirstOrderGaugeInvariantStore(_NicelySerializable):
                       'gauge_space_directions' : self._encodemx(self.gauge_space_directions),
                       'norm_order' : self.norm_order,
                       'dependent_fogi_action' : self._dependent_fogi_action,
-                      'gauge_space' : self.gauge_space._to_nice_serialization()
+                      'gauge_space' : self.gauge_space._to_nice_serialization(),
+                      'fogv_labels' : self.fogv_labels
                       })
         return state
     @classmethod
@@ -345,6 +349,7 @@ class FirstOrderGaugeInvariantStore(_NicelySerializable):
         fogv_directions = cls._decodemx(state['fogv_directions'])
         fogi_directions = cls._decodemx(state['fogi_directions'])
         
+        
         for object in state['fogi_metadata']:
             object['gaugespace_dir'] = cls._decodemx(object['gaugespace_dir'])
             object['opset'] = tuple(_Label(label) for label in object['opset'])
@@ -356,7 +361,7 @@ class FirstOrderGaugeInvariantStore(_NicelySerializable):
         gauge_space = _ErrorgenSpace.from_nice_serialization(state['gauge_space'])
         norm_order = state['norm_order']
 
-        return cls(primitive_op_labels, gauge_space, elem_errorgen_labels_by_op, op_errorgen_indices, fogi_directions, fogi_metadata, dependent_dir_indices, fogv_directions, allop_gauge_action, gauge_space_directions, norm_order, dependent_fogi_action)
+        return cls(primitive_op_labels, gauge_space, elem_errorgen_labels_by_op, op_errorgen_indices, fogi_directions, fogi_metadata, dependent_dir_indices, fogv_directions, allop_gauge_action, gauge_space_directions, state['fogv_labels'], norm_order=norm_order, dependent_fogi_action=dependent_fogi_action)
     
     def find_nice_fogiv_directions(self):
         # BELOW: an attempt to find nice FOGV directions - but we'd like all the vecs to be
@@ -444,7 +449,6 @@ class FirstOrderGaugeInvariantStore(_NicelySerializable):
         
         if not (self.fogv_directions != other.fogv_directions).nnz == 0:
             return False 
-        
         if not (self.allop_gauge_action != other.allop_gauge_action).nnz == 0:
             return False
         #Case for when one of the spaces is none but the other isn't

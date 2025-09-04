@@ -492,6 +492,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
     
     for set_size in range(1, max_size):
         larger_sets = []
+        print(f'{set_size=}')
         num_indep_vecs_from_smaller_sets = fogi_dirs.shape[1]
         for op_label in primitive_op_labels:
             for existing_set in smaller_sets:
