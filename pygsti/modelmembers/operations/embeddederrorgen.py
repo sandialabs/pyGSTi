@@ -59,12 +59,12 @@ class EmbeddedErrorgen(_EmbeddedOp):
         #self.sparse = True # Embedded error generators are *always* sparse (pointless to
         #                   # have dense versions of these)
 
-        embedded_matrix_basis = errgen_to_embed.matrix_basis
-        if isinstance(embedded_matrix_basis, str):
-            self.matrix_basis = embedded_matrix_basis
-        else:  # assume a Basis object
-            my_basis_dim = self.state_space.dim
-            self.matrix_basis = _Basis.cast(embedded_matrix_basis.name, my_basis_dim, sparse=True)
+        #embedded_matrix_basis = errgen_to_embed.matrix_basis
+        #if isinstance(embedded_matrix_basis, str):
+        #    self.matrix_basis = embedded_matrix_basis
+        #else:  # assume a Basis object
+        #    my_basis_dim = self.state_space.dim
+        #    self.matrix_basis = _Basis.cast(embedded_matrix_basis.name, my_basis_dim, sparse=True)
 
     def from_vector(self, v, close=False, dirty_value=True):
         """

@@ -75,11 +75,11 @@ class ComposedErrorgen(_LinearOperator):
         #assert(all([self.sparse == eg.sparse for eg in errgens_to_compose])), \
         #    "All error generators must have the same sparsity (%s expected)!" % self.sparse
 
-        self.matrix_basis = errgens_to_compose[0].matrix_basis \
-            if len(errgens_to_compose) > 0 else None
-        assert(all([self.matrix_basis.is_equivalent(eg.matrix_basis, sparseness_must_match=False)
-                    for eg in errgens_to_compose])), \
-            "All error generators must have the same matrix basis (%s expected)!" % str(self.matrix_basis)
+        #self.matrix_basis = errgens_to_compose[0].matrix_basis \
+        #    if len(errgens_to_compose) > 0 else None
+        #assert(all([self.matrix_basis.is_equivalent(eg.matrix_basis, sparseness_must_match=False)
+        #            for eg in errgens_to_compose])), \
+        #    "All error generators must have the same matrix basis (%s expected)!" % str(self.matrix_basis)
 
         #Create representation object
         factor_reps = [op._rep for op in self.factors]

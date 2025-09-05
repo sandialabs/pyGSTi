@@ -79,15 +79,15 @@ class ComposedPOVM(_POVM):
         self.error_map = errormap
         state_space = self.error_map.state_space
 
-        if mx_basis is None:
-            if (isinstance(errormap, (_op.ExpErrorgenOp, _op.IdentityPlusErrorgenOp))
-                and isinstance(errormap.errorgen, _op.LindbladErrorgen)):
-                mx_basis = errormap.errorgen.matrix_basis
-            else:
-                raise ValueError("Cannot extract a matrix-basis from `errormap` (type %s)"
-                                 % str(type(errormap)))
+        #if mx_basis is None:
+        #    if (isinstance(errormap, (_op.ExpErrorgenOp, _op.IdentityPlusErrorgenOp))
+        #        and isinstance(errormap.errorgen, _op.LindbladErrorgen)):
+         #       mx_basis = errormap.errorgen.matrix_basis
+         #   else:
+         #       raise ValueError("Cannot extract a matrix-basis from `errormap` (type %s)"
+         #                        % str(type(errormap)))
 
-        self.matrix_basis = _Basis.cast(mx_basis, state_space)
+        #self.matrix_basis = _Basis.cast(mx_basis, state_space)
         evotype = self.error_map._evotype
 
         if povm is None:
@@ -131,7 +131,7 @@ class ComposedPOVM(_POVM):
         """
         mm_dict = super().to_memoized_dict(mmg_memo)
 
-        mm_dict['matrix_basis'] = self.matrix_basis.to_nice_serialization()
+        #mm_dict['matrix_basis'] = self.matrix_basis.to_nice_serialization()
 
         return mm_dict
 
@@ -139,8 +139,8 @@ class ComposedPOVM(_POVM):
     def _from_memoized_dict(cls, mm_dict, serial_memo):
         errormap = serial_memo[mm_dict['submembers'][0]]
         base_povm = serial_memo[mm_dict['submembers'][1]] if len(mm_dict['submembers']) > 1 else None
-        mx_basis = _Basis.from_nice_serialization(mm_dict['matrix_basis'])
-        return cls(errormap, base_povm, mx_basis)
+        #mx_basis = _Basis.from_nice_serialization(mm_dict['matrix_basis'])
+        return cls(errormap, base_povm, None)
 
     def __contains__(self, key):
         """ For lazy creation of effect vectors """
@@ -192,7 +192,7 @@ class ComposedPOVM(_POVM):
 
     def __reduce__(self):
         """ Needed for OrderedDict-derived classes (to set dict items) """
-        return (ComposedPOVM, (self.error_map.copy(), self.base_povm.copy(), self.matrix_basis),
+        return (ComposedPOVM, (self.error_map.copy(), self.base_povm.copy(), None),
                 {'_gpindices': self._gpindices})  # preserve gpindices (but not parent)
 
     def submembers(self):
