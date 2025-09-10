@@ -2,7 +2,7 @@
 Defines objective-function objects
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -28,7 +28,7 @@ from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAl
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from pygsti.models.model import OpModel as _OpModel
-
+from pygsti import SpaceT
 
 def set_docstring(docstr):
     def assign(fn):
@@ -4823,6 +4823,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             firsts, indicesWithOmitted = zip(*([(iel - element_slice.start, ic) for (iel, ic)
                                                 in zip(self.firsts, self.indicesOfCircuitsWithOmittedData)
                                                 if element_slice.start <= iel < element_slice.stop]))
+            firsts = list(firsts)  # needed for proper numpy indexing below (tuple=different)
 
             #Allocate these above?  Need to know block sizes of dprobs12 & hprobs...
             dprobs12_omitted_rowsum = _np.empty((len(firsts),) + dprobs12.shape[1:], 'd')
@@ -5707,11 +5708,11 @@ def _spam_penalty(mdl, prefactor, op_basis):
     return prefactor * (_np.sqrt(
         _np.array([
             _tools.tracenorm(
-                _tools.vec_to_stdmx(prepvec.to_dense(on_space='minimal'), op_basis)
+                _tools.vec_to_stdmx(prepvec.to_dense("minimal"), op_basis)
             ) for prepvec in mdl.preps.values()
         ] + [
             _tools.tracenorm(
-                _tools.vec_to_stdmx(mdl.povms[plbl][elbl].to_dense(on_space='minimal'), op_basis)
+                _tools.vec_to_stdmx(mdl.povms[plbl][elbl].to_dense("minimal"), op_basis)
             ) for plbl in mdl.povms for elbl in mdl.povms[plbl]], 'd')
     ))
 

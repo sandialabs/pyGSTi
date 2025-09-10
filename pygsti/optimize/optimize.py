@@ -2,7 +2,7 @@
 Optimization (minimization) functions
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -149,20 +149,18 @@ def minimize(fn, x0, method='cg', callback=None,
     elif method == 'evolve':
         solution = _fmin_evolutionary(fn, x0, num_generations=maxiter, num_individuals=500, printer=printer)
 
-#    elif method == 'homebrew':
-#      solution = fmin_homebrew(fn, x0, maxiter)
-
     else:
-        #Set options for different algorithms
+        # Set options for different algorithms
         opts = {'maxiter': maxiter, 'disp': False}
-        if method == "BFGS": opts['gtol'] = tol  # gradient norm tolerance
-        elif method == "L-BFGS-B": opts['gtol'] = opts['ftol'] = tol  # gradient norm and fractional y-tolerance
-        elif method == "Nelder-Mead": opts['maxfev'] = maxfev  # max fn evals (note: ftol and xtol can also be set)
+        if method == "BFGS":
+            opts['gtol'] = tol
+        elif method == "L-BFGS-B":
+            opts['gtol'] = opts['ftol'] = tol  # gradient norm and fractional y-tolerance
+            opts.pop('disp')  # SciPy deprecated this for L-BFGS-B.
+        elif method == "Nelder-Mead":
+            opts['maxfev'] = maxfev  # max fn evals (note: ftol and xtol can also be set)
 
-        if method in ("BFGS", "CG", "Newton-CG", "L-BFGS-B", "TNC", "SLSQP", "dogleg", "trust-ncg"):  # use jacobian
-            solution = _spo.minimize(fn, x0, options=opts, method=method, tol=tol, callback=callback, jac=jac)
-        else:
-            solution = _spo.minimize(fn, x0, options=opts, method=method, tol=tol, callback=callback)
+        solution = _spo.minimize(fn, x0, options=opts, method=method, tol=tol, callback=callback, jac=jac)  
 
     return solution
 

@@ -2,7 +2,7 @@
 Plotly-to-Matplotlib conversion functions.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -674,9 +674,9 @@ def special_keyplot(pygsti_fig, save_to, fontsize):
     axes.yaxis.set_major_locator(mticker.FixedLocator(axes.get_yticks().tolist()))  # when calling set_[x|y]ticklabels
     axes.set_xticklabels(_val_filter(prepStrs), rotation=90, ha='center', fontsize=fontsize)
     axes.set_yticklabels(list(reversed(_val_filter(effectStrs))), fontsize=fontsize)  # FLIP
-    axes.set_xticks(_np.arange(len(prepStrs)) + .5)
+    axes.set_xticks(_np.arange(len(prepStrs)) + 0.5)
     axes.set_xticks(_np.arange(len(prepStrs) + 1), minor=True)
-    axes.set_yticks(_np.arange(len(effectStrs)) + .5)
+    axes.set_yticks(_np.arange(len(effectStrs)) + 0.5)
     axes.set_yticks(_np.arange(len(effectStrs) + 1), minor=True)
     axes.tick_params(which='major', bottom='off', top='off', left='off', right='off', pad=5)
     axes.yaxis.grid(True, linestyle='-', linewidth=1.0, which='minor')

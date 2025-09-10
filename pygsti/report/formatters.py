@@ -3,7 +3,7 @@ Functions for generating report tables in different formats
 """
 
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -67,7 +67,7 @@ NormalHTML = _Formatter(html,
                         ebstring='%s <span class="errorbar">&plusmn; %s</span>',
                         nmebstring='%s <span class="nmerrorbar">&plusmn; %s</span>')
 NormalLatex = _Formatter(latex,
-                         ebstring='$ \\begin{array}{c} %s \\\\ \pm %s \\end{array} $')  # nmebstring will match
+                         ebstring='$ \\begin{array}{c} %s \\\\ \\pm %s \\end{array} $')  # nmebstring will match
 
 # Normal replacements
 format_dict['Normal'] = {
@@ -186,7 +186,7 @@ format_dict['MathText'] = {
 
 format_dict['Vec'] = {
     'html': NormalHTML,
-    'latex': _Formatter(latex, ebstring='%s $\pm$ %s'),
+    'latex': _Formatter(latex, ebstring='%s $\\pm$ %s'),
     'python': _no_format}
 
 format_dict['Circuit'] = {

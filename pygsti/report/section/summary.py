@@ -1,6 +1,6 @@
 """ Summary section """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -21,24 +21,28 @@ class SummarySection(_Section):
         return workspace.FitComparisonBarPlot(
             max_lengths, switchboard.circuits_all, switchboard.mdl_all_modvi,
             switchboard.modvi_ds, switchboard.objfn_builder_modvi,
-            'L', comm=comm
+            'L', comm=comm, mdc_stores = switchboard.mdc_store_all
         )
 
     @_Section.figure_factory()
     def final_model_fit_histogram(workspace, switchboard=None, linlog_percentile=5, comm=None, bgcolor='white',
                                   **kwargs):
         return workspace.ColorBoxPlot(
-            switchboard.objfn_builder_modvi,  # NOTE: this should objfun_builder_modvi
+            switchboard.objfn_builder_modvi,
             switchboard.circuits_final,
             switchboard.modvi_ds, switchboard.mdl_current_modvi,
             linlg_pcntle=linlog_percentile / 100,
-            typ='histogram', comm=comm, bgcolor=bgcolor
+            typ='histogram', comm=comm, bgcolor=bgcolor,
+            mdc_store= switchboard.final_mdc_store
         )
 
     @_Section.figure_factory()
     def final_gates_vs_target_table_insummary(workspace, switchboard=None, confidence_level=None, ci_brevity=1,
                                               show_unmodeled_error=False, **kwargs):
-        summary_display = ('inf', 'trace', 'diamond', 'evinf', 'evdiamond')
+        if kwargs.get('n_leak', 0) == 0:
+            summary_display = ('inf', 'trace', 'diamond', 'evinf', 'evdiamond')
+        else:
+            summary_display = ('sub-inf', 'sub-trace', 'sub-diamond', 'plf-sub-diamond', 'leak-rate-max')
         wildcardBudget = None
         if show_unmodeled_error:
             summary_display += ('unmodeled',)
@@ -75,9 +79,11 @@ class SummarySection(_Section):
             circuitsGrid = [[na_to_none(switchboard.circuits_final[i])] * Ne for i in range(Nd)]
             mdlGrid = [[na_to_none(switchboard.mdl_current_modvi[d, i, -1]) for i in est_inds_mt]
                        for d in range(Nd)]
+            mdc_store_grid = [[na_to_none(switchboard.final_mdc_store[d, i]) for i in est_inds_mt]
+                       for d in range(Nd)]
             return workspace.FitComparisonBoxPlot(
                 est_lbls_mt, dataset_labels, circuitsGrid, mdlGrid, dsGrid, grid_objfn_builder,
-                comm=comm
+                comm=comm, mdc_stores=mdc_store_grid
             )
         else:
             dsGrid = [na_to_none(switchboard.modvi_ds[0, i]) for i in est_inds_mt]
@@ -86,7 +92,9 @@ class SummarySection(_Section):
                 mdlGrid = [None for i in est_inds_mt]
             else:
                 mdlGrid = [na_to_none(switchboard.mdl_current_modvi[0, i, -1]) for i in est_inds_mt]
+            mdc_store_grid = [na_to_none(switchboard.final_mdc_store[0, i]) for i in est_inds_mt]
+
             return workspace.FitComparisonBarPlot(
                 est_lbls_mt, circuitsGrid, mdlGrid, dsGrid, grid_objfn_builder, 'Estimate',
-                comm=comm
+                comm=comm, mdc_stores=mdc_store_grid
             )

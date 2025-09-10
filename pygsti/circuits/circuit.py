@@ -2,13 +2,22 @@
 Defines the Circuit class
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
+
+from __future__ import annotations
+from typing import Dict, Tuple, Union, Optional, List, TYPE_CHECKING
+if TYPE_CHECKING:
+    try:
+        import qiskit
+        import stim
+    except:
+        pass
 
 import collections as _collections
 import itertools as _itertools
@@ -21,6 +30,7 @@ from pygsti.baseobjs import outcomelabeldict as _ld, _compatibility as _compat
 from pygsti.tools import internalgates as _itgs
 from pygsti.tools import slicetools as _slct
 from pygsti.tools.legacytools import deprecate as _deprecate_fn
+
 
 #Externally, we'd like to do thinks like:
 # c = Circuit( LabelList )
@@ -977,11 +987,10 @@ class Circuit(object):
         if isinstance(x, Circuit):
             if len(self) != len(x):
                 return False
+            elif self._static and x._static and self._hash != x._hash:
+                return False
             else:
-                if self._static and x._static:
-                    return self._hash == x._hash
-                else:
-                    return self.tup == x.tup
+                return self.tup == x.tup
         elif x is None: 
             return False
         else:
@@ -3724,7 +3733,7 @@ class Circuit(object):
         f.write("\\documentclass{article}\n")
         f.write("\\usepackage{mathtools}\n")
         f.write("\\usepackage{xcolor}\n")
-        f.write("\\usepackage[paperwidth=" + str(5. + d * .3)
+        f.write("\\usepackage[paperwidth=" + str(5. + d * 0.3)
                 + "in, paperheight=" + str(2 + n * 0.2) + "in,margin=0.5in]{geometry}")
         f.write("\\input{Qcircuit}\n")
         f.write("\\begin{document}\n")
@@ -3760,6 +3769,179 @@ class Circuit(object):
         f.write("}\\end{equation*}\n")
         f.write("\\end{document}")
         f.close()
+
+
+    def convert_to_stim_tableau_layers(self, gate_name_conversions: Optional[dict[str, stim.Tableau]] = None, 
+                                       num_qubits: Optional[int] = None, 
+                                       qubit_label_conversions: Optional[dict[Union[str, int], int]] = None) -> list[stim.Tableau]:
+        """
+        Converts this circuit to a list of stim tableau layers
+
+        Parameters
+        ----------
+        gate_name_conversions : dict, optional (default None)
+            A map from pygsti gatenames to standard stim tableaus. 
+            If None a standard set of gate names is used from 
+            `pygsti.tools.internalgates`
+
+        num_qubits : int, optional (default None)
+            Number of qubits which should be included in the each Tableau.
+            If None this value will be attempted to be inferred from the
+            Circuit's line_labels. 
+
+        qubit_label_conversions : dict, optional (default None)
+            A map from the circuit's qubit labels into integers in the range 0 to N-1,
+            where N is the number of qubits, where the integer indices indicate
+            which qubit in the stim Tableau to map a given circuit operation into.
+            If not specified an attempt will be made to infer this mapping based on the
+            circuit's qubit labels and an exception will be made if this inference is not possible.
+
+            Note: in the following line_labels = self.line_labels.
+
+            Inference is supported for line labels with the following format.
+
+            - Qubit labels that are either integers, or string representations of integers, prefixed by
+              the character 'Q' or 'q', that are monotonically increasing.
+
+            If num_qubits is not specified, then these qubit labels will be mapped into the range [0,N-1] based
+            on their index.
+
+            If num_qubits is specified then there are different subcases:
+                If num_qubits == len(line_labels) then these qubit labels will be mapped into the range [0,N-1] based
+                on their index.
+                If num_qubit > len(line_labels) we have two possibilities:
+                    1. If max(line_labels) <= num_qubits then the line_labels are mapped directly into their value
+                       in the range [0, N-1].
+                    2. If max(line_labels) > num_qubits then the line_labels are mapped into [0,N-1] using their index.
+                Note if num_qubits<len(line_labels) then an exception is raised.
+               
+            If the default conversion behavior doesn't suit your needs, or doesn't support your label format then
+            a manual dictionary should be specified.
+
+
+        Returns
+        -------
+        A layer by layer list of stim tableaus    
+        """
+        try:
+            import stim
+        except ImportError:
+            raise ImportError("Stim is required for this operation, and it does not appear to be installed.")
+        if gate_name_conversions is None:
+            gate_name_conversions = _itgs.standard_gatenames_stim_conversions()
+        line_labels = self._line_labels
+
+        if num_qubits is None:
+            assert line_labels != ('*',), "Cannot convert circuits with placeholder line label to stim Tableau unless number of qubits is specified."
+            num_qubits=len(line_labels)
+
+        if qubit_label_conversions is None: #attempt to infer this.
+            assert len(line_labels)<=num_qubits, 'More line labels specified than qubits, cannot infer qubit label conversion mapping.'
+
+            #case 1: qubit labels are monotonically increasing integers and span a range of length num_qubits.
+            if all([isinstance(lbl, int) for lbl in line_labels]) and all([(line_labels[i+1]-line_labels[i])>0 for i in range(len(line_labels)-1)]):
+                if len(line_labels) == num_qubits or max(line_labels)>num_qubits:
+                    qubit_label_conversions = {lbl:i for i, lbl in enumerate(line_labels)}
+                elif max(line_labels)<=num_qubits:
+                    qubit_label_conversions = {lbl:lbl for lbl in line_labels}                
+                
+            #Case 2: qubit labels are strings of the form 'Qi' or 'qi' where the i's are string representations of integers otherwise matching the constraints of
+            #case 1.          
+            elif all([isinstance(lbl,str) for lbl in line_labels]):
+                if all([lbl[0]=='Q' or lbl[0]=='q' for lbl in line_labels]) and all([lbl[1:].isnumeric() for lbl in line_labels]):
+                    int_line_labels = [int(lbl[1:]) for lbl in line_labels]
+                    if all([(int_line_labels[i+1] - int_line_labels[i])>0 for i in range(len(line_labels)-1)]):
+                        if len(int_line_labels) == num_qubits or max(int_line_labels)>num_qubits:
+                            qubit_label_conversions = {lbl:i for i, lbl in enumerate(line_labels)}
+                        elif max(int_line_labels)<=num_qubits:
+                            qubit_label_conversions = {str(lbl):lbl for lbl in int_line_labels}                        
+            else:
+                raise ValueError(f'Unsupported line_label type {type(line_labels[0])}, only str or int supported.')
+
+            if qubit_label_conversions is None: #then no automatic conversion was inferred.
+                msg = 'Unable to infer a mapping from line labels of this circuit into integers in the range [0,N-1] '\
+                      +'as required for conversion to a stim.Tableau object. Please see the docstring for this method for the '\
+                      +'supported automatic inferencing. Please manually specify a qubit_label_conversions dictionary.'
+                raise RuntimeError(msg)
+        else: #validate qubit_label_conversion dictionary has the keys we need.
+            msg = 'qubit_label_conversions does not contain keys for all of the line_labels in this circuit.'
+            assert all([lbl in qubit_label_conversions for lbl in line_labels]), msg
+            msg1 = 'All qubit_label_conversions values should be ints in the range [0, num_qubits-1]'
+            assert all([isinstance(val,int) and (0 <= val <=num_qubits-1) for val in qubit_label_conversions.values()]), msg1
+
+        stim_layers=[]
+
+        if self._static:
+            circuit_layers = [layer.components for layer in self._labels]
+        else:
+            circuit_layers = self._labels
+        empty_tableau = stim.Tableau(num_qubits)
+        for layer in circuit_layers:
+            stim_layer = empty_tableau.copy()
+            for sub_lbl in layer:
+                temp = gate_name_conversions[sub_lbl.name]    
+                stim_layer.append(temp, [qubit_label_conversions[qubit_lbl] for qubit_lbl in sub_lbl.qubits])
+            stim_layers.append(stim_layer)
+        return stim_layers
+    
+    def convert_to_stim_tableau(self, gate_name_conversions: Optional[dict[str, stim.Tableau]] = None, 
+                                       num_qubits: Optional[int] = None, 
+                                       qubit_label_conversions: Optional[dict[Union[str, int], int]] = None) -> stim.Tableau:
+        """
+        Converts this circuit to a stim tableau
+
+        Parameters
+        ----------
+        gate_name_conversions : dict, optional (default None)
+            A map from pygsti gatenames to standard stim tableaus. 
+            If None a standard set of gate names is used from 
+            `pygsti.tools.internalgates`
+        
+        num_qubits : int, optional (default None)
+            Number of qubits which should be included in the overall Tableau.
+            If None this value will be attempted to be inferred from the
+            Circuit's line_labels. 
+
+        qubit_label_conversions : dict, optional (default None)    
+            A map from the circuit's qubit labels into integers in the range 0 to N-1,
+            where N is the number of qubits, where the integer indices indicate
+            which qubit in the stim Tableau to map a given circuit operation into.
+            If not specified an attempt will be made to infer this mapping based on the
+            circuit's qubit labels and an exception will be made if this inference is not possible.
+
+            Note: in the following line_labels = self.line_labels.
+
+            Inference is supported for line labels with the following format.
+
+            - Qubit labels that are either integers, or string representations of integers, prefixed by
+              the character 'Q' or 'q', that are monotonically increasing.
+
+            If num_qubits is not specified, then these qubit labels will be mapped into the range [0,N-1] based
+            on their index.
+
+            If num_qubits is specified then there are different subcases:
+                If num_qubits == len(line_labels) then these qubit labels will be mapped into the range [0,N-1] based
+                on their index.
+                If num_qubit > len(line_labels) we have two possibilities:
+                    1. If max(line_labels) <= num_qubits then the line_labels are mapped directly into their value
+                       in the range [0, N-1].
+                    2. If max(line_labels) > num_qubits then the line_labels are mapped into [0,N-1] using their index.
+                Note if num_qubits<len(line_labels) then an exception is raised.
+               
+            If the default conversion behavior doesn't suit your needs, or doesn't support your label format then
+            a manual dictionary should be specified.
+
+        Returns
+        -------
+        A single stim.Tableau representing the entire circuit.
+        """
+        layers=self.convert_to_stim_tableau_layers(gate_name_conversions, num_qubits, qubit_label_conversions)
+        if layers:        
+            tableau=layers[0]
+            for layer in layers[1:]:
+                tableau= layer*tableau
+            return tableau
+        
 
     def convert_to_cirq(self,
                         qubit_conversion,
@@ -4006,6 +4188,196 @@ class Circuit(object):
         else:
             return cls(circuit_layers)        
 
+    @classmethod
+    def from_qiskit(cls,
+                    circuit: qiskit.QuantumCircuit,
+                    qubit_conversion: Optional[Dict[qiskit.circuit.Qubit, str]] = None,
+                    qiskit_gate_conversion: Optional[Dict[str, str]] = None,
+                    use_standard_gate_conversion_as_backup: bool = True,
+                    allow_different_gates_in_same_layer: bool = True,
+                    verbose: bool = False
+                    ) -> Tuple[Circuit, Dict[int, str]]:
+        """
+        Converts and instantiates a pyGSTi Circuit object from a Qiskit QuantumCircuit object.
+
+        Parameters
+        ----------
+        circuit : Qiskit QuantumCircuit
+            The Qiskit QuantumCircuit object to parse into a pyGSTi circuit.
+
+        qubit_conversion : dict, optional (default None)
+            A dictionary specifying a mapping between Qiskit qubit indices and 
+            pyGSTi qubit labels (either integers or strings).
+            If None, then a default mapping is created.
+
+        qiskit_gate_conversion : dict, optional (default None)
+            If specified a dictionary with keys given by Qiskit gate objects,
+            and values given by pyGSTi gate names which overrides the built-in
+            conversion dictionary used by default.
+
+        use_standard_gate_conversion_as_backup : boolean (default True)
+            Determines how the circuit conversion will be handled when the custom
+            Qiskit gate conversion dict does not have an entry for the encountered
+            gate. If True, this method will fall back on the standard conversions
+            found in qiskit_gatenames_standard_conversions(). If False, the method
+            will fail.
+
+        allow_different_gates_in_same_layer: boolean (default True)
+            determines if gates with different names can be in the same layer.
+            For instance, if a CZ gate and CX gate can both fit in the same layer,
+            they will either be placed in the same layer (if True) or split into
+            separate layers (if False).
+
+        Returns
+        -------
+        Tuple: 
+            pygsti_circuit
+                A pyGSTi Circuit instance equivalent to the specified Qiskit one.
+
+            Dict {qiskit_qubit_idx, pyGSTi_qubit}
+                Dictionary that contains the mapping from the Qiskit qubit index
+                to the corresponding pyGSTi qubit.
+        """
+
+        try:
+            import qiskit
+            if qiskit.__version__ != '2.1.1':
+                _warnings.warn("Circuit class method `from_qiskit()` is designed for qiskit version 2.1.1 and may not \
+                                function properly for your qiskit version, which is " + qiskit.__version__)
+        except:
+            raise RuntimeError('Qiskit is required for this operation, and does not appear to be installed.')
+
+        # mapping between qiskit gates and pygsti gate names:
+        if qiskit_gate_conversion is not None:
+            if use_standard_gate_conversion_as_backup == True:
+                qiskit_to_gate_name_mapping = _itgs.qiskit_gatenames_standard_conversions()
+                for key, value in qiskit_gate_conversion.items():
+                    qiskit_to_gate_name_mapping[key] = value
+            else:
+                qiskit_to_gate_name_mapping = qiskit_gate_conversion
+        else:
+            qiskit_to_gate_name_mapping = _itgs.qiskit_gatenames_standard_conversions()
+
+        # get all of the qubits in the Qiskit circuit
+        if len(circuit.qregs) > 1:
+            _warnings.warn('pyGSTi circuit mapping does not preserve Qiskit qreg structure.')
+
+        if len(circuit.cregs):
+            _warnings.warn('pyGSTi circuit mapping discards classical registers.')
+
+        qubits = circuit.qubits
+
+        #ensure all of these have a conversion available.
+        if qubit_conversion is not None:
+            unmapped_qubits = set(qubits).difference(set(qubit_conversion.keys()))
+            assert len(unmapped_qubits) == 0, f'Missing Qiskit to pygsti conversions for some qubits: {unmapped_qubits}'
+
+            qubit_idx_conversion = {i: qubit_conversion[circuit._qbit_argument_conversion(i)[0]] for i in range(circuit.num_qubits)}
+                    
+        #if it is None, build a default mapping.
+        else:
+            # default mapping is the identity mapping: qubit i in the Qiskit circuit maps to qubit i in the pyGSTi circuit
+            qubit_conversion = {circuit._qbit_argument_conversion(i)[0]: f'Q{i}' for i in range(circuit.num_qubits)} # in Qiskit 1.1.1, the method is called qbit_argument_conversion. In Qiskit >=1.2 (as far as Noah can tell), the method is called _qbit_argument_conversion. 
+
+            qubit_idx_conversion = {i: f'Q{i}' for i in range(circuit.num_qubits)}
+
+        line_labels = tuple(sorted([qubit_conversion[qubit] for qubit in qubits]))
+
+        if verbose:
+            print(f'qubit_conversion: {qubit_conversion}')
+            print(f'line_labels: {line_labels}')
+
+        layer_indices = {}
+        for line_label in line_labels:
+            layer_indices[line_label] = 0
+
+        instructions = circuit.data
+
+        pygsti_circ_layers = []
+        
+        if allow_different_gates_in_same_layer == False:
+            layer_names = []
+
+        for instruction in instructions:
+            if verbose:
+                print(f'instruction: {instruction}')
+
+            if allow_different_gates_in_same_layer == False:
+                assert len(pygsti_circ_layers) == len(layer_names), "there must be one layer name for each layer!"
+
+            name = instruction.operation.name
+            num_qubits = instruction.operation.num_qubits
+            params = instruction.operation.params
+            if len(params) == 0:
+                params = None
+
+            if verbose:
+                print(f'qiskit instruction name: {name}')
+                print(f'number of qubits in instruction: {num_qubits}')
+                print(f'instruction params: {params}')
+
+            pygsti_gate_qubits = [qubit_conversion[qubit] for qubit in instruction.qubits]
+
+            if name == 'measure':
+                _warnings.warn('skipping measure')
+                continue
+
+            if name == 'barrier':
+                next_index = max(layer_indices[qubit] for qubit in pygsti_gate_qubits)
+                for qubit in pygsti_gate_qubits:
+                    layer_indices[qubit] = next_index
+                continue
+
+            pygsti_gate_name = qiskit_to_gate_name_mapping[name][0]
+
+            label = _Label(pygsti_gate_name, pygsti_gate_qubits, args=params)
+
+            next_index = max(layer_indices[qubit] for qubit in pygsti_gate_qubits)
+            if verbose:
+                print(f'computed next index for {pygsti_gate_name} gate on lines {pygsti_gate_qubits}: {next_index}')
+
+            if allow_different_gates_in_same_layer == True: # layers are not separated by the type of gate they contain
+
+                if next_index < len(pygsti_circ_layers): # there is an existing layer in the circuit where the gate can be inserted
+                    pygsti_circ_layers[next_index].append(label)
+                    if verbose:
+                        print(f"inserting {pygsti_gate_name} gate in layer {next_index} on lines {pygsti_gate_qubits}")
+
+                    for pygsti_qubit in pygsti_gate_qubits: # update where a gate on these qubits can be placed
+                        layer_indices[pygsti_qubit] = next_index + 1
+                else:
+                    if verbose:
+                        print(f"inserting {pygsti_gate_name} gate at end of circuit, which is layer {len(pygsti_circ_layers)} on lines {pygsti_gate_qubits}")
+
+                    pygsti_circ_layers.append([label]) # need to append gate at the end of the circuit, thus creating a new layer
+                    for pygsti_qubit in pygsti_gate_qubits:
+                        layer_indices[pygsti_qubit] = len(pygsti_circ_layers)
+
+            else:
+                for i in range(next_index, len(pygsti_circ_layers)): # searching for a layer where the gate can be inserted. Layer name needs to match the name of the gate being inserted
+                    if name == layer_names[i]:
+                        if verbose:
+                            print(f'inserting gate {pygsti_gate_name} on qubits {pygsti_gate_qubits} in layer {i}')
+
+                        pygsti_circ_layers[i].append(label)
+                        for pygsti_qubit in pygsti_gate_qubits:
+                            layer_indices[pygsti_qubit] = i + 1
+                        break
+
+                else: # no place to put the gate in the existing layers. New layer is added with corresponding name
+                    if verbose:
+                        print(f'inserting gate {pygsti_gate_name} on qubits {pygsti_gate_qubits} in layer {len(pygsti_circ_layers)}')
+
+                    pygsti_circ_layers.append([label])
+                    layer_names.append(name)
+                    for pygsti_qubit in pygsti_gate_qubits:
+                        layer_indices[pygsti_qubit] = len(pygsti_circ_layers)
+            
+        circuit = cls(pygsti_circ_layers, line_labels=line_labels)
+
+        return (circuit, qubit_idx_conversion)
+
+
     def convert_to_quil(self,
                         num_qubits=None,
                         gatename_conversion=None,
@@ -4173,12 +4545,121 @@ class Circuit(object):
 
         return quil
 
+
+    def convert_to_qiskit(self,
+                          num_qubits: int = None,
+                          qubit_conversion: Optional[Union[str, Dict[str, Union[int, qiskit.circuit.Qubit]]]] = None,
+                          gatename_conversion: Optional[Dict[str, qiskit.circuit.Instruction]] = None,
+                          block_between_layers: bool = True,
+                          qubits_to_measure: Optional[Union[str, List[str]]] = None,
+                          ) -> qiskit.QuantumCircuit:
+
+        """
+        Convert a pyGSTi circuit to a Qiskit QuantumCircuit.
+
+        Parameters
+        ----------
+        num_qubits : int, optional
+            size of Qiskit QuantumCircuit to create from the pyGSTi circuit. If None,
+            the number of line labels will set the size of the QuantumCircuit.
+            It is often useful to provide this field if the pyGSTi circuit is to be
+            executed on a backend that has more qubits than the pyGSTi circuit.
+
+        qubit_conversion : dict, optional
+            mapping from pyGSTi line labels to Qiskit qubits, either as indices
+            or Qiskit Qubit objects. If none, a literal mapping is used. If 'remove-Q' is set,
+            then the 'Q' at the beginning of the line label is removed: e.g., 'Q53' becomes 53 (integer).
+
+        gatename_conversion : dict, optional
+            A dictionary mapping gate names contained in this circuit to the corresponding
+            gate names used in the rendered Qiskit QuantumCircuit.  If None, a standard set of conversions
+            is used (see :func:`standard_gatenames_qiskit_conversions`).
+
+        block_between_layers : bool, optional
+            Set whether or not pyGSTi layer structure is maintained in the Qiskit circuit. Default is True.
+            If set to False, Qiskit will move all gates to their earliest possible execution point.
+
+        qubits_to_measure : str or list, optional
+            Set which pyGSTi qubits should be measured in the rendered Qiskit QuantumCircuit.
+            If None, no qubits are measured.
+            If 'all', all qubits in the length-`num_qubits` Qiskit QuantumRegister are measured.
+            If 'active', only the qubits for which a qubit conversion is specified are measured.
+            If a list of pyGSTi line labels is provided, then only the corresponding Qiskit qubits are measured.
+
+        
+        Returns
+        ---------
+        qiskit.QuantumCircuit
+            a Qiskit QuantumCircuit corresponding to the pyGSTi circuits.
+        """
+
+        try:
+            import qiskit
+            if qiskit.__version__ != '2.1.1':
+                _warnings.warn("Circuit class method `convert_to_qiskit()` is designed for qiskit version 2.1.1 and may not \
+                                function properly for your qiskit version, which is " + qiskit.__version__)
+        except:
+            raise RuntimeError('Qiskit is required for this operation, and does not appear to be installed.')
+        
+        depth = self.depth
+
+        if num_qubits is None:
+            num_qubits = self.width
+
+        if qubit_conversion is None:
+            qubit_conversion = {label: label for label in self.line_labels}
+        elif qubit_conversion == 'remove-Q':
+            qubit_conversion = {label: (int(label[1:]) if (isinstance(label, str) and label[0]=='Q' and label[1:].isnumeric()) else label) for label in self.line_labels}
+
+
+        qiskit_qc = qiskit.QuantumCircuit(num_qubits)
+
+        qiskit_gate_conversion = _itgs.standard_gatenames_qiskit_conversions()
+
+        for i in range(depth):
+            layer = self.layer_label(i).components
+            for gate in layer:
+                qiskit_gate, qiskit_gate_name, is_standard_gate = qiskit_gate_conversion[gate.name]
+                qiskit_qubits = [qubit_conversion[qubit] for qubit in gate.qubits]
+                qiskit_qc.append(qiskit_gate(*(gate.args)), qiskit_qubits, copy=False)
+            
+            if block_between_layers:
+                qiskit_qc.barrier()
+
+        if qubits_to_measure is not None:
+            if isinstance(qubits_to_measure, str):
+                if qubits_to_measure == 'all':
+                    qiskit_qc.measure_all()
+
+                elif qubits_to_measure == 'active':
+                    qiskit_qubits_to_measure = [v for v in qubit_conversion.values()]
+                    new_creg = qiskit_qc._create_creg(len(qiskit_qubits_to_measure), "cr")
+                    qiskit_qc.add_register(new_creg)
+                    qiskit_qc.barrier()
+                    qiskit_qc.measure(qiskit_qubits_to_measure, new_creg)
+
+                else:
+                    raise ValueError(f"unknown string option for 'qubits_to_measure': {qubits_to_measure}")
+                
+            elif isinstance(qubits_to_measure, list):
+                qiskit_qubits_to_measure = [qubit_conversion[qubit] for qubit in qubits_to_measure]
+                new_creg = qiskit_qc._create_creg(len(qiskit_qubits_to_measure), "cr")
+                qiskit_qc.add_register(new_creg)
+                qiskit_qc.barrier()
+                qiskit_qc.measure(qiskit_qubits_to_measure, new_creg)
+
+            else:
+                raise ValueError(f"could not parse argument for 'qubits_to_measure': {qubits_to_measure}")
+
+        return qiskit_qc
+                    
+
     def convert_to_openqasm(self, num_qubits=None,
                             standard_gates_version='u3',
                             gatename_conversion=None, qubit_conversion=None,
                             block_between_layers=True,
                             block_between_gates=False,
-                            include_delay_on_idle=True,
+                            include_delay_on_idle=False,
                             gateargs_map=None):  # TODO
         """
         Converts this circuit to an openqasm string.
@@ -4223,9 +4704,9 @@ class Circuit(object):
         include_delay_on_idle: bool, optional
             When `True`, includes a delay operation on implicit idles in each layer, as per
             Qiskit's OpenQASM 2.0 convention after the deprecation of the id operation.
-            Defaults to True, which is commensurate with legacy usage of this function.
-            However, this can now be set to False to avoid this behaviour if generating
+            Defaults to False, to avoid this behaviour if generating
             actually valid OpenQASM (with no opaque delay instruction) is desired.
+            Can be set to True, which is commensurate with legacy usage of this function.
 
         gateargs_map : dict, optional
             If not None, a dict that maps strings (representing pyGSTi standard gate names) to
@@ -4309,7 +4790,7 @@ class Circuit(object):
                     if openqasmlist_for_gate is None:
                         # Try to look up the operation in mapping dict instead
                         openqasmfn_for_gate = gateargs_map.get(gate.name, None)
-                        assert openqasmfn_for_gate is not None, "Could not look up {} as qasm list or func" % gate.name
+                        assert openqasmfn_for_gate is not None, f"Could not look up {gate.name} as qasm list or func"
                         openqasmlist_for_gate = openqasmfn_for_gate(gate.args)
 
                     openqasm_for_gate = ''
@@ -4362,6 +4843,7 @@ class Circuit(object):
                         # Delay 0 works because of the barrier
                         # In OpenQASM3, this should probably be a stretch instead
                         openqasm += 'delay(0)' + ' q[' + str(qubit_conversion[q]) + '];\n'
+                        pass
 
             # Add in a barrier after every circuit layer if block_between_layers==True.
             # Including barriers is critical for QCVV testing, circuits should usually

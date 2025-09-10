@@ -2,7 +2,7 @@
 Matrix related utility functions
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -13,6 +13,7 @@ Matrix related utility functions
 import functools as _functools
 import itertools as _itertools
 import warnings as _warnings
+import typing as _typing
 
 import numpy as _np
 import scipy.linalg as _spl
@@ -420,7 +421,7 @@ def independent_columns(m, initial_independent_cols=None, tol=1e-7):
             # We assume initial_independent_cols is full column-rank.
             # This lets us use unpivoted QR instead of pivoted QR or SVD.
             assert initial_independent_cols.shape[0] == m.shape[0]
-            q = _spl.qr(initial_independent_cols, mode='econ')[0]
+            q = _spl.qr(initial_independent_cols, mode='economic')[0]
             # proj_m = (I - qq')m
             temp1 = q.T.conj() @ m
             temp2 = q @ temp1
@@ -2394,3 +2395,42 @@ def sign_fix_qr(q, r, tol=1e-6):
             qq[:, i] = -q[:, i]
             rr[i, :] = -r[i, :]
     return qq, rr
+
+
+def is_operatorlike(obj: _typing.Any) -> bool:
+    return hasattr(obj, '__matmul__') and hasattr(obj, '__rmatmul__') and hasattr(obj, 'T') and hasattr(obj, 'conj')
+
+
+class IdentityOperator:
+    """
+    A representation of the identity operator on any and all vector spaces.
+    """
+
+    __array_priority__ = 101
+    # ^ The __array_priority__ static class variable determines how infix
+    #   operators (most notably, @) are dispatched.
+    #
+    #   If Python initially dispatches the ndarray implementation of an infix
+    #   operator, then the ndarray implementation will first check if the other
+    #   operand has __array_priority__ greater than zero. If it does, then a
+    #   function call like ndarray.__matmul__(array, other) will return the
+    #   result of other.__rmatmul__(array).
+    #   
+    #   For our purposes, it should suffice to set __array_priority__ to 1.
+    #   We set it to 101 in case someone does something weird and passes in 
+    #   a numpy matrix (which behaves like an ndarray in many respects, and
+    #   has __array_priority__ of 10). 
+    #
+
+    def __matmul__(self, other: _typing.Any) -> _typing.Any:
+        return other
+    
+    def __rmatmul__(self, other: _typing.Any) -> _typing.Any:
+        return other
+    
+    @property
+    def T(self):
+        return self
+    
+    def conj(self):
+        return self

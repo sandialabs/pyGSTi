@@ -2,7 +2,7 @@
 Utility functions related to Gram matrix construction.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -100,7 +100,7 @@ def max_gram_rank_and_eigenvalues(dataset, target_model, max_basis_string_length
     if fixed_lists is not None:
         maxRhoStrs, maxEStrs = fixed_lists
     else:
-        maxRhoStrs = maxEStrs = max_gram_basis(dataset.gate_labels(),
+        maxRhoStrs = maxEStrs = max_gram_basis(target_model.primitive_op_labels,
                                                dataset, max_basis_string_length)
 
     return _gram_rank_and_evals(dataset, maxRhoStrs, maxEStrs, target_model)

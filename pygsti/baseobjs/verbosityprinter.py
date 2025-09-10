@@ -2,7 +2,7 @@
 Defines the VerbosityPrinter class, used for logging output.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -636,7 +636,7 @@ if __name__ == "__main__":
             for i, item in enumerate(data):
                 printer.show_progress(i, len(data)-1,
                           verbose_messages=['%s gates' % i], prefix='--- GST (', suffix=') ---')
-                time.sleep(.05)
+                time.sleep(0.05)
 
     def nested_demo(verbosity):
         printer = VerbosityPrinter.create_printer(verbosity)

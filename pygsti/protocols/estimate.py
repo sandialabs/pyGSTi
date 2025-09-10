@@ -2,7 +2,7 @@
 Defines the Estimate class.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -165,6 +165,8 @@ class Estimate(_MongoSerializable):
         self._final_objfn_cache = parameters.get('final_objfn_cache', None)
         self.final_objfn_builder = parameters.get('final_objfn_builder', _objfns.ObjectiveFunctionBuilder(_objfns.PoissonPicDeltaLogLFunction))
         self._final_objfn = parameters.get('final_objfn', None)
+        self._per_iter_mdc_store = parameters.get('per_iter_mdc_store', None)
+
 
         self.extra_parameters = extra_parameters if (extra_parameters is not None) else {}
 
@@ -193,13 +195,14 @@ class Estimate(_MongoSerializable):
                               '_final_objfn_cache': 'dir-serialized-object',
                               'final_objfn_builder': 'serialized-object',
                               '_final_objfn': 'reset',
-                              '_gaugeopt_suite': 'serialized-object'
+                              '_gaugeopt_suite': 'serialized-object',
+                              '_per_iter_mdc_store': 'reset'
                               }
 
     @property
     def parameters(self):
         #HACK for now, until we can remove references that access these parameters
-        parameters = _collections.OrderedDict()
+        parameters = dict()
         parameters['protocol'] = self.protocol  # Estimates can hold sub-Protocols <=> sub-results
         parameters['profiler'] = self.profiler
         parameters['final_mdc_store'] = self._final_mdc_store
@@ -207,6 +210,7 @@ class Estimate(_MongoSerializable):
         parameters['final_objfn_cache'] = self._final_objfn_cache
         parameters['final_objfn_builder'] = self.final_objfn_builder
         parameters['weights'] = self.circuit_weights
+        parameters['per_iter_mdc_store'] = self._per_iter_mdc_store
         parameters.update(self.extra_parameters)
         #parameters['raw_objective_values']
         #parameters['model_test_values']

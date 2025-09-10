@@ -2,7 +2,7 @@
 GST gauge optimization algorithms
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -20,7 +20,12 @@ from pygsti import optimize as _opt
 from pygsti import tools as _tools
 from pygsti.tools import mpitools as _mpit
 from pygsti.tools import slicetools as _slct
-from pygsti.models.gaugegroup import TrivialGaugeGroupElement as _TrivialGaugeGroupElement
+from pygsti.models.gaugegroup import (
+    TrivialGaugeGroupElement as _TrivialGaugeGroupElement,
+    GaugeGroupElement as _GaugeGroupElement
+)
+
+from typing import Callable, Union, Optional
 
 
 def gaugeopt_to_target(model, target_model, item_weights=None,
@@ -29,7 +34,7 @@ def gaugeopt_to_target(model, target_model, item_weights=None,
                        gauge_group=None, method='auto', maxiter=100000,
                        maxfev=None, tol=1e-8, oob_check_interval=0,
                        convert_model_to=None, return_all=False, comm=None,
-                       verbosity=0, check_jac=False):
+                       verbosity=0, check_jac=False, n_leak=0):
     """
     Optimize the gauge degrees of freedom of a model to that of a target.
 
@@ -170,7 +175,7 @@ def gaugeopt_to_target(model, target_model, item_weights=None,
     objective_fn, jacobian_fn = _create_objective_fn(
         model, target_model, item_weights,
         cptp_penalty_factor, spam_penalty_factor,
-        gates_metric, spam_metric, method, comm, check_jac)
+        gates_metric, spam_metric, method, comm, check_jac, n_leak)
 
     result = gaugeopt_custom(model, objective_fn, gauge_group, method,
                              maxiter, maxfev, tol, oob_check_interval,
@@ -265,6 +270,10 @@ def gaugeopt_custom(model, objective_fn, gauge_group=None,
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, comm)
     tStart = _time.time()
 
+    #replace model with a new copy of itself so as to not propagate the conversion back to the 
+    #instance of the model object we are gauge optimizing.
+    model = model.copy()
+
     if comm is not None:
         mdl_cmp = comm.bcast(model if (comm.Get_rank() == 0) else None, root=0)
         try:
@@ -303,9 +312,6 @@ def gaugeopt_custom(model, objective_fn, gauge_group=None,
 
     printer.log("--- Gauge Optimization (%s method, %s) ---" % (method, str(type(gauge_group))), 2)
     if method == 'ls':
-        #minSol  = _opt.least_squares(_call_objective_fn, x0, #jac=_call_jacobian_fn,
-        #                            max_nfev=maxfev, ftol=tol)
-        #solnX = minSol.x
         assert(_call_jacobian_fn is not None), "Cannot use 'ls' method unless jacobian is available"
         ralloc = _baseobjs.ResourceAllocation(comm)  # FUTURE: plumb up a resource alloc object?
         test_f = _call_objective_fn(x0)
@@ -350,10 +356,15 @@ def gaugeopt_custom(model, objective_fn, gauge_group=None,
         return newModel
 
 
-def _create_objective_fn(model, target_model, item_weights=None,
-                         cptp_penalty_factor=0, spam_penalty_factor=0,
+GGElObjective = Callable[[_GaugeGroupElement,bool], Union[float, _np.ndarray]]
+
+GGElJacobian  = Union[None, Callable[[_GaugeGroupElement], _np.ndarray]]
+
+
+def _create_objective_fn(model, target_model, item_weights: Optional[dict[str,float]]=None,
+                         cptp_penalty_factor: float=0.0, spam_penalty_factor: float=0.0,
                          gates_metric="frobenius", spam_metric="frobenius",
-                         method=None, comm=None, check_jac=False):
+                         method=None, comm=None, check_jac=False, n_leak=0) -> tuple[GGElObjective, GGElJacobian]:
     """
     Creates the objective function and jacobian (if available)
     for gaugeopt_to_target
@@ -513,8 +524,8 @@ def _create_objective_fn(model, target_model, item_weights=None,
                 # d(op_term) = S_inv * (-dS * S_inv * G * S + G * dS) = S_inv * (-dS * G' + G * dS)
                 #   Note: (S_inv * G * S) is G' (transformed G)
                 wt = item_weights.get(lbl, opWeight)
-                left = -1 * _np.dot(dS, mdl_post.operations[lbl].to_dense(on_space='minimal'))  # shape (n,d1,d2)
-                right = _np.swapaxes(_np.dot(G.to_dense(on_space='minimal'), dS), 0, 1)  # shape (d1,n,d2) -> (n,d1,d2)
+                left = -1 * _np.dot(dS, mdl_post.operations[lbl].to_dense('minimal'))  # shape (n,d1,d2)
+                right = _np.swapaxes(_np.dot(G.to_dense('minimal'), dS), 0, 1)  # shape (d1,n,d2) -> (n,d1,d2)
                 result = _np.swapaxes(_np.dot(S_inv, left + right), 1, 2)  # shape (d1, d2, n)
                 result = result.reshape((d**2, n))  # must copy b/c non-contiguous
                 my_jacMx[start:start + d**2] = wt * result
@@ -526,8 +537,8 @@ def _create_objective_fn(model, target_model, item_weights=None,
                 wt = item_weights.get(ilbl, opWeight)
                 for lbl, G in Inst.items():
                     # same calculation as for operation terms
-                    left = -1 * _np.dot(dS, mdl_post.instruments[ilbl][lbl].to_dense(on_space='minimal'))  # (n,d1,d2)
-                    right = _np.swapaxes(_np.dot(G.to_dense(on_space='minimal'), dS), 0, 1)  # (d1,n,d2) -> (n,d1,d2)
+                    left = -1 * _np.dot(dS, mdl_post.instruments[ilbl][lbl].to_dense('minimal'))  # (n,d1,d2)
+                    right = _np.swapaxes(_np.dot(G.to_dense('minimal'), dS), 0, 1)  # (d1,n,d2) -> (n,d1,d2)
                     result = _np.swapaxes(_np.dot(S_inv, left + right), 1, 2)  # shape (d1, d2, n)
                     result = result.reshape((d**2, n))  # must copy b/c non-contiguous
                     my_jacMx[start:start + d**2] = wt * result
@@ -540,7 +551,7 @@ def _create_objective_fn(model, target_model, item_weights=None,
                 #   Note: (S_inv * rho) is transformed rho
                 wt = item_weights.get(lbl, spamWeight)
                 Sinv_dS = _np.dot(S_inv, dS)  # shape (d1,n,d2)
-                result = -1 * _np.dot(Sinv_dS, rho.to_dense(on_space='minimal'))  # shape (d,n)
+                result = -1 * _np.dot(Sinv_dS, rho.to_dense('minimal'))  # shape (d,n)
                 my_jacMx[start:start + d] = wt * result
                 start += d
 
@@ -550,7 +561,7 @@ def _create_objective_fn(model, target_model, item_weights=None,
                 for lbl, E in povm.items():
                     # d(ET_term) = E.T * dS
                     wt = item_weights.get(povmlbl + "_" + lbl, spamWeight)
-                    result = _np.dot(E.to_dense(on_space='minimal')[None, :], dS).T  # shape (1,n,d2).T => (d2,n,1)
+                    result = _np.dot(E.to_dense('minimal')[None, :], dS).T  # shape (1,n,d2).T => (d2,n,1)
                     my_jacMx[start:start + d] = wt * result.squeeze(2)  # (d2,n)
                     start += d
 
@@ -591,16 +602,31 @@ def _create_objective_fn(model, target_model, item_weights=None,
         # non-least-squares case where objective function returns a single float
         # and (currently) there's no analytic jacobian
 
+        assert gates_metric != "frobeniustt"
+        assert spam_metric  != "frobeniustt"
+        # ^ PR #410 removed support for Frobenius transform-target metrics in this codepath.
+
+        dim = int(_np.sqrt(mxBasis.dim))
+        if n_leak > 0:
+            B = _tools.leading_dxd_submatrix_basis_vectors(dim - n_leak, dim, mxBasis)
+            P = B @ B.T.conj()
+            if _np.linalg.norm(P.imag) > 1e-12:
+                msg  = f"Attempting to run leakage-aware gauge optimization with basis {mxBasis}\n"
+                msg +=  "is resulting an orthogonal projector onto the computational subspace that\n"
+                msg +=  "is not real-valued. Try again with a different basis, like 'l2p1' or 'gm'."
+                raise ValueError(msg)
+            else:
+                P = P.real
+            transform_mx_arg = (P, _tools.matrixtools.IdentityOperator())
+            # ^ The semantics of this tuple are defined by the frobeniusdist function
+            #   in the ExplicitOpModelCalc class.
+        else:
+            transform_mx_arg = None
+            # ^ It would be equivalent to set this to a pair of IdentityOperator objects.
+
         def _objective_fn(gauge_group_el, oob_check):
             mdl = _transform_with_oob_check(model, gauge_group_el, oob_check)
             ret = 0
-
-            if gates_metric == "frobeniustt" or spam_metric == "frobeniustt":
-                full_target_model = target_model.copy()
-                full_target_model.convert_members_inplace("full")  # so we can gauge-transform the target model.
-                transformed_target = _transform_with_oob_check(full_target_model, gauge_group_el.inverse(), oob_check)
-            else:
-                transformed_target = None
 
             if cptp_penalty_factor > 0:
                 mdl.basis = mxBasis  # set basis for jamiolkowski iso
@@ -612,84 +638,86 @@ def _create_objective_fn(model, target_model, item_weights=None,
                 spamPenaltyVec = _spam_penalty(mdl, spam_penalty_factor, mdl.basis)
                 ret += _np.sum(spamPenaltyVec)
 
-            if target_model is not None:
-                if gates_metric == "frobenius":
-                    if spam_metric == "frobenius":
-                        ret += mdl.frobeniusdist(target_model, None, item_weights)
-                    else:
-                        wts = item_weights.copy(); wts['spam'] = 0.0
-                        for k in wts:
-                            if k in mdl.preps or \
-                               k in mdl.povms: wts[k] = 0.0
-                        ret += mdl.frobeniusdist(target_model, None, wts)
+            if target_model is None:
+                return ret
+            
+            if "frobenius" in gates_metric:
+                if spam_metric == gates_metric:
+                    val = mdl.frobeniusdist(target_model, transform_mx_arg, item_weights)
+                else:
+                    wts = item_weights.copy()
+                    wts['spam'] = 0.0
+                    for k in wts:
+                        if k in mdl.preps or k in mdl.povms:
+                            wts[k] = 0.0
+                    val = mdl.frobeniusdist(target_model, transform_mx_arg, wts, n_leak)
+                if "squared" in gates_metric:
+                    val = val ** 2
+                ret += val
 
-                elif gates_metric == "frobeniustt":
-                    if spam_metric == "frobeniustt":
-                        ret += transformed_target.frobeniusdist(model, None, item_weights)
-                    else:
-                        wts = item_weights.copy(); wts['spam'] = 0.0
-                        for k in wts:
-                            if k in mdl.preps or \
-                               k in mdl.povms: wts[k] = 0.0
-                        ret += transformed_target.frobeniusdist(model, None, wts)
+            elif gates_metric == "fidelity":
+                # If n_leak==0, then subspace_entanglement_fidelity is just entanglement_fidelity
+                for opLbl in mdl.operations:
+                    wt = item_weights.get(opLbl, opWeight)
+                    top = target_model.operations[opLbl].to_dense()
+                    mop = mdl.operations[opLbl].to_dense()
+                    ret += wt * (1.0 - _tools.subspace_entanglement_fidelity(top, mop, mxBasis, n_leak))**2
 
-                elif gates_metric == "fidelity":
-                    for opLbl in mdl.operations:
-                        wt = item_weights.get(opLbl, opWeight)
-                        ret += wt * (1.0 - _tools.entanglement_fidelity(
-                            target_model.operations[opLbl], mdl.operations[opLbl]))**2
+            elif gates_metric == "tracedist":
+                # If n_leak==0, then subspace_jtracedist is just jtracedist.
+                for opLbl in mdl.operations:
+                    wt = item_weights.get(opLbl, opWeight)
+                    top = target_model.operations[opLbl].to_dense()
+                    mop = mdl.operations[opLbl].to_dense()
+                    ret += wt * _tools.subspace_jtracedist(top, mop, mxBasis, n_leak)
 
-                elif gates_metric == "tracedist":
-                    for opLbl in mdl.operations:
-                        wt = item_weights.get(opLbl, opWeight)
-                        ret += opWeight * _tools.jtracedist(
-                            target_model.operations[opLbl], mdl.operations[opLbl])
+            else:
+                raise ValueError("Invalid gates_metric: %s" % gates_metric)
 
-                else: raise ValueError("Invalid gates_metric: %s" % gates_metric)
+            if "frobenius" in spam_metric and gates_metric == spam_metric:
+                # We already handled SPAM error in this case. Just return.
+                return ret
 
-                if spam_metric == "frobenius":
-                    if gates_metric != "frobenius":  # otherwise handled above to match normalization in frobeniusdist
-                        wts = item_weights.copy(); wts['gates'] = 0.0
-                        for k in wts:
-                            if k in mdl.operations or \
-                               k in mdl.instruments: wts[k] = 0.0
-                        ret += mdl.frobeniusdist(target_model, None, wts)
+            if "frobenius" in spam_metric:
+                # SPAM and gates can have different choices for squared vs non-squared.
+                wts = item_weights.copy(); wts['gates'] = 0.0
+                for k in wts:
+                    if k in mdl.operations or k in mdl.instruments:
+                        wts[k] = 0.0
+                val = mdl.frobeniusdist(target_model, transform_mx_arg, wts)
+                if "squared" in spam_metric:
+                    val = val ** 2
+                ret += val 
 
-                elif spam_metric == "frobeniustt":
-                    if gates_metric != "frobeniustt":  # otherwise handled above to match normalization in frobeniusdist
-                        wts = item_weights.copy(); wts['gates'] = 0.0
-                        for k in wts:
-                            if k in mdl.operations or \
-                               k in mdl.instruments: wts[k] = 0.0
-                        ret += transformed_target.frobeniusdist(model, None, wts)
+            elif spam_metric == "fidelity":
+                # Leakage-aware metrics NOT available
+                for preplabel, m_prep in mdl.preps.items():
+                    wt = item_weights.get(preplabel, spamWeight)
+                    rhoMx1 = _tools.vec_to_stdmx(m_prep.to_dense(), mxBasis)
+                    t_prep = target_model.preps[preplabel]
+                    rhoMx2 = _tools.vec_to_stdmx(t_prep.to_dense(), mxBasis)
+                    ret += wt * (1.0 - _tools.fidelity(rhoMx1, rhoMx2))**2
 
-                elif spam_metric == "fidelity":
-                    for preplabel, prep in mdl.preps.items():
-                        wt = item_weights.get(preplabel, spamWeight)
-                        rhoMx1 = _tools.vec_to_stdmx(prep, mxBasis)
-                        rhoMx2 = _tools.vec_to_stdmx(
-                            target_model.preps[preplabel], mxBasis)
-                        ret += wt * (1.0 - _tools.fidelity(rhoMx1, rhoMx2))**2
+                for povmlabel in mdl.povms.keys():
+                    wt = item_weights.get(povmlabel, spamWeight)
+                    fidelity = _tools.povm_fidelity(mdl, target_model, povmlabel)
+                    ret += wt * (1.0 - fidelity)**2
 
-                    for povmlabel, povm in mdl.povms.items():
-                        wt = item_weights.get(povmlabel, spamWeight)
-                        ret += wt * (1.0 - _tools.povm_fidelity(
-                            mdl, target_model, povmlabel))**2
+            elif spam_metric == "tracedist":
+                # Leakage-aware metrics NOT available.
+                for preplabel, m_prep in mdl.preps.items():
+                    wt = item_weights.get(preplabel, spamWeight)
+                    rhoMx1 = _tools.vec_to_stdmx(m_prep.to_dense(), mxBasis)
+                    t_prep = target_model.preps[preplabel]
+                    rhoMx2 = _tools.vec_to_stdmx(t_prep.to_dense(), mxBasis)
+                    ret += wt * _tools.tracedist(rhoMx1, rhoMx2)
 
-                elif spam_metric == "tracedist":
-                    for preplabel, prep in mdl.preps.items():
-                        wt = item_weights.get(preplabel, spamWeight)
-                        rhoMx1 = _tools.vec_to_stdmx(prep, mxBasis)
-                        rhoMx2 = _tools.vec_to_stdmx(
-                            target_model.preps[preplabel], mxBasis)
-                        ret += wt * _tools.tracedist(rhoMx1, rhoMx2)
+                for povmlabel in mdl.povms.keys():
+                    wt = item_weights.get(povmlabel, spamWeight)
+                    ret += wt * _tools.povm_jtracedist(mdl, target_model, povmlabel)
 
-                    for povmlabel, povm in mdl.povms.items():
-                        wt = item_weights.get(povmlabel, spamWeight)
-                        ret += wt * (1.0 - _tools.povm_jtracedist(
-                            mdl, target_model, povmlabel))**2
-
-                else: raise ValueError("Invalid spam_metric: %s" % spam_metric)
+            else:
+                raise ValueError("Invalid spam_metric: %s" % spam_metric)
 
             return ret
 
@@ -847,7 +875,7 @@ def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl_pre, mdl_post,
 
         #get sgn(denMx) == d(|denMx|_Tr)/d(denMx) in std basis
         # dmDim = denMx.shape[0]
-        denMx = _tools.vec_to_stdmx(prepvec.to_dense(on_space='minimal')[:, None], op_basis)
+        denMx = _tools.vec_to_stdmx(prepvec.to_dense('minimal')[:, None], op_basis)
         assert(_np.linalg.norm(denMx - denMx.T.conjugate()) < 1e-4), \
             "denMx should be Hermitian!"
 
@@ -861,7 +889,7 @@ def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl_pre, mdl_post,
         # get d(prepvec')/dp = d(S_inv * prepvec)/dp in op_basis [shape == (n,dim)]
         #                    = (-S_inv*dS*S_inv) * prepvec = -S_inv*dS * prepvec'
         Sinv_dS = _np.dot(S_inv, dS)  # shape (d1,n,d2)
-        dVdp = -1 * _np.dot(Sinv_dS, prepvec.to_dense(on_space='minimal')[:, None]).squeeze(2)  # shape (d,n,1) => (d,n)
+        dVdp = -1 * _np.dot(Sinv_dS, prepvec.to_dense('minimal')[:, None]).squeeze(2)  # shape (d,n,1) => (d,n)
         assert(dVdp.shape == (d, n))
 
         # denMx = sum( spamvec[i] * Bmx[i] )
@@ -886,7 +914,7 @@ def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl_pre, mdl_post,
         for lbl, effectvec in povm.items():
 
             #get sgn(EMx) == d(|EMx|_Tr)/d(EMx) in std basis
-            EMx = _tools.vec_to_stdmx(effectvec.to_dense(on_space='minimal')[:, None], op_basis)
+            EMx = _tools.vec_to_stdmx(effectvec.to_dense('minimal')[:, None], op_basis)
             # dmDim = EMx.shape[0]
             assert(_np.linalg.norm(EMx - EMx.T.conjugate()) < 1e-4), \
                 "denMx should be Hermitian!"
@@ -901,7 +929,7 @@ def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl_pre, mdl_post,
             # get d(effectvec')/dp = [d(effectvec.T * S)/dp].T in op_basis [shape == (n,dim)]
             #                      = [effectvec.T * dS].T
             #  OR = dS.T * effectvec
-            pre_effectvec = mdl_pre.povms[povmlbl][lbl].to_dense(on_space='minimal')[:, None]
+            pre_effectvec = mdl_pre.povms[povmlbl][lbl].to_dense('minimal')[:, None]
             dVdp = _np.dot(pre_effectvec.T, dS).squeeze(0).T
             # shape = (1,d) * (n, d1,d2) = (1,n,d2) => (n,d2) => (d2,n)
             assert(dVdp.shape == (d, n))

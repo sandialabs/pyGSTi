@@ -1,5 +1,5 @@
 ## Columns = 0 count, 1 count
-GiGiGi  865  135
+GiGiGi  865  136
 GiGiGiGx  803  197
 GiGiGiGy  803  197
 GiGiGiGxGx  709  291

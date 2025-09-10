@@ -2,18 +2,19 @@
 Sub-package holding model POVM and POVM effect objects.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
-import _collections
 import functools as _functools
 import itertools as _itertools
-
+import warnings
 import numpy as _np
+import scipy.linalg as _spl
+import scipy.optimize as _spo
 
 from .complementeffect import ComplementPOVMEffect
 from .composedeffect import ComposedPOVMEffect
@@ -35,6 +36,8 @@ from .unconstrainedpovm import UnconstrainedPOVM
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.tools import basistools as _bt
 from pygsti.tools import optools as _ot
+from pygsti.tools import sum_of_negative_choi_eigenvalues_gate
+from pygsti.baseobjs import Basis
 
 # Avoid circular import
 import pygsti.modelmembers as _mm
@@ -42,10 +45,40 @@ import pygsti.modelmembers as _mm
 
 def create_from_pure_vectors(pure_vectors, povm_type, basis='pp', evotype='default', state_space=None,
                              on_construction_error='warn'):
-    """ TODO: docstring -- create a POVM from a list/dict of (key, pure-vector) pairs """
+    """
+    Creates a Positive Operator-Valued Measure (POVM) from a list or dictionary of (key, pure-vector) pairs.
+
+    Parameters
+    ----------
+    pure_vectors : list or dict
+        A list of (key, pure-vector) pairs or a dictionary where keys are labels and values are pure state vectors.
+        
+    povm_type : str or tuple
+        The type of POVM to create. This can be a single string or a tuple of strings indicating the preferred types.
+        Supported types include 'computational', 'static pure', 'full pure', 'static', 'full', 'full TP', and any valid
+        Lindblad parameterization type.
+
+    basis : str, optional
+        The basis in which the pure vectors are expressed. Default is 'pp'.
+
+    evotype : str, optional
+        The evolution type. Default is 'default'.
+
+    state_space : StateSpace, optional
+        The state space in which the POVM operates. Default is None.
+
+    on_construction_error : str, optional
+        Specifies the behavior when an error occurs during POVM construction. Options are 'raise' to raise the error,
+        'warn' to print a warning message, or any other value to silently ignore the error. Default is 'warn'.
+
+    Returns
+    -------
+    POVM
+        The constructed POVM object.
+    """
     povm_type_preferences = (povm_type,) if isinstance(povm_type, str) else povm_type
     if not isinstance(pure_vectors, dict):  # then assume it's a list of (key, value) pairs
-        pure_vectors = _collections.OrderedDict(pure_vectors)
+        pure_vectors = dict(pure_vectors)
     if state_space is None:
         state_space = _statespace.default_space_for_udim(len(next(iter(pure_vectors.values()))))
 
@@ -94,10 +127,41 @@ def create_from_pure_vectors(pure_vectors, povm_type, basis='pp', evotype='defau
 
 def create_from_dmvecs(superket_vectors, povm_type, basis='pp', evotype='default', state_space=None,
                        on_construction_error='warn'):
-    """ TODO: docstring -- create a POVM from a list/dict of (key, pure-vector) pairs """
+    """ 
+    Creates a Positive Operator-Valued Measure (POVM) from a list or dictionary of (key, superket) pairs.
+
+    Parameters
+    ----------
+    superket_vectors : list or dict
+        A list of (key, pure-vector) pairs or a dictionary where keys are labels and values are superket vectors.
+        i.e. vectorized density matrices.
+        
+    povm_type : str or tuple
+        The type of POVM to create. This can be a single string or a tuple of strings indicating the preferred types.
+        Supported types include 'full', 'static', 'full TP', 'computational', 'static pure', 'full pure', and any valid
+        Lindblad parameterization type.
+
+    basis : str or `Basis`, optional
+        The basis in which the density matrix vectors are expressed. Default is 'pp'.
+
+    evotype : str, optional
+        The evolution type. Default is 'default'.
+
+    state_space : StateSpace, optional
+        The state space in which the POVM operates. Default is None.
+
+    on_construction_error : str, optional
+        Specifies the behavior when an error occurs during POVM construction. Options are 'raise' to raise the error,
+        'warn' to print a warning message, or any other value to silently ignore the error. Default is 'warn'.
+
+    Returns
+    -------
+    POVM
+        The constructed POVM object. 
+    """
     povm_type_preferences = (povm_type,) if isinstance(povm_type, str) else povm_type
     if not isinstance(superket_vectors, dict):  # then assume it's a list of (key, value) pairs
-        superket_vectors = _collections.OrderedDict(superket_vectors)
+        superket_vectors = dict(superket_vectors)
 
     for typ in povm_type_preferences:
         try:
@@ -140,12 +204,42 @@ def create_from_dmvecs(superket_vectors, povm_type, basis='pp', evotype='default
                 print('Failed to construct povm with type "{}" with error: {}'.format(typ, str(err)))
             pass  # move on to next type
 
-    raise ValueError("Could not create a POVM of type(s) %s from the given pure vectors!" % (str(povm_type)))
+    raise ValueError("Could not create a POVM of type(s) %s from the given density matrix vectors!" % (str(povm_type)))
 
 
 def create_effect_from_pure_vector(pure_vector, effect_type, basis='pp', evotype='default', state_space=None,
                                    on_construction_error='warn'):
-    """ TODO: docstring -- create a State from a state vector """
+    """
+    Creates a POVM effect from a pure state vector.
+
+    Parameters
+    ----------
+    pure_vector : array-like
+        The pure state vector from which to create the POVM effect.
+        
+    effect_type : str or tuple
+        The type of effect to create. This can be a single string or a tuple of strings indicating the preferred types.
+        Supported types include 'computational', 'static pure', 'full pure', 'static', 'full', 'static clifford', and
+        any valid Lindblad parameterization type.
+
+    basis : str or `Basis` optional
+        The basis in which the pure vector is expressed. Default is 'pp'.
+
+    evotype : str, optional
+        The evolution type. Default is 'default'.
+
+    state_space : StateSpace, optional
+        The state space in which the effect operates. Default is None.
+
+    on_construction_error : str, optional
+        Specifies the behavior when an error occurs during effect construction. Options are 'raise' to raise the error,
+        'warn' to print a warning message, or any other value to silently ignore the error. Default is 'warn'.
+
+    Returns
+    -------
+    POVMEffect
+        The constructed POVM effect object.
+    """
     effect_type_preferences = (effect_type,) if isinstance(effect_type, str) else effect_type
     if state_space is None:
         state_space = _statespace.default_space_for_udim(len(pure_vector))
@@ -196,6 +290,38 @@ def create_effect_from_pure_vector(pure_vector, effect_type, basis='pp', evotype
 
 def create_effect_from_dmvec(superket_vector, effect_type, basis='pp', evotype='default', state_space=None,
                              on_construction_error='warn'):
+    """
+    Creates a POVM effect from a density matrix vector (superket).
+
+    Parameters
+    ----------
+    superket_vector : array-like
+        The density matrix vector (superket) from which to create the POVM effect.
+        
+    effect_type : str or tuple
+        The type of effect to create. This can be a single string or a tuple of strings indicating the preferred types.
+        Supported types include 'static', 'full', and any valid Lindblad parameterization type. For other types
+        we first try to convert to a pure state vector and then utilize `create_effect_from_pure_vector`
+
+    basis : str or `Basis` optional
+        The basis in which the superket vector is expressed. Default is 'pp'.
+
+    evotype : str, optional
+        The evolution type. Default is 'default'.
+
+    state_space : StateSpace, optional
+        The state space in which the effect operates. Default is None.
+
+    on_construction_error : str, optional
+        Specifies the behavior when an error occurs during effect construction. Options are 'raise' to raise the error,
+        'warn' to print a warning message, or any other value to silently ignore the error. Default is 'warn'.
+
+    Returns
+    -------
+    POVMEffect
+        The constructed POVM effect object.
+    """
+
     effect_type_preferences = (effect_type,) if isinstance(effect_type, str) else effect_type
     if state_space is None:
         state_space = _statespace.default_space_for_dim(len(superket_vector))
@@ -241,7 +367,8 @@ def create_effect_from_dmvec(superket_vector, effect_type, basis='pp', evotype='
 
 
 def povm_type_from_op_type(op_type):
-    """Decode an op type into an appropriate povm type.
+    """
+    Decode an op type into an appropriate povm type.
 
     Parameters:
     -----------
@@ -295,7 +422,7 @@ def povm_type_from_op_type(op_type):
     return povm_type_preferences
 
 
-def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False):
+def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False, cp_penalty=1e-7):
     """
     TODO: update docstring
     Convert a POVM to a new type of parameterization.
@@ -327,6 +454,14 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False):
         are separately converted, leaving the original POVM's structure
         unchanged.  When `True`, composed and embedded operations are "flattened"
         into a single POVM of the requested `to_type`.
+    
+    cp_penalty : float, optional (default 1e-7)
+            Converting SPAM operations to an error generator representation may 
+            introduce trivial gauge degrees of freedom. These gauge degrees of freedom 
+            are called trivial because they quite literally do not change the dense representation 
+            (i.e. Hilbert-Schmidt vectors) at all. Despite being trivial, error generators along 
+            this trivial gauge orbit may be non-CP, so this cptp penalty is used to favor channels 
+            within this gauge orbit which are CPTP.
 
     Returns
     -------
@@ -334,6 +469,7 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False):
         The converted POVM vector, usually a distinct
         object from the object passed as input.
     """
+
     to_types = to_type if isinstance(to_type, (tuple, list)) else (to_type,)  # HACK to support multiple to_type values
     error_msgs = {}
 
@@ -364,6 +500,7 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False):
                 from ..operations import LindbladParameterization as _LindbladParameterization
                 lndtype = _LindbladParameterization.cast(to_type)
 
+                
                 #Construct a static "base" POVM
                 if isinstance(povm, ComputationalBasisPOVM):  # special easy case
                     base_povm = ComputationalBasisPOVM(povm.state_space.num_qubits, povm.evotype)  # just copy it?
@@ -375,14 +512,109 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False):
                                           for lbl, vec in povm.items()]
                         else:
                             raise RuntimeError('Evotype must be compatible with Hilbert ops to use pure effects')
-                    except Exception:  # try static mixed states next:
-                        base_items = [(lbl, convert_effect(vec, 'static', basis, idl.get(lbl, None), flatten_structure))
-                                      for lbl, vec in povm.items()]
+                    except RuntimeError:  # try static mixed states next:
+                        #if idl.get(lbl,None) is not None:
+                        
+                        base_items = []
+                        for lbl, vec in povm.items():
+                            ideal_effect = idl.get(lbl,None)
+                            if ideal_effect is not None:
+                                base_items.append((lbl, convert_effect(ideal_effect, 'static', basis, ideal_effect, flatten_structure)))
+                            else:
+                                base_items.append((lbl, convert_effect(vec, 'static', basis, idl.get(lbl, None), flatten_structure)))
                     base_povm = UnconstrainedPOVM(base_items, povm.evotype, povm.state_space)
 
                 proj_basis = 'PP' if povm.state_space.is_entirely_qubits else basis
                 errorgen = _LindbladErrorgen.from_error_generator(povm.state_space.dim, lndtype, proj_basis,
                                                                   basis, truncate=True, evotype=povm.evotype)
+                    
+                #Collect all ideal effects
+                base_dense_effects = []
+                for item in base_items:
+                    dense_effect = item[1].to_dense(on_space='HilbertSchmidt')
+                    base_dense_effects.append(dense_effect.reshape((1,len(dense_effect))))
+
+                dense_ideal_povm = _np.concatenate(base_dense_effects, axis=0)
+
+                #Collect all noisy effects
+                dense_effects = []
+                for effect in povm.values():
+                    dense_effect = effect.to_dense(on_space='HilbertSchmidt')
+                    dense_effects.append(dense_effect.reshape((1,len(dense_effect))))
+
+                dense_povm = _np.concatenate(dense_effects, axis=0)
+                
+                #It is often the case that there are more error generators than physical degrees of freedom in the POVM
+                #We define a function which finds linear comb. of errgens that span these degrees of freedom.
+                #This has been called "the trivial gauge", and this function is meant to avoid it
+                eegb = 'PP' if basis.name == 'pp' else basis
+                def calc_physical_subspace(dense_ideal_povm, epsilon = 1e-4):
+
+                    degrees_of_freedom = (dense_ideal_povm.shape[0] - 1) * dense_ideal_povm.shape[1]
+                    errgen = _LindbladErrorgen.from_error_generator(
+                        povm.state_space.dim, parameterization=to_type,
+                        elementary_errorgen_basis=eegb, mx_basis=basis
+                    )
+
+                    if degrees_of_freedom > errgen.num_params:
+                        warnings.warn("POVM has more degrees of freedom than the available number of parameters, representation in this parameterization is not guaranteed")
+                    exp_errgen = _ExpErrorgenOp(errgen)
+                    
+                    num_errgens = errgen.num_params
+                    #TODO: Maybe we can use the num of params instead of number of matrix entries, as some of them are linearly dependent.
+                    #i.e E0 completely determines E1 if those are the only two povm elements (E0 + E1 = Identity)
+                    num_entries = dense_ideal_povm.size
+
+                    #Compute the jacobian with respect to the error generators. This will allow us to see which
+                    #error generators change the POVM entries
+                    J = _np.zeros((num_entries,num_errgens))
+                    new_vec = _np.zeros(num_errgens)
+                    for i in range(num_errgens):
+                        
+                        new_vec[i] = epsilon
+                        exp_errgen.from_vector(new_vec)
+                        new_vec[i] = 0
+                        vectorized_povm = _np.zeros(num_entries)
+                        perturbed_povm = (dense_ideal_povm @ exp_errgen.to_dense() - dense_ideal_povm)/epsilon 
+
+                        vectorized_povm = perturbed_povm.flatten(order='F')
+                        
+                        J[:,i] = vectorized_povm
+
+                    _,S,Vt = _np.linalg.svd(J, full_matrices=False)
+
+                    #Only return nontrivial singular vectors
+                    Vt = Vt[S > 1e-13, :].reshape((-1, Vt.shape[1]))
+                    return Vt
+                    
+                
+                phys_directions = calc_physical_subspace(dense_ideal_povm)
+
+                #We use optimization to find the best error generator representation
+                #we only vary physical directions, not independent error generators
+                def _objfn(v):
+
+                    #For some reason adding the sum_of_negative_choi_eigenvalues_gate term
+                    #resulted in minimize() sometimes choosing NaN values for v. There are
+                    #two stack exchange issues showing this problem with no solution.
+                    if _np.isnan(v).any():
+                        v = _np.zeros(len(v))
+
+                    L_vec = _np.zeros(len(phys_directions[0]))
+                    for coeff, phys_direction in zip(v,phys_directions):
+                        L_vec += coeff * phys_direction
+                    errorgen.from_vector(L_vec)
+                    proc_matrix = _spl.expm(errorgen.to_dense())
+                    
+                    return _np.linalg.norm(dense_povm - dense_ideal_povm @ proc_matrix) + cp_penalty * sum_of_negative_choi_eigenvalues_gate(proc_matrix, basis)
+                
+                soln = _spo.minimize(_objfn, _np.zeros(len(phys_directions), 'd'), method="Nelder-Mead", options={},
+                                        tol=1e-13) 
+                if not soln.success and soln.fun > 1e-6:  # not "or" because success is often not set correctly
+                    raise ValueError("Failed to find an errorgen such that <ideal|exp(errorgen) = <effect|")
+                errgen_vec = _np.linalg.lstsq(phys_directions, soln.x)[0]
+                errorgen.from_vector(errgen_vec)
+                
                 EffectiveExpErrorgen = _IdentityPlusErrorgenOp if lndtype.meta == '1+' else _ExpErrorgenOp
                 return ComposedPOVM(EffectiveExpErrorgen(errorgen), base_povm, mx_basis=basis)
 

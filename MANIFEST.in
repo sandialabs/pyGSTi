@@ -1,6 +1,5 @@
 include README.md CONTRIBUTING.md LICENSE
-include pyproject.toml pyproject.toml.no_cython
-include install_locally.py
+include pyproject.toml
 include requirements.txt
 include optional-requirements.txt
 include jupyter_notebooks/START_HERE.ipynb

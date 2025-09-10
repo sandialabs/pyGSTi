@@ -4,7 +4,7 @@
 # filename: fastcircuitparser.pyx
 
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -253,13 +253,14 @@ cdef get_next_simple_lbl(unicode s, INT start, INT end, bool integerize_sslbls, 
         last = i; is_float = True
         while i < end:
             c = s[i]
+            if u'0' <= c <= u'9' or c == u'.' or c == u'-' or c == u'e': #last case for scientific notation
+                i += 1
+                continue
             if c != 'G':
                 # We convert to lowercase here for the same reason as above.
                 c = c.lower()
             if u'a' <= c <= u'z' or c == u'_' or c == u'Q' or c == u'/':
                 i += 1; is_float = False
-            elif u'0' <= c <= u'9' or c == u'.' or c == u'-':
-                i += 1
             else:
                 break
         args.append(float(s[last:i]) if is_float else s[last:i]); last = i

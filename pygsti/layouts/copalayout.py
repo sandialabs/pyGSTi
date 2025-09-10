@@ -2,7 +2,7 @@
 A object representing the indexing into a (flat) array of circuit outcome probabilities.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -86,10 +86,6 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
     num_elements : int
         The total number of elements in this layout.  In a multi-processor context,
         the number of elements locally owned by the current processor.
-
-    num_elements : int
-        The total number of circuits in this layout.  In a multi-processor context,
-        the number of circuits locally owned by the current processor.
 
     global_layout : CircuitOutcomeProbabilityArrayLayout
         A layout containing all the circuits in their original order, that is the

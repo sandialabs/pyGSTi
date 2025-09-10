@@ -2,7 +2,7 @@
 Tools for working with Pandas dataframes
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -21,6 +21,7 @@ def _reset_index(df):
     import pandas as _pd
     index_df = df.index.to_frame(index=False)
     df = df.reset_index(drop=True)
+    df.columns = df.columns.tolist() # convert CategoricalIndex to normal Index
     # In merge is important the order in which you pass the dataframes
     # if the index contains a Categorical. I.e.,
     # pd.merge(df, index_df, left_index=True, right_index=True) does not work.

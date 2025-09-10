@@ -2,7 +2,7 @@
 Report generation functions.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -247,12 +247,18 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
     switchBd.add("mdl_all_modvi", (0, 1))
     switchBd.add("circuits_all", (0,))  # a list of circuit lists, one per L-val (iteration)
     switchBd.add("mdl_final_grid", (2,))
-
     switchBd.add("idtresults", (0,))
+    
+
+    switchBd.add('current_mdc_store', (0, 1, 3))#mdc stores for this estimate/dataset indexed by L
+    switchBd.add('mdc_store_all', (0,1)) #list of all the mdc stores for this estimate/dataset
+    switchBd.add('final_mdc_store', (0, 1))
+    switchBd.add('mdl_final_modvi', (0, 1))
 
     if confidence_level is not None:
         switchBd.add("cri", (0, 1, 2))
         switchBd.add("cri_gaugeinv", (0, 1))
+        switchBd.add("cri_target_and_final", (0, 1, 2)) 
 
     for d, dslbl in enumerate(dataset_labels):
         results = results_dict[dslbl]
@@ -304,11 +310,15 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
             else:
                 est_modvi = est
 
-            switchBd.objfn_builder[d, i] =  _objfns.ObjectiveFunctionBuilder.create_from('logl') # est.parameters.get('final_objfn_builder', _objfns.ObjectiveFunctionBuilder.create_from('logl'))
+            switchBd.objfn_builder[d, i] = est.parameters.get('final_objfn_builder', _objfns.ObjectiveFunctionBuilder.create_from('logl'))
             switchBd.objfn_builder_modvi[d, i] = _objfns.ObjectiveFunctionBuilder.create_from('logl')
-                # est_modvi.parameters.get('final_objfn_builder', _objfns.ObjectiveFunctionBuilder.create_from('logl'))
             switchBd.params[d, i] = est.parameters
+            
+            #add the final mdc store
+            switchBd.final_mdc_store[d,i]= est.parameters.get('final_mdc_store', None)
+            switchBd.mdc_store_all[d,i] = est.parameters.get('per_iter_mdc_store', None)
 
+            #TODO: Fix this next block
             switchBd.clifford_compilation[d, i] = est.parameters.get("clifford compilation", 'auto')
             if switchBd.clifford_compilation[d, i] == 'auto':
                 switchBd.clifford_compilation[d, i] = find_std_clifford_compilation(
@@ -365,6 +375,9 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
 
             switchBd.mdl_target[d, i] = est.models['target']
             switchBd.mdl_gaugeinv[d, i] = est.models[GIRepLbl]
+            
+            switchBd.mdl_final_modvi[d, i]= est.models['final iteration estimate']
+            
             try:
                 switchBd.mdl_gaugeinv_ep[d, i] = _tools.project_to_target_eigenspace(est.models[GIRepLbl],
                                                                                      est.models['target'])
@@ -389,6 +402,11 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
                     k = loc_Ls.index(L)
                     switchBd.mdl_current[d, i, iL] = est.models['iteration %d estimate' % k]
                     switchBd.mdl_current_modvi[d, i, iL] = est_modvi.models['iteration %d estimate' % k]
+                    #add the intermediate iteration mdc stores.
+                    if est.parameters.get('per_iter_mdc_store', None):
+                        switchBd.current_mdc_store[d,i,iL] = est.parameters['per_iter_mdc_store'][k]
+                    else:
+                        switchBd.current_mdc_store[d,i,iL] = None
             switchBd.mdl_all[d, i] = [est.models['iteration %d estimate' % k] for k in range(est.num_iterations)]
             switchBd.mdl_all_modvi[d, i] = [est_modvi.models['iteration %d estimate' % k]
                                             for k in range(est_modvi.num_iterations)]
@@ -399,6 +417,7 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
                 for il, l in enumerate(gauge_opt_labels):
                     if l in est.models:
                         switchBd.cri[d, i, il] = None  # default
+                        switchBd.cri_target_and_final[d, i, il] = [None, None] #default
                         crf = _get_viewable_crf(est, lbl, l, printer - 2)
 
                         if crf is not None:
@@ -409,8 +428,13 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
                             region_type = "normal" if misfit_sigma <= nmthreshold \
                                           else "non-markovian"
                             switchBd.cri[d, i, il] = crf.view(confidence_level, region_type)
+                            #Now that we have identifies the gauge-optimization with the CRI
+                            #add this to the switchboard.
+                            switchBd.cri_target_and_final[d,i,il] = [None, crf.view(confidence_level, region_type)]
+                    else: 
+                        switchBd.cri[d, i, il] = NA
+                        switchBd.cri_target_and_final[d, i, il] = NA
 
-                    else: switchBd.cri[d, i, il] = NA
 
                 # "Gauge Invariant Representation" model
                 # If we can't compute CIs for this, ignore SILENTLY, since any
@@ -1195,20 +1219,21 @@ def construct_standard_report(results, title="auto",
             that is not in the keys of the above dict (after casting to
             lower case and stripping white space).
 
-
     verbosity : int, optional
         How much detail to send to stdout.
 
     Returns
     -------
-    Workspace
-        The workspace object used to create the report
+    Report
     """
 
     printer = _VerbosityPrinter.create_printer(verbosity, comm=comm)
     ws = ws or _ws.Workspace()
 
     advanced_options = advanced_options or {}
+    n_leak = advanced_options.get('n_leak', 0)
+    # ^ It would be preferable to store n_leak in a Basis object, or something similar.
+    #   We're using this for now since it's simple and gets the job done.
     linlogPercentile = advanced_options.get('linlog percentile', 5)
     nmthreshold = advanced_options.get('nmthreshold', DEFAULT_NONMARK_ERRBAR_THRESHOLD)
     embed_figures = advanced_options.get('embed_figures', True)
@@ -1300,7 +1325,11 @@ def construct_standard_report(results, title="auto",
     try:
         idt_results = _construct_idtresults(idtIdleOp, idtPauliDicts, results, printer)
     except Exception as e:
-        _warnings.warn("Idle tomography failed:\n" + str(e))
+        if isinstance(e, ValueError) and 'Expected matrix of shape' in str(e):
+            msg = "Idle tomography skipped. Currently, this is only supported for 2-level systems."
+            printer.log(msg)
+        else:
+            _warnings.warn("Idle tomography unexpectedly failed:\n" + str(e))
         idt_results = {}
     if len(idt_results) > 0:
         sections.append(_section.IdleTomographySection())
@@ -1351,7 +1380,8 @@ def construct_standard_report(results, title="auto",
         'gauge_opt_labels': tuple(gauge_opt_labels),
         'max_lengths': tuple(Ls),
         'switchbd_maxlengths': tuple(swLs),
-        'show_unmodeled_error': bool('ShowUnmodeledError' in flags)
+        'show_unmodeled_error': bool('ShowUnmodeledError' in flags),
+        'n_leak' : n_leak
     }
 
     templates = dict(

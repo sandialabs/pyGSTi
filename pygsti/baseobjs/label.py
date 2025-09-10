@@ -2,7 +2,7 @@
 Defines the Label class
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -13,6 +13,7 @@ Defines the Label class
 import itertools as _itertools
 import numbers as _numbers
 import sys as _sys
+import numpy as _np
 
 
 class Label(object):
@@ -127,14 +128,17 @@ class Label(object):
             time = 0.0  # for non-TupTup labels not setting a time is equivalent to setting it to 0.0
 
         #print(" -> preproc with name=", name, "sslbls=", state_space_labels, "t=", time, "args=", args)
-        if state_space_labels is None or state_space_labels in ((), (None,)):
-            if args:
+        # If numpy object, we have to check size=0 for empty; otherwise, check for empty tuple
+        if state_space_labels is None \
+            or (isinstance(state_space_labels, (_np.ndarray, _np.generic)) and state_space_labels.size == 0) \
+            or (not isinstance(state_space_labels, (_np.ndarray, _np.generic)) and state_space_labels in ((), (None,))):
+            if args is not None:
                 return LabelTupWithArgs.init(name, (), time, args)  # just use empty sslbls
             else:
                 return LabelStr.init(name, time)
 
         else:
-            if args: return LabelTupWithArgs.init(name, state_space_labels, time, args)
+            if args is not None: return LabelTupWithArgs.init(name, state_space_labels, time, args)
             else:
                 if time == 0.0:
                     return LabelTup.init(name, state_space_labels)
@@ -1889,7 +1893,7 @@ class LabelTupWithArgs(Label, tuple):
         """
         return tuple(self)
 
-    def replacename(self, oldname, newname):
+    def replace_name(self, oldname, newname):
         """
         Returns a label with `oldname` replaced by `newname`.
 

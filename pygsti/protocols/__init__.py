@@ -2,7 +2,7 @@
 Sub-package containing protocol objects and related inputs, data, and results
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -19,3 +19,4 @@ from .rpe import *
 from .stability import *
 from .vb import *
 from .vbdataframe import *
+from .mirror_edesign import *

@@ -25,7 +25,7 @@ class StdListTester(BaseCase):
         lsgstLists = gstcircuits.create_lsgst_circuit_lists(
             std1Q_XY.target_model(), self.strs, self.strs, self.germs, maxLens, fid_pairs=None,
             trunc_scheme="whole germ powers")  # also try a Model as first arg
-        self.assertEqual(lsgstLists[-1][26]._str, 'GxGx(Gx)^2GxGx')  # ensure that (.)^2 appears in string (*not* expanded)
+        self.assertEqual(lsgstLists[-1][26]._str, 'Gx(GxGy)GxGx')  # ensure that (.)^2 appears in string (*not* expanded)
 
         lsgstLists2 = gstcircuits.create_lsgst_circuit_lists(
             self.opLabels, self.strs, self.strs, self.germs, maxLens, fid_pairs=None,
