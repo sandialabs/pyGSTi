@@ -143,7 +143,7 @@ def fidelity(a, b):
         """
         n = mat.shape[0]
 
-        ZERO_THRESHOLD = n * _np.finfo(mat.dtype).eps**0.75
+        ZERO_THRESHOLD = n**0.5 * _np.finfo(mat.dtype).eps**0.75
         # ^ This value affects correctness, not just when we raise an error or a warning.
         #   Don't change from the value given here.
 
