@@ -203,7 +203,6 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
 
         self._outcomes = dict()
         self._element_indices = dict()
-        ind_array = _np.arange(self._size)
         sort_idx_func = lambda x: x[0]
         for i_unique, tuples in elindex_outcome_tuples.items():
             sorted_tuples = sorted(tuples, key=sort_idx_func)  # sort by element index
