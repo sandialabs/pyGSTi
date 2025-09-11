@@ -25,7 +25,7 @@ from pygsti.models.model import Model as _Model
 from pygsti.models.modelconstruction import _create_explicit_model, create_explicit_model
 from pygsti.protocols.gst import _load_pspec_or_model
 from pygsti.forwardsims import ForwardSimulator
-from typing import Optional
+from typing import Optional, Any
 
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]
 DEFAULT_BAD_FIT_THRESHOLD = 2.0
@@ -315,7 +315,7 @@ def run_linear_gst(data_filename_or_set, target_model_filename_or_object,
 def run_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
                           prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
                           germs_list_or_filename, max_lengths, gauge_opt_params=None,
-                          advanced_options=None, comm=None, mem_limit=None,
+                          advanced_options: Optional[dict[str,Any]]=None, comm=None, mem_limit=None,
                           output_pkl=None, verbosity=2, checkpoint=None, checkpoint_path=None,
                           disable_checkpointing=False,
                           simulator: Optional[ForwardSimulator.Castable]=None,
@@ -388,9 +388,7 @@ def run_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
         and values include:
 
         HISTORICAL NOTE: "XX" indicates that we've at least _intended_ for the
-        keyword argument to be removed. I've removed documentation for options
-        that we never reference in the code (truncScheme, estimate_label, and
-        missingDataAction).
+        keyword argument to be removed.
 
         - objective = typically, a string in {'chi2', 'logl', 'tvd'}. But this can
           be anything accepted by the `ObjectiveFunctionBuilder.create_from` function.
