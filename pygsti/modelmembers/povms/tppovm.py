@@ -102,29 +102,28 @@ class TPPOVM(_BasePOVM, _Torchable):
         vec = _np.concatenate(effect_vecs)
         return vec
 
-    def stateless_data(self) -> Tuple[int, _np.ndarray]:
+    def stateless_data(self) -> Tuple[int, _torch.Tensor, int]:
         num_effects = len(self)
         complement_effect = self[self.complement_label]
         identity = complement_effect.identity.to_vector()
-        return (num_effects, identity)
-
-    @staticmethod
-    def torch_base(sd: Tuple[int, _np.ndarray], t_param: _torch.Tensor) -> _torch.Tensor:
-        num_effects, identity = sd
+        identity = identity.reshape((1, -1)) # make into a row vector
+        t_identity = _torch.from_numpy(identity)
+    
         dim = identity.size
-
-        first_basis_vec = _np.zeros(dim)
-        first_basis_vec[0] = dim ** 0.25
+        first_basis_vec = _np.zeros((1,dim))
+        first_basis_vec[0,0] = dim ** 0.25
         TOL = 1e-15 * _np.sqrt(dim)
         if _np.linalg.norm(first_basis_vec - identity) > TOL:
             # Don't error out. The documentation for the class
             # clearly indicates that the meaning of "identity"
             # can be nonstandard.
             warnings.warn('Unexpected normalization!') 
+        return (num_effects, t_identity, dim)
 
-        identity = identity.reshape((1, -1)) # make into a row vector
-        t_identity = _torch.from_numpy(identity)
-        t_param_mat = t_param.reshape((num_effects - 1, dim))
+    @staticmethod
+    def torch_base(sd: Tuple[int, _torch.Tensor, int], t_param: _torch.Tensor) -> _torch.Tensor:
+        num_effects, t_identity, dim = sd
+        t_param_mat = t_param.view(num_effects - 1, dim)
         t_func = t_identity - t_param_mat.sum(axis=0, keepdim=True)
         t = _torch.row_stack((t_param_mat, t_func))
         return t

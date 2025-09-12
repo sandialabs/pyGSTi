@@ -31,6 +31,7 @@ from pygsti.forwardsims.forwardsim import ForwardSimulator
 
 try:
     import torch
+    from torch.profiler import profile, record_function, ProfilerActivity
     TORCH_ENABLED = True
 except ImportError:
     TORCH_ENABLED = False
@@ -74,7 +75,7 @@ class StatelessModel:
     def __init__(self, model: ExplicitOpModel, layout: CircuitOutcomeProbabilityArrayLayout):
         circuits = []
         self.outcome_probs_dim = 0
-        #TODO: Refactor this to use the bulk_expand_instruments_and_separate_povm codepath
+        # TODO: Refactor this to use the bulk_expand_instruments_and_separate_povm codepath
         for _, circuit, outcomes in layout.iter_unique_circuits():
             expanded_circuits = model.expand_instruments_and_separate_povm(circuit, outcomes)
             if len(expanded_circuits) > 1:
@@ -90,6 +91,7 @@ class StatelessModel:
         # framed in terms of the "layout._element_indicies" dict.
         eind = layout._element_indices
         assert isinstance(eind, dict)
+        assert len(eind) > 0
         items = iter(eind.items())
         k_prev, v_prev = next(items)
         assert k_prev == 0
@@ -107,11 +109,11 @@ class StatelessModel:
             param_type = type(obj)
             param_data = (lbl, param_type) + (obj.stateless_data(),)
             self.param_metadata.append(param_data)
-        self.params_dim = None 
-        # ^ That's set in get_free_params.
 
-        self.default_to_reverse_ad = None
-        # ^ That'll be set to a boolean the next time that get_free_params is called.
+        self.params_dim = []
+        self.free_param_sizes = []
+        self.default_to_reverse_ad = False
+        # ^ Those are set in get_free_params
         return
     
     def get_free_params(self, model: ExplicitOpModel) -> Tuple[torch.Tensor]:
@@ -123,6 +125,7 @@ class StatelessModel:
         to StatelessModel.__init__(...). We raise an error if an inconsistency is detected.
         """
         free_params = []
+        free_param_sizes = []
         prev_idx = 0
         for i, (lbl, obj) in enumerate(model._iter_parameterized_objs()):
             gpind = obj.gpindices_as_array()
@@ -144,6 +147,8 @@ class StatelessModel:
                 """
                 raise ValueError(message)
             free_params.append(vec)
+            free_param_sizes.append(vec_size)
+        self.free_param_sizes = free_param_sizes
         self.params_dim = prev_idx
         self.default_to_reverse_ad = self.outcome_probs_dim < self.params_dim
         return tuple(free_params)
@@ -157,7 +162,7 @@ class StatelessModel:
         ----
         If you want to use the returned dict to build a PyTorch Tensor that supports the 
         .backward() method, then you need to make sure that fp.requires_grad is True for all
-        fp in free_params. This can be done by calling fp._requires_grad(True) before calling
+        fp in free_params. This can be done by calling fp.requires_grad_(True) before calling
         this function.
         """
         assert len(free_params) == len(self.param_metadata)
@@ -202,8 +207,9 @@ class StatelessModel:
         """
         if enable_backward:
             for fp in free_params:
-                fp._requires_grad(True)
-        torch_bases = self.get_torch_bases(free_params)
+                fp.requires_grad_(True)
+
+        torch_bases = self.get_torch_bases(free_params) # type: ignore
         probs = self.circuit_probs_from_torch_bases(torch_bases)
         return probs
 
@@ -247,13 +253,9 @@ class TorchForwardSimulator(ForwardSimulator):
 
         argnums = tuple(range(len(slm.param_metadata)))
         if slm.default_to_reverse_ad:
-            # Then slm.circuit_probs_from_free_params will automatically construct the
-            # torch_base dict to support reverse-mode AD.
-            J_func = torch.func.jacrev(slm.circuit_probs_from_free_params, argnums=argnums)
+            J_func = torch.func.jacrev(slm.circuit_probs_from_free_params, argnums=argnums) # type: ignore
         else:
-            # Then slm.circuit_probs_from_free_params will automatically skip the extra
-            # steps needed for torch_base to support reverse-mode AD.
-            J_func = torch.func.jacfwd(slm.circuit_probs_from_free_params, argnums=argnums)
+            J_func = torch.func.jacfwd(slm.circuit_probs_from_free_params, argnums=argnums) # type: ignore
         # ^ Note that this _bulk_fill_dprobs function doesn't accept parameters that
         #   could be used to override the default behavior of the StatelessModel. If we
         #   have a need to override the default in the future then we'd need to override
