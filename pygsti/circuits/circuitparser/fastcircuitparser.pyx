@@ -250,8 +250,7 @@ cdef get_next_simple_lbl(unicode s, INT start, INT end, bool integerize_sslbls, 
             c = s[i]
             if u'0' <= c <= u'9' or c == u'.' or c == u'-' or c == u'e': #last case for scientific notation
                 i += 1
-                continue
-            if u'a' <= c <= u'z' or c == u'_' or c == u'Q' or c == u'/':
+            elif u'a' <= c <= u'z' or c == u'_' or c == u'Q' or c == u'/':
                 i += 1; is_float = False
             else:
                 break
