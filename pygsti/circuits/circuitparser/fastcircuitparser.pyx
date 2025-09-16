@@ -236,11 +236,6 @@ cdef get_next_simple_lbl(unicode s, INT start, INT end, bool integerize_sslbls, 
     else:
         while i < end:
             c = s[i]
-            if c != 'G':
-                # We need to convert to lowercase in case there are strings like
-                # "GXI" "GXX", "GIGY", or "GCNOT". We don't convert 'G' because
-                # that's a special character for our purposes.
-                c = c.lower()
             if u'a' <= c <= u'z' or u'0' <= c <= u'9' or c == u'_':
                 i += 1
             else:
@@ -256,9 +251,6 @@ cdef get_next_simple_lbl(unicode s, INT start, INT end, bool integerize_sslbls, 
             if u'0' <= c <= u'9' or c == u'.' or c == u'-' or c == u'e': #last case for scientific notation
                 i += 1
                 continue
-            if c != 'G':
-                # We convert to lowercase here for the same reason as above.
-                c = c.lower()
             if u'a' <= c <= u'z' or c == u'_' or c == u'Q' or c == u'/':
                 i += 1; is_float = False
             else:
@@ -271,9 +263,6 @@ cdef get_next_simple_lbl(unicode s, INT start, INT end, bool integerize_sslbls, 
         last = i; is_int = True
         while i < end:
             c = s[i]
-            if c != 'G':
-                # We convert to lowercase here for the same reason as above.
-                c = c.lower()
             if u'0' <= c <= u'9':
                 i += 1
             elif u'a' <= c <= u'z' or c == u'_' or c == u'Q':

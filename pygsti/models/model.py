@@ -2320,13 +2320,7 @@ class OpModel(Model):
         """
         self._clean_paramvec()  # ensure _paramvec is rebuilt if needed
         if OpModel._pcheck: self._check_paramvec()
-        try:
-            ret = Model.copy(self)
-        except:
-            # This can do a better job than `Model.copy` at resolving ambiguities
-            # in setting the `parent` field of Modelmembers in the copied model.
-            state = self.to_nice_serialization()
-            ret = type(self).from_nice_serialization(state)
+        ret = Model.copy(self)
 
         if self._param_bounds is not None and self.parameter_labels is not None:
             ret._clean_paramvec()  # will *always* rebuild paramvec; do now so we can preserve param bounds

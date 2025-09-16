@@ -1246,7 +1246,7 @@ class ExplicitOpModel(_mdl.OpModel):
             from pygsti.modelmembers.povms import create_from_dmvecs
             def transformed_gate(rand_op, gate):
                 rand_op = rand_op.to_dense()
-                return _op.FullArbitraryOp(rand_op @ gate)
+                return _op.FullArbitraryOp(rand_op @ gate.to_dense())
             def transformed_stateprep(rand_op, rho):
                 rand_op = rand_op.to_dense()
                 return FullState(rand_op @ rho)
