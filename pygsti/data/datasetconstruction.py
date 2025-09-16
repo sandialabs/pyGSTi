@@ -20,7 +20,6 @@ import numpy.random as _rndm
 from pygsti.circuits import circuitconstruction as _gstrc
 from pygsti.data import dataset as _ds
 from pygsti.baseobjs import label as _lbl, outcomelabeldict as _ld
-from typing import Optional, Union
 
 
 def simulate_data(model_or_dataset, circuit_list, num_samples,
