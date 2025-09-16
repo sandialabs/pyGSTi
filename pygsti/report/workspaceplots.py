@@ -4240,12 +4240,10 @@ class FitComparisonBarPlot(WorkspacePlot):
             if circuits is None or mdl is None:
                 Nsig, rating = _np.nan, 5
             else:
-                # from pygsti.baseobjs.smartcache import _get_fn_name_key
-                # self.ws.smartCache.ineffective.add(_get_fn_name_key(_ph.rated_n_sigma))
                 Nsig, rating, _, _, _, _ = self._ccompute(_ph.rated_n_sigma, dataset, mdl,
                                                           circuits, objfn_builder, Np, wildcard,
                                                           return_all=True, comm=comm, mdc_store=mdc_store)
-                #Note: don't really need return_all=True, but helps w/caching b/c other fns use it.
+                # Note: don't really need return_all=True, but helps w/caching b/c other fns use it.
 
             if rating == 5: color = "darkgreen"
             elif rating == 4: color = "lightgreen"
