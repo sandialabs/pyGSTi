@@ -20,6 +20,7 @@ import numpy.random as _rndm
 from pygsti.circuits import circuitconstruction as _gstrc
 from pygsti.data import dataset as _ds
 from pygsti.baseobjs import label as _lbl, outcomelabeldict as _ld
+from typing import Optional, Union
 
 
 def simulate_data(model_or_dataset, circuit_list, num_samples,
@@ -207,39 +208,6 @@ def simulate_data(model_or_dataset, circuit_list, num_samples,
         dataset = comm.bcast(dataset if (comm.Get_rank() == 0) else None, root=0)
 
     return dataset
-
-
-def mix_datasets(dsa, dsb, p, integral=True, choose_machine=False, seed=None):
-    dsc = dsa.copy_nonstatic()
-    # arr = _np.array(dsc.repData).ravel()
-    # print((arr, arr.size))
-    # print((dsb.repData, dsb.repData.size))
-    num_circuits = len(dsb)
-    if choose_machine:
-        if seed is None:
-            _warnings.warn('Set the random seed! Using 42.')
-            seed = 42
-        rngstate = _np.random.default_rng(seed)
-        interp_weights = rngstate.uniform(low=0, high=1, size=num_circuits)
-        interp_weights[interp_weights < p] = 0.0
-        interp_weights[interp_weights > 0] = 1.0 
-    else:
-        interp_weights = p * _np.ones(num_circuits)
-
-    for i, (_, dsrow) in enumerate(dsb.items()):
-        p_i = interp_weights[i]
-        interpolated = p_i * dsc.repData[i] + (1-p_i) * dsrow.reps
-        if integral and (not choose_machine):
-            assert interpolated.size == 2
-            total = int(_np.ceil((_np.sum(interpolated))))
-            j = _np.argmin(interpolated)
-            interpolated[j] = _np.ceil(interpolated[j])
-            interpolated[1 - j] = total - interpolated[j]
-        dsc.repData[i][:] = interpolated
-    dsc.done_adding_data()
-    # arr = np.array(dsc.repData).ravel()
-    # print((arr, arr.size))
-    return dsc
 
 
 def _adjust_probabilities_inbounds(ps, tol):
