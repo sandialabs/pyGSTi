@@ -15,6 +15,8 @@ import sys
 import numpy as _np
 import copy as _copy
 
+from ...baseobjs.statespace import QubitSpace as _QubitSpace
+
 from ...baseobjs.statespace import StateSpace as _StateSpace
 from ...tools import internalgates as _itgs
 from ...tools import symplectic as _symp
@@ -176,8 +178,9 @@ cdef class OpRepEmbedded(OpRep):
         # assert that all state space labels == qubits, since we only know
         # how to embed cliffords on qubits...
         state_space = _StateSpace.cast(state_space)
-        assert(all([state_space.label_udimension(l) == 2 for l in state_space.sole_tensor_product_block_labels])), \
-            "All state space labels must correspond to *qubits*"
+        if not isinstance(state_space, _QubitSpace):
+            assert(all([state_space.label_udimension(l) == 2 for l in state_space.sole_tensor_product_block_labels])), \
+                "All state space labels must correspond to *qubits*"
         if isinstance(embedded_rep, OpRepClifford):
             assert(len(target_labels) == len(embedded_rep.svector) // 2), \
                 "Inconsistent number of qubits in `target_labels` and `embedded_op`"

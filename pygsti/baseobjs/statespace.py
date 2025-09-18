@@ -15,6 +15,8 @@ import numbers as _numbers
 import sys as _sys
 import numpy as _np
 
+from functools import cache
+
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 
 
@@ -671,6 +673,8 @@ class QuditSpace(StateSpace):
         self._hash = hash((self.tensor_product_blocks_labels,
                            self.tensor_product_blocks_dimensions,
                            self.tensor_product_blocks_types))
+        
+        #self._qudit_label_set = set(self._qudit_labels)
     
     def __hash__(self):
         return self._hash
@@ -867,6 +871,7 @@ class QubitSpace(QuditSpace):
 
     def __init__(self, nqubits_or_labels):
         super().__init__(nqubits_or_labels, 2)
+        #self._qubit_label_map = {lbl:2 for lbl in self._qudit_labels}
 
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
@@ -987,10 +992,15 @@ class QubitSpace(QuditSpace):
         -------
         int
         """
-        if label in self.qubit_labels:
+        if label in self._qudit_labels:
             return 2
         else:
             raise KeyError("Invalid qubit label: %s" % label)
+        # try:
+        #     return self._qubit_label_map[label]
+        # except KeyError:
+        #     raise KeyError("Invalid qubit label: %s" % label)
+
 
     def label_tensor_product_block_index(self, label):
         """
