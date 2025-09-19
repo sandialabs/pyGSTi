@@ -154,8 +154,9 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
     rhoLabelsToEstimate = list(target_model.preps.keys())
     povmLabelsToEstimate = list(target_model.povms.keys())
 
-    if guess_model_for_gauge is None:
-        guess_model_for_gauge = target_model
+    #TEMPORARY: Turn this off because of incompatibility with kite models.
+    #if guess_model_for_gauge is None:
+    #    guess_model_for_gauge = target_model
 
     # the dimensions of the LGST matrices, called (nESpecs, nRhoSpecs),
     # are determined by the number of outcomes obtained by compiling the
