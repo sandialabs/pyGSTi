@@ -234,7 +234,7 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
         else:
             #Just a normal gae
             assert(len(X_ps) == 1); X_p = X_ps[0]  # shape (nESpecs, nRhoSpecs)
-            lgstModel.operations[opLabel] = _op.FullArbitraryOp(_np.dot(invABMat_p, X_p))  # shape (trunc,trunc)
+            lgstModel.operations[opLabel] = _op.FullArbitraryOp(_np.dot(invABMat_p, X_p), state_space=lgstModel.state_space)  # shape (trunc,trunc)
 
     #Form POVMs
     for povmLabel in povmLabelsToEstimate:
@@ -252,9 +252,10 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
                 # that all effect labels are present (only ones with non-zero counts are)
                 # so return 0 for the fraction in that case.
                 EVec[0, i] = dsRow_fractions.get((effectLabel,), 0)
+
             EVec_p = _np.dot(_np.dot(EVec, Vd), Pj)  # truncate Evec => Evec', shape (1,trunc)
             povm_effects.append((effectLabel, _np.transpose(EVec_p)))
-        lgstModel.povms[povmLabel] = _povm.UnconstrainedPOVM(povm_effects, evotype='default')
+        lgstModel.povms[povmLabel] = _povm.UnconstrainedPOVM(povm_effects, evotype='default', state_space=lgstModel.state_space)
         # unconstrained POVM for now - wait until after guess gauge for TP-constraining)
 
     # Form rhoVecs
@@ -278,6 +279,8 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
     # Perform "guess" gauge transformation by computing the "B" matrix
     #  assuming rhos, Es, and gates are those of a guesstimate of the model
     if guess_model_for_gauge is not None:
+        gauge_group = _models.gaugegroup.FullGaugeGroup(lgstModel.state_space, lgstModel.basis)
+        
         guessTrunc = guess_model_for_gauge.dim  # the truncation to apply to it's B matrix
         # the dimension of the model for gauge guessing cannot exceed the dimension of the model being estimated
         assert(guessTrunc <= trunc)
@@ -310,10 +313,12 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
             BMat_p_padded[0:guessTrunc, 0:guessTrunc] = BMat_p
             for i in range(guessTrunc, trunc):
                 BMat_p_padded[i, i] = _np.sqrt(s[i])  # set diagonal as sqrt of actual AB matrix's singular values
-            ggEl = _models.FullGaugeGroupElement(_np.linalg.inv(BMat_p_padded))
+            #ggEl = _models.FullGaugeGroupElement(_np.linalg.inv(BMat_p_padded))
+            ggEl = gauge_group.compute_element(_np.ravel(_np.linalg.inv(BMat_p_padded)))
             lgstModel.transform_inplace(ggEl)
         else:
-            ggEl = _models.gaugegroup.FullGaugeGroupElement(_np.linalg.inv(BMat_p))
+            #ggEl = _models.gaugegroup.FullGaugeGroupElement(_np.linalg.inv(BMat_p))
+            ggEl = gauge_group.compute_element(_np.ravel(_np.linalg.inv(BMat_p)))
             lgstModel.transform_inplace(ggEl)
 
         # Force lgstModel to have gates, preps, & effects parameterized in the same way as those in
@@ -363,7 +368,7 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
                             new_vec = EVec.copy()
                             _povm.optimize_effect(new_vec, lgstModel.povms[povmLabel][effectLabel])
                             new_effects.append((effectLabel, new_vec))
-                        lgstModel.povms[povmLabel] = _povm.UnconstrainedPOVM(new_effects, evotype='default')
+                        lgstModel.povms[povmLabel] = _povm.UnconstrainedPOVM(new_effects, evotype='default', state_space = lgstModel.state_space)
 
             #Also convey default gauge group & simulator from guess_model_for_gauge
             lgstModel.default_gauge_group = \
@@ -496,7 +501,7 @@ def _construct_b(prep_fiducials, model):
         basis_E[i] = 1.0
         basis_Es.append(basis_E)
     model.povms['M_LGST_tmp_povm'] = _povm.UnconstrainedPOVM(
-        [("E%d" % i, E) for i, E in enumerate(basis_Es)], evotype='default')
+        [("E%d" % i, E) for i, E in enumerate(basis_Es)], evotype='default', state_space=model.state_space)
 
     for k, rhostr in enumerate(prep_fiducials):
         #Build fiducial | rho_k > := Circuit(prepSpec[0:-1]) | rhoVec[ prepSpec[-1] ] >

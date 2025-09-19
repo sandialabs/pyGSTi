@@ -2107,7 +2107,9 @@ class OpModel(Model):
         """
         if len(self._primitive_povm_label_dict) == 1 and \
            (sslbls is None or sslbls == ('*',) or (self.state_space.num_tensor_product_blocks == 1
-                                                   and self.state_space.tensor_product_block_labels(0) == sslbls)):
+           and self.state_space.tensor_product_block_labels(0) == sslbls) \
+           or (self.state_space.num_tensor_product_blocks > 1 and 
+               all([self.state_space.tensor_product_block_labels(i)[0]=='L' for i in range(1,self.state_space.num_tensor_product_blocks)]))):            
             return next(iter(self._primitive_povm_label_dict.keys()))
         else:
             return None
