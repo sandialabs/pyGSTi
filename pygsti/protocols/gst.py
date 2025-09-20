@@ -735,8 +735,9 @@ class GSTObjFnBuilders(_NicelySerializable):
         on the final GST iteration.
     """
 
-    @classmethod
-    def cast(cls, obj):
+    # This used to be a class method, but this class has no derived classes.
+    @staticmethod
+    def cast(obj):
         """
         Cast `obj` to a :class:`GSTObjFnBuilders` object.
 
@@ -751,20 +752,22 @@ class GSTObjFnBuilders(_NicelySerializable):
         -------
         GSTObjFnBuilders
         """
+        cls = GSTObjFnBuilders
         if isinstance(obj, cls): return obj
         elif obj is None: return cls.create_from()
         elif isinstance(obj, dict): return cls.create_from(**obj)
         elif isinstance(obj, (list, tuple)): return cls(*obj)
         else: raise ValueError("Cannot create an %s object from '%s'" % (cls.__name__, str(type(obj))))
 
-    @classmethod
-    def create_from(cls, objective='logl', freq_weighted_chi2=False, always_perform_mle=False, only_perform_mle=False):
+    # This used to be a class method, but this class has no derived classes.
+    @staticmethod
+    def create_from(objective='logl', freq_weighted_chi2=False, always_perform_mle=False, only_perform_mle=False):
         """
         Creates a common :class:`GSTObjFnBuilders` object from several arguments.
 
         Parameters
         ----------
-        objective : {'logl', 'chi2'}, optional
+        objective : {'logl', 'chi2', 'tvd'}, optional
             Whether to create builders for maximum-likelihood or minimum-chi-squared GST.
 
         freq_weighted_chi2 : bool, optional
@@ -786,10 +789,15 @@ class GSTObjFnBuilders(_NicelySerializable):
         chi2_builder = _objfns.ObjectiveFunctionBuilder.create_from('chi2', freq_weighted_chi2)
         mle_builder = _objfns.ObjectiveFunctionBuilder.create_from('logl')
 
-        if objective == "chi2":
+        if not isinstance(objective, str):
+            import warnings
+            warnings.warn(f'Trying to create an objective function from non-string specification, "{objective}". \
+                           \nSupport for this kind of specification is experimental!')
+            iteration_builders = [chi2_builder]
+            final_builders = [_objfns.ObjectiveFunctionBuilder.create_from(objective)]
+        elif objective == "chi2":
             iteration_builders = [chi2_builder]
             final_builders = []
-
         elif objective == "logl":
             if always_perform_mle:
                 iteration_builders = [mle_builder] if only_perform_mle else [chi2_builder, mle_builder]
@@ -798,8 +806,13 @@ class GSTObjFnBuilders(_NicelySerializable):
                 iteration_builders = [chi2_builder]
                 final_builders = [mle_builder]
         else:
-            raise ValueError("Invalid objective: %s" % objective)
-        return cls(iteration_builders, final_builders)
+            iteration_builders = [chi2_builder]
+            try:
+                final_builders = [_objfns.ObjectiveFunctionBuilder.create_from(objective)]
+            except Exception as e:
+                raise ValueError("Invalid objective: %s" % objective)
+    
+        return GSTObjFnBuilders(iteration_builders, final_builders)
 
     def __init__(self, iteration_builders, final_builders=()):
         super().__init__()
@@ -1662,7 +1675,7 @@ class LinearGateSetTomography(_proto.Protocol):
         parameters['protocol'] = self  # Estimates can hold sub-Protocols <=> sub-results
         parameters['profiler'] = profiler
         parameters['final_mdc_store'] = final_store
-        parameters['final_objfn_builder'] = _objfns.PoissonPicDeltaLogLFunction.builder()
+        parameters['final_objfn_builder'] = _objfns.ObjectiveFunctionBuilder(_objfns.PoissonPicDeltaLogLFunction)
         # just set final objective function as default logl objective (for ease of later comparison)
 
         ret = ModelEstimateResults(data, self)
@@ -3136,6 +3149,9 @@ class ModelEstimateResults(_proto.ProtocolResults):
             _warnings.warn("Re-initializing the %s estimate" % estimate_key
                            + " of this Results object!  Usually you don't"
                            + " want to do this.")
+            
+        if estimate.parent is None:
+            estimate.set_parent(self)
 
         self.estimates[estimate_key] = estimate
 

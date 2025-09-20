@@ -40,7 +40,18 @@ from pygsti import SpaceT
 from typing import Union, Optional, Any
 BasisLike = Union[str, _Basis]
 
-IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
+
+__SCALAR_TOL_EXPONENT__ = 0.75
+"""^
+__SCALAR_TOL_EXPONENT__ is used when checking properties of matrices and vectors.
+It's intended only when we can check the property without incurring rounding
+errors from some reduction (like a sum or a matrix-vector product). If we're
+working with a matrix whose dtype is `d`, then we set
+
+    __SCALAR_TOL__ = d.eps ** __SCALAR_TOL_EXPONENT__,
+
+or a modest multiple thereof.
+"""
 
 
 def _flat_mut_blks(i, j, block_dims):
@@ -82,7 +93,7 @@ def fidelity(a, b):
     float
         The resulting fidelity.
     """
-    __SCALAR_TOL__ = _np.finfo(a.dtype).eps ** 0.75
+    __SCALAR_TOL__ = _np.finfo(a.dtype).eps ** __SCALAR_TOL_EXPONENT__
     # ^ use for checks that have no dimensional dependence; about 1e-12 for double precision.
     __VECTOR_TOL__ = (a.shape[0] ** 0.5) * __SCALAR_TOL__
     # ^ use for checks that do have dimensional dependence (will naturally increase for larger matrices)
@@ -98,6 +109,18 @@ def fidelity(a, b):
     
     assert_hermitian(a)
     assert_hermitian(b)
+
+    def check_unit_trace(mat):
+        tr = _np.trace(mat)
+        if abs(tr - 1) > __VECTOR_TOL__:
+            message = f"""
+                The input matrix is trace {tr}, which deviates from 1 by more than {__VECTOR_TOL__}.
+                Beware result!
+            """
+            _warnings.warn(message)
+
+    check_unit_trace(a)
+    check_unit_trace(b)
 
     def check_rank_one_density(mat):
         """
@@ -120,7 +143,11 @@ def fidelity(a, b):
         """
         n = mat.shape[0]
 
-        if _np.linalg.norm(mat) < __VECTOR_TOL__:
+        ZERO_THRESHOLD = n**0.5 * _np.finfo(mat.dtype).eps**0.75
+        # ^ This value affects correctness, not just when we raise an error or a warning.
+        #   Don't change from the value given here.
+
+        if _np.linalg.norm(mat) < ZERO_THRESHOLD:
             # We prefer to return the zero vector instead of None to simplify how we handle
             # this function's output.
             return 0, _np.zeros(n, dtype=complex)
@@ -134,7 +161,7 @@ def fidelity(a, b):
         alpha = _np.real(candidate_v.conj() @ mat @ candidate_v)
         reconstruction = alpha * _np.outer(candidate_v, candidate_v.conj())
 
-        if _np.linalg.norm(mat - reconstruction) > __VECTOR_TOL__:
+        if _np.linalg.norm(mat - reconstruction) > ZERO_THRESHOLD:
             # We can't certify that mat is rank-1.
             return 2, None
         
@@ -144,9 +171,9 @@ def fidelity(a, b):
             return 0, _np.zeros(n)
         
         if abs(alpha - 1) > __SCALAR_TOL__:
-            message = f"The input matrix is not trace-1 up to tolerance {__SCALAR_TOL__}. Beware result!"
+            message = f"The input matrix is not trace-1 up to tolerance {__SCALAR_TOL__}."
             _warnings.warn(message)
-            candidate_v *= _np.sqrt(alpha)
+        candidate_v *= _np.sqrt(alpha)
 
         return 1, candidate_v
   
@@ -171,6 +198,7 @@ def fidelity(a, b):
         if _np.min(evals) < -__SCALAR_TOL__:
             message = f"""
             Input matrix is not PSD up to tolerance {__SCALAR_TOL__}.
+            The negative eigenvalues are {evals[evals < 0]}.
             We'll project out the bad eigenspaces to only work with the PSD part.
             """
             _warnings.warn(message)

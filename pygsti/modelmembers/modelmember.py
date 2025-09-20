@@ -309,9 +309,20 @@ class ModelMember(ModelChild, _NicelySerializable):
         """
         for subm in self.submembers():
             subm.relink_parent(parent)
-
-        if self._parent is parent: return  # OK to relink multiple times
-        assert(self._parent is None), "Cannot relink parent: parent is not None!"
+        #
+        # We need to either set self._parent or raise an error if it's set incorrectly.
+        # This is delicate, because ...
+        #
+        #   1. The `_parent`` attribute might be missing from self.__dict__.
+        #
+        #   2. type(self) might have its own __getattr__ method, and the logic of
+        #      that method might break if its called when the _parent attribute
+        #      is missing.
+        #
+        if '_parent' in self.__dict__:
+            if self._parent is parent:
+                return  # OK to relink multiple times
+            assert(self._parent is None), "Cannot relink parent: current parent is not None!"
         self._parent = parent  # assume no dependent objects
 
     def unlink_parent(self, force=False):

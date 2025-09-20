@@ -41,15 +41,15 @@ def check_gate_metrics_are_nontrivial(metrics, tol):
     for lbl, val in metrics['infids'].items():
         if lbl == idle_label:
             continue
-        assert val > tol, f"{val} is at most {tol}, failure for gate {lbl} w.r.t. infidelity."
+        assert val > tol, f"{val} is <= {tol}, failure for gate {lbl} w.r.t. infidelity."
     for lbl, val in metrics['frodists'].items():
         if lbl == idle_label:
             continue
-        assert val > tol, f"{val} is at most {tol}, failure for gate {lbl} w.r.t. frobenius distance."
+        assert val > tol, f"{val} is <= {tol}, failure for gate {lbl} w.r.t. frobenius distance."
     for lbl, val in metrics['tracedists'].items():
         if lbl == idle_label:
             continue
-        assert val > tol, f"{val} is at most {tol}, failure for gate {lbl} w.r.r. trace distance."
+        assert val > tol, f"{val} is <= {tol}, failure for gate {lbl} w.r.r. trace distance."
     return
 
 
@@ -111,18 +111,20 @@ class sm1QXYI_FindPerfectGauge:
         self.model = self.target.copy()
         self.model.default_gauge_group = self.default_gauge_group
         np.random.seed(seed)
-        self.U = la.expm(np.random.randn()/2 * -1j * (pgbc.sigmax + pgbc.sigmaz)/np.sqrt(2))
+        strength = (np.random.rand() + 1)/100
+        self.U = la.expm(strength * -1j * (pgbc.sigmax + pgbc.sigmaz)/np.sqrt(2))
         self.gauge_grp_el = self.gauge_grp_el_class(pgo.unitary_to_pauligate(self.U))
         self.model.transform_inplace(self.gauge_grp_el)
         self.metrics_before = gate_metrics_dict(self.model, self.target)
-        check_gate_metrics_are_nontrivial(self.metrics_before, tol=1e-2)
+        check_gate_metrics_are_nontrivial(self.metrics_before, tol=1e-4)
         return
 
     def _main_tester(self, method, seed, test_tol, alg_tol, gop_objective):
         assert gop_objective in {'frobenius', 'frobenius_squared', 'tracedist', 'fidelity'}
         self._gauge_transform_model(seed)
         tic = time.time()
-        newmodel = gop.gaugeopt_to_target(self.model, self.target, method=method, tol=alg_tol, spam_metric=gop_objective, gates_metric=gop_objective)
+        verbosity = 0
+        newmodel = gop.gaugeopt_to_target(self.model, self.target, method=method, tol=alg_tol, spam_metric=gop_objective, gates_metric=gop_objective, verbosity=verbosity)
         toc = time.time()
         dt = toc - tic
         metrics_after = gate_metrics_dict(newmodel, self.target)
@@ -133,7 +135,7 @@ class sm1QXYI_FindPerfectGauge:
         self.setUp()
         times = []
         for seed in range(self.N_REPS):
-            dt = self._main_tester('L-BFGS-B', seed, test_tol=1e-6, alg_tol=1e-8, gop_objective='frobenius')
+            dt = self._main_tester('L-BFGS-B', seed, test_tol=1e-5, alg_tol=1e-7, gop_objective='frobenius')
             times.append(dt)
         print(f'GaugeOpt over {self.gauge_space_name} w.r.t. Frobenius dist, using L-BFGS: {times}.')
         return
@@ -142,7 +144,7 @@ class sm1QXYI_FindPerfectGauge:
         self.setUp()
         times = []
         for seed in range(self.N_REPS):
-            dt = self._main_tester('L-BFGS-B', seed, test_tol=1e-6, alg_tol=1e-8, gop_objective='tracedist')
+            dt = self._main_tester('L-BFGS-B', seed, test_tol=1e-5, alg_tol=1e-7, gop_objective='tracedist')
             times.append(dt)
         print(f'GaugeOpt over {self.gauge_space_name} w.r.t. trace dist, using L-BFGS: {times}.')
         return

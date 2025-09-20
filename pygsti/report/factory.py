@@ -1199,6 +1199,7 @@ def construct_standard_report(results, title="auto",
              in this particular report. Strings will be cast to lowercase, 
              stripped of white space, and then mapped to omitted Section classes
              as follows
+
                 {
                     'summary'         : SummarySection,
                     'goodness'        : GoodnessSection,

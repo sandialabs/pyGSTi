@@ -6,18 +6,25 @@ import warnings
 from contextlib import contextmanager
 from pathlib import Path
 from tempfile import TemporaryDirectory
+import importlib.util
 
 import numpy as np
+
+__cvxpy_not_importable__ = importlib.util.find_spec('cvxpy') is None
+
+__deap_not_importable__ = importlib.util.find_spec('deap') is None
 
 
 def needs_cvxpy(fn):
     """Shortcut decorator for skipping tests that require CVXPY"""
-    return unittest.skipIf('SKIP_CVXPY' in os.environ, "skipping cvxpy tests")(fn)
+    cond = __cvxpy_not_importable__ or ('SKIP_CVXPY' in os.environ)
+    return unittest.skipIf(cond, "skipping cvxpy tests")(fn)
 
 
 def needs_deap(fn):
     """Shortcut decorator for skipping tests that require deap"""
-    return unittest.skipIf('SKIP_DEAP' in os.environ, "skipping deap tests")(fn)
+    cond = __deap_not_importable__ or ('SKIP_DEAP' in os.environ)
+    return unittest.skipIf(cond, "skipping deap tests")(fn)
 
 
 def needs_matplotlib(fn):

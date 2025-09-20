@@ -65,7 +65,7 @@ def parse_circuit(code, create_subcircuits=True, integerize_sslbls=True):
     return tuple(result), labels, occurrence_id, compilable_indices
 
 
-def parse_label(code, integerize_sslbls=True):
+def parse_label(code: str, integerize_sslbls=True) -> _lbl.Label:
     create_subcircuits = False
     segment = 0  # segment for gates/instruments vs. preps vs. povms: 0 = *any*
     interlayer_marker = u''  # matches nothing - no interlayer markerg

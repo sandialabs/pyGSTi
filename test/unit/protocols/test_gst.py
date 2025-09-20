@@ -2,7 +2,7 @@ from pygsti.data import simulate_data
 from pygsti.forwardsims.mapforwardsim import MapForwardSimulator
 from pygsti.modelpacks import smq1Q_XYI
 from pygsti.modelpacks.legacy import std1Q_XYI, std2Q_XYICNOT
-from pygsti.objectivefns.objectivefns import PoissonPicDeltaLogLFunction
+from pygsti.objectivefns.objectivefns import PoissonPicDeltaLogLFunction, ObjectiveFunctionBuilder
 from pygsti.models.gaugegroup import TrivialGaugeGroup
 from pygsti.objectivefns import FreqWeightedChi2Function
 from pygsti.optimize.simplerlm import SimplerLMOptimizer
@@ -64,7 +64,7 @@ class GSTUtilTester(BaseCase):
             GSTGaugeOptSuite("foobar").to_dictionary(model_1Q, verbosity=1)
 
     def test_add_badfit_estimates(self):
-        builder = PoissonPicDeltaLogLFunction.builder()
+        builder = ObjectiveFunctionBuilder(PoissonPicDeltaLogLFunction)
         opt = SimplerLMOptimizer()
         badfit_opts = gst.GSTBadFitOptions(threshold=-10, actions=("robust", "Robust", "robust+", "Robust+",
                                                                    "wildcard", "do nothing"))

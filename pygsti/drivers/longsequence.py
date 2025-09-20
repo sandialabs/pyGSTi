@@ -25,7 +25,7 @@ from pygsti.models.model import Model as _Model
 from pygsti.models.modelconstruction import _create_explicit_model, create_explicit_model
 from pygsti.protocols.gst import _load_pspec_or_model
 from pygsti.forwardsims import ForwardSimulator
-from typing import Optional
+from typing import Optional, Any
 
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]
 DEFAULT_BAD_FIT_THRESHOLD = 2.0
@@ -315,7 +315,7 @@ def run_linear_gst(data_filename_or_set, target_model_filename_or_object,
 def run_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
                           prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
                           germs_list_or_filename, max_lengths, gauge_opt_params=None,
-                          advanced_options=None, comm=None, mem_limit=None,
+                          advanced_options: Optional[dict[str,Any]]=None, comm=None, mem_limit=None,
                           output_pkl=None, verbosity=2, checkpoint=None, checkpoint_path=None,
                           disable_checkpointing=False,
                           simulator: Optional[ForwardSimulator.Castable]=None,
@@ -386,7 +386,12 @@ def run_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
         Specifies advanced options most of which deal with numerical details of
         the objective function or expert-level functionality.  The allowed keys
         and values include:
-        - objective = {'chi2', 'logl'}
+
+        HISTORICAL NOTE: "XX" indicates that we've at least _intended_ for the
+        keyword argument to be removed.
+
+        - objective = typically, a string in {'chi2', 'logl', 'tvd'}. But this can
+          be anything accepted by the `ObjectiveFunctionBuilder.create_from` function.
         - op_labels = list of strings
         - circuit_weights = dict or None
         - starting_point = "LGST-if-possible" (default), "LGST", or "target"
@@ -402,19 +407,16 @@ def run_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
         - prob_clip_interval = tuple (default == (-1e6,1e6)
         - radius = float (default == 1e-4)
         - use_freq_weighted_chi2 = True / False (default)
-        - XX nested_circuit_lists = True (default) / False
-        - XX include_lgst = True / False (default is True)
+        - XX nested_circuit_lists = True (default) / False  -- passed to StandardGSTDesign; seems to be functional
+        - XX include_lgst = True / False (default is True)  -- passed to StandardGSTDesign; seems to be functional
         - distribute_method = "default", "circuits" or "deriv"
         - profile = int (default == 1)
         - check = True / False (default)
-        - XX op_label_aliases = dict (default = None)
+        - XX op_label_aliases = dict (default = None) -- passed to StandardGSTDesign and used to set a GateSetTomography protocol object's oplabel_aliases field.
         - always_perform_mle = bool (default = False)
         - only_perform_mle = bool (default = False)
-        - XX truncScheme = "whole germ powers" (default) or "truncated germ powers" or "length as exponent"
         - appendTo = Results (default = None)
-        - estimateLabel = str (default = "default")
-        - XX missingDataAction = {'drop','raise'} (default = 'drop')
-        - XX string_manipulation_rules = list of (find,replace) tuples
+        - XX string_manipulation_rules = list of (find,replace) tuples -- passed to _proto.StandardGSTDesign construct as its "circuit_rules" argument.
         - germ_length_limits = dict of form {germ: maxlength}
         - record_output = bool (default = True)
         - timeDependent = bool (default = False)
