@@ -1542,7 +1542,11 @@ class ErrgenTable(WorkspaceTable):
                 colHeadings.append('%sStochastic Projections' % basisPrefix)
             elif disp == "CA":
                 colHeadings.append('%sActive\\Correlation Projections' % basisPrefix)
-            else: raise ValueError("Invalid display element: %s" % disp)
+            else: 
+                msg = "Invalid display element: %s" % disp
+                if disp in {'C','A'}:
+                    msg += f'\nYou probably meant to use "CA" instead of {disp}.'
+                raise ValueError(msg)
 
         assert(display_as == "boxes" or display_as == "numbers")
         table = _ReportTable(colHeadings, (None,) * len(colHeadings),

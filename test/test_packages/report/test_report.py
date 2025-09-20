@@ -10,7 +10,7 @@ import pygsti
 from pygsti.modelpacks import smq1Q_XY as std
 # Inherit setup from here
 from .reportBaseCase import ReportBaseCase
-from ..testutils import compare_files, temp_files
+from ..testutils import compare_files, temp_files, run_notebook
 
 bLatex = bool('PYGSTI_LATEX_TESTING' in os.environ and
               os.environ['PYGSTI_LATEX_TESTING'].lower() in ("yes","1","true"))
@@ -53,7 +53,6 @@ class TestReport(ReportBaseCase):
         nonStdGS = std.target_model().rotate((0.15,-0.03,0.03))
         self.assertTrue(pygsti.report.factory.find_std_clifford_compilation(nonStdGS) is None)
 
-
     def test_reports_chi2_noCIs(self):
     
         pygsti.report.construct_standard_report(self.results, confidence_level=None, verbosity=3).write_html(temp_files + "/general_reportA", auto_open=False) # omit title as test
@@ -83,7 +82,6 @@ class TestReport(ReportBaseCase):
         #Compare the html files?
         #self.checkFile("general_reportA%s.html" % vs)
 
-
     def test_reports_chi2_wCIs(self):
         crfact = self.results.estimates['default'].add_confidence_region_factory('go0', 'final')
         crfact.compute_hessian(comm=None)
@@ -95,7 +93,6 @@ class TestReport(ReportBaseCase):
         #Compare the html files?
         #self.checkFile("general_reportB%s.html" % vs)
 
-
     def test_reports_chi2_nonMarkCIs(self):
         crfact = self.results.estimates['default'].add_confidence_region_factory('go0', 'final')
         crfact.compute_hessian(comm=None)
@@ -106,7 +103,6 @@ class TestReport(ReportBaseCase):
                                              advanced_options={'nm threshold': -10}).write_html(temp_files + "/general_reportE", auto_open=False)
         #Compare the html files?
         #self.checkFile("general_reportC%s.html" % vs)
-
 
     def test_reports_logL_TP_noCIs(self):
         #Also test adding a model-test estimate to this report
@@ -121,7 +117,6 @@ class TestReport(ReportBaseCase):
                                              advanced_options={'combine_robust': False}).write_html(temp_files + "/general_reportC", auto_open=False)
         #Compare the html files?
         #self.checkFile("general_reportC%s.html" % vs)
-
 
     def test_reports_logL_TP_wCIs(self):
         #Use propagation method instead of directly computing a factory for the go0 gauge-opt
@@ -145,12 +140,24 @@ class TestReport(ReportBaseCase):
         #Compare the html files?
         #self.checkFile("general_reportC%s.html" % vs)
 
-
     def test_report_notebook(self):
-        pygsti.report.construct_standard_report(self.results_logL, None,
-                                             verbosity=3).write_notebook(temp_files + "/report_notebook.ipynb")
-        pygsti.report.construct_standard_report({'one': self.results_logL, 'two': self.results_logL},
-                                                None, verbosity=3).write_notebook(temp_files + "/report_notebook.ipynb") # multiple comparable data
+        import os
+        os.chdir(temp_files)
+        nb_filename = "report_notebook.ipynb"
+        pygsti.report.construct_standard_report(
+            self.results_logL, None, verbosity=3
+        ).write_notebook(nb_filename)
+        err = run_notebook(nb_filename)
+        if err is not None:
+            raise err
+        pygsti.report.construct_standard_report(
+            {'one': self.results_logL, 'two': self.results_logL}, None, verbosity=3
+        ).write_notebook(nb_filename) # multiple comparable data
+        err = run_notebook(nb_filename)
+        if err is not None:
+            raise err
+        os.chdir('..')
+        return
 
     def test_inline_template(self):
         #Generate some results (quickly)

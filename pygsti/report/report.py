@@ -334,6 +334,10 @@ class Report:
             ws.init_notebook_mode(connected={conn}, autodisplay=True)\
             """.format(conn=str(connected)))
 
+        # The line below injects a whole BUNCH of cell definitions into 
+        # the notebook. Relative to the top-level of the pyGSTi repo,
+        # these files should be located in the folder
+        #       pygsti/report/templates/report_notebook/
         nb.add_notebook_text_files([
             templatePath / 'summary.txt',
             templatePath / 'goodness.txt',
@@ -352,7 +356,8 @@ class Report:
             dscmp_circuits = results_dict[dslbl1].circuit_lists['final']
             ds1 = results_dict[dslbl1].dataset
             ds2 = results_dict[dslbl2].dataset
-            dscmp = pygsti.baseobjs.DataComparator([ds1, ds2], ds_names=[dslbl1, dslbl2])
+            dscmp = pygsti.data.DataComparator([ds1, ds2], ds_names=[dslbl1, dslbl2])
+            dscmp.run()
             """.format(dsLbl1=dsKeys[0], dsLbl2=dsKeys[1]))
             nb.add_notebook_text_files([
                 templatePath / 'data_comparison.txt'])
