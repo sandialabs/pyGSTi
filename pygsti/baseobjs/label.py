@@ -14,9 +14,10 @@ import itertools as _itertools
 import numbers as _numbers
 import sys as _sys
 import numpy as _np
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 
 
-class Label(object):
+class Label:
     """
     A label used to identify a gate, circuit layer, or (sub-)circuit.
 
@@ -30,6 +31,10 @@ class Label(object):
     # actual labels will either be LabelTup or LabelStr instances,
     # depending on whether the tuple of sector names exists or not.
     # (the reason for separate classes is for hashing speed)
+    
+    # def __init__(self, *args, **kwargs):
+    #     super().__init__()
+    #     return
 
     def __new__(cls, name, state_space_labels=None, time=None, args=None):
         """
@@ -200,7 +205,15 @@ class Label(object):
 
         return self.IS_SIMPLE
 
+    # def _to_nice_serialization(self):
+    #     state = super()._to_nice_serialization()
+    #     state['as_str'] = str(self)
+    #     return state
 
+    # @classmethod
+    # def from_nice_serialization(cls, state):
+    #     from pygsti.circuits.circuitparser import parse_label
+    #     return parse_label(state['as_str'])
 
 class LabelTup(Label, tuple):
     """
