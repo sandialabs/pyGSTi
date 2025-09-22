@@ -24,10 +24,11 @@ from pygsti.objectivefns.objectivefns import ModelDatasetCircuitsStore as _Model
 from pygsti.protocols.confidenceregionfactory import ConfidenceRegionFactory as _ConfidenceRegionFactory
 from pygsti.models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
 from pygsti.objectivefns import objectivefns as _objfns
-from pygsti.circuits.circuitlist import CircuitList as _CircuitList
+from pygsti.circuits import Circuit as _Circuit, CircuitList as _CircuitList
 from pygsti.circuits.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from pygsti.baseobjs.mongoserializable import MongoSerializable as _MongoSerializable
+
 
 #Class for holding confidence region factory keys
 CRFkey = _collections.namedtuple('CRFkey', ['model', 'circuit_list'])
@@ -83,6 +84,8 @@ class Estimate(_MongoSerializable):
         ret.__dict__.update(_io.load_meta_based_dir(_pathlib.Path(dirname), 'auxfile_types', quick_load=quick_load))
         for crf in ret.confidence_region_factories.values():
             crf.set_parent(ret)  # re-link confidence_region_factories
+        # if ret.circuit_weights is not None:
+        #     ret.circuit_weights = {_Circuit.from_tuple(c): v for c,v in ret.circuit_weights}
         return ret
 
     @classmethod
@@ -236,6 +239,9 @@ class Estimate(_MongoSerializable):
         -------
         None
         """
+        # TODO: make this work when self.circuit_weights exists.
+        # if self.circuit_weights is not None:
+        #     self.circuit_weights = {tuple(c): v for c,v in self.circuit_weights.items()}
         _io.write_obj_to_meta_based_dir(self, dirname, 'auxfile_types')
 
     def _add_auxiliary_write_ops_and_update_doc(self, doc, write_ops, mongodb, collection_name, overwrite_existing):

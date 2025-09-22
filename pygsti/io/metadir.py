@@ -33,6 +33,8 @@ except ImportError:
 
 from pygsti.io import readers as _load
 from pygsti.io import writers as _write
+from pygsti.baseobjs.label import Label as _Label
+from pygsti.circuits.circuitparser import parse_circuit as _parse_circuit, parse_label as _parse_label
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 
@@ -408,11 +410,12 @@ def write_meta_based_dir(root_dir, valuedict, auxfile_types=None, init_meta=None
             meta[auxnm] = auxmeta  # metadata about auxfile(s) for this auxnm
 
     with open(str(root_dir / 'meta.json'), 'w') as f:
-        _check_jsonable(meta)
+        meta_jsonable = _to_jsonable(meta)
+        _check_jsonable(meta_jsonable)
         if _json_util is not None:
-            _json.dump(meta, f, indent=4, default=_json_util.default)
+            _json.dump(meta_jsonable, f, indent=4, default=_json_util.default)
         else:
-            _json.dump(meta, f, indent=4)
+            _json.dump(meta_jsonable, f, indent=4)
 
 
 def _write_auxfile_member(root_dir, filenm, typ, val):
@@ -695,7 +698,15 @@ def _to_jsonable(val):
     elif type(val) == list:  # don't use isinstance here
         return [_to_jsonable(v) for v in val]
     elif type(val) == dict:  # don't use isinstance here
-        return {k: _to_jsonable(v) for k, v in val.items()}
+        out = dict()
+        for k,v in val.items():
+            vj = _to_jsonable(v)
+            if not isinstance(k, str):
+                kj = _json.dumps(_to_jsonable(k))
+                out[kj] = vj
+            else:
+                out[k] = vj
+        return out
     else:
         return val
 
@@ -707,9 +718,14 @@ def _from_jsonable(x):
         if 'module' in x and 'class' in x:
             return _NicelySerializable.from_nice_serialization(x)
         else:  # assume a normal dictionary
-            return {k: _from_jsonable(v) for k, v in x.items()}
+            try:
+                return { k : _from_jsonable(v) for k, v in x.items()}
+            except Exception as e:
+                return {_from_jsonable(k): _from_jsonable(v) for k, v in x.items()}
     elif isinstance(x, list):
         return [_from_jsonable(v) for v in x]
+    elif isinstance(x, tuple):
+        return tuple(_from_jsonable(v) for v in x)
     else:
         raise ValueError("Cannot decode object of type '%s' within JSON'd values!" % str(type(x)))
 
