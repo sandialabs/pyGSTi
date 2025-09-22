@@ -196,7 +196,7 @@ class Report:
                 verbosity=verbosity
             )
 
-    def write_notebook(self, path, auto_open=False, connected=False, verbosity=0):
+    def write_notebook(self, path, auto_open=False, connected=False, verbosity=0, use_pickle=False):
         """
         Write this report to the disk as an IPython notebook
 
@@ -246,10 +246,14 @@ class Report:
         #Save results to file
         # basename = _os.path.splitext(_os.path.basename(filename))[0]
         basename = path.stem
-        results_file_base = basename + '_results.pkl'
-        results_file = outputDir / results_file_base
-        with open(str(results_file), 'wb') as f:
-            _pickle.dump(self._results, f)
+        legacy_results_file_base = basename + '_results.pkl'
+        if use_pickle:
+            legacy_results_file = outputDir / legacy_results_file_base
+            with open(str(legacy_results_file), 'wb') as f:
+                _pickle.dump(self._results, f)
+        else:
+            for dskey, mer in self._results.items():
+                mer.write(basename + '/' + dskey)
 
         nb = _Notebook()
         nb.add_markdown('# {title}\n(Created on {date})'.format(
@@ -263,18 +267,32 @@ class Report:
 
         nb.add_code("""\
             import pickle
-            import pygsti""")
+            import pygsti
+            from pygsti.protocols import ModelEstimateResults
+            import os""")
 
         dsKeys = list(self._results.keys())
         results = self._results[dsKeys[0]]
         #Note: `results` is always a single Results obj from here down
 
-        nb.add_code("""\
+        nb.add_code(f"""
         #Load results dictionary
-        with open('{infile}', 'rb') as infile:
-            results_dict = pickle.load(infile)
-        print("Available dataset keys: ", ', '.join(results_dict.keys()))\
-        """.format(infile=results_file_base))
+        if os.path.exists('{legacy_results_file_base}'):
+            with open('{legacy_results_file_base}', 'rb') as infile:
+                results_dict = pickle.load(infile)
+        else:
+            results_dict = dict()
+            for dname in os.listdir('{basename}'):
+                inner_dict = dict()
+                for estname in os.listdir('{basename}/' + dname + '/results'):
+                    res = ModelEstimateResults.from_dir('{basename}/' + dname, name=estname)
+                    inner_dict[estname] = res
+                _, res = inner_dict.popitem()
+                for en, e in inner_dict.items():
+                    res.add_estimate(en, e.estimates[en])
+                results_dict[dname] = res
+        print("Available dataset keys: ", ', '.join(results_dict.keys()))
+        """)
 
         nb.add_code("""\
         #Set which dataset should be used below
