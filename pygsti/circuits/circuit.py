@@ -25,7 +25,6 @@ import warnings as _warnings
 
 import numpy as _np
 from pygsti.baseobjs.label import Label as _Label, CircuitLabel as _CircuitLabel
-from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.baseobjs import outcomelabeldict as _ld, _compatibility as _compat
 from pygsti.tools import internalgates as _itgs
 from pygsti.tools import slicetools as _slct
@@ -195,7 +194,7 @@ def to_label(x):
     else: return _Label(x)
 
 
-class Circuit(_NicelySerializable):
+class Circuit(object):
     """
     A quantum circuit.
 
@@ -512,18 +511,6 @@ class Circuit(_NicelySerializable):
         self._bare_init(labels, my_line_labels, editable, name, stringrep, 
                         occurrence, compilable_layer_indices_tup)
 
-    def to_nice_serialization(self):
-        state = super()._to_nice_serialization()
-        s = self.__repr__()
-        s = s.removeprefix('Circuit(').removesuffix(')')
-        state['repr'] = s
-        return state
-    
-    @classmethod
-    def _from_nice_serialization(cls, state):
-        from pygsti.circuits.circuitparser import parse_circuit
-        return parse_circuit(state['repr'], True, True)
-
     @classmethod
     def _fastinit(cls, labels, line_labels, editable, name='', stringrep=None, occurrence=None,
                   compilable_layer_indices_tup=()):
@@ -548,7 +535,6 @@ class Circuit(_NicelySerializable):
         self._name = name  # can be None
         #self._times = None  # for FUTURE expansion
         self.auxinfo = {}  # for FUTURE expansion / user metadata
-        super().__init__()
 
     #Note: If editing _copy_init one should also check _bare_init in case changes must be propagated.
     #specialized codepath for copying
