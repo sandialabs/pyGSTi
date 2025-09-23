@@ -2972,6 +2972,10 @@ class ModelEstimateResults(_proto.ProtocolResults):
         ret.circuit_lists = ret._create_circuit_lists(ret.data.edesign)  # because circuit_lists auxfile_type == 'none'
         for est in ret.estimates.values():
             est.parent = ret  # link estimate to parent results object
+        # if hasattr(ret, 'circuit_weights') and isinstance(ret.circuit_weights, dict):
+        #     # de-JSON
+        #     from pygsti.circuits.circuitparser import parse_circuit
+        #     ret.circuit_weights = {parse_circuit(c): v for c,v in ret.circuit_weights.items()}
         return ret
 
     @classmethod
@@ -2997,6 +3001,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
         #Punt on serialization of these qtys for now...
         self.auxfile_types['circuit_lists'] = 'none'  # derived from edesign
         self.auxfile_types['estimates'] = 'dict:dir-serialized-object'
+        # self.auxfile_types['circuit_weights'] = 'fancykeydict'
 
     def _create_circuit_lists(self, edesign):
         #Compute some basic "results" by just exposing edesign circuit lists more directly
@@ -3017,6 +3022,15 @@ class ModelEstimateResults(_proto.ProtocolResults):
 
         circuit_lists['final'] = circuit_lists['iteration'][-1]
         return circuit_lists
+    
+    # def write(self, dirname=None, data_already_written=False):
+    #     if hasattr(self, 'circuit_weights') and isinstance(self.circuit_weights, dict): # type: ignore
+    #         jsonable_cws = dict()
+    #         for c,v in self.circuit_weights.items():
+    #             if hasattr(c, 'str'):
+    #                 jsonable_cws[c.str] = v
+    #         self.circuit_weights = jsonable_cws
+    #     super().write(dirname, data_already_written)
 
     @property
     def dataset(self):

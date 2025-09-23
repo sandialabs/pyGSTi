@@ -84,8 +84,9 @@ class Estimate(_MongoSerializable):
         ret.__dict__.update(_io.load_meta_based_dir(_pathlib.Path(dirname), 'auxfile_types', quick_load=quick_load))
         for crf in ret.confidence_region_factories.values():
             crf.set_parent(ret)  # re-link confidence_region_factories
-        # if ret.circuit_weights is not None:
-        #     ret.circuit_weights = {_Circuit.from_tuple(c): v for c,v in ret.circuit_weights}
+        if ret.circuit_weights is not None:
+            from pygsti.circuits.circuitparser import parse_circuit
+            ret.circuit_weights = {parse_circuit(c, True, True): v for c,v in ret.circuit_weights.items()}
         return ret
 
     @classmethod
@@ -239,9 +240,8 @@ class Estimate(_MongoSerializable):
         -------
         None
         """
-        # TODO: make this work when self.circuit_weights exists.
-        # if self.circuit_weights is not None:
-        #     self.circuit_weights = {tuple(c): v for c,v in self.circuit_weights.items()}
+        if self.circuit_weights is not None:
+            self.circuit_weights = {getattr(c,'str',c): v for c,v in self.circuit_weights.items()}
         _io.write_obj_to_meta_based_dir(self, dirname, 'auxfile_types')
 
     def _add_auxiliary_write_ops_and_update_doc(self, doc, write_ops, mongodb, collection_name, overwrite_existing):

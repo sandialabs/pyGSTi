@@ -702,8 +702,9 @@ def _to_jsonable(val):
         for k,v in val.items():
             vj = _to_jsonable(v)
             if not isinstance(k, str):
-                kj = _json.dumps(_to_jsonable(k))
-                out[kj] = vj
+                raise ValueError()
+                # kj = _json.dumps(_to_jsonable(k))
+                # out[kj] = vj
             else:
                 out[k] = vj
         return out
