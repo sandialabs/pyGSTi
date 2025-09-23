@@ -140,6 +140,19 @@ class TestReport(ReportBaseCase):
         #Compare the html files?
         #self.checkFile("general_reportC%s.html" % vs)
 
+    def test_report_notebook_pickle(self):
+        import os
+        os.chdir(temp_files)
+        nb_filename = "report_notebook.ipynb"
+        pygsti.report.construct_standard_report(
+            self.results_logL, None, verbosity=3
+        ).write_notebook(nb_filename, use_pickle=True)
+        err = run_notebook(nb_filename)
+        if err is not None:
+            raise err
+        os.chdir('..')
+        return
+
     def test_report_notebook(self):
         import os
         os.chdir(temp_files)
