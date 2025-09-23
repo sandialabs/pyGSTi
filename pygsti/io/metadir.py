@@ -695,7 +695,7 @@ def _to_jsonable(val):
     elif type(val) == list:  # don't use isinstance here
         return [_to_jsonable(v) for v in val]
     elif type(val) == dict:  # don't use isinstance here
-        return {k: _to_jsonable(v) for k,v in val.items()}
+        return {k: _to_jsonable(v) for k, v in val.items()}
     else:
         return val
 
@@ -707,7 +707,7 @@ def _from_jsonable(x):
         if 'module' in x and 'class' in x:
             return _NicelySerializable.from_nice_serialization(x)
         else:  # assume a normal dictionary
-            return { k : _from_jsonable(v) for k, v in x.items()}
+            return {k: _from_jsonable(v) for k, v in x.items()}
     elif isinstance(x, list):
         return [_from_jsonable(v) for v in x]
     else:
