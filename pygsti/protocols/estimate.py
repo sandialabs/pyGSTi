@@ -24,7 +24,7 @@ from pygsti.objectivefns.objectivefns import ModelDatasetCircuitsStore as _Model
 from pygsti.protocols.confidenceregionfactory import ConfidenceRegionFactory as _ConfidenceRegionFactory
 from pygsti.models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
 from pygsti.objectivefns import objectivefns as _objfns
-from pygsti.circuits import Circuit as _Circuit, CircuitList as _CircuitList
+from pygsti.circuits import CircuitList as _CircuitList
 from pygsti.circuits.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from pygsti.baseobjs.mongoserializable import MongoSerializable as _MongoSerializable
