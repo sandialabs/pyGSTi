@@ -1511,6 +1511,7 @@ class GateSetTomography(_proto.Protocol):
         
         return ret
 
+
 class LinearGateSetTomography(_proto.Protocol):
     """
     The linear gate set tomography protocol.
@@ -1971,13 +1972,6 @@ def _load_pspec(processorspec_filename_or_obj):
         return processorspec_filename_or_obj
 
 
-def _load_model(model_filename_or_obj):
-    if isinstance(model_filename_or_obj, str):
-        return _io.load_model(model_filename_or_obj)
-    else:
-        return model_filename_or_obj  # assume a Model object
-
-
 def _load_pspec_or_model(processorspec_or_model_filename_or_obj):
     if isinstance(processorspec_or_model_filename_or_obj, str):
         # if a filename is given, just try to load a processor spec (can't load a model file yet)
@@ -2008,25 +2002,6 @@ def _load_fiducials_and_germs(prep_fiducial_list_or_filename,
     else: germs = germ_list_or_filename
 
     return prep_fiducials, meas_fiducials, germs
-
-
-def _load_dataset(data_filename_or_set, comm, verbosity):
-    """Loads a DataSet from the data_filename_or_set argument of functions in this module."""
-    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, comm)
-    if isinstance(data_filename_or_set, str):
-        if comm is None or comm.Get_rank() == 0:
-            if _os.path.splitext(data_filename_or_set)[1] == ".pkl":
-                with open(data_filename_or_set, 'rb') as pklfile:
-                    ds = _pickle.load(pklfile)
-            else:
-                ds = _io.read_dataset(data_filename_or_set, True, "aggregate", printer)
-            if comm is not None: comm.bcast(ds, root=0)
-        else:
-            ds = comm.bcast(None, root=0)
-    else:
-        ds = data_filename_or_set  # assume a Dataset object
-
-    return ds
 
 
 def _add_gaugeopt_and_badfit(results, estlbl, target_model, gaugeopt_suite,
@@ -2324,19 +2299,11 @@ def _compute_wildcard_budget_1d_model(estimate, mdc_objfn, verbosity, gaugeopt_s
     estimate : Estimate
         The estimate object containing the model and data to be used.
 
-    objfn_cache : ObjectiveFunctionCache
-        A cache for objective function evaluations.
-
     mdc_objfn : ModelDatasetCircuitsStore
         An object that stores the model, dataset, and circuits to be used in the computation.
 
     parameters : dict
         Various parameters of the estimate at hand.
-
-    badfit_options : GSTBadFitOptions, optional
-        Options specifying what post-processing actions should be performed when
-        a fit is unsatisfactory. Contains detailed parameters for wildcard budget
-        creation.
 
     verbosity : int, optional
         Level of detail printed to stdout.
@@ -2349,8 +2316,7 @@ def _compute_wildcard_budget_1d_model(estimate, mdc_objfn, verbosity, gaugeopt_s
     Returns
     -------
     PrimitiveOpsWildcardBudget or dict
-        The computed wildcard budget. If gauge optimization is applied, a dictionary of 
-        budgets keyed by gauge optimization labels is returned.
+        A dictionary of budgets keyed by gauge optimization labels.
 
     """
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, mdc_objfn.resource_alloc)
