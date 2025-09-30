@@ -84,6 +84,7 @@ testing_no_cython_mpi = [
     'pytest-xdist',
     'pytest-cov',
     'nbval',
+    'nbformat',
     'packaging',
     'zmq',
     'seaborn',
