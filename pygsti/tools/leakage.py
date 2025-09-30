@@ -144,7 +144,7 @@ def apply_tensorized_to_teststate(op_x: np.ndarray, op_y, op_basis: np.ndarray, 
 
 
 @lru_cache
-def leading_dxd_submatrix_basis_vectors(d: int, n: int, current_basis: Basis):
+def leading_dxd_submatrix_basis_vectors(d: int, n: int, current_basis: Basis) -> np.ndarray:
     """
     Let "H" denote n^2 dimensional Hilbert-Schdmit space, and let "U" denote the d^2
     dimensional subspace of H spanned by vectors whose Hermitian matrix representations
@@ -237,7 +237,7 @@ This function returns the %s between X⨂I(rho_t) and Y⨂I(rho_t).
 
 
 @set_docstring(CHOI_INDUCED_METRIC % 'entanglement fidelity')
-def subspace_entanglement_fidelity(op_x, op_y, op_basis, n_leak=0):
+def subspace_entanglement_fidelity(op_x: np.ndarray, op_y: np.ndarray, op_basis, n_leak=0) -> float:
     ten_std_basis, temp1, temp2 = apply_tensorized_to_teststate(op_x, op_y, op_basis, n_leak)
     temp1_mx = pgbt.vec_to_stdmx(temp1, ten_std_basis, keep_complex=True)
     temp2_mx = pgbt.vec_to_stdmx(temp2, ten_std_basis, keep_complex=True)
@@ -246,7 +246,7 @@ def subspace_entanglement_fidelity(op_x, op_y, op_basis, n_leak=0):
 
 
 @set_docstring(CHOI_INDUCED_METRIC % 'jamiolkowski trace distance')
-def subspace_jtracedist(op_x, op_y, op_basis, n_leak=0):
+def subspace_jtracedist(op_x: np.ndarray, op_y: np.ndarray, op_basis, n_leak=0) -> float:
     ten_std_basis, temp1, temp2 = apply_tensorized_to_teststate(op_x, op_y, op_basis, n_leak)
     temp1_mx = pgbt.vec_to_stdmx(temp1, ten_std_basis, keep_complex=True)
     temp2_mx = pgbt.vec_to_stdmx(temp2, ten_std_basis, keep_complex=True)
@@ -264,7 +264,7 @@ projector onto the computational subspace (i.e., C), of co-dimension n_leak.
 *Warning!* At present, this function can only be used for gates over a single system
 (e.g., a single qubit), not for tensor products of such systems.
 """ + NOTATION)
-def subspace_superop_fro_dist(op_x, op_y, op_basis, n_leak=0):
+def subspace_superop_fro_dist(op_x: np.ndarray, op_y: np.ndarray, op_basis, n_leak=0) -> float:
     diff = op_x -  op_y
     if n_leak == 0:
         return np.linalg.norm(diff, 'fro')
@@ -274,6 +274,45 @@ def subspace_superop_fro_dist(op_x, op_y, op_basis, n_leak=0):
     B = leading_dxd_submatrix_basis_vectors(d-n_leak, d, op_basis)
     P = B @ B.T.conj()
     return np.linalg.norm(diff @ P)
+
+
+def subspace_diamonddist(op_x: np.ndarray, op_y: np.ndarray, op_basis) -> float:
+    dim_mixed = op_x.shape[0]
+    dim_pure  = int(dim_mixed**0.5)
+    dim_pure_compsub = dim_pure - 1
+    U = leading_dxd_submatrix_basis_vectors(dim_pure_compsub, dim_pure, op_basis)
+    P = U @ U.T.conj()
+    assert np.linalg.norm(P - P.real) < 1e-10
+    P = P.real
+    from pygsti.tools.optools import diamonddist
+    val : float = diamonddist(op_x @ P, op_y @ P, op_basis, return_x=False) / 2 # type: ignore
+    return val
+
+
+def leakage_profile(op, mx_basis) -> tuple[np.ndarray, list[np.ndarray]]:
+    assert op.shape == (9, 9)
+    lfb = BuiltinBasis('l2p1', 9)
+    op_lfb = pgbt.change_basis(op, mx_basis, lfb)
+    elinds = lfb.elindlookup
+    compinds = [elinds[sslbl] for sslbl in ['I','X','Y','Z'] ]
+    leakage_effect_superket = op_lfb[elinds['L'], compinds]
+    leakage_effect = pgbt.vec_to_stdmx(leakage_effect_superket, 'pp')
+    leakage_rates, states = np.linalg.eigh(leakage_effect)
+    ind = np.argsort(leakage_rates)[::-1]
+    rates  = leakage_rates[ind]
+    states = [np.concatenate([s,[0.0]]) for s in states.T[ind]]
+    return rates, states
+
+
+def seepage_profile(op, mx_basis) -> tuple[np.ndarray, list[np.ndarray]]:
+    assert op.shape == (9, 9)
+    lfb = BuiltinBasis('l2p1', 9)
+    op_lfb = pgbt.change_basis(op, mx_basis, lfb)
+    elinds = lfb.elindlookup
+    seeprate  = np.atleast_1d(op_lfb[elinds['I'], elinds['L']])
+    state = [np.array([0.0, 0.0, 1.0], dtype=np.complex128)]
+    return seeprate, state
+
 
 
 # MARK: model construction
@@ -326,6 +365,8 @@ def leaky_qubit_model_from_pspec(ps_2level: QubitProcessorSpec, mx_basis: Union[
     if isinstance(mx_basis, str):
         mx_basis = BuiltinBasis(mx_basis, 9)
     assert isinstance(mx_basis, Basis)
+
+    ql = ps_2level.qubit_labels[0]
     
     Us = ps_2level.gate_unitaries
     rho0 = np.array([[1, 0, 0], [0, 0, 0], [0, 0, 0]], complex)
@@ -333,7 +374,7 @@ def leaky_qubit_model_from_pspec(ps_2level: QubitProcessorSpec, mx_basis: Union[
     E0[levels_readout_zero, levels_readout_zero] = 1
     E1   = np.eye(3, dtype=complex) - E0
 
-    ss = ExplicitStateSpace([0],[3])
+    ss = ExplicitStateSpace([ql],[3])
     tm_3level = ExplicitOpModel(ss, mx_basis) # type: ignore
     tm_3level.preps['rho0']     =  FullState(stdmx_to_vec(rho0, mx_basis))
     tm_3level.povms['Mdefault'] =  UnconstrainedPOVM(
@@ -348,7 +389,7 @@ def leaky_qubit_model_from_pspec(ps_2level: QubitProcessorSpec, mx_basis: Union[
         return superop
 
     for gatename, unitary in Us.items():
-        gatekey = (gatename, 0) if gatename != '{idle}' else ('Gi',0)
+        gatekey = (gatename, ql) if gatename != '{idle}' else ('Gi', ql)
         tm_3level.operations[gatekey] = u2x2_to_9x9_superoperator(unitary)
 
     tm_3level.sim = 'map'  # can use 'matrix', if that's preferred for whatever reason.

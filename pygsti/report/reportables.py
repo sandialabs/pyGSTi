@@ -1016,13 +1016,16 @@ def maximum_trace_dist(gate, mx_basis):
 Maximum_trace_dist = _modf.opfn_factory(maximum_trace_dist)
 # init args == (model, op_label)
 
+
 def leaky_maximum_trace_dist(gate, mx_basis):
     closestUOpMx = _alg.find_closest_unitary_opmx(gate)
     _tools.jamiolkowski_iso(closestUOpMx, mx_basis, mx_basis)
     n_leak = 1
     return _tools.subspace_jtracedist(gate, closestUOpMx, mx_basis, n_leak)
 
+
 Leaky_maximum_trace_dist = _modf.opfn_factory(leaky_maximum_trace_dist)
+
 
 def diamonddist_to_leakfree_cptp(op, ignore, mx_basis):
     import pygsti.tools.sdptools as _sdps
@@ -1037,7 +1040,9 @@ def diamonddist_to_leakfree_cptp(op, ignore, mx_basis):
             continue
     return -1
 
+
 Diamonddist_to_leakfree_cptp = _modf.opsfn_factory(diamonddist_to_leakfree_cptp)
+
 
 def subspace_diamonddist_to_leakfree_cptp(op, ignore, mx_basis):
     import pygsti.tools.sdptools as _sdps
@@ -1052,49 +1057,41 @@ def subspace_diamonddist_to_leakfree_cptp(op, ignore, mx_basis):
             continue
     return -1
 
+
 SubspaceDiamonddist_to_leakfree_cptp = _modf.opsfn_factory(subspace_diamonddist_to_leakfree_cptp)
 
+
 def subspace_diamonddist(op_a, op_b, basis):
-    dim_mixed = op_a.shape[0]
-    dim_pure  = int(dim_mixed**0.5)
-    dim_pure_compsub = dim_pure - 1
-    from pygsti.tools.leakage import leading_dxd_submatrix_basis_vectors
-    U = leading_dxd_submatrix_basis_vectors(dim_pure_compsub, dim_pure, basis)
-    P = U @ U.T.conj()
-    assert _np.linalg.norm(P - P.real) < 1e-10
-    P = P.real
-    from pygsti.tools.optools import diamonddist
-    return diamonddist(op_a @ P, op_b @ P, basis) / 2
+    from pygsti.tools.leakage import subspace_diamonddist as _subspace_diamonddist
+    return _subspace_diamonddist(op_a, op_b, basis)
+
 
 SubspaceDiamonddist = _modf.opsfn_factory(subspace_diamonddist)
 
-def pergate_leakrate_reduction(op, ignore, mx_basis, reduction):
-    assert op.shape == (9, 9)
-    lfb = _BuiltinBasis('l2p1', 9)
-    op_lfb = _tools.change_basis(op, mx_basis, lfb)
-    elinds = lfb.elindlookup
-    compinds = [elinds[sslbl] for sslbl in ['I','X','Y','Z'] ]
-    leakage_effect_superket = op_lfb[elinds['L'], compinds]
-    leakage_effect = _tools.vec_to_stdmx(leakage_effect_superket, 'pp')
-    leakage_rates = _np.linalg.eigvalsh(leakage_effect)
-    return reduction(leakage_rates)
 
 def pergate_leakrate_max(op, ignore, mx_basis):
-    return pergate_leakrate_reduction(op, ignore, mx_basis, max)
+    from pygsti.tools.leakage import leakage_profile
+    evals, _ = leakage_profile(op, mx_basis)
+    return evals[0]
 
-def pergate_leakrate_min(op, ignore, mx_basis):
-    return pergate_leakrate_reduction(op, ignore, mx_basis, min)
 
 PerGateLeakRateMax = _modf.opsfn_factory(pergate_leakrate_max)
+
+
+def pergate_leakrate_min(op, ignore, mx_basis):
+    from pygsti.tools.leakage import leakage_profile
+    evals, _ = leakage_profile(op, mx_basis)
+    return evals[-1]
+
+
 PerGateLeakRateMin = _modf.opsfn_factory(pergate_leakrate_min)
 
+
 def pergate_seeprate(op, ignore, mx_basis):
-    assert op.shape == (9, 9)
-    lfb = _BuiltinBasis('l2p1', 9)
-    op_lfb = _tools.change_basis(op, mx_basis, lfb)
-    elinds = lfb.elindlookup
-    seeprate = op_lfb[elinds['I'], elinds['L']]
-    return seeprate
+    from pygsti.tools.leakage import seepage_profile
+    seeprate, _ = seepage_profile(op, mx_basis)
+    return seeprate[0]
+
 
 PerGateSeepRate = _modf.opsfn_factory(pergate_seeprate)
 
@@ -1169,9 +1166,11 @@ def entanglement_fidelity(a, b, mx_basis):
 Entanglement_fidelity = _modf.opsfn_factory(entanglement_fidelity)
 # init args == (model1, model2, op_label)
 
+
 def subspace_entanglement_fidelity(a, b, mx_basis):
     n_leak = 1
     return _tools.subspace_entanglement_fidelity(a, b, mx_basis, n_leak)
+
 
 Subspace_entanglement_fidelity = _modf.opsfn_factory(subspace_entanglement_fidelity)
 
@@ -1201,8 +1200,10 @@ def entanglement_infidelity(a, b, mx_basis):
 Entanglement_infidelity = _modf.opsfn_factory(entanglement_infidelity)
 # init args == (model1, model2, op_label)
 
+
 def leaky_entanglement_infidelity(a, b, mx_basis):
     return 1 - subspace_entanglement_fidelity(a, b, mx_basis)
+
 
 Leaky_entanglement_infidelity = _modf.opsfn_factory(leaky_entanglement_infidelity)
 
@@ -1305,9 +1306,11 @@ def jtrace_diff(a, b, mx_basis):  # assume vary model1, model2 fixed
 Jt_diff = _modf.opsfn_factory(jtrace_diff)
 # init args == (model1, model2, op_label)
 
+
 def leaky_jtrace_diff(a, b, mx_basis):
     n_leak = 1
     return _tools.subspace_jtracedist(a, b, mx_basis, n_leak)
+
 
 Leaky_Jt_diff = _modf.opsfn_factory(leaky_jtrace_diff)
 
