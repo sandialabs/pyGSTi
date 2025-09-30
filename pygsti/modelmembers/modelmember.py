@@ -254,6 +254,10 @@ class ModelMember(ModelChild, _NicelySerializable):
         -------
         Model
         """
+        if '_parent' not in self.__dict__:
+            # This can be absent because of how serialization works.
+            # It's set during deserialization in self.relink_parent().
+            self._parent = None
         return self._parent
 
     @parent.setter
@@ -308,11 +312,13 @@ class ModelMember(ModelChild, _NicelySerializable):
         None
         """
         for subm in self.submembers():
-            subm.relink_parent(parent)
-
-        if self._parent is parent: return  # OK to relink multiple times
-        assert(self._parent is None), "Cannot relink parent: parent is not None!"
-        self._parent = parent  # assume no dependent objects
+            subm.relink_parent(parent)    
+        if '_parent' in self.__dict__:
+            # This codepath needed to resolve GitHub issue 651.
+            if self._parent is parent:
+                return  # OK to relink multiple times
+            assert(self._parent is None), "Cannot relink parent: current parent is not None!"
+        self._parent = parent
 
     def unlink_parent(self, force=False):
         """
@@ -793,6 +799,9 @@ class ModelMember(ModelChild, _NicelySerializable):
             memo[id(self.parent)] = None  # so deepcopy uses None instead of copying parent
         return self._copy_gpindices(_copy.deepcopy(self, memo), parent, memo)
 
+    def to_dense(self) -> _np.ndarray:
+        raise NotImplementedError('Derived classes must implement .to_dense().')
+
     def _is_similar(self, other, rtol, atol):
         """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
             the same local structure, i.e., not considering parameter values or submembers """
@@ -857,7 +866,16 @@ class ModelMember(ModelChild, _NicelySerializable):
         """
         if not self.is_similar(other): return False
 
-        if not _np.allclose(self.to_vector(), other.to_vector(), rtol=rtol, atol=atol):
+        try:
+            v1 = self.to_vector()
+            v2 = other.to_vector()
+        except RuntimeError as e:
+            if 'to_vector() should never be called' not in str(e):
+                raise e
+            assert type(self) == type(other)
+            v1 = self.to_dense()
+            v2 = other.to_dense()
+        if not _np.allclose(v1, v2, rtol=rtol, atol=atol):
             return False
 
         # Recursive check on submembers
