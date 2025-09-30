@@ -301,7 +301,8 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
             'load_cevd_cache_filename': load_cevd_cache_filename,
             'file_compression': file_compression,
             'evd_tol': 1e-10,
-            'initial_germ_set_test': True
+            'initial_germ_set_test': True,
+            'gate_penalty': None
         }
         for key in default_kwargs:
             if key not in algorithm_kwargs:
@@ -3593,7 +3594,8 @@ def find_germs_breadthfirst_greedy(model_list, germs_list, randomize=True,
                             float_type= _np.cdouble, 
                             mode="all-Jac", force_rank_increase=False,
                             save_cevd_cache_filename=None, load_cevd_cache_filename=None,
-                            file_compression=False, evd_tol=1e-10, initial_germ_set_test=True):
+                            file_compression=False, evd_tol=1e-10, initial_germ_set_test=True,
+                            gate_penalty=None):
     """
     Greedy algorithm starting with 0 germs.
 
@@ -3835,6 +3837,7 @@ def find_germs_breadthfirst_greedy(model_list, germs_list, randomize=True,
         'num_nongauge_params': numNonGaugeParams,
         'op_penalty': op_penalty,
         'float_type': float_type,
+        'gate_penalty': gate_penalty
     }
 
     #For all-Jac and compactEVD build out the requisite caches (plus all-zeros placeholders for single-Jac):
@@ -4080,6 +4083,7 @@ def find_germs_breadthfirst_greedy(model_list, germs_list, randomize=True,
                         nonAC_kwargs['germ_lengths'] = \
                             _np.array([len(germ) for germ in
                                        (goodGerms + [germs_list[candidateGermIdx]])])
+                        nonAC_kwargs['germ_list'] = goodGerms + [germs_list[candidateGermIdx]]
                         nonAC_kwargs['num_params']=Np
                         nonAC_kwargs['force_rank_increase']= force_rank_increase
                         
@@ -4294,11 +4298,12 @@ def compute_composite_germ_set_score_compactevd(current_update_cache, germ_updat
     return ret
 
 def compute_composite_germ_set_score_low_rank_trace(current_update_cache, germ_update, 
-                                                score_fn="all", threshold_ac=1e6, init_n=1, model=None,
+                                                 score_fn="all", threshold_ac=1e6, init_n=1, model=None,
                                                  partial_germs_list=None, eps=None, num_germs=None,
                                                  op_penalty=0.0, l1_penalty=0.0, num_nongauge_params=None,
                                                  num_params=None, force_rank_increase=False,
-                                                 germ_lengths=None, float_type=_np.cdouble):
+                                                 germ_lengths=None, float_type=_np.cdouble,
+                                                 gate_penalty=None, germ_list=None):
     """
     Compute the score for a germ set when it is not AC against a model.
 
@@ -4406,6 +4411,18 @@ def compute_composite_germ_set_score_low_rank_trace(current_update_cache, germ_u
     opScore = 0.0
     if op_penalty != 0.0:
         opScore = op_penalty * _np.sum(germ_lengths)
+
+    #add the gate penalties.
+    gate_score = 0.0
+    if gate_penalty is not None:
+        assert germ_list is not None
+        for gate, penalty_value in gate_penalty.items():
+            #loop through each ckt in the fiducial list.
+            for germ in germ_list:
+                #alternative approach using the string 
+                #representation of the ckt.
+                num_gate_instances= germ.str.count(gate)
+                gate_score += num_gate_instances*penalty_value
     
     #calculate the updated eigenvalues
     inverse_trace, updated_rank, rank_increase_flag = minamide_style_inverse_trace(germ_update, current_update_cache[0], current_update_cache[1], current_update_cache[2], force_rank_increase)
@@ -4420,7 +4437,7 @@ def compute_composite_germ_set_score_low_rank_trace(current_update_cache, germ_u
         N_AC = updated_rank
         
     # Apply penalties to the major score
-    major_score = -N_AC + opScore + l1Score
+    major_score = -N_AC + opScore + l1Score + gate_score
     minor_score = AC_score
     ret = _scoring.CompositeScore(major_score, minor_score, N_AC)
     
@@ -4429,7 +4446,7 @@ def compute_composite_germ_set_score_low_rank_trace(current_update_cache, germ_u
     
     return ret#, rank_increase_flag
 
-#Function for even faster kronecker products courtesy of stackexchange:
+#Function for even faster kronecker products courtesy of stackexchange:g
 def fast_kron(a,b):
     #Don't really understand the numpy tricks going on here,
     #But this does appear to work correctly in testing and
