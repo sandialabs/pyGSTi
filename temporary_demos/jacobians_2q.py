@@ -110,17 +110,28 @@ class Benchmarker:
         return times
 
 
-def demo_benchmarker_on_modelpack(gst_maxlen=32):
-    sims = [TorchForwardSimulator, MapForwardSimulator]
+def demo_benchmarker_on_modelpack(torch_use_gpu: bool, gst_maxlen=32):
+    sims = [TorchForwardSimulator(use_gpu=torch_use_gpu), MapForwardSimulator]
     mp = smq2Q_XYICNOT
     print()
-    print('-'*80)
     b = Benchmarker.from_modelpack(mp, sims, gst_maxlen)
     b.compare_dprob_times()
-    print('-'*80 + '\n')
     return
 
 if __name__ == '__main__':
-    
+    trials = 2
+
+    print('\n' + '*'*80)
+    print( ' '*30 + 'WITH GPU')
+    print('*'*80)
+    for i in range(trials):
+        demo_benchmarker_on_modelpack(True)
+
+    print('\n' + '*'*80)
+    print( ' '*30 + 'WITHOUT GPU')
+    print('*'*80)
+    for i in range(trials):
+        demo_benchmarker_on_modelpack(False)
+
 
     print(0)

@@ -33,6 +33,18 @@ try:
     import torch
     from torch.profiler import profile, record_function, ProfilerActivity
     TORCH_ENABLED = True
+
+    def todevice_kwargs():
+        if torch.cuda.device_count() > 0:
+            return {'dtype': torch.float64, 'device': 'cuda:0'}
+        elif torch.mps.device_count() > 0:
+            return {'dtype': torch.float32, 'device': 'mps:0'}
+        elif torch.xpu.device_count() > 0:
+            return {'dtype': torch.float64, 'device': 'xpu:0'}
+        else:
+            return {'dtype': torch.float64, 'device': -1}
+    DEVICE_KWARGS = todevice_kwargs()
+
 except ImportError:
     TORCH_ENABLED = False
     pass
@@ -72,7 +84,7 @@ class StatelessModel:
     the sophiciated machinery in TorchForwardSimulator's base class.
     """
 
-    def __init__(self, model: ExplicitOpModel, layout: CircuitOutcomeProbabilityArrayLayout):
+    def __init__(self, model: ExplicitOpModel, layout: CircuitOutcomeProbabilityArrayLayout, use_gpu: bool):
         circuits = []
         self.outcome_probs_dim = 0
         # TODO: Refactor this to use the bulk_expand_instruments_and_separate_povm codepath
@@ -85,6 +97,7 @@ class StatelessModel:
             circuits.append(c)
             self.outcome_probs_dim += c.outcome_probs_dim
         self.circuits = circuits
+        self.use_gpu = use_gpu
 
         # We need to verify assumptions on what layout.iter_unique_circuits() returns.
         # Looking at the implementation of that function, the assumptions can be
@@ -172,6 +185,9 @@ class StatelessModel:
 
             label, type_handle, stateless_data = self.param_metadata[i]
             param_t = type_handle.torch_base(stateless_data, val)
+            if self.use_gpu:
+                param_t = param_t.to(**DEVICE_KWARGS)
+                # ^ See https://docs.pytorch.org/docs/stable/generated/torch.Tensor.to.html
             torch_bases[label] = param_t
         
         return torch_bases
@@ -221,15 +237,16 @@ class TorchForwardSimulator(ForwardSimulator):
 
     ENABLED = TORCH_ENABLED
 
-    def __init__(self, model : Optional[ExplicitOpModel] = None):
+    def __init__(self, model : Optional[ExplicitOpModel] = None, use_gpu=True):
         if not self.ENABLED:
             raise RuntimeError('PyTorch could not be imported.')
         self.model = model
+        self.use_gpu = use_gpu
         super(ForwardSimulator, self).__init__(model)
 
     def _bulk_fill_probs(self, array_to_fill, layout, split_model = None) -> None:
         if split_model is None:
-            slm = StatelessModel(self.model, layout)
+            slm = StatelessModel(self.model, layout, self.use_gpu)
             free_params = slm.get_free_params(self.model)
             torch_bases = slm.get_torch_bases(free_params)
         else:
@@ -240,7 +257,7 @@ class TorchForwardSimulator(ForwardSimulator):
         return
 
     def _bulk_fill_dprobs(self, array_to_fill, layout, pr_array_to_fill) -> None:
-        slm = StatelessModel(self.model, layout)
+        slm = StatelessModel(self.model, layout, self.use_gpu)
         # ^ TODO: figure out how to safely recycle StatelessModel objects from one
         #   call to another. The current implementation is wasteful if we need to 
         #   compute many jacobians without structural changes to layout or self.model.
