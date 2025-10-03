@@ -2,14 +2,15 @@
 # Learn more at https://jupyterbook.org/customize/toc.html
 
 format: jb-book
-root: intro
+root: markdown/intro
 parts:
-- caption: Tutorials
+- caption: Getting Started
   chapters:
-  - file: markdown/intro2
-- caption: Examples
-  chapters:
-  - file: markdown/intro3
+  - file: markdown/overview/00-Protocols
+  - file: markdown/overview/01-Essential-Objects
+    sections:
+    - file: markdown/overview/02-Using-Essential-Objects
+  - file: markdown/overview/FAQ
 - caption: Developer API
   maxdepth: 1
   chapters:
