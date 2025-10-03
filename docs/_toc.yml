@@ -1,0 +1,16 @@
+# Table of contents
+# Learn more at https://jupyterbook.org/customize/toc.html
+
+format: jb-book
+root: intro
+parts:
+- caption: Tutorials
+  chapters:
+  - file: markdown/intro2
+- caption: Examples
+  chapters:
+  - file: markdown/intro3
+- caption: Developer API
+  maxdepth: 1
+  chapters:
+  - file: api.rst

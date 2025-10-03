@@ -65,6 +65,8 @@ jupyter_notebooks/Tutorials/tutorial_files/tempTest
 jupyter_notebooks/Tutorials/tutorial_files/*checkpoints
 jupyter_notebooks/Tutorials/objects/advanced/test_ibmq*
 jupyter_notebooks/Tutorials/tutorial_files/test_mirror_benchmark
+docs/_autosummary
+docs/_build
 
 
 

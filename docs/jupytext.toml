@@ -1,0 +1,3 @@
+[formats]
+"notebooks/" = "ipynb"
+"markdown/" = "md:myst"
