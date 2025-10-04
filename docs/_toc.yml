@@ -4,13 +4,42 @@
 format: jb-book
 root: markdown/intro
 parts:
-- caption: Getting Started
+- caption: Overview
   chapters:
   - file: markdown/overview/00-Protocols
   - file: markdown/overview/01-Essential-Objects
     sections:
     - file: markdown/overview/02-Using-Essential-Objects
   - file: markdown/overview/FAQ
+- caption: QCVV Protocols
+  chapters:
+  - file: markdown/gst/Overview
+    sections:
+    - file: markdown/gst/Protocols
+    - file: markdown/gst/CircuitConstruction
+      sections:
+      - file: markdown/gst/FiducialAndGermSelection
+      - file: markdown/gst/FiducialPairReduction
+    - file: markdown/gst/ContextDependence
+    - file: markdown/gst/QutritGST
+      sections:
+      - file: markdown/gst/Leakage-automagic
+      - file: markdown/gst/Leakage-manual
+    - file: markdown/gst/TimeDependent
+    - file: markdown/gst/2Q-CreatingModels
+      sections:
+      - file: markdown/gst/2Q-RunningIt
+      - file: markdown/gst/2Q-ErrorBars
+    - file: markdown/gst/MPI
+      sections: 
+      - file: markdown/gst/MPI-GermSelection
+      - file: markdown/gst/MPI-RunningGST
+    - file: markdown/gst/Legacy
+      sections:
+      - file: markdown/gst/Overview-functionbased
+      - file: markdown/gst/Driverfunctions
+      - file: markdown/gst/LowLevel
+  - file: markdown/rb/RB-Overview
 - caption: Developer API
   maxdepth: 1
   chapters:

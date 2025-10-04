@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Overview
+# pyGSTi
 Welcome! This notebook serves as a top-level "readme" document for pyGSTi.  It and the other notebooks in this directory describe and demonstrate how you can use the `pygsti` package to accomplish various tasks related to quantum characterization.  We'll start with a brief general introduction and then move on to specifics.
 
 ## What does pyGSTi do?
