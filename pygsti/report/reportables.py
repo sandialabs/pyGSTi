@@ -1600,11 +1600,17 @@ def eigenvalue_entanglement_infidelity(a, b, mx_basis):
     float
     """
     d2 = a.shape[0]
-    evA = _np.linalg.eigvals(a)
-    evB = _np.linalg.eigvals(b)
-    _, pairs = _tools.minweight_match(evA, evB, lambda x, y: abs(x - y),
+    evalsA, evecsA = _np.linalg.eig(a)
+    evalsB, evecsB = _np.linalg.eig(b)
+    """
+    IDEA: check if (a,b) are normal operators. If they are, then compute
+    proceed by computing a Schur decomposition to get orthonormal eigenbases.
+    From there, match them based on a dissimilarity kernel of abs(1 - <u,v>).
+    That could be used 
+    """
+    _, pairs = _tools.minweight_match(evalsA, evalsB, lambda x, y: abs(x - y),
                                       return_pairs=True)  # just to get pairing
-    mlPl = abs(_np.sum([_np.conjugate(evB[j]) * evA[i] for i, j in pairs]))
+    mlPl = abs(_np.sum([_np.conjugate(evalsB[j]) * evalsA[i] for i, j in pairs]))
     return 1.0 - mlPl / float(d2)
 
 
