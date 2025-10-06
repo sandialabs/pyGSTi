@@ -14,7 +14,7 @@ import numpy as _np
 
 from pygsti.baseobjs.opcalc import bulk_eval_compact_polynomials_complex as _bulk_eval_compact_polynomials_complex
 from pygsti.modelmembers import modelmember as _modelmember
-from pygsti.tools import optools as _ot
+from pygsti.tools import optools as _ot, matrixtools as _mt
 from pygsti import SpaceT
 
 from typing import Any
@@ -416,11 +416,14 @@ class LinearOperator(_modelmember.ModelMember):
         float
         """
         self_mx = self.to_dense("minimal")
+        other_mx = other_op.to_dense("minimal")
         if transform is not None:
             self_mx = self_mx @ transform
+            if isinstance(inv_transform, _mt.IdentityOperator):
+                other_mx = other_mx @ transform
         if inv_transform is not None:
             self_mx = inv_transform @ self_mx
-        return _ot.frobeniusdist_squared(self_mx, other_op.to_dense("minimal"))
+        return _ot.frobeniusdist_squared(self_mx, other_mx)
 
 
     def frobeniusdist(self, other_op, transform=None, inv_transform=None):
