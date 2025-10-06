@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Volumetric Benchmarks
+# Volumetric Benchmarking
 This tutorial demonstrates how to compute volumetric benchmarks in pyGSTi.  Volumetric benchmarks map a (*width*, *depth*) pair to a test suite of circuits with (at least approximately) the given width and depth, and define an overall success measure that lies between 0 and 1 (1 indicating better performance on the test suite).  Thus, by collecting the success measures for many (width, depth) pairs, one can explore, in addition to the overall processor performance, the tradeoff between a quantum processor's ability to perform deep vs. wide circuits.  For more information on the theory and motivation for volumetric benchmarks, see [this paper](https://arxiv.org/abs/1904.05546).
 
 We'll begin by importing pyGSTi as usual, and making `pp` a shorthand for `pygsti.protocols` since we'll be using it a lot.

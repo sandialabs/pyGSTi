@@ -13,7 +13,9 @@ kernelspec:
 
 +++ {"deletable": true, "editable": true}
 
-# $\star\star$ Currently in development.  This example doesn't work $\star\star$
+# Model Selection (alpha)
+
+```{warning} Currently in development.  This example doesn't work```
 Some parts of `pygsti` are works-in-progress. Here, we investigate how to do the task of "model selection" within GST, essentially answering the question "Can we do a better job of modeling the experiment by changing the assumptions within GST?".
 
 +++ {"deletable": true, "editable": true}

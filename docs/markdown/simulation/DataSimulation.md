@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Simulating data for circuits
+# Data Simulation
 "Data simulation" in pyGSTi refers generally to the computation of per-circuit quantities that are independent of any experimental data.  Typically the "data" that is simulated for each circuit is the circuit's sampled outcome probability distribution, resulting in simulated experimental data counts.  In this typical case, the "data" in "data simulation" refers specificially to "experimental data".
 
 This is not, however, necessarily the case.  Other types of per-circuit "data" that may be simulated are properties of a circuit, such as its width, depth, or ideal/expected outcome.  PyGSTi provides an extensible framework for computing arbitrary per-circuit quantities.  These can be based, if desired, on the circuit's outcome probabilities, the final state at the end of a circuit, or the process matrix representation of the circuit action.

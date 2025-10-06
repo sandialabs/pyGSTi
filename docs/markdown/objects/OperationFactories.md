@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Continuously parameterized gates
+# Continuously Parameterized Gates via `OpFactories`
 This tutorial demonstrates how gate labels can be given "arguments".  Let's get started by some usual imports:
 
 ```{code-cell} ipython3

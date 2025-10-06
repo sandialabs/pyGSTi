@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Mirror Randomized Benchmarking
+# Mirror RB
 
 +++
 

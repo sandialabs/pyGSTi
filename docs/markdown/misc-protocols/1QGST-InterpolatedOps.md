@@ -11,6 +11,8 @@ kernelspec:
   name: python3
 ---
 
+# 1Q Physical GST Example
+
 ```{code-cell} ipython3
 import numpy as np
 from matplotlib import pyplot as plt

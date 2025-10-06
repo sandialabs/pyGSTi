@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Randomized Benchmarking Overview
+# Randomized Benchmarking
 
 +++
 

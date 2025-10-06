@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# The `MultiDataSet` object: a dictionary of `DataSet`s
+# MultiDataSets
 
 Sometimes it is useful to deal with several sets of data all of which hold counts for the *same* set of operation sequences.  For example, colleting data to perform GST on Monday and then again on Tuesday, or making an adjustment to an experimental system and re-taking data, could create two separate data sets with the same sequences.  PyGSTi has a separate data type, `pygsti.objects.MultiDataSet`, for this purpose.  A `MultiDataSet` looks and acts like a simple dictionary of `DataSet` objects, but underneath implements some certain optimizations that reduce the amount of space and memory required to store the data.  Primarily, it holds just a *single* list of the circuits - as opposed to an actual dictionary of `DataSet`s in which each `DataSet` contains it's own copy of the circuits.  In addition to being more space efficient, a `MultiDataSet` is able to aggregate all of its data into a single "summed" `DataSet` via `get_datasets_aggregate(...)`, which can be useful for combining several "passes" of experimental data.  
 

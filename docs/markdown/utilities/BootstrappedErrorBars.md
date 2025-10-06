@@ -11,7 +11,7 @@ kernelspec:
   name: api_updates
 ---
 
-# An example showing how to generate bootstrapped error bars.
+# Bootstrapped Error Bars
 
 ```{code-cell} ipython3
 import os

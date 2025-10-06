@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Matrix Basis Tutorial
+# Basis
 
 Consider the space of density matrices corresponding to a Hilbert space $\mathcal{H}$ of dimension $d$.  The basis used for this Hilbert-Schmidt space, $B(\mathcal{H})$, can be any set of $d\times d$ matrices which span the density matrix space.  pyGSTi supports arbitrary bases by deriving from the `pygsti.tools.Basis` class, and constains built-in support for the following basis sets:
 

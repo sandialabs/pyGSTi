@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Tutorial on operators (SPAM, gate, and layer operations)
+# Operators
 
 This tutorial explains the objects that represent state preparation, measurement, gate, and layer operations in pyGSTi.  These objects form the essential components of `Model` objects in pyGSTi, and are therefore an important topic to understand if you're creating your own models or just need to know how to extract specific information from a `Model`.  We use the term *operator* generically all such objects, even when gate or layer operators act on vectorized density matrices and are therefore *super-operators*. 
 

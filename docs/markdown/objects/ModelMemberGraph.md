@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# ModelMemberGraph and Serialization
+# ModelMemberGraph (advanced)
 
 Example notebook of ModelMemberGraph functionality
 

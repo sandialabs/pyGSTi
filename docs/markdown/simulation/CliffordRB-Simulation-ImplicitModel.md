@@ -11,7 +11,7 @@ kernelspec:
   name: api_updates
 ---
 
-# Simulating Clifford randomized benchmarking using implicit models
+# Clifford RB w/ Implicit Model Simulation
 
 This tutorial demonstrates shows how to simulate Clifford RB sequences using $n$-qubit "implicit" models which build $n$-qubit process matrices from smaller building blocks.  This restricts the noise allowed in the $n$-qubit model; in this tutorial we take $n=3$ and use a `LocalNoiseModel`.
 

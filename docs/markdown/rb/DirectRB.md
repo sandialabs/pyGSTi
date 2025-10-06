@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Direct Randomized Benchmarking
+# Direct RB
 
 +++
 

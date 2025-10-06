@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Results Object Tutorial
+# Results
 This tutorial explains the structure and usage of the "model estimate results" objects (derived from `pygsti.protocols.ProtocolResults`).  These objects are returned from a `Protocol` object's `.run(...)` method and thus constitute the main way results are communicated back to the user in pyGSTi.  A `ProtocolResults` object is used to store results corresponding to a given *experiment design* and its accompanying data (packaged together into a `ProtocolData` object).  A result object's `.data` attribute holds the `ProtocolData` associated with it, and its `.protocol` attribute holds the `Protocol` that created the results. 
 
 

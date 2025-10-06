@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Simulating Clifford randomized benchmarking using a generic noise model
+# Clifford RB w/ Explicit Model Simulation
 
 This tutorial demonstrates shows how to simulate Clifford RB sequences using arbitrary $n$-qubit process matrices.  In this example $n=2$.
 

@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Binary Randomized Benchmarking
+# Binary RB
 
 +++
 

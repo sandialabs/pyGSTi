@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Circuit Tutorial
+# Circuits
 This tutorial will show you how to create and use `Circuit` objects, which represent (suprise, suprise) quantum circuits.  Noteable among their features is the ability to interface pyGSTi with other quantum circuit standards (e.g., conversion to [OpenQasm](https://arxiv.org/abs/1707.03429))
 
 First let's get the usual imports out of the way.

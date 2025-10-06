@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Tutorial on pyGSTi "model packs"
+# Model "Packs"
 
 PyGSTi comes shipped with a number of "model packs", each of which contains a small (few-qubit) noise model and related information.  This related information is typically *derived* from the base noise model, but it's computation is nontrivial or inconvenient.  The convenience of having meta-data packaged together with the base model is the sole reason for model packs in pyGSTi. 
 

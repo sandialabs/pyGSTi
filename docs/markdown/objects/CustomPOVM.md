@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Custom POVM Tutorial
+# Custom POVMs
 This tutorial will demonstrate how to encode custom POVMs -- such as two-qubit parity measurement into a pyGSTi model -- rather than the standard Z measurement in the computational basis.
 
 ```{code-cell} ipython3

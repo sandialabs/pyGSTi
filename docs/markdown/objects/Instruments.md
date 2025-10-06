@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Instruments and Intermediate Measurements Tutorial
+# Instruments and Intermediate Measurements
 This tutorial will demonstrate how perform tomography on models which, in addition to normal gates, contain *quantum instruments*.  Quantum instruments are maps that act on a qubit state (density matrix) and produce a qubit state along with a classical outcome.  That is, instruments are maps from $\mathcal{B}(\mathcal{H})$, the space of density matrices, to $\mathcal{B}(\mathcal{H}) \otimes K(n)$, where $K(n)$ is a classical space of $n$ elements.
 
 In pyGSTi, instruments are represented as collections of gates, one for each classical "outcome" of the instrument.  This tutorial will demonstrate how to add instruments to `Model` objects, compute probabilities using such `Model`s, and ultimately perform tomography on them.  We'll start with a few familiar imports:

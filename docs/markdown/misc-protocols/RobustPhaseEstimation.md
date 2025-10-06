@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Robust Phase Estimation (RPE) Tutorial
+# Robust Phase Estimation
 This notebook demonstrates how to use Robust Phase Estimation (RPE) to estimate certain parameters of a standard single-qubit model.  The RPE protocol is contained within the `extras` package of pyGSTi.
 
 ```{code-cell} ipython3

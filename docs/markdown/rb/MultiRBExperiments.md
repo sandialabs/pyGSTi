@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Running Multiple Randomized Benchmarking Experiments
+# Simultaneous RB
 
 +++
 

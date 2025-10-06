@@ -10,37 +10,143 @@ parts:
   - file: markdown/overview/01-Essential-Objects
     sections:
     - file: markdown/overview/02-Using-Essential-Objects
-  - file: markdown/overview/FAQ
-- caption: QCVV Protocols
+
+- caption: User Guide
   chapters:
-  - file: markdown/gst/Overview
+  - file: markdown/Protocols
     sections:
-    - file: markdown/gst/Protocols
-    - file: markdown/gst/CircuitConstruction
+    - file: markdown/gst/Overview
       sections:
-      - file: markdown/gst/FiducialAndGermSelection
-      - file: markdown/gst/FiducialPairReduction
-    - file: markdown/gst/ContextDependence
-    - file: markdown/gst/QutritGST
+      - file: markdown/gst/Protocols
+      - file: markdown/gst/CircuitConstruction
+        sections:
+        - file: markdown/gst/FiducialAndGermSelection
+        - file: markdown/gst/FiducialPairReduction
+      - file: markdown/gst/ContextDependence
+      - file: markdown/gst/QutritGST
+        sections:
+        - file: markdown/gst/Leakage-automagic
+        - file: markdown/gst/Leakage-manual
+      - file: markdown/gst/TimeDependent
+      - file: markdown/gst/2Q-CreatingModels
+        sections:
+        - file: markdown/gst/2Q-RunningIt
+        - file: markdown/gst/2Q-ErrorBars
+      - file: markdown/gst/MPI
+        sections: 
+        - file: markdown/gst/MPI-GermSelection
+        - file: markdown/gst/MPI-RunningGST
+      - file: markdown/gst/Legacy
+        sections:
+        - file: markdown/gst/Overview-functionbased
+        - file: markdown/gst/Driverfunctions
+        - file: markdown/gst/LowLevel
+    - file: markdown/misc-protocols/InterpolatedOperators
       sections:
-      - file: markdown/gst/Leakage-automagic
-      - file: markdown/gst/Leakage-manual
-    - file: markdown/gst/TimeDependent
-    - file: markdown/gst/2Q-CreatingModels
+      - file: markdown/misc-protocols/1QGST-InterpolatedOps
+    - file: markdown/misc-protocols/IdleTomography
+    - file: markdown/misc-protocols/DriftCharacterization
+    - file: markdown/misc-protocols/RobustPhaseEstimation
+    - file: markdown/rb/Overview
       sections:
-      - file: markdown/gst/2Q-RunningIt
-      - file: markdown/gst/2Q-ErrorBars
-    - file: markdown/gst/MPI
-      sections: 
-      - file: markdown/gst/MPI-GermSelection
-      - file: markdown/gst/MPI-RunningGST
-    - file: markdown/gst/Legacy
+      - file: markdown/rb/CliffordRB
+      - file: markdown/rb/DirectRB
+      - file: markdown/rb/MirrorRB
+        sections:
+        - file: markdown/rb/MirrorRB-Universal-Gate-Sets
+      - file: markdown/rb/Samplers
+      - file: markdown/rb/MultiRBExperiments
+      - file: markdown/rb/BinaryRB
+    - file: markdown/misc-protocols/VolumetricBenchmarks
       sections:
-      - file: markdown/gst/Overview-functionbased
-      - file: markdown/gst/Driverfunctions
-      - file: markdown/gst/LowLevel
-  - file: markdown/rb/RB-Overview
-- caption: Developer API
+      - file: markdown/misc-protocols/MirrorCircuitBenchmarks
+      - file: markdown/misc-protocols/MCFE-Example
+    - file: markdown/misc-protocols/ParityBenchmarking
+  
+  - file: markdown/Objects
+    sections:
+    - file: markdown/objects/MatrixBases
+    - file: markdown/objects/Circuit
+      sections:
+      - file: markdown/objects/CircuitLists
+    - file: markdown/objects/DataSet
+      sections:
+      - file: markdown/objects/MultiDataSet
+      - file: markdown/objects/TimestampedDataSets
+    - file: markdown/objects/ExperimentDesign
+    - file: markdown/objects/Models
+      sections:
+      - file: markdown/objects/ExplicitModel
+      - file: markdown/objects/ImplicitModel
+      - file: markdown/objects/StateSpace
+      - file: markdown/objects/ModelParameterization
+      - file: markdown/objects/ModelNoise
+      - file: markdown/objects/ParameterBounds
+      - file: markdown/objects/ParameterLabels
+      - file: markdown/objects/ModelMemberGraph
+    - file: markdown/objects/ModelPacks
+    - file: markdown/objects/Operators
+      sections:
+      - file: markdown/objects/CustomOperator
+      - file: markdown/objects/CustomPOVM
+      - file: markdown/objects/Instruments
+      - file: markdown/objects/OperationFactories
+    - file: markdown/objects/ProcessorSpec
+    - file: markdown/objects/Results
+  
+  - file: markdown/Utilities
+    sections:
+    - file: markdown/utilities/DatasetComparison
+    - file: markdown/utilities/ErrorBars
+      sections:
+      - file: markdown/utilities/BootstrappedErrorBars
+      - file: markdown/utilities/ProceduralErrorBars
+    - file: markdown/utilities/FisherInformation
+    - file: markdown/utilities/GaugeOpt
+      sections:
+      - file: markdown/utilities/GOpt-AddingNewOptimizations
+      - file: markdown/utilities/GOpt-NonIdealTargets
+    - file: markdown/utilities/Metrics
+      sections:
+      - file: markdown/utilities/ModelAnalysisMetrics
+    - file: markdown/utilities/ModelTesting
+      sections:
+      - file: markdown/utilities/ModelTesting-functions
+    - file: markdown/utilities/Model-Selection
+  
+  - file: markdown/Simulation
+    sections:
+    - file: markdown/simulation/CircuitSimulation
+      sections:
+      - file: markdown/simulation/CliffordRB-Simulation-ExplicitModel
+      - file: markdown/simulation/CliffordRB-Simulation-ImplicitModel
+      - file: markdown/simulation/CircuitSimulation-CHP
+    - file: markdown/simulation/DataSimulation
+    - file: markdown/simulation/ErrorGeneratorPropagation
+    - file: markdown/simulation/ForwardSimulationTypes
+  
+  - file: markdown/Interfaces
+    sections:
+    - file: markdown/interfaces/FileIO
+    - file: markdown/interfaces/CirqIntegration
+    - file: markdown/interfaces/IBMQExperiment
+  
+  - file: markdown/Reporting
+    sections:
+    - file: markdown/reporting/ReportGeneration
+      sections:
+      - file: markdown/reporting/Reports-LGSTonly
+    - file: markdown/reporting/Workspace
+      sections:
+      - file: markdown/reporting/WorkspaceSwitchboards
+      - file: markdown/reporting/WorkspaceExamples
+
+- caption: Developer Zone
   maxdepth: 1
   chapters:
   - file: api.rst
+
+- caption: Reference
+  chapters:
+  - file: markdown/FAQ
+  - file: markdown/Citing

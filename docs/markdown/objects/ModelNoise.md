@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Adding noise to models
+# Model Noise
 This tutorial covers how various kinds of noise (errors) can be added to a model's operations.  The procedure for specifying the noise is similar for the different types of models, though the types of noise allowed and how this noise is incorporated into the model's structure differ as we point out below.
 
 ```{code-cell} ipython3

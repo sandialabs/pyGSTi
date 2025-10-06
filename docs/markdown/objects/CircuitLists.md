@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Circuit Lists Tutorial
+# Circuit Lists
 This tutorial will show you how to create lists of `Circuit` objects.  In some cases, we'll want to construct and use a list (or even a list of lists!) of `Circuit`s, so we've dedicated this tutorial to talking about "circuit lists".
 We utilize the fact that `Circuit` objects behave and compose as tuples of layer-labels (see the [Circuit tutorial](../Circuit.ipynb)).
 

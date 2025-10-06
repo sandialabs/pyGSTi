@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Mirror Randomized Benchmarking with Universal Gate Sets
+# MRB with Universal Gate Sets
 
 +++
 

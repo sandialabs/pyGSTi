@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Explicit Models Tutorial
+# Explicit Models
 This tutorial will show you how to create and use `ExplicitOpModel` objects.  `Model` objects are fundamental to pyGSTi, as each represents a set of quantum gates along with state preparation and measurement (i.e. POVM) operations.  In pyGSTi, a "state space" refers to a Hilbert space of *pure* quantum states (often thought of as length-$d$ vectors, where $d=2^N$ for $N$ qubits). A "density matrix space" refers to a Hilbert space of density matrices, which while often thought of as $d \times d$ matrices can also be represented by length $d^2$ vectors.  Mathematically, these vectors live in Hilbert-Schmidt space, the space of linear operators on the original $d\times d$ density matrix space.  pyGSTi uses the "Liouville" vector-representation for density matrices and POVM effects, since this allows quantum gates to be represented by $d^2 \times d^2$ matrices which act on Hilbert-Schmidt vectors.
 
 `ExplicitOpModel` objects are the simplest type of `Model` objects in pyGSTi.  They have the look and feel of Python dictionaries which hold $d^2\times d^2$ operation matrices, length-$d^2$ state preparation vectors, and sets of length-$d^2$ effect vectors which encode positive operator value measures (POVMs).  State preparation and POVM effect vectors are both generically referred to as "SPAM" (state preparation and measurement) vectors. 

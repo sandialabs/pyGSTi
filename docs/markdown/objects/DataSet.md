@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Data Sets Tutorial
+# Data Sets
 This tutorial demonstrates how to create and use `DataSet` objects.  PyGSTi uses `DataSet` objects to hold experimental or simulated data in the form of outcome counts.  When a `DataSet` is used to hold time-independent data (the typical case, and all we'll look at in this tutorial), it essentially looks like a nested dictionary which associates operation sequences with dictionaries of (outcome-label,count) pairs so that `dataset[circuit][outcomeLabel]` can be used to read & write the number of `outcomeLabel` outcomes of the experiment given by the circuit `circuit`.
 
 There are a few important differences between a `DataSet` and a dictionary-of-dictionaries:

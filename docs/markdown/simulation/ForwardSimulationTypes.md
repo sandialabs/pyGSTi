@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Quantum state propagation in pyGSTi
+# Simulation Types (advanced)
 The ability prepare, propagate, and measure quantum states in simulations is a core capability of pyGSTi.  We call the calculation of circuit outcome probabilities *forward simulation*, and this type of calculation lies at the heart of Gate Set Tomography and other characterization protocols which need to compare a model's predictions with actual data.  As you're probably already encountered through other tutorials, `Model` objects have a `.probabilities(circuit)` method that performs forward simulation (computes the outcome probabilities of `circuit`).  
 
 What is not so apparent is that there can be several different types of computational "engines" under the hood of a `Model` that do the heavy lifting within a call to `probs`.  **Understanding the different types of forward simulation engines in pyGSTi is the topic of this tutorial.**

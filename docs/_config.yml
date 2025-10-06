@@ -30,6 +30,7 @@ repository:
 html:
   use_issues_button: true
   use_repository_button: true
+  home_page_in_navbar: false
 
 # Sphinx options
 sphinx:

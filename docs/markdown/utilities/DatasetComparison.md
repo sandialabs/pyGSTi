@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Pure Data Analysis
+# Data-Only Analysis
 
 This tutorial covers different methods of analysing data *without* running GST.  So far, there's only one, which checks for consistency between two (or more) datasets, called "Data Set Comparison".
 

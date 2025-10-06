@@ -11,8 +11,8 @@ kernelspec:
   name: python3
 ---
 
-# Demo of benchmarking a 4-qubit parity check
-This notebook demonstrates how to compute the "weight-X disturbance" error metric between a *reference* and *test* data set using pyGSTi.
+# Parity Benchmarking
+This notebook demonstrates how to compute the "weight-X disturbance" error metric between a *reference* and *test* data set using pyGSTi to benchmark a 4-qubit parity check.
 
 ```{code-cell} ipython3
 import numpy as np

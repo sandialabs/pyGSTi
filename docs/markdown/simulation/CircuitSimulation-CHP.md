@@ -11,9 +11,9 @@ kernelspec:
   name: python3
 ---
 
-# PyGSTi CHP Object Test
+# CHP Interface (legacy)
 
-<font color='red'>This notebook is under construction and will have more description in the near future.</font>
+```{warning} This notebook is under construction and will have more description in the near future.```
 
 ```{code-cell} ipython3
 from __future__ import print_function #python 2 & 3 compatibility

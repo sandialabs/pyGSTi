@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# How to create gates from physical processes
+# Physical Process GST
 This tutorial shows how to use the `InterpolatedDenseOp` and `InterpolatedOpFactory` to create quick-to-evaluate operations by interpolating between the discrete points at quick a more computationally-intensive process is performed.  Often the computationally intensive process simulates the physics of a qubit gate, and would not practially work as a custom model operation because of the time required to evaluate it.
 
 In order to turn such physical processes into gates, you should implement a custom `PhysicalProcess` object and then use the `InterpolatedDenseOp` or `InterpolatedOpFactory` class to interpolate the values of the custom process on a set of pre-defined points.  All the physics simulation is then done at the time of creating the interpolated operation (or factory), after which the object can be saved for later use.  An `InterpolatedDenseOp` or `InterpolatedOpFactory` object can be evaluated at any parameter-space point within the ranges over which the initial interpolation was performed.

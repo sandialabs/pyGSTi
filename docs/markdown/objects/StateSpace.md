@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# State space labelling in pyGSTi
+# State Space Labeling
 
 Instances of `pygsti.baseobjs.StateSpace` describe the structure of a model's state space and associate labels with the parts of that structure.  This is particularly useful when dealing with multiple qubits or a qubit and its environment, as it can be useful to reference subspaces or subsystems of the entire quantum state space.
 

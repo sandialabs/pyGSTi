@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Clifford Randomized Benchmarking
+# Clifford RB
 
 +++
 

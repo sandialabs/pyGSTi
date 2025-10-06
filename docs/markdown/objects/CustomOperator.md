@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Tutorial on creating a custom operator (e.g. gate)
+# Custom Operators (e.g. Gates)
 
 This tutorial demonstrates the process of creating your own gate operation.  One can view gate (or layer) operations in pyGSTi as simply parameterized process matrices: a mapping that associates with any given set of parameter values a process matrix.  This mapping is encapsulated by a `LinearOperator`-derived class in pyGSTi, and in addition to using the ones included with pyGSTi (e.g. `FullArbitraryOp`, see the [Operator tutorial](Operators.ipynb) for more examples) you're free to make your own.  That's exactly what we'll be doing here.
 

@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Gauge Optimization Tutorial
+# Gauge Optimization
 
 This tutorial is about gauge optimization.  First, we'll explain what gauge optimization is, then we'll demonstrate how pyGSTi can used to perform it.
 

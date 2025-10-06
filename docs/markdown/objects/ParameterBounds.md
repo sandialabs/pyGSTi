@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Placing bounds on model parameters
+# Parameter Bounds
 This tutorial shows how to place simple bounds on the values of a model's parameters.  This can be especially useful when building your own objects (see the [custom operator tutorial](CustomOperator.ipynb)) that might have restrictions on their allowed parameters.
 
 First, we construct a model.  It doesn't really matter what type of model this is, as the procedure we outline below is the same regardless of the model type.  We choose to create a simple 1-qubit model.
