@@ -31,7 +31,6 @@ from pygsti.forwardsims.forwardsim import ForwardSimulator
 
 try:
     import torch
-    from torch.profiler import profile, record_function, ProfilerActivity
     TORCH_ENABLED = True
 
     def todevice_kwargs():
@@ -120,7 +119,10 @@ class StatelessModel:
         for lbl, obj in model._iter_parameterized_objs():
             assert isinstance(obj, Torchable), f"{type(obj)} does not subclass {Torchable}."
             param_type = type(obj)
-            param_data = (lbl, param_type) + (obj.stateless_data(),)
+            sld = obj.stateless_data()
+            if self.use_gpu:
+                sld = tuple((i.to(**DEVICE_KWARGS) if isinstance(i, torch.Tensor) else i) for i in sld)
+            param_data = (lbl, param_type) + (sld,)
             self.param_metadata.append(param_data)
 
         self.params_dim = []
@@ -159,6 +161,8 @@ class StatelessModel:
                 call to get_torch_bases would silently fail, so we're forced to raise an error here.
                 """
                 raise ValueError(message)
+            if self.use_gpu:
+                vec = vec.to(**DEVICE_KWARGS)
             free_params.append(vec)
             free_param_sizes.append(vec_size)
         self.free_param_sizes = free_param_sizes
@@ -185,9 +189,6 @@ class StatelessModel:
 
             label, type_handle, stateless_data = self.param_metadata[i]
             param_t = type_handle.torch_base(stateless_data, val)
-            if self.use_gpu:
-                param_t = param_t.to(**DEVICE_KWARGS)
-                # ^ See https://docs.pytorch.org/docs/stable/generated/torch.Tensor.to.html
             torch_bases[label] = param_t
         
         return torch_bases
@@ -278,6 +279,9 @@ class TorchForwardSimulator(ForwardSimulator):
         #   have a need to override the default in the future then we'd need to override
         #   the ForwardSimulator function(s) that call self._bulk_fill_dprobs(...).
 
+        # if self.use_gpu:
+        #     J_func = make_fx(J_func, tracing_mode='fake')
+            # ^ see https://github.com/pytorch/pytorch/issues/152701#issuecomment-2847838362
         J_val = J_func(*free_params)
         J_val = torch.column_stack(J_val)
         array_to_fill[:] = J_val.cpu().detach().numpy()
