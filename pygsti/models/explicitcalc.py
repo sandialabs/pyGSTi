@@ -172,6 +172,7 @@ class ExplicitOpModelCalc(object):
         if item_weights is None: item_weights = {}
         opWeight = item_weights.get('gates', 1.0)
         spamWeight = item_weights.get('spam', 1.0)
+        prepWeight = item_weights.get('prep', spamWeight)
 
         for opLabel, gate in self.operations.items():
             wt = item_weights.get(opLabel, opWeight)
@@ -179,7 +180,7 @@ class ExplicitOpModelCalc(object):
             nSummands += wt * (gate.dim)**2
 
         for lbl, rhoV in self.preps.items():
-            wt = item_weights.get(lbl, spamWeight)
+            wt = item_weights.get(lbl, prepWeight)
             d += wt * rhoV.frobeniusdist_squared(other_calc.preps[lbl], P, invP)
             nSummands += wt * rhoV.dim
 
