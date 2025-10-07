@@ -2224,11 +2224,10 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options,
                     #corresponding to the elements of gaugeopt_labels. In this case let's  make
                     #base_estimate.extra_parameters['wildcard1d' + "_unmodeled_error"] a dictionary of
                     #the serialized PrimitiveOpsSingleScaleWildcardBudget elements
-                    if gaugeopt_suite is not None and gaugeopt_suite.gaugeopt_suite_names is not None:
-                        gaugeopt_labels = gaugeopt_suite.gaugeopt_suite_names
+                    if gaugeopt_suite is not None:
+                        gaugeopt_labels = budget.keys()
                         base_estimate.extra_parameters['wildcard1d' + "_unmodeled_error"] = {lbl: budget[lbl].to_nice_serialization() for lbl in gaugeopt_labels} 
-                        base_estimate.extra_parameters['wildcard1d' + "_unmodeled_active_constraints"] \
-                            = None
+                        base_estimate.extra_parameters['wildcard1d' + "_unmodeled_active_constraints"] = None
 
                         base_estimate.extra_parameters["unmodeled_error"] = {lbl: budget[lbl].to_nice_serialization() for lbl in gaugeopt_labels}
                         base_estimate.extra_parameters["unmodeled_active_constraints"] = None
@@ -2289,7 +2288,7 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options,
                     gauge_opt_params.copy(), go_gs_final, gokey, comm, printer - 1)
 
 
-def _compute_wildcard_budget_1d_model(estimate, mdc_objfn, verbosity, gaugeopt_suite=None):
+def _compute_wildcard_budget_1d_model(estimate, mdc_objfn, verbosity, gaugeopt_suite):
     """
     Create a wildcard budget for a model estimate. This version of the function produces a wildcard estimate
     using the model introduced in https://doi.org/10.1038/s41534-023-00764-y.
@@ -2341,15 +2340,20 @@ def _compute_wildcard_budget_1d_model(estimate, mdc_objfn, verbosity, gaugeopt_s
     two_dlogl_threshold = _chi2.ppf(1 - percentile, max(ds_dof - nparams, 1))
     redbox_threshold = _chi2.ppf(1 - percentile / nboxes, 1)
 
-    # Getting the target model is a little annoying.
-    target = getattr(gaugeopt_suite, 'gaugeopt_target', None)
+    target = gaugeopt_suite.gaugeopt_target
     if target is None:
         target = estimate.models['target']
 
     # Getting the dict of gauge-optimized models is very annoying.
-    gop_names = getattr(gaugeopt_suite, 'gaugeopt_suite_names', None)
+    if gaugeopt_suite.gaugeopt_argument_dicts is None:
+        gaugeopt_suite.gaugeopt_argument_dicts = dict()
+        # ^ We make that assignment because _compute_1d_reference_values_and_name
+        #   shouldn't have to include reassign.
+    gop_dicts = gaugeopt_suite.gaugeopt_argument_dicts
+    gop_names = gaugeopt_suite.gaugeopt_suite_names
     if gop_names is None:
-        gop_names = ['stdgaugeopt'] if 'stdgaugeopt' in estimate.models else []
+        gop_names = [gn for gn in gop_dicts if gn in estimate.models]
+
     goped_models = {lbl: estimate.models[lbl] for lbl in gop_names}
     if len(goped_models) == 0:
         final_iter_model = estimate.models['final iteration estimate']
@@ -2360,7 +2364,7 @@ def _compute_wildcard_budget_1d_model(estimate, mdc_objfn, verbosity, gaugeopt_s
             goped_models['no gaugeopt'] = final_iter_model
 
     from pygsti.baseobjs.label import Label
-    ref : dict[str,dict[Label, float]] = _compute_1d_reference_values_and_name(target, goped_models)
+    ref : dict[str,dict[Label, float]] = _compute_1d_reference_values_and_name(target, goped_models, gaugeopt_suite)
     reference_name = 'diamond distance'
 
     gaugeopt_labels = list(ref.keys())
@@ -2378,7 +2382,7 @@ def _compute_wildcard_budget_1d_model(estimate, mdc_objfn, verbosity, gaugeopt_s
     return wcm
 
 
-def _compute_1d_reference_values_and_name(target_model, gopped_models):
+def _compute_1d_reference_values_and_name(target_model, gopped_models, gaugeopt_suite):
     """
     Compute the reference values the 1D wildcard budget.
 
@@ -2416,20 +2420,41 @@ def _compute_1d_reference_values_and_name(target_model, gopped_models):
 
     target_ops, target_preps, target_povms, target_insts = _memberdicts(target_model)
 
-    dd = {lbl: {} for lbl in gopped_models}
+    dd = {lbl: dict() for lbl in gopped_models}
     for lbl, gaugeopt_model in gopped_models.items():
 
+        argdicts = gaugeopt_suite.gaugeopt_argument_dicts.get(lbl, dict())
+        n_leak = 0
+        if isinstance(argdicts, list) and len(argdicts) > 0:
+            n_leak = argdicts[-1].get('n_leak', n_leak)
+
+        if n_leak > 0:
+            dim = gaugeopt_model.basis.state_space.udim
+            assert n_leak == 1
+            assert dim == 3
+            B = _tools.leading_dxd_submatrix_basis_vectors(2, 3, gaugeopt_model.basis)
+            P = B @ B.T.conj()
+            if _np.linalg.norm(P.imag) > 1e-12:
+                msg  = f"Attempting to run leakage-aware gauge optimization with basis {gaugeopt_model.basis}\n"
+                msg +=  "is resulting an orthogonal projector onto the computational subspace that\n"
+                msg +=  "is not real-valued. Try again with a different basis, like 'l2p1' or 'gm'."
+                raise ValueError(msg)
+            P = P.real
+        else:
+            P = _tools.matrixtools.IdentityOperator()
+
         ops, preps, _, insts = _memberdicts(gaugeopt_model)
+        mx_basis = gaugeopt_model.basis
 
         for key, op in ops.items():
-            dd[lbl][key] = 0.5 * _tools.diamonddist(op.to_dense(), target_ops[key].to_dense()) # type: ignore
+            dd[lbl][key] : float = 0.5 * _tools.diamonddist(op.to_dense() @ P, target_ops[key].to_dense() @ P, mx_basis=mx_basis) # type: ignore
             if dd[lbl][key] < 0:  # indicates that diamonddist failed (cvxpy failure)
                 _warnings.warn(("Diamond distance failed to compute %s reference value for 1D wildcard budget!"
                                 " Falling back to trace distance.") % str(key))
                 dd[lbl][key] = _tools.jtracedist(op.to_dense(), target_ops[key].to_dense())
         
         for key, op in insts.items():
-            inst_dd = 0.5* _tools.instrument_diamonddist(op, target_insts[key]) # type: ignore
+            inst_dd : float = 0.5* _tools.instrument_diamonddist(op, target_insts[key], mx_basis=mx_basis) # type: ignore
             if inst_dd < 0: # indicates that instrument_diamonddist failed
                 _warnings.warn(("Diamond distance failed to compute %s reference value for 1D wildcard budget!"
                                 "No fallback presently available for instruments, so skipping.") % str(key))
@@ -2438,8 +2463,8 @@ def _compute_1d_reference_values_and_name(target_model, gopped_models):
 
         spamdd = {}
         for key, op in preps.items():
-            rho1 = _tools.vec_to_stdmx(op.to_dense(), 'pp')
-            rho2 = _tools.vec_to_stdmx(target_preps[key].to_dense(), 'pp')
+            rho1 = _tools.vec_to_stdmx(op.to_dense(), basis=mx_basis)
+            rho2 = _tools.vec_to_stdmx(target_preps[key].to_dense(), basis=mx_basis)
             spamdd[key] = _tools.tracedist(rho1, rho2)
 
         for key in target_povms:
@@ -3225,6 +3250,11 @@ def _add_param_preserving_gauge_opt(results: ModelEstimateResults, est_key: str,
             ggel = gop_dictorlist['_gaugeGroupEl']
         model_implicit_gauge = transform_composed_model(est.models['final iteration estimate'], ggel)
         est.models[gop_name] = model_implicit_gauge
+    protocol = est.parameters['protocol']
+    badfit_options = protocol.badfit_options
+    optimizer = protocol.optimizer
+    resource_alloc = _baseobjs.resourceallocation.ResourceAllocation()
+    _add_badfit_estimates(results, est_key, badfit_options, optimizer, resource_alloc, verbosity, gaugeopt_suite=gop_params)
     return
 
 
