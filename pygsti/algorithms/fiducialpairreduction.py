@@ -2147,10 +2147,16 @@ def compute_jacobian_dicts(model, germs, prep_fiducials, meas_fiducials, prep_po
 def _set_up_prep_POVM_tuples(target_model, prep_povm_tuples, return_meas_dofs= False):
 
     if prep_povm_tuples == "first":
-        firstRho = list(target_model.preps.keys())[0]
-        prep_ssl = [target_model.preps[firstRho].state_space.state_space_labels]
-        firstPOVM = list(target_model.povms.keys())[0]
-        POVM_ssl = [target_model.povms[firstPOVM].state_space.state_space_labels]
+        try:
+            firstRho = list(target_model.preps.keys())[0]
+            prep_ssl = [target_model.preps[firstRho].state_space.state_space_labels]
+            firstPOVM = list(target_model.povms.keys())[0]
+            POVM_ssl = [target_model.povms[firstPOVM].state_space.state_space_labels]
+        except AttributeError:
+            firstRho = list(target_model.prep_blks['layers'].keys())[0]
+            prep_ssl = [target_model.prep_blks['layers'][firstRho].state_space.state_space_labels]
+            firstPOVM = list(target_model.povm_blks['layers'].keys())[0]
+            POVM_ssl = [target_model.povm_blks['layers'][firstPOVM].state_space.state_space_labels]
         prep_povm_tuples = [(firstRho, firstPOVM)]
         #I think using the state space labels for firstRho and firstPOVM as the
         #circuit labels should work most of the time (new stricter line_label enforcement means
@@ -2160,11 +2166,18 @@ def _set_up_prep_POVM_tuples(target_model, prep_povm_tuples, return_meas_dofs= F
     #if not we still need to extract state space labels for all of these to meet new circuit
     #label handling requirements.
     else:
-        prep_ssl = [target_model.preps[lbl_tup[0]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
-        POVM_ssl = [target_model.povms[lbl_tup[1]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
+        try:
+            prep_ssl = [target_model.preps[lbl_tup[0]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
+            POVM_ssl = [target_model.povms[lbl_tup[1]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
+        except AttributeError:
+            prep_ssl = [target_model.prep_blks['layers'][lbl_tup[0]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
+            POVM_ssl = [target_model.povm_blks['layers'][lbl_tup[1]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
 
     #brief intercession to calculate the number of degrees of freedom for the povm.
-    num_effects= len(list(target_model.povms[prep_povm_tuples[0][1]].keys()))
+    try:
+        num_effects= len(list(target_model.povms[prep_povm_tuples[0][1]].keys()))
+    except AttributeError:
+        num_effects= len(list(target_model.povm_blks['layers'][prep_povm_tuples[0][1]].keys()))
     dof_per_povm= num_effects-1
 
     prep_povm_tuples = [(_circuits.Circuit([prepLbl], line_labels=prep_ssl[i]), 
