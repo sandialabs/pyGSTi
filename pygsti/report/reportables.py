@@ -1600,17 +1600,23 @@ def eigenvalue_entanglement_infidelity(a, b, mx_basis):
     float
     """
     d2 = a.shape[0]
-    evalsA, evecsA = _np.linalg.eig(a)
-    evalsB, evecsB = _np.linalg.eig(b)
+    evA = _np.linalg.eigvals(a)
+    evB = _np.linalg.eigvals(b)
     """
-    IDEA: check if (a,b) are normal operators. If they are, then compute
-    proceed by computing a Schur decomposition to get orthonormal eigenbases.
-    From there, match them based on a dissimilarity kernel of abs(1 - <u,v>).
-    That could be used 
+    IDEA: check if (a,b) are normal operators. If they are, then proceed by
+    computing a Schur decomposition to get orthonormal eigenbases. From there,
+    match them based on a dissimilarity kernel of abs(1 - <u,v>), rather than
+    the dissimilarity kernel abs(ev_a - ev_b).
+    
+    This would introduce some gauge dependence to eigenvalue entanglement
+    fidelity. However, there's already ambiguity in the definition of this
+    metric since it requires an ordering of the eigenvalues. It just so
+    happens that this function's current implementation chooses the ordering
+    in a gauge-invariant way.
     """
-    _, pairs = _tools.minweight_match(evalsA, evalsB, lambda x, y: abs(x - y),
+    _, pairs = _tools.minweight_match(evA, evB, lambda x, y: abs(x - y),
                                       return_pairs=True)  # just to get pairing
-    mlPl = abs(_np.sum([_np.conjugate(evalsB[j]) * evalsA[i] for i, j in pairs]))
+    mlPl = abs(_np.sum([_np.conjugate(evB[j]) * evA[i] for i, j in pairs]))
     return 1.0 - mlPl / float(d2)
 
 
