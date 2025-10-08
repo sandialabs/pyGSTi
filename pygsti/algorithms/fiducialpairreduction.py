@@ -24,7 +24,9 @@ from pygsti import baseobjs as _baseobjs
 from pygsti import circuits as _circuits
 
 from pygsti.circuits import circuitconstruction as _gsc
+from pygsti.models import ExplicitOpModel as _ExplicitOpModel
 from pygsti.modelmembers.operations import EigenvalueParamDenseOp as _EigenvalueParamDenseOp
+from pygsti.modelmembers.povms import convert as _convert_povm
 from pygsti.tools import remove_duplicates as _remove_duplicates
 from pygsti.tools import slicetools as _slct
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
@@ -428,8 +430,7 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
             #Create a new model containing static target gates and a
             # special "germ" gate that is parameterized only by it's
             # eigenvalues (and relevant off-diagonal elements)
-            gsGerm = target_model.copy()
-            gsGerm.set_all_parameterizations("static")
+            gsGerm = _copy_to_static_explicitop_model(target_model)
             germMx = gsGerm.sim.product(germ)
             #give this state space labels equal to the line_labels of 
             gsGerm.operations['Ggerm'] = _EigenvalueParamDenseOp(
@@ -628,8 +629,7 @@ def find_sufficient_fiducial_pairs_per_germ_greedy(target_model, prep_fiducials,
             #Create a new model containing static target gates and a
             # special "germ" gate that is parameterized only by it's
             # eigenvalues (and relevant off-diagonal elements)
-            gsGerm = target_model.copy()
-            gsGerm.set_all_parameterizations("static")
+            gsGerm = _copy_to_static_explicitop_model(target_model)
             germMx = gsGerm.sim.product(germ)
             gsGerm.operations["Ggerm"] = _EigenvalueParamDenseOp(
                 germMx, True, constrain_to_tp)
@@ -804,8 +804,7 @@ def find_sufficient_fiducial_pairs_per_germ_power(target_model, prep_fiducials, 
             #Create a new model containing static target gates and a
             # special "germ" gate that is parameterized only by it's
             # eigenvalues (and relevant off-diagonal elements)
-            gsGerm = target_model.copy()
-            gsGerm.set_all_parameterizations("static")
+            gsGerm = _copy_to_static_explicitop_model(target_model)
             germMx = gsGerm.sim.product(germ)
             
             gsGerm.operations["Ggerm"] = _EigenvalueParamDenseOp(
@@ -2071,6 +2070,29 @@ def _make_spam_static(model):
     model_copy._rebuild_paramvec()
     
     return model_copy
+
+
+def _copy_to_static_explicitop_model(mdl):
+    if isinstance(mdl, _ExplicitOpModel):
+        ret = mdl.copy()
+        ret.set_all_parameterizations('static')
+    else:
+        ret = _ExplicitOpModel(mdl.state_space, mdl.basis,
+                           default_gate_type='static',
+                           default_prep_type='static',
+                           default_povm_type='static',
+                           default_instrument_type='static',
+                           simulator=mdl.sim.copy(), evotype=mdl.evotype)
+        for k, v in mdl.prep_blks['layers'].items():
+            ret.preps[k] = v.to_dense()
+        for k, v in mdl.povm_blks['layers'].items():
+            ret.povms[k] = _convert_povm(v.copy(), 'static', mdl.basis)
+        for k, v in mdl.operation_blks['layers'].items():
+            ret.operations[k] = v.to_dense()
+
+    assert ret.num_params == 0
+    return ret
+
     
 #write a helper function for precomputing the jacobian dictionaries from bulk_dprobs
 #which can then be passed into the construction of the compactEVD caches.
