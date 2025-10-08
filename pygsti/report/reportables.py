@@ -1070,8 +1070,8 @@ SubspaceDiamonddist = _modf.opsfn_factory(subspace_diamonddist)
 
 
 def pergate_leakrate_max(op, ignore, mx_basis):
-    from pygsti.tools.leakage import leakage_profile
-    evals, _ = leakage_profile(op, mx_basis)
+    from pygsti.tools.leakage import gate_leakage_profile
+    evals, _ = gate_leakage_profile(op, mx_basis)
     return evals[0]
 
 
@@ -1079,8 +1079,8 @@ PerGateLeakRateMax = _modf.opsfn_factory(pergate_leakrate_max)
 
 
 def pergate_leakrate_min(op, ignore, mx_basis):
-    from pygsti.tools.leakage import leakage_profile
-    evals, _ = leakage_profile(op, mx_basis)
+    from pygsti.tools.leakage import gate_leakage_profile
+    evals, _ = gate_leakage_profile(op, mx_basis)
     return evals[-1]
 
 
@@ -1088,8 +1088,8 @@ PerGateLeakRateMin = _modf.opsfn_factory(pergate_leakrate_min)
 
 
 def pergate_seeprate(op, ignore, mx_basis):
-    from pygsti.tools.leakage import seepage_profile
-    seeprate, _ = seepage_profile(op, mx_basis)
+    from pygsti.tools.leakage import gate_seepage_profile
+    seeprate, _ = gate_seepage_profile(op, mx_basis)
     return seeprate[0]
 
 

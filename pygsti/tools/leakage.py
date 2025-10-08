@@ -27,8 +27,6 @@ if TYPE_CHECKING:
     from pygsti.processors import QubitProcessorSpec
 
 
-
-# Question: include the parenthetical in the heading below?
 NOTATION = \
 """
 Default notation (deferential to text above)
@@ -145,71 +143,22 @@ def apply_tensorized_to_teststate(op_x: np.ndarray, op_y, op_basis: np.ndarray, 
 
 
 @lru_cache
+@set_docstring(
+"""
+Here, H has dimension n and C ⊂ H has dimension d ≤ n.
+
+This function returns a column-unitary matrix B where P = B B^{\\dagger} is the
+orthogonal projector from M[H] to M[C] with respect to current_basis.
+
+If you only care about P, then you can call subspace_projector instead.
+""" + NOTATION)
 def leading_dxd_submatrix_basis_vectors(d: int, n: int, current_basis: Basis) -> np.ndarray:
-    """
-    Let "H" denote n^2 dimensional Hilbert-Schdmit space, and let "U" denote the d^2
-    dimensional subspace of H spanned by vectors whose Hermitian matrix representations
-    are zero outside the leading d-by-d submatrix.
-
-    This function returns a column-unitary matrix "B" where P = B B^{\\dagger} is the
-    orthogonal projector from H to U with respect to current_basis. We return B rather
-    than P only because it's simpler to get P from B than it is to get B from P.
-    
-    See below for this function's original use-case.
-    
-    Raison d'etre
-    -------------
-    Suppose we canonically measure the distance between two process matrices (M1, M2) by
-
-        D(M1, M2; H) = max || (M1 - M2) v ||
-                            v is in H,                   (Eq. 1)
-                            tr(v) = 1,
-                            v is positive
-
-    for some norm || * ||.  Suppose also that we want an analog of this distance when
-    (M1, M2) are restricted to the linear subspace U consisting of all vectors in H
-    whose matrix representations are zero outside of their leading d-by-d submatrix.
-
-    One natural way to do this is via the function D(M1, M2; U) -- i.e., just replace
-    H in (Eq. 1) with the subspace U. Using P to denote the orthogonal projector onto U,
-    we claim that we can evaluate this function via the identity
-
-        D(M1, M2; U) = D(M1 P, M2 P; H).                (Eq. 2)
-
-    To see why this is the case, consider a positive vector v and its projection u = P v.
-    Since a vector is called positive whenever its Hermitian matrix representation is positive
-    semidefinite (PSD), we need to show that u is positive. This can be seen by considering
-    block 2-by-2 partitions of the matrix representations of (u,v), where the leading block
-    is d-by-d:
-
-        mat(v) = [x11,  x12]         and      mat(u) = [x11,  0]
-                 [x21,  x22]                           [  0,  0].
-    
-    In particular, u is positive if and only if x11 is PSD, and x11 must be PSD for v
-    to be positive. Furthermore, positivity of v requires that x22 is PSD, which implies
-
-        0 <= tr(u) = tr(x11) <= tr(v).
-    
-    Given this, it is easy to establish (Eq 2.) by considering how the following pair 
-    of problems have the same optimal objective function value
-
-        max || (M1 - M2) P v ||         and        max || (M1 - M2) P v || 
-            mat(v) = [x11, x12]                         mat(v) = [x11, x12]
-                     [x21, x22]                                  [x21, x22]
-            mat(v) is PSD                               x11 is PSD
-            tr(x11) + tr(x22) = 1                       tr(x11) <= 1.
-
-    In fact, this can be taken a little further! The whole argument goes through unchanged
-    if, instead of starting with the objective function || (M1 - M2) v ||, we started with
-    f((M1 - M2) v) and f satisfied the property that f(c v) >= f(v) whenever c is a scalar
-    greater than or equal to one.
-    """
     assert d <= n
+    if d == n:
+        return np.eye(n**2)
     current_basis = Basis.cast(current_basis, dim=n**2)
     X = current_basis.create_transform_matrix('std')
     X = X.T.conj()
-    if d == n:
-        return X
     # we have to select a proper subset of columns in current_basis
     std_basis = BuiltinBasis(name='std', dim_or_statespace=n**2)
     label2ind = std_basis.elindlookup
@@ -221,6 +170,41 @@ def leading_dxd_submatrix_basis_vectors(d: int, n: int, current_basis: Basis) ->
     basis_ind = np.array(basis_ind)
     submatrix_basis_vectors = X[:, basis_ind]
     return submatrix_basis_vectors
+
+
+@lru_cache
+@set_docstring(
+"""
+This function returns the superoperator in S[H] that projects orthogonally from
+M[H] to M[C], where H is n-dimensional and C ⊂ H is d-dimensional (d ≤ n).
+
+The action of this operator is easy to understand when M[H] and M[C] are viewed
+as spaces of n-by-n matrices rather than spaces of length-n^2 vectors.
+
+For v in M[H] and u = P v, we have
+
+    mat(v) = [x11,  x12]         and      mat(u) = [x11,  0]
+             [x21,  x22]                           [  0,  0].
+
+This characterization makes two facts about P apparent. First, P is positive
+(i.e., it takes Hermitian psd operators to Hermitian psd operators). Second,
+P is trace-non-increasing.
+""" +  NOTATION)
+def subspace_projector(d: int, n: int, basis: Basis, force_real=True) -> np.ndarray:
+    assert d <= n
+    if d == n:
+        return np.eye(n**2)
+    U = leading_dxd_submatrix_basis_vectors(d, n, basis) # type: ignore
+    P = U @ U.T.conj()
+    if force_real:
+        if np.linalg.norm(P.imag) > 1e-12:
+            msg  =  "The orthogonal projector onto the computational subspace in the basis\n"
+            msg += f"{basis} is not real-valued. Since we were passed force_real=True we're\n"
+            msg +=  "raising a ValueError. Try again with a basis like 'l2p1' or 'gm', or\n"
+            msg +=  "use force_real=False."
+            raise ValueError(msg)
+    P = P.real
+    return P
 
 
 CHOI_INDUCED_METRIC = \
@@ -243,7 +227,7 @@ def subspace_entanglement_fidelity(op_x: np.ndarray, op_y: np.ndarray, op_basis,
     temp1_mx = pgbt.vec_to_stdmx(temp1, ten_std_basis, keep_complex=True)
     temp2_mx = pgbt.vec_to_stdmx(temp2, ten_std_basis, keep_complex=True)
     ent_fid = pgot.fidelity(temp1_mx, temp2_mx)
-    return ent_fid
+    return ent_fid  # type: ignore
 
 
 @set_docstring(CHOI_INDUCED_METRIC % 'jamiolkowski trace distance')
@@ -252,45 +236,91 @@ def subspace_jtracedist(op_x: np.ndarray, op_y: np.ndarray, op_basis, n_leak=0) 
     temp1_mx = pgbt.vec_to_stdmx(temp1, ten_std_basis, keep_complex=True)
     temp2_mx = pgbt.vec_to_stdmx(temp2, ten_std_basis, keep_complex=True)
     j_dist = pgot.tracedist(temp1_mx, temp2_mx)
-    return j_dist
+    return j_dist  # type: ignore
 
 
-@set_docstring(
+
+PROJECTION_INDUCED_METRIC = \
 """
 The pair (op_x, op_y) represent some superoperators (X, Y) in S[H], using op_basis.
 
-We return the Frobenius distance between op_x @ P and op_y @ P, where P is the
-projector onto the computational subspace (i.e., C), of co-dimension n_leak.
+We return the %s between op_x @ P and op_y @ P, where P is the
+projector onto the computational subspace (i.e., C) of co-dimension n_leak.
 
 *Warning!* At present, this function can only be used for gates over a single system
 (e.g., a single qubit), not for tensor products of such systems.
-""" + NOTATION)
+""" + NOTATION
+
+
+@set_docstring(PROJECTION_INDUCED_METRIC % 'Frobenius distance')
 def subspace_superop_fro_dist(op_x: np.ndarray, op_y: np.ndarray, op_basis, n_leak=0) -> float:
     diff = op_x -  op_y
     if n_leak == 0:
-        return np.linalg.norm(diff, 'fro')
+        return np.linalg.norm(diff, 'fro')  # type: ignore
+    n = int(np.sqrt(op_x.shape[0]))
+    assert op_x.shape == op_y.shape == (n**2, n**2)
+    return np.linalg.norm(diff @ P)  # type: ignore
+
+
+@set_docstring(PROJECTION_INDUCED_METRIC % 'diamond distance')
+def subspace_diamonddist(op_x: np.ndarray, op_y: np.ndarray, op_basis, n_leak=0) -> float:
+    """
+    Here we give a brief motivating derivation for defining the subspace diamond norm in
+    the way that we have. This derivation won't convince a skeptic that our definition
+    is the best-possible.
+
+    Suppose we canonically measure the distance between two superoperators (X, Y) by
+
+        D(X, Y; H) = max || (X - Y) v ||
+                            v is in M[H],                   (Eq. 1)
+                            tr(v) = 1,
+                            v is positive
+
+    for some norm || * ||.
     
-    d = int(np.sqrt(op_x.shape[0]))
-    assert op_x.shape == op_y.shape == (d**2, d**2)
-    B = leading_dxd_submatrix_basis_vectors(d-n_leak, d, op_basis)
-    P = B @ B.T.conj()
-    return np.linalg.norm(diff @ P)
+    We arrive at a natural analog of this metric when (X, Y) are restricted to M[C]
+    simply by replacing "H" in (Eq. 1) with "C". 
+    
+    Using P to denote the orthogonal projector onto M[C], we claim that
 
+        D(X, Y; C) = D(X P, Y P; H).                (Eq. 2)
 
-def subspace_diamonddist(op_x: np.ndarray, op_y: np.ndarray, op_basis) -> float:
+    Here's a proof of that claim:
+    
+    |   It's easy to show that P is a positive trace-non-increasing map. In particular,
+    |   if u = P v, then the matrix representations of u and v are
+    |
+    |      mat(v) = [v11,  v12]         and      mat(u) = [v11,  0]
+    |               [v21,  v22]                           [  0,  0],
+    |    
+    |   where v11 and v22 are psd if v is positive. From here the claim follows once
+    |   you've convinced yourself that the pair of problems below have the same optimal
+    |   objective value
+    |
+    |       max || (X - Y) P v ||         and        max || (X - Y) P v || 
+    |           mat(v) = [v11, v12]                         mat(v) = [v11, v12]
+    |                    [v21, v22]                                  [v21, v22]
+    |           mat(v) is PSD                               v11 is PSD
+    |           tr(v11) + tr(v22) = 1                       tr(v11) <= 1.
+
+    This can be taken a little further. The proof's argument goes through unchanged if,
+    instead of starting with the objective || (X - Y) v ||, we started with f((X - Y) v),
+    where f satisfies the property that f(c v) >= f(v) whenever c is a scalar >= 1.
+    """
+    from pygsti.tools.optools import diamonddist
     dim_mixed = op_x.shape[0]
     dim_pure  = int(dim_mixed**0.5)
-    dim_pure_compsub = dim_pure - 1
-    U = leading_dxd_submatrix_basis_vectors(dim_pure_compsub, dim_pure, op_basis)
-    P = U @ U.T.conj()
-    assert np.linalg.norm(P - P.real) < 1e-10
-    P = P.real
-    from pygsti.tools.optools import diamonddist
+    assert n_leak <= 1
+    dim_pure_compsub = dim_pure - n_leak
+    P = subspace_projector(dim_pure_compsub, dim_pure, op_basis)
     val : float = diamonddist(op_x @ P, op_y @ P, op_basis, return_x=False) / 2 # type: ignore
     return val
 
 
-def leakage_profile(op, mx_basis) -> tuple[np.ndarray, list[np.ndarray]]:
+def gate_leakage_profile(op, mx_basis) -> tuple[np.ndarray, list[np.ndarray]]:
+    """
+    A 
+    """
     assert op.shape == (9, 9)
     lfb = BuiltinBasis('l2p1', 9)
     op_lfb = pgbt.change_basis(op, mx_basis, lfb)
@@ -305,7 +335,7 @@ def leakage_profile(op, mx_basis) -> tuple[np.ndarray, list[np.ndarray]]:
     return rates, states
 
 
-def seepage_profile(op, mx_basis) -> tuple[np.ndarray, list[np.ndarray]]:
+def gate_seepage_profile(op, mx_basis) -> tuple[np.ndarray, list[np.ndarray]]:
     assert op.shape == (9, 9)
     lfb = BuiltinBasis('l2p1', 9)
     op_lfb = pgbt.change_basis(op, mx_basis, lfb)
@@ -413,14 +443,48 @@ def leaky_qubit_model_from_pspec(
 
 def lagoified_gopparams_dicts(gopparams_dicts: List[Dict]) -> List[Dict]:
     """
-    Return a modified deep-copy of gopparams_dicts, where the modifications
-    strip out gauge optimization over the TPSpam gauge group and apply a 
-    few other changes appropriate for leakage modeling.
+    goppparams_dicts is a list-of-dicts (LoDs) representation of a gauge optimization suite
+    suitable for models without leakage (e.g., a model of a 2-level system).
+
+    This function returns a new gauge optimization suite (also in the LoDs representation)
+    by applying leakage-specific modifications to a deep-copy of gopparams_dicts.
+
+    Example
+    -------
+    Suppose we have a ModelEstimateResults object called `results` that includes a
+    CPTPLND estimate, and we want to update the models of that estimate to include
+    two types of leakage-aware gauge optimization.
+
+        #
+        # Step 1: get the input to this function
+        #
+        estimate = results.estimates['CPTPLND']
+        model    = estimate.models['target']
+        stdsuite = GSTGaugeOptSuite(gaugeopt_suite_names=('stdgaugeopt',))
+        gopparams_dicts = stdsuite.to_dictionary(model)['stdgaugeopt']
+        
+        #
+        # Step 2: use this function to build our GSTGaugeOptSuite.
+        #
+        s = lagoified_gopparams_dicts(gopparams_dicts)
+        t = lagoified_gopparams_dicts(gopparams_dicts)
+        t[-1]['gates_metric'] = 'fidelity'
+        t[-1]['spam_metric']  = 'fidelity'
+        specification = {'LAGO-std': s,'LAGO-custom': t}
+        gos = GSTGaugeOptSuite(gaugeopt_argument_dicts=specification)
+        
+        #
+        # Step 3: updating `estimate` requires that we modify `results`.
+        #
+        add_lago_models(results, 'CPTPLND', gos)
+
+    After those lines execute, the `estimates.models` dict will have two new
+    key-value pairs, where the keys are 'LAGO-std' and 'LAGO-custom'.
     """
     from pygsti.models.gaugegroup import UnitaryGaugeGroup
+    tm = gopparams_dicts[0]['target_model']
     gopparams_dicts = [gp for gp in gopparams_dicts if 'TPSpam' not in str(type(gp['_gaugeGroupEl']))]
     gopparams_dicts = copy.deepcopy(gopparams_dicts)
-    tm = gopparams_dicts[0]['target_model']
     for inner_dict in gopparams_dicts:
         inner_dict['n_leak'] = 1
         # ^ This function could accept n_leak as an argument instead. However,
@@ -462,15 +526,11 @@ def lagoified_gopparams_dicts(gopparams_dicts: List[Dict]) -> List[Dict]:
     return gopparams_dicts
 
 
-def std_lago_gopsuite(model: ExplicitOpModel) -> dict[str, list[dict]]:
+def std_lago_gaugeopt_params(model: ExplicitOpModel) -> dict[str, list[dict]]:
     """
-    Return a dictionary of the form {'LAGO': v}, where v is a
-    list-of-dicts representation of a gauge optimization suite.
-
-    We construct v by getting the list-of-dicts representation of the
-    "stdgaugeopt" suite for `model`, and then changing some of its 
-    options to be suitable for leakage-aware gauge optimization. These
-    changes are made in the `lagoified_gopparams_dicts` function.
+    Return a dictionary of the form {'LAGO': v}, where v is a list-of-dicts
+    representation of a gauge optimization suite suitable for leakage modeling,
+    obtained by modiftying the 'stdgaugeopt' suite induced by `model`.
     """
     from pygsti.protocols.gst import GSTGaugeOptSuite
     std_gop_suite = GSTGaugeOptSuite(gaugeopt_suite_names=('stdgaugeopt',))
@@ -484,23 +544,23 @@ def add_lago_models(results: ModelEstimateResults, est_key: Optional[str] = None
     """
     Update each estimate in results.estimates (or just results.estimates[est_key],
     if est_key is not None) with a model obtained by parameterization-preserving
-    gauge optimization.
-    
-    If no gauge optimization suite is provided, then we construct one by starting
-    with "stdgaugeopt" suite and then changing the settings to be suitable for 
     leakage-aware gauge optimization.
+    
+    If no gauge optimization suite is provided, then we construct one by making
+    appropriate modifications to either the estimate's existing 'stdgaugeopt' suite
+    (if that exists) or to the 'stdgaugeopt' suite induced by the target model.
     """
     from pygsti.protocols.gst import GSTGaugeOptSuite, _add_param_preserving_gauge_opt
-    if gos is None:
-        existing_est  = results.estimates[est_key]
-        if 'stdgaugeopt' in existing_est.goparameters:
-            std_gos_lods  = existing_est.goparameters['stdgaugeopt']
-            lago_gos_lods = lagoified_gopparams_dicts(std_gos_lods)
-            gop_params = {'LAGO': lago_gos_lods}
-        else:
-            gop_params = std_lago_gopsuite(results.estimates[est_key].models['target'])
-        gos = GSTGaugeOptSuite(gaugeopt_argument_dicts=gop_params)
     if isinstance(est_key, str):
+        if gos is None:
+            existing_est  = results.estimates[est_key]
+            if 'stdgaugeopt' in existing_est.goparameters:
+                std_gos_lods  = existing_est.goparameters['stdgaugeopt']
+                lago_gos_lods = lagoified_gopparams_dicts(std_gos_lods)
+                gop_params = {'LAGO': lago_gos_lods}
+            else:
+                gop_params = std_lago_gaugeopt_params(results.estimates[est_key].models['target'])
+            gos = GSTGaugeOptSuite(gaugeopt_argument_dicts=gop_params)
         _add_param_preserving_gauge_opt(results, est_key, gos, verbosity)
     elif est_key is None:
         for est_key in results.estimates.keys():

@@ -609,15 +609,7 @@ def _create_objective_fn(model, target_model, item_weights: Optional[dict[str,fl
 
         dim = int(_np.sqrt(mxBasis.dim))
         if n_leak > 0:
-            B = _tools.leading_dxd_submatrix_basis_vectors(dim - n_leak, dim, mxBasis)
-            P = B @ B.T.conj()
-            if _np.linalg.norm(P.imag) > 1e-12:
-                msg  = f"Attempting to run leakage-aware gauge optimization with basis {mxBasis}\n"
-                msg +=  "is resulting an orthogonal projector onto the computational subspace that\n"
-                msg +=  "is not real-valued. Try again with a different basis, like 'l2p1' or 'gm'."
-                raise ValueError(msg)
-            else:
-                P = P.real
+            P = _tools.subspace_projector(dim - n_leak, dim, mxBasis)
             transform_mx_arg = (P, _tools.matrixtools.IdentityOperator())
             # ^ The semantics of this tuple are defined by the frobeniusdist function
             #   in the ExplicitOpModelCalc class.

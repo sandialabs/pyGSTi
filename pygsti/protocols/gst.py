@@ -2432,14 +2432,7 @@ def _compute_1d_reference_values_and_name(target_model, gopped_models, gaugeopt_
             dim = gaugeopt_model.basis.state_space.udim
             assert n_leak == 1
             assert dim == 3
-            B = _tools.leading_dxd_submatrix_basis_vectors(2, 3, gaugeopt_model.basis)
-            P = B @ B.T.conj()
-            if _np.linalg.norm(P.imag) > 1e-12:
-                msg  = f"Attempting to run leakage-aware gauge optimization with basis {gaugeopt_model.basis}\n"
-                msg +=  "is resulting an orthogonal projector onto the computational subspace that\n"
-                msg +=  "is not real-valued. Try again with a different basis, like 'l2p1' or 'gm'."
-                raise ValueError(msg)
-            P = P.real
+            P = _tools.subspace_projector(2, 3, gaugeopt_model.basis)
         else:
             P = _tools.matrixtools.IdentityOperator()
 
