@@ -417,13 +417,11 @@ def lagoified_gopparams_dicts(gopparams_dicts: List[Dict]) -> List[Dict]:
     strip out gauge optimization over the TPSpam gauge group and apply a 
     few other changes appropriate for leakage modeling.
     """
+    from pygsti.models.gaugegroup import UnitaryGaugeGroup
     gopparams_dicts = [gp for gp in gopparams_dicts if 'TPSpam' not in str(type(gp['_gaugeGroupEl']))]
     gopparams_dicts = copy.deepcopy(gopparams_dicts)
+    tm = gopparams_dicts[0]['target_model']
     for inner_dict in gopparams_dicts:
-        gg = inner_dict['target_model'].default_gauge_group
-        if gg is not None:
-            inner_dict['gauge_group'] = gg
-            inner_dict['_gaugeGroupEl'] = gg.compute_element(gg.initial_params)
         inner_dict['n_leak'] = 1
         # ^ This function could accept n_leak as an argument instead. However,
         #   downstream functions for gauge optimization only support n_leak=0 or 1.
@@ -432,18 +430,35 @@ def lagoified_gopparams_dicts(gopparams_dicts: List[Dict]) -> List[Dict]:
         #   about mismatches between an estimate and a target when restricted to the
         #   computational subspace. We have code for evaluating the loss functions
         #   themselves, but not their gradients.
-        inner_dict['method'] = 'L-BFGS-B'
-        # ^ We need this optimizer because it doesn't require a gradient oracle.
         inner_dict['gates_metric'] = 'frobenius squared'
         inner_dict['spam_metric']  = 'frobenius squared'
-        # ^ We have other metrics for leakage-aware gauge optimization, but they
-        #   aren't really useful.
+        inner_dict['item_weights'] = {'gates': 0.0, 'spam': 1.0}
+        gg = UnitaryGaugeGroup(tm.basis.state_space, tm.basis)
+        inner_dict['gauge_group'] = gg
+        inner_dict['_gaugeGroupEl'] = gg.compute_element(gg.initial_params)
+        # ^ We start with gauge optimization over the full unitary group, minimizing
+        #   SPAM differences between the estimate and the target on the computational
+        #   subspace. Our last step of gauge optimization (which is after this loop)
+        #   includes gates.
+        inner_dict['method'] = 'L-BFGS-B'
+        # ^ We need this optimizer because it doesn't require a gradient oracle.
         inner_dict['convert_model_to']['to_type'] = 'full'
         # ^ The natural basis for Hilbert-Schmidt space in leakage modeling doesn't
         #   have the identity matrix as its first element. This means we can't use
         #   the full TP parameterization. There's no real harm in taking "full" as
         #   our default because add_lago_models uses parameterization-preserving
         #   gauge optimization.
+    inner_dict = inner_dict.copy()
+    gg = tm.default_gauge_group
+    # ^ The most likely scenario is that gg is a DirectSumGaugeGroup, consisting
+    #   of a UnitaryGaugeGroup and a TrivialGaugeGroup. Rather than hard-code
+    #   that choice, we go with the default gauge group of the target model.
+    if gg is not None:
+        inner_dict['gauge_group'] = gg
+        inner_dict['_gaugeGroupEl'] = gg.compute_element(gg.initial_params)
+    inner_dict['n_leak'] = 1
+    inner_dict['item_weights'] = {'gates': 1.0, 'spam': 1.0}
+    gopparams_dicts.append(inner_dict)
     return gopparams_dicts
 
 

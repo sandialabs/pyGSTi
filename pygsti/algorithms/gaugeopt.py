@@ -372,6 +372,7 @@ def _create_objective_fn(model, target_model, item_weights: Optional[dict[str,fl
     if item_weights is None: item_weights = {}
     opWeight = item_weights.get('gates', 1.0)
     spamWeight = item_weights.get('spam', 1.0)
+    prepWeight = item_weights.get('prep', spamWeight)
     mxBasis = model.basis
 
     #Use the target model's basis if model's is unknown
@@ -623,6 +624,44 @@ def _create_objective_fn(model, target_model, item_weights: Optional[dict[str,fl
         else:
             transform_mx_arg = None
             # ^ It would be equivalent to set this to a pair of IdentityOperator objects.
+        from pygsti.report.reportables import eigenvalue_entanglement_infidelity, vec_fidelity
+
+
+        """
+        We say that a (model, target) pair admit a _perfect gauge_ if "model" has no relational errors
+        when compared to "target." If "model" is considered in the perfect gauge, then 
+        
+            (1) its fidelities with the target gates match the eigenvalue fidelities with the target gates;
+            
+            (2) the fidelities between rho_e and {E_t : E_t in M_target} will match those between
+                rho_e and {E_e : E_e in M_estimate}; and 
+
+            (3) the fidelities between rho_t and {E_e : E_e in M_estimate} will match those between
+                rho_t and {E_t : E_t in M_target}.
+
+        In view of this, taking fidelity as the gauge-optimization objective tries to minimize an
+        aggregration of any mismatch between the various fidelities above.
+        """
+
+        gate_fidelity_targets : dict[ Union[str, _baseobjs.Label], Union[float, _np.floating] ] = dict()
+        if gates_metric == 'fidelity':
+            for lbl in target_model.operations:
+                G_target = target_model.operations[lbl]
+                G_curest = model.operations[lbl]
+                t = 1 - eigenvalue_entanglement_infidelity(G_curest.to_dense(), G_target.to_dense(), model.basis)
+                gate_fidelity_targets[lbl] = min(t, 1.0)
+
+        spam_fidelity_targets : dict[
+            tuple[Union[str, _baseobjs.Label], Union[str, _baseobjs.Label]],
+             dict[Union[str, _baseobjs.Label], Union[float, _np.floating]]
+        ] = dict()
+        if spam_metric == 'fidelity':
+            for preplbl in target_model.preps:
+                for povmlbl in target_model.povms:
+                    rho_curest = model.preps[preplbl].to_dense()
+                    M_curest   = model.povms[povmlbl]
+                    t = {elbl: vec_fidelity(rho_curest, e.to_dense(), mxBasis).item() for (elbl, e) in M_curest.items() }
+                    spam_fidelity_targets[(preplbl, povmlbl)] = t
 
         def _objective_fn(gauge_group_el, oob_check):
             mdl = _transform_with_oob_check(model, gauge_group_el, oob_check)
@@ -656,12 +695,15 @@ def _create_objective_fn(model, target_model, item_weights: Optional[dict[str,fl
                 ret += val
 
             elif gates_metric == "fidelity":
-                # If n_leak==0, then subspace_entanglement_fidelity is just entanglement_fidelity
+                # Leakage-aware metrics NOT available
                 for opLbl in mdl.operations:
                     wt = item_weights.get(opLbl, opWeight)
                     top = target_model.operations[opLbl].to_dense()
                     mop = mdl.operations[opLbl].to_dense()
-                    ret += wt * (1.0 - _tools.subspace_entanglement_fidelity(top, mop, mxBasis, n_leak))**2
+                    t = gate_fidelity_targets[opLbl]
+                    v = _tools.entanglement_fidelity(top, mop, mxBasis)
+                    z = _np.abs(t - v)
+                    ret += wt * z
 
             elif gates_metric == "tracedist":
                 # If n_leak==0, then subspace_jtracedist is just jtracedist.
@@ -691,17 +733,26 @@ def _create_objective_fn(model, target_model, item_weights: Optional[dict[str,fl
 
             elif spam_metric == "fidelity":
                 # Leakage-aware metrics NOT available
-                for preplabel, m_prep in mdl.preps.items():
-                    wt = item_weights.get(preplabel, spamWeight)
-                    rhoMx1 = _tools.vec_to_stdmx(m_prep.to_dense(), mxBasis)
-                    t_prep = target_model.preps[preplabel]
-                    rhoMx2 = _tools.vec_to_stdmx(t_prep.to_dense(), mxBasis)
-                    ret += wt * (1.0 - _tools.fidelity(rhoMx1, rhoMx2))**2
-
-                for povmlabel in mdl.povms.keys():
-                    wt = item_weights.get(povmlabel, spamWeight)
-                    fidelity = _tools.povm_fidelity(mdl, target_model, povmlabel)
-                    ret += wt * (1.0 - fidelity)**2
+                val = 0.0
+                for preplbl in target_model.preps:
+                    wt_prep = item_weights.get(preplbl, prepWeight)
+                    for povmlbl in target_model.povms:
+                        wt_povm = item_weights.get(povmlbl, spamWeight)
+                        rho_curest = model.preps[preplbl].to_dense()
+                        rho_target = target_model.preps[preplbl].to_dense()
+                        M_curest   = model.povms[povmlbl]
+                        M_target   = target_model.povms[povmlbl]
+                        vs_prep = {elbl: vec_fidelity(rho_curest, e.to_dense(), mxBasis) for (elbl, e) in M_target.items() }
+                        vs_povm = {elbl: vec_fidelity(rho_target, e.to_dense(), mxBasis) for (elbl, e) in M_curest.items() }
+                        t_dict = spam_fidelity_targets[(preplbl, povmlbl)]
+                        val1 = 0.0
+                        for lbl, f in vs_prep.items():
+                            val1 += _np.abs(t_dict[lbl] - f)
+                        val2 = 0.0
+                        for lbl, f in vs_povm.items():
+                            val2 += _np.abs(t_dict[lbl] - f)
+                        val += (wt_prep * val1 + wt_povm * val2)
+                ret += val
 
             elif spam_metric == "tracedist":
                 # Leakage-aware metrics NOT available.

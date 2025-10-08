@@ -2426,7 +2426,7 @@ def _compute_1d_reference_values_and_name(target_model, gopped_models, gaugeopt_
         argdicts = gaugeopt_suite.gaugeopt_argument_dicts.get(lbl, dict())
         n_leak = 0
         if isinstance(argdicts, list) and len(argdicts) > 0:
-            n_leak = argdicts[-1].get('n_leak', n_leak)
+            n_leak = argdicts[0].get('n_leak', n_leak)
 
         if n_leak > 0:
             dim = gaugeopt_model.basis.state_space.udim
