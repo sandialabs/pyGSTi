@@ -100,7 +100,7 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
         options are:
         'greedy' : Add germs one-at-a-time until the set is AC, picking the germ that
         improves the germ-set score by the largest amount at each step. See
-        :func:`find_germs_breadthfirst` for more details.
+        :func:`find_germs_breadthfirst_greedy` for more details.
         
         'grasp': Use GRASP to generate random greedy germ sets and then locally
         optimize them. See :func:`find_germs_grasp` for more 
@@ -318,7 +318,8 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
                 score_func=algorithm_kwargs['score_func'],
                 op_penalty=algorithm_kwargs['op_penalty'],
                 num_nongauge_params=num_nongauge_params,
-                float_type=float_type)
+                float_type=float_type,
+                gate_penalty=algorithm_kwargs['gate_penalty'])
             printer.log('Constructed germ set:', 1)
             printer.log(str([germ.str for germ in germList]), 1)
             printer.log(germsetScore, 1)
@@ -338,7 +339,8 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
             'return_all': False,
             'score_func': 'all',
             'num_nongauge_params': num_nongauge_params,
-            'float_type': float_type
+            'float_type': float_type,
+            'gate_penalty':None
         }
         for key in default_kwargs:
             if key not in algorithm_kwargs:
@@ -354,7 +356,8 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
                 op_penalty=algorithm_kwargs['op_penalty'],
                 l1_penalty=algorithm_kwargs['l1_penalty'],
                 num_nongauge_params=num_nongauge_params,
-                float_type=float_type)
+                float_type=float_type,
+                )
             printer.log(str([germ.str for germ in germList[0]]), 1)
             printer.log(germsetScore)
         elif not algorithm_kwargs['return_all'] and germList is not None:
@@ -433,7 +436,7 @@ def compute_germ_set_score(germs, target_model=None, neighborhood=None,
                            neighborhood_size=5,
                            randomization_strength=1e-2, score_func='all',
                            op_penalty=0.0, l1_penalty=0.0, num_nongauge_params=None,
-                           float_type=_np.cdouble):
+                           float_type=_np.cdouble, gate_penalty=None):
     """
     Calculate the score of a germ set with respect to a model.
 
@@ -441,7 +444,6 @@ def compute_germ_set_score(germs, target_model=None, neighborhood=None,
     to the number of amplified parameters) for a cloud of models.
     If `target_model` is given, it serves as the center of the cloud,
     otherwise the cloud must be supplied directly via `neighborhood`.
-
 
     Parameters
     ----------
@@ -477,6 +479,13 @@ def compute_germ_set_score(germs, target_model=None, neighborhood=None,
     float_type : numpy dtype object, optional
         Numpy data type to use for floating point arrays.
 
+    gate_penalty : dict, optional (default None)
+        An optional dictionary allowing the specification of gate-specific penalties to add for each instance
+        of the specified gate(s) in each germ. Should be specified as a dictionary whose keys are strings
+        corresponding to gate names, and whose values are the penalty factor to add for each instance of that
+        gate. E.g. {'Gcnot':2} would correspond to a penalty term where each instance of a 'Gcnot' gate
+        gets and additional 2 units added to the cost function for a candidate germ. 
+
     Returns
     -------
     CompositeScore
@@ -491,7 +500,9 @@ def compute_germ_set_score(germs, target_model=None, neighborhood=None,
                                                op_penalty=op_penalty,
                                                l1_penalty=l1_penalty,
                                                num_nongauge_params=num_nongauge_params,
-                                               float_type=float_type)
+                                               float_type=float_type, 
+                                               gate_penalty=gate_penalty,
+                                               germ_list=germs)
               for model in neighborhood]
 
     return max(scores)
@@ -582,7 +593,7 @@ def compute_composite_germ_set_score(score_fn, threshold_ac=1e6, init_n=1,
                                      partial_deriv_dagger_deriv=None, model=None,
                                      partial_germs_list=None, eps=None, germ_lengths=None,
                                      op_penalty=0.0, l1_penalty=0.0, num_nongauge_params=None,
-                                     float_type=_np.cdouble):
+                                     float_type=_np.cdouble, gate_penalty=None, germ_list=None):
     """
     Compute the score for a germ set when it is not AC against a model.
 
@@ -649,6 +660,20 @@ def compute_composite_germ_set_score(score_fn, threshold_ac=1e6, init_n=1,
     num_nongauge_params : int, optional
         Force the number of nongauge parameters rather than rely on automated gauge optimization.
 
+    float_type : numpy dtype object, optional
+        Numpy data type to use for floating point arrays.
+    
+    gate_penalty : dict, optional (default None)
+        An optional dictionary allowing the specification of gate-specific penalties to add for each instance
+        of the specified gate(s) in each germ. Should be specified as a dictionary whose keys are strings
+        corresponding to gate names, and whose values are the penalty factor to add for each instance of that
+        gate. E.g. {'Gcnot':2} would correspond to a penalty term where each instance of a 'Gcnot' gate
+        gets and additional 2 units added to the cost function for a candidate germ.
+
+    germ_list : list of `Circuit`s, optional (default None)
+        A list of circuits corresponding to the current candidate set of germs (including the candidate addition
+        being evaluated). Must be specified when using the `gate_penalty` kwarg.    
+
     Returns
     -------
     CompositeScore
@@ -695,6 +720,18 @@ def compute_composite_germ_set_score(score_fn, threshold_ac=1e6, init_n=1,
                                          for germ in partial_germs_list])
         opScore = op_penalty * _np.sum(germ_lengths)
     
+    #add the gate penalties.
+    gate_score = 0.0
+    if gate_penalty is not None:
+        assert germ_list is not None, 'Must specify `germ_list` when using `gate_penalty`.'
+        for gate, penalty_value in gate_penalty.items():
+            #loop through each ckt in the fiducial list.
+            for germ in germ_list:
+                #alternative approach using the string 
+                #representation of the ckt.
+                num_gate_instances= germ.str.count(gate)
+                gate_score += num_gate_instances*penalty_value
+
     if partial_deriv_dagger_deriv is not None:
         combinedDDD = _np.sum(partial_deriv_dagger_deriv, axis=0)
     sortedEigenvals = _np.sort(_np.real(_nla.eigvalsh(combinedDDD)))
@@ -1677,7 +1714,8 @@ def find_germs_breadthfirst(model_list, germs_list, randomize=True,
                             op_penalty=0, score_func='all', tol=1e-6, threshold=1e6,
                             check=False, force="singletons", pretest=True, mem_limit=None,
                             comm=None, profiler=None, verbosity=0, num_nongauge_params=None, 
-                            float_type= _np.cdouble, mode="all-Jac"):
+                            float_type= _np.cdouble, mode="all-Jac",
+                            gate_penalty=None):
     """
     Greedy algorithm starting with 0 germs.
 
@@ -1767,6 +1805,13 @@ def find_germs_breadthfirst(model_list, germs_list, randomize=True,
     float_type : numpy dtype object, optional
         Use an alternative data type for the values of the numpy arrays generated.
 
+    gate_penalty : dict, optional (default None)
+        An optional dictionary allowing the specification of gate-specific penalties to add for each instance
+        of the specified gate(s) in each germ. Should be specified as a dictionary whose keys are strings
+        corresponding to gate names, and whose values are the penalty factor to add for each instance of that
+        gate. E.g. {'Gcnot':2} would correspond to a penalty term where each instance of a 'Gcnot' gate
+        gets and additional 2 units added to the cost function for a candidate germ.
+        
     Returns
     -------
     list
@@ -1932,7 +1977,8 @@ def find_germs_breadthfirst(model_list, germs_list, randomize=True,
         'num_nongauge_params': numNonGaugeParams,
         'op_penalty': op_penalty,
         'germ_lengths': germLengths,
-        'float_type': float_type
+        'float_type': float_type,
+        'gate_penalty':gate_penalty
     }
 
     initN = 1
@@ -1942,6 +1988,7 @@ def find_germs_breadthfirst(model_list, germs_list, randomize=True,
         worstScore = _scoring.CompositeScore(-1.0e100, 0, None)  # worst of all models
         for k, currentDDD in enumerate(currentDDDList):
             nonAC_kwargs['germ_lengths'] = _np.array([len(germ) for germ in goodGerms])
+            nonAC_kwargs['germ_list'] = goodGerms
             worstScore = max(worstScore, compute_composite_germ_set_score(
                 partial_deriv_dagger_deriv=currentDDD[None, :, :], init_n=initN,
                 **nonAC_kwargs))
@@ -1998,6 +2045,7 @@ def find_germs_breadthfirst(model_list, germs_list, randomize=True,
                     nonAC_kwargs['germ_lengths'] = \
                         _np.array([len(germ) for germ in
                                    (goodGerms + [germs_list[candidateGermIdx]])])
+                    nonAC_kwargs['germ_list'] = goodGerms + [germs_list[candidateGermIdx]]
                     worstScore = max(worstScore, compute_composite_germ_set_score(
                         partial_deriv_dagger_deriv=testDDD[None, :, :], init_n=initN,
                         **nonAC_kwargs))
@@ -2160,6 +2208,9 @@ def find_germs_integer_slack(model_list, germs_list, randomize=True,
 
     verbosity : int, optional
         Integer >= 0 indicating the amount of detail to print.
+
+    float_type : numpy dtype object, optional
+        Use an alternative data type for the values of the numpy arrays generated.
 
     See Also
     --------
@@ -2385,6 +2436,8 @@ def _germ_set_score_grasp(germ_set, germs_list, twirled_deriv_dagger_deriv_list,
         kwargs = non_ac_kwargs.copy()
         if 'germ_lengths' in non_ac_kwargs:
             kwargs['germ_lengths'] = germ_lengths
+        if non_ac_kwargs.get('gate_penalty') is not None:
+            kwargs['germ_list'] = germ_set
         germsVsModelScores.append(compute_composite_germ_set_score(
             partial_deriv_dagger_deriv=partialDDD, init_n=init_n, **kwargs))
     # Take the score for the current germ set to be its worst score over all
@@ -2398,7 +2451,8 @@ def find_germs_grasp(model_list, germs_list, alpha, randomize=True,
                      score_func='all', tol=1e-6, threshold=1e6,
                      check=False, force="singletons",
                      iterations=5, return_all=False, shuffle=False,
-                     verbosity=0, num_nongauge_params=None, float_type=_np.cdouble):
+                     verbosity=0, num_nongauge_params=None, float_type=_np.cdouble,
+                     gate_penalty=None):
     """
     Use GRASP to find a high-performing germ set.
 
@@ -2505,6 +2559,13 @@ def find_germs_grasp(model_list, germs_list, alpha, randomize=True,
     float_type : Numpy dtype object, optional
         Numpy data type to use for floating point arrays
 
+    gate_penalty : dict, optional (default None)
+        An optional dictionary allowing the specification of gate-specific penalties to add for each instance
+        of the specified gate(s) in each germ. Should be specified as a dictionary whose keys are strings
+        corresponding to gate names, and whose values are the penalty factor to add for each instance of that
+        gate. E.g. {'Gcnot':2} would correspond to a penalty term where each instance of a 'Gcnot' gate
+        gets and additional 2 units added to the cost function for a candidate germ. 
+
     Returns
     -------
     finalGermList : list of Circuit
@@ -2564,7 +2625,8 @@ def find_germs_grasp(model_list, germs_list, alpha, randomize=True,
         'op_penalty': op_penalty,
         'germ_lengths': germLengths,
         'num_nongauge_params': numNonGaugeParams,
-        'float_type' : float_type
+        'float_type' : float_type,
+        'gate_penalty': gate_penalty
     }
 
     final_nonAC_kwargs = nonAC_kwargs.copy()
@@ -3704,6 +3766,13 @@ def find_germs_breadthfirst_greedy(model_list, germs_list, randomize=True,
         be expensive) if the user has reason to believe this initial set won't be AC. Most of the time
         this initial set won't be.
 
+    gate_penalty : dict, optional (default None)
+        An optional dictionary allowing the specification of gate-specific penalties to add for each instance
+        of the specified gate(s) in each germ. Should be specified as a dictionary whose keys are strings
+        corresponding to gate names, and whose values are the penalty factor to add for each instance of that
+        gate. E.g. {'Gcnot':2} would correspond to a penalty term where each instance of a 'Gcnot' gate
+        gets and additional 2 units added to the cost function for a candidate germ. 
+
     Returns
     -------
     list
@@ -3890,11 +3959,13 @@ def find_germs_breadthfirst_greedy(model_list, germs_list, randomize=True,
         #all models. 
         initial_scores= [[_scoring.CompositeScore(-1.0e100, 0, None)]*len(model_list) for _ in range(len(germs_list))]
         for i in range(len(germs_list)):
+            if nonAC_kwargs.get('gate_penalty') is not None:
+                nonAC_kwargs['germ_list'] = [germs_list[i]]
             for j in range(len(model_list)):
                 if mode=='all-Jac':                
                     #standard slicing squeezes the array losing the first index, which compute_composite_germ_set_score
                     #is expecting, so use a trick with integer array slicing to preserve this
-                    derivDaggerDeriv = twirledDerivDaggerDerivList[j][[i],:,:]
+                    derivDaggerDeriv = twirledDerivDaggerDerivList[j][[i],:,:]                    
                     initial_scores[i][j] = compute_composite_germ_set_score(
                                 partial_deriv_dagger_deriv=derivDaggerDeriv, init_n=1, germ_lengths= [germLengths[i]],
                                 **nonAC_kwargs)
@@ -4053,6 +4124,7 @@ def find_germs_breadthfirst_greedy(model_list, germs_list, randomize=True,
                         nonAC_kwargs['germ_lengths'] = \
                         _np.array([len(germ) for germ in
                                    (goodGerms + [germs_list[candidateGermIdx]])])
+                        nonAC_kwargs['germ_list'] = goodGerms + [germs_list[candidateGermIdx]]
                         worstScore = max(worstScore, compute_composite_germ_set_score(
                                     partial_deriv_dagger_deriv=testDDD[None, :, :], init_n=initN,
                                     **nonAC_kwargs))
@@ -4071,6 +4143,7 @@ def find_germs_breadthfirst_greedy(model_list, germs_list, randomize=True,
                         nonAC_kwargs['germ_lengths'] = \
                         _np.array([len(germ) for germ in
                                    (goodGerms + [germs_list[candidateGermIdx]])])
+                        nonAC_kwargs['germ_list'] = goodGerms + [germs_list[candidateGermIdx]]
                         worstScore = max(worstScore, compute_composite_germ_set_score(
                                     partial_deriv_dagger_deriv=testDDD[None, :, :], init_n=initN,
                                     **nonAC_kwargs))
@@ -4155,7 +4228,8 @@ def compute_composite_germ_set_score_compactevd(current_update_cache, germ_updat
                                                  partial_germs_list=None, eps=None, num_germs=None,
                                                  op_penalty=0.0, l1_penalty=0.0, num_nongauge_params=None,
                                                  num_params=None, force_rank_increase=False,
-                                                 germ_lengths=None, float_type=_np.cdouble):
+                                                 germ_lengths=None, float_type=_np.cdouble,
+                                                 gate_penalty=None, germ_list=None):
     """
     Compute the score for a germ set when it is not AC against a model.
 
@@ -4231,7 +4305,20 @@ def compute_composite_germ_set_score_compactevd(current_update_cache, germ_updat
         with respect to the chosen score function). Also results in pruning in subsequent
         optimization iterations. Defaults to False.
     
+    float_type : numpy dtype object, optional
+        Numpy data type to use for floating point arrays.
     
+    gate_penalty : dict, optional (default None)
+        An optional dictionary allowing the specification of gate-specific penalties to add for each instance
+        of the specified gate(s) in each germ. Should be specified as a dictionary whose keys are strings
+        corresponding to gate names, and whose values are the penalty factor to add for each instance of that
+        gate. E.g. {'Gcnot':2} would correspond to a penalty term where each instance of a 'Gcnot' gate
+        gets and additional 2 units added to the cost function for a candidate germ.
+
+    germ_list : list of `Circuit`s, optional (default None)
+        A list of circuits corresponding to the current candidate set of germs (including the candidate addition
+        being evaluated). Must be specified when using the `gate_penalty` kwarg.  
+        
     Returns
     -------
     CompositeScore
@@ -4260,6 +4347,18 @@ def compute_composite_germ_set_score_compactevd(current_update_cache, germ_updat
     if op_penalty != 0.0:
         opScore = op_penalty * _np.sum(germ_lengths)
     
+    #add the gate penalties.
+    gate_score = 0.0
+    if gate_penalty is not None:
+        assert germ_list is not None, 'Must specify `germ_list` when using `gate_penalty`.'
+        for gate, penalty_value in gate_penalty.items():
+            #loop through each ckt in the fiducial list.
+            for germ in germ_list:
+                #alternative approach using the string 
+                #representation of the ckt.
+                num_gate_instances= germ.str.count(gate)
+                gate_score += num_gate_instances*penalty_value
+
     #calculate the updated eigenvalues
     updated_eigenvalues, rank_increase_flag = symmetric_low_rank_spectrum_update(germ_update, current_update_cache[0], current_update_cache[1], current_update_cache[2], force_rank_increase)
     
@@ -4378,7 +4477,20 @@ def compute_composite_germ_set_score_low_rank_trace(current_update_cache, germ_u
         of the jacobian at each iteration (this may result in choosing a germ that is sub-optimal
         with respect to the chosen score function). Also results in pruning in subsequent
         optimization iterations. Defaults to False.
+
+    float_type : numpy dtype object, optional
+        Numpy data type to use for floating point arrays.
     
+    gate_penalty : dict, optional (default None)
+        An optional dictionary allowing the specification of gate-specific penalties to add for each instance
+        of the specified gate(s) in each germ. Should be specified as a dictionary whose keys are strings
+        corresponding to gate names, and whose values are the penalty factor to add for each instance of that
+        gate. E.g. {'Gcnot':2} would correspond to a penalty term where each instance of a 'Gcnot' gate
+        gets and additional 2 units added to the cost function for a candidate germ.
+
+    germ_list : list of `Circuit`s, optional (default None)
+        A list of circuits corresponding to the current candidate set of germs (including the candidate addition
+        being evaluated). Must be specified when using the `gate_penalty` kwarg.   
     
     Returns
     -------
@@ -4415,7 +4527,7 @@ def compute_composite_germ_set_score_low_rank_trace(current_update_cache, germ_u
     #add the gate penalties.
     gate_score = 0.0
     if gate_penalty is not None:
-        assert germ_list is not None
+        assert germ_list is not None, 'Must specify `germ_list` when using `gate_penalty`.'
         for gate, penalty_value in gate_penalty.items():
             #loop through each ckt in the fiducial list.
             for germ in germ_list:
