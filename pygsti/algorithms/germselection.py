@@ -753,7 +753,7 @@ def compute_composite_germ_set_score(score_fn, threshold_ac=1e6, init_n=1,
     #minor_score = AC_score + l1Score + opScore
 
     # Apply penalties to the major score
-    major_score = -N_AC + opScore + l1Score
+    major_score = -N_AC + opScore + l1Score + gate_score
     minor_score = AC_score
     ret = _scoring.CompositeScore(major_score, minor_score, N_AC)
     #DEBUG: ret.extra = {'opScore': opScore,
@@ -4390,7 +4390,7 @@ def compute_composite_germ_set_score_compactevd(current_update_cache, germ_updat
                 N_AC = N
 
     # Apply penalties to the major score
-    major_score = -N_AC + opScore + l1Score
+    major_score = -N_AC + opScore + l1Score + gate_score
     minor_score = AC_score
     ret = _scoring.CompositeScore(major_score, minor_score, N_AC)
 

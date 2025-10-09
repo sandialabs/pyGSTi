@@ -374,8 +374,49 @@ class GreedyGermSelectionTester(GermSelectionWithNeighbors, BaseCase):
                                    assume_real=True, float_type=np.double,  verbosity=1, 
                                    force=pc.list_random_circuits_onelen(fixtures.opLabels, length=7, count=2, seed=_SEED))
                                    
-                                   
-                                   
+class GermSelectionPenaltyTester(GermSelectionWithNeighbors, BaseCase):
+    def setUp(self):
+        super(GreedyGermSelectionTester, self).setUp()
+
+    def test_op_penalty_greedy(self):
+ 
+        germs_no_penalty_cevd = germsel.find_germs(self.target_model, randomize=True, seed=1234, candidate_germ_counts={6:'all upto'}, 
+                                                   assume_real=True, float_type=np.double, mode='compactEVD', algorithm='greedy')
+    
+        germs_penalty_cevd = germsel.find_germs(self.target_model, randomize=True, seed=1234, candidate_germ_counts={6:'all upto'}, 
+                                                   assume_real=True, float_type=np.double, mode='compactEVD', algorithm='greedy', 
+                                                   algorithm_kwargs={'op_penalty':.1})        
+
+        assert count_ops(germs_no_penalty_cevd) > count_ops(germs_penalty_cevd)
+
+
+    def test_gate_penalty_greedy(self):
+        germs_no_penalty_alljac = germsel.find_germs(self.target_model, randomize=True, seed=1234, candidate_germ_counts={6:'all upto'}, 
+                                                     assume_real=True, float_type=np.double, mode='all-Jac', algorithm='greedy')        
+        germs_no_penalty_cevd = germsel.find_germs(self.target_model, randomize=True, seed=1234, candidate_germ_counts={6:'all upto'}, 
+                                                   assume_real=True, float_type=np.double, mode='compactEVD', algorithm='greedy')
+
+        germs_penalty_alljac = germsel.find_germs(self.target_model, randomize=True, seed=1234, candidate_germ_counts={6:'all upto'}, 
+                                                     assume_real=True, float_type=np.double, mode='all-Jac', algorithm='greedy', 
+                                                     algorithm_kwargs={'gate_penalty':{'Gxpi2':.1}})        
+        germs_penalty_cevd = germsel.find_germs(self.target_model, randomize=True, seed=1234, candidate_germ_counts={6:'all upto'}, 
+                                                   assume_real=True, float_type=np.double, mode='compactEVD', algorithm='greedy', 
+                                                   algorithm_kwargs={'gate_penalty':{'Gxpi2':.1}})
+
+        assert count_gate(germs_no_penalty_alljac, 'Gxpi2') > count_gate(germs_penalty_alljac, 'Gxpi2')
+        assert count_gate(germs_no_penalty_cevd,   'Gxpi2') > count_gate(germs_penalty_cevd,   'Gxpi2')
+                                           
+    def test_gate_penalty_grasp(self):
+        germs_gate_penalty_grasp = germsel.find_germs(self.target_model, randomize=False, seed=1234, candidate_germ_counts={6:'all upto'}, 
+                                                      assume_real=True, float_type=np.double, mode='all-Jac', algorithm='grasp',
+                                                      algorithm_kwargs={'gate_penalty':{'Gxpi2':.1}, 'seed':1234})
+
+        germs_default_grasp = germsel.find_germs(self.target_model, randomize=False, seed=1234, candidate_germ_counts={6:'all upto'}, 
+                                                 assume_real=True, float_type=np.double, mode='all-Jac', algorithm='grasp',
+                                                 algorithm_kwargs={'seed':1234})
+
+        assert count_gate(germs_gate_penalty_grasp, 'Gxpi2') > count_gate(germs_default_grasp, 'Gxpi2')
+
 class EndToEndGermSelectionTester(GermSelectionData, BaseCase):
 
     #This line from our tutorial notebook previously revealed some numerical precision
@@ -389,3 +430,16 @@ class EndToEndGermSelectionTester(GermSelectionData, BaseCase):
     def robust_germ_selection_end_to_end_test(self):
         robust_germs = germsel.find_germs(self.target_model, seed=2017)
         #todo assert correctness
+
+#helper function
+def count_gate(circuits, gate_name):
+    num_gate=0
+    for circuit in circuits:
+        num_gate+=circuit.str.count(gate_name)
+    return num_gate
+
+def count_ops(circuits):
+    num_ops = 0
+    for circuit in circuits:
+        num_ops+= circuit.num_gates
+    return num_ops
