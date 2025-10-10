@@ -2432,7 +2432,7 @@ def _compute_1d_reference_values_and_name(target_model, gopped_models, gaugeopt_
             dim = gaugeopt_model.basis.state_space.udim
             assert n_leak == 1
             assert dim == 3
-            P = _tools.subspace_projector(2, 3, gaugeopt_model.basis)
+            P = _tools.superop_subspace_projector(2, 3, gaugeopt_model.basis)
         else:
             P = _tools.matrixtools.IdentityOperator()
 

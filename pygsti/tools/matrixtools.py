@@ -139,6 +139,18 @@ def is_valid_density_mx(mx, tol=1e-9):
     return abs(_np.trace(mx) - 1.0) < tol and is_pos_def(mx, tol)
 
 
+def is_projector(mx, tol=1e-14):
+    # We use a stringent default tolerance since projectors tend to be
+    # computed to high accuracy.
+    if tol == _np.inf:
+        return True
+    if not is_hermitian(mx, tol):
+        return False
+    mx2 = mx @ mx
+    atol = _np.sqrt(mx.size) * tol
+    return _np.allclose(mx, mx2, atol=atol)
+
+
 def nullspace(m, tol=1e-7):
     """
     Compute the nullspace of a matrix.
@@ -473,6 +485,14 @@ def pinv_of_matrix_with_orthogonal_columns(m):
     return m_with_scaled_cols.T
 
 
+def matrix_rank(m : _np.ndarray, tol=1e-14, assume_hermitian=False):
+    if assume_hermitian:
+        s = _np.abs(_spl.eigvalsh(m))
+    else:
+        s = _spl.svdvals(m)
+    return _np.count_nonzero(s > tol*_np.max(s))
+
+
 def matrix_sign(m):
     """
     Compute the matrix s = sign(m). The eigenvectors of s are the same as those of m.
@@ -531,7 +551,6 @@ def matrix_sign(m):
 
     sign = Z @ (U @ Z.T.conj())
     return sign
-
 
 
 def print_mx(mx, width=9, prec=4, withbrackets=False):

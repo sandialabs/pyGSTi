@@ -609,7 +609,7 @@ def _create_objective_fn(model, target_model, item_weights: Optional[dict[str,fl
 
         dim = int(_np.sqrt(mxBasis.dim))
         if n_leak > 0:
-            P = _tools.subspace_projector(dim - n_leak, dim, mxBasis)
+            P = _tools.superop_subspace_projector(dim - n_leak, dim, mxBasis)
             transform_mx_arg = (P, _tools.matrixtools.IdentityOperator())
             # ^ The semantics of this tuple are defined by the frobeniusdist function
             #   in the ExplicitOpModelCalc class.

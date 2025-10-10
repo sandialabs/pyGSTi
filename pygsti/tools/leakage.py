@@ -14,10 +14,13 @@ from functools import lru_cache
 import copy
 from pygsti.tools import optools as pgot
 from pygsti.tools import basistools as pgbt
+from pygsti.tools import matrixtools as pgmt
 from pygsti.tools.basistools import stdmx_to_vec
 from pygsti.baseobjs import Label
 from pygsti.baseobjs.basis import TensorProdBasis, Basis, BuiltinBasis
+from pygsti.baseobjs.basisconstructors import is_standard_leakage_basis_name
 import numpy as np
+import scipy.linalg as la
 import warnings
 
 from typing import Union, Dict, Optional, List, Any, TYPE_CHECKING
@@ -29,15 +32,18 @@ if TYPE_CHECKING:
 
 NOTATION = \
 """
-Default notation (deferential to text above)
---------------------------------------------
+Default notation (possibly superceded by text above)
+----------------------------------------------------
  * H is a complex Hilbert space equipped with the standard basis.
 
  * C, the computational subspace, is the complex-linear span of the first dim(C)
-   standard basis vectors of H.
+   standard basis vectors of H. The orthogonal complement of C in H is H \\ C.
 
  * Given a complex Hilbert space, U, we write M[U] to denote the space of linear
    operators from U to U. Elements of M[U] have natural matrix representations.
+
+   We can interpret A ∈ M[C] as an element of M[H] by requiring that ker(A) and
+   ker(A^{†}) contain H \\ C.
 
  * Given a space of linear operators, L, we write S[L] for the set of linear 
    transformations ("superoperators") from L to L.
@@ -150,7 +156,7 @@ Here, H has dimension n and C ⊂ H has dimension d ≤ n.
 This function returns a column-unitary matrix B where P = B B^{\\dagger} is the
 orthogonal projector from M[H] to M[C] with respect to current_basis.
 
-If you only care about P, then you can call subspace_projector instead.
+If you only care about P, then you can call superop_subspace_projector instead.
 """ + NOTATION)
 def leading_dxd_submatrix_basis_vectors(d: int, n: int, current_basis: Basis) -> np.ndarray:
     assert d <= n
@@ -190,7 +196,7 @@ This characterization makes two facts about P apparent. First, P is positive
 (i.e., it takes Hermitian psd operators to Hermitian psd operators). Second,
 P is trace-non-increasing.
 """ +  NOTATION)
-def subspace_projector(d: int, n: int, basis: Basis, force_real=True) -> np.ndarray:
+def superop_subspace_projector(d: int, n: int, basis: Basis, force_real=True) -> np.ndarray:
     assert d <= n
     if d == n:
         return np.eye(n**2)
@@ -207,7 +213,7 @@ def subspace_projector(d: int, n: int, basis: Basis, force_real=True) -> np.ndar
     return P
 
 
-CHOI_INDUCED_METRIC = \
+CHOI_INDUCED_METRIC_TEMPLATE = \
 """
 The pair (op_x, op_y) represent some superoperators (X, Y) in S[H], using op_basis.
 
@@ -221,7 +227,7 @@ This function returns the %s between X⨂I(rho_t) and Y⨂I(rho_t).
 """ + NOTATION
 
 
-@set_docstring(CHOI_INDUCED_METRIC % 'entanglement fidelity')
+@set_docstring(CHOI_INDUCED_METRIC_TEMPLATE % 'entanglement fidelity')
 def subspace_entanglement_fidelity(op_x: np.ndarray, op_y: np.ndarray, op_basis, n_leak=0) -> float:
     ten_std_basis, temp1, temp2 = apply_tensorized_to_teststate(op_x, op_y, op_basis, n_leak)
     temp1_mx = pgbt.vec_to_stdmx(temp1, ten_std_basis, keep_complex=True)
@@ -230,7 +236,7 @@ def subspace_entanglement_fidelity(op_x: np.ndarray, op_y: np.ndarray, op_basis,
     return ent_fid  # type: ignore
 
 
-@set_docstring(CHOI_INDUCED_METRIC % 'jamiolkowski trace distance')
+@set_docstring(CHOI_INDUCED_METRIC_TEMPLATE % 'jamiolkowski trace distance')
 def subspace_jtracedist(op_x: np.ndarray, op_y: np.ndarray, op_basis, n_leak=0) -> float:
     ten_std_basis, temp1, temp2 = apply_tensorized_to_teststate(op_x, op_y, op_basis, n_leak)
     temp1_mx = pgbt.vec_to_stdmx(temp1, ten_std_basis, keep_complex=True)
@@ -240,7 +246,7 @@ def subspace_jtracedist(op_x: np.ndarray, op_y: np.ndarray, op_basis, n_leak=0) 
 
 
 
-PROJECTION_INDUCED_METRIC = \
+PROJECTION_INDUCED_METRIC_TEMPLATE = \
 """
 The pair (op_x, op_y) represent some superoperators (X, Y) in S[H], using op_basis.
 
@@ -252,17 +258,18 @@ projector onto the computational subspace (i.e., C) of co-dimension n_leak.
 """ + NOTATION
 
 
-@set_docstring(PROJECTION_INDUCED_METRIC % 'Frobenius distance')
+@set_docstring(PROJECTION_INDUCED_METRIC_TEMPLATE % 'Frobenius distance')
 def subspace_superop_fro_dist(op_x: np.ndarray, op_y: np.ndarray, op_basis, n_leak=0) -> float:
     diff = op_x -  op_y
     if n_leak == 0:
         return np.linalg.norm(diff, 'fro')  # type: ignore
     n = int(np.sqrt(op_x.shape[0]))
     assert op_x.shape == op_y.shape == (n**2, n**2)
+    P = superop_subspace_projector(n - n_leak, n, op_basis, force_leak=False)
     return np.linalg.norm(diff @ P)  # type: ignore
 
 
-@set_docstring(PROJECTION_INDUCED_METRIC % 'diamond distance')
+@set_docstring(PROJECTION_INDUCED_METRIC_TEMPLATE % 'diamond distance')
 def subspace_diamonddist(op_x: np.ndarray, op_y: np.ndarray, op_basis, n_leak=0) -> float:
     """
     Here we give a brief motivating derivation for defining the subspace diamond norm in
@@ -312,38 +319,143 @@ def subspace_diamonddist(op_x: np.ndarray, op_y: np.ndarray, op_basis, n_leak=0)
     dim_pure  = int(dim_mixed**0.5)
     assert n_leak <= 1
     dim_pure_compsub = dim_pure - n_leak
-    P = subspace_projector(dim_pure_compsub, dim_pure, op_basis)
+    P = superop_subspace_projector(dim_pure_compsub, dim_pure, op_basis)
     val : float = diamonddist(op_x @ P, op_y @ P, op_basis, return_x=False) / 2 # type: ignore
     return val
 
 
-def gate_leakage_profile(op, mx_basis) -> tuple[np.ndarray, list[np.ndarray]]:
-    """
-    A 
-    """
-    assert op.shape == (9, 9)
-    lfb = BuiltinBasis('l2p1', 9)
-    op_lfb = pgbt.change_basis(op, mx_basis, lfb)
-    elinds = lfb.elindlookup
-    compinds = [elinds[sslbl] for sslbl in ['I','X','Y','Z'] ]
-    leakage_effect_superket = op_lfb[elinds['L'], compinds]
-    leakage_effect = pgbt.vec_to_stdmx(leakage_effect_superket, 'pp')
-    leakage_rates, states = np.linalg.eigh(leakage_effect)
-    ind = np.argsort(leakage_rates)[::-1]
-    rates  = leakage_rates[ind]
-    states = [np.concatenate([s,[0.0]]) for s in states.T[ind]]
+TRANSPORT_PROFILES_TEMPLATE = \
+"""
+This function returns a description of how a gate (in some process matrix representation)
+transports population from SUB to the orthogonal complement of SUB in H.
+
+Underlying mathematics
+----------------------
+Our subspace of interest is represented by the unique Hermitian operator E_SUB satisfying
+⟨ E_SUB, ρ ⟩ = 1 and ρ = E_SUB ρ E_SUB for all densities ρ ∈ M[SUB]. %s
+
+The process matrix `op` is the mx_basis representation of a CPTP map G : M[H] ➞ M[H].
+
+Consider an experimental protocol where a system is prepared in state ρ, evolved to G(ρ),
+and then measured with the 2-element POVM {E_SUB, 1 - E_SUB}. Runs of this protocol that
+result in the `1 - E_SUB` measurement outcome are called transport events.
+
+The population transport profile of (G,SUB) is a full specification of the probabilties
+of transport events, considering all possible choices of ρ ∈ M[SUB]. This profile is 
+encoded in the Hermitian operator
+
+    E_transport := (E_SUB) G^{†}(1 - E_SUB) (E_SUB) ∈  M[SUB] ⊂ M[H].
+
+This is a valid representation, since
+
+    Pr{ G transports ρ | ρ ∈ M[SUB] } 
+        = ⟨       1 - E_SUB  , G(ρ) ⟩    // definition of a transport event
+        = ⟨ G^{†}(1 - E_SUB) ,   ρ  ⟩    // definition of the adjoint
+        = ⟨     E_transport  ,   ρ  ⟩.   // using ρ = E_SUB ρ E_SUB
+
+
+Function output and interpretation
+----------------------------------
+This function returns a tuple with eigenvalues and eigenvectors of E_transport.
+
+Say this tuple is `(rates, states)`. If G is CPTP, then
+
+    rates[-1] ≤ Pr{ G transports ρ | ρ ∈ M[SUB] } ≤ rates[0].
+
+The upper bound is G's maximum transport of population (Max TOP) out of SUB, and
+is acheived by applying G to the pure state `states[0]` ∈ SUB.
+
+The lower bound is G's minimum transport of population (Min TOP) out of SUB (assuming
+population starts in SUB) and is acheived by applying G to `states[-1]` ∈ SUB.
+
+The length of `rates` and `states` is equal to the rank of E_SUB.
+
+"""
+
+
+@set_docstring(
+TRANSPORT_PROFILES_TEMPLATE.replace('SUB', 'sub') % '' + """
+Failure modes
+-------------
+We raise a ValueError if pygsti.tools.is_projector(E_sub, E_sub_tol) returns False.
+""" + NOTATION )
+def pop_transport_profile(E_sub: np.ndarray, op: np.ndarray, mx_basis: Basis, E_sub_tol=1e-14) -> tuple[np.ndarray,list[np.ndarray]]:
+    n = int(np.sqrt(E_sub.size))
+    if not pgmt.is_projector(E_sub, E_sub_tol):
+        msg = \
+        f"""
+        The argument E_sub must be an orthogonal projector. The provided value was
+
+            E_sub = {E_sub};
+
+        this failed the tests in pygsti.tools.is_projector at tolerance={E_sub_tol}.
+        """
+        raise ValueError(msg)
+
+    E_sub_perp_mat  = np.eye(n) - E_sub
+    E_sub_perp_vec  = pgbt.stdmx_to_vec(E_sub_perp_mat, mx_basis)
+    transport_E_vec  = op.T @ E_sub_perp_vec
+    transport_E_mat  = pgbt.vec_to_stdmx(transport_E_vec, mx_basis, keep_complex=True)
+    transport_E_mat  = E_sub @ transport_E_mat @ E_sub
+
+    rates, states = np.linalg.eigh(transport_E_mat)
+    dim_proj = int(np.trace(E_sub).real)
+    ind = np.argsort(np.abs(rates))[::-1][:dim_proj]
+    rates  = rates[ind]
+    states = [s for s in states.T[ind]]
+
     return rates, states
 
 
-def gate_seepage_profile(op, mx_basis) -> tuple[np.ndarray, list[np.ndarray]]:
-    assert op.shape == (9, 9)
-    lfb = BuiltinBasis('l2p1', 9)
-    op_lfb = pgbt.change_basis(op, mx_basis, lfb)
-    elinds = lfb.elindlookup
-    seeprate  = np.atleast_1d(op_lfb[elinds['I'], elinds['L']])
-    state = [np.array([0.0, 0.0, 1.0], dtype=np.complex128)]
-    return seeprate, state
+@set_docstring(
+TRANSPORT_PROFILES_TEMPLATE.replace('SUB', 'C') % """This operator is
+proportional to the element of mx_basis labeled 'I', since that basis element is assumed
+be proportional to the orthogonal projector onto C.
+""" + NOTATION )
+def gate_leakage_profile(op: np.ndarray, mx_basis: Basis) -> tuple[np.ndarray, list[np.ndarray]]:
+    mx_basis = Basis.cast(mx_basis, dim=int(np.sqrt(op.size)))
+    E_comp_mat = mx_basis.ellookup['I'] # type: ignore
+    n = int(np.sqrt(E_comp_mat.size))
+    assert E_comp_mat.shape == (n, n)
+    dim_comp = pgmt.matrix_rank(E_comp_mat, assume_hermitian=True)
+    E_comp_mat = E_comp_mat * (dim_comp / np.trace(E_comp_mat))
+    if dim_comp == n:
+        msg = \
+        """
+        The provided basis suggests that the computational subspace is equal to
+        the entire system Hilbert space. Returning with an empty leakage profile!
+        """
+        warnings.warn(msg)
+        return np.empty((0,)), []
 
+    rates, states = pop_transport_profile(E_comp_mat, op, mx_basis)
+    return rates, states
+
+
+@set_docstring(
+TRANSPORT_PROFILES_TEMPLATE.replace('SUB', '[H \\ C]') % """This operator is
+inferred from the element of mx_basis labeled 'I', since that basis element is assumed
+be proportional to the orthogonal projector onto C.
+""" + NOTATION )
+def gate_seepage_profile(op, mx_basis) -> tuple[np.ndarray, list[np.ndarray]]:
+    mx_basis = Basis.cast(mx_basis, dim=int(np.sqrt(op.size)))
+    E_comp_mat = mx_basis.ellookup['I'] # type: ignore
+    n = int(np.sqrt(E_comp_mat.size))
+    assert E_comp_mat.shape == (n, n)
+    dim_comp = pgmt.matrix_rank(E_comp_mat, assume_hermitian=True)
+    E_comp_mat = E_comp_mat * (dim_comp / np.trace(E_comp_mat))
+    E_leak_mat = np.eye(n) - E_comp_mat
+    if dim_comp == n:
+        msg = \
+        """
+        The provided basis suggests that the computational subspace is equal to
+        the entire system Hilbert space. Returning with an empty seepage profile!
+        """
+        warnings.warn(msg)
+        return np.empty((0,)), []
+
+    rates, states = pop_transport_profile(E_leak_mat, op, mx_basis)
+    return rates, states
 
 
 # MARK: model construction
@@ -478,7 +590,7 @@ def lagoified_gopparams_dicts(gopparams_dicts: List[Dict]) -> List[Dict]:
         #
         add_lago_models(results, 'CPTPLND', gos)
 
-    After those lines execute, the `estimates.models` dict will have two new
+    After those lines execute, the `estimate.models` dict will have two new
     key-value pairs, where the keys are 'LAGO-std' and 'LAGO-custom'.
     """
     from pygsti.models.gaugegroup import UnitaryGaugeGroup
