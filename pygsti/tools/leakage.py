@@ -18,7 +18,6 @@ from pygsti.tools import matrixtools as pgmt
 from pygsti.tools.basistools import stdmx_to_vec
 from pygsti.baseobjs import Label
 from pygsti.baseobjs.basis import TensorProdBasis, Basis, BuiltinBasis
-from pygsti.baseobjs.basisconstructors import is_standard_leakage_basis_name
 import numpy as np
 import scipy.linalg as la
 import warnings
@@ -417,7 +416,7 @@ def gate_leakage_profile(op: np.ndarray, mx_basis: Basis) -> tuple[np.ndarray, l
     E_comp_mat = mx_basis.ellookup['I'] # type: ignore
     n = int(np.sqrt(E_comp_mat.size))
     assert E_comp_mat.shape == (n, n)
-    dim_comp = pgmt.matrix_rank(E_comp_mat, assume_hermitian=True)
+    dim_comp = np.linalg.matrix_rank(E_comp_mat, hermitian=True)
     E_comp_mat = E_comp_mat * (dim_comp / np.trace(E_comp_mat))
     if dim_comp == n:
         msg = \
@@ -442,7 +441,7 @@ def gate_seepage_profile(op, mx_basis) -> tuple[np.ndarray, list[np.ndarray]]:
     E_comp_mat = mx_basis.ellookup['I'] # type: ignore
     n = int(np.sqrt(E_comp_mat.size))
     assert E_comp_mat.shape == (n, n)
-    dim_comp = pgmt.matrix_rank(E_comp_mat, assume_hermitian=True)
+    dim_comp = np.linalg.matrix_rank(E_comp_mat, hermitian=True)
     E_comp_mat = E_comp_mat * (dim_comp / np.trace(E_comp_mat))
     E_leak_mat = np.eye(n) - E_comp_mat
     if dim_comp == n:
@@ -726,5 +725,3 @@ def construct_leakage_report(
         results, advanced_options={'n_leak': 1}, **extra_report_kwargs
     )
     return report, results
-
-print()

@@ -10,7 +10,6 @@ Functions for creating the standard sets of matrices in the standard, Pauli, Gel
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 import itertools as _itertools
-import re as _re
 import numbers as _numbers
 import numpy as _np
 import scipy.sparse as _sps

@@ -24,6 +24,25 @@ class MatrixToolsTester(BaseCase):
         self.assertTrue(mt.is_pos_def(pos_mx))
         self.assertFalse(mt.is_pos_def(non_pos_mx))
 
+    def test_is_projector(self):
+        self.assertTrue(mt.is_projector(np.zeros((3, 3))))
+        I2 = np.eye(2)
+        self.assertTrue(mt.is_projector(I2))
+        I2[1,1] = 0.9999998
+        self.assertFalse(mt.is_projector(I2))
+        self.assertTrue( mt.is_projector(I2, tol=np.inf))
+        A = np.array([
+            [-0.653829-0.313923j, -0.129614+1.458021j,  0.783975+1.960258j],
+            [ 1.493431+1.801635j, -1.259066+1.315104j,  1.513924+0.35738j ],
+            [ 1.345875-1.208319j,  0.781311-0.004454j,  0.264456+0.656475j]
+        ])
+        Q = np.linalg.qr(A)[0]
+        for i in range(1, 4):
+            U = Q[:,:i].reshape((3, i))
+            P = U @ U.T.conj()
+            self.assertTrue(mt.is_projector(P))
+        return
+
     def test_mx_to_string(self):
         mx = np.array([[ 1, 1+2j],
                        [1-2j, 3]], 'complex')
@@ -192,3 +211,4 @@ class MatrixToolsTester(BaseCase):
         self.assertEqual(mt.prime_factors(7), [7])
         self.assertEqual(mt.prime_factors(10), [2, 5])
         self.assertEqual(mt.prime_factors(12), [2, 2, 3])
+
