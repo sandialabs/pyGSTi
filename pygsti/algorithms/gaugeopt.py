@@ -625,11 +625,12 @@ def _create_objective_fn(model, target_model, item_weights: Optional[dict[str,fl
         
             (1) its fidelities with the target gates match the eigenvalue fidelities with the target gates;
             
-            (2) the fidelities between rho_e and {E_t : E_t in M_target} will match those between
-                rho_e and {E_e : E_e in M_estimate}; and 
+            (2) the (rho_e, M_t) SPAM probs will match the (rho_e, M_e) SPAM probs
 
-            (3) the fidelities between rho_t and {E_e : E_e in M_estimate} will match those between
-                rho_t and {E_t : E_t in M_target}.
+            (3) the (rho_t, M_e) SPAM probs will match the (rho_e, M_e) SPAM probs
+        
+            ^ (3) originally said "fidelities ... match those between rho_e and {E_t : E_t in M_target}", which is WRONG.
+
 
         In view of this, taking fidelity as the gauge-optimization objective tries to minimize an
         aggregration of any mismatch between the various fidelities above.
@@ -652,7 +653,7 @@ def _create_objective_fn(model, target_model, item_weights: Optional[dict[str,fl
                 for povmlbl in target_model.povms:
                     rho_curest = model.preps[preplbl].to_dense()
                     M_curest   = model.povms[povmlbl]
-                    t = {elbl: vec_fidelity(rho_curest, e.to_dense(), mxBasis).item() for (elbl, e) in M_curest.items() }
+                    t = {elbl: _np.vdot(rho_curest, e.to_dense()) for (elbl, e) in M_curest.items() }
                     spam_fidelity_targets[(preplbl, povmlbl)] = t
 
         def _objective_fn(gauge_group_el, oob_check):
@@ -734,8 +735,8 @@ def _create_objective_fn(model, target_model, item_weights: Optional[dict[str,fl
                         rho_target = target_model.preps[preplbl].to_dense()
                         M_curest   = model.povms[povmlbl]
                         M_target   = target_model.povms[povmlbl]
-                        vs_prep = {elbl: vec_fidelity(rho_curest, e.to_dense(), mxBasis) for (elbl, e) in M_target.items() }
-                        vs_povm = {elbl: vec_fidelity(rho_target, e.to_dense(), mxBasis) for (elbl, e) in M_curest.items() }
+                        vs_prep = {elbl: _np.vdot(rho_curest, e_target.to_dense()) for (elbl, e_target) in M_target.items() }
+                        vs_povm = {elbl: _np.vdot(rho_target, e_curest.to_dense()) for (elbl, e_curest) in M_curest.items() }
                         t_dict = spam_fidelity_targets[(preplbl, povmlbl)]
                         val1 = 0.0
                         for lbl, f in vs_prep.items():
