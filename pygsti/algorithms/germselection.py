@@ -25,6 +25,7 @@ from pygsti import circuits as _circuits
 from pygsti import baseobjs as _baseobjs
 from pygsti.tools import mpitools as _mpit
 from pygsti.models import ExplicitOpModel as _ExplicitOpModel
+from pygsti.models import ImplicitOpModel as _ImplicitOpModel
 from pygsti.forwardsims import MatrixForwardSimulator as _MatrixForwardSimulator
 
 FLOATSIZE = 8  # in bytes: TODO: a better way
@@ -193,10 +194,13 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
     modelList = _setup_model_list(target_model, randomize,
                                   randomization_strength, num_gs_copies, seed)
                                   
-    try:
+    if isinstance(target_model, _ExplicitOpModel):
         gates = list(target_model.operations.keys())
-    except AttributeError:
+    elif isinstance(target_model, _ImplicitOpModel):
         gates = list(target_model.operation_blks['layers'].keys())
+    else:
+        raise ValueError("Model must be an ExplicitOpModel or ImplicitOpModel")
+
     availableGermsList = []
     if candidate_germ_counts is None: candidate_germ_counts = {6: 'all upto'}
     for germLength, count in candidate_germ_counts.items():
@@ -1023,17 +1027,20 @@ def _remove_spam_vectors(model):
     Model
     """
     reducedModel = model.copy()
-    try:
+    if isinstance(reducedModel, _ExplicitOpModel):
         for prepLabel in list(reducedModel.preps.keys()):
             del reducedModel.preps[prepLabel]
         for povmLabel in list(reducedModel.povms.keys()):
             del reducedModel.povms[povmLabel]
-    except AttributeError:
+    elif isinstance(reducedModel, _ImplicitOpModel):
         # Implicit model instead
         for prepLabel in list(reducedModel.prep_blks.keys()):
             del reducedModel.prep_blks[prepLabel]
         for povmLabel in list(reducedModel.povm_blks.keys()):
             del reducedModel.povm_blks[povmLabel]
+    else:
+        raise ValueError("Don't know how to remove SPAM vectors from a "
+                         f"{type(reducedModel)}")
 
     reducedModel._mark_for_rebuild()
     return reducedModel
@@ -1309,13 +1316,15 @@ def _bulk_twirled_deriv(model, circuits, eps=1e-6, check=False, comm=None, float
 
     # This function assumes model has no spam elements so `lookup` below
     #  gives indexes into products computed by evalTree.
-    try:
+    if isinstance(model, _ExplicitOpModel):
         if len(model.preps) > 0 or len(model.povms) > 0:
             model = _remove_spam_vectors(model)            
-    except AttributeError: # try treating like implicit model
+    elif isinstance(model, _ImplicitOpModel):
         if len(model.prep_blks) > 0 or len(model.povm_blks) > 0:
             model = _remove_spam_vectors(model)
-        
+    else:
+        raise ValueError(f"Unknown model type: {type(model)}")
+
     resource_alloc = _baseobjs.ResourceAllocation(comm=comm)
     dProds, prods = model.sim.bulk_dproduct(circuits, flat=True, return_prods=True, resource_alloc=resource_alloc)
     op_dim = model.dim
@@ -3049,15 +3058,16 @@ def _compute_bulk_twirled_ddd_compact(model, germs_list, eps,
     #The representations of the germ process matrices are clearly independent 
     #of the spam parameters. (I say that, but I only realized I had forgotten this like
     #6 months later...)
-    try:
+    if isinstance(model, _ExplicitOpModel):
         if len(model.preps) > 0 or len(model.povms) > 0:
             model = _remove_spam_vectors(model)
-            # This function assumes model has no spam elements so `lookup` below
-    except AttributeError:
+    elif isinstance(model, _ImplicitOpModel):
         if len(model.prep_blks['layers']) > 0 or \
            len(model.povm_blks['layers']) > 0:
             model = _remove_spam_vectors(model)
-            # This function assumes model has no spam elements so `lookup` below
+    else:
+        raise ValueError(f"Unknown model type: {type(model)}.")
+    # This function assumes model has no spam elements so `lookup` below
     
     if printer is not None:
         printer.log('Generating compact EVD Cache',1)

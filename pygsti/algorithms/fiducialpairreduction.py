@@ -25,6 +25,7 @@ from pygsti import circuits as _circuits
 
 from pygsti.circuits import circuitconstruction as _gsc
 from pygsti.models import ExplicitOpModel as _ExplicitOpModel
+from pygsti.models import ImplicitOpModel as _ImplicitOpModel
 from pygsti.modelmembers.operations import EigenvalueParamDenseOp as _EigenvalueParamDenseOp
 from pygsti.modelmembers.povms import convert as _convert_povm
 from pygsti.tools import remove_duplicates as _remove_duplicates
@@ -2169,16 +2170,18 @@ def compute_jacobian_dicts(model, germs, prep_fiducials, meas_fiducials, prep_po
 def _set_up_prep_POVM_tuples(target_model, prep_povm_tuples, return_meas_dofs= False):
 
     if prep_povm_tuples == "first":
-        try:
+        if isinstance(target_model, _ExplicitOpModel):        
             firstRho = list(target_model.preps.keys())[0]
             prep_ssl = [target_model.preps[firstRho].state_space.state_space_labels]
             firstPOVM = list(target_model.povms.keys())[0]
             POVM_ssl = [target_model.povms[firstPOVM].state_space.state_space_labels]
-        except AttributeError:
+        elif isinstance(target_model, _ImplicitOpModel):
             firstRho = list(target_model.prep_blks['layers'].keys())[0]
             prep_ssl = [target_model.prep_blks['layers'][firstRho].state_space.state_space_labels]
             firstPOVM = list(target_model.povm_blks['layers'].keys())[0]
             POVM_ssl = [target_model.povm_blks['layers'][firstPOVM].state_space.state_space_labels]
+        else:
+            raise ValueError("Model must be an ExplicitOpModel or ImplicitOpModel")
         prep_povm_tuples = [(firstRho, firstPOVM)]
         #I think using the state space labels for firstRho and firstPOVM as the
         #circuit labels should work most of the time (new stricter line_label enforcement means
@@ -2188,18 +2191,24 @@ def _set_up_prep_POVM_tuples(target_model, prep_povm_tuples, return_meas_dofs= F
     #if not we still need to extract state space labels for all of these to meet new circuit
     #label handling requirements.
     else:
-        try:
+        if isinstance(target_model, _ExplicitOpModel):
             prep_ssl = [target_model.preps[lbl_tup[0]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
             POVM_ssl = [target_model.povms[lbl_tup[1]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
-        except AttributeError:
+        elif isinstance(target_model, _ImplicitOpModel):
             prep_ssl = [target_model.prep_blks['layers'][lbl_tup[0]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
             POVM_ssl = [target_model.povm_blks['layers'][lbl_tup[1]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
+        else:
+            raise ValueError("Model must be an ExplicitOpModel or ImplicitOpModel")
 
     #brief intercession to calculate the number of degrees of freedom for the povm.
-    try:
+    if isinstance(target_model, _ExplicitOpModel):
         num_effects= len(list(target_model.povms[prep_povm_tuples[0][1]].keys()))
-    except AttributeError:
+    elif isinstance(target_model, _ImplicitOpModel):
         num_effects= len(list(target_model.povm_blks['layers'][prep_povm_tuples[0][1]].keys()))
+    else:
+        raise ValueError("Model must be an ExplicitOpModel or ImplicitOpModel")
+    
+    #subtract 1 for the POVM constraint that effects sum to identity.
     dof_per_povm= num_effects-1
 
     prep_povm_tuples = [(_circuits.Circuit([prepLbl], line_labels=prep_ssl[i]), 
