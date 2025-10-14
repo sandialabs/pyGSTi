@@ -17,6 +17,9 @@ from pygsti.baseobjs.opcalc import bulk_eval_compact_polynomials_complex as _bul
 from pygsti.modelmembers import modelmember as _modelmember
 from pygsti.baseobjs import _compatibility as _compat
 from pygsti.tools import optools as _ot
+from pygsti import SpaceT
+
+from typing import Any
 
 
 class State(_modelmember.ModelMember):
@@ -104,7 +107,7 @@ class State(_modelmember.ModelMember):
         """
         pass
 
-    def to_dense(self, on_space='minimal', scratch=None):
+    def to_dense(self, on_space: SpaceT='minimal', scratch=None):
         """
         Return this state vector as a (dense) numpy array.
 
@@ -297,13 +300,11 @@ class State(_modelmember.ModelMember):
         terms_at_order = [t.copy_with_magnitude(abs(coeff)) for coeff, t in zip(coeffs, terms_at_order)]
         return [t for t in terms_at_order if t.magnitude >= min_term_mag]
 
-    def frobeniusdist_squared(self, other_spam_vec, transform=None,
-                              inv_transform=None):
+    def frobeniusdist_squared(self, other_spam_vec, transform=None, inv_transform=None) -> _np.floating[Any]:
         """
         Return the squared frobenius difference between this operation and `other_spam_vec`.
 
-        Optionally transforms this vector first using `transform` and
-        `inv_transform`.
+        Optionally transforms this vector first using `inv_transform`.
 
         Parameters
         ----------
@@ -311,21 +312,21 @@ class State(_modelmember.ModelMember):
             The other spam vector
 
         transform : numpy.ndarray, optional
-            Transformation matrix.
+            Ignored. (We keep this as a positional argument for consistency with
+            the frobeniusdist_squared method of pyGSTi's LinearOperator objects.)
 
         inv_transform : numpy.ndarray, optional
-            Inverse of `tranform`.
+            Named for consistency with the frobeniusdist_squared method of pyGSTi's
+            LinearOperator objects.
 
         Returns
         -------
         float
         """
-        vec = self.to_dense(on_space='minimal')
-        if inv_transform is None:
-            return _ot.frobeniusdist_squared(vec, other_spam_vec.to_dense(on_space='minimal'))
-        else:
-            return _ot.frobeniusdist_squared(_np.dot(inv_transform, vec),
-                                             other_spam_vec.to_dense(on_space='minimal'))
+        vec = self.to_dense("minimal")
+        if inv_transform is not None:
+            vec = inv_transform @ vec
+        return _ot.frobeniusdist_squared(vec, other_spam_vec.to_dense("minimal"))
 
     def residuals(self, other_spam_vec, transform=None, inv_transform=None):
         """
@@ -349,10 +350,10 @@ class State(_modelmember.ModelMember):
         -------
         float
         """
-        vec = self.to_dense(on_space='minimal')
+        vec = self.to_dense("minimal")
         if inv_transform is not None:
             vec = inv_transform @ vec
-        return (vec - other_spam_vec.to_dense(on_space='minimal')).ravel()
+        return (vec - other_spam_vec.to_dense("minimal")).ravel()
 
 
     def transform_inplace(self, s):
@@ -378,7 +379,7 @@ class State(_modelmember.ModelMember):
         None
         """
         Si = s.transform_matrix_inverse
-        self.set_dense(_np.dot(Si, self.to_dense(on_space='minimal')))
+        self.set_dense(_np.dot(Si, self.to_dense("minimal")))
 
     def depolarize(self, amount):
         """
@@ -407,7 +408,7 @@ class State(_modelmember.ModelMember):
         else:
             assert(len(amount) == self.dim - 1)
             D = _np.diag([1] + list(1.0 - _np.array(amount, 'd')))
-        self.set_dense(_np.dot(D, self.to_dense(on_space='minimal')))
+        self.set_dense(_np.dot(D, self.to_dense("minimal")))
 
     @property
     def num_params(self):
@@ -541,7 +542,7 @@ class State(_modelmember.ModelMember):
         numpy array
         """
         if isinstance(v, State):
-            vector = v.to_dense(on_space='minimal').copy()
+            vector = v.to_dense("minimal").copy()
             vector.shape = (vector.size, 1)
         elif isinstance(v, _np.ndarray):
             vector = v.copy()

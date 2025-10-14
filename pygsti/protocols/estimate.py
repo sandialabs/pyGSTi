@@ -24,10 +24,11 @@ from pygsti.objectivefns.objectivefns import ModelDatasetCircuitsStore as _Model
 from pygsti.protocols.confidenceregionfactory import ConfidenceRegionFactory as _ConfidenceRegionFactory
 from pygsti.models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
 from pygsti.objectivefns import objectivefns as _objfns
-from pygsti.circuits.circuitlist import CircuitList as _CircuitList
+from pygsti.circuits import CircuitList as _CircuitList, Circuit as _Circuit
 from pygsti.circuits.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from pygsti.baseobjs.mongoserializable import MongoSerializable as _MongoSerializable
+
 
 #Class for holding confidence region factory keys
 CRFkey = _collections.namedtuple('CRFkey', ['model', 'circuit_list'])
@@ -80,9 +81,18 @@ class Estimate(_MongoSerializable):
         """
         ret = cls.__new__(cls)
         _MongoSerializable.__init__(ret)
-        ret.__dict__.update(_io.load_meta_based_dir(_pathlib.Path(dirname), 'auxfile_types', quick_load=quick_load))
+        state = _io.load_meta_based_dir(_pathlib.Path(dirname), 'auxfile_types', quick_load=quick_load)
+        ret.__dict__.update(state)
         for crf in ret.confidence_region_factories.values():
             crf.set_parent(ret)  # re-link confidence_region_factories
+        if ret.circuit_weights is not None:
+            from pygsti.circuits.circuitparser import parse_circuit
+            cws : dict[_Circuit, float] = dict()
+            for cstr, w in ret.circuit_weights.items():
+                lbls = parse_circuit(cstr, True, True)[0]
+                ckt = _Circuit(lbls)
+                cws[ckt] = w
+            ret.circuit_weights = cws
         return ret
 
     @classmethod
@@ -165,6 +175,8 @@ class Estimate(_MongoSerializable):
         self._final_objfn_cache = parameters.get('final_objfn_cache', None)
         self.final_objfn_builder = parameters.get('final_objfn_builder', _objfns.PoissonPicDeltaLogLFunction.builder())
         self._final_objfn = parameters.get('final_objfn', None)
+        self._per_iter_mdc_store = parameters.get('per_iter_mdc_store', None)
+
 
         self.extra_parameters = extra_parameters if (extra_parameters is not None) else {}
 
@@ -193,13 +205,14 @@ class Estimate(_MongoSerializable):
                               '_final_objfn_cache': 'dir-serialized-object',
                               'final_objfn_builder': 'serialized-object',
                               '_final_objfn': 'reset',
-                              '_gaugeopt_suite': 'serialized-object'
+                              '_gaugeopt_suite': 'serialized-object',
+                              '_per_iter_mdc_store': 'reset'
                               }
 
     @property
     def parameters(self):
         #HACK for now, until we can remove references that access these parameters
-        parameters = _collections.OrderedDict()
+        parameters = dict()
         parameters['protocol'] = self.protocol  # Estimates can hold sub-Protocols <=> sub-results
         parameters['profiler'] = self.profiler
         parameters['final_mdc_store'] = self._final_mdc_store
@@ -207,6 +220,7 @@ class Estimate(_MongoSerializable):
         parameters['final_objfn_cache'] = self._final_objfn_cache
         parameters['final_objfn_builder'] = self.final_objfn_builder
         parameters['weights'] = self.circuit_weights
+        parameters['per_iter_mdc_store'] = self._per_iter_mdc_store
         parameters.update(self.extra_parameters)
         #parameters['raw_objective_values']
         #parameters['model_test_values']
@@ -232,7 +246,17 @@ class Estimate(_MongoSerializable):
         -------
         None
         """
+        old_cw = self.circuit_weights
+        if isinstance(old_cw, dict):
+            new_cw : dict[str, float] = dict()
+            for c, w in old_cw.items():
+                if not isinstance(c, _Circuit):
+                    raise ValueError()
+                new_cw[c.str] = w
+            self.circuit_weights = new_cw
         _io.write_obj_to_meta_based_dir(self, dirname, 'auxfile_types')
+        self.circuit_weights = old_cw
+        return
 
     def _add_auxiliary_write_ops_and_update_doc(self, doc, write_ops, mongodb, collection_name, overwrite_existing):
         _io.add_obj_auxtree_write_ops_and_update_doc(self, doc, write_ops, mongodb, collection_name,

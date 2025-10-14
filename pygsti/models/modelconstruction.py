@@ -47,6 +47,7 @@ from pygsti.tools import basistools as _bt
 from pygsti.tools import internalgates as _itgs
 from pygsti.tools import optools as _ot
 from pygsti.tools import listtools as _lt
+from pygsti import SpaceT
 from pygsti.baseobjs.basisconstructors import sqrt2, id2x2, sigmax, sigmay, sigmaz
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
@@ -252,7 +253,7 @@ def create_operation(op_expr, state_space, basis="pp", parameterization="full", 
             # a complex 2*num_qubits x 2*num_qubits mx unitary on full space in Pauli-product basis
             Uop_embed = _op.EmbeddedOp(state_space, labels, Uop)
             # a real 4*num_qubits x 4*num_qubits mx superoperator in final basis
-            superop_mx_pp = Uop_embed.to_dense(on_space='HilbertSchmidt')
+            superop_mx_pp = Uop_embed.to_dense("HilbertSchmidt")
             # a real 4*num_qubits x 4*num_qubits mx superoperator in final basis
             superop_mx_in_basis = _bt.change_basis(superop_mx_pp, 'pp', basis)
 
@@ -299,7 +300,7 @@ def create_operation(op_expr, state_space, basis="pp", parameterization="full", 
             # a complex 2*num_qubits x 2*num_qubits mx unitary on full space in Pauli-product basis
             Uop_embed = _op.EmbeddedOp(state_space, (label,), Uop)
             # a real 4*num_qubits x 4*num_qubits mx superoperator in Pauli-product basis
-            superop_mx_pp = Uop_embed.to_dense(on_space='HilbertSchmidt')
+            superop_mx_pp = Uop_embed.to_dense("HilbertSchmidt")
             # a real 4*num_qubits x 4*num_qubits mx superoperator in final basis
             superop_mx_in_basis = _bt.change_basis(superop_mx_pp, 'pp', basis)
 
@@ -319,7 +320,7 @@ def create_operation(op_expr, state_space, basis="pp", parameterization="full", 
             # a complex 2*num_qubits x 2*num_qubits mx unitary on full space in Pauli-product basis
             Uop_embed = _op.EmbeddedOp(state_space, (label,), Uop)
             # a real 4*num_qubits x 4*num_qubits mx superoperator in Pauli-product basis
-            superop_mx_pp = Uop_embed.to_dense(on_space='HilbertSchmidt')
+            superop_mx_pp = Uop_embed.to_dense("HilbertSchmidt")
             # a real 4*num_qubits x 4*num_qubits mx superoperator in final basis
             superop_mx_in_basis = _bt.change_basis(superop_mx_pp, 'pp', basis)
 
@@ -362,7 +363,7 @@ def create_operation(op_expr, state_space, basis="pp", parameterization="full", 
             # a complex 2*num_qubits x 2*num_qubits mx unitary on full space
             Uop_embed = _op.EmbeddedOp(state_space, [label1, label2], Uop)
             # a real 4*num_qubits x 4*num_qubits mx superoperator in Pauli-product basis
-            superop_mx_pp = Uop_embed.to_dense(on_space='HilbertSchmidt')
+            superop_mx_pp = Uop_embed.to_dense("HilbertSchmidt")
             # a real 4*num_qubits x 4*num_qubits mx superoperator in final basis
             superop_mx_in_basis = _bt.change_basis(superop_mx_pp, 'pp', basis)
 
@@ -928,6 +929,7 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
         # resolved_avail is a list/tuple of available sslbls for the current gate/factory
         for inds in resolved_avail:  # inds are target qudit labels
             inst_label = _label.Label(instrument_name, inds)
+
             if inds is None or inds == tuple(qudit_labels):  # then no need to embed
                 ideal_instrument = _instrument.Instrument(dense_instrument_spec)
             else:

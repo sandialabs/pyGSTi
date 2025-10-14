@@ -23,7 +23,7 @@ from pygsti.baseobjs import statespace as _statespace
 from pygsti.baseobjs.basis import ExplicitBasis as _ExplicitBasis
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GlobalElementaryErrorgenLabel, LocalElementaryErrorgenLabel as _LocalElementaryErrorgenLabel
 from pygsti.tools import matrixtools as _mt
-
+from pygsti import SpaceT
 
 class ComposedErrorgen(_LinearOperator):
     """
@@ -549,7 +549,7 @@ class ComposedErrorgen(_LinearOperator):
             self.parent._mark_for_rebuild(self)  # of our params may have changed
             self._parent = None  # mark this object for re-allocation
 
-    def to_sparse(self, on_space='minimal'):
+    def to_sparse(self, on_space: SpaceT='minimal'):
         """
         Return this error generator as a sparse matrix
 
@@ -564,7 +564,7 @@ class ComposedErrorgen(_LinearOperator):
             mx += eg.to_sparse(on_space)
         return mx
 
-    def to_dense(self, on_space='minimal'):
+    def to_dense(self, on_space: SpaceT='minimal'):
         """
         Return this error generator as a dense matrix
 

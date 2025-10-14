@@ -434,27 +434,6 @@ class OpModel(Model):
     possible to build up layer operations in an on-demand fashion from pieces
     within the model.
 
-    Parameters
-    ----------
-    state_space : StateSpace
-        The state space for this model.
-
-    basis : Basis
-        The basis used for the state space by dense operator representations.
-
-    evotype : Evotype or str, optional
-        The evolution type of this model, describing how states are
-        represented.  The special value `"default"` is equivalent
-        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
-
-    layer_rules : LayerRules
-        The "layer rules" used for constructing operators for circuit
-        layers.  This functionality is essential to using this model to
-        simulate ciruits, and is typically supplied by derived classes.
-
-    simulator : ForwardSimulator or {"auto", "matrix", "map"}
-        The forward simulator (or typ) that this model should use.  `"auto"`
-        tries to determine the best type automatically.
     """
 
     #Whether to perform extra parameter-vector integrity checks
@@ -466,6 +445,27 @@ class OpModel(Model):
     def __init__(self, state_space, basis, evotype, layer_rules, simulator="auto"):
         """
         Creates a new OpModel.  Rarely used except from derived classes `__init__` functions.
+        Parameters
+        ----------
+        state_space : StateSpace
+            The state space for this model.
+
+        basis : Basis
+            The basis used for the state space by dense operator representations.
+
+        evotype : Evotype or str, optional
+            The evolution type of this model, describing how states are
+            represented.  The special value `"default"` is equivalent
+            to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
+
+        layer_rules : LayerRules
+            The "layer rules" used for constructing operators for circuit
+            layers.  This functionality is essential to using this model to
+            simulate ciruits, and is typically supplied by derived classes.
+
+        simulator : ForwardSimulator or {"auto", "matrix", "map"}
+            The forward simulator (or typ) that this model should use.  `"auto"`
+            tries to determine the best type automatically.
         """
         self._set_state_space(state_space, basis)
         #sets self._state_space, self._basis
@@ -657,56 +657,6 @@ class OpModel(Model):
         self._clean_paramvec()
         return Model.num_modeltest_params.fget(self)
 
-    @property
-    def parameter_labels(self):
-        """
-        A list of labels, usually of the form `(op_label, string_description)` describing this model's parameters.
-        """
-        self._clean_paramvec()
-        return self._ops_paramlbls_to_model_paramlbls(self._paramlbls)
-    
-    def set_parameter_label(self, index, label):
-        """
-        Set the label of a single model parameter.
-
-        Parameters
-        ----------
-        index : int
-            The index of the paramter whose label should be set.
-
-        label : object
-            An object that serves to label this parameter.  Often a string.
-
-        Returns
-        -------
-        None
-        """
-        self._clean_paramvec()
-        self._paramlbls[index] = label
-    
-    @property
-    def parameter_bounds(self):
-        """ Upper and lower bounds on the values of each parameter, utilized by optimization routines """
-        self._clean_paramvec()
-        return self._param_bounds
-    
-    @property
-    def num_modeltest_params(self):
-        """
-        The parameter count to use when testing this model against data.
-
-        Often times, this is the same as :meth:`num_params`, but there are times
-        when it can convenient or necessary to use a parameter count different than
-        the actual number of parameters in this model.
-
-        Returns
-        -------
-        int
-            the number of model parameters.
-        """
-        self._clean_paramvec()
-        return Model.num_modeltest_params.fget(self)
-
     def _iter_parameterized_objs(self):
         raise NotImplementedError("Derived Model classes should implement _iter_parameterized_objs")
         #return # default is to have no parameterized objects
@@ -715,6 +665,10 @@ class OpModel(Model):
     def _check_paramvec(self, debug=False):
         if debug: print("---- Model._check_paramvec ----")
 
+        ops_paramvec = self._model_paramvec_to_ops_paramvec(self._paramvec)
+        if debug: 
+            print(f'{ops_paramvec=}')
+            print(f'{self._paramvec=}')
         TOL = 1e-8
         for lbl, obj in self._iter_parameterized_objs():
             if debug: print(lbl, ":", obj.num_params, obj.gpindices)
@@ -722,14 +676,14 @@ class OpModel(Model):
             msg = "None" if (obj.parent is None) else id(obj.parent)
             assert(obj.parent is self), "%s's parent is not set correctly (%s)!" % (lbl, msg)
             if obj.gpindices is not None and len(w) > 0:
-                if _np.linalg.norm(self._paramvec[obj.gpindices] - w) > TOL:
+                if _np.linalg.norm(ops_paramvec[obj.gpindices] - w) > TOL:
                     if debug: print(lbl, ".to_vector() = ", w, " but Model's paramvec = ",
-                                    self._paramvec[obj.gpindices])
-                    raise ValueError("%s is out of sync with paramvec!!!" % lbl)
+                                    ops_paramvec[obj.gpindices])
+                    raise ValueError(f"{str(lbl)} is out of sync with paramvec!!!")
             if not self.dirty and obj.dirty:
-                raise ValueError("%s is dirty but Model.dirty=False!!" % lbl)
+                raise ValueError(f"{str(lbl)} is dirty but Model.dirty=False!!")
 
-    def _clean_paramvec(self):
+    def _clean_paramvec(self, debug=False):
         """ Updates _paramvec corresponding to any "dirty" elements, which may
             have been modified without out knowing, leaving _paramvec out of
             sync with the element's internal data.  It *may* be necessary
@@ -758,7 +712,6 @@ class OpModel(Model):
         if self.dirty:  # if any member object is dirty (ModelMember.dirty setter should set this value)
             TOL = 1e-8
             ops_paramvec = self._model_paramvec_to_ops_paramvec(self._paramvec)
-
             #Note: lbl args used *just* for potential debugging - could strip out once
             # we're confident this code always works.
             def clean_single_obj(obj, lbl):  # sync an object's to_vector result w/_paramvec
@@ -773,7 +726,8 @@ class OpModel(Model):
                         else:
                             raise e  # we don't know what went wrong.
                     chk_norm = _np.linalg.norm(ops_paramvec[obj.gpindices] - w)
-                    #print(lbl, " is dirty! vec = ", w, "  chk_norm = ",chk_norm)
+                    if debug:
+                        print(f"{lbl} is dirty! vec = {w}, chk_norm = {chk_norm} gpindices = {obj.gpindices}")
                     if (not _np.isfinite(chk_norm)) or chk_norm > TOL:
                         ops_paramvec[obj.gpindices] = w
                     obj.dirty = False
@@ -1034,9 +988,10 @@ class OpModel(Model):
                 max_index_processed_so_far = max(max_index_processed_so_far, max_existing_index)
                 insertion_point = max_index_processed_so_far + 1
                 if num_new_params > 0:
+                    memo = set()
                     # If so, before allocating anything, make the necessary space in the parameter arrays:
                     for _, o in self._iter_parameterized_objs():
-                        o.shift_gpindices(insertion_point, num_new_params, self)
+                        o.shift_gpindices(insertion_point, num_new_params, self, memo)
                     w = _np.insert(w, insertion_point, _np.empty(num_new_params, 'd'))
                     wl = _np.insert(wl, insertion_point, _np.empty(num_new_params, dtype=object))
                     wb = _np.insert(wb, insertion_point, _default_param_bounds(num_new_params), axis=0)
@@ -1187,21 +1142,20 @@ class OpModel(Model):
 
         #Mapping between the model index and the corresponding model members will be more complicated
         #when there is a parameter interposer, so table implementing this for that case.
-        if self.param_interposer is not None:
-            self._index_mm_map = None
-            self._index_mm_label_map = None
-        else:
-            index_mm_map = [[] for _ in range(len(self._paramvec))]
-            index_mm_label_map = [[] for _ in range(len(self._paramvec))]
-            
-            for lbl, obj in self._iter_parameterized_objs():
-                #if the gpindices are a slice then convert to a list of indices.
-                gpindices = _slct.indices(obj.gpindices) if isinstance(obj.gpindices, slice) else obj.gpindices
-                for gpidx in gpindices:
-                    index_mm_map[gpidx].append(obj)
-                    index_mm_label_map[gpidx].append(lbl)
-            self._index_mm_map = index_mm_map
-            self._index_mm_label_map = index_mm_label_map
+        
+
+        ops_param_vec = self._model_paramvec_to_ops_paramvec(self._paramvec)
+        index_mm_map = [[] for _ in range(len(ops_param_vec))]
+        index_mm_label_map = [[] for _ in range(len(ops_param_vec))]
+        
+        for lbl, obj in self._iter_parameterized_objs():
+            #if the gpindices are a slice then convert to a list of indices.
+            gpindices = _slct.indices(obj.gpindices) if isinstance(obj.gpindices, slice) else obj.gpindices
+            for gpidx in gpindices:
+                index_mm_map[gpidx].append(obj)
+                index_mm_label_map[gpidx].append(lbl)
+        self._index_mm_map = index_mm_map
+        self._index_mm_label_map = index_mm_label_map
         #Note to future selves. If we add a flag indicating the presence of collected parameters
         #then we can improve the performance of this by using a simpler structure when no collected
 
@@ -1304,52 +1258,69 @@ class OpModel(Model):
         -------
         None
         """
+        orig_param_vec = self._paramvec.copy()
 
         if isinstance(indices[0], tuple):
             #parse the strings into integer indices.
             param_labels_list = self.parameter_labels.tolist()
             indices = [param_labels_list.index(lbl) for lbl in indices]
-                        
+            
+
         for idx, val in zip(indices, values):
             self._paramvec[idx] = val
 
-        if self._param_interposer is not None or self._index_mm_map is None:
-            #fall back to standard from_vector call.
+        if self._index_mm_map is None:
             self.from_vector(self._paramvec)
+            return
+
+        if self._param_interposer is not None:
+            
+            original_errgen_vec = self._param_interposer.transform_matrix @ orig_param_vec
+            new_errgen_vec = self._param_interposer.transform_matrix @ self._paramvec
+            diff_vec =  original_errgen_vec -  new_errgen_vec
+            diff_vec[_np.abs(diff_vec) < 1e-14] = 0
+            non_zero_errgens = _np.nonzero(diff_vec)
+
+            indices = non_zero_errgens[0]
+            values = new_errgen_vec[indices]
+            vec_to_access = new_errgen_vec
         else:
-            #get all of the model members which need to be be updated and loop through them to update their
-            #parameters.
-            unique_mms = {lbl:val for idx in indices for lbl, val in zip(self._index_mm_label_map[idx], self._index_mm_map[idx])}
+            vec_to_access = self._paramvec.copy()
+
+        #get all of the model members which need to be be updated and loop through them to update their
+        #parameters.
+        #test_model = self.copy()
+        #test_model.from_vector(self._paramvec)
+        unique_mms = {lbl:val for idx in indices for lbl, val in zip(self._index_mm_label_map[idx], self._index_mm_map[idx])}
+        for obj in unique_mms.values():
+            obj.from_vector(vec_to_access[obj.gpindices].copy(), close, dirty_value=False)
+        
+        #go through the model members which have been updated and identify whether any of them have children
+        #which may be present in the _opcaches which have already been updated by the parents. I think the
+        #conditions under which this should be safe are: a) the layer rules are ExplicitLayerRules,
+        #b) The parent is a POVM (it should be safe to assume that POVMs update their children, 
+        #and c) the effect is a child of that POVM.
+        
+        if isinstance(self._layer_rules, _ExplicitLayerRules):
+            updated_children = []
             for obj in unique_mms.values():
-                obj.from_vector(self._paramvec[obj.gpindices].copy(), close, dirty_value=False)
-            
-            #go through the model members which have been updated and identify whether any of them have children
-            #which may be present in the _opcaches which have already been updated by the parents. I think the
-            #conditions under which this should be safe are: a) the layer rules are ExplicitLayerRules,
-            #b) The parent is a POVM (it should be safe to assume that POVMs update their children, 
-            #and c) the effect is a child of that POVM.
-            
-            if isinstance(self._layer_rules, _ExplicitLayerRules):
-                updated_children = []
-                for obj in unique_mms.values():
-                    if isinstance(obj, _POVM):
-                        updated_children.extend(obj.values())
-            else:
-                updated_children = None
+                if isinstance(obj, _POVM):
+                    updated_children.extend(obj.values())
+        else:
+            updated_children = None
 
-            # Call from_vector on elements of the cache
-            if self._call_fromvector_on_cache:
-                #print(f'{self._opcaches=}')
-                for opcache in self._opcaches.values():
-                    for obj in opcache.values():
-                        opcache_elem_gpindices = _slct.indices(obj.gpindices) if isinstance(obj.gpindices, slice) else obj.gpindices
-                        if any([idx in opcache_elem_gpindices for idx in indices]):
-                            #check whether we have already updated this object.
-                            if updated_children is not None and any([child is obj for child in updated_children]):
-                                continue
-                            obj.from_vector(self._paramvec[opcache_elem_gpindices], close, dirty_value=False)
+        # Call from_vector on elements of the cache
+        if self._call_fromvector_on_cache:
+            for opcache in self._opcaches.values():
+                for obj in opcache.values():
+                    opcache_elem_gpindices = _slct.indices(obj.gpindices) if isinstance(obj.gpindices, slice) else obj.gpindices
+                    if any([idx in opcache_elem_gpindices for idx in indices]):
+                        #check whether we have already updated this object.
+                        if updated_children is not None and any([child is obj for child in updated_children]):
+                            continue
+                        obj.from_vector(vec_to_access[obj.gpindices].copy(), close, dirty_value=False)
 
-            if OpModel._pcheck: self._check_paramvec()
+        if OpModel._pcheck: self._check_paramvec()
 
     @property
     def param_interposer(self):
@@ -1361,7 +1332,13 @@ class OpModel(Model):
             self._paramvec = self._model_paramvec_to_ops_paramvec(self._paramvec)
         self._param_interposer = interposer
         if interposer is not None:  # add new interposer
+            #the clean_paramvec call below happens at a point between when we've set the interposer 
+            #attribute, but before we've used it to set the model's parameter vector, which will results
+            #in an edge case in the parameter vector integrity logic, so disable temporarily.
+            pcheck = self._pcheck
+            OpModel._pcheck = False
             self._clean_paramvec()
+            OpModel._pcheck = pcheck
             self._paramvec = self._ops_paramvec_to_model_paramvec(self._paramvec)
 
     def _model_paramvec_to_ops_paramvec(self, v):
@@ -2553,8 +2530,6 @@ class OpModel(Model):
                    dependent_fogi_action='drop', include_spam=True, primitive_op_labels=None):
 
         from pygsti.baseobjs.errorgenbasis import CompleteElementaryErrorgenBasis as _CompleteElementaryErrorgenBasis
-        from pygsti.baseobjs.errorgenbasis import ExplicitElementaryErrorgenBasis as _ExplicitElementaryErrorgenBasis
-        from pygsti.baseobjs.errorgenspace import ErrorgenSpace as _ErrorgenSpace
 
         from pygsti.tools import basistools as _bt
         from pygsti.tools import fogitools as _fogit
@@ -2703,11 +2678,12 @@ class OpModel(Model):
 
         norm_order = "auto"  # NOTE - should be 1 for normalizing 'S' quantities and 2 for 'H',
         # so 'auto' utilizes intelligence within FOGIStore
-        self.fogi_store = _FOGIStore(gauge_action_matrices, gauge_action_gauge_spaces,
-                                     errorgen_coefficient_labels,  # gauge_errgen_space_labels,
-                                     op_label_abbrevs, reduce_to_model_space, dependent_fogi_action,
-                                     norm_order=norm_order)
 
+
+        self.fogi_store = _FOGIStore.from_gauge_action_matrices(gauge_action_matrices, gauge_action_gauge_spaces,
+                                     errorgen_coefficient_labels, 
+                                     op_label_abbrevs, dependent_fogi_action,
+                                     norm_order=norm_order)
         if reparameterize:
             self.param_interposer = self._add_reparameterization(
                 primitive_op_labels + primitive_prep_labels + primitive_povm_labels,

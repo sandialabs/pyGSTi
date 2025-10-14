@@ -87,10 +87,6 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
         The total number of elements in this layout.  In a multi-processor context,
         the number of elements locally owned by the current processor.
 
-    num_elements : int
-        The total number of circuits in this layout.  In a multi-processor context,
-        the number of circuits locally owned by the current processor.
-
     global_layout : CircuitOutcomeProbabilityArrayLayout
         A layout containing all the circuits in their original order, that is the
         same on all processors and doesn't depend on a specific resource allocation.

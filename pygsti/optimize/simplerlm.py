@@ -560,7 +560,7 @@ def simplish_leastsq(
             Jac = jac_guarded(k, num_fd_iters, obj_fn, jac_fn, f, ari, global_x, fdJac)
 
             if profiler:
-                jac_gb = Jac.nbytes/(1024.0**3) if hasattr(Jac, 'nbytes') else _np.NaN
+                jac_gb = Jac.nbytes/(1024.0**3) if hasattr(Jac, 'nbytes') else _np.nan
                 vals = ((f.size, global_x.size), jac_gb)
                 profiler.memory_check("simplish_leastsq: after jacobian: shape=%s, GB=%.2f" % vals)
             

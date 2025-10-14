@@ -6,7 +6,7 @@ name: Build and run tests (feature branches)
 
 on:
   push:
-    branches-ignore: [ "beta", "develop", "master" ]
+    branches-ignore: [ "beta", "develop", "master", "bugfix" ]
   # Hacky way to only run pull requests from forked repositories (assumes : is not used in branch names unless forked)
   # https://github.community/t/how-to-trigger-an-action-on-push-or-pull-request-but-not-both/16662/10
   pull_request:
@@ -16,7 +16,7 @@ on:
 jobs:
   build:
     strategy:
-      # fail-fast: true is OK here
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
         python-version: [3.9, '3.12'] # Only extremal Python versions

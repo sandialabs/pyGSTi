@@ -119,8 +119,11 @@ function trigger_wstable_plot_creation(id, initial_autosize) {
 	    else { padding = parseFloat(padding); }
 	    desiredW =	max_width(plots)+2*padding;
             desiredH =	max_height(plots)+2*padding
-            $(td).css("width", desiredW);
+            $(td).css("min-width", desiredW);
             $(td).css("height", desiredH);
+        console.log("desired width: ", desiredW)
+        console.log("desired height: ", desiredH)
+        
 	    if(TDtoCheck === null) TDtoCheck = $(td); //just take the first one
 
 	    if(!initial_autosize) {
@@ -345,8 +348,6 @@ function make_wsobj_autosize(boxid) {
 }
 
 
-
-
 function pex_get_container(el) {
     // first see if el lies within a TD element. If so, take this at it's container.
     var td = el.closest("td"); 
@@ -360,6 +361,8 @@ function pex_get_container(el) {
 }
 
 function pex_init_plotdiv(el, natural_width, natural_height) {
+    
+    console.log("Calling pex_init_plotdiv with width ", natural_width, "and height ", natural_height);
     //Set initial size to the natural size
     el.css("width", natural_width);
     el.css("height",natural_height);
@@ -436,7 +439,10 @@ function pex_update_plotdiv_size(el, aspect_ratio, frac_width, frac_height, orig
 	val_container.show();
     }
     
-    var w = box.width(); var h = box.height();    
+    var w = box.width(); var h = box.height();
+    //console.log("box width", box.width());
+    //console.log("box height", box.height());
+    //console.log("aspect ratio", aspect_ratio);    
     if(aspect_ratio == null) {
 	// then just match container dimensions exactly
         el.css("width", w-2*padding);
@@ -444,7 +450,7 @@ function pex_update_plotdiv_size(el, aspect_ratio, frac_width, frac_height, orig
     }
     else {
         h = w / aspect_ratio; // get height corresponding to width (h may be > max-height)
-
+        //console.log("h ", h);
 	// Check if container's height (or max-height) is the
 	// limiting factor given the aspect ratio (sometimes height()
 	// doesn't work when not displayed)
@@ -462,7 +468,7 @@ function pex_update_plotdiv_size(el, aspect_ratio, frac_width, frac_height, orig
 
 	//Set content dimensions
 	el.css("width", w-padding);
-        el.css("height",h-padding);
+    el.css("height",h-padding);
     }
     
     if(in_invisible_tab) { tab.hide(); }

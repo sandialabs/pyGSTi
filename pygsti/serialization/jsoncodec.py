@@ -10,14 +10,12 @@ Defines JSON-format encoding and decoding functions
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-# XXX this module should certainly be rewritten as a custom `json.JSONEncoder`
 
 import base64 as _base64
 import collections as _collections
 import importlib as _importlib
 import types as _types
 import uuid as _uuid
-
 import numpy as _np
 import scipy.sparse as _sps
 

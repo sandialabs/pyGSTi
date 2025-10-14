@@ -567,9 +567,9 @@ class QuditProcessorSpec(ProcessorSpec):
             return new_gate_name if (nm == existing_gate_name) else nm
 
         self.gate_names = tuple([rename(nm) for nm in self.gate_names])
-        self.nonstd_gate_unitaries = {rename(k): v for k, v in self.nonstd_gate_unitaries}
-        self.gate_unitaries = {rename(k): v for k, v in self.gate_unitaries}
-        self.availability = {rename(k): v for k, v in self.availability}
+        self.nonstd_gate_unitaries = {rename(k): v for k, v in self.nonstd_gate_unitaries.items()}
+        self.gate_unitaries = {rename(k): v for k, v in self.gate_unitaries.items()}
+        self.availability = {rename(k): v for k, v in self.availability.items()}
 
     def resolved_availability(self, op_name, tuple_or_function="auto"):
         """

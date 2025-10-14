@@ -418,7 +418,7 @@ class StateSpace(_NicelySerializable):
         StateSpace
         """
         # Default, generic, implementation constructs an explicit state space
-        labels = set(labels)
+        labels = sorted(set(labels))
         sub_tpb_labels = []
         sub_tpb_udims = []
         sub_tpb_types = []
@@ -707,6 +707,8 @@ class QuditSpace(StateSpace):
     def qudit_udims(self):
         """Integer Hilbert (unitary operator) space dimensions of the qudits in ths quantum state space."""
         return self._qudit_udims
+
+
     @property
     def udim(self):
         """
@@ -1387,7 +1389,6 @@ class ExplicitStateSpace(StateSpace):
         return ' + '.join(
             ['*'.join(["%s(%d%s)" % (lbl, self.label_dims[lbl], 'c' if (self.label_types[lbl] == 'C') else '')
                        for lbl in tpb]) for tpb in self._labels])
-
 
 def default_space_for_dim(dim):
     """

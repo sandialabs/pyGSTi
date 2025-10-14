@@ -27,6 +27,7 @@ from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
 from pygsti.tools import listtools as _lt
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools import slicetools as _slct
+from pygsti import SpaceT
 
 
 class ComposedOp(_LinearOperator):
@@ -114,9 +115,9 @@ class ComposedOp(_LinearOperator):
         if len(self.factorops) == 0:
             mx = _np.identity(self.state_space.dim, 'd')
         else:
-            mx = self.factorops[0].to_dense(on_space='HilbertSchmidt')
+            mx = self.factorops[0].to_dense("HilbertSchmidt")
             for op in self.factorops[1:]:
-                mx = _np.dot(op.to_dense(on_space='HilbertSchmidt'), mx)
+                mx = _np.dot(op.to_dense("HilbertSchmidt"), mx)
 
         self._rep.base.flags.writeable = True
         self._rep.base[:, :] = mx
@@ -259,7 +260,7 @@ class ComposedOp(_LinearOperator):
             self.parent._mark_for_rebuild(self)  # of our params may have changed
             self._parent = None  # mark this object for re-allocation
 
-    def to_sparse(self, on_space='minimal'):
+    def to_sparse(self, on_space: SpaceT='minimal'):
         """
         Return the operation as a sparse matrix
 
@@ -272,7 +273,7 @@ class ComposedOp(_LinearOperator):
             mx = op.to_sparse(on_space).dot(mx)
         return mx
 
-    def to_dense(self, on_space='minimal'):
+    def to_dense(self, on_space: SpaceT='minimal'):
         """
         Return this operation as a dense matrix.
 
@@ -395,7 +396,7 @@ class ComposedOp(_LinearOperator):
         numpy array
             Array of derivatives with shape (dimension^2, num_params)
         """
-        typ = complex if any([_np.iscomplexobj(op.to_dense(on_space='minimal'))
+        typ = complex if any([_np.iscomplexobj(op.to_dense("minimal"))
                               for op in self.factorops]) else 'd'
         derivMx = _np.zeros((self.dim, self.dim, self.num_params), typ)
 
@@ -407,16 +408,16 @@ class ComposedOp(_LinearOperator):
             deriv.shape = (self.dim, self.dim, op.num_params)
 
             if i > 0:  # factors before ith
-                pre = self.factorops[0].to_dense(on_space='minimal')
+                pre = self.factorops[0].to_dense("minimal")
                 for opA in self.factorops[1:i]:
-                    pre = _np.dot(opA.to_dense(on_space='minimal'), pre)
+                    pre = _np.dot(opA.to_dense("minimal"), pre)
                 #deriv = _np.einsum("ija,jk->ika", deriv, pre )
                 deriv = _np.transpose(_np.tensordot(deriv, pre, (1, 0)), (0, 2, 1))
 
             if i + 1 < len(self.factorops):  # factors after ith
-                post = self.factorops[i + 1].to_dense(on_space='minimal')
+                post = self.factorops[i + 1].to_dense("minimal")
                 for opA in self.factorops[i + 2:]:
-                    post = _np.dot(opA.to_dense(on_space='minimal'), post)
+                    post = _np.dot(opA.to_dense("minimal"), post)
                 #deriv = _np.einsum("ij,jka->ika", post, deriv )
                 deriv = _np.tensordot(post, deriv, (1, 0))
 
@@ -636,8 +637,8 @@ class ComposedOp(_LinearOperator):
             #SPECIAL CASE / HACK: for 1 & 2Q, when holding e^L * T, where T is a static gate
             # then try to gauge transform by setting e^L directly and leaving T alone:
             Smx = s.transform_matrix; Si = s.transform_matrix_inverse
-            Tinv = _np.linalg.inv(self.factorops[0].to_dense(on_space='minimal'))
-            trans_eLT = _np.dot(Si, _np.dot(self.to_dense(on_space='minimal'), Smx))
+            Tinv = _np.linalg.inv(self.factorops[0].to_dense("HilbertSchmidt"))
+            trans_eLT = _np.dot(Si, _np.dot(self.to_dense("HilbertSchmidt"), Smx))
             self.factorops[1].set_dense(_np.dot(trans_eLT, Tinv))  # set_dense(trans_eL)
             return
 
@@ -898,7 +899,20 @@ class ComposedOp(_LinearOperator):
                 available_factor_coeffs = op.errorgen_coefficients(False, logscale_nonham)
             except AttributeError:
                 continue  # just skip members that don't implemnt errorgen_coefficients (?)
-
+            
+            #If necessary cast the input lindblad_term_dict keys so they match the type of
+            #available_factor_coeffs.
+            if available_factor_coeffs:
+                available_factor_coeffs_first_lbl_type = type(next(iter(available_factor_coeffs)))
+                updated_values_to_set = {}
+                for key, val in values_to_set.items():
+                    if not isinstance(key, available_factor_coeffs_first_lbl_type):
+                        #implicitly assuming there is only a single tensor product block in the case where it is an ExplicitStateSpace object.
+                        sslbls = self.state_space.qudit_labels if isinstance(self.state_space, _statespace.QuditSpace) else self.state_space.labels[0]
+                        updated_values_to_set[available_factor_coeffs_first_lbl_type.cast(key, sslbls)] = val
+                    else:
+                        updated_values_to_set[key] = val
+                values_to_set = updated_values_to_set
             Ltermdict_local = {k:v for k, v in values_to_set.items() if k in available_factor_coeffs}
             op.set_errorgen_coefficients(Ltermdict_local, action, logscale_nonham, truncate)
             for k in Ltermdict_local:
