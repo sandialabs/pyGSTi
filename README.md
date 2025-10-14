@@ -36,7 +36,7 @@ In particular, there are a number of characterization protocols currently implem
 
 PyGSTi is designed with a modular structure so as to be highly customizable
 and easily integrated to new or existing python software.  It runs using
-python 3.9 or higher.  To faclilitate integration with software for running
+python 3.9 or higher.  To facilitate integration with software for running
 cloud-QIP experiments, pyGSTi `Circuit` objects can be converted to IBM's
 **OpenQASM** and Rigetti Quantum Computing's **Quil** circuit description languages.
 
@@ -58,7 +58,7 @@ included in the package will then be buried within your Python's
 
 ~~~
 cd <install_directory>
-git clone https://github.com/pyGSTio/pyGSTi.git
+git clone https://github.com/sandialabs/pyGSTi.git
 cd pyGSTi
 pip install -e .[complete]
 ~~~
@@ -155,11 +155,11 @@ report.write_html("myReport", auto_open=True, verbosity=1) # Can also write out 
 Tutorials and Examples
 ----------------------
 There are numerous tutorials (meant to be pedagogical) and examples (meant to be demonstrate
-how to do some particular thing) in the form of Jupyter notebooks beneath the `pyGSTi/jupyter_notebooks`
+how to do some particular thing) in the form of Jupytext-enabled Markdown and Jupyter notebooks beneath the `pyGSTi/docs`
 directory.  The root "START HERE" notebook will direct you where to go based on what you're most
 interested in learning about.  You can view the
-[read-only GitHub version of this notebook](https://github.com/pyGSTio/pyGSTi/blob/master/jupyter_notebooks/START_HERE.ipynb)
-or you can [explore the tutorials interactively](https://mybinder.org/v2/gh/pyGSTio/pyGSTi/master)
+[read-only GitHub version of this notebook](https://github.com/sandialabs/pyGSTi/blob/master/docs/intro.md)
+or you can [explore the tutorials interactively](https://mybinder.org/v2/gh/sandialabs/pyGSTi/master)
 using JupyterHub via Binder.  Note the existence of a
 [FAQ](https://github.com/pyGSTio/pyGSTi/blob/master/jupyter_notebooks/FAQ.ipynb), which
 addresses common issues.
@@ -190,7 +190,7 @@ Online documentation is hosted on [Read the Docs](http://pygsti.readthedocs.io).
 
 License
 -------
-PyGSTi is licensed under the [Apache License Version 2.0](https://github.com/pyGSTio/pyGSTi/blob/master/LICENSE).
+PyGSTi is licensed under the [Apache License Version 2.0](https://github.com/sandialabs/pyGSTi/blob/master/LICENSE).
 
 
 Questions?

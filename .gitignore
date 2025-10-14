@@ -67,6 +67,7 @@ jupyter_notebooks/Tutorials/objects/advanced/test_ibmq*
 jupyter_notebooks/Tutorials/tutorial_files/test_mirror_benchmark
 docs/_autosummary
 docs/_build
+docs/notebooks/**/*.ipynb
 
 
 

@@ -4,14 +4,14 @@
 format: jb-book
 root: markdown/intro
 parts:
-- caption: Overview
+- caption: Getting Started
   chapters:
+  - file: markdown/Installation
   - file: markdown/overview/00-Protocols
   - file: markdown/overview/01-Essential-Objects
-    sections:
-    - file: markdown/overview/02-Using-Essential-Objects
+  - file: markdown/overview/02-Using-Essential-Objects
 
-- caption: User Guide
+- caption: Tutorials
   chapters:
   - file: markdown/Protocols
     sections:
@@ -22,31 +22,16 @@ parts:
         sections:
         - file: markdown/gst/FiducialAndGermSelection
         - file: markdown/gst/FiducialPairReduction
-      - file: markdown/gst/ContextDependence
-      - file: markdown/gst/QutritGST
-        sections:
-        - file: markdown/gst/Leakage-automagic
-        - file: markdown/gst/Leakage-manual
       - file: markdown/gst/TimeDependent
-      - file: markdown/gst/2Q-CreatingModels
-        sections:
-        - file: markdown/gst/2Q-RunningIt
-        - file: markdown/gst/2Q-ErrorBars
-      - file: markdown/gst/MPI
-        sections: 
-        - file: markdown/gst/MPI-GermSelection
-        - file: markdown/gst/MPI-RunningGST
       - file: markdown/gst/Legacy
         sections:
         - file: markdown/gst/Overview-functionbased
         - file: markdown/gst/Driverfunctions
         - file: markdown/gst/LowLevel
-    - file: markdown/misc-protocols/InterpolatedOperators
-      sections:
-      - file: markdown/misc-protocols/1QGST-InterpolatedOps
-    - file: markdown/misc-protocols/IdleTomography
-    - file: markdown/misc-protocols/DriftCharacterization
-    - file: markdown/misc-protocols/RobustPhaseEstimation
+    - file: markdown/protocols/InterpolatedOperators
+    - file: markdown/protocols/IdleTomography
+    - file: markdown/protocols/DriftCharacterization
+    - file: markdown/protocols/RobustPhaseEstimation
     - file: markdown/rb/Overview
       sections:
       - file: markdown/rb/CliffordRB
@@ -57,11 +42,10 @@ parts:
       - file: markdown/rb/Samplers
       - file: markdown/rb/MultiRBExperiments
       - file: markdown/rb/BinaryRB
-    - file: markdown/misc-protocols/VolumetricBenchmarks
+    - file: markdown/protocols/VolumetricBenchmarks
       sections:
-      - file: markdown/misc-protocols/MirrorCircuitBenchmarks
-      - file: markdown/misc-protocols/MCFE-Example
-    - file: markdown/misc-protocols/ParityBenchmarking
+      - file: markdown/protocols/MirrorCircuitBenchmarks
+    - file: markdown/protocols/ParityBenchmarking
   
   - file: markdown/Objects
     sections:
@@ -73,7 +57,12 @@ parts:
       sections:
       - file: markdown/objects/MultiDataSet
       - file: markdown/objects/TimestampedDataSets
+      - file: markdown/utilities/DatasetComparison
     - file: markdown/objects/ExperimentDesign
+    - file: markdown/utilities/GaugeOpt
+    - file: markdown/utilities/Metrics
+      sections:
+      - file: markdown/utilities/ModelAnalysisMetrics
     - file: markdown/objects/Models
       sections:
       - file: markdown/objects/ExplicitModel
@@ -84,6 +73,10 @@ parts:
       - file: markdown/objects/ParameterBounds
       - file: markdown/objects/ParameterLabels
       - file: markdown/objects/ModelMemberGraph
+      - file: markdown/utilities/ModelTesting
+        sections:
+        - file: markdown/utilities/ModelTesting-functions
+        - file: markdown/utilities/Model-Selection
     - file: markdown/objects/ModelPacks
     - file: markdown/objects/Operators
       sections:
@@ -93,26 +86,6 @@ parts:
       - file: markdown/objects/OperationFactories
     - file: markdown/objects/ProcessorSpec
     - file: markdown/objects/Results
-  
-  - file: markdown/Utilities
-    sections:
-    - file: markdown/utilities/DatasetComparison
-    - file: markdown/utilities/ErrorBars
-      sections:
-      - file: markdown/utilities/BootstrappedErrorBars
-      - file: markdown/utilities/ProceduralErrorBars
-    - file: markdown/utilities/FisherInformation
-    - file: markdown/utilities/GaugeOpt
-      sections:
-      - file: markdown/utilities/GOpt-AddingNewOptimizations
-      - file: markdown/utilities/GOpt-NonIdealTargets
-    - file: markdown/utilities/Metrics
-      sections:
-      - file: markdown/utilities/ModelAnalysisMetrics
-    - file: markdown/utilities/ModelTesting
-      sections:
-      - file: markdown/utilities/ModelTesting-functions
-    - file: markdown/utilities/Model-Selection
   
   - file: markdown/Simulation
     sections:
@@ -125,21 +98,41 @@ parts:
     - file: markdown/simulation/ErrorGeneratorPropagation
     - file: markdown/simulation/ForwardSimulationTypes
   
-  - file: markdown/Interfaces
-    sections:
-    - file: markdown/interfaces/FileIO
-    - file: markdown/interfaces/CirqIntegration
-    - file: markdown/interfaces/IBMQExperiment
-  
   - file: markdown/Reporting
     sections:
     - file: markdown/reporting/ReportGeneration
-      sections:
-      - file: markdown/reporting/Reports-LGSTonly
     - file: markdown/reporting/Workspace
       sections:
       - file: markdown/reporting/WorkspaceSwitchboards
       - file: markdown/reporting/WorkspaceExamples
+    
+  - file: markdown/interfaces/FileIO
+
+- caption: Examples
+  chapters:
+  - file: markdown/examples/FisherInformation
+  - file: markdown/examples/ContextDependence
+  - file: markdown/examples/BootstrappedErrorBars
+  - file: markdown/examples/ProceduralErrorBars
+  - file: markdown/examples/2Q-CreatingModels
+    sections:
+    - file: markdown/examples/2Q-RunningIt
+    - file: markdown/examples/2Q-ErrorBars
+  - file: markdown/examples/QutritGST
+    sections:
+    - file: markdown/examples/Leakage-automagic
+    - file: markdown/examples/Leakage-manual
+  - file: markdown/examples/1QGST-InterpolatedOps
+  - file: markdown/examples/MPI
+    sections:
+    - file: markdown/examples/MPI-GermSelection
+    - file: markdown/examples/MPI-RunningGST
+  - file: markdown/examples/GOpt-AddingNewOptimizations
+  - file: markdown/examples/GOpt-NonIdealTargets
+  - file: markdown/examples/Reports-LGSTonly
+  - file: markdown/examples/MCFE-Example
+  - file: markdown/interfaces/IBMQExperiment
+  - file: markdown/interfaces/CirqIntegration
 
 - caption: Developer Zone
   maxdepth: 1

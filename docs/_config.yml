@@ -23,7 +23,7 @@ bibtex_bibfiles:
 repository:
   url: https://github.com/sandialabs/pyGSTi  # Online location of your book
   path_to_book: docs  # Optional path to your book, relative to the repository root
-  branch: master  # Which branch of the repository should be used when creating links (optional)
+  branch: feature-jupyterbook  # Which branch of the repository should be used when creating links (optional)
 
 # Add GitHub buttons to your book
 # See https://jupyterbook.org/customize/config.html#add-a-link-to-your-repository
@@ -31,6 +31,13 @@ html:
   use_issues_button: true
   use_repository_button: true
   home_page_in_navbar: false
+
+# Which notebook interface to open
+# Note, must be classic to automatically convert MD to the ipynb
+# And then we point to public BinderHub
+launch_buttons:
+  notebook_interface: "classic" # or "jupyterlab"
+  binderhub_url: "https://mybinder.org"
 
 # Sphinx options
 sphinx:

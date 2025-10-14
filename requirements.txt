@@ -6,3 +6,4 @@ pandas
 networkx
 stim
 tqdm
+jupytext>=0.16
