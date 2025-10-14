@@ -152,41 +152,53 @@ report = pygsti.report.construct_standard_report(results, title="My Report", ver
 report.write_html("myReport", auto_open=True, verbosity=1) # Can also write out Jupyter notebooks!
 ~~~
 
-Tutorials and Examples
-----------------------
+Documentation
+-------------
 There are numerous tutorials (meant to be pedagogical) and examples (meant to be demonstrate
-how to do some particular thing) in the form of Jupytext-enabled Markdown and Jupyter notebooks beneath the `pyGSTi/docs`
-directory.  The root "START HERE" notebook will direct you where to go based on what you're most
-interested in learning about.  You can view the
-[read-only GitHub version of this notebook](https://github.com/sandialabs/pyGSTi/blob/master/docs/intro.md)
-or you can [explore the tutorials interactively](https://mybinder.org/v2/gh/sandialabs/pyGSTi/master)
-using JupyterHub via Binder.  Note the existence of a
-[FAQ](https://github.com/pyGSTio/pyGSTi/blob/master/jupyter_notebooks/FAQ.ipynb), which
-addresses common issues.
+how to do some particular thing) in the `pyGSTi/docs` directory. These are stored as MyST Markdown
+for version control convenience, but can be converted to Jupyter notebooks as needed using Jupytext.
 
+#### Viewing the documentation *online*
+The recommended way to view the documentation is on [ReadTheDocs](https://pygsti.readthedocs.io/en/latest/),
+although the raw Markdown files can also be looked at on [GitHub](https://github.com/sandialabs/pyGSTi/blob/master/docs/markdown/intro.md).
+
+When using the ReadTheDocs version, you can [interactively explore the tutorials using Binder](https://mybinder.org/v2/gh/sandialabs/pyGSTi/master)
+by clicking the rocket button on the top of any tutorial page. If the document opens in the Markdown version,
+right-click and open as a Notebook to have Jupytext convert it to a runnable notebook.
+
+#### Building the documentation *locally*
+The documentation is built using JupyterBook. Presuming you have `jupytext` and `jupyter-book` installed
+from `pip` and have followed the *local installation* directions above,
+the following command will build all the documentation:
+    ``jb build docs``
+
+Then open `docs/_build/html/index.html` in a web browser to look through the documentation.
 
 #### Running notebooks *locally*
-While it's possible to view the notebooks on GitHub using the links above, it's
-usually nicer to run them *locally* so you can mess around with the code as
-you step through it.  To do this, you'll need to start up a Jupyter notebook
-server using the following steps (this assumes you've followed the *local
-installation* directions above):
+It can also be convenient to build and run the tutorials locally. We can do this using Jupytext
+for conversion and then start a Jupyter notebook or JupyterLab server to run the notebooks.
+Assuming you've followed the *local installation* directions above:
 
-* Changing to the notebook directory, by running:
-    ``cd jupyter_notebooks/Tutorials/``
+* Change to the docs directory, by running:
+    ``cd docs``
 
-* Start up the Jupyter notebook server by running:
-  ``jupyter notebook``
+* Convert the Markdown files to their corresponding notebooks:
+    ``jupytext --sync markdown/**/*.md``
+
+* Change to the newly populated `notebooks` directory:
+    ``cd notebooks``
+
+* Start up the Jupyter notebook server by running ``jupyter notebook`` or a JupyterLab server by running ``jupyter lab``.
 
 The Jupyter server should open up your web browser to the server root, from
-where you can start the first "START_HERE.ipynb" notebook.  Note that the key
+where you can start the first `intro.ipynb` notebook.  Note that the key
 command to execute a cell within the Jupyter notebook is ``Shift+Enter``, not
 just ``Enter``.
 
-
-Documentation
--------------
-Online documentation is hosted on [Read the Docs](http://pygsti.readthedocs.io).
+#### Contributing notebook changes
+Note that only the Markdown files are stored in the repository. If you have made changes to a notebook that
+you wish to push back to the repo, you must run another `jupytext --sync markdown/**/*.md` to resync the
+Markdown file with the changes you have made in the notebook, and then commit the updated Markdown file.
 
 License
 -------

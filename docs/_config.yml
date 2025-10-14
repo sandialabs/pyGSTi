@@ -32,11 +32,9 @@ html:
   use_repository_button: true
   home_page_in_navbar: false
 
-# Which notebook interface to open
-# Note, must be classic to automatically convert MD to the ipynb
-# And then we point to public BinderHub
+# Interactive notebook interface
 launch_buttons:
-  notebook_interface: "classic" # or "jupyterlab"
+  notebook_interface: "jupyterlab"
   binderhub_url: "https://mybinder.org"
 
 # Sphinx options
