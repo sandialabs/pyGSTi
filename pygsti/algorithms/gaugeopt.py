@@ -33,7 +33,18 @@ from typing import Callable, Union, Optional, Any
 
 
 class GaugeoptToTargetArgs:
-    # This class is a glorified namespace. It was introduced to make gaugeopt_to_target(...) easier to understand.
+    """
+    This class is basically a namespace. It was introduced to strip out tons of complexity
+    in gaugeopt_to_target(...) without breaking old code that might call gaugeopt_to_target.
+    """
+
+    old_trailing_positional_args = (
+        'item_weights', 'cptp_penalty_factor', 'spam_penalty_factor',
+        'gates_metric', 'spam_metric', 'gauge_group', 'method',
+        'maxiter', 'maxfev', 'tol', 'oob_check_interval', 
+        'convert_model_to', 'return_all', 'comm', 'verbosity',
+        'check_jac'
+    )
 
     @staticmethod
     def parsed_model(model: Union[_OpModel, _ExplicitOpModel], convert_model_to: Optional[Any]) -> _OpModel:
@@ -79,62 +90,9 @@ class GaugeoptToTargetArgs:
         cptp_penalty_factor=0,
         spam_penalty_factor=0,
         check_jac=False,
-        n_leak=0,
     )
-     
-    gaugeopt_custom_passthrough_kwargs : dict[str, Any] = dict(
-        maxiter=100000,
-        maxfev=None,
-        tol=1e-8,
-        oob_check_interval=0,
-        verbosity=0,
-    )
-
-    other_kwargs : dict[str, Any] = dict(
-        gates_metric="frobenius",    # defines ls_mode_allowed, then passed to _create_objective_fn,
-        spam_metric="frobenius",     # defines ls_mode_allowed, then passed to _create_objective_fn,
-        gauge_group=None,            # used iff convert_model_to is not None, then passed to _create_objective_fn and gaugeopt_custom
-        method='auto',               # validated, then passed to _create_objective_fn and gaugeopt_custom
-        return_all=False,            # used in the function body (only for branching after passing to gaugeopt_custom)
-        convert_model_to=None,       # passthrough to converted_model.
-        comm=None,                   # passthrough to _create_objective_fn and gaugeopt_custom
-    )
-
-    default_kwargs : dict[str, Any] = dict(
-        **create_objective_passthrough_kwargs,
-        **gaugeopt_custom_passthrough_kwargs,
-        **other_kwargs
-    )
-
-    @staticmethod
-    def create_full_kwargs(kwargs: dict[str, Any]):
-        full_kwargs = GaugeoptToTargetArgs.default_kwargs.copy()
-        full_kwargs.update(kwargs)
-        return full_kwargs
-    
-    old_positional_args = (
-        'item_weights', 'cptp_penalty_factor', 'spam_penalty_factor',
-        'gates_metric', 'spam_metric', 'gauge_group', 'method',
-        'maxiter', 'maxfev', 'tol', 'oob_check_interval', 
-        'convert_model_to', 'return_all', 'comm', 'verbosity',
-        'check_jac'
-    )
-
-
-def gaugeopt_to_target(model, target_model, *args, **kwargs):
     """
-    Optimize the gauge degrees of freedom of a model to that of a target.
-
-    Parameters
-    ----------
-    model : Model
-        The model to gauge-optimize
-
-    target_model : Model
-        The model to optimize to.  The metric used for comparing models
-        is given by `gates_metric` and `spam_metric`.
-
-    item_weights : dict, optional
+    item_weights : dict
         Dictionary of weighting factors for gates and spam operators.  Keys can
         be gate, state preparation, or POVM effect, as well as the special values
         "spam" or "gates" which apply the given weighting to *all* spam operators
@@ -143,16 +101,56 @@ def gaugeopt_to_target(model, target_model, *args, **kwargs):
         "spam" values.  The precise use of these weights depends on the model
         metric(s) being used.
 
-    cptp_penalty_factor : float, optional
+    cptp_penalty_factor : float
         If greater than zero, the objective function also contains CPTP penalty
         terms which penalize non-CPTP-ness of the gates being optimized.  This factor
         multiplies these CPTP penalty terms.
 
-    spam_penalty_factor : float, optional
+    spam_penalty_factor : float
         If greater than zero, the objective function also contains SPAM penalty
         terms which penalize non-positive-ness of the state preps being optimized.  This
         factor multiplies these SPAM penalty terms.
 
+    check_jac : bool
+        When True, check least squares analytic jacobian against finite differences.
+    """
+     
+    gaugeopt_custom_passthrough_kwargs : dict[str, Any] = dict(
+        maxiter=100000,
+        maxfev=None,
+        tol=1e-8,
+        oob_check_interval=0,
+        verbosity=0,
+    )
+    """
+    maxiter : int
+        Maximum number of iterations for the gauge optimization.
+
+    maxfev : int
+        Maximum number of function evaluations for the gauge optimization.
+        Defaults to maxiter.
+
+    tol : float
+        The tolerance for the gauge optimization.
+
+    oob_check_interval : int
+        If greater than zero, gauge transformations are allowed to fail (by raising
+        any exception) to indicate an out-of-bounds condition that the gauge optimizer
+        will avoid.  If zero, then any gauge-transform failures just terminate the
+        optimization.
+    """
+
+    other_kwargs : dict[str, Any] = dict(
+        gates_metric="frobenius",    # defines ls_mode_allowed, then passed to _create_objective_fn,
+        spam_metric="frobenius",     # defines ls_mode_allowed, then passed to _create_objective_fn,
+        gauge_group=None,            # used iff convert_model_to is not None, then passed to _create_objective_fn and gaugeopt_custom
+        method='auto',               # validated, then passed to _create_objective_fn and gaugeopt_custom
+        return_all=False,            # used in the function body (only for branching after passing to gaugeopt_custom)
+        convert_model_to=None,       # passthrough to parsed_model.
+        comm=None,                   # passthrough to _create_objective_fn and gaugeopt_custom
+        n_leak=0                     # passthrough to parsed_objective and _create_objective_fn
+    )
+    """
     gates_metric : {"frobenius", "fidelity", "tracedist"}, optional
         The metric used to compare gates within models. "frobenius" computes
         the normalized sqrt(sum-of-squared-differences), with weights
@@ -185,22 +183,6 @@ def gaugeopt_to_target(model, target_model, *args, **kwargs):
         - 'evolve' -- evolutionary global optimization algorithm using DEAP
         - 'brute' -- Experimental: scipy.optimize.brute using 4 points along each dimensions
 
-    maxiter : int, optional
-        Maximum number of iterations for the gauge optimization.
-
-    maxfev : int, optional
-        Maximum number of function evaluations for the gauge optimization.
-        Defaults to maxiter.
-
-    tol : float, optional
-        The tolerance for the gauge optimization.
-
-    oob_check_interval : int, optional
-        If greater than zero, gauge transformations are allowed to fail (by raising
-        any exception) to indicate an out-of-bounds condition that the gauge optimizer
-        will avoid.  If zero, then any gauge-transform failures just terminate the
-        optimization.
-
     convert_model_to : str, dict, list, optional
         For use when `model` is an `ExplicitOpModel`.  When not `None`, calls
         `model.convert_members_inplace(convert_model_to, set_default_gauge_group=False)` if
@@ -217,35 +199,54 @@ def gaugeopt_to_target(model, target_model, *args, **kwargs):
         When not None, an MPI communicator for distributing the computation
         across multiple processors.
 
-    verbosity : int, optional
-        How much detail to send to stdout.
+    n_leak : int
+       Used in leakage modeling. If positive, this specifies how modify defintiions
+       of gate and SPAM metrics to reflect the fact that target gates do not have
+       well-defined actions outside the computational subspace.
+    """
 
-    check_jac : bool
-        When True, check least squares analytic jacobian against finite differences
+    @staticmethod
+    def create_full_kwargs(args: tuple[Any,...], kwargs: dict[str, Any]):
+        full_kwargs =      GaugeoptToTargetArgs.create_objective_passthrough_kwargs.copy()
+        full_kwargs.update(GaugeoptToTargetArgs.gaugeopt_custom_passthrough_kwargs)
+        full_kwargs.update(GaugeoptToTargetArgs.other_kwargs)
+        full_kwargs.update(kwargs)
+
+        if extra_posargs := len(args) > 0:
+            msg = \
+            f"""
+            Recieved {extra_posargs} positional arguments past `model` and `target_model`.
+            These should be passed as appropriate keyword arguments instead. This version
+            of pyGSTi will infer intended keyword arguments based on the legacy argument 
+            positions. Future versions of pyGSTi will raise an error.
+            """
+            _warnings.warn(msg)
+            for k,v in zip(GaugeoptToTargetArgs.old_trailing_positional_args, args):
+                full_kwargs[k] = v
+        
+        return full_kwargs
+
+
+def gaugeopt_to_target(model, target_model, *args, **kwargs):
+    """
+    Legacy function to optimize the gauge degrees of freedom of a model to that of a target.
+
+    Use of more than two positional arguments is deprecated; keyword arguments should be used
+    instead. See the GaugeoptToTargetArgs class for available keyword arguments and their
+    default values.
 
     Returns
     -------
-    model : if return_all == False
+    model : if kwargs.get('return_all', False) == False
     
-    (goodnessMin, gaugeMx, model) : if return_all == True
+    (goodnessMin, gaugeMx, model) : if kwargs.get('return_all', False) == True
+    
         Where goodnessMin is the minimum value of the goodness function (the best 'goodness') 
         found, gaugeMx is the gauge matrix used to transform the model, and model is the 
         final gauge-transformed model.
     """
-    if extra_posargs := len(args) > 0:
-        msg = \
-        f"""
-        Recieved {extra_posargs} positional arguments past `model` and `target_model`.
-        These should be passed as appropriate keyword arguments instead. This version
-        of pyGSTi will infer intended keyword arguments based on the legacy argument 
-        positions. Future versions of pyGSTi will raise an error.
-        """
-        _warnings.warn(msg)
-        kwargs.update({ k: v for (k, v) in zip(GaugeoptToTargetArgs.old_positional_args, args) })
-        out = gaugeopt_to_target(model, target_model, **kwargs)
-        return out
 
-    full_kwargs = GaugeoptToTargetArgs.create_full_kwargs(kwargs)
+    full_kwargs = GaugeoptToTargetArgs.create_full_kwargs(args, kwargs)
     """
     This function handles a strange situation where `target_model` can be None.
 
