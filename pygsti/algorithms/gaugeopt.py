@@ -20,21 +20,108 @@ from pygsti import optimize as _opt
 from pygsti import tools as _tools
 from pygsti.tools import mpitools as _mpit
 from pygsti.tools import slicetools as _slct
+from pygsti.models import (
+    ExplicitOpModel as _ExplicitOpModel
+)
+from pygsti.models.model import OpModel as _OpModel
 from pygsti.models.gaugegroup import (
     TrivialGaugeGroupElement as _TrivialGaugeGroupElement,
     GaugeGroupElement as _GaugeGroupElement
 )
 
-from typing import Callable, Union, Optional
+from typing import Callable, Union, Optional, Any
 
 
-def gaugeopt_to_target(model, target_model, item_weights=None,
-                       cptp_penalty_factor=0, spam_penalty_factor=0,
-                       gates_metric="frobenius", spam_metric="frobenius",
-                       gauge_group=None, method='auto', maxiter=100000,
-                       maxfev=None, tol=1e-8, oob_check_interval=0,
-                       convert_model_to=None, return_all=False, comm=None,
-                       verbosity=0, check_jac=False, n_leak=0):
+class GaugeoptToTargetArgs:
+    # This class is a glorified namespace. It was introduced to make gaugeopt_to_target(...) easier to understand.
+
+    @staticmethod
+    def parsed_model(model: Union[_OpModel, _ExplicitOpModel], convert_model_to: Optional[Any]) -> _OpModel:
+        if convert_model_to is None:
+            return model
+        
+        if not isinstance(model, _ExplicitOpModel):
+            raise ValueError('Gauge optimization only supports model conversion for ExplicitOpModels.')
+        conversion_args = convert_model_to if isinstance(convert_model_to, (list, tuple)) else (convert_model_to,)
+        model_out = model.copy()  # don't alter the original model's parameterization (this would be unexpected)
+        for args in conversion_args:
+            if isinstance(args, str):
+                model_out.convert_members_inplace(args, set_default_gauge_group=True)
+            elif isinstance(args, dict):
+                model_out.convert_members_inplace(**args)
+            else:
+                raise ValueError("Invalid `convert_model_to` arguments: %s" % str(args))
+        return model_out
+
+    @staticmethod
+    def parsed_method(target_model: Optional[_OpModel], method: str, gates_metric: str, spam_metric: str, n_leak: int) -> str:
+        ls_mode_allowed = bool(target_model is not None
+                            and gates_metric.startswith("frobenius")
+                            and spam_metric.startswith("frobenius")
+                            and n_leak == 0)
+        # and model.dim < 64: # least squares optimization seems uneffective if more than 3 qubits
+        #   -- observed by Lucas - should try to debug why 3 qubits seemed to cause trouble...
+        if method == "ls" and not ls_mode_allowed:
+            raise ValueError("Least-squares method is not allowed! Target"
+                            " model must be non-None and frobenius metrics"
+                            " must be used.")
+        elif method == "auto":
+            return 'ls' if ls_mode_allowed else 'L-BFGS-B'
+        else:
+            return method
+
+    # The static dicts of default values are substituted in gaugeopt_to_target's kwargs.
+    # This is a safe thing to do because no invocation of "gaugeopt_to_target" within pyGSTi
+    # used positional arguments past target_model.
+
+    create_objective_passthrough_kwargs : dict[str,Any] = dict(
+        item_weights=None,
+        cptp_penalty_factor=0,
+        spam_penalty_factor=0,
+        check_jac=False,
+        n_leak=0,
+    )
+     
+    gaugeopt_custom_passthrough_kwargs : dict[str, Any] = dict(
+        maxiter=100000,
+        maxfev=None,
+        tol=1e-8,
+        oob_check_interval=0,
+        verbosity=0,
+    )
+
+    other_kwargs : dict[str, Any] = dict(
+        gates_metric="frobenius",    # defines ls_mode_allowed, then passed to _create_objective_fn,
+        spam_metric="frobenius",     # defines ls_mode_allowed, then passed to _create_objective_fn,
+        gauge_group=None,            # used iff convert_model_to is not None, then passed to _create_objective_fn and gaugeopt_custom
+        method='auto',               # validated, then passed to _create_objective_fn and gaugeopt_custom
+        return_all=False,            # used in the function body (only for branching after passing to gaugeopt_custom)
+        convert_model_to=None,       # passthrough to converted_model.
+        comm=None,                   # passthrough to _create_objective_fn and gaugeopt_custom
+    )
+
+    default_kwargs : dict[str, Any] = dict(
+        **create_objective_passthrough_kwargs,
+        **gaugeopt_custom_passthrough_kwargs,
+        **other_kwargs
+    )
+
+    @staticmethod
+    def create_full_kwargs(kwargs: dict[str, Any]):
+        full_kwargs = GaugeoptToTargetArgs.default_kwargs.copy()
+        full_kwargs.update(kwargs)
+        return full_kwargs
+    
+    old_positional_args = (
+        'item_weights', 'cptp_penalty_factor', 'spam_penalty_factor',
+        'gates_metric', 'spam_metric', 'gauge_group', 'method',
+        'maxiter', 'maxfev', 'tol', 'oob_check_interval', 
+        'convert_model_to', 'return_all', 'comm', 'verbosity',
+        'check_jac'
+    )
+
+
+def gaugeopt_to_target(model, target_model, *args, **kwargs):
     """
     Optimize the gauge degrees of freedom of a model to that of a target.
 
@@ -145,43 +232,68 @@ def gaugeopt_to_target(model, target_model, item_weights=None,
         found, gaugeMx is the gauge matrix used to transform the model, and model is the 
         final gauge-transformed model.
     """
-    
-    if item_weights is None: item_weights = {}
+    if extra_posargs := len(args) > 0:
+        msg = \
+        f"""
+        Recieved {extra_posargs} positional arguments past `model` and `target_model`.
+        These should be passed as appropriate keyword arguments instead. This version
+        of pyGSTi will infer intended keyword arguments based on the legacy argument 
+        positions. Future versions of pyGSTi will raise an error.
+        """
+        _warnings.warn(msg)
+        kwargs.update({ k: v for (k, v) in zip(GaugeoptToTargetArgs.old_positional_args, args) })
+        out = gaugeopt_to_target(model, target_model, **kwargs)
+        return out
 
-    ls_mode_allowed = bool(target_model is not None
-                           and gates_metric.startswith("frobenius")
-                           and spam_metric.startswith("frobenius"))
-    #and model.dim < 64: # least squares optimization seems uneffective if more than 3 qubits
-    #  -- observed by Lucas - should try to debug why 3 qubits seemed to cause trouble...
+    full_kwargs = GaugeoptToTargetArgs.create_full_kwargs(kwargs)
+    """
+    This function handles a strange situation where `target_model` can be None.
 
-    if method == "ls" and not ls_mode_allowed:
-        raise ValueError("Least-squares method is not allowed! Target"
-                         " model must be non-None and frobenius metrics"
-                         " must be used.")
-    if method == "auto":
-        method = 'ls' if ls_mode_allowed else 'L-BFGS-B'
+    In this case, the objective function will only depend on `cptp_penality_factor`
+    and `spam_penalty_factor`; it's forbidden to use method == 'ls'; and the
+    returned OpModel might not have its basis set.
+    """
 
-    if convert_model_to is not None:
-        conversion_args = convert_model_to if isinstance(convert_model_to, (list, tuple)) else (convert_model_to,)
-        model = model.copy()  # don't alter the original model's parameterization (this would be unexpected)
-        for args in conversion_args:
-            if isinstance(args, str):
-                model.convert_members_inplace(args, set_default_gauge_group=True)
-            elif isinstance(args, dict):
-                model.convert_members_inplace(**args)
-            else:
-                raise ValueError("Invalid `convert_model_to` arguments: %s" % str(args))
+    # arg parsing: validating `method`
+    gates_metric = full_kwargs['gates_metric']
+    spam_metric  = full_kwargs['spam_metric']
+    n_leak       = full_kwargs['n_leak']
+    method       = full_kwargs['method']
+    method = GaugeoptToTargetArgs.parsed_method(
+        target_model, method, gates_metric, spam_metric, n_leak
+    )
 
+    # arg parsing: (possibly) converting `model`
+    convert_model_to = full_kwargs['convert_model_to']
+    model  = GaugeoptToTargetArgs.parsed_model(model, convert_model_to)
+
+    # actual work: constructing objective_fn and jacobian_fn
+    item_weights = full_kwargs['item_weights']
+    if item_weights is None:
+        item_weights = {}
+    cptp_penalty = full_kwargs['cptp_penalty_factor']
+    spam_penalty = full_kwargs['spam_penalty_factor']
+    comm         = full_kwargs['comm']
+    check_jac    = full_kwargs['check_jac']
     objective_fn, jacobian_fn = _create_objective_fn(
-        model, target_model, item_weights,
-        cptp_penalty_factor, spam_penalty_factor,
-        gates_metric, spam_metric, method, comm, check_jac, n_leak)
+        model, target_model, item_weights, cptp_penalty, spam_penalty,
+        gates_metric, spam_metric, method, comm, check_jac, n_leak
+    )
 
-    result = gaugeopt_custom(model, objective_fn, gauge_group, method,
-                             maxiter, maxfev, tol, oob_check_interval,
-                             return_all, jacobian_fn, comm, verbosity)
+    # actual work: calling the (wrapper of the wrapper of the ...) optimizer
+    gauge_group = full_kwargs['gauge_group']
+    maxiter     = full_kwargs['maxiter']
+    maxfev      = full_kwargs['maxfev']
+    tol         = full_kwargs['tol']
+    oob_check   = full_kwargs['oob_check_interval']
+    return_all  = full_kwargs['return_all']
+    verbosity   = full_kwargs['verbosity']
+    result = gaugeopt_custom(
+        model, objective_fn, gauge_group, method, maxiter, maxfev,
+        tol, oob_check, return_all, jacobian_fn, comm, verbosity
+    )
 
-    #If we've gauge optimized to a target model, declare that the
+    # If we've gauge optimized to a target model, declare that the
     # resulting model is now in the same basis as the target.
     if target_model is not None:
         newModel = result[-1] if return_all else result
@@ -190,9 +302,14 @@ def gaugeopt_to_target(model, target_model, item_weights=None,
     return result
 
 
-def gaugeopt_custom(model, objective_fn, gauge_group=None,
+GGElObjective = Callable[[_GaugeGroupElement, bool], Union[float, _np.ndarray]]
+
+GGElJacobian  = Union[None, Callable[[_GaugeGroupElement], _np.ndarray]]
+
+
+def gaugeopt_custom(model, objective_fn: GGElObjective, gauge_group=None,
                     method='L-BFGS-B', maxiter=100000, maxfev=None, tol=1e-8,
-                    oob_check_interval=0, return_all=False, jacobian_fn=None,
+                    oob_check_interval=0, return_all=False, jacobian_fn: Optional[GGElJacobian]=None,
                     comm=None, verbosity=0):
     """
     Optimize the gauge of a model using a custom objective function.
@@ -203,8 +320,9 @@ def gaugeopt_custom(model, objective_fn, gauge_group=None,
         The model to gauge-optimize
 
     objective_fn : function
-        The function to be minimized.  The function must take a single `Model`
-        argument and return a float.
+        The function to be minimized. The function must take a GaugeGroupElement
+        and a bool. If method == 'ls' then objective_fn must return an ndarray; if
+        method != 'ls' then objective_fn must return a float.
 
     gauge_group : GaugeGroup, optional
         The gauge group which defines which gauge trasformations are optimized
@@ -354,11 +472,6 @@ def gaugeopt_custom(model, objective_fn, gauge_group=None,
         return solnF, gaugeGroupEl, newModel
     else:
         return newModel
-
-
-GGElObjective = Callable[[_GaugeGroupElement,bool], Union[float, _np.ndarray]]
-
-GGElJacobian  = Union[None, Callable[[_GaugeGroupElement], _np.ndarray]]
 
 
 def _create_objective_fn(model, target_model, item_weights: Optional[dict[str,float]]=None,
