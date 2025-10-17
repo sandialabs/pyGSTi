@@ -175,12 +175,12 @@ class GaugeVariantSection(_Section):
             est_representative   = res_representative.estimates[list(res_representative.estimates)[0]]
             mdl_representative   = est_representative.models[list(est_representative.models)[-1]]
             basis_representative = mdl_representative.basis
-        n_leak_default = None if basis_representative.implies_leakage_modeling else 0
 
-        if kwargs.get('n_leak', n_leak_default) == 0:
-            display = ('inf', 'agi', 'geni', 'trace', 'diamond', 'nuinf', 'nuagi')
-        else:
+        if basis_representative.implies_leakage_modeling:
             display = ('sub-inf', 'sub-trace', 'sub-diamond', 'plf-sub-diamond', 'leak-rate-max', 'leak-rate-min', 'seep-rate' )
+        else:
+            display = ('inf', 'agi', 'geni', 'trace', 'diamond', 'nuinf', 'nuagi')
+
         return workspace.GatesVsTargetTable(
             switchboard.mdl_final, switchboard.mdl_target, _cri(1, switchboard, confidence_level, ci_brevity),
             display=display

@@ -1230,9 +1230,6 @@ def construct_standard_report(results, title="auto",
     ws = ws or _ws.Workspace()
 
     advanced_options = advanced_options or {}
-    n_leak = advanced_options.get('n_leak', None)
-    # ^ It would be preferable to store n_leak in a Basis object, or something similar.
-    #   We're using this for now since it's simple and gets the job done.
     linlogPercentile = advanced_options.get('linlog percentile', 5)
     nmthreshold = advanced_options.get('nmthreshold', DEFAULT_NONMARK_ERRBAR_THRESHOLD)
     embed_figures = advanced_options.get('embed_figures', True)
@@ -1379,8 +1376,7 @@ def construct_standard_report(results, title="auto",
         'gauge_opt_labels': tuple(gauge_opt_labels),
         'max_lengths': tuple(Ls),
         'switchbd_maxlengths': tuple(swLs),
-        'show_unmodeled_error': bool('ShowUnmodeledError' in flags),
-        'n_leak' : n_leak
+        'show_unmodeled_error': bool('ShowUnmodeledError' in flags)
     }
 
     templates = dict(

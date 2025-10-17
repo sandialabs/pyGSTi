@@ -960,7 +960,7 @@ def closest_ujmx(gate, mx_basis):
     -------
     float
     """
-    closestUOpMx = _alg.find_closest_unitary_opmx(gate)
+    closestUOpMx = _alg.find_closest_unitary_opmx(gate, mx_basis)
     return _tools.jamiolkowski_iso(closestUOpMx, mx_basis, mx_basis)
 
 
@@ -1010,9 +1010,7 @@ def maximum_trace_dist(gate, mx_basis):
     -------
     float
     """
-    closestUOpMx = _alg.find_closest_unitary_opmx(gate)
-    #closestUJMx = _tools.jamiolkowski_iso(closestUOpMx, mx_basis, mx_basis)
-    _tools.jamiolkowski_iso(closestUOpMx, mx_basis, mx_basis)
+    closestUOpMx = _alg.find_closest_unitary_opmx(gate, mx_basis)
     return _tools.jtracedist(gate, closestUOpMx)
 
 
@@ -1021,16 +1019,8 @@ Maximum_trace_dist = _modf.opfn_factory(maximum_trace_dist)
 
 
 def leaky_maximum_trace_dist(gate, mx_basis):
-    closestUOpMx = _alg.find_closest_unitary_opmx(gate)
-    _tools.jamiolkowski_iso(closestUOpMx, mx_basis, mx_basis)
-    # .... ^ What does that function call do ???
-    if not isinstance(mx_basis, _Basis):
-        mx_basis = _Basis.cast(mx_basis, dim=gate.shape[0])
-    if mx_basis.implies_leakage_modeling:
-        n_leak = None # we'll infer a detailed leakage model from mx_basis
-    else:
-        n_leak = 1 # assume one leakage level
-    return _tools.subspace_jtracedist(gate, closestUOpMx, mx_basis, n_leak)
+    closestUOpMx = _alg.find_closest_unitary_opmx(gate, mx_basis)
+    return _tools.subspace_jtracedist(gate, closestUOpMx, mx_basis)
 
 
 Leaky_maximum_trace_dist = _modf.opfn_factory(leaky_maximum_trace_dist)
@@ -1039,7 +1029,7 @@ Leaky_maximum_trace_dist = _modf.opfn_factory(leaky_maximum_trace_dist)
 def diamonddist_to_leakfree_cptp(op, ignore, mx_basis):
     import pygsti.tools.sdptools as _sdps
     prob, _, solvers = _sdps.diamond_distance_projection_model(
-        op, mx_basis, leakfree=True, seepfree=False, n_leak=1, cptp=True, subspace_diamond=False
+        op, mx_basis, leakfree=True, seepfree=False, cptp=True, subspace_diamond=False
     )
     for s in solvers:
         try:
@@ -1056,7 +1046,7 @@ Diamonddist_to_leakfree_cptp = _modf.opsfn_factory(diamonddist_to_leakfree_cptp)
 def subspace_diamonddist_to_leakfree_cptp(op, ignore, mx_basis):
     import pygsti.tools.sdptools as _sdps
     prob, _, solvers = _sdps.diamond_distance_projection_model(
-        op, mx_basis, leakfree=True, seepfree=False, n_leak=1, cptp=True, subspace_diamond=True
+        op, mx_basis, leakfree=True, seepfree=False, cptp=True, subspace_diamond=True
     )
     for s in solvers:
         try:
@@ -1179,11 +1169,7 @@ Entanglement_fidelity = _modf.opsfn_factory(entanglement_fidelity)
 def subspace_entanglement_fidelity(a, b, mx_basis):
     if not isinstance(mx_basis, _Basis):
         mx_basis = _Basis.cast(mx_basis, dim=a.shape[0])
-    if mx_basis.implies_leakage_modeling:
-        n_leak = None # we'll infer a detailed leakage model from mx_basis
-    else:
-        n_leak = 1 # assume one leakage level
-    return _tools.subspace_entanglement_fidelity(a, b, mx_basis, n_leak)
+    return _tools.subspace_entanglement_fidelity(a, b, mx_basis)
 
 
 Subspace_entanglement_fidelity = _modf.opsfn_factory(subspace_entanglement_fidelity)
@@ -1246,11 +1232,11 @@ def closest_unitary_fidelity(a, b, mx_basis):  # assume vary model1, model2 fixe
 
     if decomp1['isUnitary']:
         closestUGateMx1 = a
-    else: closestUGateMx1 = _alg.find_closest_unitary_opmx(a)
+    else: closestUGateMx1 = _alg.find_closest_unitary_opmx(a, mx_basis)
 
     if decomp2['isUnitary']:
         closestUGateMx2 = b
-    else: closestUGateMx2 = _alg.find_closest_unitary_opmx(a)
+    else: closestUGateMx2 = _alg.find_closest_unitary_opmx(a, mx_basis)
 
     closeChoi1 = _tools.jamiolkowski_iso(closestUGateMx1)
     closeChoi2 = _tools.jamiolkowski_iso(closestUGateMx2)
@@ -1290,11 +1276,7 @@ Fro_diff = _modf.opsfn_factory(frobenius_diff)
 def leaky_gate_frob_dist(a, b, mx_basis):
     if not isinstance(mx_basis, _Basis):
         mx_basis = _Basis.cast(mx_basis, dim=a.shape[0])
-    if mx_basis.implies_leakage_modeling:
-        n_leak = None # we'll infer a detailed leakage model from mx_basis
-    else:
-        n_leak = 1 # assume one leakage level
-    return _tools.subspace_superop_fro_dist(a, b, mx_basis, n_leak)
+    return _tools.subspace_superop_fro_dist(a, b, mx_basis)
 
 
 Leaky_gate_frob_dist = _modf.opsfn_factory(leaky_gate_frob_dist)
@@ -1329,11 +1311,7 @@ Jt_diff = _modf.opsfn_factory(jtrace_diff)
 def leaky_jtrace_diff(a, b, mx_basis):
     if not isinstance(mx_basis, _Basis):
         mx_basis = _Basis.cast(mx_basis, dim=a.shape[0])
-    if mx_basis.implies_leakage_modeling:
-        n_leak = None # we'll infer a detailed leakage model from mx_basis
-    else:
-        n_leak = 1 # assume one leakage level
-    return _tools.subspace_jtracedist(a, b, mx_basis, n_leak)
+    return _tools.subspace_jtracedist(a, b, mx_basis)
 
 
 Leaky_Jt_diff = _modf.opsfn_factory(leaky_jtrace_diff)

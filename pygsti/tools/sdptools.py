@@ -159,7 +159,7 @@ def cptp_superop_variable(purestate_dim: int, basis: BasisLike) -> Tuple[cp.Expr
     return X, constraints
 
 
-def diamond_distance_projection_model(superop: np.ndarray, basis: BasisLike, leakfree: bool=False, seepfree: bool=False, n_leak: Optional[int]=None, cptp: bool=True, subspace_diamond: bool=False):
+def diamond_distance_projection_model(superop: np.ndarray, basis: BasisLike, leakfree: bool=False, seepfree: bool=False, cptp: bool=True, subspace_diamond: bool=False):
     assert CVXPY_ENABLED
     dim_mixed = superop.shape[0]
     dim_pure = int(np.sqrt(dim_mixed))
@@ -169,11 +169,8 @@ def diamond_distance_projection_model(superop: np.ndarray, basis: BasisLike, lea
 
     if not isinstance(basis, Basis):
         basis = Basis.cast(basis, dim=dim_mixed)
-    if n_leak is None:
-        U = projective_measurement_subspace_basis_vectors(basis.ellookup['I'], basis)
-    else:
-        dim_pure_compsub  = dim_pure - n_leak
-        U = leading_dxd_submatrix_basis_vectors(dim_pure_compsub, dim_pure, basis) # type: ignore
+
+    U = projective_measurement_subspace_basis_vectors(basis.ellookup['I'], basis)
 
     if cptp:
         proj_superop, cons = cptp_superop_variable(dim_pure, basis)

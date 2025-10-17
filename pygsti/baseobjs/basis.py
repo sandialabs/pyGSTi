@@ -321,21 +321,9 @@ class Basis(_NicelySerializable):
         if self.elshape is None: return 0
         return int(_np.prod(self.elshape))
 
-    # @property
-    # def ellookup(self) -> dict[str, Any]:
-    #     raise NotImplementedError()
-    
-    # @property
-    # def elements(self) -> Sequence[Any]:
-    #     raise NotImplementedError()
-
-    # @property.setter
-    # def elements(self, val) -> None:
-    #     self.
-
-    # @property
-    # def labels(self) -> Sequence[Any]:
-    #     raise ValueError()
+    # TODO: convert labels, ellookup, and elements to properties.
+    #       Type annotations for Basis objects are of limited use
+    #       without the Basis class declaring that these members exist.
     
     @property
     def implies_leakage_modeling(self) -> bool:

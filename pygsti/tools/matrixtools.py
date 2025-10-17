@@ -981,8 +981,6 @@ def norm1(m):
     return nrm
 
 
-# Riley note: I'd like to rewrite this, but I don't want to mess with reproducibility
-# issues. For now I've just made it a teeny bit more efficient.
 def random_hermitian(dim):
     """
     Generates a random Hermitian matrix
@@ -2442,6 +2440,9 @@ class IdentityOperator:
     #   a numpy matrix (which behaves like an ndarray in many respects, and
     #   has __array_priority__ of 10). 
     #
+
+    def __hash__(self):
+        return 0
 
     def __matmul__(self, other: _typing.Any) -> _typing.Any:
         return other

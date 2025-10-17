@@ -65,11 +65,12 @@ class GaugeoptToTargetArgs:
         return model_out
 
     @staticmethod
-    def parsed_method(target_model: Optional[_OpModel], method: str, gates_metric: str, spam_metric: str, n_leak: Optional[int]) -> str:
+    def parsed_method(target_model: Optional[_OpModel], method: str, gates_metric: str, spam_metric: str) -> str:
         ls_mode_allowed = bool(target_model is not None
                             and gates_metric.startswith("frobenius")
                             and spam_metric.startswith("frobenius")
-                            and isinstance(n_leak, int) and n_leak == -1)
+                            and not target_model.basis.implies_leakage_modeling
+        )
         # and model.dim < 64: # least squares optimization seems uneffective if more than 3 qubits
         #   -- observed by Lucas - should try to debug why 3 qubits seemed to cause trouble...
         if method == "ls" and not ls_mode_allowed:
@@ -147,8 +148,7 @@ class GaugeoptToTargetArgs:
         method='auto',               # validated, then passed to _create_objective_fn and gaugeopt_custom
         return_all=False,            # used in the function body (only for branching after passing to gaugeopt_custom)
         convert_model_to=None,       # passthrough to parsed_model.
-        comm=None,                   # passthrough to _create_objective_fn and gaugeopt_custom
-        n_leak=-1                    # passthrough to parsed_objective and _create_objective_fn; default value is a flag.
+        comm=None                    # passthrough to _create_objective_fn and gaugeopt_custom
     )
     """
     gates_metric : {"frobenius", "fidelity", "tracedist"}, optional
@@ -198,11 +198,6 @@ class GaugeoptToTargetArgs:
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
         across multiple processors.
-
-    n_leak : int
-       Used in leakage modeling. If positive, this specifies how modify defintiions
-       of gate and SPAM metrics to reflect the fact that target gates do not have
-       well-defined actions outside the computational subspace.
     """
 
     @staticmethod
@@ -261,10 +256,9 @@ def gaugeopt_to_target(model, target_model, *args, **kwargs):
     # arg parsing: validating `method`
     gates_metric = full_kwargs['gates_metric']
     spam_metric  = full_kwargs['spam_metric']
-    n_leak       = full_kwargs['n_leak']
     method       = full_kwargs['method']
     method = GaugeoptToTargetArgs.parsed_method(
-        target_model, method, gates_metric, spam_metric, n_leak
+        target_model, method, gates_metric, spam_metric
     )
 
     # arg parsing: (possibly) converting `model`
@@ -279,7 +273,7 @@ def gaugeopt_to_target(model, target_model, *args, **kwargs):
     check_jac    = full_kwargs['check_jac']
     objective_fn, jacobian_fn = _create_objective_fn(
         model, target_model, item_weights, cptp_penalty, spam_penalty,
-        gates_metric, spam_metric, method, comm, check_jac, n_leak
+        gates_metric, spam_metric, method, comm, check_jac
     )
 
     # actual work: calling the (wrapper of the wrapper of the ...) optimizer
@@ -527,7 +521,7 @@ def _povm_effect_fidelity_targets(model, target_model):
 
 def _legacy_create_scalar_objective(model, target_model,
         item_weights: dict[str,float], cptp_penalty_factor: float, spam_penalty_factor: float,
-        gates_metric: str, spam_metric: str, n_leak: Optional[int]
+        gates_metric: str, spam_metric: str
     ) -> tuple[GGElObjective, GGElJacobian]:
     opWeight = item_weights.get('gates', 1.0)
     spamWeight = item_weights.get('spam', 1.0)
@@ -539,20 +533,15 @@ def _legacy_create_scalar_objective(model, target_model,
     #  since from_vector will clear any basis info)
     if mxBasis.name == "unknown" and target_model is not None:
         mxBasis = target_model.basis
+    # ^ TODO: look into if this comment about from_vector is still valid.
+    #   my instinct tells me that we should be raising an error if model.basis
+    #   doesn't match target_model.basis.
 
-
-    udim = int(_np.sqrt(mxBasis.dim))
     I = _tools.matrixtools.IdentityOperator()
-    if n_leak is None and mxBasis.first_element_is_identity:
-        P = I
-    elif n_leak is None:
+    if mxBasis.implies_leakage_modeling:
         P = _tools.superop_subspace_projector(mxBasis)
-    elif n_leak > 0:
-        P = _tools.superop_subspace_projector(udim - n_leak, udim, mxBasis)
     else:
-        # this also handles the case n_leak==-1, which is a flag.
         P = I
-        n_leak = 0
     transform_mx_arg = (P, I)
     # ^ The semantics of this tuple are defined by the frobeniusdist function
     #   in the ExplicitOpModelCalc class.
@@ -593,7 +582,7 @@ def _legacy_create_scalar_objective(model, target_model,
                 for k in wts:
                     if k in mdl.preps or k in mdl.povms:
                         wts[k] = 0.0
-                val = mdl.frobeniusdist(target_model, transform_mx_arg, wts, n_leak)
+                val = mdl.frobeniusdist(target_model, transform_mx_arg, wts)
             if "squared" in gates_metric:
                 val = val ** 2
             ret += val
@@ -616,12 +605,11 @@ def _legacy_create_scalar_objective(model, target_model,
                 ret += wt * z
 
         elif gates_metric == "tracedist":
-            # If n_leak==0, then subspace_jtracedist is just jtracedist.
             for opLbl in mdl.operations:
                 wt = item_weights.get(opLbl, opWeight)
                 top = target_model.operations[opLbl].to_dense()
                 mop = mdl.operations[opLbl].to_dense()
-                ret += wt * _tools.subspace_jtracedist(top, mop, mxBasis, n_leak)
+                ret += wt * _tools.subspace_jtracedist(top, mop, mxBasis)
 
         else:
             raise ValueError("Invalid gates_metric: %s" % gates_metric)
@@ -928,7 +916,7 @@ def _legacy_create_least_squares_objective(model, target_model,
 def _create_objective_fn(model, target_model, item_weights: Optional[dict[str,float]]=None,
                          cptp_penalty_factor: float=0.0, spam_penalty_factor: float=0.0,
                          gates_metric="frobenius", spam_metric="frobenius",
-                         method=None, comm=None, check_jac=False, n_leak: Optional[int]=None) -> tuple[GGElObjective, GGElJacobian]:
+                         method=None, comm=None, check_jac=False) -> tuple[GGElObjective, GGElJacobian]:
     if item_weights is None:
         item_weights = dict()
     if method == 'ls':
@@ -939,7 +927,7 @@ def _create_objective_fn(model, target_model, item_weights: Optional[dict[str,fl
     else:
         return _legacy_create_scalar_objective(
             model, target_model, item_weights, cptp_penalty_factor, spam_penalty_factor, gates_metric,
-            spam_metric, n_leak
+            spam_metric
         )
 
 

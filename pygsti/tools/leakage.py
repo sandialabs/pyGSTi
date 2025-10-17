@@ -81,24 +81,8 @@ representation is real and "maximally spread out" in C⨂C as a subspace of H⨂
 *A remark.* The Choi matrix for a superoperator G in S[H] is G(rho_t), where rho_t is
 the output of this function when n_leak=0.
 """ + NOTATION)
-def tensorized_teststate_density(*args) -> np.ndarray:
-    if len(args) == 2:
-        dim    : int = args[0] # type: ignore
-        n_leak : int = args[1] # type: ignore
-        args_ok = isinstance(dim, int) and isinstance(n_leak, int) and n_leak < dim
-        if not args_ok:
-            raise ValueError()
-        E = np.eye(dim, dtype=np.complex128)
-        if n_leak > 0:
-            E[-n_leak:,-n_leak:] = 0.0
-    elif len(args) == 1:
-        basis : Basis = args[0] # type: ignore
-        args_ok = isinstance(basis, Basis) and basis.is_hermitian() and ('I' in basis.labels)
-        if not args_ok:
-            raise ValueError()
-        E = basis.ellookup['I'].copy()
-    else:
-        raise ValueError()
+def tensorized_teststate_density(basis: Basis) -> np.ndarray:
+    E = basis.ellookup['I'].copy()
     psi = pgbt.stdmx_to_stdvec(E).ravel()
     psi /= la.norm(psi)
     # In a standard leakage basis we have
@@ -122,7 +106,7 @@ This function returns a triplet, consisting of
 *Warning!* At present, this function can only be used for gates over a single system
 (e.g., a single qubit), not for tensor products of such systems.
 """ + NOTATION)
-def apply_tensorized_to_teststate(op_x: np.ndarray, op_y: np.ndarray, op_basis: BasisLike, n_leak: Optional[int]=None) -> tuple[TensorProdBasis, np.ndarray, np.ndarray]:
+def apply_tensorized_to_teststate(op_x: np.ndarray, op_y: np.ndarray, op_basis: BasisLike) -> tuple[TensorProdBasis, np.ndarray, np.ndarray]:
     udim = int(np.sqrt(op_x.shape[0]))
     dim = udim**2
     assert op_x.shape == (dim, dim)
@@ -152,10 +136,7 @@ def apply_tensorized_to_teststate(op_x: np.ndarray, op_y: np.ndarray, op_basis: 
     lift_op_y_std = np.kron(op_y_std, idle_gate)
 
     # Now we'll compare these lifted operators by how they act on specific state in M[H]⨂M[H].
-    if n_leak is not None:
-        rho_test = tensorized_teststate_density(udim, n_leak)
-    else: 
-        rho_test = tensorized_teststate_density(op_basis) # type: ignore
+    rho_test = tensorized_teststate_density(op_basis) # type: ignore
 
     # lift_op_x and lift_op_y only act on states in their superket representations, so we convert
     # rho_test to a superket representation in the induced tensor product basis for S[H]⨂S[H].
@@ -299,8 +280,8 @@ This function returns the %s between X⨂I(rho_t) and Y⨂I(rho_t).
 
 
 @set_docstring(CHOI_INDUCED_METRIC_TEMPLATE % 'entanglement fidelity')
-def subspace_entanglement_fidelity(op_x: np.ndarray, op_y: np.ndarray, op_basis, n_leak: Optional[int] = None) -> float:
-    ten_std_basis, temp1, temp2 = apply_tensorized_to_teststate(op_x, op_y, op_basis, n_leak)
+def subspace_entanglement_fidelity(op_x: np.ndarray, op_y: np.ndarray, op_basis) -> float:
+    ten_std_basis, temp1, temp2 = apply_tensorized_to_teststate(op_x, op_y, op_basis)
     temp1_mx = pgbt.vec_to_stdmx(temp1, ten_std_basis, keep_complex=True)
     temp2_mx = pgbt.vec_to_stdmx(temp2, ten_std_basis, keep_complex=True)
     ent_fid = pgot.fidelity(temp1_mx, temp2_mx)
@@ -308,8 +289,8 @@ def subspace_entanglement_fidelity(op_x: np.ndarray, op_y: np.ndarray, op_basis,
 
 
 @set_docstring(CHOI_INDUCED_METRIC_TEMPLATE % 'jamiolkowski trace distance')
-def subspace_jtracedist(op_x: np.ndarray, op_y: np.ndarray, op_basis, n_leak: Optional[int] = None) -> float:
-    ten_std_basis, temp1, temp2 = apply_tensorized_to_teststate(op_x, op_y, op_basis, n_leak)
+def subspace_jtracedist(op_x: np.ndarray, op_y: np.ndarray, op_basis) -> float:
+    ten_std_basis, temp1, temp2 = apply_tensorized_to_teststate(op_x, op_y, op_basis)
     temp1_mx = pgbt.vec_to_stdmx(temp1, ten_std_basis, keep_complex=True)
     temp2_mx = pgbt.vec_to_stdmx(temp2, ten_std_basis, keep_complex=True)
     j_dist = pgot.tracedist(temp1_mx, temp2_mx)
@@ -330,21 +311,17 @@ projector onto the computational subspace (i.e., C) of co-dimension n_leak.
 
 
 @set_docstring(PROJECTION_INDUCED_METRIC_TEMPLATE % 'Frobenius distance')
-def subspace_superop_fro_dist(op_x: np.ndarray, op_y: np.ndarray, op_basis, n_leak:Optional[int]=None) -> float:
+def subspace_superop_fro_dist(op_x: np.ndarray, op_y: np.ndarray, op_basis: Basis) -> float:
     diff = op_x -  op_y
-    if n_leak == 0:
-        return la.norm(diff, 'fro')  # type: ignore
-    n = int(np.sqrt(op_x.shape[0]))
-    assert op_x.shape == op_y.shape == (n**2, n**2)
-    if n_leak is None:
-        P = superop_subspace_projector(op_basis)
+    if op_basis.implies_leakage_modeling:
+        P = superop_subspace_projector(op_basis) # type: ignore
     else:
-        P = superop_subspace_projector(n - n_leak, n, op_basis)
+        P = pgmt.IdentityOperator()
     return la.norm(diff @ P)  # type: ignore
 
 
 @set_docstring(PROJECTION_INDUCED_METRIC_TEMPLATE % 'diamond distance')
-def subspace_diamonddist(op_x: np.ndarray, op_y: np.ndarray, op_basis, n_leak: Optional[int]=None) -> float:
+def subspace_diamonddist(op_x: np.ndarray, op_y: np.ndarray, op_basis) -> float:
     """
     Here we give a brief motivating derivation for defining the subspace diamond norm in
     the way that we have. This derivation won't convince a skeptic that our definition
@@ -389,12 +366,10 @@ def subspace_diamonddist(op_x: np.ndarray, op_y: np.ndarray, op_basis, n_leak: O
     where f satisfies the property that f(c v) >= f(v) whenever c is a scalar >= 1.
     """
     from pygsti.tools.optools import diamonddist
-    dim_mixed = op_x.shape[0]
-    dim_pure  = int(dim_mixed**0.5)
-    if n_leak is None:
+    if op_basis.implies_leakage_modeling:
         P = superop_subspace_projector(op_basis)
     else:
-        P = superop_subspace_projector(dim_pure - n_leak, dim_pure, op_basis)
+        P = pgmt.IdentityOperator()
     val : float = diamonddist(op_x @ P, op_y @ P, op_basis, return_x=False) / 2 # type: ignore
     return val
 
@@ -670,25 +645,9 @@ def lagoified_gopparams_dicts(gopparams_dicts: List[Dict]) -> List[Dict]:
     """
     from pygsti.models.gaugegroup import UnitaryGaugeGroup
     tm = gopparams_dicts[0]['target_model']
-    if tm.basis.implies_leakage_modeling:
-        # The basis carries enough information for us to infer how leakage should
-        # be modeled.
-        n_leak_arg = None
-    else:
-        # The basis doesn't say anything about how the leakage should be modeled.
-        # We'll assume a 3-level system with one leakage level.
-        n_leak_arg = 1
     gopparams_dicts = [gp for gp in gopparams_dicts if 'TPSpam' not in str(type(gp['_gaugeGroupEl']))]
     gopparams_dicts = copy.deepcopy(gopparams_dicts)
     for inner_dict in gopparams_dicts:
-        inner_dict['n_leak'] = n_leak_arg
-        # ^ This function could accept n_leak as an argument instead. However,
-        #   downstream functions for gauge optimization only support n_leak=0 or 1.
-        # 
-        #   When n_leak=1 we use subspace-restricted loss functions that only care
-        #   about mismatches between an estimate and a target when restricted to the
-        #   computational subspace. We have code for evaluating the loss functions
-        #   themselves, but not their gradients.
         inner_dict['gates_metric'] = 'fidelity'
         inner_dict['spam_metric']  = 'fidelity'
         inner_dict['item_weights'] = {'gates': 0.0, 'spam': 1.0}
@@ -717,7 +676,6 @@ def lagoified_gopparams_dicts(gopparams_dicts: List[Dict]) -> List[Dict]:
         inner_dict['_gaugeGroupEl'] = gg.compute_element(gg.initial_params)
     inner_dict['gates_metric'] = 'frobenius squared'
     inner_dict['spam_metric']  = 'frobenius squared'
-    inner_dict['n_leak'] = n_leak_arg
     inner_dict['item_weights'] = {'gates': 1.0, 'spam': 1.0}
     gopparams_dicts.append(inner_dict)
     return gopparams_dicts
@@ -806,11 +764,7 @@ def construct_leakage_report(
     for ek in est_key:
         assert isinstance(ek, str)
         add_lago_models(results, ek, verbosity=gaugeopt_verbosity)
-    est = results.estimates[ek]
-    n_leak_arg = None if est.models['LAGO'].basis.implies_leakage_modeling else 1
 
     from pygsti.report import construct_standard_report
-    report = construct_standard_report(
-        results, advanced_options={'n_leak': n_leak_arg}, **extra_report_kwargs
-    )
+    report = construct_standard_report(results, **extra_report_kwargs)
     return report, results
