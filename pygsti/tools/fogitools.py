@@ -347,6 +347,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
 
 
     """
+    print_lattices = True
     assert(dependent_fogi_action in ('drop', 'mark'))
     orthogonalize_relationals = True
     set_size_dims = {}
@@ -483,16 +484,13 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
         ccomms[(op_label,)] = complement
         #gauge_action_for_op[op_label] = ga
 
-        #print("Commutant:"); _mt.print_mx(commutant)
-        #print("Names: ", errgen_names)
-        #print("Complement:"); _mt.print_mx(complement)
     
     smaller_sets = [(op_label,) for op_label in primitive_op_labels]
     max_size = len(primitive_op_labels)
-    
+
     for set_size in range(1, max_size):
         larger_sets = []
-        print(f'{set_size=}')
+        print(set_size)
         num_indep_vecs_from_smaller_sets = fogi_dirs.shape[1]
         for op_label in primitive_op_labels:
             for existing_set in smaller_sets:
@@ -752,6 +750,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
 
                     ccomms[new_set] = union_space
                     set_size_dims[new_set] = len(new_indep_cols)
+                    
                     #print("Complement:\n"); _mt.print_mx(union_space)
 
                 larger_sets.append(new_set)
@@ -769,23 +768,28 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
         fogi_dirs = fogi_dirs.real
     if _spsl.norm(dep_fogi_dirs.imag) < 1e-6:
         dep_fogi_dirs = dep_fogi_dirs.real
-    '''
-    keys = list(set_size_dims.keys())
-    gate_abbrevs = {'Gxpi2:0':'X', 'Gypi2:0': 'Y','Gzpi2:0':'Z', 'rho0':'rho', 'Mdefault': 'M'}
-    key_strings = {}
-    for key in keys:
-        key_strings[key] = [gate_abbrevs[label.__str__()] for label in key]
-    print(list(key_strings.values()))
-    keys.sort(key = lambda x: -len(x))
-    curr_length = 1
-    for key in keys:
-        if len(key) != curr_length:
-            print('\n')
-            curr_length = len(key)
-        print(key_strings[key], set_size_dims[key], end='     ')
-        '''
+    if print_lattices:
+        keys = list(set_size_dims.keys())
+        gate_abbrevs = {'Gxpi:0': 'Xpi','Gt:0':'T:0','Gt:1':'T:1','Gh:0':'H:0','Gh:1':'H:1','Gympi2:1':'Ym:1','Gcz:0:1':'CZ','Gxpi2:0':'X:0', 'Gypi2:0': 'Y:0','Gzpi2:0':'Z:0', 'rho0':'rho:0', 'Mdefault': 'M:0', 'Gn:0': 'GN','Gxpi2:1':'X:1', 'Gypi2:1': 'Y:1','Gzpi2:1':'Z:1', 'Gx:0': 'X:0', 'Gx:1': 'X:0', 'Gz:0': 'Z:0', 'Gz:1': 'Z:1', 'Gy:0': 'Y:0'}
+        key_strings = {}
+        for key in keys:
+            key_strings[key] = [gate_abbrevs[label.__str__()] for label in key]
+        keys.sort(key = lambda x: -len(x))
+        curr_length = 1
+        for key in keys:
+            if len(key) != curr_length:
+                print('\n')
+                curr_length = len(key)
+            if set_size_dims[key] > 0:
+                print(key_strings[key], set_size_dims[key], end='     ')
+        
     
-
+    for i in range(1, set_size):
+        summation = 0
+        for op_set in set_size_dims.keys():
+            if len(op_set) == i:
+                summation += set_size_dims[op_set]
+        print(i, summation)
     return (fogi_dirs, fogi_meta, dep_fogi_dirs, dep_fogi_meta)
 
 

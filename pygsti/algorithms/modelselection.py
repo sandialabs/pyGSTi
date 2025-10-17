@@ -63,7 +63,7 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
         optimizer performance).
     
     recompute_H_thresh_percentage : float
-        TODO, parameter not implemented yet
+        TODO,
 
     graph_checkpoint : TODO this will likely get heavily modified
 
@@ -150,8 +150,7 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
             new_checkpoint.x0 = x0
             new_checkpoint.save()
             print('Checkpoint saved in', new_checkpoint.path)
-    if rank == 2:
-        print(x0)
+
     if H is None:
         if rank == 0 and verbosity > 0: 
             print("computing Hessian")
@@ -162,18 +161,32 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
             new_checkpoint.H = H
             new_checkpoint.save()
             print('Checkpoint saved in', new_checkpoint.path)
-    red_model = target_model.copy()
-    logl_fn = create_logl_obj_fn(target_model_fit, data.dataset)
-    original_dlogl = -logl_fn.fn()
-    print(f'{original_dlogl=}')
-    expansion_point_logl = pygsti.tools.logl(target_model_fit, data.dataset, poisson_picture=False)
-    approx_logl_fn = create_approx_logl_fn(H, x0, expansion_point_logl)
-    prev_logl = original_dlogl
-    graph_levels.append([[x0,original_dlogl, 0]])
-    exceeded_threshold = False
-    red_row_H = H
-    red_rowandcol_H = H
+    
+    if False: #checkpoint is not None:
+        if checkpoint.graph_levels is not None:
+            if rank == 0 and verbosity > 0:
+                print(f'Checkpoint contains {len(checkpoint.graph_levels)} levels')
+            graph_levels = checkpoint.graph_levels
+            red_model = checkpoint.red_model
+
+    
+    #else
+    if len(graph_levels) == 0:
+
+        red_model = target_model.copy()
+        logl_fn = create_logl_obj_fn(target_model_fit, data.dataset)
+        original_dlogl = -logl_fn.fn()
+        print(f'{original_dlogl=}')
+        expansion_point_logl = pygsti.tools.logl(target_model_fit, data.dataset, poisson_picture=False)
+        approx_logl_fn = create_approx_logl_fn(H, x0, expansion_point_logl)
+        prev_logl = original_dlogl
+        graph_levels.append([[x0,original_dlogl, 0]])
+        exceeded_threshold = False
+        red_row_H = H
+        red_rowandcol_H = H
     counter = 0
+
+
     while not exceeded_threshold:
         if rank == 0 and verbosity >1:
             print(f'>> Working on level {len(graph_levels)} <<',flush = True)

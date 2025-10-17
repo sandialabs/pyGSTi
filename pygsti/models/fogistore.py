@@ -484,7 +484,7 @@ class FirstOrderGaugeInvariantStore(_NicelySerializable):
         """ typ can be 'raw' or 'abbrev' too """
         if typ == 'normal': return tuple([meta['name'] for meta in self.fogi_metadata])
         elif typ == 'raw': return tuple([meta['raw'] for meta in self.fogi_metadata])
-        elif typ == 'abrev': return tuple([meta['abbrev'] for meta in self.fogi_metadata])
+        elif typ == 'abbrev': return tuple([meta['abbrev'] for meta in self.fogi_metadata])
         else: raise ValueError("Invalid `typ` argument: %s" % str(typ))
 
     def fogv_errorgen_direction_labels(self, typ='normal'):

@@ -2504,7 +2504,6 @@ class OpModel(Model):
         nOpParams = self.num_params  # the number of parameters *before* any reparameterization.  TODO: better way?
         errgenset_space_labels_indx = _collections.OrderedDict(
             [(lbl, i) for i, lbl in enumerate(errgenset_space_labels)])
-        print(errgenset_space_labels[9])
         invDeriv = _np.zeros((nOpParams, fogi_dirs.shape[0]), 'd')
 
         used_param_indices = set()
