@@ -14,9 +14,14 @@ from functools import lru_cache
 import copy
 from pygsti.tools import optools as pgot
 from pygsti.tools import basistools as pgbt
+from pygsti.tools import matrixtools as pgmt
 from pygsti.tools.basistools import stdmx_to_vec
+from pygsti.baseobjs import Label
 from pygsti.baseobjs.basis import TensorProdBasis, Basis, BuiltinBasis
 import numpy as np
+import scipy.linalg as la
+import warnings
+
 import warnings
 
 from typing import Union, Dict, Optional, List, Any, TYPE_CHECKING
@@ -278,7 +283,10 @@ def subspace_superop_fro_dist(op_x, op_y, op_basis, n_leak=0):
 
 # MARK: model construction
 
-def leaky_qubit_model_from_pspec(ps_2level: QubitProcessorSpec, mx_basis: Union[str, Basis]='l2p1', levels_readout_zero=(0,)) -> ExplicitOpModel:
+def leaky_qubit_model_from_pspec(
+        ps_2level: QubitProcessorSpec, mx_basis: Union[str, Basis]='l2p1',
+        levels_readout_zero=(0,), default_idle_gatename: Label = Label(())
+    ) -> ExplicitOpModel:
     """
     Return an ExplicitOpModel `m` whose (ideal) gates act on three-dimensional Hilbert space and whose members
     are represented in `mx_basis`, constructed as follows:
@@ -322,10 +330,14 @@ def leaky_qubit_model_from_pspec(ps_2level: QubitProcessorSpec, mx_basis: Union[
     from pygsti.modelmembers.povms import UnconstrainedPOVM
     from pygsti.modelmembers.states import FullState
     assert ps_2level.num_qubits == 1
+    if ps_2level.idle_gate_names == ['{idle}']:
+        ps_2level.rename_gate_inplace('{idle}', default_idle_gatename)
 
     if isinstance(mx_basis, str):
         mx_basis = BuiltinBasis(mx_basis, 9)
     assert isinstance(mx_basis, Basis)
+
+    ql = ps_2level.qubit_labels[0]
     
     Us = ps_2level.gate_unitaries
     rho0 = np.array([[1, 0, 0], [0, 0, 0], [0, 0, 0]], complex)
@@ -333,7 +345,7 @@ def leaky_qubit_model_from_pspec(ps_2level: QubitProcessorSpec, mx_basis: Union[
     E0[levels_readout_zero, levels_readout_zero] = 1
     E1   = np.eye(3, dtype=complex) - E0
 
-    ss = ExplicitStateSpace([0],[3])
+    ss = ExplicitStateSpace([ql],[3])
     tm_3level = ExplicitOpModel(ss, mx_basis) # type: ignore
     tm_3level.preps['rho0']     =  FullState(stdmx_to_vec(rho0, mx_basis))
     tm_3level.povms['Mdefault'] =  UnconstrainedPOVM(
@@ -348,9 +360,16 @@ def leaky_qubit_model_from_pspec(ps_2level: QubitProcessorSpec, mx_basis: Union[
         return superop
 
     for gatename, unitary in Us.items():
-        gatekey = (gatename, 0) if gatename != '{idle}' else ('Gi',0)
+        gatekey = gatename if isinstance(gatename, Label) else Label((gatename, ql))
         tm_3level.operations[gatekey] = u2x2_to_9x9_superoperator(unitary)
 
+    from pygsti.models.gaugegroup import UnitaryGaugeGroup, DirectSumUnitaryGroup, TrivialGaugeGroup, _ExplicitStateSpace
+    ss_comp = _ExplicitStateSpace(ps_2level.qubit_labels, [2])
+    ss_leak = _ExplicitStateSpace(['L'], [1])
+    g_comp = UnitaryGaugeGroup(ss_comp, 'pp')
+    g_leak = TrivialGaugeGroup(ss_leak)
+    g_full = DirectSumUnitaryGroup((g_comp, g_leak), mx_basis)
+    tm_3level.default_gauge_group = g_full
     tm_3level.sim = 'map'  # can use 'matrix', if that's preferred for whatever reason.
     return tm_3level
 
@@ -359,10 +378,46 @@ def leaky_qubit_model_from_pspec(ps_2level: QubitProcessorSpec, mx_basis: Union[
 
 def lagoified_gopparams_dicts(gopparams_dicts: List[Dict]) -> List[Dict]:
     """
-    Return a modified deep-copy of gopparams_dicts, where the modifications
-    strip out gauge optimization over the TPSpam gauge group and apply a 
-    few other changes appropriate for leakage modeling.
+    goppparams_dicts is a list-of-dicts (LoDs) representation of a gauge optimization suite
+    suitable for models without leakage (e.g., a model of a 2-level system).
+
+    This function returns a new gauge optimization suite (also in the LoDs representation)
+    by applying leakage-specific modifications to a deep-copy of gopparams_dicts.
+
+    Example
+    -------
+    Suppose we have a ModelEstimateResults object called `results` that includes a
+    CPTPLND estimate, and we want to update the models of that estimate to include
+    two types of leakage-aware gauge optimization.
+
+        #
+        # Step 1: get the input to this function
+        #
+        estimate = results.estimates['CPTPLND']
+        model    = estimate.models['target']
+        stdsuite = GSTGaugeOptSuite(gaugeopt_suite_names=('stdgaugeopt',))
+        gopparams_dicts = stdsuite.to_dictionary(model)['stdgaugeopt']
+        
+        #
+        # Step 2: use this function to build our GSTGaugeOptSuite.
+        #
+        s = lagoified_gopparams_dicts(gopparams_dicts)
+        t = lagoified_gopparams_dicts(gopparams_dicts)
+        t[-1]['gates_metric'] = 'fidelity'
+        t[-1]['spam_metric']  = 'fidelity'
+        specification = {'LAGO-std': s,'LAGO-custom': t}
+        gos = GSTGaugeOptSuite(gaugeopt_argument_dicts=specification)
+        
+        #
+        # Step 3: updating `estimate` requires that we modify `results`.
+        #
+        add_lago_models(results, 'CPTPLND', gos)
+
+    After those lines execute, the `estimate.models` dict will have two new
+    key-value pairs, where the keys are 'LAGO-std' and 'LAGO-custom'.
     """
+    from pygsti.models.gaugegroup import UnitaryGaugeGroup
+    tm = gopparams_dicts[0]['target_model']
     gopparams_dicts = [gp for gp in gopparams_dicts if 'TPSpam' not in str(type(gp['_gaugeGroupEl']))]
     gopparams_dicts = copy.deepcopy(gopparams_dicts)
     for inner_dict in gopparams_dicts:
@@ -374,18 +429,36 @@ def lagoified_gopparams_dicts(gopparams_dicts: List[Dict]) -> List[Dict]:
         #   about mismatches between an estimate and a target when restricted to the
         #   computational subspace. We have code for evaluating the loss functions
         #   themselves, but not their gradients.
-        inner_dict['method'] = 'L-BFGS-B'
-        # ^ We need this optimizer because it doesn't require a gradient oracle.
         inner_dict['gates_metric'] = 'frobenius squared'
         inner_dict['spam_metric']  = 'frobenius squared'
-        # ^ We have other metrics for leakage-aware gauge optimization, but they
-        #   aren't really useful.
+        inner_dict['item_weights'] = {'gates': 0.0, 'spam': 1.0}
+        gg = UnitaryGaugeGroup(tm.basis.state_space, tm.basis)
+        inner_dict['gauge_group'] = gg
+        inner_dict['_gaugeGroupEl'] = gg.compute_element(gg.initial_params)
+        # ^ We start with gauge optimization over the full unitary group, minimizing
+        #   SPAM differences between the estimate and the target on the computational
+        #   subspace. Our last step of gauge optimization (which is after this loop)
+        #   includes gates.
+        inner_dict['method'] = 'L-BFGS-B'
+        # ^ We need this optimizer because it doesn't require a gradient oracle.
         inner_dict['convert_model_to']['to_type'] = 'full'
         # ^ The natural basis for Hilbert-Schmidt space in leakage modeling doesn't
         #   have the identity matrix as its first element. This means we can't use
         #   the full TP parameterization. There's no real harm in taking "full" as
         #   our default because add_lago_models uses parameterization-preserving
         #   gauge optimization.
+    inner_dict = inner_dict.copy()
+    gg = tm.default_gauge_group
+    # ^ The most likely scenario is that gg is a DirectSumGaugeGroup, consisting
+    #   of a UnitaryGaugeGroup and a TrivialGaugeGroup. Rather than hard-code
+    #   that choice, we go with the default gauge group of the target model.
+    if gg is not None:
+        inner_dict['gauge_group'] = gg
+        inner_dict['_gaugeGroupEl'] = gg.compute_element(gg.initial_params)
+    inner_dict['gates_metric'] = 'frobenius squared'
+    inner_dict['spam_metric']  = 'frobenius squared'
+    inner_dict['item_weights'] = {'gates': 1.0, 'spam': 1.0}
+    gopparams_dicts.append(inner_dict)
     return gopparams_dicts
 
 
@@ -411,20 +484,23 @@ def add_lago_models(results: ModelEstimateResults, est_key: Optional[str] = None
     """
     Update each estimate in results.estimates (or just results.estimates[est_key],
     if est_key is not None) with a model obtained by parameterization-preserving
-    gauge optimization.
-    
-    If no gauge optimization suite is provided, then we construct one by starting
-    with "stdgaugeopt" suite and then changing the settings to be suitable for 
     leakage-aware gauge optimization.
+    
+    If no gauge optimization suite is provided, then we construct one by making
+    appropriate modifications to either the estimate's existing 'stdgaugeopt' suite
+    (if that exists) or to the 'stdgaugeopt' suite induced by the target model.
     """
     from pygsti.protocols.gst import GSTGaugeOptSuite, _add_param_preserving_gauge_opt
-    if gos is None:
-        existing_est  = results.estimates[est_key]
-        std_gos_lods  = existing_est.goparameters['stdgaugeopt']
-        lago_gos_lods = lagoified_gopparams_dicts(std_gos_lods)
-        gop_params = {'LAGO': lago_gos_lods}
-        gos = GSTGaugeOptSuite(gaugeopt_argument_dicts=gop_params)
     if isinstance(est_key, str):
+        if gos is None:
+            existing_est  = results.estimates[est_key]
+            if 'stdgaugeopt' in existing_est.goparameters:
+                std_gos_lods  = existing_est.goparameters['stdgaugeopt']
+                lago_gos_lods = lagoified_gopparams_dicts(std_gos_lods)
+                gop_params = {'LAGO': lago_gos_lods}
+            else:
+                gop_params = std_lago_gopsuite(results.estimates[est_key].models['target'])
+            gos = GSTGaugeOptSuite(gaugeopt_argument_dicts=gop_params)
         _add_param_preserving_gauge_opt(results, est_key, gos, verbosity)
     elif est_key is None:
         for est_key in results.estimates.keys():
