@@ -193,7 +193,7 @@ def eigenvalue_fidelity(a, b, gauge_invariant=True) -> _np.floating:
     ind_a, ind_b = zip(*pairs)
     arg_a = _np.maximum(valsA[list(ind_a)], 0)
     arg_b = _np.maximum(valsB[list(ind_b)], 0)
-    f = _np.linalg.norm(arg_a**0.5 * arg_b**0.5, ord=1)
+    f = _np.linalg.norm(arg_a**0.5 * arg_b**0.5, ord=1)**2
     return f
 
 
