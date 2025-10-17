@@ -311,7 +311,7 @@ GGElJacobian  = Union[None, Callable[[_GaugeGroupElement], _np.ndarray]]
 
 def gaugeopt_custom(model, objective_fn: GGElObjective, gauge_group=None,
                     method='L-BFGS-B', maxiter=100000, maxfev=None, tol=1e-8,
-                    oob_check_interval=0, return_all=False, jacobian_fn: Optional[GGElJacobian]=None,
+                    oob_check_interval=0, return_all=False, jacobian_fn: GGElJacobian=None,
                     comm=None, verbosity=0):
     """
     Optimize the gauge of a model using a custom objective function.
@@ -574,7 +574,7 @@ def _legacy_create_scalar_objective(model, target_model,
 
     def _objective_fn(gauge_group_el: _GaugeGroupElement, oob_check: bool) -> float:
         mdl = _transform_with_oob_check(model, gauge_group_el, oob_check)
-        ret = 0
+        ret = 0.0
 
         if cptp_penalty_factor > 0:
             mdl.basis = mxBasis  # set basis for jamiolkowski iso
