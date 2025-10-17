@@ -1230,7 +1230,7 @@ def construct_standard_report(results, title="auto",
     ws = ws or _ws.Workspace()
 
     advanced_options = advanced_options or {}
-    n_leak = advanced_options.get('n_leak', 0)
+    n_leak = advanced_options.get('n_leak', None)
     # ^ It would be preferable to store n_leak in a Basis object, or something similar.
     #   We're using this for now since it's simple and gets the job done.
     linlogPercentile = advanced_options.get('linlog percentile', 5)

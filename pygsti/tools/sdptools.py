@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from typing import Union, List, Tuple, TYPE_CHECKING
+from typing import Union, List, Tuple, Optional, TYPE_CHECKING
 if TYPE_CHECKING:
     import cvxpy as cp
     ExpressionLike = Union[cp.Expression, np.ndarray]
@@ -159,23 +159,30 @@ def cptp_superop_variable(purestate_dim: int, basis: BasisLike) -> Tuple[cp.Expr
     return X, constraints
 
 
-def diamond_distance_projection_model(superop: np.ndarray, basis: Basis, leakfree: bool=False, seepfree: bool=False, n_leak: int=0, cptp: bool=True, subspace_diamond: bool=False):
+def diamond_distance_projection_model(superop: np.ndarray, basis: BasisLike, leakfree: bool=False, seepfree: bool=False, n_leak: Optional[int]=ModuleNotFoundError, cptp: bool=True, subspace_diamond: bool=False):
     assert CVXPY_ENABLED
     dim_mixed = superop.shape[0]
     dim_pure = int(np.sqrt(dim_mixed))
     assert dim_pure**2 == dim_mixed
     constraints = []
+    from pygsti.tools.leakage import leading_dxd_submatrix_basis_vectors, projective_measurement_subspace_basis_vectors
+
+    if not isinstance(basis, Basis):
+        basis = Basis.cast(basis, dim=dim_mixed)
+    if n_leak is None:
+        U = projective_measurement_subspace_basis_vectors(basis.ellookup['I'], basis)
+    else:
+        dim_pure_compsub  = dim_pure - n_leak
+        U = leading_dxd_submatrix_basis_vectors(dim_pure_compsub, dim_pure, basis) # type: ignore
+
     if cptp:
         proj_superop, cons = cptp_superop_variable(dim_pure, basis)
         constraints.extend(cons)
     else:
         proj_superop = cp.Variable((dim_mixed, dim_mixed))
+    
     diamondnorm_arg = superop - proj_superop
     if (leakfree or seepfree or subspace_diamond):
-        assert n_leak == 1
-        from pygsti.tools.leakage import leading_dxd_submatrix_basis_vectors
-        dim_pure_compsub  = dim_pure - n_leak
-        U = leading_dxd_submatrix_basis_vectors(dim_pure_compsub, dim_pure, basis)
         P = U @ U.T.conj()
         I = np.eye(dim_mixed)
         if leakfree:

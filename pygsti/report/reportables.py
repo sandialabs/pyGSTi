@@ -17,6 +17,7 @@ Named quantities as well as their confidence-region error bars are
 """
 import importlib
 import warnings as _warnings
+from typing import Union
 
 import numpy as _np
 import scipy.linalg as _spl
@@ -39,6 +40,8 @@ from pygsti import SpaceT
 _CVXPY_AVAILABLE = importlib.util.find_spec('cvxpy') is not None
 
 FINITE_DIFF_EPS = 1e-7
+
+BasisLike = Union[str, _Basis]
 
 
 def _null_fn(*arg):
@@ -1020,7 +1023,13 @@ Maximum_trace_dist = _modf.opfn_factory(maximum_trace_dist)
 def leaky_maximum_trace_dist(gate, mx_basis):
     closestUOpMx = _alg.find_closest_unitary_opmx(gate)
     _tools.jamiolkowski_iso(closestUOpMx, mx_basis, mx_basis)
-    n_leak = 1
+    # .... ^ What does that function call do ???
+    if not isinstance(mx_basis, _Basis):
+        mx_basis = _Basis.cast(mx_basis, dim=gate.shape[0])
+    if mx_basis.implies_leakage_modeling:
+        n_leak = None # we'll infer a detailed leakage model from mx_basis
+    else:
+        n_leak = 1 # assume one leakage level
     return _tools.subspace_jtracedist(gate, closestUOpMx, mx_basis, n_leak)
 
 
@@ -1168,7 +1177,12 @@ Entanglement_fidelity = _modf.opsfn_factory(entanglement_fidelity)
 
 
 def subspace_entanglement_fidelity(a, b, mx_basis):
-    n_leak = 1
+    if not isinstance(mx_basis, _Basis):
+        mx_basis = _Basis.cast(mx_basis, dim=a.shape[0])
+    if mx_basis.implies_leakage_modeling:
+        n_leak = None # we'll infer a detailed leakage model from mx_basis
+    else:
+        n_leak = 1 # assume one leakage level
     return _tools.subspace_entanglement_fidelity(a, b, mx_basis, n_leak)
 
 
@@ -1274,7 +1288,12 @@ Fro_diff = _modf.opsfn_factory(frobenius_diff)
 
 
 def leaky_gate_frob_dist(a, b, mx_basis):
-    n_leak = 1
+    if not isinstance(mx_basis, _Basis):
+        mx_basis = _Basis.cast(mx_basis, dim=a.shape[0])
+    if mx_basis.implies_leakage_modeling:
+        n_leak = None # we'll infer a detailed leakage model from mx_basis
+    else:
+        n_leak = 1 # assume one leakage level
     return _tools.subspace_superop_fro_dist(a, b, mx_basis, n_leak)
 
 
@@ -1308,7 +1327,12 @@ Jt_diff = _modf.opsfn_factory(jtrace_diff)
 
 
 def leaky_jtrace_diff(a, b, mx_basis):
-    n_leak = 1
+    if not isinstance(mx_basis, _Basis):
+        mx_basis = _Basis.cast(mx_basis, dim=a.shape[0])
+    if mx_basis.implies_leakage_modeling:
+        n_leak = None # we'll infer a detailed leakage model from mx_basis
+    else:
+        n_leak = 1 # assume one leakage level
     return _tools.subspace_jtracedist(a, b, mx_basis, n_leak)
 
 
@@ -1580,44 +1604,74 @@ Eigenvalue_nonunitary_avg_gate_infidelity = _modf.opsfn_factory(eigenvalue_nonun
 # init args == (model1, model2, op_label)
 
 
-def eigenvalue_entanglement_infidelity(a, b, mx_basis):
+def eigenvalue_entanglement_infidelity(a: _np.ndarray, b: _np.ndarray, mx_basis: BasisLike, is_tp=None, is_unitary=None, tol=1e-8) -> _np.floating:
     """
-    Eigenvalue entanglement infidelity between a and b
+    Eigenvalue entanglement infidelity is the infidelity between certain diagonal matrices that
+    contain [see Note 1] the eigenvalues of J(a) and J(b), where J(.) is the Jamiolkowski
+    isomorphism map. This is equivalent to computing infidelity of (J(a), J(b)) while pretending
+    that they share an eigenbasis.
 
     Parameters
     ----------
-    a : numpy.ndarray
-        The first process (transfer) matrix.
+    is_tp : bool, optional (default None)
+        Flag indicating that a and b are TP in their provided basis. If None (the default),
+        an explicit check is performed up to numerical tolerance `tol`. If True/False, then
+        the check is skipped and this is used as the result of the check as though it were 
+        performed.
 
-    b : numpy.ndarray
-        The second process (transfer) matrix.
+    is_unitary : bool, optional (default None)
+        Flag indicating that b is unitary. If None (the default) an explicit check is performed
+        up to tolerance `tol`. If True/False, then the check is skipped and this is used as the
+        result of the check as though it were performed.
 
-    mx_basis : Basis or {'pp', 'gm', 'std'}
-        the basis that `a` and `b` are in.
+    Notes
+    -----
+    [1] The eigenvalues are ordered using a min-weight matching algorithm.
 
-    Returns
-    -------
-    float
+    [2] If a and b are trace-preserving (TP) and b is unitary, then we compute eigenvalue
+        entanglement fidelity by leveraging three facts:
+
+        1. If (x,y) share an eigenbasis and have (consistently ordered) eigenvalues (v(x),v(y)),
+           then Tr(x y^{\\dagger}) is the inner product of v(x) and v(y).
+
+        2. J(a) and J(b) share an eigenbasis of if `a` and `b` share an eigenbasis.
+
+        3. If `a` and `b` are TP and `b` is unitary, then their entanglement fidelity can be
+           expressed as |Tr( a.b^{\\dagger} )| / d^2.
+     
+       Then together, we see that if (a,b) are TP and `b` is unitary, then their eigenvalue 
+       entanglement fidelity is expressible as the inner product of v(a) and v(b), where 
+       v(a) and v(b) vectors holding are suitably-ordered eigenvalues of a and b.
+    
     """
     d2 = a.shape[0]
-    evA = _np.linalg.eigvals(a)
-    evB = _np.linalg.eigvals(b)
-    """
-    IDEA: check if (a,b) are normal operators. If they are, then proceed by
-    computing a Schur decomposition to get orthonormal eigenbases. From there,
-    match them based on a dissimilarity kernel of abs(1 - <u,v>), rather than
-    the dissimilarity kernel abs(ev_a - ev_b).
-    
-    This would introduce some gauge dependence to eigenvalue entanglement
-    fidelity. However, there's already ambiguity in the definition of this
-    metric since it requires an ordering of the eigenvalues. It just so
-    happens that this function's current implementation chooses the ordering
-    in a gauge-invariant way.
-    """
-    _, pairs = _tools.minweight_match(evA, evB, lambda x, y: abs(x - y),
-                                      return_pairs=True)  # just to get pairing
-    mlPl = abs(_np.sum([_np.conjugate(evB[j]) * evA[i] for i, j in pairs]))
-    return 1.0 - mlPl / float(d2)
+
+    if is_unitary is None:
+        is_unitary = _np.allclose(_np.eye(d2), b @ b.T.conj(), atol=tol, rtol=tol)
+    if is_tp is None:
+        is_tp = _tools.is_trace_preserving(a, mx_basis, tol) and _tools.is_trace_preserving(b, mx_basis, tol) 
+
+    if is_unitary and is_tp:
+        evA = _np.linalg.eigvals(a)
+        evB = _np.linalg.eigvals(b)
+        _, pairs = _tools.minweight_match(evA, evB, lambda x, y: abs(x - y),
+                                        return_pairs=True)  # just to get pairing
+        fid = abs(_np.sum([_np.conjugate(evB[j]) * evA[i] for i, j in pairs])) / d2
+    else:
+        Ja = _tools.fast_jamiolkowski_iso_std(a, mx_basis)
+        Jb = _tools.fast_jamiolkowski_iso_std(b, mx_basis)
+        from pygsti.tools.optools import eigenvalue_fidelity
+        fid = eigenvalue_fidelity(Ja, Jb, gauge_invariant=True)
+        if fid < 0.9:
+            pass
+        # valsA, vecsA = _spl.eigh(Ja)
+        # valsB, vecsB = _spl.eigh(Jb)
+        # dissimilarity = lambda vec_x, vec_y : abs(1 - vec_x @ vec_y)
+        # _, pairs = _tools.minweight_match(vecsA.T.conj(), vecsB.T.conj(), dissimilarity, return_pairs=True)
+        # fid = abs(_np.sum([_np.conjugate(evB[j]) * evA[i] for i, j in pairs])) / d2
+        # fid = _np.linalg.norm(_np.sqrt(evA) * _np.sqrt(evB), ord=1)**2
+
+    return 1.0 - fid
 
 
 Eigenvalue_entanglement_infidelity = _modf.opsfn_factory(eigenvalue_entanglement_infidelity)
@@ -1658,7 +1712,8 @@ Eigenvalue_avg_gate_infidelity = _modf.opsfn_factory(eigenvalue_avg_gate_infidel
 
 def eigenvalue_diamondnorm(a, b, mx_basis):
     """
-    Eigenvalue diamond distance between a and b
+    Eigenvalue diamond distance between `a` and `b`, assuming
+    that `a` and `b` are TP and that `b` is unitary.
 
     Parameters
     ----------
@@ -1678,8 +1733,8 @@ def eigenvalue_diamondnorm(a, b, mx_basis):
     d2 = a.shape[0]
     evA = _np.linalg.eigvals(a)
     evB = _np.linalg.eigvals(b)
-    return (d2 - 1.0) / d2 * _np.max(_tools.minweight_match(evA, evB, lambda x, y: abs(x - y),
-                                                            return_pairs=False))
+    temp = _tools.minweight_match(evA, evB, lambda x, y: abs(x - y), return_pairs=False)
+    return (d2 - 1.0) / d2 * _np.max(temp)
 
 
 Eigenvalue_diamondnorm = _modf.opsfn_factory(eigenvalue_diamondnorm)

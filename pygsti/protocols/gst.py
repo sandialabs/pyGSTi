@@ -2424,17 +2424,21 @@ def _compute_1d_reference_values_and_name(target_model, gopped_models, gaugeopt_
     for lbl, gaugeopt_model in gopped_models.items():
 
         argdicts = gaugeopt_suite.gaugeopt_argument_dicts.get(lbl, dict())
-        n_leak = 0
+        n_leak: Optional[int] = None
         if isinstance(argdicts, list) and len(argdicts) > 0:
             n_leak = argdicts[0].get('n_leak', n_leak)
 
-        if n_leak > 0:
-            dim = gaugeopt_model.basis.state_space.udim
-            assert n_leak == 1
-            assert dim == 3
-            P = _tools.superop_subspace_projector(2, 3, gaugeopt_model.basis)
+        basis = gaugeopt_model.basis
+        udim = int(_np.round(_np.sqrt(basis.dim)))
+        I = _tools.matrixtools.IdentityOperator()
+        if n_leak is None and basis.first_element_is_identity:
+            P = I
+        elif n_leak is None:
+            P = _tools.superop_subspace_projector(basis)
+        elif n_leak > 0:
+            P = _tools.superop_subspace_projector(udim - n_leak, udim, basis)
         else:
-            P = _tools.matrixtools.IdentityOperator()
+            P = I
 
         ops, preps, _, insts = _memberdicts(gaugeopt_model)
         mx_basis = gaugeopt_model.basis

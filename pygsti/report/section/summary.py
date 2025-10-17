@@ -38,7 +38,17 @@ class SummarySection(_Section):
     @_Section.figure_factory()
     def final_gates_vs_target_table_insummary(workspace, switchboard=None, confidence_level=None, ci_brevity=1,
                                               show_unmodeled_error=False, **kwargs):
-        if kwargs.get('n_leak', 0) == 0:
+        
+        if switchboard is not None and 'mdl_target_grid' in switchboard:
+            basis_representative = switchboard['mdl_target_grid'][0].basis
+        else:
+            res_representative   = kwargs['results'][list(kwargs['results'])[0]]
+            est_representative   = res_representative.estimates[list(res_representative.estimates)[0]]
+            mdl_representative   = est_representative.models[list(est_representative.models)[-1]]
+            basis_representative = mdl_representative.basis
+        n_leak_default = None if basis_representative.implies_leakage_modeling else 0
+        
+        if kwargs.get('n_leak', n_leak_default) == 0:
             summary_display = ('inf', 'trace', 'diamond', 'evinf', 'evdiamond')
         else:
             summary_display = ('sub-inf', 'sub-trace', 'sub-diamond', 'plf-sub-diamond', 'leak-rate-max')

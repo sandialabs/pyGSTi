@@ -29,6 +29,9 @@ if TYPE_CHECKING:
     from pygsti.processors import QubitProcessorSpec
 
 
+BasisLike = Union[Basis, str]
+
+
 NOTATION = \
 """
 Default notation (possibly superceded by text above)
@@ -78,15 +81,28 @@ representation is real and "maximally spread out" in C⨂C as a subspace of H⨂
 *A remark.* The Choi matrix for a superoperator G in S[H] is G(rho_t), where rho_t is
 the output of this function when n_leak=0.
 """ + NOTATION)
-def tensorized_teststate_density(dim: int, n_leak: int) -> np.ndarray:
-    temp = np.eye(dim, dtype=np.complex128)
-    if n_leak > 0:
-        temp[-n_leak:,-n_leak:] = 0.0
-    temp /= np.sqrt(dim - n_leak)
-    psi = pgbt.stdmx_to_stdvec(temp).ravel()
-    #
+def tensorized_teststate_density(*args) -> np.ndarray:
+    if len(args) == 2:
+        dim    : int = args[0] # type: ignore
+        n_leak : int = args[1] # type: ignore
+        args_ok = isinstance(dim, int) and isinstance(n_leak, int) and n_leak < dim
+        if not args_ok:
+            raise ValueError()
+        E = np.eye(dim, dtype=np.complex128)
+        if n_leak > 0:
+            E[-n_leak:,-n_leak:] = 0.0
+    elif len(args) == 1:
+        basis : Basis = args[0] # type: ignore
+        args_ok = isinstance(basis, Basis) and basis.is_hermitian() and ('I' in basis.labels)
+        if not args_ok:
+            raise ValueError()
+        E = basis.ellookup['I'].copy()
+    else:
+        raise ValueError()
+    psi = pgbt.stdmx_to_stdvec(E).ravel()
+    psi /= la.norm(psi)
+    # In a standard leakage basis we have
     #   |psi> = (|00> + |11> + ... + |dim - n_leak - 1>) / sqrt(dim - n_leak).
-    #
     rho_test = np.outer(psi, psi)
     return rho_test
 
@@ -106,18 +122,20 @@ This function returns a triplet, consisting of
 *Warning!* At present, this function can only be used for gates over a single system
 (e.g., a single qubit), not for tensor products of such systems.
 """ + NOTATION)
-def apply_tensorized_to_teststate(op_x: np.ndarray, op_y, op_basis: np.ndarray, n_leak: int=0) -> tuple[TensorProdBasis, np.ndarray, np.ndarray]:
-    dim = int(np.sqrt(op_x.shape[0]))
-    assert op_x.shape == (dim**2, dim**2)
-    assert op_y.shape == (dim**2, dim**2)
+def apply_tensorized_to_teststate(op_x: np.ndarray, op_y: np.ndarray, op_basis: BasisLike, n_leak: Optional[int]=None) -> tuple[TensorProdBasis, np.ndarray, np.ndarray]:
+    udim = int(np.sqrt(op_x.shape[0]))
+    dim = udim**2
+    assert op_x.shape == (dim, dim)
+    assert op_y.shape == (dim, dim)
     # op_x and op_y act on M[H].
     #
     # We care about op_x and op_y only up to their action on the subspace
-    #    U = {rho in M[H] : <i|rho|i> = 0 for all i >= dim - n_leak }.
+    #    U = {rho in M[H] : <i|rho|i> = 0 for all i >= udim - n_leak }.
     #
     # It's easier to talk about this subspace (and related subspaces) if op_x and op_y are in
     # the standard basis. So the first thing we do is convert to that basis.
-    std_basis = BuiltinBasis('std', dim**2)
+    op_basis = Basis.cast(op_basis, dim=dim)
+    std_basis = BuiltinBasis('std', dim)
     op_x_std = pgbt.change_basis(op_x, op_basis, std_basis)
     op_y_std = pgbt.change_basis(op_y, op_basis, std_basis)
    
@@ -129,12 +147,15 @@ def apply_tensorized_to_teststate(op_x: np.ndarray, op_y, op_basis: np.ndarray, 
     #
     # for all sigma, rho in M[H]. The way we do this implicitly fixes a basis for S[H]⨂S[H] as
     # the tensor product basis. We'll make that explicit later on.
-    idle_gate = np.eye(dim**2, dtype=np.complex128)
+    idle_gate = np.eye(dim, dtype=np.complex128)
     lift_op_x_std = np.kron(op_x_std, idle_gate)
     lift_op_y_std = np.kron(op_y_std, idle_gate)
 
     # Now we'll compare these lifted operators by how they act on specific state in M[H]⨂M[H].
-    rho_test = tensorized_teststate_density(dim, n_leak)
+    if n_leak is not None:
+        rho_test = tensorized_teststate_density(udim, n_leak)
+    else: 
+        rho_test = tensorized_teststate_density(op_basis) # type: ignore
 
     # lift_op_x and lift_op_y only act on states in their superket representations, so we convert
     # rho_test to a superket representation in the induced tensor product basis for S[H]⨂S[H].
@@ -158,6 +179,9 @@ orthogonal projector from M[H] to M[C] with respect to current_basis.
 If you only care about P, then you can call superop_subspace_projector instead.
 """ + NOTATION)
 def leading_dxd_submatrix_basis_vectors(d: int, n: int, current_basis: Basis) -> np.ndarray:
+    """
+    TODO: deprecate this function.
+    """
     assert d <= n
     if d == n:
         return np.eye(n**2)
@@ -177,38 +201,86 @@ def leading_dxd_submatrix_basis_vectors(d: int, n: int, current_basis: Basis) ->
     return submatrix_basis_vectors
 
 
+# TODO: document me
+def projective_measurement_subspace_basis_vectors(E: np.ndarray, basis: Basis) -> np.ndarray:
+    """
+    Our desired subspace is
+        { rho : ker(rho) contains ker(E) } .
+    Since E is (proportional to) a projector, this is equivalent to
+        { rho : E rho E = rho }.
+    """
+    if not basis.is_hermitian():
+        raise ValueError()
+    E = E.copy()
+    k = np.linalg.matrix_rank(E)
+    E *= (k/np.trace(E))
+    if not pgmt.is_projector(E):
+        raise ValueError()
+    proj_elements  = [ E @ B @ E for B in basis.elements ]
+    subspace_frame = np.column_stack([ pgbt.stdmx_to_vec(pB, basis) for pB in proj_elements ])
+    # ^ a "frame" is an overcomplete basis.
+    subspace_frame = subspace_frame.real 
+    # ^ Since basis.elements are Hermitian and E is Hermitian, we have that proj_elements are
+    #   Hermitian and that their vectorizations are real. We cast to real here just to 
+    #   eliminate possible rounding errors.
+    U_full : np.ndarray = la.qr(subspace_frame, pivoting=True)[0] # type: ignore
+    U = U_full[:, :k**2]
+    return U
+
+
 @lru_cache
 @set_docstring(
-"""
-This function returns the superoperator in S[H] that projects orthogonally from
-M[H] to M[C], where H is n-dimensional and C ⊂ H is d-dimensional (d ≤ n).
+NOTATION)
+def superop_subspace_projector(*args) -> np.ndarray:
 
-The action of this operator is easy to understand when M[H] and M[C] are viewed
-as spaces of n-by-n matrices rather than spaces of length-n^2 vectors.
+    num_positional_args = len(args) 
+    if num_positional_args not in {3, 1}:
+        raise ValueError()
 
-For v in M[H] and u = P v, we have
+    if num_positional_args == 1:
+        basis = args[0]
+        if not isinstance(basis, Basis):
+            raise ValueError()
+        if not hasattr(basis, 'ellookup') or ('I' not in basis.ellookup):
+            raise ValueError()
+        dim = basis.dim
+        if basis.first_element_is_identity:
+            return np.eye(dim)
+        E = basis.ellookup['I']
+        U = projective_measurement_subspace_basis_vectors(E, basis)
 
-    mat(v) = [x11,  x12]         and      mat(u) = [x11,  0]
-             [x21,  x22]                           [  0,  0].
+    else:
+        """
+        This function returns the superoperator in S[H] that projects orthogonally from
+        M[H] to M[C], where H is n-dimensional and C ⊂ H is d-dimensional (d ≤ n).
 
-This characterization makes two facts about P apparent. First, P is positive
-(i.e., it takes Hermitian psd operators to Hermitian psd operators). Second,
-P is trace-non-increasing.
-""" +  NOTATION)
-def superop_subspace_projector(d: int, n: int, basis: Basis, force_real=True) -> np.ndarray:
-    assert d <= n
-    if d == n:
-        return np.eye(n**2)
-    U = leading_dxd_submatrix_basis_vectors(d, n, basis) # type: ignore
-    P = U @ U.T.conj()
-    if force_real:
-        if np.linalg.norm(P.imag) > 1e-12:
-            msg  =  "The orthogonal projector onto the computational subspace in the basis\n"
-            msg += f"{basis} is not real-valued. Since we were passed force_real=True we're\n"
-            msg +=  "raising a ValueError. Try again with a basis like 'l2p1' or 'gm', or\n"
-            msg +=  "use force_real=False."
-            raise ValueError(msg)
-    P = P.real
+        The action of this operator is easy to understand when M[H] and M[C] are viewed
+        as spaces of n-by-n matrices rather than spaces of length-n^2 vectors.
+
+        For v in M[H] and u = P v, we have
+
+            mat(v) = [x11,  x12]         and      mat(u) = [x11,  0]
+                     [x21,  x22]                           [  0,  0].
+
+        This characterization makes two facts about P apparent. First, P is positive
+        (i.e., it takes Hermitian psd operators to Hermitian psd operators). Second,
+        P is trace-non-increasing.
+        """
+        d, n, basis = args
+        types_ok = isinstance(d, int) and isinstance(n, int) and isinstance(basis, Basis)
+        if not types_ok:
+            raise ValueError()
+        if d > n:
+            raise ValueError()
+        if n**2 != basis.elsize:
+            raise ValueError()
+        if d == n:
+            return np.eye(n**2)
+        E = np.eye(n)
+        E[d:, d:] = 0.0
+        U = projective_measurement_subspace_basis_vectors(E, basis)
+
+    P = U @ U.T
     return P
 
 
@@ -227,7 +299,7 @@ This function returns the %s between X⨂I(rho_t) and Y⨂I(rho_t).
 
 
 @set_docstring(CHOI_INDUCED_METRIC_TEMPLATE % 'entanglement fidelity')
-def subspace_entanglement_fidelity(op_x: np.ndarray, op_y: np.ndarray, op_basis, n_leak=0) -> float:
+def subspace_entanglement_fidelity(op_x: np.ndarray, op_y: np.ndarray, op_basis, n_leak: Optional[int] = None) -> float:
     ten_std_basis, temp1, temp2 = apply_tensorized_to_teststate(op_x, op_y, op_basis, n_leak)
     temp1_mx = pgbt.vec_to_stdmx(temp1, ten_std_basis, keep_complex=True)
     temp2_mx = pgbt.vec_to_stdmx(temp2, ten_std_basis, keep_complex=True)
@@ -236,7 +308,7 @@ def subspace_entanglement_fidelity(op_x: np.ndarray, op_y: np.ndarray, op_basis,
 
 
 @set_docstring(CHOI_INDUCED_METRIC_TEMPLATE % 'jamiolkowski trace distance')
-def subspace_jtracedist(op_x: np.ndarray, op_y: np.ndarray, op_basis, n_leak=0) -> float:
+def subspace_jtracedist(op_x: np.ndarray, op_y: np.ndarray, op_basis, n_leak: Optional[int] = None) -> float:
     ten_std_basis, temp1, temp2 = apply_tensorized_to_teststate(op_x, op_y, op_basis, n_leak)
     temp1_mx = pgbt.vec_to_stdmx(temp1, ten_std_basis, keep_complex=True)
     temp2_mx = pgbt.vec_to_stdmx(temp2, ten_std_basis, keep_complex=True)
@@ -258,18 +330,21 @@ projector onto the computational subspace (i.e., C) of co-dimension n_leak.
 
 
 @set_docstring(PROJECTION_INDUCED_METRIC_TEMPLATE % 'Frobenius distance')
-def subspace_superop_fro_dist(op_x: np.ndarray, op_y: np.ndarray, op_basis, n_leak=0) -> float:
+def subspace_superop_fro_dist(op_x: np.ndarray, op_y: np.ndarray, op_basis, n_leak:Optional[int]=None) -> float:
     diff = op_x -  op_y
     if n_leak == 0:
-        return np.linalg.norm(diff, 'fro')  # type: ignore
+        return la.norm(diff, 'fro')  # type: ignore
     n = int(np.sqrt(op_x.shape[0]))
     assert op_x.shape == op_y.shape == (n**2, n**2)
-    P = superop_subspace_projector(n - n_leak, n, op_basis, force_leak=False)
-    return np.linalg.norm(diff @ P)  # type: ignore
+    if n_leak is None:
+        P = superop_subspace_projector(op_basis)
+    else:
+        P = superop_subspace_projector(n - n_leak, n, op_basis)
+    return la.norm(diff @ P)  # type: ignore
 
 
 @set_docstring(PROJECTION_INDUCED_METRIC_TEMPLATE % 'diamond distance')
-def subspace_diamonddist(op_x: np.ndarray, op_y: np.ndarray, op_basis, n_leak=0) -> float:
+def subspace_diamonddist(op_x: np.ndarray, op_y: np.ndarray, op_basis, n_leak: Optional[int]=None) -> float:
     """
     Here we give a brief motivating derivation for defining the subspace diamond norm in
     the way that we have. This derivation won't convince a skeptic that our definition
@@ -316,9 +391,10 @@ def subspace_diamonddist(op_x: np.ndarray, op_y: np.ndarray, op_basis, n_leak=0)
     from pygsti.tools.optools import diamonddist
     dim_mixed = op_x.shape[0]
     dim_pure  = int(dim_mixed**0.5)
-    assert n_leak <= 1
-    dim_pure_compsub = dim_pure - n_leak
-    P = superop_subspace_projector(dim_pure_compsub, dim_pure, op_basis)
+    if n_leak is None:
+        P = superop_subspace_projector(op_basis)
+    else:
+        P = superop_subspace_projector(dim_pure - n_leak, dim_pure, op_basis)
     val : float = diamonddist(op_x @ P, op_y @ P, op_basis, return_x=False) / 2 # type: ignore
     return val
 
@@ -335,9 +411,9 @@ Our subspace of interest is represented by the unique Hermitian operator E_SUB s
 
 The process matrix `op` is the mx_basis representation of a CPTP map G : M[H] ➞ M[H].
 
-Consider an experimental protocol where a system is prepared in state ρ, evolved to G(ρ),
-and then measured with the 2-element POVM {E_SUB, 1 - E_SUB}. Runs of this protocol that
-result in the `1 - E_SUB` measurement outcome are called transport events.
+Consider an experimental protocol where a system is prepared in state ρ ∈ M[SUB], evolved
+to G(ρ), and then measured with the 2-element POVM {E_SUB, 1 - E_SUB}. Runs of this protocol
+that result in the `1 - E_SUB` measurement outcome are called transport events.
 
 The population transport profile of (G,SUB) is a full specification of the probabilties
 of transport events, considering all possible choices of ρ ∈ M[SUB]. This profile is 
@@ -397,8 +473,8 @@ def pop_transport_profile(E_sub: np.ndarray, op: np.ndarray, mx_basis: Basis, E_
     transport_E_mat  = pgbt.vec_to_stdmx(transport_E_vec, mx_basis, keep_complex=True)
     transport_E_mat  = E_sub @ transport_E_mat @ E_sub
 
-    rates, states = np.linalg.eigh(transport_E_mat)
-    dim_proj = int(np.trace(E_sub).real)
+    rates, states = la.eigh(transport_E_mat)
+    dim_proj = int(np.round(np.trace(E_sub).real))
     ind = np.argsort(np.abs(rates))[::-1][:dim_proj]
     rates  = rates[ind]
     states = [s for s in states.T[ind]]
@@ -594,10 +670,18 @@ def lagoified_gopparams_dicts(gopparams_dicts: List[Dict]) -> List[Dict]:
     """
     from pygsti.models.gaugegroup import UnitaryGaugeGroup
     tm = gopparams_dicts[0]['target_model']
+    if tm.basis.implies_leakage_modeling:
+        # The basis carries enough information for us to infer how leakage should
+        # be modeled.
+        n_leak_arg = None
+    else:
+        # The basis doesn't say anything about how the leakage should be modeled.
+        # We'll assume a 3-level system with one leakage level.
+        n_leak_arg = 1
     gopparams_dicts = [gp for gp in gopparams_dicts if 'TPSpam' not in str(type(gp['_gaugeGroupEl']))]
     gopparams_dicts = copy.deepcopy(gopparams_dicts)
     for inner_dict in gopparams_dicts:
-        inner_dict['n_leak'] = 1
+        inner_dict['n_leak'] = n_leak_arg
         # ^ This function could accept n_leak as an argument instead. However,
         #   downstream functions for gauge optimization only support n_leak=0 or 1.
         # 
@@ -605,8 +689,8 @@ def lagoified_gopparams_dicts(gopparams_dicts: List[Dict]) -> List[Dict]:
         #   about mismatches between an estimate and a target when restricted to the
         #   computational subspace. We have code for evaluating the loss functions
         #   themselves, but not their gradients.
-        inner_dict['gates_metric'] = 'frobenius squared'
-        inner_dict['spam_metric']  = 'frobenius squared'
+        inner_dict['gates_metric'] = 'fidelity'
+        inner_dict['spam_metric']  = 'fidelity'
         inner_dict['item_weights'] = {'gates': 0.0, 'spam': 1.0}
         gg = UnitaryGaugeGroup(tm.basis.state_space, tm.basis)
         inner_dict['gauge_group'] = gg
@@ -631,7 +715,9 @@ def lagoified_gopparams_dicts(gopparams_dicts: List[Dict]) -> List[Dict]:
     if gg is not None:
         inner_dict['gauge_group'] = gg
         inner_dict['_gaugeGroupEl'] = gg.compute_element(gg.initial_params)
-    inner_dict['n_leak'] = 1
+    inner_dict['gates_metric'] = 'frobenius squared'
+    inner_dict['spam_metric']  = 'frobenius squared'
+    inner_dict['n_leak'] = n_leak_arg
     inner_dict['item_weights'] = {'gates': 1.0, 'spam': 1.0}
     gopparams_dicts.append(inner_dict)
     return gopparams_dicts
@@ -720,8 +806,11 @@ def construct_leakage_report(
     for ek in est_key:
         assert isinstance(ek, str)
         add_lago_models(results, ek, verbosity=gaugeopt_verbosity)
+    est = results.estimates[ek]
+    n_leak_arg = None if est.models['LAGO'].basis.implies_leakage_modeling else 1
+
     from pygsti.report import construct_standard_report
     report = construct_standard_report(
-        results, advanced_options={'n_leak': 1}, **extra_report_kwargs
+        results, advanced_options={'n_leak': n_leak_arg}, **extra_report_kwargs
     )
     return report, results
