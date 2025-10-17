@@ -529,6 +529,7 @@ def _legacy_create_scalar_objective(model, target_model,
         item_weights: dict[str,float], cptp_penalty_factor: float, spam_penalty_factor: float,
         gates_metric: str, spam_metric: str, n_leak: int
     ) -> tuple[GGElObjective, GGElJacobian]:
+
     opWeight = item_weights.get('gates', 1.0)
     spamWeight = item_weights.get('spam', 1.0)
     mxBasis = model.basis
@@ -538,6 +539,10 @@ def _legacy_create_scalar_objective(model, target_model,
     #  since from_vector will clear any basis info)
     if mxBasis.name == "unknown" and target_model is not None:
         mxBasis = target_model.basis
+
+    assert gates_metric != "frobeniustt"
+    assert spam_metric  != "frobeniustt"
+    # ^ PR #410 removed support for Frobenius transform-target metrics in this codepath.
 
     dim = int(_np.sqrt(mxBasis.dim))
     I = _tools.IdentityOperator()

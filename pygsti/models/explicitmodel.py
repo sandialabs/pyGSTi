@@ -10,6 +10,8 @@ Defines the ExplicitOpModel class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
+
 import collections as _collections
 import itertools as _itertools
 import uuid as _uuid
@@ -1634,6 +1636,10 @@ class ExplicitOpModel(_mdl.OpModel):
             return _QuditProcessorSpec(qudit_labels, all_udims, list(gate_unitaries.keys()), gate_unitaries,
                                        availability,
                                        instrument_names=list(self.instruments.keys()), nonstd_instruments=self.instruments)
+
+    def copy(self) -> ExplicitOpModel:
+        c = super().copy()  # <-- that is indeed an ExplicitOpModel
+        return c # type: ignore
 
     def create_modelmember_graph(self):
         return _MMGraph({
