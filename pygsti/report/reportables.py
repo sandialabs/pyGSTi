@@ -1662,14 +1662,6 @@ def eigenvalue_entanglement_infidelity(a: _np.ndarray, b: _np.ndarray, mx_basis:
         Jb = _tools.fast_jamiolkowski_iso_std(b, mx_basis)
         from pygsti.tools.optools import eigenvalue_fidelity
         fid = eigenvalue_fidelity(Ja, Jb, gauge_invariant=True)
-        if fid < 0.9:
-            pass
-        # valsA, vecsA = _spl.eigh(Ja)
-        # valsB, vecsB = _spl.eigh(Jb)
-        # dissimilarity = lambda vec_x, vec_y : abs(1 - vec_x @ vec_y)
-        # _, pairs = _tools.minweight_match(vecsA.T.conj(), vecsB.T.conj(), dissimilarity, return_pairs=True)
-        # fid = abs(_np.sum([_np.conjugate(evB[j]) * evA[i] for i, j in pairs])) / d2
-        # fid = _np.linalg.norm(_np.sqrt(evA) * _np.sqrt(evB), ord=1)**2
 
     return 1.0 - fid
 
