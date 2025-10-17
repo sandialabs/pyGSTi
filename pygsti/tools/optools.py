@@ -197,7 +197,7 @@ def eigenvalue_fidelity(a, b, gauge_invariant=True) -> _np.floating:
     else:
         valsA, vecsA = _spl.eigh(a)
         valsB, vecsB = _spl.eigh(b) 
-        dissimilarity = lambda vec_x, vec_y : abs(1 - vec_x @ vec_y)
+        dissimilarity = lambda vec_x, vec_y : abs(1 - abs(vec_x @ vec_y))
         _, pairs = minweight_match(vecsA.T.conj(), vecsB.T.conj(), dissimilarity, return_pairs=True)
     ind_a, ind_b = zip(*pairs)
     arg_a = _np.maximum(valsA[list(ind_a)], 0)
