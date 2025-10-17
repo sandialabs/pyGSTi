@@ -184,6 +184,33 @@ def fidelity(a, b):
     return f
 
 
+def eigenvalue_fidelity(a, b, gauge_invariant=True) -> _np.floating:
+    from pygsti.tools import minweight_match
+    tol = _np.finfo(a.dtype).eps ** 0.75
+    _mt.assert_hermitian(a, tol)
+    _mt.assert_hermitian(b, tol)
+    if gauge_invariant:
+        valsA = _spl.eigvalsh(a)
+        valsB = _spl.eigvalsh(b)
+        dissimilarity = lambda x, y: abs(x - y)
+        _, pairs = minweight_match(valsA, valsB, dissimilarity, return_pairs=True)
+    else:
+        valsA, vecsA = _spl.eigh(a)
+        valsB, vecsB = _spl.eigh(b) 
+        dissimilarity = lambda vec_x, vec_y : abs(1 - vec_x @ vec_y)
+        _, pairs = minweight_match(vecsA.T.conj(), vecsB.T.conj(), dissimilarity, return_pairs=True)
+    ind_a, ind_b = zip(*pairs)
+    arg_a = _np.maximum(valsA[list(ind_a)], 0)
+    arg_b = _np.maximum(valsB[list(ind_b)], 0)
+    f = _np.linalg.norm(arg_a**0.5 * arg_b**0.5, ord=1)**2
+    return f
+
+
+def eigenvalue_infidelity(a, b, gauge_invariant=True) -> _np.floating:
+    return 1 - eigenvalue_fidelity(a, b, gauge_invariant)
+
+
+
 def frobeniusdist(a, b) -> _np.floating[Any]:
     """
     Returns the frobenius distance between arrays: ||a - b||_Fro.
