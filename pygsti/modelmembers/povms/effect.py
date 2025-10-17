@@ -14,6 +14,7 @@ import numpy as _np
 
 from pygsti.modelmembers import modelmember as _modelmember
 from pygsti.tools import optools as _ot
+from pygsti.tools import matrixtools as _mt
 from pygsti.baseobjs.opcalc import bulk_eval_compact_polynomials_complex as _bulk_eval_compact_polynomials_complex
 
 from typing import Any
@@ -142,9 +143,12 @@ class POVMEffect(_modelmember.ModelMember):
         float
         """
         vec = self.to_dense()
+        other_vec = other_spam_vec.to_dense()
         if transform is not None:
             vec = transform.T @ vec
-        return _ot.frobeniusdist_squared(vec, other_spam_vec.to_dense())
+            if isinstance(inv_transform, _mt.IdentityOperator):
+                other_vec = transform.T @ other_vec
+        return _ot.frobeniusdist_squared(vec, other_vec)
 
     def residuals(self, other_spam_vec, transform=None, inv_transform=None):
         """
