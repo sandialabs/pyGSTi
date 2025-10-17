@@ -159,7 +159,7 @@ def cptp_superop_variable(purestate_dim: int, basis: BasisLike) -> Tuple[cp.Expr
     return X, constraints
 
 
-def diamond_distance_projection_model(superop: np.ndarray, basis: BasisLike, leakfree: bool=False, seepfree: bool=False, n_leak: Optional[int]=ModuleNotFoundError, cptp: bool=True, subspace_diamond: bool=False):
+def diamond_distance_projection_model(superop: np.ndarray, basis: BasisLike, leakfree: bool=False, seepfree: bool=False, n_leak: Optional[int]=None, cptp: bool=True, subspace_diamond: bool=False):
     assert CVXPY_ENABLED
     dim_mixed = superop.shape[0]
     dim_pure = int(np.sqrt(dim_mixed))
