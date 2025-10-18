@@ -427,6 +427,8 @@ class ExplicitOpModel(_mdl.OpModel):
         -------
         None
         """
+        if isinstance(self, ExplicitOpFOGIModel):
+            raise NotImplementedError('Conversion from FOGI to other parameterizations is not available yet.')
         typ = gate_type
 
         # Set ideal model to static when used as targets (specifically needed for CPTP prep/povms)
@@ -1748,3 +1750,4 @@ class ExplicitLayerRules(_LayerRules):
             return model.operations[layerlbl]
         else:
             return _opfactory.op_from_factories(model.factories, layerlbl)
+

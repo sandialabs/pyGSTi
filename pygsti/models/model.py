@@ -480,7 +480,6 @@ class OpModel(Model):
         self.sim = simulator  # property setter does nontrivial initialization (do this *last*)
         self._param_interposer = None
         self._reinit_opcaches()
-        self.fogi_store = None
         self._index_mm_map = None
         self._index_mm_label_map = None
 
@@ -2968,6 +2967,7 @@ class OpModel(Model):
             return total_error_val, total_error_eb, infidelity_val, infidelity_eb
         else:
             return total_error_val, infidelity_val
+
 
 
 def _default_param_bounds(num_params):

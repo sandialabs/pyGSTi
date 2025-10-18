@@ -97,7 +97,7 @@ class AMSCheckpoint(_NicelySerializable):
         """
         return [self.target_model, self.datasetstr, self.er_thresh, self.maxiter, self.tol, self.prob_clip, self.recompute_H_thresh_percent]
          
-    def check_valid_checkpoint(self, target_model, datasetstr, er_thresh, maxiter, tol, prob_clip, recompute_H_thresh_percent):
+    def check_valid_checkpoint(self, target_model, datasetstr, er_thresh, maxiter, tol, prob_clip):
         """Check if self is a checkpoint with the same settings as the ones passed in. This is only compatible with FOGI model checkpoints.
 
         Parameters

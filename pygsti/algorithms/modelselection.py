@@ -143,7 +143,7 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
         result = _parallel_GST(target_model, data, prob_clip, tol, maxiter, verbosity, comm=comm, mem_limit=mem_limit)
     
         target_model_fit = result.estimates['GateSetTomography'].models['final iteration estimate']
-        target_model_fit.sim = pygsti.forwardsims.MapForwardSimulator(param_blk_sizes=(100,100))
+        
         x0 = target_model_fit.to_vector()
         if not disable_checkpoints and rank == 0:
             new_checkpoint.target_model = target_model_fit
@@ -154,6 +154,7 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
     if H is None:
         if rank == 0 and verbosity > 0: 
             print("computing Hessian")
+        #target_model_fit.sim = pygsti.forwardsims.MapForwardSimulator(param_blk_sizes=(100,100))
         H = pygsti.tools.logl_hessian(target_model_fit, data.dataset, comm=comm, mem_limit=mem_limit, verbosity = verbosity)
         #TODO how to make this work without mpiexec call
         H = comm.bcast(H, root = 0)

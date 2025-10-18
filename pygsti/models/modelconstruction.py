@@ -42,6 +42,7 @@ from pygsti.baseobjs import statespace as _statespace
 from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.baseobjs.basis import ExplicitBasis as _ExplicitBasis
 from pygsti.baseobjs.basis import DirectSumBasis as _DirectSumBasis
+from pygsti.baseobjs import CompleteElementaryErrorgenBasis as _CompleteElementaryErrorgenBasis
 from pygsti.baseobjs.qubitgraph import QubitGraph as _QubitGraph
 from pygsti.tools import basistools as _bt
 from pygsti.tools import internalgates as _itgs
@@ -728,6 +729,52 @@ def create_explicit_alias_model(mdl_primitives, alias_dict):
     mdl_new._clean_paramvec()
     return mdl_new
 
+def create_explicit_fogi_model(processor_spec, custom_gates=None,
+                          depolarization_strengths=None, stochastic_error_probs=None, lindblad_error_coeffs=None,
+                          depolarization_parameterization='depolarize', stochastic_parameterization='stochastic',
+                          lindblad_parameterization='auto',
+                          evotype="default", simulator="auto",
+                          embed_gates=False, basis='pp', op_abbrevs=None):
+    """Constructs and returns a FOGI GLND model from a processor spec, for 1 qubit it should take ~seconds, 
+    for 2 qubits expect <10min depending on the number of operations in the gate set.
+
+    TODO docstring, also maybe convert to work with a FOGI model class later
+    Args:
+        processor_spec (_type_): _description_
+        custom_gates (_type_, optional): _description_. Defaults to None.
+        depolarization_strengths (_type_, optional): _description_. Defaults to None.
+        stochastic_error_probs (_type_, optional): _description_. Defaults to None.
+        lindblad_error_coeffs (_type_, optional): _description_. Defaults to None.
+        depolarization_parameterization (str, optional): _description_. Defaults to 'depolarize'.
+        stochastic_parameterization (str, optional): _description_. Defaults to 'stochastic'.
+        lindblad_parameterization (str, optional): _description_. Defaults to 'auto'.
+        evotype (str, optional): _description_. Defaults to "default".
+        simulator (str, optional): _description_. Defaults to "auto".
+        embed_gates (bool, optional): _description_. Defaults to False.
+        basis (str, optional): _description_. Defaults to 'pp'.
+        op_abbrevs (_type_, optional): _description_. Defaults to None.
+
+    Returns:
+        _type_: _description_
+    """
+    #TODO check if all parameters (asides from ideal_gate_type='GLND', ideal_spam_type='GLND') can be set to anything for 
+    #them to be compatible with FOGI models
+        
+    errgen_model = create_explicit_model(processor_spec, custom_gates,
+                          depolarization_strengths, stochastic_error_probs, lindblad_error_coeffs,
+                          depolarization_parameterization, stochastic_parameterization,
+                          lindblad_parameterization,
+                          evotype, simulator,
+                          ideal_gate_type='GLND', ideal_spam_type='GLND',
+                          embed_gates=embed_gates, basis=basis)
+    
+    basis1q = _Basis.cast('pp', 4)
+    #TODO make this adaptive for subsets of HSCA errgen types below
+    gauge_basis = _CompleteElementaryErrorgenBasis(
+            basis1q, errgen_model.state_space, elementary_errorgen_types='HSCA')
+    errgen_model.setup_fogi(gauge_basis, None, op_abbrevs, include_spam=True, reparameterize=True)
+    return errgen_model
+    
 
 def create_explicit_model(processor_spec, custom_gates=None,
                           depolarization_strengths=None, stochastic_error_probs=None, lindblad_error_coeffs=None,
@@ -748,6 +795,7 @@ def create_explicit_model(processor_spec, custom_gates=None,
 def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotype="default", simulator="auto",
                            ideal_gate_type='auto', ideal_prep_type='auto', ideal_povm_type='auto',
                            embed_gates=False, basis='pp'):
+    
     qudit_labels = processor_spec.qudit_labels
     state_space = _statespace.QubitSpace(qudit_labels) if all([udim == 2 for udim in processor_spec.qudit_udims]) \
         else _statespace.QuditSpace(qudit_labels, processor_spec.qudit_udims)
@@ -765,6 +813,7 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
         ideal_prep_type = _state.state_type_from_op_type(ideal_gate_type)
     if ideal_povm_type == "auto":
         ideal_povm_type = _povm.povm_type_from_op_type(ideal_gate_type)
+    
 
     def _embed_unitary(statespace, target_labels, unitary):
         dummyop = _op.EmbeddedOp(statespace, target_labels,
