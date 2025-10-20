@@ -404,6 +404,26 @@ def jtracedist(a, b, mx_basis='pp'):  # Jamiolkowski trace distance:  Tr(|J(a)-J
     return tracedist(JA, JB)
 
 
+def is_trace_preserving(a: _np.ndarray, mx_basis: BasisLike='pp', tol=1e-8) -> bool:
+    dim   = int(_np.round( a.size**0.5 ))
+    udim  = int(_np.round( dim**0.5    ))
+    basis = _Basis.cast(mx_basis, dim=dim)
+    if basis.first_element_is_identity:
+        checkone = _np.isclose(a[0,0], 1.0, rtol=tol, atol=tol)
+        checktwo = _np.allclose(a[1:], 0.0, atol=tol)
+        return checkone and checktwo
+    # else, check that the adjoint of a is unital.
+    I_mat = _np.eye(udim)
+    I_vec = _bt.stdmx_to_vec(I_mat, basis)
+    if _np.isrealobj(a):
+        expect_I_vec = a.T @ I_vec
+    else:
+        expect_I_vec = a.T.conj() @ I_vec
+    atol = tol * udim
+    check = float(_np.linalg.norm(I_vec - expect_I_vec)) <= atol
+    return check
+
+
 def entanglement_fidelity(a, b, mx_basis: BasisLike='pp', is_tp=None, is_unitary=None):
     """
     Returns the "entanglement" process fidelity between gate  matrices.
@@ -466,10 +486,7 @@ def entanglement_fidelity(a, b, mx_basis: BasisLike='pp', is_tp=None, is_unitary
     
     #if the tp flag isn't set we'll calculate whether it is true here
     if is_tp is None:
-        def is_tp_fn(x):
-            return _np.isclose(x[0, 0], 1.0) and _np.allclose(x[0, 1:d2], 0)
-        
-        is_tp= (is_tp_fn(a) and is_tp_fn(b))
+        is_tp = is_trace_preserving(a, mx_basis) and is_trace_preserving(b, mx_basis)
    
     #if the unitary flag isn't set we'll calculate whether it is true here 
     if is_unitary is None:
