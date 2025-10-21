@@ -239,14 +239,12 @@ class ExplicitOpModelCalc(object):
             The (weighted) number of elements accounted for by the residuals.
         """
         resids = []
-        T = transform_mx
         nSummands = 0.0
         if item_weights is None: item_weights = {}
         sqrt_itemWeights = {k: _np.sqrt(v) for k, v in item_weights.items()}
         opWeight = sqrt_itemWeights.get('gates', 1.0)
         spamWeight = sqrt_itemWeights.get('spam', 1.0)
-        Ti = None if T is None else _np.linalg.pinv(T)
-        # ^ TODO: generalize inverse op (call T.inverse() if T were a "transform" object?)
+        T, Ti = to_transform_mx_pair(transform_mx)
 
         for opLabel, gate in self.operations.items():
             wt = sqrt_itemWeights.get(opLabel, opWeight)
