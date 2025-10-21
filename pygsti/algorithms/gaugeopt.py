@@ -24,6 +24,7 @@ from pygsti.models.gaugegroup import (
     TrivialGaugeGroupElement as _TrivialGaugeGroupElement,
     GaugeGroupElement as _GaugeGroupElement
 )
+from pygsti.modelmembers.operations import LinearOperator as _LinearOperator
 
 from typing import Callable, Union, Optional
 
@@ -360,8 +361,10 @@ GGElObjective = Callable[[_GaugeGroupElement,bool], Union[float, _np.ndarray]]
 
 GGElJacobian  = Union[None, Callable[[_GaugeGroupElement], _np.ndarray]]
 
+LabelLike = Union[str, _baseobjs.Label]
 
-def _create_objective_fn(model, target_model, item_weights: Optional[dict[str,float]]=None,
+
+def _create_objective_fn(model, target_model, item_weights: Optional[dict[LabelLike, float]]=None,
                          cptp_penalty_factor: float=0.0, spam_penalty_factor: float=0.0,
                          gates_metric="frobenius", spam_metric="frobenius",
                          method=None, comm=None, check_jac=False, n_leak=0) -> tuple[GGElObjective, GGElJacobian]:
@@ -626,7 +629,13 @@ def _create_objective_fn(model, target_model, item_weights: Optional[dict[str,fl
 
         def _objective_fn(gauge_group_el, oob_check):
             mdl = _transform_with_oob_check(model, gauge_group_el, oob_check)
-            ret = 0
+            mdl_ops : dict[_baseobjs.Label, _LinearOperator] = mdl._excalc().operations
+            tgt_ops : dict[_baseobjs.Label, _LinearOperator] = dict()
+            if target_model is not None:
+                tgt_ops.update(target_model._excalc().operations)
+            # ^ Use these dicts instead of mdl.operations and target_model.operations,
+            #   since these dicts are updated to include instruments.
+            ret = 0.0
 
             if cptp_penalty_factor > 0:
                 mdl.basis = mxBasis  # set basis for jamiolkowski iso
@@ -645,30 +654,27 @@ def _create_objective_fn(model, target_model, item_weights: Optional[dict[str,fl
                 if spam_metric == gates_metric:
                     val = mdl.frobeniusdist(target_model, transform_mx_arg, item_weights)
                 else:
-                    wts = item_weights.copy()
-                    wts['spam'] = 0.0
-                    for k in wts:
-                        if k in mdl.preps or k in mdl.povms:
-                            wts[k] = 0.0
-                    val = mdl.frobeniusdist(target_model, transform_mx_arg, wts, n_leak)
+                    non_gates = {'spam'}.union(set(mdl.preps)).union(set(mdl.povms))
+                    temp_wts = {k: (0.0 if k in non_gates else v) for (k, v) in item_weights.items()}
+                    val = mdl.frobeniusdist(target_model, transform_mx_arg, temp_wts, n_leak)
                 if "squared" in gates_metric:
                     val = val ** 2
                 ret += val
 
             elif gates_metric == "fidelity":
                 # If n_leak==0, then subspace_entanglement_fidelity is just entanglement_fidelity
-                for opLbl in mdl.operations:
+                for opLbl in mdl_ops:
                     wt = item_weights.get(opLbl, opWeight)
-                    top = target_model.operations[opLbl].to_dense()
-                    mop = mdl.operations[opLbl].to_dense()
+                    top = tgt_ops[opLbl].to_dense()
+                    mop = mdl_ops[opLbl].to_dense()
                     ret += wt * (1.0 - _tools.subspace_entanglement_fidelity(top, mop, mxBasis, n_leak))**2
 
             elif gates_metric == "tracedist":
                 # If n_leak==0, then subspace_jtracedist is just jtracedist.
-                for opLbl in mdl.operations:
+                for opLbl in mdl_ops:
                     wt = item_weights.get(opLbl, opWeight)
-                    top = target_model.operations[opLbl].to_dense()
-                    mop = mdl.operations[opLbl].to_dense()
+                    top = tgt_ops[opLbl].to_dense()
+                    mop = mdl_ops[opLbl].to_dense()
                     ret += wt * _tools.subspace_jtracedist(top, mop, mxBasis, n_leak)
 
             else:
@@ -680,11 +686,9 @@ def _create_objective_fn(model, target_model, item_weights: Optional[dict[str,fl
 
             if "frobenius" in spam_metric:
                 # SPAM and gates can have different choices for squared vs non-squared.
-                wts = item_weights.copy(); wts['gates'] = 0.0
-                for k in wts:
-                    if k in mdl.operations or k in mdl.instruments:
-                        wts[k] = 0.0
-                val = mdl.frobeniusdist(target_model, transform_mx_arg, wts)
+                non_spam = {'gates'}.union(set(mdl_ops)) # use mdl_ops, not mdl.operations!
+                temp_wts = {k: (0.0 if k in non_spam else v) for (k, v) in item_weights.items()}
+                val = mdl.frobeniusdist(target_model, transform_mx_arg, temp_wts)
                 if "squared" in spam_metric:
                     val = val ** 2
                 ret += val 
