@@ -76,7 +76,7 @@ class XRotationOpFactory(op.OpFactory):
         return op.StaticArbitraryOp(superop)
 ```
 
-Next, we build a model that contains an instance of `XRotationFactory` that will be invoked when a circuit contains a `"Ga"` gate.  So far, only *implicit* models are allowed to contain factories, so we'll create a `LocalNoiseModel`  (see the [implicit model tutorial](../ImplicitModel.ipynb)) for a single qubit with the standard X, and Y gates, and then add our factory:
+Next, we build a model that contains an instance of `XRotationFactory` that will be invoked when a circuit contains a `"Ga"` gate.  So far, only *implicit* models are allowed to contain factories, so we'll create a `LocalNoiseModel`  (see the [implicit model tutorial](ImplicitModel)) for a single qubit with the standard X, and Y gates, and then add our factory:
 
 ```{code-cell} ipython3
 pspec = pygsti.processors.QubitProcessorSpec(1, ['Gx', 'Gy'])

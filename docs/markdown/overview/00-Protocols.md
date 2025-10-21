@@ -43,16 +43,16 @@ from pygsti.modelpacks import smq1Q_XY
 exp_design = smq1Q_XY.create_gst_experiment_design(max_max_length=316)  
 
 # write an empty data object (creates a template to fill in)
-pygsti.io.write_empty_protocol_data('tutorial_files/test_gst_dir', exp_design, clobber_ok=True)
+pygsti.io.write_empty_protocol_data('../../tutorial_files/test_gst_dir', exp_design, clobber_ok=True)
 
 # fill in the template with simulated data (you would run the experiment and use actual data)
 pygsti.io.fill_in_empty_dataset_with_fake_data(
-    "tutorial_files/test_gst_dir/data/dataset.txt",
+    "../../tutorial_files/test_gst_dir/data/dataset.txt",
     smq1Q_XY.target_model().depolarize(op_noise=0.01, spam_noise=0.001),
     num_samples=1000, seed=1234)
 
 # load the data object back in, now with the experimental data
-data = pygsti.io.read_data_from_dir('tutorial_files/test_gst_dir')
+data = pygsti.io.read_data_from_dir('../../tutorial_files/test_gst_dir')
 
 # run the GST protocol on the data 
 results = pygsti.protocols.StandardGST().run(data)
@@ -60,11 +60,11 @@ results = pygsti.protocols.StandardGST().run(data)
 # create a report
 report = pygsti.report.construct_standard_report(
     results, title="GST Overview Tutorial Example Report")
-report.write_html("tutorial_files/gettingStartedReport")
+report.write_html("../../tutorial_files/gettingStartedReport")
 ```
 
 ## Randomized benchmarking
-Randomized benchmarking (RB) can be used to estimate the average per-Clifford error rate by fitting a simple curve to the data from randomized circuits of different depths.  To create the experiment design, the user specifies a `QubitProcessorSpec` object that describes the quantum processor (see the [ProcessorSpec tutorial](../objects/ProcessorSpec)), the depths (in number of Clifford gates) to use, and the number of circuits at each depth.  The results from running the protocol are then used to create a plot of the RB decay curve along with the data.  For more information, see the [RB Overview tutorial](../rb/Overview.ipynb).
+Randomized benchmarking (RB) can be used to estimate the average per-Clifford error rate by fitting a simple curve to the data from randomized circuits of different depths.  To create the experiment design, the user specifies a `QubitProcessorSpec` object that describes the quantum processor (see the [ProcessorSpec tutorial](../objects/ProcessorSpec)), the depths (in number of Clifford gates) to use, and the number of circuits at each depth.  The results from running the protocol are then used to create a plot of the RB decay curve along with the data.  For more information, see the [RB Overview tutorial](../rb/Overview).
 
 ```{code-cell} ipython3
 # define the quantum processor (or piece of a processor) we'll be doing RB on
@@ -84,7 +84,7 @@ compilations = {'absolute': CCR.create_standard(pspec, 'absolute', ('paulis', '1
 exp_design = pygsti.protocols.CliffordRBDesign(pspec, compilations, depths, circuits_per_depth)
 
 # write an empty data object (creates a template to fill in)
-pygsti.io.write_empty_protocol_data('tutorial_files/test_rb_dir', exp_design, clobber_ok=True)
+pygsti.io.write_empty_protocol_data('../../tutorial_files/test_rb_dir', exp_design, clobber_ok=True)
 
 # fill in the template with simulated data (you would run the experiment and use actual data)
 # Use a model with 1% depolarization on all gates
@@ -92,10 +92,10 @@ mdl_datagen = pygsti.models.create_crosstalk_free_model(pspec, depolarization_st
     'Gxpi2': 0.01, 'Gxmpi2': 0.01, 'Gypi2': 0.01, 'Gympi2': 0.01
 }, simulator="map")
 pygsti.io.fill_in_empty_dataset_with_fake_data(
-    "tutorial_files/test_rb_dir/data/dataset.txt", mdl_datagen, num_samples=1000, seed=1234)
+    "../../tutorial_files/test_rb_dir/data/dataset.txt", mdl_datagen, num_samples=1000, seed=1234)
 
 # load the data object back in, now with the experimental data
-data = pygsti.io.read_data_from_dir('tutorial_files/test_rb_dir')
+data = pygsti.io.read_data_from_dir('../../tutorial_files/test_rb_dir')
 
 #Run RB protocol                                                                                                                                                                                     
 proto = pygsti.protocols.RB()
@@ -118,9 +118,9 @@ Gx:0Gy:1@(0,1)       20  27  23  30
 Gx:0^4@(0,1)         85   3  10   2
 Gx:0Gcnot:0:1@(0,1)  45   1   4  50
 """
-with open("tutorial_files/Example_Short_Dataset.txt","w") as f:
+with open("../../tutorial_files/Example_Short_Dataset.txt","w") as f:
     f.write(dataset_txt)
-ds = pygsti.io.read_dataset("tutorial_files/Example_Short_Dataset.txt")
+ds = pygsti.io.read_dataset("../../tutorial_files/Example_Short_Dataset.txt")
 
 # package the dataset into a data object, using the default experiment design
 #  that has essentially no structure.
@@ -140,7 +140,7 @@ print("Number of std-deviations away from expected = ", results.estimates['Model
 ```
 
 ## Robust phase estimation
-Robust Phase Estimation (RPE) determines the phase of a target gate U by iterated action of that gate on a superposition of eigenstates of U.  Upwards of 30% error in counts can be tolerated, due to any cause (e.g., statistical noise or calibration error). See the [tutorial on RPE](../misc-protocols/RobustPhaseEstimation) for more details.
+Robust Phase Estimation (RPE) determines the phase of a target gate U by iterated action of that gate on a superposition of eigenstates of U.  Upwards of 30% error in counts can be tolerated, due to any cause (e.g., statistical noise or calibration error). See the [tutorial on RPE](../protocols/RobustPhaseEstimation) for more details.
 
 In this example, the π/2 phase of an X rotation is determined using only noisy X_pi/2 gates (and SPAM). Additional modelpacks for characterizing different phases of different gates will be made available in the future. In the meantime, if you wish to characterize, using RPE, the phase of a gate that is neither X_pi/2 nor Y_pi/2, please email either pygsti@sandia.gov or kmrudin@sandia.gov.
 
@@ -150,16 +150,16 @@ from pygsti.modelpacks import smq1Q_Xpi2_rpe, smq1Q_XY
 exp_design = smq1Q_Xpi2_rpe.create_rpe_experiment_design(max_max_length=64)
 
 # write an empty data object (creates a template to fill in)
-pygsti.io.write_empty_protocol_data('tutorial_files/test_rpe_dir', exp_design, clobber_ok=True)
+pygsti.io.write_empty_protocol_data('../../tutorial_files/test_rpe_dir', exp_design, clobber_ok=True)
 
 # fill in the template with simulated data (you would run the experiment and use actual data)
 pygsti.io.fill_in_empty_dataset_with_fake_data(
-    "tutorial_files/test_rpe_dir/data/dataset.txt",
+    "../../tutorial_files/test_rpe_dir/data/dataset.txt",
     smq1Q_XY.target_model().depolarize(op_noise=0.01, spam_noise=0.1),
     num_samples=1000, seed=1234)
 
 # read the data object back in, now with the experimental data
-data = pygsti.io.read_data_from_dir('tutorial_files/test_rpe_dir/')
+data = pygsti.io.read_data_from_dir('../../tutorial_files/test_rpe_dir/')
 
 # Run the RPE Protocol
 results = pygsti.protocols.rpe.RobustPhaseEstimation().run(data)
@@ -168,26 +168,26 @@ print(results.angle_estimate)
 ```
 
 ## Drift Characterization
-Time-series data can be analyzed for significant indications of drift (time variance in circuit outcome probabilities).  See the [tutorial on drift characterization](../misc-protocols/DriftCharacterization) for more details.
+Time-series data can be analyzed for significant indications of drift (time variance in circuit outcome probabilities).  See the [tutorial on drift characterization](../protocols/DriftCharacterization) for more details.
 
 ```{code-cell} ipython3
 from pygsti.modelpacks import smq1Q_XY
 exp_design = smq1Q_XY.create_gst_experiment_design(max_max_length=4)
-pygsti.io.write_empty_protocol_data('tutorial_files/test_drift_dir', exp_design, clobber_ok=True)
+pygsti.io.write_empty_protocol_data('../../tutorial_files/test_drift_dir', exp_design, clobber_ok=True)
 
 # Simulate time dependent data (right now, this just uses a time-independent model so this is uninteresting)                                                       
 datagen_model = smq1Q_XY.target_model().depolarize(op_noise=0.05, spam_noise=0.1)
 datagen_model.sim = "map" # only map-type can generate time-dep data
                           # can also construct this as target_model(simulator="map") above
-pygsti.io.fill_in_empty_dataset_with_fake_data('tutorial_files/test_drift_dir/data/dataset.txt',
+pygsti.io.fill_in_empty_dataset_with_fake_data('../../tutorial_files/test_drift_dir/data/dataset.txt',
                                                datagen_model, num_samples=10, seed=2020, times=range(10))
 
-gst_data = pygsti.io.read_data_from_dir('tutorial_files/test_drift_dir')
+gst_data = pygsti.io.read_data_from_dir('../../tutorial_files/test_drift_dir')
 stability_protocol = pygsti.protocols.StabilityAnalysis()
 results = stability_protocol.run(gst_data)
 
 report = pygsti.report.create_drift_report(results, title='Demo Drift Report')
-report.write_html('tutorial_files/DemoDriftReport')
+report.write_html('../../tutorial_files/DemoDriftReport')
 ```
 
 ## What's next?

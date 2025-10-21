@@ -42,9 +42,9 @@ This documentation facilitates **two basic approaches** to getting started with 
 The first approach is a **top-down** approach that shows how to use pyGSTi as a stand-alone QCVV tool that runs protocols on data.  An overview of what protocols pyGSTi can run and how to invoke them is given in the [pyGSTi protocols overview](overview/00-Protocols) notebook.
 
 The second is a **bottom-up** approach that starts by introducing the main components of pyGSTi and how they work together, and then explains what you can do with them.  If you like this approach or are ambivalent, you should read through these two notebooks to get a high-level overview of what pyGSTi can do:
-- [Part1: pyGSTi's essential objects](overview/01-Essential-Objects)
-- [Part2: Using these objects](overview/02-Using-Essential-Objects)
+- [Part 1: pyGSTi's essential objects](overview/01-Essential-Objects)
+- [Part 2: Using these objects](overview/02-Using-Essential-Objects)
 
 (These notebooks contain links to other notebooks covering more advanced functionality that you are free to explore as desired.)
 
-If you have a particular problem you need solved and you want to know what 5 lines of Python code will get it done for you, then you should visit the [FAQ](overview/FAQ) and with links to associated example notebooks.  If your question isn't answered there, you should email us at pygsti@sandia.gov or add an issue to the pyGSTi github page.
+If you have a particular problem you need solved and you want to know what 5 lines of Python code will get it done for you, then you should visit the [FAQ](FAQ) and with links to associated example notebooks.  If your question isn't answered there, you should email us at pygsti@sandia.gov or add an issue to the pyGSTi github page.

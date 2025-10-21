@@ -18,7 +18,7 @@ from pygsti.data import simulate_data
 from pygsti.protocols import StandardGST, ProtocolData
 ```
 
-## Leakage (automatic)
+# Leakage (automatic)
 
 This short notebook shows how (data from) an experiment design for a two-level system can be used to fit a three-level sytem model, and how to generate a special report to provide insights for these models. The report includes special gate error metrics that reflect the distinguished role of the first two levels in the three-level system.
 
@@ -36,7 +36,7 @@ res = gst.run(pd)
 ```
 
 ```{code-cell} ipython3
-report_dir = 'example_files/leakage-report-automagic'
+report_dir = '../../example_files/leakage-report-automagic'
 report_object, updated_res = construct_leakage_report(res, title='easy leakage analysis!')
 # ^ Each estimate in updated_res has a new gauge-optimized model.
 #   The gauge optimization was done to reflect how our target gates

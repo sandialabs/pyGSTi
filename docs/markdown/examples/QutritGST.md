@@ -52,7 +52,7 @@ print("%d germs" % len(germs))
 ```{code-cell} ipython3
 #generate data template
 expList = pygsti.circuits.create_lsgst_circuits(target_model.operations.keys(), fiducialPrep, fiducialMeasure, germs,  maxLengths)
-pygsti.io.write_empty_dataset("example_files/dataTemplate_qutrit_maxL=4.txt", expList, "## Columns = 0bright count, 1bright count, 2bright count")
+pygsti.io.write_empty_dataset("../../example_files/dataTemplate_qutrit_maxL=4.txt", expList, "## Columns = 0bright count, 1bright count, 2bright count")
 ```
 
 At this point **STOP** and create/fill a dataset file using the template written in the above cell.  Then proceed with the lines below to run GST on the data and create (hopefully useful) reports telling you about your gates.
@@ -80,5 +80,5 @@ result = pygsti.run_stdpractice_gst(DS, target_model, fiducialPrep, fiducialMeas
 #Create a report
 ws = pygsti.report.construct_standard_report(
     result, "Example Qutrit Report", verbosity=3
-).write_html('example_files/sampleQutritReport', auto_open=False, verbosity=3)
+).write_html('../../example_files/sampleQutritReport', auto_open=False, verbosity=3)
 ```

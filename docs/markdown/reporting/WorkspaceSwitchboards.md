@@ -11,8 +11,7 @@ kernelspec:
   name: python3
 ---
 
-## Tutorial showing use of a `Workspace` object
-### Part 2: Switchboards
+# Workspace `Switchboards`
 
 "This tutorial introduces the `Switchboard` workspace object and demonstrates its use.  You may have gotten the sense from the last tutorial that screen real estate can quickly be taken up by plots and tables.  Wouldn't it me nice if we could interactively switch between plots or figures using buttons or sliders instead of having to scroll through endless pages of plots?  `Switchboard` to the rescue!
 
@@ -81,7 +80,7 @@ To see it, we need to call `display()`:
 tbl1.display()
 ```
 
-### Switchboards
+## Switchboards
 A `Switchboard` is essentially a collection of one or more switches along with a dictionary of "values" which depend on some or all of the switch positions.  Each value looks like a NumPy `ndarray` whose axes correspond to the switches that value depends upon.  The array can hold whatever you want: `Model`s, `DataSet`s, `float`s, etc., and from the perspective of the plot and table workspace objects the value looks like the thing contained in its array (e.g. a *single* `Model`, `DataSet`, or `float`, etc.).  
 
 Let's start off simple and create a switchboard with a single switch named "My Switch" that has two positions "On" and "Off":
@@ -184,7 +183,7 @@ logLProgress.display()
 switchbd4.display()
 ```
 
-### Switchboard Views
+## Switchboard Views
 If you want to duplicate a switch board in order to have the same switches accessible at different (multiple) location in a page, you need to create switchboard *views*.  These are somewhat like NumPy array views in that they are windows into some base data - in this case the original `Switchboard` object.  Let's create a view of the `Switchboard` above.
 
 ```{code-cell} ipython3
@@ -213,9 +212,6 @@ otherView = parent.view(["My Dropdown","My Slider"])
 otherView.display()
 ```
 
-### Exporting to HTML
+## Exporting to HTML
 Again, you can save this notebook as an HTML file by going to **File => Download As => HTML** in the Jupyter menu.  The resulting file will retain all of the plot *and switch* interactivity, and in this case doesn't need the `offline` folder (because we set `connected=True` in `init_notebook_mode` above) but does need an internet connection.
 
-```{code-cell} ipython3
-
-```

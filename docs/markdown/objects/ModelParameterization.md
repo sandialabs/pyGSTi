@@ -52,7 +52,7 @@ These operations act as critical building blocks when constructing complex gate 
 
 Many of the model construction functions take arguments dictating the type of modelmember objects to create.  As described above, by changing the type of a gate you select how that gate is represented (e.g. Clifford gates can be represented more efficiently than arbitrary gates) and how it is parameterized.  This in turn dictates how the overall model is paramterized.
 
-For a brief overview of the available options, here is an incomplete list of parameterization arguments and their associated `pygsti.modelmember` class.  Most types start with either `"full"` or `"static"` - these indicate whether the model members have parameters or not, respectively. Parameterizations without a prefix are "full" by default. See the related [ForwardSimulation tutorial](../algorithms/advanced/ForwardSimulationTypes.ipynb) for how each parameterization relates to the allowed types of forward simulation in PyGSTi.
+For a brief overview of the available options, here is an incomplete list of parameterization arguments and their associated `pygsti.modelmember` class.  Most types start with either `"full"` or `"static"` - these indicate whether the model members have parameters or not, respectively. Parameterizations without a prefix are "full" by default. See the related [ForwardSimulation tutorial](../simulation/ForwardSimulationTypes) for how each parameterization relates to the allowed types of forward simulation in PyGSTi.
 
 - `gate_type` for `modelmember.operations`:
   - `"static"` $\rightarrow$ `StaticArbitraryOp`
@@ -89,7 +89,7 @@ For convenience, the `prep_type` and `povm_type` arguments also accept `"auto"`,
 - All others map directly
 
 ### Explicit Models
-We now illustrate how one may specify the type of paramterization in `create_explicit_model`, and change the object types of all of a `ExplicitOpModel`'s contents using its `set_all_parameterizaions` method.  The `create_explicit_model` function builds (layer) operations that are compositions of the ideal operations and added noise (see the [model noise tutorial](ModelNoise.ipynb)).  By setting `ideal_gate_type` and similar arguments, the object type used for the initial "ideal" part of the operations is decided.
+We now illustrate how one may specify the type of paramterization in `create_explicit_model`, and change the object types of all of a `ExplicitOpModel`'s contents using its `set_all_parameterizaions` method.  The `create_explicit_model` function builds (layer) operations that are compositions of the ideal operations and added noise (see the [model noise tutorial](ModelNoise)).  By setting `ideal_gate_type` and similar arguments, the object type used for the initial "ideal" part of the operations is decided.
 
 ```{code-cell} ipython3
 import pygsti
@@ -177,4 +177,4 @@ mdl_locnoise.operation_blks['gates']['Gxpi2'] = np.array([[1,   0,   0,   0],
                                                           [0,   0,   0,-0.9]],'d')
 ```
 
-In `CloudNoiseModel` objects, all of the model's parameterization is inherited from its noise operations, and so there are no `ideal_gate_type` and similar arguments in `create_cloud_crosstalk_model`.  All of the ideal operations are always static (have no parameters) in a cloud noise model.  See the [tutorial on model noise](ModelNoise.ipynb) to see how the types of the noise objects can be set.
+In `CloudNoiseModel` objects, all of the model's parameterization is inherited from its noise operations, and so there are no `ideal_gate_type` and similar arguments in `create_cloud_crosstalk_model`.  All of the ideal operations are always static (have no parameters) in a cloud noise model.  See the [tutorial on model noise](ModelNoise) to see how the types of the noise objects can be set.

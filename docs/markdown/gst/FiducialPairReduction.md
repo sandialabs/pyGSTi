@@ -249,26 +249,26 @@ Finally, one can generate reports using GST with reduced-sequences:
 
 ```{code-cell} ipython3
 pygsti.report.construct_standard_report(full_results, title="Standard GST Strings Example"
-                                       ).write_html("tutorial_files/example_stdstrs_report")
+                                       ).write_html("../../tutorial_files/example_stdstrs_report")
 pygsti.report.construct_standard_report(gfpr_results, title="Global FPR Report Example"
-                                        ).write_html("tutorial_files/example_gfpr_report")
+                                        ).write_html("../../tutorial_files/example_gfpr_report")
 pygsti.report.construct_standard_report(pfpr_results, title="Per-germ FPR Report Example"
-                                        ).write_html("tutorial_files/example_pfpr_report")
+                                        ).write_html("../../tutorial_files/example_pfpr_report")
 pygsti.report.construct_standard_report(pfpr_results_greedy, title="Per-germ FPR (Greedy Heuristic) Report Example"
-                                        ).write_html("tutorial_files/example_pfpr_greedy_report")
+                                        ).write_html("../../tutorial_files/example_pfpr_greedy_report")
 pygsti.report.construct_standard_report(pggfpr_results, title="Per-germ Global FPR Report Example"
-                                        ).write_html("tutorial_files/example_pggfpr_report")
+                                        ).write_html("../../tutorial_files/example_pggfpr_report")
 pygsti.report.construct_standard_report(rfpr_results, title="Random FPR Report Example"
-                                        ).write_html("tutorial_files/example_rfpr_report")
+                                        ).write_html("../../tutorial_files/example_rfpr_report")
 ```
 
-If all has gone well, the [Standard GST](tutorial_files/example_stdstrs_report/main.html),
-[GFPR](tutorial_files/example_gfpr_report/main.html),
-[PFPR](tutorial_files/example_pfpr_report/main.html),
-[PFPR (Greedy)](tutorial_files/example_pfpr_greedy_report/main.html)
-[PGGFPR](tutorial_files/example_pggfpr_report/main.html)
+If all has gone well, the [Standard GST](../../tutorial_files/example_stdstrs_report/main.html),
+[GFPR](../../tutorial_files/example_gfpr_report/main.html),
+[PFPR](../../tutorial_files/example_pfpr_report/main.html),
+[PFPR (Greedy)](../../tutorial_files/example_pfpr_greedy_report/main.html)
+[PGGFPR](../../tutorial_files/example_pggfpr_report/main.html)
 and
-[RFPR](tutorial_files/example_rfpr_report/main.html),
+[RFPR](../../tutorial_files/example_rfpr_report/main.html),
 reports may now be viewed.
 The only notable difference in the output are "gaps" in the color box plots which plot quantities such as the log-likelihood across all operation sequences, organized by germ and fiducials.
 

@@ -13,7 +13,7 @@ kernelspec:
 
 # Gate Set Tomography
 
-The `pygsti` package provides multiple levels of abstraction over the core Gate Set Tomography (GST) algorithms.  This tutorial will show you how to run Gate Set Tomography on some simulated (generated) data, hopefully giving you an overall sense of what it takes (and how easy it is!) to run GST.  For more details and options for running GST, see the [GST circuits tutorial](GSTCircuitConstruction) and the [tutorial covering the different protocols for running GST](GST-Protocols).
+The `pygsti` package provides multiple levels of abstraction over the core Gate Set Tomography (GST) algorithms.  This tutorial will show you how to run Gate Set Tomography on some simulated (generated) data, hopefully giving you an overall sense of what it takes (and how easy it is!) to run GST.  For more details and options for running GST, see the [GST circuits tutorial](CircuitConstruction) and the [tutorial covering the different protocols for running GST](Protocols).
 
 There are three basic steps to running protocols in pyGSTi:
 
@@ -26,7 +26,7 @@ To run GST, we need the following three inputs:
     - a single state preparation in the $|0\rangle$ state.
     - a 2-outcome measurement with the label "0" associated with measuring $|0\rangle$ and "1" with measuring $|1\rangle$.
     
-2. a list of circuits tailored to the target model; essentially a list of what experiments we need to run.  Using a standard model makes things especially straightforward here, since the building blocks, called *germ* and *fiducial* circuits, needed to make good GST circuits have already been computed (see the [tutorial on GST circuits](GSTCircuitConstruction)).  In the example below, the model pack also provides the necessary germ and fiducial lists, so that all that is needed is a list of "maximum lengths" describing how long (deep) the circuits should be.
+2. a list of circuits tailored to the target model; essentially a list of what experiments we need to run.  Using a standard model makes things especially straightforward here, since the building blocks, called *germ* and *fiducial* circuits, needed to make good GST circuits have already been computed (see the [tutorial on GST circuits](CircuitConstruction)).  In the example below, the model pack also provides the necessary germ and fiducial lists, so that all that is needed is a list of "maximum lengths" describing how long (deep) the circuits should be.
 
 3. data, in the form of experimental outcome counts, for each of the required sequences.  In this example we'll generate "fake" or "simulated" data from a depolarized version of our ideal model.  For more information about `DataSet` objects, see the [tutorial on DataSets](../objects/DataSet).
 
@@ -64,12 +64,12 @@ def simulate_taking_data(data_template_filename):
 ```
 
 ```{code-cell} ipython3
-pygsti.io.write_empty_protocol_data('../tutorial_files/test_gst_dir', exp_design, clobber_ok=True)
+pygsti.io.write_empty_protocol_data('../../tutorial_files/test_gst_dir', exp_design, clobber_ok=True)
 
 # -- fill in the dataset file in tutorial_files/test_gst_dir/data/dataset.txt --
-simulate_taking_data("../tutorial_files/test_gst_dir/data/dataset.txt")  # REPLACE with actual data-taking
+simulate_taking_data("../../tutorial_files/test_gst_dir/data/dataset.txt")  # REPLACE with actual data-taking
 
-data = pygsti.io.read_data_from_dir('../tutorial_files/test_gst_dir')
+data = pygsti.io.read_data_from_dir('../../tutorial_files/test_gst_dir')
 ```
 
 ## Step 3: Run the GST protocol and create a report
@@ -82,9 +82,9 @@ results = gst_protocol.run(data)
 
 report = pygsti.report.construct_standard_report(
     results, title="GST Overview Tutorial Example Report", verbosity=2)
-report.write_html("../tutorial_files/gettingStartedReport", verbosity=2)
+report.write_html("../../tutorial_files/gettingStartedReport", verbosity=2)
 ```
 
-You can now open the file [../tutorial_files/gettingStartedReport/main.html](../tutorial_files/gettingStartedReport/main.html) in your browser (Firefox works best) to view the report.  **That's it!  You've just run GST!** 
+You can now open the file [../../tutorial_files/gettingStartedReport/main.html](../../tutorial_files/gettingStartedReport/main.html) in your browser (Firefox works best) to view the report.  **That's it!  You've just run GST!** 
 
 In the cell above, `results` is a `ModelEstimateResults` object, which is used to generate a HTML report.  For more information see the [Results object tutorial](../objects/Results) and [report generation tutorial](../reporting/ReportGeneration).

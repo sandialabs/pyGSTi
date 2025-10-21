@@ -25,7 +25,7 @@ from pygsti.processors import CliffordCompilationRules as CCR
 
 ## Get some CRB circuits
 
-First, we follow the [Clifford RB](../CliffordRB.ipynb) tutorial to generate a set of sequences.  If you want to perform Direct RB instead, just replace this cell with the contents of the [Direct RB](../DirectRB.ipynb) tutorial up until the point where it creates `circuitlist`:
+First, we follow the [Clifford RB](../rb/CliffordRB) tutorial to generate a set of sequences.  If you want to perform Direct RB instead, just replace this cell with the contents of the [Direct RB](../rb/DirectRB) tutorial up until the point where it creates `circuitlist`:
 
 ```{code-cell} ipython3
 #Specify the device to be benchmarked - in this case 2 qubits
@@ -58,7 +58,7 @@ Now we need to create a model that can simulate circuits like this. The RB circu
 1. RB circuits use our "multi-qubit" gate naming, so you have gates like `Gxpi2:0` and `Gcphase:0:1`.
 2. RB circuits do gates in parallel (this only matters for >1 qubits), so you have layers like `[Gypi2:0Gypi2:1]`
 
-"Implicit" models in pyGSTi (see the [implicit model tutorial](../../objects/ImplicitModel.ipynb)) are designed to efficiently describe multi-qubit processors.  There are numerous ways of constructing implicit models, all of which can simulate the type of circuits described above.  Here we'll demonstrate the simplest type: a "local noise model" (class `LocalNoiseModel`) where the noise on a gate can only act on that gate's target qubits - so, for instance, 1-qubit gates are still given by 1-qubit operators, not $n$-qubit ones.
+"Implicit" models in pyGSTi (see the [implicit model tutorial](../objects/ImplicitModel)) are designed to efficiently describe multi-qubit processors.  There are numerous ways of constructing implicit models, all of which can simulate the type of circuits described above.  Here we'll demonstrate the simplest type: a "local noise model" (class `LocalNoiseModel`) where the noise on a gate can only act on that gate's target qubits - so, for instance, 1-qubit gates are still given by 1-qubit operators, not $n$-qubit ones.
 
 One of the easiest ways to construct a `LocalNoiseModel` is to use the `create_crosstalk_free_model` function, which takes our `QubitProcessorSpec` and other optional kwargs.
 
@@ -80,7 +80,7 @@ depol1Q = np.array([[1, 0,   0, 0],
 depol2Q = np.kron(depol1Q,depol1Q)
 ```
 
-As detailed in the [implicit model tutorial](../../objects/ImplicitModel.ipynb), the gate operations of a `LocalNoiseModel` are held in its `.operation_blks['gates']` dictionary.  We'll alter these by assigning new process matrices to each gate.  In this case, it will be just a depolarized version of the original gate.
+As detailed in the [implicit model tutorial](../objects/ImplicitModel), the gate operations of a `LocalNoiseModel` are held in its `.operation_blks['gates']` dictionary.  We'll alter these by assigning new process matrices to each gate.  In this case, it will be just a depolarized version of the original gate.
 
 ```{code-cell} ipython3
 myModel.operation_blks['gates']["Gxpi2"] = np.dot(depol1Q, myModel.operation_blks['gates']["Gxpi2"])
@@ -103,7 +103,7 @@ ds = pygsti.data.simulate_data(myModel, circuitlist, 100, seed=1234)
 ```
 
 ## Running RB on the simulated `DataSet`
-To run an RB analysis, we just package up the experiment design and data set into a `ProtocolData` object and give this to a `RB` protocol's `run` method.  This returns a `RandomizedBenchmarkingResults` object that can be used to plot the RB decay curve.  (See the [RB analysis tutorial](../RBAnalysis.ipynb) for more details.)
+To run an RB analysis, we just package up the experiment design and data set into a `ProtocolData` object and give this to a `RB` protocol's `run` method.  This returns a `RandomizedBenchmarkingResults` object that can be used to plot the RB decay curve.
 
 ```{code-cell} ipython3
 data = pygsti.protocols.ProtocolData(exp_design, ds)

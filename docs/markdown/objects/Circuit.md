@@ -340,10 +340,20 @@ c == c2
 ```
 
 ### File I/O
-Circuits can be saved to and read from their single-line string format, which uses square brackets to enclose each layer of the circuit. See the lines of [MyCircuits.txt](../tutorial_files/MyCircuits.txt), which we read in below, for examples.  Note that a `Circuit`'s line labels are not included in their single-line-string format, and so to reliably import circuits the line labels should be supplied separately to the `read_circuit_list` function:
+Circuits can be saved to and read from their single-line string format, which uses square brackets to enclose each layer of the circuit. See the lines of [MyCircuits.txt](../../tutorial_files/MyCircuits.txt), which we read in below, for examples.  Note that a `Circuit`'s line labels are not included in their single-line-string format, and so to reliably import circuits the line labels should be supplied separately to the `read_circuit_list` function:
 
 ```{code-cell} ipython3
-circuitList = pygsti.io.read_circuit_list("../tutorial_files/MyCircuits.txt", line_labels=[0,1,2,3,4])
+circuitfile_txt = \
+"""# Some circuits to import
+{}
+[Gc11:0Gc18:1Gc12:2Gcnot:4:3][Gcnot:1:0Gc22:2Gc23:3Gc22:4][Gc12:0Gcnot:1:2Gc16:3Gc21:4]
+[Gc6:0Gc0:1Gcnot:2:3Gc9:4][Gc4:0Gc20:1Gc11:2Gc13:3Gc17:4][Gc5:0Gc23:1Gc12:2Gcnot:4:3][Gcnot:1:0Gc9:2Gc2:3Gc1:4][Gc15:0Gcnot:1:2Gc11:3Gc2:4][Gcnot:1:0Gc12:2Gc0:3Gc13:4][Gc13:0Gc12:1Gc13:2Gcnot:4:3]                                                                                            
+"""
+
+with open("../../tutorial_files/MyCircuits.txt","w") as f:
+    f.write(circuitfile_txt)
+
+circuitList = pygsti.io.read_circuit_list("../../tutorial_files/MyCircuits.txt", line_labels=[0,1,2,3,4])
 for c in circuitList:
     print(c)
 ```
@@ -373,7 +383,7 @@ print(quil)
 ```
 
 ### Simulating circuits
-`Model` objects in pyGSTi are able to *simulate*, or "generate the outcome probabilities for", circuits.  To demonstrate, let's create a circuit and a model (see the tutorials on ["explicit" models](ExplicitModel.ipynb) and ["implicit" models](ImplicitModel.ipynb) for more information on model creation):
+`Model` objects in pyGSTi are able to *simulate*, or "generate the outcome probabilities for", circuits.  To demonstrate, let's create a circuit and a model (see the tutorials on ["explicit" models](ExplicitModel) and ["implicit" models](ImplicitModel) for more information on model creation):
 
 ```{code-cell} ipython3
 clifford_circuit = Circuit([ [L('Gh','Q0'),L('Gh','Q1')],
@@ -397,11 +407,11 @@ The output is simply a dictionary of outcome probabilities:
 out1
 ```
 
-The keys of the outcome dictionary `out` are things like `('00',)` instead of just `'00'` because of possible *intermediate* outcomes.  See the [Instruments tutorial](advanced/Instruments.ipynb) if you're interested in learning more about intermediate outcomes.
+The keys of the outcome dictionary `out` are things like `('00',)` instead of just `'00'` because of possible *intermediate* outcomes.  See the [Instruments tutorial](Instruments) if you're interested in learning more about intermediate outcomes.
 
-Computation of outcome probabilities may be done in a variety of ways, and `Model` objects are associated with a *forward simulator* that supplies the core computational routines for generating outcome probabilities.  In the example above the simulation was performed by multiplying together process matrices.  For more information on the types of forward simulators in pyGSTi and how to use them, see the [forward simulators tutorial](../algorithms/advanced/ForwardSimulationTypes.ipynb).
+Computation of outcome probabilities may be done in a variety of ways, and `Model` objects are associated with a *forward simulator* that supplies the core computational routines for generating outcome probabilities.  In the example above the simulation was performed by multiplying together process matrices.  For more information on the types of forward simulators in pyGSTi and how to use them, see the [forward simulators tutorial](../simulation/ForwardSimulationTypes).
 
 +++
 
 ## Conclusion
-This concludes our detailed look into the `Circuit` object.  If you're intersted in using circuits for specific applications, you might want to check out the [tutorial on circuit lists](advanced/CircuitLists.ipynb) or the [tutorial on constructing GST circuits](advanced/GSTCircuitConstruction.ipynb)
+This concludes our detailed look into the `Circuit` object.  If you're intersted in using circuits for specific applications, you might want to check out the [tutorial on circuit lists](CircuitLists) or the [tutorial on constructing GST circuits](../gst/CircuitConstruction)

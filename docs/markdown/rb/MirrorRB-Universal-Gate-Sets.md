@@ -15,7 +15,7 @@ kernelspec:
 
 +++
 
-This tutorial contains a few details on how to run *Mirror Randomized Benchmarking* with universal gate sets, that are not covered in the [RB overview tutorial](RB-Overview.ipynb) or the [Clifford MRB tutorial](RB-MirrorRB.ipynb).
+This tutorial contains a few details on how to run *Mirror Randomized Benchmarking* with universal gate sets, that are not covered in the [RB overview tutorial](Overview) or the [Clifford MRB tutorial](MirrorRB).
 
 ## What is Mirror RB? 
 
@@ -41,7 +41,7 @@ Generating a Mirror RB experiment design for universal gate sets is very similar
 
 ### 1. Generic RB inputs
 
-The first inputs to create a Mirror RB experiment design are the same as in all RB protocols, and these are covered in the [RB overview tutorial](RB-Overview.ipynb). They are:
+The first inputs to create a Mirror RB experiment design are the same as in all RB protocols, and these are covered in the [RB overview tutorial](Overview). They are:
 
 - The device to benchmark (`pspec`). Universal gate set MRB in pyGSTi currently requires the `Gzr` and `Xpi2` gates to be in the list of gate names.
 - The "RB depths" at which we will sample circuits (`depths`). For Mirror RB, these depths must be even integers. They correspond to the number of total layers in the "compute" and "uncompute" sub-circuits.
@@ -97,12 +97,12 @@ def simulate_taking_data(data_template_filename):
 design = pygsti.protocols.MirrorRBDesign(pspec, depths, k, qubit_labels=qubits,
                                          circuit_type='clifford+zxzxz-haar', samplerargs=samplerargs)
 
-pygsti.io.write_empty_protocol_data('../tutorial_files/test_mrb_dir', design, clobber_ok=True)
+pygsti.io.write_empty_protocol_data('../../tutorial_files/test_mrb_dir', design, clobber_ok=True)
 
 # -- fill in the dataset file in tutorial_files/test_rb_dir/data/dataset.txt --MirrorRBDesign
-simulate_taking_data('../tutorial_files/test_mrb_dir/data/dataset.txt') # REPLACE with actual data-taking
+simulate_taking_data('../../tutorial_files/test_mrb_dir/data/dataset.txt') # REPLACE with actual data-taking
 
-data = pygsti.io.read_data_from_dir('../tutorial_files/test_mrb_dir')
+data = pygsti.io.read_data_from_dir('../../tutorial_files/test_mrb_dir')
 ```
 
 ## Running the Mirror RB protocol

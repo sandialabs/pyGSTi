@@ -35,14 +35,14 @@ ds = pygsti.data.simulate_data(mdl_datagen, exp_design.all_circuits_needing_data
 data = pygsti.protocols.ProtocolData(exp_design, ds)
 ```
 
-#### Create a "guess" model that anticipates a more-depolarized Gx gate
+## Create a "guess" model that anticipates a more-depolarized Gx gate
 
 ```{code-cell} ipython3
 mdl_guess = smq1Q_XYI.target_model()
 mdl_guess[('Gxpi2',0)].depolarize(0.1)
 ```
 
-#### Run GST with and without the guess model
+## Run GST with and without the guess model
 
 ```{code-cell} ipython3
 # GST with standard "ideal target" gauge optimization
@@ -56,7 +56,7 @@ gaugeopt_suite = pygsti.protocols.GSTGaugeOptSuite(gaugeopt_suite_names=['stdgau
 results2 = pygsti.protocols.StandardGST("full TP", gaugeopt_suite).run(data)
 ```
 
-#### Comparisons
+## Comparisons
 After running both the "ideal-target" and "mdl_guess-target" gauge optimizations, we can compare them with the ideal targets and the data-generating gates themselves.  We see that using `mdl_guess` results in a similar frobenius distance to the ideal targets, a slightly closer estimate to the data-generating model, and reflects our expectation that the `Gx` gate is slightly worse than the other gates.
 
 ```{code-cell} ipython3
@@ -76,7 +76,7 @@ print("\nPer-op difference between ideal and mdl_guess-GO")
 print(mdl_2.strdiff(target_model))
 ```
 
-#### Adding a gauge optimization to existing `Results`
+## Adding a gauge optimization to existing `Results`
 We can also include our `mdl_guess` as the `targetModel` when adding a new gauge-optimized result.  See other examples for more info on using `add_gaugeoptimized`.
 
 ```{code-cell} ipython3
@@ -89,6 +89,3 @@ mdl_1b = results1.estimates['full TP'].models['using mdl_guess']
 print(mdl_1b.frobeniusdist(mdl_2)) # gs1b is the same as gs2
 ```
 
-```{code-cell} ipython3
-
-```

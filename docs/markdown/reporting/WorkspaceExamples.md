@@ -16,7 +16,7 @@ kernelspec:
 PyGSTi's `Workspace` object is first a foremost a container and factory for plots and tables.  At the most basic level, it can be used to generate nice output based on quantities (e.g. `Model`, `DataSet`, etc. objects) that you've computed or loaded within a notebook.  For this, it's useful to call `init_notebook_mode` with `autodisplay=True` (see below) so that you don't have to `.display()` everything - `display()` gets called automatically when a plot or table is created.
 
 ## Getting some results
-First, let's run Gate Set Tomography (GST) on the standard 1-qubit model to get some results to play with.  We generate a few `DataSet` objects and then call `run_long_sequence_gst` to run GST, generating a `ModelEstimateResults` object (essentially a container for `Model` objects).  For more details, see the tutorials [GST overview tutorial](../algorithms/GST-Overview.ipynb), the [tutorial on GST functions](../algorithms/GST-Driverfunctions.ipynb), and the [tutorial explaining the ModelEstimateResults object](../objects/advanced/Results.ipynb).
+First, let's run Gate Set Tomography (GST) on the standard 1-qubit model to get some results to play with.  We generate a few `DataSet` objects and then call `run_long_sequence_gst` to run GST, generating a `ModelEstimateResults` object (essentially a container for `Model` objects).  For more details, see the tutorials [GST overview tutorial](../gst/Overview), the [tutorial on GST functions](../gst/Driverfunctions), and the [tutorial explaining the ModelEstimateResults object](../objects/Results).
 
 ```{code-cell} ipython3
 import numpy as np
@@ -81,7 +81,7 @@ w.init_notebook_mode(connected=False, autodisplay=True)
 
 Plots and tables are created via member functions of a `Workspace` (`w` in our case).  Note that you can start typing "`w.`" and TAB-complete to see the different things a `Workspace` can make for you.  Furthermore, pressing SHIFT-TAB after the opening parenthesis of a function,  e.g. after typing "`w.GatesVsTargetTable(`", will bring up Jupyter's help window showing you the function signature (the arguments you need to give the function).
 
-#### The remainder of this tutorial demonstrates some of the tables and plots you can create. 
+### The remainder of this tutorial demonstrates some of the tables and plots you can create. 
 Note that displayed objects have a resize handle in their lower right corner.
 
 ```{code-cell} ipython3
@@ -234,16 +234,16 @@ You can also save plot and figures to separate files using their `saveas` method
 
 ```{code-cell} ipython3
 import os
-if not os.path.exists("../tutorial_files/tempTest"):
-    os.mkdir("../tutorial_files/tempTest")
+if not os.path.exists("../../tutorial_files/tempTest"):
+    os.mkdir("../../tutorial_files/tempTest")
 
 obj = w.GatesVsTargetTable(mdl1, tgt)
 #obj = w.ErrgenTable(mdl3,tgt)
 #obj = w.ColorBoxPlot(("logl",), gss, ds1, mdl1, typ='boxes')
 
-obj.saveas("../tutorial_files/tempTest/testSave.tex")
-obj.saveas("../tutorial_files/tempTest/testSave.pkl")
-obj.saveas("../tutorial_files/tempTest/testSave.html")
+obj.saveas("../../tutorial_files/tempTest/testSave.tex")
+obj.saveas("../../tutorial_files/tempTest/testSave.pkl")
+obj.saveas("../../tutorial_files/tempTest/testSave.html")
 ```
 
 Saving as a pdf requires having pdflatex installed and on the system path.
@@ -251,12 +251,8 @@ Saving as a pdf requires having pdflatex installed and on the system path.
 ```{code-cell} ipython3
 :tags: [nbval-skip]
 
-obj.saveas("../tutorial_files/tempTest/testSave.pdf")
+obj.saveas("../../tutorial_files/tempTest/testSave.pdf")
 ```
 
 ## Exporting notebooks to HTML
 If you want, you can save figure-containing notebooks (like this one) as an HTML file by going to **File => Download As => HTML** in the Jupyter menu.  The resulting file will retain all of the plot interactivity, so long as its in a directory with an `offline` folder (because we set `connected=False` above).
-
-```{code-cell} ipython3
-
-```

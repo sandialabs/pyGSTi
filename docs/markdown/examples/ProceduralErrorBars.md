@@ -13,7 +13,7 @@ kernelspec:
 
 # Procedural Error Bars
 
-One other way we can use the `pygsti.report.reportables` module described in the [ModelAnalysisMetrics tutorial](ModelAnalysisMetrics.ipynb) is to procedurally generate error bars for any quantity you want.
+One other way we can use the `pygsti.report.reportables` module described in the [ModelAnalysisMetrics tutorial](../utilities/ModelAnalysisMetrics) is to procedurally generate error bars for any quantity you want.
 
 First, let's simulate a noisy GST experiment
 

@@ -12,7 +12,7 @@ kernelspec:
 ---
 
 # Circuit Construction
-This tutorial discusses the creation of `Circuit` objects for use with Gate Set Tomography (GST).  If you're not sure what a `Circuit` is, you might want to read through the [tutorial on circuits](../Circuit.ipynb) first. 
+This tutorial discusses the creation of `Circuit` objects for use with Gate Set Tomography (GST).  If you're not sure what a `Circuit` is, you might want to read through the [tutorial on circuits](../objects/Circuit) first. 
 
 While pyGSTi allows one to create arbitrary lists of circuits, the GST algorithms have been designed to work well with circuits that have a particular structure.  At the beginning and the end of each string are "preparation fiducial" and "measurement fiducial" circuits (or "sequences"), respectively, whose purpose is to extend the native preparation and measurment operations to informationally complete sets.  In between the fiducial sequences is a "germ" sequence, or just "germ", that is repeated some number of times.  The purpose of the repeated-germ sequence is to amplify one or more particular types of errors.  By considering an entire set of germs (called an "amplificationally complete" set), *all* possible types of errors are amplified, giving the GST algorithms high sensitivity to all errors.  The longer the sequences, that is, the more repetitions of the germs, the higher the sensitivity.  
 
@@ -26,7 +26,7 @@ In practice, well-chosen lists of operation sequences can be formed as follows. 
 
 circuits, where `preparation_fiducial` ranges over all preparation fiducials, `measurement_fiducial` ranges over all measurement fiducials, and `repeated_germ` ranges over all the germs *repeated such that the length of `repeated_germ` does not exceed $L$*.  To further increase the robustness of the numerics, the circuit list corresponding to $L$ will also contain all of the sequences from earlier (lower) values of $L$.  This procedure thus creates a list of operation sequences for each $L$ that are designed for use by pyGSTi's "long-sequence" GST algorithms.
 
-The fiducial and germ lists are obtained by pyGSTi's "fiducial selection" and "germ selection" algorithms, which are explained in more detail in the [tutorial on fiducial and germ selection](../algorithms/advanced/GST-FiducialAndGermSelection.ipynb).  This this tutorial we'll be using one of pyGSTi's built-in "model packs" (see the [model pack tutorial](ModelPacks.ipynb)), for which fiducial and germ circuits are pre-computed:
+The fiducial and germ lists are obtained by pyGSTi's "fiducial selection" and "germ selection" algorithms, which are explained in more detail in the [tutorial on fiducial and germ selection](FiducialAndGermSelection).  This this tutorial we'll be using one of pyGSTi's built-in "model packs" (see the [model pack tutorial](../objects/ModelPacks)), for which fiducial and germ circuits are pre-computed:
 
 ```{code-cell} ipython3
 import pygsti

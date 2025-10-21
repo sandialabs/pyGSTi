@@ -13,13 +13,13 @@ kernelspec:
 
 # Report Generation Tutorial
 
-PyGSTi is able to construct polished report documents, which provide high-level summaries as well as detailed analyses of results (Gate Set Tomography (GST) and model-testing results in particular).  Reports are intended to be quick and easy way of analyzing `Model`-type estimates, and pyGSTi's report generation functions are specifically designed to interact with the `ModelEstimateResults` object (producted by several high-level algorithm functions - see, for example, the [GST overview tutorial](../algorithms/GST-Overview.ipynb) and [GST functions tutorial](../algorithms/GST-Drivers.ipynb).).  The report generation functions in pyGSTi takes one or more results (often `ModelEstimateResults`-type) objects as input and produces an HTML file as output.  The HTML format allows the reports to include **interactive plots** and **switches** (see the [workspace switchboard tutorial](advanced/WorkspaceSwitchboards.ipynb), making it easy to compare different types of analysis or data sets.  
+PyGSTi is able to construct polished report documents, which provide high-level summaries as well as detailed analyses of results (Gate Set Tomography (GST) and model-testing results in particular).  Reports are intended to be quick and easy way of analyzing `Model`-type estimates, and pyGSTi's report generation functions are specifically designed to interact with the `ModelEstimateResults` object (producted by several high-level algorithm functions - see, for example, the [GST overview tutorial](../gst/Overview) and [GST functions tutorial](../gst/Driverfunctions)).  The report generation functions in pyGSTi takes one or more results (often `ModelEstimateResults`-type) objects as input and produces an HTML file as output.  The HTML format allows the reports to include **interactive plots** and **switches** (see the [workspace switchboard tutorial](WorkspaceSwitchboards), making it easy to compare different types of analysis or data sets.  
 
-PyGSTi's reports are stand-alone HTML documents which cannot run Python.  Thus, all the results displayed in a report must be pre-computed (in Python).  If you find yourself wanting to fiddle with things and feel that these reports are too static, please consider using a `Workspace` object (see the [Workspace tutorial](Workspace.ipynb)) within a Jupyter notebook, where you can intermix report tables/plots and Python.  Internally, functions like `construct_standard_report` (see below) are simple factories for `Report` objects, which are in turn little more than a wrapper around a `Workspace` object and a set of instructions for how to generate reports of different output formats.
+PyGSTi's reports are stand-alone HTML documents which cannot run Python.  Thus, all the results displayed in a report must be pre-computed (in Python).  If you find yourself wanting to fiddle with things and feel that these reports are too static, please consider using a `Workspace` object (see the [Workspace tutorial](Workspace)) within a Jupyter notebook, where you can intermix report tables/plots and Python.  Internally, functions like `construct_standard_report` (see below) are simple factories for `Report` objects, which are in turn little more than a wrapper around a `Workspace` object and a set of instructions for how to generate reports of different output formats.
 
 
-### Get some `ModelEstimateResults`
-We start by performing GST using `run_long_sequence_gst`, as usual, to create a `ModelEstimateResults` object (we could also have just loaded one from file).  See the [GST functions tutorial](../algorithms/GST-Driverfunctions.ipynb) for more details.
+## Get some `ModelEstimateResults`
+We start by performing GST using `run_long_sequence_gst`, as usual, to create a `ModelEstimateResults` object (we could also have just loaded one from file).  See the [GST functions tutorial](../gst/Driverfunctions) for more details.
 
 ```{code-cell} ipython3
 import pygsti
@@ -30,7 +30,7 @@ prep_fiducials = smq1Q_XYI.prep_fiducials()
 meas_fiducials = smq1Q_XYI.meas_fiducials()
 germs = smq1Q_XYI.germs()
 maxLengths = [1,2,4,8,16]
-ds = pygsti.io.read_dataset("../tutorial_files/Example_Dataset.txt", cache=True)
+ds = pygsti.io.read_dataset("../../tutorial_files/Example_Dataset.txt", cache=True)
 
 #Run GST
 target_model.set_all_parameterizations("full TP") #TP-constrained
@@ -38,7 +38,7 @@ results = pygsti.run_long_sequence_gst(ds, target_model, prep_fiducials, meas_fi
                                       maxLengths, verbosity=3)
 ```
 
-### Make a report
+## Make a report
 Now that we have `results`, we use the `construct_standard_report` method within `pygsti.report` to generate a `Report`.  
 `pygsti.report.construct_standard_report` is the most commonly used report factory function in pyGSTi, as it is appropriate for smaller models (1- and 2-qubit) which have *operations that are or can be represeted as dense matrices and/or vectors*.  
 
@@ -47,14 +47,14 @@ Once constructed, a `Report` object can be used to write a report as an HTML doc
 ```{code-cell} ipython3
 report = pygsti.report.construct_standard_report(results, title="GST Example Report", verbosity=1)
 #HTML
-report.write_html("../tutorial_files/exampleReport", auto_open=False, verbosity=1)
+report.write_html("../../tutorial_files/exampleReport", auto_open=False, verbosity=1)
 ```
 
 ```{code-cell} ipython3
 :tags: [nbval-skip]
 
 #PDF
-report.write_pdf("../tutorial_files/exampleReport.pdf", auto_open=False, verbosity=1)
+report.write_pdf("../../tutorial_files/exampleReport.pdf", auto_open=False, verbosity=1)
 ```
 
 There are several remarks about these reports worth noting:
@@ -65,7 +65,7 @@ There are several remarks about these reports worth noting:
 
 +++
 
-### Multiple estimates in a single report
+## Multiple estimates in a single report
 Next, let's analyze the same data two different ways: with and without the TP-constraint (i.e. whether the gates *must* be trace-preserving) and furthermore gauge optmimize each case using several different SPAM-weights.  In each case we'll call `run_long_sequence_gst` with `gauge_opt_params=False`, so that no gauge optimization is done, and then perform several gauge optimizations separately and add these to the `Results` object via its `add_gaugeoptimized` function.
 
 ```{code-cell} ipython3
@@ -106,7 +106,7 @@ We'll now call the *same* `construct_standard_report` function but this time ins
 ws = pygsti.report.Workspace()
 report = pygsti.report.construct_standard_report(
     {'full TP': results_tp, "Full": results_full}, title="Example Multi-Estimate Report", ws=ws, verbosity=2)
-report.write_html("../tutorial_files/exampleMultiEstimateReport", auto_open=False, verbosity=2)
+report.write_html("../../tutorial_files/exampleMultiEstimateReport", auto_open=False, verbosity=2)
 ```
 
 In the above call we construct `ws` - a `Workspace` object.  PyGSTi's `Workspace` objects function as both a factory for figures and tables as well as a smart cache for computed values.  A `Workspace` object can optionally be passed as an argument to `construct_standard_report`, where it is used to create all figures in the report.  As an intended side effect, each of these figures is cached, along with some of the intermediate results used to create it.  By passing a preconstructed `Workspace` object to `construct_standard_report`, we allow it to utilize previously cached quantities.
@@ -125,11 +125,11 @@ pygsti.report.construct_standard_report(
     results_both,
     title="Example Multi-Estimate Report (v2)", 
     ws=ws, verbosity=2
-).write_html("../tutorial_files/exampleMultiEstimateReport2", auto_open=False, verbosity=2)
+).write_html("../../tutorial_files/exampleMultiEstimateReport2", auto_open=False, verbosity=2)
 ```
 
-### Multiple estimates and `run_stdpractice_gst`
-It's no coincidence that a `Results` object containing multiple estimates using the same data is precisely what's returned from `run_stdpractice_gst` (see docstring for information on its arguments, and see the [GST functions tutorial](../algorithms/GST-Drivers.ipynb)).  This allows one to run GST multiple times, creating several different "standard" estimates and gauge optimizations, and plot them all in a single (HTML) report.
+## Multiple estimates and `run_stdpractice_gst`
+It's no coincidence that a `Results` object containing multiple estimates using the same data is precisely what's returned from `run_stdpractice_gst` (see docstring for information on its arguments, and see the [GST functions tutorial](../gst/Driverfunctions)).  This allows one to run GST multiple times, creating several different "standard" estimates and gauge optimizations, and plot them all in a single (HTML) report.
 
 ```{code-cell} ipython3
 results_std = pygsti.run_stdpractice_gst(ds, target_model, prep_fiducials, meas_fiducials, germs,
@@ -139,10 +139,10 @@ results_std = pygsti.run_stdpractice_gst(ds, target_model, prep_fiducials, meas_
 # Generate a report with "TP", "CPTP", and "Target" estimates
 pygsti.report.construct_standard_report(
     results_std, title="Post StdPractice Report", verbosity=1
-).write_html("../tutorial_files/exampleStdReport", auto_open=False, verbosity=1)
+).write_html("../../tutorial_files/exampleStdReport", auto_open=False, verbosity=1)
 ```
 
-### Reports with confidence regions
+## Reports with confidence regions
 To display confidence intervals for reported quantities, you must do two things:
 
 1. you must specify the `confidenceLevel` argument to `construct_standard_report`.
@@ -159,10 +159,10 @@ crfact.project_hessian('intrinsic error')
 pygsti.report.construct_standard_report(
     results_std, title="Post StdPractice Report (w/CIs on CPTP)",
     confidence_level=95, verbosity=1
-).write_html("../tutorial_files/exampleStdReport2", auto_open=False, verbosity=1)
+).write_html("../../tutorial_files/exampleStdReport2", auto_open=False, verbosity=1)
 ```
 
-### Reports with multiple *different* data sets
+## Reports with multiple *different* data sets
 We've already seen above that `construct_standard_report` can be given a dictionary of `Results` objects instead of a single one.  This allows the creation of reports containing estimates for different `DataSet`s (each `Results` object only holds estimates for a single `DataSet`).  Furthermore, when the data sets have the same operation sequences, they will be compared within a tab of the HTML report.
 
 Below, we generate a new data set with the same sequences as the one loaded at the beginning of this tutorial, proceed to run standard-practice GST on that dataset, and create a report of the results along with those of the original dataset.  Look at the **"Data Comparison" tab** within the gauge-invariant error metrics category.
@@ -188,10 +188,10 @@ results_std2 = pygsti.run_stdpractice_gst(ds2, target_model, prep_fiducials, mea
 pygsti.report.construct_standard_report(
     {'DS1': results_std, 'DS2': results_std2},
     title="Example Multi-Dataset Report", verbosity=1
-).write_html("../tutorial_files/exampleMultiDataSetReport", auto_open=False, verbosity=1)
+).write_html("../../tutorial_files/exampleMultiDataSetReport", auto_open=False, verbosity=1)
 ```
 
-### Other cool `Report` tricks
+## Other cool `Report` tricks
 Finally, let us highlight a few of the additional arguments one can supply to the respective `Report` output methods that allows further control over what gets included in the generated report.
 
 - Setting the `link_to` argument to a tuple of `'pkl'`, `'tex'`, and/or `'pdf'` will create hyperlinks within the plots or below the tables of the HTML linking to Python pickle, LaTeX source, and PDF versions of the content, respectively.  The Python pickle files for tables contain pickled pandas `DataFrame` objects, wheras those of plots contain ordinary Python dictionaries of the data that is plotted.  Applies to HTML reports only.
@@ -203,7 +203,7 @@ Below, we demonstrate both of these options in very brief (`brevity=4`) report w
 ```{code-cell} ipython3
 pygsti.report.construct_standard_report(
     results_std, title="Example Brief Report", verbosity=1
-).write_html("../tutorial_files/exampleBriefReport", auto_open=False, verbosity=1,
+).write_html("../../tutorial_files/exampleBriefReport", auto_open=False, verbosity=1,
              brevity=4, link_to=('pkl', 'tex'))
 ```
 
@@ -218,7 +218,7 @@ The line below demonstrates how to create a report notebook using `write_noteboo
 ```{code-cell} ipython3
 pygsti.report.construct_standard_report(
     results, title="GST Example Report Notebook", confidence_level=None, verbosity=3
-).write_notebook("../tutorial_files/exampleReport.ipynb", auto_open=False, connected=False, verbosity=3)
+).write_notebook("../../tutorial_files/exampleReport.ipynb", auto_open=False, connected=False, verbosity=3)
 ```
 
 ## Multi-qubit reports

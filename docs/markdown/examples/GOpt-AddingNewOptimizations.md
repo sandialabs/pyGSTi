@@ -28,13 +28,13 @@ data = pygsti.protocols.ProtocolData(exp_design, ds)
 
 gst = pygsti.protocols.StandardGST("full TP", gaugeopt_suite={'go0': {'item_weights': {'gates': 1, 'spam': 1}}})
 results = gst.run(data) 
-results.write("example_files/regaugeopt_example")
+results.write("../../example_files/regaugeopt_example")
 ```
 
 Next, let's load in the pre-computed results and use the `add_gauge_optimization` method of the `pygsti.objects.Estimate` object to add a new gauge-optimized version of the (gauge un-fixed) model estimate stored in `my_results.estimates['default']`.  The first argument of `add_gauge_optimization` is just a dictionary of arguments to `pygsti.gaugeopt_to_target` **except** that you don't need to specify the `Model` to gauge optimize or the target `Model` (just like the `gaugeOptParams` argument of `run_long_sequence_gst`).  The optional "`label`" argument defines the key name for the gauge-optimized `Model` and the corresponding parameter dictionary within the `Estimate`'s `.models` and `.goparameters` dictionaries, respectively.
 
 ```{code-cell} ipython3
-my_results = pygsti.io.read_results_from_dir("example_files/regaugeopt_example", name="StandardGST")
+my_results = pygsti.io.read_results_from_dir("../../example_files/regaugeopt_example", name="StandardGST")
 ```
 
 ```{code-cell} ipython3

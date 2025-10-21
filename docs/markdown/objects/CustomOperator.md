@@ -13,7 +13,7 @@ kernelspec:
 
 # Custom Operators (e.g. Gates)
 
-This tutorial demonstrates the process of creating your own gate operation.  One can view gate (or layer) operations in pyGSTi as simply parameterized process matrices: a mapping that associates with any given set of parameter values a process matrix.  This mapping is encapsulated by a `LinearOperator`-derived class in pyGSTi, and in addition to using the ones included with pyGSTi (e.g. `FullArbitraryOp`, see the [Operator tutorial](Operators.ipynb) for more examples) you're free to make your own.  That's exactly what we'll be doing here.
+This tutorial demonstrates the process of creating your own gate operation.  One can view gate (or layer) operations in pyGSTi as simply parameterized process matrices: a mapping that associates with any given set of parameter values a process matrix.  This mapping is encapsulated by a `LinearOperator`-derived class in pyGSTi, and in addition to using the ones included with pyGSTi (e.g. `FullArbitraryOp`, see the [Operator tutorial](Operators) for more examples) you're free to make your own.  That's exactly what we'll be doing here.
 
 There are lots of good reasons for doing this, the foremost being that you have a specific way you want to model a gate operation that is specific to your system's physics and not captured by pyGSTi's more generic built-in operation classes.  You also may want to make an operation whose parameters are exactly the "knobs" that you have access to in the lab.  Whatever the reason, pyGSTi has been designed to make the creation of custom operator types easy and straightforward.
 
@@ -62,7 +62,7 @@ class MyXPi2Operator(pygsti.modelmembers.operations.DenseOperator):
         raise NotImplementedError("MyXPi2Operator cannot be transformed!")
 ```
 
-We'll add a `MyXPi2Operator` instance as the `("Gxpi2",0)` gate in pyGSTi's {Idle, $X(\pi/2)$, $Y(\pi/2)$} modelpack (see the [modelpacks tutorial](ModelPacks.ipynb) for more information on modelpacks).
+We'll add a `MyXPi2Operator` instance as the `("Gxpi2",0)` gate in pyGSTi's {Idle, $X(\pi/2)$, $Y(\pi/2)$} modelpack (see the [modelpacks tutorial](ModelPacks) for more information on modelpacks).
 
 ```{code-cell} ipython3
 ---
@@ -75,7 +75,7 @@ mdl.operations[('Gxpi2',0)] = MyXPi2Operator()
 print(mdl)
 ```
 
-Next, to demonstrate everything is working like it should, we'll optimize this model using Gate Set tomography (see the [GST overview tutorial](../../algorithms/GST-Overview.ipynb) for the details on what all this stuff does).  GST by default attempts to gauge optimize its final estimate to look like the target model (see the [gauge optimization tutorial](../../algorithms/advanced/GaugeOpt.ipynb) for details).  This would requires all of the operators in our model to implement the (gauge) `transform` method.  Because `MyXPi2Operator` doesn't, we tell GST not to perform any gauge optimization by setting `gauge_opt_params=False` below.
+Next, to demonstrate everything is working like it should, we'll optimize this model using Gate Set tomography (see the [GST overview tutorial](../gst/Overview) for the details on what all this stuff does).  GST by default attempts to gauge optimize its final estimate to look like the target model (see the [gauge optimization tutorial](../utilities/GaugeOpt) for details).  This would requires all of the operators in our model to implement the (gauge) `transform` method.  Because `MyXPi2Operator` doesn't, we tell GST not to perform any gauge optimization by setting `gauge_opt_params=False` below.
 
 ```{code-cell} ipython3
 # Generate "fake" data from a depolarized version of the target (ideal) model
@@ -107,9 +107,7 @@ The reason these values aren't exactly $0.01$ and $0$ are due to the finite numb
 
 ## What's next?
 This tutorial showed you how to create a custom *dense* operation (a subclass of `DenseOperator`).  We'll be adding demonstrations of more complex custom operations in the future.  Here are some places you might want to go next:
-- The [operators tutorial](Operators.ipynb) explains and shows examples of pyGSTi's existing operations.
-- MORE TODO
-
-```{code-cell} ipython3
-
-```
+- The [operators tutorial](Operators) explains and shows examples of pyGSTi's existing operations.
+- The [OperationFactory tutorial](OperationFactories) shows how to make a continuously-parameterization operation.
+- The [POVM tutorial](CustomPOVM) explains and shows examples of pyGSTi's POVMs (i.e. terminating measurements).
+- The [instrument tutorial](Instruments) explains and shows examples of pyGSTi's instruments (i.e. mid-circuit measurements).

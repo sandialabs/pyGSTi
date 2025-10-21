@@ -25,11 +25,11 @@ from pygsti.modelpacks import smq1Q_XYI
 
 #Create experiment design
 exp_design = smq1Q_XYI.create_gst_experiment_design(max_max_length=32)
-pygsti.io.write_empty_protocol_data("example_files/mpi_gst_example", exp_design, clobber_ok=True)
+pygsti.io.write_empty_protocol_data("../../example_files/mpi_gst_example", exp_design, clobber_ok=True)
 
 #Simulate taking data
 mdl_datagen  = smq1Q_XYI.target_model().depolarize(op_noise=0.1, spam_noise=0.001)
-pygsti.io.fill_in_empty_dataset_with_fake_data("example_files/mpi_gst_example/data/dataset.txt",
+pygsti.io.fill_in_empty_dataset_with_fake_data("../../example_files/mpi_gst_example/data/dataset.txt",
                                                mdl_datagen, num_samples=1000, seed=2020)
 ```
 
@@ -47,7 +47,7 @@ comm = MPI.COMM_WORLD
 print("Rank %d started" % comm.Get_rank())
 
 #load in data
-data = pygsti.io.read_data_from_dir("example_files/mpi_gst_example")
+data = pygsti.io.read_data_from_dir("../../example_files/mpi_gst_example")
 
 #Specify a per-core memory limit (useful for larger GST calculations)
 memLim = 2.1*(1024)**3  # 2.1 GB
@@ -64,16 +64,16 @@ if comm.Get_rank() == 0:
     
 results=None # needed to free shared memory before garbage collection is torn down
 """
-with open("example_files/mpi_example_script.py","w") as f:
+with open("../../example_files/mpi_example_script.py","w") as f:
     f.write(mpiScript)
 ```
 
 Next, we run the script with 3 processors using `mpiexec`.  The `mpiexec` executable should have been installed with your MPI distribution -- if it doesn't exist, try replacing `mpiexec` with `mpirun`.
 
-```{code-cell} ipython3
+```{code-cell} bash
 :tags: [nbval-skip]
 
-! mpiexec -n 3 python3 "example_files/mpi_example_script.py"
+mpiexec -n 3 python3 "../../example_files/mpi_example_script.py"
 ```
 
 Notice in the above that output within `StandardGST.run` is not duplicated (only the first processor outputs to stdout) so that the output looks identical to running on a single processor.  Finally, we just need to read the saved `ModelEstimateResults` object from file and proceed with any post-processing analysis.  In this case, we'll just create a  report.
@@ -81,13 +81,13 @@ Notice in the above that output within `StandardGST.run` is not duplicated (only
 ```{code-cell} ipython3
 :tags: [nbval-skip]
 
-results = pygsti.io.read_results_from_dir("example_files/mpi_gst_example", name="StandardGST")
+results = pygsti.io.read_results_from_dir("../../example_files/mpi_gst_example", name="StandardGST")
 pygsti.report.construct_standard_report(
     results, title="MPI Example Report", verbosity=2
-).write_html('example_files/mpi_example_brief', auto_open=True)
+).write_html('../../example_files/mpi_example_brief', auto_open=True)
 ```
 
-Open the [report](example_files/mpi_example_brief/main.html).
+Open the [report](../../example_files/mpi_example_brief/main.html).
 
 ```{code-cell} ipython3
 

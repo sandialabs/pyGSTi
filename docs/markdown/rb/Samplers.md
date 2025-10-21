@@ -22,7 +22,7 @@ from __future__ import print_function #python 2 & 3 compatibility
 import pygsti
 ```
 
-The circuit layer samplers in pyGSTi exist primarily for the purpose of running [Direct Randomized Benchmarking](RB-DirectRB.ipynb) and/or [Mirror Randomized Benchmarking](RB-MirroRB.ipynb). Here we'll demonstate them by just creating a more generic random circuit consisting of independently sampled random layers, but the same syntax is used to select these samplers in the `DirectRBDesign` and `MirrorRBDesign` functions.
+The circuit layer samplers in pyGSTi exist primarily for the purpose of running [Direct Randomized Benchmarking](DirectRB) and/or [Mirror Randomized Benchmarking](MirrorRB). Here we'll demonstate them by just creating a more generic random circuit consisting of independently sampled random layers, but the same syntax is used to select these samplers in the `DirectRBDesign` and `MirrorRBDesign` functions.
 
 ```{code-cell} ipython3
 from pygsti.algorithms.randomcircuit import create_random_circuit
@@ -39,7 +39,7 @@ availability = {'Gcphase':[('Q0','Q1'), ('Q1','Q2'), ('Q2','Q3'), ('Q3','Q0')]}
 pspec = QPS(n_qubits, gate_names, availability=availability, qubit_labels=qubit_labels)
 ```
 
-### What kind of circuit layer samplers do we need for Direct and Mirror RB?
+## What kind of circuit layer samplers do we need for Direct and Mirror RB?
 
 As these samplers are mostly useful for Direct and Mirror RB, it's first worthwhile to go over what properties we want of the circuit layer samplers in those protocols.
 
@@ -111,7 +111,7 @@ The compatible two-qubit gates sampler is more involved to use, but it provides 
 sampler = 'co2Qgates'
 ```
 
-This sampler requires the user to specify sets of compatible 2-qubit gates, meaning 2-qubit gates that can applied in parallel. We specifying this as a list of lists of `Label` objects (see the [Ciruit tutorial](../objects/Circuit.ipynb) for more on `Label` objects), so let's import the `Label` object:
+This sampler requires the user to specify sets of compatible 2-qubit gates, meaning 2-qubit gates that can applied in parallel. We specifying this as a list of lists of `Label` objects (see the [Ciruit tutorial](../objects/Circuit) for more on `Label` objects), so let's import the `Label` object:
 
 ```{code-cell} ipython3
 from pygsti.baseobjs import Label as L
@@ -172,8 +172,4 @@ samplerargs = [co2Qgates,] # We leave the latter two values off this list, becau
 ```{code-cell} ipython3
 circuit = create_random_circuit(pspec, depth, sampler=sampler, samplerargs=samplerargs)
 print(circuit)
-```
-
-```{code-cell} ipython3
-
 ```

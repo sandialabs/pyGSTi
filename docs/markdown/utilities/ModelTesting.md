@@ -68,7 +68,7 @@ results.add_estimates(results3)
 
 pygsti.report.construct_standard_report(
     results, title="Model Test Example Report", verbosity=1
-).write_html("../tutorial_files/modeltest_report", auto_open=False, verbosity=1)
+).write_html("../../tutorial_files/modeltest_report", auto_open=False, verbosity=1)
 ```
 
 ```{code-cell} ipython3
@@ -88,7 +88,7 @@ gst_results.add_model_test(target_model, test_model3, estimate_key='MyModel3')
 #Create a report to see that we've added an estimate labeled "MyModel3"
 pygsti.report.construct_standard_report(
     gst_results, title="GST with Model Test Example Report 1", verbosity=1
-).write_html("../tutorial_files/gstwithtest_report1", auto_open=False, verbosity=1)
+).write_html("../../tutorial_files/gstwithtest_report1", auto_open=False, verbosity=1)
 ```
 
 ### Method 3: `modelToTest` argument
@@ -105,32 +105,32 @@ gst_results = proto.run(data, disable_checkpointing=True)
 
 pygsti.report.construct_standard_report(
     gst_results, title="GST with Model Test Example Report 2", verbosity=1
-).write_html("../tutorial_files/gstwithtest_report2", auto_open=False, verbosity=1)
+).write_html("../../tutorial_files/gstwithtest_report2", auto_open=False, verbosity=1)
 ```
 
 ## Checkpointing/Warmstarting
 
-Just like the GST protocols discussed in [GST-Protocols](GST-Protocols.ipynb), `ModelTest` protocols also support checkpointing/warmstarting in the event of unexpected failure or termination using `ModelTestCheckpoint` objects which are serialized and written to disk over the course of running an iterative `ModelTest`. We direct you to the linked tutorial for more on the basic syntax and usage, which essentially identical for `ModelTestCheckpoints` objects.
+Just like the GST protocols discussed in [GST-Protocols](../gst/Protocols), `ModelTest` protocols also support checkpointing/warmstarting in the event of unexpected failure or termination using `ModelTestCheckpoint` objects which are serialized and written to disk over the course of running an iterative `ModelTest`. We direct you to the linked tutorial for more on the basic syntax and usage, which essentially identical for `ModelTestCheckpoints` objects.
 
 ```{code-cell} ipython3
 # creates a Results object with a "model1" estimate
 modeltest_proto = pygsti.protocols.ModelTest(test_model1, target_model, name='model1')
-results = modeltest_proto.run(data, checkpoint_path = '../tutorial_files/modeltest_checkpoints/ModelTest_model1')
+results = modeltest_proto.run(data, checkpoint_path = '../../tutorial_files/modeltest_checkpoints/ModelTest_model1')
 ```
 
 We now have a bunch of checkpoint files associated with this `ModelTest` protocol saved in the specified directory:
 
 ```{code-cell} ipython3
 import os
-os.listdir('../tutorial_files/modeltest_checkpoints/')
+os.listdir('../../tutorial_files/modeltest_checkpoints/')
 ```
 
 Suppose hypothetically we needed to restart the running of this ModelTest from where it left off following iteration 4. We can do so reading in the saved `ModelTestCheckpoint` object and passing it into the `ModelTest`'s `run` method.
 
 ```{code-cell} ipython3
 from pygsti.protocols import ModelTestCheckpoint
-modeltest_checkpoint = ModelTestCheckpoint.read('../tutorial_files/modeltest_checkpoints/ModelTest_model1_iteration_4.json')
-results_warmstarted= modeltest_proto.run(data, checkpoint= modeltest_checkpoint, checkpoint_path= '../tutorial_files/modeltest_checkpoints/ModelTest_model1')
+modeltest_checkpoint = ModelTestCheckpoint.read('../../tutorial_files/modeltest_checkpoints/ModelTest_model1_iteration_4.json')
+results_warmstarted= modeltest_proto.run(data, checkpoint= modeltest_checkpoint, checkpoint_path= '../../tutorial_files/modeltest_checkpoints/ModelTest_model1')
 ```
 
 As expected, the results are identical in both cases:
@@ -141,4 +141,4 @@ print(results.estimates['model1'].parameters['model_test_values'] == \
 results_warmstarted.estimates['model1'].parameters['model_test_values'])
 ```
 
-Thats it!  Now that you know more about model-testing you may want to go back to the [overview of pyGSTi protocols](../03-Protocols.ipynb).
+Thats it!  Now that you know more about model-testing you may want to go back to the [overview of pyGSTi protocols](../overview/00-Protocols).

@@ -27,7 +27,7 @@ PyGSTi currently contains two types of implicit models, both derived from `Impli
 - `CloudNoiseModel` objects allow imperfections in a gate to involve qubits in a *neighborhood* of or *cloud* around  the gate's target qubits. When the neighborhood is shrunk to just the target qubits themselves this reduced to a local noise model.  What exactly constitutes a neighborhood or cloud is up to the user.  The `create_cloudnoise_model_from_hops_and_weights` function defines clouds based on a number of "hops" (edge-traversals) on a graph of qubit connectivity that is supplied by the user.  The `create_cloud_crosstalk_model` model allows more flexibility.
 
 
-### Inside an implicit model: `.prep_blks`, `.povm_blks`, `.operation_blks`, and `.instrument_blks`
+## Inside an implicit model: `.prep_blks`, `.povm_blks`, `.operation_blks`, and `.instrument_blks`
 
 Whereas an `ExplicitModel` contains the dictionaries `.preps`, `.povms`, `.operations`, and `.instruments` (which hold *layer* operators), an `ImplicitModel` contains the dictionaries `.prep_blks`, `.povm_blks`, `.operation_blks`, and `.instrument_blks`.  Each of these dictionaries contains a second level of dictionaries, and it is this second level which hold actual operators (`LinearOperator`-, `State`-, and `POVM`-derived objects) - the **building blocks** of the model.  The keys of the top-level dictionary are *category* names, and the keys of the second-level dictionaries are typically gate names or circuit layer labels.  For example, a `LocalNoiseModel` has two categories within its `.operation_blks`: `"gates"`, and `"layers"`, which we'll see more of below.  
 
@@ -60,7 +60,7 @@ The `LocalNoiseModel` class represents a model whose gates are only have *local 
 
 A `LocalNoiseModel` can be built from the default constructors as well as several class methods, but the easiest method for constructing these models is to use the `create_crosstalk_free_model` function. The change in terminology from "local" noise to a "crosstalk-free" model is not significant, and is mostly to keep consistency for other more complex noise models that are specifically structured to study crosstalk.
 
-This function works almost exactly the same as the `create_explicit_model` function from the [ExplicitModel tutorial](ExplicitModel.ipynb) - given a `ProcessorSpec` and several other options to add nonstandard gates and gate noise, the corresponding model will be returned.
+This function works almost exactly the same as the `create_explicit_model` function from the [ExplicitModel tutorial](ExplicitModel) - given a `ProcessorSpec` and several other options to add nonstandard gates and gate noise, the corresponding model will be returned.
 
 ```{code-cell} ipython3
 from pygsti.processors import QubitProcessorSpec
@@ -96,9 +96,7 @@ The types of individual operators can be accessed straightforwardly.  For exampl
 print(mdl_locnoise.operation_blks['gates']['Gxpi']) # Static!
 ```
 
-Notice that is a `StaticStandardOp` object, just as the output from `print_modelmembers` indicates.  The gate operations in `.operation_blks["gates"]` are all *static* operators (they have no adjustable parameters - see the [Operators tutorial](advanced/Operators.ipynb) for an explanation of the different kinds of operators).  This is because the default value of the `ideal_gate_type` argument of `"auto"` is equivalent to attempting a number of static types. See the [model parameterization tutorial](ModelParameterization.ipynb) for a more complete description of parameterization types.
-
-+++
+Notice that is a `StaticStandardOp` object, just as the output from `print_modelmembers` indicates.  The gate operations in `.operation_blks["gates"]` are all *static* operators (they have no adjustable parameters - see the [Operators tutorial](Operators) for an explanation of the different kinds of operators).  This is because the default value of the `ideal_gate_type` argument of `"auto"` is equivalent to attempting a number of static types. See the [model parameterization tutorial](ModelParameterization) for a more complete description of parameterization types.
 
 ### Creating a `LocalNoiseModel` with independent gates
 As we've just seen, by default `create_crosstalk_free_model` creates a `LocalNoiseModel` that contains just a single gate operation for each gate name (e.g. `"Gxpi"`).  This is convenient when we expect the same gate acting on different qubits will have identical (or very similar) noise properties.  What if, however, we expect that the $X(\pi)$ gate on qubit $0$ has a different type of noise than the $X(\pi)$ gate on qubit $1$?  In this case, we want gates on different qubits to have *independent* noise, so we set `independent_gates=True`.  We'll also set a `ideal_gate_type='full'` to demonstrate how to change the type of the created gate objects.
@@ -110,8 +108,6 @@ mdl_locnoise_full_indep.print_modelmembers()
 ```
 
 We see from the above that now there is a different gate object for each set of target qubits, and that the primitive layer operations each embed a *different* gate operation rather than, e.g. both Gxpi:1 and Gxpi:2 linking to (embedding) the same underlying 1-qubit gate.
-
-+++
 
 ### Circuit simulation
 Now that we have a models, we'll simulate a circuit with four "primitive $X(\pi)$" layers.  Notice from the outcome probabilities that all for layers have imperfect (depolarized) $X(\pi)$ gates:
@@ -206,7 +202,7 @@ This structure is very similar to a local noise model, but there are some import
 
 - in a cloud-noise model, `"gates"` and `"layers"` categories *always contain perfect operations*. As such, there are no `ideal_gate_type` and similar arguments to `create_cloud_crosstalk_model`.  Noise is added by composition of these perfect gates and layers with elements in the `"cloudnoise"` category.
 
-In the model we created above, there are no `"cloudnoise"` elements because we didn't specify any noise.  The `create_cloud_crosstalk_model` function constructs a *noisy* `CloudNoiseModel` via the `depolarization_strengths`, `stochastic_error_probs`, and `lindblad_error_coeffs` arguments.  The use of these arguments is covered in more depth in the [model noise tutorial](ModelNoise.ipynb), but we give a brief example here to illustrate how the internals of a cloud noise model are updated when noise is added.
+In the model we created above, there are no `"cloudnoise"` elements because we didn't specify any noise.  The `create_cloud_crosstalk_model` function constructs a *noisy* `CloudNoiseModel` via the `depolarization_strengths`, `stochastic_error_probs`, and `lindblad_error_coeffs` arguments.  The use of these arguments is covered in more depth in the [model noise tutorial](ModelNoise), but we give a brief example here to illustrate how the internals of a cloud noise model are updated when noise is added.
 
 The following constructs a model that places certain on- and off-target noise on particular $X(\pi)$ and CNOT gates:
 
@@ -306,8 +302,6 @@ mdl_hopsweights.print_modelmembers()
 
 Note also that when a model is created using `create_cloud_crosstalk_model_from_hops_and_weights` all of the Lindbladian coefficients start with value 0.  A model is created with the *potential* for errors in any of the geometrically-local and low-weight ways specificed, but there aren't actually any errors yet.  Such models are useful primarily as the initial model for a fitting procedure that will tweak the model's parameters (that are initially zero) to fit data.
 
-+++
-
 ## Additional resources
 
 Getting a list of the gate names recognized by pyGSTi:
@@ -318,4 +312,4 @@ print(known_gate_names)
 ```
 
 ## Next steps
-To learn more about using implicit models, you may want to check out the [model parameterizations tutorial](ModelParameterization.ipynb), which covers material especially relevant when optimizing implicit models, and the [model noise tutorial](ModelNoise.ipynb), which describes how to add noise to implicit (and explicit) models.
+To learn more about using implicit models, you may want to check out the [model parameterizations tutorial](ModelParameterization), which covers material especially relevant when optimizing implicit models, and the [model noise tutorial](ModelNoise), which describes how to add noise to implicit (and explicit) models.

@@ -20,10 +20,10 @@ This is the primary way circuit simulation is done in pyGSTi.  `Model` objects a
 1. create a `Model`
 2. create a `Circuit`
 3. call `model.probabilities(circuit)`
+Building models and circuits (steps 1 and 2) are largely covered in other tutorials (see the [essential objects tutorial](../overview/01-Essential-Objects), [circuits tutorial](../objects/Circuit), and [explicit-op model](../objects/ExplicitModel) and [implicit-op model](../objects/ImplicitModel) tutorials).  This section focuses on step 3 and `Model` options which impact the way in which a model computes probabilities.  This approach to circuit simulation is most convenient when you have a large number of circuits which are known (and fixed) beforehand.
 
-Building models and circuits (steps 1 and 2) are largely covered in other tutorials (see the [essential objects tutorial](../01-EssentialObjects.ipynb), [circuits tutorial](../objects/Circuit.ipynb), and [explicit-op model](../objects/ExplicitModel.ipynb) and [implicit-op model](../objects/ImplicitModel.ipynb) tutorials).  This section focuses on step 3 and `Model` options which impact the way in which a model computes probabilities.  This approach to circuit simulation is most convenient when you have a large number of circuits which are known (and fixed) beforehand.
 
-Let's begin with a simple example, essentially the same as the one in the [using-essential-objects tutorial](../02-Using-Essential-Objects.ipynb):
+Let's begin with a simple example, essentially the same as the one in the [using-essential-objects tutorial](../overview/02-Using-Essential-Objects):
 
 ```{code-cell} ipython3
 import pygsti
@@ -46,7 +46,7 @@ except KeyError as e:
     print("KEY ERROR (can't simulate this layer): " + str(e))
 ```
 
-As is detailed in the [implicit-op model tutorial](../objects/ImplicitModel.ipynb), an "implicit-operation" model *is* able to implicitly create layer operations from constituent gates, and thus perform the simulation of `c2`:
+As is detailed in the [implicit-op model tutorial](../objects/ImplicitModel), an "implicit-operation" model *is* able to implicitly create layer operations from constituent gates, and thus perform the simulation of `c2`:
 
 ```{code-cell} ipython3
 pspec = pygsti.processors.QubitProcessorSpec(2, ('Gxpi2', 'Gypi2', 'Gcnot'), geometry='line')
@@ -90,7 +90,7 @@ print(probs)
 
 ## Forward-simulation types
 
-PyGSTi refers to the process of computing circuit-outcome probabilities as *forward simulation*, and there are several methods of forward simulation currently available.  The default method for 1- and 2-qubit models multiplies together dense process matrices, and is named `"matrix"` (because operations are *matrices*). The default method for 3+ qubit models performs sparse matrix-vector products, and is named `"map"` (because operations are abstract *maps*).  A `Model` is constructed for a single type of forward simulation, and it stores this within its `.simtype` member.  For more information on using different types of forward simulation see the [forward simulation types tutorial](algorithms/advanced/ForwardSimulationTypes.ipynb).
+PyGSTi refers to the process of computing circuit-outcome probabilities as *forward simulation*, and there are several methods of forward simulation currently available.  The default method for 1- and 2-qubit models multiplies together dense process matrices, and is named `"matrix"` (because operations are *matrices*). The default method for 3+ qubit models performs sparse matrix-vector products, and is named `"map"` (because operations are abstract *maps*).  A `Model` is constructed for a single type of forward simulation, and it stores this within its `.simtype` member.  For more information on using different types of forward simulation see the [forward simulation types tutorial](ForwardSimulationTypes).
 
 Here are some examples showing which method is being used and how to switch between them.  Usually you don't need to worry about the forward-simulation type, but in the future pyGSTi may have more options for specialized purposes.
 

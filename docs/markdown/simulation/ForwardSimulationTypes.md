@@ -39,7 +39,7 @@ Often the `simulator` argument can be left as `"auto"`, which selects the `"matr
 Below, we'll demonstrate the use of different evolution and forward-simulation types using a local-noise model on 5 and then 10 qubits.  
 
 ## 5 qubits
-First, let's generate a random circuit using the `pygsti.algorithms.randomcicuit` module.  Random circuits are primarily used in Randomized Benchmarking (see the [RB tutorial](../RB-Overview.ipynb) for more information about running RB); here we just use it as an easy way to create an example circuit without having to write down one by hand.
+First, let's generate a random circuit using the `pygsti.algorithms.randomcicuit` module.  Random circuits are primarily used in Randomized Benchmarking (see the [RB tutorial](../rb/Overview) for more information about running RB); here we just use it as an easy way to create an example circuit without having to write down one by hand.
 
 ```{code-cell} ipython3
 import pygsti, time

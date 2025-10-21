@@ -17,11 +17,11 @@ kernelspec:
 
 This tutorial is an overview of randomized benchmarking (RB) in pyGSTi. The are multiple flavours of RB, that have different strengths and weaknesses. pyGSTi contains end-to-end methods for:
 
-- [Clifford randomized benchmarking](http://journals.aps.org/prl/abstract/10.1103/PhysRevLett.106.180504), meaning benchmarking of the $n$-qubit Clifford group. This is a popular protocol for benchmarking 1 or 2 qubits. It is used in this notebook to demonstrate the general work-flow for running RB in pyGSTi. More details that are specific to Clifford RB can be found in the [Clifford RB tutorial](RB-CliffordRB.ipynb).
-- [Direct randomized benchmarking](https://journals.aps.org/prl/abstract/10.1103/PhysRevLett.123.030503) is more streamlined than Clifford RB. As the name suggests, it directly benchmarks a set of native gates, rather than indirectly benchmarking them in the form of the $n$-qubit Clifford group gate set. Direct RB can be used to benchmark more qubits than standard Clifford RB, and only one small change is required to this notebook to run direct RB (this change is called out). Further detail on how to use Direct RB are given in the [Direct RB tutorial](RB-DirectRB.ipynb).
-- *Mirror randomized benchmarking* is a new form of RB that is similar to Direct RB, but it is further streamlined so that it can be run on 10s to 100s of qubits. Running this method requires only two small adjustments to this notebook (again, these changes are called out). Further detail on how to use Mirror RB are given in the [Mirror RB tutorial](RB-MirrorRB.ipynb).
-- [Simultaneous randomized benchmarking](https://journals.aps.org/prl/abstract/10.1103/PhysRevLett.109.240504) involves running RB circuits simultaneously on different subsets of a device, and then perhaps comparing the results to when RB is run while idling all other qubits. It is not a protocol per se. It is better thought of as an add-on to any other RB protocol, for exploring crosstalk and/or benchmarking a large device more efficiently. pyGSTi contains integrated methods for running simultaneous Clifford, Direct or Mirror RB. This is covered in the [multiple RB experiments tutorial](RB-MultiRBExperiments.ipynb).
-- Benchmarking multiple device regions, by running multiple RB sub-experiments in one experimental run. This is also covered in the [multiple RB experiments tutorial](RB-MultiRBExperiments.ipynb) and [volumetric benchmarks tutorial](VolumetricBenchmarks.ipynb).
+- [Clifford randomized benchmarking](http://journals.aps.org/prl/abstract/10.1103/PhysRevLett.106.180504), meaning benchmarking of the $n$-qubit Clifford group. This is a popular protocol for benchmarking 1 or 2 qubits. It is used in this notebook to demonstrate the general work-flow for running RB in pyGSTi. More details that are specific to Clifford RB can be found in the [Clifford RB tutorial](CliffordRB).
+- [Direct randomized benchmarking](https://journals.aps.org/prl/abstract/10.1103/PhysRevLett.123.030503) is more streamlined than Clifford RB. As the name suggests, it directly benchmarks a set of native gates, rather than indirectly benchmarking them in the form of the $n$-qubit Clifford group gate set. Direct RB can be used to benchmark more qubits than standard Clifford RB, and only one small change is required to this notebook to run direct RB (this change is called out). Further detail on how to use Direct RB are given in the [Direct RB tutorial](DirectRB).
+- *Mirror randomized benchmarking* is a new form of RB that is similar to Direct RB, but it is further streamlined so that it can be run on 10s to 100s of qubits. Running this method requires only two small adjustments to this notebook (again, these changes are called out). Further detail on how to use Mirror RB are given in the [Mirror RB tutorial](MirrorRB).
+- [Simultaneous randomized benchmarking](https://journals.aps.org/prl/abstract/10.1103/PhysRevLett.109.240504) involves running RB circuits simultaneously on different subsets of a device, and then perhaps comparing the results to when RB is run while idling all other qubits. It is not a protocol per se. It is better thought of as an add-on to any other RB protocol, for exploring crosstalk and/or benchmarking a large device more efficiently. pyGSTi contains integrated methods for running simultaneous Clifford, Direct or Mirror RB. This is covered in the [multiple RB experiments tutorial](MultiRBExperiments).
+- Benchmarking multiple device regions, by running multiple RB sub-experiments in one experimental run. This is also covered in the [multiple RB experiments tutorial](MultiRBExperiments) and [volumetric benchmarks tutorial](../protocols/VolumetricBenchmarks).
 
 ```{code-cell} ipython3
 from __future__ import print_function #python 2 & 3 compatibility
@@ -32,7 +32,7 @@ from pygsti.processors import CliffordCompilationRules as CCR
 
 ## Step 1: create an experiment design
 
-First, we specify the device to be benchmarked, so that pyGSTi can create circuits that use only the native gates in the device (including respecting the device's connectivity). We do this using a `QubitProcessorSpec` object (see the [QubitProcessorSpec tutorial](../objects/advanced/QubitProcessorSpec.ipynb) for details). Here we'll demonstrate RB on a device with:
+First, we specify the device to be benchmarked, so that pyGSTi can create circuits that use only the native gates in the device (including respecting the device's connectivity). We do this using a `QubitProcessorSpec` object (see the [ProcessorSpec tutorial](../objects/ProcessorSpec) for details). Here we'll demonstrate RB on a device with:
 - Five qubits on a ring.
 - 1-qubit gates consisting of $\sigma_x$ and $\sigma_y$ rotations by $\pm \pi/2$, and an idle gate
 - Controlled-Z gates connecting adjacent qubits on the ring
@@ -72,12 +72,12 @@ def simulate_taking_data(data_template_filename):
 ```
 
 ```{code-cell} ipython3
-pygsti.io.write_empty_protocol_data('../tutorial_files/test_rb_dir', exp_design, clobber_ok=True)
+pygsti.io.write_empty_protocol_data('../../tutorial_files/test_rb_dir', exp_design, clobber_ok=True)
 
 # -- fill in the dataset file in tutorial_files/test_rb_dir/data/dataset.txt --
-simulate_taking_data('../tutorial_files/test_rb_dir/data/dataset.txt') # REPLACE with actual data-taking
+simulate_taking_data('../../tutorial_files/test_rb_dir/data/dataset.txt') # REPLACE with actual data-taking
 
-data = pygsti.io.read_data_from_dir('../tutorial_files/test_rb_dir')
+data = pygsti.io.read_data_from_dir('../../tutorial_files/test_rb_dir')
 ```
 
 ## Step 3: Run the RB protocol

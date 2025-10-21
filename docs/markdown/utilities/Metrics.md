@@ -14,7 +14,7 @@ kernelspec:
 # Metrics
 PyGSTi contains implementation of common ways to compare quantum processes and models.  You may just want to `import pygsti` just for this functionality, as many of the functions below act on standard NumPy arrays.  Here are some of the most common functions (this tutorial is <font style="color:red">under construction, and we plan to expand it in future releases.  We apologize for it's current brevity</font>.
 
-Let's begin by getting some gate (process) matrices for several simple 1-qubit operations.  Note that `Gx`, `Gy` and `Gi` below are superoperator matrices in the Pauli basis - they're $4 \times 4$ *real* matrices.  We do this for a model pack (see the [model packs tutorial](../objects/advanced/ModelPacks.ipynb)) and a version of this model with slightly rotated gates.
+Let's begin by getting some gate (process) matrices for several simple 1-qubit operations.  Note that `Gx`, `Gy` and `Gi` below are superoperator matrices in the Pauli basis - they're $4 \times 4$ *real* matrices.  We do this for a model pack (see the [model packs tutorial](../objects/ModelPacks)) and a version of this model with slightly rotated gates.
 
 ```{code-cell} ipython3
 import pygsti.tools as tls

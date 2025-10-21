@@ -162,7 +162,7 @@ for version control convenience, but can be converted to Jupyter notebooks as ne
 The recommended way to view the documentation is on [ReadTheDocs](https://pygsti.readthedocs.io/en/latest/),
 although the raw Markdown files can also be looked at on [GitHub](https://github.com/sandialabs/pyGSTi/blob/master/docs/markdown/intro.md).
 
-When using the ReadTheDocs version, you can [interactively explore the tutorials using Binder](https://mybinder.org/v2/gh/sandialabs/pyGSTi/master)
+When using the ReadTheDocs version, you can [**interactively** explore the tutorials using Binder](https://mybinder.org/v2/gh/sandialabs/pyGSTi/master)
 by clicking the rocket button on the top of any tutorial page. If the document opens in the Markdown version,
 right-click and open as a Notebook to have Jupytext convert it to a runnable notebook.
 
@@ -197,8 +197,8 @@ just ``Enter``.
 
 #### Contributing notebook changes
 Note that only the Markdown files are stored in the repository. If you have made changes to a notebook that
-you wish to push back to the repo, you must run another `jupytext --sync markdown/**/*.md` to resync the
-Markdown file with the changes you have made in the notebook, and then commit the updated Markdown file.
+you wish to push back to the repo, you must run another `jupytext --sync markdown/**/*.md` from the ``docs`` folder
+to resync the Markdown file with the changes you have made in the notebook, and then commit the updated Markdown file.
 
 License
 -------

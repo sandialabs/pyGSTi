@@ -13,13 +13,13 @@ kernelspec:
 
 # Different GST Protocols
 
-The `pygsti` package provides multiple ways to use its core Gate Set Tomography (GST) algorithms.  This  tutorial will show you how to work with pyGSTi's GST protocol objects to perform GST in different ways with a minimial amount of effort.  In order to run the GST protocol there are 3 essential ingredients: 1) an "experiment design" specifying the structure of the GST circuits and how the data should be collected, 2) the outcome counts for the circuits specified by the experiment design, and 3) a desired, or "target", `Model`.  The [GST overview tutorial](Overview), gave an end-to-end example of how to construct a GST experiment design, run GST, and generate a report.  This tutorial focuses on the first and second steps in more detail; related information about circuit construction and report generation can be found in the [GST circuits tutorial](CircuitConstruction.ipynb) and [report generation tutorial](../reporting/ReportGeneration).
+The `pygsti` package provides multiple ways to use its core Gate Set Tomography (GST) algorithms.  This  tutorial will show you how to work with pyGSTi's GST protocol objects to perform GST in different ways with a minimial amount of effort.  In order to run the GST protocol there are 3 essential ingredients: 1) an "experiment design" specifying the structure of the GST circuits and how the data should be collected, 2) the outcome counts for the circuits specified by the experiment design, and 3) a desired, or "target", `Model`.  The [GST overview tutorial](Overview), gave an end-to-end example of how to construct a GST experiment design, run GST, and generate a report.  This tutorial focuses on the first and second steps in more detail; related information about circuit construction and report generation can be found in the [GST circuits tutorial](CircuitConstruction) and [report generation tutorial](../reporting/ReportGeneration).
 
 There are two different `Protocol` objects within pyGSTi for running GST:
 
-- [`GateSetTomography`](#gatesettomography) - runs a single model optimization based on a *given* initial model that can have any parameterization you like.  This protocol can be run on any `GateSetTomographyDesign` experiment design, which only needs a target model (to describe what gates occur in the circuits) and a list of circuit lists to specify the circuits used for each iteration of the model optimization.
+- `GateSetTomography` - runs a single model optimization based on a *given* initial model that can have any parameterization you like.  This protocol can be run on any `GateSetTomographyDesign` experiment design, which only needs a target model (to describe what gates occur in the circuits) and a list of circuit lists to specify the circuits used for each iteration of the model optimization.
 
-- [`StandardGST`](#standardgst) - runs multiple model optimizations based on an `ExplicitOpModel` target model by parameterizing this model in different ways.  The target model is expected to be a part of the experiment design, and only `StandardGSTDesign`-type experiment designs are allowed since the usual germs-and-fiducials structure of the GST circuits is expected.
+- `StandardGST` - runs multiple model optimizations based on an `ExplicitOpModel` target model by parameterizing this model in different ways.  The target model is expected to be a part of the experiment design, and only `StandardGSTDesign`-type experiment designs are allowed since the usual germs-and-fiducials structure of the GST circuits is expected.
 
 Overall, the `GateSetTomography` protocol is more flexible than the `StandardGST` protocol, but requires a little more work to get going because its inputs are more complicated.  Both protocols return a `ModelEstimateResults` object when they are run.
 
@@ -27,14 +27,13 @@ Overall, the `GateSetTomography` protocol is more flexible than the `StandardGST
 import pygsti
 ```
 
-### Setup
+## Setup
 In the [DataSet tutorial](../objects/DataSet) we simulate the circuits required by a GST experiment design and save the results.  In this tutorial, we'll be analyzing that data.  This illustrates a typical workflow where at some earlier time you setup an experiment (a "GST experiment in this case) and save the experiment design to disk and at some later time (after the data has been collected) you want to analyze it.  Now *is* that later time, and we start by reading the the data we've collected.
 
 ```{code-cell} ipython3
-data = pygsti.io.read_data_from_dir("../tutorial_files/Example_GST_Data")
+data = pygsti.io.read_data_from_dir("../../tutorial_files/Example_GST_Data")
 ```
 
-(gatesettomography)=
 ## `GateSetTomography`
 This protocol performs a single model optimization, and so computes a **single GST estimate** given a `DataSet`, a target `Model`, and other parameters.  (The returned `ModelEstimateResults` object may sometimes contain multiple related estimates in certain cases, but in these cases all the estimates are closely related.)  The experiment design provides all of the information about the GST circuits, in this case a *standard*  (*prep_fiducial + germ^power + meas_fiducial*) set, so the only thing needed by the protocol is an initial `Model` to optimize.  Thus, the `GateSetTomography` protocol is essentially just a model optimizer that you give an initial point.  Importantly, this initial point (a `Model`) also specifies the *parameterization*, i.e. the space of parameters that are optimized over.
 
@@ -59,7 +58,7 @@ The `gaugeopt_suite` argument specifies a set of gauge optimizations to be perfo
 
 If `gaugeopt_suite` is set to a string, this is the same as passing a dictionary with a single key-value pair where both key and value are equal to the string.  Thus, the default `"stdgaugeopt"` is equivalent to specifying the dictionary `{"stdgaugeopt": "stdgagueopt"}`.
 
-The example below performs a customized gauge-optimization where the gate parameters are weighted 1000 times more relative to the SPAM parameters.  Mathematically this corresponds to a multiplicative factor of 0.001 preceding the sum-of-squared-difference terms corresponding to SPAM elements in the model.   Typically it is good to weight the gates parameters more heavily since GST amplifies gate parameter errors via long operation sequences but cannot amplify SPAM parameter errors.  For more details on the arguments of `gaugeopt_to_target`, see the previous tutorial on low-level algorithms.  For more infomation, see the [gauge optimization tutorial](../misc-qcvv/GaugeOpt.ipynb).
+The example below performs a customized gauge-optimization where the gate parameters are weighted 1000 times more relative to the SPAM parameters.  Mathematically this corresponds to a multiplicative factor of 0.001 preceding the sum-of-squared-difference terms corresponding to SPAM elements in the model.   Typically it is good to weight the gates parameters more heavily since GST amplifies gate parameter errors via long operation sequences but cannot amplify SPAM parameter errors.  For more details on the arguments of `gaugeopt_to_target`, see the previous tutorial on low-level algorithms.  For more infomation, see the [gauge optimization tutorial](../utilities/GaugeOpt).
 
 The cell below also illustrates how you can create a TP target model by calling `set_all_parameterizations` explicitly instead of using the equivalent and more condensed `.target_model("TP")`.
 
@@ -153,7 +152,6 @@ proto = pygsti.protocols.GateSetTomography(target_model_TP2, name="GSTwithReduce
 results_reduced = proto.run(reduced_data, disable_checkpointing=True)
 ```
 
-(standardgst)=
 ## `StandardGST`
 The protocol embodies a standard *set* of GST protocols to be run on a set of data.  It essentially runs multiple `GateSetTomography` protocols on the given data which use different parameterizations of an `ExplicitOpModel`  (the `StandardGST` protocol doesn't work with other types of `Model` objects, e.g. *implicit* models, which don't implement `set_all_parameterizations`).  The `modes` argument is a list strings corresponding to the parameterization types that should be run (e.g. `["full TP","CPTPLND"]` will compute a Trace-Preserving estimate *and* a Completely-Positive & Trace-Preserving estimate). The currently available modes are:
  - "full" : unconstrained gates (fully parameterized)                                                                 
@@ -174,7 +172,7 @@ print("Estimates: ", ", ".join(results_stdprac.estimates.keys()))
 print("TP Estimate's gauge optimized models: ", ", ".join(results_stdprac.estimates["full TP"].goparameters.keys()))
 ```
 
-Next, we'll perform the same analysis but with a **non-default standard suite of gauge optimizations** - this one toggles the SPAM penalty in addition to varying the spam weight (the default suite just varies the spam weight without any SPAM penalty).  See the [gauge optimization tutorial](../misc-qcvv/GaugeOpt) for more details on gauge optmization "suites".
+Next, we'll perform the same analysis but with a **non-default standard suite of gauge optimizations** - this one toggles the SPAM penalty in addition to varying the spam weight (the default suite just varies the spam weight without any SPAM penalty).  See the [gauge optimization tutorial](../utilities/GaugeOpt) for more details on gauge optmization "suites".
 
 ```{code-cell} ipython3
 proto = pygsti.protocols.StandardGST(gaugeopt_suite="varySpam", name="StdGST_varySpam")
@@ -213,10 +211,10 @@ Two remarks are in order:
 2. Notice how the `name=` arguments given to protocols above are used as sub-directory names, e.g. under the "tutorial_files/Example_GST_Data/results" parent directory.
 
 ```{code-cell} ipython3
-results_TP.write()  # uses "../tutorial_files/Example_GST_Data" (where data was loaded from)
+results_TP.write()  # uses "../../tutorial_files/Example_GST_Data" (where data was loaded from)
 results_TP2.write() # ditto
 results_stdprac.write() # ditto
-results_reduced.write("../tutorial_files/Example_Reduced_GST_Data") # choose a different dir
+results_reduced.write("../../tutorial_files/Example_Reduced_GST_Data") # choose a different dir
 ```
 
 While it is also possible to **pickle** a results object, this method of serialization is **not recommended** for long-term storage since pickle files are relatively fragile to changes in pyGSTi or other python libraries.
@@ -224,10 +222,10 @@ While it is also possible to **pickle** a results object, this method of seriali
 ```{code-cell} ipython3
 #Not recommended:
 # import pickle
-# pickle.dump(results_TP, open('../tutorial_files/exampleResults_TP.pkl',"wb"))
-# pickle.dump(results_TP2, open('../tutorial_files/exampleResults_TP2.pkl',"wb"))
-# pickle.dump(results_reduced, open('../tutorial_files/exampleResults_reduced.pkl',"wb"))
-# pickle.dump(results_stdprac, open('../tutorial_files/exampleResults_stdprac.pkl',"wb"))
+# pickle.dump(results_TP, open('../../tutorial_files/exampleResults_TP.pkl',"wb"))
+# pickle.dump(results_TP2, open('../../tutorial_files/exampleResults_TP2.pkl',"wb"))
+# pickle.dump(results_reduced, open('../../tutorial_files/exampleResults_reduced.pkl',"wb"))
+# pickle.dump(results_stdprac, open('../../tutorial_files/exampleResults_stdprac.pkl',"wb"))
 ```
 
 ## Checkpointing/Warmstarting
@@ -242,22 +240,22 @@ Below we repeat our first example of the notebook, but this time with checkpoint
 from pygsti.modelpacks import smq1Q_XYI
 target_model_TP = smq1Q_XYI.target_model("full TP")
 proto = pygsti.protocols.GateSetTomography(target_model_TP)
-results_TP = proto.run(data, checkpoint_path = '../tutorial_files/gst_checkpoints/GateSetTomography')
+results_TP = proto.run(data, checkpoint_path = '../../tutorial_files/gst_checkpoints/GateSetTomography')
 ```
 
 Note that in the example above we have specified a value for an additional kwarg called `checkpoint_path`. This allows for overriding the default behavior for the save location and naming of checkpoint files. The expected format is `{path}/{name}` where path is the directory to save the checkpoint files to (with that directory being created is required) and where name is the stem of the checkpoint file names `{name}_iteration_{i}.json`. Inspecting the contents of the directory we just specified, we can see that it is now populated by 8 new checkpoint files.
 
 ```{code-cell} ipython3
 import os
-os.listdir('../tutorial_files/gst_checkpoints/')
+os.listdir('../../tutorial_files/gst_checkpoints/')
 ```
 
 Suppose hypothetically that a GST fit had failed at iteration 5 and we wanted to restart from that point without redoing all of the previous iterations from scratch again. We'll call this warmstarting. We can do so by reading in the appropriate serialized checkpoint object using the `read` class method of `GateSetTomographyCheckpoint` and passing that now loaded checkpoint object in for the `checkpoint` kwarg of `run`.
 
 ```{code-cell} ipython3
 from pygsti.protocols import GateSetTomographyCheckpoint
-gst_iter_5_checkpoint = GateSetTomographyCheckpoint.read('../tutorial_files/gst_checkpoints/GateSetTomography_iteration_5.json')
-results_TP_from_iter_5= proto.run(data, checkpoint= gst_iter_5_checkpoint, checkpoint_path = '../tutorial_files/gst_checkpoints/GateSetTomography')
+gst_iter_5_checkpoint = GateSetTomographyCheckpoint.read('../../tutorial_files/gst_checkpoints/GateSetTomography_iteration_5.json')
+results_TP_from_iter_5= proto.run(data, checkpoint= gst_iter_5_checkpoint, checkpoint_path = '../../tutorial_files/gst_checkpoints/GateSetTomography')
 ```
 
 We can see from the output that we indeed started from iteration 6 (note the output log indexes from 1 instead of 0). Moreover we can see that we've indeed produced the same output as before without warmstarting, as we would expect/hope:
@@ -275,21 +273,21 @@ Checkpointing with the `StandardGST` protocol works similarly:
 
 ```{code-cell} ipython3
 proto_standard_gst = pygsti.protocols.StandardGST(modes=['full TP', 'CPTPLND', 'Target'], verbosity=3)
-results_stdprac = proto_standard_gst.run(data, checkpoint_path = '../tutorial_files/standard_gst_checkpoints/StandardGST')
+results_stdprac = proto_standard_gst.run(data, checkpoint_path = '../../tutorial_files/standard_gst_checkpoints/StandardGST')
 ```
 
 Except this time we have significantly more files saved, as during the course of the StandardGST protocol we're actually running three subprotocols:
 
 ```{code-cell} ipython3
-os.listdir('../tutorial_files/standard_gst_checkpoints/')
+os.listdir('../../tutorial_files/standard_gst_checkpoints/')
 ```
 
 Note that the StandardGST protocol runs the subprotocols in the order listed in the `modes` argument, and checkpoint objects labeled with a given model label additionally contain the checkpointing information for the final iterations of any preceding modes which have been completed. i.e. the CPTPLND checkpoint objects contain the information required for full TP. Likewise, checkpoints for Target contain the information required for the full TP and CPTPLND modes. As before, imagine that our fitting failed for whatever reason during iteration 5 of CPTPLND, we can warmstart the protocol by loading in the checkpoint object associated with iteration 4 as below:
 
 ```{code-cell} ipython3
 from pygsti.protocols import StandardGSTCheckpoint
-standard_gst_checkpoint = StandardGSTCheckpoint.read('../tutorial_files/standard_gst_checkpoints/StandardGST_CPTPLND_iteration_4.json')
-results_stdprac_warmstart= proto_standard_gst.run(data, checkpoint= standard_gst_checkpoint, checkpoint_path = '../tutorial_files/standard_gst_checkpoints/StandardGST')
+standard_gst_checkpoint = StandardGSTCheckpoint.read('../../tutorial_files/standard_gst_checkpoints/StandardGST_CPTPLND_iteration_4.json')
+results_stdprac_warmstart= proto_standard_gst.run(data, checkpoint= standard_gst_checkpoint, checkpoint_path = '../../tutorial_files/standard_gst_checkpoints/StandardGST')
 ```
 
 Notice that we've indeed skipped past the previously completed full TP mode and jumped straight to the 6th iteration of the CPTPLND fit as expected. 

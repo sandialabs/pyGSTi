@@ -12,7 +12,7 @@ kernelspec:
 ---
 
 # Essential Objects
-This tutorial covers several object types that are foundational to much of what pyGSTi does: [circuits](#circuits), [processor specifications](#pspecs), [models](#models), and [data sets](#datasets).  Our objective is to explain what these objects are and how they relate to one another at a high level while providing links to other notebooks that cover details we skip over here.
+This tutorial covers several object types that are foundational to much of what pyGSTi does: circuits, processor specifications, models, and data sets.  Our objective is to explain what these objects are and how they relate to one another at a high level while providing links to other notebooks that cover details we skip over here.
 
 ```{code-cell} ipython3
 import pygsti
@@ -21,7 +21,6 @@ from pygsti.models import Model
 from pygsti.data import DataSet
 ```
 
-(circuits)=
 ## Circuits
 The `Circuit` object encapsulates a quantum circuit as a sequence of *layers*, each of which contains zero or more non-identity *gates*.  A `Circuit` has some number of labeled *lines* and each gate label is assigned to one or more lines. Line labels can be integers or strings.   Gate labels have two parts: a `str`-type name and a tuple of line labels.  A gate name typically begins with 'G' because this is expected when we parse circuits from text files.
 
@@ -41,7 +40,7 @@ c = Circuit( [('Gx',0),[('Gcnot',0,1),('Gy',3)],()] , line_labels=[0,1,2,3])
 print(c)
 ```
 
-We distinguish three basic types of circuit layers.  We call layers containing quantum gates *operation layers*.  All the circuits we've seen so far just have operation layers.  It's also possible to have a *preparation layer* at the beginning of a circuit and a *measurement layer* at the end of a circuit.  There can also be a fourth type of layer called an *instrument layer* which we dicuss in a separate [tutorial on Instruments](objects/advanced/Instruments.ipynb).  Assuming that `'rho'` labels a (n-qubit) state preparation and `'Mz'` labels a (n-qubit) measurement, here's a circuit with all three types of layers:
+We distinguish three basic types of circuit layers.  We call layers containing quantum gates *operation layers*.  All the circuits we've seen so far just have operation layers.  It's also possible to have a *preparation layer* at the beginning of a circuit and a *measurement layer* at the end of a circuit.  There can also be a fourth type of layer called an *instrument layer* which we dicuss in a separate [tutorial on Instruments](../objects/Instruments).  Assuming that `'rho'` labels a (n-qubit) state preparation and `'Mz'` labels a (n-qubit) measurement, here's a circuit with all three types of layers:
 
 ```{code-cell} ipython3
 c = Circuit( ['rho',('Gz',1),[('Gswap',0,1),('Gy',2)],'Mz'] , line_labels=[0,1,2])
@@ -55,9 +54,8 @@ c = Circuit( ['Gx','Gy','Gi'] )
 print(c)
 ```
 
-Pretty simple, right?  The `Circuit` object allows you to easily manipulate its labels (similar to a NumPy array) and even perform some basic operations like depth reduction and simple compiling.  For lots more details on how to create, modify, and use circuit objects see the [circuit tutorial](objects/Circuit.ipynb).
+Pretty simple, right?  The `Circuit` object allows you to easily manipulate its labels (similar to a NumPy array) and even perform some basic operations like depth reduction and simple compiling.  For lots more details on how to create, modify, and use circuit objects see the [circuit tutorial](../objects/Circuit).
 
-(pspecs)=
 ## Processor Specifications
 A processor specification describes the interface that a quantum processor exposes to the outside world.  Actual quantum processors often have a "native" interface associated with them, but can also be viewed as implementing various other derived interfaces.  For example, while a 1-qubit quantum processor may natively implement the $X(\pi/2)$ and $Z(\pi/2)$ gates, it can also implement the set of all 1-qubit Clifford gates.  Both of these interfaces would correspond to a processor specification in pyGSTi.
 
@@ -71,15 +69,14 @@ print("X(pi/2) gates on qubits: ", pspec.resolved_availability('Gxpi2'))
 print("CNOT gates on qubits: ", pspec.resolved_availability('Gcnot'))
 ```
 
-creates a processor specification for a 2-qubits with $X(\pi/2)$, $Y(\pi/2)$, and CNOT gates.  Setting the geometry to `"line"` causes 1-qubit gates to be available on each qubit and the CNOT between the two qubits (in either control/target direction).  Processor specifications are used to build experiment designs and models, and so defining or importing an appropriate processor specification is often the first step in many analyses.  To learn more about processor specification objects, see the [processor specification tutorial](objects/ProcessorSpec.ipynb).
+creates a processor specification for a 2-qubits with $X(\pi/2)$, $Y(\pi/2)$, and CNOT gates.  Setting the geometry to `"line"` causes 1-qubit gates to be available on each qubit and the CNOT between the two qubits (in either control/target direction).  Processor specifications are used to build experiment designs and models, and so defining or importing an appropriate processor specification is often the first step in many analyses.  To learn more about processor specification objects, see the [processor specification tutorial](../objects/ProcessorSpec).
 
 
-(models)=
 ## Models
 An instance of the `Model` class represents something that can predict the outcome probabilities of quantum circuits.  We define any such thing to be a "QIP model", or just a "model", as these probabilities define the behavior of some real or virtual QIP.  Because there are so many types of models, the `Model` class in pyGSTi is just a base class and is never instaniated directly.  Classes `ExplicitOpModel` and `ImplicitOpModel` (subclasses of `Model`) define two broad categories of models, both of which sequentially operate on circuit *layers* (the "Op" in the class names is short for "layer operation"). 
 
 ### Explicit layer-operation models
-An `ExplicitOpModel` is a container object.  Its `.preps`, `.povms`, and `.operations` members are essentially dictionaires of state preparation, measurement, and layer-operation objects, respectively.  How to create these objects and build up explicit models from scratch is a central capability of pyGSTi and a topic of the [explicit-model tutorial](objects/ExplicitModel.ipynb).  Presently, we'll create a 2-qubit model using the processor specification above via the `create_explicit_model` function:
+An `ExplicitOpModel` is a container object.  Its `.preps`, `.povms`, and `.operations` members are essentially dictionaires of state preparation, measurement, and layer-operation objects, respectively.  How to create these objects and build up explicit models from scratch is a central capability of pyGSTi and a topic of the [explicit-model tutorial](../objects/ExplicitModel).  Presently, we'll create a 2-qubit model using the processor specification above via the `create_explicit_model` function:
 
 ```{code-cell} ipython3
 mdl = pygsti.models.create_explicit_model(pspec)
@@ -128,9 +125,8 @@ mdl.probabilities((('Gxpi2',0),('Gcnot',0,1)))
 ```
 
 ### Implicit layer-operation models
-In the above example, you saw how it is possible to manually add a layer-operation to an `ExplicitOpModel` based on its other, more primitive layer operations.  This often works fine for a few qubits, but can quickly become tedious as the number of qubits increases (since the number of potential layers that involve a given set of gates grows exponentially with qubit number).  This is where `ImplicitOpModel` objects come into play: these models contain rules for building up arbitrary layer-operations based on more primitive operations.  PyGSTi offers several "built-in" types of implicit models and a rich set of tools for building your own custom ones.  See the [tutorial on implicit models](objects/ImplicitModel.ipynb) for details. 
+In the above example, you saw how it is possible to manually add a layer-operation to an `ExplicitOpModel` based on its other, more primitive layer operations.  This often works fine for a few qubits, but can quickly become tedious as the number of qubits increases (since the number of potential layers that involve a given set of gates grows exponentially with qubit number).  This is where `ImplicitOpModel` objects come into play: these models contain rules for building up arbitrary layer-operations based on more primitive operations.  PyGSTi offers several "built-in" types of implicit models and a rich set of tools for building your own custom ones.  See the [tutorial on implicit models](../objects/ImplicitModel) for details. 
 
-(datasets)=
 ## Data Sets
 The `DataSet` object is a container for tabulated outcome counts.  It behaves like a dictionary whose keys are `Circuit` objects and whose values are dictionaries that associate *outcome labels* with (usually) integer counts.  There are two primary ways you go about getting a `DataSet`.  The first is by reading in a simply formatted text file:
 
@@ -144,9 +140,9 @@ Gxpi2:0^4              85   3  10   2
 Gxpi2:0Gcnot:0:1       45   1   4  50
 [Gxpi2:0Gxpi2:1]Gypi2:0 25  32  17  26
 """
-with open("tutorial_files/Example_Short_Dataset.txt","w") as f:
+with open("../../tutorial_files/Example_Short_Dataset.txt","w") as f:
     f.write(dataset_txt)
-ds = pygsti.io.read_dataset("tutorial_files/Example_Short_Dataset.txt")
+ds = pygsti.io.read_dataset("../../tutorial_files/Example_Short_Dataset.txt")
 ```
 
 The second is by simulating a `Model` and thereby generating "fake data".  This essentially calls `mdl.probabilities(c)` for each circuit in a given list, and samples from the output probability distribution to obtain outcome counts:
@@ -170,7 +166,7 @@ print(ds[c])                     # index using a Circuit
 print(ds[ [('Gxpi2',0),('Gypi2',1)] ]) # or with something that can be converted to a Circuit 
 ```
 
-Because `DataSet` object can also store *timestamped* data (see the [time-dependent data tutorial](objects/advanced/TimestampedDataSets.ipynb), the values or "rows" of a `DataSet` aren't simple dictionary objects.  When you'd like a `dict` of counts use the `.counts` member of a data set row:
+Because `DataSet` object can also store *timestamped* data (see the [time-dependent data tutorial](../objects/TimestampedDataSets)), the values or "rows" of a `DataSet` aren't simple dictionary objects.  When you'd like a `dict` of counts use the `.counts` member of a data set row:
 
 ```{code-cell} ipython3
 row = ds[c]
@@ -207,16 +203,18 @@ You can manipulate `DataSets` in a variety of ways, including:
 - "trucating" a `DataSet` to include only a subset of it's string
 - "filtering" a $n$-qubit `DataSet` to a $m < n$-qubit dataset
 
-To find out more about these and other operations, see our [data set tutorial](objects/DataSet.ipynb).
+To find out more about these and other operations, see our [data set tutorial](../objects/DataSet).
 
 ## What's next?
-You've learned about the three main object types in pyGSTi!  The next step is to learn about how these objects are used within pyGSTi, which is the topic of the next [overview tutorial on applications](02-Applications.ipynb).  Alternatively, if you're interested in learning more about the above-described or other objects, here are some links to relevant tutorials:
-- [Circuit](objects/Circuit.ipynb) - how to build circuits ([GST circuits](objects/advanced/GSTCircuitConstruction.ipynb) in particular)
-- [ExplicitModel](objects/ExplicitModel.ipynb) - constructing explicit layer-operation models
-- [ImplicitModel](objects/ImplicitModel.ipynb) - constructing implicit layer-operation models
-- [DataSet](objects/DataSet.ipynb) - constructing data sets ([timestamped data](objects/advanced/TimestampedDataSets.ipynb) in particular)
-- [Basis](objects/advanced/MatrixBases.ipynb) - defining matrix and vector bases
-- [Results](objects/advanced/Results.ipynb) - the container object for model-based results
-- [QubitProcessorSpec](objects/advanced/QubitProcessorSpec.ipynb) - represents a QIP as a collection of models and meta information. 
-- [Instrument](objects/advanced/Instruments.ipynb) - allows for circuits with intermediate measurements
-- [Operation Factories](objects/advanced/OperationFactories.ipynb) - allows continuously parameterized gates
+You've learned about the three main object types in pyGSTi!  The next step is to learn about how these objects are used within pyGSTi, which is the topic of the next [overview tutorial](02-Using-Essential-Objects).  Alternatively, if you're interested in learning more about the above-described or other objects, here are some links to relevant tutorials:
+- [Circuit](../objects/Circuit) - how to build circuits ([GST circuits](../gst/CircuitConstruction) in particular)
+- [ExplicitModel](../objects/ExplicitModel) - constructing explicit layer-operation models
+- [ImplicitModel](../objects/ImplicitModel) - constructing implicit layer-operation models
+- [ModelNoise](../objects/ModelNoise) - describing noise for both explicit and implicit models
+- [ParameterBounds](../objects/ParameterBounds) - bounding model parameters
+- [DataSet](../objects/DataSet) - constructing data sets ([timestamped data](../objects/TimestampedDataSets) in particular)
+- [Basis](../objects/MatrixBases) - defining matrix and vector bases
+- [Results](../objects/Results) - the container object for model-based results
+- [ProcessorSpec](../objects/ProcessorSpec) - represents a QIP as a collection of models and meta information. 
+- [Instrument](../objects/Instruments) - allows for circuits with intermediate measurements
+- [Operation Factories](../objects/OperationFactories) - allows continuously parameterized gates

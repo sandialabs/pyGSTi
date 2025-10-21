@@ -13,17 +13,17 @@ kernelspec:
 
 # Gate Set Tomography (function-based)
 
-This tutorial shows you how to run gate set tomography using the older-style function-centric API.  This can be useful in certain scenarios, but most of the time it's easier to use the newer, object-oriented approach outlined in the main [GST overview tutorial](GST-Overview.ipynb).  For more details and options for running GST, see the [GST circuits tutorial](../objects/advanced/GSTCircuitConstruction.ipynb) and the [tutorial covering the different pyGSTi functions for running GST](GST-Drivers.ipynb).
+This tutorial shows you how to run gate set tomography using the older-style function-centric API.  This can be useful in certain scenarios, but most of the time it's easier to use the newer, object-oriented approach outlined in the main [GST overview tutorial](Overview).  For more details and options for running GST, see the [GST circuits tutorial](CircuitConstruction) and the [tutorial covering the different pyGSTi functions for running GST](Driverfunctions).
 
 To run GST, we need three inputs:
-1. a "**target model**" which describes the desired, or ideal, operations we want our experimental hardware to perform.  In the example below, we use one of pyGSTi's build-in "model packs" (see the [tutorial on model packs](objects/advanced/ModelPacks.ipynb)) - which acts on a single qubit with the following operations:
+1. a "**target model**" which describes the desired, or ideal, operations we want our experimental hardware to perform.  In the example below, we use one of pyGSTi's build-in "model packs" (see the [tutorial on model packs](../objects/ModelPacks)) - which acts on a single qubit with the following operations:
     - two gates: $\pi/2$ rotations around the $x$- and $y$-axes.
     - a single state preparation in the $|0\rangle$ state.
     - a 2-outcome measurement with the label "0" associated with measuring $|0\rangle$ and "1" with measuring $|1\rangle$.
     
-2. a list of circuits tailored to the target model; essentially a list of what experiments we need to run.  Using a standard model makes things especially straightforward here, since the building blocks, called *germ* and *fiducial* circuits, needed to make good GST circuits have already been computed (see the [tutorial on GST circuits](../objects/advanced/GSTCircuitConstruction.ipynb)).
+2. a list of circuits tailored to the target model; essentially a list of what experiments we need to run.  Using a standard model makes things especially straightforward here, since the building blocks, called *germ* and *fiducial* circuits, needed to make good GST circuits have already been computed (see the [tutorial on GST circuits](CircuitConstruction)).
 
-3. data, in the form of experimental outcome counts, for each of the required sequences.  In this example we'll generate "fake" or "simulated" data from a depolarized version of our ideal model.  For more information about `DataSet` objects, see the [tutorial on DataSets](../objects/DataSet.ipynb).
+3. data, in the form of experimental outcome counts, for each of the required sequences.  In this example we'll generate "fake" or "simulated" data from a depolarized version of our ideal model.  For more information about `DataSet` objects, see the [tutorial on DataSets](../objects/DataSet).
 
 ```{code-cell} ipython3
 #Import the pygsti module (always do this) and the XYI model pack
@@ -47,7 +47,7 @@ ds = pygsti.data.simulate_data(mdl_datagen, listOfExperiments, num_samples=1000,
 
 #Note: from listOfExperiments we can also create an empty dataset file
 # which has columns of zeros where actual data should go. 
-pygsti.io.write_empty_dataset("../tutorial_files/GettingStartedDataTemplate.txt", listOfExperiments,
+pygsti.io.write_empty_dataset("../../tutorial_files/GettingStartedDataTemplate.txt", listOfExperiments,
                               "## Columns = 0 count, 1 count")
 # After replacing the zeros with actual data, the data set can be 
 # loaded back into pyGSTi using the line below and used in the rest
@@ -55,7 +55,7 @@ pygsti.io.write_empty_dataset("../tutorial_files/GettingStartedDataTemplate.txt"
 #ds = pygsti.io.load_dataset("tutorial_files/GettingStartedDataTemplate.txt")
 ```
 
-Now that we have all of the inputs, we can run GST in a standard way using the `run_stdpractice_gst` function.  For more information about this and related functions, see the [GST methods tutorial](GST-Drivers.ipynb).  This returns a `pygsti.report.Results` object (see the [Results tutorial](../objects/advanced/Results.ipynb)), from which we can generate a report giving us a summary of the analysis.
+Now that we have all of the inputs, we can run GST in a standard way using the `run_stdpractice_gst` function.  For more information about this and related functions, see the [GST methods tutorial](Driverfunctions).  This returns a `pygsti.report.Results` object (see the [Results tutorial](../objects/Results)), from which we can generate a report giving us a summary of the analysis.
 
 ```{code-cell} ipython3
 #Run GST and create a report
@@ -64,13 +64,9 @@ results = pygsti.run_stdpractice_gst(ds, target_model, prep_fiducials, meas_fidu
 
 pygsti.report.construct_standard_report(
     results, title="GST Overview Tutorial Example Report", verbosity=2
-).write_html("../tutorial_files/gettingStartedReport", verbosity=2)
+).write_html("../../tutorial_files/gettingStartedReport", verbosity=2)
 ```
 
-You can now open the file [../tutorial_files/gettingStartedReport/main.html](../tutorial_files/gettingStartedReport/main.html) in your browser (Firefox works best) to view the report.  **That's it!  You've just run GST!** 
+You can now open the file [../../tutorial_files/gettingStartedReport/main.html](../../tutorial_files/gettingStartedReport/main.html) in your browser (Firefox works best) to view the report.  **That's it!  You've just run GST!** 
 
-In the cell above, `results` is a `Results` object, which is used to generate a HTML report.  For more information see the [Results object tutorial](../objects/advanced/Results.ipynb) and [report generation tutorial](../reporting/ReportGeneration.ipynb).
-
-```{code-cell} ipython3
-
-```
+In the cell above, `results` is a `Results` object, which is used to generate a HTML report.  For more information see the [Results object tutorial](../objects/Results) and [report generation tutorial](../reporting/ReportGeneration).

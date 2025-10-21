@@ -111,11 +111,11 @@ print(ln_mmg1.is_equivalent(ln_mmg4))
 # Serialization
 
 ```{code-cell} ipython3
-ex_mdl1.write('example_files/ex_mdl1.json')
+ex_mdl1.write('../../example_files/ex_mdl1.json')
 ```
 
 ```{code-cell} ipython3
-ln_mdl1.write('example_files/ln_mdl1.json')
+ln_mdl1.write('../../example_files/ln_mdl1.json')
 ```
 
 ```{code-cell} ipython3

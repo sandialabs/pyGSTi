@@ -80,7 +80,7 @@ for element in comp.elements:
     print(element)
 ```
 
-### Basis usage
+## Basis usage
 Once created, bases are used to manipulate matrices and vectors within pygsti:
 
 ```{code-cell} ipython3

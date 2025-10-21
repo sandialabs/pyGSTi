@@ -34,7 +34,7 @@ ws.init_notebook_mode(autodisplay=True)
 
 This injects necessary HTML and JavaScript into the notebook so that plots and tables display properly.  If everything works properly, you'll see a GREEN "**Notebook Initialization Complete**" message.  If instead you see a BLUE "**Loading...**" message, then 1) check that this notebook is "Trusted" in the upper right corner of this window and 2) check that you have a working internet connection.  You will need to reload this notebook using your *browser's* reload button after fixing either of these issues.
 
-Setting `autodisplay=True` means that figures will be displayed as soon as they're created (otherwise we'd have to capture the returned object and call `.display()` on it).  By typing `ws.` and then hitting TAB you can see the somewhat-descriptive names of the figures that can be created.  Here are a few examples (for more, see the [Workspace examples tutorial](WorkspaceExamples.ipynb)):
+Setting `autodisplay=True` means that figures will be displayed as soon as they're created (otherwise we'd have to capture the returned object and call `.display()` on it).  By typing `ws.` and then hitting TAB you can see the somewhat-descriptive names of the figures that can be created.  Here are a few examples (for more, see the [Workspace examples tutorial](WorkspaceExamples)):
 
 ```{code-cell} ipython3
 import numpy as np
@@ -46,4 +46,4 @@ from pygsti.modelpacks import smq1Q_XYI
 ws.GatesTable( smq1Q_XYI.target_model() )
 ```
 
-Thats covers the basics!  The [Workspace examples tutorial](WorkspaceExamples.ipynb) shows a **gallery** of many of the tables and plots a `Workspace` can create, and the [Workspace switchboard tutorial](advanced/WorkspaceSwitchboards.ipynb) shows how to integrate workspace figures with *switches* (dropdown boxes, buttons, and sliders).  `Workspace` objects are used internally when generating HTML reports. The [report generation tutorial](ReportGeneration.ipynb) demonstrates how the automated use of a `Workspace` can lead to a standalone HTML report.
+Thats covers the basics!  The [Workspace examples tutorial](WorkspaceExamples) shows a **gallery** of many of the tables and plots a `Workspace` can create, and the [Workspace switchboard tutorial](WorkspaceSwitchboards) shows how to integrate workspace figures with *switches* (dropdown boxes, buttons, and sliders).  `Workspace` objects are used internally when generating HTML reports. The [report generation tutorial](ReportGeneration) demonstrates how the automated use of a `Workspace` can lead to a standalone HTML report.

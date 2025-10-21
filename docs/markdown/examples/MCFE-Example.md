@@ -25,7 +25,7 @@ import time
 unmapped_circs = [pygsti.circuits.Circuit([["Gxpi2", "Q0"], ["Gypi2", "Q1"]]),pygsti.circuits.Circuit([["Gypi2", "Q0"], ["Gxpi2", "Q1"]])]
 ```
 
-### Map circuits to device connectivity and U3-CX gate set
+## Map circuits to device connectivity and U3-CX gate set
 
 +++
 
@@ -67,7 +67,7 @@ for i, circ in enumerate(unmapped_circs):
 unmirrored_design = pygsti.protocols.FreeformDesign(mapped_circs)
 ```
 
-### Mirror circuit generation
+## Mirror circuit generation
 
 +++
 
@@ -92,7 +92,7 @@ We have created the MCFE experiment design.
 
 +++
 
-### Run the Edesign
+## Run the Edesign
 
 +++
 
@@ -139,7 +139,7 @@ print(end - start)
 data = exp.data
 ```
 
-### Compute process fidelity for each circuit
+## Compute process fidelity for each circuit
 
 ```{code-cell} ipython3
 from pygsti.protocols.vbdataframe import VBDataFrame

@@ -15,11 +15,11 @@ kernelspec:
 
 +++
 
-This tutorial contains a few details on how to run *Binary Randomized Benchmarking (BiRB)* that are not covered in the [RB overview tutorial](RB-Overview.ipynb).
+This tutorial contains a few details on how to run *Binary Randomized Benchmarking (BiRB)* that are not covered in the [RB overview tutorial](Overview).
 
 ## What is Binary RB? 
 
-Binary RB is a streamlined RB method that draws upon the strengths of [Direct RB](RB-DirectRB.ipynb), but uses a highly gate-efficient state preparation and measurement method that allows it to run on many, many more qubits. It has the same core purpose as Clifford RB - quantifying average gate performance - but it is feasable on more qubits, and it provides more directly useful information. BiRB is feasable on 10s or 100s of qubits (it is possible to holistically benchmark around $1/\epsilon$ qubits if the error rate per-gate per-qubit is around $\epsilon$).
+Binary RB is a streamlined RB method that draws upon the strengths of [Direct RB](DirectRB), but uses a highly gate-efficient state preparation and measurement method that allows it to run on many, many more qubits. It has the same core purpose as Clifford RB - quantifying average gate performance - but it is feasable on more qubits, and it provides more directly useful information. BiRB is feasable on 10s or 100s of qubits (it is possible to holistically benchmark around $1/\epsilon$ qubits if the error rate per-gate per-qubit is around $\epsilon$).
  
 A depth $m$ ($m\geq 0$) Binary RB circuit consists of:
 
@@ -44,7 +44,7 @@ Generating a Mirror RB experiment design is very similar to creating a Direct RB
 
 ### 1. Generic RB inputs
 
-The first inputs to create a Binary RB experiment design are the same as in all RB protocols, and these are covered in the [RB overview tutorial](RB-Overview.ipynb). They are:
+The first inputs to create a Binary RB experiment design are the same as in all RB protocols, and these are covered in the [RB overview tutorial](Overview). They are:
 
 - The device to benchmark (`pspec`).
 - The "RB depths" at which we will sample circuits (`depths`), which must be nonnegative integers. These correspond to the number of randomly sampled core layers in a circuit. 
@@ -82,7 +82,7 @@ The structure of the circuit layers is specificed via the option argument `layer
 
 Further details of the sampling distribution are specified via the optional arguements `sampler` and `samplerargs`.
 
-Because Direct, Mirror, and Binary RB have the this sampling-distribution dependence, there is a separate [random circuit sampling tutorial](RB-Samplers.ipynb) that introduces the different built-in sampling algorithms within pyGSTi.
+Because Direct, Mirror, and Binary RB have the this sampling-distribution dependence, there is a separate [random circuit sampling tutorial](Samplers) that introduces the different built-in sampling algorithms within pyGSTi.
 
 ```{code-cell} ipython3
 sampler = 'edgegrab'
@@ -108,12 +108,12 @@ def simulate_taking_data(data_template_filename):
 design = pygsti.protocols.BinaryRBDesign(pspec, compilations['absolute'], depths, k, qubit_labels=qubits, sampler=sampler, 
                                             samplerargs=samplerargs, layer_sampling='mixed1q2q')
 
-pygsti.io.write_empty_protocol_data('../tutorial_files/test_birb_dir', design, clobber_ok=True)
+pygsti.io.write_empty_protocol_data('../../tutorial_files/test_birb_dir', design, clobber_ok=True)
 
 # -- fill in the dataset file in tutorial_files/test_rb_dir/data/dataset.txt --
-simulate_taking_data('../tutorial_files/test_birb_dir/data/dataset.txt') # REPLACE with actual data-taking
+simulate_taking_data('../../tutorial_files/test_birb_dir/data/dataset.txt') # REPLACE with actual data-taking
 
-data = pygsti.io.read_data_from_dir('../tutorial_files/test_birb_dir')
+data = pygsti.io.read_data_from_dir('../../tutorial_files/test_birb_dir')
 ```
 
 ## Running the Binary RB protocol

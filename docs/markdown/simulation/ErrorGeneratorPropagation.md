@@ -283,7 +283,7 @@ We'll specifically cover:
 
 +++
 
-#### `eoc_error_channel` : 
+### `eoc_error_channel` : 
 This method provides a simple single function call for generating a dense representation of the end-of-circuit error channel (i.e. the exponentiated end-of-circuit error generator). This can be useful in few-qubit testing, but obviously doesn't not scale beyond a few qubits. This end-of-circuit error channel can be produced either exactly or without the BCH approximation. In the former case this is acheived by exponentiating and multiplying together all of the propagated error generator layers.
 
 ```{code-cell} ipython3
@@ -302,7 +302,7 @@ print(f'Frobenius norm between exact and 1st-order BCH EOC channels: {np.linalg.
 print(f'Frobenius norm between exact and 2nd-order BCH EOC channels: {np.linalg.norm(dense_end_of_circuit_channel_exact-dense_end_of_circuit_channel_second_order_BCH)}')
 ```
 
-#### `errorgen_layer_dict_to_errorgen`
+### `errorgen_layer_dict_to_errorgen`
 Throughout the error generator propagation framework we generate a lot of sparse error generator representations in terms of dictionaries of elementary error generator coefficients and corresponding rates. For testing purposes (with just a few qubits, this obviously does not scale) it is often useful to convert these into a dense representation as a numpy array. This method helps do so in just a single line.
 
 ```{code-cell} ipython3
@@ -314,7 +314,7 @@ Note: There is another function called `errorgen_layer_to_matrix` available in t
 
 +++
 
-#### `approximate_stabilizer_probabilities`
+### `approximate_stabilizer_probabilities`
 This one is straightforward. Above we showed the use of the function `approximate_stabilizer_probability` from the `errgenproptools` module for calculating approximate output probabilities for a given computational bitstring. If you happen to want *all* of the bit string probabilities you can save yourself a for loop by using the function `approximate_stabilizer_probabilities` from this module instead!
 
 ```{code-cell} ipython3
@@ -326,7 +326,7 @@ Note the returned values are given in right-LSB convention (i.e. '0000' -> '0001
 
 +++
 
-#### `error_generator_commutator` and `error_generator_composition`
+### `error_generator_commutator` and `error_generator_composition`
 These two functions from the `errgenproptools` module return the result of analytically computing the commutator and composition of two elementary error generators, respectively.
 
 ```{code-cell} ipython3

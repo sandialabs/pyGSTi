@@ -66,9 +66,9 @@ Gxpi2:0@(0)        10 90
 Gxpi2:0Gypi2:0@(0) 40 60
 Gxpi2:0^4@(0)      20 90
 """
-with open("../tutorial_files/Example_TinyDataset.txt","w") as tinydataset:
+with open("../../tutorial_files/Example_TinyDataset.txt","w") as tinydataset:
     tinydataset.write(dataset_txt)
-ds2 = pygsti.io.read_dataset("../tutorial_files/Example_TinyDataset.txt")
+ds2 = pygsti.io.read_dataset("../../tutorial_files/Example_TinyDataset.txt")
 ```
 
 ```{code-cell} ipython3
@@ -91,12 +91,12 @@ ds3b = pygsti.data.simulate_data(depol_gateset, circuit_list, num_samples=50,
 
 #Package the ds3 and ds3b datasets together with their experiment design
 # and save to disk for later tutorials to use for protocols
-pygsti.protocols.ProtocolData(exp_design, ds3).write("../tutorial_files/Example_GST_Data")
-pygsti.protocols.ProtocolData(exp_design, ds3b).write("../tutorial_files/Example_GST_Data_LowCnts")
+pygsti.protocols.ProtocolData(exp_design, ds3).write("../../tutorial_files/Example_GST_Data")
+pygsti.protocols.ProtocolData(exp_design, ds3b).write("../../tutorial_files/Example_GST_Data_LowCnts")
 
 #Also write the dataset files separately
-pygsti.io.write_dataset("../tutorial_files/Example_Dataset.txt", ds3, outcome_label_order=['0','1']) 
-pygsti.io.write_dataset("../tutorial_files/Example_Dataset_LowCnts.txt", ds3b) 
+pygsti.io.write_dataset("../../tutorial_files/Example_Dataset.txt", ds3, outcome_label_order=['0','1']) 
+pygsti.io.write_dataset("../../tutorial_files/Example_Dataset_LowCnts.txt", ds3b) 
 ```
 
 ## Viewing `DataSets`
@@ -108,7 +108,7 @@ print("Dataset2:\n",ds2)
 print("Dataset3 is too big to print, so here it is truncated to Dataset2's strings\n", ds3.truncate(ds2.keys()))
 ```
 
-**Note that the outcome labels `'0'` and `'1'` appear as `('0',)` and `('1',)`**.  This is because outcome labels in pyGSTi are tuples of time-ordered instrument element (see the [intermediate measurements tutorial](advanced/Instruments.ipynb)) and POVM effect labels.  In the special but common case when there are no intermediate measurements, the outcome label is a 1-tuple of just the final POVM effect label.  In this case, one may use the effect label itself (e.g. `'0'` or `'1'`) in place of the 1-tuple in almost all contexts, as it is automatically converted to the 1-tuple (e.g. `('0',)` or `('1',)`) internally.  When printing, however, the 1-tuple is still displayed to remind the user of the more general structure contained in the `DataSet`.
+**Note that the outcome labels `'0'` and `'1'` appear as `('0',)` and `('1',)`**.  This is because outcome labels in pyGSTi are tuples of time-ordered instrument element (see the [intermediate measurements tutorial](Instruments)) and POVM effect labels.  In the special but common case when there are no intermediate measurements, the outcome label is a 1-tuple of just the final POVM effect label.  In this case, one may use the effect label itself (e.g. `'0'` or `'1'`) in place of the 1-tuple in almost all contexts, as it is automatically converted to the 1-tuple (e.g. `('0',)` or `('1',)`) internally.  When printing, however, the 1-tuple is still displayed to remind the user of the more general structure contained in the `DataSet`.
 
 +++
 
@@ -147,9 +147,7 @@ print("Keepseparate-mode Dataset:\n",ds_sep)
 
 ## Related topics
 This concludes our overview of `DataSet` objects.  Here are a couple of related topics we didn't touch on that might be of interest:
-- the ability of a `DataSet` to store **time-dependent data** (in addition to the count data described above) is covered in the [timestamped data tutorial](advanced/TimestampedDataSets.ipynb).
-- the `MultiDataSet` object, which is similar to a dictionary of `DataSets` is described in the [MultiDataSet tutorial](advanced/MultiDataSet.ipynb).  `MultiDataSet` objects are useful when you have several data sets containing outcomes for the *same* set of circuits, like when you do multiple passes of the same experimental procedure.
+- the ability of a `DataSet` to store **time-dependent data** (in addition to the count data described above) is covered in the [timestamped data tutorial](TimestampedDataSets).
+- the `MultiDataSet` object, which is similar to a dictionary of `DataSets` is described in the [MultiDataSet tutorial](MultiDataSet).  `MultiDataSet` objects are useful when you have several data sets containing outcomes for the *same* set of circuits, like when you do multiple passes of the same experimental procedure.
 
-```{code-cell} ipython3
 
-```

@@ -16,7 +16,7 @@ kernelspec:
 This tutorial is about gauge optimization.  First, we'll explain what gauge optimization is, then we'll demonstrate how pyGSTi can used to perform it.
 
 ## What is gauge optimization?
-In pyGSTi, *models* of quantum information processors have parameters - that is, they're *parameterized models* which posess some number of knobs, or *parameters*, that you can adjust to tune the model.  For example, a "fully parameterized model" has an independent parameter for every SPAM-vector or process-matrix element (see the [explicit model tutorial](../../objects/ExplicitModel.ipynb) for more details).  Sometimes (more often than you might think) there are combinations of knob movements (directions in parameter-space) which do not affect *any* physically observed quantities, i.e. any circuit outcome probabilities.  These are called *gauge degrees of freedom*, and **gauge optimization is an optimization over a model's gauge degrees of freedom**.  Sometimes the gauge degrees of freedom form a group - the *gauge group* - which makes the space of *gate transformations* (a movement along just the gauge directions of parameter space) particularly straightforward to optimize over.  
+In pyGSTi, *models* of quantum information processors have parameters - that is, they're *parameterized models* which posess some number of knobs, or *parameters*, that you can adjust to tune the model.  For example, a "fully parameterized model" has an independent parameter for every SPAM-vector or process-matrix element (see the [explicit model tutorial](../objects/ExplicitModel) for more details).  Sometimes (more often than you might think) there are combinations of knob movements (directions in parameter-space) which do not affect *any* physically observed quantities, i.e. any circuit outcome probabilities.  These are called *gauge degrees of freedom*, and **gauge optimization is an optimization over a model's gauge degrees of freedom**.  Sometimes the gauge degrees of freedom form a group - the *gauge group* - which makes the space of *gate transformations* (a movement along just the gauge directions of parameter space) particularly straightforward to optimize over.  
 
 In the example of a fully-parameterized model, a gauge transformation $T_M$ is associated with an invertable matrix *M* and transforms the state preparation vectors $|\rho\rangle\rangle$, the POVM effect vectors $\langle\langle E|$, and the process matrices $G$ of a model as follows:
 
@@ -33,7 +33,7 @@ You may be thinking, if the gauge doesn't matter for any observable quantities w
 In pyGSTi there are many ways to tune exactly how gauge optimization is performed.  This can be somewhat of a black art, since there's no *a priori* best way to choose the gauge of a model - it depends on what you're after.  Furthermore, **pyGSTi can only perform gauge optimization when there exists a well-defined gauge group** (see above).  Here's we'll demonstrate some of the basics of how gauge optimization works in pyGSTi.
 
 ### Gauge transformations
-Before *optimizing* the gauge, lets take a look at how to *change* the gauge.  Throughout this notebook we'll be looking at a fully-parameterized 1-qubit model whose gauge group is the set of $4 \times 4$ invertible matrices.  (The picture is essentially the same for trace-preserving (TP) parameterized models, but becomes more complicated when moving to CPTP constrainted models.)  Lets use one of the target models builtin to pyGSTi (see the [model packs tutorial](../../objects/advanced/ModelPacks.ipynb) for more information):
+Before *optimizing* the gauge, lets take a look at how to *change* the gauge.  Throughout this notebook we'll be looking at a fully-parameterized 1-qubit model whose gauge group is the set of $4 \times 4$ invertible matrices.  (The picture is essentially the same for trace-preserving (TP) parameterized models, but becomes more complicated when moving to CPTP constrainted models.)  Lets use one of the target models builtin to pyGSTi (see the [model packs tutorial](../objects/ModelPacks) for more information):
 
 ```{code-cell} ipython3
 import numpy as np
@@ -132,7 +132,7 @@ std_results = pygsti.run_stdpractice_gst(
                   } )
 ```
 
-We can see that the `"TP"` estimate constains the expected gauge-optimized models (see the [Results object tutorial](../../objects/advanced/Results.ipynb) on how to access the elements of a `ModelEstimateResults` object):
+We can see that the `"TP"` estimate constains the expected gauge-optimized models (see the [Results object tutorial](../objects/Results) on how to access the elements of a `ModelEstimateResults` object):
 
 ```{code-cell} ipython3
 print("\n".join(std_results.estimates['full TP'].models.keys()))

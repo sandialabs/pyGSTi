@@ -22,8 +22,8 @@ import pygsti
 
 ## Creating models
 Before getting to `ExplicitOpModels` in particular, lets explain two quantites that *all* `Model` objects posess: a *basis* and *state space labels*:
-- A model's `.state_space` member (a `StateSpace` object) describes the model's state space as the direct sum and tensor product of labelled *factors*.  Typically, this is just a tensor product of one or more 2-dimensional qubit spaces labelled by the integers 0 to $N_{qubits}-1$ or `"Q0"`, `"Q1"`, etc.  We specify a 1-qubit state space using `["Q0"]` below (the "Q" tells pyGSTi it's a 2-dimensional *qubit* space).  If you had two qubits you could use `["Q0","Q1"]` or `[0,1]` to describe the tensor product of two qubit spaces, as pyGSTi assumes integer labels stand for qubit spaces too.  To learn more about the `StateSpace` object, see the [state space  tutorial](advanced/StateSpace.ipynb).
-- A model's `.basis` member (a `Basis` object) describes how any dense representations (matrices or vectors) of the the operations in a `Model` should be interpreted.  We'll be using the "Pauli product" basis, which is named `"pp"` in pyGSTi and consists of the tensor products of Pauli matrices (since our example has just a 1-qubit state space the `"pp"` basis is just the 4 Pauli matrices $\{\sigma_0,\sigma_X,\sigma_Y,\sigma_Z\}$).  To learn more about `Basis` objects see the [Basis object tutorial](advanced/MatrixBases.ipynb)).
+- A model's `.state_space` member (a `StateSpace` object) describes the model's state space as the direct sum and tensor product of labelled *factors*.  Typically, this is just a tensor product of one or more 2-dimensional qubit spaces labelled by the integers 0 to $N_{qubits}-1$ or `"Q0"`, `"Q1"`, etc.  We specify a 1-qubit state space using `["Q0"]` below (the "Q" tells pyGSTi it's a 2-dimensional *qubit* space).  If you had two qubits you could use `["Q0","Q1"]` or `[0,1]` to describe the tensor product of two qubit spaces, as pyGSTi assumes integer labels stand for qubit spaces too.  To learn more about the `StateSpace` object, see the [state space  tutorial](StateSpace).
+- A model's `.basis` member (a `Basis` object) describes how any dense representations (matrices or vectors) of the the operations in a `Model` should be interpreted.  We'll be using the "Pauli product" basis, which is named `"pp"` in pyGSTi and consists of the tensor products of Pauli matrices (since our example has just a 1-qubit state space the `"pp"` basis is just the 4 Pauli matrices $\{\sigma_0,\sigma_X,\sigma_Y,\sigma_Z\}$).  To learn more about `Basis` objects see the [Basis object tutorial](MatrixBases).
 
 
 ## Creating explicit models
@@ -31,8 +31,8 @@ There are more or less four ways to create `ExpicitOpModel` objects in pyGSTi:
 
 * By creating an empty `ExpicitOpModel` and setting its elements directly.
 * By a single call to a `pygsti.models.modelconstruction` function, which automates the above approach.
-* By loading from a text-format model file using `pygsti.io.read_model` (see the [File IO tutorial](../other/FileIO.ipynb)).
-* By loading one from the `pygsti.modelpacks` module (see the [ModelPacks tutorial](advanced/ModelPacks.ipynb).
+* By loading from a text-format model file using `pygsti.io.read_model` (see the [File IO tutorial](../interfaces/FileIO)).
+* By loading one from the `pygsti.modelpacks` module (see the [ModelPacks tutorial](ModelPacks)).
 
 +++
 
@@ -42,7 +42,7 @@ Layer operations (often called "gates" in a 1- or even 2-qubit context) and SPAM
 
 To separately access (set or get) the state preparations, POVMs, and operations contained in a `ExplicitOpModel` use the `preps`, `povms`, and `operations` members respectively.  Each one provides dictionary-like access to the underlying objects.  For example, `myModel.operations['Gx']` accesses the same underlying `LinearOperator` object as `myModel['Gx']`, and similarly for `myModel.preps['rho0']` and `myModel['rho0']`.  The values of operations and state preparation vectors can be read and written in this way.  
 
-A POVM object acts similarly to dictionary of `SPAMVec`-derived effect vectors, but typically requires all such vectors to be initialized at once, that is, you cannot assign individual effect vectors to a `POVM`.  The string-valued keys of a `POVM` label the outcome associated with each effect vector, and are therefore termed *effect labels* or *outcome labels*.  The outcome labels also designate data within a `DataSet` object (see the [DataSet tutorial](DataSet.ipynb)), and thereby associate modeled POVMs with experimental measurements. 
+A POVM object acts similarly to dictionary of `SPAMVec`-derived effect vectors, but typically requires all such vectors to be initialized at once, that is, you cannot assign individual effect vectors to a `POVM`.  The string-valued keys of a `POVM` label the outcome associated with each effect vector, and are therefore termed *effect labels* or *outcome labels*.  The outcome labels also designate data within a `DataSet` object (see the [DataSet tutorial](DataSet)), and thereby associate modeled POVMs with experimental measurements. 
 
 
 
@@ -160,7 +160,7 @@ A `QubitProcessorSpec` is an object that contains information for some experimen
 - Number of qubits
 - Names of standard gates
 - Qubit labels and topology/availability of gates.
-To learn more, see the [processor specification tutorial](ProcessorSpec.ipynb). For our purposes here, it is sufficient to view this as a container for qubit/gate information, and is a common input to most model construction routines.
+To learn more, see the [processor specification tutorial](ProcessorSpec). For our purposes here, it is sufficient to view this as a container for qubit/gate information, and is a common input to most model construction routines.
 
 ```{code-cell} ipython3
 from pygsti.processors import QubitProcessorSpec
@@ -239,7 +239,7 @@ rot_model3 = model3.rotate(rotate=(0,0.1,0))
 
 ```{code-cell} ipython3
 #Writing a model as a text file
-depol_model3.write("../tutorial_files/Example_depolarizedModel.json")
+depol_model3.write("../../tutorial_files/Example_depolarizedModel.json")
 ```
 
 ```{code-cell} ipython3
@@ -249,7 +249,7 @@ print("Probabilities of outcomes of the \"complete\" gate\n sequence rho0+GxGx+M
       depol_model3.probabilities( ("rho0", "Gx", "Gx", "Mdefault")))
 ```
 
-It is also possible to manipulate the underlying operations by accessing the forward simulator in the `Model` class. For example, using the `matrix` simulator type, one can compute the product of two gate operations. For more details, see the [ForwardSimulationTypes tutorial](../algorithms/advanced/ForwardSimulationTypes.ipynb).
+It is also possible to manipulate the underlying operations by accessing the forward simulator in the `Model` class. For example, using the `matrix` simulator type, one can compute the product of two gate operations. For more details, see the [ForwardSimulationTypes tutorial](../simulation/ForwardSimulationTypes).
 
 ```{code-cell} ipython3
 # Computing the product of operation matrices (only allowed with the matrix simulator type)
@@ -257,4 +257,4 @@ print("Product of Gx * Gx = \n",depol_model3.sim.product(("Gx", "Gx")), end='\n\
 ```
 
 ## Next steps
-Next, you may want to take a look a [implicit models](ImplicitModel.ipynb), which are similar to explicit models but more powerful in ways relevant to multi-qubit modeling.  You may also be interested to check out the [model parameterizations tutorial](ModelParameterization.ipynb) and the [model noise tutoria](ModelNoise.ipynb), which have information relevant to explicit and implicit models.
+Next, you may want to take a look a [implicit models](ImplicitModel), which are similar to explicit models but more powerful in ways relevant to multi-qubit modeling.  You may also be interested to check out the [model parameterizations tutorial](ModelParameterization) and the [model noise tutoria](ModelNoise), which have information relevant to explicit and implicit models.

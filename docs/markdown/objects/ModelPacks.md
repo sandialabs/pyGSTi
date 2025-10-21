@@ -65,7 +65,7 @@ In addition to a target `Model`, a GST-type model pack (most of them are this ty
 - measurement (effect) fiducials: `meas_fiducials`
 - germ sequences: `germs`
  - this function has an additional `lite` argument that, when True (the default) gives a shorter list of germ circuits that amplify all the errors in the target model to *first order*.  This is usually all that is needed to achieve the high-accuracy typically desired from GST results, and so we recommend starting with this list of germs since it's shorter.  When `lite=False` a longer list of germ circuits is returned that amplify all the errors in the target model to *higher orders*.  Although typically unnecessary, this "paranoid" set of germs can be particularly helpful when you expect and don't care about some departures (errors) from the target model.
-- fiducial pair reductions (see the [circuit reduction tutorial](../../algorithms/advanced/GST-FiducialPairReduction.ipynb) for more details):
+- fiducial pair reductions (see the [circuit reduction tutorial](../gst/FiducialPairReduction) for more details):
  - `global_fid_pairs` is not a function, but just a list of 2-tuples giving the indices (within `prep_fiducials` and `meas_fiducials`) of the fiducial circuits to keep when implementing global fiducial pair reduction.
  - `pergerm_fidpair_dict` and `pergerm_fidpair_dict_lite` are dictionaries of lists-of-2-tuples giving the indices of the fiducial circuits to keep on a per-germ basis (dict keys are germ circuits) when implementing per-germ fiducial pair reduction.
  
@@ -80,12 +80,8 @@ smq1Q_XYI.pergerm_fidpair_dict_lite()
 ```
 
 ## Quantities for running RB
-Standard Clifford-based randomized benchmarking (RB) requires knowing how to "compile" the elements of the Clifford group from your native gate set.  Most model packs also contain a `clifford_compilation` function that returns a dictionary describing this compilation, which can in turn be used when running Clifford RB (see the [Clifford RB tutorial](../../algorithms/CliffordRB.ipynb) for more info).
+Standard Clifford-based randomized benchmarking (RB) requires knowing how to "compile" the elements of the Clifford group from your native gate set.  Most model packs also contain a `clifford_compilation` function that returns a dictionary describing this compilation, which can in turn be used when running Clifford RB (see the [Clifford RB tutorial](../rb/CliffordRB) for more info).
 
 ```{code-cell} ipython3
 smq1Q_XYI.clifford_compilation()
-```
-
-```{code-cell} ipython3
-
 ```

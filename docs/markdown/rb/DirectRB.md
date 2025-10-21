@@ -15,11 +15,11 @@ kernelspec:
 
 +++
 
-This tutorial contains a few details on how to run [Direct Randomized Benchmarking](https://journals.aps.org/prl/abstract/10.1103/PhysRevLett.123.030503) that are not covered in the [RB overview tutorial](RB-Overview.ipynb).
+This tutorial contains a few details on how to run [Direct Randomized Benchmarking](https://journals.aps.org/prl/abstract/10.1103/PhysRevLett.123.030503) that are not covered in the [RB overview tutorial](Overview).
 
 ## What is Direct RB? 
 
-In essence, Direct RB is a streamlined, generalized version of the popular [Clifford RB](RB-CliffordRB.ipynb) method. It has the same core purpose - quantifying average gate performance - but it is feasable on more qubits, and it provides more directly useful information.
+In essence, Direct RB is a streamlined, generalized version of the popular [Clifford RB](CliffordRB) method. It has the same core purpose - quantifying average gate performance - but it is feasable on more qubits, and it provides more directly useful information.
 
 The basic requirements for running Clifford RB and Direct RB are the same. Both methods can be implemented on a set of $n$ qubits whenever the $n$-qubit Clifford group can be **generated** by the native gates on those $n$ qubits. Clifford RB runs circuits containing $m+1$ uniformly random $n$-qubit Cliffords followed by the unique inversion $n$-qubit Clifford gate (all of which must be compiled into the native gates of the device), where $m \geq 0$. In contrast, Direct RB circuits consist of:
 
@@ -40,11 +40,11 @@ from pygsti.processors import CliffordCompilationRules as CCR
 
 ## Creating a Direct RB experiment design
 
-The data analysis in Direct RB is exactly as in Clifford RB, and how to do this analysis is covered in the [RB overview tutorial](RB-Overview.ipynb). The differences and flexibility in Direct RB are all at the experiment design stage, and so this is what is covered in this tutorial. 
+The data analysis in Direct RB is exactly as in Clifford RB, and how to do this analysis is covered in the [RB overview tutorial](Overview). The differences and flexibility in Direct RB are all at the experiment design stage, and so this is what is covered in this tutorial. 
 
 ### 1. Generic RB inputs
 
-The first inputs to create a Direct RB experiment design are the same as in all RB protocols, and these are covered in the [RB overview tutorial](RB-Overview.ipynb). They are:
+The first inputs to create a Direct RB experiment design are the same as in all RB protocols, and these are covered in the [RB overview tutorial](Overview). They are:
 
 - The device to benchmark (`pspec`).
 - The "RB depths" at which we will sample circuits (`depths`). For Direct RB, these depths are the number of layers in the "core" circuit, outlined in step (2) above. These depths can be any non-negative integers.
@@ -74,7 +74,7 @@ This might seem like a drawback in comparison to Clifford RB, but note that this
 
 The sampling distribution is specified via the optional arguements `sampler` and `samplerargs`. Here we use what we call the "edge grab" sampler. 
 
-Because Mirror RB has an equivalent sampling-distribution dependence, there is a separate [random circuit sampling tutorial](RB-Samplers.ipynb) that introduces the different built-in sampling algorithms within pyGSTi (which includes details of the "edge grab" algorithm).
+Because Mirror RB has an equivalent sampling-distribution dependence, there is a separate [random circuit sampling tutorial](Samplers) that introduces the different built-in sampling algorithms within pyGSTi (which includes details of the "edge grab" algorithm).
 
 ```{code-cell} ipython3
 sampler = 'edgegrab'
@@ -118,12 +118,12 @@ design = pygsti.protocols.DirectRBDesign(pspec, compilations, depths, k, qubit_l
                                            samplerargs=samplerargs, randomizeout=randomizeout,
                                            citerations=citerations)
 
-pygsti.io.write_empty_protocol_data('../tutorial_files/test_drb_dir', design, clobber_ok=True)
+pygsti.io.write_empty_protocol_data('../../tutorial_files/test_drb_dir', design, clobber_ok=True)
 
 # -- fill in the dataset file in tutorial_files/test_rb_dir/data/dataset.txt --
-simulate_taking_data('../tutorial_files/test_drb_dir/data/dataset.txt') # REPLACE with actual data-taking
+simulate_taking_data('../../tutorial_files/test_drb_dir/data/dataset.txt') # REPLACE with actual data-taking
 
-data = pygsti.io.read_data_from_dir('../tutorial_files/test_drb_dir')
+data = pygsti.io.read_data_from_dir('../../tutorial_files/test_drb_dir')
 
 protocol = pygsti.protocols.RB()
 results = protocol.run(data)
@@ -135,8 +135,4 @@ ws.RandomizedBenchmarkingPlot(results)
 ```{code-cell} ipython3
 # The error rate we approximately expect accord to Direct RB theory
 print(1 - (1 - gate_error_rate)**len(qubits))
-```
-
-```{code-cell} ipython3
-
 ```

@@ -24,7 +24,7 @@ from pygsti.processors import CliffordCompilationRules as CCR
 ```
 
 ## Define the processor
-Next, we define the processor that we're benchmarking.  For this we use a `QubitProcessorSpec` object (see the [tutorial on processor specs](../objects/advanced/ProcessorSpec.ipynb)) to define a ring of 4 qubits.  Each qubit has 4 single-qubit gates: $X(\pm\pi/2)$ and $Y(\pm\pi/2)$, and CPHASE gates are allowed between neighbors.
+Next, we define the processor that we're benchmarking.  For this we use a `QubitProcessorSpec` object (see the [tutorial on processor specs](../objects/ProcessorSpec)) to define a ring of 4 qubits.  Each qubit has 4 single-qubit gates: $X(\pm\pi/2)$ and $Y(\pm\pi/2)$, and CPHASE gates are allowed between neighbors.
 
 ```{code-cell} ipython3
 n_qubits = 4
@@ -73,10 +73,10 @@ designS2 = pp.SimultaneousExperimentDesign([VB_design0, VB_design1, VB_design2, 
 
 entire_design = pp.CombinedExperimentDesign({"specA": designS1, "specB": designS2})
 try:
-    import shutil; shutil.rmtree('../tutorial_files/vb_example')  # start with a clean directory - stale files can be problematic
+    import shutil; shutil.rmtree('../../tutorial_files/vb_example')  # start with a clean directory - stale files can be problematic
 except FileNotFoundError:
     pass
-pygsti.io.write_empty_protocol_data("../tutorial_files/vb_example", entire_design)
+pygsti.io.write_empty_protocol_data("../../tutorial_files/vb_example", entire_design)
 ```
 
 ## Step 2: collect data as specified by the experiment design
@@ -85,14 +85,14 @@ Next, we just follow the instructions in the experiment design to collect data f
 ```{code-cell} ipython3
 mdl_datagen = pygsti.models.create_crosstalk_free_model(pspec, ideal_gate_type='full TP')
 for gate in mdl_datagen.operation_blks['gates'].values(): gate.depolarize(0.01)
-pygsti.io.fill_in_empty_dataset_with_fake_data("../tutorial_files/vb_example/data/dataset.txt", mdl_datagen,
+pygsti.io.fill_in_empty_dataset_with_fake_data("../../tutorial_files/vb_example/data/dataset.txt", mdl_datagen,
                                                num_samples=1000, seed=2020)
 ```
 
 Now that the template file has been filled in (or just replaced with one containing data), we read it in from the same root directory we saved the data to above.  This loads in both the `dataset.txt` we simulated above and the experiment design (saved in the `.../vb_example/edesign` directory).
 
 ```{code-cell} ipython3
-data = pygsti.io.read_data_from_dir('../tutorial_files/vb_example')
+data = pygsti.io.read_data_from_dir('../../tutorial_files/vb_example')
 ```
 
 ## Step 3: Run the volumetric benchmark protocol on each DRB experiment design

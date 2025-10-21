@@ -1,1 +1,0 @@
-{"type": "pygsti.protocols.vb.ByDepthSummaryStatistics", "auxfile_types": {"custom_data_src": "serialized-object"}, "name": "ByDepthSummaryStatistics", "tags": {}, "_nameddict_attributes": [], "depths": "all", "statistics_to_compute": ["polarization"], "names_to_compute": ["polarization"]}

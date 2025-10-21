@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-## Leakage (manual)
+# Leakage (manual)
 
 This tutorial demonstrates how to perform GST on a "leaky-qubit" described by a 3-level (instead of the desired 2-level) system.
 
@@ -99,14 +99,14 @@ find_fiducials = True
 if find_fiducials:
     prepfids, measfids = pygsti.algorithms.find_fiducials(
         mdl_3level_guess, omit_identity=False, candidate_fid_counts={4: "all upto"}, verbosity=4)
-    pygsti.io.write_circuit_list("example_files/leakage_prepfids.txt", prepfids)
-    pygsti.io.write_circuit_list("example_files/leakage_measfids.txt", measfids)
+    pygsti.io.write_circuit_list("../../example_files/leakage_prepfids.txt", prepfids)
+    pygsti.io.write_circuit_list("../../example_files/leakage_measfids.txt", measfids)
 ```
 
 ```{code-cell} ipython3
 # If files missing, run previous cell at least once with find_fiducials = True
-prepfids = pygsti.io.read_circuit_list("example_files/leakage_prepfids.txt")
-measfids = pygsti.io.read_circuit_list("example_files/leakage_measfids.txt")
+prepfids = pygsti.io.read_circuit_list("../../example_files/leakage_prepfids.txt")
+measfids = pygsti.io.read_circuit_list("../../example_files/leakage_measfids.txt")
 germs = smq1Q.germs(qubit_labels=["Qubit_leakage"])
 maxLengths = [1,]
 expList = pygsti.circuits.create_lsgst_circuits(mdl_3level_noisy, prepfids, measfids, germs, maxLengths)
@@ -131,10 +131,10 @@ results_2level = pygsti.run_stdpractice_gst(ds_2level, mdl_2level_ideal, prepfid
 ```
 
 ```{code-cell} ipython3
-pygsti.report.construct_standard_report(results_2level, "2-level Leakage Example Report").write_html('example_files/leakage_report_2level')
+pygsti.report.construct_standard_report(results_2level, "2-level Leakage Example Report").write_html('../../example_files/leakage_report_2level')
 ```
 
-Open the report [here](example_files/leakage_report_2level/main.html)
+Open the report [here](../../example_files/leakage_report_2level/main.html)
 
 ```{code-cell} ipython3
 results_3level = pygsti.run_stdpractice_gst(ds, mdl_3level_ideal, prepfids, measfids,
@@ -144,10 +144,10 @@ results_3level = pygsti.run_stdpractice_gst(ds, mdl_3level_ideal, prepfids, meas
 ```
 
 ```{code-cell} ipython3
-pygsti.report.construct_standard_report(results_3level, "3-level Leakage Example Report").write_html('example_files/leakage_report')
+pygsti.report.construct_standard_report(results_3level, "3-level Leakage Example Report").write_html('../../example_files/leakage_report')
 ```
 
-Open the report [here](example_files/leakage_report/main.html)
+Open the report [here](../../example_files/leakage_report/main.html)
 
 ```{code-cell} ipython3
 #try a different basis:
@@ -204,10 +204,10 @@ results_3level_leakage_basis = changebasis_3level_results( results_3level )
 
 ```{code-cell} ipython3
 pygsti.report.construct_standard_report(results_3level_leakage_basis, "3-level with Basis Change Leakage Example Report"
-                                        ).write_html('example_files/leakage_report_basis')
+                                        ).write_html('../../example_files/leakage_report_basis')
 ```
 
-Open the report [here](example_files/leakage_report_basis/main.html)
+Open the report [here](../../example_files/leakage_report_basis/main.html)
 
 ```{code-cell} ipython3
 # use "kite" density-matrix structure
@@ -263,7 +263,7 @@ results_2plus1 = pygsti.run_long_sequence_gst(ds_2plus1, mdl_2plus1_ideal, prepf
 
 # TODO: This is currently broken
 pygsti.report.construct_standard_report(results_2plus1,"2+1 Leakage Example Report"
-).write_html('example_files/leakage_report_2plus1', autosize='none')
+).write_html('../../example_files/leakage_report_2plus1', autosize='none')
 ```
 
-Open the report [here](example_files/leakage_report/main.html)
+Open the report [here](../../example_files/leakage_report/main.html)

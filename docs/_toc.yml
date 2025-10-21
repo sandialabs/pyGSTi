@@ -114,10 +114,10 @@ parts:
   - file: markdown/examples/ContextDependence
   - file: markdown/examples/BootstrappedErrorBars
   - file: markdown/examples/ProceduralErrorBars
-  - file: markdown/examples/2Q-CreatingModels
+  - file: markdown/examples/2QGST-CreatingModels
     sections:
-    - file: markdown/examples/2Q-RunningIt
-    - file: markdown/examples/2Q-ErrorBars
+    - file: markdown/examples/2QGST-RunningIt
+    - file: markdown/examples/2QGST-ErrorBars
   - file: markdown/examples/QutritGST
     sections:
     - file: markdown/examples/Leakage-automagic

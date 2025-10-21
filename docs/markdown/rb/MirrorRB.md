@@ -15,13 +15,13 @@ kernelspec:
 
 +++
 
-This tutorial contains a few details on how to run *Mirror Randomized Benchmarking* that are not covered in the [RB overview tutorial](RB-Overview.ipynb).
+This tutorial contains a few details on how to run *Mirror Randomized Benchmarking* that are not covered in the [RB overview tutorial](Overview).
 
 ## What is Mirror RB? 
 
-Like Direct RB, Mirror RB is a streamlined RB method partly inspired by [Clifford RB](RB-CliffordRB.ipynb). It has the same core purpose as Clifford RB - quantifying average gate performance - but it is feasable on more qubits, and it provides more directly useful information. However, Mirror RB is even more streamlined than Direct RB, making it feasable on 10s or 100s of qubits (it is possible to holistically benchmark around $1/\epsilon$ qubits if the error rate per-gate per-qubit is around $\epsilon$).
+Like Direct RB, Mirror RB is a streamlined RB method partly inspired by [Clifford RB](CliffordRB). It has the same core purpose as Clifford RB - quantifying average gate performance - but it is feasable on more qubits, and it provides more directly useful information. However, Mirror RB is even more streamlined than Direct RB, making it feasable on 10s or 100s of qubits (it is possible to holistically benchmark around $1/\epsilon$ qubits if the error rate per-gate per-qubit is around $\epsilon$).
 
-Mirror RB can be implemented with non-Clifford gates as well (see the [Universal Gate Set MRB tutorial](RB-MirrorRB-Universal-Gate-Sets.ipynb)). A depth $m$ ($m\geq 0$) mirror RB circuit consists of:
+Mirror RB can be implemented with non-Clifford gates as well (see the [Universal Gate Set MRB tutorial](MirrorRB-Universal-Gate-Sets)). A depth $m$ ($m\geq 0$) mirror RB circuit consists of:
 
 1. A uniformly random 1-qubit Clifford gate on every qubit. 
 2. A "compute" circuit consisting of $m/2$ independently sampled layers of the native Clifford gates in the device, sampled according to a user-specified distribution $\Omega$. Each of these layers is proceeded by a uniformly random Pauli gate on each qubit.
@@ -46,7 +46,7 @@ Generating a Mirror RB experiment design is very similar to creating a Direct RB
 
 ### 1. Generic RB inputs
 
-The first inputs to create a Mirror RB experiment design are the same as in all RB protocols, and these are covered in the [RB overview tutorial](RB-Overview.ipynb). They are:
+The first inputs to create a Mirror RB experiment design are the same as in all RB protocols, and these are covered in the [RB overview tutorial](Overview). They are:
 
 - The device to benchmark (`pspec`).
 - The "RB depths" at which we will sample circuits (`depths`). For Mirror RB, these depths must be even integers. They correspond to the number of total layers in the "compute" and "uncompute" sub-circuits (but where we don't include the randomized Pauli gates in the layer count). 
@@ -80,7 +80,7 @@ This might seem like a drawback in comparison to Clifford RB, but note that this
 
 The sampling distribution is specified via the optional arguements `sampler` and `samplerargs`. Here we use what we call the "edge grab" sampler. 
 
-Because both Direct and Mirror RB have the this sampling-distribution dependence, there is a separate [random circuit sampling tutorial](RB-Samplers.ipynb) that introduces the different built-in sampling algorithms within pyGSTi (which includes details of the "edge grab" algorithm).
+Because both Direct and Mirror RB have the this sampling-distribution dependence, there is a separate [random circuit sampling tutorial](Samplers) that introduces the different built-in sampling algorithms within pyGSTi (which includes details of the "edge grab" algorithm).
 
 ```{code-cell} ipython3
 sampler = 'edgegrab'
@@ -106,12 +106,12 @@ def simulate_taking_data(data_template_filename):
 design = pygsti.protocols.MirrorRBDesign(pspec, depths, k, qubit_labels=qubits, sampler=sampler, 
                                          clifford_compilations=compilations, samplerargs=samplerargs)
 
-pygsti.io.write_empty_protocol_data('../tutorial_files/test_mrb_dir', design, clobber_ok=True)
+pygsti.io.write_empty_protocol_data('../../tutorial_files/test_mrb_dir', design, clobber_ok=True)
 
 # -- fill in the dataset file in tutorial_files/test_rb_dir/data/dataset.txt --
-simulate_taking_data('../tutorial_files/test_mrb_dir/data/dataset.txt') # REPLACE with actual data-taking
+simulate_taking_data('../../tutorial_files/test_mrb_dir/data/dataset.txt') # REPLACE with actual data-taking
 
-data = pygsti.io.read_data_from_dir('../tutorial_files/test_mrb_dir')
+data = pygsti.io.read_data_from_dir('../../tutorial_files/test_mrb_dir')
 ```
 
 ## Running the Mirror RB protocol

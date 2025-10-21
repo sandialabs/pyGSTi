@@ -25,7 +25,7 @@ from pygsti.processors import CliffordCompilationRules as CCR
 
 ## Get some CRB circuits
 
-First, we follow the [Clifford RB](../CliffordRB.ipynb) tutorial to generate a set of sequences.  If you want to perform Direct RB instead, just replace this cell with the contents of the [Direct RB](../DirectRB.ipynb) tutorial up until the point where it creates `circuitlist`:
+First, we follow the [Clifford RB](../rb/CliffordRB) tutorial to generate a set of sequences.  If you want to perform Direct RB instead, just replace this cell with the contents of the [Direct RB](../rb/DirectRB) tutorial up until the point where it creates `circuitlist`:
 
 ```{code-cell} ipython3
 #Specify the device to be benchmarked - in this case 2 qubits
@@ -60,7 +60,7 @@ Now we need to create a model that can simulate circuits like this.  Two things 
 2. RB circuits do gates in parallel (this only matters for >1 qubits), so you have layers like `[Gypi2:0Gypi2:1]`
 
 In this example, we'll make a model with $n$-qubit process matrices, so this will be practically limited to small $n$.  We construct a model based on our standard 2-qubit X, Y, and CPHASE model, since this 
-has all the appropriate gates.  To get a model with the multi-qubit labels, we'll use a standard multi-qubit "model-pack", which packages a `Model` object with relevant meta information needed by other protocols (like GST).  If you can't start with a standard model, then you'll need to create an `ExplicitOpModel` object of the appropriate dimension (see the [explicit models tutorial](../../objects/ExplicitModel.ipynb)) and assign to it gates with are, for instance `('Gxpi2',0)` rather than just `'Gxpi2'`.
+has all the appropriate gates.  To get a model with the multi-qubit labels, we'll use a standard multi-qubit "model-pack", which packages a `Model` object with relevant meta information needed by other protocols (like GST).  If you can't start with a standard model, then you'll need to create an `ExplicitOpModel` object of the appropriate dimension (see the [explicit models tutorial](../objects/ExplicitModel)) and assign to it gates with are, for instance `('Gxpi2',0)` rather than just `'Gxpi2'`.
 
 Here we import the `smq2Q_XYCPHASE` model pack:
 
@@ -105,7 +105,7 @@ ds_unserial = ds.process_circuits(lambda c: unserialize_map[c])
 ```
 
 ## Running RB on the simulated `DataSet`
-To run an RB analysis, we just package up the experiment design and data set into a `ProtocolData` object and give this to a `RB` protocol's `run` method.  This returns a `RandomizedBenchmarkingResults` object that can be used to plot the RB decay curve.  (See the [RB analysis tutorial](../RBAnalysis.ipynb) for more details.)
+To run an RB analysis, we just package up the experiment design and data set into a `ProtocolData` object and give this to a `RB` protocol's `run` method.  This returns a `RandomizedBenchmarkingResults` object that can be used to plot the RB decay curve.
 
 ```{code-cell} ipython3
 data = pygsti.protocols.ProtocolData(exp_design, ds_unserial)

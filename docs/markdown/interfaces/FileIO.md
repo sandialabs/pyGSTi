@@ -40,11 +40,11 @@ Gx 10 80
 GxGy 40 20
 Gx^4 20 70
 """
-with open("../tutorial_files/TestDataSet.txt","w") as f:
+with open("../../tutorial_files/TestDataSet.txt","w") as f:
     f.write(dataset_txt)
 
-ds = pygsti.io.read_dataset("../tutorial_files/TestDataSet.txt")
-pygsti.io.write_dataset("../tutorial_files/TestDataSet.txt", ds)
+ds = pygsti.io.read_dataset("../../tutorial_files/TestDataSet.txt")
+pygsti.io.write_dataset("../../tutorial_files/TestDataSet.txt", ds)
 
 
 #MultiDataSets ------------------------------------------------------------
@@ -56,11 +56,11 @@ GxGy 40 60 0.4 100
 Gx^4 20 80 0.2 100                                                                                                  
 """
 
-with open("../tutorial_files/TestMultiDataSet.txt","w") as f:
+with open("../../tutorial_files/TestMultiDataSet.txt","w") as f:
     f.write(multidataset_txt)
     
-multiDS = pygsti.io.read_multidataset("../tutorial_files/TestMultiDataSet.txt", cache=True)
-pygsti.io.write_multidataset("../tutorial_files/TestDataSet.txt", multiDS)
+multiDS = pygsti.io.read_multidataset("../../tutorial_files/TestMultiDataSet.txt", cache=True)
+pygsti.io.write_multidataset("../../tutorial_files/TestDataSet.txt", multiDS)
 
 
 #DataSets w/timestamped data --------------------------------------------
@@ -72,10 +72,10 @@ tddataset_txt = \
 Gx 111000111
 Gy 11001100
 """
-with open("../tutorial_files/TestTDDataset.txt","w") as f:
+with open("../../tutorial_files/TestTDDataset.txt","w") as f:
     f.write(tddataset_txt)
     
-tdds_fromfile = pygsti.io.read_time_dependent_dataset("../tutorial_files/TestTDDataset.txt")
+tdds_fromfile = pygsti.io.read_time_dependent_dataset("../../tutorial_files/TestTDDataset.txt")
 #NOTE: currently there's no way to *write* a DataSet w/timestamped data to a text file yet.
 
 
@@ -84,10 +84,10 @@ from pygsti.modelpacks import smq1Q_XY
 cList = pygsti.circuits.create_lsgst_circuits(
     [('Gxpi2',0), ('Gypi2',0)], smq1Q_XY.prep_fiducials(), smq1Q_XY.meas_fiducials(),
     smq1Q_XY.germs(), [1,2,4,8])    
-pygsti.io.write_circuit_list("../tutorial_files/TestCircuitList.txt",cList,"#Test Circuit List")
-pygsti.io.write_empty_dataset("../tutorial_files/TestEmptyDataset.txt",cList) 
+pygsti.io.write_circuit_list("../../tutorial_files/TestCircuitList.txt",cList,"#Test Circuit List")
+pygsti.io.write_empty_dataset("../../tutorial_files/TestEmptyDataset.txt",cList) 
   #additionally creates columns of zeros where data should go...
-cList2 = pygsti.io.read_circuit_list("../tutorial_files/TestCircuitList.txt")
+cList2 = pygsti.io.read_circuit_list("../../tutorial_files/TestCircuitList.txt")
 ```
 
 ## JSON format
@@ -96,10 +96,10 @@ Any object that derives from `pygsti.baseobjs.NicelySerializable` can be written
 ```{code-cell} ipython3
 pspec = pygsti.processors.QubitProcessorSpec(2, ['Gxpi2', 'Gypi2', 'Gcnot'], geometry='line')
 mdl = pygsti.models.modelconstruction.create_crosstalk_free_model(pspec)
-mdl.write("../tutorial_files/serialized_model.json")
+mdl.write("../../tutorial_files/serialized_model.json")
 
 #A base class can read in derived-class files 
-loaded_mdl = pygsti.models.Model.read("../tutorial_files/serialized_model.json")
+loaded_mdl = pygsti.models.Model.read("../../tutorial_files/serialized_model.json")
 print(type(loaded_mdl))
 
 import numpy as np
@@ -109,7 +109,7 @@ assert(np.allclose(mdl.to_vector(), loaded_mdl.to_vector()))
 We can also serialize a `QubitProcessorSpec` this way:
 
 ```{code-cell} ipython3
-pspec.write("../tutorial_files/serialized_pspec.json")
+pspec.write("../../tutorial_files/serialized_pspec.json")
 print("wrote a", str(type(pspec)))
 ```
 
@@ -117,13 +117,13 @@ But we'll get an error if we try to read in the processor specification using `p
 
 ```{code-cell} ipython3
 try:
-    pygsti.models.Model.read("../tutorial_files/serialized_pspec.json")
+    pygsti.models.Model.read("../../tutorial_files/serialized_pspec.json")
 except ValueError as v:
     print("ERROR: ", str(v))
 
-p1 = pygsti.processors.QubitProcessorSpec.read("../tutorial_files/serialized_pspec.json")  # ok - reads object of same type
-p2 = pygsti.processors.ProcessorSpec.read("../tutorial_files/serialized_pspec.json")  # ok - ProcessorSpec is a base class of QubitProcessorSpec
-p3 = pygsti.baseobjs.NicelySerializable.read("../tutorial_files/serialized_pspec.json") # also ok - NicelySerializeable is a base class too
+p1 = pygsti.processors.QubitProcessorSpec.read("../../tutorial_files/serialized_pspec.json")  # ok - reads object of same type
+p2 = pygsti.processors.ProcessorSpec.read("../../tutorial_files/serialized_pspec.json")  # ok - ProcessorSpec is a base class of QubitProcessorSpec
+p3 = pygsti.baseobjs.NicelySerializable.read("../../tutorial_files/serialized_pspec.json") # also ok - NicelySerializeable is a base class too
 
 assert(type(p1) == pygsti.processors.QubitProcessorSpec)
 assert(type(p2) == pygsti.processors.QubitProcessorSpec)
@@ -151,26 +151,26 @@ We demonstrate some of this functionality with a simple example:
 ```{code-cell} ipython3
 try:
     import shutil
-    shutil.rmtree("../tutorial_files/example_root_directory")  # start with a clean slate, in case you rerun this tutorial
+    shutil.rmtree("../../tutorial_files/example_root_directory")  # start with a clean slate, in case you rerun this tutorial
 except FileNotFoundError:
     pass
 from pygsti.modelpacks import smq1Q_XYI
 edesign = smq1Q_XYI.create_gst_experiment_design(1)
-edesign.write("../tutorial_files/example_root_directory")  # creates .../example_root_directory/edesign
+edesign.write("../../tutorial_files/example_root_directory")  # creates .../example_root_directory/edesign
 ```
 
 ```{code-cell} ipython3
 # load back in the experiment design (just to demo this function):
-loaded_edesign = pygsti.io.read_edesign_from_dir("../tutorial_files/example_root_directory")
+loaded_edesign = pygsti.io.read_edesign_from_dir("../../tutorial_files/example_root_directory")
 
 #Create & write an empty ProtocolData object to the same root directory
 # (this is often useful because it creates an empty data set file in .../example_root_directory/data
 #  that can be used as a template for the real experimental data)
-pygsti.io.write_empty_protocol_data("../tutorial_files/example_root_directory", loaded_edesign, clobber_ok=True)
+pygsti.io.write_empty_protocol_data("../../tutorial_files/example_root_directory", loaded_edesign, clobber_ok=True)
 
 #Alternatively, we can create an empty ProtocolData object and then write it:
 data = pygsti.protocols.ProtocolData(loaded_edesign)
-data.write()  # same as .write("../tutorial_files/example_root_directory") because loaded_edesign remembers 
+data.write()  # same as .write("../../tutorial_files/example_root_directory") because loaded_edesign remembers 
               # where is was loaded from and this is the default destination (see loaded_edesign._loaded_from)
 ```
 
@@ -180,8 +180,8 @@ protocol = pygsti.protocols.GateSetTomography(smq1Q_XYI.target_model("full TP"),
 
 #We can read/write this separately, though we don't really need to since it will get saved as a part
 # of the results later on.  Still, to demonstrate this, here's how to do it:
-protocol.write("../tutorial_files/example_gst_protocol")
-loaded_protocol = pygsti.io.read_protocol_from_dir("../tutorial_files/example_gst_protocol")
+protocol.write("../../tutorial_files/example_gst_protocol")
+loaded_protocol = pygsti.io.read_protocol_from_dir("../../tutorial_files/example_gst_protocol")
 ```
 
 ```{code-cell} ipython3
@@ -189,26 +189,26 @@ loaded_protocol = pygsti.io.read_protocol_from_dir("../tutorial_files/example_gs
 
 # Mimic filling in or replacing the empty "template" dataset file (dataset.txt) with actual data
 datagen_model = smq1Q_XYI.target_model().depolarize(op_noise=0.05, spam_noise=0.2)
-pygsti.io.fill_in_empty_dataset_with_fake_data("../tutorial_files/example_root_directory/data/dataset.txt",
+pygsti.io.fill_in_empty_dataset_with_fake_data("../../tutorial_files/example_root_directory/data/dataset.txt",
                                                datagen_model, num_samples=1000, seed=2021)
 
 # Load the just-simulated data as a ProtocolData object and run our GST protocol on it:
-loaded_data = pygsti.io.read_data_from_dir("../tutorial_files/example_root_directory")
+loaded_data = pygsti.io.read_data_from_dir("../../tutorial_files/example_root_directory")
 results = protocol.run(loaded_data)
 ```
 
 ```{code-cell} ipython3
 # Save the results:
-results.write()  # same as .write("../tutorial_files/example_root_directory") because result's edesign remembers 
+results.write()  # same as .write("../../tutorial_files/example_root_directory") because result's edesign remembers 
                  # the root directory is was loaded from and this is the default destination.
 ```
 
-At this point we have directory containing an experiment design, a corresponding set of data, and some results from analyzing that data.  It may be interesting to poke around in this [example_root_directory](../tutorial_files/example_root_directory) and take not of where things are.  Notice how the subdirectory under `results` is the name we gave to the protocol above: `TP_GST_Analysis`.
+At this point we have directory containing an experiment design, a corresponding set of data, and some results from analyzing that data.  It may be interesting to poke around in this [example_root_directory](../../tutorial_files/example_root_directory) and take note of where things are.  Notice how the subdirectory under `results` is the name we gave to the protocol above: `TP_GST_Analysis`.
 
 We can load the results back in, again using the *same* root directory:
 
 ```{code-cell} ipython3
-loaded_results_dir = pygsti.io.read_results_from_dir("../tutorial_files/example_root_directory")
+loaded_results_dir = pygsti.io.read_results_from_dir("../../tutorial_files/example_root_directory")
 
 print("Available results = ", list(loaded_results_dir.for_protocol.keys()))
 gst_results = loaded_results_dir.for_protocol['TP_GST_Analysis']
@@ -223,4 +223,4 @@ if nSigma < 2:
     print("  The GST model gives a very good fit to the data!")
 ```
 
-Something we want to emphasize is that all of the I/O function calls (except the simulated data generation and unnecessary separate saving of the protocol) are given the same, single root directory (`"../tutorial_files/example_root_directory"`).  This is a key feature and the intended design of pyGSTi's I/O framework - that a given experiment design, data, and analysis all live together in the same "node" (corresponding to a root directory) in a potential tree of experiments.  In the example above, we just have a single node.  By using nested experiment designs (e.g. `CombinedExperimentDesign` and `SimultaneousExperimentDesign` objects) a tree of such "root directories" (perhaps better called "node directories" then) can be built.
+Something we want to emphasize is that all of the I/O function calls (except the simulated data generation and unnecessary separate saving of the protocol) are given the same, single root directory (`"../../tutorial_files/example_root_directory"`).  This is a key feature and the intended design of pyGSTi's I/O framework - that a given experiment design, data, and analysis all live together in the same "node" (corresponding to a root directory) in a potential tree of experiments.  In the example above, we just have a single node.  By using nested experiment designs (e.g. `CombinedExperimentDesign` and `SimultaneousExperimentDesign` objects) a tree of such "root directories" (perhaps better called "node directories" then) can be built.

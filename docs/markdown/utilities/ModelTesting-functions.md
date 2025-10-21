@@ -80,7 +80,7 @@ results.add_estimates(results3)
 
 pygsti.report.construct_standard_report(
     results, title="Model Test Example Report", verbosity=1
-).write_html("../tutorial_files/modeltest_report", auto_open=False, verbosity=1)
+).write_html("../../tutorial_files/modeltest_report", auto_open=False, verbosity=1)
 ```
 
 ```{code-cell} ipython3
@@ -102,7 +102,7 @@ gst_results.add_model_test(target_model, test_model3, estimate_key='MyModel3')
 #Create a report to see that we've added an estimate labeled "MyModel3"
 pygsti.report.construct_standard_report(
     gst_results, title="GST with Model Test Example Report 1", verbosity=1
-).write_html("../tutorial_files/gstwithtest_report1", auto_open=False, verbosity=1)
+).write_html("../../tutorial_files/gstwithtest_report1", auto_open=False, verbosity=1)
 ```
 
 ### Method 3: `models_to_test` argument
@@ -119,7 +119,7 @@ gst_results = pygsti.run_stdpractice_gst(ds, target_model, smq1Q_XYI.prep_fiduci
 
 pygsti.report.construct_standard_report(
     gst_results, title="GST with Model Test Example Report 2", verbosity=1
-).write_html("../tutorial_files/gstwithtest_report2", auto_open=False, verbosity=1)
+).write_html("../../tutorial_files/gstwithtest_report2", auto_open=False, verbosity=1)
 ```
 
-Thats it!  Now that you know more about model-testing you may want to go back to the [overview of pyGST applications](../02-Using-Essential-Objects.ipynb).
+Thats it!  Now that you know more about model-testing you may want to go back to the [overview of pyGST applications](../overview/02-Using-Essential-Objects).

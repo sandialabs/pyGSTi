@@ -80,7 +80,7 @@ Gypi2:0@(0)
 """
 
 # Write a text file with the above circuit strings to a root/edesign directory
-root = pathlib.Path("../tutorial_files/example_edesign_root")  # the root directory
+root = pathlib.Path("../../tutorial_files/example_edesign_root")  # the root directory
 root.mkdir(exist_ok=True); (root / 'edesign').mkdir(exist_ok=True)  # create a `edesign` subdirectory
 with open(str(root / 'edesign' / 'circuits.txt'), 'w') as f:
     f.write(circuits)
@@ -252,15 +252,15 @@ Note that all of the above circuits have qubit labels `(0,1,2)` even though the 
 Once an experiment design is created, loading and saving it to a directory is easy.  Experiment designs write their data to the `edesign` sub-directory beneath the specified root directory.  Combined and simultaneous designs write to and load from a directory structure that mimics their structure.  That is, there will be a sub-directory for each sub-design.
 
 ```{code-cell} ipython3
-gst_design.write("../tutorial_files/example_gst_edesign_root")
-combined_design.write("../tutorial_files/example_combined_edesign_root")
-sim_design.write("../tutorial_files/example_simultaneous_edesign_root")
+gst_design.write("../../tutorial_files/example_gst_edesign_root")
+combined_design.write("../../tutorial_files/example_combined_edesign_root")
+sim_design.write("../../tutorial_files/example_simultaneous_edesign_root")
 ```
 
 ```{code-cell} ipython3
-gst_design_loaded = pygsti.io.read_edesign_from_dir("../tutorial_files/example_gst_edesign_root")
-combined_design_loaded = pygsti.io.read_edesign_from_dir("../tutorial_files/example_combined_edesign_root")
-sim_design_loaded = pygsti.io.read_edesign_from_dir("../tutorial_files/example_simultaneous_edesign_root")
+gst_design_loaded = pygsti.io.read_edesign_from_dir("../../tutorial_files/example_gst_edesign_root")
+combined_design_loaded = pygsti.io.read_edesign_from_dir("../../tutorial_files/example_combined_edesign_root")
+sim_design_loaded = pygsti.io.read_edesign_from_dir("../../tutorial_files/example_simultaneous_edesign_root")
 ```
 
 ## Estimating runtime of experiment designs

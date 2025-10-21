@@ -12,7 +12,7 @@ kernelspec:
 ---
 
 # Time-dependent Data Sets
-The [DataSet tutorial](../DataSet.ipynb) covered the basics of how to use `DataSet` objects with time-independent counts. When your data is time-stamped, either for each individual count or by groups of counts, there are additional (richer) options for analysis.  The `DataSet` class is also capable of storing time-dependent data by holding *series* of count data rather than binned numbers-of-counts, which are added via its `add_series_data` method.  Outcome counts are input by giving at least two parallel arrays of 1) outcome labels and 2) time stamps.  Optionally, one can provide a third array of repetitions, specifying how many times the corresponding outcome occurred at the time stamp.  While in reality no two outcomes are taken at exactly the same time, a `DataSet` allows for arbitrarily *coarse-grained* time-dependent data in which multiple outcomes are all tagged with the *same* time stamp.  In fact, the "time-independent" case considered in the aforementioned tutorial is actually just a special case in which the all data is stamped at *time=0*.
+The [DataSet tutorial](DataSet) covered the basics of how to use `DataSet` objects with time-independent counts. When your data is time-stamped, either for each individual count or by groups of counts, there are additional (richer) options for analysis.  The `DataSet` class is also capable of storing time-dependent data by holding *series* of count data rather than binned numbers-of-counts, which are added via its `add_series_data` method.  Outcome counts are input by giving at least two parallel arrays of 1) outcome labels and 2) time stamps.  Optionally, one can provide a third array of repetitions, specifying how many times the corresponding outcome occurred at the time stamp.  While in reality no two outcomes are taken at exactly the same time, a `DataSet` allows for arbitrarily *coarse-grained* time-dependent data in which multiple outcomes are all tagged with the *same* time stamp.  In fact, the "time-independent" case considered in the aforementioned tutorial is actually just a special case in which the all data is stamped at *time=0*.
 
 Below we demonstrate how to create and initialize a `DataSet` using time series data.
 
@@ -95,7 +95,7 @@ print( "Time-independent-like total counts:", tdds_row.total )
 print( "Time-independent-like spam label fraction:", tdds_row.fractions )
 ```
 
-### Text data-file formats
+## Text data-file formats
 
 It is possible to read text-formatted time-dependent data in two ways.
 

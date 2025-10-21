@@ -35,7 +35,7 @@ So let's create a `QubitProcessorSpec`.  First, we'll choose the number of qubit
 n_qubits = 4
 ```
 
-Next, we pick some names for the qubits.  These are akin to the *line labels* in a `Circuit` object (see the [Circuit tutorial](../Circuit.ipynb)).  Qubits are typically labelled by names beginning with "Q" or integers (if not specified, the qubit labels default to the integers $0, 1, 2, \ldots$).  Here we choose:
+Next, we pick some names for the qubits.  These are akin to the *line labels* in a `Circuit` object (see the [Circuit tutorial](Circuit)).  Qubits are typically labelled by names beginning with "Q" or integers (if not specified, the qubit labels default to the integers $0, 1, 2, \ldots$).  Here we choose:
 
 ```{code-cell} ipython3
 qubit_labels = ['Q0','Q1','Q2','Q3']
@@ -128,9 +128,9 @@ pspec = pygsti.processors.QubitProcessorSpec(num_qubits=1, gate_names=['Gi', 'Gc
                                  nonstd_gate_unitaries={'Gcustom': MyContinuouslyParameterizedGateFunction()},
                                  availability={'Gi': [(0,)], 'Gcustom': [(0,)]})
 
-#Write this to a file then read it pack
-pspec.write("../tutorial_files/test_pspec.json")
-pspec_readin = pygsti.processors.QubitProcessorSpec.read("../tutorial_files/test_pspec.json")
+#Write this to a file then read it back
+pspec.write("../../tutorial_files/test_pspec.json")
+pspec_readin = pygsti.processors.QubitProcessorSpec.read("../../tutorial_files/test_pspec.json")
 ```
 
 ## Idle gates
@@ -256,4 +256,4 @@ In the future, these compilation rules will also be able to be applied to circui
 +++
 
 ## Next Steps:
-`QubitProcessorSpec` objects are primarily used for creating models and experiment designs.  Most of the functions for creating models (see the [explicit model tutorial](ExplicitModel.ipynb) and [implicit model tutorial](ImplicitModel.ipynb)) take as their first argument a processor specification.  Processor specifications are also used to construct randomized benchmarking (RB) experiment designs (see the [Clifford](../algorithms/RB-CliffordRB.ipynb), [Direct](../algorithms/RB-DirectRB.ipynb) and [Mirror](../algorithms/RB-MirrorRB.ipynb) RB tutorials) as well as in gate set tomography experiment designs.
+`QubitProcessorSpec` objects are primarily used for creating models and experiment designs.  Most of the functions for creating models (see the [explicit model tutorial](ExplicitModel) and [implicit model tutorial](ImplicitModel)) take as their first argument a processor specification.  Processor specifications are also used to construct randomized benchmarking (RB) experiment designs (see the [Clifford](../rb/CliffordRB), [Direct](../rb/DirectRB) and [Mirror](../rb/MirrorRB) RB tutorials) as well as in gate set tomography experiment designs.

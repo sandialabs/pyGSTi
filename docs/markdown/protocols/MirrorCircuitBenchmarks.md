@@ -119,7 +119,7 @@ for w in widths:
 ```{code-cell} ipython3
 edesign = pygsti.protocols.CombinedExperimentDesign(edesigns)
 
-pygsti.io.write_empty_protocol_data('../tutorial_files/test_mirror_benchmark', edesign, clobber_ok=True)
+pygsti.io.write_empty_protocol_data('../../tutorial_files/test_mirror_benchmark', edesign, clobber_ok=True)
 
 # All the circuits that need to be run
 circuits = edesign.all_circuits_needing_data
@@ -128,7 +128,7 @@ circuits = edesign.all_circuits_needing_data
 np.random.shuffle(circuits)
 
 # Write this circuit list to file (the non-random order list is in the edesign folder).
-pygsti.io.write_circuit_list('../tutorial_files/test_mirror_benchmark/randomized_circuits.txt', circuits)
+pygsti.io.write_circuit_list('../../tutorial_files/test_mirror_benchmark/randomized_circuits.txt', circuits)
 
 # Convert to a list of OpenQASM format circuits. You may or may not want to use this 
 # to get the pyGSTi circuits into a format that you can run on your device.
@@ -144,12 +144,12 @@ qasm = [c.convert_to_openqasm(standard_gates_version='x-sx-rz') for c in circuit
 lindblad_error_coeffs = {g:{('H','Z'):0.01, ('S','X'):0.001} for g in gate_names if g != 'Gcnot'}
 lindblad_error_coeffs['Gcnot'] = {('H','XX'):0.05, ('S','XI'):0.005}
 noisemodel = pygsti.models.create_crosstalk_free_model(pspec, lindblad_error_coeffs=lindblad_error_coeffs)
-ds = pygsti.io.fill_in_empty_dataset_with_fake_data('../tutorial_files/test_mirror_benchmark/data/dataset.txt', noisemodel, num_samples=1000, seed=1234)
+ds = pygsti.io.fill_in_empty_dataset_with_fake_data('../../tutorial_files/test_mirror_benchmark/data/dataset.txt', noisemodel, num_samples=1000, seed=1234)
 ```
 
 ```{code-cell} ipython3
 # Loads the data
-data = pygsti.io.read_data_from_dir('../tutorial_files/test_mirror_benchmark')
+data = pygsti.io.read_data_from_dir('../../tutorial_files/test_mirror_benchmark')
 ```
 
 ```{code-cell} ipython3

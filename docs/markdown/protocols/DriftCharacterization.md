@@ -13,7 +13,7 @@ kernelspec:
 
 # Drift Characterization
 
-This tutorial shows how to implement instability ("drift") detection and characterization on time-stamped data. This data can be from *any* quantum circuits, on *any* number of qubits, but we require around 100+ time-stamps per circuit (perhaps fewer if there are multiple measurement outcomes per time-stamp). If you only have data that is binned into a few different time periods then consider instead using the `DataComparator` object demonstrated in the [DataSetComparison](../algorithms/DatasetComparison.ipynb) tutorial.
+This tutorial shows how to implement instability ("drift") detection and characterization on time-stamped data. This data can be from *any* quantum circuits, on *any* number of qubits, but we require around 100+ time-stamps per circuit (perhaps fewer if there are multiple measurement outcomes per time-stamp). If you only have data that is binned into a few different time periods then consider instead using the `DataComparator` object demonstrated in the [DataSetComparison](../utilities/DatasetComparison) tutorial.
 
 Currently the gap between data collection times for each circuit is required to be approximately constant, both across the data collection times for each circuit, and across circuits. If this is not the case the code should still work, but the analysis it performs may be significantly sub-optimal, and interpretting the results is more complicated. There is beta-level capabilities within the functions used below to properly analyze unequally-spaced data, but it is untested and will not be used with the default options in the analysis code. This limitation will be addressed in a future release of pyGSTi.
 
@@ -28,7 +28,7 @@ import pygsti
 ```
 
 ## Quick and Easy Analysis
-First we import some *time-stamped* data. For more information on the mechanics of using time-stamped `DataSets` see the [TimestampedDataSets](../objects/advanced/TimestampedDataSets.ipynb) tutorial. The data we are importing is from long-sequence GST on $G_x$, and $G_y$ with time-dependent coherent errors on the gates.
+First we import some *time-stamped* data. For more information on the mechanics of using time-stamped `DataSets` see the [TimestampedDataSets](../objects/TimestampedDataSets) tutorial. The data we are importing is from long-sequence GST on $G_x$, and $G_y$ with time-dependent coherent errors on the gates.
 
 We load the time-dependent data from the `timestamped_dataset.txt` file included with pyGSTi, and then build a `ProtocolData` object out of it so it can be used as input for `Protocol` objects.  We can pass `None` as the experiment design when constructing `data` because the stability analysis doesn't require any special structure to the circuits - it just requires the data to have timestamps.
 
@@ -54,7 +54,7 @@ germs = [pygsti.circuits.Circuit(g) for g in germ_strs]
 max_lengths = [2**i for i in range(0,log2maxL+1)]
 exp_design = pygsti.protocols.StandardGSTDesign(model, prep_fiducials, meas_fiducials, germs, max_lengths)
 
-ds = pygsti.io.load_dataset("../tutorial_files/timestamped_dataset.txt")  # a DataSet
+ds = pygsti.io.load_dataset("../../tutorial_files/timestamped_dataset.txt")  # a DataSet
 ds = ds.truncate(list(exp_design.all_circuits_needing_data))
 data = pygsti.protocols.ProtocolData(exp_design, ds)
 ```
@@ -183,7 +183,7 @@ We can also create a report that contains all of these plots, as well as a few o
 
 ```{code-cell} ipython3
 report = pygsti.report.create_drift_report(results, title='Example Drift Report')
-report.write_html('../tutorial_files/DriftReport')
+report.write_html('../../tutorial_files/DriftReport')
 ```
 
-You can now open the file [../tutorial_files/DriftReport/main.html](../tutorial_files/DriftReport/main.html) in your browser (Firefox works best) to view the report.
+You can now open the file [../../tutorial_files/DriftReport/main.html](../../tutorial_files/DriftReport/main.html) in your browser (Firefox works best) to view the report.

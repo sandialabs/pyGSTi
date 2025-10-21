@@ -14,7 +14,7 @@ kernelspec:
 # Using Essential Objects
 Now that we've covered what [circuits, models, and data sets](01-Essential-Objects) are, let's see what we can do with them!  This tutorial is intended to be an overview of the things that pyGSTi is able to do, with links to more detailed explanations and demonstrations as is appropriate.  We begin with the simpler applications and proceed to the more complex ones.  Here's a table of contents to give you a sense of what's here and so you can skip around if you'd like.  Each of the sections here can more-or-less stand on its own.
 
-We'll begin by setting up a `Workspace` so we can display pretty interactive figures inline (see the [intro to Workspaces tutorial](reporting/Workspace.ipynb) for more details).
+We'll begin by setting up a `Workspace` so we can display pretty interactive figures inline (see the [intro to Workspaces tutorial](../reporting/Workspace) for more details).
 
 ```{code-cell} ipython3
 import pygsti
@@ -24,7 +24,7 @@ ws.init_notebook_mode(autodisplay=True)
 ```
 
 ## Computing circuit outcome probabilities
-One of the simplest uses of pyGSTi is to construct a `Model` and use it to compute the outcome probabilities of one or more `Circuit` objects.  This is generally accomplished using the `.probabilities` method of a `Model` object as shown below (this was also demonstrated in the [essential objects tutorial](01-EssentialObjects.ipynb)).  The real work  is in constructing the `Circuit` and `Model` objects, which is covered in more detail in the [circuits tutorial](objects/Circuit.ipynb) and in the [explicit-model](objects/ExplicitModel.ipynb) (best for 1-2 qubits) and [implicit-model](objects/ImplicitModel.ipynb) (best for 3+ qubits) tutorials.  For more information on circuit simulation, see the [circuit simulation tutorial](algorithms/CircuitSimulation.ipynb).
+One of the simplest uses of pyGSTi is to construct a `Model` and use it to compute the outcome probabilities of one or more `Circuit` objects.  This is generally accomplished using the `.probabilities` method of a `Model` object as shown below (this was also demonstrated in the [essential objects tutorial](01-Essential-Objects)).  The real work  is in constructing the `Circuit` and `Model` objects, which is covered in more detail in the [circuits tutorial](../objects/Circuit) and in the [explicit-model](../objects/ExplicitModel) (best for 1-2 qubits) and [implicit-model](../objects/ImplicitModel) (best for 3+ qubits) tutorials.  For more information on circuit simulation, see the [circuit simulation tutorial](../simulation/CircuitSimulation).
 
 ```{code-cell} ipython3
 pspec = pygsti.processors.QubitProcessorSpec(num_qubits=2, gate_names=['Gx', 'Gy', 'Gcnot'],
@@ -79,9 +79,9 @@ Gx:0Gy:1@(0,1)       20  27  23  30
 Gx:0^4@(0,1)         85   3  10   2
 Gx:0Gcnot:0:1@(0,1)  45   1   4  50
 """
-with open("tutorial_files/Example_Short_Dataset.txt","w") as f:
+with open("../../tutorial_files/Example_Short_Dataset.txt","w") as f:
     f.write(dataset_txt)
-ds = pygsti.io.read_dataset("tutorial_files/Example_Short_Dataset.txt")
+ds = pygsti.io.read_dataset("../../tutorial_files/Example_Short_Dataset.txt")
 
 def compare(prefix, model, dataset):
     chi2 = pygsti.tools.chi2(model, dataset)
@@ -108,13 +108,13 @@ print("2DeltaLogL per circuit = ", 2*(max_logl_percircuit - logl_percircuit))
 #ws.ColorBoxPlot('logl', pygsti.obj.LsGermsSerialStructure([0],)) TODO
 ```
 
-It's possible to display model testing results within figure and HTML reports too.  For more information on model testing, especially alongside GST, see the [tutorial on model testing](algorithms/ModelTesting.ipynb)(using protocol objects) and the [functions for model testing](algorithms/ModelTesting-functions.ipynb).
+It's possible to display model testing results within figure and HTML reports too.  For more information on model testing, especially alongside GST, see the [tutorial on model testing](../utilities/ModelTesting)(using protocol objects) and the [functions for model testing](../utilities/ModelTesting-functions).
 
 ## Randomized Benchmarking (RB)
-PyGSTi is able to perform two types of Randomized Benchmarking (RB).  First, there is the [standard Clifford-circuit-based RB](http://journals.aps.org/prl/abstract/10.1103/PhysRevLett.106.180504) protocol first defined by Magesan et al. Second, there is ["Direct RB"](https://arxiv.org/abs/1807.07975), which is particularly suited to multi-qubit benchmarking.  More details on using these protocols (e.g. how to generate a set of RB sequences) see the separate [RB overview tutorial](algorithms/RB-Overview.ipynb) and related tutorials.
+PyGSTi is able to perform two types of randomized benchmarking (RB).  First, there is the [standard Clifford-circuit-based RB](http://journals.aps.org/prl/abstract/10.1103/PhysRevLett.106.180504) protocol first defined by Magesan et al. Second, there is ["Direct RB"](https://arxiv.org/abs/1807.07975), which is particularly suited to multi-qubit benchmarking.  More details on using these protocols (e.g. how to generate a set of RB sequences) see the separate [RB overview tutorial](../rb/Overview) and related tutorials.
 
 ## Robust Phase Estimation (RPE)
-The Robust Phase Estimation (RPE) protocol is designed to efficiently estimate a few specific parameters of certain single-qubit models.  Below we demonstrate how to run RPE with the single-qubit model containing $X(\pi/2)$ and $Y(\pi/2)$ gates.  The list of requisite circuits is given by `make_rpe_angle_string_list_dict` and simulated noisy data is analyzed using `analyze_rpe_data`.  For more information on running RPE see the [RPE tutorial](algorithms/RobustPhaseEstimation.ipynb).
+The Robust Phase Estimation (RPE) protocol is designed to efficiently estimate a few specific parameters of certain single-qubit models.  Below we demonstrate how to run RPE with the single-qubit model containing $X(\pi/2)$ and $Y(\pi/2)$ gates.  The list of requisite circuits is given by `make_rpe_angle_string_list_dict` and simulated noisy data is analyzed using `analyze_rpe_data`.  For more information on running RPE see the [RPE tutorial](../protocols/RobustPhaseEstimation).
 
 ```{code-cell} ipython3
 from pygsti.extras import rpe
@@ -144,7 +144,7 @@ print('theta_true - theta_est_final =',resultsRPE['thetaErrorList'][-1])
 ```
 
 ## Data set comparison tests
-The `DataComparator` object is designed to check multiple `DataSet` objects for consistency.  This procedure essentially answers the question: "Is it better to describe `DataSet`s $A$ and $B$ as having been generated by the *same* set of probabilities or *different* sets?".  This quick test is useful for detecting drift in experimental setups from one round of data-taking to the next, and doesn't require constructing any `Model` objects.  Below, we generate three `DataSet` objects - two from the same underlying model and one from a different model - and show that we can detect this difference.  For more information, see the [tutorial on data set comparison](algorithms/DataSetComparison.ipynb).
+The `DataComparator` object is designed to check multiple `DataSet` objects for consistency.  This procedure essentially answers the question: "Is it better to describe `DataSet`s $A$ and $B$ as having been generated by the *same* set of probabilities or *different* sets?".  This quick test is useful for detecting drift in experimental setups from one round of data-taking to the next, and doesn't require constructing any `Model` objects.  Below, we generate three `DataSet` objects - two from the same underlying model and one from a different model - and show that we can detect this difference.  For more information, see the [tutorial on data set comparison](../utilities/DatasetComparison).
 
 ```{code-cell} ipython3
 from pygsti.modelpacks import smq1Q_XYI
@@ -177,9 +177,9 @@ ws.DatasetComparisonHistogramPlot(comparator_A1_B, log=True, display='pvalue', s
 ```
 
 ## Gate Set Tomography (GST)
-Gate set tomography (GST) is a protocol designed to solve the inverse of "[use this model to simulate observed data](#simulating_data)"; its goal is to *infer a model based on actual observed data*.  From a functional perspective, GST can be viewed as an inverse of the `generate_fake_data` function we've used a bunch above: it takes a `DataSet` and produces a `Model`.
+Gate set tomography (GST) is a protocol designed to solve the inverse of "use this model to simulate observed data"; its goal is to *infer a model based on actual observed data*.  From a functional perspective, GST can be viewed as an inverse of the `generate_fake_data` function we've used a bunch above: it takes a `DataSet` and produces a `Model`.
 
-Because this inverse problem traverses some technical challenges, GST also requires a *structured* set of `Circuits` to work reliably and efficiently.  Here enters the concepts of "fiducial" and "germ" circuits, as well as a list of "maximum-repeated-germ-lengths" or just "max-lengths".  For details, see the [tutorial on the structure of GST circuits](objects/advanced/GSTCircuitConstruction.ipynb) and the [tutorial on fiducial and germ selection](algorithms/advanced/GST-FiducialAndGermSelection.ipynb).  The important takeaway is that the GST circuits are described below by the 4 variables: `prep_fiducials`, `meas_fiducials`, `germs`, and `maxLengths`.
+Because this inverse problem traverses some technical challenges, GST also requires a *structured* set of `Circuits` to work reliably and efficiently.  Here enters the concepts of "fiducial" and "germ" circuits, as well as a list of "maximum-repeated-germ-lengths" or just "max-lengths".  For details, see the [tutorial on the structure of GST circuits](../gst/CircuitConstruction) and the [tutorial on fiducial and germ selection](../gst/FiducialAndGermSelection).  The important takeaway is that the GST circuits are described below by the 4 variables: `prep_fiducials`, `meas_fiducials`, `germs`, and `maxLengths`.
 
 Below, we generate a set of GST circuits and simulate them using a noisy (slightly depolarized) model of the some ideal operations to get a `DataSet`.
 
@@ -211,11 +211,11 @@ print("2DeltaLogL(true, data): ", pygsti.tools.two_delta_logl(mdl_true, ds))
 print("2DeltaLogL(ideal, data): ", pygsti.tools.two_delta_logl(mdl_ideal, ds))
 ```
 
-[Recall](#model_testing) that a lower $2\Delta\log\mathcal{L}$ means a better agreement between model and data. Note that the GST estimate fits the data best (even slightly better than the *true* model, because it agrees better with the finite sample noise), and the GST estimate is much better than the ideal model.
+Recall that a lower $2\Delta\log\mathcal{L}$ means a better agreement between model and data. Note that the GST estimate fits the data best (even slightly better than the *true* model, because it agrees better with the finite sample noise), and the GST estimate is much better than the ideal model.
 
-GST is essentially an automated model-tester that keeps modifying and testing models until it finds one the agrees with the data as well any model of the specified type can.  To learn more about how to run GST using functions that act on essential objects see the [function-based GST overview tutorial](algorithms/GST-Overview-functionbased.ipynb) and the [GST driver functions tutorial](algorithms/GST-Driverfunctions.ipynb).  GST can also be run in a more object-oriented way, using `Protocol` objects as described in the [GST overview tutorial](algorithms/GST-Overview.ipynb).
+GST is essentially an automated model-tester that keeps modifying and testing models until it finds one the agrees with the data as well any model of the specified type can. In modern ``pyGSTi``, GST is typically run in an object-oriented way using `Protocol` objects as described in the [GST overview tutorial](../gst/Overview). To learn more about how to run GST by directly using functions that act on essential objects see the [function-based GST overview tutorial](../gst/Overview-functionbased).
 
-The output of GST is an entire `Model` (contrasted with the one or several numbers of RB and RPE), there are many ways to assess and understand the performance of a QIP based on GST results.  The `ModelEstimateResults` object in pyGSTi is responsible for holding the GST and other model-based protocol results.  The structure and use of a `ModelEstimateResults` object is explained in the [Results tutorial](objects/advanced/Results.ipynb).  A common use for results objects is to generate "reports".  PyGSTi has the ability to generate HTML reports (a directory of files) whose goal is to display relevant model vs. data metrics such as $2\Delta\log\mathcal{L}$ as well as model vs. model metrics like process fidelity and diamond distance. To learn more about generating these "model-explaining" reports see the [report generation tutorial](reporting/ReportGeneration.ipynb).
+The output of GST is an entire `Model` (contrasted with the one or several numbers of RB and RPE), there are many ways to assess and understand the performance of a QIP based on GST results.  The `ModelEstimateResults` object in pyGSTi is responsible for holding the GST and other model-based protocol results.  The structure and use of a `ModelEstimateResults` object is explained in the [Results tutorial](../objects/Results).  A common use for results objects is to generate "reports".  PyGSTi has the ability to generate HTML reports (a directory of files) whose goal is to display relevant model vs. data metrics such as $2\Delta\log\mathcal{L}$ as well as model vs. model metrics like process fidelity and diamond distance. To learn more about generating these "model-explaining" reports see the [report generation tutorial](../reporting/ReportGeneration).
 
 Here's an example of how to generate a report (it will auto-open in a new tab; if it doesn't display **try it in FireFox**):
 
@@ -226,20 +226,13 @@ pygsti.report.construct_standard_report(
 ```
 
 ## Idle tomography
-Idle tomography estimates the error rates of an $n$-qubit idle operation using relatively few sequences.  To learn more about how to use it, see the [idle tomography tutorial](algorithms/IdleTomography.ipynb).
+Idle tomography estimates the error rates of an $n$-qubit idle operation using relatively few sequences.  To learn more about how to use it, see the [idle tomography tutorial](../protocols/IdleTomography).
 
 ## Drift Characterization
-Time-series data can be analyzed for significant indications of drift (time variance in circuit outcome probabilities).  See the [tutorial on drift characterization](algorithms/DriftCharacterization.ipynb) for more details.
+Time-series data can be analyzed for significant indications of drift (time variance in circuit outcome probabilities).  See the [tutorial on drift characterization](../protocols/DriftCharacterization) for more details.
 
 ## Time-dependent gate set tomography
-pyGSTi has recently added support for time-dependent models and data sets, allowing the GST to be performed in a time-dependent fashion.  See the [time-dependent GST tutorial](algorithms/advanced/Time-dependent-GST.ipynb) for more details.
-
-## Multi-qubit tomography
-pyGSTi contains all the ingredients necessary for multi-qubit tomography, and this functionality is currently in the beta-testing stages.  Stay tuned!
-
-```{code-cell} ipython3
-#Coming soon
-```
+pyGSTi has recently added support for time-dependent models and data sets, allowing the GST to be performed in a time-dependent fashion.  See the [time-dependent GST tutorial](../gst/TimeDependent) for more details.
 
 ## What's next?
-This concludes our overview of what can be done with pyGSTi.  There are a few minor topics that haven't been touched on that we've collected within the next tutorial on [miscellaneous topics](03-Miscellaneous.ipynb), so you might want to take a quick look there to see if there's anything you're especially interested in.
+This concludes our overview of what can be done with pyGSTi. The rest of this documentation is split into in-depth tutorials on: the available protocols; various objects, including the aforementioned "essential" objects and other lower-level objects; details and options for forward simulators; generating human-readable reports; serialization, deserialization, and file I/O; and, last but not least, some end-to-end examples for common workflows.

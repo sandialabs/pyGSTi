@@ -15,7 +15,7 @@ kernelspec:
 
 +++
 
-This tutorial contains a few details on how to run [Clifford Randomized Benchmarking](http://journals.aps.org/prl/abstract/10.1103/PhysRevLett.106.180504) that are not covered in the [RB overview tutorial](RB-Overview.ipynb). 
+This tutorial contains a few details on how to run [Clifford Randomized Benchmarking](http://journals.aps.org/prl/abstract/10.1103/PhysRevLett.106.180504) that are not covered in the [RB overview tutorial](Overview). 
 
 
 ## What is Clifford RB? 
@@ -31,11 +31,11 @@ import numpy as np
 
 ## Creating a Clifford RB experiment design
 
-The only aspects of running Clifford RB with pyGSTi that are not covered in the [RB overview tutorial](RB-Overview.ipynb) are some subtleties in generating a Clifford RB experiment design (and what those subtleties mean for interpretting the results). To cover these subtleties, here we go through the inputs used to generate a Clifford RB experiment design in more detail.
+The only aspects of running Clifford RB with pyGSTi that are not covered in the [RB overview tutorial](Overview) are some subtleties in generating a Clifford RB experiment design (and what those subtleties mean for interpretting the results). To cover these subtleties, here we go through the inputs used to generate a Clifford RB experiment design in more detail.
 
 ### 1. Generic RB inputs
 
-The first inputs to create an RB experiment design are the same as in all RB protocols, and these are covered in the [RB overview tutorial](RB-Overview.ipynb). They are:
+The first inputs to create an RB experiment design are the same as in all RB protocols, and these are covered in the [RB overview tutorial](Overview). They are:
 
 - The device to benchmark (`pspec`).
 - The "RB depths" at which we will sample circuits (`depths`). For Clifford RB on $n$ qubits, the RB depth is the number of (uncompiled) $n$-qubit Clifford gates in the sequence minus two. This convention is chosen so that zero is the minimum RB depth for all RB methods in pyGSTi.
@@ -67,7 +67,7 @@ randomizeout = True
 ```
 
 ### 3. The Clifford compilation algorithm
-To generate a Clifford RB circuit in terms of native gates, it is necessary to decompose each $n$-qubit Clifford gate into the native gates. pyGSTi has a few different Clifford gate compilation algorithms, that can be accessed via the `compilerargs` optional argument. Note: **The Clifford RB error rate is compiler dependent!** So it is not possible to properly interpret the Clifford RB error rate without understanding at least some aspects of the compilation algorithm (e.g., the mean two-qubit gate count in a compiled $n$-qubit Clifford circuit). This is one of the reasons that [Direct RB](RB-DirectRB.ipynb) is arguably a preferable method to Clifford RB.
+To generate a Clifford RB circuit in terms of native gates, it is necessary to decompose each $n$-qubit Clifford gate into the native gates. pyGSTi has a few different Clifford gate compilation algorithms, that can be accessed via the `compilerargs` optional argument. Note: **The Clifford RB error rate is compiler dependent!** So it is not possible to properly interpret the Clifford RB error rate without understanding at least some aspects of the compilation algorithm (e.g., the mean two-qubit gate count in a compiled $n$-qubit Clifford circuit). This is one of the reasons that [Direct RB](DirectRB) is arguably a preferable method to Clifford RB.
 
 None of the Clifford compilation algorithms in pyGSTi are a simple look-up table with some optimized property (e.g., minimized two-qubit gate count or depth). Look-up tables like this are typically used for 1- and 2-qubit Clifford RB experiments, but we instead used a method that scales to many qubits.
 
@@ -92,12 +92,12 @@ def simulate_taking_data(data_template_filename):
 ```{code-cell} ipython3
 design = pygsti.protocols.CliffordRBDesign(pspec, compilations, depths, k, qubit_labels=qubits, 
                                            randomizeout=randomizeout, citerations=citerations)
-pygsti.io.write_empty_protocol_data('../tutorial_files/test_crb_dir', design, clobber_ok=True)
+pygsti.io.write_empty_protocol_data('../../tutorial_files/test_crb_dir', design, clobber_ok=True)
 
 # -- fill in the dataset file in tutorial_files/test_rb_dir/data/dataset.txt --
-simulate_taking_data('../tutorial_files/test_crb_dir/data/dataset.txt') # REPLACE with actual data-taking
+simulate_taking_data('../../tutorial_files/test_crb_dir/data/dataset.txt') # REPLACE with actual data-taking
 
-data = pygsti.io.read_data_from_dir('../tutorial_files/test_crb_dir')
+data = pygsti.io.read_data_from_dir('../../tutorial_files/test_crb_dir')
 
 protocol = pygsti.protocols.RB() 
 results = protocol.run(data)
@@ -158,11 +158,11 @@ def simulate_taking_data_irb(data_template_filename):
 ```
 
 ```{code-cell} ipython3
-pygsti.io.write_empty_protocol_data('../tutorial_files/test_irb_dir', irb_design, clobber_ok=True)
+pygsti.io.write_empty_protocol_data('../../tutorial_files/test_irb_dir', irb_design, clobber_ok=True)
 
 # -- fill in the dataset file in tutorial_files/test_rb_dir/data/dataset.txt --
-simulate_taking_data_irb('../tutorial_files/test_irb_dir/data/dataset.txt') # REPLACE with actual data-taking
-data_irb = pygsti.io.read_data_from_dir('../tutorial_files/test_irb_dir')
+simulate_taking_data_irb('../../tutorial_files/test_irb_dir/data/dataset.txt') # REPLACE with actual data-taking
+data_irb = pygsti.io.read_data_from_dir('../../tutorial_files/test_irb_dir')
 ```
 
 ```{code-cell} ipython3
@@ -200,11 +200,11 @@ print(results_irb['crb'].for_protocol['RandomizedBenchmarking'].fits['full'].est
 Finally, we'll note that this results object for IRB can be written to and read from disk using the `write` method and the function `pygsti.io.read_results_from_dir`, respectively.
 
 ```{code-cell} ipython3
-results_irb.write('../tutorial_files/test_irb_results')
+results_irb.write('../../tutorial_files/test_irb_results')
 ```
 
 ```{code-cell} ipython3
-irb_results_from_disk = pygsti.io.read_results_from_dir('../tutorial_files/test_irb_results')
+irb_results_from_disk = pygsti.io.read_results_from_dir('../../tutorial_files/test_irb_results')
 print(irb_results_from_disk['crb'].for_protocol['RandomizedBenchmarking'].fits['full'].estimates)
 #As expected these values are the same as above when we accessed them in `results_irb`
 ```

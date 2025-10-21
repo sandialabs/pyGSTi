@@ -13,7 +13,7 @@ kernelspec:
 
 # Fiducial and Germ Selection
 
-This notebook demonstrates how to generate sets of fiducial and germ sequences which form the building blocks of the operation sequences used by long-sequence GST.  As described in [GST circuits tutorial](../../objects/advanced/GSTCircuitConstruction.ipynb), by structuring the GST sequences as
+This notebook demonstrates how to generate sets of fiducial and germ sequences which form the building blocks of the operation sequences used by long-sequence GST.  As described in [GST circuits tutorial](CircuitConstruction), by structuring the GST sequences as
 
 `preparation_fiducial + repeated_germ + measurement_fiducial`
 

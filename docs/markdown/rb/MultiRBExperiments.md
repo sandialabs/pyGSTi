@@ -15,7 +15,7 @@ kernelspec:
 
 +++
 
-This tutorial shows how to easily run multiple RB experiments concurrently. This includes running RB on different subsets of a device, as well as running [simultaneous RB]() experiments. Here we'll demonstrate generating an experiment to run 1, 2, 3 and 4 qubit RB in sequence (i.e., separately), as well as running 1-qubit RB in parallel on all the qubits (i.e., simultaneously).
+This tutorial shows how to easily run multiple RB experiments concurrently. This includes running RB on different subsets of a device, as well as running [simultaneous RB](https://journals.aps.org/prl/abstract/10.1103/PhysRevLett.122.200502) experiments. Here we'll demonstrate generating an experiment to run 1, 2, 3 and 4 qubit RB in sequence (i.e., separately), as well as running 1-qubit RB in parallel on all the qubits (i.e., simultaneously).
 
 Note that this functionality is not specific to RB: similar code could be used to combine multiple GST experiments, or GST and RB experiments, etc.
 
@@ -95,12 +95,12 @@ def simulate_taking_data(data_template_filename):
 ```{code-cell} ipython3
 combdesign = pygsti.protocols.CombinedExperimentDesign(designs)
 
-pygsti.io.write_empty_protocol_data('../tutorial_files/test_combrb_dir', combdesign, clobber_ok=True)
+pygsti.io.write_empty_protocol_data('../../tutorial_files/test_combrb_dir', combdesign, clobber_ok=True)
 
 # -- fill in the dataset file in tutorial_files/test_rb_dir/data/dataset.txt --
-simulate_taking_data('../tutorial_files/test_combrb_dir/data/dataset.txt') # REPLACE with actual data-taking
+simulate_taking_data('../../tutorial_files/test_combrb_dir/data/dataset.txt') # REPLACE with actual data-taking
 
-data = pygsti.io.read_data_from_dir('../tutorial_files/test_combrb_dir')
+data = pygsti.io.read_data_from_dir('../../tutorial_files/test_combrb_dir')
 ```
 
 We can then run any protocols that we want to on the imported data. Because we set `add_default_protocol=True` when creating the protocols, the imported data contains the `RB` protocols ready to run (with the appropriate optional arguments set for Mirror RB). We can run all these default protocols by creating a `pygsti.protocols.DefaultRunner()` protocol, and running it on the data.
@@ -136,4 +136,4 @@ for i in ['1Q-RB', '2Q-RB', '3Q-RB' , '4Q-RB']:
     ws.RandomizedBenchmarkingPlot(results[i].for_protocol['RB'])
 ```
 
-**For more information** and examples on running multiple benchmarking protocols on a processor, check out the [volumetric benchmarking tutorial](VolumetricBenchmarks.ipynb).
+**For more information** and examples on running multiple benchmarking protocols on a processor, check out the [volumetric benchmarking tutorial](../protocols/VolumetricBenchmarks).
