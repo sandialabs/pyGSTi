@@ -24,6 +24,7 @@ from pygsti.models.gaugegroup import (
     TrivialGaugeGroupElement as _TrivialGaugeGroupElement,
     GaugeGroupElement as _GaugeGroupElement
 )
+from pygsti.models import ExplicitOpModel
 from pygsti.modelmembers.operations import LinearOperator as _LinearOperator
 
 from typing import Callable, Union, Optional
@@ -628,7 +629,7 @@ def _create_objective_fn(model, target_model, item_weights: Optional[dict[LabelL
             # ^ It would be equivalent to set this to a pair of IdentityOperator objects.
 
         def _objective_fn(gauge_group_el, oob_check):
-            mdl = _transform_with_oob_check(model, gauge_group_el, oob_check)
+            mdl : ExplicitOpModel = _transform_with_oob_check(model, gauge_group_el, oob_check)
             mdl_ops : dict[_baseobjs.Label, _LinearOperator] = mdl._excalc().operations
             tgt_ops : dict[_baseobjs.Label, _LinearOperator] = dict()
             if target_model is not None:
@@ -656,7 +657,7 @@ def _create_objective_fn(model, target_model, item_weights: Optional[dict[LabelL
                 else:
                     non_gates = {'spam'}.union(set(mdl.preps)).union(set(mdl.povms))
                     temp_wts = {k: (0.0 if k in non_gates else v) for (k, v) in item_weights.items()}
-                    val = mdl.frobeniusdist(target_model, transform_mx_arg, temp_wts, n_leak)
+                    val = mdl.frobeniusdist(target_model, transform_mx_arg, temp_wts)
                 if "squared" in gates_metric:
                     val = val ** 2
                 ret += val
