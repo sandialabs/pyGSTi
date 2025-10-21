@@ -139,6 +139,4 @@ plt.title('Scatter plot comparing param vs. non-param bootstrapping error bars.'
 plt.show()
 ```
 
-```{code-cell} ipython3
 
-```

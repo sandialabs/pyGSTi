@@ -14,7 +14,9 @@ kernelspec:
 # Running experiments on IBM Q Processors
 This tutorial will demonstrate how to run an experiment on IBM Q Processors. To do so you will need [QisKit](https://qiskit.org/) installed and an [IBM Q account](https://quantum-computing.ibm.com/).
 
-<font style="color:red">There have been major changes to `IBMQExperiment` as of pygsti 0.9.13. This is due to Qiskit 1.0 and subsequent deprecations of V1 backends and `qiskit-ibm-provider`. The `IBMQExperiment` class only supports V2 backends and is based on `qiskit-ibm-runtime`.
+```{warning}
+There have been major changes to `IBMQExperiment` as of pygsti 0.9.13. This is due to Qiskit 1.0 and subsequent deprecations of V1 backends and `qiskit-ibm-provider`. The `IBMQExperiment` class only supports V2 backends and is based on `qiskit-ibm-runtime`.
+```
 
 For details on how to migrate from `qiskit<1` or `qiskit-ibm-provider`, see [this blog post](https://www.ibm.com/quantum/blog/transition-to-1), [this Qiskit 1.0 migration guide](https://docs.quantum.ibm.com/api/migration-guides/qiskit-1.0-features), or [this Qiskit Runtime migration guide](https://docs.quantum.ibm.com/api/migration-guides/qiskit-runtime).</font>
 
@@ -86,8 +88,6 @@ print(backend)
 ```
 
 ## Make a ProcessorSpec for IBM Q's processor.
-
-+++
 
 Next we create a ProcessorSpec for the device you're going to run on. This ProcessorSpec must also contain the details needed for creating the pyGSTi experiment design that you want to run, which you can tweak by varying the optional arguments to the `devices.create_processor_spec()` function.
 
@@ -300,6 +300,4 @@ for i in data.keys():
     ws.RandomizedBenchmarkingPlot(results[i])
 ```
 
-```{code-cell} ipython3
 
-```

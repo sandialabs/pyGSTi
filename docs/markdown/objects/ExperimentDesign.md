@@ -92,8 +92,6 @@ edesign_from_dir.all_circuits_needing_data
 ## Protocol-specific experiment designs
 Some protocols, such as gate set tomography (GST) and randomized benchmarking (RB) require additional information about the circuits that were performed in order to perform their analysis.
 
-+++
-
 ### Gate set tomography
 The `GateSetTomographyDesign` class defines an experiment design with all the necessary information to run the GST protocol.  It is derived from `CircuitListsDesign`, and holds a minimal amount of additional information, namely a *target model*.  
 
@@ -134,7 +132,7 @@ gst_design3 = pygsti.protocols.GateSetTomographyDesign(pspec, [circuits1, circui
 gst_design3.all_circuits_needing_data
 ```
 
-### Randomized Benchmarking
+### Randomized benchmarking
 The `CliffordRBDesign`, `DirectRBDesign`, and `MirrorRBDesign` classes define experiment designs with all the necessary information to run the randomized benchmarking (RB) protocol using different ensembles of circuits.  These classes are also derived from `CircuitListsDesign`, and hold additionally meta-data needed to run the RB protocol (primarily what the correct outcome of each random circuit is).
 
 We create these experiment designs using a processor specification and counts of the depths and number of random circuits per depth that should be generated.  The cell below demonstrates this for the Clifford RB case.
@@ -155,8 +153,6 @@ rb_design = pygsti.protocols.CliffordRBDesign(pspec, compilations, depths, circu
 ```
 
 The `DirectRBDesign` and `MirrorRBDesign` classes are used similarly.
-
-+++
 
 ## Simultaneous and combined experiment designs
 It is not uncommon to run multiple characterization protocols on a single processor, and it can be desirable to run circuits for multiple protocols in a single round of data-taking.  The `CombinedExperimentDesign` and `SimultaneousExperimentDesign` classes allow you to build a *hierarchy* of nested experiment designs that facilitate a multiple-protocols-on-one-processor paradigm.
@@ -246,8 +242,6 @@ sim_design2.all_circuits_needing_data
 
 Note that all of the above circuits have qubit labels `(0,1,2)` even though the simultaneous design was only given a single sub-design with circuits on qubit `0`.
 
-+++
-
 ## Loading and saving experiment designs
 Once an experiment design is created, loading and saving it to a directory is easy.  Experiment designs write their data to the `edesign` sub-directory beneath the specified root directory.  Combined and simultaneous designs write to and load from a directory structure that mimics their structure.  That is, there will be a sub-directory for each sub-design.
 
@@ -283,6 +277,4 @@ edtools.calculate_edesign_estimated_runtime(gst_design,
     circuits_per_batch=200)
 ```
 
-```{code-cell} ipython3
 
-```

@@ -111,6 +111,3 @@ We're done creating our 2-qubit model, `target_model`, printed below.  To run 2-
 print(target_model)
 ```
 
-```{code-cell} ipython3
-
-```

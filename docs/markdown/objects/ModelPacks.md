@@ -46,8 +46,6 @@ mdl_TP = smq1Q_XYI.target_model("full TP")
 
 3. **It has gate names that are tuples of the form (name, *qubits*).**  The gate names (keys of the models `.operations` dictionary) use pyGSTi's multi-qubit labeling convention, e.g. `("Gx",0)`, `("Gx",1)`, or `("Gcnot",0,1)`.  Note that the label for an idle is just an empty tuple, indicating an empty circuit layer.  If you need one of the old standard modules that uses simple strings as gate labels, you'll need to import the `std` analogue from `pygsti.modelpacks.legacy` (e.g. `from pygsti.modelpacks.legacy import std1Q_XYI`).
 
-+++
-
 ## General additional quantities
 For convenience standard modules contain `description` and `gates` members giving a simple text description of the standard module's target model and its gates:
 
@@ -60,7 +58,7 @@ smq1Q_XYI.gates
 ```
 
 ## Quantities for running GST
-In addition to a target `Model`, a GST-type model pack (most of them are this type) contains a number of `Circuit` list generating functions used for running Gate Set Tomography (GST).  All of these functions (like `target_model`) take a `qubit_labels` argument that can specify a non-default set of qubit labels to use.  The circuit-list functions include:
+In addition to a target `Model`, a GST-type model pack (most of them are this type) contains a number of `Circuit` list generating functions used for running gate set tomography (GST).  All of these functions (like `target_model`) take a `qubit_labels` argument that can specify a non-default set of qubit labels to use.  The circuit-list functions include:
 - preparation fiducials: `prep_fiducials`
 - measurement (effect) fiducials: `meas_fiducials`
 - germ sequences: `germs`

@@ -354,6 +354,3 @@ pprint(np.sqrt(2)*final_model.to_vector()[4:8])
 pprint(np.sqrt(2)*final_model.to_vector()[8:12])
 ```
 
-```{code-cell} ipython3
-
-```

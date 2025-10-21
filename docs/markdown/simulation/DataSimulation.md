@@ -141,6 +141,4 @@ data_df = mysim.apply(edesign_df)
 data_df
 ```
 
-```{code-cell} ipython3
 
-```

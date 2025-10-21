@@ -11,49 +11,34 @@ kernelspec:
   name: python3
 ---
 
-+++ {"deletable": true, "editable": true}
-
 # Model Selection (alpha)
 
-```{warning} Currently in development.  This example doesn't work```
+```{warning}
+Currently in development.  This example doesn't work
+```
+
 Some parts of `pygsti` are works-in-progress. Here, we investigate how to do the task of "model selection" within GST, essentially answering the question "Can we do a better job of modeling the experiment by changing the assumptions within GST?".
 
-+++ {"deletable": true, "editable": true}
-
 ## Testing variable-gateset-dimension GST with model selection
-
-+++ {"deletable": true, "editable": true}
 
 ###     Setup
 
 ```{code-cell} ipython3
-:deletable: true
-:editable: true
 :tags: [nbval-skip]
 
 from __future__ import print_function
 ```
 
 ```{code-cell} ipython3
----
-deletable: true
-editable: true
-jupyter:
-  outputs_hidden: false
-tags: [nbval-skip]
----
+:tags: [nbval-skip]
+
 import pygsti
 from pygsti.construction import std1Q_XYI
 ```
 
 ```{code-cell} ipython3
----
-deletable: true
-editable: true
-jupyter:
-  outputs_hidden: false
-tags: [nbval-skip]
----
+:tags: [nbval-skip]
+
 #Load gateset and some string lists
 gs_target = std1Q_XYI.gs_target
 fiducialList = std1Q_XYI.fiducials
@@ -63,13 +48,8 @@ expList = [1,2,4]
 ```
 
 ```{code-cell} ipython3
----
-deletable: true
-editable: true
-jupyter:
-  outputs_hidden: false
-tags: [nbval-skip]
----
+:tags: [nbval-skip]
+
 #Create some testing gate string lists
 lgstList = pygsti.construction.list_lgst_gatestrings(specs, gs_target.gates.keys())
 lsgstLists = [ lgstList[:] ]
@@ -83,13 +63,8 @@ dsList = pygsti.remove_duplicates( lsgstLists[-1] )
 ```
 
 ```{code-cell} ipython3
----
-deletable: true
-editable: true
-jupyter:
-  outputs_hidden: false
-tags: [nbval-skip]
----
+:tags: [nbval-skip]
+
 #Test on fake data by depolarizing target set, increasing its dimension,
 # and adding leakage to the gates into the new dimension.
 
@@ -117,13 +92,8 @@ dsFake5 = pygsti.construction.simulate_data(gs_dataGen5, dsList, nSamples=100000
 ```
 
 ```{code-cell} ipython3
----
-deletable: true
-editable: true
-jupyter:
-  outputs_hidden: false
-tags: [nbval-skip]
----
+:tags: [nbval-skip]
+
 print("Number of gates                        = ",len(gs_target.gates.keys()))
 print("Number of fiducials                    =",len(fiducialList))
 print("Maximum length for a gate string in ds =",max(map(len,dsList)))
@@ -131,18 +101,11 @@ print("Number of LGST strings                 = ",len(lgstList))
 print("Number of LSGST strings                = ",map(len,lsgstLists))
 ```
 
-+++ {"deletable": true, "editable": true}
-
 ### Test using dimension-4 fake data
 
 ```{code-cell} ipython3
----
-deletable: true
-editable: true
-jupyter:
-  outputs_hidden: false
-tags: [nbval-skip]
----
+:tags: [nbval-skip]
+
 #Run LGST to get an initial estimate for the gates in gs_target based on the data in ds
 # NOTE: with nSamples less than 1M (100K, 10K, 1K) this routine will choose a higher-than-4 dimensional gateset
 ds = dsFake4
@@ -161,28 +124,16 @@ gs_lsgst = pygsti.do_iterative_mc2gst_with_model_selection(ds, gs_lgst4, 1, lsgs
 ```
 
 ```{code-cell} ipython3
----
-deletable: true
-editable: true
-jupyter:
-  outputs_hidden: false
-tags: [nbval-skip]
----
+:tags: [nbval-skip]
+
 print(gs_lsgst)
 ```
-
-+++ {"deletable": true, "editable": true}
 
 ### Test using dimension-5 fake data
 
 ```{code-cell} ipython3
----
-deletable: true
-editable: true
-jupyter:
-  outputs_hidden: false
-tags: [nbval-skip]
----
+:tags: [nbval-skip]
+
 #Run LGST to get an initial estimate for the gates in gs_target based on the data in ds
 ds = dsFake5
 gs_lgst4 = pygsti.run_lgst(ds, specs, targetGateset=gs_target, svdTruncateTo=4, verbosity=3)
@@ -199,22 +150,7 @@ gs_lsgst = pygsti.do_iterative_mc2gst_with_model_selection(ds, gs_lgst4, 1, lsgs
 ```
 
 ```{code-cell} ipython3
----
-deletable: true
-editable: true
-jupyter:
-  outputs_hidden: false
-tags: [nbval-skip]
----
+:tags: [nbval-skip]
+
 print(gs_lsgst)
-```
-
-```{code-cell} ipython3
----
-deletable: true
-editable: true
-jupyter:
-  outputs_hidden: false
----
-
 ```

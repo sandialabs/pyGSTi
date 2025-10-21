@@ -118,6 +118,4 @@ ex_mdl1.write('../../example_files/ex_mdl1.json')
 ln_mdl1.write('../../example_files/ln_mdl1.json')
 ```
 
-```{code-cell} ipython3
 
-```

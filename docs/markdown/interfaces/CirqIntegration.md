@@ -11,11 +11,7 @@ kernelspec:
   name: api_updates
 ---
 
-+++ {"colab_type": "text", "id": "DmNaCESptyWj"}
-
 # Cirq Integration
-
-+++
 
 This notebook shows a simple example of how to use pyGSTi with Cirq. It has three sections:
 
@@ -25,10 +21,6 @@ This notebook shows a simple example of how to use pyGSTi with Cirq. It has thre
 4. Shows how the Cirq circuits can be run and the results loaded back into pyGSTi for analysis.
 
 ```{code-cell} ipython3
-:colab: {}
-:colab_type: code
-:id: gw9bJiKmkST9
-
 import cirq
 import pygsti
 from pygsti.modelpacks import smq1Q_XYI
@@ -37,11 +29,7 @@ import numpy as np
 import tqdm
 ```
 
-+++ {"colab_type": "text", "id": "uugvjGQ3vR0z"}
-
 ## 1. Generate the GST circuits
-
-+++ {"colab_type": "text", "id": "cWpHwZVtvejH"}
 
 ### Make target gate set $\{R_{X}(\pi/2), R_{Y}(\pi/2),I\}$
 
@@ -49,71 +37,35 @@ import tqdm
 target_model = smq1Q_XYI.target_model()
 ```
 
-+++ {"colab_type": "text", "id": "JVfiXBu4vqJV"}
-
 ### Preparation and measurement fiducials, germs
 
 ```{code-cell} ipython3
-:colab: {}
-:colab_type: code
-:id: EPNxq24fvo6t
-
 preps = smq1Q_XYI.prep_fiducials()
 effects = smq1Q_XYI.meas_fiducials()
 germs = smq1Q_XYI.germs()
 ```
 
-+++ {"colab_type": "text", "id": "u9fHRr8Hv933"}
-
 ### Construct pyGSTi circuits
 
 ```{code-cell} ipython3
-:colab: {}
-:colab_type: code
-:id: Jptyo9F0vx5N
-
 max_lengths = list(np.logspace(0, 10, 11, base=2, dtype=int))
 ```
 
 ```{code-cell} ipython3
----
-colab:
-  base_uri: https://localhost:8080/
-  height: 34
-colab_type: code
-id: SuvgxDpKwCul
-outputId: 6654eeeb-3870-4b61-af43-0c66cb09169e
----
 print(max_lengths)
 ```
 
 ```{code-cell} ipython3
-:colab: {}
-:colab_type: code
-:id: qk-yEEWTwFJM
-
 pygsti_circuits = pygsti.circuits.gstcircuits.create_lsgst_circuits(target_model, preps, effects, germs, max_lengths)
 ```
 
 ```{code-cell} ipython3
----
-colab:
-  base_uri: https://localhost:8080/
-  height: 34
-colab_type: code
-id: 9vD8DXOPwHSV
-outputId: 06e10aec-f7ab-4b7b-d0c6-242ce225d5a2
----
 len(pygsti_circuits)
 ```
 
 ## 2. Convert to runable `cirq.Circuit`'s
 
-+++
-
 ### Setup
-
-+++
 
 Now, we need to map the qubit names from pyGSTi (`0`, `1`, etc.) into cirq qubits. There's nothing special about `cirq.GridQubit(8, 3)`; it's just an example.
 
@@ -123,8 +75,6 @@ qubit_label_dict = {0: q0}
 ```
 
 ### Testing examples
-
-+++
 
 Do an example conversion.
 
@@ -170,8 +120,6 @@ print(pygsti_circuit.convert_to_cirq(qubit_label_dict, wait_duration))
 
 ### The real thing
 
-+++
-
 Now, convert all the circuits.
 
 ```{code-cell} ipython3
@@ -183,8 +131,6 @@ cirq_circuits
 ```
 
 Note that we're missing the measurments and the first circuit is empty (it's should just be an idle). Otherwise, the results look good, and those things should be easy to fix.
-
-+++
 
 ## 3. Convert Cirq circuits to pyGSTi circuits
 We also have support for converting a cirq circuit to a pyGSTi circuit, which is demonstrated below.
@@ -265,8 +211,6 @@ print(converted_cirq_circuit_custom_gate_map)
 
 ## 4. Run the circuits
 
-+++
-
 Add measurements to the circuits.
 
 ```{code-cell} ipython3
@@ -303,6 +247,4 @@ print("2DeltaLogL(estimate, data): ", pygsti.tools.two_delta_logl(mdl_estimate, 
 print("2DeltaLogL(ideal, data): ", pygsti.tools.two_delta_logl(target_model, dataset))
 ```
 
-```{code-cell} ipython3
 
-```

@@ -87,6 +87,4 @@ idt.create_idletomography_report(results, "../../tutorial_files/IDTTestReport",
                                  "Test idle tomography example report", auto_open=False)
 ```
 
-```{code-cell} ipython3
 
-```

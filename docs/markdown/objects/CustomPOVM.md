@@ -174,6 +174,4 @@ dict(mult_meas_model.probabilities( pygsti.circuits.Circuit([('Gxpi2', 0), ('Gxp
 dict(mult_meas_model.probabilities( pygsti.circuits.Circuit([('Gxpi2', 0), ('Gxpi2', 0), "M_par_Z"], line_labels=(0,1,2)) ))
 ```
 
-```{code-cell} ipython3
 
-```

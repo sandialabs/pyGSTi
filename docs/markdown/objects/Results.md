@@ -134,6 +134,4 @@ In summary, when thinking about `ProtocolResults`, `ModelEstimateResults`, and `
 - each contained **`Estimate`** object represents a **single *gauge-unfixed* estimate** based on the data.  An `Estimate` may also contain **one or more *gauge-optimized* versions** of the gauge-invariant estimate.  
 - an `Estimate` can construct confidence intervals only after a **`ConfidenceRegionFactory`** object is created and initialized using a multi-step process.  Because it may be computationally expensive, these steps are *not* performed automatically when reports are generated.
 
-```{code-cell} ipython3
 
-```

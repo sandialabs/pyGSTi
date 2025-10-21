@@ -16,7 +16,7 @@ kernelspec:
 PyGSTi's `Workspace` object is first a foremost a container and factory for plots and tables.  At the most basic level, it can be used to generate nice output based on quantities (e.g. `Model`, `DataSet`, etc. objects) that you've computed or loaded within a notebook.  For this, it's useful to call `init_notebook_mode` with `autodisplay=True` (see below) so that you don't have to `.display()` everything - `display()` gets called automatically when a plot or table is created.
 
 ## Getting some results
-First, let's run Gate Set Tomography (GST) on the standard 1-qubit model to get some results to play with.  We generate a few `DataSet` objects and then call `run_long_sequence_gst` to run GST, generating a `ModelEstimateResults` object (essentially a container for `Model` objects).  For more details, see the tutorials [GST overview tutorial](../gst/Overview), the [tutorial on GST functions](../gst/Driverfunctions), and the [tutorial explaining the ModelEstimateResults object](../objects/Results).
+First, let's run gate set tomography (GST) on the standard 1-qubit model to get some results to play with.  We generate a few `DataSet` objects and then call `run_long_sequence_gst` to run GST, generating a `ModelEstimateResults` object (essentially a container for `Model` objects).  For more details, see the tutorials [GST overview tutorial](../gst/Overview), the [tutorial on GST functions](../gst/Driverfunctions), and the [tutorial explaining the ModelEstimateResults object](../objects/Results).
 
 ```{code-cell} ipython3
 import numpy as np

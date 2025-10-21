@@ -69,6 +69,4 @@ pp.pprint(dict(estimate.goparameters['Spam 1e-3']))
 
 Finally, note that if, in the original creation of `StandardGST`, you set **`gaugeopt_suite=None`** then no gauge optimizations are performed (there would be no "`go0`" elements) and you start with a blank slate to perform whatever gauge optimizations you want on your own.
 
-```{code-cell} ipython3
 
-```

@@ -135,6 +135,4 @@ print('epsilon_true - epsilon_est_final =',resultsRPE['epsilonErrorList'][-1])
 print('theta_true - theta_est_final =',resultsRPE['thetaErrorList'][-1])
 ```
 
-```{code-cell} ipython3
 
-```

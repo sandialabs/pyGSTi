@@ -11,11 +11,9 @@ kernelspec:
   name: python3
 ---
 
-# Driver functions for running Gate Set Tomography
+# Driver functions for running GST
 
-+++
-
-The `pygsti` package provides multiple levels of abstraction over the core Gate Set Tomography (GST) algorithms.  This  tutorial will show you how to work with pyGSTi's top-level functions for performing GST with a minimial amount of effort.  In order to run the GST protocol there are 3 essential ingredients: 1) data specifing the experimental outcomes, 2) a desired, or "target", `Model`, and 3) lists of `Circuit` objects, specifying the operation sequences to use at each successive step in the GST optimization.  The [GST overview tutorial](Overview), gave an end-to-end example of how to construct GST circuits, run GST, and generate a report.  This tutorial focus on the second step in more detail; more information about circuit construction and report generation can be found in the [GST circuits tutorial](CircuitConstruction) and [report generation tutorial](../reporting/ReportGeneration).
+The `pygsti` package provides multiple levels of abstraction over the core gate set tomography (GST) algorithms.  This  tutorial will show you how to work with pyGSTi's top-level functions for performing GST with a minimial amount of effort.  In order to run the GST protocol there are 3 essential ingredients: 1) data specifing the experimental outcomes, 2) a desired, or "target", `Model`, and 3) lists of `Circuit` objects, specifying the operation sequences to use at each successive step in the GST optimization.  The [GST overview tutorial](Overview), gave an end-to-end example of how to construct GST circuits, run GST, and generate a report.  This tutorial focus on the second step in more detail; more information about circuit construction and report generation can be found in the [GST circuits tutorial](CircuitConstruction) and [report generation tutorial](../reporting/ReportGeneration).
 
 There are several different "driver routines" for running GST, and we'll cover in turn:
 - `run_long_sequence_gst` - runs a single instance of GST with "standard" circuit lists.

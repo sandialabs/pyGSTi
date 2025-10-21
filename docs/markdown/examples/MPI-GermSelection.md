@@ -80,6 +80,4 @@ do_greedy_germsel(target_model, forced_germs, candidate_counts,
 
 Above is **keyboard-interrupted on purpose**, as this output was produced with a single processor and it would have taken a very long time.
 
-```{code-cell} ipython3
 
-```

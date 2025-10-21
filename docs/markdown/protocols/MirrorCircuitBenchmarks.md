@@ -240,6 +240,4 @@ plt.ylabel("RB Error Rate")
 plt.show()
 ```
 
-```{code-cell} ipython3
 
-```

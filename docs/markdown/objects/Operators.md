@@ -48,7 +48,7 @@ print(state_vec0.dtype) # of *real* numbers
 
 ## Dense operators
 
-The simplest kind of operators look very similar to numpy arrays (like those we created above) in which some of the elements are read-only.  These operators derive from `DenseOperator` or `DenseState` and hold a *dense* representation, meaning the a dense vector or matrix is stored in memory.  **SPAM, gate, and layer operators have parameters which describe how they can be varied**, essentially the "knobs" which you can turn.  `Model` objects also have *parameters* that are essentially inherited from their contained operators.  How an operator is parameterized is particularly relevant for protocols which optimize a `Model` over its parameter space (e.g. Gate Set Tomography).  See the tutorial on [model parameterization](ModelParameterization) for more information.  Three common parameterizations are:
+The simplest kind of operators look very similar to numpy arrays (like those we created above) in which some of the elements are read-only.  These operators derive from `DenseOperator` or `DenseState` and hold a *dense* representation, meaning the a dense vector or matrix is stored in memory.  **SPAM, gate, and layer operators have parameters which describe how they can be varied**, essentially the "knobs" which you can turn.  `Model` objects also have *parameters* that are essentially inherited from their contained operators.  How an operator is parameterized is particularly relevant for protocols which optimize a `Model` over its parameter space (e.g. gate set tomography).  See the tutorial on [model parameterization](ModelParameterization) for more information.  Three common parameterizations are:
 - **static**: the object has *no* (zero) parameters, so the object cannot be changed at all.  Static operators are like read-only NumPy arrays.
 - **full**: the object has one independent parameter for each element of its (dense) vector or matrix.  Fully parameterized objects are like normal NumPy arrays.
 - **trace-preserving (TP)**: similar to full, except the top row of gate/layer matrices and the first element of state preparation vectors is fixed and these elements are therefore not parameters.  (A POVM that is trace preserving must have all of its effect vectors sum to the identity.)
@@ -246,8 +246,6 @@ print("Before interacting w/Model:",composedOp.num_params,"params")
 ```
 
 This all looks good.  As we expect, there are $0+12+16=28$ parameters (the sum of the parameter-counts of the factors).
-
-+++
 
 ### Embedded operations
 Here's how to embed a single-qubit operator (`fullOp`, created above) into a 3-qubit state space, and have `fullOp` act on the second qubit (labelled `"Q1"`).  Note that the parameters of an `EmbeddedOp` are just those of the underlying operator (the one that has been embedded).

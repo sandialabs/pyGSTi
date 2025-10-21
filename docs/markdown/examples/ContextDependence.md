@@ -105,6 +105,4 @@ print("Diff between truth and context-dep GST w/LGST starting pt: ", mdl_datagen
 print("Diff between truth and context-dep GST w/custom starting pt: ", mdl_datagen.frobeniusdist(gsC))
 ```
 
-```{code-cell} ipython3
 
-```

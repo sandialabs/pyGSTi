@@ -13,8 +13,6 @@ kernelspec:
 
 # Random Circuit Samplers
 
-+++
-
 This tutorial introduces the different random circuit layer samplers in-built into `pyGSTi`.
 
 ```{code-cell} ipython3
@@ -22,7 +20,7 @@ from __future__ import print_function #python 2 & 3 compatibility
 import pygsti
 ```
 
-The circuit layer samplers in pyGSTi exist primarily for the purpose of running [Direct Randomized Benchmarking](DirectRB) and/or [Mirror Randomized Benchmarking](MirrorRB). Here we'll demonstate them by just creating a more generic random circuit consisting of independently sampled random layers, but the same syntax is used to select these samplers in the `DirectRBDesign` and `MirrorRBDesign` functions.
+The circuit layer samplers in pyGSTi exist primarily for the purpose of running [Direct randomized benchmarking](DirectRB) and/or [Mirror randomized benchmarking](MirrorRB). Here we'll demonstate them by just creating a more generic random circuit consisting of independently sampled random layers, but the same syntax is used to select these samplers in the `DirectRBDesign` and `MirrorRBDesign` functions.
 
 ```{code-cell} ipython3
 from pygsti.algorithms.randomcircuit import create_random_circuit

@@ -411,7 +411,5 @@ The keys of the outcome dictionary `out` are things like `('00',)` instead of ju
 
 Computation of outcome probabilities may be done in a variety of ways, and `Model` objects are associated with a *forward simulator* that supplies the core computational routines for generating outcome probabilities.  In the example above the simulation was performed by multiplying together process matrices.  For more information on the types of forward simulators in pyGSTi and how to use them, see the [forward simulators tutorial](../simulation/ForwardSimulationTypes).
 
-+++
-
 ## Conclusion
 This concludes our detailed look into the `Circuit` object.  If you're intersted in using circuits for specific applications, you might want to check out the [tutorial on circuit lists](CircuitLists) or the [tutorial on constructing GST circuits](../gst/CircuitConstruction)

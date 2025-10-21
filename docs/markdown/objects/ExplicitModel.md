@@ -34,8 +34,6 @@ There are more or less four ways to create `ExpicitOpModel` objects in pyGSTi:
 * By loading from a text-format model file using `pygsti.io.read_model` (see the [File IO tutorial](../interfaces/FileIO)).
 * By loading one from the `pygsti.modelpacks` module (see the [ModelPacks tutorial](ModelPacks)).
 
-+++
-
 ### Creating a `ExplicitOpModel` from scratch
 
 Layer operations (often called "gates" in a 1- or even 2-qubit context) and SPAM vectors can be assigned to a `ExplicitOpModel` object as to an ordinary python dictionary.  Internally a `ExpicitOpModel` holds these quantities as `LinearOperator`- and `SPAMVec`- and `POVM`-derived objects (all types of `ModelMember` objects from `pygsti.modelmembers`), but you may assign lists, Numpy arrays, or other types of Python iterables to a `ExplicitOpModel` key and a conversion will be performed automatically.  To keep gates, state preparations, and POVMs separate, the `ExplicitOpModel` object looks at the beginning of the dictionary key being assigned: keys beginning with `rho`, `M`, and `G` are categorized as state preparations, POVMs, and gates, respectively.  To avoid ambiguity, each key *must* begin with one of these three prefixes.

@@ -13,10 +13,7 @@ kernelspec:
 
 # Clifford RB
 
-+++
-
-This tutorial contains a few details on how to run [Clifford Randomized Benchmarking](http://journals.aps.org/prl/abstract/10.1103/PhysRevLett.106.180504) that are not covered in the [RB overview tutorial](Overview). 
-
+This tutorial contains a few details on how to run [Clifford randomized benchmarking](http://journals.aps.org/prl/abstract/10.1103/PhysRevLett.106.180504) that are not covered in the [RB overview tutorial](Overview). 
 
 ## What is Clifford RB? 
 
@@ -111,7 +108,7 @@ rb_fig = ws.RandomizedBenchmarkingPlot(results)
 #rb_fig.figs[0].plotlyfig
 ```
 
-## Interleaved Randomized Benchmarking
+## Interleaved randomized benchmarking
 In this subsection we'll discuss built-in support for performing interleaved randomized benchmarking (IRB). IRB is a method for estimating the error rate of a particular clifford of interest using CRB as a subroutine.
 
 ```{code-cell} ipython3

@@ -13,9 +13,7 @@ kernelspec:
 
 # 2Q-GST Fitting
 
-```{attention} Is this redundant with the Overview and MPI-RunningGST tutorials?```
-
-This example gives an overview of the typical steps used to perform an end-to-end (i.e. experimental-data-to-report) Gate Set Tomography analysis on a 2-qubit system.  The steps are very similar to the single-qubit case described in the tutorials, but we thought 2Q-GST is an important enough topic to deserve a separate example.
+This example gives an overview of the typical steps used to perform an end-to-end (i.e. experimental-data-to-report) gate set tomography analysis on a 2-qubit system.  The steps are very similar to the single-qubit case described in the tutorials, but we thought 2Q-GST is an important enough topic to deserve a separate example.
 
 ```{code-cell} ipython3
 import pygsti
@@ -97,6 +95,4 @@ You can save the `ModelEstimateResults` object to the same directory as the data
 results.write()
 ```
 
-```{code-cell} ipython3
 
-```

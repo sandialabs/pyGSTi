@@ -13,8 +13,6 @@ kernelspec:
 
 # Randomized Benchmarking
 
-+++
-
 This tutorial is an overview of randomized benchmarking (RB) in pyGSTi. The are multiple flavours of RB, that have different strengths and weaknesses. pyGSTi contains end-to-end methods for:
 
 - [Clifford randomized benchmarking](http://journals.aps.org/prl/abstract/10.1103/PhysRevLett.106.180504), meaning benchmarking of the $n$-qubit Clifford group. This is a popular protocol for benchmarking 1 or 2 qubits. It is used in this notebook to demonstrate the general work-flow for running RB in pyGSTi. More details that are specific to Clifford RB can be found in the [Clifford RB tutorial](CliffordRB).
@@ -110,6 +108,4 @@ print("r = {0:1.2e} +/- {1:1.2e} (fit with a free asymptote)".format(r, 2*rstd))
 print("r = {0:1.2e} +/- {1:1.2e} (fit with the asymptote fixed to 1/2^n)".format(rAfix, 2*rAfixstd))
 ```
 
-```{code-cell} ipython3
 
-```

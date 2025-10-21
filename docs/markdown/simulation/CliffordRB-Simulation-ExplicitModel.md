@@ -117,6 +117,4 @@ results = pygsti.protocols.RB().run(data)
 results.plot()
 ```
 
-```{code-cell} ipython3
 
-```

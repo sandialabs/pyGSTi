@@ -138,6 +138,4 @@ fig.update_layout(title='Volumetric benchmarking example',
 fig.show()
 ```
 
-```{code-cell} ipython3
 
-```

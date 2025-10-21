@@ -160,7 +160,9 @@ model.probabilities(circ)
 
 ## Advanced State Prep and Measurement
 
-<font color='red'>TODO: This section does not work due to non-CHP related issues. Come back to this once other issues are fixed.</font>
+```{warning}
+TODO: This section does not work due to non-CHP related issues. Come back to this once other issues are fixed.
+```
 
 ### State Prep
 
@@ -412,6 +414,4 @@ ln_model_corr.probabilities(circ)
 #ctf_povm_model.probabilities(circ) # Expect about 80% all 0, 5% on weight one errors, 0.25% on weight 2, etc.
 ```
 
-```{code-cell} ipython3
 
-```

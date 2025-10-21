@@ -118,6 +118,4 @@ print(opstr.format_display_str(80))
 print(comparator_1_2.jsd(opstr))
 ```
 
-```{code-cell} ipython3
 
-```

@@ -262,8 +262,6 @@ for i,d in enumerate(ovd_corrected_disturbances):
 
 ## Testing and verification
 
-+++
-
 ### Test problems.
 Below we put what we did above in the "main demo" section into a function so it's easier to run, and perform a bunch of simple tests to ensure that the disturbance behavior agrees with our intuition.
 
@@ -404,6 +402,4 @@ test_errorbars({'0000': 0.45, '0111': 0.05, '1111': 0.5}) # weight 3 movement
 test_errorbars({'0000': 0.45, '1111': 0.55}) # weight 4 movement 
 ```
 
-```{code-cell} ipython3
 
-```

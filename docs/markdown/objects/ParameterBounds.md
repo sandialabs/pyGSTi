@@ -64,6 +64,4 @@ print("\nModel bounds after getting the number of parameters:\n",mdl.parameter_b
 
 Now, when model `mdl` is optimized, the optimizer will limit range of this parameter as desired.
 
-```{code-cell} ipython3
 
-```

@@ -75,7 +75,7 @@ mdl.operations[('Gxpi2',0)] = MyXPi2Operator()
 print(mdl)
 ```
 
-Next, to demonstrate everything is working like it should, we'll optimize this model using Gate Set tomography (see the [GST overview tutorial](../gst/Overview) for the details on what all this stuff does).  GST by default attempts to gauge optimize its final estimate to look like the target model (see the [gauge optimization tutorial](../utilities/GaugeOpt) for details).  This would requires all of the operators in our model to implement the (gauge) `transform` method.  Because `MyXPi2Operator` doesn't, we tell GST not to perform any gauge optimization by setting `gauge_opt_params=False` below.
+Next, to demonstrate everything is working like it should, we'll optimize this model using gate set tomography (see the [GST overview tutorial](../gst/Overview) for the details on what all this stuff does).  GST by default attempts to gauge optimize its final estimate to look like the target model (see the [gauge optimization tutorial](../utilities/GaugeOpt) for details).  This would requires all of the operators in our model to implement the (gauge) `transform` method.  Because `MyXPi2Operator` doesn't, we tell GST not to perform any gauge optimization by setting `gauge_opt_params=False` below.
 
 ```{code-cell} ipython3
 # Generate "fake" data from a depolarized version of the target (ideal) model

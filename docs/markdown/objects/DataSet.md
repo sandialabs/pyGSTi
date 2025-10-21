@@ -110,8 +110,6 @@ print("Dataset3 is too big to print, so here it is truncated to Dataset2's strin
 
 **Note that the outcome labels `'0'` and `'1'` appear as `('0',)` and `('1',)`**.  This is because outcome labels in pyGSTi are tuples of time-ordered instrument element (see the [intermediate measurements tutorial](Instruments)) and POVM effect labels.  In the special but common case when there are no intermediate measurements, the outcome label is a 1-tuple of just the final POVM effect label.  In this case, one may use the effect label itself (e.g. `'0'` or `'1'`) in place of the 1-tuple in almost all contexts, as it is automatically converted to the 1-tuple (e.g. `('0',)` or `('1',)`) internally.  When printing, however, the 1-tuple is still displayed to remind the user of the more general structure contained in the `DataSet`.
 
-+++
-
 ## Iteration over data sets
 
 ```{code-cell} ipython3

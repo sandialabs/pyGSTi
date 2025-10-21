@@ -69,8 +69,6 @@ results = protocol.run(data)
 
 **Note** the `StabilityAnalysis` protocol has a variety of optional arguments that can be used to optimize the tool to different circumstances. In this tutorial we won't discuss the full range of analyzes that can be performed using the `drift` module.
 
-+++
-
 ## Inspecting the results
 
 Everything has been calculated, and we can now look at the results. If we print the returned results object (currently, essentially a container `StabilityAnalyzer` object), it will tell us whether instability was detected. If no instability is detected, then there is little else to do: the circuits are, as far as we can tell, stable, and most of the other results contained in a `StabilityAnalyzer` will not be very interesting. However, here instability is detected:

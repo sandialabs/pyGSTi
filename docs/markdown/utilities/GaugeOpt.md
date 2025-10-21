@@ -92,7 +92,7 @@ gauge_optimized_mdl = pygsti.algorithms.gaugeopt_to_target(mdl, target_mdl,
 ```
 
 ### Gauge optimization in high-level routines
-Because gauge optimization is a common post-processing step to Gate Set Tomography (GST), `pygsti.run_long_sequence_gst` and `pygsti.run_stdpractice_gst` have arguments that allow you to specify arguments to underlying calls to `gaugeopt_to_target`.  To demonstrate, we'll create some simulated data to run GST.
+Because gauge optimization is a common post-processing step to gate set tomography (GST), `pygsti.run_long_sequence_gst` and `pygsti.run_stdpractice_gst` have arguments that allow you to specify arguments to underlying calls to `gaugeopt_to_target`.  To demonstrate, we'll create some simulated data to run GST.
 
 ```{code-cell} ipython3
 #Create (simulate) some data

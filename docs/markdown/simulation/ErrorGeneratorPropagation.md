@@ -106,11 +106,7 @@ print(propagated_errorgen_layers[-1])
 
 To change this behavior so that the SPAM layers are not included you can set the optional kwarg `include_spam` to `FALSE` in `propgate_errorgens` and other related methods.
 
-+++
-
 The next things worth noting are the keys of the final dictionary. Notice that the basis element labels for each of the elementary error generator coefficient labels are instances of `stim.PauliString`, very much unlike the other elementary error generator labels used in pyGSTi. These labels are instances of the class `LocalStimErrorgenLabel`, a specialized label class with additional metadata and methods used throughout the error generator propagation framework. For applications where you need to take the output of this module and utilize it elsewhere in pyGSTi you can utilize the `to_local_eel` and `to_global_eel` methods of the `LocalStimErrorgenLabel` class to convert these into instances of `LocalElementaryErrorgenLabel` and `GlobalElementaryErrorgenLabel`, respectively, for use within other parts of pyGSTi.
-
-+++
 
 While the output of `propgate_errorgens` is in and of itself incredibly useful, often we want to know more about how specific errors have been transformed by propagation through the circuit. Fortunately the analytic structure of error generator propagation through a clifford operation is such that it acts as a generalized permutation of each elementary error generator within it's sector (i.e. propagation can't in and of itself map H errors to anything other than H errors, for example). To view the input-output corresponding to the transformation of each error generator we can use the `errorgen_transform_map` method.
 
@@ -131,8 +127,6 @@ print(errorgen_propagator.errorgen_gate_contributors(_LSE('H', [stim.PauliString
 ```
 
 Here this method returns the fact that in our particular error model the only gate at layer index 1 which could have contributed this particular error generator was the 'Gxpi2' gate acting on qubit 0. In some error models it may be possible for multiple gates to contribute to a particular rate, in which case this method should return all such gates.
-
-+++
 
 ## BCH Approximation
 In the previous section we showed how to use the `ErrorGeneratorPropagator` class to transform a circuit with a series of post-gate error generators into an equivalent representation of this noisy circuit with instead a series of post-circuit error generator layers. What if we want a single effective end-of-circuit error generator which approximates the overall action of the composition of each of the propagated error generators? To do so the `ErrorGeneratorPropagator` class supports the option to iteratively apply the BCH approximation at various orders to perform this recombination.
@@ -164,18 +158,14 @@ print(propagated_errorgen_layer_second_order)
 
 Aside from the fact that there are now significantly more terms than was found for the first-order BCH approximation, notice that there are also now emergent second (and higher) order contributions due to C and A error generators which arise from the composition of purely H and S error generators. These additional terms arise from the non-commutivity of the elementary error generators, particularly the non-commutivity of H and S elementary error generators. For more on this phenomenon see [insert paper reference here].
 
-+++
-
 ## Approximate Probabilities and Expectation Values
 Now you have an efficient representation for an approximation to the effective end-of-circuit error generator for your circuit, what can you do with it? In this section we show how to use this sparse representation to efficiently compute corrections to the outcome probability distributions and pauli observable expectation values of noisy clifford circuits.
-
-+++
 
 We'll start off by demonstrating how to perform strong simulation using the results of error generator propagation to estimate the output probabilities for a desired computational basis state. 
 
 To do so we'll be making use of the function `approximate_stabilizer_probability` from the `errgenproptools` module. This function takes as input the following arguments:
 
-- errorgen_dict : A dictionary of elementary error generator coefficients and their corresponding rates (as outputted, for example, by `propagate_errorgens_bch`.
+- errorgen_dict : A dictionary of elementary error generator coefficients and their corresponding rates (as outputted, for example, by `propagate_errorgens_bch`).
 - circuit : The circuit to compute the output probability for. This can by a pyGSTi `Circuit` object, or alternatively a `stim.Tableau`.
 - desired_bitstring : A string corresponding to the desired computational basis state.
 - order : Order of the taylor series approximation for the exponentiated error generator to use in computing the approximate output probability. In principle this function can compute       arbitary-order approximation (but practically the cost of the computation scales in the order).
@@ -211,8 +201,6 @@ print(f'Relative Error Approx to Exact (Second-order taylor, Second-order BCH): 
 ```
 
 Here we can see that with the combination of second-order BCH and second-order taylor approximations our estimated probability is accurate to well below a 1 percent relative error. By going out to higher-order in either approximation one can achieve even higher levels of accuracy.
-
-+++
 
 In addition to strong simulation of the output probabilities of computational basis states, it is also possible to compute approximate values for the expectation values of pauli observables. The main function for doing so is `approximate_stabilizer_pauli_expectation` from the `errgenproptools` module, the signature of which is nearly identical to that of `approximate_stabilizer_probability` described above, except taking instead a desired pauli observable to estimate the expectation value for. Here we'll again use the results of the second-order BCH approximation produced above and look are various order of the taylor series approximation for the pauli expectation value of 'XYZI' (the value for the ideal noise-free circuit is 1).
 
@@ -269,8 +257,6 @@ print(f'Relative Error Approx to Exact (Second-order taylor, Second-order BCH): 
 
 In this case even with the first-order taylor approximation together with the second-order BCH approximation the relative error to the exact expecation value is roughly half a percent, dropping to below a tenth of a percent when we go up to the second order taylor approximation. As before, by going out to higher-order in either approximation one can achieve even higher levels of accuracy.
 
-+++
-
 ## Other Helpful Utilities:
 In this section we'll highlight a few additional utilities within the error generator propagation related modules which are often useful (some of these you may have even seen us use above!).
 
@@ -280,8 +266,6 @@ We'll specifically cover:
 - `approximate_stabilizer_probabilities`
 - `error_generator_commutator`
 - `error_generator_composition`
-
-+++
 
 ### `eoc_error_channel` : 
 This method provides a simple single function call for generating a dense representation of the end-of-circuit error channel (i.e. the exponentiated end-of-circuit error generator). This can be useful in few-qubit testing, but obviously doesn't not scale beyond a few qubits. This end-of-circuit error channel can be produced either exactly or without the BCH approximation. In the former case this is acheived by exponentiating and multiplying together all of the propagated error generator layers.
@@ -312,8 +296,6 @@ dense_end_of_circuit_errorgen_first_order_BCH = errorgen_propagator.errorgen_lay
 By default this returns the error generator in the normalized pauli-product basis, but this can be changed using the optional `mx_basis` kwarg.
 Note: There is another function called `errorgen_layer_to_matrix` available in the `errgenproptools` module with similar functionality to this method, but with a somewhat different interface. That function can be particularly useful in situations where you may want to compute a lot of dense error generator representations from the outputs of the error generator propagation framework, so check out the documentation of that function for more.
 
-+++
-
 ### `approximate_stabilizer_probabilities`
 This one is straightforward. Above we showed the use of the function `approximate_stabilizer_probability` from the `errgenproptools` module for calculating approximate output probabilities for a given computational bitstring. If you happen to want *all* of the bit string probabilities you can save yourself a for loop by using the function `approximate_stabilizer_probabilities` from this module instead!
 
@@ -323,8 +305,6 @@ print(approximate_probabilities)
 ```
 
 Note the returned values are given in right-LSB convention (i.e. '0000' -> '0001' ->'0010', etc.)
-
-+++
 
 ### `error_generator_commutator` and `error_generator_composition`
 These two functions from the `errgenproptools` module return the result of analytically computing the commutator and composition of two elementary error generators, respectively.
@@ -350,10 +330,5 @@ Both of these methods return their output as a list of two-element tuples. This 
 
 In the examples above we can see that the commutator of the specified H and S error generators gives rise to a pauli-correlation (C) error generator. This could potentially give rise to emergent C error generators when applying second-or-higher order BCH approximations for the effective end-of-circuit error generator, for example. Likewise the composition of these to error generators is a linear combination of a C error generator and an H error generator. And finally we see that squaring an H error generator (composing it with itself) gives rise to a pauli-stochastic (S) error generator.
 
-+++
-
 There's a whole bunch of other functionality and utilities available, particularly in the `errgenproptools` module which have not been covered in this tutorial, so please check out the documentation for additional capabilities!
 
-```{code-cell} ipython3
-
-```

@@ -46,6 +46,4 @@ report_object, updated_res = construct_leakage_report(res, title='easy leakage a
 report_object.write_html(report_dir)
 ```
 
-```{code-cell} ipython3
 
-```

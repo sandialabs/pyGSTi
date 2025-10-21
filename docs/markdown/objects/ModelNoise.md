@@ -134,8 +134,6 @@ mdl_locnoise.print_modelmembers()
 
 The printout above shows that the SPAM operators are now the ideal operators composed with depolarization noise.  It also reveals that the specified depolarization strength is applied as a parallel 1-qubit depolarization to each of the qubits.
 
-+++
-
 ### Nonlocal noise (crosstalk)
 So far, all the noise we've specified has been directed at the *target* qubits of the relevant operation.  For instance, when a depolarization strength is specified for a 1-qubit gates, it applies the given depolarization to gate's single target qubit.  When depolarization is applied to a 2-qubit gate, 2-qubit depolarization is applied to the target qubits.  When Lindblad error rates are given for a 1-qubit gate, they are indexed by single Pauli elements, e.g. `('H','X')`, whereas for a 2-qubit gate they are indexed by 2-qubit Paulis, e.g. `('H','XX')`.
 

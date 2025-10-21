@@ -13,7 +13,7 @@ kernelspec:
 
 # Different GST Protocols
 
-The `pygsti` package provides multiple ways to use its core Gate Set Tomography (GST) algorithms.  This  tutorial will show you how to work with pyGSTi's GST protocol objects to perform GST in different ways with a minimial amount of effort.  In order to run the GST protocol there are 3 essential ingredients: 1) an "experiment design" specifying the structure of the GST circuits and how the data should be collected, 2) the outcome counts for the circuits specified by the experiment design, and 3) a desired, or "target", `Model`.  The [GST overview tutorial](Overview), gave an end-to-end example of how to construct a GST experiment design, run GST, and generate a report.  This tutorial focuses on the first and second steps in more detail; related information about circuit construction and report generation can be found in the [GST circuits tutorial](CircuitConstruction) and [report generation tutorial](../reporting/ReportGeneration).
+The `pygsti` package provides multiple ways to use its core gate set tomography (GST) algorithms.  This  tutorial will show you how to work with pyGSTi's GST protocol objects to perform GST in different ways with a minimial amount of effort.  In order to run the GST protocol there are 3 essential ingredients: 1) an "experiment design" specifying the structure of the GST circuits and how the data should be collected, 2) the outcome counts for the circuits specified by the experiment design, and 3) a desired, or "target", `Model`.  The [GST overview tutorial](Overview), gave an end-to-end example of how to construct a GST experiment design, run GST, and generate a report.  This tutorial focuses on the first and second steps in more detail; related information about circuit construction and report generation can be found in the [GST circuits tutorial](CircuitConstruction) and [report generation tutorial](../reporting/ReportGeneration).
 
 There are two different `Protocol` objects within pyGSTi for running GST:
 
@@ -266,8 +266,6 @@ results_TP_from_iter_5.estimates['GateSetTomography'].models['final iteration es
 ```
 
 The checkpoint object itself contains information that could be useful for diagnostics or debugging, including the current list of models associated each iterative fit, the last completed iteration it is associated with, and the list of circuits for the last completed iteration it is associated with.
-
-+++
 
 Checkpointing with the `StandardGST` protocol works similarly:
 

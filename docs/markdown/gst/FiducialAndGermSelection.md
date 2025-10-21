@@ -40,8 +40,6 @@ The defining property which makes a set of operation sequences a "complete germ 
 
 If not all that made perfect sense, do not worry.  The remainder of this tutorial focuses on how to do fiducial or germ selection using pyGSTi, and does not rely on a rock solid theoretical understanding of the methods.
 
-+++
-
 ## Fiducial and Germ selection in practice
 The selection of fiducial and germ sequences in pyGSTi is similar in that each uses a numerical optimization which considers different possible "candidate" sets, and tries to find the one which scores the best.  The modules `pygsti.algorithms.fiducialselection` and `pygsti.algorithms.germselection` contain the algorithms relevant to each type of sequence selection.
 
@@ -60,8 +58,6 @@ target_model = smq1Q_XYI.target_model('full TP')
 ```
 
 ### Automated "*laissez-faire*" approach
-
-+++
 
 We begin by demonstrating the most automated and hands-off approach to computing fiducials and germs -- by just providing the target model and accepting the defaults for all remaining optional arguments.  Note that one may compute these in either order - fiducial selection is usually much faster, since the required computation is significantly less.
 
@@ -86,12 +82,8 @@ listOfExperiments = pygsti.circuits.create_lsgst_circuits(
 
 ### Less-automated, more control: useful optional arguments
 
-+++
-
 There are many ways you can assume more control over the experiment design process. We'll only demonstrate
 a few here, but all options are discussed in the documentation for the various functions we've used.
-
-+++
 
 #### Different algorithms
 There are a number of different algorithms available for germ selection. You can choose a non-default
@@ -138,8 +130,6 @@ of the algorithms currently rely on having a pool of circuit from which they con
 The size of this pool is set by specifying the longest germ or fiducial to include in this pool.
 
 For germ selection, the default maximum germ length is 6.
-
-+++
 
 We can try and set the maximum germ length to 5 and see what we get.
 

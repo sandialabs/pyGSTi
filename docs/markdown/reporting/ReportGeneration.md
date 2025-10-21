@@ -13,7 +13,7 @@ kernelspec:
 
 # Report Generation Tutorial
 
-PyGSTi is able to construct polished report documents, which provide high-level summaries as well as detailed analyses of results (Gate Set Tomography (GST) and model-testing results in particular).  Reports are intended to be quick and easy way of analyzing `Model`-type estimates, and pyGSTi's report generation functions are specifically designed to interact with the `ModelEstimateResults` object (producted by several high-level algorithm functions - see, for example, the [GST overview tutorial](../gst/Overview) and [GST functions tutorial](../gst/Driverfunctions)).  The report generation functions in pyGSTi takes one or more results (often `ModelEstimateResults`-type) objects as input and produces an HTML file as output.  The HTML format allows the reports to include **interactive plots** and **switches** (see the [workspace switchboard tutorial](WorkspaceSwitchboards), making it easy to compare different types of analysis or data sets.  
+PyGSTi is able to construct polished report documents, which provide high-level summaries as well as detailed analyses of results (gate set tomography (GST) and model-testing results in particular).  Reports are intended to be quick and easy way of analyzing `Model`-type estimates, and pyGSTi's report generation functions are specifically designed to interact with the `ModelEstimateResults` object (producted by several high-level algorithm functions - see, for example, the [GST overview tutorial](../gst/Overview) and [GST functions tutorial](../gst/Driverfunctions)).  The report generation functions in pyGSTi takes one or more results (often `ModelEstimateResults`-type) objects as input and produces an HTML file as output.  The HTML format allows the reports to include **interactive plots** and **switches** (see the [workspace switchboard tutorial](WorkspaceSwitchboards), making it easy to compare different types of analysis or data sets.  
 
 PyGSTi's reports are stand-alone HTML documents which cannot run Python.  Thus, all the results displayed in a report must be pre-computed (in Python).  If you find yourself wanting to fiddle with things and feel that these reports are too static, please consider using a `Workspace` object (see the [Workspace tutorial](Workspace)) within a Jupyter notebook, where you can intermix report tables/plots and Python.  Internally, functions like `construct_standard_report` (see below) are simple factories for `Report` objects, which are in turn little more than a wrapper around a `Workspace` object and a set of instructions for how to generate reports of different output formats.
 
@@ -62,8 +62,6 @@ There are several remarks about these reports worth noting:
 2. It's best to use **Firefox** when opening the HTML reports. (If there's a problem with your brower's capabilities it will be shown on the screen when you try to load the report.)
 3. You'll need **`pdflatex`** on your system to compile PDF reports.
 4. To familiarize yourself with the layout of an HTML report, click on the gray **"Help" link** on the black sidebar.
-
-+++
 
 ## Multiple estimates in a single report
 Next, let's analyze the same data two different ways: with and without the TP-constraint (i.e. whether the gates *must* be trace-preserving) and furthermore gauge optmimize each case using several different SPAM-weights.  In each case we'll call `run_long_sequence_gst` with `gauge_opt_params=False`, so that no gauge optimization is done, and then perform several gauge optimizations separately and add these to the `Results` object via its `add_gaugeoptimized` function.
@@ -211,7 +209,9 @@ pygsti.report.construct_standard_report(
 In addition to the standard HTML-page reports demonstrated above, pyGSTi is able to generate a Jupyter notebook containing the Python commands to create the figures and tables within a general report.  This is facilitated
 by `Workspace` objects, which are factories for figures and tables (see previous tutorials).  By calling `Report.write_notebook`, all of the relevant `Workspace` initialization and calls are dumped to a new notebook file, which can be run (either fully or partially) by the user at their convenience.  Creating such "report notebooks" has the advantage that the user may insert Python code amidst the figure and table generation calls to inspect or modify what is display in a highly customizable fashion.  The chief disadvantages of report notebooks is that they require the user to 1) have a Jupyter server up and running and 2) to run the notebook before any figures are displayed.
 
-<font color='red'>Note that interactive cells in report notebooks require JavaScript, and therefore do not work with JupyterLab. Please continue to use to track this issue, see https://github.com/pyGSTio/pyGSTi/issues/205.</font>
+```{warning}
+Note that interactive cells in report notebooks require JavaScript, and therefore do not work with JupyterLab. Please continue to use to track this issue, see https://github.com/pyGSTio/pyGSTi/issues/205.
+```
 
 The line below demonstrates how to create a report notebook using `write_notebook`.  Note that the argument list is very similar to the other `Report` output methods.
 

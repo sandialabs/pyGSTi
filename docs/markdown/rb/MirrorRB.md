@@ -13,9 +13,7 @@ kernelspec:
 
 # Mirror RB
 
-+++
-
-This tutorial contains a few details on how to run *Mirror Randomized Benchmarking* that are not covered in the [RB overview tutorial](Overview).
+This tutorial contains a few details on how to run *Mirror randomized benchmarking* that are not covered in the [RB overview tutorial](Overview).
 
 ## What is Mirror RB? 
 

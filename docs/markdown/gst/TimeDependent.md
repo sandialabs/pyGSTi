@@ -202,6 +202,4 @@ objfn2 = builder.build(final_mdl, data.dataset, list(data.dataset.keys()))
 print("Objective function at best-fit (GST) model (should be lower) = ",objfn2.fn())
 ```
 
-```{code-cell} ipython3
 
-```

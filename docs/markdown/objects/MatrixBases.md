@@ -111,6 +111,4 @@ print(mxInReducedBasis)
 original         = flexible_change_basis(mxInReducedBasis, end, begin)
 ```
 
-```{code-cell} ipython3
 
-```

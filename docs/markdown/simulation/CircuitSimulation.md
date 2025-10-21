@@ -70,7 +70,11 @@ probs = mdl['Mdefault'].acton(rho)
 print(probs)
 ```
 
-Note that, especially for implicit models, the interface is a bit clunky.  <font style="color:red">Simulation by state propagation is a work in progress in pyGSTi, and users should expect that this interface may change (improve!) in the future</font>.
+Note that, especially for implicit models, the interface is a bit clunky.  
+
+```{warning}
+Simulation by state propagation is a work in progress in pyGSTi, and users should expect that this interface may change (improve!) in the future.
+```
 
 ```{code-cell} ipython3
 #Simulating circuit `c2` above using `implicit_mdl`: [ [('Gxpi2',0), ('Gxpi2',1)], ('Gcnot',0,1) ]
@@ -84,9 +88,10 @@ print(probs)
 ```
 
 ## Method 3: hybrid
-(an addition planned in future releases of pyGSTi)
 
-+++
+```{note}
+(an addition planned in future releases of pyGSTi)
+```
 
 ## Forward-simulation types
 
@@ -118,6 +123,4 @@ print("3Q implicit_mdl will simulate probabilities using the '%s' forward-simula
 implicit_mdl.probabilities(c)
 ```
 
-```{code-cell} ipython3
 
-```

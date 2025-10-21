@@ -110,6 +110,4 @@ print(c2)
 mdl2.probabilities(c2)
 ```
 
-```{code-cell} ipython3
 
-```

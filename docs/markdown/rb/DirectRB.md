@@ -13,9 +13,7 @@ kernelspec:
 
 # Direct RB
 
-+++
-
-This tutorial contains a few details on how to run [Direct Randomized Benchmarking](https://journals.aps.org/prl/abstract/10.1103/PhysRevLett.123.030503) that are not covered in the [RB overview tutorial](Overview).
+This tutorial contains a few details on how to run [Direct randomized benchmarking](https://journals.aps.org/prl/abstract/10.1103/PhysRevLett.123.030503) that are not covered in the [RB overview tutorial](Overview).
 
 ## What is Direct RB? 
 

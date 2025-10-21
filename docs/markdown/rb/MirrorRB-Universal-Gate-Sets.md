@@ -13,9 +13,7 @@ kernelspec:
 
 # MRB with Universal Gate Sets
 
-+++
-
-This tutorial contains a few details on how to run *Mirror Randomized Benchmarking* with universal gate sets, that are not covered in the [RB overview tutorial](Overview) or the [Clifford MRB tutorial](MirrorRB).
+This tutorial contains a few details on how to run *Mirror randomized benchmarking* with universal gate sets, that are not covered in the [RB overview tutorial](Overview) or the [Clifford MRB tutorial](MirrorRB).
 
 ## What is Mirror RB? 
 

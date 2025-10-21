@@ -24,8 +24,6 @@ If you're curious, the implementation of these algorithms are found in the `pygs
 
 Additionally, `pygsti` contains **gauge-optimization** algorithms.  Because the outcome data (the input to the GST algorithms above) only determines a model up to some number of un-physical "gauge" degrees of freedom, it is often desirable to optimize the `Model` estimate obtained from a GST algorithm within the space of its gauge freedoms.  This process is called "gauge-optimization" and the final part of this tutorial demonstrates how to gauge-optimize a model using various criteria.
 
-+++
-
 ##  Low-level GST Algorithms
 The ingredients needed by the LGST and LSGST algorithms are:
 - a "target" `Model` which defines the desired gates.  This model is used by LGST to specify the various gate, state preparation, POVM effect, and SPAM labels, as well as to provide an initial guess for the *gauge* degrees of freedom.
@@ -146,6 +144,4 @@ mdl_go7 = pygsti.gaugeopt_to_target(mdl, target_model, verbosity=3) # show outpu
 print("Final frobenius distance between mdl_go7 and target_model = ", mdl_go7.frobeniusdist(target_model))
 ```
 
-```{code-cell} ipython3
 
-```

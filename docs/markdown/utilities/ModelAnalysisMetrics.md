@@ -42,6 +42,4 @@ print("Eigenvalue Process Fidelity = ", float(rptbl.eigenvalue_entanglement_infi
 print("Diamond Distance = ", rptbl.eigenvalue_diamondnorm(ideal_model[('Gxpi2',0)], noisy_model[('Gxpi2',0)], basis))
 ```
 
-```{code-cell} ipython3
 
-```

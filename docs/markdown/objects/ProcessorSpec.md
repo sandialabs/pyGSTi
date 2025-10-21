@@ -234,7 +234,9 @@ print(explicit_model.primitive_op_labels)
 ```
 
 ## Compilation Rules
-<font style="color:red">Note: This is a new and incomplete feature in pyGSTi</font>
+```{warning}
+Note: This is a new and incomplete feature in pyGSTi
+```
 
 A new functionality currently under development allows new `QubitProcessorSpec` objects to be created from old ones by applying a set of "compilation rules".  These rules, for instance, allow us to create a new processor specification that contains $\pi$-rotation gates:
 
@@ -252,8 +254,6 @@ pspec2.gate_names
 ```
 
 In the future, these compilation rules will also be able to be applied to circuits to convert circuits intended for the "derived" processor specification into circuits for the original "native" one.
-
-+++
 
 ## Next Steps:
 `QubitProcessorSpec` objects are primarily used for creating models and experiment designs.  Most of the functions for creating models (see the [explicit model tutorial](ExplicitModel) and [implicit model tutorial](ImplicitModel)) take as their first argument a processor specification.  Processor specifications are also used to construct randomized benchmarking (RB) experiment designs (see the [Clifford](../rb/CliffordRB), [Direct](../rb/DirectRB) and [Mirror](../rb/MirrorRB) RB tutorials) as well as in gate set tomography experiment designs.

@@ -192,6 +192,4 @@ print(twopass_ds[('Gy',)].fractions['1'])
 print(twopass_ds[('Gx',)].total)
 ```
 
-```{code-cell} ipython3
 
-```

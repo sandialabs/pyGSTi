@@ -27,8 +27,6 @@ unmapped_circs = [pygsti.circuits.Circuit([["Gxpi2", "Q0"], ["Gypi2", "Q1"]]),py
 
 ## Map circuits to device connectivity and U3-CX gate set
 
-+++
-
 This step will be different depending on what architecture you are using. For this example, we are using an IBM device. You need to end up with pyGSTi circuits in a U3-CX gate set so that circuit mirroring can be performed.
 
 ```{code-cell} ipython3
@@ -69,8 +67,6 @@ unmirrored_design = pygsti.protocols.FreeformDesign(mapped_circs)
 
 ## Mirror circuit generation
 
-+++
-
 We use Pauli random compiling (`pauli_rc`) here. Central Pauli (`central_pauli`) is also an option.
 
 ```{code-cell} ipython3
@@ -90,11 +86,7 @@ print(f'Mirroring time:', time.time() - start)
 
 We have created the MCFE experiment design.
 
-+++
-
 ## Run the Edesign
-
-+++
 
 This example will run the edesign on a fake IBM backend, but this is not strictly required. This step needs to generate a `ProtocolData(edesign=mirror_edesign, dataset=circuit_counts_data)` where `mirror_edesign` is the variable defined earlier and `circuit_counts_data` is a `DataSet` that contains the outcomes for each circuit.
 

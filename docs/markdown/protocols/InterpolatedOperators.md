@@ -256,6 +256,4 @@ op.to_dense()
 op.aux_info
 ```
 
-```{code-cell} ipython3
 
-```

@@ -58,6 +58,4 @@ Note above cell was executed for demonstration purposes, and was **keyboard-inte
 results.write()
 ```
 
-```{code-cell} ipython3
 
-```

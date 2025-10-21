@@ -272,6 +272,4 @@ and
 reports may now be viewed.
 The only notable difference in the output are "gaps" in the color box plots which plot quantities such as the log-likelihood across all operation sequences, organized by germ and fiducials.
 
-```{code-cell} ipython3
 
-```

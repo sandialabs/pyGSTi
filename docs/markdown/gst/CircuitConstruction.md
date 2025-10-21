@@ -12,7 +12,7 @@ kernelspec:
 ---
 
 # Circuit Construction
-This tutorial discusses the creation of `Circuit` objects for use with Gate Set Tomography (GST).  If you're not sure what a `Circuit` is, you might want to read through the [tutorial on circuits](../objects/Circuit) first. 
+This tutorial discusses the creation of `Circuit` objects for use with gate set tomography (GST).  If you're not sure what a `Circuit` is, you might want to read through the [tutorial on circuits](../objects/Circuit) first. 
 
 While pyGSTi allows one to create arbitrary lists of circuits, the GST algorithms have been designed to work well with circuits that have a particular structure.  At the beginning and the end of each string are "preparation fiducial" and "measurement fiducial" circuits (or "sequences"), respectively, whose purpose is to extend the native preparation and measurment operations to informationally complete sets.  In between the fiducial sequences is a "germ" sequence, or just "germ", that is repeated some number of times.  The purpose of the repeated-germ sequence is to amplify one or more particular types of errors.  By considering an entire set of germs (called an "amplificationally complete" set), *all* possible types of errors are amplified, giving the GST algorithms high sensitivity to all errors.  The longer the sequences, that is, the more repetitions of the germs, the higher the sensitivity.  
 
@@ -106,6 +106,4 @@ my_lsgst_lists = my_make_lsgst_lists(['Gx','Gy'], prep_fiducials, germs, maxLeng
 print('\n'.join(['%d strings' % len(l) for l in my_lsgst_lists]))
 ```
 
-```{code-cell} ipython3
 
-```

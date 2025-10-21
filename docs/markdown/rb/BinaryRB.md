@@ -13,9 +13,7 @@ kernelspec:
 
 # Binary RB
 
-+++
-
-This tutorial contains a few details on how to run *Binary Randomized Benchmarking (BiRB)* that are not covered in the [RB overview tutorial](Overview).
+This tutorial contains a few details on how to run *Binary randomized benchmarking (BiRB)* that are not covered in the [RB overview tutorial](Overview).
 
 ## What is Binary RB? 
 
@@ -134,6 +132,4 @@ ws.RandomizedBenchmarkingPlot(results)
 print(1 - (1 - qubit_error_rate)**(len(qubits)))
 ```
 
-```{code-cell} ipython3
 
-```

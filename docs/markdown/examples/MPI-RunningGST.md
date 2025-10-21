@@ -89,6 +89,4 @@ pygsti.report.construct_standard_report(
 
 Open the [report](../../example_files/mpi_example_brief/main.html).
 
-```{code-cell} ipython3
 
-```

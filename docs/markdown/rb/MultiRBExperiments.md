@@ -13,8 +13,6 @@ kernelspec:
 
 # Simultaneous RB
 
-+++
-
 This tutorial shows how to easily run multiple RB experiments concurrently. This includes running RB on different subsets of a device, as well as running [simultaneous RB](https://journals.aps.org/prl/abstract/10.1103/PhysRevLett.122.200502) experiments. Here we'll demonstrate generating an experiment to run 1, 2, 3 and 4 qubit RB in sequence (i.e., separately), as well as running 1-qubit RB in parallel on all the qubits (i.e., simultaneously).
 
 Note that this functionality is not specific to RB: similar code could be used to combine multiple GST experiments, or GST and RB experiments, etc.

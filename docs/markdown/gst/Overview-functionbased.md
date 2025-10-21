@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Gate Set Tomography (function-based)
+# Gate set tomography (function-based)
 
 This tutorial shows you how to run gate set tomography using the older-style function-centric API.  This can be useful in certain scenarios, but most of the time it's easier to use the newer, object-oriented approach outlined in the main [GST overview tutorial](Overview).  For more details and options for running GST, see the [GST circuits tutorial](CircuitConstruction) and the [tutorial covering the different pyGSTi functions for running GST](Driverfunctions).
 

@@ -110,11 +110,11 @@ print("2DeltaLogL per circuit = ", 2*(max_logl_percircuit - logl_percircuit))
 
 It's possible to display model testing results within figure and HTML reports too.  For more information on model testing, especially alongside GST, see the [tutorial on model testing](../utilities/ModelTesting)(using protocol objects) and the [functions for model testing](../utilities/ModelTesting-functions).
 
-## Randomized Benchmarking (RB)
+## Randomized benchmarking (RB)
 PyGSTi is able to perform two types of randomized benchmarking (RB).  First, there is the [standard Clifford-circuit-based RB](http://journals.aps.org/prl/abstract/10.1103/PhysRevLett.106.180504) protocol first defined by Magesan et al. Second, there is ["Direct RB"](https://arxiv.org/abs/1807.07975), which is particularly suited to multi-qubit benchmarking.  More details on using these protocols (e.g. how to generate a set of RB sequences) see the separate [RB overview tutorial](../rb/Overview) and related tutorials.
 
-## Robust Phase Estimation (RPE)
-The Robust Phase Estimation (RPE) protocol is designed to efficiently estimate a few specific parameters of certain single-qubit models.  Below we demonstrate how to run RPE with the single-qubit model containing $X(\pi/2)$ and $Y(\pi/2)$ gates.  The list of requisite circuits is given by `make_rpe_angle_string_list_dict` and simulated noisy data is analyzed using `analyze_rpe_data`.  For more information on running RPE see the [RPE tutorial](../protocols/RobustPhaseEstimation).
+## Robust phase estimation (RPE)
+The robust phase estimation (RPE) protocol is designed to efficiently estimate a few specific parameters of certain single-qubit models.  Below we demonstrate how to run RPE with the single-qubit model containing $X(\pi/2)$ and $Y(\pi/2)$ gates.  The list of requisite circuits is given by `make_rpe_angle_string_list_dict` and simulated noisy data is analyzed using `analyze_rpe_data`.  For more information on running RPE see the [RPE tutorial](../protocols/RobustPhaseEstimation).
 
 ```{code-cell} ipython3
 from pygsti.extras import rpe
@@ -176,7 +176,7 @@ ws.DatasetComparisonHistogramPlot(comparator_A1_A2, log=True, display='pvalue', 
 ws.DatasetComparisonHistogramPlot(comparator_A1_B, log=True, display='pvalue', scale=0.8)
 ```
 
-## Gate Set Tomography (GST)
+## Gate set tomography (GST)
 Gate set tomography (GST) is a protocol designed to solve the inverse of "use this model to simulate observed data"; its goal is to *infer a model based on actual observed data*.  From a functional perspective, GST can be viewed as an inverse of the `generate_fake_data` function we've used a bunch above: it takes a `DataSet` and produces a `Model`.
 
 Because this inverse problem traverses some technical challenges, GST also requires a *structured* set of `Circuits` to work reliably and efficiently.  Here enters the concepts of "fiducial" and "germ" circuits, as well as a list of "maximum-repeated-germ-lengths" or just "max-lengths".  For details, see the [tutorial on the structure of GST circuits](../gst/CircuitConstruction) and the [tutorial on fiducial and germ selection](../gst/FiducialAndGermSelection).  The important takeaway is that the GST circuits are described below by the 4 variables: `prep_fiducials`, `meas_fiducials`, `germs`, and `maxLengths`.
@@ -228,7 +228,7 @@ pygsti.report.construct_standard_report(
 ## Idle tomography
 Idle tomography estimates the error rates of an $n$-qubit idle operation using relatively few sequences.  To learn more about how to use it, see the [idle tomography tutorial](../protocols/IdleTomography).
 
-## Drift Characterization
+## Drift characterization
 Time-series data can be analyzed for significant indications of drift (time variance in circuit outcome probabilities).  See the [tutorial on drift characterization](../protocols/DriftCharacterization) for more details.
 
 ## Time-dependent gate set tomography
