@@ -538,7 +538,7 @@ class LinearOperator(_modelmember.ModelMember):
         if transform is None and inv_transform is None:
             return _ot.diamonddist(self.to_dense("minimal"), other_op.to_dense("minimal"))
         else:
-            arg = arg = inv_transform @ self.to_dense("minimal") @ transform
+            arg = inv_transform @ self.to_dense("minimal") @ transform
             return _ot.diamonddist(arg, other_op.to_dense("minimal"))
 
     def transform_inplace(self, s):
