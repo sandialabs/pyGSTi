@@ -8,3 +8,5 @@ numpydoc
 sphinx==6.2.1
 sphinx_rtd_theme>=1.2.2
 sphinx-autoapi
+jupytext>=0.16
+jupyter-book

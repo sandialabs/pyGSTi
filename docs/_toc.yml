@@ -1,0 +1,145 @@
+# Table of contents
+# Learn more at https://jupyterbook.org/customize/toc.html
+
+format: jb-book
+root: markdown/intro
+parts:
+- caption: Getting Started
+  chapters:
+  - file: markdown/Installation
+  - file: markdown/overview/00-Protocols
+  - file: markdown/overview/01-Essential-Objects
+  - file: markdown/overview/02-Using-Essential-Objects
+
+- caption: Tutorials
+  chapters:
+  - file: markdown/Protocols
+    sections:
+    - file: markdown/gst/Overview
+      sections:
+      - file: markdown/gst/Protocols
+      - file: markdown/gst/CircuitConstruction
+        sections:
+        - file: markdown/gst/FiducialAndGermSelection
+        - file: markdown/gst/FiducialPairReduction
+      - file: markdown/gst/TimeDependent
+      - file: markdown/gst/Legacy
+        sections:
+        - file: markdown/gst/Overview-functionbased
+        - file: markdown/gst/Driverfunctions
+        - file: markdown/gst/LowLevel
+    - file: markdown/protocols/InterpolatedOperators
+    - file: markdown/protocols/IdleTomography
+    - file: markdown/protocols/DriftCharacterization
+    - file: markdown/protocols/RobustPhaseEstimation
+    - file: markdown/rb/Overview
+      sections:
+      - file: markdown/rb/CliffordRB
+      - file: markdown/rb/DirectRB
+      - file: markdown/rb/MirrorRB
+        sections:
+        - file: markdown/rb/MirrorRB-Universal-Gate-Sets
+      - file: markdown/rb/Samplers
+      - file: markdown/rb/MultiRBExperiments
+      - file: markdown/rb/BinaryRB
+    - file: markdown/protocols/VolumetricBenchmarks
+      sections:
+      - file: markdown/protocols/MirrorCircuitBenchmarks
+    - file: markdown/protocols/ParityBenchmarking
+  
+  - file: markdown/Objects
+    sections:
+    - file: markdown/objects/MatrixBases
+    - file: markdown/objects/Circuit
+      sections:
+      - file: markdown/objects/CircuitLists
+    - file: markdown/objects/DataSet
+      sections:
+      - file: markdown/objects/MultiDataSet
+      - file: markdown/objects/TimestampedDataSets
+      - file: markdown/utilities/DatasetComparison
+    - file: markdown/objects/ExperimentDesign
+    - file: markdown/utilities/GaugeOpt
+    - file: markdown/utilities/Metrics
+      sections:
+      - file: markdown/utilities/ModelAnalysisMetrics
+    - file: markdown/objects/Models
+      sections:
+      - file: markdown/objects/ExplicitModel
+      - file: markdown/objects/ImplicitModel
+      - file: markdown/objects/StateSpace
+      - file: markdown/objects/ModelParameterization
+      - file: markdown/objects/ModelNoise
+      - file: markdown/objects/ParameterBounds
+      - file: markdown/objects/ParameterLabels
+      - file: markdown/objects/ModelMemberGraph
+      - file: markdown/utilities/ModelTesting
+        sections:
+        - file: markdown/utilities/ModelTesting-functions
+        - file: markdown/utilities/Model-Selection
+    - file: markdown/objects/ModelPacks
+    - file: markdown/objects/Operators
+      sections:
+      - file: markdown/objects/CustomOperator
+      - file: markdown/objects/CustomPOVM
+      - file: markdown/objects/Instruments
+      - file: markdown/objects/OperationFactories
+    - file: markdown/objects/ProcessorSpec
+    - file: markdown/objects/Results
+  
+  - file: markdown/Simulation
+    sections:
+    - file: markdown/simulation/CircuitSimulation
+      sections:
+      - file: markdown/simulation/CliffordRB-Simulation-ExplicitModel
+      - file: markdown/simulation/CliffordRB-Simulation-ImplicitModel
+      - file: markdown/simulation/CircuitSimulation-CHP
+    - file: markdown/simulation/DataSimulation
+    - file: markdown/simulation/ErrorGeneratorPropagation
+    - file: markdown/simulation/ForwardSimulationTypes
+  
+  - file: markdown/Reporting
+    sections:
+    - file: markdown/reporting/ReportGeneration
+    - file: markdown/reporting/Workspace
+      sections:
+      - file: markdown/reporting/WorkspaceSwitchboards
+      - file: markdown/reporting/WorkspaceExamples
+    
+  - file: markdown/interfaces/FileIO
+
+- caption: Examples
+  chapters:
+  - file: markdown/examples/FisherInformation
+  - file: markdown/examples/ContextDependence
+  - file: markdown/examples/BootstrappedErrorBars
+  - file: markdown/examples/ProceduralErrorBars
+  - file: markdown/examples/2QGST-CreatingModels
+    sections:
+    - file: markdown/examples/2QGST-RunningIt
+    - file: markdown/examples/2QGST-ErrorBars
+  - file: markdown/examples/QutritGST
+    sections:
+    - file: markdown/examples/Leakage-automagic
+    - file: markdown/examples/Leakage-manual
+  - file: markdown/examples/1QGST-InterpolatedOps
+  - file: markdown/examples/MPI
+    sections:
+    - file: markdown/examples/MPI-GermSelection
+    - file: markdown/examples/MPI-RunningGST
+  - file: markdown/examples/GOpt-AddingNewOptimizations
+  - file: markdown/examples/GOpt-NonIdealTargets
+  - file: markdown/examples/Reports-LGSTonly
+  - file: markdown/examples/MCFE-Example
+  - file: markdown/interfaces/IBMQExperiment
+  - file: markdown/interfaces/CirqIntegration
+
+- caption: Developer Zone
+  maxdepth: 1
+  chapters:
+  - file: api.rst
+
+- caption: Reference
+  chapters:
+  - file: markdown/FAQ
+  - file: markdown/Citing
