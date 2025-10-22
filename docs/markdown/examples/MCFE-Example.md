@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Running MCFE on target circuits
+# Mirror Circuit Fidelity Estimation
 
 ```{code-cell} ipython3
 import pygsti

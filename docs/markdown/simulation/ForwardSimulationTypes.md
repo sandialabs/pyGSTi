@@ -162,7 +162,7 @@ Going beyond 10 qubits, run times will start to get long even for the stabilizer
 
 ```{warning}
 This cell takes several minutes to run!
-```{warning}
+```
 
 ```{code-cell} ipython3
 :tags: [nbval-skip]

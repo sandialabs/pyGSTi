@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Gauge-optimization with non-ideal targets
+# Gauge-Optimization With Non-Ideal Targets
 Typically gauge optimizations are performed with respect to the set of ideal target gates and spam operations.  This is convenient, since you need to specify the ideal targets as points of comparison, but not always the best approach.  Particularly when you expect all or some of the gate estimates to either substantially differ from the ideal operations or differ, even by small amounts, in particular ways from the ideal operations, it can be hugely aid later interpretation to specify a non-ideal `Model` as the target for gauge-optimization.  By separating the "ideal targets" from the "gauge optimization targets", you're able to tell the gauge optimizer what gates you *think* you have, including any known errors.  This can result in a gauge-optimized estimate which is much more sensible and straightforward to interpet.
 
 For example, gauge transformations can slosh error between the SPAM operations and the non-unital parts of gates.  If you know your gates are slightly non-unital you can include this information in the gauge-optimization-target (by specifying a `Model` which is slightly non-unital) and obtain a resulting estimate of low SPAM-error and slightly non-unital gates.  If you just used the ideal (unital) target gates, the gauge-optimizer, which is often setup to care more about matching gate than SPAM ops, could have sloshed all the error into the SPAM ops, resulting in a confusing estimate that indicates perfectly unital gates and horrible SPAM operations.

@@ -14,7 +14,7 @@ kernelspec:
 # Time-dependent GST
 This tutorial demonstrates how time dependence can be added to models in pyGSTi and, since gate set tomography (GST) just optimizes model parameters, how to run time-dependent GST.  
 
-```{warning} This topic describes "beta level" functionality in pyGSTi!**  It may contain bugs and holes in its implementation, which will be addressed in future releases.```
+```{warning} **This topic describes "beta level" functionality in pyGSTi!**  It may contain bugs and holes in its implementation, which will be addressed in future releases.```
 
 ```{code-cell} ipython3
 import pygsti

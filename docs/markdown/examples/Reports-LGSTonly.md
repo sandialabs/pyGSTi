@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# How to create an LGST-only report
+# Create An LGST-Only Report
 This example shows how you can create a HTML report from just the results of running *linear GST* (LGST).  This can be useful when you want to get a rough estimate of your gates quickly, as LGST is takes substantially less data and computation time compared with long-sequence GST.  This example is modeled after Tutorial 0.
 
 ```{code-cell} ipython3

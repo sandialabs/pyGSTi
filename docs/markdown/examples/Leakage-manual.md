@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Leakage (manual)
+# Leakage (Manual)
 
 This tutorial demonstrates how to perform GST on a "leaky-qubit" described by a 3-level (instead of the desired 2-level) system.
 

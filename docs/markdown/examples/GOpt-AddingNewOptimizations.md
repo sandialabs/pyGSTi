@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Adding new gauge-optimizations
+# Adding New Gauge-Optimizations
 This example demonstrates how to take a previously computed `Results` object and add new gauge-optimized version of to one of the estimates.  First, let's "pre-compute" a `ModelEstimateResults` object using `StandardGST`, which contains a single `Estimate` called "TP":
 
 ```{code-cell} ipython3

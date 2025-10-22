@@ -11,9 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# 2-Qubit GST Model
-
-```{attention} Should this be here or in a new Model or Examples section?```
+# 2Q-GST Model
 
 While pyGSTi is able to support several common types of 2-qubit gates, the space of all possible 2-qubit gates is so large that some users will need to construct their own particular 2-qubit gate "from scratch".  In this example, we look at how to construct a 2-qubit model manually.  We'll use `pygsti.construction.create_explicit_model` to construct the single-qubit gates and we'll create a "non-standard" 2-qubit gate by specifying the unitary operation it performs as a $4\times 4$ matrix. 
 

@@ -18,7 +18,7 @@ from pygsti.data import simulate_data
 from pygsti.protocols import StandardGST, ProtocolData
 ```
 
-# Leakage (automatic)
+# Leakage (Automatic)
 
 This short notebook shows how (data from) an experiment design for a two-level system can be used to fit a three-level sytem model, and how to generate a special report to provide insights for these models. The report includes special gate error metrics that reflect the distinguished role of the first two levels in the three-level system.
 
