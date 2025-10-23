@@ -184,26 +184,60 @@ def fidelity(a, b):
     return f
 
 
-def eigenvalue_fidelity(a, b, gauge_invariant=True) -> _np.floating:
-    from pygsti.tools import minweight_match
-    tol = _np.finfo(a.dtype).eps ** 0.75
-    _mt.assert_hermitian(a, tol)
-    _mt.assert_hermitian(b, tol)
+def eigenvalue_fidelity(x: _np.ndarray, y: _np.ndarray, gauge_invariant:bool=True) -> _np.floating:
+    """
+    For positive semidefinite matrices (x, y), define M(x,y) = √(√x · y · √x).
+
+    The fidelity of (x, y) is defined as F(x,y) = Tr(M(x,y))^2.
+
+    Let v(x) and v(y) denote vectors containing the eigenvalues of x and y,
+    sorted in decreasing order.
+
+    If gauge_invariant is True, then this function returns ⟨√v(x), √v(y)⟩^2,
+    which is always an upper bound for F(x,y).
+
+    If gauge_invariant is False, then this function uses a heuristic to "match"
+    eigenvalues of x and y based on similarity of their corresponding eigenvectors.
+
+    Proof
+    -----
+    Let A = √x·√y, so that M(x,y) = √(A A^†). The fact that M(x,y) is a square-root
+    of a Gram matrix of A implies (via the polar decomposition) the existence of a
+    unitary matrix U where A = M(x,y)U. This lets us write fidelity as
+
+        F(x,y) = Tr( √x · √y U^† )^2.                            (1)
+
+    Next, let s(z) denote the vector of singular values of a matrix z, in descending
+    order. Assuming the claim from Problem III.6.2 of Bhatia's Matrix Analysis, we
+    have the inequality
+
+        Tr( √x · √y U^† ) ≤ ⟨ s(√x), s(√y U^†) ⟩.                (2)
+
+    Using the fact that the singular values of √x are the same as its eigenvalues,
+    and the singular values of √y U^† are the eigenvalues of √y, we have
+
+        ⟨ s(√x), s(√y U^†) ⟩ = ⟨ √v(x), √v(y) ⟩.                 (3)
+
+    Combining (1), (2), and (3) proves our claim.
+    """
+    tol = _np.finfo(x.dtype).eps ** 0.75
+    _mt.assert_hermitian(x, tol)
+    _mt.assert_hermitian(y, tol)
     if gauge_invariant:
-        valsA = _spl.eigvalsh(a)
-        valsB = _spl.eigvalsh(b)
-        dissimilarity = lambda x, y: abs(x - y)
-        _, pairs = minweight_match(valsA, valsB, dissimilarity, return_pairs=True)
+        valsX = _np.sort(_spl.eigvalsh(x))
+        valsY = _np.sort(_spl.eigvalsh(y))
+        pairs = [(i,i) for i in range(valsX.size)]
     else:
-        valsA, vecsA = _spl.eigh(a)
-        valsB, vecsB = _spl.eigh(b) 
+        from pygsti.tools import minweight_match
+        valsX, vecsX = _spl.eigh(x)
+        valsY, vecsY = _spl.eigh(y)
         dissimilarity = lambda vec_x, vec_y : abs(1 - abs(vec_x @ vec_y))
-        _, pairs = minweight_match(vecsA.T.conj(), vecsB.T.conj(), dissimilarity, return_pairs=True)
-    ind_a, ind_b = zip(*pairs)
-    arg_a = _np.maximum(valsA[list(ind_a)], 0)
-    arg_b = _np.maximum(valsB[list(ind_b)], 0)
-    f = _np.linalg.norm(arg_a**0.5 * arg_b**0.5, ord=1)**2
-    return f
+        _, pairs = minweight_match(vecsX.T.conj(), vecsY.T.conj(), dissimilarity, return_pairs=True)
+    ind_x, ind_y = zip(*pairs)
+    arg_x = _np.maximum(valsX[list(ind_x)], 0)
+    arg_y = _np.maximum(valsY[list(ind_y)], 0)
+    f = (arg_x**0.5 @ arg_y**0.5)**2
+    return f # type: ignore
 
 
 def eigenvalue_infidelity(a, b, gauge_invariant=True) -> _np.floating:
