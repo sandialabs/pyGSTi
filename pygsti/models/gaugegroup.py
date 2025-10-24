@@ -817,7 +817,7 @@ class UnitaryGaugeGroup(OpGaugeGroupWithBasis):
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
     """
 
-    def __init__(self, state_space: _StateSpace, basis: Optional[Union[_Basis, str]],
+    def __init__(self, state_space: _StateSpace, basis: Union[_Basis, str],
                  evotype: Optional[Union[_Evotype, str]] = 'default'):
         state_space = _StateSpace.cast(state_space)
         evotype = _Evotype.cast(str(evotype), default_prefer_dense_reps=True)  # since we use deriv_wrt_params
