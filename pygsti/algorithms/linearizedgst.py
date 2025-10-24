@@ -57,14 +57,24 @@ def build_model_parameter_indexing(lindblad_coeff, num_qubits):
 
 def create_circuit_design_matrix(circuit, model, model_parameter_indexing, usePaulis=False,pauli_measurements=None,include_spam=False):
 	"""
+	Inputs:
+
 	circuit: Circuit
 
-	model: Noise model we're creating the design matrix for
+	model: a pygsti noise model we're creating the design matrix is for
 
 	model_parameter_indexing : a list where the elements are 2-element tuples. Each element consists of a error generator tuple (in Stim format)
 								and a gate in the model. The index where this element appears defines the indexing of the created design matrix.
 
-	error_free_model : A model with which to compute error-free circuit outcomes.
+	usePaulis: If false calculates the design matrix for bitstring probabilities, if true calculates the design matrix for pauli measurement outcomes
+
+	include_spam: Placeholder for when SPAM is added to error propapgation code, should be set to false currently.
+	______________________________
+	Returns:
+	design_matrix: the design matrix for the circuit, noise model, and measurements:
+	______________________________
+	Description:
+	Calculates the design matrix for a single circuit.
 	"""
 	num_qubits = len(circuit.line_labels)
 
@@ -81,12 +91,52 @@ def create_circuit_design_matrix(circuit, model, model_parameter_indexing, usePa
 	return design_matrix
 
 def create_design_matrix(circuit_list, model, model_parameter_indexing,usePaulis=False,include_spam=False):
+	"""
+	Inputs:
+
+	circuit_list: List of circuits to calculate the design matrix for
+
+	model: A pygsti noise model we're creating the design matrix is for
+
+	model_parameter_indexing : a list where the elements are 2-element tuples. Each element consists of a error generator tuple (in Stim format)
+								and a gate in the model. The index where this element appears defines the indexing of the created design matrix.
+
+	usePaulis: If false calculates the design matrix for bitstring probabilities, if true calculates the design matrix for pauli measurement outcomes
+
+	include_spam: Placeholder for when SPAM is added to error propapgation code, should be set to false currently.
+	______________________________
+	Returns:
+	design_matrix: the design matrix for the set of circuits, noise model, and measurements:
+	______________________________
+	Description:
+	Calculates the design matrix for a set of circuits
+	"""
 	design_matrices = []
 	for i, circuit in enumerate(circuit_list):
 		design_matrices.append(create_circuit_design_matrix(circuit, model, model_parameter_indexing,usePaulis=usePaulis,include_spam=include_spam))
 	return _np.vstack(design_matrices)
 
 def create_design_matrix_list(circuit_list, model, model_parameter_indexing,usePaulis=False,pauli_measurements=None,include_spam=False):
+	"""
+	Inputs:
+
+	circuit_list: list of circuits to calculate the design matrix for
+
+	model: A pygsti Noise model we're creating the design matrix is for
+
+	model_parameter_indexing : a list where the elements are 2-element tuples. Each element consists of a error generator tuple (in Stim format)
+								and a gate in the model. The index where this element appears defines the indexing of the created design matrix.
+
+	usePaulis: If false calculates the design matrix for bitstring probabilities, if true calculates the design matrix for pauli measurement outcomes
+
+	include_spam: Placeholder for when SPAM is added to error propapgation code, should be set to false currently.
+	______________________________
+	Returns:
+	design_matrices: A list of design matrices where the order follows the circuit list
+	______________________________
+	Description:
+	Calculates the design matrix for a list of circuits. However, leaves the design matrices as a list rather than merge them into a final design matrix.
+	"""
 	design_matrices = []
 	for i, circuit in enumerate(circuit_list):
 		dm =create_circuit_design_matrix(circuit, model, model_parameter_indexing,usePaulis=usePaulis,pauli_measurements=pauli_measurements,include_spam=include_spam)
