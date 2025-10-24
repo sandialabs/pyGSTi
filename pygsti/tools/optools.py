@@ -208,7 +208,7 @@ def eigenvalue_fidelity(x: _np.ndarray, y: _np.ndarray, gauge_invariant:bool=Tru
         F(x,y) = Tr( √x · √y U^† )^2.                            (1)
 
     Next, let s(z) denote the vector of singular values of a matrix z, in descending
-    order. Assuming the claim from Problem III.6.2 of Bhatia's Matrix Analysis, we
+    order. Assuming the claim from Problem III.6.12 of Bhatia's Matrix Analysis, we
     have the inequality
 
         Tr( √x · √y U^† ) ≤ ⟨ s(√x), s(√y U^†) ⟩.                (2)
