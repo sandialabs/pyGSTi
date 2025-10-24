@@ -565,7 +565,7 @@ class LinearOperator(_modelmember.ModelMember):
         """
         Smx = s.transform_matrix
         Si = s.transform_matrix_inverse
-        self.set_dense(_np.dot(Si, _np.dot(self.to_dense("minimal"), Smx)))
+        self.set_dense(Si @ self.to_dense("minimal") @ Smx)
 
     def spam_transform_inplace(self, s, typ):
         """
@@ -593,9 +593,9 @@ class LinearOperator(_modelmember.ModelMember):
         None
         """
         if typ == 'prep':
-            self.set_dense(_np.dot(s.transform_matrix_inverse, self.to_dense("minimal")))
+            self.set_dense(s.transform_matrix_inverse @ self.to_dense("minimal"))
         elif typ == 'effect':
-            self.set_dense(_np.dot(self.to_dense("minimal"), s.transform_matrix))
+            self.set_dense(self.to_dense("minimal") @ s.transform_matrix)
         else:
             raise ValueError("Invalid `typ` argument: %s" % typ)
 
@@ -629,7 +629,7 @@ class LinearOperator(_modelmember.ModelMember):
         else:
             assert(len(amount) == self.dim - 1)
             D = _np.diag([1] + list(1.0 - _np.array(amount, 'd')))
-        self.set_dense(_np.dot(D, self.to_dense("minimal")))
+        self.set_dense(D @  self.to_dense("minimal"))
 
     def rotate(self, amount, mx_basis="gm"):
         """
@@ -660,7 +660,7 @@ class LinearOperator(_modelmember.ModelMember):
         None
         """
         rotnMx = _ot.rotation_gate_mx(amount, mx_basis)
-        self.set_dense(_np.dot(rotnMx, self.to_dense("minimal")))
+        self.set_dense(rotnMx @ self.to_dense("minimal"))
 
     def deriv_wrt_params(self, wrt_filter=None):
         """
