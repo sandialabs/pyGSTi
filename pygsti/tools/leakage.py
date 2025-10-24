@@ -281,6 +281,20 @@ def subspace_superop_fro_dist(op_x, op_y, op_basis, n_leak=0):
     return np.linalg.norm(diff @ P)
 
 
+def _direct_sum_unitary_group(subspace_bases, full_basis):
+    from pygsti.models.gaugegroup import UnitaryGaugeGroup, DirectSumUnitaryGroup, TrivialGaugeGroup
+    subgroups : list[Union[TrivialGaugeGroup, UnitaryGaugeGroup]] = []
+    for sb in subspace_bases:
+        udim = int(np.round(sb.dim**0.5))
+        assert udim**2 == sb.dim
+        if udim == 1:
+            g = TrivialGaugeGroup(sb.state_space)
+        else:
+            g = UnitaryGaugeGroup(sb.state_space, sb)
+        subgroups.append(g)
+    g_full = DirectSumUnitaryGroup(tuple(subgroups), full_basis)
+    return g_full
+
 # MARK: model construction
 
 def leaky_qubit_model_from_pspec(
@@ -363,12 +377,8 @@ def leaky_qubit_model_from_pspec(
         gatekey = gatename if isinstance(gatename, Label) else Label((gatename, ql))
         tm_3level.operations[gatekey] = u2x2_to_9x9_superoperator(unitary)
 
-    from pygsti.models.gaugegroup import UnitaryGaugeGroup, DirectSumUnitaryGroup, TrivialGaugeGroup, _ExplicitStateSpace
-    ss_comp = _ExplicitStateSpace(ps_2level.qubit_labels, [2])
-    ss_leak = _ExplicitStateSpace(['L'], [1])
-    g_comp = UnitaryGaugeGroup(ss_comp, 'pp')
-    g_leak = TrivialGaugeGroup(ss_leak)
-    g_full = DirectSumUnitaryGroup((g_comp, g_leak), mx_basis)
+    subgroup_bases = [Basis.cast('pp', 4), Basis.cast('pp', 1)]
+    g_full = _direct_sum_unitary_group(subgroup_bases, mx_basis)
     tm_3level.default_gauge_group = g_full
     tm_3level.sim = 'map'  # can use 'matrix', if that's preferred for whatever reason.
     return tm_3level
@@ -448,13 +458,9 @@ def lagoified_gopparams_dicts(gopparams_dicts: List[Dict]) -> List[Dict]:
         #   our default because add_lago_models uses parameterization-preserving
         #   gauge optimization.
     inner_dict = inner_dict.copy()
-    gg = tm.default_gauge_group
-    # ^ The most likely scenario is that gg is a DirectSumGaugeGroup, consisting
-    #   of a UnitaryGaugeGroup and a TrivialGaugeGroup. Rather than hard-code
-    #   that choice, we go with the default gauge group of the target model.
-    if gg is not None:
-        inner_dict['gauge_group'] = gg
-        inner_dict['_gaugeGroupEl'] = gg.compute_element(gg.initial_params)
+    gg = _direct_sum_unitary_group([Basis.cast('pp', 4), Basis.cast('pp', 1)], tm.basis)
+    inner_dict['gauge_group'] = gg
+    inner_dict['_gaugeGroupEl'] = gg.compute_element(gg.initial_params)
     inner_dict['gates_metric'] = 'frobenius squared'
     inner_dict['spam_metric']  = 'frobenius squared'
     inner_dict['item_weights'] = {'gates': 1.0, 'spam': 1.0}
