@@ -4406,21 +4406,22 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         return terms
 
     def lsvec(self, paramvec=None, oob_check=False, raw_objfn_lsvec_signs=True):
-        lsvec = self.terms(paramvec, oob_check, "LS OBJECTIVE")
-        if _np.any(lsvec < 0):
-            bad_locs = _np.where(lsvec < 0)[0]
-            msg = f"""
-            lsvec is only defined when terms is elementwise nonnegative.
-            We encountered negative values for terms[i] for indices i
-            in {bad_locs}.
-            """
-            raise RuntimeError(msg)
         unit_ralloc = self.layout.resource_alloc('atom-processing')
         shared_mem_leader = unit_ralloc.is_host_leader
+        lsvec = self.terms(paramvec, oob_check, "LS OBJECTIVE")
+
         if shared_mem_leader:
+            if _np.any(lsvec < 0):            
+                bad_locs = _np.where(lsvec < 0)[0]
+                msg = f"""
+                lsvec is only defined when terms is elementwise nonnegative.
+                We encountered negative values for terms[i] for indices i
+                in {bad_locs}.
+                """
+                raise RuntimeError(msg)
+
             lsvec **= 0.5
-        if raw_objfn_lsvec_signs:
-            if shared_mem_leader:
+            if raw_objfn_lsvec_signs:
                 raw_lsvec = self.raw_objfn.lsvec(self.probs, self.counts, self.total_counts, self.freqs)
                 lsvec[:self.nelements][raw_lsvec < 0] *= -1
         unit_ralloc.host_comm_barrier()
