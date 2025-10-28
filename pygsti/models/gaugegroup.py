@@ -1144,8 +1144,12 @@ class DirectSumUnitaryGroup(GaugeGroup):
 
         # Step 2. Infer and validate the provided basis.
         if isinstance(basis, str):
-            ss = _ExplicitStateSpace(['all'], [udim])
-            basis = _BuiltinBasis("std", ss)
+            basis = _Basis.cast(basis, udim**2)
+            # NOTE: Strings get cast to BuiltinBasis objects, which subclass LazyBasis.
+            # If a LazyBasis is instantiated with invalid dimensions (e.g., dim=9 when
+            # basis='pp'), then an exception will be raised when we try to actually use
+            # the basis, such as by accessing basis.labels.
+
         if basis.dim != udim**2:
             msg = """
             Inconsistency between `basis.dim` and the dimension of the direct sum Hilbert
