@@ -734,7 +734,7 @@ def create_explicit_fogi_model(processor_spec, custom_gates=None,
                           depolarization_parameterization='depolarize', stochastic_parameterization='stochastic',
                           lindblad_parameterization='auto',
                           evotype="default", simulator="auto",
-                          embed_gates=False, basis='pp', op_abbrevs=None):
+                          embed_gates=False, basis='pp', op_abbrevs=None, dependent_fogi_action='drop'):
     """Constructs and returns a FOGI GLND model from a processor spec, for 1 qubit it should take ~seconds, 
     for 2 qubits expect <10min depending on the number of operations in the gate set.
 
@@ -772,7 +772,7 @@ def create_explicit_fogi_model(processor_spec, custom_gates=None,
     #TODO make this adaptive for subsets of HSCA errgen types below
     gauge_basis = _CompleteElementaryErrorgenBasis(
             basis1q, errgen_model.state_space, elementary_errorgen_types='HSCA')
-    errgen_model.setup_fogi(gauge_basis, None, op_abbrevs, include_spam=True, reparameterize=True)
+    errgen_model.setup_fogi(gauge_basis, None, op_abbrevs, include_spam=True, reparameterize=True, dependent_fogi_action=dependent_fogi_action)
     return errgen_model
     
 

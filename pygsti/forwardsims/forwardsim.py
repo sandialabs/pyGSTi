@@ -888,7 +888,6 @@ def _bytes_for_array_type(array_type, global_elements, max_local_elements, max_a
         if letter == 'd': size *= dim
     return size * bytes_per_item
 
-
 def _bytes_for_array_types(array_types, global_elements, max_local_elements, max_atom_size,
                            total_circuits, max_local_circuits,
                            global_num_params, max_local_num_params, max_param_block_size,

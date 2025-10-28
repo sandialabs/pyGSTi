@@ -7,6 +7,7 @@ import time
 from pygsti.tools.modelselectiontools import create_red_model as _create_red_model, reduced_model_approx_GST_fast as _reduced_model_approx_GST_fast
 from pygsti.tools.modelselectiontools import parallel_GST as _parallel_GST, AMSCheckpoint as _AMSCheckpoint, remove_param, create_approx_logl_fn
 import os as _os
+import math
 
 def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, maxiter=100, tol=1.0, prob_clip=1e-3, recompute_H_thresh_percentage = .1, disable_checkpoints = False, checkpoint = None, comm = None, mem_limit = None):
     """
@@ -139,7 +140,7 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
     if target_model_fit is None:
         if rank == 0 and verbosity > 0:
             print('starting GST')
-        #target_model.sim = pygsti.forwardsims.MapForwardSimulator(param_blk_sizes=(100,100))
+        target_model.sim = pygsti.forwardsims.MapForwardSimulator(processor_grid=(1,size))
         result = _parallel_GST(target_model, data, prob_clip, tol, maxiter, verbosity, comm=comm, mem_limit=mem_limit)
     
         target_model_fit = result.estimates['GateSetTomography'].models['final iteration estimate']
@@ -154,7 +155,7 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
     if H is None:
         if rank == 0 and verbosity > 0: 
             print("computing Hessian")
-        #target_model_fit.sim = pygsti.forwardsims.MapForwardSimulator(param_blk_sizes=(100,100))
+        target_model_fit.sim = pygsti.forwardsims.MapForwardSimulator(processor_grid=(1,math.floor(size/2),math.ceil(size/2)),param_blk_sizes=(100,100))
         H = pygsti.tools.logl_hessian(target_model_fit, data.dataset, comm=comm, mem_limit=mem_limit, verbosity = verbosity)
         #TODO how to make this work without mpiexec call
         H = comm.bcast(H, root = 0)
@@ -175,6 +176,7 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
     if len(graph_levels) == 0:
 
         red_model = target_model.copy()
+        print(f'{target_model_fit.sim._processor_grid}')
         logl_fn = create_logl_obj_fn(target_model_fit, data.dataset)
         original_dlogl = -logl_fn.fn()
         print(f'{original_dlogl=}')
