@@ -412,10 +412,12 @@ def lagoified_gopparams_dicts(gopparams_dicts: List[Dict]) -> List[Dict]:
         # Step 2: use this function to build our GSTGaugeOptSuite.
         #
         s = lagoified_gopparams_dicts(gopparams_dicts)
-        t = lagoified_gopparams_dicts(gopparams_dicts)
-        t[-1]['gates_metric'] = 'fidelity'
-        t[-1]['spam_metric']  = 'fidelity'
-        specification = {'LAGO-std': s,'LAGO-custom': t}
+        c = lagoified_gopparams_dicts(gopparams_dicts)
+        c[-1]['gates_metric'] = 'fidelity'
+        c[-1]['spam_metric']  = 'fidelity'
+        # ^ our custom leakage gauge optimization uses fidelity, rather
+        #   than the default of squared frobenius norm.
+        specification = {'LAGO-std': s,'LAGO-custom': c}
         gos = GSTGaugeOptSuite(gaugeopt_argument_dicts=specification)
         
         #
