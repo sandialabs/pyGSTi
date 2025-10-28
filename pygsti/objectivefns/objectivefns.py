@@ -4397,12 +4397,15 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             self.model.from_vector(paramvec)
         terms = self.obj.view()
 
+        # Whether this rank is the "leader" of all the processors accessing the same shared self.jac and self.probs mem.
+        #  Only leader processors should modify the contents of the shared memory, so we only apply operations *once*
+        #  `unit_ralloc` is the group of all the procs targeting same destination into self.obj
         unit_ralloc = self.layout.resource_alloc('atom-processing')
         shared_mem_leader = unit_ralloc.is_host_leader
 
         with self.resource_alloc.temporarily_track_memory(self.nelements):  # 'e' (terms)
-            self.model.sim.bulk_fill_probs(self.probs, self.layout)
-            self._clip_probs()
+            self.model.sim.bulk_fill_probs(self.probs, self.layout) # syncs shared mem
+            self._clip_probs() # clips self.probs in place w/shared mem sync
     
             if oob_check:  # Only used for termgap cases
                 if not self.model.sim.bulk_test_if_paths_are_sufficient(self.layout, self.probs, verbosity=1):
@@ -4444,6 +4447,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             if raw_objfn_lsvec_signs:
                 raw_lsvec = self.raw_objfn.lsvec(self.probs, self.counts, self.total_counts, self.freqs)
                 lsvec[:self.nelements][raw_lsvec < 0] *= -1
+        unit_ralloc.host_comm_barrier()
         return lsvec
 
     def dterms(self, paramvec=None):
