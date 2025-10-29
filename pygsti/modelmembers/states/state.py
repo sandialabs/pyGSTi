@@ -13,11 +13,10 @@ The State class and supporting functionality.
 
 import numpy as _np
 
-from ...tools.matrixtools import OperatorLike
 from pygsti.baseobjs.opcalc import bulk_eval_compact_polynomials_complex as _bulk_eval_compact_polynomials_complex
 from pygsti.modelmembers import modelmember as _modelmember
 from pygsti.baseobjs import _compatibility as _compat
-from pygsti.tools import optools as _ot
+from pygsti.tools import matrixtools as _mt
 from pygsti import SpaceT
 
 from typing import Any
@@ -131,7 +130,7 @@ class State(_modelmember.ModelMember):
         """
         raise NotImplementedError("to_dense(...) not implemented for %s objects!" % self.__class__.__name__)
 
-    def _to_transformed_dense(self, T_domain: OperatorLike, T_codomain: OperatorLike, on_space: SpaceT='minimal') -> _np.ndarray:
+    def _to_transformed_dense(self, T_domain: _mt.OperatorLike, T_codomain: _mt.OperatorLike, on_space: SpaceT='minimal') -> _np.ndarray:
         """
         Return an array representation of the linear operator obtained by composing
         self.to_dense() and T_codomain. The representation interprets states as vectors
