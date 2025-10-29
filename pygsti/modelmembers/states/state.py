@@ -13,6 +13,7 @@ The State class and supporting functionality.
 
 import numpy as _np
 
+from ...tools.matrixtools import OperatorLike
 from pygsti.baseobjs.opcalc import bulk_eval_compact_polynomials_complex as _bulk_eval_compact_polynomials_complex
 from pygsti.modelmembers import modelmember as _modelmember
 from pygsti.baseobjs import _compatibility as _compat
@@ -129,6 +130,19 @@ class State(_modelmember.ModelMember):
         numpy.ndarray
         """
         raise NotImplementedError("to_dense(...) not implemented for %s objects!" % self.__class__.__name__)
+
+    def _to_transformed_dense(self, T_domain: OperatorLike, T_codomain: OperatorLike, on_space: SpaceT='minimal') -> _np.ndarray:
+        """
+        Return an array representation of the linear operator obtained by composing
+        self.to_dense() and T_codomain. The representation interprets states as vectors
+        in Hilbert(--Schmidt) space; it uses the canonical identification of a vector
+        `v` with a linear map `lambda c: c*v` that takes scalars to vectors.
+
+        T_domain (ignored) is only here for consistency across the ModelMember API.
+        """
+        X = self.to_dense(on_space=on_space)
+        out = T_codomain @ X
+        return out
 
     def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):
         """
@@ -299,62 +313,6 @@ class State(_modelmember.ModelMember):
             cpolys[0], cpolys[1], v, (len(terms_at_order),))  # an array of coeffs
         terms_at_order = [t.copy_with_magnitude(abs(coeff)) for coeff, t in zip(coeffs, terms_at_order)]
         return [t for t in terms_at_order if t.magnitude >= min_term_mag]
-
-    def frobeniusdist_squared(self, other_spam_vec, transform=None, inv_transform=None) -> _np.floating[Any]:
-        """
-        Return the squared frobenius difference between this operation and `other_spam_vec`.
-
-        Optionally transforms this vector first using `inv_transform`.
-
-        Parameters
-        ----------
-        other_spam_vec : State
-            The other spam vector
-
-        transform : numpy.ndarray, optional
-            Ignored. (We keep this as a positional argument for consistency with
-            the frobeniusdist_squared method of pyGSTi's LinearOperator objects.)
-
-        inv_transform : numpy.ndarray, optional
-            Named for consistency with the frobeniusdist_squared method of pyGSTi's
-            LinearOperator objects.
-
-        Returns
-        -------
-        float
-        """
-        vec = self.to_dense("minimal")
-        if inv_transform is not None:
-            vec = inv_transform @ vec
-        return _ot.frobeniusdist_squared(vec, other_spam_vec.to_dense("minimal"))
-
-    def residuals(self, other_spam_vec, transform=None, inv_transform=None):
-        """
-        Return a vector of residuals between this spam vector and `other_spam_vec`.
-
-        Optionally transforms this vector first using `transform` and
-        `inv_transform`.
-
-        Parameters
-        ----------
-        other_spam_vec : State
-            The other spam vector
-
-        transform : numpy.ndarray, optional
-            Transformation matrix.
-
-        inv_transform : numpy.ndarray, optional
-            Inverse of `tranform`.
-
-        Returns
-        -------
-        float
-        """
-        vec = self.to_dense("minimal")
-        if inv_transform is not None:
-            vec = inv_transform @ vec
-        return (vec - other_spam_vec.to_dense("minimal")).ravel()
-
 
     def transform_inplace(self, s):
         """

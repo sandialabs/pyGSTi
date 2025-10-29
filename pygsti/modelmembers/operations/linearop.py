@@ -10,6 +10,8 @@ The LinearOperator class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
+
 import numpy as _np
 
 from pygsti.baseobjs.opcalc import bulk_eval_compact_polynomials_complex as _bulk_eval_compact_polynomials_complex
@@ -17,8 +19,6 @@ from pygsti.modelmembers import modelmember as _modelmember
 from pygsti.tools import optools as _ot
 from pygsti.tools import matrixtools as _mt
 from pygsti import SpaceT
-
-from typing import Any
 
 #Note on initialization sequence of Operations within a Model:
 # 1) a Model is constructed (empty)
@@ -156,6 +156,14 @@ class LinearOperator(_modelmember.ModelMember):
         numpy.ndarray
         """
         raise NotImplementedError("to_dense(...) not implemented for %s objects!" % self.__class__.__name__)
+
+    def _to_transformed_dense(self, T_domain: _mt.OperatorLike, T_codomain: _mt.OperatorLike, on_space: SpaceT='minimal') -> _np.ndarray:
+        """
+        Return an array representation of the linear operator obtained by composing T_domain,
+        self.to_dense(), and T_codomain --- in that order.
+        """
+        out = T_codomain @ self.to_dense(on_space=on_space) @ T_domain
+        return out
 
     def acton(self, state, on_space='minimal'):
         """
@@ -391,99 +399,6 @@ class LinearOperator(_modelmember.ModelMember):
         #        import bpdb; bpdb.set_trace()
 
         return [t for t in terms_at_order if t.magnitude >= min_term_mag]
-
-    def frobeniusdist_squared(self, other_op, transform=None, inv_transform=None) -> _np.floating[Any]:
-        """
-        Return the squared frobenius difference between this operation and `other_op`
-
-        Optionally transforms this operation first using matrices
-        `transform` and `inv_transform`.  Specifically, this operation gets
-        transformed as: `O => inv_transform * O * transform` before comparison with
-        `other_op`.
-
-        Parameters
-        ----------
-        other_op : DenseOperator
-            The other operation.
-
-        transform : numpy.ndarray, optional
-            Transformation matrix.
-
-        inv_transform : numpy.ndarray, optional
-            Inverse of `transform`.
-
-        Returns
-        -------
-        float
-        """
-        self_mx = self.to_dense("minimal")
-        other_mx = other_op.to_dense("minimal")
-        if transform is not None:
-            self_mx = self_mx @ transform
-            if isinstance(inv_transform, _mt.IdentityOperator):
-                other_mx = other_mx @ transform
-        if inv_transform is not None:
-            self_mx = inv_transform @ self_mx
-        return _ot.frobeniusdist_squared(self_mx, other_mx)
-
-
-    def frobeniusdist(self, other_op, transform=None, inv_transform=None):
-        """
-        Return the frobenius distance between this operation and `other_op`.
-
-        Optionally transforms this operation first using matrices
-        `transform` and `inv_transform`.  Specifically, this operation gets
-        transformed as: `O => inv_transform * O * transform` before comparison with
-        `other_op`.
-
-        Parameters
-        ----------
-        other_op : DenseOperator
-            The other operation.
-
-        transform : numpy.ndarray, optional
-            Transformation matrix.
-
-        inv_transform : numpy.ndarray, optional
-            Inverse of `transform`.
-
-        Returns
-        -------
-        float
-        """
-        return _np.sqrt(self.frobeniusdist_squared(other_op, transform, inv_transform))
-
-    def residuals(self, other_op, transform=None, inv_transform=None):
-        """
-        The per-element difference between this `DenseOperator` and `other_op`.
-
-        Optionally, tansforming this operation first as
-        `O => inv_transform * O * transform`.
-
-        Parameters
-        ----------
-        other_op : DenseOperator
-            The operation to compare against.
-
-        transform : numpy.ndarray, optional
-            Transformation matrix.
-
-        inv_transform : numpy.ndarray, optional
-            Inverse of `transform`.
-
-        Returns
-        -------
-        numpy.ndarray
-            A 1D-array of size equal to that of the flattened operation matrix.
-        """
-        dense_self = self.to_dense("minimal")
-        if transform is not None:
-            assert inv_transform is not None
-            dense_self = inv_transform @ (dense_self @ transform)
-        else:
-            assert inv_transform is None
-        return (dense_self - other_op.to_dense("minimal")).ravel()
-
 
     def jtracedist(self, other_op, transform=None, inv_transform=None):
         """
