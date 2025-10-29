@@ -24,10 +24,7 @@ from pygsti.tools import matrixtools as _mt
 from typing import Union
 
 
-TransformMxPair = tuple[
-    Union[_np.ndarray, _mt.IdentityOperator],
-    Union[_np.ndarray, _mt.IdentityOperator]
-]
+TransformMxPair = tuple[_mt.OperatorLike, _mt.OperatorLike]
 
 
 def to_transform_mx_pair(tmx_arg: Union[None, _np.ndarray, TransformMxPair]) -> TransformMxPair:
@@ -38,8 +35,8 @@ def to_transform_mx_pair(tmx_arg: Union[None, _np.ndarray, TransformMxPair]) -> 
         invP = _np.linalg.pinv(P)
     else:
         P, invP = tmx_arg
-        assert _mt.is_operatorlike(P)
-        assert _mt.is_operatorlike(invP)
+        assert isinstance(P,    _mt.OperatorLike)
+        assert isinstance(invP, _mt.OperatorLike)
     return P, invP
 
 # Tolerace for matrix_rank when finding rank of a *normalized* projection
