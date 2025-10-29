@@ -1041,7 +1041,7 @@ def instrument_infidelity(a, b, mx_basis):
     return 1 - sum(sqrt_component_fidelities)**2
 
 
-def instrument_diamonddist(a, b, mx_basis, _premultipler=None):
+def instrument_diamonddist(a, b, mx_basis, _premultiplier=None):
     """
     The diamond distance between instruments a and b.
 
@@ -1079,8 +1079,8 @@ def instrument_diamonddist(a, b, mx_basis, _premultipler=None):
             cc, dd = j * adim, (j + 1) * adim
             composite_op[aa:bb, cc:dd] = a[clbl].to_dense("HilbertSchmidt")
             composite_top[aa:bb, cc:dd] = b[clbl].to_dense("HilbertSchmidt")
-    if isinstance(_premultipler, _np.ndarray):
-        P = _np.kron(_np.eye(nComps), _premultipler)
+    if isinstance(_premultiplier, _np.ndarray):
+        P = _np.kron(_np.eye(nComps), _premultiplier)
         composite_op  = composite_op  @ P
         composite_top = composite_top @ P
 
