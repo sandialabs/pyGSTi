@@ -2967,7 +2967,7 @@ class OpModel(Model):
             return total_error_val, total_error_eb, infidelity_val, infidelity_eb
         else:
             return total_error_val, infidelity_val
-        
+"""
 def ReducedOpModel(OpModel):
 
     def __init__(self, state_space, basis, evotype, layer_rules, simulator):
@@ -2977,10 +2977,10 @@ def ReducedOpModel(OpModel):
     def from_explicit_model(self):
 
         if self.param_interposer is None:
-            self.param_interposer = np.eye(self.num_params)
+            self.param_interposer = _np.eye(self.num_params)
         #self.param_interposer.full_span_inv_transform_matrix = target_model.param_interposer.inv_transform_matrix
         #self.param_interposer.inv_transform_matrix_projector = np.eye(target_model.num_params)
-
+"""
 def _default_param_bounds(num_params):
     """Construct an array to hold parameter bounds that starts with no bounds (all bounds +-inf) """
     param_bounds = _np.empty((num_params, 2), 'd')
@@ -2995,3 +2995,6 @@ def _param_bounds_are_nontrivial(param_bounds):
 
 #stick this on the bottom to resolve a circular import issue:
 from pygsti.models.explicitmodel import ExplicitLayerRules as _ExplicitLayerRules
+
+
+

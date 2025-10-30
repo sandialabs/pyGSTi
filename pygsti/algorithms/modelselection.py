@@ -138,14 +138,24 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
     
     
     if target_model_fit is None:
-        if rank == 0 and verbosity > 0:
-            print('starting GST')
+        if rank == 0: #and verbosity > 0:
+            print('starting GST ', size)
         target_model.sim = pygsti.forwardsims.MapForwardSimulator(processor_grid=(1,size))
+        
+        if rank == 0:
+            start = time.time()
         result = _parallel_GST(target_model, data, prob_clip, tol, maxiter, verbosity, comm=comm, mem_limit=mem_limit)
+
     
         target_model_fit = result.estimates['GateSetTomography'].models['final iteration estimate']
+        target_model_fit.sim = pygsti.forwardsims.MapForwardSimulator(processor_grid=(1,1))
+        logl_2 = pygsti.tools.logl(target_model_fit, data.dataset)
+
         
         x0 = target_model_fit.to_vector()
+        if rank == 0:
+            print('time: ', time.time()- start, ' logl: ', logl_2, ' |x| =', np.linalg.norm(x0))
+        exit()
         if not disable_checkpoints and rank == 0:
             new_checkpoint.target_model = target_model_fit
             new_checkpoint.x0 = x0
