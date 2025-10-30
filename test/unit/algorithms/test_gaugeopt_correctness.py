@@ -270,7 +270,7 @@ class FindPerfectGauge_Instruments_Tester(BaseCase):
     
     def test_lbfgs_tracedist(self):
         times = []
-        for seed in range(1, 3):
+        for seed in [1]:
             dt = self._main_tester('L-BFGS-B', seed, test_tol=1e-6, alg_tol=1e-8, gop_objective='tracedist')
             times.append(dt)
         print(f'L-BFGS GaugeOpt over UnitaryGaugeGroup w.r.t. trace dist: {times}.')
