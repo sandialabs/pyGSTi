@@ -490,14 +490,21 @@ def _transform_with_oob_check(mdl, gauge_group_el, oob_check):
         mdl.transform_inplace(gauge_group_el)
     return mdl
 
-LabelLike = Union[str, _baseobjs.Label]
+
+def gates_with_instruments(model) -> dict[_baseobjs.Label, _LinearOperator]:
+    gates = {k:v for (k,v) in model.operations.items()}
+    for lbl, inst in model.instruments.items():
+        gates.update(inst.simplify_operations(lbl))
+    return gates
 
 
 def _gate_fidelity_targets(model, target_model):
     from pygsti.report.reportables import eigenvalue_entanglement_infidelity
     gate_fidelity_targets : dict[ _baseobjs.Label, tuple[_np.ndarray, Union[float, _np.floating]] ] = dict()
-    mdl_ops = model._excalc().operations
-    tgt_ops = target_model._excalc().operations
+    
+    mdl_ops = gates_with_instruments(model)
+    tgt_ops = gates_with_instruments(target_model)
+    
     for lbl in tgt_ops:
         G_target = tgt_ops[lbl].to_dense()
         G_curest = mdl_ops[lbl].to_dense()
@@ -529,7 +536,6 @@ def _povm_effect_fidelity_targets(model, target_model):
         ts = {elbl : _np.clip(t, a_min=0.0, a_max=1.0) for (elbl, t) in ts.items()}
         povm_fidelity_targets[povmlbl] = (Es_target, ts)
     return povm_fidelity_targets
-
 
 
 def _legacy_create_scalar_objective(model, target_model,
@@ -583,15 +589,13 @@ def _legacy_create_scalar_objective(model, target_model,
         prep_fidelity_targets.update(_prep_fidelity_targets(model, target_model))
         povm_fidelity_targets.update(_povm_effect_fidelity_targets(model, target_model))
 
+    tgt_ops : dict[_baseobjs.Label, _LinearOperator] = dict()
+    if target_model is not None:
+        tgt_ops.update(gates_with_instruments(target_model))
 
     def _objective_fn(gauge_group_el, oob_check):
         mdl : ExplicitOpModel = _transform_with_oob_check(model, gauge_group_el, oob_check)
-        mdl_ops : dict[_baseobjs.Label, _LinearOperator] = mdl._excalc().operations
-        tgt_ops : dict[_baseobjs.Label, _LinearOperator] = dict()
-        if target_model is not None:
-            tgt_ops.update(target_model._excalc().operations)
-        # ^ Use these dicts instead of mdl_ops and target_model.operations,
-        #   since these dicts are updated to include instruments.
+        mdl_ops : dict[_baseobjs.Label, _LinearOperator] = gates_with_instruments(mdl)
         ret: _np.floating = _np.float64(0.0)
 
         if cptp_penalty_factor > 0:
