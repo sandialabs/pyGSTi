@@ -13,7 +13,8 @@ Matrix related utility functions
 import functools as _functools
 import itertools as _itertools
 import warnings as _warnings
-import typing as _typing
+
+from typing import Protocol, Any, runtime_checkable, TypeVar
 
 import numpy as _np
 import scipy.linalg as _spl
@@ -2407,8 +2408,25 @@ def sign_fix_qr(q, r, tol=1e-6):
     return qq, rr
 
 
-def is_operatorlike(obj: _typing.Any) -> bool:
-    return hasattr(obj, '__matmul__') and hasattr(obj, '__rmatmul__') and hasattr(obj, 'T') and hasattr(obj, 'conj')
+# a TypeVar to allow methods to return "self"
+_T = TypeVar("_T", bound="OperatorLike")
+
+
+@runtime_checkable
+class OperatorLike(Protocol[_T]): # type: ignore
+
+    @property
+    def T(self) -> _T:
+        ...
+
+    def __matmul__(self, other: Any) -> Any:
+        ...
+
+    def __rmatmul__(self, other: Any) -> Any:
+        ...
+
+    def conj(self) -> _T:
+        ...
 
 
 class IdentityOperator:
@@ -2432,10 +2450,10 @@ class IdentityOperator:
     #   has __array_priority__ of 10). 
     #
 
-    def __matmul__(self, other: _typing.Any) -> _typing.Any:
+    def __matmul__(self, other: Any) -> Any:
         return other
     
-    def __rmatmul__(self, other: _typing.Any) -> _typing.Any:
+    def __rmatmul__(self, other: Any) -> Any:
         return other
     
     @property
@@ -2444,3 +2462,12 @@ class IdentityOperator:
     
     def conj(self):
         return self
+
+
+def to_operatorlike(obj):
+    if obj is None:
+        return IdentityOperator()
+    elif isinstance(obj, OperatorLike):
+        return obj
+    else:
+        raise ValueError()

@@ -28,6 +28,8 @@ from pygsti.models.gaugegroup import (
     TrivialGaugeGroupElement as _TrivialGaugeGroupElement,
     GaugeGroupElement as _GaugeGroupElement
 )
+from pygsti.models import ExplicitOpModel
+from pygsti.modelmembers.operations import LinearOperator as _LinearOperator
 
 from typing import Callable, Union, Optional, Any
 
@@ -304,7 +306,7 @@ def gaugeopt_to_target(model, target_model, *args, **kwargs):
     return result
 
 
-GGElObjective = Callable[[_GaugeGroupElement, bool], Union[float, _np.ndarray]]
+GGElObjective = Callable[[_GaugeGroupElement, bool], Union[_np.floating, _np.ndarray]]
 
 GGElJacobian  = Union[None, Callable[[_GaugeGroupElement], _np.ndarray]]
 
@@ -488,13 +490,17 @@ def _transform_with_oob_check(mdl, gauge_group_el, oob_check):
         mdl.transform_inplace(gauge_group_el)
     return mdl
 
+LabelLike = Union[str, _baseobjs.Label]
+
 
 def _gate_fidelity_targets(model, target_model):
     from pygsti.report.reportables import eigenvalue_entanglement_infidelity
     gate_fidelity_targets : dict[ _baseobjs.Label, tuple[_np.ndarray, Union[float, _np.floating]] ] = dict()
-    for lbl in target_model.operations:
-        G_target = target_model.operations[lbl].to_dense()
-        G_curest = model.operations[lbl].to_dense()
+    mdl_ops = model._excalc().operations
+    tgt_ops = target_model._excalc().operations
+    for lbl in tgt_ops:
+        G_target = tgt_ops[lbl].to_dense()
+        G_curest = mdl_ops[lbl].to_dense()
         t = 1 - eigenvalue_entanglement_infidelity(G_curest, G_target, model.basis)
         t = _np.clip(t, a_min=0.0, a_max=1.0)
         gate_fidelity_targets[lbl] = (G_target, t)
@@ -525,11 +531,16 @@ def _povm_effect_fidelity_targets(model, target_model):
     return povm_fidelity_targets
 
 
+
 def _legacy_create_scalar_objective(model, target_model,
         item_weights: dict[str,float], cptp_penalty_factor: float, spam_penalty_factor: float,
         gates_metric: str, spam_metric: str, n_leak: int
     ) -> tuple[GGElObjective, GGElJacobian]:
-
+    """
+    Creates the objective function and jacobian (if available)
+    for gaugeopt_to_target
+    """
+    if item_weights is None: item_weights = {}
     opWeight = item_weights.get('gates', 1.0)
     spamWeight = item_weights.get('spam', 1.0)
     mxBasis = model.basis
@@ -572,9 +583,16 @@ def _legacy_create_scalar_objective(model, target_model,
         prep_fidelity_targets.update(_prep_fidelity_targets(model, target_model))
         povm_fidelity_targets.update(_povm_effect_fidelity_targets(model, target_model))
 
-    def _objective_fn(gauge_group_el: _GaugeGroupElement, oob_check: bool) -> float:
-        mdl = _transform_with_oob_check(model, gauge_group_el, oob_check)
-        ret = 0.0
+
+    def _objective_fn(gauge_group_el, oob_check):
+        mdl : ExplicitOpModel = _transform_with_oob_check(model, gauge_group_el, oob_check)
+        mdl_ops : dict[_baseobjs.Label, _LinearOperator] = mdl._excalc().operations
+        tgt_ops : dict[_baseobjs.Label, _LinearOperator] = dict()
+        if target_model is not None:
+            tgt_ops.update(target_model._excalc().operations)
+        # ^ Use these dicts instead of mdl_ops and target_model.operations,
+        #   since these dicts are updated to include instruments.
+        ret: _np.floating = _np.float64(0.0)
 
         if cptp_penalty_factor > 0:
             mdl.basis = mxBasis  # set basis for jamiolkowski iso
@@ -598,16 +616,16 @@ def _legacy_create_scalar_objective(model, target_model,
                 for k in wts:
                     if k in mdl.preps or k in mdl.povms:
                         wts[k] = 0.0
-                val = mdl.frobeniusdist(target_model, transform_mx_arg, wts, n_leak)
+                val = mdl.frobeniusdist(target_model, transform_mx_arg, wts)
             if "squared" in gates_metric:
                 val = val ** 2
             ret += val
 
         elif gates_metric == "fidelity":
             # Leakage-aware metrics NOT available
-            for opLbl in mdl.operations:
+            for opLbl in mdl_ops:
                 wt = item_weights.get(opLbl, opWeight)
-                mop = mdl.operations[opLbl].to_dense()
+                mop = mdl_ops[opLbl].to_dense()
                 top, t = gate_fidelity_targets[opLbl]
                 v = _tools.entanglement_fidelity(mop, top, mxBasis)
                 z = _np.abs(t - v)
@@ -615,10 +633,10 @@ def _legacy_create_scalar_objective(model, target_model,
 
         elif gates_metric == "tracedist":
             # If n_leak==0, then subspace_jtracedist is just jtracedist.
-            for opLbl in mdl.operations:
+            for opLbl in mdl_ops:
                 wt = item_weights.get(opLbl, opWeight)
-                top = target_model.operations[opLbl].to_dense()
-                mop = mdl.operations[opLbl].to_dense()
+                top = tgt_ops[opLbl].to_dense()
+                mop = mdl_ops[opLbl].to_dense()
                 ret += wt * _tools.subspace_jtracedist(top, mop, mxBasis, n_leak)
 
         else:
@@ -632,7 +650,7 @@ def _legacy_create_scalar_objective(model, target_model,
             # SPAM and gates can have different choices for squared vs non-squared.
             wts = item_weights.copy(); wts['gates'] = 0.0
             for k in wts:
-                if k in mdl.operations or k in mdl.instruments:
+                if k in mdl_ops or k in mdl.instruments:
                     wts[k] = 0.0
             val = mdl.frobeniusdist(target_model, transform_mx_arg, wts)
             if "squared" in spam_metric:
@@ -659,7 +677,7 @@ def _legacy_create_scalar_objective(model, target_model,
                     E   = _tools.vec_to_stdmx(M_curest[elbl].to_dense(), mxBasis)
                     v_e = _tools.fidelity(E, Es_target[elbl])
                     val_povm += wt_povm * abs(t_e - v_e)
-            ret += (val_prep + val_povm)
+            ret += (val_prep + val_povm) # type: ignore
 
         elif spam_metric == "tracedist":
             # Leakage-aware metrics NOT available.
@@ -898,6 +916,7 @@ def _legacy_create_least_squares_objective(model, target_model,
                             verbosity=1)
 
         return jacMx
+
 
     return _objective_fn, _jacobian_fn
 

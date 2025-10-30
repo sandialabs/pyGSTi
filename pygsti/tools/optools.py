@@ -1058,7 +1058,7 @@ def povm_jtracedist(model, target_model, povmlbl):
         return _np.nan
 
 
-def povm_diamonddist(model, target_model, povmlbl):
+def povm_diamonddist(model, target_model, povmlbl, _premultiplier=None):
     """
     Computes the diamond distance between POVM maps using :func:`diamonddist`.
 
@@ -1076,10 +1076,19 @@ def povm_diamonddist(model, target_model, povmlbl):
     Returns
     -------
     float
+
+    Notes
+    -----
+    _premultiplier is not in the public API. It's here for the time being
+    to facilitate leakage modeling. When present, it's a projector built
+    from pygsti.tools.leading_dxd_submatrix_basis_vectors.
     """
     try:
         povm_mx = compute_povm_map(model, povmlbl)
         target_povm_mx = compute_povm_map(target_model, povmlbl)
+        if isinstance(_premultiplier, _np.ndarray):
+            povm_mx = povm_mx @ _premultiplier
+            target_povm_mx = target_povm_mx @ _premultiplier
         return diamonddist(povm_mx, target_povm_mx, target_model.basis)
     except AssertionError as e:
         assert '`dim` must be a perfect square' in str(e)
@@ -1110,7 +1119,7 @@ def instrument_infidelity(a, b, mx_basis):
     return 1 - sum(sqrt_component_fidelities)**2
 
 
-def instrument_diamonddist(a, b, mx_basis):
+def instrument_diamonddist(a, b, mx_basis, _premultiplier=None):
     """
     The diamond distance between instruments a and b.
 
@@ -1128,6 +1137,12 @@ def instrument_diamonddist(a, b, mx_basis):
     Returns
     -------
     float
+
+    Notes
+    -----
+    _premultiplier is not in the public API. It's here for the time being
+    to facilitate leakage modeling. When present, it's a projector built
+    from pygsti.tools.leading_dxd_submatrix_basis_vectors.
     """
     #Turn instrument into a CPTP map on qubit + classical space.
     adim = a.state_space.dim
@@ -1142,6 +1157,11 @@ def instrument_diamonddist(a, b, mx_basis):
             cc, dd = j * adim, (j + 1) * adim
             composite_op[aa:bb, cc:dd] = a[clbl].to_dense("HilbertSchmidt")
             composite_top[aa:bb, cc:dd] = b[clbl].to_dense("HilbertSchmidt")
+    if isinstance(_premultiplier, _np.ndarray):
+        P = _np.kron(_np.eye(nComps), _premultiplier)
+        composite_op  = composite_op  @ P
+        composite_top = composite_top @ P
+
     return diamonddist(composite_op, composite_top, sumbasis)
 
 
