@@ -272,7 +272,7 @@ def parallel_GST(target_model, data, min_prob_clip=1e-7, tol=1e-10, maxiter=300,
     
     target_model.from_vector(_np.zeros(target_model.num_params))
 
-    optimizer = pygsti.optimize.customlm.CustomLMOptimizer(maxiter=maxiter, tol={'f':tol})
+    optimizer = pygsti.optimize.customlm.CustomLMOptimizer(maxiter=maxiter, tol={'f':tol, 'relf': tol})
     protoOpt = pygsti.protocols.GateSetTomography(target_model, verbosity=verbosity, optimizer=optimizer, gaugeopt_suite=None, objfn_builders=builders)
 
     result = protoOpt.run(data, comm=comm,
