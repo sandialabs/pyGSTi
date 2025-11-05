@@ -90,6 +90,16 @@ def is_hermitian(mx, tol=1e-9):
         return _np.all(_np.abs(mx - mx.T.conj()) <= tol)
 
 
+def assert_hermitian(mat : _np.ndarray, tol: _np.floating) -> None:
+    hermiticity_error = _np.abs(mat - mat.T.conj())
+    if _np.any(hermiticity_error > tol):
+        message = f"""
+            Input matrix 'mat' is not Hermitian, up to tolerance {tol}.
+            The absolute values of entries in (mat - mat^H) are \n{hermiticity_error}. 
+        """
+        raise ValueError(message)
+
+
 def is_pos_def(mx, tol=1e-9, attempt_cholesky=False):
     """
     Test whether mx is a positive-definite matrix.

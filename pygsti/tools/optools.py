@@ -184,6 +184,67 @@ def fidelity(a, b):
     return f
 
 
+def eigenvalue_fidelity(x: _np.ndarray, y: _np.ndarray, gauge_invariant:bool=True) -> _np.floating:
+    """
+    For positive semidefinite matrices (x, y), define M(x,y) = √(√x · y · √x).
+
+    The fidelity of (x, y) is defined as F(x,y) = Tr(M(x,y))^2.
+
+    Let v(x) and v(y) denote vectors containing the eigenvalues of x and y,
+    sorted in decreasing order.
+
+    If gauge_invariant is True, then this function returns ⟨√v(x), √v(y)⟩^2,
+    which is always an upper bound for F(x,y).
+
+    If gauge_invariant is False, then this function uses a heuristic to "match"
+    eigenvalues of x and y based on similarity of their corresponding eigenvectors.
+
+    Proof
+    -----
+    Let A = √x·√y, so that M(x,y) = √(A A^†). The fact that M(x,y) is a square-root
+    of a Gram matrix of A implies (via the polar decomposition) the existence of a
+    unitary matrix U where A = M(x,y)U. This lets us write fidelity as
+
+        F(x,y) = Tr( √x · √y U^† )^2.                            (1)
+
+    Next, let s(z) denote the vector of singular values of a matrix z, in descending
+    order. Assuming the claim from Problem III.6.12 of Bhatia's Matrix Analysis, we
+    have the inequality
+
+        Tr( √x · √y U^† ) ≤ ⟨ s(√x), s(√y U^†) ⟩.                (2)
+
+    Using the fact that the singular values of √x are the same as its eigenvalues,
+    and the singular values of √y U^† are the eigenvalues of √y, we have
+
+        ⟨ s(√x), s(√y U^†) ⟩ = ⟨ √v(x), √v(y) ⟩.                 (3)
+
+    Combining (1), (2), and (3) proves our claim.
+    """
+    tol = _np.finfo(x.dtype).eps ** 0.75
+    _mt.assert_hermitian(x, tol)
+    _mt.assert_hermitian(y, tol)
+    if gauge_invariant:
+        valsX = _np.sort(_spl.eigvalsh(x))
+        valsY = _np.sort(_spl.eigvalsh(y))
+        pairs = [(i,i) for i in range(valsX.size)]
+    else:
+        from pygsti.tools import minweight_match
+        valsX, vecsX = _spl.eigh(x)
+        valsY, vecsY = _spl.eigh(y)
+        dissimilarity = lambda vec_x, vec_y : abs(1 - abs(vec_x @ vec_y))
+        _, pairs = minweight_match(vecsX.T.conj(), vecsY.T.conj(), dissimilarity, return_pairs=True)
+    ind_x, ind_y = zip(*pairs)
+    arg_x = _np.maximum(valsX[list(ind_x)], 0)
+    arg_y = _np.maximum(valsY[list(ind_y)], 0)
+    f = (arg_x**0.5 @ arg_y**0.5)**2
+    return f # type: ignore
+
+
+def eigenvalue_infidelity(a, b, gauge_invariant=True) -> _np.floating:
+    return 1 - eigenvalue_fidelity(a, b, gauge_invariant)
+
+
+
 def frobeniusdist(a, b) -> _np.floating[Any]:
     """
     Returns the frobenius distance between arrays: ||a - b||_Fro.
@@ -377,6 +438,26 @@ def jtracedist(a, b, mx_basis='pp'):  # Jamiolkowski trace distance:  Tr(|J(a)-J
     return tracedist(JA, JB)
 
 
+def is_trace_preserving(a: _np.ndarray, mx_basis: BasisLike='pp', tol=1e-8) -> bool:
+    dim   = int(_np.round( a.size**0.5 ))
+    udim  = int(_np.round( dim**0.5    ))
+    basis = _Basis.cast(mx_basis, dim=dim)
+    if basis.first_element_is_identity:
+        checkone = _np.isclose(a[0,0], 1.0, rtol=tol, atol=tol)
+        checktwo = _np.allclose(a[1:], 0.0, atol=tol)
+        return checkone and checktwo
+    # else, check that the adjoint of a is unital.
+    I_mat = _np.eye(udim)
+    I_vec = _bt.stdmx_to_vec(I_mat, basis)
+    if _np.isrealobj(a):
+        expect_I_vec = a.T @ I_vec
+    else:
+        expect_I_vec = a.T.conj() @ I_vec
+    atol = tol * udim
+    check = float(_np.linalg.norm(I_vec - expect_I_vec)) <= atol
+    return check
+
+
 def entanglement_fidelity(a, b, mx_basis: BasisLike='pp', is_tp=None, is_unitary=None):
     """
     Returns the "entanglement" process fidelity between gate  matrices.
@@ -439,10 +520,7 @@ def entanglement_fidelity(a, b, mx_basis: BasisLike='pp', is_tp=None, is_unitary
     
     #if the tp flag isn't set we'll calculate whether it is true here
     if is_tp is None:
-        def is_tp_fn(x):
-            return _np.isclose(x[0, 0], 1.0) and _np.allclose(x[0, 1:d2], 0)
-        
-        is_tp= (is_tp_fn(a) and is_tp_fn(b))
+        is_tp = is_trace_preserving(a, mx_basis) and is_trace_preserving(b, mx_basis)
    
     #if the unitary flag isn't set we'll calculate whether it is true here 
     if is_unitary is None:
