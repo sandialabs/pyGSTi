@@ -196,8 +196,8 @@ def _contract_to_cp_direct(model, verbosity, tp_also=False, maxiter=100000, tol=
         if(tp_also):
             for k in range(new_op.shape[1]): new_op[0, k] = 1.0 if k == 0 else 0.0
 
-        Jmx = _tools.jamiolkowski_iso(new_op, op_mx_basis=mdl.basis, choi_mx_basis="gm")
-        evals, evecs = _np.linalg.eig(Jmx)
+        Jmx : _np.ndarray = _tools.jamiolkowski_iso(new_op, op_mx_basis=mdl.basis, choi_mx_basis="gm") # type: ignore
+        evecs, evals, inv_evecs = _tools.eigendecomposition(Jmx)
 
         if tp_also:
             assert(abs(sum(evals) - 1.0) < 1e-8)  # check that Jmx always has trace == 1
@@ -243,7 +243,7 @@ def _contract_to_cp_direct(model, verbosity, tp_also=False, maxiter=100000, tol=
             #  print "DEBUG: orig evals == ",evals                #DEBUG
             assert(abs(sum(new_evals) - 1.0) < 1e-8)
 
-            new_Jmx = _np.dot(evecs, _np.dot(_np.diag(new_evals), _np.linalg.inv(evecs)))
+            new_Jmx = evecs @ _np.diag(new_evals) @ inv_evecs
 
             #Make trace preserving by zeroing out real parts of off diagonal blocks and imaginary parts
             #  within diagaonal 1x1 and 3x3 block (so really just the 3x3 block's off diag elements)
@@ -256,7 +256,7 @@ def _contract_to_cp_direct(model, verbosity, tp_also=False, maxiter=100000, tol=
                 for j in range(1, kmax):
                     new_Jmx[i, j] = new_Jmx[i, j].real
 
-            evals, evecs = _np.linalg.eig(new_Jmx)
+            evecs, evals, inv_evecs = _tools.eigendecomposition(new_Jmx)
 
             #DEBUG
             #EVAL_TOL = 1e-10
@@ -399,7 +399,8 @@ def _contract_to_valid_spam(model, verbosity=0):
         for ELabel, EVec in mdl.povms[povmLbl].items():
             #if isinstance(EVec, _povm.ComplementPOVMEffect):
             #    continue #don't contract complement vectors
-            evals, evecs = _np.linalg.eig(_tools.ppvec_to_stdmx(EVec))
+            Emat = _tools.ppvec_to_stdmx(EVec)
+            evecs, evals, inv_evecs = _tools.eigendecomposition(Emat)
             if(min(evals) < 0.0 or max(evals) > 1.0):
                 if all([ev > 1.0 for ev in evals]):
                     evals[evals.argmin()] = 0.0  # at least one eigenvalue must be != 1.0
@@ -408,7 +409,7 @@ def _contract_to_valid_spam(model, verbosity=0):
                 for (k, ev) in enumerate(evals):
                     if ev < 0.0: evals[k] = 0.0
                     if ev > 1.0: evals[k] = 1.0
-                mx = _np.dot(evecs, _np.dot(_np.diag(evals), _np.linalg.inv(evecs)))
+                mx = evecs @ _np.diag(evals) @ inv_evecs
                 vec = _tools.stdmx_to_ppvec(mx)
                 diff += _np.linalg.norm(model.povms[povmLbl][ELabel] - vec)
                 scaled_effects.append((ELabel, vec))

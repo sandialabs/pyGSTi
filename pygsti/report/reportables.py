@@ -237,7 +237,10 @@ class GateEigenvalues(_modf.ModelFunction):
         -------
         numpy.ndarray
         """
-        evals, evecs = _np.linalg.eig(model.operations[self.oplabel].to_dense("HilbertSchmidt"))
+        mx = model.operations[self.oplabel].to_dense("HilbertSchmidt")
+        evals, evecs = _np.linalg.eig(mx)
+        # ^ NOTE: the use of eig is intentional. We can't assume mx is
+        #   Hermitian, or even normal.
 
         ev_list = list(enumerate(evals))
         ev_list.sort(key=lambda tup: abs(tup[1]), reverse=True)
@@ -304,6 +307,8 @@ class CircuitEigenvalues(_modf.ModelFunction):
         """
         Mx = model.sim.product(self.circuit)
         evals, evecs = _np.linalg.eig(Mx)
+        # ^ NOTE: the use of eig is intentional. We can't assume Mx is
+        #   Hermitian, or even normal.
 
         ev_list = list(enumerate(evals))
         ev_list.sort(key=lambda tup: abs(tup[1]), reverse=True)
