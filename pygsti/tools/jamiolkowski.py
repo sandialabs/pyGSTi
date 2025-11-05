@@ -15,6 +15,7 @@ from __future__ import annotations
 import numpy as _np
 
 from pygsti.tools import basistools as _bt
+from pygsti.tools import matrixtools as _mt
 from pygsti.baseobjs.basis import Basis as _Basis
 from typing import Union, TYPE_CHECKING
 
@@ -341,9 +342,8 @@ def sum_of_negative_choi_eigenvalues_gate(op_mx, op_mx_basis):
     """
     sumOfNeg = 0
     J = fast_jamiolkowski_iso_std(op_mx, op_mx_basis)  # Choi mx basis doesn't matter
-    evals = _np.linalg.eigvals(J)  # could use eigvalsh, but wary of this since eigh can be wrong...
-    for ev in evals:
-            if ev.real < 0: sumOfNeg -= ev.real
+    evals = _mt.eigenvalues(J, assume_hermitian=True)
+    sumOfNeg = _np.sum(evals[evals < 0])
     return sumOfNeg
 
 def sum_of_negative_choi_eigenvalues(model, weights=None):
@@ -368,13 +368,11 @@ def sum_of_negative_choi_eigenvalues(model, weights=None):
     float
         the sum of negative eigenvalues of the Choi matrix for each gate.
     """
+    sums = sums_of_negative_choi_eigenvalues(model)
     if weights is not None:
         default = weights.get('gates', 1.0)
-        sums = sums_of_negative_choi_eigenvalues(model)
-        return sum([s * weights.get(gl, default)
-                    for gl, s in zip(model.operations.keys(), sums)])
-    else:
-        return sum(sums_of_negative_choi_eigenvalues(model))
+        sums = [s * weights.get(gl, default) for gl, s in zip(model.operations, sums)]
+    return sum(sums)
 
 
 def sums_of_negative_choi_eigenvalues(model):
@@ -399,11 +397,8 @@ def sums_of_negative_choi_eigenvalues(model):
     """
     ret = []
     for (_, gate) in model.operations.items():
-        J = fast_jamiolkowski_iso_std(gate.to_dense("HilbertSchmidt"), model.basis)  # Choi mx basis doesn't matter
-        evals = _np.linalg.eigvals(J)  # could use eigvalsh, but wary of this since eigh can be wrong...
-        sumOfNeg = 0.0
-        for ev in evals:
-            if ev.real < 0: sumOfNeg -= ev.real
+        mx = gate.to_dense()
+        sumOfNeg = sum_of_negative_choi_eigenvalues_gate(mx, model.basis)
         ret.append(sumOfNeg)
     return ret
 
@@ -425,9 +420,10 @@ def magnitudes_of_negative_choi_eigenvalues(model):
         as positive eigenvalues contribute nothing to this list.
     """
     ret = []
+    choi_basis = model.basis.create_simple_equivalent('std')
     for (_, gate) in model.operations.items():
-        J = jamiolkowski_iso(gate, model.basis, choi_mx_basis=model.basis.create_simple_equivalent('std'))
-        evals = _np.linalg.eigvals(J)  # could use eigvalsh, but wary of this since eigh can be wrong...
+        J : _np.ndarray = jamiolkowski_iso(gate, model.basis, choi_mx_basis=choi_basis) # type: ignore
+        evals = _mt.eigenvalues(J, assume_hermitian=True)
         for ev in evals:
-            ret.append(-ev.real if ev.real < 0 else 0.0)
+            ret.append(-ev if ev < 0 else 0.0)
     return ret

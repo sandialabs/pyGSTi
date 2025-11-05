@@ -383,12 +383,14 @@ def _contract_to_valid_spam(model, verbosity=0):
         mx = _tools.ppvec_to_stdmx(vec)
 
         #Ensure positive semidefinite
-        lowEval = min([ev.real for ev in _np.linalg.eigvals(mx)])
+        lowEval = _np.min(_tools.eigenvalues(mx, assume_hermitian=True))
         while(lowEval < -TOL):
             # only element with trace (even for multiple qubits) -- keep this constant and decrease others
             idEl = vec[0, 0]
-            vec /= 1.00001; vec[0, 0] = idEl
-            lowEval = min([ev.real for ev in _np.linalg.eigvals(_tools.ppvec_to_stdmx(vec))])
+            vec /= 1.00001
+            vec[0, 0] = idEl
+            mat = _tools.ppvec_to_stdmx(vec)
+            lowEval = _np.min(_tools.eigenvalues(mat, assume_hermitian=True))
 
         diff += _np.linalg.norm(model.preps[prepLabel] - vec)
         mdl.preps[prepLabel] = vec

@@ -301,11 +301,12 @@ def tracenorm(a):
     -------
     float
     """
-    if _np.linalg.norm(a - _np.conjugate(a.T)) < 1e-8:
+    if _mt.is_hermitian(a):
         #Hermitian, so just sum eigenvalue magnitudes
-        return _np.sum(_np.abs(_np.linalg.eigvals(a)))
+        abs_eigs = _np.abs(_mt.eigenvalues(a, assume_hermitian=True))
+        return _np.sum(abs_eigs)
     else:
-        #Sum of singular values (positive by construction)
+        # Sum of singular values (positive by construction)
         return _np.sum(_np.linalg.svd(a, compute_uv=False))
 
 
