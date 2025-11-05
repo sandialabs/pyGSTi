@@ -1903,7 +1903,7 @@ def rel_log_tig_eigenvalues(a, b, mx_basis):
     numpy.ndarray
     """
     rel_op = _tools.error_generator(a, b, mx_basis, "logTiG")
-    return _mt.eigenvalues(rel_op).astype("complex")  # since they generally *can* be complex
+    return _tools.eigenvalues(rel_op).astype("complex")  # since they generally *can* be complex
 
 
 Rel_logTiG_eigvals = _modf.opsfn_factory(rel_log_tig_eigenvalues)
