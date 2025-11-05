@@ -807,6 +807,23 @@ def approximate_matrix_log(m, target_logm, target_weight=10.0, tol=1e-6):
     return logM
 
 
+def eigenvalues(m: _np.ndarray, *, assume_hermitian: Optional[bool] = None, assume_normal: bool = False):
+    if assume_hermitian is None:
+        assume_hermitian = is_hermitian(m)
+    if assume_hermitian:
+        # Make sure it's Hermtian in exact arithmetic. This helps with
+        # reproducibility across different implementations of LAPACK.
+        m += m.T.conj()
+        m /= 2
+        return _np.linalg.eigvalsh(m)
+    elif assume_normal:
+        temp = _spl.schur(m, output='complex')
+        evals = _np.diag(temp[1])
+        return evals
+    else:
+        return _np.linalg.eigvals(m)
+
+
 def eigendecomposition(m: _np.ndarray, *, assume_hermitian: Optional[bool] = None):
     if assume_hermitian is None:
         assume_hermitian = is_hermitian(m)
