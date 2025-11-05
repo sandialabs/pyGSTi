@@ -584,7 +584,8 @@ def NewtonSolve(initial_x, fn, fn_with_derivs=None, dx_tol=1e-6, max_iters=20, p
 
     i = 0
     while i < max_iters:
-
+        Hobj : _np.ndarray = None  # type: ignore
+        # ^ That line is needed for flake.
         if fn_with_derivs:
             obj, Dobj, Hobj = fn_with_derivs(x)
             #DEBUG - check against finite diff
