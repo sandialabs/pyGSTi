@@ -32,7 +32,7 @@ from pygsti.tools.optools import create_elementary_errorgen_nqudit, state_to_dmv
 from functools import reduce
 from itertools import chain, product
 from math import factorial
-from typing import Literal
+from typing import Literal, Optional
 
 def errgen_coeff_label_to_stim_pauli_strs(err_gen_coeff_label, num_qubits):
     """
@@ -477,16 +477,7 @@ def magnus_expansion(errorgen_layers: list[dict[_LSE, float]], magnus_order: Lit
     errorgen_layers : list of dicts
         List of dictionaries of the error generator coefficients and rates for a circuit layer. 
         The error generator coefficients are represented using LocalStimErrorgenLabel.
-
-    errorgen_transform_maps : dict
-        Map giving the relationship between input error generators and their final
-        value following propagation through the circuit. Needed to track any sign updates
-        for terms with zero mean but nontrivial covariance.
-
-    cov_func : 
-        A function which maps tuples of elementary error generator labels at multiple times to
-        a scalar quantity corresponding to the value of the covariance for that pair.
-    
+       
     magnus_order : int, optional (default 1)
         Order of the magnus expansion to apply. Currently supports up to third order.
     
@@ -527,46 +518,14 @@ def magnus_expansion(errorgen_layers: list[dict[_LSE, float]], magnus_order: Lit
         
         # second-order magnus terms:
         # (1/2)\sum_{t1=1}^n \sum_{t2=1}^{t1-1} [A(t1), A(t2)]
-        elif curr_order == 1:
-            # construct a list of all of the pairs of error generator layers we need the
-            # commutators for.
-            errorgen_pairs = []
-            for i in range(len(errorgen_layers)):
-                for j in range(i):
-                    errorgen_pairs.append((errorgen_layers[i], errorgen_layers[j]))
-            
+        elif curr_order == 1:            
             # precompute an identity string for comparisons in commutator calculations.
             if errorgen_layers:
                 for layer in errorgen_layers:
                     if layer:
                         identity = stim.PauliString('I'*len(next(iter(layer)).basis_element_labels[0]))
                         break
-            
-            # compute second-order BCH correction for each pair of error generators in the
-            # errorgen_pairs list.
-            commuted_errgen_list = []
-            for errorgen_pair in errorgen_pairs:
-                for error1, error1_val in errorgen_pair[0].items():
-                    for error2, error2_val in errorgen_pair[1].items():
-                        # get the list of error generator labels
-                        weight = .5*error1_val*error2_val
-                        # avoid computing commutators which will be effectively zero.
-                        if abs(weight) < truncation_threshold:
-                            continue
-                        commuted_errgen_sublist = error_generator_commutator(error1, error2, 
-                                                                            weight= weight, identity=identity)
-                        commuted_errgen_list.extend(commuted_errgen_sublist)
-            # loop through all of the elements of commuted_errorgen_list and instantiate a dictionary with the requisite keys.
-            second_order_comm_dict = {error_tuple[0]: 0 for error_tuple in commuted_errgen_list}
-
-            # Add all of these error generators to the working dictionary of updated error generators and weights.
-            # There may be duplicates, which should be summed together.
-            for error_tuple in commuted_errgen_list:
-                second_order_comm_dict[error_tuple[0]] += error_tuple[1]
-            # truncate any terms which are below the truncation threshold following
-            # aggregation.
-            second_order_comm_dict = {key: val for key, val in second_order_comm_dict.items() if abs(val)>truncation_threshold}
-
+            second_order_comm_dict = _second_order_magnus_term(errorgen_layers, identity, truncation_threshold)
             new_errorgen_layer.append(second_order_comm_dict)
 
         # third order magnus terms
@@ -700,6 +659,184 @@ def magnus_expansion(errorgen_layers: list[dict[_LSE, float]], magnus_order: Lit
 
     # Future: Possibly do one last truncation pass in case any of the different orders cancel out when aggregated?
     return new_errorgen_layer_dict
+
+def _second_order_magnus_term(errorgen_layers: list[dict[_LSE, float]], identity: Optional[stim.PauliString],
+                              truncation_threshold: float = 1e-14) -> dict[_LSE, float]:
+    """
+    Helper function for computing the second-order correction term in the
+    magnus expansion.
+
+    (1/2)\sum_{t1=1}^n \sum_{t2=1}^{t1-1} [A(t1), A(t2)]
+
+    Parameters:
+    ----------
+    errorgen_layers : list of dicts
+        List of dictionaries of the error generator coefficients and rates for a circuit layer. 
+        The error generator coefficients are represented using LocalStimErrorgenLabel.
+
+    identity : stim.PauliString, optional (default None)
+        An optional stim.PauliString to use for comparisons to the identity.
+        Passing in this kwarg isn't necessary, but can allow for reduced 
+        stim.PauliString creation when calling this function many times for
+        improved efficiency.
+        
+    truncation_threshold : float, optional (default 1e-14)
+        Threshold for which any error generators with magnitudes below this value
+        are truncated.
+
+    Returns
+    -------
+    second_order_comm_dict : dict
+        A dictionary with the same general structure as those in `errorgen_layers`, but with the
+        rates combined according to the second order of the magnus expansion.
+    """
+    errorgen_pairs = []
+    for i in range(len(errorgen_layers)):
+        for j in range(i):
+            errorgen_pairs.append((errorgen_layers[i], errorgen_layers[j]))
+    
+    # precompute an identity string for comparisons in commutator calculations if one is not provided.
+    if identity is None and errorgen_layers:
+        for layer in errorgen_layers:
+            if layer:
+                identity = stim.PauliString('I'*len(next(iter(layer)).basis_element_labels[0]))
+                break
+    
+    # compute second-order BCH correction for each pair of error generators in the
+    # errorgen_pairs list.
+    commuted_errgen_list = []
+    for errorgen_pair in errorgen_pairs:
+        commuted_errgen_list.extend(_error_generator_layer_pairwise_commutator(errorgen_pair[0], errorgen_pair[1], addl_weight=0.5, 
+                                                                               identity=identity, truncation_threshold=truncation_threshold))
+                
+    # loop through all of the elements of commuted_errorgen_list and instantiate a dictionary with the requisite keys.
+    second_order_comm_dict = {error_tuple[0]: 0 for error_tuple in commuted_errgen_list}
+
+    # Add all of these error generators to the working dictionary of updated error generators and weights.
+    # There may be duplicates, which should be summed together.
+    for error_tuple in commuted_errgen_list:
+        second_order_comm_dict[error_tuple[0]] += error_tuple[1]
+    # truncate any terms which are below the truncation threshold following
+    # aggregation.
+    second_order_comm_dict = {key: val for key, val in second_order_comm_dict.items() if abs(val)>truncation_threshold}
+
+    return second_order_comm_dict
+
+def zassenhaus_formula(errorgen_groups: list[dict[_LSE, float]], zassenhaus_order: Literal[1,2,3] = 1, 
+                      truncation_threshold: float = 1e-14) -> list[dict[_LSE, float]]:
+    """
+    Function for computing the nth-order Zassenhaus formula for a set of error generators.
+    Please see https://arxiv.org/pdf/1903.03140 or https://en.wikipedia.org/wiki/Baker%E2%80%93Campbell%E2%80%93Hausdorff_formula#Zassenhaus_formula
+    for more information on this approxmation.
+
+    Given an exponentiated sum of operators exp(X1+X2+...+Xn) the Zassenhaus formula gives one disentangle this
+    exponentiated sum into a product of exponentiated operators given by exp(X1)exp(X2)...exp(Xn)\prod_{k=2}^\infty exp(W_k) where
+    the W_k's are Lie polynomials (nested commutators) in the operators {X1, ..., Xn}, and the value of k we go up to gives the order of the
+    approximation. 
+
+    errorgen_groups : list of dicts
+        List of dictionaries of the error generator coefficients and rates for a group of error generators corresponding
+        to each of the operators in the sum to perform Zassenhaus with respect to. 
+        The error generator coefficients are represented using LocalStimErrorgenLabel.
+    
+    zassenhaus_order : int, optional (default 1)
+        Order of the Zassenahaus formula to compute. Currently supports up to TBD order. Note that
+        zassenhaus_order = 1 corresponds simply to the original list of error generator in
+        errorgen_groups, and in this case we simply return errorgen_groups as-is (not a copy).
+    
+    truncation_threshold : float, optional (default 1e-14)
+        Threshold for which any error generators with magnitudes below this value
+        are truncated.
+
+    Returns
+    -------
+    zassenhaus_formula_dicts : list of dicts
+        A list of dictionaries, each corresponding to one of the operators which is exponentiated in 
+        the product as output by the Zassenhaus formula.
+    """
+    zassenhaus_formula_dicts = []
+    
+    # first-order zassenhaus terms are just the original list of error generators in errorgen_groups.
+    if zassenhaus_order >= 1:
+        # allow short-circuiting for zassenhaus_order==1.
+        if zassenhaus_order==1:
+            return errorgen_groups
+        else:
+            zassenhaus_formula_dicts.extend(errorgen_groups)
+
+    # second-order zassenhaus term: (1/2)\sum_{1<=i<j<=n}[X_j,X_i]
+    # this is identical to the second order magnus term, so reuse that code.
+    if zassenhaus_order>=2:
+        # precompute an identity string for comparisons in commutator calculations.
+        if errorgen_groups:
+            for layer in errorgen_groups:
+                if layer:
+                    identity = stim.PauliString('I'*len(next(iter(layer)).basis_element_labels[0]))
+                    break
+        second_order_comm_dict = _second_order_magnus_term(errorgen_groups, identity, truncation_threshold)
+        zassenhaus_formula_dicts.append(second_order_comm_dict)
+
+    # third-order zassenhaus term: 
+    # (1/3)\sum_{1<=i<j,k<=n}[[X_j,X_i],X_k] + (1/6)\sum_{1<=i<j<=n} [[X_j,X_i],X_i]
+    if zassenhaus_order>=3:
+        commuted_errgen_list_1 = []
+        commuted_errgen_list_2 = []
+        # compute each of the two terms separately.
+        # First term:
+        # (2/3) \sum_{1<=k<=n}[(1/2)\sum_{1<=i<j<=n}[X_j,X_i]),X_k]
+        # written this way we can see that for the inner double sum we can reuse the second-order correction.
+        for layer in errorgen_groups:
+            commuted_errgen_list_1.extend(_error_generator_layer_pairwise_commutator(second_order_comm_dict, layer, 
+                                                                                     identity=identity,
+                                                                                     addl_weight=(2/3),
+                                                                                     truncation_threshold=truncation_threshold))
+        # Second term:
+        # (1/6)\sum_{1<=i<j<=n} [[X_j,X_i],X_i] Reindexing this sum we get
+        # (1/6)\sum_{1<=i=n-1} [(\sum_{i+1<=j<=n}[X_j,X_i]), X_i] If we 
+        # accumulate this sum in reverse we can reuse intermediate values.
+        for i in range(len(errorgen_groups)-1):
+            new_12_commutator_terms = []
+            for j in range(i,len(errorgen_groups)):
+                new_12_commutator_terms.extend(_error_generator_layer_pairwise_commutator(errorgen_groups[j], errorgen_groups[i], 
+                                                                                          addl_weight=(1/6), identity=identity, 
+                                                                                          truncation_threshold=truncation_threshold))
+            #accumulate new_12_commutator_terms before doing the outer commutator again.
+            new_12_commutator_dict = {}
+            for error_tuple in new_12_commutator_terms:
+                new_12_commutator_dict[error_tuple[0]] = 0
+            # Now that keys are instantiated add all of these error generators to the working dictionary of updated error generators and weights.
+            # There may be duplicates, which should be summed together.
+            for error_tuple in new_12_commutator_terms:
+                new_12_commutator_dict[error_tuple[0]] += error_tuple[1]
+
+            #compute the outer commutator
+            commuted_errgen_list_2.extend(_error_generator_layer_pairwise_commutator(new_12_commutator_dict, errorgen_groups[i],
+                                                                                     identity=identity, 
+                                                                                     truncation_threshold=truncation_threshold))
+
+        # finally combine the contents of commuted_errgen_list_1 and commuted_errgen_list_2 
+        # turn the two new commuted error generator lists into dictionaries.
+        # loop through all of the elements of commuted_errorgen_list and instantiate a dictionary with the requisite keys.
+        third_order_comm_dict_1 = {error_tuple[0]:0 for error_tuple in commuted_errgen_list_1}
+        third_order_comm_dict_2 = {error_tuple[0]:0 for error_tuple in commuted_errgen_list_2}
+        
+        # Add all of these error generators to the working dictionary of updated error generators and weights.
+        # There may be duplicates, which should be summed together.
+        for error_tuple in commuted_errgen_list_1:
+            third_order_comm_dict_1[error_tuple[0]] += error_tuple[1]
+        for error_tuple in commuted_errgen_list_2:
+            third_order_comm_dict_2[error_tuple[0]] += error_tuple[1]
+        
+        # finally sum these two dictionaries, keeping only terms which are greater than the threshold.
+        third_order_comm_dict = dict()
+        current_combined_coeff_lbls = {key: None for key in chain(third_order_comm_dict_1, third_order_comm_dict_2)}
+        for lbl in current_combined_coeff_lbls:
+            third_order_rate = third_order_comm_dict_1.get(lbl, 0) + third_order_comm_dict_2.get(lbl, 0)
+            if abs(third_order_rate) > truncation_threshold:
+                third_order_comm_dict[lbl] = third_order_rate
+        zassenhaus_formula_dicts.append(third_order_comm_dict)
+
+    return zassenhaus_formula_dicts
 
 # TODO: Refactor a bunch of the code in this module to use this helper function.
 # define a helper function to do a layerwise commutator accumulating all of the pairwise terms into a single list.
@@ -6991,7 +7128,84 @@ def errorgen_pauli_action_numerical(errorgen: _EEL, pauli: stim.PauliString) -> 
 
     return weighted_pauli
 
+def zassenhaus_formula_numerical(errorgen_groups: list[dict[_EEL, float]], error_propagator: _epropagator.ErrorGeneratorPropagator, 
+                                 zassenhaus_order: Literal[1,2,3] = 1) -> list[_np.ndarray]:
+    """
+    Function for numerically computing the nth-order Zassenhaus formula for a set of error generators.
+    Please see https://arxiv.org/pdf/1903.03140 or https://en.wikipedia.org/wiki/Baker%E2%80%93Campbell%E2%80%93Hausdorff_formula#Zassenhaus_formula
+    for more information on this approxmation.
 
+    Due to the numerical nature of this implementation it is not meant for efficient computation and
+    primarily supports testing.
+
+    Parameters
+    ----------
+    errorgen_groups : list of dicts
+        List of dictionaries of the error generator coefficients and rates for a group of error generators corresponding
+        to each of the operators in the sum to perform Zassenhaus with respect to. 
+        The error generator coefficients are represented using LocalStimErrorgenLabel.
+    
+    zassenhaus_order : int, optional (default 1)
+        Order of the Zassenahaus formula to compute.
+    
+    Returns
+    -------
+    zassenhaus_formula_arrays : list of numpy.ndarrays
+        A list of numpy arrays, each corresponding to one of the operators which is exponentiated in 
+        the product as output by the Zassenhaus formula.    
+    """
+
+    # Need to build an appropriate basis for getting the error generator matrices.
+    # accumulate the error generator coefficients needed.
+    collected_coeffs = []
+    for layer in errorgen_groups:
+        for coeff in layer.keys():
+            collected_coeffs.append(coeff.to_local_eel())
+    # only want the unique ones.
+    unique_coeffs = list(set(collected_coeffs))
+    
+    num_qubits = len(error_propagator.model.state_space.qubit_labels)
+    
+    errorgen_basis = _ExplicitElementaryErrorgenBasis(_QubitSpace(num_qubits), unique_coeffs, basis_1q=_BuiltinBasis('PP', 4))
+    
+    # iterate through each of the propagated error generator layers and turn these into dense numpy arrays
+    errorgen_group_mats = []
+    for layer in errorgen_groups:
+        errorgen_group_mats.append(error_propagator.errorgen_layer_dict_to_errorgen(layer, mx_basis='pp'))
+
+    zassenhaus_formula_arrays = []
+
+    if zassenhaus_order>=1:
+        if zassenhaus_order==1:
+            return errorgen_group_mats
+        else:
+            zassenhaus_formula_arrays.extend(errorgen_group_mats)
+
+    if zassenhaus_order>=2:
+        second_order_correction_array = _np.zeros((4**num_qubits, 4**num_qubits), dtype=_np.complex128)
+        errorgen_pairs = []
+        for i in range(len(errorgen_groups)):
+            for j in range(i):
+                errorgen_pairs.append((errorgen_group_mats[i], errorgen_group_mats[j]))
+        for errorgen_pair in errorgen_pairs:
+            second_order_correction_array += .5*_matrix_commutator(errorgen_pair[0], errorgen_pair[1])
+        zassenhaus_formula_arrays.append(second_order_correction_array)
+    
+    # (1/3)\sum_{1<=i<j,k<=n}[[X_j,X_i],X_k] + (1/6)\sum_{1<=i<j<=n} [[X_j,X_i],X_i]
+    if zassenhaus_order>=3:
+        third_order_correction_array = _np.zeros((4**num_qubits, 4**num_qubits), dtype=_np.complex128)
+        for k in range(len(errorgen_groups)):
+            for j in range(len(errorgen_groups)):
+                for i in range(j):
+                    third_order_correction_array += (1/3)*_matrix_commutator(_matrix_commutator(errorgen_group_mats[j], errorgen_group_mats[i]), errorgen_group_mats[k])
+        for j in range(len(errorgen_groups)):
+            for i in range(j):
+                third_order_correction_array += (1/6)*_matrix_commutator(_matrix_commutator(errorgen_group_mats[j], errorgen_group_mats[i]), errorgen_group_mats[i])
+        
+        zassenhaus_formula_arrays.append(third_order_correction_array)
+
+    return zassenhaus_formula_arrays
+    
 def _matrix_commutator(mat1, mat2):
     return mat1@mat2 - mat2@mat1
 
