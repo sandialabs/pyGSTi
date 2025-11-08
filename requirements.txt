@@ -5,3 +5,4 @@ plotly
 pandas
 networkx
 stim
+tqdm
