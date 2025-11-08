@@ -722,11 +722,11 @@ def _second_order_magnus_term(errorgen_layers: list[dict[_LSE, float]], identity
 
     return second_order_comm_dict
 
-def zassenhaus_formula(errorgen_groups: list[dict[_LSE, float]], zassenhaus_order: Literal[1,2,3] = 1, 
+def zassenhaus_formula(errorgen_groups: list[dict[_LSE, float]], zassenhaus_order: Literal[1,2] = 1, 
                       truncation_threshold: float = 1e-14) -> list[dict[_LSE, float]]:
     """
     Function for computing the nth-order Zassenhaus formula for a set of error generators.
-    Please see https://arxiv.org/pdf/1903.03140 or https://en.wikipedia.org/wiki/Baker%E2%80%93Campbell%E2%80%93Hausdorff_formula#Zassenhaus_formula
+    Please see https://en.wikipedia.org/wiki/Baker%E2%80%93Campbell%E2%80%93Hausdorff_formula#Zassenhaus_formula
     for more information on this approxmation.
 
     Given an exponentiated sum of operators exp(X1+X2+...+Xn) the Zassenhaus formula gives one disentangle this
@@ -740,7 +740,7 @@ def zassenhaus_formula(errorgen_groups: list[dict[_LSE, float]], zassenhaus_orde
         The error generator coefficients are represented using LocalStimErrorgenLabel.
     
     zassenhaus_order : int, optional (default 1)
-        Order of the Zassenahaus formula to compute. Currently supports up to TBD order. Note that
+        Order of the Zassenahaus formula to compute. Currently supports up to second order. Note that
         zassenhaus_order = 1 corresponds simply to the original list of error generator in
         errorgen_groups, and in this case we simply return errorgen_groups as-is (not a copy).
     
@@ -776,66 +776,9 @@ def zassenhaus_formula(errorgen_groups: list[dict[_LSE, float]], zassenhaus_orde
         second_order_comm_dict = _second_order_magnus_term(errorgen_groups, identity, truncation_threshold)
         zassenhaus_formula_dicts.append(second_order_comm_dict)
 
-    # third-order zassenhaus term: 
-    # (1/3)\sum_{1<=i<j,k<=n}[[X_j,X_i],X_k] + (1/6)\sum_{1<=i<j<=n} [[X_j,X_i],X_i]
     if zassenhaus_order>=3:
-        commuted_errgen_list_1 = []
-        commuted_errgen_list_2 = []
-        # compute each of the two terms separately.
-        # First term:
-        # (2/3) \sum_{1<=k<=n}[(1/2)\sum_{1<=i<j<=n}[X_j,X_i]),X_k]
-        # written this way we can see that for the inner double sum we can reuse the second-order correction.
-        for layer in errorgen_groups:
-            commuted_errgen_list_1.extend(_error_generator_layer_pairwise_commutator(second_order_comm_dict, layer, 
-                                                                                     identity=identity,
-                                                                                     addl_weight=(2/3),
-                                                                                     truncation_threshold=truncation_threshold))
-        # Second term:
-        # (1/6)\sum_{1<=i<j<=n} [[X_j,X_i],X_i] Reindexing this sum we get
-        # (1/6)\sum_{1<=i=n-1} [(\sum_{i+1<=j<=n}[X_j,X_i]), X_i] If we 
-        # accumulate this sum in reverse we can reuse intermediate values.
-        for i in range(len(errorgen_groups)-1):
-            new_12_commutator_terms = []
-            for j in range(i,len(errorgen_groups)):
-                new_12_commutator_terms.extend(_error_generator_layer_pairwise_commutator(errorgen_groups[j], errorgen_groups[i], 
-                                                                                          addl_weight=(1/6), identity=identity, 
-                                                                                          truncation_threshold=truncation_threshold))
-            #accumulate new_12_commutator_terms before doing the outer commutator again.
-            new_12_commutator_dict = {}
-            for error_tuple in new_12_commutator_terms:
-                new_12_commutator_dict[error_tuple[0]] = 0
-            # Now that keys are instantiated add all of these error generators to the working dictionary of updated error generators and weights.
-            # There may be duplicates, which should be summed together.
-            for error_tuple in new_12_commutator_terms:
-                new_12_commutator_dict[error_tuple[0]] += error_tuple[1]
-
-            #compute the outer commutator
-            commuted_errgen_list_2.extend(_error_generator_layer_pairwise_commutator(new_12_commutator_dict, errorgen_groups[i],
-                                                                                     identity=identity, 
-                                                                                     truncation_threshold=truncation_threshold))
-
-        # finally combine the contents of commuted_errgen_list_1 and commuted_errgen_list_2 
-        # turn the two new commuted error generator lists into dictionaries.
-        # loop through all of the elements of commuted_errorgen_list and instantiate a dictionary with the requisite keys.
-        third_order_comm_dict_1 = {error_tuple[0]:0 for error_tuple in commuted_errgen_list_1}
-        third_order_comm_dict_2 = {error_tuple[0]:0 for error_tuple in commuted_errgen_list_2}
-        
-        # Add all of these error generators to the working dictionary of updated error generators and weights.
-        # There may be duplicates, which should be summed together.
-        for error_tuple in commuted_errgen_list_1:
-            third_order_comm_dict_1[error_tuple[0]] += error_tuple[1]
-        for error_tuple in commuted_errgen_list_2:
-            third_order_comm_dict_2[error_tuple[0]] += error_tuple[1]
-        
-        # finally sum these two dictionaries, keeping only terms which are greater than the threshold.
-        third_order_comm_dict = dict()
-        current_combined_coeff_lbls = {key: None for key in chain(third_order_comm_dict_1, third_order_comm_dict_2)}
-        for lbl in current_combined_coeff_lbls:
-            third_order_rate = third_order_comm_dict_1.get(lbl, 0) + third_order_comm_dict_2.get(lbl, 0)
-            if abs(third_order_rate) > truncation_threshold:
-                third_order_comm_dict[lbl] = third_order_rate
-        zassenhaus_formula_dicts.append(third_order_comm_dict)
-
+        raise NotImplementedError('The Zassenhaus formula is currently only implemented up to second-order.')  
+         
     return zassenhaus_formula_dicts
 
 # TODO: Refactor a bunch of the code in this module to use this helper function.
@@ -7129,10 +7072,10 @@ def errorgen_pauli_action_numerical(errorgen: _EEL, pauli: stim.PauliString) -> 
     return weighted_pauli
 
 def zassenhaus_formula_numerical(errorgen_groups: list[dict[_EEL, float]], error_propagator: _epropagator.ErrorGeneratorPropagator, 
-                                 zassenhaus_order: Literal[1,2,3] = 1) -> list[_np.ndarray]:
+                                 zassenhaus_order: Literal[1,2] = 1) -> list[_np.ndarray]:
     """
     Function for numerically computing the nth-order Zassenhaus formula for a set of error generators.
-    Please see https://arxiv.org/pdf/1903.03140 or https://en.wikipedia.org/wiki/Baker%E2%80%93Campbell%E2%80%93Hausdorff_formula#Zassenhaus_formula
+    Please see https://en.wikipedia.org/wiki/Baker%E2%80%93Campbell%E2%80%93Hausdorff_formula#Zassenhaus_formula
     for more information on this approxmation.
 
     Due to the numerical nature of this implementation it is not meant for efficient computation and
@@ -7146,7 +7089,7 @@ def zassenhaus_formula_numerical(errorgen_groups: list[dict[_EEL, float]], error
         The error generator coefficients are represented using LocalStimErrorgenLabel.
     
     zassenhaus_order : int, optional (default 1)
-        Order of the Zassenahaus formula to compute.
+        Order of the Zassenahaus formula to compute, currently supports up to second order.
     
     Returns
     -------
@@ -7190,19 +7133,9 @@ def zassenhaus_formula_numerical(errorgen_groups: list[dict[_EEL, float]], error
         for errorgen_pair in errorgen_pairs:
             second_order_correction_array += .5*_matrix_commutator(errorgen_pair[0], errorgen_pair[1])
         zassenhaus_formula_arrays.append(second_order_correction_array)
-    
-    # (1/3)\sum_{1<=i<j,k<=n}[[X_j,X_i],X_k] + (1/6)\sum_{1<=i<j<=n} [[X_j,X_i],X_i]
+
     if zassenhaus_order>=3:
-        third_order_correction_array = _np.zeros((4**num_qubits, 4**num_qubits), dtype=_np.complex128)
-        for k in range(len(errorgen_groups)):
-            for j in range(len(errorgen_groups)):
-                for i in range(j):
-                    third_order_correction_array += (1/3)*_matrix_commutator(_matrix_commutator(errorgen_group_mats[j], errorgen_group_mats[i]), errorgen_group_mats[k])
-        for j in range(len(errorgen_groups)):
-            for i in range(j):
-                third_order_correction_array += (1/6)*_matrix_commutator(_matrix_commutator(errorgen_group_mats[j], errorgen_group_mats[i]), errorgen_group_mats[i])
-        
-        zassenhaus_formula_arrays.append(third_order_correction_array)
+        raise NotImplementedError('The Zassenhaus formula is currently only implemented up to second-order.')    
 
     return zassenhaus_formula_arrays
     
