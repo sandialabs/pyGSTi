@@ -140,21 +140,25 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
     if target_model_fit is None:
         if rank == 0: #and verbosity > 0:
             print('starting GST ', size)
-        target_model.sim = pygsti.forwardsims.MapForwardSimulator(processor_grid=(1,size))
+        from pygsti.models import Model
+        target_model.sim = pygsti.forwardsims.MapForwardSimulator(processor_grid=(size,1))
         
         if rank == 0:
             start = time.time()
+
         result = _parallel_GST(target_model, data, prob_clip, tol, maxiter, verbosity, comm=comm, mem_limit=mem_limit)
 
     
         target_model_fit = result.estimates['GateSetTomography'].models['final iteration estimate']
-        target_model_fit.sim = pygsti.forwardsims.MapForwardSimulator(processor_grid=(1,1))
-        logl_2 = pygsti.tools.logl(target_model_fit, data.dataset)
+        #target_model_fit.write('./good_model.json')
+        logl_2 = pygsti.tools.two_delta_logl(target_model_fit, data.dataset, min_prob_clip=prob_clip, comm=comm)
+        #target_model_fit.sim = pygsti.forwardsims.MapForwardSimulator(processor_grid=(1,1))
+        #logl_2 = pygsti.tools.two_delta_logl(target_model_fit, data.dataset, min_prob_clip=prob_clip)
 
         
         x0 = target_model_fit.to_vector()
         if rank == 0:
-            print('time: ', time.time()- start, ' logl: ', logl_2, ' |x| =', np.linalg.norm(x0))
+            print('time: ', time.time()- start, ' 2deltalogl: ', logl_2, ' |x| =', np.linalg.norm(x0))
         exit()
         if not disable_checkpoints and rank == 0:
             new_checkpoint.target_model = target_model_fit
@@ -187,6 +191,7 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
 
         red_model = target_model.copy()
         print(f'{target_model_fit.sim._processor_grid}')
+        target_model_fit.sim._processor_grid = (1,1,1)
         logl_fn = create_logl_obj_fn(target_model_fit, data.dataset)
         original_dlogl = -logl_fn.fn()
         print(f'{original_dlogl=}')

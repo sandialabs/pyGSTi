@@ -137,6 +137,7 @@ class ExplicitOpModel(_mdl.OpModel):
         self.factories = _OrderedMemberDict(self, default_gate_type, gate_prefix, flagfn("factory"))
         self.effects_prefix = effect_prefix
         self._default_gauge_group = None
+        self.fogi_store = None
 
         super(ExplicitOpModel, self).__init__(state_space, basis, evotype, ExplicitLayerRules(), simulator)
 
