@@ -1022,7 +1022,7 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
 
 def _create_spam_layers(processor_spec, modelnoise, local_noise,
                         ideal_prep_type, ideal_povm_type, evotype, state_space, independent_spam,
-                        basis='pp'):
+                        basis='pp', custom_spam=None):
     """ local_noise=True creates lindblad ops that are embedded & composed 1Q ops, and assumes
         that modelnoise specifies 1Q noise.  local_noise=False assumes modelnoise specifies n-qudit noise"""
     qudit_labels = processor_spec.qudit_labels
@@ -1030,6 +1030,9 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
     qudit_udim = processor_spec.qudit_udims[0]
     if not all([u == qudit_udim for u in processor_spec.qudit_udims]):
         raise NotImplementedError("Mixtures of different dimension qudits is not implemented yet.")
+
+    if custom_spam is None:
+        custom_spam = {}
 
     singleQ_state_space = _statespace.default_space_for_udim(qudit_udim)  # single qudit state space
 
@@ -1113,8 +1116,11 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
     # cases below.
 
     for prep_name in processor_spec.prep_names:
-        prep_spec = processor_spec.prep_specifier(prep_name)
+        if prep_name in custom_spam:
+            prep_layers[prep_name] = custom_spam[prep_name]
+            continue
 
+        prep_spec = processor_spec.prep_specifier(prep_name)
         # Prep logic
         if isinstance(ideal_prep_type, (tuple, list)):  # HACK to support multiple vals
             ideal_prep_type = ideal_prep_type[0]
@@ -1249,8 +1255,12 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
             _add_to_prep_layers(ideal_prep, prep_ops_to_compose, prep_name)
 
     for povm_name in processor_spec.povm_names:
-        povm_spec = processor_spec.povm_specifier(povm_name)
+        if povm_name in custom_spam:
+            povm_layers[povm_name] = custom_spam[povm_name]
+            continue
 
+        povm_spec = processor_spec.povm_specifier(povm_name)
+            
         # Povm logic
         if isinstance(ideal_povm_type, (tuple, list)):  # HACK to support multiple vals
             ideal_povm_type = ideal_povm_type[0]
@@ -1736,7 +1746,7 @@ def create_cloud_crosstalk_model(processor_spec, custom_gates=None,
                                  depolarization_parameterization='depolarize', stochastic_parameterization='stochastic',
                                  lindblad_parameterization='auto', evotype="default", simulator="auto",
                                  independent_gates=False, independent_spam=True, errcomp_type="gates",
-                                 implicit_idle_mode="none", basis='pp', verbosity=0):
+                                 implicit_idle_mode="none", basis='pp', verbosity=0, custom_spam=None):
     """
     Create a n-qudit "cloud-crosstalk" model.
 
@@ -1862,6 +1872,14 @@ def create_cloud_crosstalk_model(processor_spec, custom_gates=None,
     verbosity : int or VerbosityPrinter, optional
         Amount of detail to print to stdout.
 
+    custom_spam: dict, optional
+        A dictionary that associates with Prep/POVM labels
+        :class:`State` or :class:`POVM`
+        objects.  These objects override any other behavior for constructing
+        their designated operations.  Keys of this dictionary should
+        be string-type prep/POVM *names*.
+
+
     Returns
     -------
     CloudNoiseModel
@@ -1873,13 +1891,13 @@ def create_cloud_crosstalk_model(processor_spec, custom_gates=None,
 
     return _create_cloud_crosstalk_model(processor_spec, modelnoise, custom_gates, evotype,
                                          simulator, independent_gates, independent_spam, errcomp_type,
-                                         implicit_idle_mode, basis, verbosity)
+                                         implicit_idle_mode, basis, verbosity, custom_spam=custom_spam)
 
 
 def _create_cloud_crosstalk_model(processor_spec, modelnoise, custom_gates=None,
                                   evotype="default", simulator="auto", independent_gates=False,
                                   independent_spam=True, errcomp_type="errorgens",
-                                  implicit_idle_mode="none", basis='pp', verbosity=0):
+                                  implicit_idle_mode="none", basis='pp', verbosity=0, custom_spam=None):
     """
     Create a n-qudit "cloud-crosstalk" model.
 
@@ -1911,7 +1929,7 @@ def _create_cloud_crosstalk_model(processor_spec, modelnoise, custom_gates=None,
     local_noise = False
     prep_layers, povm_layers = _create_spam_layers(processor_spec, modelnoise, local_noise,
                                                    'computational', 'computational', evotype, state_space,
-                                                   independent_spam, basis)
+                                                   independent_spam, basis, custom_spam=custom_spam)
 
     if errcomp_type == 'gates':
         create_stencil_fn = modelnoise.create_errormap_stencil
