@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.linalg import logm
+from scipy.linalg import logm, expm
 from pygsti.baseobjs import Label, QubitSpace, BuiltinBasis
 from pygsti.baseobjs.errorgenbasis import CompleteElementaryErrorgenBasis
 from pygsti.algorithms.randomcircuit import create_random_circuit
@@ -251,6 +251,21 @@ class ErrgenCompositionCommutationTester(BaseCase):
                                             if pauli_action is not None else np.zeros((2**len(pauli),2**len(pauli)))
                 pauli_action_numerical = _eprop.errorgen_pauli_action_numerical(eglbl, pauli)
                 assert np.linalg.norm(pauli_action_dense-pauli_action_numerical) < 1e-14, f'Numerical and analytical results differ, {eglbl=}, {pauli=}'
+
+    def test_zassenhaus_formula(self):
+        first_order_zassenhaus_numerical = _eprop.zassenhaus_formula_numerical(self.propagated_errorgen_layers, self.errorgen_propagator, zassenhaus_order=1)
+        first_order_zassenhaus_analytical = _dense_zassenhaus_generators_analytic(self.propagated_errorgen_layers, self.errorgen_propagator, zassenhaus_order=1)
+        assert all([np.linalg.norm(analytic-numerical) < 1e-14 for analytic, numerical in zip(first_order_zassenhaus_analytical,first_order_zassenhaus_numerical)])
+        
+        second_order_zassenhaus_numerical = _eprop.zassenhaus_formula_numerical(self.propagated_errorgen_layers, self.errorgen_propagator, zassenhaus_order=2)
+        second_order_zassenhaus_analytical = _dense_zassenhaus_generators_analytic(self.propagated_errorgen_layers, self.errorgen_propagator, zassenhaus_order=2)
+        assert all([np.linalg.norm(analytic-numerical) < 1e-14 for analytic, numerical in zip(second_order_zassenhaus_analytical,second_order_zassenhaus_numerical)])
+
+        exact_channel = self.errorgen_propagator.eoc_error_channel(self.circuit, use_bch=True, bch_kwargs={'bch_order':1})
+        exact_vs_first_order_norm  = np.linalg.norm(np.linalg.multi_dot([expm(gen) for gen in first_order_zassenhaus_analytical])-exact_channel)
+        exact_vs_second_order_norm = np.linalg.norm(np.linalg.multi_dot([expm(gen) for gen in second_order_zassenhaus_analytical])-exact_channel)
+        
+        self.assertTrue(exact_vs_first_order_norm > exact_vs_second_order_norm)
 
 class ApproxStabilizerMethodTester(BaseCase):
     def setUp(self):
@@ -671,3 +686,9 @@ def _compare_analytic_numeric_iterative_composition(num_qubits):
             print('analytic_composition_mat=')
             print_mx(analytic_composition_mat)
             raise ValueError('Numeric and analytic error generator compositions were not found to be identical!')
+
+#helper function for zassenhaus formula testing
+def _dense_zassenhaus_generators_analytic(errorgen_groups, errogen_propagator, zassenhaus_order=1):
+    zassenhaus_gens= _eprop.zassenhaus_formula(errorgen_groups, zassenhaus_order)
+    dense_zassenhaus_generators = [errogen_propagator.errorgen_layer_dict_to_errorgen(gen) for gen in zassenhaus_gens]    
+    return dense_zassenhaus_generators

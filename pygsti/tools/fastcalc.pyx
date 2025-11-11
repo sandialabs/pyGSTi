@@ -1302,5 +1302,143 @@ def fast_triu_indices(int n):
 
     return row_indices_np, col_indices_np
 
+# These Cython functions provides an optimized version of pauli_phase_update_all_zeros,
+# reworked to work on the string representation of a stim.PauliString.
+#
+# The expected format is:
+#    prefix + operator_chars
+#
+# Accepted prefixes and their ASCII codes:
+#    '+' (43)  -> +1,
+#    '-' (45)  -> -1,
+#    "+i" (43,105) -> +1j,
+#    "-i" (45,105) -> -1j.
+#
+# Following the prefix, each operator character (one per qubit) is one of:
+#    '_' (95) -> identity,
+#    'X' (88) -> X,
+#    'Y' (89) -> Y,
+#    'Z' (90) -> Z.
+#
+# We now avoid converting these operator characters to an intermediate integer code:
+# instead, we pass the ASCII code directly into the inline helper get_phase0_ascii().
 
+cdef inline complex get_phase0_ascii(unsigned char op, bint dual):
+    """
+    Returns the phase correction for an operator character when the input bit is '0'.
+    
+    For op:
+      '_' -> 1
+      'X' -> 1
+      'Y' -> 1j  if dual is False, or -1j if dual is True.
+      'Z' -> 1
+    For any unrecognized operator, defaults to 1.
+    """
+    if op == 95:  # '_' ASCII 95
+        return 1
+    elif op == 88:  # 'X' ASCII 88
+        return 1
+    elif op == 89:  # 'Y' ASCII 89
+        if dual:
+            return -1j
+        else:
+            return 1j
+    elif op == 90:  # 'Z' ASCII 90
+        return 1
+    else:
+        return 1
 
+cdef inline bint pauli_flip_ascii(unsigned char op):
+    """
+    Returns whether the operator (given by its ASCII code) causes a bit flip.
+    
+    For op:
+      '_' -> False,
+      'X' -> True,
+      'Y' -> True,
+      'Z' -> False.
+    Any unrecognized operator is treated as no flip.
+    """
+    return (op == 88 or op == 89)  # 'X' (88) or 'Y' (89)
+
+from cpython.unicode cimport PyUnicode_FromStringAndSize, PyUnicode_AsUTF8
+from cpython.mem cimport PyMem_Malloc, PyMem_Free
+@cython.wraparound(False)   # Deactivate negative indexing.
+cpdef pauli_phase_update_all_zeros(str pauli_str, bint dual=False):
+    """
+    Optimized specialized function that works on the string representation of a stim.PauliString.
+    
+    Expected string format:
+         prefix + operator_chars
+
+    Valid prefixes:
+         "+"    (ASCII 43)         -> +1,
+         "-"    (ASCII 45)         -> -1,
+         "+i"   (43,105)           -> +1j,
+         "-i"   (45,105)           -> -1j.
+         
+    Each following operator character (one per qubit) is interpreted as:
+         '_'  (ASCII 95) -> identity (1),
+         'X'  (ASCII 88) -> X (1, with flip),
+         'Y'  (ASCII 89) -> Y (1j or -1j, with flip),
+         'Z'  (ASCII 90) -> Z (1).
+         
+    This routine assumes that the input bitstring is all zeros.
+    It returns a tuple (overall_phase, output_bitstring), where output_bitstring is
+    constructed by flipping bits when required.
+    """
+    cdef:
+        int prefix_len = 0
+        int i, n
+        complex overall_phase = 1.0
+        complex sign = 1.0
+        unsigned char op   # declare op outside the loop
+        char* out_buffer
+
+    # Convert pauli_str to ASCII bytes. (UTF-8 is backwards compatible with ASCII)
+    cdef const char* p = PyUnicode_AsUTF8(pauli_str)
+
+    # Determine the sign from the prefix.
+    if p[0] == ord('+'):
+        if p[1] == ord('i'):
+            sign = 1j
+            prefix_len = 2
+        else:
+            sign = 1
+            prefix_len = 1
+    elif p[0] == ord('-'):
+        if p[1] == ord('i'):
+            sign = -1j
+            prefix_len = 2
+        else:
+            sign = -1
+            prefix_len = 1
+    else:
+        # No explicit sign provided; default to positive.
+        sign = 1
+        prefix_len = 0
+
+    n = len(pauli_str) - prefix_len  # Number of operator characters.
+    # Allocate a C char buffer for output with space for n characters plus a null terminator.
+    out_buffer = <char*> PyMem_Malloc((n + 1) * sizeof(char))
+    if not out_buffer:
+        raise MemoryError("Failed to allocate memory for output buffer")
+     # Initialize the buffer with the ASCII code for '0' (48).
+    for i in range(n):
+        out_buffer[i] = 48
+    out_buffer[n] = 0  # null termination
+
+    for i in range(n):
+        # Retrieve the operator character from the pointer.
+        op = p[prefix_len + i]
+        overall_phase *= get_phase0_ascii(op, dual)
+        if pauli_flip_ascii(op):
+            # Use ASCII 49 for '1'.
+            out_buffer[i] = 49  # Flip bit from '0' to '1'
+    overall_phase *= sign
+    
+    # Create a Python string from the out_buffer.
+    cdef object out_pystr = PyUnicode_FromStringAndSize(out_buffer, n)
+    PyMem_Free(out_buffer)
+    
+    return overall_phase, out_pystr

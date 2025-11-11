@@ -13,7 +13,8 @@ Matrix related utility functions
 import functools as _functools
 import itertools as _itertools
 import warnings as _warnings
-import typing as _typing
+
+from typing import Protocol, Any, runtime_checkable, TypeVar
 
 import numpy as _np
 import scipy.linalg as _spl
@@ -87,6 +88,16 @@ def is_hermitian(mx, tol=1e-9):
         return False
     else:
         return _np.all(_np.abs(mx - mx.T.conj()) <= tol)
+
+
+def assert_hermitian(mat : _np.ndarray, tol: _np.floating) -> None:
+    hermiticity_error = _np.abs(mat - mat.T.conj())
+    if _np.any(hermiticity_error > tol):
+        message = f"""
+            Input matrix 'mat' is not Hermitian, up to tolerance {tol}.
+            The absolute values of entries in (mat - mat^H) are \n{hermiticity_error}. 
+        """
+        raise ValueError(message)
 
 
 def is_pos_def(mx, tol=1e-9, attempt_cholesky=False):
@@ -2397,8 +2408,25 @@ def sign_fix_qr(q, r, tol=1e-6):
     return qq, rr
 
 
-def is_operatorlike(obj: _typing.Any) -> bool:
-    return hasattr(obj, '__matmul__') and hasattr(obj, '__rmatmul__') and hasattr(obj, 'T') and hasattr(obj, 'conj')
+# a TypeVar to allow methods to return "self"
+_T = TypeVar("_T", bound="OperatorLike")
+
+
+@runtime_checkable
+class OperatorLike(Protocol[_T]): # type: ignore
+
+    @property
+    def T(self) -> _T:
+        ...
+
+    def __matmul__(self, other: Any) -> Any:
+        ...
+
+    def __rmatmul__(self, other: Any) -> Any:
+        ...
+
+    def conj(self) -> _T:
+        ...
 
 
 class IdentityOperator:
@@ -2422,10 +2450,10 @@ class IdentityOperator:
     #   has __array_priority__ of 10). 
     #
 
-    def __matmul__(self, other: _typing.Any) -> _typing.Any:
+    def __matmul__(self, other: Any) -> Any:
         return other
     
-    def __rmatmul__(self, other: _typing.Any) -> _typing.Any:
+    def __rmatmul__(self, other: Any) -> Any:
         return other
     
     @property
@@ -2434,3 +2462,12 @@ class IdentityOperator:
     
     def conj(self):
         return self
+
+
+def to_operatorlike(obj):
+    if obj is None:
+        return IdentityOperator()
+    elif isinstance(obj, OperatorLike):
+        return obj
+    else:
+        raise ValueError()
