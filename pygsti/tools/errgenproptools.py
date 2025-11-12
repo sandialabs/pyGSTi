@@ -32,7 +32,7 @@ from pygsti.tools.optools import create_elementary_errorgen_nqudit, state_to_dmv
 from functools import reduce
 from itertools import chain, product
 from math import factorial
-from typing import Literal, Optional, Union
+from typing import Literal, Optional, Union, Callable
 
 def errgen_coeff_label_to_stim_pauli_strs(err_gen_coeff_label, num_qubits):
     """
@@ -7271,7 +7271,7 @@ def bitstring_to_tableau(bitstring):
 
 # Modified from Gidney 
 # https://quantumcomputing.stackexchange.com/questions/34610/get-the-amplitude-of-a-computational-basis-in-stim
-def amplitude_of_state(tableau: Union[stim.Tableau, stim.TableauSimulator], desired_state: str) -> complex:
+def amplitude_of_state(tableau, desired_state):
     """
     Get the amplitude of a particular computational basis state for given
     stabilizer state.
@@ -7294,9 +7294,11 @@ def amplitude_of_state(tableau: Union[stim.Tableau, stim.TableauSimulator], desi
 
     if isinstance(tableau, stim.Tableau):
         sim = stim.TableauSimulator()
-        sim.set_inverse_tableau(tableau**-1)
+        orig_tableau_inverse = tableau**-1
+        sim.set_inverse_tableau(orig_tableau_inverse)
     elif isinstance(tableau, stim.TableauSimulator):
         sim = tableau
+        orig_tableau_inverse = sim.current_inverse_tableau()
     else:
         raise ValueError(f'Unsupported input type {type(tableau)} for `tableau`. Supported options are stim.Tableau and stim.TableauSimulator')
     
@@ -7306,55 +7308,67 @@ def amplitude_of_state(tableau: Union[stim.Tableau, stim.TableauSimulator], desi
     desired_state = [desired_state[i] == '1' for i in range(n)]
     
     #  Determine the magnitude of the target state.
-    copy = sim.copy()
     num_random = 0
     for q in range(n):
         desired_bit = desired_state[q]
-        z = copy.peek_z(q)
+        z = sim.peek_z(q)
         forced_bit = z == -1
         if z == 0:
             num_random += 1
         elif desired_bit != forced_bit: # forced bit is true if the state is |1>, so this is checking whether the bits match.
+            #only put things back the way they were if tableau was a stim.TableauSimulator, otherwise we can avoid the overhead
+            #since sim is local to this function call.
+            if isinstance(tableau, stim.TableauSimulator):
+                tableau.set_inverse_tableau(orig_tableau_inverse)
             return 0
-        copy.postselect_z(q, desired_value=desired_bit)
+        sim.postselect_z(q, desired_value=desired_bit)
     magnitude = 2**-(num_random / 2)
     #  For a phase reference, use the smallest state with non-zero amplitude.
-    copy = sim.copy()
+    sim.set_inverse_tableau(orig_tableau_inverse)
     ref_state = [False]*n
     for q in range(n):
-        z = copy.peek_z(q)
+        z = sim.peek_z(q)
         forced_bit = z == -1
         ref_state[q] = forced_bit
-        copy.postselect_z(q, desired_value=forced_bit)
+        sim.postselect_z(q, desired_value=forced_bit)
     if ref_state == desired_state:
+        #only put things back the way they were if tableau was a stim.TableauSimulator, otherwise we can avoid the overhead
+        #since sim is local to this function call.
+        if isinstance(tableau, stim.TableauSimulator):
+            tableau.set_inverse_tableau(orig_tableau_inverse)
         return magnitude
 
     #  Postselect away states that aren't the desired or reference states.
     #  Also move the ref state to |00..00> and the desired state to |00..01>.
-    copy = sim.copy()
+    sim.set_inverse_tableau(orig_tableau_inverse)
     found_difference = False
     for q in range(n):
         desired_bit =  desired_state[q]
         ref_bit = ref_state[q]
         if desired_bit == ref_bit:
-            copy.postselect_z(q, desired_value=ref_bit)
+            sim.postselect_z(q, desired_value=ref_bit)
             if desired_bit:
-                copy.x(q)
+                sim.x(q)
         elif not found_difference:
             found_difference = True
             if q:
-                copy.swap(0, q)
+                sim.swap(0, q)
             if ref_bit:
-                copy.x(0)
+                sim.x(0)
         else:
             #  Remove difference between target state and ref state at this bit.
-            copy.cnot(0, q)
-            copy.postselect_z(q, desired_value=ref_bit)
+            sim.cnot(0, q)
+            sim.postselect_z(q, desired_value=ref_bit)
 
     #  The phase difference between |00..00> and |00..01> is what we want.
     #  Since other states are gone, this is the bloch vector phase of qubit 0.
     assert found_difference
-    s = str(copy.peek_bloch(0))
+    s = str(sim.peek_bloch(0))
+    
+    #only put things back the way they were if tableau was a stim.TableauSimulator, otherwise we can avoid the overhead
+    #since sim is local to this function call.
+    if isinstance(tableau, stim.TableauSimulator):
+        tableau.set_inverse_tableau(orig_tableau_inverse)
     
     if s == "+X":
         phase_factor = 1
@@ -7374,10 +7388,13 @@ PAULI_PHASES_0_DUAL = (1, 1, -1j, 1)
 PAULI_PHASES_1_DUAL = (1, 1, 1j, -1)
 PAULI_FLIPS = (False, True, True, False)
 
-def pauli_phase_update(pauli: Union[str, stim.PauliString], bitstring: str, dual: bool=False):
+def slow_pauli_phase_update(pauli: Union[str, stim.PauliString], bitstring: str, dual: bool=False) -> tuple[complex, str]:
     """
     Takes as input a pauli and a bit string and computes the output bitstring
     and the overall phase that bit string accumulates.
+
+    Note: This is a pure python implementation of this function. For best performance see the
+    optimized cython implementation tools.fastcalc.fast_pauli_phase_update.
     
     Parameters
     ----------
@@ -7439,12 +7456,15 @@ def pauli_phase_update(pauli: Union[str, stim.PauliString], bitstring: str, dual
     
     return overall_phase, output_bitstring
 
-def pauli_phase_update_all_zeros(pauli: Union[str, stim.PauliString], dual: bool=False) -> tuple[complex, str]:
+def slow_pauli_phase_update_all_zeros(pauli: Union[str, stim.PauliString], dual: bool=False) -> tuple[complex, str]:
     """
     Specialized version of `pauli_phase_update` for the case of the all-zeros
     bitstring which is more computationally efficient. Takes as input a pauli and
     computes the output bitstring and overall phase accumulated when applied to the
     all-zeros bit string.
+
+    Note: This is a pure python implementation of this function. For best performance see the
+    optimized cython implementation tools.fastcalc.fast_pauli_phase_update.
     
     Parameters
     ----------
@@ -7523,17 +7543,12 @@ def phi(tableau: Union[stim.Tableau, stim.TableauSimulator], desired_bitstring: 
     # now get the bit strings which need their amplitudes extracted from the input stabilizer state and get
     # the corresponding phase corrections.
     all_zeros = '0'*len(eff_P)
-    phase1, bitstring1 = pauli_phase_update(eff_P, all_zeros, dual=True)
-    phase2, bitstring2 = pauli_phase_update(eff_Q, all_zeros)
+    phase1, bitstring1 = pauli_phase_update(str(eff_P), all_zeros, dual=True)
+    phase2, bitstring2 = pauli_phase_update(str(eff_Q), all_zeros)
 
-    #print(f'{bitstring1=}')
-    #print(f'{bitstring2=}')
-    
-
-    # get the amplitude of these two bitstrings in the stabilizer state.
     amp1 = amplitude_of_state(tableau, bitstring1)
     amp2 = amplitude_of_state(tableau, bitstring2).conjugate()  # The second amplitude also needs a complex conjugate applied
-        
+
     # now apply the phase corrections. 
     amp1*=phase1
     amp2*=phase2
@@ -7583,10 +7598,14 @@ def bulk_phi(tableau: Union[stim.Tableau, stim.TableauSimulator],
     
     Ps : List[Union[str, stim.PauliString]]
         List of Pauli string indices for the first operator in each phi computation.
+        Can be either a string or a stim.PauliString (but all values are assumed to be
+        the same type).
     
     Qs : List[Union[str, stim.PauliString]]
         List of Pauli string indices for the second operator in each phi computation.
-        
+        Can be either a string or a stim.PauliString (but all values are assumed to be
+        the same type).
+
     Returns
     -------
     List[complex]
@@ -7594,6 +7613,8 @@ def bulk_phi(tableau: Union[stim.Tableau, stim.TableauSimulator],
     """
     if len(Ps) != len(Qs):
         raise ValueError("Lists of Ps and Qs must be of the same length.")
+    if len(Ps) == 0:
+        return []
 
     num_qubits = len(desired_bitstring)
 
@@ -7607,23 +7628,19 @@ def bulk_phi(tableau: Union[stim.Tableau, stim.TableauSimulator],
     list_P_str = []  # will store canonical representation of the original P for every pair
     list_Q_str = []  # same for Q
 
+    if not isinstance(Ps[0], stim.PauliString):
+        Ps = [stim.PauliString(P_val) for P_val in Ps]
+    if not isinstance(Qs[0], stim.PauliString):
+        Qs = [stim.PauliString(Q_val) for Q_val in Qs]
+    
     for P_val, Q_val in zip(Ps, Qs):
-        # Convert to stim.PauliString if needed.
-        if not isinstance(P_val, stim.PauliString):
-            P_val = stim.PauliString(P_val)
-        if not isinstance(Q_val, stim.PauliString):
-            Q_val = stim.PauliString(Q_val)
-
         # Use their string representation as canonical keys.
         key_P = str(P_val)
         key_Q = str(Q_val)
         list_P_str.append(key_P)
         list_Q_str.append(key_Q)
-
-        if key_P not in unique_Ps:
-            unique_Ps[key_P] = P_val
-        if key_Q not in unique_Qs:
-            unique_Qs[key_Q] = Q_val
+        unique_Ps[key_P] = P_val
+        unique_Qs[key_Q] = Q_val
 
     # (3) Compute effective pauli strings for each unique P and unique Q.
     #    They are given by:
@@ -7633,21 +7650,22 @@ def bulk_phi(tableau: Union[stim.Tableau, stim.TableauSimulator],
     eff_Q_phase_cache: Dict[str, Tuple[complex, str]] = {}
 
     # For each unique P, compute effective pauli string and then call pauli_phase_update.
+    unique_eff_Ps_by_unique_Ps = {}
     for key, P_obj in unique_Ps.items():
         eff_P = initial_pauli_str * P_obj
         # Use canonical string representation of effective pauli as key.
         key_eff = str(eff_P)
         # Process pauli_phase_update for effective P with dual=True.
         eff_P_phase_cache[key_eff] = pauli_phase_update_all_zeros(key_eff, dual=True)
-        # Replace the stored value with the effective pauli string as well so we can access it later.
-        unique_Ps[key] = eff_P
+        unique_eff_Ps_by_unique_Ps[key] = key_eff
 
     # For each unique Q, do similar.
+    unique_eff_Qs_by_unique_Qs = {}
     for key, Q_obj in unique_Qs.items():
         eff_Q = Q_obj * initial_pauli_str
         key_eff = str(eff_Q)
         eff_Q_phase_cache[key_eff] = pauli_phase_update_all_zeros(key_eff)
-        unique_Qs[key] = eff_Q
+        unique_eff_Qs_by_unique_Qs[key] = key_eff        
 
     # (4) Now, from the phase update results, collect all unique output bitstrings.
     unique_bitstrings = set()
@@ -7660,19 +7678,17 @@ def bulk_phi(tableau: Union[stim.Tableau, stim.TableauSimulator],
     cached_amplitudes: Dict[str, complex] = {}
     for bitstr in unique_bitstrings:
         cached_amplitudes[bitstr] = amplitude_of_state(tableau, bitstr)
-
+        
     # (5) Assemble the result for each (P, Q) pair.
     # Retrieve the effective pauli's phase update using the already-computed caches.
     result_phis: List[complex] = []
     for key_P, key_Q in zip(list_P_str, list_Q_str):
         # Get the effective pauli for P corresponding to the original P key.
-        eff_P = unique_Ps[key_P]
-        key_eff_P = str(eff_P)
+        key_eff_P = unique_eff_Ps_by_unique_Ps[key_P]
         phase1, bitstring1 = eff_P_phase_cache[key_eff_P]
 
         # Similarly for Q.
-        eff_Q = unique_Qs[key_Q]
-        key_eff_Q = str(eff_Q)
+        key_eff_Q = unique_eff_Qs_by_unique_Qs[key_Q]
         phase2, bitstring2 = eff_Q_phase_cache[key_eff_Q]
 
         amp1 = cached_amplitudes[bitstring1]
@@ -7873,6 +7889,8 @@ def bulk_alpha(errorgens: list[_LSE], tableau: stim.Tableau, desired_bitstrings:
     for i, desired_bitstring in enumerate(desired_bitstrings):
         phis = bulk_phi(sim, desired_bitstring, Ps, Qs)
 
+        phis_cython = _fc.bulk_phi(sim, desired_bitstring, Ps, Qs)
+        assert phis == phis_cython
         #loop through all of the phi values and get the sensitivity for each error generator.
         running_phi_index = 0
         for errgen_type in errgen_types:            
@@ -8630,11 +8648,16 @@ def error_generator_taylor_expansion_numerical(errorgen_dict, errorgen_propagato
 
     return taylor_expansion
 
-#Alias in the cython implementation of pauli_phase_update_all_zeros
+#Alias in the cython implementation of pauli_phase_update_all_zeros and pauli_phase_update
+PauliPhaseUpdater = Callable[[str,str,Optional[bool]],tuple[complex,str]]
 try:
     from pygsti.tools import fastcalc as _fc
-    pauli_phase_update_all_zeros = _fc.pauli_phase_update_all_zeros
+    pauli_phase_update_all_zeros = _fc.fast_pauli_phase_update_all_zeros
+    pauli_phase_update = _fc.fast_pauli_phase_update    
 except ImportError:
     msg = 'Could not import cython module `fastcalc`. This may indicate that your cython extensions for pyGSTi failed to.'\
           +'properly build. Lack of cython extensions can result in significant performance degredation so we recommend trying to rebuild them.'\
            'Falling back to python implementation for pauli_phase_update_all_zeros.'
+    warnings.warn(msg)
+    pauli_phase_update_all_zeros = slow_pauli_phase_update_all_zeros
+    pauli_phase_update = slow_fast_pauli_phase_update 
