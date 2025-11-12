@@ -39,12 +39,12 @@ class AMSCheckpoint(_NicelySerializable):
         super().__init__()
         self.target_model = target_model
         self.datasetstr = datasetstr
-        self.er_thresh = er_thresh
         self.maxiter = maxiter
         self.tol = tol
         self.prob_clip = prob_clip
         self.H = H
         self.x0 = x0
+        self.er_thresh = er_thresh
         if time is None:
             self.last_update_time = _time.ctime()
         else:
@@ -75,8 +75,18 @@ class AMSCheckpoint(_NicelySerializable):
         return state
     @classmethod
     def _from_nice_serialization(cls, state):
-        return cls(Model.from_nice_serialization(state['target_model']), state['datasetstr'], state['er_thresh'], state['maxiter'], state['tol'], state['prob_clip'] ,cls._decodemx(state['H']), cls._decodemx(state['x0']), state['time'])
-    def save(self, path=None):
+        H = cls._decodemx(state['H'])
+        x0 = cls._decodemx(state['x0'])
+        target_model = Model.from_nice_serialization(state['target_model'])
+        er_thresh = state['er_thresh']
+        datasetstr = state['datasetstr']
+        maxiter = state['maxiter']
+        prob_clip = state['prob_clip']
+        time= state['time']
+        tol = state['tol']
+
+        return cls(target_model, datasetstr, er_thresh, maxiter,tol , prob_clip ,H, x0, time)
+    def save(self):
         """
         Saves self to memory. If path is not specified, a default one is created.
 

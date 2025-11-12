@@ -131,6 +131,10 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
             target_model_fit.from_vector(x0)
             if rank == 0:
                 print('Warm starting AMS from checkpoint ' + checkpoint)
+        if new_checkpoint is not None:
+            new_checkpoint.x0 = x0
+            new_checkpoint.H = H
+            new_checkpoint.target_model = target_model_fit
         else:
             if rank == 0:
                 raise ValueError('Invalid AMS checkpoint provided. The checkpoint settings are:', f"{loaded_checkpoint.er_thresh=}, {loaded_checkpoint.maxiter=}, {loaded_checkpoint.tol=}, {loaded_checkpoint.prob_clip=}, {loaded_checkpoint.recompute_H_thresh_percent=}", ' make sure that these match the arguments provided match these, and that the target model and data are correct.')
@@ -140,8 +144,7 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
     if target_model_fit is None:
         if rank == 0: #and verbosity > 0:
             print('starting GST ', size)
-        from pygsti.models import Model
-        target_model.sim = pygsti.forwardsims.MapForwardSimulator(processor_grid=(size,1))
+        target_model.sim = pygsti.forwardsims.MapForwardSimulator(processor_grid=(1,size))
         
         if rank == 0:
             start = time.time()
@@ -150,26 +153,18 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
 
     
         target_model_fit = result.estimates['GateSetTomography'].models['final iteration estimate']
-        #target_model_fit.write('./good_model.json')
-        logl_2 = pygsti.tools.two_delta_logl(target_model_fit, data.dataset, min_prob_clip=prob_clip, comm=comm)
-        #target_model_fit.sim = pygsti.forwardsims.MapForwardSimulator(processor_grid=(1,1))
-        #logl_2 = pygsti.tools.two_delta_logl(target_model_fit, data.dataset, min_prob_clip=prob_clip)
-
         
         x0 = target_model_fit.to_vector()
-        if rank == 0:
-            print('time: ', time.time()- start, ' 2deltalogl: ', logl_2, ' |x| =', np.linalg.norm(x0))
-        exit()
         if not disable_checkpoints and rank == 0:
             new_checkpoint.target_model = target_model_fit
             new_checkpoint.x0 = x0
             new_checkpoint.save()
             print('Checkpoint saved in', new_checkpoint.path)
-
+    
     if H is None:
         if rank == 0 and verbosity > 0: 
             print("computing Hessian")
-        target_model_fit.sim = pygsti.forwardsims.MapForwardSimulator(processor_grid=(1,math.floor(size/2),math.ceil(size/2)),param_blk_sizes=(100,100))
+        target_model_fit.sim = pygsti.forwardsims.MapForwardSimulator(processor_grid=(1,1,size),param_blk_sizes=(100,100))
         H = pygsti.tools.logl_hessian(target_model_fit, data.dataset, comm=comm, mem_limit=mem_limit, verbosity = verbosity)
         #TODO how to make this work without mpiexec call
         H = comm.bcast(H, root = 0)
