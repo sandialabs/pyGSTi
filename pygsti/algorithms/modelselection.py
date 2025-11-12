@@ -185,7 +185,7 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
     if len(graph_levels) == 0:
 
         red_model = target_model.copy()
-        print(f'{target_model_fit.sim._processor_grid}')
+        red_model.sim._processor_grid = (1,1,1)
         target_model_fit.sim._processor_grid = (1,1,1)
         logl_fn = create_logl_obj_fn(target_model_fit, data.dataset)
         original_dlogl = -logl_fn.fn()
