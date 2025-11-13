@@ -22,7 +22,7 @@ import scipy.stats as _stats
 
 from pygsti.baseobjs.profiler import DummyProfiler as _DummyProfiler
 from pygsti import models as _models
-from pygsti.baseobjs import BuiltinBasis, VerbosityPrinter, DirectSumBasis
+from pygsti.baseobjs import BuiltinBasis, VerbosityPrinter, DirectSumBasis, Basis
 from pygsti import tools as _tools
 from pygsti import circuits as _circuits
 from pygsti import objectivefns as _objfns
@@ -36,6 +36,11 @@ from pygsti.optimize.simplerlm import Optimizer as _Optimizer, SimplerLMOptimize
 from pygsti import forwardsims as _fwdsims
 
 _dummy_profiler = _DummyProfiler()
+
+
+from typing import Union
+
+BasisLike = Union[str, Basis]
 
 
 CUSTOMLM = True
@@ -1132,7 +1137,7 @@ def _do_term_runopt(objective, optimizer, printer):
 ###################################################################################
 
 
-def find_closest_unitary_opmx(operation_mx):
+def find_closest_unitary_opmx(operation_mx, op_basis: BasisLike='pp'):
     """
     Find the closest (in fidelity) unitary superoperator to `operation_mx`.
 
@@ -1150,7 +1155,7 @@ def find_closest_unitary_opmx(operation_mx):
         The resulting closest unitary operation matrix.
     """
 
-    gate_JMx = _tools.jamiolkowski_iso(operation_mx, choi_mx_basis="std")
+    gate_JMx = _tools.jamiolkowski_iso(operation_mx, op_mx_basis=op_basis, choi_mx_basis="std")
     # d = _np.sqrt(operation_mx.shape[0])
     # I = _np.identity(d)
 
