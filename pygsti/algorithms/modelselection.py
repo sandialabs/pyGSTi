@@ -96,7 +96,19 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
         new_checkpoint = _AMSCheckpoint(None, data.dataset.to_str(), er_thresh, maxiter, tol, prob_clip, None, None)
     #logl function will not change throughout this algorithm, so we can save a lot of time
     #by setting it up once, and recomputing its value with different inputs throughout AMS
-    def create_logl_obj_fn(parent_model, dataset, min_prob_clip = 1e-6, comm = None, mem_limit = None):
+    def create_deltalogl_obj_fn(parent_model, dataset, min_prob_clip = 1e-6, comm = None, mem_limit = None):
+        """This function returns the delta logl of the 
+
+        Args:
+            parent_model (_type_): _description_
+            dataset (_type_): _description_
+            min_prob_clip (_type_, optional): _description_. Defaults to 1e-6.
+            comm (_type_, optional): _description_. Defaults to None.
+            mem_limit (_type_, optional): _description_. Defaults to None.
+
+        Returns:
+            _type_: _description_
+        """
         prob_clip_interval=(-1e6, 1e6) 
         radius=1e-4
         poisson_picture = False
@@ -187,12 +199,12 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
         red_model = target_model.copy()
         red_model.sim._processor_grid = (1,1,1)
         target_model_fit.sim._processor_grid = (1,1,1)
-        logl_fn = create_logl_obj_fn(target_model_fit, data.dataset)
-        original_dlogl = -logl_fn.fn()
+        deltalogl_fn = create_deltalogl_obj_fn(target_model_fit, data.dataset)
+        original_dlogl = deltalogl_fn.fn()
         print(f'{original_dlogl=}')
         expansion_point_logl = pygsti.tools.logl(target_model_fit, data.dataset, poisson_picture=False)
         approx_logl_fn = create_approx_logl_fn(H, x0, expansion_point_logl)
-        prev_logl = original_dlogl
+        prev_dlogl = original_dlogl
         graph_levels.append([[x0,original_dlogl, 0]])
         exceeded_threshold = False
         red_row_H = H
@@ -226,9 +238,9 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
                 vec = _reduced_model_approx_GST_fast(red_rowandcol_H, red_row_H, x0, i)
 
                 #vec = _parallel_GST(remove_param(red_model, i), data, prob_clip, tol, maxiter, verbosity=0, comm=None, mem_limit=None).estimates['GateSetTomography'].models['final iteration estimate'].to_vector()
-                logl_fn.model.from_vector(reduced_model_projector_matrix @ vec)
+                deltalogl_fn.model.from_vector(reduced_model_projector_matrix @ vec)
 
-                quantity = (prev_logl + logl_fn.fn())*2
+                quantity = (deltalogl_fn.fn()- prev_dlogl )*2
                 if i  % 223 == 0 and verbosity > 1:
                     print('Model ', i, ' has ev. ratio of ', quantity, flush=True)
                 if lowest_quantity == None or lowest_quantity > quantity:
@@ -243,9 +255,9 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
                 i = left_over_start_index + rank
                 reduced_model_projector_matrix = np.delete(parent_model_projector, i, axis=1)     
                 vec = _reduced_model_approx_GST_fast(red_rowandcol_H, red_row_H, x0, i)
-                logl_fn.model.from_vector(reduced_model_projector_matrix @ vec)
+                deltalogl_fn.model.from_vector(reduced_model_projector_matrix @ vec)
 
-                quantity = (prev_logl + logl_fn.fn())*2
+                quantity = (deltalogl_fn.fn() - prev_dlogl )*2
                 
                 if lowest_quantity == None or lowest_quantity > quantity:
                     lowest_quantity = quantity
@@ -294,8 +306,8 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
             x0 = red_model_fit.to_vector()
         
             reduced_model_projector_matrix = np.delete(parent_model_projector, sorted_finalists[0][2], axis=1)     
-            logl_fn.model.from_vector(reduced_model_projector_matrix @ x0)
-            sorted_finalists[0][1] = (prev_logl + logl_fn.fn())*2
+            deltalogl_fn.model.from_vector(reduced_model_projector_matrix @ x0)
+            sorted_finalists[0][1] = (deltalogl_fn.fn() - prev_dlogl )*2
             expansion_point_logl = pygsti.tools.logl(red_model_fit, data.dataset, poisson_picture=False)
             approx_logl_fn = create_approx_logl_fn(H, x0, expansion_point_logl)
             if rank == 0 and verbosity > 0:
@@ -315,12 +327,11 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
 
                 final_fit = _parallel_GST(final_model.copy(), data, prob_clip, tol, maxiter, verbosity, comm=comm, mem_limit=mem_limit).estimates['GateSetTomography'].models['final iteration estimate']
     
-                logl_fn.model.from_vector(final_projector_matrix @ final_fit.to_vector())
-                curr_logl = - logl_fn.fn()
-                new_quantity = 2*(prev_logl - curr_logl)
-                total_ev_ratio = 2*(original_dlogl - curr_logl)/len(graph_levels)
+                deltalogl_fn.model.from_vector(final_projector_matrix @ final_fit.to_vector())
+                curr_dlogl = deltalogl_fn.fn()
+                new_quantity = 2*(curr_dlogl - prev_dlogl)
+                total_ev_ratio = 2*(curr_dlogl - original_dlogl)/len(graph_levels)
                 
-                    
                 evratios = [level[0][1] for level in graph_levels[1:]]
                 pre_opt = np.average(evratios)
                 if rank == 0 and verbosity > 0:
@@ -329,7 +340,7 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
                     print('Evidence ratio wrt first model improved by ', pre_opt - total_ev_ratio)
                 graph_levels[-1][0] = [final_fit.to_vector(), new_quantity, graph_levels[-1][0][2], graph_levels[-1][0][1]]
                 if total_ev_ratio > er_thresh:
-                     warnings.warn("Final model does not meet er_thresh specified. This can only happen if there is a bug, or if logl approximations were used" + str(2*(original_dlogl - curr_logl)/len(graph_levels)))
+                     warnings.warn("Final model does not meet er_thresh specified. This is likely a result of approximating logl calculations. Evidence ratio between seed model and model being returned: " + total_ev_ratio)
 
         else:
             parent_model_projector = np.delete(parent_model_projector, sorted_finalists[0][2], axis=1)
@@ -346,7 +357,7 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
             graph_levels.append(sorted_finalists)
 
         if len(graph_levels) > 1:
-            prev_logl = prev_logl - sorted_finalists[0][1]/2
+            prev_dlogl = prev_dlogl + sorted_finalists[0][1]/2
             
         # Generate next level
         
