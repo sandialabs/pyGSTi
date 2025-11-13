@@ -1474,11 +1474,9 @@ class ExplicitOpModel(_mdl.OpModel):
         print("Basis = ", self.basis.name)
         print("Choi Matrices:")
         for (label, gate) in self.operations.items():
-            print(("Choi(%s) in pauli basis = \n" % label,
-                   _mt.mx_to_string_complex(_jt.jamiolkowski_iso(gate))))
-            print(("  --eigenvals = ", sorted(
-                [ev.real for ev in _np.linalg.eigvals(
-                    _jt.jamiolkowski_iso(gate))]), "\n"))
+            jmx : _np.ndarray = _jt.jamiolkowski_iso(gate) # type: ignore
+            print(("Choi(%s) in pauli basis = \n" % label, _mt.mx_to_string_complex(jmx)))
+            print(("  --eigenvals = ", sorted(_mt.eigenvalues(jmx, assume_hermitian=True).tolist()), "\n"))
         print(("Sum of negative Choi eigenvalues = ", _jt.sum_of_negative_choi_eigenvalues(self)))
 
     def _effect_labels_for_povm(self, povm_lbl):
