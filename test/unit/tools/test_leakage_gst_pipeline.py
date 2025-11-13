@@ -97,7 +97,7 @@ class TestLeakageGSTPipeline(unittest.TestCase):
 
         infids = dict()
         for lbl in ['LAGO', 'stdgaugeopt']:
-            infids[lbl] = {g: 1 - fidelity(gates[lbl][g], gates['target'][g], 'l2p1', n_leak=1) for g in ['x', 'y'] } 
+            infids[lbl] = {g: 1 - fidelity(gates[lbl][g], gates['target'][g], 'l2p1') for g in ['x', 'y'] } 
 
         self.assertGreater( infids['LAGO']['x'],        5.0 * infids['LAGO']['y']        )
         self.assertLess(    infids['stdgaugeopt']['x'], 1.1 * infids['stdgaugeopt']['y'] )

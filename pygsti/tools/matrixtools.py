@@ -100,6 +100,18 @@ def assert_hermitian(mat : _np.ndarray, tol: _np.floating) -> None:
         raise ValueError(message)
 
 
+def is_projector(mx, tol=1e-14):
+    # We use a stringent default tolerance since projectors tend to be
+    # computed to high accuracy.
+    if tol == _np.inf:
+        return True
+    if not is_hermitian(mx, tol):
+        return False
+    mx2 = mx @ mx
+    tol = _np.sqrt(mx.size) * tol
+    return _np.allclose(mx, mx2, atol=tol, rtol=tol)
+
+
 def is_pos_def(mx, tol=1e-9, attempt_cholesky=False):
     """
     Test whether mx is a positive-definite matrix.

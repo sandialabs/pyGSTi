@@ -641,7 +641,7 @@ def _legacy_create_scalar_objective(model, target_model,
                 wt = item_weights.get(opLbl, opWeight)
                 top = tgt_ops[opLbl].to_dense()
                 mop = mdl_ops[opLbl].to_dense()
-                ret += wt * _tools.subspace_jtracedist(top, mop, mxBasis, n_leak)
+                ret += wt * _tools.subspace_jtracedist(top, mop, mxBasis)
 
         else:
             raise ValueError("Invalid gates_metric: %s" % gates_metric)
