@@ -30,7 +30,7 @@ from pygsti.tools import basistools as _bt
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
 from pygsti.processors import QubitProcessorSpec as _QubitProcessorSpec
 from pygsti.models import Model as _Model
-
+import os as _os
 class ModelPack(_ABC):
     """
     ABC of all derived modelpack types
@@ -103,8 +103,8 @@ class ModelPack(_ABC):
             assert hasattr(self, 'serialized_fogi_path'), 'This modelpack does not have a FOGI version yet. Please create it manually'
             assert povm_type == 'FOGI-GLND' or povm_type == 'auto', 'modelpack FOGI models have only been implemented for full FOGI-GLND.'
             assert prep_type == 'FOGI-GLND' or prep_type == 'auto', 'modelpack FOGI models have only been implemented for full FOGI-GLND.'
-
-            return _Model.read(self.serialized_fogi_path)
+            path = _os.path.dirname(_os.path.abspath(__file__)) + '/serialized_fogi_models/' + self.serialized_fogi_path
+            return _Model.read(path)
 
         cache_key = (gate_type, prep_type, povm_type, instrument_type, simulator, evotype, qubit_labels)
         if cache_key not in self._gscache:

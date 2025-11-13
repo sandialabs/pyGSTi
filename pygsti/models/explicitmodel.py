@@ -428,8 +428,6 @@ class ExplicitOpModel(_mdl.OpModel):
         -------
         None
         """
-        if isinstance(self, ExplicitOpFOGIModel):
-            raise NotImplementedError('Conversion from FOGI to other parameterizations is not available yet.')
         typ = gate_type
 
         # Set ideal model to static when used as targets (specifically needed for CPTP prep/povms)

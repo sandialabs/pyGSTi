@@ -178,8 +178,8 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
             print("computing Hessian")
         target_model_fit.sim = pygsti.forwardsims.MapForwardSimulator(processor_grid=(1,1,size),param_blk_sizes=(100,100))
         H = pygsti.tools.logl_hessian(target_model_fit, data.dataset, comm=comm, mem_limit=mem_limit, verbosity = verbosity)
-        #TODO how to make this work without mpiexec call
-        H = comm.bcast(H, root = 0)
+        if comm is not None:
+            H = comm.bcast(H, root = 0)
         if not disable_checkpoints and rank == 0:
             new_checkpoint.H = H
             new_checkpoint.save()
@@ -265,8 +265,10 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
                     lowest_vec = vec
             
             best_of_chunk = [lowest_vec, lowest_quantity, lowest_imdl]
-
-            finalists_raw = comm.allgather(best_of_chunk)
+            if comm is not None:
+                finalists_raw = comm.allgather(best_of_chunk)
+            else:
+                finalists_raw = [best_of_chunk]
             finalists = []
             for finalist in finalists_raw:
                 finalists.append(finalist)
@@ -302,7 +304,8 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
             red_model_fit = result.estimates['GateSetTomography'].models['final iteration estimate']
             red_model_fit.sim = pygsti.forwardsims.MapForwardSimulator(param_blk_sizes=(100,100))
             H = pygsti.tools.logl_hessian(red_model_fit, data.dataset, comm=comm, mem_limit=mem_limit, verbosity = verbosity)
-            H = comm.bcast(H, root = 0)
+            if comm is not None:
+                H = comm.bcast(H, root = 0)
             x0 = red_model_fit.to_vector()
         
             reduced_model_projector_matrix = np.delete(parent_model_projector, sorted_finalists[0][2], axis=1)     
@@ -338,6 +341,7 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
                     print('Evidence ratio wrt first model is ', total_ev_ratio)
                     print('Evidence ratio pre-optimization was ', pre_opt)
                     print('Evidence ratio wrt first model improved by ', pre_opt - total_ev_ratio)
+                    print('Removed ', len(graph_levels)-1, ' parameters')
                 graph_levels[-1][0] = [final_fit.to_vector(), new_quantity, graph_levels[-1][0][2], graph_levels[-1][0][1]]
                 if total_ev_ratio > er_thresh:
                      warnings.warn("Final model does not meet er_thresh specified. This is likely a result of approximating logl calculations. Evidence ratio between seed model and model being returned: " + total_ev_ratio)
