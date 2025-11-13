@@ -12,8 +12,10 @@ import scipy.linalg as la
 import pygsti.tools.optools as pgo
 import pygsti.baseobjs.label as pgl
 import pygsti.baseobjs.basisconstructors as pgbc
+import pygsti.baseobjs as pgb
 import pygsti.algorithms.gaugeopt as gop
 from pygsti.models import ExplicitOpModel
+from pygsti.modelmembers.operations import FullArbitraryOp
 import pytest
 
 
@@ -23,7 +25,7 @@ def gate_metrics_dict(model, target):
     for lbl in model.operations.keys():
         model_gate = model[lbl]
         target_gate = target[lbl]
-        metrics['infids'][lbl] = pgo.entanglement_infidelity(model_gate, target_gate)
+        metrics['infids'][lbl] = pgo.entanglement_infidelity(model_gate, target_gate, model.basis)
         metrics['frodists'][lbl] = pgo.frobeniusdist(model_gate, target_gate)
         metrics['tracedists'][lbl] = pgo.tracedist(model_gate, target_gate)
     return metrics
@@ -291,5 +293,38 @@ class FindPerfectGauge_Instruments_Tester(BaseCase):
             dt = self._main_tester('ls', seed, test_tol=1e-6, alg_tol=1e-15, gop_objective='frobenius')
             times.append(dt)
         print(f'LS GaugeOpt over UnitaryGaugeGroup : {times}.')
+        return
+
+
+class FindPerfectGauge_DirectSumGaugeGroupTester(BaseCase):
+
+    
+    def _prep(self, seed):
+        from pygsti.tools.leakage import leaky_qubit_model_from_pspec
+        tm2 = smq1Q_XYI.target_model()
+        self.target = leaky_qubit_model_from_pspec(tm2.create_processor_spec())
+        self.model = self.target.copy()
+        np.random.seed(seed)
+        U2x2 = la.expm(np.random.randn()/2 * -1j * (pgbc.sigmax + pgbc.sigmaz)/np.sqrt(2))
+        self.U = la.block_diag(U2x2, np.array([[1j]]))
+        U_superop = FullArbitraryOp(pgo.unitary_to_superop(self.U, 'l2p1'), 'l2p1')
+        self.gauge_grp_el = FullGaugeGroupElement(U_superop)
+        self.model.transform_inplace(self.gauge_grp_el)
+        self.metrics_before = gate_metrics_dict(self.model, self.target)
+        check_gate_metrics_are_nontrivial(self.metrics_before, tol=1e-2)
+        return
+    
+    def test_lbfgs_frodist(self):
+        self.setUp()
+        times = []
+        for seed in [1]:
+            self._prep(seed)
+            tic = time.time()
+            newmodel = gop.gaugeopt_to_target(self.model, self.target, method='L-BFGS-B', tol=1e-14, spam_metric='frobenius squared', gates_metric='frobenius squared')
+            toc = time.time()
+            dt = toc - tic
+            metrics_after = gate_metrics_dict(newmodel, self.target)
+            check_gate_metrics_near_zero(metrics_after, tol=1e-6)
+            times.append(dt)
         return
 

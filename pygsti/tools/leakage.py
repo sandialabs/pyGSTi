@@ -521,7 +521,7 @@ def add_lago_models(results: ModelEstimateResults, est_key: Optional[str] = None
 # MARK: reports
 
 def construct_leakage_report(
-        results : ModelEstimateResults,
+        results : Union[ModelEstimateResults, dict[str,ModelEstimateResults]],
         title : str = 'auto',
         extra_report_kwargs : Optional[dict[str,Any]] = None,
         gaugeopt_verbosity : int = 0,
@@ -553,10 +553,13 @@ def construct_leakage_report(
         extra_report_kwargs['title'] = title
     
     results = copy.deepcopy(results)
-    est_key = results.estimates.keys()
-    for ek in est_key:
-        assert isinstance(ek, str)
-        add_lago_models(results, ek, verbosity=gaugeopt_verbosity)
+    if isinstance(results, dict):
+        for res in results.values():	
+            for ek in res.estimates.keys():
+                add_lago_models(res, ek, verbosity=gaugeopt_verbosity)
+    else: 
+        for ek in results.estimates.keys():
+            add_lago_models(results, ek, verbosity=gaugeopt_verbosity)
     from pygsti.report import construct_standard_report
     report = construct_standard_report(
         results, advanced_options={'n_leak': 1}, **extra_report_kwargs
