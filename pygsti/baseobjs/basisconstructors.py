@@ -697,6 +697,7 @@ def gm_labels(matrix_dim):
     lblList.extend(["Z_{%d}" % (k) for k in range(1, d)])
     return lblList
 
+
 def lf_labels(matrix_dim: int) -> tuple[str,...]:
     if matrix_dim != 3:
         raise NotImplementedError()
@@ -717,6 +718,7 @@ def lf_labels(matrix_dim: int) -> tuple[str,...]:
         "L"
     )
     return lbls
+
 
 def lf_matrices(matrix_dim: int) -> list[_np.ndarray]:
     """ 
@@ -741,7 +743,6 @@ def lf_matrices(matrix_dim: int) -> list[_np.ndarray]:
         1 / 3 * (_np.sqrt(3) * gm_basis[0] - _np.sqrt(6) * gm_basis[8]),
     ]
     return leakage_basis_mxs
-
 
 
 def qsim_matrices(matrix_dim):
