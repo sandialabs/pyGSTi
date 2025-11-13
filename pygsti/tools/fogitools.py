@@ -490,7 +490,6 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
 
     for set_size in range(1, max_size):
         larger_sets = []
-        print(set_size)
         num_indep_vecs_from_smaller_sets = fogi_dirs.shape[1]
         for op_label in primitive_op_labels:
             for existing_set in smaller_sets:
@@ -768,7 +767,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
         fogi_dirs = fogi_dirs.real
     if _spsl.norm(dep_fogi_dirs.imag) < 1e-6:
         dep_fogi_dirs = dep_fogi_dirs.real
-    if print_lattices:
+    if False:#print_lattices:
         keys = list(set_size_dims.keys())
         gate_abbrevs = {'Gxpi:0': 'Xpi','Gt:0':'T:0','Gt:1':'T:1','Gh:0':'H:0','Gh:1':'H:1','Gympi2:1':'Ym:1','Gcz:0:1':'CZ','Gxpi2:0':'X:0', 'Gypi2:0': 'Y:0','Gzpi2:0':'Z:0', 'rho0':'rho:0', 'Mdefault': 'M:0', 'Gn:0': 'GN','Gxpi2:1':'X:1', 'Gypi2:1': 'Y:1','Gzpi2:1':'Z:1', 'Gx:0': 'X:0', 'Gx:1': 'X:1', 'Gz:0': 'Z:0', 'Gz:1': 'Z:1', 'Gy:0': 'Y:0', 'Gy:1': 'Y:1'}
         key_strings = {}
@@ -789,7 +788,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
         for op_set in set_size_dims.keys():
             if len(op_set) == i:
                 summation += set_size_dims[op_set]
-        print(i, summation)
+        #print(i, summation)
     return (fogi_dirs, fogi_meta, dep_fogi_dirs, dep_fogi_meta)
 
 
