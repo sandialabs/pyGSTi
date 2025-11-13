@@ -29,7 +29,7 @@ from pygsti.tools import optools as _ot
 from pygsti.tools import basistools as _bt
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
 from pygsti.processors import QubitProcessorSpec as _QubitProcessorSpec
-
+from pygsti.models import Model as _Model
 
 class ModelPack(_ABC):
     """
@@ -99,6 +99,12 @@ class ModelPack(_ABC):
         qubit_labels = self._sslbls if (qubit_labels is None) else tuple(qubit_labels)
         assert(len(qubit_labels) == len(self._sslbls)), \
             "Expected %d qubit labels and got: %s!" % (len(self._sslbls), str(qubit_labels))
+        if gate_type == 'FOGI-GLND':
+            assert hasattr(self, 'serialized_fogi_path'), 'This modelpack does not have a FOGI version yet. Please create it manually'
+            assert povm_type == 'FOGI-GLND' or povm_type == 'auto', 'modelpack FOGI models have only been implemented for full FOGI-GLND.'
+            assert prep_type == 'FOGI-GLND' or prep_type == 'auto', 'modelpack FOGI models have only been implemented for full FOGI-GLND.'
+
+            return _Model.read(self.serialized_fogi_path)
 
         cache_key = (gate_type, prep_type, povm_type, instrument_type, simulator, evotype, qubit_labels)
         if cache_key not in self._gscache:
