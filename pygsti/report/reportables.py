@@ -1671,15 +1671,8 @@ def eigenvalue_avg_gate_infidelity(a, b, mx_basis):
     -------
     float
     """
-    # TODO: discuss correctness of this function. I think it might assume that both are
-    # tp and that b is unitary. We should probably just transform the result of 
-    # eigenvalue_entanglement_infidelity, rather than compute from scratch.
     d2 = a.shape[0]; d = int(round(_np.sqrt(d2)))
-    evA = _np.linalg.eigvals(a)
-    evB = _np.linalg.eigvals(b)
-    _, pairs = _tools.minweight_match(evA, evB, lambda x, y: abs(x - y),
-                                      return_pairs=True)  # just to get pairing
-    mlPl = abs(_np.sum([_np.conjugate(evB[j]) * evA[i] for i, j in pairs]))
+    mlPl = eigenvalue_entanglement_infidelity(a, b, mx_basis)
     return (d2 - mlPl) / float(d * (d + 1))
 
 
@@ -1706,8 +1699,6 @@ def eigenvalue_diamondnorm(a, b, mx_basis):
     -------
     float
     """
-    # TODO: discuss correctness of this function. I think it might assume that both are
-    # tp and that b is unitary. 
     d2 = a.shape[0]
     evA = _np.linalg.eigvals(a)
     evB = _np.linalg.eigvals(b)
@@ -1738,7 +1729,6 @@ def eigenvalue_nonunitary_diamondnorm(a, b, mx_basis):
     -------
     float
     """
-    # TODO: discuss meaning of this function.
     d2 = a.shape[0]
     evA = _np.linalg.eigvals(a)
     evB = _np.linalg.eigvals(b)
