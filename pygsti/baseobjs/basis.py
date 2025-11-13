@@ -263,6 +263,8 @@ class Basis(_NicelySerializable):
         self.longname = longname
         self.real = real  # whether coefficients must be real (*not* whether elements are real - they're always complex)
         self.sparse = sparse  # whether elements are stored as sparse vectors/matrices
+        self._is_hermitian : Optional[bool] = None
+        self._implies_leakage : Optional[bool] = None
 
     @property
     def dim(self):
@@ -317,6 +319,20 @@ class Basis(_NicelySerializable):
         if self.elshape is None: return 0
         return int(_np.prod(self.elshape))
 
+    # TODO: convert labels, ellookup, and elements to properties.
+    #       Type annotations for Basis objects are of limited use
+    #       without the Basis class declaring that these members exist.
+
+    @property
+    def implies_leakage_modeling(self) -> bool:
+        if (not hasattr(self, '_implies_leakage')) or self._implies_leakage is None:
+            if 'I' not in self.labels:
+                return False
+            I = self.ellookup['I']
+            self._implies_leakage = _np.linalg.matrix_rank(I) < I.shape[0]
+        return self._implies_leakage
+
+
     @property
     def first_element_is_identity(self):
         """
@@ -355,6 +371,16 @@ class Basis(_NicelySerializable):
         bool
         """
         return not self.is_complete()
+
+    def is_hermitian(self) -> bool:
+        from pygsti.tools.matrixtools import is_hermitian as matrix_is_hermitian
+        if self.elndim != 2 or self.elshape[0] != self.elshape[1]:
+            return False
+        if not hasattr(self, '_is_hermitian') or self._is_hermitian is None:
+            tol = self.dim * _np.finfo(self.elements[0].dtype).eps
+            is_hermitian = all([matrix_is_hermitian(el, tol=tol) for el in self.elements])
+            self._is_hermitian = is_hermitian
+        return self._is_hermitian
 
     @property
     def vector_elements(self):
