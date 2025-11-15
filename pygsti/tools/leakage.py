@@ -33,11 +33,61 @@ if TYPE_CHECKING:
     from pygsti.processors import QubitProcessorSpec
 
 
-# Question: include the parenthetical in the heading below?
 NOTATION = \
 """
-\n
+Definitions for Hilbert--Schmidt space
+--------------------------------------
+We use H to denote a fixed complex Hilbert space equipped with a standard
+basis, and we use U to denote various subspaces of H (possibly H itself).
+
+The Hilbert--Schmidt space of linear operators from U to U is denoted M[U],
+and the set of linear transformations (or superoperators) from M[U] to M[U]
+is denoted S[U].
+
+The orthogonal complement of U in H is denoted U^⟂. There are multiple ways
+to extend a linear operator Φ ∈ M[U] to all of H = U ⨁ U^⟂.
+
+    We call an extension ...
+
+      * direct if U and U^⟂ are invariant subspaces for both Φ and Φ^†,
+      * annhilating if ker(Φ) and ker(Φ^†) contain U^⟂, and
+      * unitary if it is direct and A is unitary on U^⟂.
+
+    We further call a unitary extension ...
+
+      * unintrusive if it acts as a multiple of the identity on U^⟂, and
+      * demure if it acts as the identity on U^⟂.
+
+Leakage modeling tends to use annhilating extension for Hermitian operators
+and demure extension for unitary operators.
+
+
+Basic definitions for leakage modeling
+--------------------------------------
+Let B denote a Hermitian basis for the Hilbert--Schmidt space M[H]. We say that
+B supports leakage modeling if
+
+    (1) it as a unique element whose label consists of (and only of) one
+        or more copies of the character 'I', and
+    (2) that element is proportional to a real orthogonal projector on H.
+
+Assuming B is such a basis, its element that satisfies (1) and (2) is called
+its computational basis matrix. (Not be confused with "the computational
+basis" of a Hilbert space, which is synonymous with the standard basis.)
+
+The computational basis matrix defines a few related objects.
+
+  * The computational subspace, C, is the range of the computational basis matrix.
+
+  * The computational effect is the Hermitian operator in M[H] that orthogonally
+    projects onto the computational subspace.
+
+  * The computational projector is the Hermiticty-preserving superoperator in
+    S[H] that orthogonally projects from M[H] to M[C].
+
 """
+
+
 
 def set_docstring(docstr):
     def assign(fn):
@@ -51,7 +101,7 @@ def set_docstring(docstr):
 
 @set_docstring(
 """
-...
+Return the rank-1 density in M[H⨂H] induced by op_basis' computational effect.
 """ + NOTATION)
 def tensorized_teststate_density(op_basis: Basis) -> np.ndarray:
     if not op_basis.implies_leakage_modeling:
@@ -59,6 +109,8 @@ def tensorized_teststate_density(op_basis: Basis) -> np.ndarray:
         E = np.eye(udim)
     else:
         E = op_basis.ellookup['I'].copy()
+        if la.norm(E.imag) > 0:
+            raise ValueError()
     psi = pgbt.stdmx_to_stdvec(E).ravel()
     psi /= la.norm(psi)
     # In a standard leakage basis we have
@@ -69,7 +121,13 @@ def tensorized_teststate_density(op_basis: Basis) -> np.ndarray:
 
 @set_docstring(
 """
-...
+The pair (op_x, op_y) represent some superoperators (X, Y) in S[H], using op_basis.
+
+Let rho be the rank-1 density in M[H⨂H] induced by op_basis' computational effect,
+and let I denote the element of S[H] that acts as the identity on M[H].
+
+This function returns a triplet consisting of a pyGSTi Basis object for S[H⨂H],
+and the vector representations of X⨂I(rho) and Y⨂I(rho) in that basis.
 """ + NOTATION)
 def apply_tensorized_to_teststate(op_x: np.ndarray, op_y: np.ndarray, op_basis: BasisLike) -> tuple[TensorProdBasis, np.ndarray, np.ndarray]:
     udim = int(np.sqrt(op_x.shape[0]))
@@ -109,13 +167,10 @@ CHOI_INDUCED_METRIC_TEMPLATE = \
 """
 The pair (op_x, op_y) represent some superoperators (X, Y) in S[H], using op_basis.
 
-Let rho_t = tensorized_teststate_density(dim(H), n_leak), and set I to the identity
-operator in S[H].
+Let rho be the rank-1 density in M[H⨂H] induced by op_basis' computational effect,
+and let I denote the element of S[H] that acts as the identity on M[H].
 
-This function returns the %s between X⨂I(rho_t) and Y⨂I(rho_t).
-
-*Warning!* At present, this function can only be used for gates over a single system
-(e.g., a single qubit), not for tensor products of such systems.
+This function returns the %s between X⨂I(rho) and Y⨂I(rho).
 """ + NOTATION
 
 
@@ -128,7 +183,7 @@ def subspace_entanglement_fidelity(op_x: np.ndarray, op_y: np.ndarray, op_basis)
     return ent_fid  # type: ignore
 
 
-@set_docstring(CHOI_INDUCED_METRIC_TEMPLATE % 'jamiolkowski trace distance')
+@set_docstring(CHOI_INDUCED_METRIC_TEMPLATE % 'Jamiolkowski trace distance')
 def subspace_jtracedist(op_x: np.ndarray, op_y: np.ndarray, op_basis) -> float:
     ten_std_basis, temp1, temp2 = apply_tensorized_to_teststate(op_x, op_y, op_basis)
     temp1_mx = pgbt.vec_to_stdmx(temp1, ten_std_basis, keep_complex=True)
@@ -140,15 +195,14 @@ def subspace_jtracedist(op_x: np.ndarray, op_y: np.ndarray, op_basis) -> float:
 
 # MARK: projected metrics
 
-@lru_cache
 @set_docstring(
 """
-Here, H has dimension n and C ⊂ H has dimension d ≤ n.
+Here, H has dimension n and C ⊂ H has dimension d ≤ n, and current_basis
+is a Hermitian basis for superoperator space S[H].
 
-This function returns a column-unitary matrix B where P = B B^{\\dagger} is the
-orthogonal projector from M[H] to M[C] with respect to current_basis.
-
-If you only care about P, then you can call superop_subspace_projector instead.
+This function returns a column-orthonormal matrix B where P = B B^† is the
+orthogonal projector from M[H] to M[C] with respect to current_basis. If
+you only care about P, then you can call superop_subspace_projector instead.
 """ + NOTATION)
 def leading_dxd_submatrix_basis_vectors(d: int, n: int, current_basis: Basis) -> np.ndarray:
     """
@@ -160,11 +214,11 @@ def leading_dxd_submatrix_basis_vectors(d: int, n: int, current_basis: Basis) ->
     else:
         E = np.zeros((n,n))
         E[:d, :d] = np.eye(d)
-        return projective_measurement_subspace_basis_vectors(E, current_basis)
+        return computational_superkets(current_basis, E)
 
 
 # TODO: document me
-def projective_measurement_subspace_basis_vectors(E: np.ndarray, basis: Basis) -> np.ndarray:
+def computational_superkets(basis: Basis, E: Optional[np.ndarray] = None) -> np.ndarray:
     """
     Our desired subspace is
         { rho : ker(rho) contains ker(E) } .
@@ -175,7 +229,11 @@ def projective_measurement_subspace_basis_vectors(E: np.ndarray, basis: Basis) -
         return np.eye(basis.dim)
     if not basis.is_hermitian():
         raise ValueError()
-    E = E.copy()
+    if E is None:
+        E = basis.ellookup['I'].copy()  # type: ignore
+    else:
+        E = E.copy()
+    assert isinstance(E, np.ndarray)
     k = np.linalg.matrix_rank(E)
     E *= (k/np.trace(E))
     if not pgmt.is_projector(E):
@@ -193,7 +251,7 @@ def projective_measurement_subspace_basis_vectors(E: np.ndarray, basis: Basis) -
 
 
 @set_docstring(NOTATION)
-def superop_subspace_projector(*args) -> np.ndarray:
+def computational_projector(*args) -> np.ndarray:
 
     num_positional_args = len(args) 
     if num_positional_args not in {3, 1}:
@@ -209,7 +267,7 @@ def superop_subspace_projector(*args) -> np.ndarray:
         if basis.first_element_is_identity:
             return np.eye(dim)
         E = basis.ellookup['I']
-        U = projective_measurement_subspace_basis_vectors(E, basis)
+        U = computational_superkets(basis, E)
 
     else:
         """
@@ -240,21 +298,22 @@ def superop_subspace_projector(*args) -> np.ndarray:
             return np.eye(n**2)
         E = np.eye(n)
         E[d:, d:] = 0.0
-        U = projective_measurement_subspace_basis_vectors(E, basis)
+        U = computational_superkets(basis, E)
 
     P = U @ U.T
     return P
+
+
+superop_subspace_projector = computational_projector
+# ^ Deprecated alias.
 
 
 PROJECTION_INDUCED_METRIC_TEMPLATE = \
 """
 The pair (op_x, op_y) represent some superoperators (X, Y) in S[H], using op_basis.
 
-We return the %s between op_x @ P and op_y @ P, where P is the
-projector onto the computational subspace (i.e., C) of co-dimension n_leak.
-
-*Warning!* At present, this function can only be used for gates over a single system
-(e.g., a single qubit), not for tensor products of such systems.
+We return the %s between op_x @ P and op_y @ P, where P is the computational
+projector of op_basis.
 """ + NOTATION
 
 
@@ -408,9 +467,8 @@ def pop_transport_profile(E_sub: np.ndarray, op: np.ndarray, mx_basis: Basis, E_
 
 
 @set_docstring(
-TRANSPORT_PROFILES_TEMPLATE.replace('SUB', 'C') % """This operator is
-proportional to the element of mx_basis labeled 'I', since that basis element is assumed
-be proportional to the orthogonal projector onto C.
+TRANSPORT_PROFILES_TEMPLATE.replace('SUB', 'C') % """
+This is the computational\neffect of mx_basis.
 """ + NOTATION )
 def gate_leakage_profile(op: np.ndarray, mx_basis: Basis) -> tuple[np.ndarray, list[np.ndarray]]:
     mx_basis = Basis.cast(mx_basis, dim=int(np.sqrt(op.size)))
@@ -433,9 +491,8 @@ def gate_leakage_profile(op: np.ndarray, mx_basis: Basis) -> tuple[np.ndarray, l
 
 
 @set_docstring(
-TRANSPORT_PROFILES_TEMPLATE.replace('SUB', '[H \\ C]') % """This operator is
-inferred from the element of mx_basis labeled 'I', since that basis element is assumed
-be proportional to the orthogonal projector onto C.
+TRANSPORT_PROFILES_TEMPLATE.replace('SUB', '[C^⟂]') % """This operator is
+the identity in M[H] minus the computational effect of mx_basis.
 """ + NOTATION )
 def gate_seepage_profile(op, mx_basis) -> tuple[np.ndarray, list[np.ndarray]]:
     mx_basis = Basis.cast(mx_basis, dim=int(np.sqrt(op.size)))
@@ -474,6 +531,7 @@ def _direct_sum_unitary_group(subspace_bases, full_basis):
 
 # MARK: model construction
 
+# TODO: write a version of this that's flexible in what it promotes from and to.
 def leaky_qubit_model_from_pspec(
         ps_2level: QubitProcessorSpec, mx_basis: Union[str, Basis]='l2p1',
         levels_readout_zero=(0,), default_idle_gatename: Label = Label(())
