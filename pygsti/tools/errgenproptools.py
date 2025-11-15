@@ -32,7 +32,7 @@ from pygsti.tools.optools import create_elementary_errorgen_nqudit, state_to_dmv
 from functools import reduce
 from itertools import chain, product
 from math import factorial
-from typing import Literal, Optional, Union, Callable
+from typing import Literal, Optional, Union, Callable, Iterable
 
 def errgen_coeff_label_to_stim_pauli_strs(err_gen_coeff_label, num_qubits):
     """
@@ -7271,10 +7271,13 @@ def bitstring_to_tableau(bitstring):
 
 # Modified from Gidney 
 # https://quantumcomputing.stackexchange.com/questions/34610/get-the-amplitude-of-a-computational-basis-in-stim
-def amplitude_of_state(tableau, desired_state):
+def slow_amplitude_of_state(tableau: Union[stim.Tableau, stim.TableauSimulator], desired_state: str) -> complex:
     """
     Get the amplitude of a particular computational basis state for given
     stabilizer state.
+
+    Note: This is a pure python implementation of this function. For best performance see the
+    optimized cython implementation tools.fasterrgencalc.fast_amplitude_of_state.
 
     Parameters
     ----------
@@ -7394,7 +7397,7 @@ def slow_pauli_phase_update(pauli: Union[str, stim.PauliString], bitstring: str,
     and the overall phase that bit string accumulates.
 
     Note: This is a pure python implementation of this function. For best performance see the
-    optimized cython implementation tools.fastcalc.fast_pauli_phase_update.
+    optimized cython implementation tools.fasterrgencalc.fast_pauli_phase_update.
     
     Parameters
     ----------
@@ -7464,7 +7467,7 @@ def slow_pauli_phase_update_all_zeros(pauli: Union[str, stim.PauliString], dual:
     all-zeros bit string.
 
     Note: This is a pure python implementation of this function. For best performance see the
-    optimized cython implementation tools.fastcalc.fast_pauli_phase_update.
+    optimized cython implementation tools.fasterrgencalc.fast_pauli_phase_update.
     
     Parameters
     ----------
@@ -7574,19 +7577,13 @@ def phi(tableau: Union[stim.Tableau, stim.TableauSimulator], desired_bitstring: 
         return complex(0)
 
 
-from typing import List, Tuple, Union, Dict
-
-def bulk_phi(tableau: Union[stim.Tableau, stim.TableauSimulator],
+def slow_bulk_phi(tableau: Union[stim.Tableau, stim.TableauSimulator],
              desired_bitstring: str,
-             Ps: List[Union[str, stim.PauliString]],
-             Qs: List[Union[str, stim.PauliString]]) -> List[complex]:
+             Ps: list[Union[str, stim.PauliString]],
+             Qs: list[Union[str, stim.PauliString]]) -> _np.ndarray[_np.complex128]:
     """
     Computes the phi function for multiple (P, Q) pairs at once while caching and reusing intermediate
-    values computed via pauli_phase_update and amplitude_of_state.
-
-    Here we exploit the group structure of the Pauli group: instead of computing
-    the effective pauli strings after multiplying by the initial_pauli_string, we first
-    cache the unique P's and Q's and then compute effective_{P,Q} from them.
+    values computed via pauli_phase_update_all_zeros and amplitude_of_state.
 
     Parameters
     ----------
@@ -7596,20 +7593,20 @@ def bulk_phi(tableau: Union[stim.Tableau, stim.TableauSimulator],
     desired_bitstring : str
         A string of zeros and ones corresponding to the measured bitstring.
     
-    Ps : List[Union[str, stim.PauliString]]
+    Ps : list[Union[str, stim.PauliString]]
         List of Pauli string indices for the first operator in each phi computation.
         Can be either a string or a stim.PauliString (but all values are assumed to be
         the same type).
     
-    Qs : List[Union[str, stim.PauliString]]
+    Qs : list[Union[str, stim.PauliString]]
         List of Pauli string indices for the second operator in each phi computation.
         Can be either a string or a stim.PauliString (but all values are assumed to be
         the same type).
 
     Returns
     -------
-    List[complex]
-        A list of computed phi values. Each phi will be one of {0, ±1, ±i}.
+    np.ndarray[np.complex128]
+        An array of computed phi values. Each phi will be one of {0, ±1, ±i}.
     """
     if len(Ps) != len(Qs):
         raise ValueError("Lists of Ps and Qs must be of the same length.")
@@ -7622,8 +7619,8 @@ def bulk_phi(tableau: Union[stim.Tableau, stim.TableauSimulator],
     initial_pauli_str = stim.PauliString(''.join('I' if bit == '0' else 'X' for bit in desired_bitstring))
 
     # (2) Convert the input Ps and Qs to stim.PauliString objects and cache unique ones.
-    unique_Ps: Dict[str, stim.PauliString] = {}
-    unique_Qs: Dict[str, stim.PauliString] = {}
+    unique_Ps: dict[str, stim.PauliString] = {}
+    unique_Qs: dict[str, stim.PauliString] = {}
 
     list_P_str = []  # will store canonical representation of the original P for every pair
     list_Q_str = []  # same for Q
@@ -7646,8 +7643,8 @@ def bulk_phi(tableau: Union[stim.Tableau, stim.TableauSimulator],
     #    They are given by:
     #         effective P = initial_pauli_str * P  with dual=True when calling pauli_phase_update.
     #         effective Q = Q * initial_pauli_str  (default dual=False).
-    eff_P_phase_cache: Dict[str, Tuple[complex, str]] = {}
-    eff_Q_phase_cache: Dict[str, Tuple[complex, str]] = {}
+    eff_P_phase_cache: dict[str, tuple[complex, str]] = {}
+    eff_Q_phase_cache: dict[str, tuple[complex, str]] = {}
 
     # For each unique P, compute effective pauli string and then call pauli_phase_update.
     unique_eff_Ps_by_unique_Ps = {}
@@ -7675,14 +7672,14 @@ def bulk_phi(tableau: Union[stim.Tableau, stim.TableauSimulator],
         unique_bitstrings.add(bitstr)
 
     # Cache amplitude_of_state for each unique bitstring.
-    cached_amplitudes: Dict[str, complex] = {}
+    cached_amplitudes: dict[str, complex] = {}
     for bitstr in unique_bitstrings:
         cached_amplitudes[bitstr] = amplitude_of_state(tableau, bitstr)
         
     # (5) Assemble the result for each (P, Q) pair.
     # Retrieve the effective pauli's phase update using the already-computed caches.
-    result_phis: List[complex] = []
-    for key_P, key_Q in zip(list_P_str, list_Q_str):
+    result_phis = _np.empty(len(list_P_str), dtype= _np.complex128)
+    for i, (key_P, key_Q) in enumerate(zip(list_P_str, list_Q_str)):
         # Get the effective pauli for P corresponding to the original P key.
         key_eff_P = unique_eff_Ps_by_unique_Ps[key_P]
         phase1, bitstring1 = eff_P_phase_cache[key_eff_P]
@@ -7700,12 +7697,12 @@ def bulk_phi(tableau: Union[stim.Tableau, stim.TableauSimulator],
         # Normalize phi to one of {0, ±1, ±i}.
         if abs(amp_val) > 1e-14:
             if abs(amp_val.real) > 1e-14:
-                norm_phi = complex(1) if amp_val.real > 0 else complex(-1)
+                norm_phi = 1 if amp_val.real > 0 else -1
             else:
                 norm_phi = 1j if amp_val.imag > 0 else -1j
         else:
-            norm_phi = complex(0)
-        result_phis.append(norm_phi)
+            norm_phi = 0
+        result_phis[i] = norm_phi
 
     return result_phis
 
@@ -7813,13 +7810,13 @@ def alpha(errorgen, tableau, desired_bitstring):
             sensitivity = 2*first_term.imag
     return sensitivity
 
-def bulk_alpha(errorgens: list[_LSE], tableau: stim.Tableau, desired_bitstrings: list[str]) -> list[list[float]]:
+def slow_bulk_alpha(errorgens: Iterable[_LSE], tableau: stim.Tableau, desired_bitstrings: list[str]) -> _np.ndarray[_np.double]:
     """
     First-order error generator sensitivity function for probability.
     
     Parameters
     ----------
-    errorgen : list of `LocalStimErrogenLabels`.
+    errorgen : iterable of `LocalStimErrogenLabels`.
         Error generator label for which to calculate sensitivity.
     
     tableau : stim.Tableau
@@ -7830,9 +7827,11 @@ def bulk_alpha(errorgens: list[_LSE], tableau: stim.Tableau, desired_bitstrings:
 
     Returns
     -------
-    sensitivities_by_bitstring : list of list float
+    sensitivities_by_bitstring : _np.ndarray
         Linear sensitivities of the probability of each desired bitstring to the
         specified elementary error generators for the given stabilizer state.
+        Result is returned as a two-dimensional numpy array, with each row being
+        indexed by a bitstring, and each column by an error generator.
     """
     if not errorgens or not desired_bitstrings:
         return []
@@ -7853,7 +7852,7 @@ def bulk_alpha(errorgens: list[_LSE], tableau: stim.Tableau, desired_bitstrings:
         errgen_type = errorgen.errorgen_type
         basis_element_labels = errorgen.basis_element_labels
         if not isinstance(basis_element_labels[0], stim.PauliString):
-                basis_element_labels = tuple([stim.PauliString(lbl) for lbl in basis_element_labels])
+            basis_element_labels = tuple([stim.PauliString(lbl) for lbl in basis_element_labels])
 
         if errgen_type == 'H':
             Ps.append(basis_element_labels[0])
@@ -7884,16 +7883,16 @@ def bulk_alpha(errorgens: list[_LSE], tableau: stim.Tableau, desired_bitstrings:
             else:
                 errgen_types.append(errgen_type)
 
-    sensitivities_by_bitstring = [[] for _ in range(len(desired_bitstrings))]
+    sensitivities_by_bitstring = _np.empty((len(desired_bitstrings), len(errorgens)), dtype=np.double)
     #bulk compute the phi values for each bitstring
     for i, desired_bitstring in enumerate(desired_bitstrings):
-        phis = bulk_phi(sim, desired_bitstring, Ps, Qs)
+        #phis = bulk_phi(sim, desired_bitstring, Ps, Qs)
 
-        phis_cython = _fc.bulk_phi(sim, desired_bitstring, Ps, Qs)
-        assert phis == phis_cython
+        phis = bulk_phi(sim, desired_bitstring, Ps, Qs)
+        #assert phis == phis_cython
         #loop through all of the phi values and get the sensitivity for each error generator.
         running_phi_index = 0
-        for errgen_type in errgen_types:            
+        for j, errgen_type in enumerate(errgen_types):            
             if errgen_type == 'H':
                 sensitivity = 2*phis[running_phi_index].imag
                 running_phi_index+=1
@@ -7904,7 +7903,7 @@ def bulk_alpha(errorgens: list[_LSE], tableau: stim.Tableau, desired_bitstrings:
                 sensitivity = 2*phis[running_phi_index].real
                 running_phi_index+=1
             elif errgen_type == 'C1': #includes additional term because P and Q commuted
-                sensitivity = 2*phis[running_phi_index].real - 2*phis[running_phi_index+1]
+                sensitivity = 2*phis[running_phi_index].real - 2*phis[running_phi_index+1].real
                 running_phi_index+=2
             elif errgen_type=='A':
                 sensitivity = 2*phis[running_phi_index].imag
@@ -7912,7 +7911,7 @@ def bulk_alpha(errorgens: list[_LSE], tableau: stim.Tableau, desired_bitstrings:
             else: # A1, includes additional term because P and Q anticommuted
                 sensitivities_by_bitstring = 2*(phis[running_phi_index] + phis[running_phi_index+1]).imag
                 running_phi_index+=2
-            sensitivities_by_bitstring[i].append(sensitivity)
+            sensitivities_by_bitstring[i,j] = sensitivity
 
     return sensitivities_by_bitstring
 
@@ -8651,13 +8650,19 @@ def error_generator_taylor_expansion_numerical(errorgen_dict, errorgen_propagato
 #Alias in the cython implementation of pauli_phase_update_all_zeros and pauli_phase_update
 PauliPhaseUpdater = Callable[[str,str,Optional[bool]],tuple[complex,str]]
 try:
-    from pygsti.tools import fastcalc as _fc
+    from pygsti.tools import fasterrgencalc as _fc
     pauli_phase_update_all_zeros = _fc.fast_pauli_phase_update_all_zeros
-    pauli_phase_update = _fc.fast_pauli_phase_update    
+    pauli_phase_update = _fc.fast_pauli_phase_update
+    amplitude_of_state = _fc.fast_amplitude_of_state
+    bulk_phi = _fc.fast_bulk_phi
+    bulk_alpha = _fc.fast_bulk_alpha    
 except ImportError:
     msg = 'Could not import cython module `fastcalc`. This may indicate that your cython extensions for pyGSTi failed to.'\
           +'properly build. Lack of cython extensions can result in significant performance degredation so we recommend trying to rebuild them.'\
            'Falling back to python implementation for pauli_phase_update_all_zeros.'
     warnings.warn(msg)
     pauli_phase_update_all_zeros = slow_pauli_phase_update_all_zeros
-    pauli_phase_update = slow_fast_pauli_phase_update 
+    pauli_phase_update = slow_pauli_phase_update
+    amplitude_of_state = slow_amplitude_of_state
+    bulk_phi = slow_bulk_phi
+    bulk_alpha = slow_bulk_alpha 
