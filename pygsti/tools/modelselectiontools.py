@@ -402,7 +402,7 @@ def compare_parameters_simple(parent_model_vec, red_model_vec, projector_matrix)
 #    return .5*(embedded_x - x0).T  @ H  @ (embedded_x - x0) + expansion_point_logl
 
 def create_approx_logl_fn(H, x0, initial_logl):
-    constant_term = x0.T @ H @ x0 + initial_logl
+    constant_term = initial_logl#x0.T @ H @ x0 + initial_logl
     def approx_logl(red_row_H, red_rowandcol_H, param_to_remove):
         red_rowandcol_H = _np.delete(_np.delete(red_rowandcol_H, param_to_remove, axis=0), param_to_remove, axis=1)
         red_row_H = _np.delete(red_row_H, param_to_remove, axis=0)
