@@ -760,10 +760,11 @@ def two_delta_logl(model, dataset, circuits=None,
         Only returned when `dof_calc_method` is not None.
     """
     from ..objectivefns import objectivefns as _objfns
+    regularization = {'min_prob_clip': min_prob_clip, 'radius': radius} if poisson_picture \
+            else {'min_prob_clip': min_prob_clip}
     obj_cls = _objfns.PoissonPicDeltaLogLFunction if poisson_picture else _objfns.DeltaLogLFunction
     obj = _objfns._objfn(obj_cls, model, dataset, circuits,
-                         {'min_prob_clip': min_prob_clip,
-                          'radius': radius},
+                         regularization,
                          {'prob_clip_interval': prob_clip_interval},
                          op_label_aliases, comm, None, ('terms',), (), mdc_store)
 
