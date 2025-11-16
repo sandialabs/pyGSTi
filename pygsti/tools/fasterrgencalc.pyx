@@ -832,3 +832,173 @@ cpdef np.ndarray[double, ndim=2] fast_bulk_alpha(object errorgens_iter,
 
     PyMem_Free(codes)
     return sensitivities_by_bitstring
+
+cdef inline double _real_if_close(complex val):
+    """
+    Helper function which returns the real part of a complex number and raises an exception
+    if the imaginary part is non-negligible (greater than 1e-14).
+
+    Parameters
+    ----------
+    val : complex
+        Complex number to convert to a real float.
+    """
+    val_imag = val.imag
+    if val_imag > 1e-14 or val_imag < -1e-14:
+        raise ValueError(f'Imaginary part of val is {val_imag}, and is too large (abs(val.imag)>1e-14) to cast to real.')
+    else:
+        return val.real
+
+cdef inline tuple _com(object P1, object P2):
+    # P1 and P2 either commute or anticommute.
+    if P1.commutes(P2):
+        return None
+    else:
+        P3 = P1*P2
+        return (P3.sign*2, P3 / P3.sign)
+
+cdef inline tuple _pauli_product(object P1, object P2):
+    P3 = P1*P2
+    return (P3.sign, P3 / P3.sign)
+
+@cython.wraparound(False)   # Deactivate negative indexing.
+@cython.boundscheck(False)
+cpdef np.ndarray[double, ndim=2] fast_bulk_alpha_pauli(object errorgens_iter, object tableau, list paulis):
+    """
+    First-order error generator sensitivity function for pauli expectations.
+    
+    Parameters
+    ----------
+    errorgens : iterable of LocalStimElementaryErrorgenLabel
+        Error generator labels for which to calculate sensitivity.
+    
+    tableau : stim.Tableau
+        Stim Tableau corresponding to the stabilizer state.
+        
+    paulis : list of stim.PauliString
+        List of paulis to calculate the sensitivity for.
+    
+    Returns
+    -------
+    np.ndarray[np.double]
+        A two-dimensional numpy array of sensitivities such that rows correspond
+        to entries in `paulis` and columns correspond to error generators.
+    """
+    cdef:
+        list errorgens = list(errorgens_iter)
+        object sim
+        int n_paulis, n_errorgens
+        np.ndarray[double, ndim=2] sensitivities_by_pauli  # our output array
+        double[:, ::1] sensitivities_by_pauli_view  # typed memory view for element access
+        int i, j
+        str errgen_type
+        tuple basis_element_labels
+        object errorgen
+        object A, B, ABP
+        bint com_AP, com_BP
+        complex expectation, sign, tmp
+        object res  # temporary for the result of com()
+    
+    # Build the simulator and set its inverse tableau.
+    sim = stim.TableauSimulator()
+    sim.set_inverse_tableau(tableau**-1)
+        
+    n_paulis    = len(paulis)
+    n_errorgens = len(errorgens)
+    
+    # Pre-allocate the output array and obtain a memoryview for fast writes.
+    sensitivities_by_pauli = np.empty((n_paulis, n_errorgens), dtype=np.double)
+    sensitivities_by_pauli_view = sensitivities_by_pauli  # typed memory view
+    
+    # Loop over each pauli observable and error generator.
+    for i in range(n_paulis):
+        for j in range(n_errorgens):
+            errorgen = errorgens[j]
+            errgen_type = errorgen.errorgen_type
+            basis_element_labels = errorgen.basis_element_labels
+            
+            if errgen_type == 'H':
+                # For H-type error generators, call the helper function com.
+                # com(...) is assumed to return either None or a tuple.
+                res = _com(paulis[i], basis_element_labels[0])
+                if res is not None:
+                    # Multiply the first element of res by -1j to generate a sign.
+                    sign = -1j * res[0]
+                    expectation = sim.peek_observable_expectation(res[1])
+                    sensitivities_by_pauli_view[i, j] = _real_if_close(sign * expectation)
+                else:
+                    sensitivities_by_pauli_view[i, j] = 0.0
+
+            elif errgen_type == 'S':
+                if paulis[i].commutes(basis_element_labels[0]):
+                    sensitivities_by_pauli_view[i, j] = 0.0
+                else:
+                    expectation = sim.peek_observable_expectation(paulis[i])
+                    sensitivities_by_pauli_view[i, j] = _real_if_close(-2 * expectation)
+
+            elif errgen_type == 'C':
+                A = basis_element_labels[0]
+                B = basis_element_labels[1]
+                com_AP = A.commutes(paulis[i])
+                if A.commutes(B):
+                    if com_AP:
+                        sensitivities_by_pauli_view[i, j] = 0.0
+                    else:
+                        com_BP = B.commutes(paulis[i])
+                        if com_BP:
+                            sensitivities_by_pauli_view[i, j] = 0.0
+                        else:
+                            ABP = _pauli_product(A * B, paulis[i])
+                            expectation = ABP[0] * sim.peek_observable_expectation(ABP[1])
+                            sensitivities_by_pauli_view[i, j] = _real_if_close(-4 * expectation)
+                else:  # non-commuting A and B.
+                    if com_AP:
+                        com_BP = B.commutes(paulis[i])
+                        if com_BP:
+                            sensitivities_by_pauli_view[i, j] = 0.0
+                        else:
+                            ABP = _pauli_product(A * B, paulis[i])
+                            expectation = ABP[0] * sim.peek_observable_expectation(ABP[1])
+                            sensitivities_by_pauli_view[i, j] = _real_if_close(-2 * expectation)
+                    else:
+                        com_BP = B.commutes(paulis[i])
+                        if com_BP:
+                            ABP = _pauli_product(A * B, paulis[i])
+                            expectation = ABP[0] * sim.peek_observable_expectation(ABP[1])
+                            sensitivities_by_pauli_view[i, j] = _real_if_close(2 * expectation)
+                        else:
+                            sensitivities_by_pauli_view[i, j] = 0.0
+
+            else:  # for error generator type 'A'
+                A = basis_element_labels[0]
+                B = basis_element_labels[1]
+                com_AP = A.commutes(paulis[i])
+                if A.commutes(B):
+                    com_BP = B.commutes(paulis[i])
+                    if com_AP:
+                        if com_BP:
+                            sensitivities_by_pauli_view[i, j] = 0.0
+                        else:
+                            ABP = _pauli_product(A * B, paulis[i])
+                            expectation = ABP[0] * sim.peek_observable_expectation(ABP[1])
+                            sensitivities_by_pauli_view[i, j] = _real_if_close(1j * 2 * expectation)
+                    else:
+                        if com_BP:
+                            ABP = _pauli_product(A * B, paulis[i])
+                            expectation = ABP[0] * sim.peek_observable_expectation(ABP[1])
+                            sensitivities_by_pauli_view[i, j] = _real_if_close(-1j * 2 * expectation)
+                        else:
+                            sensitivities_by_pauli_view[i, j] = 0.0
+                else:
+                    if com_AP:
+                        sensitivities_by_pauli_view[i, j] = 0.0
+                    else:
+                        com_BP = B.commutes(paulis[i])
+                        if com_BP:
+                            sensitivities_by_pauli_view[i, j] = 0.0
+                        else:
+                            ABP = _pauli_product(A * B, paulis[i])
+                            expectation = ABP[0] * sim.peek_observable_expectation(ABP[1])
+                            sensitivities_by_pauli_view[i, j] = _real_if_close(1j * 4 * expectation)
+                            
+    return sensitivities_by_pauli

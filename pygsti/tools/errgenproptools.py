@@ -7268,7 +7268,6 @@ def bitstring_to_tableau(bitstring):
     pauli_tableau = pauli_string.to_tableau()
     return pauli_tableau
 
-
 # Modified from Gidney 
 # https://quantumcomputing.stackexchange.com/questions/34610/get-the-amplitude-of-a-computational-basis-in-stim
 def slow_amplitude_of_state(tableau: Union[stim.Tableau, stim.TableauSimulator], desired_state: str) -> complex:
@@ -7505,7 +7504,6 @@ def slow_pauli_phase_update_all_zeros(pauli: Union[str, stim.PauliString], dual:
     overall_phase *= pauli.sign
     return overall_phase, "".join(output_chars)
 
-# TODO: This function needs a more evocative name
 def phi(tableau: Union[stim.Tableau, stim.TableauSimulator], desired_bitstring: str, P: Union[str, stim.PauliString], Q: Union[str, stim.PauliString]) -> complex:
     """
     This function computes a quantity whose value is used in expression for the sensitivity of probabilities to error generators.
@@ -7575,7 +7573,6 @@ def phi(tableau: Union[stim.Tableau, stim.TableauSimulator], desired_bitstring: 
                 return -1j 
     else:
         return complex(0)
-
 
 def slow_bulk_phi(tableau: Union[stim.Tableau, stim.TableauSimulator],
              desired_bitstring: str,
@@ -7706,7 +7703,6 @@ def slow_bulk_phi(tableau: Union[stim.Tableau, stim.TableauSimulator],
 
     return result_phis
 
-
 # helper function for numerically computing phi, primarily used for testing.
 def phi_numerical(tableau, desired_bitstring, P, Q):
     """
@@ -7760,13 +7756,13 @@ def phi_numerical(tableau, desired_bitstring, P, Q):
 
     return phi*scale
 
-def alpha(errorgen, tableau, desired_bitstring):
+def alpha(errorgen: Union[_LSE, _LEEL], tableau: stim.Tableau, desired_bitstring: str) -> float:
     """
     First-order error generator sensitivity function for probability.
     
     Parameters
     ----------
-    errorgen : `ElementaryErrorgenLabel`
+    errorgen : `LocalStimElementaryErrorgenLabel` or `LocalElementaryErrorgenLabel`
         Error generator label for which to calculate sensitivity.
     
     tableau : stim.Tableau
@@ -7816,7 +7812,7 @@ def slow_bulk_alpha(errorgens: Iterable[_LSE], tableau: stim.Tableau, desired_bi
     
     Parameters
     ----------
-    errorgen : iterable of `LocalStimErrogenLabels`.
+    errorgens : iterable of `LocalStimErrogenLabels`.
         Error generator label for which to calculate sensitivity.
     
     tableau : stim.Tableau
@@ -7827,14 +7823,14 @@ def slow_bulk_alpha(errorgens: Iterable[_LSE], tableau: stim.Tableau, desired_bi
 
     Returns
     -------
-    sensitivities_by_bitstring : _np.ndarray
+    sensitivities_by_bitstring : np.ndarray[np.double]
         Linear sensitivities of the probability of each desired bitstring to the
         specified elementary error generators for the given stabilizer state.
         Result is returned as a two-dimensional numpy array, with each row being
         indexed by a bitstring, and each column by an error generator.
     """
     if not errorgens or not desired_bitstrings:
-        return []
+        return _np.array([], dtype=_np.double)
 
     #pre-compute the stim.TableauSimulator we'll need for all of the computations.
     sim = stim.TableauSimulator()
@@ -7915,7 +7911,6 @@ def slow_bulk_alpha(errorgens: Iterable[_LSE], tableau: stim.Tableau, desired_bi
 
     return sensitivities_by_bitstring
 
-
 def alpha_numerical(errorgen, tableau, desired_bitstring):
     """
     First-order error generator sensitivity function for probability. This implementation calculates
@@ -7965,13 +7960,13 @@ def alpha_numerical(errorgen, tableau, desired_bitstring):
     
     return alpha
 
-def alpha_pauli(errorgen, tableau, pauli):
+def alpha_pauli(errorgen: _LSE, tableau: stim.Tableau, pauli: stim.PauliString) -> float:
     """
     First-order error generator sensitivity function for pauli expectations.
     
     Parameters
     ----------
-    errorgen : `ElementaryErrorgenLabel`
+    errorgen : `LocalStimElementaryErrorgenLabel` or `LocalElementaryErrorgenLabel`
         Error generator label for which to calculate sensitivity.
     
     tableau : stim.Tableau
@@ -7979,6 +7974,12 @@ def alpha_pauli(errorgen, tableau, pauli):
         
     pauli : stim.PauliString
         Pauli to calculate the sensitivity for.
+
+    Returns
+    -------
+    float
+        Linear sensitivity of the expectation value of the desired pauli observable to the
+        specified elementary error generator for the given stabilizer state.
     """
     
     sim = stim.TableauSimulator()
@@ -8067,7 +8068,7 @@ def alpha_pauli(errorgen, tableau, pauli):
                     expectation = ABP[0]*sim.peek_observable_expectation(ABP[1])
                     return _np.real_if_close(1j*4*expectation)
 
-def alpha_pauli_numerical(errorgen, tableau, pauli):
+def alpha_pauli_numerical(errorgen: Union[_LSE, _LEEL], tableau: stim.Tableau, pauli: stim.PauliString):
     """
     First-order error generator sensitivity function for pauli expectatons. This implementation calculates
     this quantity numerically, and as such is primarily intended for used as parting of testing
@@ -8114,7 +8115,134 @@ def alpha_pauli_numerical(errorgen, tableau, pauli):
     
     return alpha
 
-def _bitstring_to_int(bitstring) -> int:
+def _real_if_close(val: complex) -> float:
+    """
+    Helper function which returns the real part of a complex number and raises an exception
+    if the imaginary part is non-negligible (greater than 1e-14).
+
+    Parameters
+    ----------
+    val : complex
+        Complex number to convert to a real float.
+    """
+    val_imag = val.imag
+    if val_imag > 1e-14 or val_imag < -1e-14:
+        raise ValueError(f'Imaginary part of val is {val_imag}, and is too large (abs(val.imag)>1e-14) to cast to real.')
+    else:
+        return val.real
+
+def slow_bulk_alpha_pauli(errorgens: Iterable[_LSE], tableau: stim.Tableau, paulis: list[stim.PauliString]) -> _np.ndarray[_np.double]:
+    """
+    First-order error generator sensitivity function for pauli expectations.
+    
+    Parameters
+    ----------
+    errorgens : iterable of `LocalStimElementaryErrorgenLabel`
+        Error generator label for which to calculate sensitivity.
+    
+    tableau : stim.Tableau
+        Stim Tableau corresponding to the stabilizer state to calculate the sensitivity for.
+        
+    pauli : stim.PauliString
+        Pauli to calculate the sensitivity for.
+
+    Returns
+    -------
+    np.ndarray[np.double]
+        Linear sensitivities of the expectation values of the desired pauli observables to the
+        specified elementary error generators for the given stabilizer state. Returned as a
+        two dimensional numpy array, with rows indexed by paulis, and columns indexed by error
+        generators.
+    """
+    sim = stim.TableauSimulator()
+    sim.set_inverse_tableau(tableau**-1)
+
+    sensitivities_by_pauli = _np.empty((len(paulis), len(errorgens)), dtype=_np.double)
+
+    for i, pauli in enumerate(paulis):
+        for j, errorgen in enumerate(errorgens):
+            errgen_type = errorgen.errorgen_type
+            basis_element_labels = errorgen.basis_element_labels
+            if errgen_type == 'H':
+                pauli_bel_0_comm = com(pauli, basis_element_labels[0])
+                if pauli_bel_0_comm is not None:
+                    sign = -1j*pauli_bel_0_comm[0]
+                    expectation  = sim.peek_observable_expectation(pauli_bel_0_comm[1])
+                    sensitivities_by_pauli[i,j] = _real_if_close(sign*expectation)
+                else: 
+                    sensitivities_by_pauli[i,j] = 0 
+            elif errgen_type == 'S':
+                if pauli.commutes(basis_element_labels[0]):
+                    sensitivities_by_pauli[i,j] = 0
+                else:
+                    expectation  = sim.peek_observable_expectation(pauli)
+                    sensitivities_by_pauli[i,j] = _real_if_close(-2*expectation)
+            elif errgen_type == 'C': 
+                A = basis_element_labels[0]
+                B = basis_element_labels[1]
+                com_AP = A.commutes(pauli)
+                if A.commutes(B):
+                    if com_AP:
+                        sensitivities_by_pauli[i,j] = 0
+                    else:
+                        com_BP = B.commutes(pauli)
+                        if com_BP:
+                            sensitivities_by_pauli[i,j] = 0
+                        else:
+                            ABP = pauli_product(A*B, pauli)
+                            expectation = ABP[0]*sim.peek_observable_expectation(ABP[1])
+                            sensitivities_by_pauli[i,j] = _real_if_close(-4*expectation)
+                else: # {A,B} = 0
+                    if com_AP:
+                        com_BP = B.commutes(pauli)
+                        if com_BP:
+                            sensitivities_by_pauli[i,j] = 0
+                        else:
+                            ABP = pauli_product(A*B, pauli)
+                            expectation = ABP[0]*sim.peek_observable_expectation(ABP[1])
+                            sensitivities_by_pauli[i,j] = _real_if_close(-2*expectation)
+                    else:
+                        com_BP = B.commutes(pauli)
+                        if com_BP:
+                            ABP = pauli_product(A*B, pauli)
+                            expectation = ABP[0]*sim.peek_observable_expectation(ABP[1])
+                            sensitivities_by_pauli[i,j] = _real_if_close(2*expectation)
+                        else:
+                            sensitivities_by_pauli[i,j] = 0
+            else: # A
+                A = basis_element_labels[0]
+                B = basis_element_labels[1]
+                com_AP = A.commutes(pauli)
+                if A.commutes(B):
+                    com_BP = B.commutes(pauli)
+                    if com_AP:
+                        if com_BP:
+                            sensitivities_by_pauli[i,j] = 0
+                        else:
+                            ABP = pauli_product(A*B, pauli)
+                            expectation = ABP[0]*sim.peek_observable_expectation(ABP[1])
+                            sensitivities_by_pauli[i,j] = _real_if_close(1j*2*expectation)
+                    else:
+                        if com_BP:
+                            ABP = pauli_product(A*B, pauli)
+                            expectation = ABP[0]*sim.peek_observable_expectation(ABP[1])
+                            sensitivities_by_pauli[i,j] = _real_if_close(-1j*2*expectation)
+                        else:
+                            sensitivities_by_pauli[i,j] = 0
+                else: # {A,B} = 0
+                    if com_AP:
+                        sensitivities_by_pauli[i,j] = 0
+                    else:
+                        com_BP = B.commutes(pauli)
+                        if com_BP:
+                            sensitivities_by_pauli[i,j] = 0
+                        else:
+                            ABP = pauli_product(A*B, pauli)
+                            expectation = ABP[0]*sim.peek_observable_expectation(ABP[1])
+                            sensitivities_by_pauli[i,j] = _real_if_close(1j*4*expectation)
+    return sensitivities_by_pauli            
+
+def _bitstring_to_int(bitstring: Union[str, tuple]) -> int:
     if isinstance(bitstring, str):
         #  If the input is a string, convert it directly
         return int(bitstring, 2)
@@ -8647,22 +8775,32 @@ def error_generator_taylor_expansion_numerical(errorgen_dict, errorgen_propagato
 
     return taylor_expansion
 
-#Alias in the cython implementation of pauli_phase_update_all_zeros and pauli_phase_update
+
 PauliPhaseUpdater = Callable[[str,str,Optional[bool]],tuple[complex,str]]
+PauliPhaseZerosUpdater = Callable[[str,Optional[bool]],tuple[complex,str]]
+AmplitudeOfStateType = Callable[[Union[stim.Tableau, stim.TableauSimulator],str], complex]
+BulkPhiType = Callable[[Union[stim.Tableau, stim.TableauSimulator],str,list[Union[str,stim.PauliString]],list[Union[str,stim.PauliString]]], _np.ndarray]
+BulkAlphaType = Callable[[Iterable[_LSE],Union[stim.Tableau, stim.TableauSimulator],list[str]], _np.ndarray]
+BulkAlphaPauliType = Callable[[Iterable[_LSE],Union[stim.Tableau, stim.TableauSimulator],list[stim.PauliString]], _np.ndarray]
+
+#alias in cython implementations.
 try:
     from pygsti.tools import fasterrgencalc as _fc
-    pauli_phase_update_all_zeros = _fc.fast_pauli_phase_update_all_zeros
-    pauli_phase_update = _fc.fast_pauli_phase_update
-    amplitude_of_state = _fc.fast_amplitude_of_state
-    bulk_phi = _fc.fast_bulk_phi
-    bulk_alpha = _fc.fast_bulk_alpha    
+    pauli_phase_update_all_zeros: PauliPhaseZerosUpdater = _fc.fast_pauli_phase_update_all_zeros
+    pauli_phase_update: PauliPhaseUpdater = _fc.fast_pauli_phase_update
+    amplitude_of_state: AmplitudeOfStateType = _fc.fast_amplitude_of_state
+    bulk_phi: BulkPhiType = _fc.fast_bulk_phi
+    bulk_alpha: BulkAlphaType = _fc.fast_bulk_alpha
+    bulk_alpha_pauli: BulkAlphaPauliType = _fc.fast_bulk_alpha_pauli    
 except ImportError:
-    msg = 'Could not import cython module `fastcalc`. This may indicate that your cython extensions for pyGSTi failed to.'\
-          +'properly build. Lack of cython extensions can result in significant performance degredation so we recommend trying to rebuild them.'\
-           'Falling back to python implementation for pauli_phase_update_all_zeros.'
+    msg = 'Could not import cython module `fastcalc`. This may indicate that your cython extensions for pyGSTi failed to '\
+          +'properly build. Lack of cython extensions can result in significant performance degredation so we recommend trying to rebuild them. '\
+           'Falling back to python implementation for: pauli_phase_update_all_zeros, pauli_phase_update, amplitude_of_state, ' \
+           'bulk_phi, bulk_alpha and bulk_alpha_pauli.'
     warnings.warn(msg)
-    pauli_phase_update_all_zeros = slow_pauli_phase_update_all_zeros
-    pauli_phase_update = slow_pauli_phase_update
-    amplitude_of_state = slow_amplitude_of_state
-    bulk_phi = slow_bulk_phi
-    bulk_alpha = slow_bulk_alpha 
+    pauli_phase_update_all_zeros: PauliPhaseZerosUpdater = slow_pauli_phase_update_all_zeros
+    pauli_phase_update: PauliPhaseUpdater = slow_pauli_phase_update
+    amplitude_of_state: AmplitudeOfStateType = slow_amplitude_of_state
+    bulk_phi: BulkPhiType = slow_bulk_phi
+    bulk_alpha: BulkAlphaType = slow_bulk_alpha
+    bulk_alpha_pauli: BulkAlphaPauliType = slow_bulk_alpha_pauli 
