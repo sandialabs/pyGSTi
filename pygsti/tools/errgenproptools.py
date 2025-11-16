@@ -8281,44 +8281,35 @@ def stabilizer_probability_correction(errorgen_dict, tableau, desired_bitstring,
     correction : float
         float corresponding to the correction to the output probability for the
         desired bitstring induced by the error generator (to specified order).
-    """
-    
+    """    
     num_random = random_support(tableau)
     scale = 1/2**(num_random) # TODO: This might overflow
     
-    # do the first order correction separately since it doesn't require composition logic:
-    # now get the sum over the alphas and the error generator rate products needed.
-    alpha_errgen_prods = _np.zeros(len(errorgen_dict))
-    
+    #accumulate the terms accross orders (with short circuit logic for order 1 to save time):
+    if order == 1:
+        combined_taylor_dict = errorgen_dict
+    else:
+        #compute the taylor series approximation to the desired order.
+        taylor_expansion = error_generator_taylor_expansion(errorgen_dict, order, truncation_threshold)
+        # Accumulate all of the dictionaries in taylor expansion into a single one, summing overlapping terms.   
+        errorgen_labels_by_order = [{key: None for key in order_dict} for order_dict in taylor_expansion]
+        complete_errorgen_labels = errorgen_labels_by_order[0]
+        for order_dict in errorgen_labels_by_order[1:]:
+            complete_errorgen_labels.update(order_dict)
 
-    for i, (lbl, rate) in enumerate(errorgen_dict.items()):
-        if abs(rate) > truncation_threshold:
-            alpha_errgen_prods[i] = alpha(lbl, tableau, desired_bitstring)*rate
+        # initialize a dictionary with requisite keys
+        combined_taylor_dict = {lbl: 0 for lbl in complete_errorgen_labels}
+
+        for order_dict in taylor_expansion:
+            for lbl, rate in order_dict.items():
+                combined_taylor_dict[lbl] += rate.real
+
+    #can now do the correction computation in a single-shot.
+    alphas = bulk_alpha(combined_taylor_dict, tableau, [desired_bitstring])
+    rates = _np.fromiter(combined_taylor_dict.values(), dtype=_np.double)
+
+    alpha_errgen_prods = alphas*rates
     correction = scale*_np.sum(alpha_errgen_prods)
-    if order > 1:
-        # The order of the approximation determines the combinations of error generators
-        # which need to be composed. (given by cartesian products of labels in errorgen_dict).
-        labels_by_order = [list(product(errorgen_dict.keys(), repeat = i+1)) for i in range(1,order)]
-        # Get a similar structure for the corresponding rates
-        rates_by_order = [list(product(errorgen_dict.values(), repeat = i+1)) for i in range(1,order)]
-        for current_order, (current_order_labels, current_order_rates) in enumerate(zip(labels_by_order, rates_by_order), start=2):
-            current_order_scale = 1/factorial(current_order)
-            composition_results = []
-            for label_tup, rate_tup in zip(current_order_labels, current_order_rates):
-                composition_results.extend(iterative_error_generator_composition(label_tup, rate_tup))
-            # aggregate together any overlapping terms in composition_results
-            composition_results_dict = dict()
-            for lbl, rate in composition_results:
-                if composition_results_dict.get(lbl,None) is None:
-                    composition_results_dict[lbl] = rate
-                else:
-                    composition_results_dict[lbl] += rate
-            alpha_errgen_prods = _np.zeros(len(composition_results_dict))
-            for i, (lbl, rate) in enumerate(composition_results_dict.items()):
-                if current_order_scale*abs(rate) > truncation_threshold:
-                    sensitivity = alpha(lbl, tableau, desired_bitstring)
-                    alpha_errgen_prods[i] = _np.real_if_close(sensitivity*rate)
-            correction += current_order_scale*scale*_np.sum(alpha_errgen_prods)
 
     return correction
 
@@ -8355,39 +8346,30 @@ def stabilizer_pauli_expectation_correction(errorgen_dict, tableau, pauli, order
         float corresponding to the correction to the expectation value for the
         selected pauli operator induced by the error generator (to specified order).
     """
-    
-    # do the first order correction separately since it doesn't require composition logic:
-    # now get the sum over the alphas and the error generator rate products needed.
-    alpha_errgen_prods = _np.zeros(len(errorgen_dict))
-    
-    for i, (lbl, rate) in enumerate(errorgen_dict.items()):
-        if abs(rate) > truncation_threshold:
-            alpha_errgen_prods[i] = alpha_pauli(lbl, tableau, pauli)*rate
+    #accumulate the terms accross orders (with short circuit logic for order 1 to save time):
+    if order == 1:
+        combined_taylor_dict = errorgen_dict
+    else:
+        #compute the taylor series approximation to the desired order.
+        taylor_expansion = error_generator_taylor_expansion(errorgen_dict, order, truncation_threshold)
+        # Accumulate all of the dictionaries in taylor expansion into a single one, summing overlapping terms.   
+        errorgen_labels_by_order = [{key: None for key in order_dict} for order_dict in taylor_expansion]
+        complete_errorgen_labels = errorgen_labels_by_order[0]
+        for order_dict in errorgen_labels_by_order[1:]:
+            complete_errorgen_labels.update(order_dict)
+
+        # initialize a dictionary with requisite keys
+        combined_taylor_dict = {lbl: 0 for lbl in complete_errorgen_labels}
+
+        for order_dict in taylor_expansion:
+            for lbl, rate in order_dict.items():
+                combined_taylor_dict[lbl] += rate.real
+
+    #can now do the correction computation in a single-shot.
+    alphas = bulk_alpha_pauli(combined_taylor_dict, tableau, [pauli])
+    rates = _np.fromiter(combined_taylor_dict.values(), dtype=_np.double)
+    alpha_errgen_prods = alphas*rates
     correction = _np.sum(alpha_errgen_prods)
-    if order > 1:
-        # The order of the approximation determines the combinations of error generators
-        # which need to be composed. (given by cartesian products of labels in errorgen_dict).
-        labels_by_order = [list(product(errorgen_dict.keys(), repeat = i+1)) for i in range(1,order)]
-        # Get a similar structure for the corresponding rates
-        rates_by_order = [list(product(errorgen_dict.values(), repeat = i+1)) for i in range(1,order)]
-        for current_order, (current_order_labels, current_order_rates) in enumerate(zip(labels_by_order, rates_by_order), start=2):
-            current_order_scale = 1/factorial(current_order)
-            composition_results = []
-            for label_tup, rate_tup in zip(current_order_labels, current_order_rates):
-                composition_results.extend(iterative_error_generator_composition(label_tup, rate_tup))
-            # aggregate together any overlapping terms in composition_results
-            composition_results_dict = dict()
-            for lbl, rate in composition_results:
-                if composition_results_dict.get(lbl,None) is None:
-                    composition_results_dict[lbl] = rate
-                else:
-                    composition_results_dict[lbl] += rate
-            alpha_errgen_prods = _np.zeros(len(composition_results_dict))
-            for i, (lbl, rate) in enumerate(composition_results_dict.items()):
-                if current_order_scale*abs(rate) > truncation_threshold:
-                    sensitivity = alpha_pauli(lbl, tableau, pauli)
-                    alpha_errgen_prods[i] = _np.real_if_close(sensitivity*rate)
-            correction += current_order_scale*_np.sum(alpha_errgen_prods)
 
     return correction
 
