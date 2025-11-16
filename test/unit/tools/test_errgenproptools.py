@@ -377,6 +377,26 @@ class ApproxStabilizerMethodTester(BaseCase):
                     _eprop.phi(self.circuit_tableau_3Q, bit_string, pauli_1, pauli_2, debug=True)
                     raise ValueError(f'{pauli_1}, {pauli_2}, {bit_string}, {phi_num=}, {phi_analytic=}')
     
+    def test_bulk_phi(self):
+        bit_strings_3Q = list(product(['0','1'], repeat=3))
+        rng = np.random.default_rng()
+        paulis = np.fromiter(stim.PauliString.iter_all(3), dtype=object)
+        random_paulis = rng.choice(paulis, size=5, replace=False)
+
+        def _compute_phis(tableau, bitstring, Ps, Qs):
+            phis = []
+            for P, Q in zip(Ps, Qs):
+                phis.append(_eprop.phi(tableau, bitstring, P, Q))
+            return phis
+
+        for bitstring in bit_strings_3Q:
+            if not np.allclose(_eprop.bulk_phi(self.circuit_tableau_3Q, bitstring, random_paulis, random_paulis)), 
+                               np.array(_compute_phis(self.circuit_tableau_3Q, bitstring, random_paulis, random_paulis), dtype=np.double)):
+                print(f'{bitstring=}')
+                print(f'{_eprop.bulk_phi(self.circuit_tableau_3Q, bitstring, random_paulis, random_paulis)=}')
+                print(f'{_compute_phis(self.circuit_tableau_3Q, bitstring, random_paulis, random_paulis)=}')
+                raise ValueError('Bulk and individually computed phi values are different.')        
+
     def test_alpha(self):
         bit_strings_3Q = list(product(['0','1'], repeat=3))
         complete_errorgen_basis_3Q = CompleteElementaryErrorgenBasis('PP', QubitSpace(3), default_label_type='local')
@@ -386,6 +406,34 @@ class ApproxStabilizerMethodTester(BaseCase):
             for lbl in random_errorgens:
                 alpha_num = _eprop.alpha_numerical(lbl, self.circuit_tableau_3Q, bit_string)
                 assert abs(alpha_num - _eprop.alpha(lbl, self.circuit_tableau_3Q, bit_string)) <1e-4
+    
+    def test_bulk_alpha(self):
+        from pygsti.modelpacks import smq2Q_XYCPHASE
+        pspec_2Q = smq2Q_XYCPHASE.processor_spec()
+        random_circuits_2Q = [create_random_circuit(pspec_2Q, 4, sampler='edgegrab', samplerargs=[0.4,], rand_state=12345+i) for i in range(5)]
+        random_circuit_tableaus_2Q = [ckt.convert_to_stim_tableau() for ckt in random_circuits_2Q]
+    
+        def _compute_alphas(errorgens, tableau, bitstring):
+            alphas = []
+            for errgen in errorgens:
+                alphas.append(_eprop.alpha(errgen, tableau, bitstring))
+            return alphas
+
+        bitstrings_2Q = ['00', '01', '10', '11']
+        rng = np.random.default_rng()
+        errorgen_basis = CompleteElementaryErrorgenBasis('PP', QubitSpace(2), default_label_type='local')
+        random_errorgens = rng.choice(np.fromiter(errorgen_basis.labels, dtype=object), size=10, replace=False)
+        errorgen_labels = [_LSE.cast(lbl) for lbl in random_errorgens]
+        
+        for i, ckt_tableau in enumerate(random_circuit_tableaus_2Q):
+            for bitstring in bitstrings_2Q:
+                if not np.allclose(_eprop.bulk_alpha(errorgen_labels, ckt_tableau, [bitstring]), 
+                                   np.array(_compute_alphas(errorgen_labels, ckt_tableau, bitstring), dtype=np.double)):
+                    print(f'circuit = {random_circuits_2Q[i]}')
+                    print(f'{bitstring=}')
+                    print(f'{_eprop.bulk_alpha(errorgen_labels, ckt_tableau, [bitstring])=}')
+                    print(f'{_compute_alphas(errorgen_labels, ckt_tableau, bitstring)=}')
+                    raise ValueError('Bulk and individually computed alpha values are different.')
 
     def test_alpha_pauli(self):
         from pygsti.modelpacks import smq2Q_XYCPHASE
@@ -412,6 +460,35 @@ class ApproxStabilizerMethodTester(BaseCase):
                         raise ValueError('Analytic and numerically computed alpha pauli values differ by more than 1e-5')
         for ckt_tableau in random_circuit_tableaus_2Q:
             _compare_alpha_pauli_analytic_numeric(2, ckt_tableau)
+
+    def test_bulk_alpha_pauli(self):
+        from pygsti.modelpacks import smq2Q_XYCPHASE
+        pspec_2Q = smq2Q_XYCPHASE.processor_spec()
+        random_circuits_2Q = [create_random_circuit(pspec_2Q, 4, sampler='edgegrab', samplerargs=[0.4,], rand_state=12345+i) for i in range(5)]
+        random_circuit_tableaus_2Q = [ckt.convert_to_stim_tableau() for ckt in random_circuits_2Q]
+
+        def _compute_alphas_pauli(errorgens, tableau, pauli):
+            alphas = []
+            for errgen in errorgens:
+                alphas.append(_eprop.alpha_pauli(errgen, tableau, pauli))
+            return alphas
+
+        pauli_list = list(stim.PauliString.iter_all(2))
+        rng = np.random.default_rng()
+        errorgen_basis = CompleteElementaryErrorgenBasis('PP', QubitSpace(2), default_label_type='local')
+        random_errorgens = rng.choice(np.fromiter(errorgen_basis.labels, dtype=object), size=10, replace=False)
+        errorgen_labels = [_LSE.cast(lbl) for lbl in random_errorgens]
+        random_paulis = rng.choice(np.fromiter(pauli_list, dtype=object), size=5, replace=False)
+        
+        for i, ckt_tableau in enumerate(random_circuit_tableaus_2Q):
+            for pauli in random_paulis:
+                if not np.allclose(_eprop.bulk_alpha_pauli(errorgen_labels, ckt_tableau, [pauli]), 
+                                   np.array(_compute_alphas_pauli(errorgen_labels, ckt_tableau, pauli), dtype=np.double)):
+                    print(f'circuit = {random_circuits_2Q[i]}')
+                    print(f'{pauli=}')
+                    print(f'{_eprop.bulk_alpha_pauli(errorgen_labels, ckt_tableau, [pauli])=}')
+                    print(f'{_compute_alphas_pauli(errorgen_labels, ckt_tableau, pauli)=}')
+                    raise ValueError('Bulk and individually computed alpha_pauli values are different.')
 
     def test_stabilizer_probability_correction(self):
         #The corrections testing here will just be integration testing, we'll
