@@ -346,7 +346,7 @@ class ApproxStabilizerMethodTester(BaseCase):
         self.assertEqual(tableau, stim.PauliString('XIXI').to_tableau())
 
     def test_pauli_phase_update(self):
-        test_paulis = ['YII', 'ZII', stim.PauliString('XYZ'), stim.PauliString('+iIII')]
+        test_paulis = ['YII', 'ZII', str(stim.PauliString('XYZ')), str(stim.PauliString('+iIII'))]
         test_bitstring = '100'
 
         correct_phase_updates_standard = [-1j, -1, 1j, 1j]
@@ -360,7 +360,27 @@ class ApproxStabilizerMethodTester(BaseCase):
             self.assertEqual(output_bitstring, correct_output_bitstrings[i])
             
         for i, test_pauli in enumerate(test_paulis):
+            print(i)
             phase_update, output_bitstring = _eprop.pauli_phase_update(test_pauli, test_bitstring, dual=True)
+            self.assertEqual(phase_update, correct_phase_updates_dual[i])
+            self.assertEqual(output_bitstring, correct_output_bitstrings[i])
+
+    def test_pauli_phase_update_all_zeros(self):
+        test_paulis = ['YII', 'ZII', str(stim.PauliString('XYZ')), str(stim.PauliString('+iIII'))]
+
+        correct_phase_updates_standard = [1j, 1, 1j, 1j]
+        correct_phase_updates_dual = [-1j, 1, -1j, -1j]
+        correct_output_bitstrings = ['100', '000', '110', '000']
+
+        for i, test_pauli in enumerate(test_paulis):
+            print(i)
+            phase_update, output_bitstring = _eprop.pauli_phase_update_all_zeros(test_pauli)
+            self.assertEqual(phase_update, correct_phase_updates_standard[i])
+            self.assertEqual(output_bitstring, correct_output_bitstrings[i])
+            
+        for i, test_pauli in enumerate(test_paulis):
+            print(i)
+            phase_update, output_bitstring = _eprop.pauli_phase_update_all_zeros(test_pauli, dual=True)
             self.assertEqual(phase_update, correct_phase_updates_dual[i])
             self.assertEqual(output_bitstring, correct_output_bitstrings[i])
 
@@ -379,9 +399,10 @@ class ApproxStabilizerMethodTester(BaseCase):
     
     def test_bulk_phi(self):
         bit_strings_3Q = list(product(['0','1'], repeat=3))
+        bit_strings_3Q = [''.join(bitstring) for bitstring in bit_strings_3Q]
         rng = np.random.default_rng()
         paulis = np.fromiter(stim.PauliString.iter_all(3), dtype=object)
-        random_paulis = rng.choice(paulis, size=5, replace=False)
+        random_paulis = list(rng.choice(paulis, size=5, replace=False))
 
         def _compute_phis(tableau, bitstring, Ps, Qs):
             phis = []
@@ -390,8 +411,8 @@ class ApproxStabilizerMethodTester(BaseCase):
             return phis
 
         for bitstring in bit_strings_3Q:
-            if not np.allclose(_eprop.bulk_phi(self.circuit_tableau_3Q, bitstring, random_paulis, random_paulis)), 
-                               np.array(_compute_phis(self.circuit_tableau_3Q, bitstring, random_paulis, random_paulis), dtype=np.double)):
+            if not np.allclose(_eprop.bulk_phi(self.circuit_tableau_3Q, bitstring, random_paulis, random_paulis), 
+                               np.array(_compute_phis(self.circuit_tableau_3Q, bitstring, random_paulis, random_paulis), dtype=np.complex128)):
                 print(f'{bitstring=}')
                 print(f'{_eprop.bulk_phi(self.circuit_tableau_3Q, bitstring, random_paulis, random_paulis)=}')
                 print(f'{_compute_phis(self.circuit_tableau_3Q, bitstring, random_paulis, random_paulis)=}')
