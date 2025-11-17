@@ -7879,7 +7879,7 @@ def slow_bulk_alpha(errorgens: Iterable[_LSE], tableau: stim.Tableau, desired_bi
             else:
                 errgen_types.append(errgen_type)
 
-    sensitivities_by_bitstring = _np.empty((len(desired_bitstrings), len(errorgens)), dtype=np.double)
+    sensitivities_by_bitstring = _np.empty((len(desired_bitstrings), len(errorgens)), dtype=_np.double)
     #bulk compute the phi values for each bitstring
     for i, desired_bitstring in enumerate(desired_bitstrings):
         #phis = bulk_phi(sim, desired_bitstring, Ps, Qs)
