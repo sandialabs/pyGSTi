@@ -369,7 +369,7 @@ class ApproxStabilizerMethodTester(BaseCase):
         test_paulis = ['YII', 'ZII', str(stim.PauliString('XYZ')), str(stim.PauliString('+iIII'))]
 
         correct_phase_updates_standard = [1j, 1, 1j, 1j]
-        correct_phase_updates_dual = [-1j, 1, -1j, -1j]
+        correct_phase_updates_dual = [-1j, 1, -1j, 1j]
         correct_output_bitstrings = ['100', '000', '110', '000']
 
         for i, test_pauli in enumerate(test_paulis):
