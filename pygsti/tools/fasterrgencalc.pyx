@@ -347,7 +347,7 @@ cpdef tuple fast_pauli_phase_update(str pauli_str, str bit_str, bint dual=False)
 
 @cython.wraparound(False)
 @cython.boundscheck(False)
-cpdef np.complex128_t fast_amplitude_of_state(object tableau, str desired_state):
+cpdef np.complex128_t fast_amplitude_of_state(object tableau, str desired_state, bint only_phase):
     """
     Get the amplitude of a particular computational basis state for given
     stabilizer state.
@@ -428,8 +428,12 @@ cpdef np.complex128_t fast_amplitude_of_state(object tableau, str desired_state)
         postselect_z(q, desired_value = bs[q])
 
     # magnitude = 2^{-num_random/2}
-    magnitude = pow(2.0, - (num_random / 2.0))
-
+    if only_phase:
+        magnitude = 1
+    else:
+        if num_random > 2148:
+            raise RuntimeError('Number of random bits is greater than 2148, magnitude of amplitude will underflow!')
+        magnitude = pow(2.0, - (num_random / 2.0))
     # 4) Build reference state.
     sim.set_inverse_tableau(orig_tableau_inverse)
     refarr = <unsigned char*>PyMem_Malloc(n * sizeof(unsigned char))
@@ -642,7 +646,7 @@ cpdef np.ndarray[np.complex128_t, ndim=1] fast_bulk_phi(object tableau, str desi
     cdef dict cached_amplitudes = {}
     cdef str bitstr
     for bitstr in unique_bitstrings:
-        cached_amplitudes[bitstr] = fast_amplitude_of_state(tableau, bitstr)
+        cached_amplitudes[bitstr] = fast_amplitude_of_state(tableau, bitstr, True)
 
     # (5) Assemble the result for each (P, Q) pair.
     cdef np.ndarray[np.complex128_t, ndim=1] result_phis = np.empty(numPs, dtype=np.complex128)
@@ -661,26 +665,9 @@ cpdef np.ndarray[np.complex128_t, ndim=1] fast_bulk_phi(object tableau, str desi
         amp2 = cached_amplitudes[str2]
         # The Q amplitude gets conjugated per phi logic.
         amp_val = (phase1 * amp1) * (phase2 * amp2.conjugate())
-        if abs(amp_val) > 1e-14:
-            if abs(amp_val.real) > 1e-14:
-                if amp_val.real > 0:
-                    norm_phi = 1
-                else:
-                    norm_phi = -1
-            else:
-                if amp_val.imag > 0:
-                    norm_phi = 1j
-                else:
-                    norm_phi = -1j
-        else:
-            norm_phi = 0
-        result_phis_view[i] = norm_phi
+        result_phis_view[i] = amp_val
 
     return result_phis
-
-import stim
-from libc.math cimport pow
-from cpython.mem cimport PyMem_Malloc, PyMem_Free
 
 # Enumerate error‐gen types to small ints (no string compares later).
 cdef enum ErrType:

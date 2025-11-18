@@ -7270,7 +7270,7 @@ def bitstring_to_tableau(bitstring):
 
 # Modified from Gidney 
 # https://quantumcomputing.stackexchange.com/questions/34610/get-the-amplitude-of-a-computational-basis-in-stim
-def slow_amplitude_of_state(tableau: Union[stim.Tableau, stim.TableauSimulator], desired_state: str) -> complex:
+def slow_amplitude_of_state(tableau: Union[stim.Tableau, stim.TableauSimulator], desired_state: str, only_phase: bool) -> complex:
     """
     Get the amplitude of a particular computational basis state for given
     stabilizer state.
@@ -7288,12 +7288,16 @@ def slow_amplitude_of_state(tableau: Union[stim.Tableau, stim.TableauSimulator],
     desired_state : str
         String of 0's and 1's corresponding to the computational basis state to extract the amplitude for.
 
+    only_phase : bool
+        If True then on the phase of the complex amplitude is returned. In many cases this phase
+        is the only information required, and for many qubits amplitude of any given state may
+        underflow.        
+        
     Returns
     -------
     amplitude : complex
         Amplitude of the desired computational basis state for a given stabilizer state.
     """
-
     if isinstance(tableau, stim.Tableau):
         sim = stim.TableauSimulator()
         orig_tableau_inverse = tableau**-1
@@ -7324,7 +7328,12 @@ def slow_amplitude_of_state(tableau: Union[stim.Tableau, stim.TableauSimulator],
                 tableau.set_inverse_tableau(orig_tableau_inverse)
             return 0
         sim.postselect_z(q, desired_value=desired_bit)
-    magnitude = 2**-(num_random / 2)
+    if only_phase:
+        magnitude = 1
+    else:
+        if num_random > 2148:
+            raise RuntimeError('Number of random bits is greater than 2148, magnitude of amplitude will underflow!')
+        magnitude = 2**-(num_random / 2)
     #  For a phase reference, use the smallest state with non-zero amplitude.
     sim.set_inverse_tableau(orig_tableau_inverse)
     ref_state = [False]*n
@@ -7547,8 +7556,8 @@ def phi(tableau: Union[stim.Tableau, stim.TableauSimulator], desired_bitstring: 
     phase1, bitstring1 = pauli_phase_update(str(eff_P), all_zeros, dual=True)
     phase2, bitstring2 = pauli_phase_update(str(eff_Q), all_zeros)
 
-    amp1 = amplitude_of_state(tableau, bitstring1)
-    amp2 = amplitude_of_state(tableau, bitstring2).conjugate()  # The second amplitude also needs a complex conjugate applied
+    amp1 = amplitude_of_state(tableau, bitstring1, only_phase=True)
+    amp2 = amplitude_of_state(tableau, bitstring2, only_phase=True).conjugate()  # The second amplitude also needs a complex conjugate applied
 
     # now apply the phase corrections. 
     amp1*=phase1
@@ -7556,23 +7565,7 @@ def phi(tableau: Union[stim.Tableau, stim.TableauSimulator], desired_bitstring: 
      
     # calculate phi.
     phi = amp1*amp2
-    
-    # phi should ultimately be either 0, +/-1 or +/-i, scaling might overflow
-    # so avoid scaling and just identify which of these it should be. For really
-    # tiny phi this may still have an issue...
-    if abs(phi)>1e-14:
-        if abs(phi.real) > 1e-14:
-            if phi.real > 0:
-                return complex(1)
-            else:
-                return complex(-1)
-        else:
-            if phi.imag > 0:
-                return 1j
-            else:
-                return -1j 
-    else:
-        return complex(0)
+    return phi
 
 def slow_bulk_phi(tableau: Union[stim.Tableau, stim.TableauSimulator],
              desired_bitstring: str,
@@ -7671,7 +7664,7 @@ def slow_bulk_phi(tableau: Union[stim.Tableau, stim.TableauSimulator],
     # Cache amplitude_of_state for each unique bitstring.
     cached_amplitudes: dict[str, complex] = {}
     for bitstr in unique_bitstrings:
-        cached_amplitudes[bitstr] = amplitude_of_state(tableau, bitstr)
+        cached_amplitudes[bitstr] = amplitude_of_state(tableau, bitstr, True)
         
     # (5) Assemble the result for each (P, Q) pair.
     # Retrieve the effective pauli's phase update using the already-computed caches.
@@ -7690,16 +7683,7 @@ def slow_bulk_phi(tableau: Union[stim.Tableau, stim.TableauSimulator],
 
         # Note the conjugation for Q's amplitude per phi logic.
         amp_val = (phase1 * amp1) * (phase2 * amp2.conjugate())
-
-        # Normalize phi to one of {0, ±1, ±i}.
-        if abs(amp_val) > 1e-14:
-            if abs(amp_val.real) > 1e-14:
-                norm_phi = 1 if amp_val.real > 0 else -1
-            else:
-                norm_phi = 1j if amp_val.imag > 0 else -1j
-        else:
-            norm_phi = 0
-        result_phis[i] = norm_phi
+        result_phis[i] = amp_val
 
     return result_phis
 
@@ -7882,10 +7866,8 @@ def slow_bulk_alpha(errorgens: Iterable[_LSE], tableau: stim.Tableau, desired_bi
     sensitivities_by_bitstring = _np.empty((len(desired_bitstrings), len(errorgens)), dtype=_np.double)
     #bulk compute the phi values for each bitstring
     for i, desired_bitstring in enumerate(desired_bitstrings):
-        #phis = bulk_phi(sim, desired_bitstring, Ps, Qs)
-
         phis = bulk_phi(sim, desired_bitstring, Ps, Qs)
-        #assert phis == phis_cython
+
         #loop through all of the phi values and get the sensitivity for each error generator.
         running_phi_index = 0
         for j, errgen_type in enumerate(errgen_types):            
@@ -7998,7 +7980,7 @@ def alpha_pauli(errorgen: _LSE, tableau: stim.Tableau, pauli: stim.PauliString) 
         if pauli_bel_0_comm is not None:
             sign = -1j*pauli_bel_0_comm[0]
             expectation  = sim.peek_observable_expectation(pauli_bel_0_comm[1])
-            return _np.real_if_close(sign*expectation)
+            return _real_if_close(sign*expectation)
         else: 
             return 0 
     elif errgen_type == 'S':
@@ -8006,7 +7988,7 @@ def alpha_pauli(errorgen: _LSE, tableau: stim.Tableau, pauli: stim.PauliString) 
             return 0
         else:
             expectation  = sim.peek_observable_expectation(pauli)
-            return _np.real_if_close(-2*expectation)
+            return _real_if_close(-2*expectation)
     elif errgen_type == 'C': 
         A = basis_element_labels[0]
         B = basis_element_labels[1]
@@ -8021,7 +8003,7 @@ def alpha_pauli(errorgen: _LSE, tableau: stim.Tableau, pauli: stim.PauliString) 
                 else:
                     ABP = pauli_product(A*B, pauli)
                     expectation = ABP[0]*sim.peek_observable_expectation(ABP[1])
-                    return _np.real_if_close(-4*expectation)
+                    return _real_if_close(-4*expectation)
         else: # {A,B} = 0
             if com_AP:
                 if com_BP:
@@ -8029,12 +8011,12 @@ def alpha_pauli(errorgen: _LSE, tableau: stim.Tableau, pauli: stim.PauliString) 
                 else:
                     ABP = pauli_product(A*B, pauli)
                     expectation = ABP[0]*sim.peek_observable_expectation(ABP[1])
-                    return _np.real_if_close(-2*expectation)
+                    return _real_if_close(-2*expectation)
             else:
                 if com_BP:
                     ABP = pauli_product(A*B, pauli)
                     expectation = ABP[0]*sim.peek_observable_expectation(ABP[1])
-                    return _np.real_if_close(2*expectation)
+                    return _real_if_close(2*expectation)
                 else:
                     return 0
     else: # A
@@ -8049,12 +8031,12 @@ def alpha_pauli(errorgen: _LSE, tableau: stim.Tableau, pauli: stim.PauliString) 
                 else:
                     ABP = pauli_product(A*B, pauli)
                     expectation = ABP[0]*sim.peek_observable_expectation(ABP[1])
-                    return _np.real_if_close(1j*2*expectation)
+                    return _real_if_close(1j*2*expectation)
             else:
                 if com_BP:
                     ABP = pauli_product(A*B, pauli)
                     expectation = ABP[0]*sim.peek_observable_expectation(ABP[1])
-                    return _np.real_if_close(-1j*2*expectation)
+                    return _real_if_close(-1j*2*expectation)
                 else:
                     return 0
         else: # {A,B} = 0
@@ -8066,7 +8048,7 @@ def alpha_pauli(errorgen: _LSE, tableau: stim.Tableau, pauli: stim.PauliString) 
                 else:
                     ABP = pauli_product(A*B, pauli)
                     expectation = ABP[0]*sim.peek_observable_expectation(ABP[1])
-                    return _np.real_if_close(1j*4*expectation)
+                    return _real_if_close(1j*4*expectation)
 
 def alpha_pauli_numerical(errorgen: Union[_LSE, _LEEL], tableau: stim.Tableau, pauli: stim.PauliString):
     """
@@ -8283,7 +8265,9 @@ def stabilizer_probability_correction(errorgen_dict, tableau, desired_bitstring,
         desired bitstring induced by the error generator (to specified order).
     """    
     num_random = random_support(tableau)
-    scale = 1/2**(num_random) # TODO: This might overflow
+    if num_random > 2148:
+        raise RuntimeError('Number of random bits is greater than 1074, magnitude of probability scale will underflow!')
+    scale = 1/2**(num_random) 
     
     #accumulate the terms accross orders (with short circuit logic for order 1 to save time):
     if order == 1:
