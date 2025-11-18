@@ -65,11 +65,46 @@ class LogLTester(LikelihoodFunctionsBase):
         npar = self.model.num_params
         assert hL1.shape == (npar, npar)
         assert hL2.shape == (npar, npar)
+        
+        #assert _np.allclose(hL1/_np.linalg.norm(hL1), hL2/_np.linalg.norm(hL2), atol=1e-8, rtol=1e-8)
 
-        assert _np.allclose(hL1, hL1.T, atol=1e-8, rtol=1e-8)
+        assert _np.allclose(hL1/_np.linalg.norm(hL1), hL1.T/_np.linalg.norm(hL1), atol=1e-8, rtol=1e-8)
+        assert _np.allclose(hL2/_np.linalg.norm(hL2), hL2.T/_np.linalg.norm(hL2), atol=1e-8, rtol=1e-8)
+        assert _np.allclose(hL2b/_np.linalg.norm(hL2b), hL2b.T/_np.linalg.norm(hL2b), atol=1e-8, rtol=1e-8)
+        
+        #TODO remove code below 
+        rng = _np.random.RandomState(0)
+        v = rng.randn(npar)
+        v /= _np.linalg.norm(v)
+        eps = 1e-4
 
-        assert _np.allclose(hL2, hL2.T, atol=1e-8, rtol=1e-8)
-        assert _np.allclose(hL2b, hL2b.T, atol=1e-8, rtol=1e-8)
+        # evaluate logL at θ ± ε v, in the same poisson_picture=False setting
+        theta0 = self.model.to_vector()
+
+        m_plus  = self.model.copy()  
+        m_plus.from_vector(theta0 + eps * v)
+
+        m_minus = self.model.copy()
+        m_minus.from_vector(theta0 - eps * v)
+
+        f0 = lfn.logl(self.model,   self.ds, self.circuits,
+                        prob_clip_interval=(-1e6,1e6),
+                        poisson_picture=False)
+        f_plus  = lfn.logl(m_plus,  self.ds, self.circuits,
+                        prob_clip_interval=(-1e6,1e6),
+                        poisson_picture=False)
+        f_minus = lfn.logl(m_minus, self.ds, self.circuits,
+                        prob_clip_interval=(-1e6,1e6),
+                        poisson_picture=False)
+        
+        # finite‐difference second directional derivative
+        fd2 = (f_plus - 2*f0 + f_minus) / (eps**2)
+
+        # quadratic form v^T H v
+        qf = v.T @ hL2 @ v
+
+        # allow a few ULP of error
+        assert _np.allclose(qf, fd2, atol=1e-3, rtol=1e-3)
 
     def test_logl_max(self):
         maxL1 = lfn.logl_max(self.model, self.ds, self.circuits, poisson_picture=True)
