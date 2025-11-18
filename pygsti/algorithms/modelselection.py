@@ -143,13 +143,14 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
             target_model_fit.from_vector(x0)
             if rank == 0:
                 print('Warm starting AMS from checkpoint ' + checkpoint)
+    
+        else:
+            if rank == 0:
+                raise ValueError('Invalid AMS checkpoint provided. The checkpoint settings are:', f"{loaded_checkpoint.er_thresh=}, {loaded_checkpoint.maxiter=}, {loaded_checkpoint.tol=}, {loaded_checkpoint.prob_clip=}", ' make sure that these match the arguments provided match these, and that the target model and data are correct.')
         if new_checkpoint is not None:
             new_checkpoint.x0 = x0
             new_checkpoint.H = H
             new_checkpoint.target_model = target_model_fit
-        else:
-            if rank == 0:
-                raise ValueError('Invalid AMS checkpoint provided. The checkpoint settings are:', f"{loaded_checkpoint.er_thresh=}, {loaded_checkpoint.maxiter=}, {loaded_checkpoint.tol=}, {loaded_checkpoint.prob_clip=}, {loaded_checkpoint.recompute_H_thresh_percent=}", ' make sure that these match the arguments provided match these, and that the target model and data are correct.')
     
     
     

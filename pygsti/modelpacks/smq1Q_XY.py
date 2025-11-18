@@ -19,7 +19,6 @@ from pygsti.modelpacks._modelpack import GSTModelPack, RBModelPack
 
 class _Module(GSTModelPack, RBModelPack):
     description = "X(pi/2) and Y(pi/2) gates"
-    serialized_fogi_path = "smq1Q_XY_FOGI-GLND.json"
     gates = [('Gxpi2', 0), ('Gypi2', 0)]
 
     _sslbls = (0,)

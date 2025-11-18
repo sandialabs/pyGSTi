@@ -24,6 +24,8 @@ from pygsti.models.modelconstruction import create_explicit_model_from_expressio
 from pygsti.circuits.gstcircuits import create_lsgst_circuit_lists as _make_lsgst_lists
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.polynomial import bulk_load_compact_polynomials as _bulk_load_compact_polys
+from pygsti.baseobjs import CompleteElementaryErrorgenBasis as _CompleteElementaryErrorgenBasis
+from pygsti.baseobjs import Basis as _Basis
 from pygsti.protocols import gst as _gst
 from pygsti.tools import optools as _ot
 from pygsti.tools import basistools as _bt
@@ -100,12 +102,23 @@ class ModelPack(_ABC):
         assert(len(qubit_labels) == len(self._sslbls)), \
             "Expected %d qubit labels and got: %s!" % (len(self._sslbls), str(qubit_labels))
         if gate_type == 'FOGI-GLND':
-            assert hasattr(self, 'serialized_fogi_path'), 'This modelpack does not have a FOGI version yet. Please create it manually'
+            assert hasattr(self, 'serialized_fogi_path') or len(self._sslbls) == 1, 'This modelpack does not have a FOGI version yet. Please create it manually'
             assert povm_type == 'FOGI-GLND' or povm_type == 'auto', 'modelpack FOGI models have only been implemented for full FOGI-GLND.'
             assert prep_type == 'FOGI-GLND' or prep_type == 'auto', 'modelpack FOGI models have only been implemented for full FOGI-GLND.'
-            path = _os.path.dirname(_os.path.abspath(__file__)) + '/serialized_fogi_models/' + self.serialized_fogi_path
-            return _Model.read(path)
 
+            if hasattr(self, 'serialized_fogi_path'):
+                path = _os.path.dirname(_os.path.abspath(__file__)) + '/serialized_fogi_models/' + self.serialized_fogi_path
+                fogi_model = _Model.read(path)
+            else:
+                basis1q = _Basis.cast('pp', 4)
+                op_abbrevs = {('Gxpi2', 0): 'Gx',
+				('Gypi2', 0): 'Gy',
+				('Gzpi2',0): 'Gz'
+						}  # just for convenience, to make the labels prettier
+                fogi_model = self.target_model('GLND')
+                gauge_basis = _CompleteElementaryErrorgenBasis(basis1q, fogi_model.state_space, elementary_errorgen_types='HSCA')
+                fogi_model.setup_fogi(gauge_basis, None, op_abbrevs, include_spam=True, reparameterize=True)
+            return fogi_model
         cache_key = (gate_type, prep_type, povm_type, instrument_type, simulator, evotype, qubit_labels)
         if cache_key not in self._gscache:
             # cache miss

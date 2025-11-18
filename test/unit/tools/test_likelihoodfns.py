@@ -61,7 +61,15 @@ class LogLTester(LikelihoodFunctionsBase):
         hL2b = lfn.logl_hessian(self.model, self.ds, None,
                                 prob_clip_interval=(-1e6, 1e6), radius=1e-4,
                                 poisson_picture=False)
-        # TODO assert correctness
+        
+        npar = self.model.num_params
+        assert hL1.shape == (npar, npar)
+        assert hL2.shape == (npar, npar)
+
+        assert _np.allclose(hL1, hL1.T, atol=1e-8, rtol=1e-8)
+
+        assert _np.allclose(hL2, hL2.T, atol=1e-8, rtol=1e-8)
+        assert _np.allclose(hL2b, hL2b.T, atol=1e-8, rtol=1e-8)
 
     def test_logl_max(self):
         maxL1 = lfn.logl_max(self.model, self.ds, self.circuits, poisson_picture=True)
