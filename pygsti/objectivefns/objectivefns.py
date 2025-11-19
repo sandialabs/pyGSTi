@@ -1616,7 +1616,8 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
                                        unit_ralloc=interatom_ralloc)
 
             if self.resource_alloc.comm_rank == 0:
-                final_hessian_cpy = final_hessian.copy()  # so we don't return shared mem...
+                final_hessian_cpy = final_hessian.copy() # so we don't return shared mem...
+                final_hessian_cpy = (final_hessian_cpy + final_hessian_cpy.T)/2
             else:
                 final_hessian_cpy = None
 
@@ -1624,7 +1625,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
                 self.resource_alloc.host_comm_barrier()  # make sure we don't deallocate too early
             _smt.cleanup_shared_ndarray(final_hessian_blk_shm)
             _smt.cleanup_shared_ndarray(final_hessian_shm)
-        return (final_hessian_cpy + final_hessian_cpy.T)/2  # (N,N)
+        return  final_hessian_cpy# (N,N)
 
 
 #NOTE on chi^2 expressions:
