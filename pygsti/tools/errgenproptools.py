@@ -8744,7 +8744,7 @@ def error_generator_taylor_expansion_numerical(errorgen_dict, errorgen_propagato
 
 PauliPhaseUpdater = Callable[[str,str,Optional[bool]],tuple[complex,str]]
 PauliPhaseZerosUpdater = Callable[[str,Optional[bool]],tuple[complex,str]]
-AmplitudeOfStateType = Callable[[Union[stim.Tableau, stim.TableauSimulator],str], complex]
+AmplitudeOfStateType = Callable[[Union[stim.Tableau, stim.TableauSimulator],str,bool], complex]
 BulkPhiType = Callable[[Union[stim.Tableau, stim.TableauSimulator],str,list[Union[str,stim.PauliString]],list[Union[str,stim.PauliString]]], _np.ndarray]
 BulkAlphaType = Callable[[Iterable[_LSE],Union[stim.Tableau, stim.TableauSimulator],list[str]], _np.ndarray]
 BulkAlphaPauliType = Callable[[Iterable[_LSE],Union[stim.Tableau, stim.TableauSimulator],list[stim.PauliString]], _np.ndarray]
