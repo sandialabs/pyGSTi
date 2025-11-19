@@ -1580,7 +1580,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         #    for j in range(i + 1, final_hessian.shape[1]):
         #        final_hessian[j, i] = final_hessian[i, j]
 
-        return (atom_hessian + atom_hessian.T)/2  # (my_nparams1, my_nparams2)
+        return atom_hessian  # (my_nparams1, my_nparams2)
 
     def _hessian_from_block(self, hprobs, dprobs12, probs, element_slice, counts, total_counts, freqs, resource_alloc):
         raise NotImplementedError("Derived classes should implement this!")
@@ -1624,7 +1624,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
                 self.resource_alloc.host_comm_barrier()  # make sure we don't deallocate too early
             _smt.cleanup_shared_ndarray(final_hessian_blk_shm)
             _smt.cleanup_shared_ndarray(final_hessian_shm)
-        return final_hessian_cpy  # (N,N)
+        return (final_hessian_cpy + final_hessian_cpy.T)/2  # (N,N)
 
 
 #NOTE on chi^2 expressions:
