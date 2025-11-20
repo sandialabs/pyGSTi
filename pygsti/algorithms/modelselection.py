@@ -162,11 +162,13 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
         if rank == 0:
             start = time.time()
 
-        result = _parallel_GST(target_model, data, prob_clip, tol, maxiter, verbosity, comm=comm, mem_limit=mem_limit)
+        result = _parallel_GST(target_model, data, prob_clip, tol, 1, verbosity, comm=comm, mem_limit=mem_limit)
 
     
-        target_model_fit = result.estimates['GateSetTomography'].models['final iteration estimate']
-        
+        #target_model_fit = result.estimates['GateSetTomography'].models['final iteration estimate']
+        loaded_checkpoint = _AMSCheckpoint.read('./ams_checkpoints/HPC_checkpoint11-16.json')
+        target_model_fit = loaded_checkpoint.target_model
+        H = loaded_checkpoint.H
         x0 = target_model_fit.to_vector()
         if not disable_checkpoints and rank == 0:
             new_checkpoint.target_model = target_model_fit
