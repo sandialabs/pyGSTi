@@ -200,11 +200,10 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
         red_model = target_model.copy()
         red_model.sim._processor_grid = (1,1,1)
         target_model_fit.sim._processor_grid = (1,1,1)
-        deltalogl_fn = create_deltalogl_obj_fn(target_model_fit, data.dataset)
+        deltalogl_fn = result.estimates['GateSetTomography'].final_objective_fn()#create_deltalogl_obj_fn(target_model_fit, data.dataset)
         original_dlogl = deltalogl_fn.fn()
         print(f'{original_dlogl=}')
-        expansion_point_logl = pygsti.tools.logl(target_model_fit, data.dataset, poisson_picture=False)
-        approx_logl_fn = create_approx_logl_fn(H, x0, expansion_point_logl)
+        approx_logl_fn = create_approx_logl_fn(H, x0, original_dlogl)
         prev_dlogl = original_dlogl
         graph_levels.append([[x0,original_dlogl, 0]])
         exceeded_threshold = False
@@ -280,7 +279,9 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
 
             red_model = remove_param(red_model, sorted_finalists[0][2])
             red_model.from_vector(sorted_finalists[0][0])
-            finalist_real_logl = pygsti.tools.logl(red_model, data.dataset, poisson_picture=False, min_prob_clip=prob_clip)
+            finalist_proj_matrix = np.delete(parent_model_projector, sorted_finalists[0][2], axis=1)
+            deltalogl_fn.model.from_vector(finalist_proj_matrix @ sorted_finalists[0][0])
+            finalist_real_logl = deltalogl_fn.fn()#pygsti.tools.logl(red_model, data.dataset, poisson_picture=False, min_prob_clip=prob_clip)
             finalist_approx_logl = approx_logl_fn(red_row_H, red_rowandcol_H, sorted_finalists[0][2])
             error = finalist_real_logl - finalist_approx_logl
             if rank == 0:
