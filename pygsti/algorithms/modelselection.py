@@ -230,7 +230,6 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
             lowest_imdl = -1
             lowest_quantity = None
             lowest_vec = None
-            print(chunk_range)
             for i in chunk_range:
 
                 reduced_model_projector_matrix = np.delete(parent_model_projector, i, axis=1)
@@ -285,7 +284,7 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
             finalist_approx_logl = approx_logl_fn(red_row_H, red_rowandcol_H, sorted_finalists[0][2])
             error = finalist_real_logl - finalist_approx_logl
             if rank == 0:
-                print(error)
+                print(f'{error=}')
         #DEBUG Delete
         if False: #rank == 0:
             print(f'{error=}', 'compared to ', recompute_H_thresh_percentage*er_thresh)
