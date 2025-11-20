@@ -201,6 +201,7 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
         red_model.sim._processor_grid = (1,1,1)
         target_model_fit.sim._processor_grid = (1,1,1)
         deltalogl_fn = result.estimates['GateSetTomography'].final_objective_fn()#create_deltalogl_obj_fn(target_model_fit, data.dataset)
+        deltalogl_fn.model = target_model_fit.copy()
         original_dlogl = deltalogl_fn.fn()
         print(f'{original_dlogl=}')
         approx_logl_fn = create_approx_logl_fn(H, x0, original_dlogl)
