@@ -233,7 +233,18 @@ def compare_parameters_simple(parent_model_vec, red_model_vec, projector_matrix)
     for row in table_data:
         print("{: <25} {: <25}".format(*row), '\n')
 
-def parallel_GST(target_model, data, min_prob_clip=1e-7, tol=1e-10, maxiter=300, verbosity=0, comm=None, mem_limit=None):
+def custom_builder(min_prob_clip):
+    
+    chi2_builder = pygsti.objectivefns.Chi2Function.builder(
+        'chi2', regularization={'min_prob_clip_for_weighting': min_prob_clip}, penalties={'cptp_penalty_factor': 0.0})
+    mle_builder = pygsti.objectivefns.PoissonPicDeltaLogLFunction.builder(
+        'logl', regularization={'min_prob_clip': min_prob_clip, 'radius': min_prob_clip})
+    iteration_builders = [chi2_builder] 
+    final_builders = [mle_builder]
+    builders = pygsti.protocols.GSTObjFnBuilders(iteration_builders, final_builders)
+    return builders
+
+def parallel_GST(target_model, data, builders, tol=1e-10, maxiter=300, verbosity=0, comm=None, mem_limit=None):
     """
     Wrapper to run GST with MPI with custom builders where the tolerance, probability clip and max iterations
     are easily accesible. The seed model, "target model", gets reset to its error-less version before doing
@@ -272,13 +283,6 @@ def parallel_GST(target_model, data, min_prob_clip=1e-7, tol=1e-10, maxiter=300,
           The return value of running protocols.GateSetTomography()
     """
      
-    chi2_builder = pygsti.objectivefns.Chi2Function.builder(
-        'chi2', regularization={'min_prob_clip_for_weighting': min_prob_clip}, penalties={'cptp_penalty_factor': 0.0})
-    mle_builder = pygsti.objectivefns.PoissonPicDeltaLogLFunction.builder(
-        'logl', regularization={'min_prob_clip': min_prob_clip, 'radius': min_prob_clip})
-    iteration_builders = [chi2_builder] 
-    final_builders = [mle_builder]
-    builders = pygsti.protocols.GSTObjFnBuilders(iteration_builders, final_builders)
 
     optimizer = pygsti.optimize.customlm.CustomLMOptimizer(maxiter=maxiter, tol={'f':tol, 'relf': tol})
     protoOpt = pygsti.protocols.GateSetTomography(target_model, verbosity=verbosity, optimizer=optimizer, gaugeopt_suite=None, objfn_builders=builders)

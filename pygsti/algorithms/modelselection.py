@@ -6,8 +6,9 @@ import warnings
 import time
 from pygsti.tools.modelselectiontools import create_red_model as _create_red_model, reduced_model_approx_GST_fast as _reduced_model_approx_GST_fast
 from pygsti.tools.modelselectiontools import parallel_GST as _parallel_GST, AMSCheckpoint as _AMSCheckpoint, remove_param, create_approx_logl_fn
+from pygsti.tools.modelselectiontools import custom_builder as _custom_builders
 import os as _os
-import math
+
 
 def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, maxiter=100, tol=1.0, prob_clip=1e-3, recompute_H_thresh_percentage = .1, disable_checkpoints = False, checkpoint = None, comm = None, mem_limit = None):
     """
@@ -94,35 +95,6 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
         size = 1
     if not disable_checkpoints:
         new_checkpoint = _AMSCheckpoint(None, data.dataset.to_str(), er_thresh, maxiter, tol, prob_clip, None, None)
-    #logl function will not change throughout this algorithm, so we can save a lot of time
-    #by setting it up once, and recomputing its value with different inputs throughout AMS
-    def create_deltalogl_obj_fn(parent_model, dataset, min_prob_clip = 1e-6, comm = None, mem_limit = None):
-        """This function returns the delta logl of the 
-
-        Args:
-            parent_model (_type_): _description_
-            dataset (_type_): _description_
-            min_prob_clip (_type_, optional): _description_. Defaults to 1e-6.
-            comm (_type_, optional): _description_. Defaults to None.
-            mem_limit (_type_, optional): _description_. Defaults to None.
-
-        Returns:
-            _type_: _description_
-        """
-        prob_clip_interval=(-1e6, 1e6) 
-        radius=1e-4
-        poisson_picture = True
-        regularization = {'min_prob_clip': min_prob_clip, 'radius': radius} if poisson_picture \
-            else {'min_prob_clip': min_prob_clip}
-        op_label_aliases = None 
-        mdc_store = None
-        circuits = None
-        obj_cls = _objfns.PoissonPicDeltaLogLFunction if poisson_picture else _objfns.DeltaLogLFunction
-        model_copy = parent_model.copy()
-        obj = _objfns._objfn(obj_cls, model_copy, dataset, circuits,
-                            regularization, {'prob_clip_interval': prob_clip_interval},
-                            op_label_aliases, comm, mem_limit, ('percircuit',), (), mdc_store)
-        return obj
     
     recompute_Hessian = False
     graph_levels = []
@@ -130,8 +102,10 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
     target_model.param_interposer.inv_transform_matrix_projector = np.eye(target_model.num_params)
     parent_model_projector = target_model.param_interposer.projector_matrix.copy()
     target_model_fit = None
+    builders = _custom_builders(prob_clip)
     H = None
     x0 = None
+    result = None
 
     if checkpoint is not None:
         #TODO: maybe not have all MPI processes read from memory in the future
@@ -162,13 +136,10 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
         if rank == 0:
             start = time.time()
 
-        result = _parallel_GST(target_model, data, prob_clip, tol, 1, verbosity, comm=comm, mem_limit=mem_limit)
+        result = _parallel_GST(target_model, data, builders, tol, maxiter, verbosity, comm=comm, mem_limit=mem_limit)
 
-    
-        #target_model_fit = result.estimates['GateSetTomography'].models['final iteration estimate']
-        loaded_checkpoint = _AMSCheckpoint.read('./ams_checkpoints/HPC_checkpoint11-16.json')
-        target_model_fit = loaded_checkpoint.target_model
-        H = loaded_checkpoint.H
+        target_model_fit = result.estimates['GateSetTomography'].models['final iteration estimate']
+
         x0 = target_model_fit.to_vector()
         if not disable_checkpoints and rank == 0:
             new_checkpoint.target_model = target_model_fit
@@ -202,9 +173,11 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
         red_model = target_model.copy()
         red_model.sim._processor_grid = (1,1,1)
         target_model_fit.sim._processor_grid = (1,1,1)
-        deltalogl_fn = result.estimates['GateSetTomography'].final_objective_fn()#create_deltalogl_obj_fn(target_model_fit, data.dataset)
+        deltalogl_fn =  builders.final_builders[0].build(target_model, data.dataset, list(data.dataset.keys()))#result.estimates['GateSetTomography'].final_objective_fn()#create_deltalogl_obj_fn(target_model_fit, data.dataset)
         deltalogl_fn.model = target_model_fit.copy()
         original_dlogl = deltalogl_fn.fn()
+        if result is not None:
+            assert result.estimates['GateSetTomography'].final_objective_fn().fn() == original_dlogl , 'obj fn builder is not matching GST obj fn'
         print(f'{original_dlogl=}')
         approx_logl_fn = create_approx_logl_fn(H, x0, original_dlogl)
         prev_dlogl = original_dlogl
@@ -243,8 +216,9 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
                 deltalogl_fn.model.from_vector(reduced_model_projector_matrix @ vec)
 
                 quantity = (deltalogl_fn.fn()- prev_dlogl )*2
-                if i  % 223 == 0 and verbosity > 1:
-                    print('Model ', i, ' has ev. ratio of ', quantity, flush=True)
+                if  verbosity > 1:
+                    if i  % (100/verbosity) == 0:
+                        print('Model ', i, ' has ev. ratio of ', quantity, flush=True)
                 if lowest_quantity == None or lowest_quantity > quantity:
                     lowest_quantity = quantity
                     lowest_imdl = i
@@ -288,7 +262,7 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
             finalist_approx_logl = approx_logl_fn(red_row_H, red_rowandcol_H, sorted_finalists[0][2])
             error = finalist_real_logl - finalist_approx_logl
             if rank == 0:
-                print(f'{error=}')
+                print(f'{error=}', flush=True)
         #DEBUG Delete
         if False: #rank == 0:
             print(f'{error=}', 'compared to ', recompute_H_thresh_percentage*er_thresh)
@@ -304,7 +278,7 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
             if verbosity > 0 and rank == 0:
                 print("Recomputing Hessian, approximation error is ", error)
 
-            result = _parallel_GST(red_model, data, prob_clip, tol, maxiter, verbosity, comm=comm, mem_limit=mem_limit)
+            result = _parallel_GST(red_model, data, builders, tol, maxiter, verbosity, comm=comm, mem_limit=mem_limit)
         
             red_model_fit = result.estimates['GateSetTomography'].models['final iteration estimate']
             red_model_fit.sim = pygsti.forwardsims.MapForwardSimulator(param_blk_sizes=(100,100))
@@ -333,7 +307,7 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
                 final_projector_matrix = parent_model_projector
                 final_model = _create_red_model(target_model.copy(), final_projector_matrix, graph_levels[-1][0][0])
 
-                final_fit = _parallel_GST(final_model.copy(), data, prob_clip, tol, maxiter, verbosity, comm=comm, mem_limit=mem_limit).estimates['GateSetTomography'].models['final iteration estimate']
+                final_fit = _parallel_GST(final_model.copy(), data, builders, tol, maxiter, verbosity, comm=comm, mem_limit=mem_limit).estimates['GateSetTomography'].models['final iteration estimate']
     
                 deltalogl_fn.model.from_vector(final_projector_matrix @ final_fit.to_vector())
                 curr_dlogl = deltalogl_fn.fn()
