@@ -236,14 +236,14 @@ def _contract_to_cp_direct(model, verbosity, tp_also=False, maxiter=100000, tol=
                 else:
                     # last eigenvalue would be < 0 with ideal shift and can't set == 0 b/c all others must be zero too
                     new_evals[i] = 1.0  # so set what was the largest eigenvalue == 1.0
-
+            new_evals = _np.array(new_evals)
             #if abs( sum(new_evals) - 1.0 ) >= 1e-8:              #DEBUG
             #  print "DEBUG: sum(new_evals) == ",sum(new_evals)   #DEBUG
             #  print "DEBUG: new_evals == ",new_evals             #DEBUG
             #  print "DEBUG: orig evals == ",evals                #DEBUG
             assert(abs(sum(new_evals) - 1.0) < 1e-8)
 
-            new_Jmx = evecs @ _np.diag(new_evals) @ inv_evecs
+            new_Jmx = (evecs * new_evals[_np.newaxis, :]) @ inv_evecs
 
             #Make trace preserving by zeroing out real parts of off diagonal blocks and imaginary parts
             #  within diagaonal 1x1 and 3x3 block (so really just the 3x3 block's off diag elements)
@@ -411,7 +411,7 @@ def _contract_to_valid_spam(model, verbosity=0):
                 for (k, ev) in enumerate(evals):
                     if ev < 0.0: evals[k] = 0.0
                     if ev > 1.0: evals[k] = 1.0
-                mx = evecs @ _np.diag(evals) @ inv_evecs
+                mx = (evecs * evals[_np.newaxis, :]) @ inv_evecs
                 vec = _tools.stdmx_to_ppvec(mx)
                 diff += _np.linalg.norm(model.povms[povmLbl][ELabel] - vec)
                 scaled_effects.append((ELabel, vec))
