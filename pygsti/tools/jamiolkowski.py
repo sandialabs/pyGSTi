@@ -343,7 +343,7 @@ def sum_of_negative_choi_eigenvalues_gate(op_mx, op_mx_basis):
     sumOfNeg = 0
     J = fast_jamiolkowski_iso_std(op_mx, op_mx_basis)  # Choi mx basis doesn't matter
     evals = _mt.eigenvalues(J, assume_hermitian=True)
-    sumOfNeg = _np.sum(evals[evals < 0])
+    sumOfNeg = - _np.sum(evals[evals < 0])
     return sumOfNeg
 
 def sum_of_negative_choi_eigenvalues(model, weights=None):
