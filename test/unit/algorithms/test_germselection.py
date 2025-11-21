@@ -8,6 +8,7 @@ from pygsti.modelmembers.operations import StaticArbitraryOp
 from . import fixtures
 from pygsti.modelpacks.legacy import std1Q_XYI as std
 from ..util import BaseCase
+from typing import Any
 
 _SEED = 2019
 
@@ -375,46 +376,45 @@ class GreedyGermSelectionTester(GermSelectionWithNeighbors, BaseCase):
                                    force=pc.list_random_circuits_onelen(fixtures.opLabels, length=7, count=2, seed=_SEED))
                                    
 class GermSelectionPenaltyTester(GermSelectionData, BaseCase):
+
+    common_kwargs  : dict[str, Any] = dict(
+        randomize=True, seed=1234, candidate_germ_counts={7:'all upto'},
+        assume_real=True, float_type=np.double, mode='compactEVD', algorithm='greedy'
+    )
+
     def setUp(self):
         super(GermSelectionData, self).setUp()
 
     def test_op_penalty_greedy(self):
- 
-        germs_no_penalty_cevd = germsel.find_germs(self.target_model, randomize=True, seed=1234, candidate_germ_counts={7:'all upto'}, 
-                                                   assume_real=True, float_type=np.double, mode='compactEVD', algorithm='greedy')
-    
-        germs_penalty_cevd = germsel.find_germs(self.target_model, randomize=True, seed=1234, candidate_germ_counts={7:'all upto'}, 
-                                                   assume_real=True, float_type=np.double, mode='compactEVD', algorithm='greedy', 
-                                                   algorithm_kwargs={'op_penalty':.1})        
-
+        germs_no_penalty_cevd = germsel.find_germs(self.target_model, **self.common_kwargs)
+        germs_penalty_cevd    = germsel.find_germs(self.target_model, **self.common_kwargs, algorithm_kwargs={'op_penalty':.1})        
         assert count_ops(germs_no_penalty_cevd) > count_ops(germs_penalty_cevd)
 
 
     def test_gate_penalty_greedy(self):
-        germs_no_penalty_alljac = germsel.find_germs(self.target_model, randomize=True, seed=1234, candidate_germ_counts={7:'all upto'}, 
-                                                     assume_real=True, float_type=np.double, mode='all-Jac', algorithm='greedy')        
-        germs_no_penalty_cevd = germsel.find_germs(self.target_model, randomize=True, seed=1234, candidate_germ_counts={7:'all upto'}, 
-                                                   assume_real=True, float_type=np.double, mode='compactEVD', algorithm='greedy')
-
-        germs_penalty_alljac = germsel.find_germs(self.target_model, randomize=True, seed=1234, candidate_germ_counts={7:'all upto'}, 
-                                                     assume_real=True, float_type=np.double, mode='all-Jac', algorithm='greedy', 
-                                                     algorithm_kwargs={'gate_penalty':{'Gxpi2':.1}})        
-        germs_penalty_cevd = germsel.find_germs(self.target_model, randomize=True, seed=1234, candidate_germ_counts={7:'all upto'}, 
-                                                   assume_real=True, float_type=np.double, mode='compactEVD', algorithm='greedy', 
-                                                   algorithm_kwargs={'gate_penalty':{'Gxpi2':.1}})
-
+        kwargs = self.common_kwargs.copy()
+        kwargs.pop('mode')
+        germs_no_penalty_alljac = germsel.find_germs(self.target_model, **kwargs, mode='all-Jac')     
+        germs_no_penalty_cevd   = germsel.find_germs(self.target_model, **kwargs, mode='compactEVD')
+        germs_penalty_alljac = germsel.find_germs(
+            self.target_model, **kwargs, mode='all-Jac',    algorithm_kwargs={'gate_penalty':{'Gxpi2':.1}}
+        )        
+        germs_penalty_cevd = germsel.find_germs(
+            self.target_model, **kwargs, mode='compactEVD', algorithm_kwargs={'gate_penalty':{'Gxpi2':.1}}
+        )
         assert count_gate(germs_no_penalty_alljac, 'Gxpi2') > count_gate(germs_penalty_alljac, 'Gxpi2')
         assert count_gate(germs_no_penalty_cevd,   'Gxpi2') > count_gate(germs_penalty_cevd,   'Gxpi2')
                                            
     def test_gate_penalty_grasp(self):
-        germs_gate_penalty_grasp = germsel.find_germs(self.target_model, randomize=True, seed=1234, candidate_germ_counts={7:'all upto'}, 
-                                                      assume_real=True, float_type=np.double, mode='all-Jac', algorithm='grasp',
-                                                      algorithm_kwargs={'gate_penalty':{'Gxpi2':.2}, 'seed':1234, 'iterations':1})
-
-        germs_default_grasp = germsel.find_germs(self.target_model, randomize=True, seed=1234, candidate_germ_counts={7:'all upto'}, 
-                                                 assume_real=True, float_type=np.double, mode='all-Jac', algorithm='grasp',
-                                                 algorithm_kwargs={'seed':1234, 'iterations':1})
-
+        kwargs = self.common_kwargs.copy()
+        kwargs['mode']      = 'all-Jac'
+        kwargs['algorithm'] = 'grasp'
+        germs_gate_penalty_grasp = germsel.find_germs(
+            self.target_model, **kwargs, algorithm_kwargs={'seed':1234, 'iterations':1, 'gate_penalty':{'Gxpi2':.2}}
+        )
+        germs_default_grasp = germsel.find_germs(
+            self.target_model, **kwargs, algorithm_kwargs={'seed':1234, 'iterations':1}
+        )
         assert count_gate(germs_gate_penalty_grasp, 'Gxpi2') < count_gate(germs_default_grasp, 'Gxpi2')
 
 class EndToEndGermSelectionTester(GermSelectionData, BaseCase):
