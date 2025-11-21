@@ -57,21 +57,23 @@ def _flat_mut_blks(i, j, block_dims):
     return ret
 
 
-def check_rank_one_density(mat, scalar_tol: Optional[Union[float,_np.floating]]=None) -> tuple[int, _np.ndarray]:
+def fast_density_rank(mat: _np.ndarray, scalar_tol: Optional[Union[float,_np.floating]]=None,
+                      rng: Union[None,int,_np.random.Generator]=0) -> tuple[int, _np.ndarray]:
     """
     mat is Hermitian of order n. This function uses an O(n^2) time randomized algorithm to
     test if mat is a PSD matrix of rank 0 or 1. It returns a tuple (r, vec), where
 
-        If r == 0, then vec is the zero vector. Either mat's numerical rank is zero
-        OR the projection of mat onto the set of PSD matrices is zero.
+        r == 0 means mat's numerical rank is zero OR its projection onto the set of PSD
+        matrices is zero. The value of vec should be ignored.
 
-        If r == 1, then mat is a PSD matrix of numerical rank one, and vec is mat's
-        unique nontrivial eigenvector.
+        r == 1 means mat is numerically equal to _np.outer(vec, vec.conj()), where vec
+        is nonzero.
 
-        If r == 2,  then our best guess is that mat's (numerical) rank is at least two
-        In exact arithmetic, this "guess" is correct with probability one. The value of
-        `vec` is ignored but provided for type-checking purposes. Additional computations
-        will be needed to determine if mat is PSD.
+        r == 2 means mat's numerical rank is at least two, but we know nothing beyond
+        that. The value of vec should be ignored.
+
+        r == -1 means mat's numerical rank is at least one, but we know nothing beyond 
+        that. The value of vec should be ignored.
 
     Conceptually, this function just takes a single step of the power iteration method
     for estimating mat's largest eigenvalue (with size measured in absolute value).
@@ -86,33 +88,30 @@ def check_rank_one_density(mat, scalar_tol: Optional[Union[float,_np.floating]]=
     n = mat.shape[0]
 
     if _np.linalg.norm(mat) < vec_tol:
-        # We prefer to return the zero vector instead of None to simplify how we handle
-        # this function's output.
         return 0, _np.zeros(n, dtype=complex)
 
-    rng = _np.random.default_rng(0)
+    rng = _np.random.default_rng(rng)
     test_vec = rng.standard_normal(n) + 1j * rng.standard_normal(n)
     test_vec /= _np.linalg.norm(test_vec)
 
     candidate_v = mat @ test_vec
-    candidate_v /= _np.linalg.norm(candidate_v)
+    scale = _np.linalg.norm(candidate_v)
+    if scale < vec_tol:
+        return -1, _np.zeros(n, dtype=complex)
+    else:
+        candidate_v /= scale
     alpha = _np.real(candidate_v.conj() @ mat @ candidate_v)
     reconstruction = alpha * _np.outer(candidate_v, candidate_v.conj())
 
     if _np.linalg.norm(mat - reconstruction) > vec_tol:
-        # We can't certify that mat is rank-1.
-        return 2, _np.zeros(n)
+        # We know mat is non-zero, but we can't certify that it's rank-1.
+        return 2, _np.zeros(n, dtype=complex)
     
     if alpha <= 0.0:
-        # Ordinarily we'd project out the negative eigenvalues and proceed with the
-        # PSD part of the matrix, but at this point we know that the PSD part is zero.
-        return 0, _np.zeros(n)
+        # mat is rank-1, but its projection onto the set of psd matrices is rank-0.
+        return 0, _np.zeros(n, dtype=complex)
     
-    if abs(alpha - 1) > scalar_tol:
-        message = f"The input matrix is not trace-1 up to tolerance {scalar_tol}. Beware result!"
-        _warnings.warn(message)
-        candidate_v *= _np.sqrt(alpha)
-
+    candidate_v *= _np.sqrt(alpha)
     return 1, candidate_v
 
 
@@ -141,19 +140,26 @@ def fidelity(a, b):
     float
         The resulting fidelity.
     """
-    __SCALAR_TOL__ = _np.finfo(a.dtype).eps ** 0.75
-    # ^ use for checks that have no dimensional dependence; about 1e-12 for double precision.
+    __SCALAR_TOL__ = _np.finfo(a.dtype).eps ** 0.5
+    # ^ use for checks that have no dimensional dependence; about 1e-8 for double precision.
     
     _mt.assert_hermitian(a, __SCALAR_TOL__)
     _mt.assert_hermitian(b, __SCALAR_TOL__)
-  
-    r, vec = check_rank_one_density(a, __SCALAR_TOL__)
+
+    trace_warning = f"The input matrix %s is not trace-1 up to tolerance {__SCALAR_TOL__}. Beware result!"
+
+    if _np.abs(_np.trace(a) - 1) > __SCALAR_TOL__:
+        _warnings.warn(trace_warning % 'a')
+    if _np.abs(_np.trace(b) - 1) > __SCALAR_TOL__:
+        _warnings.warn(trace_warning % 'b')
+
+    r, vec = fast_density_rank(a, __SCALAR_TOL__)
     if r <= 1:
         # special case when a is rank 1, a = vec * vec^T.
         f = (vec.T.conj() @ b @ vec).real  # vec^T * b * vec
         return f
 
-    r, vec = check_rank_one_density(b, __SCALAR_TOL__)
+    r, vec = fast_density_rank(b, __SCALAR_TOL__)
     if r <= 1:
         # special case when b is rank 1 (recall fidelity is sym in args)
         f = (vec.T.conj() @ a @ vec).real  # vec^T * a * vec
@@ -1385,13 +1391,25 @@ def dmvec_to_state(dmvec, tol=1e-6):
     dim = int(dmvec.size**0.5)
     dm = dmvec.reshape((dim, dim))
     _mt.assert_hermitian(dm, tol)
-    r, psi = check_rank_one_density(dm, tol)
-    if r == 0:
-        raise ValueError('Cannot convert zero dmvec to pure state!')
+    r, psi = fast_density_rank(dm, tol)
+    if r == 1:
+        # The most common codepath goes up front.
+        return psi.reshape((-1, 1))
     if r == 2:
         raise ValueError('Cannot convert mixed dmvec to pure state!')
-    psi = psi.reshape((-1, 1))
-    return psi
+    if r == 0:
+        raise ValueError('Cannot convert zero dmvec to pure state!')
+
+    # The randomized algorithm failed. This is a very unusual case.
+    evals, evecs = _np.linalg.eigh(dm)
+    r = _np.count_nonzero(evals > tol)
+    if r > 1:
+        raise ValueError('Cannot convert mixed dmvec to pure state!')
+    elif r == 0:
+        raise ValueError('Cannot convert zero dmvec to pure state!')
+    else:
+        psi = evecs[:,-1].reshape((-1, 1))
+        return psi
 
 
 def unitary_to_superop(u, superop_mx_basis='pp'):
