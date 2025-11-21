@@ -10,6 +10,7 @@ Functions for selecting a complete set of germs for a GST analysis.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
 import warnings as _warnings
 
 import numpy as _np
