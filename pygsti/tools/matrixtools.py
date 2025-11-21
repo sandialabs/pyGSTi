@@ -66,7 +66,7 @@ def gram_matrix(m, adjoint=False):
     return out
 
 
-def is_hermitian(mx, tol=1e-9) -> bool:
+def is_hermitian(mx: _np.ndarray, tol: float=1e-9) -> bool:
     """
     Test whether mx is a hermitian matrix.
 
