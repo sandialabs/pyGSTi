@@ -2567,10 +2567,10 @@ class GateEigenvalueTable(WorkspaceTable):
                 #TODO: move this to a reportable qty to get error bars?
 
                 if isinstance(gl, _baseobjs.Label) or isinstance(gl, str):
-                    # no error bars
-                    target_evals = _np.linalg.eigvals(target_model.operations[gl].to_dense("HilbertSchmidt"))
+                    mx = target_model.operations[gl].to_dense("HilbertSchmidt")
                 else:
-                    target_evals = _np.linalg.eigvals(target_model.sim.product(gl))  # no error bars
+                    mx = target_model.sim.product(gl)
+                target_evals = _tools.eigenvalues(mx)
 
                 if any([(x in display) for x in ('rel', 'log-rel', 'relpolar')]):
                     if isinstance(gl, _baseobjs.Label) or isinstance(gl, str):
@@ -2683,11 +2683,13 @@ class GateEigenvalueTable(WorkspaceTable):
                 row_formatters = [None]
 
                 #FUTURE: use reportables to get instrument eigenvalues
-                evals = _ReportableQty(_np.linalg.eigvals(comp.to_dense("HilbertSchmidt")))
+                mx = comp.to_dense("HilbertSchmidt")
+                evals = _ReportableQty(_tools.eigenvalues(mx))
                 evals = evals.reshape(evals.size, 1)
 
                 if target_model is not None:
-                    target_evals = _np.linalg.eigvals(tcomp.to_dense("HilbertSchmidt"))  # no error bars
+                    tmx = tcomp.to_dense("HilbertSchmidt")
+                    target_evals = _tools.eigenvalues(tmx)  # no error bars
                     #Note: no support for relative eigenvalues of instruments (yet)
 
                     # permute target eigenvalues according to min-weight matching
