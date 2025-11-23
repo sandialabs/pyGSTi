@@ -1655,11 +1655,6 @@ def find_sufficient_fiducial_pairs_per_germ_global(target_model, prep_fiducials,
         list of fiducial pairs for a particular germ (indices are into
         `prep_fiducials` and `meas_fiducials`).
     """
-
-    if not isinstance(target_model.sim, _MatrixForwardSimulator):
-        target_model = target_model.copy()
-        target_model.sim = 'matrix'
-
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
 
     #if no germ_vector_spanning_set is passed in compute it here.

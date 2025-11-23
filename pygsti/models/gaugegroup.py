@@ -822,7 +822,7 @@ class UnitaryGaugeGroup(OpGaugeGroupWithBasis):
         state_space = _StateSpace.cast(state_space)
         evotype = _Evotype.cast(str(evotype), default_prefer_dense_reps=True)  # since we use deriv_wrt_params
         errgen = _op.LindbladErrorgen.from_operation_matrix(
-            _np.eye(state_space.dim), "H", basis, mx_basis=basis, evotype=evotype
+            _np.eye(state_space.dim), "H", basis, mx_basis=basis, evotype=evotype, state_space=state_space
         )
         operation = _op.ExpErrorgenOp(errgen)
         OpGaugeGroupWithBasis.__init__(self, operation, UnitaryGaugeGroupElement, "Unitary", basis)

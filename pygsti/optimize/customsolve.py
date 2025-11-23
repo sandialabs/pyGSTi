@@ -165,7 +165,7 @@ def custom_solve(a, b, x, ari, resource_alloc, proc_threshold=100):
         potential_pivot_indices = all_row_indices[potential_pivot_mask]
         ibest_global, ibest_local, h, k = _find_pivot(a, b, icol, potential_pivot_indices, my_row_slice,
                                                       shared_floats, shared_ints, resource_alloc, comm, host_comm,
-                                                      smbuf1, smbuf2, smbuf3, host_index_buf, host_val_buf)
+                                                      smbuf1, smbuf1b, smbuf2, smbuf3, host_index_buf, host_val_buf)
 
         # Step 2: proc that owns best row (holds that row and is root of param-fine comm) broadcasts it
         pivot_row, pivot_b = _broadcast_pivot_row(a, b, ibest_local, h, k, shared_rowb, local_pivot_rowb,

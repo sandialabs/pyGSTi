@@ -352,7 +352,13 @@ class LindbladErrorgen(_LinearOperator):
         See `from_error_generator` for more details.
         """
 
-        dim = errgen.shape[0]
+        if isinstance(errgen, _np.ndarray):
+            dim = errgen.shape[0]
+        elif isinstance(errgen, int):
+            dim = errgen
+        else:
+            raise ValueError(f'Unsupported value for argument `errgen` of type {type(errgen)}.')  
+        
         if state_space is None:
             state_space = _statespace.default_space_for_dim(dim)
 
