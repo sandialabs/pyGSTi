@@ -345,7 +345,7 @@ class ProbTrajectoriesPlot(_ws.WorkspacePlot):
             layout = go.Layout(width=800 * scale, height=400 * scale, title=dict(font=dict(size=16)),
                                # , rangeslider=dict(visible = True)),
                                xaxis=dict(title=dict(text="Time (seconds)", font=dict(size=14)), range=xlim),
-                               yaxis=dict(title=dict("Probability", font=dict(size=14)), range=ylim),
+                               yaxis=dict(title=dict(text="Probability", font=dict(size=14)), range=ylim),
                                legend=dict(
                 #                    x=0.05,
                 #                    y=1.05,
