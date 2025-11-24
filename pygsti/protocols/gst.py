@@ -1279,7 +1279,7 @@ class GateSetTomography(_proto.Protocol):
         self.unreliable_ops = ('Gcnot', 'Gcphase', 'Gms', 'Gcn', 'Gcx', 'Gcz')
 
     def run(self, data, memlimit=None, comm=None, checkpoint=None, checkpoint_path=None, disable_checkpointing=False,
-            simulator: Optional[ForwardSimulator.Castable]=None):
+            simulator: Optional[ForwardSimulator.Castable]=None, optimizers=None):
         """
         Run this protocol on `data`.
 
@@ -1316,11 +1316,19 @@ class GateSetTomography(_proto.Protocol):
             Ignored if None. If not None, then we call
                 fwdsim = ForwardSimulator.cast(simulator),
             and we set the .sim attribute of every Model we encounter to fwdsim.
+        
+        optimizers : Optimizer, or dict, or list of Optimizer, or list of dict (default None)
+            The optimizer to use, or a dictionary of optimizer parameters
+            from which a default optimizer can be built. If a list, the length
+            of the list should either be 1 or equal to the number of iterations. 
+            If 1, then this optimizer is used for every iteration, otherwise
+            each optimizer is used for its corresponding iteration.
 
         Returns
         -------
         ModelEstimateResults
         """
+        from pygsti.forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
         tref = _time.time()
 
         profile = self.profile
@@ -1353,6 +1361,31 @@ class GateSetTomography(_proto.Protocol):
                                                       data.dataset, comm)
         if simulator is not None:
             mdl_start.sim = simulator
+        
+        if optimizers is None:
+            optimizers = [self.optimizer]
+
+        else:
+            if isinstance(optimizers, _opt.Optimizer):    
+                optimizers = [optimizers]
+            else:
+                if not isinstance(optimizers, list):
+                    raise ValueError(f'Invalid argument for optimizers of type {type(optimizers)}, supported types are list, Optimizer')
+                temp_optimizers = []
+                default_first_fditer = 1 if mdl_start and isinstance(mdl_start.sim, _MatrixFSim) else 0
+                for optimizer in optimizers:
+                    if isinstance(optimizer, _opt.Optimizer):
+                        if hasattr(optimizer,'first_fditer') and optimizer.first_fditer is None:
+                            # special behavior: can set optimizer's first_fditer to `None` to mean "fill with default"
+                            temp_optimizer = _copy.deepcopy(optimizer)  # don't mess with caller's optimizer
+                            temp_optimizer.first_fditer = default_first_fditer
+                    else:
+                        if optimizer is None:
+                            temp_optimizer = {}
+                        if 'first_fditer' not in optimizer:  # then add default first_fditer value
+                            temp_optimizer['first_fditer'] = default_first_fditer
+                    temp_optimizers.append(_opt.SimplerLMOptimizer.cast(temp_optimizer))
+                optimizers = temp_optimizers
 
         if disable_checkpointing:
             seed_model = mdl_start.copy()
@@ -1412,7 +1445,7 @@ class GateSetTomography(_proto.Protocol):
         #Run Long-sequence GST on data
         #Use the generator based version and query each of the intermediate results.
         gst_iter_generator = _alg.iterative_gst_generator( 
-            ds, seed_model, bulk_circuit_lists, self.optimizer,
+            ds, seed_model, bulk_circuit_lists, optimizers,
             self.objfn_builders.iteration_builders, self.objfn_builders.final_builders,
             resource_alloc, starting_idx, printer)
 
@@ -1722,7 +1755,7 @@ class StandardGST(_proto.Protocol):
     objfn_builders : GSTObjFnBuilders, optional
         The objective function(s) to optimize.  Can also be anything that can
         be cast to a :class:`GSTObjFnBuilders` object.  Applies to all modes.
-
+    
     optimizer : Optimizer, optional
         The optimizer to use.  Can also be anything that can be case to a
         :class:`Optimizer`.  Applies to all modes.
@@ -1780,7 +1813,7 @@ class StandardGST(_proto.Protocol):
         self.starting_point = {}  # a dict whose keys are modes
 
     def run(self, data, memlimit=None, comm=None, checkpoint=None, checkpoint_path=None,
-            disable_checkpointing=False, simulator: Optional[ForwardSimulator.Castable]=None):
+            disable_checkpointing=False, simulator: Optional[ForwardSimulator.Castable]=None, optimizers=None):
         """
         Run this protocol on `data`.
 
@@ -1817,6 +1850,13 @@ class StandardGST(_proto.Protocol):
             Ignored if None. If not None, then we call
                 fwdsim = ForwardSimulator.cast(simulator),
             and we set the .sim attribute of every Model we encounter to fwdsim.
+
+        optimizers : Optimizer, or dict, or list of Optimizer, or list of dict (default None)
+            The optimizer to use, or a dictionary of optimizer parameters
+            from which a default optimizer can be built. If a list, the length
+            of the list should either be 1 or equal to the number of iterations. 
+            If 1, then this optimizer is used for every iteration, otherwise
+            each optimizer is used for its corresponding iteration.
 
         Returns
         -------
@@ -1941,7 +1981,7 @@ class StandardGST(_proto.Protocol):
                     result = gst.run(data, memlimit, comm,
                                      disable_checkpointing=disable_checkpointing,
                                      checkpoint=child_checkpoint,
-                                     checkpoint_path=checkpoint_path)
+                                     checkpoint_path=checkpoint_path, optimizers=optimizers)
                     ret.add_estimates(result)
 
         return ret

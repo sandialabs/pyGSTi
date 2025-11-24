@@ -103,6 +103,7 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
     parent_model_projector = target_model.param_interposer.projector_matrix.copy()
     target_model_fit = None
     builders = _custom_builders(prob_clip)
+    deltalogl_fn =  builders.final_builders[0].build(target_model_fit, data.dataset, list(data.dataset.keys()))
     H = None
     x0 = None
     result = None
@@ -114,7 +115,11 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
             H = loaded_checkpoint.H
             x0 = loaded_checkpoint.x0
             target_model_fit = target_model.copy()
+            target_model_fit.sim._processor_grid = (1,1,1)
             target_model_fit.from_vector(x0)
+            deltalogl_fn.model = target_model_fit
+            original_dlogl = deltalogl_fn.fn()
+
             if rank == 0:
                 print('Warm starting AMS from checkpoint ' + checkpoint)
     
@@ -141,6 +146,11 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
         target_model_fit = result.estimates['GateSetTomography'].models['final iteration estimate']
 
         x0 = target_model_fit.to_vector()
+
+        target_model_fit.sim._processor_grid = (1,1,1)
+        deltalogl_fn.model = target_model_fit.copy()
+        original_dlogl = deltalogl_fn.fn()
+
         if not disable_checkpoints and rank == 0:
             new_checkpoint.target_model = target_model_fit
             new_checkpoint.x0 = x0
@@ -159,7 +169,7 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
             new_checkpoint.save()
             print('Checkpoint saved in', new_checkpoint.path)
     
-    if False: #checkpoint is not None:
+    if checkpoint is not None:
         if checkpoint.graph_levels is not None:
             if rank == 0 and verbosity > 0:
                 print(f'Checkpoint contains {len(checkpoint.graph_levels)} levels')
@@ -167,19 +177,12 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
             red_model = checkpoint.red_model
 
     
-    #else
+    #if we did not load a checkpoint with levels in it
     if len(graph_levels) == 0:
-
-        red_model = target_model.copy()
-        red_model.sim._processor_grid = (1,1,1)
-        target_model_fit.sim._processor_grid = (1,1,1)
-        deltalogl_fn =  builders.final_builders[0].build(target_model, data.dataset, list(data.dataset.keys()))#result.estimates['GateSetTomography'].final_objective_fn()#create_deltalogl_obj_fn(target_model_fit, data.dataset)
-        deltalogl_fn.model = target_model_fit.copy()
-        original_dlogl = deltalogl_fn.fn()
+        red_model = target_model_fit.copy()
         if result is not None:
-            assert result.estimates['GateSetTomography'].final_objective_fn().fn() == original_dlogl , 'obj fn builder is not matching GST obj fn'
+            assert result.estimates['GateSetTomography'].final_objective_fn().fn() == original_dlogl , 'obj fn builder is not matching GST obj fn ' + str(result.estimates['GateSetTomography'].final_objective_fn().fn() - original_dlogl)
         print(f'{original_dlogl=}')
-        approx_logl_fn = create_approx_logl_fn(H, x0, original_dlogl)
         prev_dlogl = original_dlogl
         graph_levels.append([[x0,original_dlogl, 0]])
         exceeded_threshold = False
@@ -187,7 +190,7 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
         red_rowandcol_H = H
     counter = 0
 
-
+    approx_logl_fn = create_approx_logl_fn(H, x0, original_dlogl)
     while not exceeded_threshold:
         if rank == 0 and verbosity >1:
             print(f'>> Working on level {len(graph_levels)} <<',flush = True)

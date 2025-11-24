@@ -162,7 +162,6 @@ def remove_param(parent_model, param_to_remove):
     next_model._need_to_rebuild = True
     next_model._clean_paramvec()
     assert next_model.num_params < parent_model.num_params
-    param_to_remove += 1
     return next_model
 
 def create_projector_matrix_from_trace(graph_levels, projector_matrix = None):
@@ -234,7 +233,7 @@ def compare_parameters_simple(parent_model_vec, red_model_vec, projector_matrix)
         print("{: <25} {: <25}".format(*row), '\n')
 
 def custom_builder(min_prob_clip):
-    
+
     chi2_builder = pygsti.objectivefns.Chi2Function.builder(
         'chi2', regularization={'min_prob_clip_for_weighting': min_prob_clip}, penalties={'cptp_penalty_factor': 0.0})
     mle_builder = pygsti.objectivefns.PoissonPicDeltaLogLFunction.builder(
