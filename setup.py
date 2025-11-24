@@ -72,7 +72,18 @@ try:
                 # # leave above commented
                 # # see http://docs.cython.org/en/latest/src/reference/compilation.html#configuring-the-c-build
                 # define_macros = [('CYTHON_TRACE','1')], #for profiling
-                include_dirs=['.', np.get_include()]
+                include_dirs=['.', np.get_include()],
+                # libraries=['m'] #math lib?
+            ),
+            Extension(
+                "pygsti.tools.fasterrgencalc",
+                sources=["pygsti/tools/fasterrgencalc.pyx"],  # , "fasterrgencalc.c
+                # # Cython docs on NumPy usage should mention this!
+                # define_macros = [('NPY_NO_DEPRECATED_API','NPY_1_7_API_VERSION')],
+                # # leave above commented
+                # # see http://docs.cython.org/en/latest/src/reference/compilation.html#configuring-the-c-build
+                # define_macros = [('CYTHON_TRACE','1')], #for profiling
+                include_dirs=['.', np.get_include()],
                 # libraries=['m'] #math lib?
             ),
             Extension(
@@ -269,7 +280,7 @@ try:
         ext_modules=extensions,
         packages=find_packages(where='.', include=['pygsti']),
         package_data={
-            'pygsti.tools': ['fastcalc.pyx'],
+            'pygsti.tools': ['fastcalc.pyx', 'fasterrgencalc.pyx'],
             'pygsti.evotypes': [
                 'basereps_cython.pxd',
                 'basereps_cython.pyx',

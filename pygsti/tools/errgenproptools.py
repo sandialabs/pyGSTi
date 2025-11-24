@@ -32,7 +32,7 @@ from pygsti.tools.optools import create_elementary_errorgen_nqudit, state_to_dmv
 from functools import reduce
 from itertools import chain, product
 from math import factorial
-from typing import Literal
+from typing import Literal, Optional, Union, Callable, Iterable
 
 def errgen_coeff_label_to_stim_pauli_strs(err_gen_coeff_label, num_qubits):
     """
@@ -477,16 +477,7 @@ def magnus_expansion(errorgen_layers: list[dict[_LSE, float]], magnus_order: Lit
     errorgen_layers : list of dicts
         List of dictionaries of the error generator coefficients and rates for a circuit layer. 
         The error generator coefficients are represented using LocalStimErrorgenLabel.
-
-    errorgen_transform_maps : dict
-        Map giving the relationship between input error generators and their final
-        value following propagation through the circuit. Needed to track any sign updates
-        for terms with zero mean but nontrivial covariance.
-
-    cov_func : 
-        A function which maps tuples of elementary error generator labels at multiple times to
-        a scalar quantity corresponding to the value of the covariance for that pair.
-    
+       
     magnus_order : int, optional (default 1)
         Order of the magnus expansion to apply. Currently supports up to third order.
     
@@ -527,46 +518,14 @@ def magnus_expansion(errorgen_layers: list[dict[_LSE, float]], magnus_order: Lit
         
         # second-order magnus terms:
         # (1/2)\sum_{t1=1}^n \sum_{t2=1}^{t1-1} [A(t1), A(t2)]
-        elif curr_order == 1:
-            # construct a list of all of the pairs of error generator layers we need the
-            # commutators for.
-            errorgen_pairs = []
-            for i in range(len(errorgen_layers)):
-                for j in range(i):
-                    errorgen_pairs.append((errorgen_layers[i], errorgen_layers[j]))
-            
+        elif curr_order == 1:            
             # precompute an identity string for comparisons in commutator calculations.
             if errorgen_layers:
                 for layer in errorgen_layers:
                     if layer:
                         identity = stim.PauliString('I'*len(next(iter(layer)).basis_element_labels[0]))
                         break
-            
-            # compute second-order BCH correction for each pair of error generators in the
-            # errorgen_pairs list.
-            commuted_errgen_list = []
-            for errorgen_pair in errorgen_pairs:
-                for error1, error1_val in errorgen_pair[0].items():
-                    for error2, error2_val in errorgen_pair[1].items():
-                        # get the list of error generator labels
-                        weight = .5*error1_val*error2_val
-                        # avoid computing commutators which will be effectively zero.
-                        if abs(weight) < truncation_threshold:
-                            continue
-                        commuted_errgen_sublist = error_generator_commutator(error1, error2, 
-                                                                            weight= weight, identity=identity)
-                        commuted_errgen_list.extend(commuted_errgen_sublist)
-            # loop through all of the elements of commuted_errorgen_list and instantiate a dictionary with the requisite keys.
-            second_order_comm_dict = {error_tuple[0]: 0 for error_tuple in commuted_errgen_list}
-
-            # Add all of these error generators to the working dictionary of updated error generators and weights.
-            # There may be duplicates, which should be summed together.
-            for error_tuple in commuted_errgen_list:
-                second_order_comm_dict[error_tuple[0]] += error_tuple[1]
-            # truncate any terms which are below the truncation threshold following
-            # aggregation.
-            second_order_comm_dict = {key: val for key, val in second_order_comm_dict.items() if abs(val)>truncation_threshold}
-
+            second_order_comm_dict = _second_order_magnus_term(errorgen_layers, identity, truncation_threshold)
             new_errorgen_layer.append(second_order_comm_dict)
 
         # third order magnus terms
@@ -700,6 +659,127 @@ def magnus_expansion(errorgen_layers: list[dict[_LSE, float]], magnus_order: Lit
 
     # Future: Possibly do one last truncation pass in case any of the different orders cancel out when aggregated?
     return new_errorgen_layer_dict
+
+def _second_order_magnus_term(errorgen_layers: list[dict[_LSE, float]], identity: Optional[stim.PauliString],
+                              truncation_threshold: float = 1e-14) -> dict[_LSE, float]:
+    """
+    Helper function for computing the second-order correction term in the
+    magnus expansion.
+
+    (1/2)\sum_{t1=1}^n \sum_{t2=1}^{t1-1} [A(t1), A(t2)]
+
+    Parameters:
+    ----------
+    errorgen_layers : list of dicts
+        List of dictionaries of the error generator coefficients and rates for a circuit layer. 
+        The error generator coefficients are represented using LocalStimErrorgenLabel.
+
+    identity : stim.PauliString, optional (default None)
+        An optional stim.PauliString to use for comparisons to the identity.
+        Passing in this kwarg isn't necessary, but can allow for reduced 
+        stim.PauliString creation when calling this function many times for
+        improved efficiency.
+        
+    truncation_threshold : float, optional (default 1e-14)
+        Threshold for which any error generators with magnitudes below this value
+        are truncated.
+
+    Returns
+    -------
+    second_order_comm_dict : dict
+        A dictionary with the same general structure as those in `errorgen_layers`, but with the
+        rates combined according to the second order of the magnus expansion.
+    """
+    errorgen_pairs = []
+    for i in range(len(errorgen_layers)):
+        for j in range(i):
+            errorgen_pairs.append((errorgen_layers[i], errorgen_layers[j]))
+    
+    # precompute an identity string for comparisons in commutator calculations if one is not provided.
+    if identity is None and errorgen_layers:
+        for layer in errorgen_layers:
+            if layer:
+                identity = stim.PauliString('I'*len(next(iter(layer)).basis_element_labels[0]))
+                break
+    
+    # compute second-order BCH correction for each pair of error generators in the
+    # errorgen_pairs list.
+    commuted_errgen_list = []
+    for errorgen_pair in errorgen_pairs:
+        commuted_errgen_list.extend(_error_generator_layer_pairwise_commutator(errorgen_pair[0], errorgen_pair[1], addl_weight=0.5, 
+                                                                               identity=identity, truncation_threshold=truncation_threshold))
+                
+    # loop through all of the elements of commuted_errorgen_list and instantiate a dictionary with the requisite keys.
+    second_order_comm_dict = {error_tuple[0]: 0 for error_tuple in commuted_errgen_list}
+
+    # Add all of these error generators to the working dictionary of updated error generators and weights.
+    # There may be duplicates, which should be summed together.
+    for error_tuple in commuted_errgen_list:
+        second_order_comm_dict[error_tuple[0]] += error_tuple[1]
+    # truncate any terms which are below the truncation threshold following
+    # aggregation.
+    second_order_comm_dict = {key: val for key, val in second_order_comm_dict.items() if abs(val)>truncation_threshold}
+
+    return second_order_comm_dict
+
+def zassenhaus_formula(errorgen_groups: list[dict[_LSE, float]], zassenhaus_order: Literal[1,2] = 1, 
+                      truncation_threshold: float = 1e-14) -> list[dict[_LSE, float]]:
+    """
+    Function for computing the nth-order Zassenhaus formula for a set of error generators.
+    Please see https://en.wikipedia.org/wiki/Baker%E2%80%93Campbell%E2%80%93Hausdorff_formula#Zassenhaus_formula
+    for more information on this approxmation.
+
+    Given an exponentiated sum of operators exp(X1+X2+...+Xn) the Zassenhaus formula gives one disentangle this
+    exponentiated sum into a product of exponentiated operators given by exp(X1)exp(X2)...exp(Xn)\prod_{k=2}^\infty exp(W_k) where
+    the W_k's are Lie polynomials (nested commutators) in the operators {X1, ..., Xn}, and the value of k we go up to gives the order of the
+    approximation. 
+
+    errorgen_groups : list of dicts
+        List of dictionaries of the error generator coefficients and rates for a group of error generators corresponding
+        to each of the operators in the sum to perform Zassenhaus with respect to. 
+        The error generator coefficients are represented using LocalStimErrorgenLabel.
+    
+    zassenhaus_order : int, optional (default 1)
+        Order of the Zassenahaus formula to compute. Currently supports up to second order. Note that
+        zassenhaus_order = 1 corresponds simply to the original list of error generator in
+        errorgen_groups, and in this case we simply return errorgen_groups as-is (not a copy).
+    
+    truncation_threshold : float, optional (default 1e-14)
+        Threshold for which any error generators with magnitudes below this value
+        are truncated.
+
+    Returns
+    -------
+    zassenhaus_formula_dicts : list of dicts
+        A list of dictionaries, each corresponding to one of the operators which is exponentiated in 
+        the product as output by the Zassenhaus formula.
+    """
+    zassenhaus_formula_dicts = []
+    
+    # first-order zassenhaus terms are just the original list of error generators in errorgen_groups.
+    if zassenhaus_order >= 1:
+        # allow short-circuiting for zassenhaus_order==1.
+        if zassenhaus_order==1:
+            return errorgen_groups
+        else:
+            zassenhaus_formula_dicts.extend(errorgen_groups)
+
+    # second-order zassenhaus term: (1/2)\sum_{1<=i<j<=n}[X_j,X_i]
+    # this is identical to the second order magnus term, so reuse that code.
+    if zassenhaus_order>=2:
+        # precompute an identity string for comparisons in commutator calculations.
+        if errorgen_groups:
+            for layer in errorgen_groups:
+                if layer:
+                    identity = stim.PauliString('I'*len(next(iter(layer)).basis_element_labels[0]))
+                    break
+        second_order_comm_dict = _second_order_magnus_term(errorgen_groups, identity, truncation_threshold)
+        zassenhaus_formula_dicts.append(second_order_comm_dict)
+
+    if zassenhaus_order>=3:
+        raise NotImplementedError('The Zassenhaus formula is currently only implemented up to second-order.')  
+         
+    return zassenhaus_formula_dicts
 
 # TODO: Refactor a bunch of the code in this module to use this helper function.
 # define a helper function to do a layerwise commutator accumulating all of the pairwise terms into a single list.
@@ -6495,7 +6575,6 @@ def errorgen_pauli_action(errorgen: _LSE, pauli: stim.PauliString) -> tuple[floa
     
     return ret
 
-
 def errorgen_layer_to_matrix(errorgen_layer, num_qubits, errorgen_matrix_dict=None, sslbls=None):
     """
     Converts an iterable over error generator coefficients and rates into the corresponding
@@ -6991,7 +7070,74 @@ def errorgen_pauli_action_numerical(errorgen: _EEL, pauli: stim.PauliString) -> 
 
     return weighted_pauli
 
+def zassenhaus_formula_numerical(errorgen_groups: list[dict[_EEL, float]], error_propagator: _epropagator.ErrorGeneratorPropagator, 
+                                 zassenhaus_order: Literal[1,2] = 1) -> list[_np.ndarray]:
+    """
+    Function for numerically computing the nth-order Zassenhaus formula for a set of error generators.
+    Please see https://en.wikipedia.org/wiki/Baker%E2%80%93Campbell%E2%80%93Hausdorff_formula#Zassenhaus_formula
+    for more information on this approxmation.
 
+    Due to the numerical nature of this implementation it is not meant for efficient computation and
+    primarily supports testing.
+
+    Parameters
+    ----------
+    errorgen_groups : list of dicts
+        List of dictionaries of the error generator coefficients and rates for a group of error generators corresponding
+        to each of the operators in the sum to perform Zassenhaus with respect to. 
+        The error generator coefficients are represented using LocalStimErrorgenLabel.
+    
+    zassenhaus_order : int, optional (default 1)
+        Order of the Zassenahaus formula to compute, currently supports up to second order.
+    
+    Returns
+    -------
+    zassenhaus_formula_arrays : list of numpy.ndarrays
+        A list of numpy arrays, each corresponding to one of the operators which is exponentiated in 
+        the product as output by the Zassenhaus formula.    
+    """
+
+    # Need to build an appropriate basis for getting the error generator matrices.
+    # accumulate the error generator coefficients needed.
+    collected_coeffs = []
+    for layer in errorgen_groups:
+        for coeff in layer.keys():
+            collected_coeffs.append(coeff.to_local_eel())
+    # only want the unique ones.
+    unique_coeffs = list(set(collected_coeffs))
+    
+    num_qubits = len(error_propagator.model.state_space.qubit_labels)
+    
+    errorgen_basis = _ExplicitElementaryErrorgenBasis(_QubitSpace(num_qubits), unique_coeffs, basis_1q=_BuiltinBasis('PP', 4))
+    
+    # iterate through each of the propagated error generator layers and turn these into dense numpy arrays
+    errorgen_group_mats = []
+    for layer in errorgen_groups:
+        errorgen_group_mats.append(error_propagator.errorgen_layer_dict_to_errorgen(layer, mx_basis='pp'))
+
+    zassenhaus_formula_arrays = []
+
+    if zassenhaus_order>=1:
+        if zassenhaus_order==1:
+            return errorgen_group_mats
+        else:
+            zassenhaus_formula_arrays.extend(errorgen_group_mats)
+
+    if zassenhaus_order>=2:
+        second_order_correction_array = _np.zeros((4**num_qubits, 4**num_qubits), dtype=_np.complex128)
+        errorgen_pairs = []
+        for i in range(len(errorgen_groups)):
+            for j in range(i):
+                errorgen_pairs.append((errorgen_group_mats[i], errorgen_group_mats[j]))
+        for errorgen_pair in errorgen_pairs:
+            second_order_correction_array += .5*_matrix_commutator(errorgen_pair[0], errorgen_pair[1])
+        zassenhaus_formula_arrays.append(second_order_correction_array)
+
+    if zassenhaus_order>=3:
+        raise NotImplementedError('The Zassenhaus formula is currently only implemented up to second-order.')    
+
+    return zassenhaus_formula_arrays
+    
 def _matrix_commutator(mat1, mat2):
     return mat1@mat2 - mat2@mat1
 
@@ -7122,81 +7268,118 @@ def bitstring_to_tableau(bitstring):
     pauli_tableau = pauli_string.to_tableau()
     return pauli_tableau
 
-
 # Modified from Gidney 
 # https://quantumcomputing.stackexchange.com/questions/34610/get-the-amplitude-of-a-computational-basis-in-stim
-def amplitude_of_state(tableau, desired_state):
+def slow_amplitude_of_state(tableau: Union[stim.Tableau, stim.TableauSimulator], desired_state: str, only_phase: bool) -> complex:
     """
     Get the amplitude of a particular computational basis state for given
     stabilizer state.
 
+    Note: This is a pure python implementation of this function. For best performance see the
+    optimized cython implementation tools.fasterrgencalc.fast_amplitude_of_state.
+
     Parameters
     ----------
-    tableau : stim.Tableau
+    tableau : stim.Tableau or stim.TableauSimulator
         Stim tableau corresponding to the stabilizer state we wish to extract
-        the amplitude from.
+        the amplitude from. If a stim.TableauSimulator it is assumed that this
+        simulator has already had the appropriate inverse tableau value instantiated.
     
     desired_state : str
         String of 0's and 1's corresponding to the computational basis state to extract the amplitude for.
-    """
 
-    sim = stim.TableauSimulator()
-    sim.set_inverse_tableau(tableau**-1)
+    only_phase : bool
+        If True then on the phase of the complex amplitude is returned. In many cases this phase
+        is the only information required, and for many qubits amplitude of any given state may
+        underflow.        
+        
+    Returns
+    -------
+    amplitude : complex
+        Amplitude of the desired computational basis state for a given stabilizer state.
+    """
+    if isinstance(tableau, stim.Tableau):
+        sim = stim.TableauSimulator()
+        orig_tableau_inverse = tableau**-1
+        sim.set_inverse_tableau(orig_tableau_inverse)
+    elif isinstance(tableau, stim.TableauSimulator):
+        sim = tableau
+        orig_tableau_inverse = sim.current_inverse_tableau()
+    else:
+        raise ValueError(f'Unsupported input type {type(tableau)} for `tableau`. Supported options are stim.Tableau and stim.TableauSimulator')
+    
     n = sim.num_qubits
     
     # convert desired state into a list of bools
     desired_state = [desired_state[i] == '1' for i in range(n)]
     
     #  Determine the magnitude of the target state.
-    copy = sim.copy()
     num_random = 0
     for q in range(n):
         desired_bit = desired_state[q]
-        z = copy.peek_z(q)
+        z = sim.peek_z(q)
         forced_bit = z == -1
         if z == 0:
             num_random += 1
         elif desired_bit != forced_bit: # forced bit is true if the state is |1>, so this is checking whether the bits match.
+            #only put things back the way they were if tableau was a stim.TableauSimulator, otherwise we can avoid the overhead
+            #since sim is local to this function call.
+            if isinstance(tableau, stim.TableauSimulator):
+                tableau.set_inverse_tableau(orig_tableau_inverse)
             return 0
-        copy.postselect_z(q, desired_value=desired_bit)
-    magnitude = 2**-(num_random / 2)
+        sim.postselect_z(q, desired_value=desired_bit)
+    if only_phase:
+        magnitude = 1
+    else:
+        if num_random > 2148:
+            raise RuntimeError('Number of random bits is greater than 2148, magnitude of amplitude will underflow!')
+        magnitude = 2**-(num_random / 2)
     #  For a phase reference, use the smallest state with non-zero amplitude.
-    copy = sim.copy()
+    sim.set_inverse_tableau(orig_tableau_inverse)
     ref_state = [False]*n
     for q in range(n):
-        z = copy.peek_z(q)
+        z = sim.peek_z(q)
         forced_bit = z == -1
         ref_state[q] = forced_bit
-        copy.postselect_z(q, desired_value=forced_bit)
+        sim.postselect_z(q, desired_value=forced_bit)
     if ref_state == desired_state:
+        #only put things back the way they were if tableau was a stim.TableauSimulator, otherwise we can avoid the overhead
+        #since sim is local to this function call.
+        if isinstance(tableau, stim.TableauSimulator):
+            tableau.set_inverse_tableau(orig_tableau_inverse)
         return magnitude
 
     #  Postselect away states that aren't the desired or reference states.
     #  Also move the ref state to |00..00> and the desired state to |00..01>.
-    copy = sim.copy()
+    sim.set_inverse_tableau(orig_tableau_inverse)
     found_difference = False
     for q in range(n):
         desired_bit =  desired_state[q]
         ref_bit = ref_state[q]
         if desired_bit == ref_bit:
-            copy.postselect_z(q, desired_value=ref_bit)
+            sim.postselect_z(q, desired_value=ref_bit)
             if desired_bit:
-                copy.x(q)
+                sim.x(q)
         elif not found_difference:
             found_difference = True
             if q:
-                copy.swap(0, q)
+                sim.swap(0, q)
             if ref_bit:
-                copy.x(0)
+                sim.x(0)
         else:
             #  Remove difference between target state and ref state at this bit.
-            copy.cnot(0, q)
-            copy.postselect_z(q, desired_value=ref_bit)
+            sim.cnot(0, q)
+            sim.postselect_z(q, desired_value=ref_bit)
 
     #  The phase difference between |00..00> and |00..01> is what we want.
     #  Since other states are gone, this is the bloch vector phase of qubit 0.
     assert found_difference
-    s = str(copy.peek_bloch(0))
+    s = str(sim.peek_bloch(0))
+    
+    #only put things back the way they were if tableau was a stim.TableauSimulator, otherwise we can avoid the overhead
+    #since sim is local to this function call.
+    if isinstance(tableau, stim.TableauSimulator):
+        tableau.set_inverse_tableau(orig_tableau_inverse)
     
     if s == "+X":
         phase_factor = 1
@@ -7209,10 +7392,20 @@ def amplitude_of_state(tableau, desired_state):
     
     return phase_factor*magnitude
 
-def pauli_phase_update(pauli, bitstring, dual=False):
+#define module-wide constants for pauli-phase updates
+PAULI_PHASES_0 = (1, 1, 1j, 1)
+PAULI_PHASES_1 = (1, 1, -1j, -1)
+PAULI_PHASES_0_DUAL = (1, 1, -1j, 1)
+PAULI_PHASES_1_DUAL = (1, 1, 1j, -1)
+PAULI_FLIPS = (False, True, True, False)
+
+def slow_pauli_phase_update(pauli: Union[str, stim.PauliString], bitstring: str, dual: bool=False) -> tuple[complex, str]:
     """
     Takes as input a pauli and a bit string and computes the output bitstring
     and the overall phase that bit string accumulates.
+
+    Note: This is a pure python implementation of this function. For best performance see the
+    optimized cython implementation tools.fasterrgencalc.fast_pauli_phase_update.
     
     Parameters
     ----------
@@ -7237,22 +7430,22 @@ def pauli_phase_update(pauli, bitstring, dual=False):
     if not dual:
         # list of phase correction for each pauli (conditional on 0)
         # Read [I, X, Y, Z]
-        pauli_phases_0 = [1, 1, 1j, 1]
+        pauli_phases_0 = PAULI_PHASES_0
         
         # list of the phase correction for each pauli (conditional on 1)
         # Read [I, X, Y, Z]
-        pauli_phases_1 = [1, 1, -1j, -1]
+        pauli_phases_1 = PAULI_PHASES_1
     else:
         # list of phase correction for each pauli (conditional on 0)
         # Read [I, X, Y, Z]
-        pauli_phases_0 = [1, 1, -1j, 1]
+        pauli_phases_0 = PAULI_PHASES_0_DUAL
         
         # list of the phase correction for each pauli (conditional on 1)
         # Read [I, X, Y, Z]
-        pauli_phases_1 = [1, 1, 1j, -1]
+        pauli_phases_1 = PAULI_PHASES_1_DUAL
 
     # list of bools corresponding to whether each pauli flips the target bit
-    pauli_flips = [False, True, True, False]
+    pauli_flips = PAULI_FLIPS
     
     overall_phase = 1
     indices_to_flip = []
@@ -7274,15 +7467,62 @@ def pauli_phase_update(pauli, bitstring, dual=False):
     
     return overall_phase, output_bitstring
 
-# TODO: This function needs a more evocative name
-def phi(tableau, desired_bitstring, P, Q):
+def slow_pauli_phase_update_all_zeros(pauli: Union[str, stim.PauliString], dual: bool=False) -> tuple[complex, str]:
+    """
+    Specialized version of `pauli_phase_update` for the case of the all-zeros
+    bitstring which is more computationally efficient. Takes as input a pauli and
+    computes the output bitstring and overall phase accumulated when applied to the
+    all-zeros bit string.
+
+    Note: This is a pure python implementation of this function. For best performance see the
+    optimized cython implementation tools.fasterrgencalc.fast_pauli_phase_update.
+    
+    Parameters
+    ----------
+    pauli : str or stim.PauliString
+        Pauli to apply
+        
+    dual : bool, optional (default False)
+        If True then then the pauli is acting to the left on a row vector.
+    Returns
+    -------
+    Tuple[complex, str]
+        A tuple (overall_phase, output_bitstring) where overall_phase is the accumulated phase,
+        and output_bitstring is the updated bitstring.
+    """
+    if isinstance(pauli, str):
+        pauli = stim.PauliString(pauli)
+    
+    n = len(pauli)
+    overall_phase = 1
+    # We start with all zeros as a list of characters.
+    output_chars = ['0'] * n
+
+    # Select the proper phase table for bits which are all False.
+    if not dual:
+        phases = PAULI_PHASES_0
+    else:
+        phases = PAULI_PHASES_0_DUAL
+
+    # For an all zero bitstring, each bit is False; so we use phases[elem] for each pauli element.
+    for i, elem in enumerate(pauli):
+        overall_phase *= phases[elem]
+        # Flip the bit if the pauli at this index indicates a flip.
+        if PAULI_FLIPS[elem]:
+            output_chars[i] = '1'
+    overall_phase *= pauli.sign
+    return overall_phase, "".join(output_chars)
+
+def phi(tableau: Union[stim.Tableau, stim.TableauSimulator], desired_bitstring: str, P: Union[str, stim.PauliString], Q: Union[str, stim.PauliString]) -> complex:
     """
     This function computes a quantity whose value is used in expression for the sensitivity of probabilities to error generators.
     
     Parameters
     ----------
-    tableau : stim.Tableau
-        A stim Tableau corresponding to the input stabilizer state. 
+    tableau : stim.Tableau or stim.TableauSimulator
+        A stim Tableau or stim TableauSimulator corresponding to the input stabilizer state.
+        If a stim.TableauSimulator it is assumed that this simulator has already had the appropriate 
+        inverse tableau value instantiated.
 
     desired_bitstring : str
         A string of zeros and ones corresponding to the bit string being measured.
@@ -7313,36 +7553,139 @@ def phi(tableau, desired_bitstring, P, Q):
     # now get the bit strings which need their amplitudes extracted from the input stabilizer state and get
     # the corresponding phase corrections.
     all_zeros = '0'*len(eff_P)
-    phase1, bitstring1 = pauli_phase_update(eff_P, all_zeros, dual=True)
-    phase2, bitstring2 = pauli_phase_update(eff_Q, all_zeros)
+    phase1, bitstring1 = pauli_phase_update(str(eff_P), all_zeros, dual=True)
+    phase2, bitstring2 = pauli_phase_update(str(eff_Q), all_zeros)
 
-    # get the amplitude of these two bitstrings in the stabilizer state.
-    amp1 = amplitude_of_state(tableau, bitstring1)
-    amp2 = amplitude_of_state(tableau, bitstring2).conjugate()  # The second amplitude also needs a complex conjugate applied
-        
+    amp1 = amplitude_of_state(tableau, bitstring1, only_phase=True)
+    amp2 = amplitude_of_state(tableau, bitstring2, only_phase=True).conjugate()  # The second amplitude also needs a complex conjugate applied
+
     # now apply the phase corrections. 
     amp1*=phase1
     amp2*=phase2
      
     # calculate phi.
     phi = amp1*amp2
+    return phi
+
+def slow_bulk_phi(tableau: Union[stim.Tableau, stim.TableauSimulator],
+             desired_bitstring: str,
+             Ps: list[Union[str, stim.PauliString]],
+             Qs: list[Union[str, stim.PauliString]]) -> _np.ndarray[_np.complex128]:
+    """
+    Computes the phi function for multiple (P, Q) pairs at once while caching and reusing intermediate
+    values computed via pauli_phase_update_all_zeros and amplitude_of_state.
+
+    Parameters
+    ----------
+    tableau : stim.Tableau or stim.TableauSimulator
+        A stim Tableau or TableauSimulator corresponding to the input stabilizer state.
     
-    # phi should ultimately be either 0, +/-1 or +/-i, scaling might overflow
-    # so avoid scaling and just identify which of these it should be. For really
-    # tiny phi this may still have an issue...
-    if abs(phi)>1e-14:
-        if abs(phi.real) > 1e-14:
-            if phi.real > 0:
-                return complex(1)
-            else:
-                return complex(-1)
-        else:
-            if phi.imag > 0:
-                return 1j
-            else:
-                return -1j 
-    else:
-        return complex(0)
+    desired_bitstring : str
+        A string of zeros and ones corresponding to the measured bitstring.
+    
+    Ps : list[Union[str, stim.PauliString]]
+        List of Pauli string indices for the first operator in each phi computation.
+        Can be either a string or a stim.PauliString (but all values are assumed to be
+        the same type).
+    
+    Qs : list[Union[str, stim.PauliString]]
+        List of Pauli string indices for the second operator in each phi computation.
+        Can be either a string or a stim.PauliString (but all values are assumed to be
+        the same type).
+
+    Returns
+    -------
+    np.ndarray[np.complex128]
+        An array of computed phi values. Each phi will be one of {0, ±1, ±i}.
+    """
+    if len(Ps) != len(Qs):
+        raise ValueError("Lists of Ps and Qs must be of the same length.")
+    if len(Ps) == 0:
+        return []
+
+    num_qubits = len(desired_bitstring)
+
+    # (1) Build the initial pauli string mapping the all-zeros state to the desired_bitstring.
+    initial_pauli_str = stim.PauliString(''.join('I' if bit == '0' else 'X' for bit in desired_bitstring))
+
+    # (2) Convert the input Ps and Qs to stim.PauliString objects and cache unique ones.
+    unique_Ps: dict[str, stim.PauliString] = {}
+    unique_Qs: dict[str, stim.PauliString] = {}
+
+    list_P_str = []  # will store canonical representation of the original P for every pair
+    list_Q_str = []  # same for Q
+
+    if not isinstance(Ps[0], stim.PauliString):
+        Ps = [stim.PauliString(P_val) for P_val in Ps]
+    if not isinstance(Qs[0], stim.PauliString):
+        Qs = [stim.PauliString(Q_val) for Q_val in Qs]
+    
+    for P_val, Q_val in zip(Ps, Qs):
+        # Use their string representation as canonical keys.
+        key_P = str(P_val)
+        key_Q = str(Q_val)
+        list_P_str.append(key_P)
+        list_Q_str.append(key_Q)
+        unique_Ps[key_P] = P_val
+        unique_Qs[key_Q] = Q_val
+
+    # (3) Compute effective pauli strings for each unique P and unique Q.
+    #    They are given by:
+    #         effective P = initial_pauli_str * P  with dual=True when calling pauli_phase_update.
+    #         effective Q = Q * initial_pauli_str  (default dual=False).
+    eff_P_phase_cache: dict[str, tuple[complex, str]] = {}
+    eff_Q_phase_cache: dict[str, tuple[complex, str]] = {}
+
+    # For each unique P, compute effective pauli string and then call pauli_phase_update.
+    unique_eff_Ps_by_unique_Ps = {}
+    for key, P_obj in unique_Ps.items():
+        eff_P = initial_pauli_str * P_obj
+        # Use canonical string representation of effective pauli as key.
+        key_eff = str(eff_P)
+        # Process pauli_phase_update for effective P with dual=True.
+        eff_P_phase_cache[key_eff] = pauli_phase_update_all_zeros(key_eff, dual=True)
+        unique_eff_Ps_by_unique_Ps[key] = key_eff
+
+    # For each unique Q, do similar.
+    unique_eff_Qs_by_unique_Qs = {}
+    for key, Q_obj in unique_Qs.items():
+        eff_Q = Q_obj * initial_pauli_str
+        key_eff = str(eff_Q)
+        eff_Q_phase_cache[key_eff] = pauli_phase_update_all_zeros(key_eff)
+        unique_eff_Qs_by_unique_Qs[key] = key_eff        
+
+    # (4) Now, from the phase update results, collect all unique output bitstrings.
+    unique_bitstrings = set()
+    for phase, bitstr in eff_P_phase_cache.values():
+        unique_bitstrings.add(bitstr)
+    for phase, bitstr in eff_Q_phase_cache.values():
+        unique_bitstrings.add(bitstr)
+
+    # Cache amplitude_of_state for each unique bitstring.
+    cached_amplitudes: dict[str, complex] = {}
+    for bitstr in unique_bitstrings:
+        cached_amplitudes[bitstr] = amplitude_of_state(tableau, bitstr, True)
+        
+    # (5) Assemble the result for each (P, Q) pair.
+    # Retrieve the effective pauli's phase update using the already-computed caches.
+    result_phis = _np.empty(len(list_P_str), dtype= _np.complex128)
+    for i, (key_P, key_Q) in enumerate(zip(list_P_str, list_Q_str)):
+        # Get the effective pauli for P corresponding to the original P key.
+        key_eff_P = unique_eff_Ps_by_unique_Ps[key_P]
+        phase1, bitstring1 = eff_P_phase_cache[key_eff_P]
+
+        # Similarly for Q.
+        key_eff_Q = unique_eff_Qs_by_unique_Qs[key_Q]
+        phase2, bitstring2 = eff_Q_phase_cache[key_eff_Q]
+
+        amp1 = cached_amplitudes[bitstring1]
+        amp2 = cached_amplitudes[bitstring2]
+
+        # Note the conjugation for Q's amplitude per phi logic.
+        amp_val = (phase1 * amp1) * (phase2 * amp2.conjugate())
+        result_phis[i] = amp_val
+
+    return result_phis
 
 # helper function for numerically computing phi, primarily used for testing.
 def phi_numerical(tableau, desired_bitstring, P, Q):
@@ -7370,7 +7713,6 @@ def phi_numerical(tableau, desired_bitstring, P, Q):
     
     # start by getting the pauli string which maps the all-zeros string to the target bitstring.
     initial_pauli_string = stim.PauliString(''.join(['I' if bit=='0' else 'X' for bit in desired_bitstring])).to_unitary_matrix(endian = 'big')
-    
 
     # map P and Q to stim.PauliString if needed.
     if isinstance(P, str):
@@ -7398,13 +7740,13 @@ def phi_numerical(tableau, desired_bitstring, P, Q):
 
     return phi*scale
 
-def alpha(errorgen, tableau, desired_bitstring):
+def alpha(errorgen: Union[_LSE, _LEEL], tableau: stim.Tableau, desired_bitstring: str) -> float:
     """
     First-order error generator sensitivity function for probability.
     
     Parameters
     ----------
-    errorgen : `ElementaryErrorgenLabel`
+    errorgen : `LocalStimElementaryErrorgenLabel` or `LocalElementaryErrorgenLabel`
         Error generator label for which to calculate sensitivity.
     
     tableau : stim.Tableau
@@ -7412,6 +7754,12 @@ def alpha(errorgen, tableau, desired_bitstring):
         
     desired_bitstring : str
         Bit string to calculate the sensitivity for.
+
+    Returns
+    -------
+    sensitivity : float
+        Linear sensitivity of the probability of the desired bitstring to the
+        specified elementary error generator for the given stabilizer state.
     """
     
     errgen_type = errorgen.errorgen_type
@@ -7441,6 +7789,109 @@ def alpha(errorgen, tableau, desired_bitstring):
         else:
             sensitivity = 2*first_term.imag
     return sensitivity
+
+def slow_bulk_alpha(errorgens: Iterable[_LSE], tableau: stim.Tableau, desired_bitstrings: list[str]) -> _np.ndarray[_np.double]:
+    """
+    First-order error generator sensitivity function for probability.
+    
+    Parameters
+    ----------
+    errorgens : iterable of `LocalStimErrogenLabels`.
+        Error generator label for which to calculate sensitivity.
+    
+    tableau : stim.Tableau
+        Stim Tableau corresponding to the stabilizer state to calculate the sensitivity for.
+        
+    desired_bitstrings : list of str
+        Bit string to calculate the sensitivity for.
+
+    Returns
+    -------
+    sensitivities_by_bitstring : np.ndarray[np.double]
+        Linear sensitivities of the probability of each desired bitstring to the
+        specified elementary error generators for the given stabilizer state.
+        Result is returned as a two-dimensional numpy array, with each row being
+        indexed by a bitstring, and each column by an error generator.
+    """
+    if not errorgens or not desired_bitstrings:
+        return _np.array([], dtype=_np.double)
+
+    #pre-compute the stim.TableauSimulator we'll need for all of the computations.
+    sim = stim.TableauSimulator()
+    sim.set_inverse_tableau(tableau**-1)
+
+    #pre-compute an appropriate length identity pauli string.
+    identity_pauli = stim.PauliString('I'*sim.num_qubits)
+
+    #gather all of the Ps and Qs we need for all of the error generators by looping through the errorgens list
+    #so we can compute all of the phi values all at once for each bitstring.
+    errgen_types = []
+    Ps = []
+    Qs = []
+    for errorgen in errorgens:
+        errgen_type = errorgen.errorgen_type
+        basis_element_labels = errorgen.basis_element_labels
+        if not isinstance(basis_element_labels[0], stim.PauliString):
+            basis_element_labels = tuple([stim.PauliString(lbl) for lbl in basis_element_labels])
+
+        if errgen_type == 'H':
+            Ps.append(basis_element_labels[0])
+            Qs.append(identity_pauli)
+            errgen_types.append(errgen_type)
+        elif errgen_type == 'S':
+            Ps.append(basis_element_labels[0])
+            Qs.append(basis_element_labels[0])
+            Ps.append(identity_pauli)
+            Qs.append(identity_pauli)
+            errgen_types.append(errgen_type)
+        elif errgen_type == 'C':
+            Ps.append(basis_element_labels[0])
+            Qs.append(basis_element_labels[1])
+            if basis_element_labels[0].commutes(basis_element_labels[1]):
+                Ps.append(basis_element_labels[0]*basis_element_labels[1])
+                Qs.append(identity_pauli)
+                errgen_types.append('C1') #label this differently as a flag we need the second term later on
+            else:
+                errgen_types.append(errgen_type)        
+        else: # A
+            Ps.append(basis_element_labels[1])
+            Qs.append(basis_element_labels[0])
+            if not basis_element_labels[0].commutes(basis_element_labels[1]):
+                Ps.append(basis_element_labels[1]*basis_element_labels[0])
+                Qs.append(identity_pauli)
+                errgen_types.append('A1') #label this differently as a flag we need the second term later on
+            else:
+                errgen_types.append(errgen_type)
+
+    sensitivities_by_bitstring = _np.empty((len(desired_bitstrings), len(errorgens)), dtype=_np.double)
+    #bulk compute the phi values for each bitstring
+    for i, desired_bitstring in enumerate(desired_bitstrings):
+        phis = bulk_phi(sim, desired_bitstring, Ps, Qs)
+
+        #loop through all of the phi values and get the sensitivity for each error generator.
+        running_phi_index = 0
+        for j, errgen_type in enumerate(errgen_types):            
+            if errgen_type == 'H':
+                sensitivity = 2*phis[running_phi_index].imag
+                running_phi_index+=1
+            elif errgen_type == 'S':
+                sensitivity = (phis[running_phi_index] - phis[running_phi_index+1]).real
+                running_phi_index+=2                    
+            elif errgen_type == 'C': 
+                sensitivity = 2*phis[running_phi_index].real
+                running_phi_index+=1
+            elif errgen_type == 'C1': #includes additional term because P and Q commuted
+                sensitivity = 2*phis[running_phi_index].real - 2*phis[running_phi_index+1].real
+                running_phi_index+=2
+            elif errgen_type=='A':
+                sensitivity = 2*phis[running_phi_index].imag
+                running_phi_index+=1
+            else: # A1, includes additional term because P and Q anticommuted
+                sensitivities_by_bitstring = 2*(phis[running_phi_index] + phis[running_phi_index+1]).imag
+                running_phi_index+=2
+            sensitivities_by_bitstring[i,j] = sensitivity
+
+    return sensitivities_by_bitstring
 
 def alpha_numerical(errorgen, tableau, desired_bitstring):
     """
@@ -7491,13 +7942,13 @@ def alpha_numerical(errorgen, tableau, desired_bitstring):
     
     return alpha
 
-def alpha_pauli(errorgen, tableau, pauli):
+def alpha_pauli(errorgen: _LSE, tableau: stim.Tableau, pauli: stim.PauliString) -> float:
     """
     First-order error generator sensitivity function for pauli expectations.
     
     Parameters
     ----------
-    errorgen : `ElementaryErrorgenLabel`
+    errorgen : `LocalStimElementaryErrorgenLabel` or `LocalElementaryErrorgenLabel`
         Error generator label for which to calculate sensitivity.
     
     tableau : stim.Tableau
@@ -7505,6 +7956,12 @@ def alpha_pauli(errorgen, tableau, pauli):
         
     pauli : stim.PauliString
         Pauli to calculate the sensitivity for.
+
+    Returns
+    -------
+    float
+        Linear sensitivity of the expectation value of the desired pauli observable to the
+        specified elementary error generator for the given stabilizer state.
     """
     
     sim = stim.TableauSimulator()
@@ -7523,7 +7980,7 @@ def alpha_pauli(errorgen, tableau, pauli):
         if pauli_bel_0_comm is not None:
             sign = -1j*pauli_bel_0_comm[0]
             expectation  = sim.peek_observable_expectation(pauli_bel_0_comm[1])
-            return _np.real_if_close(sign*expectation)
+            return _real_if_close(sign*expectation)
         else: 
             return 0 
     elif errgen_type == 'S':
@@ -7531,7 +7988,7 @@ def alpha_pauli(errorgen, tableau, pauli):
             return 0
         else:
             expectation  = sim.peek_observable_expectation(pauli)
-            return _np.real_if_close(-2*expectation)
+            return _real_if_close(-2*expectation)
     elif errgen_type == 'C': 
         A = basis_element_labels[0]
         B = basis_element_labels[1]
@@ -7546,7 +8003,7 @@ def alpha_pauli(errorgen, tableau, pauli):
                 else:
                     ABP = pauli_product(A*B, pauli)
                     expectation = ABP[0]*sim.peek_observable_expectation(ABP[1])
-                    return _np.real_if_close(-4*expectation)
+                    return _real_if_close(-4*expectation)
         else: # {A,B} = 0
             if com_AP:
                 if com_BP:
@@ -7554,12 +8011,12 @@ def alpha_pauli(errorgen, tableau, pauli):
                 else:
                     ABP = pauli_product(A*B, pauli)
                     expectation = ABP[0]*sim.peek_observable_expectation(ABP[1])
-                    return _np.real_if_close(-2*expectation)
+                    return _real_if_close(-2*expectation)
             else:
                 if com_BP:
                     ABP = pauli_product(A*B, pauli)
                     expectation = ABP[0]*sim.peek_observable_expectation(ABP[1])
-                    return _np.real_if_close(2*expectation)
+                    return _real_if_close(2*expectation)
                 else:
                     return 0
     else: # A
@@ -7574,12 +8031,12 @@ def alpha_pauli(errorgen, tableau, pauli):
                 else:
                     ABP = pauli_product(A*B, pauli)
                     expectation = ABP[0]*sim.peek_observable_expectation(ABP[1])
-                    return _np.real_if_close(1j*2*expectation)
+                    return _real_if_close(1j*2*expectation)
             else:
                 if com_BP:
                     ABP = pauli_product(A*B, pauli)
                     expectation = ABP[0]*sim.peek_observable_expectation(ABP[1])
-                    return _np.real_if_close(-1j*2*expectation)
+                    return _real_if_close(-1j*2*expectation)
                 else:
                     return 0
         else: # {A,B} = 0
@@ -7591,9 +8048,9 @@ def alpha_pauli(errorgen, tableau, pauli):
                 else:
                     ABP = pauli_product(A*B, pauli)
                     expectation = ABP[0]*sim.peek_observable_expectation(ABP[1])
-                    return _np.real_if_close(1j*4*expectation)
+                    return _real_if_close(1j*4*expectation)
 
-def alpha_pauli_numerical(errorgen, tableau, pauli):
+def alpha_pauli_numerical(errorgen: Union[_LSE, _LEEL], tableau: stim.Tableau, pauli: stim.PauliString):
     """
     First-order error generator sensitivity function for pauli expectatons. This implementation calculates
     this quantity numerically, and as such is primarily intended for used as parting of testing
@@ -7640,7 +8097,134 @@ def alpha_pauli_numerical(errorgen, tableau, pauli):
     
     return alpha
 
-def _bitstring_to_int(bitstring) -> int:
+def _real_if_close(val: complex) -> float:
+    """
+    Helper function which returns the real part of a complex number and raises an exception
+    if the imaginary part is non-negligible (greater than 1e-14).
+
+    Parameters
+    ----------
+    val : complex
+        Complex number to convert to a real float.
+    """
+    val_imag = val.imag
+    if val_imag > 1e-14 or val_imag < -1e-14:
+        raise ValueError(f'Imaginary part of val is {val_imag}, and is too large (abs(val.imag)>1e-14) to cast to real.')
+    else:
+        return val.real
+
+def slow_bulk_alpha_pauli(errorgens: Iterable[_LSE], tableau: stim.Tableau, paulis: list[stim.PauliString]) -> _np.ndarray[_np.double]:
+    """
+    First-order error generator sensitivity function for pauli expectations.
+    
+    Parameters
+    ----------
+    errorgens : iterable of `LocalStimElementaryErrorgenLabel`
+        Error generator label for which to calculate sensitivity.
+    
+    tableau : stim.Tableau
+        Stim Tableau corresponding to the stabilizer state to calculate the sensitivity for.
+        
+    pauli : stim.PauliString
+        Pauli to calculate the sensitivity for.
+
+    Returns
+    -------
+    np.ndarray[np.double]
+        Linear sensitivities of the expectation values of the desired pauli observables to the
+        specified elementary error generators for the given stabilizer state. Returned as a
+        two dimensional numpy array, with rows indexed by paulis, and columns indexed by error
+        generators.
+    """
+    sim = stim.TableauSimulator()
+    sim.set_inverse_tableau(tableau**-1)
+
+    sensitivities_by_pauli = _np.empty((len(paulis), len(errorgens)), dtype=_np.double)
+
+    for i, pauli in enumerate(paulis):
+        for j, errorgen in enumerate(errorgens):
+            errgen_type = errorgen.errorgen_type
+            basis_element_labels = errorgen.basis_element_labels
+            if errgen_type == 'H':
+                pauli_bel_0_comm = com(pauli, basis_element_labels[0])
+                if pauli_bel_0_comm is not None:
+                    sign = -1j*pauli_bel_0_comm[0]
+                    expectation  = sim.peek_observable_expectation(pauli_bel_0_comm[1])
+                    sensitivities_by_pauli[i,j] = _real_if_close(sign*expectation)
+                else: 
+                    sensitivities_by_pauli[i,j] = 0 
+            elif errgen_type == 'S':
+                if pauli.commutes(basis_element_labels[0]):
+                    sensitivities_by_pauli[i,j] = 0
+                else:
+                    expectation  = sim.peek_observable_expectation(pauli)
+                    sensitivities_by_pauli[i,j] = _real_if_close(-2*expectation)
+            elif errgen_type == 'C': 
+                A = basis_element_labels[0]
+                B = basis_element_labels[1]
+                com_AP = A.commutes(pauli)
+                if A.commutes(B):
+                    if com_AP:
+                        sensitivities_by_pauli[i,j] = 0
+                    else:
+                        com_BP = B.commutes(pauli)
+                        if com_BP:
+                            sensitivities_by_pauli[i,j] = 0
+                        else:
+                            ABP = pauli_product(A*B, pauli)
+                            expectation = ABP[0]*sim.peek_observable_expectation(ABP[1])
+                            sensitivities_by_pauli[i,j] = _real_if_close(-4*expectation)
+                else: # {A,B} = 0
+                    if com_AP:
+                        com_BP = B.commutes(pauli)
+                        if com_BP:
+                            sensitivities_by_pauli[i,j] = 0
+                        else:
+                            ABP = pauli_product(A*B, pauli)
+                            expectation = ABP[0]*sim.peek_observable_expectation(ABP[1])
+                            sensitivities_by_pauli[i,j] = _real_if_close(-2*expectation)
+                    else:
+                        com_BP = B.commutes(pauli)
+                        if com_BP:
+                            ABP = pauli_product(A*B, pauli)
+                            expectation = ABP[0]*sim.peek_observable_expectation(ABP[1])
+                            sensitivities_by_pauli[i,j] = _real_if_close(2*expectation)
+                        else:
+                            sensitivities_by_pauli[i,j] = 0
+            else: # A
+                A = basis_element_labels[0]
+                B = basis_element_labels[1]
+                com_AP = A.commutes(pauli)
+                if A.commutes(B):
+                    com_BP = B.commutes(pauli)
+                    if com_AP:
+                        if com_BP:
+                            sensitivities_by_pauli[i,j] = 0
+                        else:
+                            ABP = pauli_product(A*B, pauli)
+                            expectation = ABP[0]*sim.peek_observable_expectation(ABP[1])
+                            sensitivities_by_pauli[i,j] = _real_if_close(1j*2*expectation)
+                    else:
+                        if com_BP:
+                            ABP = pauli_product(A*B, pauli)
+                            expectation = ABP[0]*sim.peek_observable_expectation(ABP[1])
+                            sensitivities_by_pauli[i,j] = _real_if_close(-1j*2*expectation)
+                        else:
+                            sensitivities_by_pauli[i,j] = 0
+                else: # {A,B} = 0
+                    if com_AP:
+                        sensitivities_by_pauli[i,j] = 0
+                    else:
+                        com_BP = B.commutes(pauli)
+                        if com_BP:
+                            sensitivities_by_pauli[i,j] = 0
+                        else:
+                            ABP = pauli_product(A*B, pauli)
+                            expectation = ABP[0]*sim.peek_observable_expectation(ABP[1])
+                            sensitivities_by_pauli[i,j] = _real_if_close(1j*4*expectation)
+    return sensitivities_by_pauli            
+
+def _bitstring_to_int(bitstring: Union[str, tuple]) -> int:
     if isinstance(bitstring, str):
         #  If the input is a string, convert it directly
         return int(bitstring, 2)
@@ -7679,44 +8263,37 @@ def stabilizer_probability_correction(errorgen_dict, tableau, desired_bitstring,
     correction : float
         float corresponding to the correction to the output probability for the
         desired bitstring induced by the error generator (to specified order).
-    """
-    
+    """    
     num_random = random_support(tableau)
-    scale = 1/2**(num_random) # TODO: This might overflow
+    if num_random > 2148:
+        raise RuntimeError('Number of random bits is greater than 1074, magnitude of probability scale will underflow!')
+    scale = 1/2**(num_random) 
     
-    # do the first order correction separately since it doesn't require composition logic:
-    # now get the sum over the alphas and the error generator rate products needed.
-    alpha_errgen_prods = _np.zeros(len(errorgen_dict))
-    
+    #accumulate the terms accross orders (with short circuit logic for order 1 to save time):
+    if order == 1:
+        combined_taylor_dict = errorgen_dict
+    else:
+        #compute the taylor series approximation to the desired order.
+        taylor_expansion = error_generator_taylor_expansion(errorgen_dict, order, truncation_threshold)
+        # Accumulate all of the dictionaries in taylor expansion into a single one, summing overlapping terms.   
+        errorgen_labels_by_order = [{key: None for key in order_dict} for order_dict in taylor_expansion]
+        complete_errorgen_labels = errorgen_labels_by_order[0]
+        for order_dict in errorgen_labels_by_order[1:]:
+            complete_errorgen_labels.update(order_dict)
 
-    for i, (lbl, rate) in enumerate(errorgen_dict.items()):
-        if abs(rate) > truncation_threshold:
-            alpha_errgen_prods[i] = alpha(lbl, tableau, desired_bitstring)*rate
+        # initialize a dictionary with requisite keys
+        combined_taylor_dict = {lbl: 0 for lbl in complete_errorgen_labels}
+
+        for order_dict in taylor_expansion:
+            for lbl, rate in order_dict.items():
+                combined_taylor_dict[lbl] += rate.real
+
+    #can now do the correction computation in a single-shot.
+    alphas = bulk_alpha(combined_taylor_dict, tableau, [desired_bitstring])
+    rates = _np.fromiter(combined_taylor_dict.values(), dtype=_np.double)
+
+    alpha_errgen_prods = alphas*rates
     correction = scale*_np.sum(alpha_errgen_prods)
-    if order > 1:
-        # The order of the approximation determines the combinations of error generators
-        # which need to be composed. (given by cartesian products of labels in errorgen_dict).
-        labels_by_order = [list(product(errorgen_dict.keys(), repeat = i+1)) for i in range(1,order)]
-        # Get a similar structure for the corresponding rates
-        rates_by_order = [list(product(errorgen_dict.values(), repeat = i+1)) for i in range(1,order)]
-        for current_order, (current_order_labels, current_order_rates) in enumerate(zip(labels_by_order, rates_by_order), start=2):
-            current_order_scale = 1/factorial(current_order)
-            composition_results = []
-            for label_tup, rate_tup in zip(current_order_labels, current_order_rates):
-                composition_results.extend(iterative_error_generator_composition(label_tup, rate_tup))
-            # aggregate together any overlapping terms in composition_results
-            composition_results_dict = dict()
-            for lbl, rate in composition_results:
-                if composition_results_dict.get(lbl,None) is None:
-                    composition_results_dict[lbl] = rate
-                else:
-                    composition_results_dict[lbl] += rate
-            alpha_errgen_prods = _np.zeros(len(composition_results_dict))
-            for i, (lbl, rate) in enumerate(composition_results_dict.items()):
-                if current_order_scale*abs(rate) > truncation_threshold:
-                    sensitivity = alpha(lbl, tableau, desired_bitstring)
-                    alpha_errgen_prods[i] = _np.real_if_close(sensitivity*rate)
-            correction += current_order_scale*scale*_np.sum(alpha_errgen_prods)
 
     return correction
 
@@ -7753,39 +8330,30 @@ def stabilizer_pauli_expectation_correction(errorgen_dict, tableau, pauli, order
         float corresponding to the correction to the expectation value for the
         selected pauli operator induced by the error generator (to specified order).
     """
-    
-    # do the first order correction separately since it doesn't require composition logic:
-    # now get the sum over the alphas and the error generator rate products needed.
-    alpha_errgen_prods = _np.zeros(len(errorgen_dict))
-    
-    for i, (lbl, rate) in enumerate(errorgen_dict.items()):
-        if abs(rate) > truncation_threshold:
-            alpha_errgen_prods[i] = alpha_pauli(lbl, tableau, pauli)*rate
+    #accumulate the terms accross orders (with short circuit logic for order 1 to save time):
+    if order == 1:
+        combined_taylor_dict = errorgen_dict
+    else:
+        #compute the taylor series approximation to the desired order.
+        taylor_expansion = error_generator_taylor_expansion(errorgen_dict, order, truncation_threshold)
+        # Accumulate all of the dictionaries in taylor expansion into a single one, summing overlapping terms.   
+        errorgen_labels_by_order = [{key: None for key in order_dict} for order_dict in taylor_expansion]
+        complete_errorgen_labels = errorgen_labels_by_order[0]
+        for order_dict in errorgen_labels_by_order[1:]:
+            complete_errorgen_labels.update(order_dict)
+
+        # initialize a dictionary with requisite keys
+        combined_taylor_dict = {lbl: 0 for lbl in complete_errorgen_labels}
+
+        for order_dict in taylor_expansion:
+            for lbl, rate in order_dict.items():
+                combined_taylor_dict[lbl] += rate.real
+
+    #can now do the correction computation in a single-shot.
+    alphas = bulk_alpha_pauli(combined_taylor_dict, tableau, [pauli])
+    rates = _np.fromiter(combined_taylor_dict.values(), dtype=_np.double)
+    alpha_errgen_prods = alphas*rates
     correction = _np.sum(alpha_errgen_prods)
-    if order > 1:
-        # The order of the approximation determines the combinations of error generators
-        # which need to be composed. (given by cartesian products of labels in errorgen_dict).
-        labels_by_order = [list(product(errorgen_dict.keys(), repeat = i+1)) for i in range(1,order)]
-        # Get a similar structure for the corresponding rates
-        rates_by_order = [list(product(errorgen_dict.values(), repeat = i+1)) for i in range(1,order)]
-        for current_order, (current_order_labels, current_order_rates) in enumerate(zip(labels_by_order, rates_by_order), start=2):
-            current_order_scale = 1/factorial(current_order)
-            composition_results = []
-            for label_tup, rate_tup in zip(current_order_labels, current_order_rates):
-                composition_results.extend(iterative_error_generator_composition(label_tup, rate_tup))
-            # aggregate together any overlapping terms in composition_results
-            composition_results_dict = dict()
-            for lbl, rate in composition_results:
-                if composition_results_dict.get(lbl,None) is None:
-                    composition_results_dict[lbl] = rate
-                else:
-                    composition_results_dict[lbl] += rate
-            alpha_errgen_prods = _np.zeros(len(composition_results_dict))
-            for i, (lbl, rate) in enumerate(composition_results_dict.items()):
-                if current_order_scale*abs(rate) > truncation_threshold:
-                    sensitivity = alpha_pauli(lbl, tableau, pauli)
-                    alpha_errgen_prods[i] = _np.real_if_close(sensitivity*rate)
-            correction += current_order_scale*_np.sum(alpha_errgen_prods)
 
     return correction
 
@@ -8172,3 +8740,33 @@ def error_generator_taylor_expansion_numerical(errorgen_dict, errorgen_propagato
         taylor_expansion += 1/factorial(i)*_np.linalg.matrix_power(errorgen_mat, i)
 
     return taylor_expansion
+
+
+PauliPhaseUpdater = Callable[[str,str,Optional[bool]],tuple[complex,str]]
+PauliPhaseZerosUpdater = Callable[[str,Optional[bool]],tuple[complex,str]]
+AmplitudeOfStateType = Callable[[Union[stim.Tableau, stim.TableauSimulator],str,bool], complex]
+BulkPhiType = Callable[[Union[stim.Tableau, stim.TableauSimulator],str,list[Union[str,stim.PauliString]],list[Union[str,stim.PauliString]]], _np.ndarray]
+BulkAlphaType = Callable[[Iterable[_LSE],Union[stim.Tableau, stim.TableauSimulator],list[str]], _np.ndarray]
+BulkAlphaPauliType = Callable[[Iterable[_LSE],Union[stim.Tableau, stim.TableauSimulator],list[stim.PauliString]], _np.ndarray]
+
+#alias in cython implementations.
+try:
+    from pygsti.tools import fasterrgencalc as _fc
+    pauli_phase_update_all_zeros: PauliPhaseZerosUpdater = _fc.fast_pauli_phase_update_all_zeros
+    pauli_phase_update: PauliPhaseUpdater = _fc.fast_pauli_phase_update
+    amplitude_of_state: AmplitudeOfStateType = _fc.fast_amplitude_of_state
+    bulk_phi: BulkPhiType = _fc.fast_bulk_phi
+    bulk_alpha: BulkAlphaType = _fc.fast_bulk_alpha
+    bulk_alpha_pauli: BulkAlphaPauliType = _fc.fast_bulk_alpha_pauli    
+except ImportError:
+    msg = 'Could not import cython module `fastcalc`. This may indicate that your cython extensions for pyGSTi failed to '\
+          +'properly build. Lack of cython extensions can result in significant performance degredation so we recommend trying to rebuild them. '\
+           'Falling back to python implementation for: pauli_phase_update_all_zeros, pauli_phase_update, amplitude_of_state, ' \
+           'bulk_phi, bulk_alpha and bulk_alpha_pauli.'
+    warnings.warn(msg)
+    pauli_phase_update_all_zeros: PauliPhaseZerosUpdater = slow_pauli_phase_update_all_zeros
+    pauli_phase_update: PauliPhaseUpdater = slow_pauli_phase_update
+    amplitude_of_state: AmplitudeOfStateType = slow_amplitude_of_state
+    bulk_phi: BulkPhiType = slow_bulk_phi
+    bulk_alpha: BulkAlphaType = slow_bulk_alpha
+    bulk_alpha_pauli: BulkAlphaPauliType = slow_bulk_alpha_pauli 
