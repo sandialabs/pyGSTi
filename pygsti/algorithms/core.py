@@ -808,10 +808,13 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
         either a Circuit object or as a tuple of operation labels (but all must be specified
         using the same type).
         e.g. [ [ (), ('Gx',) ], [ (), ('Gx',), ('Gy',) ], [ (), ('Gx',), ('Gy',), ('Gx','Gy') ]  ]
-
-    optimizer : Optimizer or dict
+    
+    optimizer : Optimizer, or dict, or list of Optimizer, or list of dict (default None)
         The optimizer to use, or a dictionary of optimizer parameters
-        from which a default optimizer can be built.
+        from which a default optimizer can be built. If a list, the length
+        of the list should either be 1 or equal to the number of iterations. 
+        If 1, then this optimizer is used for every iteration, otherwise
+        each optimizer is used for its corresponding iteration.
 
     iteration_objfn_builders : list
         List of ObjectiveFunctionBuilder objects defining which objective functions
@@ -847,7 +850,20 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
           (an "evaluated" model-dataset-circuits store).
     """
     resource_alloc = _ResourceAllocation.cast(resource_alloc)
-    optimizer = optimizer if isinstance(optimizer, _Optimizer) else _SimplerLMOptimizer.cast(optimizer)
+    if isinstance(optimizer, (_Optimizer, dict)):
+        optimizers = [optimizer]*len(circuit_lists)
+    
+    elif not isinstance(optimizer, list):
+        raise ValueError(f'Invalid argument for optimizers of type {type(optimizer)}, supported types are list, Optimizer, or dict.')
+    else:
+        optimizers = optimizer
+
+    assert len(optimizers) == 1 or len(optimizers) == len(circuit_lists), 'Optimizers must be length 1 or length circuit_lists'
+
+    temp_optimizers = []
+    for  opt in optimizers:
+        temp_optimizers.append(opt if isinstance(opt, _Optimizer) else _SimplerLMOptimizer.cast(opt))
+    optimizers = temp_optimizers
     comm = resource_alloc.comm
     profiler = resource_alloc.profiler
     printer = VerbosityPrinter.create_printer(verbosity, comm)
@@ -872,8 +888,8 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
    
     #These lines were previously in the loop below, but we should be able to move it out from there so we can use it
     #in precomputing layouts:
-    method_names = optimizer.called_objective_methods
-    array_types = optimizer.array_types + \
+    method_names = optimizers[0].called_objective_methods
+    array_types = optimizers[0].array_types + \
                 _max_array_types([builder.compute_array_types(method_names, mdl.sim)
                                   for builder in iteration_objfn_builders + final_objfn_builders])
     
@@ -929,11 +945,11 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
             for j, obj_fn_builder in enumerate(iteration_objfn_builders):
                 tNxt = _time.time()
                 if i == 0 and j == 0:  # special case: in first optimization run, use "first_fditer"
-                    first_iter_optimizer = _copy.deepcopy(optimizer)  # use a separate copy of optimizer, as it
-                    first_iter_optimizer.fditer = optimizer.first_fditer  # is a persistent object (so don't modify!)
+                    first_iter_optimizer = _copy.deepcopy(optimizers[i])  # use a separate copy of optimizer, as it
+                    first_iter_optimizer.fditer = optimizers[i].first_fditer  # is a persistent object (so don't modify!)
                     opt_result, mdc_store = run_gst_fit(mdc_store, first_iter_optimizer, obj_fn_builder, printer - 1)
                 else:
-                    opt_result, mdc_store = run_gst_fit(mdc_store, optimizer, obj_fn_builder, printer - 1)
+                    opt_result, mdc_store = run_gst_fit(mdc_store, optimizers[i], obj_fn_builder, printer - 1)
                 profiler.add_time('run_iterative_gst: iter %d %s-opt' % (i + 1, obj_fn_builder.name), tNxt)
 
             tNxt = _time.time()
@@ -946,7 +962,7 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
                 for j, obj_fn_builder in enumerate(final_objfn_builders):
                     tNxt = _time.time()
                     mdl.basis = start_model.basis
-                    opt_result, mdc_store = run_gst_fit(mdc_store, optimizer, obj_fn_builder, printer - 1)
+                    opt_result, mdc_store = run_gst_fit(mdc_store, optimizers[i], obj_fn_builder, printer - 1)
                     profiler.add_time('run_iterative_gst: final %s opt' % obj_fn_builder.name, tNxt)
                 tNxt = _time.time()
                 printer.log("Final optimization took %.1fs\n" % (tNxt - tRef), 2)
