@@ -1398,11 +1398,11 @@ class GateSetTomography(_proto.Protocol):
             mdl_start.sim = simulator
         
         if optimizers is None:
-            optimizers = [self.optimizer]
+            optimizers = [self.optimizer]*len(circuit_lists)
 
         else:
             if isinstance(optimizers, _opt.Optimizer):    
-                optimizers = [optimizers]
+                optimizers = [optimizers]*len(circuit_lists)
             else:
                 if not isinstance(optimizers, list):
                     raise ValueError(f'Invalid argument for optimizers of type {type(optimizers)}, supported types are list, Optimizer')
