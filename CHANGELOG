@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## [0.9.14.2] - 2025-11-08
+
+This is a bugfix release patching the following issues:
+
+* Bugfixes for diamond-distance wildcard budget computation in the context of leakage-aware analysis as reported in #652. (#671)
+* Changes to default behavior of leakage-aware gauge optimization suite to address the manner in which relational leakage errors are attributed to each gate. Additional correctness checks/unit tests for leakage GST modeling. (#671)
+* Bugfix for issue reported in #644 where it was found that when gauge-optimizing models with instruments using fidelity or trace distance as cost functions the instrument parameters were being ignored. Note that it was originally reported/thought that this applied to frobenius distance as well, but that turned out not to be true and this was working correctly. (#672)
+* Fix for issue #600, which found the `Model.is_equivalent` method did not work for 'full TP' models. (#657)
+* tqdm added as proper dependency (#653, #656)
+* Shared memory bugs in objective function computation when parallelizing across parameters. (#660, #674) 
+* Fixes a bug in DataSet count retrieval and adds unit tests. (#663)
+
 ## [0.9.14.1] - 2025-08-30
 
 This is a bugfix release patching two issues: 
