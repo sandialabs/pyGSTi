@@ -858,7 +858,7 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
     else:
         optimizers = optimizer
 
-    assert len(optimizers) == 1 or len(optimizers) == len(circuit_lists), 'Optimizers must be length 1 or length circuit_lists'
+    assert len(optimizers) == 1 or len(optimizers) == len(circuit_lists), f'Optimizers must be length 1 or length {len(circuit_lists)=}'
 
     temp_optimizers = []
     for  opt in optimizers:
