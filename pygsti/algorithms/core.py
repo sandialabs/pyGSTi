@@ -786,7 +786,7 @@ def run_iterative_gst(dataset, start_model, circuit_lists,
     return models, optimums, final_objfn, mdc_store_list
 
 def iterative_gst_generator(dataset, start_model, circuit_lists,
-                      optimizer: Union[_SimplerLMOptimizer.Optimizer, dict, list[_SimplerLMOptimizer.Optimizer], list[dict]],
+                      optimizer: Union[_SimplerLMOptimizer, dict, list[_SimplerLMOptimizer], list[dict]],
                         iteration_objfn_builders, final_objfn_builders,
                       resource_alloc, starting_index=0, verbosity=0):
     """
