@@ -282,12 +282,19 @@ def parallel_GST(target_model, data, builders, tol=1e-10, maxiter=300, verbosity
           The return value of running protocols.GateSetTomography()
     """
      
-
-    optimizer = pygsti.optimize.customlm.CustomLMOptimizer(maxiter=maxiter, tol={'f':tol, 'relf': tol})
-    protoOpt = pygsti.protocols.GateSetTomography(target_model, verbosity=verbosity, optimizer=optimizer, gaugeopt_suite=None, objfn_builders=builders)
+    if isinstance(maxiter, list) or isinstance(tol, list):
+        if not (isinstance(maxiter, list) and isinstance(tol, list)):
+            raise ValueError('Invalid optimizer settings')
+        else:
+            optimizers = []
+            for i in range(len(maxiter)):
+                optimizers.append(pygsti.optimize.customlm.CustomLMOptimizer(maxiter=maxiter[i], tol={'f':tol[i], 'relf': tol[i]}))
+    else:
+        optimizers = [pygsti.optimize.customlm.CustomLMOptimizer(maxiter=maxiter, tol={'f':tol, 'relf': tol})]
+    protoOpt = pygsti.protocols.GateSetTomography(target_model, verbosity=verbosity, optimizer=optimizers[0], gaugeopt_suite=None, objfn_builders=builders)
 
     result = protoOpt.run(data, comm=comm,
-                memlimit=mem_limit)
+                memlimit=mem_limit, optimizers=optimizers)
     return result
 
 def create_red_model(parent_model, projector_matrix, vec):

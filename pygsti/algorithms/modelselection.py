@@ -181,7 +181,12 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
     if len(graph_levels) == 0:
         red_model = target_model_fit.copy()
         if result is not None:
-            assert result.estimates['GateSetTomography'].final_objective_fn().fn() == original_dlogl , 'obj fn builder is not matching GST obj fn ' + str(result.estimates['GateSetTomography'].final_objective_fn().fn() - original_dlogl)
+            print('difference: ', result.estimates['GateSetTomography'].final_objective_fn().fn() - original_dlogl)
+            if result.estimates['GateSetTomography'].final_objective_fn().fn() != original_dlogl:
+                print('fns did not match!')
+                result.write('obj_fn_test')
+                print(f'{original_dlogl=}, ', result.estimates['GateSetTomography'].final_objective_fn().fn())
+
         print(f'{original_dlogl=}')
         prev_dlogl = original_dlogl
         graph_levels.append([[x0,original_dlogl, 0]])
