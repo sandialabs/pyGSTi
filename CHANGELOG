@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## [0.9.14.3] - 2025-11-25
+
+This is a bugfix release patching the following issues:
+
+* The benchmarking tool formerly named `bsqale` has been renamed to `scarab` (@ndsieki, #685)
+* Bugfix for drift report generation caused by incorrect Plotly syntax. (@liuyichao82 #688)
+* Fix for a ReadTheDocs build failure that caused the documentation generation to fail. (#691)
+
+Development-related change: Pushes to the `bugfix` branch no longer trigger automatic merges into `develop`, and these changes will need to be merged in manually going forward.
+
 ## [0.9.14.2] - 2025-11-08
 
 This is a bugfix release patching the following issues:
