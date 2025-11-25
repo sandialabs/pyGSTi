@@ -15,6 +15,7 @@ import collections as _collections
 import time as _time
 import copy as _copy
 import warnings as _warnings
+from typing import Union
 
 import numpy as _np
 import scipy.optimize as _spo
@@ -785,7 +786,8 @@ def run_iterative_gst(dataset, start_model, circuit_lists,
     return models, optimums, final_objfn, mdc_store_list
 
 def iterative_gst_generator(dataset, start_model, circuit_lists,
-                      optimizer, iteration_objfn_builders, final_objfn_builders,
+                      optimizer: Union[_SimplerLMOptimizer.Optimizer, dict, list[_SimplerLMOptimizer.Optimizer], list[dict]],
+                        iteration_objfn_builders, final_objfn_builders,
                       resource_alloc, starting_index=0, verbosity=0):
     """
     Performs Iterative Gate Set Tomography on the dataset.

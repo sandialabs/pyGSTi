@@ -21,7 +21,7 @@ import pathlib as _pathlib
 
 import numpy as _np
 from scipy.stats import chi2 as _chi2
-from typing import Optional
+from typing import Optional, Union, Any
 
 from pygsti.baseobjs.profiler import DummyProfiler as _DummyProfiler
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
@@ -1314,7 +1314,8 @@ class GateSetTomography(_proto.Protocol):
         self.unreliable_ops = ('Gcnot', 'Gcphase', 'Gms', 'Gcn', 'Gcx', 'Gcz')
 
     def run(self, data, memlimit=None, comm=None, checkpoint=None, checkpoint_path=None, disable_checkpointing=False,
-            simulator: Optional[ForwardSimulator.Castable]=None, optimizers=None):
+            simulator: Optional[ForwardSimulator.Castable]=None, 
+            optimizers: Optional[Union[_opt.Optimizer, dict, list[_opt.Optimizer], list[dict]]] = None):
         """
         Run this protocol on `data`.
 
@@ -1853,7 +1854,8 @@ class StandardGST(_proto.Protocol):
         self.starting_point = {}  # a dict whose keys are modes
 
     def run(self, data, memlimit=None, comm=None, checkpoint=None, checkpoint_path=None,
-            disable_checkpointing=False, simulator: Optional[ForwardSimulator.Castable]=None, optimizers=None):
+            disable_checkpointing=False, simulator: Optional[ForwardSimulator.Castable]=None, 
+            optimizers: Optional[Union[_opt.Optimizer, dict, list[_opt.Optimizer], list[dict]]] = None):
         """
         Run this protocol on `data`.
 
