@@ -263,11 +263,14 @@ class GateSetTomographyTester(BaseProtocolData):
 
         assert _np.allclose(mdl_result1.to_vector() , mdl_result2.to_vector())
 
-        #Test that we can pass a list
+        #Test that we can pass a list of len == 1 or len == edesign.circuit_lists
         optimizers = [optimizer]*len(self.gst_data.edesign.circuit_lists)
         results3 = proto1.run(self.gst_data, optimizers=optimizers)
+        results4 = proto1.run(self.gst_data, optimizers=[optimizers[0]])
         mdl_result3 = results3.estimates["testGST"].models['stdgaugeopt']
+        mdl_result4 = results4.estimates["testGST"].models['stdgaugeopt']
         assert _np.allclose(mdl_result3.to_vector() , mdl_result1.to_vector())
+        assert _np.allclose(mdl_result4.to_vector() , mdl_result1.to_vector())
         
 
     def test_run_custom_sim(self, capfd: pytest.LogCaptureFixture):
@@ -391,13 +394,17 @@ class StandardGSTTester(BaseProtocolData):
         #Test that we can pass a list
         optimizers = [optimizer]*len(self.gst_data.edesign.circuit_lists)
         results3 = proto1.run(self.gst_data, optimizers=optimizers)
+        results4 = proto1.run(self.gst_data, optimizers=[optimizer])
+
         for mode in ["full TP","CPTPLND","Target"]:
             mdl_result1 = results1.estimates[mode].models['stdgaugeopt']
             mdl_result2 = results2.estimates[mode].models['stdgaugeopt']
             mdl_result3 = results3.estimates[mode].models['stdgaugeopt']
+            mdl_result4 = results4.estimates[mode].models['stdgaugeopt']
 
-            assert _np.allclose(mdl_result1.to_vector() , mdl_result2.to_vector())
+            assert _np.allclose(mdl_result2.to_vector() , mdl_result1.to_vector())
             assert _np.allclose(mdl_result3.to_vector() , mdl_result1.to_vector())
+            assert _np.allclose(mdl_result4.to_vector() , mdl_result1.to_vector())
     
 
     def test_write_and_read_to_dir(self):

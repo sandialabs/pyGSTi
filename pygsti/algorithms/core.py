@@ -854,6 +854,9 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
     resource_alloc = _ResourceAllocation.cast(resource_alloc)
     if optimizer is None:
         optimizer = _SimplerLMOptimizer.cast(None)
+    if isinstance(optimizer,list):
+        if len(optimizer) == 1:
+            optimizer = optimizer*len(circuit_lists)
     if isinstance(optimizer, (_Optimizer, dict)):
         optimizers = [optimizer]*len(circuit_lists)
     

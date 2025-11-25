@@ -1404,6 +1404,9 @@ class GateSetTomography(_proto.Protocol):
         else:
             if isinstance(optimizers, (_opt.Optimizer, dict)):    
                 optimizers = [optimizers]*len(circuit_lists)
+            if isinstance(optimizers, list):
+                if len(optimizers) == 1:
+                    optimizers = optimizers*len(circuit_lists)
             else:
                 if not isinstance(optimizers, (list, dict)):
                     raise ValueError(f'Invalid argument for optimizers of type {type(optimizers)}, supported types are list, Optimizer')
