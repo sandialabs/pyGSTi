@@ -354,7 +354,7 @@ class LindbladErrorgen(_LinearOperator):
         See `from_error_generator` for more details.
         """
 
-        if isinstance(errgen, (_np.ndarray, _sps.sparray)):
+        if isinstance(errgen, (_np.ndarray, _sps.sparray, _sps.spmatrix)):
             dim = errgen.shape[0]
         elif isinstance(errgen, int):
             dim = errgen
