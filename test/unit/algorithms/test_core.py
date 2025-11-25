@@ -451,3 +451,70 @@ class CoreMLGSTTester(CoreStdData, BaseCase):
 
         #Make sure we get the same result in both cases.
         self.assertArraysAlmostEqual(models[-1].to_vector(), models1[-1].to_vector())
+    def test_iterative_gst_generator_optimizers_list(self):
+        
+        #Test that passing a different optimizer per iteration works as intended
+        optimizers = [] 
+        tols = [1e1, 1e-8]
+        maxiters = [10, 150]
+
+        #First create substantially different optimizers
+        for i in range(len(self.lsgstStrings)):
+            optimizers.append({'tol': tols[i], 'maxiter':maxiters[i]})
+
+        assert len(self.lsgstStrings) == len(tols), f' If you change {self.lsgstStrings=}, this unit test must be modified to account for it'
+        
+        generator_optimizers = core.iterative_gst_generator(
+            self.ds, self.mdl_clgst, self.lsgstStrings,
+            optimizer=optimizers,
+            iteration_objfn_builders=['chi2'],
+            final_objfn_builders=['logl'],
+            resource_alloc=None, verbosity=0
+        )
+
+        models1 = []
+        models0 = []
+        #loop over all iterations
+        for j in range(0,len(self.lsgstStrings)):
+
+            models0.append(next(generator_optimizers)[0])
+
+            #create a gst generator for the iteration that we are in,
+            #to be compared with generator
+            generator_step = core.iterative_gst_generator(
+            self.ds, self.mdl_clgst, self.lsgstStrings,
+            optimizer={'tol':tols[j], 'maxiter':maxiters[j]},
+            iteration_objfn_builders=['chi2'],
+            final_objfn_builders=['logl'],
+            resource_alloc=None, verbosity=0,
+            starting_index=j
+            )
+            
+            models1.append(next(generator_step)[0])
+            
+            self.assertArraysAlmostEqual(models0[-1].to_vector(), models1[-1].to_vector())
+
+        # we also test use case of optimzer=[optimizer] being equivalent to optimzer=optimizer
+        generator_single_item_optimizers0 = core.iterative_gst_generator(
+            self.ds, self.mdl_clgst, self.lsgstStrings,
+            optimizer=[optimizers[0]],
+            iteration_objfn_builders=['chi2'],
+            final_objfn_builders=['logl'],
+            resource_alloc=None, verbosity=0
+        )
+        generator_single_item_optimizers1 = core.iterative_gst_generator(
+            self.ds, self.mdl_clgst, self.lsgstStrings,
+            optimizer=optimizers[0],
+            iteration_objfn_builders=['chi2'],
+            final_objfn_builders=['logl'],
+            resource_alloc=None, verbosity=0
+        )
+
+        models0 = []
+        models1 = []
+        for j in range(0,len(self.lsgstStrings)):
+
+            models0.append(next(generator_single_item_optimizers0)[0])
+            models1.append(next(generator_single_item_optimizers1)[0])
+            self.assertArraysAlmostEqual(models0[-1].to_vector(), models1[-1].to_vector())
+        
