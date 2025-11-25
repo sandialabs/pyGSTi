@@ -1399,26 +1399,28 @@ class GateSetTomography(_proto.Protocol):
         
         if optimizers is None:
             optimizers = [self.optimizer]*len(circuit_lists)
-
+        
         else:
-            if isinstance(optimizers, _opt.Optimizer):    
+            if isinstance(optimizers, (_opt.Optimizer, dict)):    
                 optimizers = [optimizers]*len(circuit_lists)
             else:
-                if not isinstance(optimizers, list):
+                if not isinstance(optimizers, (list, dict)):
                     raise ValueError(f'Invalid argument for optimizers of type {type(optimizers)}, supported types are list, Optimizer')
                 temp_optimizers = []
                 default_first_fditer = 1 if mdl_start and isinstance(mdl_start.sim, _MatrixFSim) else 0
                 for optimizer in optimizers:
+                    
                     if isinstance(optimizer, _opt.Optimizer):
+                        temp_optimizer = _copy.deepcopy(optimizer)  # don't mess with caller's optimizer
                         if hasattr(optimizer,'first_fditer') and optimizer.first_fditer is None:
                             # special behavior: can set optimizer's first_fditer to `None` to mean "fill with default"
-                            temp_optimizer = _copy.deepcopy(optimizer)  # don't mess with caller's optimizer
                             temp_optimizer.first_fditer = default_first_fditer
-                        else:
-                            temp_optimizer = _copy.deepcopy(optimizer)
+
                     else:
                         if optimizer is None:
                             temp_optimizer = {}
+                        else:
+                            temp_optimizer = _copy.deepcopy(optimizer)  # don't mess with caller's optimizer
                         if 'first_fditer' not in optimizer:  # then add default first_fditer value
                             temp_optimizer['first_fditer'] = default_first_fditer
                         temp_optimizers.append(_opt.SimplerLMOptimizer.cast(temp_optimizer))

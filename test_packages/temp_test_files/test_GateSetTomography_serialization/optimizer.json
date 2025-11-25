@@ -1,0 +1,33 @@
+{
+    "module": "pygsti.optimize.simplerlm",
+    "class": "SimplerLMOptimizer",
+    "version": 0,
+    "maximum_iterations": 100,
+    "maximum_function_evaluations": 100,
+    "tolerance": {
+        "relx": 1e-08,
+        "relf": 1e-06,
+        "f": 1.0,
+        "jac": 1e-06,
+        "maxdx": 1.0
+    },
+    "number_of_finite_difference_iterations": 0,
+    "number_of_first_stage_finite_difference_iterations": 0,
+    "initial_mu_and_nu": "auto",
+    "out_of_bounds_check_interval": 0,
+    "out_of_bounds_action": "reject",
+    "out_of_bounds_check_mode": 0,
+    "array_types": [
+        "p",
+        "p",
+        "p",
+        "e",
+        "ep"
+    ],
+    "called_objective_function_methods": [
+        "lsvec",
+        "dlsvec"
+    ],
+    "serial_solve_number_of_processors_threshold": 100,
+    "lsvec_mode": "normal"
+}
