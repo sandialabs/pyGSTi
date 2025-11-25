@@ -1414,6 +1414,8 @@ class GateSetTomography(_proto.Protocol):
                             # special behavior: can set optimizer's first_fditer to `None` to mean "fill with default"
                             temp_optimizer = _copy.deepcopy(optimizer)  # don't mess with caller's optimizer
                             temp_optimizer.first_fditer = default_first_fditer
+                        else:
+                            temp_optimizer = _copy.deepcopy(optimizer)
                     else:
                         if optimizer is None:
                             temp_optimizer = {}
