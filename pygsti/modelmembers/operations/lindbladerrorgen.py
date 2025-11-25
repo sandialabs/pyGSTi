@@ -32,7 +32,7 @@ from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _Glob
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools import optools as _ot
 from pygsti import SpaceT
-from typing import Literal
+from typing import Literal, Union, Optional
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 
@@ -210,8 +210,9 @@ class LindbladErrorgen(_LinearOperator):
                                         mx_basis, truncate, evotype, state_space=state_space)
 
     @classmethod
-    def from_error_generator(cls, errgen_or_dim, parameterization="CPTPLND", elementary_errorgen_basis='PP', mx_basis='pp',
-                             truncate=True, evotype="default", state_space=None):
+    def from_error_generator(cls, errgen_or_dim: Union[_np.ndarray, _sps.sparray, int], parameterization: Union[LindbladParameterization, str]="CPTPLND", 
+                             elementary_errorgen_basis: Union[_Basis, str]='PP', mx_basis: Union[_Basis, str]='pp',
+                             truncate: bool=True, evotype: Union[_Evotype, str]="default", state_space: Optional[_statespace.StateSpace]=None) -> LindbladErrorgen:
         """
         Construct a new `LindbladErrorgen` instance instantiated using a dense numpy array or sparse
         scipy array representation. 
@@ -346,13 +347,14 @@ class LindbladErrorgen(_LinearOperator):
         return cls(lindblad_coefficient_blocks, elementary_errorgen_basis, mx_basis, evotype, state_space)
 
     @classmethod
-    def _from_error_generator(cls, errgen, parameterization="CPTPLND", elementary_errorgen_basis="PP",
-                              mx_basis="pp", truncate=True, evotype="default", state_space=None):
+    def _from_error_generator(cls, errgen: Union[_np.ndarray, _sps.sparray, int], parameterization: Union[LindbladParameterization, str]="CPTPLND", 
+                             elementary_errorgen_basis: Union[_Basis, str]='PP', mx_basis: Union[_Basis, str]='pp',
+                             truncate: bool=True, evotype: Union[_Evotype, str]="default", state_space: Optional[_statespace.StateSpace]=None) -> LindbladErrorgen:
         """
         See `from_error_generator` for more details.
         """
 
-        if isinstance(errgen, _np.ndarray):
+        if isinstance(errgen, (_np.ndarray, _sps.sparray)):
             dim = errgen.shape[0]
         elif isinstance(errgen, int):
             dim = errgen
