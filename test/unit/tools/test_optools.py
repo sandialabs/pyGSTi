@@ -4,12 +4,15 @@ from unittest import mock
 import sys
 import numpy as np
 import scipy
+import scipy.linalg as la
 from pygsti.baseobjs.basis import Basis
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as LEEL
 
 import pygsti.tools.basistools as bt
 import pygsti.tools.lindbladtools as lt
 import pygsti.tools.optools as ot
+import pygsti.tools.sdptools as sdps
+import pygsti.tools.leakage as pgleak
 from pygsti.modelmembers.operations.lindbladcoefficients import LindbladCoefficientBlock
 from pygsti.modelpacks.legacy import std2Q_XXYYII
 from ..util import BaseCase, needs_cvxpy
@@ -48,7 +51,7 @@ class OpToolsTester(BaseCase):
         # U_2Q is 4x4 unitary matrix operating on isolated two-qubit space (CX(pi) rotation)
 
         op_2Q = ot.unitary_to_pauligate(U_2Q)
-        op_2Q_inv = ot.process_mx_to_unitary(bt.change_basis(op_2Q, 'pp', 'std'))
+        op_2Q_inv = ot.std_process_mx_to_unitary(bt.change_basis(op_2Q, 'pp', 'std'))
         self.assertArraysAlmostEqual(U_2Q, op_2Q_inv)
 
     def test_decompose_gate_matrix(self):
@@ -377,18 +380,62 @@ class GateOpsTester(BaseCase):
             [-0.35432747-0.27939404j, -0.02266757+0.71502652j, -0.27452307+0.07511567j,  0.35432747+0.27939404j],
             [ 0.71538573+0.j,  0.2680266 +0.36300238j, 0.2680266 -0.36300238j,  0.28461427+0.j]])
 
+    def test_frobenius_distance(self):
+        self.assertAlmostEqual(ot.frobeniusdist(self.A, self.A), 0.0)
+        self.assertAlmostEqual(ot.frobeniusdist(self.A, self.B), 0.6204836823)
+
+        self.assertAlmostEqual(ot.frobeniusdist_squared(self.A, self.A), 0.0)
+        self.assertAlmostEqual(ot.frobeniusdist_squared(self.A, self.B), 0.385)
+
     def test_jtrace_distance(self):
         val = ot.jtracedist(self.A_TP, self.A_TP, mx_basis="pp")
         self.assertAlmostEqual(val, 0.0)
         val = ot.jtracedist(self.A_TP, self.B_unitary, mx_basis="pp")
         self.assertGreaterEqual(val, 0.5)
 
+    def validate_primal_diamondnorm(self, objective_val, operator, rho0, rho1, places=4):
+        d = rho0.shape[0]
+        assert rho0.shape == (d, d)
+        assert rho1.shape == (d, d)
+        assert operator.shape == (d**2, d**2)
+        left  = np.kron(np.eye(d), la.sqrtm(rho0))
+        right = np.kron(np.eye(d), la.sqrtm(rho1))
+        Jop   = ot._jam.jamiolkowski_iso(operator, 'pp', 'std', normalized=False)
+        arg = left @ Jop @ right
+        s = la.svdvals(arg)
+        expected_val = np.sum(s)
+        self.assertAlmostEqual(objective_val, expected_val, places=places)
+        return
+
     @needs_cvxpy
     def test_diamond_distance(self):
+        mosek_warning_pattern = ".*Incorrect array format causing data to be copied*"
+        import warnings
+        warnings.filterwarnings('ignore', mosek_warning_pattern)
         val = ot.diamonddist(self.A_TP, self.A_TP, mx_basis="pp")
         self.assertAlmostEqual(val, 0.0)
-        val = ot.diamonddist(self.A_TP, self.B_unitary, mx_basis="pp")
-        self.assertGreaterEqual(val, 0.7)
+        objective_val, modelvars = ot.diamonddist(self.A_TP, self.B_unitary, mx_basis="pp", return_x=True)
+        rho0, rho1 = modelvars[1:]
+        self.validate_primal_diamondnorm(objective_val, self.A_TP - self.B_unitary, rho0, rho1)
+        self.assertGreaterEqual(objective_val, 0.7)
+        return
+
+    @needs_cvxpy
+    def test_diamond_norm_epigraph(self):
+        mosek_warning_pattern = ".*Incorrect array format causing data to be copied*"
+        import warnings
+        warnings.filterwarnings('ignore', mosek_warning_pattern)
+        val0 = ot.diamonddist(self.A_TP, self.B_unitary, mx_basis="pp")
+        delta0 = self.A_TP - self.B_unitary
+        delta1 = bt.change_basis(delta0, 'pp', 'std')
+        import cvxpy as cp
+        obj_expr, constraints = sdps.diamond_norm_canon(delta1, 'std')
+        objective = cp.Minimize(obj_expr)
+        problem = cp.Problem(objective, constraints)
+        val1 = problem.solve(verbose=True, solver='CLARABEL')
+        self.assertGreaterEqual(val0, 0.7)
+        self.assertAlmostEqual(val0, val1, places=4)
+        return
 
     def test_entanglement_fidelity(self):
         fidelity_TP_unitary= ot.entanglement_fidelity(self.A_TP, self.B_unitary, is_tp=True, is_unitary=True)
@@ -401,6 +448,19 @@ class GateOpsTester(BaseCase):
         self.assertAlmostEqual(fidelity_TP_unitary_no_flag, expect)
         self.assertAlmostEqual(fidelity_TP_unitary_jam, expect)
         self.assertAlmostEqual(fidelity_TP_unitary_std, expect)
+
+    def test_subspace_entanglement_fidelity(self):
+        fidelity_TP_unitary= pgleak.subspace_entanglement_fidelity(self.A_TP, self.B_unitary, 'pp')
+        fidelity_TP_unitary_no_flag= pgleak.subspace_entanglement_fidelity(self.A_TP, self.B_unitary, 'pp')
+        fidelity_TP_unitary_jam= pgleak.subspace_entanglement_fidelity(self.A_TP, self.B_unitary, 'pp')
+        fidelity_TP_unitary_std= pgleak.subspace_entanglement_fidelity(self.A_TP_std, self.B_unitary_std, op_basis='std')
+
+        expect = 0.4804724656092404
+        self.assertAlmostEqual(fidelity_TP_unitary, expect)
+        self.assertAlmostEqual(fidelity_TP_unitary_no_flag, expect)
+        self.assertAlmostEqual(fidelity_TP_unitary_jam, expect)
+        self.assertAlmostEqual(fidelity_TP_unitary_std, expect)
+        pass
 
     def test_fidelity_upper_bound(self):
         np.random.seed(0)

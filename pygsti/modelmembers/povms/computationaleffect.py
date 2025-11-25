@@ -22,6 +22,7 @@ from pygsti.evotypes import Evotype as _Evotype
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
+from pygsti import SpaceT
 
 try:
     from pygsti.tools import fastcalc as _fastcalc
@@ -191,7 +192,7 @@ class ComputationalBasisPOVMEffect(_POVMEffect):
         return (_np.array_equal(self._rep.zvals, other._rep.zvals)
                 and self._rep.basis == other._rep.basis)
 
-    def to_dense(self, on_space='minimal', scratch=None):
+    def to_dense(self, on_space: SpaceT='minimal', scratch=None):
         """
         Return this POVM effect vector as a (dense) numpy array.
 

@@ -16,7 +16,10 @@ import numpy as _np
 from pygsti.baseobjs.opcalc import bulk_eval_compact_polynomials_complex as _bulk_eval_compact_polynomials_complex
 from pygsti.modelmembers import modelmember as _modelmember
 from pygsti.baseobjs import _compatibility as _compat
-from pygsti.tools import optools as _ot
+from pygsti.tools import matrixtools as _mt
+from pygsti import SpaceT
+
+from typing import Any
 
 
 class State(_modelmember.ModelMember):
@@ -104,7 +107,7 @@ class State(_modelmember.ModelMember):
         """
         pass
 
-    def to_dense(self, on_space='minimal', scratch=None):
+    def to_dense(self, on_space: SpaceT='minimal', scratch=None):
         """
         Return this state vector as a (dense) numpy array.
 
@@ -126,6 +129,19 @@ class State(_modelmember.ModelMember):
         numpy.ndarray
         """
         raise NotImplementedError("to_dense(...) not implemented for %s objects!" % self.__class__.__name__)
+
+    def _to_transformed_dense(self, T_domain: _mt.OperatorLike, T_codomain: _mt.OperatorLike, on_space: SpaceT='minimal') -> _np.ndarray:
+        """
+        Return an array representation of the linear operator obtained by composing
+        self.to_dense() and T_codomain. The representation interprets states as vectors
+        in Hilbert(--Schmidt) space; it uses the canonical identification of a vector
+        `v` with a linear map `lambda c: c*v` that takes scalars to vectors.
+
+        T_domain (ignored) is only here for consistency across the ModelMember API.
+        """
+        X = self.to_dense(on_space=on_space)
+        out = T_codomain @ X
+        return out
 
     def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):
         """
@@ -297,64 +313,6 @@ class State(_modelmember.ModelMember):
         terms_at_order = [t.copy_with_magnitude(abs(coeff)) for coeff, t in zip(coeffs, terms_at_order)]
         return [t for t in terms_at_order if t.magnitude >= min_term_mag]
 
-    def frobeniusdist_squared(self, other_spam_vec, transform=None,
-                              inv_transform=None):
-        """
-        Return the squared frobenius difference between this operation and `other_spam_vec`.
-
-        Optionally transforms this vector first using `transform` and
-        `inv_transform`.
-
-        Parameters
-        ----------
-        other_spam_vec : State
-            The other spam vector
-
-        transform : numpy.ndarray, optional
-            Transformation matrix.
-
-        inv_transform : numpy.ndarray, optional
-            Inverse of `tranform`.
-
-        Returns
-        -------
-        float
-        """
-        vec = self.to_dense(on_space='minimal')
-        if inv_transform is None:
-            return _ot.frobeniusdist_squared(vec, other_spam_vec.to_dense(on_space='minimal'))
-        else:
-            return _ot.frobeniusdist_squared(_np.dot(inv_transform, vec),
-                                             other_spam_vec.to_dense(on_space='minimal'))
-
-    def residuals(self, other_spam_vec, transform=None, inv_transform=None):
-        """
-        Return a vector of residuals between this spam vector and `other_spam_vec`.
-
-        Optionally transforms this vector first using `transform` and
-        `inv_transform`.
-
-        Parameters
-        ----------
-        other_spam_vec : State
-            The other spam vector
-
-        transform : numpy.ndarray, optional
-            Transformation matrix.
-
-        inv_transform : numpy.ndarray, optional
-            Inverse of `tranform`.
-
-        Returns
-        -------
-        float
-        """
-        vec = self.to_dense(on_space='minimal')
-        if inv_transform is not None:
-            vec = inv_transform @ vec
-        return (vec - other_spam_vec.to_dense(on_space='minimal')).ravel()
-
-
     def transform_inplace(self, s):
         """
         Update state preparation (column) vector V as inv(s) * V.
@@ -378,7 +336,7 @@ class State(_modelmember.ModelMember):
         None
         """
         Si = s.transform_matrix_inverse
-        self.set_dense(_np.dot(Si, self.to_dense(on_space='minimal')))
+        self.set_dense(_np.dot(Si, self.to_dense("minimal")))
 
     def depolarize(self, amount):
         """
@@ -407,7 +365,7 @@ class State(_modelmember.ModelMember):
         else:
             assert(len(amount) == self.dim - 1)
             D = _np.diag([1] + list(1.0 - _np.array(amount, 'd')))
-        self.set_dense(_np.dot(D, self.to_dense(on_space='minimal')))
+        self.set_dense(_np.dot(D, self.to_dense("minimal")))
 
     @property
     def num_params(self):
@@ -541,7 +499,7 @@ class State(_modelmember.ModelMember):
         numpy array
         """
         if isinstance(v, State):
-            vector = v.to_dense(on_space='minimal').copy()
+            vector = v.to_dense("minimal").copy()
             vector.shape = (vector.size, 1)
         elif isinstance(v, _np.ndarray):
             vector = v.copy()

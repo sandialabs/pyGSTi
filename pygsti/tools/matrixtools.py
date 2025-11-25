@@ -14,6 +14,8 @@ import functools as _functools
 import itertools as _itertools
 import warnings as _warnings
 
+from typing import Protocol, Any, runtime_checkable, TypeVar, Optional, Union
+
 import numpy as _np
 import scipy.linalg as _spl
 import scipy.optimize as _spo
@@ -64,7 +66,7 @@ def gram_matrix(m, adjoint=False):
     return out
 
 
-def is_hermitian(mx, tol=1e-9):
+def is_hermitian(mx: _np.ndarray, tol: float=1e-9) -> bool:
     """
     Test whether mx is a hermitian matrix.
 
@@ -85,7 +87,17 @@ def is_hermitian(mx, tol=1e-9):
     if m != n:
         return False
     else:
-        return _np.all(_np.abs(mx - mx.T.conj()) <= tol)
+        return bool(_np.all(_np.abs(mx - mx.T.conj()) <= tol))
+
+
+def assert_hermitian(mat : _np.ndarray, tol: Union[float,_np.floating]) -> None:
+    hermiticity_error = _np.abs(mat - mat.T.conj())
+    if _np.any(hermiticity_error > tol):
+        message = f"""
+            Input matrix 'mat' is not Hermitian, up to tolerance {tol}.
+            The absolute values of entries in (mat - mat^H) are \n{hermiticity_error}. 
+        """
+        raise ValueError(message)
 
 
 def is_pos_def(mx, tol=1e-9, attempt_cholesky=False):
@@ -796,6 +808,40 @@ def approximate_matrix_log(m, target_logm, target_weight=10.0, tol=1e-6):
         #      _np.linalg.norm(logM-target_logm)**2)
 
     return logM
+
+
+def eigenvalues(m: _np.ndarray, *, assume_hermitian: Optional[bool] = None, assume_normal: bool = False):
+    if assume_hermitian is None:
+        assume_hermitian = is_hermitian(m)
+    if assume_hermitian:
+        # Make sure it's Hermtian in exact arithmetic. This helps with
+        # reproducibility across different implementations of LAPACK.
+        m += m.T.conj()
+        m /= 2
+        return _np.linalg.eigvalsh(m)
+    elif assume_normal:
+        temp = _spl.schur(m, output='complex')
+        evals = _np.diag(temp[1])
+        return evals
+    else:
+        return _np.linalg.eigvals(m)
+
+
+def eigendecomposition(m: _np.ndarray, *, assume_hermitian: Optional[bool] = None):
+    if assume_hermitian is None:
+        assume_hermitian = is_hermitian(m)
+    if assume_hermitian:
+        # Make sure it's Hermtian in exact arithmetic. This helps with
+        # reproducibility across different implementations of LAPACK.
+        m += m.T.conj()
+        m /= 2
+        evals, evecs = _np.linalg.eigh(m)
+        inv_evecs = evecs.T.conj()
+    else:
+        evals, evecs = _np.linalg.eigh(m)
+        inv_evecs = _np.linalg.inv(evecs)
+    return evecs, evals, inv_evecs
+
 
 
 def real_matrix_log(m, action_if_imaginary="raise", tol=1e-8):
@@ -2397,3 +2443,68 @@ def sign_fix_qr(q, r, tol=1e-6):
             qq[:, i] = -q[:, i]
             rr[i, :] = -r[i, :]
     return qq, rr
+
+
+# a TypeVar to allow methods to return "self"
+_T = TypeVar("_T", bound="OperatorLike")
+
+
+@runtime_checkable
+class OperatorLike(Protocol[_T]): # type: ignore
+
+    @property
+    def T(self) -> _T:
+        ...
+
+    def __matmul__(self, other: Any) -> Any:
+        ...
+
+    def __rmatmul__(self, other: Any) -> Any:
+        ...
+
+    def conj(self) -> _T:
+        ...
+
+
+class IdentityOperator:
+    """
+    A representation of the identity operator on any and all vector spaces.
+    """
+
+    __array_priority__ = 101
+    # ^ The __array_priority__ static class variable determines how infix
+    #   operators (most notably, @) are dispatched.
+    #
+    #   If Python initially dispatches the ndarray implementation of an infix
+    #   operator, then the ndarray implementation will first check if the other
+    #   operand has __array_priority__ greater than zero. If it does, then a
+    #   function call like ndarray.__matmul__(array, other) will return the
+    #   result of other.__rmatmul__(array).
+    #   
+    #   For our purposes, it should suffice to set __array_priority__ to 1.
+    #   We set it to 101 in case someone does something weird and passes in 
+    #   a numpy matrix (which behaves like an ndarray in many respects, and
+    #   has __array_priority__ of 10). 
+    #
+
+    def __matmul__(self, other: Any) -> Any:
+        return other
+    
+    def __rmatmul__(self, other: Any) -> Any:
+        return other
+    
+    @property
+    def T(self):
+        return self
+    
+    def conj(self):
+        return self
+
+
+def to_operatorlike(obj):
+    if obj is None:
+        return IdentityOperator()
+    elif isinstance(obj, OperatorLike):
+        return obj
+    else:
+        raise ValueError()

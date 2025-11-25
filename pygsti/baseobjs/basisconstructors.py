@@ -59,7 +59,6 @@ MAX_BASIS_MATRIX_DIM = 2**6
 
 
 def _check_dim(dim):
-    global MAX_BASIS_MATRIX_DIM
     if not isinstance(dim, _numbers.Integral):
         dim = max(dim)  # assume dim is a list/tuple of dims & just consider max
     if dim > MAX_BASIS_MATRIX_DIM:
@@ -95,7 +94,7 @@ class MatrixBasisConstructor(object):
         real components.
     """
 
-    def __init__(self, longname, matrixgen_fn, labelgen_fn, real, first_element_is_identity):
+    def __init__(self, longname: str, matrixgen_fn, labelgen_fn, real: bool, first_element_is_identity):
         """
         Create a new MatrixBasisConstructor:
 
@@ -124,7 +123,7 @@ class MatrixBasisConstructor(object):
         self.real = real
         self.first_element_is_identity = first_element_is_identity
 
-    def matrix_dim(self, dim):
+    def matrix_dim(self, dim: int) -> int:
         """
         Helper function that converts a *vector-space* dimension `dim` to matrix-dimension by taking a sqrt.
 
@@ -141,7 +140,7 @@ class MatrixBasisConstructor(object):
         assert(d**2 == dim), "Matrix bases can only have dimension = perfect square (not %d)!" % dim
         return d
 
-    def labeler(self, dim, sparse):
+    def labeler(self, dim, sparse: bool) -> list[str]:
         """
         Get the labels of a basis to be constructed.
 
@@ -159,7 +158,7 @@ class MatrixBasisConstructor(object):
         """
         return self.labelgen_fn(self.matrix_dim(dim))
 
-    def constructor(self, dim, sparse):
+    def constructor(self, dim, sparse: bool):
         """
         Get the elements of a basis to be constructed.
 
@@ -179,7 +178,7 @@ class MatrixBasisConstructor(object):
         if sparse: els = [_sps.csr_matrix(el) for el in els]
         return els
 
-    def sizes(self, dim, sparse):
+    def sizes(self, dim, sparse: bool) -> tuple[int, int, tuple[int, int]]:
         """
         Get some relevant sizes/dimensions for constructing a basis.
 
@@ -223,7 +222,7 @@ class DiagonalMatrixBasisConstructor(MatrixBasisConstructor):
     a VectorBasisConstructor, but element are diagonal matrices rather than vectors)
     """
 
-    def constructor(self, dim, sparse):
+    def constructor(self, dim, sparse: bool):
         """
         Get the elements of a basis to be constructed.
 
@@ -246,7 +245,7 @@ class DiagonalMatrixBasisConstructor(MatrixBasisConstructor):
         if sparse: els = [_sps.csr_matrix(el) for el in els]
         return els
 
-    def sizes(self, dim, sparse):
+    def sizes(self, dim, sparse: bool):
         """
         Get some relevant sizes/dimensions for constructing a basis.
 
@@ -286,7 +285,7 @@ class SingleElementMatrixBasisConstructor(MatrixBasisConstructor):
     A constructor for a basis containing just a single element (e.g. the identity).
     """
 
-    def sizes(self, dim, sparse):
+    def sizes(self, dim, sparse: bool):
         """
         See docstring for :class:`MatrixBasisConstructor`
 
@@ -366,7 +365,7 @@ class VectorBasisConstructor(object):
         self.real = real
         self.first_element_is_identity = False  # only applies to matrix bases
 
-    def labeler(self, dim, sparse):
+    def labeler(self, dim, sparse: bool):
         """
         Get the labels of a basis to be constructed.
 
@@ -384,7 +383,7 @@ class VectorBasisConstructor(object):
         """
         return self.labelgen_fn(dim)
 
-    def constructor(self, dim, sparse):
+    def constructor(self, dim, sparse: bool):
         """
         Get the elements of a basis to be constructed.
 
@@ -404,7 +403,7 @@ class VectorBasisConstructor(object):
         assert(not sparse), "Sparse vector bases not supported (yet)"
         return els
 
-    def sizes(self, dim, sparse):
+    def sizes(self, dim, sparse: bool):
         """
         Get some relevant sizes/dimensions for constructing a basis.
 
@@ -697,6 +696,52 @@ def gm_labels(matrix_dim):
     # by sqrt( 2.0 / (d*(d-1)) ) to ensure proper normalization.
     lblList.extend(["Z_{%d}" % (k) for k in range(1, d)])
     return lblList
+
+def lf_labels(matrix_dim: int) -> tuple[str,...]:
+    if matrix_dim != 3:
+        raise NotImplementedError()
+    # Divides the underlying Hilbert space into levels (0, 1, L), where (0, 1)
+    # is the computational subspace and (L,) is leakage space.
+    lbls = (
+        # The first element is proportional to the identity on the computational subspace.
+        "I",
+        # The next seven elements also appear in the Gell-Mann basis when matrix_dim == 3.
+        "X",   # --> X_{0,1}
+        "Y",   # --> Y_{0,1}
+        "Z",   # --> Z_{1}
+        "LX0", # --> X_{0,2}
+        "LX1", # --> X_{1,2}
+        "LY0", # --> Y_{0,2}
+        "LY1", # --> Y_{1,2}
+        # The ninth and final element is proportional to the identity on leakage space.
+        "L"
+    )
+    return lbls
+
+def lf_matrices(matrix_dim: int) -> list[_np.ndarray]:
+    """ 
+    This basis is used to isolate the parts of Hilbert-Schmidt space that act on
+    the computational subspace induced from a partition of 3-dimensional complex
+    Hilbert space into a 2-dimensional computational subspace and a 1-dimensional
+    leakage space.
+    """
+    if matrix_dim != 3:
+        raise NotImplementedError()
+    
+    gm_basis = gm_matrices(3)
+    leakage_basis_mxs = [
+        _np.sqrt(2) / 3 * (_np.sqrt(3) * gm_basis[0] + 0.5 * _np.sqrt(6) * gm_basis[8]),
+        gm_basis[1],
+        gm_basis[4],
+        gm_basis[7],
+        gm_basis[2],
+        gm_basis[3],
+        gm_basis[5],
+        gm_basis[6],
+        1 / 3 * (_np.sqrt(3) * gm_basis[0] - _np.sqrt(6) * gm_basis[8]),
+    ]
+    return leakage_basis_mxs
+
 
 
 def qsim_matrices(matrix_dim):
@@ -1270,6 +1315,7 @@ _basis_constructor_dict['pp'] = MatrixBasisConstructor('Normalized Pauli-Product
 _basis_constructor_dict['PP'] = MatrixBasisConstructor('Pauli-Product basis', PP_matrices, pp_labels, True, True)
 _basis_constructor_dict['qsim'] = MatrixBasisConstructor('QuantumSim basis', qsim_matrices, qsim_labels, True, False)
 _basis_constructor_dict['qt'] = MatrixBasisConstructor('Qutrit basis', qt_matrices, qt_labels, True, True)
+_basis_constructor_dict['l2p1'] = MatrixBasisConstructor('Leakage basis for a 2+1 level system', lf_matrices, lf_labels, True, False)
 _basis_constructor_dict['id'] = SingleElementMatrixBasisConstructor('Identity-only subbasis', identity_matrices,
                                                                     identity_labels, True, True)
 _basis_constructor_dict['clmx'] = DiagonalMatrixBasisConstructor('Diagonal Matrix-unit basis', cl_vectors,

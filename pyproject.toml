@@ -27,7 +27,8 @@ dependencies=[
     'stim',
     'plotly>=3.8.0',
     'pandas',
-    'networkx'
+    'networkx',
+    'tqdm>=4.42.0'
 ]
 requires-python='>=3.9'
 keywords=[
@@ -42,7 +43,6 @@ keywords=[
 classifiers=[
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python",
     "Topic :: Scientific/Engineering :: Physics",
     "Operating System :: Microsoft :: Windows",
@@ -57,6 +57,11 @@ diamond_norm = [
 evolutionary_optimization = ['deap']
 extensions = ['cython']
 html_reports = ['jinja2', 'MarkupSafe']
+ibmq = [
+    'qiskit>1',
+    'qiskit-ibm-runtime>=0.17.1',
+    'dill'
+]
 interpygate = ['csaps']
 linting = [
     'autopep8',
@@ -79,12 +84,13 @@ testing_no_cython_mpi = [
     'pytest-xdist',
     'pytest-cov',
     'nbval',
+    'nbformat',
     'packaging',
     'zmq',
     'seaborn',
     'ply',
     'cirq-core',
-    'pygsti[diamond_norm,interpygate,memory_profiling,msgpack,notebooks,pytorch,reports]'
+    'pygsti[diamond_norm,ibmq,interpygate,memory_profiling,msgpack,notebooks,pytorch,reports]'
 ]
 testing_no_cython = ['pygsti[multiprocessor,testing_no_cython_mpi]']
 testing = ['pygsti[extensions,testing_no_cython]']

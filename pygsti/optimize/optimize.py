@@ -149,20 +149,42 @@ def minimize(fn, x0, method='cg', callback=None,
     elif method == 'evolve':
         solution = _fmin_evolutionary(fn, x0, num_generations=maxiter, num_individuals=500, printer=printer)
 
-#    elif method == 'homebrew':
-#      solution = fmin_homebrew(fn, x0, maxiter)
-
     else:
-        #Set options for different algorithms
-        opts = {'maxiter': maxiter, 'disp': False}
-        if method == "BFGS": opts['gtol'] = tol  # gradient norm tolerance
-        elif method == "L-BFGS-B": opts['gtol'] = opts['ftol'] = tol  # gradient norm and fractional y-tolerance
-        elif method == "Nelder-Mead": opts['maxfev'] = maxfev  # max fn evals (note: ftol and xtol can also be set)
+        # We're calling scipy.minimize.
 
-        if method in ("BFGS", "CG", "Newton-CG", "L-BFGS-B", "TNC", "SLSQP", "dogleg", "trust-ncg"):  # use jacobian
-            solution = _spo.minimize(fn, x0, options=opts, method=method, tol=tol, callback=callback, jac=jac)
-        else:
-            solution = _spo.minimize(fn, x0, options=opts, method=method, tol=tol, callback=callback)
+        # Step 1. Check if addl_kwargs has passthrough arguments for scipy.optimize; make
+        # sure that any such arguments don't contradict kwargs passed to this function.
+        scipy_args = addl_kwargs.get('scipy', dict())
+        if 'method' in scipy_args:
+            scipy_method = scipy_args.pop('method')
+            assert method == scipy_method
+        if isinstance(jac, str):
+            scipy_jac = scipy_args.pop('jac', None)
+            if isinstance(scipy_jac, str):
+                assert jac == scipy_jac
+        
+        # Step 2. Set default options (method-dependent), then clobber as needed.
+        opts = {'maxiter': maxiter, 'disp': False}
+        if method == "BFGS":
+            opts['gtol'] = tol
+        elif method == "L-BFGS-B":
+            opts['gtol'] = opts['ftol'] = tol  # gradient norm and fractional y-tolerance
+            opts.pop('disp')  # SciPy deprecated this for L-BFGS-B.
+        elif method == "Nelder-Mead":
+            opts['maxfev'] = maxfev  # max fn evals (note: ftol and xtol can also be set)
+        opts.update(scipy_args.get('options', dict()))
+
+        # Step 3. Actually call scipy.minimize. If the first call fails, then we'll try again
+        # with different settings.
+        solution = _spo.minimize(fn, x0, method=method, options=opts, tol=tol, callback=callback, jac=jac)
+        if not solution.success:
+            tempsol = _spo.minimize(fn, x0, method='COBYLA', options=opts)
+            # ^ It's wise to pass through `opts` in case it contains bound constraints.
+            if not hasattr(jac, '__call__'):
+                jac = '3-point'  # more expensive than the default 2-point finite-difference, but more reliable.
+            tempsol = _spo.minimize(fn, tempsol.x, method=method, options=opts, tol=tol, callback=callback, jac=jac)
+            if tempsol.fun < solution.fun:
+                solution = tempsol
 
     return solution
 

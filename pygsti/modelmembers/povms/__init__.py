@@ -531,7 +531,7 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False, cp_p
                 #Collect all ideal effects
                 base_dense_effects = []
                 for item in base_items:
-                    dense_effect = item[1].to_dense()
+                    dense_effect = item[1].to_dense(on_space='HilbertSchmidt')
                     base_dense_effects.append(dense_effect.reshape((1,len(dense_effect))))
 
                 dense_ideal_povm = _np.concatenate(base_dense_effects, axis=0)
@@ -539,7 +539,7 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False, cp_p
                 #Collect all noisy effects
                 dense_effects = []
                 for effect in povm.values():
-                    dense_effect = effect.to_dense()
+                    dense_effect = effect.to_dense(on_space='HilbertSchmidt')
                     dense_effects.append(dense_effect.reshape((1,len(dense_effect))))
 
                 dense_povm = _np.concatenate(dense_effects, axis=0)
@@ -547,10 +547,14 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False, cp_p
                 #It is often the case that there are more error generators than physical degrees of freedom in the POVM
                 #We define a function which finds linear comb. of errgens that span these degrees of freedom.
                 #This has been called "the trivial gauge", and this function is meant to avoid it
+                eegb = 'PP' if basis.name == 'pp' else basis
                 def calc_physical_subspace(dense_ideal_povm, epsilon = 1e-4):
 
                     degrees_of_freedom = (dense_ideal_povm.shape[0] - 1) * dense_ideal_povm.shape[1]
-                    errgen = _LindbladErrorgen.from_error_generator(povm.state_space.dim, parameterization=to_type)
+                    errgen = _LindbladErrorgen.from_error_generator(
+                        povm.state_space.dim, parameterization=to_type,
+                        elementary_errorgen_basis=eegb, mx_basis=basis
+                    )
 
                     if degrees_of_freedom > errgen.num_params:
                         warnings.warn("POVM has more degrees of freedom than the available number of parameters, representation in this parameterization is not guaranteed")

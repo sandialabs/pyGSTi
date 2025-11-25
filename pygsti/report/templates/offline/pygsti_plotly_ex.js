@@ -119,8 +119,11 @@ function trigger_wstable_plot_creation(id, initial_autosize) {
 	    else { padding = parseFloat(padding); }
 	    desiredW =	max_width(plots)+2*padding;
             desiredH =	max_height(plots)+2*padding
-            $(td).css("width", desiredW);
+            $(td).css("min-width", desiredW);
             $(td).css("height", desiredH);
+        console.log("desired width: ", desiredW)
+        console.log("desired height: ", desiredH)
+        
 	    if(TDtoCheck === null) TDtoCheck = $(td); //just take the first one
 
 	    if(!initial_autosize) {
