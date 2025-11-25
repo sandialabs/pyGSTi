@@ -16,7 +16,9 @@ import logging
 import os
 import sys
 
-from pkg_resources import get_distribution
+from importlib.metadata import version as _version
+
+
 
 # autoclass sometimes wants stubs that aren't needed, so suppress unneccessary log spam
 logging.getLogger('sphinx').addFilter(lambda r: not r.msg.startswith("autosummary: stub file not found"))
@@ -79,7 +81,12 @@ author = u'Erik Nielsen, Kenneth Rudinger, John King Gamble, Robin Blume-Kohout'
 # built documents.
 #
 # The full version, including alpha/beta/rc tags.
-release = get_distribution('pygsti').version
+try:
+    # Get the version of a specific package, e.g., 'requests'
+    release = _version("pygsti")
+except:
+    print("The 'pygsti' package was not found.")
+
 # The short X.Y.Z version.
 version = '.'.join((release.split('.') + ['0'] * 2)[:3])
 
