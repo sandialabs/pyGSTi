@@ -103,7 +103,7 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
     parent_model_projector = target_model.param_interposer.projector_matrix.copy()
     target_model_fit = None
     builders = _custom_builders(prob_clip)
-    deltalogl_fn =  builders.final_builders[0].build(target_model_fit, data.dataset, list(data.dataset.keys()))
+    deltalogl_fn =  builders.final_builders[0].build(target_model, data.dataset, list(data.dataset.keys()))
     H = None
     x0 = None
     result = None
@@ -169,12 +169,12 @@ def do_greedy_from_full_fast(target_model, data, er_thresh=2.0, verbosity=2, max
             new_checkpoint.save()
             print('Checkpoint saved in', new_checkpoint.path)
     
-    if checkpoint is not None:
-        if checkpoint.graph_levels is not None:
+    if loaded_checkpoint is not None:
+        if loaded_checkpoint.graph_levels is not None:
             if rank == 0 and verbosity > 0:
                 print(f'Checkpoint contains {len(checkpoint.graph_levels)} levels')
-            graph_levels = checkpoint.graph_levels
-            red_model = checkpoint.red_model
+            graph_levels = loaded_checkpoint.graph_levels
+            red_model = loaded_checkpoint.red_model
 
     
     #if we did not load a checkpoint with levels in it
