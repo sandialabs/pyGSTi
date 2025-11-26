@@ -201,76 +201,73 @@ def do_greedy_from_full_fast(full_model, data, er_thresh=2.0, verbosity=2, maxit
 
     approx_logl_fn = create_approx_logl_fn(H, x0, original_dlogl)
     while not exceeded_threshold:
+        
         if rank == 0 and verbosity >1:
             print(f'>> Working on level {len(graph_levels)} <<',flush = True)
             start = time.time()
         
-        if False: #np.abs(approx_error) > recompute_H_thresh_percentage * 2:#er_thresh:
-            recompute_Hessian = True
-            break
+        num_total_models = len(graph_levels[-1][0][0])
+        bucket_size = num_total_models // size
+        chunk_range = range(rank*bucket_size, (rank+1)*bucket_size)
+        finalists = []
+        lowest_imdl = -1
+        lowest_quantity = None
+        lowest_vec = None
+        for i in chunk_range:
+
+            reduced_model_projector_matrix = np.delete(parent_model_projector, i, axis=1)
+        
+            vec = _reduced_model_approx_GST_fast(red_rowandcol_H, red_row_H, x0, i)
+
+            deltalogl_fn.model.from_vector(reduced_model_projector_matrix @ vec)
+
+            quantity = (deltalogl_fn.fn()- prev_dlogl)*2
+            if  verbosity > 1:
+                if i  % (100/verbosity) == 0:
+                    print('Model ', i, ' has ev. ratio of ', quantity, flush=True)
+            if lowest_quantity == None or lowest_quantity > quantity:
+                lowest_quantity = quantity
+                lowest_imdl = i
+                lowest_vec = vec
+            
+        left_over_start_index = size * bucket_size
+
+        if (left_over_start_index + rank) < num_total_models:
+
+            i = left_over_start_index + rank
+            reduced_model_projector_matrix = np.delete(parent_model_projector, i, axis=1)     
+            vec = _reduced_model_approx_GST_fast(red_rowandcol_H, red_row_H, x0, i)
+            deltalogl_fn.model.from_vector(reduced_model_projector_matrix @ vec)
+
+            quantity = (deltalogl_fn.fn() - prev_dlogl )*2
+            
+            if lowest_quantity == None or lowest_quantity > quantity:
+                lowest_quantity = quantity
+                lowest_imdl = i
+                lowest_vec = vec
+        
+        best_of_chunk = [lowest_vec, lowest_quantity, lowest_imdl]
+        if comm is not None:
+            finalists_raw = comm.allgather(best_of_chunk)
         else:
+            finalists_raw = [best_of_chunk]
+        finalists = []
+        for finalist in finalists_raw:
+            finalists.append(finalist)
+        #Purge out all entries from processes that did not compute anything
+        finalists = [finalist for finalist in finalists if finalist[2] != -1]
+        
+        sorted_finalists = sorted(finalists, key=lambda x: x[1])
 
-            num_total_models = len(graph_levels[-1][0][0])
-            bucket_size = num_total_models // size
-            chunk_range = range(rank*bucket_size, (rank+1)*bucket_size)
-            finalists = []
-            lowest_imdl = -1
-            lowest_quantity = None
-            lowest_vec = None
-            for i in chunk_range:
+        red_model = remove_param(red_model, sorted_finalists[0][2])
+        finalist_proj_matrix = np.delete(parent_model_projector, sorted_finalists[0][2], axis=1)
+        deltalogl_fn.model.from_vector(finalist_proj_matrix @ sorted_finalists[0][0])
+        finalist_real_logl = deltalogl_fn.fn()
+        finalist_approx_logl = approx_logl_fn(red_row_H, red_rowandcol_H, sorted_finalists[0][2])
+        error = finalist_real_logl - finalist_approx_logl
 
-                reduced_model_projector_matrix = np.delete(parent_model_projector, i, axis=1)
-            
-                vec = _reduced_model_approx_GST_fast(red_rowandcol_H, red_row_H, x0, i)
-
-                deltalogl_fn.model.from_vector(reduced_model_projector_matrix @ vec)
-
-                quantity = (deltalogl_fn.fn()- prev_dlogl)*2
-                if  verbosity > 1:
-                    if i  % (100/verbosity) == 0:
-                        print('Model ', i, ' has ev. ratio of ', quantity, flush=True)
-                if lowest_quantity == None or lowest_quantity > quantity:
-                    lowest_quantity = quantity
-                    lowest_imdl = i
-                    lowest_vec = vec
-                
-            left_over_start_index = size * bucket_size
-
-            if (left_over_start_index + rank) < num_total_models:
-
-                i = left_over_start_index + rank
-                reduced_model_projector_matrix = np.delete(parent_model_projector, i, axis=1)     
-                vec = _reduced_model_approx_GST_fast(red_rowandcol_H, red_row_H, x0, i)
-                deltalogl_fn.model.from_vector(reduced_model_projector_matrix @ vec)
-
-                quantity = (deltalogl_fn.fn() - prev_dlogl )*2
-                
-                if lowest_quantity == None or lowest_quantity > quantity:
-                    lowest_quantity = quantity
-                    lowest_imdl = i
-                    lowest_vec = vec
-            
-            best_of_chunk = [lowest_vec, lowest_quantity, lowest_imdl]
-            if comm is not None:
-                finalists_raw = comm.allgather(best_of_chunk)
-            else:
-                finalists_raw = [best_of_chunk]
-            finalists = []
-            for finalist in finalists_raw:
-                finalists.append(finalist)
-            #Purge out all entries from processes that did not compute anything
-            finalists = [finalist for finalist in finalists if finalist[2] != -1]
-            
-            sorted_finalists = sorted(finalists, key=lambda x: x[1])
-
-            red_model = remove_param(red_model, sorted_finalists[0][2])
-            finalist_proj_matrix = np.delete(parent_model_projector, sorted_finalists[0][2], axis=1)
-            deltalogl_fn.model.from_vector(finalist_proj_matrix @ sorted_finalists[0][0])
-            finalist_real_logl = deltalogl_fn.fn()
-            finalist_approx_logl = approx_logl_fn(red_row_H, red_rowandcol_H, sorted_finalists[0][2])
-            error = finalist_real_logl - finalist_approx_logl
-            if rank == 0:
-                print(f'{error=}', flush=True)
+        if rank == 0:
+            print(f'{error=}', flush=True)
         #DEBUG Delete
         if False: #rank == 0:
             print(f'{error=}', 'compared to ', recompute_H_thresh_percentage*er_thresh)
