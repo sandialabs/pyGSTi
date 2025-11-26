@@ -161,11 +161,8 @@ def do_greedy_from_full_fast(full_model, data, er_thresh=2.0, verbosity=2, maxit
         if rank == 0 and verbosity > 0: 
             print("computing Hessian")
         full_model_fit.sim = pygsti.forwardsims.MapForwardSimulator(processor_grid=(1,1,size),param_blk_sizes=(100,100))
-        #H = pygsti.tools.logl_hessian(full_model_fit, data.dataset, comm=comm, mem_limit=mem_limit, verbosity = verbosity)
-        tmp_ckp=_AMSCheckpoint.read('./ams_checkpoints/HPC_checkpoint11-16.json')
-        H = tmp_ckp.H
-        x0 = tmp_ckp.x0
-        full_model_fit.from_vector(x0)
+        H = pygsti.tools.logl_hessian(full_model_fit, data.dataset, comm=comm, mem_limit=mem_limit, verbosity = verbosity)
+
         if comm is not None:
             H = comm.bcast(H, root = 0)
         if not disable_checkpoints and rank == 0:
@@ -230,7 +227,7 @@ def do_greedy_from_full_fast(full_model, data, er_thresh=2.0, verbosity=2, maxit
 
                 quantity = (deltalogl_fn.fn()- prev_dlogl)*2
                 if  verbosity > 1:
-                    if True:#i  % (100/verbosity) == 0:
+                    if i  % (100/verbosity) == 0:
                         print('Model ', i, ' has ev. ratio of ', quantity, flush=True)
                 if lowest_quantity == None or lowest_quantity > quantity:
                     lowest_quantity = quantity
@@ -278,7 +275,7 @@ def do_greedy_from_full_fast(full_model, data, er_thresh=2.0, verbosity=2, maxit
         if False: #rank == 0:
             print(f'{error=}', 'compared to ', recompute_H_thresh_percentage*er_thresh)
 
-        if  False: #np.abs(error) > recompute_H_thresh_percentage*er_thresh:
+        if  np.abs(error) > recompute_H_thresh_percentage*er_thresh:
             recompute_Hessian = True
             
 
@@ -288,6 +285,7 @@ def do_greedy_from_full_fast(full_model, data, er_thresh=2.0, verbosity=2, maxit
             if verbosity > 0 and rank == 0:
                 print("Recomputing Hessian, approximation error is ", error)
             red_model.from_vector(sorted_finalists[0][0])
+            red_model.sim = pygsti.forwardsims.MapForwardSimulator(processor_grid=(1,size))
             result = _parallel_GST(red_model, data, builders, tol, maxiter, verbosity, comm=comm, mem_limit=mem_limit)
         
             red_model_fit = result.estimates['GateSetTomography'].models['final iteration estimate']
