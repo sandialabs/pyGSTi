@@ -474,7 +474,14 @@ class CircuitMethodTester(BaseCase):
         circ1 = circuit.Circuit(["Gxpi2:0", "Gypi2:1"])
         circ2 = circuit.Circuit(["Gypi2:1", "Gxpi2:0"])
 
-        self.assertTrue(circ1 == circ2, "Logically equivalent circuits should have the same hash")
+        self.assertTrue(circ1 != circ2)
+
+        tmp = circ1.canonicalize_circuit()
+        self.assertTrue(tmp, circ1)
+        self.assertTrue(tmp, circ2)
+
+        tmp2 = circ2.canonicalize_circuit()
+        self.assertTrue(tmp, tmp2)
 
 
     def test_convert_to_quil(self):

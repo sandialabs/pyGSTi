@@ -535,16 +535,18 @@ class Circuit(object):
         self._name = name  # can be None
         #self._times = None  # for FUTURE expansion
         self.auxinfo = {}  # for FUTURE expansion / user metadata
+        self.in_canonical_form: bool = False
 
     #Note: If editing _copy_init one should also check _bare_init in case changes must be propagated.
     #specialized codepath for copying
     def _copy_init(self, labels, line_labels, editable, name='', stringrep=None, occurrence=None,
-                compilable_layer_indices_tup=(), hashable_tup=None, precomp_hash=None):
+                compilable_layer_indices_tup=(), hashable_tup=None, precomp_hash=None, in_canonical_form=False):
         self._labels = labels
         self._line_labels = line_labels
         self._occurrence_id = occurrence
         self._compilable_layer_indices_tup = compilable_layer_indices_tup # always a tuple, but can be empty.
         self._static = not editable
+        self.in_canonical_form = in_canonical_form # are the layers so that qubit indices are in increasing order?
         if self._static:
             self._hashable_tup = hashable_tup #if static we have already precomputed and cached the hashable circuit tuple.
             self._hash = precomp_hash #Same as previous comment. Only meant to be used in settings where we're explicitly checking for self._static.
@@ -985,6 +987,21 @@ class Circuit(object):
         if isinstance(x, Circuit):
             if len(self) != len(x):
                 return False
+            elif self.in_canonical_form != x.in_canonical_form:
+                _warnings.warn((" Either compare circuits both in canonical form or neither in canonical form."
+                            " To convert a circuit to canonical form you should call."
+                            " circuit.canonical_form() beforehand."))
+                if not self.in_canonical_form:
+                    tmp = self.canonicalize_circuit()
+                    if tmp._static and x._static and tmp._hash != x._hash:
+                        return False
+                    return tmp.tup == x.tup
+                else:
+                    # X not in form.
+                    tmp = x.canonicalize_circuit()
+                    if tmp._static and self._static and tmp._hash != self._hash:
+                        return False
+                    return self.tup == tmp.tup
             elif self._static and x._static and self._hash != x._hash:
                 return False
             else:
@@ -1054,13 +1071,13 @@ class Circuit(object):
                 editable_labels =[[lbl] if lbl.IS_SIMPLE else list(lbl.components) for lbl in self._labels]
                 return ret._copy_init(editable_labels, self._line_labels, editable, 
                                       self._name, self._str, self._occurrence_id, 
-                                      self._compilable_layer_indices_tup)
+                                      self._compilable_layer_indices_tup, in_canonical_form=self.in_canonical_form)
             else:
                 #copy the editable labels (avoiding shallow copy issues)
                 editable_labels = [sublist.copy() for sublist in self._labels]
                 return ret._copy_init(editable_labels, self._line_labels, editable, 
                                       self._name, self._str, self._occurrence_id, 
-                                      self._compilable_layer_indices_tup)
+                                      self._compilable_layer_indices_tup, in_canonical_form=self.in_canonical_form)
         else: #create static copy
             if self._static:
                 #if presently static leverage precomputed hashable_tup and hash. 
@@ -1069,7 +1086,7 @@ class Circuit(object):
                 return ret._copy_init(self._labels, self._line_labels, editable, 
                                       self._name, self._str, self._occurrence_id, 
                                       self._compilable_layer_indices_tup, 
-                                      self._hashable_tup, self._hash)
+                                      self._hashable_tup, self._hash, in_canonical_form=self.in_canonical_form)
             else:
                 static_labels = tuple([layer_lbl if isinstance(layer_lbl, _Label) else _Label(layer_lbl) 
                                        for layer_lbl in self._labels])
@@ -1077,7 +1094,7 @@ class Circuit(object):
                 return ret._copy_init(static_labels, self._line_labels, 
                                       editable, self._name, self._str, self._occurrence_id, 
                                       self._compilable_layer_indices_tup, 
-                                      hashable_tup, hash(hashable_tup))
+                                      hashable_tup, hash(hashable_tup), in_canonical_form=self.in_canonical_form)
 
     def clear(self):
         """
@@ -4939,6 +4956,35 @@ class Circuit(object):
                                   else _Label(layer_lbl) for layer_lbl in self._labels])
         self._hashable_tup = self.tup
         self._hash = hash(self._hashable_tup)
+
+    def canonicalize_circuit(self):
+        """
+        Convert a circuit into a canonical form where each of the gates within a layer is sorted in increasing order
+        of the qubits it is operating on.
+        Note that this will not force the qubits to be labeled `0 \dots q` or `Q0 \dots Qq`.
+        
+        It is assumed that the circuit will be fully expanded before calling this function.
+
+        Returns the canonical version of the circuit.
+        Two equivalent canonical circuits will have the same hash.
+        """
+        if self.in_canonical_form:
+            return self # No need to update it.
+        cpy = self.copy(editable=True)
+        for layer_num in range(self.num_layers):
+            layer = cpy.layer(layer_num)
+            tmp = {}
+            for gate in layer:
+                tmp[gate.qubits] = gate
+            tmp2 = []
+            for key in sorted(tmp.keys()):
+                tmp2.append(tmp[key])
+            cpy[layer_num] = tmp2
+        
+        cpy.in_canonical_form = True
+        cpy.done_editing()
+        return cpy
+
 
 
 class CompressedCircuit(object):
