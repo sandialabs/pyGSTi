@@ -70,4 +70,4 @@ class AMSTester(BaseCase):
 												num_samples=10000, seed=20230217)
 				data = ProtocolData(edesign, dataset)
 																	
-				self.check_approx_AMS(fogi_model, data, 2, [fogi_index], [4, 300, 1e-12, 1e-4, 200, True, None, None,None])
+				self.check_approx_AMS(fogi_model, data, 2, [fogi_index], [0, 300, 1e-12, 1e-4, 200, True, None, None,None])
