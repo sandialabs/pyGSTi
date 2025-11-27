@@ -133,7 +133,7 @@ def _accumulate_explicit_sslbls(obj):
             for lbl in obj.components:
                 ret.update(_accumulate_explicit_sslbls(lbl))
         else:  # a simple label
-            if obj.sslbls is not None:  # don't know how to interpet None sslbls
+            if obj.sslbls is not None:  # don't know how to interpret None sslbls
                 return set(obj.sslbls)
     else:  # things that aren't labels we assume are iterable
         for lbl in obj:
@@ -357,7 +357,7 @@ class Circuit(object):
             value doesn't affect the circuit an any way except by affecting
             it's hashing and equivalence testing.  Circuits with different
             occurrence ids are *not* equivalent.  Occurrence values effectively
-            allow multiple copies of the same ciruit to be stored in a
+            allow multiple copies of the same circuit to be stored in a
             dictionary or :class:`DataSet`.
 
         compilable_layer_indices : tuple, optional
@@ -365,7 +365,7 @@ class Circuit(object):
             same target operation) and/or combined with the following circuit layer
             by a hardware compiler.when executing this circuit.  Layers that are
             not "compilable" are effectively followed by a *barrier* which prevents
-            the hardward compiler from restructuring the circuit across the layer
+            the hardware compiler from restructuring the circuit across the layer
             boundary.
         """
         from pygsti.circuits.circuitparser import CircuitParser as _CircuitParser
@@ -380,14 +380,14 @@ class Circuit(object):
                 if line_labels == 'auto':
                     line_labels = chk_labels
                 elif tuple(line_labels) != chk_labels:
-                    raise ValueError(("Error intializing Circuit: "
+                    raise ValueError(("Error initializing Circuit: "
                                       " `line_labels` and line labels in `layer_labels` do not match: %s != %s")
                                      % (line_labels, chk_labels))
             if chk_occurrence is not None:
                 if occurrence is None:  # Also acts as "auto"
                     occurrence = chk_occurrence
                 elif occurrence != chk_occurrence:
-                    raise ValueError(("Error intializing Circuit: "
+                    raise ValueError(("Error initializing Circuit: "
                                       " `occurrence` and occurrence ID in `layer_labels` do not match: %s != %s")
                                      % (occurrence, chk_occurrence))
 
@@ -395,7 +395,7 @@ class Circuit(object):
                 if compilable_layer_indices is None:  # Also acts as "auto"
                     compilable_layer_indices = chk_compilable_inds
                 elif compilable_layer_indices != chk_compilable_inds:
-                    raise ValueError(("Error intializing Circuit: `compilable_layer_indices` and markers"
+                    raise ValueError(("Error initializing Circuit: `compilable_layer_indices` and markers"
                                       " in `layer_labels` do not match: %s != %s")
                                      % (compilable_layer_indices, chk_compilable_inds))
 
@@ -418,7 +418,7 @@ class Circuit(object):
                 if layer_labels_objs is None:
                     layer_labels_objs = tuple(map(to_label, layer_labels))
                 if layer_labels_objs != tuple(chk):
-                    raise ValueError(("Error intializing Circuit: "
+                    raise ValueError(("Error initializing Circuit: "
                                       " `layer_labels` and `stringrep` do not match: %s != %s\n"
                                       "(set `layer_labels` to None to infer it from `stringrep`)")
                                      % (layer_labels, stringrep))
@@ -426,7 +426,7 @@ class Circuit(object):
                 if line_labels == 'auto':
                     line_labels = chk_labels
                 elif tuple(line_labels) != chk_labels:
-                    raise ValueError(("Error intializing Circuit: "
+                    raise ValueError(("Error initializing Circuit: "
                                       " `line_labels` and `stringrep` do not match: %s != %s (from %s)\n"
                                       "(set `line_labels` to None to infer it from `stringrep`)")
                                      % (line_labels, chk_labels, stringrep))
@@ -435,7 +435,7 @@ class Circuit(object):
                 if occurrence is None:  # Also acts as "auto"
                     occurrence = chk_occurrence
                 elif occurrence != chk_occurrence:
-                    raise ValueError(("Error intializing Circuit: "
+                    raise ValueError(("Error initializing Circuit: "
                                       " `occurrence` and occurrence ID in `layer_labels` do not match: %s != %s")
                                      % (occurrence, chk_occurrence))
 
@@ -443,7 +443,7 @@ class Circuit(object):
                 if compilable_layer_indices is None:  # Also acts as "auto"
                     compilable_layer_indices = chk_compilable_inds
                 elif compilable_layer_indices != chk_compilable_inds:
-                    raise ValueError(("Error intializing Circuit:  `compilable_layer_indices` and markers"
+                    raise ValueError(("Error initializing Circuit:  `compilable_layer_indices` and markers"
                                       " in `layer_labels` do not match: %s != %s")
                                      % (compilable_layer_indices, chk_compilable_inds))
 
@@ -535,16 +535,18 @@ class Circuit(object):
         self._name = name  # can be None
         #self._times = None  # for FUTURE expansion
         self.auxinfo = {}  # for FUTURE expansion / user metadata
+        self.in_canonical_form: bool = False
 
     #Note: If editing _copy_init one should also check _bare_init in case changes must be propagated.
     #specialized codepath for copying
     def _copy_init(self, labels, line_labels, editable, name='', stringrep=None, occurrence=None,
-                compilable_layer_indices_tup=(), hashable_tup=None, precomp_hash=None):
+                compilable_layer_indices_tup=(), hashable_tup=None, precomp_hash=None, in_canonical_form=False):
         self._labels = labels
         self._line_labels = line_labels
         self._occurrence_id = occurrence
         self._compilable_layer_indices_tup = compilable_layer_indices_tup # always a tuple, but can be empty.
         self._static = not editable
+        self.in_canonical_form = in_canonical_form # are the layers so that qubit indices are in increasing order?
         if self._static:
             self._hashable_tup = hashable_tup #if static we have already precomputed and cached the hashable circuit tuple.
             self._hash = precomp_hash #Same as previous comment. Only meant to be used in settings where we're explicitly checking for self._static.
@@ -581,7 +583,7 @@ class Circuit(object):
         Construct and return this entire circuit as a :class:`CircuitLabel`.
 
         Note: occurrence-id information is not stored in a circuit label, so
-        circuits that differ only in their `occurence_id` will return circuit
+        circuits that differ only in their `occurrence_id` will return circuit
         labels that are equal.
 
         Parameters
@@ -902,7 +904,7 @@ class Circuit(object):
         #try to return the line labels as the contents of combined labels in
         #sorted order. If there is a TypeError raised this is probably because
         #we're mixing integer and string labels, in which case we'll just return
-        #the new labels in whatever arbirary order is obtained by casting a set to
+        #the new labels in whatever arbitrary order is obtained by casting a set to
         #a tuple.
         #unpack all of the different sets of labels and make sure there are no duplicates
         combined_labels_unpacked = {el for tup in combined_labels for el in tup}
@@ -985,6 +987,21 @@ class Circuit(object):
         if isinstance(x, Circuit):
             if len(self) != len(x):
                 return False
+            elif self.in_canonical_form != x.in_canonical_form:
+                _warnings.warn((" Either compare circuits both in canonical form or neither in canonical form."
+                            " To convert a circuit to canonical form you should call."
+                            " circuit.canonical_form() beforehand."))
+                if not self.in_canonical_form:
+                    tmp = self.canonicalize_circuit()
+                    if tmp._static and x._static and tmp._hash != x._hash:
+                        return False
+                    return tmp.tup == x.tup
+                else:
+                    # X not in form.
+                    tmp = x.canonicalize_circuit()
+                    if tmp._static and self._static and tmp._hash != self._hash:
+                        return False
+                    return self.tup == tmp.tup
             elif self._static and x._static and self._hash != x._hash:
                 return False
             else:
@@ -1054,13 +1071,13 @@ class Circuit(object):
                 editable_labels =[[lbl] if lbl.IS_SIMPLE else list(lbl.components) for lbl in self._labels]
                 return ret._copy_init(editable_labels, self._line_labels, editable, 
                                       self._name, self._str, self._occurrence_id, 
-                                      self._compilable_layer_indices_tup)
+                                      self._compilable_layer_indices_tup, in_canonical_form=self.in_canonical_form)
             else:
                 #copy the editable labels (avoiding shallow copy issues)
                 editable_labels = [sublist.copy() for sublist in self._labels]
                 return ret._copy_init(editable_labels, self._line_labels, editable, 
                                       self._name, self._str, self._occurrence_id, 
-                                      self._compilable_layer_indices_tup)
+                                      self._compilable_layer_indices_tup, in_canonical_form=self.in_canonical_form)
         else: #create static copy
             if self._static:
                 #if presently static leverage precomputed hashable_tup and hash. 
@@ -1069,7 +1086,7 @@ class Circuit(object):
                 return ret._copy_init(self._labels, self._line_labels, editable, 
                                       self._name, self._str, self._occurrence_id, 
                                       self._compilable_layer_indices_tup, 
-                                      self._hashable_tup, self._hash)
+                                      self._hashable_tup, self._hash, in_canonical_form=self.in_canonical_form)
             else:
                 static_labels = tuple([layer_lbl if isinstance(layer_lbl, _Label) else _Label(layer_lbl) 
                                        for layer_lbl in self._labels])
@@ -1077,7 +1094,7 @@ class Circuit(object):
                 return ret._copy_init(static_labels, self._line_labels, 
                                       editable, self._name, self._str, self._occurrence_id, 
                                       self._compilable_layer_indices_tup, 
-                                      hashable_tup, hash(hashable_tup))
+                                      hashable_tup, hash(hashable_tup), in_canonical_form=self.in_canonical_form)
 
     def clear(self):
         """
@@ -1215,7 +1232,7 @@ class Circuit(object):
             Note: if you want a `Circuit` when only selecting one layer,
             set `layers` to a slice or tuple containing just a single index.
             Note that the returned circuit doesn't retain any original
-            metadata, such as the compilable layer indices or occurence id.
+            metadata, such as the compilable layer indices or occurrence id.
         """
         nonint_layers = not isinstance(layers, int)
 
@@ -3653,7 +3670,7 @@ class Circuit(object):
 
     def format_display_str(self, width=80):
         """
-        Formats a string for displaying this circuit suject to a maximum `width`.
+        Formats a string for displaying this circuit subject to a maximum `width`.
 
         Parameters
         ----------
@@ -3956,7 +3973,7 @@ class Circuit(object):
 
         wait_duration : cirq.Duration, optional
             If no gatename_conversion dict is given, the idle operation is not
-            converted to a gate. If wait_diration is specified and gatename_conversion
+            converted to a gate. If wait_duration is specified and gatename_conversion
             is not specified, then the idle operation will be converted to a
             `cirq.WaitGate` with the specified duration.
 
@@ -4422,7 +4439,7 @@ class Circuit(object):
         block_idles : bool, optional
             In the special case of global idle gates, pragma-block barriers are inserted *even*
             when `block_between_layers=False`.  Set `block_idles=False` to disable this behavior,
-            whcih typically results in global idle gates being removed by the compiler.
+            which typically results in global idle gates being removed by the compiler.
 
         gate_declarations : dict, optional
             If not None, a dictionary that provides unitary maps for particular gates that
@@ -4871,7 +4888,7 @@ class Circuit(object):
 
         return openqasm
     
-    @_deprecate_fn('Model.probabilites or Model.sim.probs')
+    @_deprecate_fn('Model.probabilities or Model.sim.probs')
     def simulate(self, model, return_all_outcomes=False):
         """
         Compute the outcome probabilities of this Circuit using `model` as a model for the gates.
@@ -4939,6 +4956,35 @@ class Circuit(object):
                                   else _Label(layer_lbl) for layer_lbl in self._labels])
         self._hashable_tup = self.tup
         self._hash = hash(self._hashable_tup)
+
+    def canonicalize_circuit(self):
+        """
+        Convert a circuit into a canonical form where each of the gates within a layer is sorted in increasing order
+        of the qubits it is operating on.
+        Note that this will not force the qubits to be labeled `0 \dots q` or `Q0 \dots Qq`.
+        
+        It is assumed that the circuit will be fully expanded before calling this function.
+
+        Returns the canonical version of the circuit.
+        Two equivalent canonical circuits will have the same hash.
+        """
+        if self.in_canonical_form:
+            return self # No need to update it.
+        cpy = self.copy(editable=True)
+        for layer_num in range(self.num_layers):
+            layer = cpy.layer(layer_num)
+            tmp = {}
+            for gate in layer:
+                tmp[gate.qubits] = gate
+            tmp2 = []
+            for key in sorted(tmp.keys()):
+                tmp2.append(tmp[key])
+            cpy[layer_num] = tmp2
+        
+        cpy.in_canonical_form = True
+        cpy.done_editing()
+        return cpy
+
 
 
 class CompressedCircuit(object):
@@ -5040,7 +5086,7 @@ class CompressedCircuit(object):
 
         The result is tuple with a special compressed- gate-string form form
         that is not useable by other GST methods but is typically shorter
-        (especially for long operation sequences with a repetative structure)
+        (especially for long operation sequences with a repetitive structure)
         than the original operation sequence tuple.
 
         Parameters
