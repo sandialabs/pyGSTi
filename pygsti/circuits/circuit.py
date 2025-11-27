@@ -133,7 +133,7 @@ def _accumulate_explicit_sslbls(obj):
             for lbl in obj.components:
                 ret.update(_accumulate_explicit_sslbls(lbl))
         else:  # a simple label
-            if obj.sslbls is not None:  # don't know how to interpet None sslbls
+            if obj.sslbls is not None:  # don't know how to interpret None sslbls
                 return set(obj.sslbls)
     else:  # things that aren't labels we assume are iterable
         for lbl in obj:
@@ -357,7 +357,7 @@ class Circuit(object):
             value doesn't affect the circuit an any way except by affecting
             it's hashing and equivalence testing.  Circuits with different
             occurrence ids are *not* equivalent.  Occurrence values effectively
-            allow multiple copies of the same ciruit to be stored in a
+            allow multiple copies of the same circuit to be stored in a
             dictionary or :class:`DataSet`.
 
         compilable_layer_indices : tuple, optional
@@ -365,7 +365,7 @@ class Circuit(object):
             same target operation) and/or combined with the following circuit layer
             by a hardware compiler.when executing this circuit.  Layers that are
             not "compilable" are effectively followed by a *barrier* which prevents
-            the hardward compiler from restructuring the circuit across the layer
+            the hardware compiler from restructuring the circuit across the layer
             boundary.
         """
         from pygsti.circuits.circuitparser import CircuitParser as _CircuitParser
@@ -380,14 +380,14 @@ class Circuit(object):
                 if line_labels == 'auto':
                     line_labels = chk_labels
                 elif tuple(line_labels) != chk_labels:
-                    raise ValueError(("Error intializing Circuit: "
+                    raise ValueError(("Error initializing Circuit: "
                                       " `line_labels` and line labels in `layer_labels` do not match: %s != %s")
                                      % (line_labels, chk_labels))
             if chk_occurrence is not None:
                 if occurrence is None:  # Also acts as "auto"
                     occurrence = chk_occurrence
                 elif occurrence != chk_occurrence:
-                    raise ValueError(("Error intializing Circuit: "
+                    raise ValueError(("Error initializing Circuit: "
                                       " `occurrence` and occurrence ID in `layer_labels` do not match: %s != %s")
                                      % (occurrence, chk_occurrence))
 
@@ -395,7 +395,7 @@ class Circuit(object):
                 if compilable_layer_indices is None:  # Also acts as "auto"
                     compilable_layer_indices = chk_compilable_inds
                 elif compilable_layer_indices != chk_compilable_inds:
-                    raise ValueError(("Error intializing Circuit: `compilable_layer_indices` and markers"
+                    raise ValueError(("Error initializing Circuit: `compilable_layer_indices` and markers"
                                       " in `layer_labels` do not match: %s != %s")
                                      % (compilable_layer_indices, chk_compilable_inds))
 
@@ -418,7 +418,7 @@ class Circuit(object):
                 if layer_labels_objs is None:
                     layer_labels_objs = tuple(map(to_label, layer_labels))
                 if layer_labels_objs != tuple(chk):
-                    raise ValueError(("Error intializing Circuit: "
+                    raise ValueError(("Error initializing Circuit: "
                                       " `layer_labels` and `stringrep` do not match: %s != %s\n"
                                       "(set `layer_labels` to None to infer it from `stringrep`)")
                                      % (layer_labels, stringrep))
@@ -426,7 +426,7 @@ class Circuit(object):
                 if line_labels == 'auto':
                     line_labels = chk_labels
                 elif tuple(line_labels) != chk_labels:
-                    raise ValueError(("Error intializing Circuit: "
+                    raise ValueError(("Error initializing Circuit: "
                                       " `line_labels` and `stringrep` do not match: %s != %s (from %s)\n"
                                       "(set `line_labels` to None to infer it from `stringrep`)")
                                      % (line_labels, chk_labels, stringrep))
@@ -435,7 +435,7 @@ class Circuit(object):
                 if occurrence is None:  # Also acts as "auto"
                     occurrence = chk_occurrence
                 elif occurrence != chk_occurrence:
-                    raise ValueError(("Error intializing Circuit: "
+                    raise ValueError(("Error initializing Circuit: "
                                       " `occurrence` and occurrence ID in `layer_labels` do not match: %s != %s")
                                      % (occurrence, chk_occurrence))
 
@@ -443,7 +443,7 @@ class Circuit(object):
                 if compilable_layer_indices is None:  # Also acts as "auto"
                     compilable_layer_indices = chk_compilable_inds
                 elif compilable_layer_indices != chk_compilable_inds:
-                    raise ValueError(("Error intializing Circuit:  `compilable_layer_indices` and markers"
+                    raise ValueError(("Error initializing Circuit:  `compilable_layer_indices` and markers"
                                       " in `layer_labels` do not match: %s != %s")
                                      % (compilable_layer_indices, chk_compilable_inds))
 
@@ -583,7 +583,7 @@ class Circuit(object):
         Construct and return this entire circuit as a :class:`CircuitLabel`.
 
         Note: occurrence-id information is not stored in a circuit label, so
-        circuits that differ only in their `occurence_id` will return circuit
+        circuits that differ only in their `occurrence_id` will return circuit
         labels that are equal.
 
         Parameters
@@ -904,7 +904,7 @@ class Circuit(object):
         #try to return the line labels as the contents of combined labels in
         #sorted order. If there is a TypeError raised this is probably because
         #we're mixing integer and string labels, in which case we'll just return
-        #the new labels in whatever arbirary order is obtained by casting a set to
+        #the new labels in whatever arbitrary order is obtained by casting a set to
         #a tuple.
         #unpack all of the different sets of labels and make sure there are no duplicates
         combined_labels_unpacked = {el for tup in combined_labels for el in tup}
@@ -1232,7 +1232,7 @@ class Circuit(object):
             Note: if you want a `Circuit` when only selecting one layer,
             set `layers` to a slice or tuple containing just a single index.
             Note that the returned circuit doesn't retain any original
-            metadata, such as the compilable layer indices or occurence id.
+            metadata, such as the compilable layer indices or occurrence id.
         """
         nonint_layers = not isinstance(layers, int)
 
@@ -3670,7 +3670,7 @@ class Circuit(object):
 
     def format_display_str(self, width=80):
         """
-        Formats a string for displaying this circuit suject to a maximum `width`.
+        Formats a string for displaying this circuit subject to a maximum `width`.
 
         Parameters
         ----------
@@ -3973,7 +3973,7 @@ class Circuit(object):
 
         wait_duration : cirq.Duration, optional
             If no gatename_conversion dict is given, the idle operation is not
-            converted to a gate. If wait_diration is specified and gatename_conversion
+            converted to a gate. If wait_duration is specified and gatename_conversion
             is not specified, then the idle operation will be converted to a
             `cirq.WaitGate` with the specified duration.
 
@@ -4439,7 +4439,7 @@ class Circuit(object):
         block_idles : bool, optional
             In the special case of global idle gates, pragma-block barriers are inserted *even*
             when `block_between_layers=False`.  Set `block_idles=False` to disable this behavior,
-            whcih typically results in global idle gates being removed by the compiler.
+            which typically results in global idle gates being removed by the compiler.
 
         gate_declarations : dict, optional
             If not None, a dictionary that provides unitary maps for particular gates that
@@ -4888,7 +4888,7 @@ class Circuit(object):
 
         return openqasm
     
-    @_deprecate_fn('Model.probabilites or Model.sim.probs')
+    @_deprecate_fn('Model.probabilities or Model.sim.probs')
     def simulate(self, model, return_all_outcomes=False):
         """
         Compute the outcome probabilities of this Circuit using `model` as a model for the gates.
@@ -5086,7 +5086,7 @@ class CompressedCircuit(object):
 
         The result is tuple with a special compressed- gate-string form form
         that is not useable by other GST methods but is typically shorter
-        (especially for long operation sequences with a repetative structure)
+        (especially for long operation sequences with a repetitive structure)
         than the original operation sequence tuple.
 
         Parameters
