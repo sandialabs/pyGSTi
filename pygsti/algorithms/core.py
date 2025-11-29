@@ -122,7 +122,7 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
     # We would like to get X or it's gauge equivalent.                                                                                                          # noqa
     #  We do:       1)  (I^-1)*AXB ~= B^-1 X B := Xhat -- we solve Ii*A*B = identity for Ii                                                                     # noqa
     #               2) B * Xhat * B^-1 ==> X  (but what if B is non-invertible -- say rectangular) Want B*(something) ~ identity ??                             # noqa
-    # for lower rank target models, want a gauge tranformation that brings Xhat => X of "increased dim" model                                                   # noqa
+    # for lower rank target models, want a gauge transformation that brings Xhat => X of "increased dim" model                                                   # noqa
     # want "B^-1" such that B(gsDim,nRhoSpecs) "B^-1"(nRhoSpecs,gsDim) ~ Identity(gsDim)                                                                        # noqa
     #   Ub,sb,Vb = svd(B) so B = Ub*diag(sb)*Vb  where Ub = (gsDim,M), s = (M,M), Vb = (M,prepSpecs)                                                            # noqa
     #   if B^-1 := VbT*sb^-1*Ub^-1 then B*B^-1 = I(gsDim)                                                                                                       # noqa
@@ -387,7 +387,7 @@ def _lgst_matrix_dims(model, prep_fiducials, effect_fiducials):
     nRhoSpecs = len(prep_fiducials)  # no instruments allowed in prep_fiducials
     povmLbls = [model.split_circuit(s, ('povm',))[2]  # povm_label
                 for s in effect_fiducials]
-    povmLens = ([len(model.povms[l]) for l in povmLbls])
+    povmLens = ([len(model.povms[povm_label]) for povm_label in povmLbls])
     nESpecs = sum(povmLens)
     return nRhoSpecs, nESpecs, povmLbls, povmLens
 
@@ -726,7 +726,7 @@ def run_iterative_gst(dataset, start_model, circuit_lists,
 
     circuit_lists : list of lists of (tuples or Circuits)
         The i-th element is a list of the circuits to be used in the i-th iteration
-        of the optimization.  Each element of these lists is a circuit, specifed as
+        of the optimization.  Each element of these lists is a circuit, specified as
         either a Circuit object or as a tuple of operation labels (but all must be specified
         using the same type).
         e.g. [ [ (), ('Gx',) ], [ (), ('Gx',), ('Gy',) ], [ (), ('Gx',), ('Gy',), ('Gx','Gy') ]  ]
@@ -806,7 +806,7 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
 
     circuit_lists : list of lists of (tuples or Circuits)
         The i-th element is a list of the circuits to be used in the i-th iteration
-        of the optimization.  Each element of these lists is a circuit, specifed as
+        of the optimization.  Each element of these lists is a circuit, specified as
         either a Circuit object or as a tuple of operation labels (but all must be specified
         using the same type).
         e.g. [ [ (), ('Gx',) ], [ (), ('Gx',), ('Gy',) ], [ (), ('Gx',), ('Gy',), ('Gx','Gy') ]  ]
