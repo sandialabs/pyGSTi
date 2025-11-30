@@ -195,7 +195,7 @@ class StandardGSTDesign(GateSetTomographyDesign):
         for each germ-power the selected pairs are *different* random
         sets of all possible pairs (unlike fid_pairs, which specifies the
         *same* fiducial pairs for *all* same-germ base strings).  If
-        fid_pairs is used in conjuction with keep_fraction, the pairs
+        fid_pairs is used in conjunction with keep_fraction, the pairs
         specified by fid_pairs are always selected, and any additional
         pairs are randomly selected.
 
@@ -472,7 +472,7 @@ class GSTInitialModel(_NicelySerializable):
             Data used to execute LGST when needed.
 
         comm : mpi4py.MPI.Comm
-            A MPI communicator to divide workload amoung multiple processors.
+            A MPI communicator to divide workload among multiple processors.
 
         Returns
         -------
@@ -672,7 +672,7 @@ class GSTBadFitOptions(_NicelySerializable):
         """
         if isinstance(obj, GSTBadFitOptions):
             return obj
-        else:  # assum obj is a dict of arguments
+        else:  # assume obj is a dict of arguments
             return cls(**obj) if obj else cls()  # allow obj to be None => defaults
 
     def __init__(self, threshold=DEFAULT_BAD_FIT_THRESHOLD, actions=(),
@@ -1542,7 +1542,7 @@ class GateSetTomography(_proto.Protocol):
         elif self.initial_model.target_model is not None:
             target_model = self.initial_model.target_model.copy()
         elif self.initial_model.model is not None:
-            # when we desparately need a target model but none have been specifically given: use initial model
+            # when we desperately need a target model but none have been specifically given: use initial model
             target_model = self.initial_model.model.copy()
         else:
             msg = 'Could not identify a suitable target model, this may result'\
@@ -2201,7 +2201,7 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options,
         The *primary* estimate label to base bad-fit additions off of.
 
     badfit_options : GSTBadFitOptions
-        The options specifing what constitutes a "bad fit" and what actions
+        The options specifying what constitutes a "bad fit" and what actions
         to take when one occurs.
 
     optimizer : Optimizer
@@ -2563,12 +2563,12 @@ def _compute_robust_scaling(scale_typ, objfn_cache, mdc_objfn):
     Parameters
     ----------
     scale_typ : {'robust', 'robust+', 'Robust', 'Robust+'}
-        The type of robust scaling.  Captial vs. lowercase "R" doesn't
+        The type of robust scaling.  Capital vs. lowercase "R" doesn't
         matter to this function (it indicates whether a post-scaling
         re-optimization is performed elsewhere).  The "+" postfix distinguishes
         a "version 1" scaling (no "+"), where we drastically scale down weights
         of especially bad sequences, from a "version 2" scaling ("+"), where
-        we additionaly rescale all the circuit data to achieve the desired chi2
+        we additionally rescale all the circuit data to achieve the desired chi2
         distribution of per-circuit goodness-of-fit values *without reordering*
         these values.
 
@@ -2812,7 +2812,7 @@ def _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options,
         # that also satisfies the constraints), and while doing this find the active constraints.
         printer.log("VERIFYING that the final wildcard budget vector is admissable")
 
-        # Used for deciding what counts as a negligable per-gate wildcard.
+        # Used for deciding what counts as a negligible per-gate wildcard.
         max_depth = 0
         for circ in ds.keys():
             if circ.depth > max_depth:
@@ -2822,8 +2822,8 @@ def _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options,
         for w_ind, w_ele in enumerate(wvec):
             active_constraints = {}
             strictly_smaller_wvec = wvec.copy()
-            negligable_budget = 1 / (100 * max_depth)
-            if abs(w_ele) > negligable_budget:  # Use absolute values everywhere (wildcard vector can be negative).
+            negligible_budget = 1 / (100 * max_depth)
+            if abs(w_ele) > negligible_budget:  # Use absolute values everywhere (wildcard vector can be negative).
                 strictly_smaller_wvec[w_ind] = 0.99 * abs(w_ele)  # Decrease the vector element by 1%.
                 printer.log(" - Trialing strictly smaller vector, with element %.3g reduced from %.3g to %.3g" %
                             (w_ind, w_ele, strictly_smaller_wvec[w_ind]))
@@ -2851,7 +2851,7 @@ def _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options,
             else:
                 if budget_was_optimized:
                     printer.log((" - Element %.3g is %.3g. This is below %.3g, so trialing snapping to zero"
-                                 " and updating.") % (w_ind, w_ele, negligable_budget))
+                                 " and updating.") % (w_ind, w_ele, negligible_budget))
                     strictly_smaller_wvec[w_ind] = 0.
                     glob_constraint, percircuit_constraint = _evaluate_constraints(strictly_smaller_wvec)
                     if glob_constraint + _np.sum(percircuit_constraint) < 1e-4:
@@ -2863,7 +2863,7 @@ def _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options,
                 else:
                     # We do this instead when we're not optimizing the budget, as otherwise we'd change the budget.
                     printer.log(" - Skipping trialing reducing element %.3g below %.3g, as it is less than %.3g" %
-                                (w_ind, w_ele, negligable_budget))
+                                (w_ind, w_ele, negligible_budget))
             active_constraints_list.append(active_constraints)
         budget.from_vector(wvec)
 
@@ -2899,7 +2899,7 @@ def _reoptimize_with_weights(mdc_objfn, circuit_weights_dict, optimizer, verbosi
         The model to re-optimize.
 
     ds : DataSet
-        The data set to compare againts.
+        The data set to compare against.
 
     circuit_list : list
         The circuits for which data and predictions should be compared.
