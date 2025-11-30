@@ -21,7 +21,7 @@ import pathlib as _pathlib
 
 import numpy as _np
 from scipy.stats import chi2 as _chi2
-from typing import Optional
+from typing import Optional, Union, Any
 
 from pygsti.baseobjs.profiler import DummyProfiler as _DummyProfiler
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
@@ -195,7 +195,7 @@ class StandardGSTDesign(GateSetTomographyDesign):
         for each germ-power the selected pairs are *different* random
         sets of all possible pairs (unlike fid_pairs, which specifies the
         *same* fiducial pairs for *all* same-germ base strings).  If
-        fid_pairs is used in conjuction with keep_fraction, the pairs
+        fid_pairs is used in conjunction with keep_fraction, the pairs
         specified by fid_pairs are always selected, and any additional
         pairs are randomly selected.
 
@@ -472,7 +472,7 @@ class GSTInitialModel(_NicelySerializable):
             Data used to execute LGST when needed.
 
         comm : mpi4py.MPI.Comm
-            A MPI communicator to divide workload amoung multiple processors.
+            A MPI communicator to divide workload among multiple processors.
 
         Returns
         -------
@@ -672,7 +672,7 @@ class GSTBadFitOptions(_NicelySerializable):
         """
         if isinstance(obj, GSTBadFitOptions):
             return obj
-        else:  # assum obj is a dict of arguments
+        else:  # assume obj is a dict of arguments
             return cls(**obj) if obj else cls()  # allow obj to be None => defaults
 
     def __init__(self, threshold=DEFAULT_BAD_FIT_THRESHOLD, actions=(),
@@ -1314,7 +1314,8 @@ class GateSetTomography(_proto.Protocol):
         self.unreliable_ops = ('Gcnot', 'Gcphase', 'Gms', 'Gcn', 'Gcx', 'Gcz')
 
     def run(self, data, memlimit=None, comm=None, checkpoint=None, checkpoint_path=None, disable_checkpointing=False,
-            simulator: Optional[ForwardSimulator.Castable]=None):
+            simulator: Optional[ForwardSimulator.Castable]=None, 
+            optimizers: Optional[Union[_opt.Optimizer, dict, list[_opt.Optimizer], list[dict]]] = None):
         """
         Run this protocol on `data`.
 
@@ -1351,11 +1352,19 @@ class GateSetTomography(_proto.Protocol):
             Ignored if None. If not None, then we call
                 fwdsim = ForwardSimulator.cast(simulator),
             and we set the .sim attribute of every Model we encounter to fwdsim.
+        
+        optimizers : Optimizer, or dict, or list of Optimizer, or list of dict (default None)
+            The optimizer to use, or a dictionary of optimizer parameters
+            from which a default optimizer can be built. If a list, the length
+            of the list should either be 1 or equal to the number of iterations. 
+            If 1, then this optimizer is used for every iteration, otherwise
+            each optimizer is used for its corresponding iteration.
 
         Returns
         -------
         ModelEstimateResults
         """
+        from pygsti.forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
         tref = _time.time()
 
         profile = self.profile
@@ -1388,6 +1397,38 @@ class GateSetTomography(_proto.Protocol):
                                                       data.dataset, comm)
         if simulator is not None:
             mdl_start.sim = simulator
+        
+        if optimizers is None:
+            optimizers = [self.optimizer]*len(circuit_lists)
+        
+        else:
+            if isinstance(optimizers, (_opt.Optimizer, dict)):    
+                optimizers = [optimizers]*len(circuit_lists)
+            if isinstance(optimizers, list):
+                if len(optimizers) == 1:
+                    optimizers = optimizers*len(circuit_lists)
+            else:
+                if not isinstance(optimizers, (list, dict)):
+                    raise ValueError(f'Invalid argument for optimizers of type {type(optimizers)}, supported types are list, Optimizer')
+                temp_optimizers = []
+                default_first_fditer = 1 if mdl_start and isinstance(mdl_start.sim, _MatrixFSim) else 0
+                for optimizer in optimizers:
+                    
+                    if isinstance(optimizer, _opt.Optimizer):
+                        temp_optimizer = _copy.deepcopy(optimizer)  # don't mess with caller's optimizer
+                        if hasattr(optimizer,'first_fditer') and optimizer.first_fditer is None:
+                            # special behavior: can set optimizer's first_fditer to `None` to mean "fill with default"
+                            temp_optimizer.first_fditer = default_first_fditer
+
+                    else:
+                        if optimizer is None:
+                            temp_optimizer = {}
+                        else:
+                            temp_optimizer = _copy.deepcopy(optimizer)  # don't mess with caller's optimizer
+                        if 'first_fditer' not in optimizer:  # then add default first_fditer value
+                            temp_optimizer['first_fditer'] = default_first_fditer
+                        temp_optimizers.append(_opt.SimplerLMOptimizer.cast(temp_optimizer))
+                optimizers = temp_optimizers
 
         if disable_checkpointing:
             seed_model = mdl_start.copy()
@@ -1447,7 +1488,7 @@ class GateSetTomography(_proto.Protocol):
         #Run Long-sequence GST on data
         #Use the generator based version and query each of the intermediate results.
         gst_iter_generator = _alg.iterative_gst_generator( 
-            ds, seed_model, bulk_circuit_lists, self.optimizer,
+            ds, seed_model, bulk_circuit_lists, optimizers,
             self.objfn_builders.iteration_builders, self.objfn_builders.final_builders,
             resource_alloc, starting_idx, printer)
 
@@ -1501,7 +1542,7 @@ class GateSetTomography(_proto.Protocol):
         elif self.initial_model.target_model is not None:
             target_model = self.initial_model.target_model.copy()
         elif self.initial_model.model is not None:
-            # when we desparately need a target model but none have been specifically given: use initial model
+            # when we desperately need a target model but none have been specifically given: use initial model
             target_model = self.initial_model.model.copy()
         else:
             msg = 'Could not identify a suitable target model, this may result'\
@@ -1816,7 +1857,8 @@ class StandardGST(_proto.Protocol):
         self.starting_point = {}  # a dict whose keys are modes
 
     def run(self, data, memlimit=None, comm=None, checkpoint=None, checkpoint_path=None,
-            disable_checkpointing=False, simulator: Optional[ForwardSimulator.Castable]=None):
+            disable_checkpointing=False, simulator: Optional[ForwardSimulator.Castable]=None, 
+            optimizers: Optional[Union[_opt.Optimizer, dict, list[_opt.Optimizer], list[dict]]] = None):
         """
         Run this protocol on `data`.
 
@@ -1853,6 +1895,13 @@ class StandardGST(_proto.Protocol):
             Ignored if None. If not None, then we call
                 fwdsim = ForwardSimulator.cast(simulator),
             and we set the .sim attribute of every Model we encounter to fwdsim.
+
+        optimizers : Optimizer, or dict, or list of Optimizer, or list of dict (default None)
+            The optimizer to use, or a dictionary of optimizer parameters
+            from which a default optimizer can be built. If a list, the length
+            of the list should either be 1 or equal to the number of iterations. 
+            If 1, then this optimizer is used for every iteration, otherwise
+            each optimizer is used for its corresponding iteration.
 
         Returns
         -------
@@ -1977,7 +2026,7 @@ class StandardGST(_proto.Protocol):
                     result = gst.run(data, memlimit, comm,
                                      disable_checkpointing=disable_checkpointing,
                                      checkpoint=child_checkpoint,
-                                     checkpoint_path=checkpoint_path)
+                                     checkpoint_path=checkpoint_path, optimizers=optimizers)
                     ret.add_estimates(result)
 
         return ret
@@ -2152,7 +2201,7 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options,
         The *primary* estimate label to base bad-fit additions off of.
 
     badfit_options : GSTBadFitOptions
-        The options specifing what constitutes a "bad fit" and what actions
+        The options specifying what constitutes a "bad fit" and what actions
         to take when one occurs.
 
     optimizer : Optimizer
@@ -2514,12 +2563,12 @@ def _compute_robust_scaling(scale_typ, objfn_cache, mdc_objfn):
     Parameters
     ----------
     scale_typ : {'robust', 'robust+', 'Robust', 'Robust+'}
-        The type of robust scaling.  Captial vs. lowercase "R" doesn't
+        The type of robust scaling.  Capital vs. lowercase "R" doesn't
         matter to this function (it indicates whether a post-scaling
         re-optimization is performed elsewhere).  The "+" postfix distinguishes
         a "version 1" scaling (no "+"), where we drastically scale down weights
         of especially bad sequences, from a "version 2" scaling ("+"), where
-        we additionaly rescale all the circuit data to achieve the desired chi2
+        we additionally rescale all the circuit data to achieve the desired chi2
         distribution of per-circuit goodness-of-fit values *without reordering*
         these values.
 
@@ -2763,7 +2812,7 @@ def _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options,
         # that also satisfies the constraints), and while doing this find the active constraints.
         printer.log("VERIFYING that the final wildcard budget vector is admissable")
 
-        # Used for deciding what counts as a negligable per-gate wildcard.
+        # Used for deciding what counts as a negligible per-gate wildcard.
         max_depth = 0
         for circ in ds.keys():
             if circ.depth > max_depth:
@@ -2773,8 +2822,8 @@ def _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options,
         for w_ind, w_ele in enumerate(wvec):
             active_constraints = {}
             strictly_smaller_wvec = wvec.copy()
-            negligable_budget = 1 / (100 * max_depth)
-            if abs(w_ele) > negligable_budget:  # Use absolute values everywhere (wildcard vector can be negative).
+            negligible_budget = 1 / (100 * max_depth)
+            if abs(w_ele) > negligible_budget:  # Use absolute values everywhere (wildcard vector can be negative).
                 strictly_smaller_wvec[w_ind] = 0.99 * abs(w_ele)  # Decrease the vector element by 1%.
                 printer.log(" - Trialing strictly smaller vector, with element %.3g reduced from %.3g to %.3g" %
                             (w_ind, w_ele, strictly_smaller_wvec[w_ind]))
@@ -2802,7 +2851,7 @@ def _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options,
             else:
                 if budget_was_optimized:
                     printer.log((" - Element %.3g is %.3g. This is below %.3g, so trialing snapping to zero"
-                                 " and updating.") % (w_ind, w_ele, negligable_budget))
+                                 " and updating.") % (w_ind, w_ele, negligible_budget))
                     strictly_smaller_wvec[w_ind] = 0.
                     glob_constraint, percircuit_constraint = _evaluate_constraints(strictly_smaller_wvec)
                     if glob_constraint + _np.sum(percircuit_constraint) < 1e-4:
@@ -2814,7 +2863,7 @@ def _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options,
                 else:
                     # We do this instead when we're not optimizing the budget, as otherwise we'd change the budget.
                     printer.log(" - Skipping trialing reducing element %.3g below %.3g, as it is less than %.3g" %
-                                (w_ind, w_ele, negligable_budget))
+                                (w_ind, w_ele, negligible_budget))
             active_constraints_list.append(active_constraints)
         budget.from_vector(wvec)
 
@@ -2850,7 +2899,7 @@ def _reoptimize_with_weights(mdc_objfn, circuit_weights_dict, optimizer, verbosi
         The model to re-optimize.
 
     ds : DataSet
-        The data set to compare againts.
+        The data set to compare against.
 
     circuit_list : list
         The circuits for which data and predictions should be compared.

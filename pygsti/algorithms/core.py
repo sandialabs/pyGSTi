@@ -15,6 +15,7 @@ import collections as _collections
 import time as _time
 import copy as _copy
 import warnings as _warnings
+from typing import Union
 
 import numpy as _np
 import scipy.optimize as _spo
@@ -121,7 +122,7 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
     # We would like to get X or it's gauge equivalent.                                                                                                          # noqa
     #  We do:       1)  (I^-1)*AXB ~= B^-1 X B := Xhat -- we solve Ii*A*B = identity for Ii                                                                     # noqa
     #               2) B * Xhat * B^-1 ==> X  (but what if B is non-invertible -- say rectangular) Want B*(something) ~ identity ??                             # noqa
-    # for lower rank target models, want a gauge tranformation that brings Xhat => X of "increased dim" model                                                   # noqa
+    # for lower rank target models, want a gauge transformation that brings Xhat => X of "increased dim" model                                                   # noqa
     # want "B^-1" such that B(gsDim,nRhoSpecs) "B^-1"(nRhoSpecs,gsDim) ~ Identity(gsDim)                                                                        # noqa
     #   Ub,sb,Vb = svd(B) so B = Ub*diag(sb)*Vb  where Ub = (gsDim,M), s = (M,M), Vb = (M,prepSpecs)                                                            # noqa
     #   if B^-1 := VbT*sb^-1*Ub^-1 then B*B^-1 = I(gsDim)                                                                                                       # noqa
@@ -386,7 +387,7 @@ def _lgst_matrix_dims(model, prep_fiducials, effect_fiducials):
     nRhoSpecs = len(prep_fiducials)  # no instruments allowed in prep_fiducials
     povmLbls = [model.split_circuit(s, ('povm',))[2]  # povm_label
                 for s in effect_fiducials]
-    povmLens = ([len(model.povms[l]) for l in povmLbls])
+    povmLens = ([len(model.povms[povm_label]) for povm_label in povmLbls])
     nESpecs = sum(povmLens)
     return nRhoSpecs, nESpecs, povmLbls, povmLens
 
@@ -725,7 +726,7 @@ def run_iterative_gst(dataset, start_model, circuit_lists,
 
     circuit_lists : list of lists of (tuples or Circuits)
         The i-th element is a list of the circuits to be used in the i-th iteration
-        of the optimization.  Each element of these lists is a circuit, specifed as
+        of the optimization.  Each element of these lists is a circuit, specified as
         either a Circuit object or as a tuple of operation labels (but all must be specified
         using the same type).
         e.g. [ [ (), ('Gx',) ], [ (), ('Gx',), ('Gy',) ], [ (), ('Gx',), ('Gy',), ('Gx','Gy') ]  ]
@@ -785,7 +786,8 @@ def run_iterative_gst(dataset, start_model, circuit_lists,
     return models, optimums, final_objfn, mdc_store_list
 
 def iterative_gst_generator(dataset, start_model, circuit_lists,
-                      optimizer, iteration_objfn_builders, final_objfn_builders,
+                      optimizer: Union[_SimplerLMOptimizer, dict, list[_SimplerLMOptimizer], list[dict]],
+                        iteration_objfn_builders, final_objfn_builders,
                       resource_alloc, starting_index=0, verbosity=0):
     """
     Performs Iterative Gate Set Tomography on the dataset.
@@ -804,14 +806,17 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
 
     circuit_lists : list of lists of (tuples or Circuits)
         The i-th element is a list of the circuits to be used in the i-th iteration
-        of the optimization.  Each element of these lists is a circuit, specifed as
+        of the optimization.  Each element of these lists is a circuit, specified as
         either a Circuit object or as a tuple of operation labels (but all must be specified
         using the same type).
         e.g. [ [ (), ('Gx',) ], [ (), ('Gx',), ('Gy',) ], [ (), ('Gx',), ('Gy',), ('Gx','Gy') ]  ]
-
-    optimizer : Optimizer or dict
+    
+    optimizer : Optimizer, or dict, or list of Optimizer, or list of dict (default None)
         The optimizer to use, or a dictionary of optimizer parameters
-        from which a default optimizer can be built.
+        from which a default optimizer can be built. If a list, the length
+        of the list should either be 1 or equal to the number of iterations. 
+        If 1, then this optimizer is used for every iteration, otherwise
+        each optimizer is used for its corresponding iteration.
 
     iteration_objfn_builders : list
         List of ObjectiveFunctionBuilder objects defining which objective functions
@@ -847,7 +852,25 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
           (an "evaluated" model-dataset-circuits store).
     """
     resource_alloc = _ResourceAllocation.cast(resource_alloc)
-    optimizer = optimizer if isinstance(optimizer, _Optimizer) else _SimplerLMOptimizer.cast(optimizer)
+    if optimizer is None:
+        optimizer = _SimplerLMOptimizer.cast(None)
+    if isinstance(optimizer,list):
+        if len(optimizer) == 1:
+            optimizer = optimizer*len(circuit_lists)
+    if isinstance(optimizer, (_Optimizer, dict)):
+        optimizers = [optimizer]*len(circuit_lists)
+    
+    elif not isinstance(optimizer, list):
+        raise ValueError(f'Invalid argument for optimizers of type {type(optimizer)}, supported types are list, Optimizer, or dict.')
+    else:
+        optimizers = optimizer
+
+    assert len(optimizers) == 1 or len(optimizers) == len(circuit_lists), f'Optimizers must be length 1 or length {len(circuit_lists)=}'
+
+    temp_optimizers = []
+    for  opt in optimizers:
+        temp_optimizers.append(opt if isinstance(opt, _Optimizer) else _SimplerLMOptimizer.cast(opt))
+    optimizers = temp_optimizers
     comm = resource_alloc.comm
     profiler = resource_alloc.profiler
     printer = VerbosityPrinter.create_printer(verbosity, comm)
@@ -872,8 +895,8 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
    
     #These lines were previously in the loop below, but we should be able to move it out from there so we can use it
     #in precomputing layouts:
-    method_names = optimizer.called_objective_methods
-    array_types = optimizer.array_types + \
+    method_names = optimizers[0].called_objective_methods
+    array_types = optimizers[0].array_types + \
                 _max_array_types([builder.compute_array_types(method_names, mdl.sim)
                                   for builder in iteration_objfn_builders + final_objfn_builders])
     
@@ -929,11 +952,11 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
             for j, obj_fn_builder in enumerate(iteration_objfn_builders):
                 tNxt = _time.time()
                 if i == 0 and j == 0:  # special case: in first optimization run, use "first_fditer"
-                    first_iter_optimizer = _copy.deepcopy(optimizer)  # use a separate copy of optimizer, as it
-                    first_iter_optimizer.fditer = optimizer.first_fditer  # is a persistent object (so don't modify!)
+                    first_iter_optimizer = _copy.deepcopy(optimizers[i])  # use a separate copy of optimizer, as it
+                    first_iter_optimizer.fditer = optimizers[i].first_fditer  # is a persistent object (so don't modify!)
                     opt_result, mdc_store = run_gst_fit(mdc_store, first_iter_optimizer, obj_fn_builder, printer - 1)
                 else:
-                    opt_result, mdc_store = run_gst_fit(mdc_store, optimizer, obj_fn_builder, printer - 1)
+                    opt_result, mdc_store = run_gst_fit(mdc_store, optimizers[i], obj_fn_builder, printer - 1)
                 profiler.add_time('run_iterative_gst: iter %d %s-opt' % (i + 1, obj_fn_builder.name), tNxt)
 
             tNxt = _time.time()
@@ -946,7 +969,7 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
                 for j, obj_fn_builder in enumerate(final_objfn_builders):
                     tNxt = _time.time()
                     mdl.basis = start_model.basis
-                    opt_result, mdc_store = run_gst_fit(mdc_store, optimizer, obj_fn_builder, printer - 1)
+                    opt_result, mdc_store = run_gst_fit(mdc_store, optimizers[i], obj_fn_builder, printer - 1)
                     profiler.add_time('run_iterative_gst: final %s opt' % obj_fn_builder.name, tNxt)
                 tNxt = _time.time()
                 printer.log("Final optimization took %.1fs\n" % (tNxt - tRef), 2)
