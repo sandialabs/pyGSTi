@@ -13,6 +13,7 @@ from pygsti.protocols.gst import GSTGaugeOptSuite
 from pygsti.tools import two_delta_logl
 from ..util import BaseCase
 import pytest
+import numpy as _np
 
 
 class GSTUtilTester(BaseCase):
@@ -232,7 +233,7 @@ class MapForwardSimulatorWrapper(MapForwardSimulator):
         super(MapForwardSimulatorWrapper, self)._bulk_fill_probs_atom(array_to_fill, layout_atom, resource_alloc)
 
 
-class TestGateSetTomography(BaseProtocolData):
+class GateSetTomographyTester(BaseProtocolData):
     """
     Tests for methods in the GateSetTomography class.
 
@@ -248,6 +249,30 @@ class TestGateSetTomography(BaseProtocolData):
         twoDLogL = two_delta_logl(mdl_result, self.gst_data.dataset)
         assert twoDLogL <= 1.0  # should be near 0 for perfect data
 
+    def test_optimizer_list_run(self):
+        self.setUpClass()
+    
+        optimizer = {'tol':1e-5}
+
+        proto1 = gst.GateSetTomography(smq1Q_XYI.target_model("CPTPLND"), 'stdgaugeopt', name="testGST", optimizer=optimizer)
+        results1 = proto1.run(self.gst_data)
+        results2 = proto1.run(self.gst_data, optimizers=optimizer)
+
+        mdl_result1 = results1.estimates["testGST"].models['stdgaugeopt']
+        mdl_result2 = results2.estimates["testGST"].models['stdgaugeopt']
+
+        assert _np.allclose(mdl_result1.to_vector() , mdl_result2.to_vector())
+
+        #Test that we can pass a list of len == 1 or len == edesign.circuit_lists
+        optimizers = [optimizer]*len(self.gst_data.edesign.circuit_lists)
+        results3 = proto1.run(self.gst_data, optimizers=optimizers)
+        results4 = proto1.run(self.gst_data, optimizers=[optimizers[0]])
+        mdl_result3 = results3.estimates["testGST"].models['stdgaugeopt']
+        mdl_result4 = results4.estimates["testGST"].models['stdgaugeopt']
+        assert _np.allclose(mdl_result3.to_vector() , mdl_result1.to_vector())
+        assert _np.allclose(mdl_result4.to_vector() , mdl_result1.to_vector())
+        
+
     def test_run_custom_sim(self, capfd: pytest.LogCaptureFixture):
         self.setUpClass()
         proto = gst.GateSetTomography(smq1Q_XYI.target_model("CPTPLND"), 'stdgaugeopt', name="testGST")
@@ -261,7 +286,7 @@ class TestGateSetTomography(BaseProtocolData):
 
         for estimate in results.estimates.values():
             for model in estimate.models.values():
-                assert isinstance(model, MapForwardSimulatorWrapper)
+                assert isinstance(model.sim, MapForwardSimulatorWrapper)
         pass
 
     
@@ -317,7 +342,7 @@ class LinearGateSetTomographyTester(BaseProtocolData, BaseCase):
         assert proto_read.name == proto.name
         assert proto_read.badfit_options.actions == proto.badfit_options.actions
 
-class TestStandardGST(BaseProtocolData):
+class StandardGSTTester(BaseProtocolData):
     """
     Tests for methods in the StandardGST class.
 
@@ -355,8 +380,32 @@ class TestStandardGST(BaseProtocolData):
             assert twoDLogL <= 1.0  # should be near 0 for perfect data
         for estimate in results.estimates.values():
             for model in estimate.models.values():
-                assert isinstance(model, MapForwardSimulatorWrapper)
+                assert isinstance(model.sim, MapForwardSimulatorWrapper)
         pass
+    
+    def test_optimizer_list_run(self):
+        self.setUpClass()
+    
+        optimizer = {'tol':1e-5}
+
+        proto1 = gst.StandardGST(modes=["full TP","CPTPLND","Target"])
+        results1 = proto1.run(self.gst_data)
+        results2 = proto1.run(self.gst_data, optimizers=optimizer)
+        #Test that we can pass a list
+        optimizers = [optimizer]*len(self.gst_data.edesign.circuit_lists)
+        results3 = proto1.run(self.gst_data, optimizers=optimizers)
+        results4 = proto1.run(self.gst_data, optimizers=[optimizer])
+
+        for mode in ["full TP","CPTPLND","Target"]:
+            mdl_result1 = results1.estimates[mode].models['stdgaugeopt']
+            mdl_result2 = results2.estimates[mode].models['stdgaugeopt']
+            mdl_result3 = results3.estimates[mode].models['stdgaugeopt']
+            mdl_result4 = results4.estimates[mode].models['stdgaugeopt']
+
+            assert _np.allclose(mdl_result2.to_vector() , mdl_result1.to_vector())
+            assert _np.allclose(mdl_result3.to_vector() , mdl_result1.to_vector())
+            assert _np.allclose(mdl_result4.to_vector() , mdl_result1.to_vector())
+    
 
     def test_write_and_read_to_dir(self):
         #integration test to at least confirm we are writing and reading
