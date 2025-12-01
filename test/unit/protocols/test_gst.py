@@ -286,7 +286,7 @@ class GateSetTomographyTester(BaseProtocolData):
 
         for estimate in results.estimates.values():
             for model in estimate.models.values():
-                assert isinstance(model, MapForwardSimulatorWrapper)
+                assert isinstance(model.sim, MapForwardSimulatorWrapper)
         pass
 
     
@@ -380,7 +380,7 @@ class StandardGSTTester(BaseProtocolData):
             assert twoDLogL <= 1.0  # should be near 0 for perfect data
         for estimate in results.estimates.values():
             for model in estimate.models.values():
-                assert isinstance(model, MapForwardSimulatorWrapper)
+                assert isinstance(model.sim, MapForwardSimulatorWrapper)
         pass
     
     def test_optimizer_list_run(self):

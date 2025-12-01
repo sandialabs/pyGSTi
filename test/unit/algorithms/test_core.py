@@ -494,17 +494,21 @@ class CoreMLGSTTester(CoreStdData, BaseCase):
             
             self.assertArraysAlmostEqual(models0[-1].to_vector(), models1[-1].to_vector())
 
+    def test_iterative_gst_generator_optimizer_single_item_list(self):
+
         # we also test use case of optimzer=[optimizer] being equivalent to optimzer=optimizer
+        
+        optimizer =  {'tol': 1e1, 'maxiter':10}
         generator_single_item_optimizers0 = core.iterative_gst_generator(
             self.ds, self.mdl_clgst, self.lsgstStrings,
-            optimizer=[optimizers[0]],
+            optimizer=[optimizer],
             iteration_objfn_builders=['chi2'],
             final_objfn_builders=['logl'],
             resource_alloc=None, verbosity=0
         )
         generator_single_item_optimizers1 = core.iterative_gst_generator(
             self.ds, self.mdl_clgst, self.lsgstStrings,
-            optimizer=optimizers[0],
+            optimizer=optimizer,
             iteration_objfn_builders=['chi2'],
             final_objfn_builders=['logl'],
             resource_alloc=None, verbosity=0
