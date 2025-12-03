@@ -168,7 +168,7 @@ def do_greedy_from_full_fast(full_model, data, er_thresh=2.0, verbosity=2, maxit
             print('Checkpoint saved in', new_checkpoint.path)
     
     if loaded_checkpoint is not None:
-        if loaded_checkpoint.graph_levels is not None:
+        if False:#loaded_checkpoint.graph_levels is not None:
             if rank == 0 and verbosity > 0:
                 print(f'Checkpoint contains {len(checkpoint.graph_levels)} levels')
             graph_levels = loaded_checkpoint.graph_levels

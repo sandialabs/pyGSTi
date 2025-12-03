@@ -35,7 +35,7 @@ class AMSCheckpoint(_NicelySerializable):
     TODO
     """ 
 
-    def __init__(self, full_model, datasetstr, er_thresh, maxiter, tol, prob_clip, H, x0, time=None, path=None):
+    def __init__(self, full_model, datasetstr, er_thresh, maxiter, tol, prob_clip, H, x0, time=None, path=None, graph_levels=None):
         super().__init__()
         self.full_model = full_model
         self.datasetstr = datasetstr
@@ -45,6 +45,7 @@ class AMSCheckpoint(_NicelySerializable):
         self.H = H
         self.x0 = x0
         self.er_thresh = er_thresh
+        self.graph_levels = graph_levels
         if time is None:
             self.last_update_time = _time.ctime()
         else:
@@ -70,7 +71,8 @@ class AMSCheckpoint(_NicelySerializable):
                         'prob_clip' : self.prob_clip,                        
                         'H' : self._encodemx(self.H),
                         'x0' : self._encodemx(self.x0),
-                        'time': self.last_update_time})
+                        'time': self.last_update_time,
+                        'graph_levels':self._encodemx(self.graph_levels)})
                        
         return state
     @classmethod
@@ -84,8 +86,9 @@ class AMSCheckpoint(_NicelySerializable):
         prob_clip = state['prob_clip']
         time= state['time']
         tol = state['tol']
+        graph_levels = state['graph_levels']
 
-        return cls(full_model, datasetstr, er_thresh, maxiter,tol , prob_clip ,H, x0, time)
+        return cls(full_model, datasetstr, er_thresh, maxiter,tol , prob_clip ,H, x0, time, graph_levels=graph_levels)
     def save(self):
         """
         Saves self to memory. If path is not specified, a default one is created.
