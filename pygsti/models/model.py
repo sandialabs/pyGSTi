@@ -1107,7 +1107,6 @@ class OpModel(Model):
         #rebuild the model index to model member map if needed.
         self._build_index_mm_map()
 
-
     def _init_virtual_obj(self, obj):
         """
         Initializes a "virtual object" - an object (e.g. LinearOperator) that *could* be a
@@ -1232,8 +1231,6 @@ class OpModel(Model):
         """
         
         self.set_parameter_values([index], [val], close)
-        
-        
 
     def set_parameter_values(self, indices, values, close=False):
         """

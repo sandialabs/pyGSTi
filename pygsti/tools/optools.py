@@ -462,6 +462,15 @@ def is_trace_preserving(a: _np.ndarray, mx_basis: BasisLike='pp', tol=1e-8) -> b
     return check
 
 
+def superket_trace(superket: _np.ndarray, basis: _Basis):
+    if basis.first_element_is_identity:
+        t = superket.ravel()[0]
+    else:
+        mx = _bt.vec_to_stdmx(superket, basis, keep_complex=True)
+        t = _np.real(_np.trace(mx))
+    return t
+
+
 def entanglement_fidelity(a, b, mx_basis: BasisLike='pp', is_tp=None, is_unitary=None):
     """
     Returns the "entanglement" process fidelity between gate  matrices.
@@ -573,6 +582,117 @@ def tensorized_with_eye(op: _np.ndarray, op_basis: _Basis, ten_basis: Optional[_
     ten_op_std = _np.kron(op_std, eye)
     ten_op = _bt.change_basis(ten_op_std, ten_std_basis, ten_basis)
     return ten_op, ten_basis
+
+
+def rootconj_superop(effect_superket: _np.ndarray, basis: _Basis, abstol_warn: float=1e-10, abstol_error: float=1e-8) -> _np.ndarray:
+    """
+    Let E denote the Hermitian matrix representation effect_superket, where 0 ≤ E ≤ 1.
+
+    This function returns the array representation (in `basis`) of the map that takes
+    a Hermitian matrix ρ to the Hermitian matrix E½ ρ E½.
+    """
+    effect_mat = _bt.vec_to_stdmx(effect_superket, basis, keep_complex=True)
+    vecs, vals, inv_vecs = _mt.eigendecomposition(effect_mat, assume_hermitian=True)
+
+    msg = f'Eigenvalues {vals} fall outside [0.0, 1.0], up to tolerance %s.'
+    if _np.any(vals < 0.0 - abstol_error) or _np.any(vals > 1.0 + abstol_error):
+        raise ValueError( msg % abstol_error )
+    if _np.any(vals < 0.0 - abstol_warn)  or _np.any(vals > 1.0 + abstol_warn ):
+        _warnings.warn( msg % abstol_warn )
+    vals = _np.clip(vals, a_min=0.0, a_max=1.0)
+    
+    rooteffect_mat = (vecs * _np.sqrt(vals)[_np.newaxis, :]) @ inv_vecs
+    mx_std = _np.kron(rooteffect_mat, rooteffect_mat.T)
+    mx : _np.ndarray = _bt.change_basis(mx_std, 'std', basis, expect_real=True) # type: ignore
+    return mx
+
+
+def partial_trace(mx: _np.ndarray, dims: tuple[int,...], axis: int) -> _np.ndarray:
+    """
+    
+    Notes
+    -----
+    This implementation is stolen from CVXPY, which was stolen from some Julia library.
+    """
+    if mx.ndim < 2 or mx.shape[0] != mx.shape[1]:
+        raise ValueError("partial_trace only supports 2-d square arrays.")
+    if axis < 0 or axis >= len(dims):
+        msg = f"Invalid axis argument, should be between 0 and {len(dims)}, got {axis}."
+        raise ValueError(msg)
+    if mx.shape[0] != _np.prod(dims):
+        raise ValueError("Dimension of system doesn't correspond to dimension of subsystems.")
+
+    def _term(j: int) -> _np.ndarray:
+        a = _sps.coo_matrix(([1.0], ([0], [0])))
+        b = _sps.coo_matrix(([1.0], ([0], [0])))
+        for (i_axis, dim) in enumerate(dims):
+            if i_axis == axis:
+                v = _sps.coo_matrix(([1], ([j], [0])), shape=(dim, 1))
+                a = _sps.kron(a, v.T)
+                b = _sps.kron(b, v)
+            else:
+                eye_mat = _sps.eye_array(dim)
+                a = _sps.kron(a, eye_mat)
+                b = _sps.kron(b, eye_mat)
+        return a @ mx @ b
+
+    return _np.sum([_term(j) for j in range(dims[axis])])
+
+
+def trace_effect(op: _np.ndarray, op_basis: BasisLike, on_space: SpaceT = 'HilbertSchmidt'):
+    """
+    Let `op` be the array representation of a superoperator G in `op_basis`,
+    where G maps from and to the space of order-d Hermitian operators.
+    
+    The trace effect of G is the Heritian operator E that satifies
+
+        trace(G(ρ)) = trace(E ρ) for all order-d Hermitian matrices ρ.
+
+    If on_space='HilbertSchmidt', then this function returns a superket representation
+    of E in `op_basis`. If on_space='Hilbert', then we return E itself.
+    """
+    d = int(_np.round(op.size ** 0.25))
+    assert op.shape == (d**2, d**2)
+    basis = op_basis if isinstance(op_basis, _Basis) else _Basis.cast(op_basis, dim=d**2)
+    vecI = _bt.stdmx_to_vec(_np.eye(d), basis)
+    vecE = op.T.conj() @ vecI
+    if on_space == 'HilbertSchmidt':
+        return vecE
+    else:
+        E = _bt.vec_to_stdmx(vecE, op_basis)
+        return E
+
+
+def minimal_kraus_decomposition(op_x: _np.ndarray, op_basis: _Basis, error_tol:float=1e-6, trunc_tol:float=1e-7) -> list[_np.ndarray]:
+    """
+    The array `op_x` represents a completely positive superoperator X on
+    Hilbert-Schmidt space, using `op_basis` as the basis for that space.
+
+    A Kraus decomposition of X is a set of square matrices, {K_i}_i, that satisfy
+
+        X(ρ) = \\sum_i K_i ρ K_i^\\dagger.
+
+    The matrices appearing in any such set are called Kraus operators of X.
+    
+    This function returns a minimal-length list of Kraus operators of X.
+    """
+    d  = int(_np.round(op_x.size ** 0.25))
+    d2 = d**2
+    assert op_x.shape == (d2, d2) 
+    from pygsti.tools.jamiolkowski import jamiolkowski_iso
+    choi_mx : _np.ndarray = jamiolkowski_iso(op_x, op_basis, 'std', normalized=True) * d  # type: ignore
+
+    evecs, evals, _ = _mt.eigendecomposition(choi_mx, assume_hermitian=True)
+    if any([ev < -error_tol for ev in evals]):
+        raise ValueError("Cannot compute Kraus decomposition of non-positive-definite superoperator!")
+    keep = evals >= trunc_tol
+    evals = evals[keep]
+    evecs = evecs[:, keep]
+    out = []
+    for i, ev in enumerate(evals):
+        temp = _np.sqrt(ev) * evecs[:, i].reshape((d, d), order='F')
+        out.append(temp)
+    return out
 
 
 def average_gate_fidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):

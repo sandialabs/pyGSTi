@@ -612,7 +612,7 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False, cp_p
                                         tol=1e-13) 
                 if not soln.success and soln.fun > 1e-6:  # not "or" because success is often not set correctly
                     raise ValueError("Failed to find an errorgen such that <ideal|exp(errorgen) = <effect|")
-                errgen_vec = _np.linalg.lstsq(phys_directions, soln.x)[0]
+                errgen_vec = _np.linalg.lstsq(phys_directions, soln.x, rcond=None)[0]
                 errorgen.from_vector(errgen_vec)
                 
                 EffectiveExpErrorgen = _IdentityPlusErrorgenOp if lndtype.meta == '1+' else _ExpErrorgenOp
