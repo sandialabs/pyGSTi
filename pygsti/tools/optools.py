@@ -462,6 +462,15 @@ def is_trace_preserving(a: _np.ndarray, mx_basis: BasisLike='pp', tol=1e-8) -> b
     return check
 
 
+def superket_trace(superket: _np.ndarray, basis: _Basis):
+    if basis.first_element_is_identity:
+        t = superket.ravel()[0]
+    else:
+        mx = _bt.vec_to_stdmx(superket, basis, keep_complex=True)
+        t = _np.real(_np.trace(mx))
+    return t
+
+
 def entanglement_fidelity(a, b, mx_basis: BasisLike='pp', is_tp=None, is_unitary=None):
     """
     Returns the "entanglement" process fidelity between gate  matrices.
