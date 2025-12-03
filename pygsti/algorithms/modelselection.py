@@ -247,22 +247,23 @@ def do_greedy_from_full_fast(full_model, data, er_thresh=2.0, verbosity=2, maxit
             finalists_raw = comm.gather(best_of_chunk, root = 0)
         else:
             finalists_raw = [best_of_chunk]
-        if rank == 0 and comm is not None:
+        if rank == 0:
             finalists = []
             for finalist in finalists_raw:
                 finalists.append(finalist)
             #Purge out all entries from processes that did not compute anything
             #TODO delete if this assertion never fails
             assert finalists == [finalist for finalist in finalists if finalist[2] != -1]
-            
+        
             best_model = sorted(finalists, key=lambda x: x[1])[0]
-        elif comm is not None:
+        else:
             best_model = None
+        if comm is not None:
             best_model = comm.bcast(best_model, root = 0)
 
         if comm is None:
             best_model = best_of_chunk
-
+        print('out of loop')
         red_model = remove_param(red_model, best_model[2])
         #finalist_proj_matrix = np.delete(parent_model_projector, best_model[2], axis=1)
         deltalogl_fn.model.from_vector(np.delete(parent_model_projector, best_model[2], axis=1) @ best_model[0])
