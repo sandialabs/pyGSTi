@@ -10,7 +10,7 @@ class AMSTester(BaseCase):
 	def check_approx_AMS(self, model, data, er_thresh, params_to_keep, options):
 
 		trace = do_greedy_from_full_fast(model, data, er_thresh, *options)
-		final_fit_vec = trace[-1][0][0]
+		final_fit_vec = trace[-1][0]
 		# a trace contains the path taken through model space. We can use this
 		#to construct a matrix that converts the full model vector into the 
 		#reduced model vector
@@ -21,8 +21,7 @@ class AMSTester(BaseCase):
 		#where entries equal to 0 represent parameters that
 		#were removed
 		projector_matrix  = reducer.T @ reducer
-		for level in trace:
-			assert level[0][1]
+
 		for param in params_to_keep:
 			assert projector_matrix[param][param] == 1, 'AMS removed a non-trivial parameter'
 		

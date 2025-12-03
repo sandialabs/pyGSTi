@@ -35,9 +35,9 @@ class AMSCheckpoint(_NicelySerializable):
     TODO
     """ 
 
-    def __init__(self, target_model, datasetstr, er_thresh, maxiter, tol, prob_clip, H, x0, time=None, path=None):
+    def __init__(self, full_model, datasetstr, er_thresh, maxiter, tol, prob_clip, H, x0, time=None, path=None):
         super().__init__()
-        self.target_model = target_model
+        self.full_model = full_model
         self.datasetstr = datasetstr
         self.maxiter = maxiter
         self.tol = tol
@@ -62,7 +62,7 @@ class AMSCheckpoint(_NicelySerializable):
     
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
-        state.update({'target_model' : self.target_model._to_nice_serialization() if self.target_model is not None else None,
+        state.update({'full_model' : self.full_model._to_nice_serialization() if self.full_model is not None else None,
                         'datasetstr' : self.datasetstr,
                         'er_thresh' : self.er_thresh,
                         'maxiter' : self.maxiter,
@@ -77,7 +77,7 @@ class AMSCheckpoint(_NicelySerializable):
     def _from_nice_serialization(cls, state):
         H = cls._decodemx(state['H'])
         x0 = cls._decodemx(state['x0'])
-        target_model = Model.from_nice_serialization(state['target_model'])
+        full_model = Model.from_nice_serialization(state['full_model'])
         er_thresh = state['er_thresh']
         datasetstr = state['datasetstr']
         maxiter = state['maxiter']
@@ -85,7 +85,7 @@ class AMSCheckpoint(_NicelySerializable):
         time= state['time']
         tol = state['tol']
 
-        return cls(target_model, datasetstr, er_thresh, maxiter,tol , prob_clip ,H, x0, time)
+        return cls(full_model, datasetstr, er_thresh, maxiter,tol , prob_clip ,H, x0, time)
     def save(self):
         """
         Saves self to memory. If path is not specified, a default one is created.
@@ -103,16 +103,16 @@ class AMSCheckpoint(_NicelySerializable):
         Returns a list of all fast AMS settings, typically used to check if the checkpoint is valid
 
         Returns:
-            list of target_model, datasetstr, er_thresh, maxiter, tol, prob_clip, recompute_H_thresh_percent]
+            list of full_model, datasetstr, er_thresh, maxiter, tol, prob_clip, recompute_H_thresh_percent]
         """
-        return [self.target_model, self.datasetstr, self.er_thresh, self.maxiter, self.tol, self.prob_clip, self.recompute_H_thresh_percent]
+        return [self.full_model, self.datasetstr, self.er_thresh, self.maxiter, self.tol, self.prob_clip, self.recompute_H_thresh_percent]
          
-    def check_valid_checkpoint(self, target_model, datasetstr, er_thresh, maxiter, tol, prob_clip):
+    def check_valid_checkpoint(self, full_model, datasetstr, er_thresh, maxiter, tol, prob_clip):
         """Check if self is a checkpoint with the same settings as the ones passed in. This is only compatible with FOGI model checkpoints.
 
         Parameters
         ----------
-        target_model : Model
+        full_model : Model
             Model used as a seed for AMS
 
         data : ProtocolData
@@ -144,7 +144,7 @@ class AMSCheckpoint(_NicelySerializable):
         def equal_fogi_models(fogi_model, fogi_model2):
             return fogi_model.fogi_store.__eq__(fogi_model2.fogi_store) and fogi_model.param_interposer.__eq__(fogi_model2.param_interposer)
         
-        if equal_fogi_models(target_model, self.target_model) and datasetstr == self.datasetstr and er_thresh == self.er_thresh and maxiter == self.maxiter and tol == self.tol and prob_clip == self.prob_clip:# and recompute_H_thresh_percent == self.recompute_H_thresh_percent:
+        if equal_fogi_models(full_model, self.full_model) and datasetstr == self.datasetstr and er_thresh == self.er_thresh and maxiter == self.maxiter and tol == self.tol and prob_clip == self.prob_clip:# and recompute_H_thresh_percent == self.recompute_H_thresh_percent:
              return True
         else:
              return False
@@ -209,9 +209,9 @@ def create_projector_matrix_from_trace(graph_levels, projector_matrix = None):
             An identity matrix, whose columns are missing for every parameter that was removed in AMS
     """
     if projector_matrix is None:
-        projector_matrix = _np.eye(len(graph_levels[0][0][0]))
+        projector_matrix = _np.eye(len(graph_levels[0][0]))
     for level in graph_levels[1:]:
-        param_to_remove = level[0][2]
+        param_to_remove = level[2]
         projector_matrix = _np.delete(projector_matrix, param_to_remove, axis=1)
     return projector_matrix
 
@@ -243,7 +243,7 @@ def custom_builder(min_prob_clip):
     builders = pygsti.protocols.GSTObjFnBuilders(iteration_builders, final_builders)
     return builders
 
-def parallel_GST(target_model, data, builders, tol=1e-10, maxiter=300, verbosity=0, comm=None, mem_limit=None):
+def parallel_GST(full_model, data, builders, tol=1e-10, maxiter=300, verbosity=0, comm=None, mem_limit=None):
     """
     Wrapper to run GST with MPI with custom builders where the tolerance, probability clip and max iterations
     are easily accesible. The seed model, "target model", gets reset to its error-less version before doing
@@ -252,8 +252,8 @@ def parallel_GST(target_model, data, builders, tol=1e-10, maxiter=300, verbosity
     Parameters
     ----------
     
-    target_model : Model
-        The model to be fit to the data. All errors are eraed, yielding an ideal version of target_model
+    full_model : Model
+        The model to be fit to the data. All errors are eraed, yielding an ideal version of full_model
         as a GST seed.
         
     data : ProtocolData
@@ -291,7 +291,7 @@ def parallel_GST(target_model, data, builders, tol=1e-10, maxiter=300, verbosity
                 optimizers.append(pygsti.optimize.customlm.CustomLMOptimizer(maxiter=maxiter[i], tol={'f':tol[i], 'relf': tol[i]}))
     else:
         optimizers = [pygsti.optimize.customlm.CustomLMOptimizer(maxiter=maxiter, tol={'f':tol, 'relf': tol})]
-    protoOpt = pygsti.protocols.GateSetTomography(target_model, verbosity=verbosity, optimizer=optimizers[0], gaugeopt_suite=None, objfn_builders=builders)
+    protoOpt = pygsti.protocols.GateSetTomography(full_model, verbosity=verbosity, optimizer=optimizers[0], gaugeopt_suite=None, objfn_builders=builders)
 
     result = protoOpt.run(data, comm=comm,
                 memlimit=mem_limit, optimizers=optimizers)

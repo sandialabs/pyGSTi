@@ -72,15 +72,13 @@ def do_greedy_from_full_fast(full_model, data, er_thresh=2.0, verbosity=2, maxit
     Returns
     -------
     trace:
-        A list of every level computed within AMS, each level contains a list of characteristics of all
-        reduced models considered
-    trace[i][j][k]
-        i: indexes over levels of AMS, where the last entry is the last level considered, in this case
-        containing the smallest models
+        A list of every level computed within AMS, each level i contains the reduced model with the best evidence ratio
+        with i parameters removed from the full model
+    trace[i][j]
+        
+        i: indexes AMS levels, where each level i contains the best model found after removing i parameters
 
-        j: indexes model characteristics of all reduced models considered in level i
-
-        k: indexes different characteristics for the jth best model at level i
+        j: indexes different characteristics for the jth best model at level i
             [param_vec , evidence_ratio, parameter_that_was_removed]
 
     lowest_vec : numpy array
@@ -141,21 +139,20 @@ def do_greedy_from_full_fast(full_model, data, er_thresh=2.0, verbosity=2, maxit
         if rank == 0:
             start = time.time()
 
-        result = _parallel_GST(full_model, data, builders, tol, maxiter, verbosity, comm=comm, mem_limit=mem_limit)
+        full_model_fit = _parallel_GST(full_model, data, builders, tol, maxiter, verbosity, comm=comm, mem_limit=mem_limit).estimates['GateSetTomography'].models['final iteration estimate']
 
-        full_model_fit = result.estimates['GateSetTomography'].models['final iteration estimate']
-
-        x0 = full_model_fit.to_vector()
+        x0 = full_model_fit.to_vector().copy()
 
         full_model_fit.sim._processor_grid = (1,1,1)
         deltalogl_fn.model = full_model_fit.copy()
         original_dlogl = deltalogl_fn.fn()
 
         if not disable_checkpoints and rank == 0:
-            new_checkpoint.full_model = full_model_fit
+            new_checkpoint.full_model = full_model_fit.copy()
             new_checkpoint.x0 = x0
             new_checkpoint.save()
             print('Checkpoint saved in', new_checkpoint.path)
+        exit()
     
     if H is None:
         if rank == 0 and verbosity > 0: 
@@ -194,19 +191,19 @@ def do_greedy_from_full_fast(full_model, data, er_thresh=2.0, verbosity=2, maxit
 
         print(f'{original_dlogl=}')
         prev_dlogl = original_dlogl
-        graph_levels.append([[x0,original_dlogl, 0]])
+        graph_levels.append([x0,original_dlogl, 0])
         exceeded_threshold = False
         
         parent_model_projector = full_model.param_interposer.projector_matrix.copy()
 
     approx_logl_fn = create_approx_logl_fn(H, x0, original_dlogl)
     while not exceeded_threshold:
-        
+
         if rank == 0 and verbosity >1:
             print(f'>> Working on level {len(graph_levels)} <<',flush = True)
             start = time.time()
         
-        num_total_models = len(graph_levels[-1][0][0])
+        num_total_models = len(graph_levels[-1][0])
         bucket_size = num_total_models // size
         chunk_range = range(rank*bucket_size, (rank+1)*bucket_size)
         finalists = []
@@ -214,12 +211,11 @@ def do_greedy_from_full_fast(full_model, data, er_thresh=2.0, verbosity=2, maxit
         lowest_quantity = None
         lowest_vec = None
         for i in chunk_range:
-
-            reduced_model_projector_matrix = np.delete(parent_model_projector, i, axis=1)
         
             vec = _reduced_model_approx_GST_fast(red_rowandcol_H, red_row_H, x0, i)
 
-            deltalogl_fn.model.from_vector(reduced_model_projector_matrix @ vec)
+            #reduced_model_projector_matrix = np.delete(parent_model_projector, i, axis=1)
+            deltalogl_fn.model.from_vector(np.delete(parent_model_projector, i, axis=1) @ vec)
 
             quantity = (deltalogl_fn.fn()- prev_dlogl)*2
             if  verbosity > 1:
@@ -235,9 +231,9 @@ def do_greedy_from_full_fast(full_model, data, er_thresh=2.0, verbosity=2, maxit
         if (left_over_start_index + rank) < num_total_models:
 
             i = left_over_start_index + rank
-            reduced_model_projector_matrix = np.delete(parent_model_projector, i, axis=1)     
+            #reduced_model_projector_matrix = np.delete(parent_model_projector, i, axis=1)     
             vec = _reduced_model_approx_GST_fast(red_rowandcol_H, red_row_H, x0, i)
-            deltalogl_fn.model.from_vector(reduced_model_projector_matrix @ vec)
+            deltalogl_fn.model.from_vector(np.delete(parent_model_projector, i, axis=1) @ vec)
 
             quantity = (deltalogl_fn.fn() - prev_dlogl )*2
             
@@ -248,22 +244,30 @@ def do_greedy_from_full_fast(full_model, data, er_thresh=2.0, verbosity=2, maxit
         
         best_of_chunk = [lowest_vec, lowest_quantity, lowest_imdl]
         if comm is not None:
-            finalists_raw = comm.allgather(best_of_chunk)
+            finalists_raw = comm.gather(best_of_chunk, root = 0)
         else:
             finalists_raw = [best_of_chunk]
-        finalists = []
-        for finalist in finalists_raw:
-            finalists.append(finalist)
-        #Purge out all entries from processes that did not compute anything
-        finalists = [finalist for finalist in finalists if finalist[2] != -1]
-        
-        sorted_finalists = sorted(finalists, key=lambda x: x[1])
+        if rank == 0 and comm is not None:
+            finalists = []
+            for finalist in finalists_raw:
+                finalists.append(finalist)
+            #Purge out all entries from processes that did not compute anything
+            #TODO delete if this assertion never fails
+            assert finalists == [finalist for finalist in finalists if finalist[2] != -1]
+            
+            best_model = sorted(finalists, key=lambda x: x[1])[0]
+        elif comm is not None:
+            best_model = None
+            best_model = comm.bcast(best_model, root = 0)
 
-        red_model = remove_param(red_model, sorted_finalists[0][2])
-        finalist_proj_matrix = np.delete(parent_model_projector, sorted_finalists[0][2], axis=1)
-        deltalogl_fn.model.from_vector(finalist_proj_matrix @ sorted_finalists[0][0])
+        if comm is None:
+            best_model = best_of_chunk
+
+        red_model = remove_param(red_model, best_model[2])
+        #finalist_proj_matrix = np.delete(parent_model_projector, best_model[2], axis=1)
+        deltalogl_fn.model.from_vector(np.delete(parent_model_projector, best_model[2], axis=1) @ best_model[0])
         finalist_real_logl = deltalogl_fn.fn()
-        finalist_approx_logl = approx_logl_fn(red_row_H, red_rowandcol_H, sorted_finalists[0][2])
+        finalist_approx_logl = approx_logl_fn(red_row_H, red_rowandcol_H, best_model[2])
         error = finalist_real_logl - finalist_approx_logl
 
         if rank == 0:
@@ -278,48 +282,45 @@ def do_greedy_from_full_fast(full_model, data, er_thresh=2.0, verbosity=2, maxit
 
         if recompute_Hessian:
             if verbosity and rank == 0:
-                print(f'Model {sorted_finalists[0][2]} has lowest evidence ratio {sorted_finalists[0][1]:.4f}')
+                print(f'Model {best_model[2]} has lowest evidence ratio {best_model[1]:.4f}')
             if verbosity > 0 and rank == 0:
                 print("Recomputing Hessian, approximation error is ", error)
-            red_model.from_vector(sorted_finalists[0][0])
+            red_model.from_vector(best_model[0])
             red_model.sim = pygsti.forwardsims.MapForwardSimulator(processor_grid=(1,size))
-            result = _parallel_GST(red_model, data, builders, tol, maxiter, verbosity, comm=comm, mem_limit=mem_limit)
         
-            red_model_fit = result.estimates['GateSetTomography'].models['final iteration estimate']
+            red_model_fit = _parallel_GST(red_model, data, builders, tol, maxiter, verbosity, comm=comm, mem_limit=mem_limit).estimates['GateSetTomography'].models['final iteration estimate']
             red_model_fit.sim = pygsti.forwardsims.MapForwardSimulator(processor_grid=(1,1,size),param_blk_sizes=(100,100))
             H = pygsti.tools.logl_hessian(red_model_fit, data.dataset, comm=comm, mem_limit=mem_limit, verbosity = verbosity)
             if comm is not None:
                 H = comm.bcast(H, root = 0)
-            x0 = red_model_fit.to_vector()
+            x0 = red_model_fit.to_vector().copy()
             red_model_fit.sim._processor_grid = (1,1,1)
-            deltalogl_fn.model = red_model_fit.copy()
-            sorted_finalists[0][1] = (deltalogl_fn.fn() - prev_dlogl )*2
+            deltalogl_fn.model = red_model_fit
+            best_model[1] = (deltalogl_fn.fn() - prev_dlogl )*2
             expansion_point_logl = deltalogl_fn.fn()
             parent_model_projector = np.eye(len(x0))
             approx_logl_fn = create_approx_logl_fn(H, x0, expansion_point_logl)
             red_row_H = H
             red_rowandcol_H = H
             if rank == 0 and verbosity > 0:
-                print('New exact evidence ratio is ', sorted_finalists[0][1])
+                print('New exact evidence ratio is ', best_model[1])
             
         if verbosity and rank == 0:
-            print(f'Model {sorted_finalists[0][2]} has lowest evidence ratio {sorted_finalists[0][1]:.4f}')
+            print(f'Model {best_model[2]} has lowest evidence ratio {best_model[1]:.4f}')
         
-        if sorted_finalists[0][1] > er_thresh or len(sorted_finalists[0][0]) == 1:
+        if best_model[1] > er_thresh or len(best_model[0]) == 1:
                 if rank == 0 and verbosity > 0:
                     print('All models from this level exceeded evidence ratio threshold, model rejected. Stopping!')
                 #print('Final accepted model (parent from previous iteration):')
                 #print('\n'.join(graph_levels[-1][0][0].parameter_labels_pretty))
                 exceeded_threshold = True
-                final_projector_matrix = parent_model_projector
 
                 if recompute_Hessian:
-                    final_fit = red_model_fit
+                    final_fit_model = red_model_fit
                     curr_dlogl = expansion_point_logl
 
                 else:
-                    final_fit = _parallel_GST(red_model, data, builders, tol, maxiter, verbosity, comm=comm, mem_limit=mem_limit)
-                    final_fit_model = final_fit.estimates['GateSetTomography'].models['final iteration estimate']
+                    final_fit_model = _parallel_GST(red_model, data, builders, tol, maxiter, verbosity, comm=comm, mem_limit=mem_limit).estimates['GateSetTomography'].models['final iteration estimate']
                     final_fit_model.sim._processor_grid = (1,1,1)
                     deltalogl_fn.model = final_fit_model.copy()
                     curr_dlogl = deltalogl_fn.fn()
@@ -341,16 +342,16 @@ def do_greedy_from_full_fast(full_model, data, er_thresh=2.0, verbosity=2, maxit
             if recompute_Hessian:
                 recompute_Hessian = False
             else:
-                parent_model_projector = np.delete(parent_model_projector, sorted_finalists[0][2], axis=1)
-                red_row_H = np.delete(red_row_H, sorted_finalists[0][2], axis=0)
-                red_rowandcol_H = np.delete(np.delete(red_rowandcol_H,sorted_finalists[0][2] , axis=0), sorted_finalists[0][2], axis=1)
+                parent_model_projector = np.delete(parent_model_projector, best_model[2], axis=1)
+                red_row_H = np.delete(red_row_H, best_model[2], axis=0)
+                red_rowandcol_H = np.delete(np.delete(red_rowandcol_H,best_model[2] , axis=0), best_model[2], axis=1)
             
         if not exceeded_threshold:
             # Save level
-            graph_levels.append(sorted_finalists)
+            graph_levels.append(best_model)
 
         if len(graph_levels) > 1:
-            prev_dlogl = prev_dlogl + sorted_finalists[0][1]/2
+            prev_dlogl = prev_dlogl + best_model[1]/2
             
         # Generate next level
         
