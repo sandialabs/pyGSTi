@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import numpy as _np
 
+from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.baseobjs.opcalc import bulk_eval_compact_polynomials_complex as _bulk_eval_compact_polynomials_complex
 from pygsti.modelmembers import modelmember as _modelmember
 from pygsti.tools import optools as _ot
@@ -102,6 +103,16 @@ class LinearOperator(_modelmember.ModelMember):
         # We can't rely on self._rep.shape since superclasses
         # are given broad freedom to define semantics of self._rep.
         return (self.dim, self.dim)
+
+    def _kraus_operators(self):
+        """A list of this operation's Kraus operators as numpy arrays."""
+        basis = getattr(self, '_basis', None)
+        if not isinstance(basis, _Basis):
+            msg = "Kraus operator functionality requires specifying a superoperator basis"
+            raise NotImplementedError(msg)
+        mx = self.to_dense('HilbertSchmidt')
+        kops = _ot.minimal_kraus_decomposition(mx, basis, 1e-7, 1e-7)
+        return kops
 
     def set_dense(self, m):
         """
