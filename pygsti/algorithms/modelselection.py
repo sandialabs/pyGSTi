@@ -202,6 +202,8 @@ def do_greedy_from_full_fast(full_model, data, er_thresh=2.0, verbosity=2, maxit
         if rank == 0 and verbosity >1:
             print(f'>> Working on level {len(graph_levels)} <<',flush = True)
             start = time.time()
+        if len(graph_levels) > 60:
+            exit()
         
         num_total_models = len(graph_levels[-1][0])
         bucket_size = num_total_models // size
@@ -263,7 +265,6 @@ def do_greedy_from_full_fast(full_model, data, er_thresh=2.0, verbosity=2, maxit
 
         if comm is None:
             best_model = best_of_chunk
-        print('out of loop')
         red_model = remove_param(red_model, best_model[2])
         #finalist_proj_matrix = np.delete(parent_model_projector, best_model[2], axis=1)
         deltalogl_fn.model.from_vector(np.delete(parent_model_projector, best_model[2], axis=1) @ best_model[0])
