@@ -190,12 +190,12 @@ def cptp_instrument(op_arrays: dict[str, _np.ndarray], basis: Basis, error_tol:f
         I_cptplnd = _op.convert(I_ideal, 'CPTPLND', basis) 
         povm_errormap = I_cptplnd.factorops[1]
     povm_cptp = _pv.ComposedPOVM(povm_errormap, base_povm)
-    inst_ops = dict()
 
     # Step 3. Assemble the CPTPLND-parameterized unitaries and POVM
     #   effects to represent each operator as a completely-positive
     #   trace-reducing map.
     # 
+    inst_ops = dict()
     for lbl in op_arrays:
         cur_effects   = effects[lbl]
         cur_unitaries = unitaries[lbl]
