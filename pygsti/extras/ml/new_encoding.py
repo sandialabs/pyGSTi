@@ -1,0 +1,231 @@
+import numpy as _np
+import warnings as _warnings
+import itertools as _itertools
+from pygsti.errorgenpropagation import errorpropagator as _ep
+from pygsti.errorgenpropagation import localstimerrorgen as _lseg
+from pygsti.extras.ml import tools as _tools
+from pygsti.tools import errgenproptools as _egptools
+from pygsti.circuits import Circuit as _Circuit
+#from tqdm import trange as _trange
+#from pygsti.extras.ml.encoding import *
+
+
+class CircuitEncoder(object):
+    """
+    TODO
+    """
+
+    # def __init__(self):
+    #     return
+
+    def __call__(self, circuit, padded_depth=None):
+        """
+        Turns the input circuit `circ`, represented as a Circuit object, into
+        a numpy array.
+        """
+        if padded_depth is None: padded_depth = circuit.depth
+        circuit_array = []
+        circuit_array += self.initialization_encoding(circuit)
+        circuit_array += [self.layer_encoding(l) for l in circuit]
+        circuit_array += [self.layer_encoding(None) for l in range(circuit.depth, padded_depth)]
+        circuit_array += self.measurement_encoding(circuit)
+        circuit_array = _np.array(circuit_array)
+
+        return circuit_array
+
+    def initialization_encoding(self, circuit):
+        """
+        The default encoding of the implicit initiliziation layer at the start of a circuit,
+        which is to not include it in the encoding.
+        """
+        return []
+
+    def measurement_encoding(self, circuit):
+        """
+        The default encoding of the implicit measuremnt layer at the end of a circuit,
+        which is to not include it in the encoding.
+        """
+        return []
+
+    def layer_encoding(self, circuit):
+        """
+        TODO
+        """
+        raise NotImplementedError("Specified in a derived class!")
+
+def circuits_to_tensor(circuits, encoder, encoding_depth=None):
+    """
+    TODO
+    """
+    if encoding_depth is None: 
+        max_depth = _np.max([c.depth for c in circuits])
+        encoding_depth = encoder.depth(max_depth)
+    
+    circuits_tensor = _np.zeros((len(circuits), encoder.length, encoding_depth), float)
+    for i, circuit in enumerate(circuits):
+        circuits_tensor[i,:,:] = encoder(circuit)
+
+    return circuits_tensor
+
+def dense_dataset_encoding(ds, n, circs=None):
+    """
+    TODO
+    """
+    if circuits is None: circuits = list(ds.keys())
+    nbit_strings = [] # TO DO
+    freqs_array = _np.zeros((len(circuits), 2**n), float)
+    for i in trange(len(circuits), smoothing=0):
+        dsrow = ds[circuits[i]]
+        freqs_array[i,:] =  _np.array([dsrow.counts.get((bs,), 0.) / dsrow.total for bs in nbit_strings])
+
+    return freqs_array
+
+def circuit_error_propagation_matrices(circuit, error_generators):
+    """
+    TODO
+    """
+    error_propagator = _ep.ErrorGeneratorPropagator(None)
+    stim_layers = error_propagator.construct_stim_layers(circuit, drop_first_layer=True)
+    propagation_layers = error_propagator.construct_propagation_layers(stim_layers)
+    # TODO : What does this do?
+    errorgen_layers = [{_lseg.LocalStimErrorgenLabel.cast(lbl):1 for lbl in error_generators}] * circuit.depth
+    propagated_errorgen_layers = error_propagator._propagate_errorgen_layers(errorgen_layers, propagation_layers, include_spam=False) # list of dicts of error generators
+
+    indices = _np.array([[_tools.error_gen_to_index(err.errorgen_type, err.bel_to_strings()) for err in propagated_errorgen_layers[l]] for  l in range(circuit.depth)])
+    signs = _np.array([[_np.sign(val) for val in propagated_errorgen_layers[l].values()] for l in range(circuit.depth)])
+
+    return indices, signs
+
+def dense_error_propagation_tensors(circuits, error_generators, pspec, prior_error_generators=None, prior_tensors=None):
+    """
+    TODO
+    """
+    if prior_error_generators is not None:
+        assert(len(set(error_generators).intersection(set(prior_error_generators))) == 0), "Can only add new error generators!"
+        prior_alphas = prior_tensors['alphas']
+        num_pregs = len(prior_error_generators)
+    else:
+        num_pregs = 0
+
+    num_qubits = pspec.num_qubits
+    nbit_strings = [''.join(p) for p in _itertools.product('01', repeat=num_qubits)]
+    max_depth = _np.max([circuit.depth for circuit in circuits])
+
+    indices = _np.zeros((len(circuits), len(error_generators) + num_pregs, max_depth), int)
+    signs = _np.zeros((len(circuits), len(error_generators) + num_pregs, max_depth), int)
+    alphas = _np.zeros((len(circuits), 2 ** num_qubits, 2 * 4 ** num_qubits), float)
+
+    if prior_error_generators is not None:
+        indices[:, 0:num_pregs, :] = prior_tensors['indices'].copy()
+        signs[:, 0:num_pregs, :] = prior_tensors['signs'].copy()
+       
+    for i, circuit in enumerate(circuits):
+
+        # compute the sign and indices matrices for this circuit
+        indices_for_circuit, signs_for_circuit = circuit_error_propagation_matrices(circuit, error_generators)
+        indices[i, 0:circuit.depth, num_pregs:] = indices_for_circuit.copy()
+        signs[i, 0:circuit.depth, num_pregs:] = signs_for_circuit.copy()
+
+        # Compute the error-free probabilities for each bit string.
+        tableau = circuit.convert_to_stim_tableau()
+        ideal_probabilities = _np.array([_egptools.stabilizer_probability(tableau, bs) for bs in nbit_strings]).T
+
+        # Compute the alpha matrix for the circuit, filling in only those 
+        if prior_error_generators is not None:
+            prior_alphas = prior_alphas[i, :, :]
+        else:
+            prior_alphas = None
+
+        unique_end_of_circuit_error_generators = list(set(indices))
+        alphas[i, :, :] = dense_alpha_matrix(tableau, num_qubits, populate_for_error_generators=unique_end_of_circuit_error_generators,
+                                             existing_alpha_matrix=prior_alphas)
+
+    tensors = {'probabilities':ideal_probabilities, 'indices': indices, 'signs':signs, 'alphas': alphas}
+    
+    return tensors
+
+def alpha_coefficient(i, num_qubits, tableau, bs):
+    """
+    Computes the alpha coefficient for the ith error generator, with the circuit defined by the
+    input tableau and for the given bit string.
+
+    Parameters
+    ----------
+    i : int
+        The index of the error generator, as specified in the ordering of ml.tools.index_to_error_gen
+
+    num_qubits : int
+        The number of qubits
+
+    tableau : stim.Tableau
+        The tableau of the circuit for which we are calculating the alpha coefficient
+
+    bs : str
+        The bit string for which the alpha coefficient is to be computed.
+
+    Returns
+    -------
+    float
+        The alpha coefficient
+    """
+    return _np.float64(_egptools.alpha(_tools.index_to_error_gen(i, num_qubits, as_label=True), tableau, bs).real) 
+
+def dense_alpha_matrix(circuit, num_qubits, populate_for_error_generators=None, existing_alpha_matrix=None):
+    """
+    Creates the alpha matrix, a 2**n by 2 * 4**n matrix, that is used to compute the 
+    first-order impact of each end-of-circuit error generator on each n-bit string. Can
+    be used to update an existing partially-populated alpha matrix.
+
+    Parameters
+    ----------
+    circuit: Circuit or Stim.Tableau
+        The circuit for which we are computing the alpha tensor.
+
+    num_qubits: int
+        The number of qubits in the circuit.
+
+    populate_for_error_generators : None or list of integers.
+        If not None, the indices of the error generators for which to compute the alpha tensor for.
+        If None, the entire alpha tensor is computed. If a list of integers, this function creates
+        an alpha tensor that is zero except for the alphas corresponding to the end-of-circuit 
+        error generators in this list.
+
+    existing_alpha_matrix : None or numpy array of shape (2**n, 2 * 4**n)
+        An existing partially-populated alpha matrix. Note that providing an existing alpha matrix
+        has no purpose if `populuate_for_error_generators` is None, as then the complete alpha
+        matrix is computed. 
+
+    Returns
+    -------
+    The alpha matrix, as a dense array. This is an array that is of shape 2**n by 2 * 4**n, with
+    element [i,j] corresponding to the alpha value for the ith n-bit string and the jth end-of-circuit
+    H or S type error generator, using the indexing defined in ml.tools. If an existing alpha matrix
+    was provided, only elements corresponding to `populate_for_error_generators` have been changed.
+
+    """
+    num_nq_errgens = 2 * 4 ** num_qubits # We include the S_{III} and H_{III..} in our indexing
+    nbit_strings = [''.join(p) for p in _itertools.product('01', repeat=num_qubits)]
+    if populate_for_error_generators is None: populate_for_error_generators = list(range(num_nq_errgens))
+
+    if isinstance(circuit, _Circuit):
+        tableau = circuit.convert_to_stim_tableau()
+    elif isinstance(circuit, stim.Tableau):
+        tableau = circuit
+
+    if existing_alpha_matrix is not None:
+        alpha_matrix = existing_alpha_matrix.copy()
+    else:
+        alpha_matrix = _np.zeros((2 ** num_qubits, num_nq_errgens), float)
+
+    scale = 1 / 2 ** _egptools.random_support(tableau) #TODO: This might overflow
+    for i in populate_for_error_generators:
+        alpha_matrix[:, i] = scale * _np.array([alpha_coefficient(i, num_qubits, tableau, bs) for bs in nbit_strings])
+
+    return alpha_matrix
+
+
+    # scale = 1 / 2 ** _egptools.random_support(tableau) #TODO: This might overflow
+    
+    # scaled_alphas = [[alpha_coefficient(i, num_qubits, tableau, bs) if (i in populate_for_error_generators) else 0. for i in range(num_nq_errgens)] for bs in nbit_strings]
+
+    # return scale * _np.array(scaled_alphas)
