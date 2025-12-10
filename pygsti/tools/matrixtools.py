@@ -813,6 +813,8 @@ def eigenvalues(m: _np.ndarray, *, assume_hermitian: Optional[bool] = None, assu
     if assume_hermitian:
         # Make sure it's Hermtian in exact arithmetic. This helps with
         # reproducibility across different implementations of LAPACK.
+        if not m.flags.writeable:
+            m = m.copy()
         m += m.T.conj()
         m /= 2
         return _np.linalg.eigvalsh(m)
@@ -830,6 +832,8 @@ def eigendecomposition(m: _np.ndarray, *, assume_hermitian: Optional[bool] = Non
     if assume_hermitian:
         # Make sure it's Hermtian in exact arithmetic. This helps with
         # reproducibility across different implementations of LAPACK.
+        if not m.flags.writeable:
+            m = m.copy()
         m += m.T.conj()
         m /= 2
         evals, evecs = _np.linalg.eigh(m)
