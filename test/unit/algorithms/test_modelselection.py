@@ -27,7 +27,7 @@ class AMSTester(BaseCase):
 		
 		percent_removed = (model.num_params - len(final_fit_vec)) / (model.num_params - len(params_to_keep)) * 100
 
-		assert percent_removed > 50, 'AMS removed less than 50% of trivial parameters'
+		assert percent_removed > 50, f'AMS removed less than 50% of trivial parameters, {model.num_params=}, {len(final_fit_vec)=}'
 
 	def test_single_errgen_fogi_noise(self):
 		from pygsti.modelpacks import smq1Q_XY, smq1Q_XYZI
@@ -68,5 +68,4 @@ class AMSTester(BaseCase):
 				dataset = simulate_data(datagen_model, edesign.all_circuits_needing_data, 
 												num_samples=10000, seed=20230217)
 				data = ProtocolData(edesign, dataset)
-																	
-				self.check_approx_AMS(fogi_model, data, 2, [fogi_index], [0, 300, 1e-12, 1e-4, 200, True, None, None,None])
+				self.check_approx_AMS(fogi_model, data, 2, [fogi_index], [2, 300, 1e-12, 1e-4, 200, True, None, None,None])

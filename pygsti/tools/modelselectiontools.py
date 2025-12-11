@@ -35,9 +35,8 @@ class AMSCheckpoint(_NicelySerializable):
     TODO
     """ 
 
-    def __init__(self, full_model, datasetstr, er_thresh, maxiter, tol, prob_clip, H, x0, time=None, path=None, graph_levels=None):
+    def __init__(self, datasetstr, er_thresh, maxiter, tol, prob_clip, H, x0, original_dlogl, time=None, path=None, graph_levels=[]):
         super().__init__()
-        self.full_model = full_model
         self.datasetstr = datasetstr
         self.maxiter = maxiter
         self.tol = tol
@@ -46,6 +45,8 @@ class AMSCheckpoint(_NicelySerializable):
         self.x0 = x0
         self.er_thresh = er_thresh
         self.graph_levels = graph_levels
+        self.original_dlogl = original_dlogl
+
         if time is None:
             self.last_update_time = _time.ctime()
         else:
@@ -63,23 +64,25 @@ class AMSCheckpoint(_NicelySerializable):
     
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
-        state.update({'full_model' : self.full_model._to_nice_serialization() if self.full_model is not None else None,
+        encoded_graph_levels = [[self._encodemx(level[0]), level[1], level[2]]for level in self.graph_levels]
+        state.update({
                         'datasetstr' : self.datasetstr,
                         'er_thresh' : self.er_thresh,
                         'maxiter' : self.maxiter,
                         'tol' : self.tol,
                         'prob_clip' : self.prob_clip,                        
-                        'H' : self._encodemx(self.H),
+                        'H' : self._encodemx(self.H) if self.H is not None else None,
                         'x0' : self._encodemx(self.x0),
                         'time': self.last_update_time,
-                        'graph_levels':self._encodemx(self.graph_levels)})
+                        'graph_levels':encoded_graph_levels,
+                        'original_dlogl': self.original_dlogl
+                        })
                        
         return state
     @classmethod
     def _from_nice_serialization(cls, state):
-        H = cls._decodemx(state['H'])
+        H = cls._decodemx(state['H']) if state['H'] is not None else None
         x0 = cls._decodemx(state['x0'])
-        full_model = Model.from_nice_serialization(state['full_model'])
         er_thresh = state['er_thresh']
         datasetstr = state['datasetstr']
         maxiter = state['maxiter']
@@ -87,8 +90,10 @@ class AMSCheckpoint(_NicelySerializable):
         time= state['time']
         tol = state['tol']
         graph_levels = state['graph_levels']
+        decoded_graph_levels = [[cls._decodemx(level[0]), level[1], level[2]]for level in graph_levels]
+        original_dlogl = state['original_dlogl']
 
-        return cls(full_model, datasetstr, er_thresh, maxiter,tol , prob_clip ,H, x0, time, graph_levels=graph_levels)
+        return cls( datasetstr, er_thresh, maxiter,tol , prob_clip ,H, x0,original_dlogl, time=time, graph_levels=decoded_graph_levels)
     def save(self):
         """
         Saves self to memory. If path is not specified, a default one is created.
@@ -110,13 +115,11 @@ class AMSCheckpoint(_NicelySerializable):
         """
         return [self.full_model, self.datasetstr, self.er_thresh, self.maxiter, self.tol, self.prob_clip, self.recompute_H_thresh_percent]
          
-    def check_valid_checkpoint(self, full_model, datasetstr, er_thresh, maxiter, tol, prob_clip):
+    def check_valid_checkpoint(self, datasetstr, er_thresh, maxiter, tol, prob_clip):
         """Check if self is a checkpoint with the same settings as the ones passed in. This is only compatible with FOGI model checkpoints.
 
         Parameters
         ----------
-        full_model : Model
-            Model used as a seed for AMS
 
         data : ProtocolData
             input data to fit models within AMS
@@ -144,13 +147,17 @@ class AMSCheckpoint(_NicelySerializable):
         -------
         True iff all arguments match the data inside self.
         """
-        def equal_fogi_models(fogi_model, fogi_model2):
-            return fogi_model.fogi_store.__eq__(fogi_model2.fogi_store) and fogi_model.param_interposer.__eq__(fogi_model2.param_interposer)
-        
-        if equal_fogi_models(full_model, self.full_model) and datasetstr == self.datasetstr and er_thresh == self.er_thresh and maxiter == self.maxiter and tol == self.tol and prob_clip == self.prob_clip:# and recompute_H_thresh_percent == self.recompute_H_thresh_percent:
+
+
+        if  datasetstr == self.datasetstr and er_thresh == self.er_thresh and maxiter == self.maxiter and tol == self.tol and prob_clip == self.prob_clip:
              return True
         else:
              return False
+
+def remove_params(parent_model, params_to_remove):
+    for i in range(len(params_to_remove)):
+        parent_model = remove_param(parent_model, i)
+    return parent_model
 
 def remove_param(parent_model, param_to_remove):
     next_model = parent_model.copy()
@@ -177,7 +184,7 @@ def create_projector_matrix_from_trace(graph_levels, projector_matrix = None):
     ----------
     
     graph_levels : a list of lists of lists 
-        Let us look at every index from this object separately, call them i,j,k such that graph_levels[i][j][k]
+        Let us look at every index from this object separately, call them i,k such that graph_levels[i][k]
 
           -  i: AMS works by traversing different "levels" of all possible reduced models. Each level considers 
                 a subset of reduced models where they each lack a single parameter from a shared parent model. 
@@ -185,10 +192,7 @@ def create_projector_matrix_from_trace(graph_levels, projector_matrix = None):
                 indexes into a specific level within AMS, with i=0 being the first level which contains only one 
                 model, the seed model, and the rest of the levels contain reduced models from the level above.
 
-          -  j: indexes between all models considered in level i. These are sorted by evidence ratio, so i=a, j=0
-                is the model that was chosen to create reduced models for level a+1
-
-          -  k: At every level of AMS, only the most important features of each model is saved. This constitutes:
+          -  k: At every level of AMS, only the most important features of the best model is saved. This constitutes:
 
                 [param_vec , evidence_ratio, parameter_that_was_removed]. k indexes within this list.
 
@@ -218,22 +222,6 @@ def create_projector_matrix_from_trace(graph_levels, projector_matrix = None):
         projector_matrix = _np.delete(projector_matrix, param_to_remove, axis=1)
     return projector_matrix
 
-def compare_parameters_simple(parent_model_vec, red_model_vec, projector_matrix):
-    
-    projector = projector_matrix @ projector_matrix.T
-    assert len(parent_model_vec) == len(projector)
-    table_data = [['Full', 'Reduced']]
-    j = 0
-    for i in range(len(parent_model_vec)):
-          
-        if projector[i][i] == 0:
-            table_data.append([parent_model_vec[i], 'removed'])
-        else:
-            table_data.append([parent_model_vec[i], red_model_vec[j]])
-            j += 1
-    assert len(red_model_vec) == j
-    for row in table_data:
-        print("{: <25} {: <25}".format(*row), '\n')
 
 def custom_builder(min_prob_clip):
 
@@ -300,33 +288,34 @@ def parallel_GST(full_model, data, builders, tol=1e-10, maxiter=300, verbosity=0
                 memlimit=mem_limit, optimizers=optimizers)
     return result
 
-def create_red_model(parent_model, projector_matrix, vec):
-	"""TODO
+def create_red_model(parent_model, projector_matrix, vec, sim=None):
+    """TODO
 
-	Args:
-		parent_model (_type_): _description_
-		projector_matrix (_type_): _description_
-		vec (_type_): _description_
+    Args:
+        parent_model (_type_): _description_
+        projector_matrix (_type_): _description_
+        vec (_type_): _description_
 
-	Returns:
-		_type_: _description_
-	"""
-	assert projector_matrix.shape[1] == len(vec)
-	assert projector_matrix.shape[0] == parent_model.num_params
-	
-	red_model = parent_model.copy()
-	red_model.param_interposer.num_params = len(vec)
-	red_model.param_interposer.transform_matrix = parent_model.param_interposer.full_span_transform_matrix @ projector_matrix
-	red_model.param_interposer.projector_matrix = projector_matrix.copy()
-	reduced_inv_matrix =  projector_matrix.T @ parent_model.param_interposer.inv_transform_matrix
-	red_model.param_interposer.inv_transform_matrix = reduced_inv_matrix
-	red_model._paramvec = vec.copy()
-	red_model.from_vector(red_model._paramvec)
+    Returns:
+        _type_: _description_
+    """
+    assert projector_matrix.shape[1] == len(vec)
+    
+    red_model = parent_model.copy()
+    red_model.param_interposer.num_params = len(vec)
+    red_model.param_interposer.transform_matrix = parent_model.param_interposer.full_span_transform_matrix @ parent_model.param_interposer.projector_matrix @ projector_matrix
+    red_model.param_interposer.projector_matrix = parent_model.param_interposer.projector_matrix @ projector_matrix
+    reduced_inv_matrix =  projector_matrix.T @ parent_model.param_interposer.inv_transform_matrix
+    red_model.param_interposer.inv_transform_matrix = reduced_inv_matrix
+    red_model._paramvec = vec.copy()
+    red_model.from_vector(red_model._paramvec)
 
-	red_model._need_to_rebuild = True
-	red_model._clean_paramvec()
-	assert red_model.num_params < parent_model.num_params
-	return red_model
+    red_model._need_to_rebuild = True
+    red_model._clean_paramvec()
+    assert red_model.num_params < parent_model.num_params
+    if sim is not None:
+        red_model.sim = sim
+    return red_model
 
 def reduced_model_approx_GST_fast(red_rowandcol_H, red_row_H, x0, param_to_remove):
         """
