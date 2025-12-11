@@ -1,4 +1,4 @@
-""" Machine learning sub-package """
+""" Machine learning sub-package containing quantum physics aware neural networks """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -9,6 +9,6 @@
 #***************************************************************************************************
 
 from . import qpanns
-from . import tools
-# from . import customlayers
+from . import errgentools
 from . import encoding
+from . import snippers

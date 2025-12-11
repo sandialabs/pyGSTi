@@ -1,89 +1,22 @@
+""" Error generator manipulation tools """
+#***************************************************************************************************
+# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
 
 import numpy as np
 import itertools as _itertools
 import copy as _copy
 import warnings as _warnings
 
-# from ..errorgenpropagation import propagatableerrorgen as _peg
 from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel
 from pygsti.errorgenpropagation.errorpropagator import ErrorGeneratorPropagator
 from pygsti.errorgenpropagation import localstimerrorgen as _lseg
 
-# from ..errorgenpropagation import errorpropagator as _ep
-
-from tensorflow import unique
-import tensorflow as _tf
-
-def layer_snipper_from_qubit_graph(error_gen, num_qubits, num_channels, qubit_graph_laplacian, num_hops):
-    """
-
-    """
-
-    laplace_power = np.linalg.matrix_power(qubit_graph_laplacian, num_hops)
-    nodes_within_hops = []
-    for i in range(num_qubits):
-        nodes_within_hops.append(np.arange(num_qubits)[abs(laplace_power[i, :]) > 0])
-
-    # These next few lines assumes only 'H' and 'S' errors because it only looks at the *first* Pauli that labels 
-    # the error generator, but there are two Paulis for 'A' and 'C'
-    
-    # The Pauli that labels the error gen, as a string of length num_qubits containing 'I', 'X', 'Y', and 'Z'.
-    pauli_string = error_gen[1][0]
-    pauli_string = pauli_string[::-1] # for reverse indexing
-    # The indices of `pauli` that are not equal to 'I'.
-    qubits_acted_on_by_error = np.where(np.array(list(pauli_string)) != 'I')[0]
-    qubits_acted_on_by_error = list(qubits_acted_on_by_error)
-
-    # All the qubits that are within `hops` steps, of the qubits acted on by the error, on the connectivity
-    # graph of the qubits
-    relevant_qubits = np.unique(np.concatenate([nodes_within_hops[i] for i in qubits_acted_on_by_error]))
-    indices_for_error = np.concatenate([[num_channels * q + i for i in range(num_channels)] for q in relevant_qubits])
-
-    return indices_for_error
-
-        
-# @_keras.utils.register_keras_serializable()
-def layer_snipper_from_qubit_graph_with_lookback(error_gen, num_qubits, num_channels, qubit_graph_laplacian, 
-                                                 num_hops, lookback=-1):
-    """
-
-    """
-    encoding_indices_for_error = layer_snipper_from_qubit_graph(error_gen=error_gen, num_qubits=num_qubits, 
-                                                                num_channels=num_channels, 
-                                                                qubit_graph_laplacian= qubit_graph_laplacian,
-                                                                num_hops=num_hops)
-
-    indices_for_error = []
-    for relative_layer_index in range(lookback, 1):
-        indices_for_error += [[relative_layer_index, i] for i in encoding_indices_for_error]
-
-    return np.array(indices_for_error)
-
-
-# @_keras.utils.register_keras_serializable()
-def layer_snipper_from_qubit_graph_with_simplified_lookback(error_gen, num_qubits, num_channels, qubit_graph_laplacian, 
-                                                 num_hops, lookback=-1):
-    """
-
-    """
-    encoding_indices_for_error = layer_snipper_from_qubit_graph(error_gen=error_gen, num_qubits=num_qubits, 
-                                                                num_channels=num_channels, 
-                                                                qubit_graph_laplacian= qubit_graph_laplacian,
-                                                                num_hops=num_hops)
-
-    indices_for_error = []
-    for i in range(0, np.abs(lookback)):
-        indices_for_error += list(encoding_indices_for_error + ((num_qubits * num_channels) * i))
-
-    return np.array(indices_for_error)
-    
-
-def laplace_from_qubit_graph(adj_matrix: np.array) -> np.array: 
-    """
-    Returns the graph laplacian for the graph defined by a given adjacency matrix.
-    """
-    deg_matrix = np.diag(np.sum(adj_matrix, axis = 1))
-    return deg_matrix - adj_matrix
 
 def numberToBase(n, b):
     """
@@ -138,7 +71,7 @@ def paulistring_to_index(ps, num_qubits):
     return idx
 
 
-# This function has not been properly vetted, and it is definitely not the best way to do this.
+# This is definitely not the best way to do this.
 # It's very slow.
 def up_to_weight_k_paulis(k, n):
     """
@@ -307,86 +240,3 @@ def num_error_generators(num_qubits):
     The number of H and S type error generators
     """
     return 4 ** num_qubits - 2
-
-
-
-# TIM JUST COMMMENT THIS OUT
-# def create_error_propagation_matrix(c, error_gens, stim_dict = None):
-#     """
-#     Computes how the errors in error_gens propogate through the circuit c.
-    
-#     c:
-    
-#     error_gens: a list specifying the error generators to insert after each circuit
-#         layer and propagate through the circuit. These primative error generators 
-#     """
-#     # error_gen_objs = [_peg.propagatableerrorgen(egen[0], egen[1], 1) for egen in error_gens]
-
-#     error_propagator = ErrorGeneratorPropagator(None)
-#     stim_layers = error_propagator.construct_stim_layers(c, drop_first_layer=True)
-#     propagation_layers = error_propagator.construct_propagation_layers(stim_layers)
-#     error_gen_objs = {LocalStimErrorgenLabel.cast(lbl):1 for lbl in error_gens} # dict to iterate over
-
-#     errorgen_layers = [error_gen_objs] * (len(c) - 0) # could be 1, tbd
-
-#     propagated_errorgen_layers = error_propagator._propagate_errorgen_layers(errorgen_layers, propagation_layers, include_spam=False) # list of dicts of error generators
-
-#     # indices references error generators
-#     # create matrix same shape and indices and signs and populate with alpha calculations for each index. this is bitstring dependent. for small qubits, can go ahead and precompute 2**n bitstrings
-#     # with signs and alphas, can convert to signed_alphas
-#     # use signed alphas as elementwise product in second half of NN
-#     indices, signs = [], [] # in separate function go and compute 
-#     for l in range(c.depth):
-#         indices.append([error_generator_index(err.errorgen_type, err.bel_to_strings()) 
-#                         for err in propagated_errorgen_layers[l]])
-#         signs.append([np.sign(val) for val in propagated_errorgen_layers[l].values()])
-
-#     indices = np.array(indices)
-#     signs = np.array(signs)
-
-#     return indices, signs
-
-# def remap_indices(c_indices):
-#     # Takes in a permutation matrix for a circuit and
-#     # remaps the entries.
-#     # e.g., P = [[1,256], [1, 0]]   ---> [[0, 1], [0, 3]]
-#     flat_indices = c_indices.flatten()
-#     unique_values, idx = np.unique(flat_indices, return_inverse = True)
-#     return idx.reshape(c_indices.shape)
-
-def clockwise_cnot(g):
-    return (g.qubits[0] - g.qubits[1]) % num_qubits == num_qubits - 1
-
-def gate_to_index(g, q):
-    assert(q in g.qubits)
-    if g.name == 'Gxpi2':
-        return 0
-    elif g.name == 'Gypi2':
-        return 1
-    elif g.name == 'Gcnot':
-        qs = g.qubits
-        if q == g.qubits[0] and clockwise_cnot(g):
-            return 2
-        if q == g.qubits[1] and clockwise_cnot(g):
-            return 3
-        if q == g.qubits[0] and not clockwise_cnot(g):
-            return 4
-        if q == g.qubits[1] and not clockwise_cnot(g):
-            return 5
-    else:
-        raise ValueError('Invalid gate name for this encoding!')
-        
-# def layer_to_matrix(layer):
-#     mat = np.zeros((num_qubits, num_channels), float)
-#     for g in layer:
-#         for q in g.qubits:
-#             mat[q, gate_to_index(g, q)] = 1
-#     return mat
-
-# def circuit_to_tensor(circ, depth=None):
-    
-#     if depth is None: depth = circ.depth
-#     ctensor = np.zeros((num_qubits, depth, num_channels), float)
-#     for i in range(circ.depth):
-#         ctensor[:, i, :] = layer_to_matrix(circ.layer(i))
-#     return ctensor
