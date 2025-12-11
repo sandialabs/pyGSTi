@@ -8,15 +8,7 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from . import neuralnets
-# from . import neuralnets4
-#from . import neuralnets_cpu_optimization
-# from . import neuralnets_gpu_optimization
-# from . import neuralnets_cpu_bitstring_probability
-#from . import neuralnets_cpu_bitstring_probability_map
+from . import qpanns
 from . import tools
-from . import probability_tools
-from . import custom_layers
-# from .neuralnets import *
-# from .neuralnets2 import *
-from .tools import *
+# from . import customlayers
+from . import encoding

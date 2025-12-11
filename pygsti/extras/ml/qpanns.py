@@ -1,9 +1,9 @@
-import tensorflow as tf
+import tensorflow as _tf
 import keras as _keras
 import numpy as _np
 import copy as _copy
-import warnings
-from pygsti.extras.ml import custom_layers
+import warnings as _warnings
+from pygsti.extras.ml import customlayers as _cl
 
 class DenseSubNetwork(_keras.layers.Layer):
     def __init__(self, units):
@@ -49,9 +49,9 @@ class EinsumSubNetwork(_keras.layers.Layer):
 
         # Define the sub-unit's dense layers
         self.sequential = _keras.Sequential(
-            # [custom_layers.SelectiveDense(self.units[0], self.layer_encoding_indices_for_error_gen,  activation='gelu')] +
-             [custom_layers.CustomDense(i, self.num_errorgens, activation='gelu') for i in self.units[:-1]] +
-            [custom_layers.CustomDense(self.units[-1], self.num_errorgens, activation='linear', kernel_initializer=init, bias_initializer=init)])
+            # [_cl.SelectiveDense(self.units[0], self.layer_encoding_indices_for_error_gen,  activation='gelu')] +
+             [_cl.CustomDense(i, self.num_errorgens, activation='gelu') for i in self.units[:-1]] +
+            [_cl.CustomDense(self.units[-1], self.num_errorgens, activation='linear', kernel_initializer=init, bias_initializer=init)])
 
     def get_config(self):
         config = super(DenseSubNetwork, self).get_config()
@@ -113,37 +113,37 @@ class DenseToErrVec(_keras.layers.Layer):
     def old_call(self, inputs):
         # print('circuit_input', inputs.shape)
         max_len_gate_encoding = max([len(layer_encoding) for layer_encoding in self.layer_encoding_indices_for_error_gen])
-        indices_tensor = tf.ragged.constant(self.layer_encoding_indices_for_error_gen).to_tensor(
+        indices_tensor = _tf.ragged.constant(self.layer_encoding_indices_for_error_gen).to_tensor(
             default_value=-1, 
             shape=[len(self.layer_encoding_indices_for_error_gen), max_len_gate_encoding]
         ) # If fewer gate encodings than num_qubits*num_channels, pad with -1 (illegal index)
         
         # Expand dimensions to match the batch size
-        batch_size = tf.shape(inputs)[0]
-        indices_tiled = tf.tile(tf.expand_dims(indices_tensor, 0), [batch_size, 1, 1])
+        batch_size = _tf.shape(inputs)[0]
+        indices_tiled = _tf.tile(_tf.expand_dims(indices_tensor, 0), [batch_size, 1, 1])
 
         # Create a mask based on the padding (-1 in indices_tensor), so that outputs from these indices can be masked out
-        mask = tf.not_equal(indices_tiled, -1)
-        mask = tf.cast(mask, dtype=inputs.dtype)
+        mask = _tf.not_equal(indices_tiled, -1)
+        mask = _tf.cast(mask, dtype=inputs.dtype)
 
-        # Change -1 to 0 in indices_tiled before using tf.gather
-        indices_tiled = tf.where(indices_tiled == -1, tf.zeros_like(indices_tiled), indices_tiled) # replace indices of -1 (error) to 0 (will point to the wrong index)
+        # Change -1 to 0 in indices_tiled before using _tf.gather
+        indices_tiled = _tf.where(indices_tiled == -1, _tf.zeros_like(indices_tiled), indices_tiled) # replace indices of -1 (error) to 0 (will point to the wrong index)
         # Gather the values based on the indices
-        gathered_slices = tf.gather(inputs, indices_tiled, batch_dims=1)
+        gathered_slices = _tf.gather(inputs, indices_tiled, batch_dims=1)
 
         # Apply the mask to zero out the gathered slices at the padding positions
         gathered_slices_masked = gathered_slices * mask
 
         # Reshape the gathered slices to concatenate along the last axis
-        gathered_slices_flat = tf.reshape(gathered_slices_masked, [batch_size, -1])
+        gathered_slices_flat = _tf.reshape(gathered_slices_masked, [batch_size, -1])
 
         # Dense network to learn error rates
         x = self.dense(gathered_slices_flat)
         return x
 
     def call_redundant(self, inputs):
-        stacked_index = tf.concat(self.layer_encoding_indices_for_error_gen, axis=0)
-        gathered_slices_flat = tf.gather(inputs, stacked_index, axis=1)
+        stacked_index = _tf.concat(self.layer_encoding_indices_for_error_gen, axis=0)
+        gathered_slices_flat = _tf.gather(inputs, stacked_index, axis=1)
         x = self.dense(gathered_slices_flat)
         return x
 
@@ -198,9 +198,9 @@ class GraphToErrVec(_keras.layers.Layer):
         super().build(input_shape)
 
     def call(self, inputs):
-        x = [self.dense[i](tf.gather(inputs, self.layer_encoding_indices_for_error_gen[i], axis=-1)) 
+        x = [self.dense[i](_tf.gather(inputs, self.layer_encoding_indices_for_error_gen[i], axis=-1)) 
              for i in range(0, self.num_tracked_error_gens)]
-        x = tf.concat(x, axis=-1)
+        x = _tf.concat(x, axis=-1)
         return x
 
 # @_keras.utils.register_keras_serializable()
@@ -250,23 +250,23 @@ class EinsumToErrVec(_keras.layers.Layer):
     
     def call(self, inputs):
         max_len_gate_encoding = max([len(layer_encoding) for layer_encoding in self.layer_encoding_indices_for_error_gen])
-        indices_tensor = tf.ragged.constant(self.layer_encoding_indices_for_error_gen).to_tensor(
+        indices_tensor = _tf.ragged.constant(self.layer_encoding_indices_for_error_gen).to_tensor(
             default_value=-1, 
             shape=[len(self.layer_encoding_indices_for_error_gen), max_len_gate_encoding]
         ) # If fewer gate encodings than num_qubits*num_channels, pad with -1 (illegal index)
         
         # Expand dimensions to match the batch size
-        batch_size = tf.shape(inputs)[0]
-        indices_tiled = tf.tile(tf.expand_dims(indices_tensor, 0), [batch_size, 1, 1])
+        batch_size = _tf.shape(inputs)[0]
+        indices_tiled = _tf.tile(_tf.expand_dims(indices_tensor, 0), [batch_size, 1, 1])
 
         # Create a mask based on the padding (-1 in indices_tensor), so that outputs from these indices can be masked out
-        mask = tf.not_equal(indices_tiled, -1)
-        mask = tf.cast(mask, dtype=inputs.dtype)
+        mask = _tf.not_equal(indices_tiled, -1)
+        mask = _tf.cast(mask, dtype=inputs.dtype)
 
-        # Change -1 to 0 in indices_tiled before using tf.gather
-        indices_tiled = tf.where(indices_tiled == -1, tf.zeros_like(indices_tiled), indices_tiled) # replace indices of -1 (error) to 0 (will point to the wrong index)
+        # Change -1 to 0 in indices_tiled before using _tf.gather
+        indices_tiled = _tf.where(indices_tiled == -1, _tf.zeros_like(indices_tiled), indices_tiled) # replace indices of -1 (error) to 0 (will point to the wrong index)
         # Gather the values based on the indices
-        gathered_slices = tf.gather(inputs, indices_tiled, batch_dims=1)
+        gathered_slices = _tf.gather(inputs, indices_tiled, batch_dims=1)
 
         # Apply the mask to zero out the gathered slices at the padding positions
         gathered_slices_masked = gathered_slices * mask
@@ -274,12 +274,12 @@ class EinsumToErrVec(_keras.layers.Layer):
         # print('gathered_slices_masked', gathered_slices_masked.shape)
 
         # Reshape the gathered slices to concatenate along the last axis
-        gathered_slices_flat = tf.reshape(gathered_slices_masked, [batch_size, self.num_tracked_error_gens, -1])
+        gathered_slices_flat = _tf.reshape(gathered_slices_masked, [batch_size, self.num_tracked_error_gens, -1])
 
         # print('gathered_slices_flat', gathered_slices_flat.shape)
 
         # Dense network to learn error rates
-        x = tf.reshape(self.dense(gathered_slices_masked), [-1, self.num_tracked_error_gens])
+        x = _tf.reshape(self.dense(gathered_slices_masked), [-1, self.num_tracked_error_gens])
         return x
 
 @_keras.utils.register_keras_serializable(package='Blah1')
@@ -338,19 +338,19 @@ class DenseCircuitErrorVec(_keras.Model):
 
     def circuit_to_probability(self, inputs):
         circuit_encoding = inputs[0]  # circuit
-        S = tf.cast(inputs[1], tf.float32)  # sign matrix
-        P = tf.cast(inputs[2], tf.int32)  # permutation matrix
+        S = _tf.cast(inputs[1], _tf.float32)  # sign matrix
+        P = _tf.cast(inputs[2], _tf.int32)  # permutation matrix
         scaled_alpha_matrix = inputs[3]  # alphas
         Px_ideal = inputs[4]  # ideal (no error) probabilities
-        # C = tf.reshape(self.dense_correction(tf.reshape(circuit_encoding, [1, -1])), [-1])
+        # C = _tf.reshape(self.dense_correction(_tf.reshape(circuit_encoding, [1, -1])), [-1])
         epsilon_matrix = self.dense_layer(circuit_encoding)  # depth * num_tracked_error
         Px_approximate = self.probability_approximation_layer([epsilon_matrix, P, S, scaled_alpha_matrix, Px_ideal]) #+C
 
-        return Px_approximate# / tf.reduce_sum(Px_approximate)
+        return Px_approximate# / _tf.reduce_sum(Px_approximate)
 
-    # @tf.function
+    # @_tf.function
     def call(self, inputs):
-        return tf.map_fn(self.circuit_to_probability, inputs, fn_output_signature=tf.float32)
+        return _tf.map_fn(self.circuit_to_probability, inputs, fn_output_signature=_tf.float32)
 
 
 @_keras.utils.register_keras_serializable(package='Blah1')
@@ -402,42 +402,42 @@ class GraphCircuitErrorVec(_keras.Model):
     def build(self):
         self.local_dense = GraphToErrVec(self.layer_snipper, self.layer_snipper_args, self.tracked_error_gens, self.dense_units)
     
-    # @tf.function
+    # @_tf.function
     def calc_end_of_circ_error_rates(self, M, P, S, scaled_alpha_matrix):
         """
         A function that maps the error rates (M) to an end-of-circuit error generator
         using the permutation matrix P.
         """
-        signed_M = tf.math.multiply(S, M) 
-        flat_signed_M, flat_P = tf.reshape(signed_M, [-1]), tf.reshape(P, [-1])
-        unique_P, idx = tf.unique(flat_P) # unique_P values [0, num_error_generators]
-        num_segments = tf.reduce_max(idx)+1
-        error_rates = tf.math.unsorted_segment_sum(flat_signed_M, idx, num_segments)
-        gathered_alpha = tf.gather(scaled_alpha_matrix, unique_P, axis=1)
+        signed_M = _tf.math.multiply(S, M) 
+        flat_signed_M, flat_P = _tf.reshape(signed_M, [-1]), _tf.reshape(P, [-1])
+        unique_P, idx = _tf.unique(flat_P) # unique_P values [0, num_error_generators]
+        num_segments = _tf.reduce_max(idx)+1
+        error_rates = _tf.math.unsorted_segment_sum(flat_signed_M, idx, num_segments)
+        gathered_alpha = _tf.gather(scaled_alpha_matrix, unique_P, axis=1)
         first_order_correction = gathered_alpha*error_rates
         return first_order_correction
 
-    # @tf.function
+    # @_tf.function
     def circuit_to_probability(self, inputs): # will replace this with circ to probability dist
         """
         A function that maps a single circuit to the prediction of a 1st order approximate probability vector for each of 2^Q bitstrings.
         """  
         
         circuit_encoding = inputs[0] # circuit
-        S = tf.cast(inputs[1], tf.float32) # sign matrix
-        P = tf.cast(inputs[2], tf.int32) # permutation matrix
+        S = _tf.cast(inputs[1], _tf.float32) # sign matrix
+        P = _tf.cast(inputs[2], _tf.int32) # permutation matrix
         scaled_alpha_matrix = inputs[3] # alphas (shape is number of tracked error gens, typically 132. Very sparse, could use sparse LA at a later time)
         Px_ideal = inputs[4] # ideal (no error) probabilities
         
         epsilon_matrix = self.local_dense(circuit_encoding) # depth * num_tracked_error
         first_order_correction = self.calc_end_of_circ_error_rates(epsilon_matrix, P, S, scaled_alpha_matrix)
-        Px_approximate = tf.reduce_sum(first_order_correction, 1) + Px_ideal
-        # Px_approximate_clipped = tf.reshape(tf.clip_by_value(Px_approximate, 0, 1), [32])
+        Px_approximate = _tf.reduce_sum(first_order_correction, 1) + Px_ideal
+        # Px_approximate_clipped = _tf.reshape(_tf.clip_by_value(Px_approximate, 0, 1), [32])
         return Px_approximate
 
-    # @tf.function
+    # @_tf.function
     def call(self, inputs):
-        output = tf.map_fn(self.circuit_to_probability, inputs, fn_output_signature=tf.float32)
+        output = _tf.map_fn(self.circuit_to_probability, inputs, fn_output_signature=_tf.float32)
         return output
         # print(output.shape, output.dtype, type(self.dense))
         # return self.dense(output)
@@ -475,7 +475,7 @@ class EinsumCircuitErrorVec(_keras.Model):
         self.dense_units = dense_units
         self.layer_snipper = layer_snipper
         self.layer_snipper_args = layer_snipper_args
-        self.s_mask = tf.constant([tev[0] == 'S' for tev in self.tracked_error_gens])
+        self.s_mask = _tf.constant([tev[0] == 'S' for tev in self.tracked_error_gens])
 
     def get_config(self):
         config = super(CircuitErrorVec, self).get_config()
@@ -495,11 +495,11 @@ class EinsumCircuitErrorVec(_keras.Model):
  
     def circuit_to_probability(self, inputs):
         circuit_encoding = inputs[0]  # circuit
-        S = tf.cast(inputs[1], tf.float32)  # sign matrix
-        P = tf.cast(inputs[2], tf.int32)  # permutation matrix
+        S = _tf.cast(inputs[1], _tf.float32)  # sign matrix
+        P = _tf.cast(inputs[2], _tf.int32)  # permutation matrix
         scaled_alpha_matrix = inputs[3]  # alphas
         Px_ideal = inputs[4]  # ideal (no error) probabilities
-        # C = tf.reshape(self.dense_correction(tf.reshape(circuit_encoding, [1, -1])), [-1])
+        # C = _tf.reshape(self.dense_correction(_tf.reshape(circuit_encoding, [1, -1])), [-1])
         epsilon_matrix = self.dense_layer(circuit_encoding)  # depth * num_tracked_error
 
         # Define the function to apply
@@ -511,21 +511,21 @@ class EinsumCircuitErrorVec(_keras.Model):
         #mask = self.s_mask
 
         # Expand the mask to match the tensor's shape for broadcasting
-        mask_expanded = tf.expand_dims(tf.expand_dims(self.s_mask, axis=0), axis=0)
+        mask_expanded = _tf.expand_dims(_tf.expand_dims(self.s_mask, axis=0), axis=0)
 
-        # Apply the function conditionally using tf.where
+        # Apply the function conditionally using _tf.where
         # If mask_expanded is True, apply custom_function, otherwise keep original row
-        s_squared_epsilon_matrix = tf.where(mask_expanded, custom_function(epsilon_matrix), epsilon_matrix)
+        s_squared_epsilon_matrix = _tf.where(mask_expanded, custom_function(epsilon_matrix), epsilon_matrix)
 
         Px_approximate = self.probability_approximation_layer([ s_squared_epsilon_matrix, P, S, scaled_alpha_matrix, Px_ideal]) #+C
 
         #Px_approximate = self.probability_approximation_layer([epsilon_matrix, P, S, scaled_alpha_matrix, Px_ideal]) #+C
         
-        return Px_approximate #/ tf.reduce_sum(Px_approximate)
+        return Px_approximate #/ _tf.reduce_sum(Px_approximate)
 
-    # @tf.function
+    # @_tf.function
     def call(self, inputs):
-        return tf.map_fn(self.circuit_to_probability, inputs, fn_output_signature=tf.float32)
+        return _tf.map_fn(self.circuit_to_probability, inputs, fn_output_signature=_tf.float32)
 
 
 class EndOfCircProbabilityLayer(_keras.layers.Layer):
@@ -540,14 +540,14 @@ class EndOfCircProbabilityLayer(_keras.layers.Layer):
     def call(self, inputs):
         M, P, S, scaled_alpha_matrix, Px_ideal = inputs
         self.bitstring_shape = Px_ideal.shape[0]
-        signed_M = tf.math.multiply(S, M) 
-        flat_signed_M, flat_P = tf.reshape(signed_M, [-1]), tf.reshape(P, [-1])
-        unique_P, idx = tf.unique(flat_P)  # unique_P values [0, num_error_generators]
-        num_segments = tf.reduce_max(idx) + 1
-        error_rates = tf.math.unsorted_segment_sum(flat_signed_M, idx, num_segments)
-        gathered_alpha = tf.gather(scaled_alpha_matrix, unique_P, axis=1)
+        signed_M = _tf.math.multiply(S, M) 
+        flat_signed_M, flat_P = _tf.reshape(signed_M, [-1]), _tf.reshape(P, [-1])
+        unique_P, idx = _tf.unique(flat_P)  # unique_P values [0, num_error_generators]
+        num_segments = _tf.reduce_max(idx) + 1
+        error_rates = _tf.math.unsorted_segment_sum(flat_signed_M, idx, num_segments)
+        gathered_alpha = _tf.gather(scaled_alpha_matrix, unique_P, axis=1)
         first_order_correction = gathered_alpha * error_rates
-        Px_approximate = tf.reduce_sum(first_order_correction, 1) + Px_ideal
+        Px_approximate = _tf.reduce_sum(first_order_correction, 1) + Px_ideal
         return Px_approximate
 
 class EndOfCircFidelityLayer(_keras.layers.Layer):
@@ -562,19 +562,19 @@ class EndOfCircFidelityLayer(_keras.layers.Layer):
     def call(self, inputs):
         M, P, S = inputs
         self.bitstring_shape = Px_ideal.shape[0]
-        signed_M = tf.math.multiply(S, M) 
-        flat_signed_M, flat_P = tf.reshape(signed_M, [-1]), tf.reshape(P, [-1])
-        unique_P, idx = tf.unique(flat_P)  # unique_P values [0, num_error_generators]
-        num_segments = tf.reduce_max(idx) + 1
+        signed_M = _tf.math.multiply(S, M) 
+        flat_signed_M, flat_P = _tf.reshape(signed_M, [-1]), _tf.reshape(P, [-1])
+        unique_P, idx = _tf.unique(flat_P)  # unique_P values [0, num_error_generators]
+        num_segments = _tf.reduce_max(idx) + 1
         return None
         
     def calc_masked_err_rates(M, P, mask):
-        masked_M = tf.math.multiply(tf.cast(mask, tf.float32), M)
-        masked_P = tf.math.multiply(mask, P)
-        flat_masked_M, flat_masked_P = tf.reshape(masked_M, [-1]), tf.reshape(masked_P, [-1])
-        unique_masked_P, idx = tf.unique(flat_masked_P)
-        num_segments = tf.reduce_max(idx) + 1
-        return tf.math.unsorted_segment_sum(flat_masked_M, idx, num_segments)
+        masked_M = _tf.math.multiply(_tf.cast(mask, _tf.float32), M)
+        masked_P = _tf.math.multiply(mask, P)
+        flat_masked_M, flat_masked_P = _tf.reshape(masked_M, [-1]), _tf.reshape(masked_P, [-1])
+        unique_masked_P, idx = _tf.unique(flat_masked_P)
+        num_segments = _tf.reduce_max(idx) + 1
+        return _tf.math.unsorted_segment_sum(flat_masked_M, idx, num_segments)
     
     def call(self, inputs):
         """
@@ -588,10 +588,10 @@ class EndOfCircFidelityLayer(_keras.layers.Layer):
             'Incorrectly formatted inputs. Should be (M, P, S, stochastic_mask, hamiltonian_mask)'
 
 
-        signed_M = tf.math.multiply(S, M)
+        signed_M = _tf.math.multiply(S, M)
         final_stochastic_error_rates = calc_masked_err_rates(signed_M, P, stochastic_mask)
         final_hamiltonian_error_rates = calc_masked_err_rates(signed_M, P, hamiltonian_mask)
-        return tf.reduce_sum(final_stochastic_error_rates) + tf.reduce_sum(tf.square(final_hamiltonian_error_rates))
+        return _tf.reduce_sum(final_stochastic_error_rates) + _tf.reduce_sum(_tf.square(final_hamiltonian_error_rates))
 
 
 @_keras.utils.register_keras_serializable(package='Blah1')
@@ -643,42 +643,42 @@ class GraphCircuitErrorVecLookback(_keras.Model):
     def build(self):
         self.local_dense = GraphToErrVecLookback(self.layer_snipper, self.layer_snipper_args, self.tracked_error_gens, self.dense_units)
     
-    # @tf.function
+    # @_tf.function
     def calc_end_of_circ_error_rates(self, M, P, S, scaled_alpha_matrix):
         """
         A function that maps the error rates (M) to an end-of-circuit error generator
         using the permutation matrix P.
         """
-        signed_M = tf.math.multiply(S, M) 
-        flat_signed_M, flat_P = tf.reshape(signed_M, [-1]), tf.reshape(P, [-1])
-        unique_P, idx = tf.unique(flat_P) # unique_P values [0, num_error_generators]
-        num_segments = tf.reduce_max(idx)+1
-        error_rates = tf.math.unsorted_segment_sum(flat_signed_M, idx, num_segments)
-        gathered_alpha = tf.gather(scaled_alpha_matrix, unique_P, axis=1)
+        signed_M = _tf.math.multiply(S, M) 
+        flat_signed_M, flat_P = _tf.reshape(signed_M, [-1]), _tf.reshape(P, [-1])
+        unique_P, idx = _tf.unique(flat_P) # unique_P values [0, num_error_generators]
+        num_segments = _tf.reduce_max(idx)+1
+        error_rates = _tf.math.unsorted_segment_sum(flat_signed_M, idx, num_segments)
+        gathered_alpha = _tf.gather(scaled_alpha_matrix, unique_P, axis=1)
         first_order_correction = gathered_alpha*error_rates
         return first_order_correction
 
-    # @tf.function
+    # @_tf.function
     def circuit_to_probability(self, inputs): # will replace this with circ to probability dist
         """
         A function that maps a single circuit to the prediction of a 1st order approximate probability vector for each of 2^Q bitstrings.
         """  
         
         circuit_encoding = inputs[0] # circuit
-        S = tf.cast(inputs[1], tf.float32) # sign matrix
-        P = tf.cast(inputs[2], tf.int32) # permutation matrix
+        S = _tf.cast(inputs[1], _tf.float32) # sign matrix
+        P = _tf.cast(inputs[2], _tf.int32) # permutation matrix
         scaled_alpha_matrix = inputs[3] # alphas (shape is number of tracked error gens, typically 132. Very sparse, could use sparse LA at a later time)
         Px_ideal = inputs[4] # ideal (no error) probabilities
         
         epsilon_matrix = self.local_dense(circuit_encoding) # depth * num_tracked_error
         first_order_correction = self.calc_end_of_circ_error_rates(epsilon_matrix, P, S, scaled_alpha_matrix)
-        Px_approximate = tf.reduce_sum(first_order_correction, 1) + Px_ideal
-        # Px_approximate_clipped = tf.reshape(tf.clip_by_value(Px_approximate, 0, 1), [32])
+        Px_approximate = _tf.reduce_sum(first_order_correction, 1) + Px_ideal
+        # Px_approximate_clipped = _tf.reshape(_tf.clip_by_value(Px_approximate, 0, 1), [32])
         return Px_approximate
 
-    # @tf.function
+    # @_tf.function
     def call(self, inputs):
-        output = tf.map_fn(self.circuit_to_probability, inputs, fn_output_signature=tf.float32)
+        output = _tf.map_fn(self.circuit_to_probability, inputs, fn_output_signature=_tf.float32)
         return output
         # print(output.shape, output.dtype, type(self.dense))
         # return self.dense(output)
@@ -731,22 +731,22 @@ class GraphToErrVecLookback(_keras.layers.Layer):
 
     def call(self, inputs):
         x = []
-        zero_layer = tf.zeros_like(tf.gather(inputs, self.layer_encoding_indices_for_error_gen[0], axis=-1))
+        zero_layer = _tf.zeros_like(_tf.gather(inputs, self.layer_encoding_indices_for_error_gen[0], axis=-1))
         for i in range(self.num_tracked_error_gens):
-            curr_layers = tf.gather(inputs, self.layer_encoding_indices_for_error_gen[i], axis=-1)
-            prev_layers = tf.gather(tf.roll(inputs, shift=1, axis=-2), self.layer_encoding_indices_for_error_gen[i], axis=-1)
+            curr_layers = _tf.gather(inputs, self.layer_encoding_indices_for_error_gen[i], axis=-1)
+            prev_layers = _tf.gather(_tf.roll(inputs, shift=1, axis=-2), self.layer_encoding_indices_for_error_gen[i], axis=-1)
             # Mask to remove the last circuit layer that has been rolled to the start
-            mask = tf.concat([tf.zeros_like(prev_layers[..., 0:1, :]), tf.ones_like(prev_layers[..., 1:, :])], axis=-2)
+            mask = _tf.concat([_tf.zeros_like(prev_layers[..., 0:1, :]), _tf.ones_like(prev_layers[..., 1:, :])], axis=-2)
             # Multiply the rolled tensor by the mask to set the layer that corresponds to the "-1 layer" of circuit to zero
             prev_layers = prev_layers * mask
-            input_pair = tf.concat([curr_layers, prev_layers], axis=-1)
+            input_pair = _tf.concat([curr_layers, prev_layers], axis=-1)
  
             x.append(self.dense[i](input_pair))
-        x = tf.concat(x, axis=-1)
+        x = _tf.concat(x, axis=-1)
  
         #indices_tensor = self.layer_encoding_indices_for_error_gen
-        #x = [self.dense[i](tf.gather(inputs, self.layer_encoding_indices_for_error_gen[i], axis=-1)) 
+        #x = [self.dense[i](_tf.gather(inputs, self.layer_encoding_indices_for_error_gen[i], axis=-1)) 
         #     for i in range(0, self.num_tracked_error_gens)]
-        #x = tf.concat(x, axis=-1)
+        #x = _tf.concat(x, axis=-1)
         return x
         

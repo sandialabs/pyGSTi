@@ -7,6 +7,7 @@ import warnings as _warnings
 # from ..errorgenpropagation import propagatableerrorgen as _peg
 from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel
 from pygsti.errorgenpropagation.errorpropagator import ErrorGeneratorPropagator
+from pygsti.errorgenpropagation import localstimerrorgen as _lseg
 
 # from ..errorgenpropagation import errorpropagator as _ep
 
@@ -257,7 +258,7 @@ def up_to_weight_k_error_gens(k, n, egtypes=['H', 'S']):
     return error_generators
 
 
-def error_gen_to_index(typ, paulis):
+def error_generator_index(typ, paulis):
     """
     A function that *defines* an indexing of the primitive error generators. Currently
     specifies indexing for all 'H' and 'S' errors. In future, will add 'C' and 'A' 
@@ -281,62 +282,69 @@ def error_gen_to_index(typ, paulis):
     # Future to do: C and A errors
     return base + paulistring_to_index(p1, n)
 
-def index_to_error_gen(i, n):
+def index_to_error_gen(i, n, as_label=False):
     """
     Maps from the index to the 'label' representation of an elementary
     error generator.
     """
     if i < 4**n:
         typ = 'H'
-        paulis = [index_to_paulistring(i, n)]
+        paulis = (index_to_paulistring(i, n),)
     elif i < 2 * 4**n:
         typ = 'S'
-        paulis = [index_to_paulistring(i - 4**n, n)]
+        paulis = (index_to_paulistring(i - 4**n, n),)
     # Future to do: implement C and A error generators
     else:
         raise ValueError('Invalid index!')
-        
-    return typ, paulis
 
+    if not as_label:
+        return typ, paulis
+    else:
+        return _lseg.LocalStimErrorgenLabel(typ, paulis)
 
-
-
-
-
-def create_error_propagation_matrix(c, error_gens, stim_dict = None):
+def num_error_generators(num_qubits):
     """
-    Computes how the errors in error_gens propogate through the circuit c.
-    
-    c:
-    
-    error_gens: a list specifying the error generators to insert after each circuit
-        layer and propagate through the circuit. These primative error generators 
+    The number of H and S type error generators
     """
-    # error_gen_objs = [_peg.propagatableerrorgen(egen[0], egen[1], 1) for egen in error_gens]
+    return 4 ** num_qubits - 2
 
-    error_propagator = ErrorGeneratorPropagator(None)
-    stim_layers = error_propagator.construct_stim_layers(c, drop_first_layer=True)
-    propagation_layers = error_propagator.construct_propagation_layers(stim_layers)
-    error_gen_objs = {LocalStimErrorgenLabel.cast(lbl):1 for lbl in error_gens} # dict to iterate over
 
-    errorgen_layers = [error_gen_objs] * (len(c) - 0) # could be 1, tbd
 
-    propagated_errorgen_layers = error_propagator._propagate_errorgen_layers(errorgen_layers, propagation_layers, include_spam=False) # list of dicts of error generators
+# TIM JUST COMMMENT THIS OUT
+# def create_error_propagation_matrix(c, error_gens, stim_dict = None):
+#     """
+#     Computes how the errors in error_gens propogate through the circuit c.
+    
+#     c:
+    
+#     error_gens: a list specifying the error generators to insert after each circuit
+#         layer and propagate through the circuit. These primative error generators 
+#     """
+#     # error_gen_objs = [_peg.propagatableerrorgen(egen[0], egen[1], 1) for egen in error_gens]
 
-    # indices references error generators
-    # create matrix same shape and indices and signs and populate with alpha calculations for each index. this is bitstring dependent. for small qubits, can go ahead and precompute 2**n bitstrings
-    # with signs and alphas, can convert to signed_alphas
-    # use signed alphas as elementwise product in second half of NN
-    indices, signs = [], [] # in separate function go and compute 
-    for l in range(c.depth):
-        indices.append([error_gen_to_index(err.errorgen_type, err.bel_to_strings()) 
-                        for err in propagated_errorgen_layers[l]])
-        signs.append([np.sign(val) for val in propagated_errorgen_layers[l].values()])
+#     error_propagator = ErrorGeneratorPropagator(None)
+#     stim_layers = error_propagator.construct_stim_layers(c, drop_first_layer=True)
+#     propagation_layers = error_propagator.construct_propagation_layers(stim_layers)
+#     error_gen_objs = {LocalStimErrorgenLabel.cast(lbl):1 for lbl in error_gens} # dict to iterate over
 
-    indices = np.array(indices)
-    signs = np.array(signs)
+#     errorgen_layers = [error_gen_objs] * (len(c) - 0) # could be 1, tbd
 
-    return indices, signs
+#     propagated_errorgen_layers = error_propagator._propagate_errorgen_layers(errorgen_layers, propagation_layers, include_spam=False) # list of dicts of error generators
+
+#     # indices references error generators
+#     # create matrix same shape and indices and signs and populate with alpha calculations for each index. this is bitstring dependent. for small qubits, can go ahead and precompute 2**n bitstrings
+#     # with signs and alphas, can convert to signed_alphas
+#     # use signed alphas as elementwise product in second half of NN
+#     indices, signs = [], [] # in separate function go and compute 
+#     for l in range(c.depth):
+#         indices.append([error_generator_index(err.errorgen_type, err.bel_to_strings()) 
+#                         for err in propagated_errorgen_layers[l]])
+#         signs.append([np.sign(val) for val in propagated_errorgen_layers[l].values()])
+
+#     indices = np.array(indices)
+#     signs = np.array(signs)
+
+#     return indices, signs
 
 # def remap_indices(c_indices):
 #     # Takes in a permutation matrix for a circuit and
