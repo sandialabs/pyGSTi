@@ -1147,36 +1147,14 @@ Angles_btwn_rotn_axes = _modf.modelfn_factory(angles_btwn_rotn_axes)
 # init args == (model)
 
 
-def entanglement_fidelity(a, b, mx_basis):
-    """
-    Entanglement fidelity between a and b
-
-    Parameters
-    ----------
-    a : numpy.ndarray
-        The first process (transfer) matrix.
-
-    b : numpy.ndarray
-        The second process (transfer) matrix.
-
-    mx_basis : Basis or {'pp', 'gm', 'std'}
-        the basis that `a` and `b` are in.
-
-    Returns
-    -------
-    float
-    """
-    return _tools.entanglement_fidelity(a, b, mx_basis)
-
-
-Entanglement_fidelity = _modf.opsfn_factory(entanglement_fidelity)
+Entanglement_fidelity = _modf.opsfn_factory(
+    _tools.entanglement_fidelity
+)
 # init args == (model1, model2, op_label)
 
-def subspace_entanglement_fidelity(a, b, mx_basis):
-    n_leak = 1
-    return _tools.subspace_entanglement_fidelity(a, b, mx_basis, n_leak)
-
-Subspace_entanglement_fidelity = _modf.opsfn_factory(subspace_entanglement_fidelity)
+Subspace_entanglement_fidelity = _modf.opsfn_factory(
+    _tools.subspace_entanglement_fidelity
+)
 
 
 def entanglement_infidelity(a, b, mx_basis):
@@ -1205,7 +1183,7 @@ Entanglement_infidelity = _modf.opsfn_factory(entanglement_infidelity)
 # init args == (model1, model2, op_label)
 
 def leaky_entanglement_infidelity(a, b, mx_basis):
-    return 1 - subspace_entanglement_fidelity(a, b, mx_basis)
+    return 1 - _tools.subspace_entanglement_fidelity(a, b, mx_basis)
 
 Leaky_entanglement_infidelity = _modf.opsfn_factory(leaky_entanglement_infidelity)
 
@@ -1275,12 +1253,9 @@ Fro_diff = _modf.opsfn_factory(frobenius_diff)
 # init args == (model1, model2, op_label)
 
 
-def leaky_gate_frob_dist(a, b, mx_basis):
-    n_leak = 1
-    return _tools.subspace_superop_fro_dist(a, b, mx_basis, n_leak)
-
-
-Leaky_gate_frob_dist = _modf.opsfn_factory(leaky_gate_frob_dist)
+Leaky_gate_frob_dist = _modf.opsfn_factory(
+    _tools.subspace_superop_fro_dist
+)
 
 
 def jtrace_diff(a, b, mx_basis):  # assume vary model1, model2 fixed
@@ -1308,11 +1283,10 @@ def jtrace_diff(a, b, mx_basis):  # assume vary model1, model2 fixed
 Jt_diff = _modf.opsfn_factory(jtrace_diff)
 # init args == (model1, model2, op_label)
 
-def leaky_jtrace_diff(a, b, mx_basis):
-    n_leak = 1
-    return _tools.subspace_jtracedist(a, b, mx_basis, n_leak)
 
-Leaky_Jt_diff = _modf.opsfn_factory(leaky_jtrace_diff)
+Leaky_Jt_diff = _modf.opsfn_factory(
+     _tools.subspace_jtracedist
+)
 
 
 if _CVXPY_AVAILABLE:
@@ -1581,7 +1555,11 @@ Eigenvalue_nonunitary_avg_gate_infidelity = _modf.opsfn_factory(eigenvalue_nonun
 
 
 
-def eigenvalue_entanglement_infidelity(a: _np.ndarray, b: _np.ndarray, mx_basis: BasisLike, is_tp=None, is_unitary=None, tol=1e-8) -> _np.floating:
+def eigenvalue_entanglement_infidelity(
+        a: _np.ndarray, b: _np.ndarray,
+        mx_basis: BasisLike,  # type: ignore
+        is_tp=None, is_unitary=None, tol=1e-8
+    ) -> _np.floating:
     """
     Eigenvalue entanglement infidelity is the infidelity between certain diagonal matrices that
     contain [see Note 1] the eigenvalues of J(a) and J(b), where J(.) is the Jamiolkowski
@@ -1622,22 +1600,30 @@ def eigenvalue_entanglement_infidelity(a: _np.ndarray, b: _np.ndarray, mx_basis:
     
     """
     d2 = a.shape[0]
+    if isinstance(mx_basis, str):
+        mx_basis : _Basis = _Basis.cast(mx_basis, d2) # type: ignore
 
     if is_unitary is None:
         is_unitary = _np.allclose(_np.eye(d2), b @ b.T.conj(), atol=tol, rtol=tol)
+    
     if is_tp is None:
         is_tp = _tools.is_trace_preserving(a, mx_basis, tol) and _tools.is_trace_preserving(b, mx_basis, tol) 
 
-    if is_unitary and is_tp:
+    if is_unitary and is_tp and (not mx_basis.implies_leakage_modeling):
         evA = _np.linalg.eigvals(a)
         evB = _np.linalg.eigvals(b)
         _, pairs = _tools.minweight_match(evA, evB, lambda x, y: abs(x - y),
                                         return_pairs=True)  # just to get pairing
         fid = abs(_np.sum([_np.conjugate(evB[j]) * evA[i] for i, j in pairs])) / d2
     else:
-        Ja = _tools.fast_jamiolkowski_iso_std(a, mx_basis)
-        Jb = _tools.fast_jamiolkowski_iso_std(b, mx_basis)
         from pygsti.tools.optools import eigenvalue_fidelity
+        if mx_basis.implies_leakage_modeling:
+            vec_basis, Ja_vec, Jb_vec = _tools.apply_tensorized_to_teststate(a, b, mx_basis)
+            Ja = _tools.vec_to_stdmx(Ja_vec, vec_basis, keep_complex=True)
+            Jb = _tools.vec_to_stdmx(Jb_vec, vec_basis, keep_complex=True)
+        else:
+            Ja = _tools.fast_jamiolkowski_iso_std(a, mx_basis)
+            Jb = _tools.fast_jamiolkowski_iso_std(b, mx_basis)
         fid = eigenvalue_fidelity(Ja, Jb, gauge_invariant=True)
     return 1.0 - fid
 
@@ -1649,7 +1635,16 @@ Eigenvalue_entanglement_infidelity = _modf.opsfn_factory(eigenvalue_entanglement
 
 def eigenvalue_avg_gate_infidelity(a, b, mx_basis):
     """
-    Eigenvalue average gate infidelity between a and b
+    Average gate fidelity (`F_g`) is related to entanglement fidelity
+    (`F_p`), via:
+
+      `F_g = (d * F_p + 1)/(1 + d)`,
+
+    where d is the Hilbert space dimension. This formula, and the
+    definition of AGF, can be found in Phys. Lett. A 303 249-252 (2002).
+
+    This function applies that same formula where F_p is the eigenvalue
+    entanglement fidelity between a and b.
 
     Parameters
     ----------
@@ -1666,13 +1661,11 @@ def eigenvalue_avg_gate_infidelity(a, b, mx_basis):
     -------
     float
     """
-    d2 = a.shape[0]; d = int(round(_np.sqrt(d2)))
-    evA = _np.linalg.eigvals(a)
-    evB = _np.linalg.eigvals(b)
-    _, pairs = _tools.minweight_match(evA, evB, lambda x, y: abs(x - y),
-                                      return_pairs=True)  # just to get pairing
-    mlPl = abs(_np.sum([_np.conjugate(evB[j]) * evA[i] for i, j in pairs]))
-    return (d2 - mlPl) / float(d * (d + 1))
+    d = round(a.size ** 0.25)
+    infid = eigenvalue_entanglement_infidelity(a, b, mx_basis)
+    F_p = 1 - infid
+    F_g = (d * F_p + 1) / (1 + d)
+    return 1 - F_g
 
 
 Eigenvalue_avg_gate_infidelity = _modf.opsfn_factory(eigenvalue_avg_gate_infidelity)

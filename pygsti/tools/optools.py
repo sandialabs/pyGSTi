@@ -184,7 +184,11 @@ def fidelity(a, b):
     return f
 
 
-def eigenvalue_fidelity(x: _np.ndarray, y: _np.ndarray, gauge_invariant:bool=True) -> _np.floating:
+def eigenvalue_fidelity(
+        x: _np.ndarray, y: _np.ndarray,
+        gauge_invariant:bool=True,
+        truncation_rank:Optional[int]=None
+    ) -> _np.floating:
     """
     For positive semidefinite matrices (x, y), define M(x,y) = √(√x · y · √x).
 
@@ -228,11 +232,27 @@ def eigenvalue_fidelity(x: _np.ndarray, y: _np.ndarray, gauge_invariant:bool=Tru
         valsY = _np.sort(_spl.eigvalsh(y))
         pairs = [(i,i) for i in range(valsX.size)]
     else:
-        from pygsti.tools import minweight_match
         valsX, vecsX = _spl.eigh(x)
         valsY, vecsY = _spl.eigh(y)
-        dissimilarity = lambda vec_x, vec_y : abs(1 - abs(vec_x @ vec_y))
-        _, pairs = minweight_match(vecsX.T.conj(), vecsY.T.conj(), dissimilarity, return_pairs=True)
+
+        from pygsti.tools import minweight_match
+        matchX = _np.column_stack([_np.maximum(valsX, 0), vecsX.T.conj()])
+        matchY = _np.column_stack([_np.maximum(valsY, 0), vecsY.T.conj()])
+
+        def dissimilarity(arg_x: _np.ndarray, arg_y: _np.ndarray):
+            val_x, vec_x = arg_x[0], arg_x[1:]
+            val_y, vec_y = arg_y[0], arg_y[1:]
+            abs_dissim   = abs(1 - abs(vec_x @ vec_y))
+            # scale        = val_x + val_y
+            scale = 1
+            rel_dissim   = abs_dissim * scale
+            return rel_dissim
+        
+        _, pairs = minweight_match(matchX, matchY, dissimilarity, return_pairs=True)
+        if truncation_rank is not None:
+            # pairs = pairs[:truncation_rank]
+            pass
+
     ind_x, ind_y = zip(*pairs)
     arg_x = _np.maximum(valsX[list(ind_x)], 0)
     arg_y = _np.maximum(valsY[list(ind_y)], 0)

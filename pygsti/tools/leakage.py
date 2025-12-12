@@ -163,6 +163,26 @@ def apply_tensorized_to_teststate(op_x: np.ndarray, op_y: np.ndarray, op_basis: 
     return ten_std_basis, temp1, temp2
 
 
+def choi_state(op_x: np.ndarray, op_basis: BasisLike) -> np.ndarray:
+    udim = int(op_x.size ** 0.25)
+    dim = udim**2
+    assert op_x.shape == (dim, dim)
+
+    op_basis  = Basis.cast(op_basis, dim=dim)
+    std_basis = BuiltinBasis('std', dim)
+    op_x_std  = pgbt.change_basis(op_x, op_basis, std_basis)
+    idle_gate = np.eye(dim, dtype=np.complex128)
+
+    lift_op_x_std = np.kron(op_x_std, idle_gate)
+    ten_std_basis = TensorProdBasis((std_basis, std_basis))
+
+    rho_test_mat  = tensorized_teststate_density(op_basis)
+    rho_test_vec  = pgbt.stdmx_to_vec(rho_test_mat, ten_std_basis).ravel()
+    choi_superket = lift_op_x_std @ rho_test_vec
+    choi_state_mx = pgbt.vec_to_stdmx(choi_superket, ten_std_basis, keep_complex=True)
+    return choi_state_mx
+
+
 CHOI_INDUCED_METRIC_TEMPLATE = \
 """
 The pair (op_x, op_y) represent some superoperators (X, Y) in S[H], using op_basis.
@@ -515,16 +535,23 @@ def gate_seepage_profile(op, mx_basis) -> tuple[np.ndarray, list[np.ndarray]]:
     return rates, states
 
 
-def _direct_sum_unitary_group(subspace_bases, full_basis):
-    from pygsti.models.gaugegroup import UnitaryGaugeGroup, DirectSumUnitaryGroup, TrivialGaugeGroup
-    subgroups : list[Union[TrivialGaugeGroup, UnitaryGaugeGroup]] = []
-    for sb in subspace_bases:
-        udim = int(np.round(sb.dim**0.5))
-        assert udim**2 == sb.dim
-        if udim == 1:
+def _direct_sum_unitary_group(subspace_bases, full_basis, triviality_flags=None):
+    from pygsti.models.gaugegroup import (UnitaryGaugeGroup, 
+        DirectSumUnitaryGroup, U1Group, TrivialGaugeGroup)
+
+    if triviality_flags is None:
+        triviality_flags = [ sb.dim == 1 for sb in subspace_bases ]
+    else:
+        assert len(triviality_flags) == len(subspace_bases)
+
+    subgroups : list[Union[TrivialGaugeGroup, U1Group, UnitaryGaugeGroup]] = []
+    for sb, tf in zip(subspace_bases, triviality_flags):
+        if tf:
             g = TrivialGaugeGroup(sb.state_space)
-        else:
+        elif sb.dim > 1:
             g = UnitaryGaugeGroup(sb.state_space, sb)
+        else:
+            g = U1Group()
         subgroups.append(g)
     g_full = DirectSumUnitaryGroup(tuple(subgroups), full_basis)
     return g_full
@@ -667,6 +694,7 @@ def lagoified_gopparams_dicts(gopparams_dicts: List[Dict]) -> List[Dict]:
     tm = gopparams_dicts[0]['target_model']
     gopparams_dicts = [gp for gp in gopparams_dicts if 'TPSpam' not in str(type(gp['_gaugeGroupEl']))]
     gopparams_dicts = copy.deepcopy(gopparams_dicts)
+    # ^ Probably a list of length 1.
     for inner_dict in gopparams_dicts:
         inner_dict['n_leak'] = 1
         # ^ This function could accept n_leak as an argument instead. However,
@@ -678,14 +706,12 @@ def lagoified_gopparams_dicts(gopparams_dicts: List[Dict]) -> List[Dict]:
         #   themselves, but not their gradients.
         inner_dict['gates_metric'] = 'frobenius squared'
         inner_dict['spam_metric']  = 'frobenius squared'
-        inner_dict['item_weights'] = {'gates': 0.0, 'spam': 1.0}
+        inner_dict['item_weights'] = {'gates': 1.0, 'spam': 1.0}
         gg = UnitaryGaugeGroup(tm.basis.state_space, tm.basis)
         inner_dict['gauge_group'] = gg
         inner_dict['_gaugeGroupEl'] = gg.compute_element(gg.initial_params)
-        # ^ We start with gauge optimization over the full unitary group, minimizing
-        #   SPAM differences between the estimate and the target on the computational
-        #   subspace. Our last step of gauge optimization (which is after this loop)
-        #   includes gates.
+        # ^ We start with gauge optimization over the full unitary group, considering
+        #   SPAM and gates.
         inner_dict['method'] = 'L-BFGS-B'
         # ^ We need this optimizer because it doesn't require a gradient oracle.
         inner_dict['convert_model_to']['to_type'] = 'full'
@@ -694,14 +720,19 @@ def lagoified_gopparams_dicts(gopparams_dicts: List[Dict]) -> List[Dict]:
         #   the full TP parameterization. There's no real harm in taking "full" as
         #   our default because add_lago_models uses parameterization-preserving
         #   gauge optimization.
-    inner_dict = inner_dict.copy()
-    gg = _direct_sum_unitary_group([Basis.cast('pp', 4), Basis.cast('pp', 1)], tm.basis)
-    inner_dict['gauge_group'] = gg
-    inner_dict['_gaugeGroupEl'] = gg.compute_element(gg.initial_params)
-    inner_dict['gates_metric'] = 'frobenius squared'
-    inner_dict['spam_metric']  = 'frobenius squared'
-    inner_dict['item_weights'] = {'gates': 1.0, 'spam': 1.0}
-    gopparams_dicts.append(inner_dict)
+
+    final_inner_dict = inner_dict.copy()
+    gg = _direct_sum_unitary_group(
+        [Basis.cast('pp', 4), Basis.cast('pp', 1)],
+        full_basis=tm.basis,
+        triviality_flags=[True, False]
+    )
+    final_inner_dict['gauge_group'] = gg
+    final_inner_dict['_gaugeGroupEl'] = gg.compute_element(gg.initial_params)
+    final_inner_dict['gates_metric'] = 'fidelity'
+    final_inner_dict['spam_metric']  = 'fidelity'
+    final_inner_dict['item_weights'] = {'gates': 1.0, 'spam': 0.0}
+    gopparams_dicts.append(final_inner_dict)
     return gopparams_dicts
 
 

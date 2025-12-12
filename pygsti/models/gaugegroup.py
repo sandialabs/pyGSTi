@@ -771,29 +771,6 @@ class TPDiagGaugeGroupElement(TPGaugeGroupElement):
         TPGaugeGroupElement.__init__(self, operation)
 
 
-class UnitaryGaugeGroupElement(OpGaugeGroupElement):
-    """
-    Element of a :class:`UnitaryGaugeGroup`
-
-    Parameters
-    ----------
-    operation : LinearOperator
-        The operation to base this element on. It provides both parameterization
-        information and the gauge transformation matrix itself.
-    """
-
-    def __init__(self, operation: _LinearOperator):
-        """
-        Creates a new gauge group element based on `operation`, which
-        is assumed to have the correct parameterization.
-        """
-        OpGaugeGroupElement.__init__(self, operation)
-
-    @property
-    def operation(self) -> _LinearOperator:
-        return self._operation
-
-
 class UnitaryGaugeGroup(OpGaugeGroupWithBasis):
     """
     A gauge group consisting of unitary gauge-transform matrices.
@@ -820,6 +797,8 @@ class UnitaryGaugeGroup(OpGaugeGroupWithBasis):
     def __init__(self, state_space: _StateSpace, basis: Union[_Basis, str],
                  evotype: Optional[Union[_Evotype, str]] = 'default'):
         state_space = _StateSpace.cast(state_space)
+        if state_space.udim == 1:
+            raise ValueError()
         evotype = _Evotype.cast(str(evotype), default_prefer_dense_reps=True)  # since we use deriv_wrt_params
         errgen = _op.LindbladErrorgen.from_operation_matrix(
             _np.eye(state_space.dim), "H", basis, mx_basis=basis, evotype=evotype
@@ -830,6 +809,98 @@ class UnitaryGaugeGroup(OpGaugeGroupWithBasis):
 
     def compute_element(self, param_vec) -> UnitaryGaugeGroupElement:
         return super().compute_element(param_vec)
+
+
+class UnitaryGaugeGroupElement(OpGaugeGroupElement):
+    """
+    Element of a :class:`UnitaryGaugeGroup`
+
+    Parameters
+    ----------
+    operation : LinearOperator
+        The operation to base this element on. It provides both parameterization
+        information and the gauge transformation matrix itself.
+    """
+
+    def __init__(self, operation: _LinearOperator):
+        """
+        Creates a new gauge group element based on `operation`, which
+        is assumed to have the correct parameterization.
+        """
+        OpGaugeGroupElement.__init__(self, operation)
+
+    @property
+    def operation(self) -> _LinearOperator:
+        return self._operation
+
+
+class U1Group(GaugeGroup):
+    """ 
+    A group representable by the complex unit circle, closed under
+    multiplication.
+    """
+
+    def __init__(self):
+        super().__init__(name='U(1); the complex unit circle')
+        self.state_space = _statespace.QubitSpace(0)
+
+    @property
+    def num_params(self) -> int:
+        return 1
+    
+    @property
+    def initial_params(self) -> _np.ndarray:
+        return _np.zeros(shape=(1,))
+    
+    def compute_element(self, param_vec: _np.ndarray) -> U1GroupElement:
+        out = U1GroupElement()
+        out.from_vector(param_vec)
+        return out
+
+
+class U1GroupElement(GaugeGroupElement):
+    """
+    An element of U(1), the 1-dimensional unitary group representable
+    by the complex unit circle.
+    """
+
+    def __init__(self):
+        self._angle = 0.0
+
+    @property
+    def num_params(self) -> int:
+        return 1
+
+    @property
+    def transform_matrix(self) -> _np.ndarray:
+        val = _np.cos(self._angle) + 1j * _np.sin(self._angle)
+        return _np.array([[val]])
+    
+    @property
+    def transform_matrix_inverse(self) -> _np.ndarray:
+        val = self.transform_matrix
+        val = val.conj()
+        return val
+    
+    def from_vector(self, v: _np.ndarray) -> None:
+        v = v.item()
+        twopi = _np.pi * 2
+        k = _np.ceil(1 + v/twopi)
+        w = (twopi * k + v) % (twopi)
+        self._angle = w
+        return 
+    
+    def to_vector(self) -> _np.ndarray:
+        return _np.array([self._angle])
+    
+    def deriv_wrt_params(self, wrt_filter=None):
+        raise NotImplementedError()
+    
+    def inverse(self) -> U1GroupElement:
+        out = U1GroupElement()
+        conj_angle = _np.angle(self.transform_matrix_inverse.item())
+        out._angle = conj_angle
+        return out
 
 
 class SpamGaugeGroup(OpGaugeGroup):
@@ -1000,7 +1071,7 @@ class TrivialGaugeGroup(GaugeGroup):
         return TrivialGaugeGroupElement(self.state_space.dim)
 
     @property
-    def initial_params(self) -> _np.array:
+    def initial_params(self) -> _np.ndarray:
         """
         Return a good (or standard) starting parameter vector, used to initialize a gauge optimization.
 
@@ -1052,7 +1123,7 @@ class TrivialGaugeGroupElement(GaugeGroupElement):
         return self._matrix
 
     @property
-    def transform_matrix_inverse(self) -> _np.ndarry:
+    def transform_matrix_inverse(self) -> _np.ndarray:
         """
         The inverse of the gauge-transform matrix.
 
@@ -1134,7 +1205,7 @@ class DirectSumUnitaryGroup(GaugeGroup):
     Unitaries in this group are block diagonal and preserve the direct sum structure of H.
     """
 
-    def __init__(self, subgroups: Tuple[Union[UnitaryGaugeGroup, TrivialGaugeGroup], ...],
+    def __init__(self, subgroups: Tuple[Union[UnitaryGaugeGroup, U1Group, TrivialGaugeGroup], ...],
                  basis, name="Direct sum gauge group"):
 
         # Step 1. Get the size of the direct sum Hilbert space
@@ -1211,7 +1282,7 @@ class DirectSumUnitaryGroup(GaugeGroup):
 
 class DirectSumUnitaryGroupElement(GaugeGroupElement):
 
-    def __init__(self, subelements: Tuple[Union[UnitaryGaugeGroupElement, TrivialGaugeGroupElement], ...], basis):
+    def __init__(self, subelements: Tuple[Union[UnitaryGaugeGroupElement, U1GroupElement, TrivialGaugeGroupElement], ...], basis):
         self.subelements = subelements
         self.basis = basis
         self._update_matrices()
@@ -1249,12 +1320,15 @@ class DirectSumUnitaryGroupElement(GaugeGroupElement):
         for se in self.subelements:
             if isinstance(se, TrivialGaugeGroupElement):
                 se_ss = _statespace.default_space_for_dim(se.transform_matrix.shape[0])
-                u_blocks.append(_np.eye(se_ss.udim))
-            else:
+                u = _np.eye(se_ss.udim)
+            elif isinstance(se, UnitaryGaugeGroupElement):
                 u_abstract_op = se.operation
-                se_basis = u_abstract_op.errorgen.matrix_basis
+                se_basis = u_abstract_op.errorgen.matrix_basis  # type: ignore
                 u = superop_to_unitary(se.transform_matrix, se_basis)
-                u_blocks.append(u)
+            else:
+                # we're a U1GroupElement
+                u = se.transform_matrix
+            u_blocks.append(u)
             num_params.append(se.num_params)
         u = _la.block_diag(*u_blocks)
         self._u = u
