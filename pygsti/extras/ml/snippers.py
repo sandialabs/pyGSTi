@@ -12,7 +12,20 @@ import numpy as _np
 
 def undirected_adjacency_matrix_from_edges(edges, qubit_labels):
     """
-    TODO
+    Constructs the adjacency matrix for the graph with nodes given by
+    `qubit_labels` and edges given by `edges.
+
+    Parameters
+    ----------
+    edges : list
+        List of tuples of edges, where each element of each edge is an element of `qubit_labels`
+
+    qubit_labels : list
+        The nodes of the graph
+
+    Returns
+    -------
+    numpy array
     """
     adjacency_matrix = _np.zeros((len(qubit_labels), len(qubit_labels)), int)
     for edge in edges:
@@ -39,7 +52,7 @@ def layer_snipper_from_qubit_graph(error_generators, encoder, adjacency_matrix, 
         # TODO : IS THIS CORRECT ?
         # I COMMENTED THIS OUT ON THE RE-WRITE, BECAUSE I THINK IT'S WRONG. NEED TO CHECK I HAVEN'T MADE A 
         # MISTAKE THOUGH.
-        pauli_string = pauli_string[::-1] # for reverse indexing
+        #pauli_string = pauli_string[::-1] # for reverse indexing
 
         # The indices of `pauli` that are not equal to 'I'.
         qubits_acted_on_by_error = _np.where(_np.array(list(pauli_string)) != 'I')[0]
