@@ -136,7 +136,7 @@ def circuits_to_tensor(circuits, encoder, encoding_depth=None):
     
     circuits_tensor = _np.zeros((len(circuits), encoding_depth, encoder.length), float)
     for i, circuit in enumerate(circuits):
-        circuits_tensor[i,:,:] = encoder(circuit)
+        circuits_tensor[i,:,:] = encoder(circuit, padded_depth=encoding_depth)
 
     return circuits_tensor
 
