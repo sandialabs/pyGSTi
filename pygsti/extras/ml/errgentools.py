@@ -44,7 +44,7 @@ def padded_numberToBase4(n, length):
 
 def index_to_paulistring(i, num_qubits):
     """
-    Implements the inverse of `paulitstring_to_index`.
+    Implements the inverse of `paulistring_to_index`.
     """
     i_to_p = {0: 'I', 1: 'X', 2: 'Y', 3: 'Z'}
     assert (i < 4**num_qubits), "The input integer is too large!"

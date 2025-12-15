@@ -17,6 +17,7 @@ from pygsti.errorgenpropagation import localstimerrorgen as _lseg
 from pygsti.extras.ml import errgentools as _tools
 from pygsti.tools import errgenproptools as _egptools
 from pygsti.circuits import Circuit as _Circuit
+from tqdm import trange as _trange
 
 class CircuitEncoder(object):
     """
@@ -146,21 +147,23 @@ def dense_dataset_encoding(ds, n, circs=None):
     if circuits is None: circuits = list(ds.keys())
     nbit_strings = [] # TO DO
     freqs_array = _np.zeros((len(circuits), 2**n), float)
-    for i in trange(len(circuits), smoothing=0):
+    for i in _trange(len(circuits)):
         dsrow = ds[circuits[i]]
         freqs_array[i,:] =  _np.array([dsrow.counts.get((bs,), 0.) / dsrow.total for bs in nbit_strings])
 
     return freqs_array
 
-def error_generator_tensors(circuits, error_generators, pspec, sparse_opt_representation=False):
+def error_generator_tensors(circuits, error_generators, pspec, alpha_representation='concise'):
     """
     TODO
     """
     indices, signs = error_propagation_tensors(circuits, error_generators, pspec)
-    if not sparse_opt_representation:
+    if alpha_representation == 'matrix':
         probabilities, alphas = first_order_outcome_probabilities_tensors(circuits, error_generators, pspec, indices=indices)
+    elif alpha_representation == 'concise':
+        probabilities, alphas = first_order_outcome_probabilities_tensors_concise(circuits, pspec, indices, signs)        
     else:
-        _warnings.NotImplementedError('This has not yet been implemented! Only O(4^n) alpha matrix representation available!')
+        _warnings.NotImplementedError('No other representations have been implemented yet!')
     return {'indices':indices, 'signs':signs, 'probabilities':probabilities, 'alphas':alphas}
 
 def circuit_error_propagation_matrices(circuit, error_generators):
@@ -234,42 +237,6 @@ def error_propagation_tensors(circuits, error_generators, pspec, prior_error_gen
     
     return indices, signs
 
-def first_order_outcome_probabilities_tensors(circuits, error_generators, pspec, indices=None, prior_error_generators=None, prior_alphas=None):
-    """
-    TODO
-    """
-    if prior_error_generators is not None:
-        assert(len(set(error_generators).intersection(set(prior_error_generators))) == 0), "Can only add new error generators!"
-
-    num_qubits = pspec.num_qubits
-    nbit_strings = [''.join(p) for p in _itertools.product('01', repeat=num_qubits)]
-
-    alphas = _np.zeros((len(circuits), 2 ** num_qubits, 2 * 4 ** num_qubits), float)
-    probabilities = _np.zeros((len(circuits), 2 ** num_qubits), float)
-      
-    for i, circuit in enumerate(circuits):
-
-        # Compute the error-free probabilities for each bit string.
-        tableau = circuit.convert_to_stim_tableau()
-        probabilities[i, :] = _np.array([_egptools.stabilizer_probability(tableau, bs) for bs in nbit_strings]).T
-
-        # Compute the alpha matrix for the circuit, filling in only those 
-        if prior_error_generators is not None:
-            prior_alpha_matrix = prior_alphas[i, :, :]
-        else:
-            prior_alpha_matrix = None
-
-        if indices is not None:
-            unique_end_of_circuit_error_generators = list(set(indices[i,:,:].flatten()))
-        else:
-            # We compute the entire alpha matrix
-            unique_end_of_circuit_error_generators = None
-
-        alphas[i, :, :] = dense_alpha_matrix(tableau, num_qubits, populate_for_error_generators=unique_end_of_circuit_error_generators,
-                                             existing_alpha_matrix=prior_alpha_matrix)
-    
-    return probabilities, alphas
-
 def alpha_coefficient(i, num_qubits, tableau, bs):
     """
     Computes the alpha coefficient for the ith error generator, with the circuit defined by the
@@ -294,7 +261,18 @@ def alpha_coefficient(i, num_qubits, tableau, bs):
     float
         The alpha coefficient
     """
-    return _np.float64(_egptools.alpha(_tools.index_to_error_gen(i, num_qubits, as_label=True), tableau, bs).real) 
+    return _np.float64(_egptools.alpha(_tools.index_to_error_gen(i, num_qubits, as_label=True), tableau, bs).real)
+
+def _get_tableau(circuit_or_tableau):
+    """
+    Helper function that returns a tableau given a Circuit or a Stim.Tableau object
+    """
+    if isinstance(circuit_or_tableau, _Circuit):
+        return circuit_or_tableau.convert_to_stim_tableau()
+    elif isinstance(circuit_or_tableau, _stim.Tableau):
+        return circuit_or_tableau
+    else:
+        raise ValueError('Input must be a Circuit or a Stim.Tableau!')
 
 def dense_alpha_matrix(circuit, num_qubits, populate_for_error_generators=None, existing_alpha_matrix=None):
     """
@@ -333,10 +311,7 @@ def dense_alpha_matrix(circuit, num_qubits, populate_for_error_generators=None, 
     nbit_strings = [''.join(p) for p in _itertools.product('01', repeat=num_qubits)]
     if populate_for_error_generators is None: populate_for_error_generators = list(range(num_nq_errgens))
 
-    if isinstance(circuit, _Circuit):
-        tableau = circuit.convert_to_stim_tableau()
-    elif isinstance(circuit, _stim.Tableau):
-        tableau = circuit
+    tableau = _get_tableau(circuit)
 
     if existing_alpha_matrix is not None:
         alpha_matrix = existing_alpha_matrix.copy()
@@ -349,3 +324,121 @@ def dense_alpha_matrix(circuit, num_qubits, populate_for_error_generators=None, 
 
     return alpha_matrix
 
+### Code that Tim wrote but never tested as he decided that to write `first_order_outcome_probabilities_tensors_concise`
+### which creates an alternative representation that is probably more useful in practice. This has been left in in case
+### it becomes useful, but it shouldn't be assumed that it works correctly as it was never tested.
+# def sparse_alpha_matrix(circuit, num_qubits, error_generators, bitstrings):
+#     """
+#     Creates a sparse reprentation of the alpha matrix, a 2**n by 2 * 4**n matrix, that is used to compute the 
+#     first-order impact of each end-of-circuit error generator on each n-bit string.
+
+#     Parameters
+#     ----------
+#     circuit: Circuit or Stim.Tableau
+#         The circuit for which we are computing the alpha tensor.
+
+#     num_qubits: int
+#         The number of qubits in the circuit.
+
+#     error_generators : list of integers.
+#         Tthe **indices** of the error generators for which to compute the alpha matrix elements for.
+
+#     bitstrings : list of strings 
+#         The n-bit strings for which to compute the alppha coefficients for.
+
+#     Returns
+#     -------
+#     list of lists
+#         A list of lists in which each element of the list ... TODO
+
+#     """
+#     tableau = _get_tableau(circuit)
+
+#     contributing_error_generators = [[] for bs in bitstrings]
+#     alphas = [[] for bs in bitstrings]
+#     for i, bs in enumerate(bitstrings):
+#         for j in error_generators:
+#             alpha = alpha_coefficient(j, num_qubits, tableau, bs)
+#             if not _np.isclose(alpha, 0.):
+#                 contributing_error_generators[i].append(j)
+#                 alphas[i].append(alpha)
+
+#     return contributing_error_generators, alphas
+
+def first_order_outcome_probabilities_tensors(circuits, error_generators, pspec, indices=None, prior_error_generators=None, prior_alphas=None):
+    """
+    TODO
+    """
+    if prior_error_generators is not None:
+        assert(len(set(error_generators).intersection(set(prior_error_generators))) == 0), "Can only add new error generators!"
+
+    num_qubits = pspec.num_qubits
+    nbit_strings = [''.join(p) for p in _itertools.product('01', repeat=num_qubits)]
+
+    alphas = _np.zeros((len(circuits), 2 ** num_qubits, 2 * 4 ** num_qubits), float)
+    probabilities = _np.zeros((len(circuits), 2 ** num_qubits), float)
+      
+    for i, circuit in enumerate(circuits):
+
+        # Compute the error-free probabilities for each bit string.
+        tableau = circuit.convert_to_stim_tableau()
+        probabilities[i, :] = _np.array([_egptools.stabilizer_probability(tableau, bs) for bs in nbit_strings]).T
+
+        # Compute the alpha matrix for the circuit, filling in only those 
+        if prior_error_generators is not None:
+            prior_alpha_matrix = prior_alphas[i, :, :]
+        else:
+            prior_alpha_matrix = None
+
+        if indices is not None:
+            unique_end_of_circuit_error_generators = list(set(indices[i,:,:].flatten()))
+        else:
+            # We compute the entire alpha matrix
+            unique_end_of_circuit_error_generators = None
+
+        alphas[i, :, :] = dense_alpha_matrix(tableau, num_qubits, populate_for_error_generators=unique_end_of_circuit_error_generators,
+                                             existing_alpha_matrix=prior_alpha_matrix)
+    
+    return probabilities, alphas
+
+def first_order_outcome_probabilities_tensors_concise(circuits, pspec, indices, signs):
+    """
+    TODO
+    """
+    num_qubits = pspec.num_qubits
+    nbit_strings = [''.join(p) for p in _itertools.product('01', repeat=num_qubits)]
+
+    shape = (indices.shape[0], 2 ** num_qubits, indices.shape[1], indices.shape[2])
+    first_order_coefficients = _np.zeros(shape, float)
+    probabilities = _np.zeros((len(circuits), 2 ** num_qubits), float)
+      
+    for i in _trange(len(circuits)):
+        circuit = circuits[i]
+        # Compute the error-free probabilities for each bit string.
+        tableau = _get_tableau(circuit)
+        scale = 1 / 2 ** _egptools.random_support(tableau) #TODO: This might overflow
+        probabilities[i, :] = _np.array([_egptools.stabilizer_probability(tableau, bs) for bs in nbit_strings]).T
+        unique_indices = set(indices[i,:,:].flatten())
+        alphas_dict = {}
+        for l, bs in enumerate(nbit_strings):
+            for error_generator_index in unique_indices:
+                egtype =  _tools.index_to_error_gen(error_generator_index, num_qubits)[0]
+                #print(egtype)
+                if egtype == 'H' and (_np.isclose(probabilities[i, l], 0.) or _np.isclose(probabilities[i, l], 1.)):
+                    alpha = 0
+                elif egtype == 'S' and not (_np.isclose(probabilities[i, l], 0.) or _np.isclose(probabilities[i, l], 1.)):
+                    alpha = 0
+                else:
+                    alpha = scale * alpha_coefficient(error_generator_index, num_qubits, tableau, bs)
+                alphas_dict[l, error_generator_index] = alpha
+
+
+        for l, bs in enumerate(nbit_strings):
+            for j in range(indices.shape[1]):
+                for k in range(indices.shape[2]):
+                    first_order_coefficients[i, l, j, k] = alphas_dict[l, indices[i,j,k]]
+
+    for l, bs in enumerate(nbit_strings):
+        first_order_coefficients[:, l, :, :] = first_order_coefficients[:, l, :, :] * signs
+    
+    return probabilities, first_order_coefficients
