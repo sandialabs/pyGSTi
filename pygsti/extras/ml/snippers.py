@@ -49,15 +49,9 @@ def layer_snipper_from_qubit_graph(error_generators, encoder, adjacency_matrix, 
     for error_generator in error_generators:
         # The Pauli that labels the error gen, as a string of length num_qubits containing 'I', 'X', 'Y', and 'Z'.
         pauli_string = error_generator[1][0]
-        # TODO : IS THIS CORRECT ?
-        # I COMMENTED THIS OUT ON THE RE-WRITE, BECAUSE I THINK IT'S WRONG. NEED TO CHECK I HAVEN'T MADE A 
-        # MISTAKE THOUGH.
-        pauli_string = pauli_string[::-1] # for reverse indexing
-
         # The indices of `pauli` that are not equal to 'I'.
         qubits_acted_on_by_error = _np.where(_np.array(list(pauli_string)) != 'I')[0]
         qubits_acted_on_by_error = list(qubits_acted_on_by_error)
-
         # All the qubits that are within `hops` steps of the qubits acted on by the error
         relevant_qubits = _np.unique(_np.concatenate([nodes_within_hops[i] for i in qubits_acted_on_by_error]))
 
