@@ -105,6 +105,13 @@ class AMSCheckpoint(_NicelySerializable):
         """
         
         self.write(self.path)
+        print('Checkpoint saved in ', self.path)
+    @classmethod
+    def load_checkpoint(cls, path):
+        try:
+            return cls.read(path)
+        except:
+            return cls.read('./ams_checkpoints/' + path)
 
     def checkpoint_settings(self):
         """

@@ -5806,7 +5806,7 @@ def _cptp_penalty(mdl, prefactor, op_basis):
         a (real) 1D array of length len(mdl.operations).
     """
     return prefactor * _np.sqrt(_np.array([_tools.tracenorm(
-        _tools.fast_jamiolkowski_iso_std(gate, op_basis)
+        _tools.fast_jamiolkowski_iso_std(gate.to_dense(), op_basis)
     ) for gate in mdl.operations.values()], 'd'))
 
 
@@ -5875,7 +5875,7 @@ def _cptp_penalty_jac_fill(cp_penalty_vec_grad_to_fill, mdl, prefactor, op_basis
 
         #get sgn(chi-matrix) == d(|chi|_Tr)/dchi in std basis
         # so sgnchi == d(|chi_std|_Tr)/dchi_std
-        chi = _tools.fast_jamiolkowski_iso_std(gate, op_basis)
+        chi = _tools.fast_jamiolkowski_iso_std(gate.to_dense(), op_basis)
         assert(_np.linalg.norm(chi - chi.T.conjugate()) < error_tol), \
             "chi should be Hermitian!"
 

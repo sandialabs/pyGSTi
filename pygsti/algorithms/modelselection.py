@@ -106,17 +106,17 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
 
     if checkpoint is not None:
         #TODO: maybe not have all MPI processes read from memory in the future
-        loaded_checkpoint = _AMSCheckpoint.read(checkpoint)
+        loaded_checkpoint = _AMSCheckpoint.load_checkpoint(checkpoint)
         if loaded_checkpoint.check_valid_checkpoint( data.dataset.to_str(), er_thresh, maxiter, tol, prob_clip):
             if rank == 0:
                 print('Warm starting AMS from checkpoint ' + checkpoint)
             H = loaded_checkpoint.H
             expansion_point_x0 = loaded_checkpoint.x0
+            assert expansion_point_x0 is not None
             original_dlogl = loaded_checkpoint.original_dlogl
             graph_levels = loaded_checkpoint.graph_levels
-            if len(expansion_point_x0) == initial_model.num_params:
-                #This condition below should be equivalent to the if statement
-                assert len(graph_levels) > 0
+            if len(graph_levels) == 0 and expansion_point_x0 is not None:
+
                 deltalogl_fn.model.sim._processor_grid = (1,1,1)
                 deltalogl_fn.model.from_vector(expansion_point_x0)
             else:
@@ -149,7 +149,7 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
         original_dlogl = deltalogl_fn.fn()
 
         if not disable_checkpoints and rank == 0:
-            new_checkpoint.expansion_point_x0 = expansion_point_x0
+            new_checkpoint.x0 = expansion_point_x0
             new_checkpoint.original_dlogl = original_dlogl
             new_checkpoint.save()
             print('Checkpoint saved in', new_checkpoint.path)
@@ -274,7 +274,6 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
             deltalogl_fn.model = red_model_fit
             #Free memory of initial model
             initial_model = None
-            print(f'{red_model_fit.to_vector()=}')
             best_model[1] = (deltalogl_fn.fn() - prev_dlogl )*2
             print(f'{deltalogl_fn.fn()=}, {prev_dlogl=}')
             expansion_point_logl = deltalogl_fn.fn()
@@ -323,9 +322,8 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
                 new_checkpoint.graph_levels = graph_levels
                 new_checkpoint.prev_dlogl = prev_dlogl
                 new_checkpoint.H = H
-                new_checkpoint.expansion_point_x0 = expansion_point_x0
+                new_checkpoint.x0 = expansion_point_x0
                 new_checkpoint.save()
-                print('Checkpoint saved in ', new_checkpoint.path)
             if recompute_Hessian:
                 recompute_Hessian = False
                 temp_model = None
