@@ -459,6 +459,9 @@ class CircuitToErrorRatesEinSum(_keras.layers.Layer):
         self.stochastic_mask = []
         self.snipper = snipper
         self.dense_units = dense_units + [1] # The + [1] is the output layer.
+        # Masks that find the 'S' (stochastic) and 'H' (Hamiltonian) error generators.
+        self.stochastic_mask = _tf.constant([i[0] == 'S' for i in self.modelled_error_generators])
+        self.hamiltonian_mask = _tf.constant([i[0] == 'H' for i in self.modelled_error_generators])
 
     def get_config(self):
         config = super().get_config()
@@ -466,7 +469,9 @@ class CircuitToErrorRatesEinSum(_keras.layers.Layer):
             'number_of_modelled_error_generators': self.number_of_modelled_error_generators,
             'modelled_error_generators': self.modelled_error_generators,
             'dense_units': self.dense_units,
-            'layer_snipper': self.layer_snipper
+            'layer_snipper': self.layer_snipper,
+            'stochastic_mask': self.stochastic_mask,
+            'hamiltonian_mask': self.hamiltonian_mask
         })
         return config
     
