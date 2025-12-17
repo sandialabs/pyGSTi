@@ -21,19 +21,28 @@ from tqdm import trange as _trange
 
 class CircuitEncoder(object):
     """
-    TODO
+    An object that converts Circuit objects into numpy arrays. This is a base class that
+    contains some general-purpose routines but not a specific encoding method.
     """
-
     def __init__(self, pspec):
         """
+        Initialize a CircuitEncoder object.
 
+        Parameters
+        ----------
+        pspec : ProcessorSpec
+            The ProcessorSpec describing the qubits and gates in the circuits that
+            will be encoded.
+
+        Returns
+        -------
+        CircuitEncoder
         """
         self.pspec = pspec
 
     def __call__(self, circuit, padded_depth=None):
         """
-        Turns the input circuit `circ`, represented as a Circuit object, into
-        a numpy array.
+        Turns the input circuit circuit, a Circuit object, into a numpy array.
         """
         if padded_depth is None: padded_depth = circuit.depth
         circuit_array = []
@@ -47,14 +56,26 @@ class CircuitEncoder(object):
 
     def initialization_encoding(self, circuit):
         """
-        The default encoding of the implicit initiliziation layer at the start of a circuit,
-        which is to not include it in the encoding.
+        This method defines the encoding of the implicit initiliziation layer at the start of a circuit.
+        In this base class, we define this to be a trivial encoding: the implicit initialization layer 
+        is not represented.
+
+        Parameters
+        ----------
+        circuit
+
+        Returns
+        -------
+        List of lists.
+        A list containing lists that encode the initiliation layer. If this inititialization is not
+        represented in the encoding, as here, this is an empty list.
         """
         return []
 
     def initialization_encoding_depth(self):
         """
-        TODO
+        Returns the length of the initalization encoding list, i.e., the length of lists returned by
+        `initialization_encoding`.
         """
         return 0
 
@@ -111,6 +132,7 @@ class StandardCircuitEncoder(CircuitEncoder):
 
         EXPECTS A CIRCUIT LAYER AS  A TUPLE OR A LIST OF LABEL OBJECTS.
         """
+        assert(isinstance(layer, tuple) or isinstance(layer, list)), "The layer must be a list or tuple of label objects!"
         if layer is not None:
             encoded_layer = _np.zeros(self.length, float)
             for gate in layer:
@@ -206,7 +228,7 @@ def error_propagation_tensors(circuits, error_generators, pspec, prior_error_gen
     """
     TODO
 
-    For more information on what a circuit's `indices` and `signs` matrix encoded, see the docstring for
+    For more information on what a circuit's `indices` and `signs` matrix encode, see the docstring for
     the function `circuit_error_propagation_matrices`, which this function calls to compute these matrices
     for each circuit.
 
