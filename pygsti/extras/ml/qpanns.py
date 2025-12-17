@@ -61,7 +61,7 @@ class EinsumSubNetwork(_keras.layers.Layer):
         # Define the sub-unit's dense layers
         self.sequential = _keras.Sequential(
             # [_cl.SelectiveDense(self.units[0], self.layer_encoding_indices_for_error_generators,  activation='gelu')] +
-             [_cl.CustomDense(i, self.number_of_modelled_error_generators, activation='gelu') for i in self.units[:-1]] +
+             [_cl.CustomDense(i, self.number_of_modelled_error_generators, activation='linear') for i in self.units[:-1]] +
             [_cl.CustomDense(self.units[-1], self.number_of_modelled_error_generators, activation='linear', kernel_initializer=init, bias_initializer=init)])
 
     def get_config(self):
