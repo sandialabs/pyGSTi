@@ -384,7 +384,7 @@ def leaky_qubit_model_from_pspec(
     return tm_3level
 
 
-# MARK: gauge optimization
+# MARK: gaugeopt
 
 def lagoified_gopparams_dicts(gopparams_dicts: List[Dict]) -> List[Dict]:
     """
@@ -539,7 +539,7 @@ def add_lago_models(results: ModelEstimateResults, est_key: Optional[str] = None
 def _add_all_hessians(mer: ModelEstimateResults, kwargs_for_projhess=None):
     # NOTE: this function is not leakage-specific.
     if kwargs_for_projhess is None:
-        kwargs_for_projhess = {'projection_type': 'instrinsic error'}
+        kwargs_for_projhess = {'projection_type': 'intrinsic error'}
 
     from pygsti.forwardsims import MatrixForwardSimulator, MapForwardSimulator
     for est in mer.estimates.values():
