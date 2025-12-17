@@ -132,7 +132,7 @@ class StandardCircuitEncoder(CircuitEncoder):
 
         EXPECTS A CIRCUIT LAYER AS  A TUPLE OR A LIST OF LABEL OBJECTS.
         """
-        assert(isinstance(layer, tuple) or isinstance(layer, list) or isintance(layer, None)), "The layer must be a list or tuple of label objects, or None!"
+        assert(isinstance(layer, tuple) or isinstance(layer, list) or isinstance(layer, None)), "The layer must be a list or tuple of label objects, or None!"
         if layer is not None:
             encoded_layer = _np.zeros(self.length, float)
             for gate in layer:
