@@ -56,7 +56,7 @@ class EinsumSubNetwork(_keras.layers.Layer):
 
         kernel_regularizer = None#_keras.regularizers.L2(1E-4)  # Adjust the regularization factor as needed
         bias_regularizer = None# _keras.regularizers.L2(1E-4)    # Adjust the regularization factor as needed
-        init = _keras.initializers.RandomUniform(minval=-0.001, maxval=0.001)
+        init = _keras.initializers.RandomUniform(minval=-0.0001, maxval=0.0001)
 
         # Define the sub-unit's dense layers
         self.sequential = _keras.Sequential(
