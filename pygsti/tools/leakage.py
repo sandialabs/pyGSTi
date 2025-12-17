@@ -542,7 +542,9 @@ def _add_all_hessians(mer: ModelEstimateResults, kwargs_for_projhess=None):
         kwargs_for_projhess = {'projection_type': 'intrinsic error'}
 
     from pygsti.forwardsims import MatrixForwardSimulator, MapForwardSimulator
-    for est in mer.estimates.values():
+    for estname, est in mer.estimates.items():
+        if estname == 'Target':
+            continue
         for gop_name in est.goparameters:
             mdl = est.models[gop_name]
             if isinstance(mdl.sim, MatrixForwardSimulator):
