@@ -58,7 +58,7 @@ class RootConjOperator(LinearOperator):
         return
     
     def deriv_wrt_params(self, wrt_filter=None):
-        raise NotImplementedError()
+        return LinearOperator.deriv_wrt_params(self, wrt_filter)
     
     def has_nonzero_hessian(self):
         # This is not affine in its parameters.
