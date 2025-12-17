@@ -31,8 +31,7 @@ class CircuitEncoder(object):
         Parameters
         ----------
         pspec : ProcessorSpec
-            The ProcessorSpec describing the qubits and gates in the circuits that
-            will be encoded.
+            Describes the qubits and gates in the circuits that will be encoded.
 
         Returns
         -------
@@ -43,6 +42,14 @@ class CircuitEncoder(object):
     def __call__(self, circuit, padded_depth=None):
         """
         Turns the input circuit circuit, a Circuit object, into a numpy array.
+
+        Parameters
+        ----------
+        circuit : Circuit
+            The circuit to encode
+
+        padded_depth : None or int
+            THe 
         """
         if padded_depth is None: padded_depth = circuit.depth
         circuit_array = []
@@ -56,9 +63,11 @@ class CircuitEncoder(object):
 
     def initialization_encoding(self, circuit):
         """
-        This method defines the encoding of the implicit initiliziation layer at the start of a circuit.
+        This method defines the encoding of the implicit initialization layer at the end of a circuit.
         In this base class, we define this to be a trivial encoding: the implicit initialization layer 
-        is not represented.
+        is not represented. In general, this method should return a list of lists. If this measurement 
+        is not represented in the encoding, as here, this is an empty list. Otherwise each element in the 
+        list is contains the encoding values (typically 0 or 1)
 
         Parameters
         ----------
@@ -67,8 +76,6 @@ class CircuitEncoder(object):
         Returns
         -------
         List of lists.
-        A list containing lists that encode the initiliation layer. If this inititialization is not
-        represented in the encoding, as here, this is an empty list.
         """
         return []
 
@@ -80,27 +87,64 @@ class CircuitEncoder(object):
         return 0
 
     def measurement_encoding(self, circuit):
-        """
-        The default encoding of the implicit measuremnt layer at the end of a circuit,
-        which is to not include it in the encoding.
+       """
+        This method defines the encoding of the implicit measurement layer at the end of a circuit.
+        In this base class, we define this to be a trivial encoding: the implicit measurement layer 
+        is not represented. In general, this method should return a list of lists. If this measurement 
+        is not represented in the encoding, as here, this is an empty list. Otherwise each element in the 
+        list is contains the encoding values (typically 0 or 1)
+
+        Parameters
+        ----------
+        circuit
+
+        Returns
+        -------
+        List of lists.
         """
         return []
 
     def measurement_encoding_depth(self): 
         """
-        TODO
+        Returns the length of the measurement encoding list, i.e., the length of lists returned by
+        `measurement_encoding`.
         """
         return 0
 
     def layer_encoding(self, layer):
         """
-        TODO
+        This method defines the encoding of a circuit layer, return a list. The list must be of the
+        same length for all layers, and it typically containing 0s and 1s, but it can contain any
+        objects that can be elements of a numpy.array. This method is implemented in derived
+        classes.
+
+        Parameters
+        ----------
+        layer : List or Tuple of Labels
+            The layer to turn into a list of numerical values.
+
+        Returns
+        -------
+        List
+            The encoded layer.
         """
         raise NotImplementedError("Specified in a derived class!")
 
     def depth(self, max_circuit_depth):
         """
-        
+        The depth of the encoding, meaning the second dimension in the array returned by
+        call the CircuitEncoder.
+
+        Parameters
+        ----------
+        max_circuit_depth : int
+            The maximum depth of the circuits that will be encoded using the encoder.
+
+        Returns
+        -------
+        int
+            The encoding depth, which is `max_circuit_depth` + the depths for initialization
+            and measurment encoding.
         """
         return max_circuit_depth + self.initialization_encoding_depth() + self.measurement_encoding_depth()
 
@@ -112,9 +156,10 @@ class CircuitEncoder(object):
 
 class StandardCircuitEncoder(CircuitEncoder):
     """
-    TODO
+    An object that converts Circuit objects into numpy arrays. This uses a simple method that
+    is now the `standard` approach when using quantum-physics-aware neural networks. It encodes
+    a layer a
     """
-
     def __init__(self, pspec):
         """
         TODO
@@ -132,7 +177,8 @@ class StandardCircuitEncoder(CircuitEncoder):
 
         EXPECTS A CIRCUIT LAYER AS  A TUPLE OR A LIST OF LABEL OBJECTS.
         """
-        #assert(isinstance(layer, tuple) or isinstance(layer, list) or isinstance(layer, None)), "The layer must be a list or tuple of label objects, or None!"
+        if layer is not None:
+            assert(isinstance(layer, (tuple, list))), "The layer must be a list or tuple of label objects, or None!"
         if layer is not None:
             encoded_layer = _np.zeros(self.length, float)
             for gate in layer:

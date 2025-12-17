@@ -78,12 +78,28 @@ class EinsumSubNetwork(_keras.layers.Layer):
 
 @_keras.utils.register_keras_serializable(package='Blah1')
 class QPANN(_keras.Model):
+    """
+    A quantum-physics-aware neural network (QPANN), which is a neural network model for a noisy quantum
+    computer. QPANNs are based on the neural network structure introduced in https://arxiv.org/abs/2406.05636,
+    but have developed since that paper in various ways.
+
+    """
     def __init__(self, encoding_length : int, modelled_error_generators: list,  snipper: list,
                  dense_units=[30, 20, 10, 5, 5], probability_computation='concise', **kwargs):
         """
+        Initialize a QPANN, with random weights and biases. An initialized QPANN should be trained
+        on data, to create meaningful predictions and internal model parameters. The inputs for a
+        QPANN are circuits, represented as tensors, along with additional information about how
+        errors combined in those circuits and impact circuit outcomes. See the docstring of `call`
+        for more information on the inputs to a QPANN.
+
+        Parameters
+        ----------
+        encoding_length : int
+
 
         modelled_error_generators: list
-            The primitive error generators that this neural network internally models.
+            The "elementary error generators" that this neural network internally models.
 
         layer_snipper: ...
 
@@ -96,7 +112,7 @@ class QPANN(_keras.Model):
         self.snipper = _copy.deepcopy(snipper)
         self.dense_units = dense_units
         self.probability_computation = probability_computation
-        # A mask that finds the 'S' (stochastic) error generators.
+        # Masks that find the 'S' (stochastic) and 'H' (Hamiltonian) error generators.
         self.stochastic_mask = _tf.constant([i[0] == 'S' for i in self.modelled_error_generators])
         self.hamiltonian_mask = _tf.constant([i[0] == 'H' for i in self.modelled_error_generators])
 
@@ -123,8 +139,8 @@ class QPANN(_keras.Model):
     def circuit_to_probability(self, inputs):
         circuit_encoding = inputs[0]  # circuit
 
-        # C = _tf.reshape(self.dense_correction(_tf.reshape(circuit_encoding, [1, -1])), [-1])
-        epsilon_matrix = self.dense_layer(circuit_encoding)  # depth * num_tracked_error
+        # Computes the error rates matrix, which has shape (circuit depth , self.modelled_error_generators)
+        error_rates = self.dense_layer(circuit_encoding)
 
         # # Define the function to apply
         # def custom_function(row):
@@ -137,7 +153,7 @@ class QPANN(_keras.Model):
         # # If mask_expanded is True, apply custom_function, otherwise keep original row
         # s_squared_epsilon_matrix = _tf.where(mask_expanded, custom_function(epsilon_matrix), epsilon_matrix)
 
-        s_squared_epsilon_matrix = epsilon_matrix
+        s_squared_epsilon_matrix = error_rates
 
         if self.probability_computation == 'expanded':
             S = _tf.cast(inputs[1], _tf.float32)  # sign matrix
@@ -149,9 +165,11 @@ class QPANN(_keras.Model):
         elif self.probability_computation == 'concise':
             corrections_coefficients = inputs[1]  # alphas
             probabilities_ideal = inputs[2]  # ideal (no error) probabilities
-            probabilities= self.probability_approximation_layer([s_squared_epsilon_matrix, corrections_coefficients, probabilities_ideal]) #+C
+            probabilities = self.probability_approximation_layer([s_squared_epsilon_matrix, corrections_coefficients, probabilities_ideal]) #+C
 
-        #Px_approximate = self.probability_approximation_layer([epsilon_matrix, P, S, scaled_alpha_matrix, Px_ideal]) #+C
+        # Old code that was written that attempted to find a correction to the first-order approximation. 
+        # C = _tf.reshape(self.dense_correction(_tf.reshape(circuit_encoding, [1, -1])), [-1])
+        # probabilities = probabilities +C
         
         return probabilities #/ _tf.reduce_sum(Px_approximate)
 
