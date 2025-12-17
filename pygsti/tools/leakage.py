@@ -431,8 +431,13 @@ def lagoified_gopparams_dicts(gopparams_dicts: List[Dict]) -> List[Dict]:
     from pygsti.models.gaugegroup import UnitaryGaugeGroup
     tm = gopparams_dicts[0]['target_model']
     gopparams_dicts = [gp for gp in gopparams_dicts if 'TPSpam' not in str(type(gp['_gaugeGroupEl']))]
+    # ^ That list will __usually__ be length-1.
+
     gopparams_dicts = copy.deepcopy(gopparams_dicts)
     for inner_dict in gopparams_dicts:
+        inner_dict['method'] = 'L-BFGS-B'
+        # ^ We need this optimizer because it doesn't require a gradient oracle.
+        #
         inner_dict['n_leak'] = 1
         # ^ This function could accept n_leak as an argument instead. However,
         #   downstream functions for gauge optimization only support n_leak=0 or 1.
@@ -441,24 +446,27 @@ def lagoified_gopparams_dicts(gopparams_dicts: List[Dict]) -> List[Dict]:
         #   about mismatches between an estimate and a target when restricted to the
         #   computational subspace. We have code for evaluating the loss functions
         #   themselves, but not their gradients.
-        inner_dict['gates_metric'] = 'frobenius squared'
-        inner_dict['spam_metric']  = 'frobenius squared'
-        inner_dict['item_weights'] = {'gates': 0.0, 'spam': 1.0}
+        #
         gg = UnitaryGaugeGroup(tm.basis.state_space, tm.basis)
         inner_dict['gauge_group'] = gg
         inner_dict['_gaugeGroupEl'] = gg.compute_element(gg.initial_params)
-        # ^ We start with gauge optimization over the full unitary group, minimizing
-        #   SPAM differences between the estimate and the target on the computational
-        #   subspace. Our last step of gauge optimization (which is after this loop)
-        #   includes gates.
-        inner_dict['method'] = 'L-BFGS-B'
-        # ^ We need this optimizer because it doesn't require a gradient oracle.
-        inner_dict['convert_model_to']['to_type'] = 'full'
-        # ^ The natural basis for Hilbert-Schmidt space in leakage modeling doesn't
-        #   have the identity matrix as its first element. This means we can't use
-        #   the full TP parameterization. There's no real harm in taking "full" as
-        #   our default because add_lago_models uses parameterization-preserving
-        #   gauge optimization.
+        # ^ We insist on the unitary gauge group because other common gauge groups
+        #   (e.g., FullTPGaugeGroup) impose requirements on tm.basis.
+        #
+        inner_dict['gates_metric'] = 'frobenius'
+        inner_dict['spam_metric']  = 'frobenius'
+        # ^ We use Frobenius rather than Frobenius squared to avoid biasing toward
+        #   gauges where the leakage is "spread out" across multiple gates.
+        #
+        inner_dict['item_weights'] = {'gates': 1.0, 'spam': 1.0}
+        # ^ The precise weights here are somewhat arbitrary. We place weight on
+        #   SPAM because SPAM plays a distinguished role in defining the 
+        #   computational subspace.
+    
+    # Below, we add a final gauge optimization step that preserves separation between 
+    # what we've identified as the computational subspace and leakage space. This
+    # step uses squared Frobenius norm as an objective, since that's better-behaved
+    # than plain Frobenius norm.
     inner_dict = inner_dict.copy()
     gg = _direct_sum_unitary_group([Basis.cast('pp', 4), Basis.cast('pp', 1)], tm.basis)
     inner_dict['gauge_group'] = gg
@@ -498,7 +506,7 @@ def add_lago_models(results: ModelEstimateResults, est_key: Optional[str] = None
     appropriate modifications to either the estimate's existing 'stdgaugeopt' suite
     (if that exists) or to the 'stdgaugeopt' suite induced by the target model.
     """
-    from pygsti.protocols.gst import GSTGaugeOptSuite, _add_param_preserving_gauge_opt
+    from pygsti.protocols.gst import GSTGaugeOptSuite, _add_param_preserving_gauge_opt, _add_gauge_opt
     if isinstance(est_key, str):
         if gos is None:
             existing_est  = results.estimates[est_key]
@@ -509,7 +517,14 @@ def add_lago_models(results: ModelEstimateResults, est_key: Optional[str] = None
             else:
                 gop_params = std_lago_gopsuite(results.estimates[est_key].models['target'])
             gos = GSTGaugeOptSuite(gaugeopt_argument_dicts=gop_params)
-        _add_param_preserving_gauge_opt(results, est_key, gos, verbosity)
+        try:
+            _add_param_preserving_gauge_opt(results, est_key, gos, verbosity)
+        except:
+            # parameterization-preserving gauge optimization fails if the seed model
+            # uses members other than ComposedState, ComposedOp, ComposedPOVM, etc..
+            # So we add a non-preserving gauge optimization here.
+            tm = results.estimates[est_key].models['target']
+            _add_gauge_opt(results, est_key, gos, tm, tuple())
     elif est_key is None:
         for est_key in results.estimates.keys():
             add_lago_models(results, est_key, gos, verbosity)
@@ -556,6 +571,9 @@ def construct_leakage_report(
     est_key = results.estimates.keys()
     for ek in est_key:
         assert isinstance(ek, str)
+        if ek == 'Target':
+            # There's no need to gauge-optimize in this case.
+            continue
         add_lago_models(results, ek, verbosity=gaugeopt_verbosity)
     from pygsti.report import construct_standard_report
     report = construct_standard_report(
