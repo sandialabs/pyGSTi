@@ -115,16 +115,15 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
             assert expansion_point_x0 is not None
             original_dlogl = loaded_checkpoint.original_dlogl
             graph_levels = loaded_checkpoint.graph_levels
-            if len(graph_levels) == 0 and expansion_point_x0 is not None:
-
-                deltalogl_fn.model.sim._processor_grid = (1,1,1)
-                deltalogl_fn.model.from_vector(expansion_point_x0)
-            else:
+            if not (len(graph_levels) == 0 and expansion_point_x0 is not None):
                 if rank == 0:
                     print(f'Checkpoint contains {len(graph_levels)} levels')
-                params_to_remove = [level[2] for level in graph_levels]
+                params_to_remove = [level[2] for level in graph_levels[1:]]
                 initial_model = remove_params(initial_model, params_to_remove)
+                deltalogl_fn.model = initial_model
                 assert initial_model.num_params == len(expansion_point_x0)
+            deltalogl_fn.model.sim._processor_grid = (1,1,1)
+            deltalogl_fn.model.from_vector(expansion_point_x0)
 
             if not disable_checkpoints:
                 new_checkpoint = loaded_checkpoint
@@ -186,7 +185,7 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
     exceeded_threshold = False
     while not exceeded_threshold:
 
-        if rank == 0 and verbosity >0:
+        if rank == 0 and verbosity > 0:
             print(f'>> Working on level {len(graph_levels)} <<',flush = True)
             start = time.time()
 
@@ -205,8 +204,8 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
             deltalogl_fn.model.from_vector(np.delete(parent_model_projector, i, axis=1) @ vec)
 
             quantity = (deltalogl_fn.fn()- prev_dlogl)*2
-            if  True:#verbosity > 1:
-                if True:#i  % (100/verbosity) == 0:
+            if  verbosity > 1:
+                if i  % (100/verbosity) == 0:
                     print('Model ', i, ' has ev. ratio of ', quantity, flush=True)
             if lowest_quantity == None or lowest_quantity > quantity:
                 lowest_quantity = quantity
