@@ -52,7 +52,7 @@ def layer_snipper_from_qubit_graph(error_generators, encoder, adjacency_matrix, 
         # TODO : IS THIS CORRECT ?
         # I COMMENTED THIS OUT ON THE RE-WRITE, BECAUSE I THINK IT'S WRONG. NEED TO CHECK I HAVEN'T MADE A 
         # MISTAKE THOUGH
-        #pauli_string = pauli_string[::-1] # for reverse indexing
+        pauli_string = pauli_string[::-1] # for reverse indexing
 
         # The indices of `pauli` that are not equal to 'I'.
         qubits_acted_on_by_error = _np.where(_np.array(list(pauli_string)) != 'I')[0]
