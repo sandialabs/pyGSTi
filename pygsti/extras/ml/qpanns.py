@@ -97,7 +97,8 @@ class QPANN(_keras.Model):
         self.dense_units = dense_units
         self.probability_computation = probability_computation
         # A mask that finds the 'S' (stochastic) error generators.
-        self.s_mask = _tf.constant([i[0] == 'S' for i in self.modelled_error_generators])
+        self.stochastic_mask = _tf.constant([i[0] == 'S' for i in self.modelled_error_generators])
+        self.hamiltonian_mask = _tf.constant([i[0] == 'H' for i in self.modelled_error_generators])
 
     def get_config(self):
         config = super().get_config()
@@ -107,7 +108,8 @@ class QPANN(_keras.Model):
             'snipper': self.snipper,
             'dense_units': self.dense_units,
             'probability_computation': self.probability_computation,
-            's_mask': self.s_mask
+            'stochastic_mask': self.stochastic_mask,
+            'hamiltonian_mask': self.hamiltonian_mask
         })
         return config
 
@@ -124,16 +126,18 @@ class QPANN(_keras.Model):
         # C = _tf.reshape(self.dense_correction(_tf.reshape(circuit_encoding, [1, -1])), [-1])
         epsilon_matrix = self.dense_layer(circuit_encoding)  # depth * num_tracked_error
 
-        # Define the function to apply
-        def custom_function(row):
-            return row ** 2
+        # # Define the function to apply
+        # def custom_function(row):
+        #     return row ** 2
 
-        # Expand the mask to match the tensor's shape for broadcasting
-        mask_expanded = _tf.expand_dims(_tf.expand_dims(self.s_mask, axis=0), axis=0)
+        # # Expand the mask to match the tensor's shape for broadcasting
+        # mask_expanded = _tf.expand_dims(_tf.expand_dims(self.stochastic_mask, axis=0), axis=0)
 
-        # Apply the function conditionally using _tf.where
-        # If mask_expanded is True, apply custom_function, otherwise keep original row
-        s_squared_epsilon_matrix = _tf.where(mask_expanded, custom_function(epsilon_matrix), epsilon_matrix)
+        # # Apply the function conditionally using _tf.where
+        # # If mask_expanded is True, apply custom_function, otherwise keep original row
+        # s_squared_epsilon_matrix = _tf.where(mask_expanded, custom_function(epsilon_matrix), epsilon_matrix)
+
+        s_squared_epsilon_matrix = epsilon_matrix
 
         if self.probability_computation == 'expanded':
             S = _tf.cast(inputs[1], _tf.float32)  # sign matrix
@@ -434,12 +438,14 @@ class CircuitToErrorRatesEinSum(_keras.layers.Layer):
         
         self.number_of_modelled_error_generators = len(modelled_error_generators) # This is the output dimension of the network
         self.modelled_error_generators = modelled_error_generators  
+        self.stochastic_mask = []
         self.snipper = snipper
         self.dense_units = dense_units + [1] # The + [1] is the output layer.
 
     def get_config(self):
         config = super().get_config()
         config.update({
+            'number_of_modelled_error_generators': self.number_of_modelled_error_generators,
             'modelled_error_generators': self.modelled_error_generators,
             'dense_units': self.dense_units,
             'layer_snipper': self.layer_snipper
@@ -490,6 +496,18 @@ class CircuitToErrorRatesEinSum(_keras.layers.Layer):
 
         # Dense network to learn error rates
         x = _tf.reshape(self.dense(gathered_slices_masked), [-1, self.number_of_modelled_error_generators])
+
+        # A function for squaring a row
+        def square(row):
+            return row ** 2
+
+        # Expand the mask to match the tensor's shape for broadcasting
+        mask_expanded = _tf.expand_dims(_tf.expand_dims(self.stochastic_mask, axis=0), axis=0)
+
+        # Apply the function conditionally using _tf.where
+        # If mask_expanded is True, apply custom_function, otherwise keep original row
+        x = _tf.where(mask_expanded, square(x), x)
+
         return x
 
 # ------------------------------------------------------------- #
