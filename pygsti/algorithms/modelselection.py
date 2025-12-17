@@ -144,6 +144,8 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
         expansion_point_x0 = _parallel_GST(initial_model, data, builders, tol, maxiter, verbosity, comm=comm, mem_limit=mem_limit).estimates['GateSetTomography'].models['final iteration estimate'].to_vector().copy()
         initial_model.sim._processor_grid = (1,1,1)
         deltalogl_fn.model.from_vector(expansion_point_x0)
+        if comm is not None and rank == 1:
+            comm.free_all_children()
         #Is the model stored in deltalogl_fn the same as initial_model?
         assert np.allclose(initial_model.to_vector(), deltalogl_fn.model.to_vector())
         original_dlogl = deltalogl_fn.fn()
@@ -159,6 +161,8 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
             print("computing Hessian")
         initial_model.sim = pygsti.forwardsims.MapForwardSimulator(processor_grid=(1,1,size),param_blk_sizes=(100,100))
         H = pygsti.tools.logl_hessian(initial_model, data.dataset, comm=comm, mem_limit=mem_limit, verbosity = verbosity)
+        if comm is not None and rank == 1:
+            comm.free_all_children()
         initial_model.sim._processor_grid = (1,1,1)
 
         if comm is not None:
@@ -268,6 +272,9 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
             H = pygsti.tools.logl_hessian(red_model_fit, data.dataset, comm=comm, mem_limit=mem_limit, verbosity = verbosity)
             if comm is not None:
                 H = comm.bcast(H, root = 0)
+                if rank == 0:
+                    comm.free_all_children()
+
             expansion_point_x0 = red_model_fit.to_vector().copy()
             red_model_fit.sim._processor_grid = (1,1,1)
             temp_model = deltalogl_fn.model

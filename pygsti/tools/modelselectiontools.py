@@ -23,7 +23,29 @@ import datetime as _datetime
 #size = comm.Get_size()
 #mem = 7
 #mem_limit = mem*(2**10)**3
+class TrackedComm():
+    def __init__(self, comm, parent=None):
+        self.children = []
+        self._comm = comm
+        if parent is not None:
+            parent.children.append(self)
 
+    def Split(self, color, key):
+        new_comm = self._comm.Split(color,key)
+        wrap = TrackedComm(new_comm, parent=self)
+        return wrap
+    
+    def free_all_children(self):
+        for child in self.children:
+            child.free_all_children()
+        if self._comm is not None:
+            if self._comm not in (MPI.COMM_WORLD, MPI.COMM_SELF) and self._comm != MPI.COMM_NULL:
+                self._comm.Free()
+             
+    def __getattr__(self, name):
+
+        return getattr(self._comm, name)
+            
 class AMSCheckpoint(_NicelySerializable):
     """
     Class for storing checkpointing intermediate progress during
