@@ -124,6 +124,7 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
                 assert initial_model.num_params == len(expansion_point_x0)
             deltalogl_fn.model.sim._processor_grid = (1,1,1)
             deltalogl_fn.model.from_vector(expansion_point_x0)
+            prev_dlogl = loaded_checkpoint.prev_dlogl
 
             if not disable_checkpoints:
                 new_checkpoint = loaded_checkpoint
@@ -148,6 +149,7 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
         #Is the model stored in deltalogl_fn the same as initial_model?
         assert np.allclose(initial_model.to_vector(), deltalogl_fn.model.to_vector())
         original_dlogl = deltalogl_fn.fn()
+        prev_dlogl = original_dlogl
 
         if not disable_checkpoints and rank == 0:
             new_checkpoint.x0 = expansion_point_x0
@@ -180,7 +182,7 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
     red_rowandcol_H = H
     parent_model_projector = np.eye(initial_model.num_params)
     deltalogl_model_projector = parent_model_projector.copy()
-    prev_dlogl = deltalogl_fn.fn()
+    
     approx_logl_fn = create_approx_logl_fn(H, expansion_point_x0, prev_dlogl)
     exceeded_threshold = False
     while not exceeded_threshold:

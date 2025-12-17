@@ -14,15 +14,9 @@ import numpy as _np
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 import pygsti
 from pygsti.models import Model
-import mpi4py as MPI
+from mpi4py import MPI
 import time as _time
 import datetime as _datetime
-
-#comm = MPI.COMM_WORLD
-#rank = comm.Get_rank()
-#size = comm.Get_size()
-#mem = 7
-#mem_limit = mem*(2**10)**3
 class TrackedComm():
     def __init__(self, comm, parent=None):
         self.children = []
@@ -57,7 +51,7 @@ class AMSCheckpoint(_NicelySerializable):
     TODO
     """ 
 
-    def __init__(self, datasetstr, er_thresh, maxiter, tol, prob_clip, H, x0, original_dlogl, time=None, path=None, graph_levels=[]):
+    def __init__(self, datasetstr, er_thresh, maxiter, tol, prob_clip, H, x0, original_dlogl, time=None, path=None, graph_levels=[], prev_dlogl=None):
         super().__init__()
         self.datasetstr = datasetstr
         self.maxiter = maxiter
@@ -68,6 +62,7 @@ class AMSCheckpoint(_NicelySerializable):
         self.er_thresh = er_thresh
         self.graph_levels = graph_levels
         self.original_dlogl = original_dlogl
+        self.prev_dlogl = prev_dlogl
 
         if time is None:
             self.last_update_time = _time.ctime()
@@ -97,7 +92,8 @@ class AMSCheckpoint(_NicelySerializable):
                         'x0' : self._encodemx(self.x0),
                         'time': self.last_update_time,
                         'graph_levels':encoded_graph_levels,
-                        'original_dlogl': self.original_dlogl
+                        'original_dlogl': self.original_dlogl,
+                        'prev_dlogl': self.prev_dlogl
                         })
                        
         return state
@@ -114,8 +110,9 @@ class AMSCheckpoint(_NicelySerializable):
         graph_levels = state['graph_levels']
         decoded_graph_levels = [[cls._decodemx(level[0]), level[1], level[2]]for level in graph_levels]
         original_dlogl = state['original_dlogl']
+        prev_dlogl = state['prev_dlogl']
 
-        return cls( datasetstr, er_thresh, maxiter,tol , prob_clip ,H, x0,original_dlogl, time=time, graph_levels=decoded_graph_levels)
+        return cls( datasetstr, er_thresh, maxiter,tol , prob_clip ,H, x0,original_dlogl, time=time, graph_levels=decoded_graph_levels, prev_dlogl=prev_dlogl)
     def save(self):
         """
         Saves self to memory. If path is not specified, a default one is created.
