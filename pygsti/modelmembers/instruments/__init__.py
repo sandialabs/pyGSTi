@@ -13,8 +13,17 @@ Sub-package holding model instrument objects.
 from .instrument import Instrument
 from .tpinstrument import TPInstrument
 from .tpinstrumentop import TPInstrumentOp
+from .cptpinstrument import RootConjOperator, SummedOperator
 
-from pygsti.tools import optools as _ot
+import scipy.linalg as _la
+import numpy as _np
+from pygsti.tools import optools as _ot, basistools as _bt
+from types import NoneType
+from pygsti.baseobjs.label import Label
+from pygsti.baseobjs.basis import Basis
+from pygsti.modelmembers import operations as _op
+from pygsti.modelmembers import povms as _pv
+from pygsti.modelmembers.povms.basepovm import _BasePOVM
 
 # Avoid circular import
 import pygsti.modelmembers as _mm
@@ -37,7 +46,6 @@ def instrument_type_from_op_type(op_type):
 
     # Limited set (only matching what is in convert)
     instr_conversion = {
-        'auto': 'full',
         'static unitary': 'static unitary',
         'static clifford': 'static clifford',
         'static': 'static',
@@ -45,16 +53,12 @@ def instrument_type_from_op_type(op_type):
         'full TP': 'full TP',
         'full CPTP': 'full CPTP',
         'full unitary': 'full unitary',
+        'CPTPLND': 'CPTPLND'
     }
 
     instr_type_preferences = []
     for typ in op_type_preferences:
-        instr_type = None
-        if _ot.is_valid_lindblad_paramtype(typ):
-            # Lindblad types are passed through as TP only (matching current convert logic)
-            instr_type = "full TP"
-        else:
-            instr_type = instr_conversion.get(typ, None)
+        instr_type = instr_conversion.get(typ, None)
 
         if instr_type is None:
             continue
@@ -110,26 +114,103 @@ def convert(instrument, to_type, basis, ideal_instrument=None, flatten_structure
         The converted instrument, usually a distinct
         object from the object passed as input.
     """
-    to_types = to_type if isinstance(to_type, (tuple, list)) else (to_type,)  # HACK to support multiple to_type values
+    if not isinstance(to_type, str):
+        if len(to_type) > 1:
+            raise ValueError(f"Expected to_type to be a string, but got {to_type}")
+        to_type = to_type[0]
+        assert isinstance(to_type, str)
+
     destination_types = {'full TP': TPInstrument}
-    NoneType = type(None)
-
-    for to_type in to_types:
-        try:
-            if isinstance(instrument, destination_types.get(to_type, NoneType)):
-                return instrument
-
-            if to_type == "full TP":
-                return TPInstrument(list(instrument.items()), instrument.evotype, instrument.state_space)
-            elif to_type in ("full", "static", "static unitary"):
-                from ..operations import convert as _op_convert
-                ideal_items = dict(ideal_instrument.items()) if (ideal_instrument is not None) else {}
-                members = [(k, _op_convert(g, to_type, basis, ideal_items.get(k, None), flatten_structure))
-                           for k, g in instrument.items()]
-                return Instrument(members, instrument.evotype, instrument.state_space)
+    
+    if isinstance(instrument, destination_types.get( to_type, NoneType ) ):
+        return instrument
+    
+    if to_type == "full TP":
+        inst_arrays = dict()
+        for k, v in instrument.items():
+            if hasattr(v, 'to_dense'):
+                inst_arrays[k] = v.to_dense('HilbertSchmidt')
             else:
-                raise ValueError("Cannot convert an instrument to type %s" % to_type)
-        except:
-            pass  # try next to_type
+                inst_arrays[k] = v
+        return TPInstrument(list(inst_arrays.items()), instrument.evotype, instrument.state_space)
+    
+    if to_type in ("full", "static", "static unitary"):
+        from ..operations import convert as _op_convert
+        ideal_items = dict(ideal_instrument.items()) if (ideal_instrument is not None) else {}
+        members = [(k, _op_convert(g, to_type, basis, ideal_items.get(k, None), flatten_structure))
+                    for k, g in instrument.items()]
+        return Instrument(members, instrument.evotype, instrument.state_space)
 
-    raise ValueError("Could not convert instrument to to type(s): %s" % str(to_types))
+    if to_type == 'CPTPLND':
+        op_arrays = {k: v.to_dense('HilbertSchmidt') for (k,v) in instrument.items()}
+        inst = cptp_instrument(op_arrays, basis)
+        return inst
+
+    raise ValueError("Cannot convert an instrument to type %s" % to_type)
+
+
+def cptp_instrument(op_arrays: dict[str, _np.ndarray], basis: Basis, error_tol:float=1e-6, trunc_tol:float=1e-7, povm_errormap=None) -> Instrument:
+    unitaries = dict()
+    effects   = dict()
+
+    # Step 1. Build CPTPLND-parameterized unitaries and static POVM effects
+    #   from Kraus decompositions of the provided operators.
+    for oplbl, op in op_arrays.items():
+        krausops = _ot.minimal_kraus_decomposition(op, basis, error_tol, trunc_tol)
+        cur_effects   = []
+        cur_unitaries = []
+        for K in krausops:
+            # Define F(rho) := K rho K^\\dagger. If we compute a polar decomposition
+            # K = u p, then we can express F(rho) = u (p rho p) u^\\dagger, which is
+            # a composition of a unitary channel and the "RootConjOperator" of p@p.
+            u, p = _la.polar(K, side='right')
+            u_linop = _op.StaticUnitaryOp(u, basis)  # type: ignore
+            u_cptp = _op.convert(u_linop, 'CPTPLND', basis)
+            cur_unitaries.append(u_cptp)
+            E_superket = _bt.stdmx_to_vec(p @ p, basis)
+            E = _pv.StaticPOVMEffect(E_superket)
+            cur_effects.append(E)
+        effects[oplbl]   = cur_effects
+        unitaries[oplbl] = cur_unitaries
+
+    # Step 2. Build a CPTPLND-parameterized POVM from the static POVM effects.
+    # 
+    #   We can't use povms.convert(...) because we might have more
+    #   effects than the Hilbert space dimension.
+    #
+    base_povm_effects = {}
+    for oplbl, cur_effects in effects.items():
+        for i, E in enumerate(cur_effects):
+            elbl = Label((oplbl, i))
+            base_povm_effects[elbl] = E
+    base_povm = _BasePOVM(base_povm_effects, preserve_sum=False)
+    udim = int(_np.round(basis.dim ** 0.5))
+    if povm_errormap is None:
+        I_ideal   = _op.StaticUnitaryOp(_np.eye(udim), basis) # type: ignore
+        I_cptplnd = _op.convert(I_ideal, 'CPTPLND', basis) 
+        povm_errormap = I_cptplnd.factorops[1]
+    povm_cptp = _pv.ComposedPOVM(povm_errormap, base_povm)
+
+    # Step 3. Assemble the CPTPLND-parameterized unitaries and POVM
+    #   effects to represent each operator as a completely-positive
+    #   trace-reducing map.
+    # 
+    inst_ops = dict()
+    for lbl in op_arrays:
+        cur_effects   = effects[lbl]
+        cur_unitaries = unitaries[lbl]
+
+        op_summands = []
+        for i, U_cptplnd in enumerate(cur_unitaries):
+            E_cptp = povm_cptp[Label((lbl, i))]
+            rcop = RootConjOperator(E_cptp, basis)
+            cptr = _op.ComposedOp([rcop, U_cptplnd])
+            op_summands.append(cptr)
+        if len(op_summands) == 1:
+            op = op_summands[0]
+        else:
+            op = SummedOperator(op_summands, basis)
+
+        inst_ops[lbl] = op
+    inst = Instrument(inst_ops)
+    return inst

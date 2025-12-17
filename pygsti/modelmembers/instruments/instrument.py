@@ -19,6 +19,9 @@ from pygsti.evotypes import Evotype as _Evotype
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools import slicetools as _slct
+from pygsti.tools import basistools as _bt
+from pygsti.tools import optools as _ot
+from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 
@@ -378,13 +381,14 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
 
         staterep = state._rep
         outcome_probs_and_states = _collections.OrderedDict()
+
         for lbl, element in self.items():
             output_rep = element._rep.acton(staterep)
-            output_unnormalized_state = output_rep.to_dense()
-            prob = output_unnormalized_state[0] * state.dim**0.25
-            output_normalized_state = output_unnormalized_state / prob  # so [0]th == 1/state_dim**0.25
-            outcome_probs_and_states[lbl] = (prob, _state.StaticState(output_normalized_state, self.evotype,
-                                                                      self.state_space))
+            unnormalized_state_array = output_rep.to_dense()
+            prob = _ot.superket_trace(unnormalized_state_array, element.basis)
+            output_state_array = unnormalized_state_array / prob
+            output_state = _state.StaticState(output_state_array, self.evotype, self.state_space)
+            outcome_probs_and_states[lbl] = (prob, output_state)
 
         return outcome_probs_and_states
 
