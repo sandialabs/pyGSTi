@@ -87,7 +87,7 @@ class CircuitEncoder(object):
         return 0
 
     def measurement_encoding(self, circuit):
-       """
+        """
         This method defines the encoding of the implicit measurement layer at the end of a circuit.
         In this base class, we define this to be a trivial encoding: the implicit measurement layer 
         is not represented. In general, this method should return a list of lists. If this measurement 
