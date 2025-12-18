@@ -347,8 +347,8 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
             print("next level")
             end = time.time()
             print('time this level ', end-start)
-    if not disable_checkpoints and rank == 0 and new_checkpoint is not None:
-        _os.remove(new_checkpoint.path)
+    #if not disable_checkpoints and rank == 0 and new_checkpoint is not None:
+    #    _os.remove(new_checkpoint.path)
     return graph_levels
 
 
