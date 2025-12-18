@@ -38,6 +38,7 @@ class CircuitEncoder(object):
         CircuitEncoder
         """
         self.pspec = pspec
+        self.length = None # This should be specified in a derived class
 
     def __call__(self, circuit, padded_depth=None):
         """
