@@ -37,7 +37,42 @@ def undirected_adjacency_matrix_from_edges(edges, qubit_labels):
 # code is updated to add in C and A errors.
 def layer_snipper_from_qubit_graph(error_generators, encoder, adjacency_matrix, hops):
     """
-    TODO
+    Creates a "snipper" for a QPANN. This snipper will specify that, when predicting the
+    error rate of an error generator G that acts non-trivially on the qubit set Q, the 
+    QPANN shoud look at what is occuring on all the qubits within Q and all those qubits
+    within 'hops' steps of that qubit on the graph given by the 'adjacency_matrix'. This
+    adjacency matrix can be the connectivity of the qubits (the qubit pairs for which there
+    are two-qubit gates), but it could also be an adjacency matrix that specifies some other
+    kind of coupling.
+
+    Parameters
+    ----------
+    error_generators : list
+        A list of elementary error generators, in the same format as used by QPANNs. Each element of this 
+            list is a tuple. The first element of the tuple is a string specifying the error
+            generator type: 'H' or 'S', for Hamiltonian and stochastic errors (currently active
+            and Pauli-correlation errors are not supported). The second element of
+            the tuple is a single-element tuple where that single element is a string for the 
+            Pauli indexing the error (e.g., for 4 qubits, this could be 'XYZI').
+
+    encoder : CircuitEncoder
+        The CircuitEncoder whose encoding this snipper will reference. Typically this will be
+        an instance of a StandardCircuitEncoder, as defined in ml.encoding.py
+
+    adjacency_matrix : numpy.array
+        A numpy array specifying the adjacency matrix of the qubits. 
+
+    hops : int
+        The number of steps on the adjacency graph to take
+
+    Returns 
+    -------
+    list
+        A list of lists, of the same length as `error_generators`. The ith element of this list
+        is the indices in the layer encoding used by `encoder` that a QPANN should look at for
+        predicting the rate of the corresponding error generator. This list is in the correct
+        format to be passed to an initialization of a QPANN, as the `snipper` argument.
+
     """
     # Compute the set of qubits that are within `hops` steps on the adjacency graph of each qubit,
     # by computing the Lapalacian and taking its `hops` power.
