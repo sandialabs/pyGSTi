@@ -185,7 +185,7 @@ def remove_params(parent_model, params_to_remove):
         parent_model = remove_param(parent_model, i)
     return parent_model
 
-def remove_param(parent_model, param_to_remove):
+def remove_param(parent_model, param_to_remove, zero = True):
     next_model = parent_model.copy()
     projector_matrix = _np.delete(parent_model.param_interposer.projector_matrix, param_to_remove, axis=1)
     next_model.param_interposer.transform_matrix = parent_model.param_interposer.full_span_transform_matrix @ projector_matrix
@@ -197,6 +197,8 @@ def remove_param(parent_model, param_to_remove):
 
     next_model._need_to_rebuild = True
     next_model._clean_paramvec()
+    if zero:
+        next_model.from_vector(_np.zeros(next_model.num_params))
     assert next_model.num_params < parent_model.num_params
     return next_model
 

@@ -336,12 +336,7 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
             else:
                 deltalogl_model_projector = np.delete(deltalogl_model_projector, best_model[2], axis=1)
                 red_row_H = np.delete(red_row_H, best_model[2], axis=0)
-                red_rowandcol_H = np.delete(np.delete(red_rowandcol_H,best_model[2] , axis=0), best_model[2], axis=1)
-
-        if len(graph_levels) > 1:
-            pass#prev_dlogl = prev_dlogl + best_model[1]/2
-        else:
-            assert False    
+                red_rowandcol_H = np.delete(np.delete(red_rowandcol_H,best_model[2] , axis=0), best_model[2], axis=1) 
 
         if rank == 0 and exceeded_threshold == False and verbosity > 1:
             print("next level")
@@ -425,7 +420,6 @@ def do_greedy_from_full_exact(initial_model, data, er_thresh=2.0, verbosity=2, m
     lowest_vec : numpy array
         vector corresponding to the fitted best reduced model found at its corresponding level
     """
-    new_checkpoint = None
     if comm is not None:
         rank = comm.Get_rank()
         size = comm.Get_size()
@@ -438,7 +432,6 @@ def do_greedy_from_full_exact(initial_model, data, er_thresh=2.0, verbosity=2, m
     initial_model.param_interposer.inv_transform_matrix_projector = np.eye(initial_model.num_params)
     builders = _custom_builders(prob_clip)
     deltalogl_fn =  builders.final_builders[0].build(initial_model, data.dataset, list(data.dataset.keys()))
-    H = None
     original_dlogl = None
 
     if original_dlogl is None:
@@ -459,76 +452,61 @@ def do_greedy_from_full_exact(initial_model, data, er_thresh=2.0, verbosity=2, m
         original_dlogl = deltalogl_fn.fn()
         prev_dlogl = original_dlogl
     
-    if H is None:
-        if rank == 0:
-            if verbosity > 0: 
-                print("computing Hessian", flush=True)        
-            H = pygsti.tools.logl_hessian(deltalogl_fn.model, data.dataset, verbosity = verbosity)
-
-        if comm is not None and rank == 1:
-            comm.free_all_children()
-
-        if comm is not None:
-            H = comm.bcast(H, root = 0)
-
     if len(graph_levels) == 0:
         print(f'{original_dlogl=}')
         graph_levels.append([deltalogl_fn.model.to_vector(),original_dlogl, 0])
         
-    deltalogl_model_projector = np.eye(deltalogl_fn.model.num_params)
     reduced_model = deltalogl_fn.model.copy()
     
     exceeded_threshold = False
     while not exceeded_threshold:
-
         if rank == 0 and verbosity > 0:
             print(f'>> Working on level {len(graph_levels)} <<',flush = True)
             start = time.time()
+                        
+            print(f'comparing with {prev_dlogl=}')
 
         num_total_models = len(graph_levels[-1][0])
         bucket_size = num_total_models // size
         chunk_range = range(rank*bucket_size, (rank+1)*bucket_size)
         level_chunk = []
         for i in chunk_range:
-            
-            vec = _parallel_GST(remove_param(reduced_model, i), data, builders, maxiter=maxiter, tol=tol, verbosity=0).estimates['GateSetTomography'].models['final iteration estimate'].to_vector()
-
-            deltalogl_fn.model.from_vector(np.delete(deltalogl_model_projector, i, axis=1) @ vec)
+            deltalogl_fn.model = _parallel_GST(remove_param(reduced_model, i), data, builders, maxiter=maxiter, tol=tol, verbosity=0).estimates['GateSetTomography'].models['final iteration estimate']
 
             quantity = (deltalogl_fn.fn()- prev_dlogl)*2
             if  verbosity > 1:
-                if i  % 5 == 0:
-                    print('Model ', i, ' has ev. ratio of ', quantity, flush=True)
-            level_chunk.append([vec, quantity, i])
+                if i  % 1 == 0:
+                    print('Model ', i, ' has ev. ratio of ', quantity, f' with its own logl {deltalogl_fn.fn()=}', flush=True)
+            level_chunk.append([deltalogl_fn.model.to_vector(), quantity, i])
 
             
         left_over_start_index = size * bucket_size
 
         if (left_over_start_index + rank) < num_total_models:
 
-            i = left_over_start_index + rank   
-            vec = _parallel_GST(remove_param(reduced_model, i), data, builders, maxiter=maxiter, tol=tol, verbosity=0).estimates['GateSetTomography'].models['final iteration estimate'].to_vector()
-            deltalogl_fn.model.from_vector(np.delete(deltalogl_model_projector, i, axis=1) @ vec)
-            quantity = (deltalogl_fn.fn() - prev_dlogl )*2
-            level_chunk.append([vec, quantity, i])
+            deltalogl_fn.model = _parallel_GST(remove_param(reduced_model, i), data, builders, maxiter=maxiter, tol=tol, verbosity=0).estimates['GateSetTomography'].models['final iteration estimate']
+
+            quantity = (deltalogl_fn.fn()- prev_dlogl)*2
+            if  verbosity > 1:
+                if i  % 1 == 0:
+                    print('Model ', i, ' has ev. ratio of ', quantity, f' with its own logl {deltalogl_fn.fn()=}', flush=True)
+            
+            level_chunk.append([deltalogl_fn.model.to_vector(), quantity, i])
         
         if comm is not None:
-            level_raw = comm.gather(level_chunk, root = 0)
+            print('waiting', flush=True)
+            level_raw = comm.allgather(level_chunk)
             level = [item for sublist in level_raw for item in sublist]
-
+            comm.free_all_children()
         else:
             level = level_chunk
-        if rank == 0:
-            #Purge out all entries from processes that did not compute anything
-            level = [candidate for candidate in level if candidate[2] != -1]
-            
-            best_model = sorted(level, key=lambda x: x[1])[0]
-        else:
-            best_model = None
-        if comm is not None:
-            best_model = comm.bcast(best_model, root = 0)
 
-        deltalogl_fn.model.from_vector(np.delete(deltalogl_model_projector, best_model[2], axis=1) @ best_model[0])
+        #Purge out all entries from processes that did not compute anything
+        level = [candidate for candidate in level if candidate[2] != -1]
+            
+        best_model = sorted(level, key=lambda x: x[1])[0]
+
+        reduced_model = remove_param(reduced_model, best_model[2])
 
         if verbosity and rank == 0:
             print(f'Model {best_model[2]} has lowest evidence ratio {best_model[1]:.4f}')
@@ -543,10 +521,10 @@ def do_greedy_from_full_exact(initial_model, data, er_thresh=2.0, verbosity=2, m
 
         else:
             prev_dlogl = prev_dlogl + best_model[1]/2
+            if rank == 0:
+                print(f'{prev_dlogl=}')
             graph_levels.append(best_model)
                 
-            deltalogl_model_projector = np.delete(deltalogl_model_projector, best_model[2], axis=1)
-            reduced_model = remove_param(reduced_model, i)
 
         if rank == 0 and exceeded_threshold == False and verbosity > 1:
             print("next level")
