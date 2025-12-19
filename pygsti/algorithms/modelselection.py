@@ -6,7 +6,7 @@ import warnings
 import time
 from pygsti.tools.modelselectiontools import create_red_model, reduced_model_approx_GST_fast as _reduced_model_approx_GST_fast
 from pygsti.tools.modelselectiontools import parallel_GST as _parallel_GST, AMSCheckpoint as _AMSCheckpoint, remove_param, remove_params, create_approx_logl_fn
-from pygsti.tools.modelselectiontools import custom_builder as _custom_builders, create_projector_matrix_from_trace
+from pygsti.tools.modelselectiontools import custom_builder as _custom_builders
 import os as _os
 
 

@@ -1,15 +1,5 @@
 
 import os
-
-#TODO where should these env variables go?
-thread_limit = '1'
-os.environ['OPENBLAS_NUM_THREADS'] = thread_limit
-os.environ['GOTO_NUM_THREADS'] = thread_limit
-os.environ['OMP_NUM_THREADS'] = thread_limit
-os.environ['NUMEXPR_NUM_THREADS'] = thread_limit
-os.environ['VECLIB_MAXIMUM_THREADS'] = thread_limit
-os.environ['MKL_NUM_THREADS'] = thread_limit
-
 import numpy as _np
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 import pygsti
@@ -181,8 +171,8 @@ class AMSCheckpoint(_NicelySerializable):
              return False
 
 def remove_params(parent_model, params_to_remove):
-    for i in range(len(params_to_remove)):
-        parent_model = remove_param(parent_model, i)
+    for param in params_to_remove:
+        parent_model = remove_param(parent_model, param )
     return parent_model
 
 def remove_param(parent_model, param_to_remove, zero = True):
@@ -316,7 +306,7 @@ def parallel_GST(full_model, data, builders, tol=1e-10, maxiter=300, verbosity=0
                 memlimit=mem_limit, optimizers=optimizers)
     return result
 
-def create_red_model(parent_model, projector_matrix, vec, sim=None):
+def create_red_model(parent_model, projector_matrix, vec=None, sim=None):
     """TODO
 
     Args:
@@ -328,7 +318,8 @@ def create_red_model(parent_model, projector_matrix, vec, sim=None):
         _type_: _description_
     """
     assert projector_matrix.shape[1] == len(vec)
-    
+    if vec is None:
+        vec = _np.zeros(len(vec))
     red_model = parent_model.copy()
     red_model.param_interposer.num_params = len(vec)
     red_model.param_interposer.transform_matrix = parent_model.param_interposer.full_span_transform_matrix @ parent_model.param_interposer.projector_matrix @ projector_matrix
@@ -425,9 +416,27 @@ def compare_parameters_simple(parent_model_vec, red_model_vec, projector_matrix)
     for row in table_data:
         print("{: <25} {: <25}".format(*row), '\n')
 
-#def approx_logl(x, x0, embedder, H, expansion_point_logl):
-#    embedded_x = embedder @ x
-#    return .5*(embedded_x - x0).T  @ H  @ (embedded_x - x0) + expansion_point_logl
+def ams_results_table(trace, ev_ratio_costs):
+    reducer = create_projector_matrix_from_trace(trace).T
+    projector = reducer.T @ reducer
+    #embedded_costs = reducer.T @ ev_ratio_costs
+    parent_model_vec = trace[0][0]
+    red_model_vec = trace[-1][0]
+
+    assert len(parent_model_vec) == len(projector)
+    table_data = [['Full', 'Reduced', 'Cost']]
+    j = 0
+    for i in range(len(parent_model_vec)):
+          
+        if projector[i][i] == 0:
+            table_data.append([parent_model_vec[i], 'removed', 'N/A'])
+        else:
+            table_data.append([parent_model_vec[i], red_model_vec[j], ev_ratio_costs[j]])
+            j += 1
+    assert len(red_model_vec) == j
+    for row in table_data:
+        print("{: <25} {: <25} {: <25}".format(*row), '\n')
+
 
 def create_approx_logl_fn(H, x0, initial_logl):
     constant_term = x0.T @ H @ x0 + initial_logl
@@ -437,4 +446,4 @@ def create_approx_logl_fn(H, x0, initial_logl):
         return constant_term - x0.T @ red_row_H.T @ _np.linalg.inv(red_rowandcol_H) @ red_row_H @ x0
     
     return approx_logl
-    
+
