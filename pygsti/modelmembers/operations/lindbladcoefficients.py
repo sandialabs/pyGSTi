@@ -23,6 +23,44 @@ except ImportError:
     triu_indices = _np.triu_indices
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
+from typing import Union, Literal
+
+
+def _custom_superops_stdbasis_conversion(mx_basis, sparse, superops):
+    # Get basis transfer matrices from 'std' <-> desired mx_basis
+    mxBasisToStd = mx_basis.create_transform_matrix(_BuiltinBasis("std", mx_basis.dim, sparse))
+    # use BuiltinBasis("std") instead of just "std" in case mx_basis is a TensorProdBasis
+
+    rightTrans = mxBasisToStd
+    leftTrans = _spsl.inv(mxBasisToStd.tocsc()).tocsr() if _sps.issparse(mxBasisToStd) \
+        else _np.linalg.inv(mxBasisToStd)
+
+    if sparse:
+        #Note: complex OK here sometimes, as only linear combos of "other" gens
+        # (like (i,j) + (j,i) terms) need to be real.
+        superops = [leftTrans @ (mx @ rightTrans) for mx in superops]
+        for mx in superops: mx.sort_indices()
+    else:
+        #superops = _np.einsum("ik,akl,lj->aij", leftTrans, superops, rightTrans)
+        superops = _np.transpose(_np.tensordot(
+            _np.tensordot(leftTrans, superops, (1, 1)), rightTrans, (2, 0)), (1, 0, 2))
+    return superops
+
+
+def _unflatten_cached_other_lindblad_term_superoperators(cached_superops: Union[list, _np.ndarray], cached_superops_1norms: _np.ndarray, include_1norms: bool):
+        # flat == False and block type is 'other', so need to reshape:
+        nMxs = round(cached_superops_1norms.size ** 0.5)
+        if isinstance(cached_superops, list):
+            superops = [ [cached_superops[i * nMxs + j] for j in range(nMxs)] for i in range(nMxs) ]
+        else:
+            d2 = round(_np.sqrt(cached_superops.size / nMxs**2))
+            superops = cached_superops.copy().reshape((nMxs, nMxs, d2, d2))
+            
+        if include_1norms:
+            return superops, cached_superops_1norms.copy().reshape((nMxs, nMxs))
+        else:
+            return superops
+
 
 
 class LindbladCoefficientBlock(_NicelySerializable):
@@ -143,90 +181,56 @@ class LindbladCoefficientBlock(_NicelySerializable):
         raise ValueError("Internal error: invalid parameter mode (%s) for block type %s!"
                          % (self._param_mode, self._block_type))
 
-    def create_lindblad_term_superoperators(self, mx_basis='pp', sparse="auto", include_1norms=False, flat=False):
-        """
-        Compute the superoperator-generators corresponding to the Lindblad coefficients in this block.
-        TODO: docstring update
+    def _update_superops_cache(self, mxs, mx_basis, cache_key):
+        d2 = mx_basis.dim
+        sparse = mx_basis.sparse
+        nMxs = len(mxs)
+        if self._block_type == 'ham':
+            superops = [None] * nMxs if sparse else _np.empty((nMxs, d2, d2), 'complex')
+            for i, B in enumerate(mxs):
+                superops[i] = _lt.create_lindbladian_term_errorgen('H', B, sparse=sparse)  # in std basis
+        elif self._block_type == 'other_diagonal':
+            superops = [None] * nMxs if sparse else _np.empty((nMxs, d2, d2), 'complex')
+            for i, Lm in enumerate(mxs):
+                superops[i] = _lt.create_lindbladian_term_errorgen('O', Lm, Lm, sparse)  # in std basis
+        elif self._block_type == 'other':
+            superops = [None] * nMxs**2 if sparse else _np.empty((nMxs**2, d2, d2), 'complex')
+            for i, Lm in enumerate(mxs):
+                for j, Ln in enumerate(mxs):
+                    superops[i * nMxs + j] = _lt.create_lindbladian_term_errorgen('O', Lm, Ln, sparse)
 
-        Returns
-        -------
-        generators : numpy.ndarray or list of SciPy CSR matrices
-            If parent holds a dense basis, this is an array of shape `(n,d,d)` for 'ham'
-            and 'other_diagonal' blocks or `(n,n,d,d)` for 'other' blocks, where `d` is
-            the *dimension* of the relevant basis and `n` is the number of basis elements
-            included in this coefficient block.  In the case of 'ham' and 'other_diagonal' type
-            blocks, `generators[i]` gives the superoperator matrix corresponding to the block's
-            `i`-th coefficient (and `i`-th basis element).  In the 'other' case, `generators[i,j]`
-            corresponds to the `(i,j)`-th coefficient.  If the parent holds a sparse basis,
-            the dimensions of size `n` are lists of CSR matrices with shape `(d,d)`.
-        """
+        # Convert matrices to desired `mx_basis` basis
+        if mx_basis != "std":
+            superops = _custom_superops_stdbasis_conversion(mx_basis, sparse, superops)
+        
+        superop_1norms = _np.array([_mt.safe_onenorm(mx) for mx in superops], 'd')
+
+        self._superops_cache[cache_key] = (superops, superop_1norms)
+        return 
+
+    def create_lindblad_term_superoperators(self, mx_basis='pp', sparse: Union[Literal['auto'], bool]="auto", include_1norms=False, flat=False):
         assert(self._basis is not None), "Cannot create lindblad superoperators without a basis!"
         basis = self._basis
         sparse = basis.sparse if (sparse == "auto") else sparse
         mxs = [basis[lbl] for lbl in self._bel_labels]
-        nMxs = len(mxs)
-        if nMxs == 0:
+        if len(mxs) == 0:
             return ([], []) if include_1norms else []  # short circuit - no superops to return
 
-        d = mxs[0].shape[0]
-        d2 = d**2
-        mx_basis = _Basis.cast(mx_basis, d2, sparse=sparse)
+        mx_basis = _Basis.cast(mx_basis, mxs[0].size, sparse=sparse)
 
         cache_key = (self._block_type, tuple(self._bel_labels), mx_basis, basis)
         if cache_key not in self._superops_cache:
-
-            #Create "flat" list of superop matrices in 'std' basis
-            if self._block_type == 'ham':
-                superops = [None] * nMxs if sparse else _np.empty((nMxs, d2, d2), 'complex')
-                for i, B in enumerate(mxs):
-                    superops[i] = _lt.create_lindbladian_term_errorgen('H', B, sparse=sparse)  # in std basis
-            elif self._block_type == 'other_diagonal':
-                superops = [None] * nMxs if sparse else _np.empty((nMxs, d2, d2), 'complex')
-                for i, Lm in enumerate(mxs):
-                    superops[i] = _lt.create_lindbladian_term_errorgen('O', Lm, Lm, sparse)  # in std basis
-            elif self._block_type == 'other':
-                superops = [None] * nMxs**2 if sparse else _np.empty((nMxs**2, d2, d2), 'complex')
-                for i, Lm in enumerate(mxs):
-                    for j, Ln in enumerate(mxs):
-                        superops[i * nMxs + j] = _lt.create_lindbladian_term_errorgen('O', Lm, Ln, sparse)
-            else:
-                raise ValueError("Invalid block_type '%s'" % str(self._block_type))
-
-            # Convert matrices to desired `mx_basis` basis
-            if mx_basis != "std":
-                # Get basis transfer matrices from 'std' <-> desired mx_basis
-                mxBasisToStd = mx_basis.create_transform_matrix(_BuiltinBasis("std", mx_basis.dim, sparse))
-                # use BuiltinBasis("std") instead of just "std" in case mx_basis is a TensorProdBasis
-
-                rightTrans = mxBasisToStd
-                leftTrans = _spsl.inv(mxBasisToStd.tocsc()).tocsr() if _sps.issparse(mxBasisToStd) \
-                    else _np.linalg.inv(mxBasisToStd)
-
-                if sparse:
-                    #Note: complex OK here sometimes, as only linear combos of "other" gens
-                    # (like (i,j) + (j,i) terms) need to be real.
-                    superops = [leftTrans @ (mx @ rightTrans) for mx in superops]
-                    for mx in superops: mx.sort_indices()
-                else:
-                    #superops = _np.einsum("ik,akl,lj->aij", leftTrans, superops, rightTrans)
-                    superops = _np.transpose(_np.tensordot(
-                        _np.tensordot(leftTrans, superops, (1, 1)), rightTrans, (2, 0)), (1, 0, 2))
-
-            superop_1norms = _np.array([_mt.safe_onenorm(mx) for mx in superops], 'd')
-
-            self._superops_cache[cache_key] = (superops, superop_1norms)
-
+            self._update_superops_cache(mxs, mx_basis, cache_key)
         cached_superops, cached_superops_1norms = self._superops_cache[cache_key]
 
         if flat or self._block_type in ('ham', 'other_diagonal'):
-            return (_copy.deepcopy(cached_superops), cached_superops_1norms.copy()) \
-                if include_1norms else _copy.deepcopy(cached_superops)
+            if include_1norms:
+                return _copy.deepcopy(cached_superops), cached_superops_1norms.copy()
+            else:
+                return _copy.deepcopy(cached_superops)
 
-        else:  # flat == False and block type is 'other', so need to reshape:
-            superops = [[cached_superops[i * nMxs + j] for j in range(nMxs)] for i in range(nMxs)] \
-                if sparse else cached_superops.copy().reshape((nMxs, nMxs, d2, d2))
-            return (superops, cached_superops_1norms.copy().reshape((nMxs, nMxs))) \
-                if include_1norms else superops
+        out = _unflatten_cached_other_lindblad_term_superoperators(cached_superops, cached_superops_1norms, include_1norms)
+        return out
 
     def create_lindblad_term_objects(self, parameter_index_offset, max_polynomial_vars, evotype, state_space):
         # needed b/c operators produced by lindblad_error_generators have an extra 'd' scaling
