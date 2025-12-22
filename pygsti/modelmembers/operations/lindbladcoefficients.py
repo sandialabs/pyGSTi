@@ -1056,8 +1056,8 @@ class LindbladCoefficientBlock(_NicelySerializable):
         eeg_indices = self.elementary_errorgen_indices
         blkdata_deriv = self.deriv_wrt_params(v)
         if blkdata_deriv.ndim == 3:  # (coeff_dim_1, coeff_dim_2, param_dim) => (coeff_dim, param_dim)
-            blkdata_deriv = blkdata_deriv.reshape((blkdata_deriv.shape[0] * blkdata_deriv.shape[1],
-                                                   blkdata_deriv.shape[2]))  # blkdata_deriv rows <=> flat_data indices
+            cd1, cd2, pd = blkdata_deriv.shape  # type: ignore
+            blkdata_deriv = blkdata_deriv.reshape((cd1 * cd2, pd), order='C')  # blkdata_deriv rows <=> flat_data indices
 
         eeg_deriv = _np.zeros((len(eeg_indices), self.num_params), 'd')  # may need to be complex?
 
