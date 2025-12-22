@@ -940,116 +940,117 @@ class LindbladCoefficientBlock(_NicelySerializable):
 
     def deriv_wrt_params(self, v=None):
         """
-        Construct derivative of Lindblad coefficients (for this block) from a set of parameter values.
-
-        This function gives the Jacobian of what is returned by
-        :func:`paramvals_to_coefficients` (as a function of the parameters).
-
-        Parameters
-        ----------
-        v : numpy.ndarray, optional
-            A 1D array of real parameter values.  If not specified, then self.to_vector() is used.
-
-        Returns
-        -------
-        block_data_deriv : numpy.ndarray
-            A real array of shape `(nBEL,nP)` or `(nBEL,nBEL,nP)`, depending on the block type,
-            where `nBEL` is this block's number of basis elements (see `self.basis_element_labels`)
-            and `nP` is the number of parameters (the length of `parameter_values`).
+        Jacobian of block_data w.r.t. the real parameters v.
+        Dispatches to _deriv_wrt_params_<block_type>.
         """
         num_bels = len(self._bel_labels)
         v = self.to_vector() if (v is None) else v
         nP = len(v)
-        assert(nP == self.num_params)
+        assert(nP == self.num_params), f"Expected {self.num_params} parameters, got {nP}!"
 
+        # static blocks have zero‐dimensional parameter space
         if self._param_mode == 'static':
             if self._block_type in ('ham', 'other_diagonal'):
                 return _np.zeros((num_bels, 0), 'd')
             elif self._block_type == 'other':
                 return _np.zeros((num_bels, num_bels, 0), 'd')
-            else: raise ValueError("Internal error: invalid block type!")
-
-        if self._block_type == 'ham':
-            if self._param_mode == 'elements':
-                assert(nP == num_bels), "expected number of parameters == %d, not %d!" % (num_bels, nP)
-                block_data_deriv = _np.identity(num_bels, 'd')
             else:
-                raise ValueError("Internal error: invalid parameter mode (%s) for block type %s!"
-                                 % (self._param_mode, self._block_type))
+                raise InvalidBlockTypeError()
 
+        # dispatch by block type
+        if   self._block_type == 'ham':
+            return self._deriv_wrt_params_ham()
         elif self._block_type == 'other_diagonal':
-            block_data_deriv = _np.zeros((num_bels, nP), 'd')
-            if self._param_mode in ("depol", "reldepol"):
-                assert(nP == 1), "expected number of parameters == 1, not %d!" % nP
-                if self._param_mode == "depol":
-                    block_data_deriv[:, 0] = 2.0 * v[0]
-                else:  # param_mode == "reldepol"
-                    block_data_deriv[:, 0] = 1.0
-
-            elif self._param_mode == "cholesky":
-                assert(nP == num_bels), "expected number of parameters == %d, not %d!" % (num_bels, nP)
-                block_data_deriv[:, :] = 2.0 * _np.diag(v)
-            elif self._param_mode == "elements":  # "unconstrained"
-                assert(nP == num_bels), "expected number of parameters == %d, not %d!" % (num_bels, nP)
-                block_data_deriv[:, :] = _np.identity(num_bels, 'd')
-            else:
-                raise ValueError("Internal error: invalid parameter mode (%s) for block type %s!"
-                                 % (self._param_mode, self._block_type))
-
+            return self._deriv_wrt_params_otherdiag(v)
         elif self._block_type == 'other':
-            params = v.reshape((num_bels, num_bels))
-            cache_mx = self._cache_mx
-            dcache_mx = _np.zeros((nP, num_bels, num_bels), 'complex')
+            return self._deriv_wrt_params_other(v)
+        else:
+            raise InvalidBlockTypeError()
+
+    def _deriv_wrt_params_ham(self) -> _np.ndarray:
+        """deriv_wrt_params for the 'ham' block."""
+        num_bels = len(self._bel_labels)
+        if self._param_mode == 'elements':
+            # d(block_data[i])/d v[j] = δ_{i,j}
+            return _np.identity(num_bels, 'd')
+        else:
+            raise InvalidParamModeError(self._param_mode, self._block_type)
+
+    def _deriv_wrt_params_otherdiag(self, v: _np.ndarray) -> _np.ndarray:
+        """deriv_wrt_params for the 'other_diagonal' block."""
+        num_bels = len(self._bel_labels)
+        nP = len(v)
+        mat = _np.zeros((num_bels, nP), 'd')
+
+        if self._param_mode in ('depol', 'reldepol'):
+            assert nP == 1, f"Expected 1 parameter, got {nP}!"
+            if self._param_mode == 'depol':
+                mat[:, 0] = 2.0 * v[0]
+            else:  # 'reldepol'
+                mat[:, 0] = 1.0
+
+        elif self._param_mode == 'cholesky':
+            assert nP == num_bels, f"Expected {num_bels} parameters, got {nP}!"
+            # block_data[i] = v[i]**2  =>  d(block_data[i])/d v[j] = 2 v[i] δ_{i,j}
+            mat[:, :] = 2.0 * _np.diag(v)
+
+        elif self._param_mode == 'elements':
+            assert nP == num_bels, f"Expected {num_bels} parameters, got {nP}!"
+            # block_data[i] = v[i]  =>  derivative is identity
+            mat[:, :] = _np.identity(num_bels, 'd')
+
+        else:
+            raise InvalidParamModeError(self._param_mode, self._block_type)
+
+        return mat
+
+    def _deriv_wrt_params_other(self, v: _np.ndarray) -> _np.ndarray:
+        """deriv_wrt_params for the 'other' block (full Hermitian matrix)."""
+        num_bels = len(self._bel_labels)
+        nP = len(v)
+        params = v.reshape((num_bels, num_bels))
+
+        if self._param_mode == 'cholesky':
+            # We have block_data = C C†, where C = cache_mx depends on params.
+            # Build C and dC/dp, then d(block_data)/dp = dC·C† + C·(dC)†
+            cache_mx : _np.ndarray = self._cache_mx  # type: ignore
+            dC = _np.zeros((nP, num_bels, num_bels), 'complex')
             stride = num_bels
 
-            if self._param_mode == "cholesky":
-                #  params is an array of length (num_bels)*(num_bels) that
-                #  encodes a lower-triangular matrix "cache_mx" via:
-                #  cache_mx[i,i] = params[i,i]
-                #  cache_mx[i,j] = params[i,j] + 1j * params[j,i] (i > j)
-                for i in range(num_bels):
-                    cache_mx[i, i] = params[i, i]
-                    dcache_mx[i * stride + i, i, i] = 1.0
-                    for j in range(i):
-                        cache_mx[i, j] = params[i, j] + 1j * params[j, i]
-                        dcache_mx[i * stride + j, i, j] = 1.0
-                        dcache_mx[j * stride + i, i, j] = 1.0j
+            # fill C and dC
+            for i in range(num_bels):
+                cache_mx[i, i] = params[i, i]
+                dC[i*stride + i, i, i] = 1.0
+                for j in range(i):
+                    cache_mx[i, j] = params[i, j] + 1j * params[j, i]
+                    dC[i*stride + j, i, j] = 1.0
+                    dC[j*stride + i, i, j] = 1.0j
 
-                #The matrix of (complex) "other"-coefficients is build by
-                # assuming cache_mx is its Cholesky decomp; means otherCoeffs
-                # is pos-def.
+            # form the Jacobian: shape = (num_bels, num_bels, nP)
+            term1 = _np.tensordot(dC, cache_mx.T.conj(), (1, 0))  # (nP,i,j)
+            term2 = _np.tensordot(cache_mx, dC.conjugate().transpose((0,2,1)), (1,0))  # (i,j,nP)
+            # combine and roll axis 0 → last
+            dB = term1 + term2.transpose((2,0,1))
+            return _np.rollaxis(dB, 0, 3)
 
-                # NOTE that the Cholesky decomp with all positive real diagonal
-                # elements is *unique* for a given positive-definite block_data
-                # matrix, but we don't care about this uniqueness criteria and so
-                # the diagonal els of cache_mx can be negative and that's fine -
-                # block_data will still be posdef.
-                #block_data = _np.dot(cache_mx, cache_mx.T.conjugate())  # C * C^T
-                block_data_deriv = _np.dot(dcache_mx, cache_mx.T.conjugate()) \
-                    + _np.dot(cache_mx, dcache_mx.conjugate().transpose((0, 2, 1))).transpose((1, 0, 2))
-                # deriv = dC * C^T + C * dC^T
+        elif self._param_mode == 'elements':
+            # direct Hermitian: block_data[i,j] = v[i,j]_real + i v[j,i]_real
+            # so we only get linear contributions
+            mat = _np.zeros((num_bels, num_bels, nP), 'complex')
+            stride = num_bels
+            for i in range(num_bels):
+                # diag
+                mat[i, i, i*stride + i] = 1.0
+                # off‐diag
+                for j in range(i):
+                    mat[i, j, i*stride + j] = 1.0
+                    mat[i, j, j*stride + i] = 1.0j
+                    mat[j, i, i*stride + j] = 1.0
+                    mat[j, i, j*stride + i] = -1.0j
+            return mat
 
-                block_data_deriv = _np.rollaxis(block_data_deriv, 0, 3)  # => shape = (num_bels, num_bels, nP)
-
-            elif self._param_mode == "elements":  # params mx stores block_data (hermitian) directly
-                # parameter_values holds block_data real and imaginary parts directly
-                block_data_deriv = _np.zeros((num_bels, num_bels, nP), 'complex')
-
-                for i in range(num_bels):
-                    block_data_deriv[i, i, i * stride + i] = 1.0
-                    for j in range(i):
-                        block_data_deriv[i, j, i * stride + j] = 1.0
-                        block_data_deriv[i, j, j * stride + i] = 1.0j
-                        block_data_deriv[j, i, i * stride + j] = 1.0
-                        block_data_deriv[j, i, j * stride + i] = -1.0j
-
-            else:
-                raise ValueError("Internal error: invalid parameter mode (%s) for block type %s!"
-                                 % (self._param_mode, self._block_type))
         else:
-            raise ValueError("Internal error: invalid block type!")
-
-        return block_data_deriv
+            raise InvalidParamModeError(self._param_mode, self._block_type)
 
     def elementary_errorgen_deriv_wrt_params(self, v=None):
         eeg_indices = self.elementary_errorgen_indices
