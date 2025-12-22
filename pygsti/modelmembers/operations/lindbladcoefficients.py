@@ -1190,99 +1190,117 @@ class LindbladCoefficientBlock(_NicelySerializable):
 
     def superop_hessian_wrt_params(self, superops, v=None, superops_are_flat=False):
         """
-        TODO: docstring
+        Second derivative (Hessian) of the Lindblad-term superoperators w.r.t. the real parameters.
 
         Returns
         -------
-        numpy.ndarray
-            Indexed by (superop_row, superop_col, param1, param2).
+        ndarray
+            Tensor of shape (d, d, …) with either 2 or 4 derivative dimensions:
+            - For 'ham' and 'other_diagonal' blocks: shape (d, d, nP, nP)
+            - For 'other' blocks: shape (d, d, nP, nP, nP, nP)
         """
+        # static blocks always have zero Hessian
         if self._param_mode == 'static':
             if superops_are_flat or self._block_type != 'other':
                 return _np.zeros((superops.shape[1], superops.shape[2], 0, 0), 'd')
             else:
                 return _np.zeros((superops.shape[2], superops.shape[3], 0, 0), 'd')
 
+        # pull in v for other_diagonal (even though not needed numerically here, for consistency/checks)
+        if self._block_type == 'other_diagonal' and v is None:
+            v = self.to_vector()
+            assert len(v) == self.num_params
+
+        # dispatch to block‐type helper
+        if   self._block_type == 'ham':
+            d2 = self._superop_hessian_wrt_params_ham(superops)
+        elif self._block_type == 'other_diagonal':
+            d2 = self._superop_hessian_wrt_params_otherdiag(superops, v)
+        elif self._block_type == 'other':
+            d2 = self._superop_hessian_wrt_params_other(superops, superops_are_flat)
+        else:
+            raise InvalidBlockTypeError()
+
+        # sanity checks & real‐cast
+        tr = d2.ndim
+        assert (tr - 2) in (2, 4), \
+            "Currently, d2Odp2 can only have 2 or 4 derivative dimensions"
+        assert _np.linalg.norm(_np.imag(d2)) < IMAG_TOL
+        return _np.real(d2)
+
+    def _superop_hessian_wrt_params_ham(self, superops):
+        """Hessian for the 'ham' block: always zero (linear in parameters)."""
+        if self._param_mode != 'elements':
+            raise InvalidParamModeError(self._param_mode, self._block_type)
+        # shape = (d, d, nP, nP)
+        d = superops.shape[1]
+        nP = self.num_params
+        return _np.zeros((d, d, nP, nP), 'd')
+
+    def _superop_hessian_wrt_params_otherdiag(self, superops, v):
+        """Hessian for the 'other_diagonal' block."""
+        d = superops.shape[1]
+        nP = self.num_params
+
+        if self._param_mode == 'depol':
+            # d²O/dp² = 2 * sum_i superops[i]
+            base = _np.sum(superops, axis=0)   # shape (d,d)
+            return base[:, :, None, None] * 2.0
+
+        elif self._param_mode == 'cholesky':
+            # d²O/dp_i dp_j = 0 if i≠j;  = 2 superops[i] if i==j
+            # build (d,d,nP,1) then broadcast with I_{nP}
+            trans = _np.transpose(superops, (1, 2, 0))      # shape (d,d,nP)
+            I = _np.identity(nP, 'd')                       # shape (nP,nP)
+            return trans[:, :, :, None] * (2.0 * I)[None, None, :, :]
+
+        elif self._param_mode in ('elements', 'reldepol'):
+            # second derivative is zero for direct or relative‐depol modes
+            return _np.zeros((d, d, nP, nP), 'd')
+
+        else:
+            raise InvalidParamModeError(self._param_mode, self._block_type)
+
+    def _superop_hessian_wrt_params_other(self, superops, superops_are_flat):
+        """Hessian for the full 'other' block (Pauli correlation / active errors)."""
         num_bels = len(self._bel_labels)
         nP = self.num_params
 
-        if self._block_type == 'ham':
-            if self._param_mode == 'elements':
-                d2Odp2 = _np.zeros((superops.shape[1], superops.shape[2], nP, nP), 'd')
-            else:
-                raise ValueError("Internal error: invalid parameter mode (%s) for block type %s!"
-                                 % (self._param_mode, self._block_type))
+        if superops_are_flat:
+            superops = superops.reshape((num_bels, num_bels, superops.shape[1], superops.shape[2]))
 
-        elif self._block_type == 'other_diagonal':
-            if v is None: v = self.to_vector()
-            assert(len(v) == nP)
+        if self._param_mode == 'cholesky':
+            # allocate 6-tensor: (d,d,nP,nP,nP,nP)
+            d = superops.shape[2]
+            d2Odp2 = _np.zeros((d, d, nP, nP, nP, nP), 'complex')
+            # helper to iterate only over nonzero Hessian entries
+            def _iter_indices(ab_inc_eq, qr_inc_eq):
+                for base in range(nP):
+                    start_ab = base if ab_inc_eq else base+1
+                    start_qr = base if qr_inc_eq else base+1
+                    for ab in range(start_ab, nP):
+                        for qr in range(start_qr, nP):
+                            yield base, ab, qr
 
-            # Derivative of exponent wrt other param; shape == [dim,dim,nP,nP]
-            if self._param_mode == "depol":
-                #d2Odp2  = _np.einsum('alj->lj', self.otherGens)[:,:,None,None] * 2
-                d2Odp2 = _np.sum(superops, axis=0)[:, :, None, None] * 2
-            elif self._param_mode == "cholesky":
-                assert(nP == num_bels)
-                #d2Odp2  = _np.einsum('alj,aq->ljaq', self.otherGens, 2*_np.identity(nP,'d'))
-                d2Odp2 = _np.transpose(superops, (1, 2, 0))[:, :, :, None] * 2 * _np.identity(nP, 'd')
-            else:  # param_mode == "elements" or "reldepol"
-                assert(nP == num_bels)
-            d2Odp2 = _np.zeros((superops.shape[1], superops.shape[2], nP, nP), 'd')
+            # fill according to Erik's notes:
+            for base, a, q in _iter_indices(True,  True):
+                d2Odp2[:, :, a, base, q, base] = superops[a, q] + superops[q, a]
+            for base, a, r in _iter_indices(True,  False):
+                d2Odp2[:, :, a, base, base, r] = -1j*superops[a, r] + 1j*superops[r, a]
+            for base, b, q in _iter_indices(False, True):
+                d2Odp2[:, :, base, b, q, base] =  1j*superops[b, q] - 1j*superops[q, b]
+            for base, b, r in _iter_indices(False, False):
+                d2Odp2[:, :, base, b, base, r] =  superops[b, r] + superops[r, b]
 
-        elif self._block_type == 'other':
-            if self._param_mode == "cholesky":
-                if superops_are_flat:  # then un-flatten
-                    superops = superops.reshape((num_bels, num_bels, superops.shape[1], superops.shape[2]))
-                sqrt_nP = _np.sqrt(nP)
-                snP = int(sqrt_nP)
-                assert snP == sqrt_nP == num_bels
-                d2Odp2 = _np.zeros([superops.shape[2], superops.shape[3], snP, snP, snP, snP], 'complex')
-                # yikes! maybe make this SPARSE in future?
+            return d2Odp2
 
-                #Note: correspondence w/Erik's notes: a=alpha, b=beta, q=gamma, r=delta
-                # indices of d2Odp2 are [i,j,a,b,q,r]
+        elif self._param_mode == 'elements':
+            # unconstrained Hermitian: Hessian is identically zero
+            d = superops.shape[2]
+            return _np.zeros((d, d, nP, nP, nP, nP), 'd')
 
-                def iter_base_ab_qr(ab_inc_eq, qr_inc_eq):
-                    """ Generates (base,ab,qr) tuples such that `base` runs over
-                        all possible 'other' params and 'ab' and 'qr' run over
-                        parameter indices s.t. ab > base and qr > base.  If
-                        ab_inc_eq == True then the > becomes a >=, and likewise
-                        for qr_inc_eq.  Used for looping over nonzero hessian els. """
-                    for _base in range(snP):
-                        start_ab = _base if ab_inc_eq else _base + 1
-                        start_qr = _base if qr_inc_eq else _base + 1
-                        for _ab in range(start_ab, snP):
-                            for _qr in range(start_qr, snP):
-                                yield (_base, _ab, _qr)
-
-                for base, a, q in iter_base_ab_qr(True, True):  # Case1: base=b=r, ab=a, qr=q
-                    d2Odp2[:, :, a, base, q, base] = superops[a, q] + superops[q, a]
-                for base, a, r in iter_base_ab_qr(True, False):  # Case2: base=b=q, ab=a, qr=r
-                    d2Odp2[:, :, a, base, base, r] = -1j * superops[a, r] + 1j * superops[r, a]
-                for base, b, q in iter_base_ab_qr(False, True):  # Case3: base=a=r, ab=b, qr=q
-                    d2Odp2[:, :, base, b, q, base] = 1j * superops[b, q] - 1j * superops[q, b]
-                for base, b, r in iter_base_ab_qr(False, False):  # Case4: base=a=q, ab=b, qr=r
-                    d2Odp2[:, :, base, b, base, r] = superops[b, r] + superops[r, b]
-
-            elif self._param_mode == 'elements':  # unconstrained
-                if superops_are_flat:  # then un-flatten
-                    superops = superops.reshape((num_bels, num_bels, superops.shape[1], superops.shape[2]))
-                sqrt_nP = _np.sqrt(nP)
-                snP = int(sqrt_nP)
-                assert snP == sqrt_nP == num_bels
-                d2Odp2 = _np.zeros([superops.shape[2], superops.shape[3], snP, snP, snP, snP], 'd')  # all params linear
-            else:
-                raise ValueError("Internal error: invalid parameter mode (%s) for block type %s!"
-                                 % (self._param_mode, self._block_type))
         else:
-            raise ValueError("Internal error: invalid block type!")
-
-        # apply basis transform
-        tr = len(d2Odp2.shape)  # tensor rank
-        assert((tr - 2) in (2, 4)), "Currently, d2Odp2 can only have 2 or 4 derivative dimensions"
-
-        assert(_np.linalg.norm(_np.imag(d2Odp2)) < IMAG_TOL)
-        return _np.real(d2Odp2)
+            raise InvalidParamModeError(self._param_mode, self._block_type)
 
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
