@@ -124,7 +124,6 @@ class LindbladCoefficientBlock(_NicelySerializable):
         #need to be updated.
         self._coefficients_need_update = True
 
-
     @property
     def basis_element_labels(self):
         return self._bel_labels
@@ -231,118 +230,125 @@ class LindbladCoefficientBlock(_NicelySerializable):
 
     def create_lindblad_term_objects(self, parameter_index_offset, max_polynomial_vars, evotype, state_space):
         # needed b/c operators produced by lindblad_error_generators have an extra 'd' scaling
-        #d = int(round(_np.sqrt(dim)))
         mpv = max_polynomial_vars
         pio = parameter_index_offset
 
-        IDENT = None  # sentinel for the do-nothing identity op
-        Lterms = []
-
         if self._block_type == 'ham':
-            for k, bel_label in enumerate(self._bel_labels):  # k == index of local parameter that is coefficient
-                # ensure all Rank1Term operators are *unitary*, so we don't need to track their "magnitude"
-                scale, U = _mt.to_unitary(self._basis[bel_label])
-                #scale /= 2  # DEBUG REMOVE - this makes ham terms w/PP the same as earlier versions of pyGSTi
+            return self._create_lindblad_term_objects_ham(pio, mpv, evotype, state_space)
 
-                if self._param_mode == 'elements':
-                    cpi = (pio + k,)  # coefficient's parameter indices (with offset)
+        if self._block_type == 'other_diagonal':
+            return self._create_lindblad_term_objects_otherdiag(pio, mpv, evotype, state_space)
+        
+        if self._block_type == 'other':
+            return self._create_lindblad_term_objects_other(pio, mpv, evotype, state_space)
+        
+        raise ValueError("Invalid block_type '%s'" % str(self._block_type))
+
+    def _create_lindblad_term_objects_ham(self, parameter_index_offset, max_polynomial_vars, evotype, state_space):
+        assert self._block_type == 'ham'
+        mpv = max_polynomial_vars
+        pio = parameter_index_offset
+        Lterms = []
+        for k, bel_label in enumerate(self._bel_labels):  # k == index of local parameter that is coefficient
+            # ensure all Rank1Term operators are *unitary*, so we don't need to track their "magnitude"
+            scale, U = _mt.to_unitary(self._basis[bel_label])
+
+            if self._param_mode == 'elements':
+                cpi = (pio + k,)  # coefficient's parameter indices (with offset)
+            elif self._param_mode == 'static':
+                cpi = ()  # not multiplied by any parameters
+                scale *= self.block_data[k]  # but scale factor gets multiplied by (static) coefficient
+            else: raise ValueError("Internal error: invalid param mode!!")
+
+            #Note: 2nd op to create_from must be the *adjoint* of the op you'd normally write down
+            Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
+                _Polynomial({cpi: -1j * scale}, mpv), U, None, evotype, state_space))
+            Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
+                _Polynomial({cpi: +1j * scale}, mpv), None, U.conjugate().T, evotype, state_space))
+        return Lterms
+    
+    def _create_lindblad_term_objects_otherdiag(self, parameter_index_offset, max_polynomial_vars, evotype, state_space):
+        assert self._block_type == 'other_diagonal'
+        mpv = max_polynomial_vars
+        pio = parameter_index_offset
+        Lterms = []
+        for k, bel_label in enumerate(self._bel_labels):  # k == index of local parameter that is coefficient
+            # ensure all Rank1Term operators are *unitary*, so we don't need to track their "magnitude"
+            scale, U = _mt.to_unitary(self._basis[bel_label])
+            scale = scale**2  # because there are two "U"s in each overall term below
+
+            if self._param_mode in ('depol', 'reldepol'):
+                cpi = (pio + 0,)
+            elif self._param_mode in ('cholesky', 'elements'):
+                cpi = (pio + k,)  # coefficient's parameter indices (with offset)
+            elif self._param_mode == 'static':
+                cpi = ()  # not multiplied by any parameters
+                scale *= self.block_data[k]  # but scale factor gets multiplied by (static) coefficient
+            else: raise ValueError("Internal error: invalid param mode!!")
+
+            pw = 2 if self._param_mode in ("cholesky", "depol") else 1
+            Lm = Ln = U
+            Lm_dag = Lm.conjugate().T  # assumes basis is dense (TODO: make sure works
+            Ln_dag = Ln.conjugate().T  # for sparse case too - and np.dots below!)
+
+            #Note: 2nd op to create_from must be the *adjoint* of the op you'd normally write down
+            # e.g. in 2nd term, _np.dot(Ln_dag, Lm) == adjoint(_np.dot(Lm_dag,Ln))
+            Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
+                _Polynomial({cpi * pw: 1.0 * scale}, mpv), Ln, Lm, evotype, state_space))
+            Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
+                _Polynomial({cpi * pw: -0.5 * scale}, mpv), None, _np.dot(Ln_dag, Lm), evotype, state_space))
+            Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
+                _Polynomial({cpi * pw: -0.5 * scale}, mpv), _np.dot(Lm_dag, Ln), None, evotype, state_space))
+        return Lterms
+    
+    def _create_lindblad_term_objects_other(self, parameter_index_offset, max_polynomial_vars, evotype, state_space):
+        assert self._block_type == 'other'
+        num_bels = len(self._bel_labels)
+        mpv = max_polynomial_vars
+        pio = parameter_index_offset
+        Lterms = []
+        for i, bel_labeli in enumerate(self._bel_labels):
+            for j, bel_labelj in enumerate(self._bel_labels):
+
+                scalem, Um = _mt.to_unitary(self._basis[bel_labeli])  # ensure all Rank1Term operators are *unitary*
+                scalen, Un = _mt.to_unitary(self._basis[bel_labelj])  # ensure all Rank1Term operators are *unitary*
+                Lm, Ln = Um, Un
+                Lm_dag = Lm.conjugate().T; Ln_dag = Ln.conjugate().T
+                scale = scalem * scalen
+
+                polyTerms = {}
+                if self._param_mode == 'cholesky':
+                    # coeffs = _np.dot(self.Lmx,self.Lmx.T.conjugate())
+                    # coeffs_ij = sum_k Lik * Ladj_kj = sum_k Lik * conjugate(L_jk)
+                    #           = sum_k (Re(Lik) + 1j*Im(Lik)) * (Re(L_jk) - 1j*Im(Ljk))
+                    def i_re(a, b): return pio + (a * num_bels + b)
+                    def i_im(a, b): return pio + (b * num_bels + a)
+                    for k in range(0, min(i, j) + 1):
+                        if k <= i and k <= j:
+                            polyTerms[(i_re(i, k), i_re(j, k))] = 1.0
+                        if k <= i and k < j:
+                            polyTerms[(i_re(i, k), i_im(j, k))] = -1.0j
+                        if k < i and k <= j:
+                            polyTerms[(i_im(i, k), i_re(j, k))] = 1.0j
+                        if k < i and k < j:
+                            polyTerms[(i_im(i, k), i_im(j, k))] = 1.0
+                elif self._param_mode == 'elements':  # unconstrained
+                    # coeffs_ij = param[i,j] + 1j*param[j,i] (coeffs == block_data is Hermitian)
+                    ijIndx = pio + (i * num_bels + j)
+                    jiIndx = pio + (j * num_bels + i)
+                    polyTerms = {(ijIndx,): 1.0, (jiIndx,): 1.0j}
                 elif self._param_mode == 'static':
-                    cpi = ()  # not multiplied by any parameters
-                    scale *= self.block_data[k]  # but scale factor gets multiplied by (static) coefficient
+                    polyTerms = {(): self.block_data[i, j]}
                 else: raise ValueError("Internal error: invalid param mode!!")
 
                 #Note: 2nd op to create_from must be the *adjoint* of the op you'd normally write down
+                base_poly = _Polynomial(polyTerms, mpv) * scale
                 Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
-                    _Polynomial({cpi: -1j * scale}, mpv), U, IDENT, evotype, state_space))
+                    1.0 * base_poly, Ln, Lm, evotype, state_space))
                 Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
-                    _Polynomial({cpi: +1j * scale}, mpv), IDENT, U.conjugate().T, evotype, state_space))
-
-        elif self._block_type == 'other_diagonal':
-            for k, bel_label in enumerate(self._bel_labels):  # k == index of local parameter that is coefficient
-                # ensure all Rank1Term operators are *unitary*, so we don't need to track their "magnitude"
-                scale, U = _mt.to_unitary(self._basis[bel_label])
-                scale = scale**2  # because there are two "U"s in each overall term below
-
-                if self._param_mode in ('depol', 'reldepol'):
-                    cpi = (pio + 0,)
-                elif self._param_mode in ('cholesky', 'elements'):
-                    cpi = (pio + k,)  # coefficient's parameter indices (with offset)
-                elif self._param_mode == 'static':
-                    cpi = ()  # not multiplied by any parameters
-                    scale *= self.block_data[k]  # but scale factor gets multiplied by (static) coefficient
-                else: raise ValueError("Internal error: invalid param mode!!")
-
-                pw = 2 if self._param_mode in ("cholesky", "depol") else 1
-                Lm = Ln = U
-                Lm_dag = Lm.conjugate().T  # assumes basis is dense (TODO: make sure works
-                Ln_dag = Ln.conjugate().T  # for sparse case too - and np.dots below!)
-
-                #Note: 2nd op to create_from must be the *adjoint* of the op you'd normally write down
-                # e.g. in 2nd term, _np.dot(Ln_dag, Lm) == adjoint(_np.dot(Lm_dag,Ln))
+                    -0.5 * base_poly, None, _np.dot(Ln_dag, Lm), evotype, state_space))  # adjoint(dot(Lm_dag,Ln))
                 Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
-                    _Polynomial({cpi * pw: 1.0 * scale}, mpv), Ln, Lm, evotype, state_space))
-                Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
-                    _Polynomial({cpi * pw: -0.5 * scale}, mpv), IDENT, _np.dot(Ln_dag, Lm), evotype, state_space))
-                Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
-                    _Polynomial({cpi * pw: -0.5 * scale}, mpv), _np.dot(Lm_dag, Ln), IDENT, evotype, state_space))
-
-        elif self._block_type == 'other':
-
-            num_bels = len(self._bel_labels)
-            for i, bel_labeli in enumerate(self._bel_labels):
-                for j, bel_labelj in enumerate(self._bel_labels):
-
-                    scalem, Um = _mt.to_unitary(self._basis[bel_labeli])  # ensure all Rank1Term operators are *unitary*
-                    scalen, Un = _mt.to_unitary(self._basis[bel_labelj])  # ensure all Rank1Term operators are *unitary*
-                    Lm, Ln = Um, Un
-                    Lm_dag = Lm.conjugate().T; Ln_dag = Ln.conjugate().T
-                    scale = scalem * scalen
-
-                    polyTerms = {}
-                    if self._param_mode == 'cholesky':
-                        # coeffs = _np.dot(self.Lmx,self.Lmx.T.conjugate())
-                        # coeffs_ij = sum_k Lik * Ladj_kj = sum_k Lik * conjugate(L_jk)
-                        #           = sum_k (Re(Lik) + 1j*Im(Lik)) * (Re(L_jk) - 1j*Im(Ljk))
-                        def i_re(a, b): return pio + (a * num_bels + b)
-                        def i_im(a, b): return pio + (b * num_bels + a)
-                        for k in range(0, min(i, j) + 1):
-                            if k <= i and k <= j:
-                                polyTerms[(i_re(i, k), i_re(j, k))] = 1.0
-                            if k <= i and k < j:
-                                polyTerms[(i_re(i, k), i_im(j, k))] = -1.0j
-                            if k < i and k <= j:
-                                polyTerms[(i_im(i, k), i_re(j, k))] = 1.0j
-                            if k < i and k < j:
-                                polyTerms[(i_im(i, k), i_im(j, k))] = 1.0
-                    elif self._param_mode == 'elements':  # unconstrained
-                        # coeffs_ij = param[i,j] + 1j*param[j,i] (coeffs == block_data is Hermitian)
-                        ijIndx = pio + (i * num_bels + j)
-                        jiIndx = pio + (j * num_bels + i)
-                        polyTerms = {(ijIndx,): 1.0, (jiIndx,): 1.0j}
-                    elif self._param_mode == 'static':
-                        polyTerms = {(): self.block_data[i, j]}
-                    else: raise ValueError("Internal error: invalid param mode!!")
-
-                    #Note: 2nd op to create_from must be the *adjoint* of the op you'd normally write down
-                    base_poly = _Polynomial(polyTerms, mpv) * scale
-                    Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
-                        1.0 * base_poly, Ln, Lm, evotype, state_space))
-                    Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
-                        -0.5 * base_poly, IDENT, _np.dot(Ln_dag, Lm), evotype, state_space))  # adjoint(dot(Lm_dag,Ln))
-                    Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
-                        -0.5 * base_poly, _np.dot(Lm_dag, Ln), IDENT, evotype, state_space))
-        else:
-            raise ValueError("Invalid block_type '%s'" % str(self._block_type))
-
-        #DEBUG
-        #print("DB: params = ", list(enumerate(self.paramvals)))
-        #print("DB: Lterms = ")
-        #for i,lt in enumerate(Lterms):
-        #    print("Term %d:" % i)
-        #    print("  coeff: ", str(lt.coeff)) # list(lt.coeff.keys()) )
-        #    print("  pre:\n", lt.pre_ops[0] if len(lt.pre_ops) else "IDENT")
-        #    print("  post:\n",lt.post_ops[0] if len(lt.post_ops) else "IDENT")
-
+                    -0.5 * base_poly, _np.dot(Lm_dag, Ln), None, evotype, state_space))
         return Lterms
 
     @property
