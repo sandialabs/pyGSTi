@@ -24,6 +24,7 @@ except ImportError:
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 from typing import Union, Literal
+from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LEEL
 
 
 def _custom_superops_stdbasis_conversion(mx_basis, sparse, superops):
@@ -484,39 +485,46 @@ class LindbladCoefficientBlock(_NicelySerializable):
         The keys of the returned dict are (flattened) block_data indices and the
         values specify a linear combination of elementary errorgens via their labels.
         """
-        from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LEEL
-
-        block_data_indices = _collections.OrderedDict()
-        if self._block_type == 'ham':  # easy case, since these are elementary error generators
-            for i, lbl in enumerate(self._bel_labels):
-                block_data_indices[i] = [(1.0, _LEEL('H', (lbl,)))]
-
-        elif self._block_type == 'other_diagonal':  # easy case, since these are elementary error generators
-            for i, lbl in enumerate(self._bel_labels):
-                block_data_indices[i] = [(1.0, _LEEL('S', (lbl,)))]
-
+        if self._block_type == 'ham':
+            return self._block_data_indices_ham()
+        elif self._block_type == 'other_diagonal':
+            return self._block_data_indices_otherdiag()
         elif self._block_type == 'other':
-            # Difficult case, as coefficients do not correspond to elementary errorgens, so
-            # there's no single index for, e.g. ('C', lbl1, lbl2) - rather this elementary
-            # errorgen is a linear combination of two coefficients.
-            stride = len(self._bel_labels)
-            for i, lbl1 in enumerate(self._bel_labels):
-                ii = i * stride + i
-                block_data_indices[ii] = [(1.0, _LEEL('S', (lbl1,)))]
-                for j, lbl2 in enumerate(self._bel_labels[i + 1:], start=i + 1):
-                    ij = i * stride + j
-                    ji = j * stride + i
-
-                    #Contributions from NH_PQ and NH_QP coeffs to C_PQ and A_PQ coeffs:
-                    # C_PQ = NH_PQ + NH_QP
-                    # A_PQ = i(NH_QP - NH_PQ)
-                    block_data_indices[ij] = [(1.0, _LEEL('C', (lbl1, lbl2))), (-1.0j, _LEEL('A', (lbl1, lbl2)))]
-                    # NH_PQ = (C_PQ + i A_PQ)/2, but here we care that NH_PQ appears w/1.0 in C_PQ and -1j in A_QP
-                    block_data_indices[ji] = [(1.0, _LEEL('C', (lbl1, lbl2))), (+1.0j, _LEEL('A', (lbl1, lbl2)))]
-                    # NH_QP = (C_PQ - i A_PQ)/2, but here we care that NH_QP appears w/1.0 in C_PQ and +1j in A_QP
+            return self._block_data_indices_other()
         else:
-            raise ValueError("Internal error: invalid block type!")
-
+            raise InvalidBlockTypeError()
+    
+    def _block_data_indices_ham(self):
+        block_data_indices = dict()
+        for i, lbl in enumerate(self._bel_labels):
+            block_data_indices[i] = [(1.0, _LEEL('H', (lbl,)))]
+        return block_data_indices
+    
+    def _block_data_indices_otherdiag(self):
+        block_data_indices = dict()
+        for i, lbl in enumerate(self._bel_labels):
+            block_data_indices[i] = [(1.0, _LEEL('S', (lbl,)))]
+            return block_data_indices
+        
+    def _block_data_indices_other(self):
+        # Difficult case, as coefficients do not correspond to elementary errorgens, so
+        # there's no single index for, e.g. ('C', lbl1, lbl2) - rather this elementary
+        # errorgen is a linear combination of two coefficients.
+        block_data_indices = dict()
+        stride = len(self._bel_labels)
+        for i, lbl1 in enumerate(self._bel_labels):
+            ii = i * stride + i
+            block_data_indices[ii] = [(1.0, _LEEL('S', (lbl1,)))]
+            for j, lbl2 in enumerate(self._bel_labels[i + 1:], start=i + 1):
+                ij = i * stride + j
+                ji = j * stride + i
+                #Contributions from NH_PQ and NH_QP coeffs to C_PQ and A_PQ coeffs:
+                # C_PQ = NH_PQ + NH_QP
+                # A_PQ = i(NH_QP - NH_PQ)
+                block_data_indices[ij] = [(1.0, _LEEL('C', (lbl1, lbl2))), (-1.0j, _LEEL('A', (lbl1, lbl2)))]
+                # NH_PQ = (C_PQ + i A_PQ)/2, but here we care that NH_PQ appears w/1.0 in C_PQ and -1j in A_QP
+                block_data_indices[ji] = [(1.0, _LEEL('C', (lbl1, lbl2))), (+1.0j, _LEEL('A', (lbl1, lbl2)))]
+                # NH_QP = (C_PQ - i A_PQ)/2, but here we care that NH_QP appears w/1.0 in C_PQ and +1j in A_QP
         return block_data_indices
 
     @property
