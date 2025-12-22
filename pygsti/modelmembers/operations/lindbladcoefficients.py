@@ -264,7 +264,9 @@ class LindbladCoefficientBlock(_NicelySerializable):
         if len(mxs) == 0:
             return ([], []) if include_1norms else []  # short circuit - no superops to return
 
-        mx_basis = _Basis.cast(mx_basis, mxs[0].size, sparse=sparse)
+        d = mxs[0].shape[0]
+        d2 = d**2  # if mxs[0] is sparse, then d2 != mxs[0].size.
+        mx_basis = _Basis.cast(mx_basis, d2, sparse=sparse)
 
         cache_key = (self._block_type, tuple(self._bel_labels), mx_basis, basis)
         if cache_key not in self._superops_cache:
@@ -517,7 +519,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
         block_data_indices = dict()
         for i, lbl in enumerate(self._bel_labels):
             block_data_indices[i] = [(1.0, _LEEL('S', (lbl,)))]
-            return block_data_indices
+        return block_data_indices
         
     def _block_data_indices_other(self):
         # Difficult case, as coefficients do not correspond to elementary errorgens, so
@@ -938,12 +940,16 @@ class LindbladCoefficientBlock(_NicelySerializable):
             self.block_data[:, :] = cache_mx @ cache_mx.conjugate().T
 
         elif self._param_mode == 'elements':
-            # direct Hermitian storage: real diag + real/imag lower‐triangle
-            upper = triu_indices(num_bels)
-            # real(diag) and real(lower)
-            self.block_data[upper] = params[upper].real
-            # imag(upper)
-            self.block_data.T[upper] = -1j * params[upper]
+            params_upper_indices = triu_indices(num_bels) 
+            params_upper = -1j*params[params_upper_indices]
+            params_lower = (params.T)[params_upper_indices]
+
+            block_data_trans = self.block_data.T
+            self.block_data[params_upper_indices] = params_lower + params_upper
+            block_data_trans[params_upper_indices] = params_lower - params_upper
+
+            diag_indices = cached_diag_indices(num_bels)
+            self.block_data[diag_indices] = params[diag_indices]
         else:
             raise InvalidParamModeError(self._param_mode, self._block_type)
 
@@ -1197,7 +1203,8 @@ class LindbladCoefficientBlock(_NicelySerializable):
         ndarray
             Tensor of shape (d, d, …) with either 2 or 4 derivative dimensions:
             - For 'ham' and 'other_diagonal' blocks: shape (d, d, nP, nP)
-            - For 'other' blocks: shape (d, d, nP, nP, nP, nP)
+            - For 'other' blocks: shape (d, d, snP, snP, snP, snP)
+              where snP = sqrt(self.num_params)
         """
         # static blocks always have zero Hessian
         if self._param_mode == 'static':
@@ -1270,34 +1277,46 @@ class LindbladCoefficientBlock(_NicelySerializable):
             superops = superops.reshape((num_bels, num_bels, superops.shape[1], superops.shape[2]))
 
         if self._param_mode == 'cholesky':
-            # allocate 6-tensor: (d,d,nP,nP,nP,nP)
-            d = superops.shape[2]
-            d2Odp2 = _np.zeros((d, d, nP, nP, nP, nP), 'complex')
-            # helper to iterate only over nonzero Hessian entries
-            def _iter_indices(ab_inc_eq, qr_inc_eq):
-                for base in range(nP):
-                    start_ab = base if ab_inc_eq else base+1
-                    start_qr = base if qr_inc_eq else base+1
-                    for ab in range(start_ab, nP):
-                        for qr in range(start_qr, nP):
-                            yield base, ab, qr
+            sqrt_nP = _np.sqrt(nP)
+            snP = int(sqrt_nP)
+            assert snP == sqrt_nP == num_bels
+            d2Odp2 = _np.zeros([superops.shape[2], superops.shape[3], snP, snP, snP, snP], 'complex')
+            # yikes! maybe make this SPARSE in future?
 
-            # fill according to Erik's notes:
-            for base, a, q in _iter_indices(True,  True):
+            #Note: correspondence w/Erik's notes: a=alpha, b=beta, q=gamma, r=delta
+            # indices of d2Odp2 are [i,j,a,b,q,r]
+
+            def iter_base_ab_qr(ab_inc_eq, qr_inc_eq):
+                """ Generates (base,ab,qr) tuples such that `base` runs over
+                    all possible 'other' params and 'ab' and 'qr' run over
+                    parameter indices s.t. ab > base and qr > base.  If
+                    ab_inc_eq == True then the > becomes a >=, and likewise
+                    for qr_inc_eq.  Used for looping over nonzero hessian els. """
+                for _base in range(snP):
+                    start_ab = _base if ab_inc_eq else _base + 1
+                    start_qr = _base if qr_inc_eq else _base + 1
+                    for _ab in range(start_ab, snP):
+                        for _qr in range(start_qr, snP):
+                            yield (_base, _ab, _qr)
+
+            for base, a, q in iter_base_ab_qr(True, True):  # Case1: base=b=r, ab=a, qr=q
                 d2Odp2[:, :, a, base, q, base] = superops[a, q] + superops[q, a]
-            for base, a, r in _iter_indices(True,  False):
-                d2Odp2[:, :, a, base, base, r] = -1j*superops[a, r] + 1j*superops[r, a]
-            for base, b, q in _iter_indices(False, True):
-                d2Odp2[:, :, base, b, q, base] =  1j*superops[b, q] - 1j*superops[q, b]
-            for base, b, r in _iter_indices(False, False):
-                d2Odp2[:, :, base, b, base, r] =  superops[b, r] + superops[r, b]
+            for base, a, r in iter_base_ab_qr(True, False):  # Case2: base=b=q, ab=a, qr=r
+                d2Odp2[:, :, a, base, base, r] = -1j * superops[a, r] + 1j * superops[r, a]
+            for base, b, q in iter_base_ab_qr(False, True):  # Case3: base=a=r, ab=b, qr=q
+                d2Odp2[:, :, base, b, q, base] = 1j * superops[b, q] - 1j * superops[q, b]
+            for base, b, r in iter_base_ab_qr(False, False):  # Case4: base=a=q, ab=b, qr=r
+                d2Odp2[:, :, base, b, base, r] = superops[b, r] + superops[r, b]
 
             return d2Odp2
 
         elif self._param_mode == 'elements':
             # unconstrained Hermitian: Hessian is identically zero
-            d = superops.shape[2]
-            return _np.zeros((d, d, nP, nP, nP, nP), 'd')
+            sqrt_nP = _np.sqrt(nP)
+            snP = int(sqrt_nP)
+            assert snP == sqrt_nP == num_bels
+            d2Odp2 = _np.zeros([superops.shape[2], superops.shape[3], snP, snP, snP, snP], 'd')  # all params linear
+            return d2Odp2
 
         else:
             raise InvalidParamModeError(self._param_mode, self._block_type)
