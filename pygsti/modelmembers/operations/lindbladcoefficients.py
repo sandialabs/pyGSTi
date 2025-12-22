@@ -704,32 +704,13 @@ class LindbladCoefficientBlock(_NicelySerializable):
             raise InvalidParamModeError(self._param_mode, self._block_type)
         return labels
 
-    def _block_data_to_params(self, truncate=False):
+    def _block_data_to_params(self, truncate: Union[bool, float]=False):
         """
-        Compute parameter values from coefficient values.
-
-        Constructs an array of paramter values from an arrays of
-        coefficient values for this block.
-
-        Parameters
-        ----------
-        truncate : bool or float, optional
-            Whether to truncate the coefficients given by `block_data` in
-            order to meet constraints (e.g. to preserve CPTP) when necessary.
-            If >= 0 or False, then an error is thrown when the given projections
-            cannot be parameterized as specified, using the value given as the
-            the maximum negative eigenvalue that is tolerated (`False` is equivalent
-            to 1e-12).  True tolerates *any* negative eigenvalues.
-
-        Returns
-        -------
-        param_vals : numpy.ndarray
-            A 1D array of real parameter values. Length is `len(self.basis_element_labels)`
-            in the case of `'ham'` or `'other_diagonal'` blocks, and `len(self.basis_element_labels)**2`
-            in the case of `'other'` blocks.
+        Compute parameter values implied by self.block_data.
+        (The public method now simply dispatches on block type.)
         """
         if truncate is False:
-            ttol = -1e-14  # (was -1e-12) # truncation tolerance
+            ttol = -1e-14
         elif truncate is True:
             ttol = -_np.inf
         else:
@@ -738,121 +719,129 @@ class LindbladCoefficientBlock(_NicelySerializable):
         if self._param_mode == 'static':
             return _np.empty(0, 'd')
 
-        if self._block_type == 'ham':
-            if self._param_mode == "elements":
-                params = self.block_data.real
-            else:
-                raise ValueError("Internal error: invalid parameter mode (%s) for block type %s!"
-                                 % (self._param_mode, self._block_type))
-
+        if   self._block_type == 'ham':
+            params = self._block_data_to_params_ham()
         elif self._block_type == 'other_diagonal':
-            if self._param_mode in ("depol", "reldepol"):
-                # params is a *single-element* 1D vector of the sqrt of each diagonal el
-                assert(self._param_mode == "reldepol" or all([v >= ttol for v in self.block_data])), \
-                    "Lindblad stochastic coefficients are not positive (truncate == %s)!" % str(truncate)
-                assert(all([_np.isclose(v, self.block_data[0], atol=1e-6) for v in self.block_data])), \
-                    "Diagonal lindblad coefficients are not equal (truncate == %s)!" % str(truncate)
-                if self._param_mode == "depol":
-                    avg_coeff = _np.mean(self.block_data.clip(0, 1e100))  # was 1e-16
-                    params = _np.array([_np.sqrt(_np.real(avg_coeff))], 'd')  # shape (1,)
-                else:  # "reldepol" -- no sqrt since not necessarily positive
-                    avg_coeff = _np.mean(self.block_data)
-                    params = _np.array([_np.real(avg_coeff)], 'd')  # shape (1,)
-
-            elif self._param_mode == "cholesky":  # params is a 1D vector of the sqrts of diagonal els
-                assert(all([v >= ttol for v in self.block_data])), \
-                    "Lindblad stochastic coefficients are not positive (truncate == %s)!" % str(truncate)
-                coeffs = self.block_data.clip(0, 1e100)  # was 1e-16
-                params = _np.sqrt(coeffs.real)  # shape (len(self._bel_labels),)
-            elif self._param_mode == "elements":  # "unconstrained":
-                # params is a 1D vector of the real diagonal els of coefficient mx
-                params = self.block_data.real  # shape (len(self._bel_labels),)
-            else:
-                raise ValueError("Internal error: invalid parameter mode (%s) for block type %s!"
-                                 % (self._param_mode, self._block_type))
-
+            params = self._block_data_to_params_otherdiag(ttol)
         elif self._block_type == 'other':
-            assert(_np.isclose(_np.linalg.norm(self.block_data - self.block_data.T.conjugate()), 0)
-                   ), "Lindblad 'other' coefficient mx is not Hermitian!"
-
-            num_bels = len(self._bel_labels)
-            params = _np.empty((num_bels, num_bels), 'd')
-
-            if self._param_mode == "cholesky":  # params mx stores Cholesky decomp
-                #assert(_np.allclose(block_data, block_data.T.conjugate()))
-
-                #Identify any all-zero row&col indices, i.e. when the i-th row and i-th
-                # column are all zero.  When this happens, remove them from the cholesky decomp,
-                # algorithm and perofrm this decomp manually: the corresponding Lmx row & col
-                # are just 0:
-                zero_inds = set([i for i in range(self.block_data.shape[0])
-                                 if (_np.linalg.norm(self.block_data[i, :])
-                                     + _np.linalg.norm(self.block_data[:, i])) < 1e-12 * self.block_data.shape[0]])
-                num_nonzero = self.block_data.shape[0] - len(zero_inds)
-
-                next_nonzero = 0; next_zero = num_nonzero
-                perm = _np.zeros(self.block_data.shape, 'd')  # permute all zero rows/cols to end
-                for i in range(self.block_data.shape[0]):
-                    if i in zero_inds:
-                        perm[next_zero, i] = 1.0; next_zero += 1
-                    else:
-                        perm[next_nonzero, i] = 1.0; next_nonzero += 1
-
-                perm_block_data = perm @ self.block_data @ perm.T
-                nonzero_block_data = perm_block_data[0:num_nonzero, 0:num_nonzero]
-                assert(_np.isclose(_np.linalg.norm(self.block_data), _np.linalg.norm(nonzero_block_data)))
-
-                evals, U = _np.linalg.eigh(nonzero_block_data)
-
-                assert(all([ev > ttol for ev in evals])), \
-                    ("Lindblad coefficients are not CPTP (truncate == %s)! (largest neg = %g)"
-                     % (str(truncate), min(evals)))
-
-                if ttol < 0:  # if we're truncating and assert above allows *negative* eigenvalues
-                    #push any slightly negative evals of other_projs positive so that
-                    # the Cholesky decomp will work.
-                    Ui = U.T.conj()
-                    pos_evals = evals.clip(1e-16, None)
-                    nonzero_block_data = U @ (pos_evals[:, None] * Ui)
-                    try:
-                        nonzero_Lmx = _np.linalg.cholesky(nonzero_block_data)
-                        # if Lmx not postitive definite, try again with 1e-12 (same lines as above)
-                    except _np.linalg.LinAlgError:                          # pragma: no cover
-                        pos_evals = evals.clip(1e-12, 1e100)                # pragma: no cover
-                        nonzero_block_data = U @ (pos_evals[:, None] * Ui)  # pragma: no cover
-                        nonzero_Lmx = _np.linalg.cholesky(nonzero_block_data)
-                else:  # truncate == False or == 0 case
-                    nonzero_Lmx = _np.linalg.cholesky(nonzero_block_data)
-
-                perm_Lmx = _np.zeros(self.block_data.shape, 'complex')
-                perm_Lmx[0:num_nonzero, 0:num_nonzero] = nonzero_Lmx
-                Lmx = perm.T @ perm_Lmx @ perm
-
-                for i in range(num_bels):
-                    assert(_np.abs(Lmx[i, i].imag) < IMAG_TOL)
-                    params[i, i] = Lmx[i, i].real
-                    for j in range(i):
-                        params[i, j] = Lmx[i, j].real
-                        params[j, i] = Lmx[i, j].imag
-
-            elif self._param_mode == "elements":  # params mx stores block_data (hermitian) directly
-                for i in range(num_bels):
-                    assert(_np.abs(self.block_data[i, i].imag) < IMAG_TOL)
-                    params[i, i] = self.block_data[i, i].real
-                    for j in range(i):
-                        params[i, j] = self.block_data[i, j].real
-                        params[j, i] = self.block_data[i, j].imag
-            else:
-                raise ValueError("Internal error: invalid parameter mode (%s) for block type %s!"
-                                 % (self._param_mode, self._block_type))
-            params = params.ravel()  # make into 1D parameter array
-
+            params = self._block_data_to_params_other(ttol)
         else:
-            raise ValueError("Internal error: invalid block type!")
+            raise InvalidBlockTypeError()
 
-        assert(not _np.iscomplexobj(params))   # params should always be *real*
+        assert(not _np.iscomplexobj(params))
         assert(len(params) == self.num_params)
         return params
+
+    def _block_data_to_params_ham(self) -> _np.ndarray:
+        if self._param_mode == "elements":
+            return self.block_data.real # type: ignore
+        else:
+            raise InvalidParamModeError(self._param_mode, self._block_type)
+
+    def _block_data_to_params_otherdiag(self, ttol) -> _np.ndarray:
+        # depol / reldepol share a one-parameter constraint
+        if self._param_mode in ("depol", "reldepol"):
+            if self._param_mode == "depol":
+                nonneg = [v >= ttol for v in self.block_data]
+                assert all(nonneg), "Lindblad stochastic coefficients are not positive!"
+            # check all diagonal entries are equal
+            first = self.block_data[0]
+            all_equal = [_np.isclose(v, first, atol=1e-6) for v in self.block_data]
+            assert all(all_equal), "Diagonal lindblad coefficients are not equal!"
+            # build the single parameter
+            if self._param_mode == "depol":
+                avg = _np.mean(self.block_data.clip(0, 1e100))
+                return _np.array([_np.sqrt(_np.real(avg))], 'd')
+            else:  # 'reldepol'
+                avg = _np.mean(self.block_data)
+                return _np.array([_np.real(avg)], 'd')
+
+        # cholesky: each block_data[i] = param[i]**2
+        elif self._param_mode == "cholesky":
+            nonneg = [v >= ttol for v in self.block_data]
+            assert all(nonneg), "Lindblad stochastic coefficients are not positive!"
+            clipped = self.block_data.clip(0, 1e100)
+            return _np.sqrt(clipped.real)
+
+        # elements: unconstrained real diag
+        elif self._param_mode == "elements":
+            return self.block_data.real
+
+        else:
+            raise InvalidParamModeError(self._param_mode, self._block_type)
+
+    def _block_data_to_params_other(self, ttol):
+        """Handle the 'other' block (full Hermitian matrix)."""
+        numpy_isclose_abstol_default = 1e-8
+        is_hermitian =  _mt.is_hermitian(self.block_data, numpy_isclose_abstol_default)
+        assert is_hermitian, "Lindblad 'other' coefficient matrix is not Hermitian!"
+
+        num_bels = len(self._bel_labels)
+        params_mat = _np.empty((num_bels, num_bels), 'd')
+
+        if self._param_mode == "cholesky":
+            # build the Cholesky‐style parameters out of block_data = C C†
+            col_norms   = _np.linalg.norm(self.block_data, axis=0)
+            row_norms   = _np.linalg.norm(self.block_data, axis=1)
+            ind_weights = col_norms + row_norms
+            zero_inds   = set(_np.where(ind_weights < 1e-12 * num_bels)[0])
+            num_nonzero = num_bels - len(zero_inds)
+
+            # permute zero rows/cols to end
+            perm = _np.zeros((num_bels, num_bels), 'd')
+            ni = nz = 0
+            for i in range(num_bels):
+                if i in zero_inds:
+                    perm[num_nonzero + nz, i] = 1.0; nz += 1
+                else:
+                    perm[ni, i] = 1.0; ni += 1
+
+            # extract nonzero block, compute eigen‐decomp & cholesky
+            pdata = perm @ self.block_data @ perm.T
+            small = pdata[0:num_nonzero, 0:num_nonzero]
+            evals, U = _np.linalg.eigh(small)
+            assert(all([ev > ttol for ev in evals])), "Lindblad coefficients are not CPTP!"
+            if ttol < 0:
+                # truncate small negatives up
+                Ui = U.T.conj()
+                pev = evals.clip(1e-16, None)
+                small = U @ (pev[:,None] * Ui)
+                try:
+                    Lsmall = _np.linalg.cholesky(small)
+                except _np.linalg.LinAlgError:
+                    pev = evals.clip(1e-12, 1e100)
+                    small = U @ (pev[:,None] * Ui)
+                    Lsmall = _np.linalg.cholesky(small)
+            else:
+                Lsmall = _np.linalg.cholesky(small)
+
+            # re‐embed into full L
+            Lfull = _np.zeros((num_bels, num_bels), 'complex')
+            Lfull[:num_nonzero, :num_nonzero] = Lsmall
+            Lmx = perm.T @ Lfull @ perm
+
+            # now extract the real diag & real/imag lower‐triangle
+            for i in range(num_bels):
+                assert(_np.abs(Lmx[i,i].imag) < IMAG_TOL)
+                params_mat[i,i] = Lmx[i,i].real
+                for j in range(i):
+                    params_mat[i,j] = Lmx[i,j].real
+                    params_mat[j,i] = Lmx[i,j].imag
+
+        elif self._param_mode == "elements":
+            # store directly the Hermitian matrix's real diag + real/imag lower‐triangle
+            for i in range(num_bels):
+                assert(_np.abs(self.block_data[i,i].imag) < IMAG_TOL)
+                params_mat[i,i] = self.block_data[i,i].real
+                for j in range(i):
+                    params_mat[i,j] = self.block_data[i,j].real
+                    params_mat[j,i] = self.block_data[i,j].imag
+
+        else:
+            raise InvalidParamModeError(self._param_mode, self._block_type)
+
+        # flatten to 1D vector
+        return params_mat.ravel()
 
     def _truncate_block_data(self, truncate=False):
         if truncate is False: return
