@@ -12,17 +12,29 @@ import numpy as np
 
 def needs_cvxpy(fn):
     """Shortcut decorator for skipping tests that require CVXPY"""
-    return unittest.skipIf('SKIP_CVXPY' in os.environ, "skipping cvxpy tests")(fn)
+    try:
+        import cvxpy
+        return unittest.skipIf('SKIP_CVXPY' in os.environ, "skipping cvxpy tests")(fn)
+    except ImportError:
+        return unittest.skip('cvxpy is not installed')
 
 
 def needs_deap(fn):
     """Shortcut decorator for skipping tests that require deap"""
-    return unittest.skipIf('SKIP_DEAP' in os.environ, "skipping deap tests")(fn)
+    try:
+        import deap
+        return unittest.skipIf('SKIP_DEAP' in os.environ, "skipping deap tests")(fn)
+    except ImportError:
+        return unittest.skip('deap is not installed')
 
 
 def needs_matplotlib(fn):
     """Shortcut decorator for skipping tests that require matplotlib"""
-    return unittest.skipIf('SKIP_MATPLOTLIB' in os.environ, "skipping matplotlib tests")(fn)
+    try:
+        import matplotlib
+        return unittest.skipIf('SKIP_MATPLOTLIB' in os.environ, "skipping matplotlib tests")(fn)
+    except ImportError:
+        return unittest.skip('matplotlib is not installed')
 
 
 def with_temp_path(fn):
