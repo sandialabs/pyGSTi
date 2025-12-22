@@ -639,61 +639,69 @@ class LindbladCoefficientBlock(_NicelySerializable):
         return labels
 
     @property
-    def param_labels(self):
+    def param_labels(self) -> list:
         """
         Generate human-readable labels for the parameters of this block.
-
-        Returns
-        -------
-        param_labels : list
-            A list of strings that describe each parameter.
         """
-        if self._param_mode == 'static':
-            return []  # static parameterization has zero parameters thus no labels
-
-        if self._block_type == 'ham':
-            if self._param_mode == 'elements':
-                labels = ["%s Hamiltonian error coefficient" % lbl for lbl in self._bel_labels]
-            else:
-                raise ValueError("Internal error: invalid parameter mode (%s) for block type %s!"
-                                 % (self._param_mode, self._block_type))
-
+        if   self._block_type == 'ham':
+            return self._param_labels_ham()
         elif self._block_type == 'other_diagonal':
-            if self._param_mode in ("depol", "reldepol"):
-                if self._param_mode == "depol":
-                    labels = ["sqrt(common stochastic error coefficient for depolarization)"]
-                else:  # "reldepol" -- no sqrt since not necessarily positive
-                    labels = ["common stochastic error coefficient for depolarization"]
-
-            elif self._param_mode == "cholesky":
-                labels = ["sqrt(%s stochastic coefficient)" % lbl for lbl in self._bel_labels]
-            elif self._param_mode == 'elements':
-                labels = ["%s stochastic coefficient" % lbl for lbl in self._bel_labels]
-            else:
-                raise ValueError("Internal error: invalid parameter mode (%s) for block type %s!"
-                                 % (self._param_mode, self._block_type))
-
+            return self._param_labels_otherdiag()
         elif self._block_type == 'other':
-            labels = []
-            if self._param_mode == "cholesky":  # params mx stores Cholesky decomp
-                for i, ilbl in enumerate(self._bel_labels):
-                    for j, jlbl in enumerate(self._bel_labels):
-                        if i == j: labels.append("%s diagonal element of non-H coeff Cholesky decomp" % ilbl)
-                        elif j < i: labels.append("Re[(%s,%s) element of non-H coeff Cholesky decomp]" % (ilbl, jlbl))
-                        else: labels.append("Im[(%s,%s) element of non-H coeff Cholesky decomp]" % (ilbl, jlbl))
-
-            elif self._param_mode == "elements":  # params mx stores (hermitian) coefficient matirx directly
-                for i, ilbl in enumerate(self._bel_labels):
-                    for j, jlbl in enumerate(self._bel_labels):
-                        if i == j: labels.append("%s diagonal element of non-H coeff matrix" % ilbl)
-                        elif j < i: labels.append("Re[(%s,%s) element of non-H coeff matrix]" % (ilbl, jlbl))
-                        else: labels.append("Im[(%s,%s) element of non-H coeff matrix]" % (ilbl, jlbl))
-            else:
-                raise ValueError("Internal error: invalid parameter mode (%s) for block type %s!"
-                                 % (self._param_mode, self._block_type))
+            return self._param_labels_other()
         else:
-            raise ValueError("Internal error: invalid block type!")
+            raise InvalidBlockTypeError()
 
+    def _param_labels_ham(self) -> list:
+        if   self._param_mode == 'static':
+            return []
+        elif self._param_mode == 'elements':
+            return [f"{lbl} Hamiltonian error coefficient" for lbl in self._bel_labels]
+        else:
+            raise InvalidParamModeError(self._param_mode, self._block_type)
+
+    def _param_labels_otherdiag(self) -> list:
+        if   self._param_mode == 'static':
+            return []
+        elif self._param_mode == "depol":
+            return ["sqrt(common stochastic error coefficient for depolarization)"]
+        elif self._param_mode == 'reldepol':
+            return ["common stochastic error coefficient for depolarization"]
+        elif self._param_mode == "cholesky":
+            return [f"sqrt({lbl} stochastic coefficient)" for lbl in self._bel_labels]
+        elif self._param_mode == "elements":
+            return [f"{lbl} stochastic coefficient" for lbl in self._bel_labels]
+        else:
+            raise InvalidParamModeError(self._param_mode, self._block_type)
+
+    def _param_labels_other(self) -> list:
+        labels = []
+        if   self._param_mode == 'static':
+            return labels
+        elif self._param_mode == "cholesky":
+            # Cholesky‐decomp parameters: real diag, real lower, imag lower
+            for i, ilbl in enumerate(self._bel_labels):
+                for j, jlbl in enumerate(self._bel_labels):
+                    if  i == j:
+                        label = f"{ilbl} diagonal element of non-H coeff Cholesky decomp"
+                    elif j < i:
+                        label = f"Re[({ilbl},{jlbl}) element of non-H coeff Cholesky decomp]"
+                    else:
+                        label = f"Im[({ilbl},{jlbl}) element of non-H coeff Cholesky decomp]"
+                    labels.append(label)
+        elif self._param_mode == "elements":
+            # Unconstrained Hermitian‐matrix parameters
+            for i, ilbl in enumerate(self._bel_labels):
+                for j, jlbl in enumerate(self._bel_labels):
+                    if  i == j:
+                        label = f"{ilbl} diagonal element of non-H coeff matrix"
+                    elif j < i:
+                        label = f"Re[({ilbl},{jlbl}) element of non-H coeff matrix]"
+                    else:
+                        label = f"Im[({ilbl},{jlbl}) element of non-H coeff matrix]"
+                    labels.append(label)
+        else:
+            raise InvalidParamModeError(self._param_mode, self._block_type)
         return labels
 
     def _block_data_to_params(self, truncate=False):
