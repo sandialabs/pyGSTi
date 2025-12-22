@@ -28,7 +28,15 @@ from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LEEL
 
 
 def _custom_superops_stdbasis_conversion(mx_basis, sparse, superops):
-    # Get basis transfer matrices from 'std' <-> desired mx_basis
+    """ 
+    The input superops is either:
+        (1) a list of CSR matrices, or 
+        (2) an ndarray of shape (n, d, d) for some d,
+    where superops[i] is a superoperator in the mx_basis representation.
+
+    The output superops has the same datatype as the input, although
+    the superoperators are now in the standard (matrix-unit) basis.
+    """
     mxBasisToStd = mx_basis.create_transform_matrix(_BuiltinBasis("std", mx_basis.dim, sparse))
     # use BuiltinBasis("std") instead of just "std" in case mx_basis is a TensorProdBasis
 
@@ -37,12 +45,13 @@ def _custom_superops_stdbasis_conversion(mx_basis, sparse, superops):
         else _np.linalg.inv(mxBasisToStd)
 
     if sparse:
-        #Note: complex OK here sometimes, as only linear combos of "other" gens
+        # Note: complex OK here sometimes, as only linear combos of "other" gens
         # (like (i,j) + (j,i) terms) need to be real.
         superops = [leftTrans @ (mx @ rightTrans) for mx in superops]
-        for mx in superops: mx.sort_indices()
+        for mx in superops:
+            mx.sort_indices()
     else:
-        #superops = _np.einsum("ik,akl,lj->aij", leftTrans, superops, rightTrans)
+        # superops = _np.einsum("ik,akl,lj->aij", leftTrans, superops, rightTrans)
         superops = _np.transpose(_np.tensordot(
             _np.tensordot(leftTrans, superops, (1, 1)), rightTrans, (2, 0)), (1, 0, 2))
     return superops
