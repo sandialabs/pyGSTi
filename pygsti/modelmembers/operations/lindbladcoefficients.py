@@ -62,6 +62,22 @@ def _unflatten_cached_other_lindblad_term_superoperators(cached_superops: Union[
             return superops
 
 
+class InvalidBlockTypeError(ValueError):
+
+    msg = "Internal error: invalid block type!"
+
+    def __init__(self) -> None:
+        super().__init__(msg)
+
+
+class InvalidParamMode(ValueError):
+
+    msg_template = "Internal error: invalid parameter mode (%s) for block type %s!"
+
+    def __init__(self, *args: object) -> None:
+        msg = InvalidParamMode.msg_template % (args[0], args[1])
+        super().__init__(msg)
+
 
 class LindbladCoefficientBlock(_NicelySerializable):
     """ 
@@ -167,19 +183,41 @@ class LindbladCoefficientBlock(_NicelySerializable):
         return self._bel_labels
 
     @property
-    def num_params(self):
-        if self._param_mode == 'static': return 0
+    def num_params(self) -> int:
         if self._block_type == 'ham':
-            if self._param_mode == 'elements': return len(self._bel_labels)
+            return self._num_params_ham()
         elif self._block_type == 'other_diagonal':
-            if self._param_mode in ('depol', 'reldepol'): return 1
-            elif self._param_mode in ('elements', 'cholesky'): return len(self._bel_labels)
+            return self._num_params_otherdiag()
         elif self._block_type == 'other':
-            if self._param_mode in ('elements', 'cholesky'): return len(self._bel_labels)**2
+            return self._num_params_other()
         else:
-            raise ValueError("Internal error: invalid block type!")
-        raise ValueError("Internal error: invalid parameter mode (%s) for block type %s!"
-                         % (self._param_mode, self._block_type))
+            raise InvalidBlockTypeError()
+
+    def _num_params_ham(self):
+        if self._param_mode == 'static':
+            return 0
+        elif self._param_mode ==  'elements':
+            return len(self._bel_labels)
+        else:
+            raise InvalidParamMode(self._param_mode, self._block_type)
+    
+    def _num_params_otherdiag(self):
+        if self._param_mode == 'static':
+            return 0
+        elif self._param_mode in ('depol', 'reldepol'):
+            return 1
+        elif self._param_mode in ('elements', 'cholesky'):
+            return len(self._bel_labels)
+        else:
+            raise InvalidParamMode(self._param_mode, self._block_type)
+
+    def _num_params_other(self):
+        if self._param_mode == 'static':
+            return 0
+        elif self._param_mode in ('elements', 'cholesky'):
+            return len(self._bel_labels)**2
+        else:
+            raise InvalidParamMode(self._param_mode, self._block_type)
 
     def _update_superops_cache(self, mxs, mx_basis, cache_key):
         d2 = mx_basis.dim
