@@ -71,12 +71,12 @@ class InvalidBlockTypeError(ValueError):
         super().__init__(msg)
 
 
-class InvalidParamMode(ValueError):
+class InvalidParamModeError(ValueError):
 
     msg_template = "Internal error: invalid parameter mode (%s) for block type %s!"
 
     def __init__(self, *args: object) -> None:
-        msg = InvalidParamMode.msg_template % (args[0], args[1])
+        msg = InvalidParamModeError.msg_template % (args[0], args[1])
         super().__init__(msg)
 
 
@@ -200,7 +200,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
         elif self._param_mode ==  'elements':
             return len(self._bel_labels)
         else:
-            raise InvalidParamMode(self._param_mode, self._block_type)
+            raise InvalidParamModeError(self._param_mode, self._block_type)
     
     def _num_params_otherdiag(self):
         if self._param_mode == 'static':
@@ -210,7 +210,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
         elif self._param_mode in ('elements', 'cholesky'):
             return len(self._bel_labels)
         else:
-            raise InvalidParamMode(self._param_mode, self._block_type)
+            raise InvalidParamModeError(self._param_mode, self._block_type)
 
     def _num_params_other(self):
         if self._param_mode == 'static':
@@ -218,7 +218,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
         elif self._param_mode in ('elements', 'cholesky'):
             return len(self._bel_labels)**2
         else:
-            raise InvalidParamMode(self._param_mode, self._block_type)
+            raise InvalidParamModeError(self._param_mode, self._block_type)
 
     def _update_superops_cache(self, mxs, mx_basis, cache_key):
         d2 = mx_basis.dim
