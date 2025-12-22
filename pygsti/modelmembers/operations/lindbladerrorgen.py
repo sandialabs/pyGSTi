@@ -1359,6 +1359,8 @@ class LindbladErrorgen(_LinearOperator):
         dim = self.dim
         blk_superop_derivs = []; off = 0
         for blk, (superops, _) in zip(self.coefficient_blocks, self.lindblad_term_superops_and_1norms):
+            if isinstance(superops, list):
+                raise ValueError()
             superop_deriv = blk.superop_deriv_wrt_params(superops, self.paramvals[off: off + blk.num_params], True)
             superop_deriv = superop_deriv.reshape((dim**2, -1))  # [iFlattenedOp, iParam]
             blk_superop_derivs.append(superop_deriv)

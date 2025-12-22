@@ -1076,105 +1076,117 @@ class LindbladCoefficientBlock(_NicelySerializable):
             eeg_deriv[i, :] = _np.real_if_close(deriv)
         return eeg_deriv
 
-    def superop_deriv_wrt_params(self, superops, v=None, superops_are_flat=False):
+    def superop_deriv_wrt_params(self, superops : _np.ndarray, v=None, superops_are_flat=False) -> _np.ndarray:
         """
-        TODO: docstring
+        Derivative of the Lindblad-term superoperators w.r.t. the real parameters.
 
-        superops : numpy.ndarray
-            Output of create_lindblad_term_superoperators (with `flat=True` if
-            `superops_are_flat==True`), so that this is a 3- or 4-dimensional array
-            indexed by `(iSuperop, superop_row, superop_col)` or
-            `(iSuperop1, iSuperop2, superop_row, superop_col)`.
+        Parameters
+        ----------
+        superops : ndarray
+            The output of create_lindblad_term_superoperators(..., sparse=False).
 
-        Returns
-        -------
-        numpy.ndarray
-            per-superop-element derivative, indexed by `(superop_row, superop_col, parameter_index)`
-            or `(superop_row, superop_col, parameter_index1, parameter_index2)` where there are two
-            parameter indices because parameters are indexed by an (i,j) pair rather than a single index.
+        v : array, optional
+            The parameter vector. Only needed for 'other_diagonal' blocks.
+            
+        superops_are_flat : bool, optional
+            True if `superops` is a flat list/array even for the 'other' block.
         """
+        # --- static case: always zero ---
         if self._param_mode == 'static':
             if superops_are_flat or self._block_type != 'other':
                 return _np.zeros((superops.shape[1], superops.shape[2], 0), 'd')
             else:
                 return _np.zeros((superops.shape[2], superops.shape[3], 0), 'd')
 
-        if self._block_type == 'ham':
-            if self._param_mode == 'elements':
-                dOdp = superops.transpose((1, 2, 0))  # PRETRANS, this was:
-                # _np.einsum("ik,akl,lj->ija", self.leftTrans, self.hamGens, self.rightTrans)
-            else:
-                raise ValueError("Internal error: invalid parameter mode (%s) for block type %s!"
-                                 % (self._param_mode, self._block_type))
+        # --- pull in v for other_diagonal ---
+        if self._block_type == 'other_diagonal' and v is None:
+            v = self.to_vector()
 
+        # --- dispatch by block type ---
+        if   self._block_type == 'ham':
+            dOdp = self._superop_deriv_wrt_params_ham(superops)
         elif self._block_type == 'other_diagonal':
-            if v is None: v = self.to_vector()
-            assert(len(v) == self.num_params)
-
-            # Derivative of exponent wrt other param; shape == [dim,dim,bs-1]
-            #  except "depol" & "reldepol" cases, when shape == [dim,dim,1]
-            if self._param_mode == "depol":  # all coeffs same & == param^2
-                #dOdp  = _np.einsum('alj->lj', self.otherGens)[:,:,None] * 2*otherParams[0]
-                dOdp = _np.sum(_np.transpose(superops, (1, 2, 0)), axis=2)[:, :, None] * 2 * v[0]
-            elif self._param_mode == "reldepol":  # all coeffs same & == param
-                #dOdp  = _np.einsum('alj->lj', self.otherGens)[:,:,None]
-                dOdp = _np.sum(_np.transpose(superops, (1, 2, 0)), axis=2)[:, :, None] * 2 * v[0]
-            elif self._param_mode == "cholesky":  # (coeffs = params^2)
-                #dOdp  = _np.einsum('alj,a->lja', self.otherGens, 2*otherParams)
-                dOdp = _np.transpose(superops, (1, 2, 0)) * 2 * v  # just a broadcast
-            elif self._param_mode == "elements":  # "unconstrained" (coeff == params)
-                #dOdp  = _np.einsum('alj->lja', self.otherGens)
-                dOdp = _np.transpose(superops, (1, 2, 0))
-            else:
-                raise ValueError("Internal error: invalid parameter mode (%s) for block type %s!"
-                                 % (self._param_mode, self._block_type))
-
+            dOdp = self._superop_deriv_wrt_params_otherdiag(superops, v)
         elif self._block_type == 'other':
-            num_bels = len(self._bel_labels)
-
-            if self._param_mode == "cholesky":
-                if superops_are_flat:  # then un-flatten
-                    superops = superops.reshape((num_bels, num_bels, superops.shape[1], superops.shape[2]))
-                L, Lbar = self._cache_mx, self._cache_mx.conjugate()
-                F1 = _np.tril(_np.ones((num_bels, num_bels), 'd'))
-                F2 = _np.triu(_np.ones((num_bels, num_bels), 'd'), 1) * 1j
-
-                # Derivative of exponent wrt other param; shape == [dim,dim,bel_index,bel_index]
-                # Note: replacing einsums here results in at least 3 numpy calls (probably slower?)
-                dOdp = _np.einsum('amlj,mb,ab->ljab', superops, Lbar, F1)  # only a >= b nonzero (F1)
-                dOdp += _np.einsum('malj,mb,ab->ljab', superops, L, F1)    # ditto
-                dOdp += _np.einsum('bmlj,ma,ab->ljab', superops, Lbar, F2)  # only b > a nonzero (F2)
-                dOdp += _np.einsum('mblj,ma,ab->ljab', superops, L, F2.conjugate())  # ditto
-            elif self._param_mode == "elements":  # "unconstrained"
-                if superops_are_flat:  # then un-flatten
-                    superops = superops.reshape((num_bels, num_bels, superops.shape[1], superops.shape[2]))
-                F0 = _np.identity(num_bels, 'd')
-                F1 = _np.tril(_np.ones((num_bels, num_bels), 'd'), -1)
-                F2 = _np.triu(_np.ones((num_bels, num_bels), 'd'), 1) * 1j
-
-                # Derivative of exponent wrt other param; shape == [dim,dim,bs-1,bs-1]
-                #dOdp  = _np.einsum('ablj,ab->ljab', self.otherGens, F0)  # a == b case
-                #dOdp += _np.einsum('ablj,ab->ljab', self.otherGens, F1) + \
-                #           _np.einsum('balj,ab->ljab', self.otherGens, F1) # a > b (F1)
-                #dOdp += _np.einsum('balj,ab->ljab', self.otherGens, F2) - \
-                #           _np.einsum('ablj,ab->ljab', self.otherGens, F2) # a < b (F2)
-                tmp_ablj = _np.transpose(superops, (2, 3, 0, 1))  # ablj -> ljab
-                tmp_balj = _np.transpose(superops, (2, 3, 1, 0))  # balj -> ljab
-                dOdp = tmp_ablj * F0  # a == b case
-                dOdp += tmp_ablj * F1 + tmp_balj * F1  # a > b (F1)
-                dOdp += tmp_balj * F2 - tmp_ablj * F2  # a < b (F2)
-            else:
-                raise ValueError("Internal error: invalid parameter mode (%s) for block type %s!"
-                                 % (self._param_mode, self._block_type))
+            dOdp = self._superop_deriv_wrt_params_other(superops, superops_are_flat)
         else:
-            raise ValueError("Internal error: invalid block type!")
+            raise InvalidBlockTypeError()
 
-        # apply basis transform
-        tr = len(dOdp.shape)  # tensor rank
-        assert((tr - 2) in (1, 2)), "Currently, dodp can only have 1 or 2 derivative dimensions"
-
-        assert(_np.linalg.norm(_np.imag(dOdp)) < IMAG_TOL)
+        # --- common checks & real‐cast ---
+        tr = dOdp.ndim
+        assert (tr - 2) in (1, 2), "Currently, dodp can only have 1 or 2 derivative dimensions"
+        assert _np.linalg.norm(_np.imag(dOdp)) < IMAG_TOL
         return _np.real(dOdp)
+
+    def _superop_deriv_wrt_params_ham(self, superops):
+        if self._param_mode == 'elements':
+            # d/dp_k of H‐term superop = the k’th superop itself
+            return superops.transpose((1, 2, 0))
+        else:
+            raise InvalidParamModeError(self._param_mode, self._block_type)
+
+    def _superop_deriv_wrt_params_otherdiag(self, superops, v):
+        transposed = _np.transpose(superops, (1, 2, 0))  # shape = (d, d, nBEL)
+
+        if self._param_mode == 'depol':
+            # all coeffs = p^2, so d/dp = 2 p * sum_m superops[m]
+            base = _np.sum(transposed, axis=2)  # shape (d,d)
+            return base[:, :, None] * 2.0 * v[0]
+
+        elif self._param_mode == 'reldepol':
+            # all coeffs = p, so d/dp = sum_m superops[m]
+            base = _np.sum(transposed, axis=2)
+            return base[:, :, None] * 1.0
+
+        elif self._param_mode == 'cholesky':
+            # coeffs = p_i^2, so d/dp_i = 2 p_i * superops[i]
+            return transposed * (2.0 * v)[None, None, :]
+
+        elif self._param_mode == 'elements':
+            # coeffs = p_i, so d/dp_i = superops[i]
+            return transposed
+
+        else:
+            raise InvalidParamModeError(self._param_mode, self._block_type)
+
+    def _superop_deriv_wrt_params_other(self, superops, superops_are_flat):
+        """superop_deriv_wrt_params for the full 'other' block."""
+        num_bels = len(self._bel_labels)
+
+        # unflatten if needed
+        if superops_are_flat:
+            superops = superops.reshape((num_bels, num_bels, superops.shape[1], superops.shape[2]))
+
+        if self._param_mode == 'cholesky':
+            L : _np.ndarray = self._cache_mx  # type: ignore
+            Lbar = L.conjugate()
+            F1 = _np.tril(_np.ones((num_bels, num_bels), 'd'))
+            F2 = _np.triu(_np.ones((num_bels, num_bels), 'd'), 1) * 1j
+
+            # using Einstein sums to build ∂O/∂p_{ab}
+            dOdp  = _np.einsum('amlj,mb,ab->ljab', superops, Lbar, F1)
+            dOdp += _np.einsum('malj,mb,ab->ljab', superops,   L, F1)
+            dOdp += _np.einsum('bmlj,ma,ab->ljab', superops, Lbar, F2)
+            dOdp += _np.einsum('mblj,ma,ab->ljab', superops,   L, F2.conjugate())
+            return dOdp
+
+        elif self._param_mode == 'elements':
+            # direct Hermitian‐matrix parameters
+            F0 = _np.identity(num_bels, 'd')
+            F1 = _np.tril(_np.ones((num_bels, num_bels), 'd'), -1)
+            F2 = _np.triu(_np.ones((num_bels, num_bels), 'd'),  1) * 1j
+
+            # reorder superops so indices = (l,j,a,b)
+            AB_LJ = _np.transpose(superops, (2, 3, 0, 1))
+            BA_LJ = _np.transpose(superops, (2, 3, 1, 0))
+
+            dOdp  = AB_LJ * F0[None, None, :, :]
+            dOdp += AB_LJ * F1[None, None, :, :] + BA_LJ * F1[None, None, :, :]
+            dOdp += BA_LJ * F2[None, None, :, :] - AB_LJ * F2[None, None, :, :]
+            return dOdp
+
+        else:
+            raise InvalidParamModeError(self._param_mode, self._block_type)
 
     def superop_hessian_wrt_params(self, superops, v=None, superops_are_flat=False):
         """
