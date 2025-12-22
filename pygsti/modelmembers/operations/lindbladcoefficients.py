@@ -617,16 +617,25 @@ class LindbladCoefficientBlock(_NicelySerializable):
     def coefficient_labels(self):
         """Labels for the elements of `self.block_data` (flattened if relevant)"""
         if self._block_type == 'ham':
-            labels = ["%s Hamiltonian error coefficient" % lbl for lbl in self._bel_labels]
+            return self._coefficient_labels_ham()
         elif self._block_type == 'other_diagonal':
-            labels = ["(%s,%s) other error coefficient" % (lbl, lbl) for lbl in self._bel_labels]
+            return self._coefficient_labels_otherdiag()
         elif self._block_type == 'other':
-            labels = []
-            for i, ilbl in enumerate(self._bel_labels):
-                for j, jlbl in enumerate(self._bel_labels):
-                    labels.append("(%s,%s) other error coefficient" % (ilbl, jlbl))
+            return self._coefficient_labels_other()
         else:
-            raise ValueError("Internal error: invalid block type!")
+            raise InvalidBlockTypeError()
+    
+    def _coefficient_labels_ham(self):
+        return ["%s Hamiltonian error coefficient" % lbl for lbl in self._bel_labels]
+    
+    def _coefficient_labels_otherdiag(self):
+        return ["(%s,%s) other error coefficient" % (lbl, lbl) for lbl in self._bel_labels]
+    
+    def _coefficient_labels_other(self):
+        labels = []
+        for i, ilbl in enumerate(self._bel_labels):
+            for j, jlbl in enumerate(self._bel_labels):
+                labels.append("(%s,%s) other error coefficient" % (ilbl, jlbl))
         return labels
 
     @property
