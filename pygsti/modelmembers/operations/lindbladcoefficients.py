@@ -332,7 +332,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
             pw = 2 if self._param_mode in ("cholesky", "depol") else 1
             Lm = Ln = U
             Lm_dag = Lm.conjugate().T  # assumes basis is dense (TODO: make sure works
-            Ln_dag = Ln.conjugate().T  # for sparse case too - and np.dots below!)
+            Ln_dag = Ln.conjugate().T  # for sparse case too - and _np.dots below!)
 
             #Note: 2nd op to create_from must be the *adjoint* of the op you'd normally write down
             # e.g. in 2nd term, _np.dot(Ln_dag, Lm) == adjoint(_np.dot(Lm_dag,Ln))
@@ -861,102 +861,82 @@ class LindbladCoefficientBlock(_NicelySerializable):
         """
         return self._block_data_to_params(truncate=False)
 
-    def from_vector(self, v):
+    def from_vector(self, v: _np.ndarray):
         """
         Construct Lindblad coefficients (for this block) from a set of parameter values.
-
-        This function essentially performs the inverse of
-        :meth:`coefficients_to_paramvals`.
-
-        Parameters
-        ----------
-        v : numpy.ndarray
-            A 1D array of real parameter values.
+        This is now just a dispatcher into the three block-type specific implementations.
         """
-
+        # static blocks carry no parameters
         if self._param_mode == 'static':
-            assert(len(v) == 0), "'static' paramterized blocks should have zero parameters!"
-            return  # self.block_data remains the same - no update
+            assert len(v) == 0, "'static' parameterized blocks should have zero parameters!"
+            return
 
-        if self._block_type == 'ham':
-            if self._param_mode == 'elements':
-                self.block_data[:] = v
-            else:
-                raise ValueError("Internal error: invalid parameter mode (%s) for block type %s!"
-                                 % (self._param_mode, self._block_type))
-
+        # dispatch on block type
+        if   self._block_type == 'ham':
+            self._from_vector_ham(v)
         elif self._block_type == 'other_diagonal':
-            num_bels = len(self._bel_labels)
-            expected_shape = (1,) if (self._param_mode in ("depol", "reldepol")) else (num_bels,)
-            assert(v.shape == expected_shape)
-
-            # compute intermediate `p` that inflates 1-param depol cases to be full length (num_bels)
-            p = v[0] * _np.ones(num_bels, 'd') \
-                if self._param_mode in ("depol", "reldepol") else v
-
-            if self._param_mode in ("cholesky", "depol"):  # constrained-to-positive param modes
-                self.block_data[:] = p**2
-            elif self._param_mode in ("reldepol", "elements"):
-                self.block_data[:] = p
-            else:
-                raise ValueError("Internal error: invalid parameter mode (%s) for block type %s!"
-                                 % (self._param_mode, self._block_type))
-
+            self._from_vector_otherdiag(v)
         elif self._block_type == 'other':
-            num_bels = len(self._bel_labels)
-            params = v.reshape((num_bels, num_bels))
-
-            if self._param_mode == "cholesky":
-                #  params is an array of length num_bels*num_bels that
-                #  encodes a lower-triangular matrix "cache_mx" via:
-                #  cache_mx[i,i] = params[i,i]
-                #  cache_mx[i,j] = params[i,j] + 1j*params[j,i] (i > j)
-
-                cache_mx = self._cache_mx
-
-                params_upper_indices = triu_indices(num_bels) 
-                params_upper = 1j*params[params_upper_indices]
-                params_lower = (params.T)[params_upper_indices]
-
-                cache_mx_trans = cache_mx.T
-                cache_mx_trans[params_upper_indices] = params_lower + params_upper
-                        
-                diag_indices = cached_diag_indices(num_bels)
-                cache_mx[diag_indices] = params[diag_indices]
-                
-                #The matrix of (complex) "other"-coefficients is build by assuming
-                # cache_mx is its Cholesky decomp; means otherCoeffs is pos-def.
-
-                # NOTE that the Cholesky decomp with all positive real diagonal
-                # elements is *unique* for a given positive-definite block_data
-                # matrix, but we don't care about this uniqueness criteria and so
-                # the diagonal els of cache_mx can be negative and that's fine -
-                # block_data will still be posdef.
-                self.block_data[:, :] = cache_mx@cache_mx.T.conj()
-
-
-            elif self._param_mode == "elements":  # params mx stores block_data (hermitian) directly
-                #params holds block_data real and imaginary parts directly
-                params_upper_indices = triu_indices(num_bels) 
-                params_upper = -1j*params[params_upper_indices]
-                params_lower = (params.T)[params_upper_indices]
-
-                block_data_trans = self.block_data.T
-                self.block_data[params_upper_indices] = params_lower + params_upper
-                block_data_trans[params_upper_indices] = params_lower - params_upper
-
-                diag_indices = cached_diag_indices(num_bels)
-                self.block_data[diag_indices] = params[diag_indices]
-
-            else:
-                raise ValueError("Internal error: invalid parameter mode (%s) for block type %s!"
-                                 % (self._param_mode, self._block_type))
+            self._from_vector_other(v)
         else:
-            raise ValueError("Internal error: invalid block type!")
-        
-        #set a flag to indicate that the coefficients (as returned by elementary_errorgens)
-        #need to be updated.
+            raise InvalidBlockTypeError()
+
+        # mark cache stale
         self._coefficients_need_update = True
+        return
+
+    def _from_vector_ham(self, v: _np.ndarray):
+        """Inverse of _block_data_to_params_ham: load block_data from v for 'ham'."""
+        if self._param_mode == 'elements':
+            self.block_data[:] = v
+        else:
+            raise InvalidParamModeError(self._param_mode, self._block_type)
+
+    def _from_vector_otherdiag(self, v: _np.ndarray):
+        """Inverse of _block_data_to_params_otherdiag: load block_data from v for 'other_diagonal'."""
+        num_bels = len(self._bel_labels)
+
+        if self._param_mode in ('depol', 'reldepol'):
+            v = v.item() * _np.ones(num_bels, 'd')
+        else:
+            assert v.shape == (num_bels,)
+
+        if self._param_mode in ('cholesky', 'depol'):
+            self.block_data[:] = v**2
+        elif self._param_mode in ('reldepol', 'elements'):
+            self.block_data[:] = v
+        else:
+            raise InvalidParamModeError(self._param_mode, self._block_type)
+
+    def _from_vector_other(self, v: _np.ndarray):
+        """Inverse of _block_data_to_params_other: load block_data from v for full 'other' block."""
+        num_bels = len(self._bel_labels)
+        params = v.reshape((num_bels, num_bels))
+
+        if self._param_mode == 'cholesky':
+            # rebuild the Hermitian block_data = L · L† from the Cholesky‐style params
+            cache_mx : _np.ndarray = self._cache_mx # type: ignore
+            # fill cache_mx from params:
+            #   diag entries:
+            diag_idxs = cached_diag_indices(num_bels)
+            cache_mx[diag_idxs] = params[diag_idxs]
+            # lower‐triangle real, upper‐triangle imaginary
+            upper = triu_indices(num_bels)
+            cache_mx_T = cache_mx.T
+            cache_mx_T[upper] = params.T[upper] + 1j * params[upper]
+            cache_mx[:] = cache_mx_T.T
+            # now form block_data = L L†
+            self.block_data[:, :] = cache_mx @ cache_mx.conjugate().T
+
+        elif self._param_mode == 'elements':
+            # direct Hermitian storage: real diag + real/imag lower‐triangle
+            upper = triu_indices(num_bels)
+            # real(diag) and real(lower)
+            self.block_data[upper] = params[upper].real
+            # imag(upper)
+            self.block_data.T[upper] = -1j * params[upper]
+        else:
+            raise InvalidParamModeError(self._param_mode, self._block_type)
 
     def deriv_wrt_params(self, v=None):
         """
