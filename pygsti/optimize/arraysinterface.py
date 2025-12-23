@@ -458,7 +458,7 @@ class UndistributedArraysInterface(ArraysInterface):
         -------
         float
         """
-        return _np.dot(f, f)
+        return _np.linalg.norm(f) ** 2
 
     def norm2_jtj(self, jtj):
         """
@@ -488,7 +488,7 @@ class UndistributedArraysInterface(ArraysInterface):
         -------
         float
         """
-        return _np.linalg.norm(j)
+        return _np.linalg.norm(j)**2
 
     def fill_jtf(self, j, f, jtf):
         """
