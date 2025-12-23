@@ -10,6 +10,8 @@ Defines objective-function objects
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from typing import Optional
+
 import itertools as _itertools
 import sys as _sys
 import time as _time
@@ -28,6 +30,11 @@ from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySeri
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from pygsti.models.model import OpModel as _OpModel
 from pygsti import SpaceT
+
+
+DEFAULT_MIN_PROB_CLIP = 1e-4
+DEFAULT_RADIUS        = 1e-4
+
 
 def _objfn(objfn_cls, model, dataset, circuits=None,
            regularization=None, penalties=None, op_label_aliases=None,
@@ -186,24 +193,25 @@ class ObjectiveFunctionBuilder(_NicelySerializable):
         """
         if objective == "chi2":
             if freq_weighted_chi2:
+                mpc = RawFreqWeightedChi2Function.DEFAULT_MIN_PROB_CLIP_FOR_WEIGHTING
                 builder = FreqWeightedChi2Function.builder(
                     name='fwchi2',
                     description="Freq-weighted sum of Chi^2",
-                    regularization={'min_freq_clip_for_weighting': 1e-4})
+                    regularization={'min_freq_clip_for_weighting': mpc})
+
             else:
+                mpc = RawChi2Function.DEFAULT_MIN_PROB_CLIP_FOR_WEIGHTING
                 builder = Chi2Function.builder(
                     name='chi2',
                     description="Sum of Chi^2",
-                    regularization={'min_prob_clip_for_weighting': 1e-4})
+                    regularization={'min_prob_clip_for_weighting': mpc})
 
         elif objective == "logl":
             builder = PoissonPicDeltaLogLFunction.builder(
                 name='dlogl',
                 description="2*Delta(log(L))",
-                regularization={'min_prob_clip': 1e-4,
-                                'radius': 1e-4},
-                penalties={'cptp_penalty_factor': 0,
-                           'spam_penalty_factor': 0})
+                regularization={'min_prob_clip': DEFAULT_MIN_PROB_CLIP, 'radius': DEFAULT_RADIUS},
+                penalties={'cptp_penalty_factor': 0, 'spam_penalty_factor': 0})
 
         elif objective == "tvd":
             builder = TVDFunction.builder(
@@ -1660,6 +1668,9 @@ class RawChi2Function(RawObjectiveFunction):
     verbosity : int, optional
         Level of detail to print to stdout.
     """
+
+    DEFAULT_MIN_PROB_CLIP_FOR_WEIGHTING = DEFAULT_MIN_PROB_CLIP
+
     def __init__(self, regularization=None, resource_alloc=None, name="chi2", description="Sum of Chi^2", verbosity=0):
         super().__init__(regularization, resource_alloc, name, description, verbosity)
 
@@ -1678,7 +1689,7 @@ class RawChi2Function(RawObjectiveFunction):
         """
         return objective_function_value
 
-    def set_regularization(self, min_prob_clip_for_weighting=1e-4):
+    def set_regularization(self, min_prob_clip_for_weighting: Optional[float]=None):
         """
         Set regularization values.
 
@@ -1692,7 +1703,11 @@ class RawChi2Function(RawObjectiveFunction):
         -------
         None
         """
-        self.min_prob_clip_for_weighting = min_prob_clip_for_weighting
+        if min_prob_clip_for_weighting is not None:
+            self.min_prob_clip_for_weighting = min_prob_clip_for_weighting
+        else:
+            self.min_prob_clip_for_weighting = RawChi2Function.DEFAULT_MIN_PROB_CLIP_FOR_WEIGHTING
+        return
 
     def lsvec(self, probs, counts, total_counts, freqs, intermediates=None):
         """
@@ -2286,7 +2301,6 @@ class RawChiAlphaFunction(RawObjectiveFunction):
 
 # negative lsvec possible
 class RawFreqWeightedChi2Function(RawChi2Function):
-
     """
     The function `N(p-f)^2 / f`
 
@@ -2307,6 +2321,9 @@ class RawFreqWeightedChi2Function(RawChi2Function):
     verbosity : int, optional
         Level of detail to print to stdout.
     """
+
+    DEFAULT_MIN_PROB_CLIP_FOR_WEIGHTING = RawChi2Function.DEFAULT_MIN_PROB_CLIP_FOR_WEIGHTING
+
     def __init__(self, regularization=None, resource_alloc=None, name="fwchi2",
                  description="Sum of freq-weighted Chi^2", verbosity=0):
         super().__init__(regularization, resource_alloc, name, description, verbosity)
@@ -2326,7 +2343,7 @@ class RawFreqWeightedChi2Function(RawChi2Function):
         """
         return objective_function_value  # default is to assume the value *is* chi2_k distributed
 
-    def set_regularization(self, min_freq_clip_for_weighting=1e-4):
+    def set_regularization(self, min_freq_clip_for_weighting: Optional[float]=None):
         """
         Set regularization values.
 
@@ -2340,7 +2357,11 @@ class RawFreqWeightedChi2Function(RawChi2Function):
         -------
         None
         """
-        self.min_freq_clip_for_weighting = min_freq_clip_for_weighting
+        if min_freq_clip_for_weighting is not None:
+            self.min_freq_clip_for_weighting = min_freq_clip_for_weighting
+        else:
+            self.min_freq_clip_for_weighting = RawFreqWeightedChi2Function.DEFAULT_MIN_PROB_CLIP_FOR_WEIGHTING
+        return
 
     def _weights(self, p, f, total_counts):
         #Note: this could be computed once and cached?
@@ -2744,8 +2765,10 @@ class RawPoissonPicDeltaLogLFunction(RawObjectiveFunction):
         """
         return 2 * objective_function_value  # 2 * deltaLogL is what is chi2_k distributed
 
-    def set_regularization(self, min_prob_clip=1e-4, pfratio_stitchpt=None, pfratio_derivpt=None,
-                           radius=1e-4, fmin=None):
+    def set_regularization(self,
+            min_prob_clip=DEFAULT_MIN_PROB_CLIP, pfratio_stitchpt=None, pfratio_derivpt=None,
+            radius=DEFAULT_RADIUS, fmin=None
+        ):
         """
         Set regularization values.
 
@@ -3144,7 +3167,7 @@ class RawDeltaLogLFunction(RawObjectiveFunction):
         """
         return 2 * objective_function_value  # 2 * deltaLogL is what is chi2_k distributed
 
-    def set_regularization(self, min_prob_clip=1e-4, pfratio_stitchpt=None, pfratio_derivpt=None):
+    def set_regularization(self, min_prob_clip=DEFAULT_MIN_PROB_CLIP, pfratio_stitchpt=None, pfratio_derivpt=None):
         """
         Set regularization values.
 
@@ -4374,12 +4397,15 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             self.model.from_vector(paramvec)
         terms = self.obj.view()
 
+        # Whether this rank is the "leader" of all the processors accessing the same shared self.jac and self.probs mem.
+        #  Only leader processors should modify the contents of the shared memory, so we only apply operations *once*
+        #  `unit_ralloc` is the group of all the procs targeting same destination into self.obj
         unit_ralloc = self.layout.resource_alloc('atom-processing')
         shared_mem_leader = unit_ralloc.is_host_leader
 
         with self.resource_alloc.temporarily_track_memory(self.nelements):  # 'e' (terms)
-            self.model.sim.bulk_fill_probs(self.probs, self.layout)
-            self._clip_probs()
+            self.model.sim.bulk_fill_probs(self.probs, self.layout) # syncs shared mem
+            self._clip_probs() # clips self.probs in place w/shared mem sync
     
             if oob_check:  # Only used for termgap cases
                 if not self.model.sim.bulk_test_if_paths_are_sufficient(self.layout, self.probs, verbosity=1):
@@ -4403,20 +4429,25 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         return terms
 
     def lsvec(self, paramvec=None, oob_check=False, raw_objfn_lsvec_signs=True):
+        unit_ralloc = self.layout.resource_alloc('atom-processing')
+        shared_mem_leader = unit_ralloc.is_host_leader
         lsvec = self.terms(paramvec, oob_check, "LS OBJECTIVE")
-        if _np.any(lsvec < 0):
-            bad_locs = _np.where(lsvec < 0)[0]
-            msg = f"""
-            lsvec is only defined when terms is elementwise nonnegative.
-            We encountered negative values for terms[i] for indices i
-            in {bad_locs}.
-            """
-            raise RuntimeError(msg)
-        lsvec **= 0.5
-        if raw_objfn_lsvec_signs:
-            if self.layout.resource_alloc('atom-processing').is_host_leader:
+
+        if shared_mem_leader:
+            if _np.any(lsvec < 0):            
+                bad_locs = _np.where(lsvec < 0)[0]
+                msg = f"""
+                lsvec is only defined when terms is elementwise nonnegative.
+                We encountered negative values for terms[i] for indices i
+                in {bad_locs}.
+                """
+                raise RuntimeError(msg)
+
+            lsvec **= 0.5
+            if raw_objfn_lsvec_signs:
                 raw_lsvec = self.raw_objfn.lsvec(self.probs, self.counts, self.total_counts, self.freqs)
                 lsvec[:self.nelements][raw_lsvec < 0] *= -1
+        unit_ralloc.host_comm_barrier()
         return lsvec
 
     def dterms(self, paramvec=None):
@@ -5413,7 +5444,7 @@ class TimeDependentChi2Function(TimeDependentMDCObjectiveFunction):
         if method_name == 'dlsvec': return fsim._array_types_for_method('bulk_fill_timedep_dchi2')
         return super()._array_types_for_method(method_name, fsim)
 
-    def set_regularization(self, min_prob_clip_for_weighting=1e-4, radius=1e-4):
+    def set_regularization(self, min_prob_clip_for_weighting: Optional[float]=None, radius: float = DEFAULT_RADIUS):
         """
         Set regularization values.
 
@@ -5430,6 +5461,9 @@ class TimeDependentChi2Function(TimeDependentMDCObjectiveFunction):
         -------
         None
         """
+        if min_prob_clip_for_weighting is None:
+            mpc = getattr(self.raw_objfn, 'DEFAULT_MIN_PROB_CLIP_FOR_WEIGHTING', DEFAULT_MIN_PROB_CLIP)
+            min_prob_clip_for_weighting = mpc            
         self.min_prob_clip_for_weighting = min_prob_clip_for_weighting
         self.radius = radius  # parameterizes "roundness" of f == 0 terms
 
@@ -5572,7 +5606,7 @@ class TimeDependentPoissonPicLogLFunction(TimeDependentMDCObjectiveFunction):
         if method_name == 'dlsvec': return fsim._array_types_for_method('bulk_fill_timedep_dloglpp')
         return super()._array_types_for_method(method_name, fsim)
 
-    def set_regularization(self, min_prob_clip=1e-4, radius=1e-4):
+    def set_regularization(self, min_prob_clip=DEFAULT_MIN_PROB_CLIP, radius=DEFAULT_RADIUS):
         """
         Set regularization values.
 
@@ -5828,7 +5862,7 @@ def _paramvec_norm_penalty(reg_factor, paramvec):
     return out
 
 
-def _cptp_penalty_jac_fill(cp_penalty_vec_grad_to_fill, mdl, prefactor, op_basis, wrt_slice):
+def _cptp_penalty_jac_fill(cp_penalty_vec_grad_to_fill, mdl, prefactor, op_basis, wrt_slice, error_tol=1e-4):
     """
     Helper function - jacobian of CPTP penalty (sum of tracenorms of gates)
     Returns a (real) array of shape (len(mdl.operations), n_params).
@@ -5842,7 +5876,7 @@ def _cptp_penalty_jac_fill(cp_penalty_vec_grad_to_fill, mdl, prefactor, op_basis
         #get sgn(chi-matrix) == d(|chi|_Tr)/dchi in std basis
         # so sgnchi == d(|chi_std|_Tr)/dchi_std
         chi = _tools.fast_jamiolkowski_iso_std(gate, op_basis)
-        assert(_np.linalg.norm(chi - chi.T.conjugate()) < 1e-4), \
+        assert(_np.linalg.norm(chi - chi.T.conjugate()) < error_tol), \
             "chi should be Hermitian!"
 
         # Alt#1 way to compute sgnchi (evals) - works equally well to svd below
@@ -5855,7 +5889,7 @@ def _cptp_penalty_jac_fill(cp_penalty_vec_grad_to_fill, mdl, prefactor, op_basis
         #        _spl.sqrtm(_np.matrix(_np.dot(chi.T.conjugate(),chi)))))
 
         sgnchi = _tools.matrix_sign(chi)
-        assert(_np.linalg.norm(sgnchi - sgnchi.T.conjugate()) < 1e-4), \
+        assert(_np.linalg.norm(sgnchi - sgnchi.T.conjugate()) < error_tol), \
             "sgnchi should be Hermitian!"
 
         # get d(gate)/dp in op_basis [shape == (nP,dim,dim)]
@@ -5872,7 +5906,8 @@ def _cptp_penalty_jac_fill(cp_penalty_vec_grad_to_fill, mdl, prefactor, op_basis
         m_dgate_dp_std = _np.empty((nparams, mdl.dim, mdl.dim), 'complex')
         for p in range(nparams):  # p indexes param
             m_dgate_dp_std[p] = _tools.fast_jamiolkowski_iso_std(dgate_dp[p], op_basis)  # now "M(dGdp_std)"
-            assert(_np.linalg.norm(m_dgate_dp_std[p] - m_dgate_dp_std[p].T.conjugate()) < 1e-8)  # check hermitian
+            assert(_np.linalg.norm(m_dgate_dp_std[p] - m_dgate_dp_std[p].T.conjugate()) < error_tol**2)  # check hermitian
+            # Riley note: not clear to me why we're using the square of error_tol in the above.
 
         m_dgate_dp_std = _np.conjugate(m_dgate_dp_std)  # so element-wise multiply
         # of complex number (einsum below) results in separately adding
@@ -5883,7 +5918,7 @@ def _cptp_penalty_jac_fill(cp_penalty_vec_grad_to_fill, mdl, prefactor, op_basis
         #v =  _np.einsum("ij,aij->a",sgnchi,MdGdp_std)
         v = _np.tensordot(sgnchi, m_dgate_dp_std, ((0, 1), (1, 2)))
         v *= prefactor * (0.5 / _np.sqrt(_tools.tracenorm(chi)))  # add 0.5/|chi|_Tr factor
-        assert(_np.linalg.norm(v.imag) < 1e-4)
+        assert(_np.linalg.norm(v.imag) < error_tol)
         cp_penalty_vec_grad_to_fill[i, :] = 0.0
 
         gate_gpinds_subset, within_wrtslice, within_gpinds = _slct.intersect_within(wrt_slice, gate.gpindices)
@@ -5894,7 +5929,7 @@ def _cptp_penalty_jac_fill(cp_penalty_vec_grad_to_fill, mdl, prefactor, op_basis
     return len(mdl.operations)  # the number of leading-dim indicies we filled in
 
 
-def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl, prefactor, op_basis, wrt_slice):
+def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl, prefactor, op_basis, wrt_slice, error_tol=1e-4):
     """
     Helper function - jacobian of CPTP penalty (sum of tracenorms of gates)
     Returns a (real) array of shape ( _spam_penalty_size(mdl), n_params).
@@ -5917,11 +5952,11 @@ def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl, prefactor, op_bas
         #get sgn(denMx) == d(|denMx|_Tr)/d(denMx) in std basis
         # dmDim = denMx.shape[0]
         denmx = _tools.vec_to_stdmx(prepvec, op_basis)
-        assert(_np.linalg.norm(denmx - denmx.T.conjugate()) < 1e-4), \
+        assert(_np.linalg.norm(denmx - denmx.T.conjugate()) < error_tol), \
             "denMx should be Hermitian!"
 
         sgndm = _tools.matrix_sign(denmx)
-        assert(_np.linalg.norm(sgndm - sgndm.T.conjugate()) < 1e-4), \
+        assert(_np.linalg.norm(sgndm - sgndm.T.conjugate()) < error_tol), \
             "sgndm should be Hermitian!"
 
         # get d(prepvec)/dp in op_basis [shape == (nP,dim)]
@@ -5936,7 +5971,7 @@ def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl, prefactor, op_bas
         #v =  _np.einsum("ij,aij,ab->b",sgndm,ddenMxdV,dVdp)
         v = _np.tensordot(_np.tensordot(sgndm, ddenmx_dv, ((0, 1), (1, 2))), dv_dp, (0, 0))
         v *= prefactor * (0.5 / _np.sqrt(_tools.tracenorm(denmx)))  # add 0.5/|denMx|_Tr factor
-        assert(_np.linalg.norm(v.imag) < 1e-4)
+        assert(_np.linalg.norm(v.imag) < error_tol)
         spam_penalty_vec_grad_to_fill[i, :] = 0.0
         gpinds_subset, within_wrtslice, within_gpinds = _slct.intersect_within(wrt_slice, prepvec.gpindices)
         spam_penalty_vec_grad_to_fill[i, within_wrtslice] = v.real[within_gpinds]  # slice or array index works!
@@ -5953,11 +5988,11 @@ def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl, prefactor, op_bas
             #get sgn(EMx) == d(|EMx|_Tr)/d(EMx) in std basis
             emx = _tools.vec_to_stdmx(effectvec, op_basis)
             # dmDim = EMx.shape[0]
-            assert(_np.linalg.norm(emx - emx.T.conjugate()) < 1e-4), \
+            assert(_np.linalg.norm(emx - emx.T.conjugate()) < error_tol), \
                 "EMx should be Hermitian!"
 
             sgn_e = _tools.matrix_sign(emx)
-            assert(_np.linalg.norm(sgn_e - sgn_e.T.conjugate()) < 1e-4), \
+            assert(_np.linalg.norm(sgn_e - sgn_e.T.conjugate()) < error_tol), \
                 "sgnE should be Hermitian!"
 
             # get d(prepvec)/dp in op_basis [shape == (nP,dim)]
@@ -5972,7 +6007,7 @@ def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl, prefactor, op_bas
             #v =  _np.einsum("ij,aij,ab->b",sgnE,dEMxdV,dVdp)
             v = _np.tensordot(_np.tensordot(sgn_e, demx_dv, ((0, 1), (1, 2))), dv_dp, (0, 0))
             v *= prefactor * (0.5 / _np.sqrt(_tools.tracenorm(emx)))  # add 0.5/|EMx|_Tr factor
-            assert(_np.linalg.norm(v.imag) < 1e-4)
+            assert(_np.linalg.norm(v.imag) < error_tol)
 
             spam_penalty_vec_grad_to_fill[i, :] = 0.0
             gpinds_subset, within_wrtslice, within_gpinds = _slct.intersect_within(wrt_slice, effectvec.gpindices)

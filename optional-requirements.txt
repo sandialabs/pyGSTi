@@ -5,9 +5,11 @@ psutil
 matplotlib
 ipython
 notebook
+nbformat
 msgpack
 cython
 cvxopt
 cvxpy
 seaborn
 packaging
+pytest

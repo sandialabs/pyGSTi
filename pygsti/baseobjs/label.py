@@ -201,7 +201,6 @@ class Label(object):
         return self.IS_SIMPLE
 
 
-
 class LabelTup(Label, tuple):
     """
     A label consisting of a string along with a tuple of integers or state-space-names.
@@ -1893,7 +1892,7 @@ class LabelTupWithArgs(Label, tuple):
         """
         return tuple(self)
 
-    def replacename(self, oldname, newname):
+    def replace_name(self, oldname, newname):
         """
         Returns a label with `oldname` replaced by `newname`.
 

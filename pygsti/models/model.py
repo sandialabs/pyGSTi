@@ -10,6 +10,8 @@ Defines the Model class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
+
 import bisect as _bisect
 import copy as _copy
 import itertools as _itertools
@@ -326,7 +328,7 @@ class Model(_NicelySerializable):
         """
         pass
 
-    def copy(self):
+    def copy(self) -> Model:
         """
         Copy this model.
 
@@ -665,6 +667,10 @@ class OpModel(Model):
     def _check_paramvec(self, debug=False):
         if debug: print("---- Model._check_paramvec ----")
 
+        ops_paramvec = self._model_paramvec_to_ops_paramvec(self._paramvec)
+        if debug: 
+            print(f'{ops_paramvec=}')
+            print(f'{self._paramvec=}')
         TOL = 1e-8
         for lbl, obj in self._iter_parameterized_objs():
             if debug: print(lbl, ":", obj.num_params, obj.gpindices)
@@ -672,14 +678,14 @@ class OpModel(Model):
             msg = "None" if (obj.parent is None) else id(obj.parent)
             assert(obj.parent is self), "%s's parent is not set correctly (%s)!" % (lbl, msg)
             if obj.gpindices is not None and len(w) > 0:
-                if _np.linalg.norm(self._paramvec[obj.gpindices] - w) > TOL:
+                if _np.linalg.norm(ops_paramvec[obj.gpindices] - w) > TOL:
                     if debug: print(lbl, ".to_vector() = ", w, " but Model's paramvec = ",
-                                    self._paramvec[obj.gpindices])
-                    raise ValueError("%s is out of sync with paramvec!!!" % lbl)
+                                    ops_paramvec[obj.gpindices])
+                    raise ValueError(f"{str(lbl)} is out of sync with paramvec!!!")
             if not self.dirty and obj.dirty:
-                raise ValueError("%s is dirty but Model.dirty=False!!" % lbl)
+                raise ValueError(f"{str(lbl)} is dirty but Model.dirty=False!!")
 
-    def _clean_paramvec(self):
+    def _clean_paramvec(self, debug=False):
         """ Updates _paramvec corresponding to any "dirty" elements, which may
             have been modified without out knowing, leaving _paramvec out of
             sync with the element's internal data.  It *may* be necessary
@@ -708,7 +714,6 @@ class OpModel(Model):
         if self.dirty:  # if any member object is dirty (ModelMember.dirty setter should set this value)
             TOL = 1e-8
             ops_paramvec = self._model_paramvec_to_ops_paramvec(self._paramvec)
-
             #Note: lbl args used *just* for potential debugging - could strip out once
             # we're confident this code always works.
             def clean_single_obj(obj, lbl):  # sync an object's to_vector result w/_paramvec
@@ -723,7 +728,8 @@ class OpModel(Model):
                         else:
                             raise e  # we don't know what went wrong.
                     chk_norm = _np.linalg.norm(ops_paramvec[obj.gpindices] - w)
-                    #print(lbl, " is dirty! vec = ", w, "  chk_norm = ",chk_norm)
+                    if debug:
+                        print(f"{lbl} is dirty! vec = {w}, chk_norm = {chk_norm} gpindices = {obj.gpindices}")
                     if (not _np.isfinite(chk_norm)) or chk_norm > TOL:
                         ops_paramvec[obj.gpindices] = w
                     obj.dirty = False
@@ -984,9 +990,10 @@ class OpModel(Model):
                 max_index_processed_so_far = max(max_index_processed_so_far, max_existing_index)
                 insertion_point = max_index_processed_so_far + 1
                 if num_new_params > 0:
+                    memo = set()
                     # If so, before allocating anything, make the necessary space in the parameter arrays:
                     for _, o in self._iter_parameterized_objs():
-                        o.shift_gpindices(insertion_point, num_new_params, self)
+                        o.shift_gpindices(insertion_point, num_new_params, self, memo)
                     w = _np.insert(w, insertion_point, _np.empty(num_new_params, 'd'))
                     wl = _np.insert(wl, insertion_point, _np.empty(num_new_params, dtype=object))
                     wb = _np.insert(wb, insertion_point, _default_param_bounds(num_new_params), axis=0)
@@ -1327,7 +1334,13 @@ class OpModel(Model):
             self._paramvec = self._model_paramvec_to_ops_paramvec(self._paramvec)
         self._param_interposer = interposer
         if interposer is not None:  # add new interposer
+            #the clean_paramvec call below happens at a point between when we've set the interposer 
+            #attribute, but before we've used it to set the model's parameter vector, which will results
+            #in an edge case in the parameter vector integrity logic, so disable temporarily.
+            pcheck = self._pcheck
+            OpModel._pcheck = False
             self._clean_paramvec()
+            OpModel._pcheck = pcheck
             self._paramvec = self._ops_paramvec_to_model_paramvec(self._paramvec)
 
     def _model_paramvec_to_ops_paramvec(self, v):
@@ -2298,7 +2311,7 @@ class OpModel(Model):
         copy_into._reinit_opcaches()
         super(OpModel, self)._post_copy(copy_into, memo)
 
-    def copy(self):
+    def copy(self) -> OpModel:
         """
         Copy this model.
 
@@ -2309,7 +2322,7 @@ class OpModel(Model):
         """
         self._clean_paramvec()  # ensure _paramvec is rebuilt if needed
         if OpModel._pcheck: self._check_paramvec()
-        ret = Model.copy(self)
+        ret = Model.copy(self) # <-- don't be fooled. That's an OpModel!
         if self._param_bounds is not None and self.parameter_labels is not None:
             ret._clean_paramvec()  # will *always* rebuild paramvec; do now so we can preserve param bounds
             assert _np.all(self.parameter_labels == ret.parameter_labels)  # ensure ordering is the same

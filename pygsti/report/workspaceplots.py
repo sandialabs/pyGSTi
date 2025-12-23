@@ -45,7 +45,7 @@ go_annotation = go.layout.Annotation
 
 
 def _color_boxplot(plt_data, colormap, colorbar=False, box_label_size=0,
-                   prec=0, hover_label_fn=None, hover_labels=None):
+                   prec=0, hover_label_fn=None, hover_labels=None, return_hover_labels=False):
     """
     Create a color box plot.
 
@@ -84,6 +84,10 @@ def _color_boxplot(plt_data, colormap, colorbar=False, box_label_size=0,
         Strings specifying the hover labels for each element of `plt_data`.
         E.g. `hover_labels[i,j]` is the string for the i-th row (y-value)
         and j-th column (x-value) of the plot.
+
+    return_hover_labels : bool, optional (default False)
+        If True, additionally return the parsed (nested) lists of
+        hover labels for each point.
 
     Returns
     -------
@@ -167,8 +171,11 @@ def _color_boxplot(plt_data, colormap, colorbar=False, box_label_size=0,
     )
 
     fig = go.Figure(data=data, layout=layout)
-    
-    return ReportFigure(fig, colormap, plt_data, plt_data=plt_data)
+    rfig = ReportFigure(fig, colormap, plt_data, plt_data=plt_data)
+    if return_hover_labels: 
+        return rfig, hover_labels
+    else:
+        return rfig
 
 
 def _nested_color_boxplot(plt_data_list_of_lists, colormap,
@@ -269,8 +276,8 @@ def _nested_color_boxplot(plt_data_list_of_lists, colormap,
     #add boundaries between plaquettes.
     #if either of these is length 1 then the diff will be empty
     #this should stick the boundaries halfway between the ticks.
-    x_boundaries = _np.array(xtics[:-1]) + .5*(xtics[1]-xtics[0]) if len(xtics)>1 else []
-    y_boundaries = _np.array(ytics[:-1]) + .5*(ytics[1]-ytics[0]) if len(ytics)>1 else []
+    x_boundaries = _np.array(xtics[:-1]) + 0.5*(xtics[1]-xtics[0]) if len(xtics)>1 else []
+    y_boundaries = _np.array(ytics[:-1]) + 0.5*(ytics[1]-ytics[0]) if len(ytics)>1 else []
     
     plaquette_boundary_lines = []
 
@@ -291,7 +298,7 @@ def _nested_color_boxplot(plt_data_list_of_lists, colormap,
     #get some reference points, but we need to include the endpoints here.
     if len(xtics)>1:
         x_ref = _np.zeros(len(xtics)+1)
-        x_ref[1:] = _np.array(xtics) + .5*(xtics[1]-xtics[0])
+        x_ref[1:] = _np.array(xtics) + 0.5*(xtics[1]-xtics[0])
         #The left edge of the figure isn't zero, since we've shifted that
         #in _color_boxplot, so shift the first reference point back a bit.
         x_ref[0] = -1
@@ -299,7 +306,7 @@ def _nested_color_boxplot(plt_data_list_of_lists, colormap,
         x_ref = _np.array([-1, 2*xtics[0]+1])
     if len(ytics)>1:
         y_ref = _np.zeros(len(ytics)+1)
-        y_ref[1:] = _np.array(ytics) + .5*(ytics[1]-ytics[0])
+        y_ref[1:] = _np.array(ytics) + 0.5*(ytics[1]-ytics[0])
         #The bottom edge of the figure isn't zero, since we've shifted that
         #in _color_boxplot, so shift the first reference point back a bit.
         y_ref[0] = -1
@@ -309,8 +316,8 @@ def _nested_color_boxplot(plt_data_list_of_lists, colormap,
     #Now we want to construct pairs of end points. We can do this by iterating
     #through the x_ref and y_ref lists pairwise and then adjusting their values
     #to match the size of the plaquette.
-    x_endpoints = [(x_ref[i-1]+.5 , x_ref[i]-.5) for i in range(1, len(x_ref))]
-    y_endpoints = [(y_ref[i-1]+.5 , y_ref[i]-.5) for i in range(1, len(y_ref))]
+    x_endpoints = [(x_ref[i-1]+0.5 , x_ref[i]-0.5) for i in range(1, len(x_ref))]
+    y_endpoints = [(y_ref[i-1]+0.5 , y_ref[i]-0.5) for i in range(1, len(y_ref))]
 
     #also create a flattened list of these endpoints for use in the next filtering
     #step.
@@ -319,8 +326,8 @@ def _nested_color_boxplot(plt_data_list_of_lists, colormap,
     
     #need to couple these end points with either constant x or y coordinates
     #which are halfway betweent the boxes.
-    y_pos = _np.arange(.5, data.shape[0]-1, 1)
-    x_pos = _np.arange(.5, data.shape[1]-1, 1)
+    y_pos = _np.arange(0.5, data.shape[0]-1, 1)
+    x_pos = _np.arange(0.5, data.shape[1]-1, 1)
 
     #To get just the ones between the boxes, remove the points in x_endpoints and
     #y_endpoints, which correspond to the edges of the plaquettes.
@@ -349,7 +356,7 @@ def _nested_color_boxplot(plt_data_list_of_lists, colormap,
             #but, it looks like adding in a manual xshift value hacks around this limitation, since we *can*
             #place an annotation at the very edge of the plotable area, and then semi-manually shift it over.
             
-            if hoverLabels[j][i]: #unpopulated squares should have the empty string as their hover labels, skip those.
+            if hoverLabels is not None and hoverLabels[j][i]: #unpopulated squares should have the empty string as their hover labels, skip those.
                 on_click_annotations.append(dict(x= data.shape[1], y= .5*data.shape[0],
                                             yanchor= 'middle', xanchor= 'left',
                                             text = hoverLabels[j][i], align= 'left',
@@ -373,7 +380,7 @@ def _nested_color_boxplot(plt_data_list_of_lists, colormap,
     grid_button = dict(type="buttons",
                         active=1,
                         x= 0,
-                        y= -.075,
+                        y= -0.075,
                         direction= 'right',
                         xanchor= 'right',
                         buttons=[dict(label="Grid On/Off", method="relayout", 
@@ -389,7 +396,7 @@ def _nested_color_boxplot(plt_data_list_of_lists, colormap,
     hover_button = dict(type="buttons",
                         active=0,
                         x= 1,
-                        y= -.075,
+                        y= -0.075,
                         direction= 'right',
                         xanchor= 'left',
                         buttons=[dict(label="Hover On/Off", method="restyle", args=['hoverinfo', 'text', [1]], args2= ['hoverinfo', 'none', [1]] )])
@@ -397,7 +404,7 @@ def _nested_color_boxplot(plt_data_list_of_lists, colormap,
     click_button = dict(type="buttons",
                         active=0,
                         x= 1,
-                        y= -.19,
+                        y= -0.19,
                         direction= 'right',
                         xanchor= 'left',
                         buttons=[dict(label="Click On/Off", method="relayout", args=['annotations', on_click_annotations], args2=['annotations', []] )])
@@ -558,8 +565,8 @@ def _summable_color_boxplot(sub_mxs, xlabels, ylabels, xlabel, ylabel,
         else: hover_label_fn = None
 
         boxLabelSize = 8 * scale if box_labels else 0
-        fig = _color_boxplot(subMxSums, colormap, colorbar, boxLabelSize,
-                             prec, hover_label_fn)
+        fig, hover_labels = _color_boxplot(subMxSums, colormap, colorbar, boxLabelSize,
+                             prec, hover_label_fn, return_hover_labels=True)
         #update tickvals b/c _color_boxplot doesn't do this (unlike _nested_color_boxplot)
         if fig is not None:
             fig.plotlyfig['layout']['xaxis'].update(tickvals=list(range(nXs)))
@@ -567,7 +574,7 @@ def _summable_color_boxplot(sub_mxs, xlabels, ylabels, xlabel, ylabel,
 
         xBoxes = nXs
         yBoxes = nYs
-
+        
     else:  # not summing up
 
         if hover_info is True:
@@ -643,7 +650,9 @@ def _summable_color_boxplot(sub_mxs, xlabels, ylabels, xlabel, ylabel,
                     hover_label_widths.extend([font.getlength(substring) for substring in split_label])
             #Now get the maximum width.
             max_annotation_width = max(hover_label_widths)
-                
+        else:
+            max_annotation_width = 0
+
         width = lmargin + 10 * xBoxes + rmargin + max_annotation_width
         rmargin +=max_annotation_width
         #manually add in some additional bottom margin for the new toggle buttons for controlling
@@ -677,10 +686,11 @@ def _summable_color_boxplot(sub_mxs, xlabels, ylabels, xlabel, ylabel,
         new_y_1 = -y_abs_1/plottable_height
         #Now let's update the updatemenus
         #updatemenus should be a tuple, but for some reason this looks like
-        #it works...
-        pfig['layout']['updatemenus'][0]['y'] = new_y_0
-        pfig['layout']['updatemenus'][1]['y'] = new_y_0
-        pfig['layout']['updatemenus'][2]['y'] = new_y_1
+        #it works...   
+        if pfig['layout']['updatemenus']:     
+            pfig['layout']['updatemenus'][0]['y'] = new_y_0
+            pfig['layout']['updatemenus'][1]['y'] = new_y_0
+            pfig['layout']['updatemenus'][2]['y'] = new_y_1
         
     else:  # fig is None => use a "No data to display" placeholder figure
         trace = go.Heatmap(z=_np.zeros((10, 10), 'd'),
@@ -1338,6 +1348,14 @@ def _opmatrices_color_boxplot(op_matrices, color_min, color_max, mx_basis_x=None
     row_col_indices = list(_product(range(1,num_rows+1), range(1,num_cols+1)))
     fig = make_subplots(rows=num_rows, cols=num_cols, subplot_titles=subtitles)
 
+    #Need to bump up the height of the subtitles
+    #if the annotation is one of the subtitles we need to bump up
+    #the y value a bit.
+    if subtitles is not None:
+        for annotation in fig.layout.annotations:
+            if annotation['text'] in subtitles:
+                annotation['y']+=0.06
+
     if isinstance(mx_basis_x, str):
         mx_basis_x = _baseobjs.BuiltinBasis(mx_basis_x, op_matrices[0].shape[1])
     if isinstance(mx_basis_y, str):
@@ -1373,7 +1391,11 @@ def _opmatrices_color_boxplot(op_matrices, color_min, color_max, mx_basis_x=None
                                                                 xlabel, ylabel, box_labels, thickLineInterval,
                                                                 colorbar, colormap, prec, scale,
                                                                 eb_matrix, None))
-
+    remapped_annotations = []
+    remapped_shapes = []
+    #add in the existing annotations in fig to start (should at minimum include "Real" and "Imag" headings).
+    remapped_annotations.extend(fig.layout['annotations'])
+    remapped_shapes.extend(fig.layout['shapes'])
     for i, row in enumerate(op_matrix_plots):
         for j, matrix in enumerate(row):
             #add the first trace (data[0]) to figure
@@ -1389,14 +1411,15 @@ def _opmatrices_color_boxplot(op_matrices, color_min, color_max, mx_basis_x=None
             for shape in matrix_shapes:
                 shape['xref'] = f'x{flattened_idx}'
                 shape['yref'] = f'y{flattened_idx}'
-                fig.add_shape(shape)
+                remapped_shapes.append(shape)
             #do this same remapping with the annotations
             matrix_annotations = matrix_dict_layout['annotations']
             for annotation in matrix_annotations:
                 annotation['xref'] = f'x{flattened_idx}'
                 annotation['yref'] = f'y{flattened_idx}'
-                fig.add_annotation(annotation)
-            
+                remapped_annotations.append(annotation)
+    fig.update_layout(annotations=remapped_annotations, shapes=remapped_shapes)
+
     #set the width of the composite figure to be equal to the width of the widest row.
     row_widths = [[] for _ in range(num_rows)]
     for i, row in enumerate(op_matrix_plots):
@@ -1432,13 +1455,7 @@ def _opmatrices_color_boxplot(op_matrices, color_min, color_max, mx_basis_x=None
     )
 
     fig.update_layout(layout)
-    #Need to bump up the height of the subtitles
-    #if the annotation is one of the subtitles we need to bump up
-    #the y value a bit.
-    for annotation in fig.layout.annotations:
-        if annotation['text'] in subtitles:
-            annotation['y']+=.06
-
+    
     return ReportFigure(fig)
 
 
@@ -2157,7 +2174,7 @@ class ColorBoxPlot(WorkspacePlot):
 
     def __init__(self, ws, plottype, circuits, dataset, model,
                  sum_up=False, box_labels=False, hover_info=True, invert=False,
-                 prec='compact', linlg_pcntle=.05, direct_gst_models=None,
+                 prec='compact', linlg_pcntle=0.05, direct_gst_models=None,
                  dscomparator=None, stabilityanalyzer=None, mdc_store=None,
                  submatrices=None, typ="boxes", scale=1.0, comm=None,
                  wildcard=None, colorbar=False, bgcolor="white", genericdict=None,
@@ -3778,50 +3795,50 @@ class ProjectionsBoxPlot(WorkspacePlot):
             #--------bottom triangle--------#
             #bottom vertical
             fig.plotlyfig.add_shape(type='line', xref='paper', yref='paper', 
-                                    x0=-.06, y0=-.06, x1=-.06, y1=1.03,
+                                    x0=-0.06, y0=-0.06, x1=-0.06, y1=1.03,
                                     line={'color':"#2cb802", 'width':1, 'dash':"dot"})
             #bottom horizontal
             fig.plotlyfig.add_shape(type='line', xref='paper', yref='paper', 
-                                    x0=-.06, y0=-.06, x1=.80, y1=-.06,
+                                    x0=-0.06, y0=-0.06, x1=0.80, y1=-0.06,
                                     line={'color':"#2cb802", 'width':1, 'dash':"dot"})
             #bottom diagonal
             fig.plotlyfig.add_shape(type='line', xref='paper', yref='paper', 
-                                    x0=-.06, y0=1.03, x1=1.03, y1=-.06,
+                                    x0=-0.06, y0=1.03, x1=1.03, y1=-0.06,
                                     line={'color':"#2cb802", 'width':1, 'dash':"dot"})
             #Add a tab-like area for the annotation
             fig.plotlyfig.add_shape(type='line', xref='paper', yref='paper', 
-                                    x0=.80, y0=-.06, x1=.80, y1=-.26,
+                                    x0=0.80, y0=-0.06, x1=0.80, y1=-0.26,
                                     line={'color':"#2cb802", 'width':1, 'dash':"dot"})
             fig.plotlyfig.add_shape(type='line', xref='paper', yref='paper', 
-                                    x0=.80, y0=-.26, x1=1.03, y1=-.26,
+                                    x0=0.80, y0=-0.26, x1=1.03, y1=-0.26,
                                     line={'color':"#2cb802", 'width':1, 'dash':"dot"})
             fig.plotlyfig.add_shape(type='line', xref='paper', yref='paper', 
-                                    x0=1.03, y0=-.26, x1=1.03, y1=-.06,
+                                    x0=1.03, y0=-0.26, x1=1.03, y1=-0.06,
                                     line={'color':"#2cb802", 'width':1, 'dash':"dot"})
 
 
             #----------top triangle---------#
             #top horizontal
             fig.plotlyfig.add_shape(type='line', xref='paper', yref='paper', 
-                                    x0=-.04, y0=1.06, x1=1.06, y1=1.06,
+                                    x0=-0.04, y0=1.06, x1=1.06, y1=1.06,
                                     line={'color':"#6002b8", 'width':1, 'dash':"dot"})
             #top vertical
             fig.plotlyfig.add_shape(type='line', xref='paper', yref='paper', 
-                                    x0=1.06, y0=1.06, x1=1.06, y1=.2,
+                                    x0=1.06, y0=1.06, x1=1.06, y1=0.2,
                                     line={'color':"#6002b8", 'width':1, 'dash':"dot"})
             #top diagonal
             fig.plotlyfig.add_shape(type='line', xref='paper', yref='paper', 
-                                    x0=-.04, y0=1.06, x1=1.06, y1=-.03,
+                                    x0=-0.04, y0=1.06, x1=1.06, y1=-0.03,
                                     line={'color':"#6002b8", 'width':1, 'dash':"dot"})
             #Add a tab-like area for the annotation
             fig.plotlyfig.add_shape(type='line', xref='paper', yref='paper', 
-                                    x0=1.06, y0=.2, x1=1.26, y1=.2,
+                                    x0=1.06, y0=0.2, x1=1.26, y1=0.2,
                                     line={'color':"#6002b8", 'width':1, 'dash':"dot"})
             fig.plotlyfig.add_shape(type='line', xref='paper', yref='paper', 
-                                    x0=1.26, y0=.2, x1=1.26, y1=-.03,
+                                    x0=1.26, y0=0.2, x1=1.26, y1=-0.03,
                                     line={'color':"#6002b8", 'width':1, 'dash':"dot"})
             fig.plotlyfig.add_shape(type='line', xref='paper', yref='paper', 
-                                    x0=1.26, y0=-.03, x1=1.06, y1=-.03,
+                                    x0=1.26, y0=-0.03, x1=1.06, y1=-0.03,
                                     line={'color':"#6002b8", 'width':1, 'dash':"dot"})
             
             #adjust margins to allow space to annotations
@@ -3833,10 +3850,10 @@ class ProjectionsBoxPlot(WorkspacePlot):
             new_lmargin = fig.plotlyfig.layout.margin.l - 20
 
             #add annotations for the upper and lower triangles.
-            fig.plotlyfig.add_annotation(x= .92, y= -.16, xref= 'paper', yref= 'paper',
+            fig.plotlyfig.add_annotation(x= 0.92, y= -0.16, xref= 'paper', yref= 'paper',
                                          text= 'A', showarrow=False, xanchor='center',
                                          yanchor='middle', font=dict(color='#2cb802'))
-            fig.plotlyfig.add_annotation(x= 1.16, y= .1, xref= 'paper', yref= 'paper',
+            fig.plotlyfig.add_annotation(x= 1.16, y= 0.1, xref= 'paper', yref= 'paper',
                                          text= 'C', showarrow=False, xanchor='center',
                                          yanchor='middle', font=dict(color='#6002b8'))
 
@@ -4790,8 +4807,8 @@ class WildcardSingleScaleBarPlot(WorkspacePlot):
         layout = go.Layout(barmode='stack', xaxis=x_axis, yaxis=y_axis,
                            width=650 * scale, height=350 * scale)
 
-        ref_bar = go.Bar(y=ref_values, name=reference_name, width=.5)
-        wildcard_bar = go.Bar(y=per_op_wildcard_values, name='Wildcard', width=.5)
+        ref_bar = go.Bar(y=ref_values, name=reference_name, width=0.5)
+        wildcard_bar = go.Bar(y=per_op_wildcard_values, name='Wildcard', width=0.5)
 
         return ReportFigure(go.Figure(data=[ref_bar, wildcard_bar], layout=layout))
 

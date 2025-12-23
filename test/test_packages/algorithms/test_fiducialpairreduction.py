@@ -54,7 +54,7 @@ class FiducialPairReductionTestCase(AlgorithmTestCase):
         nAmplified = pygsti.alg.test_fiducial_pairs(fidPairs, target_model, prep_fiducials,
                                                     meas_fiducials, germs,
                                                     verbosity=3, mem_limit=None, test_lengths=(64, 512),
-                                                    tol = .5)
+                                                    tol = 0.5)
 
         #Note: can't amplify SPAM params, so don't count them
 
@@ -74,7 +74,7 @@ class FiducialPairReductionTestCase(AlgorithmTestCase):
                                                     meas_fiducials, germs,
                                                     verbosity=3, mem_limit=None,
                                                     test_lengths=(64, 512),
-                                                    tol = .5)
+                                                    tol = 0.5)
 
         print("PFPR: %d AMPLIFIED out of %d total (non-spam non-gauge) params" % (nAmplified, nTotal))
         self.assertEqual(nAmplified, 34)

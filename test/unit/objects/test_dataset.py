@@ -99,6 +99,43 @@ class DataSetTester(BaseCase):
         with self.assertRaises(ValueError):
             DataSet(circuits=self.gstrs, outcome_labels=['0', '1'], static=True)
 
+    def test_add_count_dict_order(self):
+        c = "Gxpi2:0@(0)"
+        counts = {'00': 1, '10': 0, '01': 97, '11': 2}
+        ds = DataSet(outcome_labels=["00", "10", "01", "11"], static=False)
+        ds.add_count_dict(c, counts)
+        check = ds[c].counts
+        print(ds)
+
+        self.assertEqual({k[0]: v for k,v in check.items()}, counts)
+
+        # Add more
+        c2 = "Gypi2:0@(0)"
+        counts2 = {'00': 1, '01': 43, '10': 24, '11': 7}
+        ds.add_count_dict(c2, counts2)
+        check = ds[c2].counts
+
+        self.assertEqual({k[0]: v for k,v in check.items()}, counts2)
+
+        ds.done_adding_data()
+        self.assertEqual({k[0]: v for k,v in ds[c].counts.items()}, counts)
+        self.assertEqual({k[0]: v for k,v in ds[c2].counts.items()}, counts2)
+
+    def test_add_count_dict_single_outcome(self):
+        c0 = Circuit("Gi:Q0@Q0")
+        c1 = Circuit("Gi:Q0Gi:Q0@Q0")
+        c0_counts = {("1",): 10.0}
+        c1_counts = {("0",): 4, ("1",): 6}
+
+        ds = DataSet()
+        ds.add_count_dict(c0, c0_counts)
+        ds.add_count_dict(c1, c1_counts)
+
+        self.assertEqual({k: v for k,v in ds[c0].counts.items()}, c0_counts)
+        self.assertEqual({k: v for k,v in ds[c1].counts.items()}, c1_counts)
+
+        
+
 
 class DefaultDataSetInstance(object):
     def setUp(self):

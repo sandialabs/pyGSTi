@@ -9,6 +9,7 @@ The LindbladErrorgen class and supporting functionality.
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
+from __future__ import annotations
 
 import warnings as _warnings
 import itertools as _itertools
@@ -31,6 +32,7 @@ from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _Glob
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools import optools as _ot
 from pygsti import SpaceT
+from typing import Literal
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 
@@ -1120,7 +1122,8 @@ class LindbladErrorgen(_LinearOperator):
         """
         return self.coefficients(return_basis=False, logscale_nonham=True, label_type=label_type)
 
-    def set_coefficients(self, elementary_errorgens, action="update", logscale_nonham=False, truncate=True):
+    def set_coefficients(self, elementary_errorgens, action: Literal['update', 'add', 'reset'] = "update", 
+                         logscale_nonham=False, truncate=True):
         """
         Sets the coefficients of elementary error generator terms in this error generator.
 
@@ -1161,6 +1164,8 @@ class LindbladErrorgen(_LinearOperator):
         -------
         None
         """
+        if not elementary_errorgens:
+            return
         #check the first key, if local then no need to convert, otherwise convert from global.
         first_key = next(iter(elementary_errorgens))
         if isinstance(first_key, (_GlobalElementaryErrorgenLabel, tuple)):

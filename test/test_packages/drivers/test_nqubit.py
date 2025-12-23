@@ -162,7 +162,8 @@ class NQubitTestCase(BaseTestCase):
         results = pygsti.run_long_sequence_gst_base(ds, mdl_to_optimize,
                                                     lsgstLists, gauge_opt_params=False,
                                                     advanced_options={'tolerance': 1e-1, 'max_iterations': 5}, verbosity=0,
-                                                    disable_checkpointing= True) #probably don't care about convergence for same reason we
+                                                    disable_checkpointing= True,
+                                                    gauge_opt_suite_name='none') #probably don't care about convergence for same reason we
                                                     #don't for the 3Q case?
 
     def test_2Q_terms(self):
@@ -200,7 +201,8 @@ class NQubitTestCase(BaseTestCase):
         results = pygsti.run_long_sequence_gst_base(ds, mdl_to_optimize,
                                                     lsgstLists, gauge_opt_params=False,
                                                     advanced_options={'tolerance': 1e-3}, verbosity=0,
-                                                    disable_checkpointing= True)
+                                                    disable_checkpointing= True,
+                                                    gauge_opt_suite_name='none')
 
     def test_3Q(self):
 
