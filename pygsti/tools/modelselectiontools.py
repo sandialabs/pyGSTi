@@ -36,10 +36,6 @@ class AMSCheckpoint(_NicelySerializable):
     Class for storing checkpointing intermediate progress during
     the running of an automated model selection function in order
     to enable restarting subsequent runs of the protocol from that point.
-
-    Parameters
-    ----------
-    TODO
     """ 
 
     def __init__(self, datasetstr, er_thresh, maxiter, tol, prob_clip, H, x0, original_dlogl, time=None, path=None, graph_levels=[], prev_dlogl=None):
@@ -318,9 +314,10 @@ def create_red_model(parent_model, embedder_matrix, vec=None, sim=None):
     Returns:
         _type_: _description_
     """
-    assert embedder_matrix.shape[1] == len(vec)
+    
     if vec is None:
         vec = _np.zeros(len(vec))
+    assert embedder_matrix.shape[1] == len(vec)
     red_model = parent_model.copy()
     red_model.param_interposer.num_params = len(vec)
     red_model.param_interposer.transform_matrix = parent_model.param_interposer.full_span_transform_matrix @ parent_model.param_interposer.embedder_matrix @ embedder_matrix
