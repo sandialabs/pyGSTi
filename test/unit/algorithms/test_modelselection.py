@@ -1,7 +1,7 @@
 
 from ..util import BaseCase
 from pygsti.algorithms.modelselection import do_greedy_from_full_fast
-from pygsti.tools.modelselectiontools import create_projector_matrix_from_trace
+from pygsti.tools.modelselectiontools import create_embedder_matrix_from_trace
 import numpy as _np
 from pygsti.data import simulate_data
 from pygsti.protocols import ProtocolData
@@ -14,7 +14,7 @@ class AMSTester(BaseCase):
 		# a trace contains the path taken through model space. We can use this
 		#to construct a matrix that converts the full model vector into the 
 		#reduced model vector
-		reducer = create_projector_matrix_from_trace(trace).T
+		reducer = create_embedder_matrix_from_trace(trace).T
 
 		#multiplying the reducer and its transpose creates a
 		#diagonal matrix whose entries are either 0 or 1,

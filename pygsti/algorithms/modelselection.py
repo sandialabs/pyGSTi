@@ -258,14 +258,14 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
         if  np.abs(error) > recompute_H_thresh_percentage*er_thresh:
             recompute_Hessian = True
             
-
+        if verbosity and rank == 0:
+                print(f'Model {best_model[2]} has lowest evidence ratio {best_model[1]}')
         if recompute_Hessian:
-            if verbosity and rank == 0:
-                print(f'Model {best_model[2]} has lowest evidence ratio {best_model[1]:.4f}')
+            
             if verbosity > 0 and rank == 0:
                 print("Recomputing Hessian, approximation error is ", error)
             sim = pygsti.forwardsims.MapForwardSimulator(processor_grid=(1,size))
-            red_model_fit = _parallel_GST(create_red_model(deltalogl_fn.model, np.delete(deltalogl_model_projector, best_model[2], axis=1),best_model[0], sim), data, builders, tol, maxiter, verbosity, comm=comm, mem_limit=mem_limit).estimates['GateSetTomography'].models['final iteration estimate']
+            red_model_fit = _parallel_GST(create_red_model(deltalogl_fn.model, np.delete(deltalogl_model_projector, best_model[2], axis=1), sim=sim, vec=None), data, builders, tol, maxiter, verbosity, comm=comm, mem_limit=mem_limit).estimates['GateSetTomography'].models['final iteration estimate']
             red_model_fit.sim = pygsti.forwardsims.MapForwardSimulator(processor_grid=(1,1,size),param_blk_sizes=(100,100))
             H = pygsti.tools.logl_hessian(red_model_fit, data.dataset, comm=comm, mem_limit=mem_limit, verbosity = verbosity)
             if comm is not None:
@@ -287,8 +287,7 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
             if rank == 0 and verbosity > 0:
                 print('New exact evidence ratio is ', best_model[1])
             
-        if verbosity and rank == 0:
-            print(f'Model {best_model[2]} has lowest evidence ratio {best_model[1]:.4f}')
+
         
         if best_model[1] > er_thresh or len(best_model[0]) == 1:
                 if rank == 0 and verbosity > 0:
@@ -300,7 +299,8 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
                 if recompute_Hessian:
                     deltalogl_fn.model = temp_model
                 else:
-                    deltalogl_fn.model = create_red_model(deltalogl_fn.model, deltalogl_model_projector, graph_levels[-1][0],sim=sim)
+                    deltalogl_fn.model = create_red_model(deltalogl_fn.model, deltalogl_model_projector,sim=sim)
+                deltalogl_fn.model.sim = sim
                 final_fit_model = _parallel_GST(deltalogl_fn.model, data, builders, tol, maxiter, verbosity, comm=comm, mem_limit=mem_limit).estimates['GateSetTomography'].models['final iteration estimate']
                 final_fit_model.sim._processor_grid = (1,1,1)
                 deltalogl_fn.model = final_fit_model

@@ -132,7 +132,7 @@ class AMSCheckpoint(_NicelySerializable):
         return [self.full_model, self.datasetstr, self.er_thresh, self.maxiter, self.tol, self.prob_clip, self.recompute_H_thresh_percent]
          
     def check_valid_checkpoint(self, datasetstr, er_thresh, maxiter, tol, prob_clip):
-        """Check if self is a checkpoint with the same settings as the ones passed in. This is only compatible with FOGI model checkpoints.
+        """Check if self is a checkpoint with the same settings as the ones passed in.
 
         Parameters
         ----------
@@ -177,9 +177,9 @@ def remove_params(parent_model, params_to_remove):
 
 def remove_param(parent_model, param_to_remove, zero = True):
     next_model = parent_model.copy()
-    projector_matrix = _np.delete(parent_model.param_interposer.projector_matrix, param_to_remove, axis=1)
-    next_model.param_interposer.transform_matrix = parent_model.param_interposer.full_span_transform_matrix @ projector_matrix
-    next_model.param_interposer.projector_matrix = projector_matrix
+    embedder_matrix = _np.delete(parent_model.param_interposer.embedder_matrix, param_to_remove, axis=1)
+    next_model.param_interposer.transform_matrix = parent_model.param_interposer.full_span_transform_matrix @ embedder_matrix
+    next_model.param_interposer.embedder_matrix = embedder_matrix
     reduced_inv_matrix = _np.delete(parent_model.param_interposer.inv_transform_matrix, param_to_remove, axis=0)
     next_model.param_interposer.inv_transform_matrix = reduced_inv_matrix
     next_model._paramvec = _np.delete(parent_model._paramvec, param_to_remove)
@@ -192,7 +192,7 @@ def remove_param(parent_model, param_to_remove, zero = True):
     assert next_model.num_params < parent_model.num_params
     return next_model
 
-def create_projector_matrix_from_trace(graph_levels, projector_matrix = None):
+def create_embedder_matrix_from_trace(graph_levels, embedder_matrix = None):
     """
     Given a trace (graph_levels) representing a path through a directed model graph, where traversing to an adjacent node corresponds to
     removing a parameter, create a projector matrix that appropriately embeds a reduced vector up in the space of parent (full) model
@@ -224,21 +224,21 @@ def create_projector_matrix_from_trace(graph_levels, projector_matrix = None):
                     index of parameter from parent model which is missing in this corresponding reduced model
                 
 
-        projector_matrix (optional, defaults to None): numpy array
+        embedder_matrix (optional, defaults to None): numpy array
             If this function is used to further reduce down a projector matrix, then an initial one must be provided.
             Otherwise, it initializes to the identity.
 
 
     Returns:
-        projector_matrix : numpy array
+        embedder_matrix : numpy array
             An identity matrix, whose columns are missing for every parameter that was removed in AMS
     """
-    if projector_matrix is None:
-        projector_matrix = _np.eye(len(graph_levels[0][0]))
+    if embedder_matrix is None:
+        embedder_matrix = _np.eye(len(graph_levels[0][0]))
     for level in graph_levels[1:]:
         param_to_remove = level[2]
-        projector_matrix = _np.delete(projector_matrix, param_to_remove, axis=1)
-    return projector_matrix
+        embedder_matrix = _np.delete(embedder_matrix, param_to_remove, axis=1)
+    return embedder_matrix
 
 
 def custom_builder(min_prob_clip):
@@ -306,25 +306,25 @@ def parallel_GST(full_model, data, builders, tol=1e-10, maxiter=300, verbosity=0
                 memlimit=mem_limit, optimizers=optimizers)
     return result
 
-def create_red_model(parent_model, projector_matrix, vec=None, sim=None):
+def create_red_model(parent_model, embedder_matrix, vec=None, sim=None):
     """TODO
 
     Args:
         parent_model (_type_): _description_
-        projector_matrix (_type_): _description_
+        embedder_matrix (_type_): _description_
         vec (_type_): _description_
 
     Returns:
         _type_: _description_
     """
-    assert projector_matrix.shape[1] == len(vec)
+    assert embedder_matrix.shape[1] == len(vec)
     if vec is None:
         vec = _np.zeros(len(vec))
     red_model = parent_model.copy()
     red_model.param_interposer.num_params = len(vec)
-    red_model.param_interposer.transform_matrix = parent_model.param_interposer.full_span_transform_matrix @ parent_model.param_interposer.projector_matrix @ projector_matrix
-    red_model.param_interposer.projector_matrix = parent_model.param_interposer.projector_matrix @ projector_matrix
-    reduced_inv_matrix =  projector_matrix.T @ parent_model.param_interposer.inv_transform_matrix
+    red_model.param_interposer.transform_matrix = parent_model.param_interposer.full_span_transform_matrix @ parent_model.param_interposer.embedder_matrix @ embedder_matrix
+    red_model.param_interposer.embedder_matrix = parent_model.param_interposer.embedder_matrix @ embedder_matrix
+    reduced_inv_matrix =  embedder_matrix.T @ parent_model.param_interposer.inv_transform_matrix
     red_model.param_interposer.inv_transform_matrix = reduced_inv_matrix
     red_model._paramvec = vec.copy()
     red_model.from_vector(red_model._paramvec)
@@ -393,15 +393,15 @@ def reduced_model_approx_GST_fast(red_rowandcol_H, red_row_H, x0, param_to_remov
 
         return x0_prime
 
-def compare_parameters_simple(parent_model_vec, red_model_vec, projector_matrix):
+def compare_parameters_simple(parent_model_vec, red_model_vec, embedder_matrix):
     """TODO: docstring
 
     Args:
         parent_model_vec (_type_): _description_
         red_model_vec (_type_): _description_
-        projector_matrix (_type_): _description_
+        embedder_matrix (_type_): _description_
     """
-    projector = projector_matrix @ projector_matrix.T
+    projector = embedder_matrix @ embedder_matrix.T
     assert len(parent_model_vec) == len(projector)
     table_data = [['Full', 'Reduced']]
     j = 0
@@ -416,8 +416,8 @@ def compare_parameters_simple(parent_model_vec, red_model_vec, projector_matrix)
     for row in table_data:
         print("{: <25} {: <25}".format(*row), '\n')
 
-def ams_results_table(trace, ev_ratio_costs):
-    reducer = create_projector_matrix_from_trace(trace).T
+def ams_results_table(trace, ev_ratio_costs, extra_column=None):
+    reducer = create_embedder_matrix_from_trace(trace).T
     projector = reducer.T @ reducer
     #embedded_costs = reducer.T @ ev_ratio_costs
     parent_model_vec = trace[0][0]
@@ -434,8 +434,11 @@ def ams_results_table(trace, ev_ratio_costs):
             table_data.append([parent_model_vec[i], red_model_vec[j], ev_ratio_costs[j]])
             j += 1
     assert len(red_model_vec) == j
-    for row in table_data:
-        print("{: <25} {: <25} {: <25}".format(*row), '\n')
+    for i,row in enumerate(table_data):
+        if extra_column is not None:
+            print("{: <25} {: <25} {: <25} {: <25}".format(*row, extra_column[i]), '\n')
+        else:
+            print("{: <25} {: <25} {: <25}".format(*row), '\n')
 
 
 def create_approx_logl_fn(H, x0, initial_logl):
