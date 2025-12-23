@@ -30,6 +30,28 @@ class TrackedComm():
 
         return getattr(self._comm, name)
             
+class AMSGreedyResult(_NicelySerializable):
+    """Class for storing and saving AMS result objects comprised of a model graph trace (trace)
+    and a list final evidence ratio cost (ev_ratio_cost).
+
+    trace contains a list of lists which contain information of the models considered in the greedy AMS
+    algorithm. Each level "i" contains the reduced model with the best evidence ratio at that level
+    with i parameters removed from the full model:
+    
+    trace[i][j]
+        
+        i: indexes AMS levels, where each level i contains the best model found after removing i parameters
+
+        j: indexes different characteristics for the jth best model at level i
+            [param_vec , evidence_ratio, parameter_that_was_removed] 
+
+    ev_ratio_cost contains a list of evidence ratios (floats) for the last models considered, which were all not accepted,
+    due to all of them being over the error threshold specified by the user. This information is particularly useful
+    to construct a results table with the function ams_results_table().
+    """
+
+    def __init__(self, doc_id=None):
+        
 class AMSCheckpoint(_NicelySerializable):
     """
     Class for storing checkpointing intermediate progress during
