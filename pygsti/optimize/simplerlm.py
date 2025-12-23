@@ -605,9 +605,6 @@ def simplish_leastsq(
                 # ok if assume fine-param-proc.size == 1 (otherwise need to sync setting local JTJ)
                 ari.jtj_update_regularization(JTJ, pre_reg_data, mu)
 
-                #assert(_np.isfinite(JTJ).all()), "Non-finite JTJ (inner)!" # NaNs tracking
-                #assert(_np.isfinite(minus_JTf).all()), "Non-finite minus_JTf (inner)!" # NaNs tracking
-
                 try:
                     if profiler: profiler.memory_check("simplish_leastsq: before linsolve")
                     tm = _time.time()

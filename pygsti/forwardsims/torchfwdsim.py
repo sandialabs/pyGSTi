@@ -32,6 +32,18 @@ from pygsti.forwardsims.forwardsim import ForwardSimulator
 try:
     import torch
     TORCH_ENABLED = True
+
+    def todevice_kwargs():
+        if torch.cuda.device_count() > 0:
+            return {'dtype': torch.float64, 'device': 'cuda:0'}
+        elif torch.mps.device_count() > 0:
+            return {'dtype': torch.float32, 'device': 'mps:0'}
+        elif torch.xpu.device_count() > 0:
+            return {'dtype': torch.float64, 'device': 'xpu:0'}
+        else:
+            return {'dtype': torch.float64, 'device': -1}
+    DEVICE_KWARGS = todevice_kwargs()
+
 except ImportError:
     TORCH_ENABLED = False
     pass
@@ -71,10 +83,10 @@ class StatelessModel:
     the sophiciated machinery in TorchForwardSimulator's base class.
     """
 
-    def __init__(self, model: ExplicitOpModel, layout: CircuitOutcomeProbabilityArrayLayout):
+    def __init__(self, model: ExplicitOpModel, layout: CircuitOutcomeProbabilityArrayLayout, use_gpu: bool):
         circuits = []
         self.outcome_probs_dim = 0
-        #TODO: Refactor this to use the bulk_expand_instruments_and_separate_povm codepath
+        # TODO: Refactor this to use the bulk_expand_instruments_and_separate_povm codepath
         for _, circuit, outcomes in layout.iter_unique_circuits():
             expanded_circuits = model.expand_instruments_and_separate_povm(circuit, outcomes)
             if len(expanded_circuits) > 1:
@@ -84,12 +96,14 @@ class StatelessModel:
             circuits.append(c)
             self.outcome_probs_dim += c.outcome_probs_dim
         self.circuits = circuits
+        self.use_gpu = use_gpu
 
         # We need to verify assumptions on what layout.iter_unique_circuits() returns.
         # Looking at the implementation of that function, the assumptions can be
         # framed in terms of the "layout._element_indicies" dict.
         eind = layout._element_indices
         assert isinstance(eind, dict)
+        assert len(eind) > 0
         items = iter(eind.items())
         k_prev, v_prev = next(items)
         assert k_prev == 0
@@ -105,13 +119,16 @@ class StatelessModel:
         for lbl, obj in model._iter_parameterized_objs():
             assert isinstance(obj, Torchable), f"{type(obj)} does not subclass {Torchable}."
             param_type = type(obj)
-            param_data = (lbl, param_type) + (obj.stateless_data(),)
+            sld = obj.stateless_data()
+            if self.use_gpu:
+                sld = tuple((i.to(**DEVICE_KWARGS) if isinstance(i, torch.Tensor) else i) for i in sld)
+            param_data = (lbl, param_type) + (sld,)
             self.param_metadata.append(param_data)
-        self.params_dim = None 
-        # ^ That's set in get_free_params.
 
-        self.default_to_reverse_ad = None
-        # ^ That'll be set to a boolean the next time that get_free_params is called.
+        self.params_dim = []
+        self.free_param_sizes = []
+        self.default_to_reverse_ad = False
+        # ^ Those are set in get_free_params
         return
     
     def get_free_params(self, model: ExplicitOpModel) -> Tuple[torch.Tensor]:
@@ -123,6 +140,7 @@ class StatelessModel:
         to StatelessModel.__init__(...). We raise an error if an inconsistency is detected.
         """
         free_params = []
+        free_param_sizes = []
         prev_idx = 0
         for i, (lbl, obj) in enumerate(model._iter_parameterized_objs()):
             gpind = obj.gpindices_as_array()
@@ -143,7 +161,11 @@ class StatelessModel:
                 call to get_torch_bases would silently fail, so we're forced to raise an error here.
                 """
                 raise ValueError(message)
+            if self.use_gpu:
+                vec = vec.to(**DEVICE_KWARGS)
             free_params.append(vec)
+            free_param_sizes.append(vec_size)
+        self.free_param_sizes = free_param_sizes
         self.params_dim = prev_idx
         self.default_to_reverse_ad = self.outcome_probs_dim < self.params_dim
         return tuple(free_params)
@@ -157,7 +179,7 @@ class StatelessModel:
         ----
         If you want to use the returned dict to build a PyTorch Tensor that supports the 
         .backward() method, then you need to make sure that fp.requires_grad is True for all
-        fp in free_params. This can be done by calling fp._requires_grad(True) before calling
+        fp in free_params. This can be done by calling fp.requires_grad_(True) before calling
         this function.
         """
         assert len(free_params) == len(self.param_metadata)
@@ -202,8 +224,9 @@ class StatelessModel:
         """
         if enable_backward:
             for fp in free_params:
-                fp._requires_grad(True)
-        torch_bases = self.get_torch_bases(free_params)
+                fp.requires_grad_(True)
+
+        torch_bases = self.get_torch_bases(free_params) # type: ignore
         probs = self.circuit_probs_from_torch_bases(torch_bases)
         return probs
 
@@ -215,15 +238,16 @@ class TorchForwardSimulator(ForwardSimulator):
 
     ENABLED = TORCH_ENABLED
 
-    def __init__(self, model : Optional[ExplicitOpModel] = None):
+    def __init__(self, model : Optional[ExplicitOpModel] = None, use_gpu=True):
         if not self.ENABLED:
             raise RuntimeError('PyTorch could not be imported.')
         self.model = model
+        self.use_gpu = use_gpu
         super(ForwardSimulator, self).__init__(model)
 
     def _bulk_fill_probs(self, array_to_fill, layout, split_model = None) -> None:
         if split_model is None:
-            slm = StatelessModel(self.model, layout)
+            slm = StatelessModel(self.model, layout, self.use_gpu)
             free_params = slm.get_free_params(self.model)
             torch_bases = slm.get_torch_bases(free_params)
         else:
@@ -234,7 +258,7 @@ class TorchForwardSimulator(ForwardSimulator):
         return
 
     def _bulk_fill_dprobs(self, array_to_fill, layout, pr_array_to_fill) -> None:
-        slm = StatelessModel(self.model, layout)
+        slm = StatelessModel(self.model, layout, self.use_gpu)
         # ^ TODO: figure out how to safely recycle StatelessModel objects from one
         #   call to another. The current implementation is wasteful if we need to 
         #   compute many jacobians without structural changes to layout or self.model.
@@ -247,18 +271,17 @@ class TorchForwardSimulator(ForwardSimulator):
 
         argnums = tuple(range(len(slm.param_metadata)))
         if slm.default_to_reverse_ad:
-            # Then slm.circuit_probs_from_free_params will automatically construct the
-            # torch_base dict to support reverse-mode AD.
-            J_func = torch.func.jacrev(slm.circuit_probs_from_free_params, argnums=argnums)
+            J_func = torch.func.jacrev(slm.circuit_probs_from_free_params, argnums=argnums) # type: ignore
         else:
-            # Then slm.circuit_probs_from_free_params will automatically skip the extra
-            # steps needed for torch_base to support reverse-mode AD.
-            J_func = torch.func.jacfwd(slm.circuit_probs_from_free_params, argnums=argnums)
+            J_func = torch.func.jacfwd(slm.circuit_probs_from_free_params, argnums=argnums) # type: ignore
         # ^ Note that this _bulk_fill_dprobs function doesn't accept parameters that
         #   could be used to override the default behavior of the StatelessModel. If we
         #   have a need to override the default in the future then we'd need to override
         #   the ForwardSimulator function(s) that call self._bulk_fill_dprobs(...).
 
+        # if self.use_gpu:
+        #     J_func = make_fx(J_func, tracing_mode='fake')
+            # ^ see https://github.com/pytorch/pytorch/issues/152701#issuecomment-2847838362
         J_val = J_func(*free_params)
         J_val = torch.column_stack(J_val)
         array_to_fill[:] = J_val.cpu().detach().numpy()
