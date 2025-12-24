@@ -35,13 +35,13 @@ try:
 
     def todevice_kwargs():
         if torch.cuda.device_count() > 0:
-            return {'dtype': torch.float64, 'device': 'cuda:0'}
+            return {'dtype': torch.float32, 'device': 'cuda:0'}
         elif torch.mps.device_count() > 0:
             return {'dtype': torch.float32, 'device': 'mps:0'}
         elif torch.xpu.device_count() > 0:
-            return {'dtype': torch.float64, 'device': 'xpu:0'}
+            return {'dtype': torch.float32, 'device': 'xpu:0'}
         else:
-            return {'dtype': torch.float64, 'device': -1}
+            return {'dtype': torch.float32, 'device': -1}
     DEVICE_KWARGS = todevice_kwargs()
 
 except ImportError:
@@ -238,11 +238,18 @@ class TorchForwardSimulator(ForwardSimulator):
 
     ENABLED = TORCH_ENABLED
 
-    def __init__(self, model : Optional[ExplicitOpModel] = None, use_gpu=True):
+    def __init__(self, model : Optional[ExplicitOpModel] = None, use_gpu: Optional[bool]=None):
         if not self.ENABLED:
             raise RuntimeError('PyTorch could not be imported.')
         self.model = model
-        self.use_gpu = use_gpu
+        if 'mps' in DEVICE_KWARGS['device']:
+            self.use_gpu = False
+            if (use_gpu is not None) and use_gpu:
+                warnings.warn('Apple Metal Performance Shaders not supported; ignoring use_gpu=True.')
+        else:
+            if use_gpu is None:
+                use_gpu = True
+            self.use_gpu = use_gpu
         super(ForwardSimulator, self).__init__(model)
 
     def _bulk_fill_probs(self, array_to_fill, layout, split_model = None) -> None:
