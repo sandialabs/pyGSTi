@@ -316,7 +316,7 @@ def create_red_model(parent_model, embedder_matrix, vec=None, sim=None):
     """
     
     if vec is None:
-        vec = _np.zeros(len(vec))
+        vec = _np.zeros(embedder_matrix.shape[1])
     assert embedder_matrix.shape[1] == len(vec)
     red_model = parent_model.copy()
     red_model.param_interposer.num_params = len(vec)
