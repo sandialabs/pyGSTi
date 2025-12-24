@@ -82,7 +82,7 @@ def _transpile_batch(circs, pass_manager, direct_to_qiskit, qasm_convert_kwargs=
             else:
                 im_dict = None
 
-            ordered_data_indices = list(range(num_IMs, num_IMs + qiskit_qc.width()))
+            ordered_data_indices = [num_IMs + (int(label[1:]) if (isinstance(label, str) and label[0]=='Q' and label[1:].isnumeric()) else label) for label in circ.line_labels]
 
             qiskit_qc.metadata = {'im_dict': im_dict,
                                   'ordered_data_indices': ordered_data_indices}
@@ -291,33 +291,11 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         which can then be used in pyGSTi data analysis routines (e.g., if this
         was a GST experiment, it can input into a GST protocol object that will
         analyze the data).
-
-        TODO: fix docstring
         """
         
         assert len(self.qjobs) == len(self.job_ids), \
             "Mismatch between jobs and job ids! If loading from file, use the regen_jobs=True option in from_dir()."
-                
-        # def to_labeled_counts(input_dict, ordered_target_indices, num_qubits_in_pspec): 
-        #     """
-        #     Implements handling for mid-circuit measurement outcomes.  
-        #     """
-        #     outcome_labels = []
-        #     counts_data = []
-        #     for bitstring, count in input_dict.items():
-        #         new_label = []
-        #         term_string = ''
-        #         term_bits = bitstring[:num_qubits_in_pspec][::-1]
-        #         mid_bits = bitstring[num_qubits_in_pspec:][::-1]
-        #         for index in ordered_target_indices:
-        #             term_string += term_bits[index]
-        #         for bit in mid_bits:
-        #             new_label.append('p'+bit)
-        #         new_label.append(term_string)
-        #         outcome_labels.append(tuple(new_label))
-        #         counts_data.append(count)
-        #     return outcome_labels, counts_data
-
+      
         def to_labeled_counts(input_dict, ordered_data_indices, mcm_dict):
 
             def qiskit_bitstring_to_outcome_label(bs, ordered_data_indices, mcm_dict):
@@ -339,7 +317,7 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
             output_dict = _defaultdict(int)
 
             for bitstring, counts in input_dict.items():
-                outcome_label = qiskit_bitstring_to_outcome_label(bs=bitstring,
+                outcome_label = qiskit_bitstring_to_outcome_label(bs=bitstring[::-1],
                                                                 ordered_data_indices=ordered_data_indices,
                                                                 mcm_dict=mcm_dict)
                 output_dict[outcome_label] += counts
@@ -347,9 +325,8 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
             return output_dict
         
 
-        #get results from backend jobs and add to dict
+        # get results from backend jobs and add to dict
         ds = _data.DataSet()
-        # for exp_idx in range(len(self.batch_results), len(self.qjobs)):
         for exp_idx in range(0, len(self.qjobs)):
             qjob = self.qjobs[exp_idx]
             print(f"Querying IBMQ for results objects for batch {exp_idx + 1}...")
@@ -365,61 +342,15 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
                                                     ordered_data_indices=ordered_data_indices,
                                                     mcm_dict=im_dict)
                 
-                #ordered_target_indices = _np.argsort(_np.argsort([int(label[1:]) for label in circ.line_labels]))
-                # ordered_target_indices = [self.processor_spec.qubit_labels.index(q) for q in circ.line_labels]
-                # ordered_target_indices = list(range(len(circ.line_labels)))
-                # pygsti labels are sorted lexicographically, qiskit ordering is numeric. #TODO: this assumes that we only measure the pyGSTi qubits on the device, e.g., if the pyGSTi circuit only uses Q100 and Q101, then we only measure device qubits 100 and 101. It may be useful to make this more flexible and associate some kind of 'measured_qubits' field with a metadata dict on each pyGSTi circuit (or transpiled qiskit circ).
-
-
-
-                # counts_data = to_labeled_counts_new(batch_result
-                # print(counts_data)
-
                 ds.add_count_dict(circ, counts_data)
 
             self.batch_results.append(batch_result)
 
-            # if not self.disable_checkpointing:
-            #     self._write_checkpoint()
-
         self.data = _ProtocolData(self.edesign, ds)
 
-            
-        if not self.disable_checkpointing: # not sure whether the _write_checkpoint() call is needed here (as opposed to data.write(), but I think it may be, as batch_results are not a part of the ProtocolData object. However in this case, perhaps it is possible to elide the data.write(), if _write_checkpoint() internally calls data.write()?
-
-            self._write_checkpoint()        
-
         if not self.disable_checkpointing:
-            self.data.write(self.checkpoint_path, edesign_already_written=True)
+            self.write()
 
-        # #get results from backend jobs and add to dict
-        # for exp_idx in range(len(self.batch_results), len(self.qjobs)):
-        #     qjob = self.qjobs[exp_idx]
-        #     print(f"Querying IBMQ for results objects for batch {exp_idx + 1}...")
-        #     batch_result = qjob.result()
-        #     self.batch_results.append(batch_result)
-
-        #     # if not self.disable_checkpointing:
-        #     #     self._write_checkpoint()
-
-        # if len(self.batch_results) == len(self.qjobs): 
-        #     print(f"All {len(self.batch_results)} jobs retrieved from IBM! Constructing dataset from batch results...")
-        #     ds = _data.DataSet()
-        #     for exp_idx, batch_result in enumerate(self.batch_results):
-        #         num_qubits_in_pspec = self.processor_spec.num_qubits
-        #         for i, circ in enumerate(self.pygsti_circuit_batches[exp_idx]):
-        #             ordered_target_indices = [self.processor_spec.qubit_labels.index(q) for q in circ.line_labels] 
-        #             labeled_counts = to_labeled_counts(batch_result[i].data.cr.get_counts(), ordered_target_indices, num_qubits_in_pspec)
-        #             outcome_labels = labeled_counts[0]
-        #             counts_data = labeled_counts[1]
-        #             count_dict = {ol:c for ol,c in zip(outcome_labels, counts_data)}
-        #             ds.add_count_dict(circ, count_dict) 
-
-        #     self.data = _ProtocolData(self.edesign, ds)
-            
-        #     if not self.disable_checkpointing:
-        #         self.data.write(self.checkpoint_path, edesign_already_written=True)
-        # print("Finished constructing dataset!")
 
     def submit(self, ibmq_backend, start=None, stop=None, ignore_job_limit=True, wait_time=5, max_attempts=10, ibmq_session=None):
         """
@@ -748,7 +679,7 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
 
     def write(self, dirname=None):
         """
-        Writes to disk, storing both the pyGSTi DataProtocol object in pyGSTi's standard
+        Writes to disk, storing both the pyGSTi ProtocolData object in pyGSTi's standard
         format and saving all of the IBM Q submission information stored in this object,
         written into the subdirectory 'ibmqexperiment'.
 

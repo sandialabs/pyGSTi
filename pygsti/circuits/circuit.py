@@ -4611,12 +4611,6 @@ class Circuit(object):
 
         # Currently only using 'Iz' as valid intermediate measurement ('IM') label.
         # TODO: Expand to all intermediate measurements.
-        # if 'Iz' in self.str:
-        #     # using_IMs = True
-        #     num_IMs = self.str.count('Iz')
-        # else:
-        #     # using_IMs = False
-        #     num_IMs = 0
         num_IMs = self.str.count('Iz')
         num_IMs_used = 0
         im_dict = {} if num_IMs > 0 else None
@@ -4677,8 +4671,6 @@ class Circuit(object):
 
                 elif qubits_to_measure == 'active':
                     qiskit_qubits_to_measure = [v for v in qubit_conversion.values()]
-                    # new_creg = qiskit_qc._create_creg(len(qiskit_qubits_to_measure), "cr")
-                    # qiskit_qc.add_register(new_creg)
                     qiskit_qc.barrier()
                     qiskit_qc.measure(qiskit_qubits_to_measure, cr[num_IMs:])
                     ordered_data_indices = [i + num_IMs for i in range(len(qubit_conversion.keys()))]
@@ -4688,8 +4680,6 @@ class Circuit(object):
                 
             elif isinstance(qubits_to_measure, list):
                 qiskit_qubits_to_measure = [qubit_conversion[qubit] for qubit in qubits_to_measure]
-                # new_creg = qiskit_qc._create_creg(len(qiskit_qubits_to_measure), "cr")
-                # qiskit_qc.add_register(new_creg)
                 qiskit_qc.barrier()
                 qiskit_qc.measure(qiskit_qubits_to_measure, cr[num_IMs:])
                 ordered_data_indices = [q + num_IMs for q in qiskit_qubits_to_measure]
@@ -4795,12 +4785,7 @@ class Circuit(object):
 
         #Currently only using 'Iz' as valid intermediate measurement ('IM') label.
         #Todo:  Expand to all intermediate measurements.
-        if 'Iz' in self.str:
-            # using_IMs = True
-            num_IMs = self.str.count('Iz')
-        else:
-            # using_IMs = False
-            num_IMs = 0
+        num_IMs = self.str.count('Iz')
         num_IMs_used = 0
 
         # Init the openqasm string.
