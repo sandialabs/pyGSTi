@@ -3,10 +3,11 @@ import os
 import numpy as _np
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 import pygsti
-from pygsti.models import Model
 from mpi4py import MPI
 import time as _time
 import datetime as _datetime
+from pygsti.models import Model as _Model
+
 class TrackedComm():
     def __init__(self, comm, parent=None):
         self.children = []
@@ -30,6 +31,60 @@ class TrackedComm():
 
         return getattr(self._comm, name)
             
+class AMSGreedyResult(_NicelySerializable):
+    """Class for storing and saving AMS result objects comprised of a model graph trace (trace)
+    and a list final evidence ratio cost (ev_ratio_cost).
+
+    trace contains a list of lists which contain information of the models considered in the greedy AMS
+    algorithm. Each level "i" contains the reduced model with the best evidence ratio at that level
+    with i parameters removed from the full model:
+    
+    trace[i][j]
+        
+        i: indexes AMS levels, where each level i contains the best model found after removing i parameters
+
+        j: indexes different characteristics for the jth best model at level i
+            [param_vec , evidence_ratio, parameter_that_was_removed] 
+
+    ev_ratio_cost contains a list of evidence ratios (floats) for the last models considered, which were all not accepted,
+    due to all of them being over the error threshold specified by the user. This information is particularly useful
+    to construct a results table with the function ams_results_table().
+    """
+
+    def __init__(self, trace, ev_ratio_costs=[], full_model=None):
+        super().__init__()
+        self.trace = trace
+        self.ev_ratio_costs = ev_ratio_costs
+        self.full_model = full_model
+    
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        encoded_trace = [[self._encodemx(level[0]), level[1], level[2]]for level in self.trace]
+        encoded_model = self.full_model._to_nice_serialization() if self.full_model is not None else None
+        state.update({
+            'trace' : encoded_trace,
+            'ev_ratios' : self.ev_ratio_costs,
+            'full_model' : encoded_model
+        })
+        return state
+    
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        decoded_trace = [[cls._decodemx(level[0]), level[1], level[2]]for level in state['trace']]
+        model = state['full_model']
+        decoded_model = _Model.from_nice_serialization(model) if model is not None else None
+        return cls(decoded_trace, ev_ratio_costs=state['ev_ratios'], full_model=decoded_model)
+    
+    @property
+    def model(self):
+        if self.full_model is None:
+            print('These results do not contain the full model, please set self.full_model to the correct model to obtain a reduced model.')
+            return None
+            
+        else:
+            return create_red_model(self.full_model, create_embedder_matrix_from_trace(self.trace), vec=self.trace[-1][0])
+
+
 
 class AMSCheckpoint(_NicelySerializable):
     """

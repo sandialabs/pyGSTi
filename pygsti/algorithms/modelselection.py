@@ -6,11 +6,11 @@ import warnings
 import time
 from pygsti.tools.modelselectiontools import create_red_model, reduced_model_approx_GST_fast as _reduced_model_approx_GST_fast
 from pygsti.tools.modelselectiontools import parallel_GST as _parallel_GST, AMSCheckpoint as _AMSCheckpoint, remove_param, remove_params, create_approx_logl_fn
-from pygsti.tools.modelselectiontools import custom_builder as _custom_builders
+from pygsti.tools.modelselectiontools import custom_builder as _custom_builders, AMSGreedyResult as _AMSGreedyResult
 import os as _os
 
 
-def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, maxiter=100, tol=1.0, prob_clip=1e-3, recompute_H_thresh_percentage = .1, disable_checkpoints = False, checkpoint = None, comm = None, mem_limit = None):
+def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, maxiter=100, tol=1.0, prob_clip=1e-3, recompute_H_thresh_percentage = 1, disable_checkpoints = False, checkpoint = None, comm = None, mem_limit = None):
     """
     An automated model selection greedy algorithm. Specifically made for FOGI models, but it should be compatible
     with any model that has a linear interposer. It is considered "fast" because on most model fits, GST analysis is
@@ -119,9 +119,8 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
                 if rank == 0:
                     print(f'Checkpoint contains {len(graph_levels)} levels')
                 params_to_remove = [level[2] for level in graph_levels[1:]]
-                initial_model = remove_params(initial_model, params_to_remove)
-                deltalogl_fn.model = initial_model
-                assert initial_model.num_params == len(expansion_point_x0)
+                deltalogl_fn.model = remove_params(initial_model, params_to_remove)
+                assert deltalogl_fn.model.num_params == len(expansion_point_x0)
             deltalogl_fn.model.sim._processor_grid = (1,1,1)
             deltalogl_fn.model.from_vector(expansion_point_x0)
             prev_dlogl = loaded_checkpoint.prev_dlogl
@@ -254,14 +253,11 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
 
         if rank == 0:
             print(f'{error=}', flush=True)
-
-        if  np.abs(error) > recompute_H_thresh_percentage*er_thresh:
-            recompute_Hessian = True
             
         if verbosity and rank == 0:
                 print(f'Model {best_model[2]} has lowest evidence ratio {best_model[1]}')
-        if recompute_Hessian:
-            
+        if  np.abs(error) > recompute_H_thresh_percentage*er_thresh:
+            recompute_Hessian = True
             if verbosity > 0 and rank == 0:
                 print("Recomputing Hessian, approximation error is ", error)
             sim = pygsti.forwardsims.MapForwardSimulator(processor_grid=(1,size))
@@ -276,8 +272,7 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
             red_model_fit.sim._processor_grid = (1,1,1)
             temp_model = deltalogl_fn.model
             deltalogl_fn.model = red_model_fit
-            #Free memory of initial model
-            initial_model = None
+
             best_model[1] = (deltalogl_fn.fn() - prev_dlogl )*2
             print(f'{deltalogl_fn.fn()=}, {prev_dlogl=}')
             expansion_point_logl = deltalogl_fn.fn()
@@ -344,7 +339,7 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
             print('time this level ', end-start)
     #if not disable_checkpoints and rank == 0 and new_checkpoint is not None:
     #    _os.remove(new_checkpoint.path)
-    return graph_levels
+    return _AMSGreedyResult(graph_levels, full_model=initial_model)
 
 
 
@@ -531,4 +526,4 @@ def do_greedy_from_full_exact(initial_model, data, er_thresh=2.0, verbosity=2, m
             end = time.time()
             print('time this level ', end-start)
 
-    return graph_levels, final_costs
+    return _AMSGreedyResult(graph_levels, final_costs, full_model=initial_model)
