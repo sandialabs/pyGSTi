@@ -56,6 +56,13 @@ class AMSGreedyResult(_NicelySerializable):
         self.trace = trace
         self.ev_ratio_costs = ev_ratio_costs
         self.full_model = full_model
+        self.embedder_matrix = create_embedder_matrix_from_trace(trace)
+        self.full_model_params_kept = []
+        projector_matrix = self.embedder_matrix @ self.embedder_matrix.T
+        for i in range(len(projector_matrix)):
+            if projector_matrix[i][i] == 1:
+                self.full_model_params_kept.append(i)
+        
     
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
@@ -82,8 +89,7 @@ class AMSGreedyResult(_NicelySerializable):
             return None
             
         else:
-            return create_red_model(self.full_model, create_embedder_matrix_from_trace(self.trace), vec=self.trace[-1][0])
-
+            return create_red_model(self.full_model, self.embedder_matrix, vec=self.trace[-1][0])
 
 
 class AMSCheckpoint(_NicelySerializable):
