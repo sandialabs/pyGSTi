@@ -179,7 +179,7 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
         
     red_row_H = H
     red_rowandcol_H = H
-    deltalogl_model_projector = np.eye(initial_model.num_params)
+    deltalogl_model_projector = np.eye(H.shape[0])
     
     approx_logl_fn = create_approx_logl_fn(H, expansion_point_x0, prev_dlogl)
     exceeded_threshold = False
