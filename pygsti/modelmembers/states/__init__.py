@@ -291,7 +291,7 @@ def convert(state, to_type, basis, ideal_state=None, flatten_structure=False, cp
                         Vt = Vt[S > 1e-13, :].reshape((-1, Vt.shape[1]))
                         return Vt
                         
-                    phys_directions = calc_physical_subspace(dense_state)
+                    phys_directions = calc_physical_subspace(dense_st)
     
                     #We use optimization to find the best error generator representation
                     #we only vary physical directions, not independent error generators
@@ -307,7 +307,10 @@ def convert(state, to_type, basis, ideal_state=None, flatten_structure=False, cp
                                          tol=1e-13)  
                     
                     if not soln.success and soln.fun > 1e-6:  # not "or" because success is often not set correctly
-                        raise ValueError("Failed to find an errorgen such that exp(errorgen)|ideal> = |state>")
+                        soln = _spo.minimize(_objfn, _np.zeros(len(phys_directions), 'd'), method="Nelder-Mead", options={'maxiter':10000},
+                                         tol=1e-13) 
+                        if not soln.success and soln.fun > 1e-6: 
+                            raise ValueError("Failed to find an errorgen such that exp(errorgen)|ideal> = |state>")
                     
                     errgen_vec = _np.linalg.lstsq(phys_directions, soln.x)[0]
                     errorgen.from_vector(errgen_vec)

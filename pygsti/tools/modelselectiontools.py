@@ -51,19 +51,20 @@ class AMSGreedyResult(_NicelySerializable):
     to construct a results table with the function ams_results_table().
     """
 
-    def __init__(self, trace, ev_ratio_costs=[], full_model=None):
+    def __init__(self, trace, ams_settings, ev_ratio_costs=[], full_model=None):
         super().__init__()
         self.trace = trace
         self.ev_ratio_costs = ev_ratio_costs
         self.full_model = full_model
         self.embedder_matrix = create_embedder_matrix_from_trace(trace)
         self.full_model_params_kept = []
+        self.ams_settings = ams_settings
         projector_matrix = self.embedder_matrix @ self.embedder_matrix.T
         for i in range(len(projector_matrix)):
             if projector_matrix[i][i] == 1:
                 self.full_model_params_kept.append(i)
         
-    
+  
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
         encoded_trace = [[self._encodemx(level[0]), level[1], level[2]]for level in self.trace]
@@ -71,7 +72,8 @@ class AMSGreedyResult(_NicelySerializable):
         state.update({
             'trace' : encoded_trace,
             'ev_ratios' : self.ev_ratio_costs,
-            'full_model' : encoded_model
+            'full_model' : encoded_model,
+            'settings' : self.ams_settings
         })
         return state
     
@@ -80,7 +82,8 @@ class AMSGreedyResult(_NicelySerializable):
         decoded_trace = [[cls._decodemx(level[0]), level[1], level[2]]for level in state['trace']]
         model = state['full_model']
         decoded_model = _Model.from_nice_serialization(model) if model is not None else None
-        return cls(decoded_trace, ev_ratio_costs=state['ev_ratios'], full_model=decoded_model)
+        settings = state['settings']
+        return cls(decoded_trace, settings, ev_ratio_costs=state['ev_ratios'], full_model=decoded_model)
     
     @property
     def model(self):

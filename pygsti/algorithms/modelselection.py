@@ -101,6 +101,7 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
     initial_model.param_interposer.inv_transform_matrix_projector = np.eye(initial_model.num_params)
     builders = _custom_builders(prob_clip)
     deltalogl_fn =  builders.final_builders[0].build(initial_model, data.dataset, list(data.dataset.keys()))
+    hessian_recomputed_previous_level = True
     H = None
     expansion_point_x0 = None
 
@@ -117,7 +118,7 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
             graph_levels = loaded_checkpoint.graph_levels
             if not (len(graph_levels) == 0 and expansion_point_x0 is not None):
                 if rank == 0:
-                    print(f'Checkpoint contains {len(graph_levels)} levels')
+                    print(f'Checkpoint contains {len(graph_levels)} levels', flush=True)
                 params_to_remove = [level[2] for level in graph_levels[1:]]
                 deltalogl_fn.model = remove_params(initial_model, params_to_remove)
                 assert deltalogl_fn.model.num_params == len(expansion_point_x0)
@@ -280,17 +281,19 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
             red_row_H = H
             red_rowandcol_H = H
             if rank == 0 and verbosity > 0:
-                print('New exact evidence ratio is ', best_model[1])
+                print('New exact evidence ratio is ', best_model[1], f', improved by {deltalogl_fn.fn()-prev_dlogl}')
             
 
-        
         if best_model[1] > er_thresh or len(best_model[0]) == 1:
+            exceeded_threshold = True
+        if not hessian_recomputed_previous_level and exceeded_threshold:
                 if rank == 0 and verbosity > 0:
                     print('All models from this level exceeded evidence ratio threshold, model rejected. Stopping!')
                 
                 exceeded_threshold = True
 
                 sim = pygsti.forwardsims.MapForwardSimulator(processor_grid=(1,size))
+
                 if recompute_Hessian:
                     deltalogl_fn.model = temp_model
                 else:
@@ -301,20 +304,21 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
                 deltalogl_fn.model = final_fit_model
                 curr_dlogl = deltalogl_fn.fn()
                 new_quantity = 2*(curr_dlogl - prev_dlogl)
-                total_ev_ratio = 2*(curr_dlogl - original_dlogl)/len(graph_levels)
                 
                 evratios = [level[1] for level in graph_levels[1:]]
                 pre_opt = np.average(evratios)
-                if rank == 0 and verbosity > 0:
-                    print('Evidence ratio wrt first model is ', total_ev_ratio)
-                    print('Evidence ratio pre-optimization was ', pre_opt)
-                    print('Evidence ratio wrt first model improved by ', pre_opt - total_ev_ratio)
-                    print('Removed ', len(graph_levels)-1, ' parameters')
                 graph_levels[-1] = [final_fit_model.to_vector(), new_quantity, graph_levels[-1][2], graph_levels[-1][1]]
-                if total_ev_ratio > er_thresh:
-                     warnings.warn("Final model does not meet er_thresh specified. This is likely a result of approximating logl calculations. Evidence ratio between seed model and model being returned: " + total_ev_ratio)
+                post_opt = np.average([level[1] for level in graph_levels[1:]])
+                #TODO check if average is equivalent to evidence ratio between parent and reduced
+                if rank == 0 and verbosity > 0:
+                    print('Evidence ratio wrt first model is ', post_opt)
+                    print('Evidence ratio pre-optimization was ', pre_opt)
+                    print('Evidence ratio wrt first model improved by ', pre_opt - post_opt)
+                    print('Removed ', len(graph_levels)-1, ' parameters')
+                
 
-        else:
+
+        if not exceeded_threshold:
             prev_dlogl = prev_dlogl + best_model[1]/2
             graph_levels.append(best_model)
             if (not disable_checkpoints and rank == 0 and recompute_Hessian):
@@ -324,11 +328,13 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
                 new_checkpoint.x0 = expansion_point_x0
                 new_checkpoint.save()
             if recompute_Hessian:
+                hessian_recomputed_previous_level=True
                 recompute_Hessian = False
                 temp_model = None
                 deltalogl_model_projector = np.eye(len(expansion_point_x0))
                 
             else:
+                hessian_recomputed_previous_level=False
                 deltalogl_model_projector = np.delete(deltalogl_model_projector, best_model[2], axis=1)
                 red_row_H = np.delete(red_row_H, best_model[2], axis=0)
                 red_rowandcol_H = np.delete(np.delete(red_rowandcol_H,best_model[2] , axis=0), best_model[2], axis=1) 
@@ -339,11 +345,12 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
             print('time this level ', end-start)
     #if not disable_checkpoints and rank == 0 and new_checkpoint is not None:
     #    _os.remove(new_checkpoint.path)
-    return _AMSGreedyResult(graph_levels, full_model=initial_model)
+    settings = {'er_thresh':er_thresh, 'verbosity':verbosity, 'maxiter':maxiter, 'tol':tol, 'prob_clip':prob_clip,'recompute_H_thresh_percentage':recompute_H_thresh_percentage}
+    return _AMSGreedyResult(graph_levels, settings, full_model=initial_model)
 
 
 
-def do_greedy_from_full_exact(initial_model, data, er_thresh=2.0, verbosity=2, maxiter=100, tol=1e-7, prob_clip=1e-3, comm = None, mem_limit = None):
+def do_greedy_from_full_exact(initial_model, data, er_thresh=2.0, verbosity=2, maxiter=100, tol=1e-7, prob_clip=1e-3, comm = None):
     """
     An automated model selection greedy algorithm. Specifically made for FOGI models, but it should be compatible
     with any model that has a linear interposer. It is considered "exact" because every model considered is found through GST, as opposed to
@@ -489,7 +496,6 @@ def do_greedy_from_full_exact(initial_model, data, er_thresh=2.0, verbosity=2, m
             level_chunk.append([deltalogl_fn.model.to_vector(), quantity, i])
         
         if comm is not None:
-            print('waiting', flush=True)
             level_raw = comm.allgather(level_chunk)
             level = [item for sublist in level_raw for item in sublist]
             comm.free_all_children()
@@ -525,5 +531,5 @@ def do_greedy_from_full_exact(initial_model, data, er_thresh=2.0, verbosity=2, m
             print("next level")
             end = time.time()
             print('time this level ', end-start)
-
-    return _AMSGreedyResult(graph_levels, final_costs, full_model=initial_model)
+    settings = {'er_thresh':er_thresh, 'verbosity':verbosity, 'maxiter':maxiter, 'tol':tol, 'prob_clip':prob_clip}
+    return _AMSGreedyResult(graph_levels, settings, final_costs, full_model=initial_model)
