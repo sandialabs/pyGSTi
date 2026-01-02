@@ -254,7 +254,7 @@ class StateSpace(_NicelySerializable):
         -------
         tuple
         """
-        return self.tensor_product_blocks_dimensions[i_tpb]
+        return self.tensor_product_blocks_udimensions[i_tpb]
 
     def copy(self):
         """
