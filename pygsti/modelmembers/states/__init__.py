@@ -306,9 +306,16 @@ def convert(state, to_type, basis, ideal_state=None, flatten_structure=False, cp
                     soln = _spo.minimize(_objfn, _np.zeros(len(phys_directions), 'd'), method="Nelder-Mead", options={},
                                          tol=1e-13)  
                     
+                    #If we don't succeed, try again with different optimizer settings
                     if not soln.success and soln.fun > 1e-6:  # not "or" because success is often not set correctly
-                        soln = _spo.minimize(_objfn, _np.zeros(len(phys_directions), 'd'), method="Nelder-Mead", options={'maxiter':10000},
-                                         tol=1e-13) 
+                        methods = ['Nelder-Mead', None, None]
+                        options = [{'maxiter':10000}, None, {'maxiter':10000}]
+                        for method, option in zip(methods, options):
+
+                            soln = _spo.minimize(_objfn, _np.zeros(len(phys_directions), 'd'), method=method, options=option,
+                                            tol=1e-13) 
+                            if  soln.success and soln.fun < 1e-6: 
+                                break
                         if not soln.success and soln.fun > 1e-6: 
                             raise ValueError("Failed to find an errorgen such that exp(errorgen)|ideal> = |state>")
                     

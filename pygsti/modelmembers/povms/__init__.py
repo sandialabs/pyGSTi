@@ -611,7 +611,17 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False, cp_p
                 soln = _spo.minimize(_objfn, _np.zeros(len(phys_directions), 'd'), method="Nelder-Mead", options={},
                                         tol=1e-13) 
                 if not soln.success and soln.fun > 1e-6:  # not "or" because success is often not set correctly
-                    raise ValueError("Failed to find an errorgen such that <ideal|exp(errorgen) = <effect|")
+                    methods = ['Nelder-Mead', None, None]
+                    options = [{'maxiter':10000}, None, {'maxiter':10000}]
+                    for method, option in zip(methods, options):
+
+                        soln = _spo.minimize(_objfn, _np.zeros(len(phys_directions), 'd'), method=method, options=option,
+                                        tol=1e-13) 
+                        if  soln.success and soln.fun < 1e-6: 
+                            break
+                    if not soln.success and soln.fun > 1e-6: 
+                        raise ValueError("Failed to find an errorgen such that exp(errorgen)|ideal> = |state>")
+                    
                 errgen_vec = _np.linalg.lstsq(phys_directions, soln.x)[0]
                 errorgen.from_vector(errgen_vec)
                 
