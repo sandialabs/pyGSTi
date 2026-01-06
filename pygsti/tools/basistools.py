@@ -9,7 +9,7 @@ Utility functions for working with Basis objects
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
-
+from __future__ import annotations
 from functools import partial, lru_cache
 
 import numpy as _np
@@ -17,6 +17,7 @@ import numpy as _np
 from pygsti.baseobjs.basisconstructors import _basis_constructor_dict
 from pygsti.baseobjs import basis as _basis
 
+from typing import Literal
 
 @lru_cache(maxsize=1)
 def basis_matrices(name_or_basis, dim, sparse=False):
@@ -284,7 +285,7 @@ def create_basis_for_matrix(mx, basis):
         return _basis.BuiltinBasis(basis, dim)
 
 
-def resize_std_mx(mx, resize, std_basis_1, std_basis_2):
+def resize_std_mx(mx: _np.ndarray, resize: Literal['expand', 'contract'], std_basis_1: _basis.Basis, std_basis_2: _basis.Basis) -> _np.ndarray:
     """
     Change the basis of `mx` to a potentially larger or smaller 'std'-type basis given by `std_basis_2`.
 
@@ -304,7 +305,7 @@ def resize_std_mx(mx, resize, std_basis_1, std_basis_2):
     Parameters
     ----------
     mx : numpy array
-        A square matrix in the `std_basis_1` basis.
+        A 2D square matrix, or 1d vector in the `std_basis_1` basis.
 
     resize : {'expand','contract'}
         Whether `mx` can be expanded or contracted.
@@ -324,21 +325,28 @@ def resize_std_mx(mx, resize, std_basis_1, std_basis_2):
         return change_basis(mx, std_basis_1, std_basis_2)  # don't just 'return mx' here
         # - need to change bases if bases are different (e.g. if one is a Tensorprod of std components)
 
-    #print('{}ing {} to {}'.format(resize, std_basis_1, std_basis_2))
-    #print('Dims: ({} to {})'.format(std_basis_1.dim, std_basis_2.dim))
+    isMx = len(mx.shape) == 2 and mx.shape[0] == mx.shape[1]
     #Below: use 'exp' in comments for 'expanded dimension'
     if resize == 'expand':
         assert std_basis_1.dim < std_basis_2.dim
-        right = _np.dot(mx, std_basis_1.from_elementstd_transform_matrix)  # (exp,dim) (dim,dim) (dim,exp) => exp,exp
-        mid = _np.dot(std_basis_1.to_elementstd_transform_matrix, right)  # want Ai st.   Ai * A = I(dim)
+        from_mx = std_basis_1.from_elementstd_transform_matrix
+        to_mx = std_basis_1.to_elementstd_transform_matrix
+        if isMx:
+            ret = to_mx @ (mx @ from_mx)
+        else:
+            ret = to_mx @ mx
     elif resize == 'contract':
         assert std_basis_1.dim > std_basis_2.dim
-        right = _np.dot(mx, std_basis_2.to_elementstd_transform_matrix)  # (dim,dim) (dim,exp) => dim,exp
-        mid = _np.dot(std_basis_2.from_elementstd_transform_matrix, right)  # (dim, exp) (exp, dim) => expdim, exp
-    return mid
+        from_mx = std_basis_2.from_elementstd_transform_matrix
+        to_mx = std_basis_2.to_elementstd_transform_matrix
+        if isMx:
+            ret = from_mx @ (mx @ to_mx)
+        else:
+            ret = from_mx @ mx
+    return ret
 
 
-def flexible_change_basis(mx, start_basis, end_basis):
+def flexible_change_basis(mx: _np.ndarray, start_basis: _basis.Basis, end_basis: _basis.Basis) -> _np.ndarray:
     """
     Change `mx` from `start_basis` to `end_basis` allowing embedding expansion and contraction if needed.
 
@@ -347,7 +355,7 @@ def flexible_change_basis(mx, start_basis, end_basis):
     Parameters
     ----------
     mx : numpy array
-        The operation matrix (a 2D square array) in the `start_basis` basis.
+        The operation matrix (a 1D or 2D square array) in the `start_basis` basis.
 
     start_basis : Basis
         The source basis.
