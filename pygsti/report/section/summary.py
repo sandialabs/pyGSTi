@@ -38,7 +38,10 @@ class SummarySection(_Section):
     @_Section.figure_factory()
     def final_gates_vs_target_table_insummary(workspace, switchboard=None, confidence_level=None, ci_brevity=1,
                                               show_unmodeled_error=False, **kwargs):
-        summary_display = ('inf', 'trace', 'diamond', 'geni', 'evinf', 'evdiamond')
+        if kwargs.get('n_leak', 0) == 0:
+            summary_display = ('inf', 'trace', 'diamond', 'evinf', 'evdiamond')
+        else:
+            summary_display = ('sub-inf', 'sub-trace', 'sub-diamond', 'plf-sub-diamond', 'leak-rate-max')
         wildcardBudget = None
         if show_unmodeled_error:
             summary_display += ('unmodeled',)

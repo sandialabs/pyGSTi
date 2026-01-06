@@ -13,19 +13,14 @@ Defines the FirstOrderGaugeInvariantStore class and supporting functionality.
 import numpy as _np
 import scipy.sparse as _sps
 import copy as _copy
-import warnings as _warnings
-import itertools as _itertools
-import collections as _collections
 from pygsti.baseobjs import Basis as _Basis
 from pygsti.tools import matrixtools as _mt
-from pygsti.tools import optools as _ot
 from pygsti.tools import slicetools as _slct
 from pygsti.tools import fogitools as _fogit
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GlobalElementaryErrorgenLabel
 from pygsti.tools.slicetools import slice_hash as _slice_hash
-from pygsti.baseobjs.errorgenspace import ErrorgenSpace as _ErrorgenSpace
 
 class FirstOrderGaugeInvariantStore(_NicelySerializable):
     """
@@ -353,6 +348,7 @@ class FirstOrderGaugeInvariantStore(_NicelySerializable):
         allop_gauge_action = cls._decodemx(state['allop_gauge_action'])
         gauge_space_directions = cls._decodemx(state['gauge_space_directions'])
         dependent_fogi_action = state['dependent_fogi_action']
+        from pygsti.baseobjs.errorgenspace import ErrorgenSpace as _ErrorgenSpace
         gauge_space = _ErrorgenSpace.from_nice_serialization(state['gauge_space'])
         norm_order = state['norm_order']
 

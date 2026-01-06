@@ -128,7 +128,10 @@ class SpamTable(WorkspaceTable):
         
         if confidence_region_infos is None:
             confidence_region_infos = [None]*len(models)
-        
+        elif not isinstance(confidence_region_infos, list):
+            confidence_region_infos = [confidence_region_infos]
+
+
         rhoLabels = list(models[0].preps.keys())  # use labels of 1st model
         povmLabels = list(models[0].povms.keys())  # use labels of 1st model
 
@@ -460,6 +463,9 @@ class GatesTable(WorkspaceTable):
         
         if confidence_region_infos is None:
             confidence_region_infos = [None]*len(models)
+        elif not isinstance(confidence_region_infos, list):
+            confidence_region_infos = [confidence_region_infos]
+        
 
         opLabels = models[0].primitive_op_labels  # use labels of 1st model
         instLabels = list(models[0].instruments.keys())  # requires an explicit model!
@@ -1536,7 +1542,11 @@ class ErrgenTable(WorkspaceTable):
                 colHeadings.append('%sStochastic Projections' % basisPrefix)
             elif disp == "CA":
                 colHeadings.append('%sActive\\Correlation Projections' % basisPrefix)
-            else: raise ValueError("Invalid display element: %s" % disp)
+            else: 
+                msg = "Invalid display element: %s" % disp
+                if disp in {'C','A'}:
+                    msg += f'\nYou probably meant to use "CA" instead of {disp}.'
+                raise ValueError(msg)
 
         assert(display_as == "boxes" or display_as == "numbers")
         table = _ReportTable(colHeadings, (None,) * len(colHeadings),
@@ -2557,10 +2567,10 @@ class GateEigenvalueTable(WorkspaceTable):
                 #TODO: move this to a reportable qty to get error bars?
 
                 if isinstance(gl, _baseobjs.Label) or isinstance(gl, str):
-                    # no error bars
-                    target_evals = _np.linalg.eigvals(target_model.operations[gl].to_dense("HilbertSchmidt"))
+                    mx = target_model.operations[gl].to_dense("HilbertSchmidt")
                 else:
-                    target_evals = _np.linalg.eigvals(target_model.sim.product(gl))  # no error bars
+                    mx = target_model.sim.product(gl)
+                target_evals = _tools.eigenvalues(mx)
 
                 if any([(x in display) for x in ('rel', 'log-rel', 'relpolar')]):
                     if isinstance(gl, _baseobjs.Label) or isinstance(gl, str):
@@ -2673,11 +2683,13 @@ class GateEigenvalueTable(WorkspaceTable):
                 row_formatters = [None]
 
                 #FUTURE: use reportables to get instrument eigenvalues
-                evals = _ReportableQty(_np.linalg.eigvals(comp.to_dense("HilbertSchmidt")))
+                mx = comp.to_dense("HilbertSchmidt")
+                evals = _ReportableQty(_tools.eigenvalues(mx))
                 evals = evals.reshape(evals.size, 1)
 
                 if target_model is not None:
-                    target_evals = _np.linalg.eigvals(tcomp.to_dense("HilbertSchmidt"))  # no error bars
+                    tmx = tcomp.to_dense("HilbertSchmidt")
+                    target_evals = _tools.eigenvalues(tmx)  # no error bars
                     #Note: no support for relative eigenvalues of instruments (yet)
 
                     # permute target eigenvalues according to min-weight matching

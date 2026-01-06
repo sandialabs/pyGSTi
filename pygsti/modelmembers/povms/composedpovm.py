@@ -338,7 +338,7 @@ class ComposedPOVM(_POVM):
         """
         self.error_map.spam_transform_inplace(s, 'effect')  # only do this *once*
         for lbl, effect in self.items():
-            #effect._update_rep()  # these two lines mimic the bookeeping in
+            #effect._update_rep()  # these two lines mimic the bookkeeping in
             effect.dirty = True   # a "effect.transform_inplace(s, 'effect')" call.
         self.dirty = True
 

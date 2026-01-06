@@ -1,14 +1,9 @@
+from ...util import BaseCase
+
 import pygsti
 from pygsti.extras.devices.experimentaldevice import ExperimentalDevice
 from pygsti.extras import ibmq
 from pygsti.processors import CliffordCompilationRules as CCR
-
-try:
-    from qiskit.providers.fake_provider import GenericBackendV2
-    from qiskit_ibm_runtime import QiskitRuntimeService
-    HAVE_QISKIT = True
-except ImportError:
-    HAVE_QISKIT = False
 from pygsti.protocols import MirrorRBDesign as RMCDesign
 from pygsti.protocols import PeriodicMirrorCircuitDesign as PMCDesign
 from pygsti.protocols import ByDepthSummaryStatistics
@@ -17,10 +12,26 @@ from pygsti.protocols import StandardGSTDesign
 import numpy as np
 import pytest
 
-@pytest.mark.skipif(not HAVE_QISKIT, reason="IBMQ experiment tests require qiskit.")
-class IBMQExperimentTester:
+try:
+    from qiskit.providers.fake_provider import GenericBackendV2
+except:
+    GenericBackendV2 = None
+
+try:
+    from qiskit_ibm_runtime import QiskitRuntimeService
+except:
+    QiskitRuntimeService = None
+
+import pytest
+
+class IBMQExperimentTester():
     @classmethod
     def setup_class(cls):
+        if GenericBackendV2 is None:
+            pytest.skip('Qiskit is required for this operation, and does not appear to be installed.')
+        elif QiskitRuntimeService is None:
+            pytest.skip('Qiskit Runtime is required for this operation, and does not appear to be installed.')
+            
         cls.backend = GenericBackendV2(num_qubits=4)
         cls.device = ExperimentalDevice.from_qiskit_backend(cls.backend)
         cls.pspec = cls.device.create_processor_spec(['Gc{}'.format(i) for i in range(24)] + ['Gcphase'])
@@ -126,12 +137,11 @@ class IBMQExperimentTester:
         # Computes the summary statistics for each circuit
         results = stats_generator.run(data)
 
-        #TODO: Turn back on correctness checks when I figure out the pandas 2.3.1 and python 3.12 incompatibilities here.
         # Turns the results into a data frame.
-        #df = results.to_dataframe('ValueName', drop_columns=['ProtocolName','ProtocolType'])
+        df = results.to_dataframe('ValueName', drop_columns=['ProtocolName','ProtocolType'])
 
         # Here's a simple test that everything worked correctly (it's a noise-free simulation)
-        #assert(all(1. == df['success_probabilities']))
+        assert(all(1. == df['success_probabilities']))
 
     #End-to-end integration test for MCM GST.
     def test_e2e_MCM_gst(self):

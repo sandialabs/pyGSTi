@@ -14,6 +14,7 @@ Core GST algorithms
 import collections as _collections
 import time as _time
 import copy as _copy
+import warnings as _warnings
 
 import numpy as _np
 import scipy.optimize as _spo
@@ -33,7 +34,6 @@ from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.optimize.simplerlm import Optimizer as _Optimizer, SimplerLMOptimizer as _SimplerLMOptimizer
 from pygsti import forwardsims as _fwdsims
-from pygsti import layouts as _layouts
 
 _dummy_profiler = _DummyProfiler()
 
@@ -392,6 +392,9 @@ def _lgst_matrix_dims(model, prep_fiducials, effect_fiducials):
 
 
 def _construct_ab(prep_fiducials, effect_fiducials, model, dataset, op_label_aliases=None):
+    if not prep_fiducials or not effect_fiducials:
+        _warnings.warn('Either prep_fiducials or effect_fiducials is empty. May return unexpected array.')
+    
     nRhoSpecs, nESpecs, povmLbls, povmLens = _lgst_matrix_dims(
         model, prep_fiducials, effect_fiducials)
 

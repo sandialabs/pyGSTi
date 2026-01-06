@@ -37,9 +37,9 @@ class MPITester:
             raise RuntimeError(msg)
         result = subprocess.run(subprocess_args, capture_output=False, text=True)
         out, err = capfd.readouterr()
-        tmp = out + err
-        tmp = [t for t in tmp if t != ALLOWED_MESSAGE]
-        if len(tmp) > 0:
+
+        #strip new lines/carriage returns before checking length.
+        if len(out.replace('\n', '').replace('\r', '')) + len(err.replace('\n', '').replace('\r', '')) > 0:
             msg = out + '\n'+ 80*'-' + err
             raise RuntimeError(msg)
         return

@@ -184,7 +184,7 @@ class MarginalizedPOVM(_POVM):
 
         if key in self:  # calls __contains__ to efficiently check for membership
             #create effect vector now that it's been requested (lazy creation)
-            #FUTURE: maybe have a "SumPOVMEffect" that can add spamvecs to preserve paramterization and avoid dense reps
+            #FUTURE: maybe have a "SumPOVMEffect" that can add spamvecs to preserve parameterization and avoid dense reps
             effect_vec = None  # Note: currently all marginalized POVMs are *static*, since
             # we don't have a good general way to add parameterized effect vectors.
 

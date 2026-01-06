@@ -19,6 +19,7 @@ from .hypothesis import *
 from .jamiolkowski import *
 from .legacytools import *
 from .likelihoodfns import *
+from .leakage import *
 from .lindbladtools import *
 from .listtools import *
 from .matrixmod2 import *

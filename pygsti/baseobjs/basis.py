@@ -794,6 +794,22 @@ class LazyBasis(Basis):
                 self._lazy_build_labels()
             self._ellookup = {lbl: el for lbl, el in zip(self._labels, self._elements)}
         return self._ellookup
+    
+    @property
+    def elindlookup(self) -> dict:
+        """
+        A dictionary mapping labels to the index in self.elements that holds
+        that label's basis element.
+
+        Returns
+        -------
+        dict
+        """
+        if self._ellookup is None:
+            if self._labels is None:
+                self._lazy_build_labels()
+            self._elindlookup = {lbl: ind for ind, lbl in enumerate(self._labels)}
+        return self._elindlookup
 
     @property
     def elements(self):

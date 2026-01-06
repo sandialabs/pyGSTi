@@ -19,3 +19,5 @@ from .circuitconstruction import *
 from .cloudcircuitconstruction import *
 from .gstcircuits import *
 # Unused: from rpecircuits import *
+
+from .subcircuit_selection import *

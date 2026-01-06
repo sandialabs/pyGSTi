@@ -16,6 +16,7 @@ import itertools as _itertools
 import warnings as _warnings
 
 import numpy as _np
+import scipy.linalg as _la
 import scipy.stats as _stats
 
 from pygsti import optimize as _opt
@@ -654,16 +655,21 @@ class ConfidenceRegionFactory(_NicelySerializable):
         # to transform H -> H' in another coordinate system v -> w = B @ v:
         # v.T @ H @ v = some 2nd deriv = v.T @ B.T @ H' @ B @ v in another basis
         # so H' = invB.T @ H @ invB
-        assert(_np.allclose(hessian, hessian.T))
+        TOL = 1e-7
+        assert(_la.norm(hessian.imag) == 0)
+        sym_err_abs = _la.norm(hessian - hessian.T)
+        sym_err_rel = sym_err_abs / _la.norm(hessian)
+        assert(sym_err_rel < TOL)
+        hessian += hessian.T
+        hessian /= 2
         invB = _np.concatenate([nongauge_space, gauge_space], axis=1)  # takes (nongauge,guage) -> orig coords
         B = _np.linalg.inv(invB)  # takes orig -> (nongauge,gauge) coords
         Hprime = invB.T @ hessian @ invB
-        #assert(_np.allclose(Hprime, Hprime.T))  # doesn't handle large magnituge Hessians well
-        assert(_np.linalg.norm(Hprime - Hprime.T) / _np.linalg.norm(Hprime) < 1e-7)
+        assert(_la.norm(Hprime.imag) == 0)
 
         if gradient is not None:  # Check that Hprime is block-diagonal -- off-diag should be ~O(gradient)
             coupling = Hprime[0:nongauge_space.shape[1], nongauge_space.shape[1]:]
-            if _np.linalg.norm(coupling) / (1e-6 + _np.linalg.norm(gradient)) > 5:
+            if _np.linalg.norm(coupling) / (10*TOL + _np.linalg.norm(gradient)) > 5:
                 _warnings.warn("Gauge-nongauge mixed partials have unusually high magnitude: \n"
                                + "|off-diag blk| = %.2g should be ~ |gradient| = %.2g" %
                                (_np.linalg.norm(coupling), _np.linalg.norm(gradient)))
@@ -1013,47 +1019,7 @@ class ConfidenceRegionFactoryView(object):
             raise ValueError(("Invalid item label (%s) for computing" % label)
                              + "profile likelihood confidence intervals")
 
-    def compute_confidence_interval(self, fn_obj, eps=1e-7,
-                                    return_fn_val=False, verbosity=0):
-        """
-        Compute the confidence interval for an arbitrary function.
-
-        This "function", however, must be encapsulated as a
-        `ModelFunction` object, which allows it to neatly specify
-        what its dependencies are and allows it to compaute finite-
-        different derivatives more efficiently.
-
-        Parameters
-        ----------
-        fn_obj : ModelFunction
-            An object representing the function to evaluate. The
-            returned confidence interval is based on linearizing this function
-            and propagating the model-space confidence region.
-
-        eps : float, optional
-            Step size used when taking finite-difference derivatives of fnOfOp.
-
-        return_fn_val : bool, optional
-            If True, return the value of fnOfOp along with it's confidence
-            region half-widths.
-
-        verbosity : int, optional
-            Specifies level of detail in standard output.
-
-        Returns
-        -------
-        df : float or numpy array
-            Half-widths of confidence intervals for each of the elements
-            in the float or array returned by fnOfOp.  Thus, shape of
-            df matches that returned by fnOfOp.
-        f0 : float or numpy array
-            Only returned when return_fn_val == True. Value of fnOfOp
-            at the gate specified by op_label.
-        """
-
-        nParams = self.model.num_params
-        f0 = fn_obj.evaluate(self.model)  # function value at "base point"
-
+    def compute_grad_f(self, fn_obj, f0, nParams, eps=1e-7):
         #Get finite difference derivative gradF that is shape (nParams, <shape of f0>)
         gradF = _create_empty_grad_f(f0, nParams)
 
@@ -1105,6 +1071,51 @@ class ConfidenceRegionFactoryView(object):
                 assert(_np.linalg.norm(_np.imag(f - f0)) < 1e-12 or _np.iscomplexobj(gradF)
                        ), "gradF seems to be the wrong type!"
                 gradF[igp] = _np.real_if_close(f - f0) / eps
+        return gradF
+    
+    def compute_confidence_interval(self, fn_obj, eps=1e-7,
+                                    return_fn_val=False, verbosity=0):
+        """
+        Compute the confidence interval for an arbitrary function.
+
+        This "function", however, must be encapsulated as a
+        `ModelFunction` object, which allows it to neatly specify
+        what its dependencies are and allows it to compaute finite-
+        different derivatives more efficiently.
+
+        Parameters
+        ----------
+        fn_obj : ModelFunction
+            An object representing the function to evaluate. The
+            returned confidence interval is based on linearizing this function
+            and propagating the model-space confidence region.
+
+        eps : float, optional
+            Step size used when taking finite-difference derivatives of fnOfOp.
+
+        return_fn_val : bool, optional
+            If True, return the value of fnOfOp along with it's confidence
+            region half-widths.
+
+        verbosity : int, optional
+            Specifies level of detail in standard output.
+
+        Returns
+        -------
+        df : float or numpy array
+            Half-widths of confidence intervals for each of the elements
+            in the float or array returned by fnOfOp.  Thus, shape of
+            df matches that returned by fnOfOp.
+        f0 : float or numpy array
+            Only returned when return_fn_val == True. Value of fnOfOp
+            at the gate specified by op_label.
+        """
+
+        nParams = self.model.num_params
+        f0 = fn_obj.evaluate(self.model)  # function value at "base point"
+
+        #Get finite difference derivative gradF that is shape (nParams, <shape of f0>)
+        gradF = self.compute_grad_f(fn_obj, f0, nParams, eps)
 
         return self._compute_return_from_grad_f(gradF, f0, return_fn_val, verbosity)
 
