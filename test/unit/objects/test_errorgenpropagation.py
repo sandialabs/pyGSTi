@@ -209,7 +209,7 @@ def probabilities_errorgen_prop(error_propagator, target_model, circuit, use_bch
     for i, effect in enumerate(ideal_meas.values()):
         dense_effect = effect.to_dense().copy()
         dense_prep = ideal_prep.to_dense().copy()
-        prob_vec[i] = np.linalg.multi_dot([dense_effect.reshape((1,len(dense_effect))), eoc_channel, ideal_channel, dense_prep.reshape((len(dense_prep),1))])
+        prob_vec[i] = np.einsum("a,ab,bc,c->",dense_effect, eoc_channel, ideal_channel, dense_prep)
     return prob_vec
 
 def probabilities_fwdsim(noise_model, circuit):
