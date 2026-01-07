@@ -54,7 +54,7 @@ class Model(_NicelySerializable):
         The state space of this model.
     """
 
-    def __init__(self, state_space):
+    def __init__(self, state_space: _statespace.StateSpace.Castable):
         super().__init__()
         self._state_space = _statespace.StateSpace.cast(state_space)
         self._num_modeltest_params = None
@@ -166,7 +166,7 @@ class Model(_NicelySerializable):
         Parameters
         ----------
         index : int
-            The index of the paramter whose bounds should be set.
+            The index of the parameter whose bounds should be set.
 
         lower_bound, upper_bound : float, optional
             The lower and upper bounds for the parameter.  Can be set to the special
@@ -214,7 +214,7 @@ class Model(_NicelySerializable):
         Parameters
         ----------
         index : int
-            The index of the paramter whose label should be set.
+            The index of the parameter whose label should be set.
 
         label : object
             An object that serves to label this parameter.  Often a string.
@@ -428,7 +428,7 @@ class OpModel(Model):
     and POMV effects.
 
     Thirdly, an `OpModel` is assumed to use a *layer-by-layer* evolution, and,
-    because of circuit simplification process, the calculaton of circuit
+    because of circuit simplification process, the calculation of circuit
     outcome probabilities has been pushed to a :class:`ForwardSimulator`
     object which just deals with the forward simulation of simplified circuits.
     Furthermore, instead of relying on a static set of operations a forward
@@ -463,7 +463,7 @@ class OpModel(Model):
         layer_rules : LayerRules
             The "layer rules" used for constructing operators for circuit
             layers.  This functionality is essential to using this model to
-            simulate ciruits, and is typically supplied by derived classes.
+            simulate circuits, and is typically supplied by derived classes.
 
         simulator : ForwardSimulator or {"auto", "matrix", "map"}
             The forward simulator (or typ) that this model should use.  `"auto"`
@@ -624,7 +624,7 @@ class OpModel(Model):
         Parameters
         ----------
         index : int
-            The index of the paramter whose label should be set.
+            The index of the parameter whose label should be set.
 
         label : object
             An object that serves to label this parameter.  Often a string.
@@ -763,7 +763,7 @@ class OpModel(Model):
         if OpModel._pcheck: self._check_paramvec()
 
     def _mark_for_rebuild(self, modified_obj=None):
-        #re-initialze any members that also depend on the updated parameters
+        #re-initialize any members that also depend on the updated parameters
         self._need_to_rebuild = True
 
         # Specifically, we need to re-allocate indices for every object that
@@ -875,7 +875,7 @@ class OpModel(Model):
 
     def uncollect_parameters(self, param_to_uncollect):
         """
-        Updates this model's parameters so that a common paramter becomes independent parameters.
+        Updates this model's parameters so that a common parameter becomes independent parameters.
 
         The model's parameterization is modified so that each usage of the given parameter
         in the model's parameterized operations is promoted to being a new independent
@@ -1391,7 +1391,7 @@ class OpModel(Model):
             the `complete_circuits` kwargs should be used.
 
         completed_circuits : list of Circuits, optional (default None)
-            If specified, this is a list of compeleted circuits with prep and povm labels included.
+            If specified, this is a list of completed circuits with prep and povm labels included.
             This is the format produced by the :meth:complete_circuit(s) method, and this can
             be used to accelerate this method call when that has been previously run. Should not
             be used in conjunction with `split_circuits`.
@@ -1681,7 +1681,7 @@ class OpModel(Model):
             the `complete_circuits` kwargs should be used.
 
         completed_circuits : list of Circuits, optional (default None)
-            If specified, this is a list of compeleted circuits with prep and povm labels included.
+            If specified, this is a list of completed circuits with prep and povm labels included.
             This is the format produced by the :meth:complete_circuit(s) method, and this can
             be used to accelerate this method call when that has been previously run. Should not
             be used in conjunction with `split_circuits`.
@@ -1725,7 +1725,7 @@ class OpModel(Model):
         def add_expanded_circuit_outcomes(circuit, running_outcomes, ootree, start):
             """
             """
-            cir = circuit if start == 0 else circuit[start:]  # for performance, avoid uneeded slicing
+            cir = circuit if start == 0 else circuit[start:]  # for performance, avoid unneeded slicing
             for k, layer_label in enumerate(cir, start=start):
                 components = layer_label.components
                 #instrument_inds = _np.nonzero([model._is_primitive_instrument_layer_lbl(component)
@@ -1927,11 +1927,11 @@ class OpModel(Model):
         
         #we should now have in completed_circuits_by_prep_povm a list of completed circuits
         #for each prep, povm pair. Unique layers by circuit will then be the union of these
-        #accross each of the sublists.
+        #across each of the sublists.
 
         unique_layers_by_circuit = []
         for circuits_by_prep_povm in zip(*completed_circuits_by_prep_povm):    
-            #Take the complete set of circuits and get the unique layers which appear accross all of them
+            #Take the complete set of circuits and get the unique layers which appear across all of them
             #then use this to pre-compute circuit_layer_operators and gpindices.
             unique_layers_by_circuit.append(set(sum([ckt.layertup for ckt in circuits_by_prep_povm], ())))
 
@@ -2822,7 +2822,7 @@ class OpModel(Model):
 
         hessian_for_errorbars : numpy.ndarray, optional
             If not `None`, a hessian matrix for this model (with shape `(Np, Np)`
-            where `Np == self.num_params`, the number of model paramters) that is
+            where `Np == self.num_params`, the number of model parameters) that is
             used to compute and return 1-sigma error bars.
 
         Returns
