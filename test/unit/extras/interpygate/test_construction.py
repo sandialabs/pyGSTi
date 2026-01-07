@@ -93,7 +93,7 @@ class InterpygateConstructionTester(BaseCase):
     @classmethod
     def setUpClass(cls):
         super(InterpygateConstructionTester, cls).setUpClass()
-        cls.static_target = np.bmat([[np.eye(2),np.zeros([2,2])],
+        cls.static_target = np.block([[np.eye(2),np.zeros([2,2])],
                                      [np.zeros([2,2]),np.sqrt(2)/2*(sigI++1.j*sigY)]])
         cls.target_op = SingleQubitTargetOp()
 
