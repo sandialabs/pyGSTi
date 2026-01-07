@@ -116,7 +116,7 @@ class BaseCase(unittest.TestCase):
         """
 
         filename = filename or "temp_file"  # yeah looks random to me
-        with TemporaryDirectory() as tmpdir:
+        with TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
             tmp_path = Path(tmpdir) / filename
             # Yield to context with temporary path
             yield str(tmp_path)
