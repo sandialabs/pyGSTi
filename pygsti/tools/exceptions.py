@@ -83,3 +83,21 @@ class PrepareThyself(UserWarning):
     they're about to do will fail.
     """
     pass
+
+
+class UnknownGaugeSpaceDimension(UserWarning):
+    """ 
+    Inform the user that we weren't sure of the dimension of gauge
+    space in current model parameterization. We use some kind of a
+    default value in these cases instead.
+    """
+    pass
+
+
+class CVXPYFailure(UserWarning):
+    """ 
+    Numerical solvers dispatched by CVXPY failed when trying
+    to solve a pyGSTi-constructed problem. We have fallback
+    behavior in these cases.
+    """
+    pass

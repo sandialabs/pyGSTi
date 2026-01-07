@@ -34,6 +34,7 @@ from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.tools import slicetools as _slct
 from pygsti.tools import matrixtools as _mt
+from pygsti.tools.exceptions import UnknownGaugeSpaceDimension as _UnknownGaugeSpaceDimension
 from pygsti.circuits import Circuit as _Circuit, SeparatePOVMCircuit as _SeparatePOVMCircuit
 
 MEMLIMIT_FOR_NONGAUGE_PARAMS = None
@@ -127,6 +128,7 @@ class Model(_NicelySerializable):
             return self._num_modeltest_params
         elif 'num_nongauge_params' in dir(self):  # better than hasattr, which *runs* the @property method
             if MEMLIMIT_FOR_NONGAUGE_PARAMS is not None:
+                # QUESTION: what in the heck is happening in this code path?
                 if hasattr(self, 'num_elements'):
                     memForNumGaugeParams = self.num_elements * (self.num_params + self.state_space.dim**2) \
                         * _np.dtype('d').itemsize  # see Model._buildup_dpg (this is mem for dPG)
@@ -136,14 +138,14 @@ class Model(_NicelySerializable):
                 if memForNumGaugeParams > MEMLIMIT_FOR_NONGAUGE_PARAMS:
                     _warnings.warn(("Model.num_modeltest_params did not compute number of *non-gauge* parameters - "
                                     "using total (make MEMLIMIT_FOR_NONGAUGE_PARAMS larger if you really want "
-                                    "the count of nongauge params"))
+                                    "the count of nongauge params"), _UnknownGaugeSpaceDimension)
                     return self.num_params
 
             try:
                 return self.num_nongauge_params  # len(x0)
             except:  # numpy can throw a LinAlgError or sparse cases can throw a NotImplementedError
                 _warnings.warn(("Model.num_modeltest_params could not obtain number of *non-gauge* parameters"
-                                " - using total instead"))
+                                " - using total instead"), _UnknownGaugeSpaceDimension)
                 return self.num_params
         else:
             return self.num_params
