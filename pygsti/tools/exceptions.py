@@ -74,3 +74,12 @@ class HashingEditableCircuitWarning(UserWarning):
     triggered when performing a check like 
     `if c in dict_of_circuits: ...`.
     """
+    pass
+
+
+class PrepareThyself(UserWarning):
+    """ 
+    Indicate to the user that there's good reason to expect that what
+    they're about to do will fail.
+    """
+    pass
