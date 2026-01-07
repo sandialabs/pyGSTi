@@ -20,6 +20,7 @@ import scipy.sparse as _sps
 import scipy.sparse.linalg as _spsl
 import functools as _functools
 
+from itertools import product
 from pygsti.tools import basistools as _bt
 from pygsti.tools import jamiolkowski as _jam
 from pygsti.tools import lindbladtools as _lt
@@ -1500,6 +1501,183 @@ def std_process_mx_to_unitary(superop_mx):
         U[:, i] = Ui
 
     return U
+
+def trace_superoperator(dim, mx_basis = 'pp'):
+    """
+    Returns a dense representation of the trace superoperator for a quantum state
+    on the specified state space, and returned in the specified matrix basis.
+    
+    Parameters
+    ----------
+    dim : int
+        Dimension of the state space to construct the trace superoperator for.
+        Most often this is the unitary dimension, but for some direct sum spaces may not be
+        Note the resulting trace superoperator lives in the corresponding operator
+        space of dimension dim^2.
+    
+    mx_basis : str or `Basis`, optional (default 'pp')
+        Basis to return the matrix for the dense superoperator in.
+    
+    Returns
+    -------
+    trace_superop : np.ndarray
+        Numpy array corresponding to the dense trace superoperator on this state space.
+    """
+    #construct the trace superoperator in the standard basis, then convert to the user requested basis.
+    trace_superop_std = _np.zeros(dim**2)
+    diag_indices = [i * (dim + 1) for i in range(dim)]
+    trace_superop_std[diag_indices] = 1
+    if isinstance(mx_basis, str):
+        mx_basis = _BuiltinBasis(mx_basis, dim**2)
+    trace_superop = _bt.flexible_change_basis(trace_superop_std, _BuiltinBasis('std', dim**2), mx_basis)             
+    return trace_superop
+
+def partial_trace_superoperator(state_space, sslbls, mx_basis = 'pp'):
+    """
+    Returns a dense representation of the partial trace superoperator which traces
+    over the subsystems given by the specified state space labels.
+    
+    Parameters
+    ----------
+    state_space : `StateSpace`
+        State space to construct partial trace superoperator on. Currently restricted
+        to state spaces with a single tensor-product block. I.e. without any additional
+        direct sum structure.
+    
+    sslbls : iterable of str or int
+        An iterable of str or int corresponding to the state space labels of subsytems
+        to trace over.
+    
+    mx_basis : str or tuple of `Basis`, optional (default 'pp')
+        Basis to return the matrix for the dense superoperator in. When passing in
+        a tuple of `Basis` objects `mx_basis[0]` corresponds to the basis for the input
+        space and `mx_basis[1]` corresponds to the basis for the output space.
+        
+    Returns
+    -------
+    partial_trace_superop : np.ndarray
+        Numpy array corresponding to the dense partial trace superoperator on this state space.
+    """
+    assert state_space.num_tensor_product_blocks == 1, 'Only state spaces with a single tensor product block are currently supported.'      
+    if not isinstance(mx_basis, str) or (not isinstance(mx_basis, tuple) and len(mx_basis)==2 and isinstance(mx_basis[0], _Basis) and isinstance(mx_basis[1], _Basis)):
+        raise ValueError(f'mx_basis must be either a str or a tuple with each entry being a `Basis` object.')
+    
+    #construct in the standard basis and then convert to the requested basis.
+    
+    #get all of the dimensions and state space labels.
+    labels = state_space.tensor_product_block_labels(0)
+    dims = state_space.tensor_product_block_dimensions(0)
+    udims = state_space.tensor_product_block_udimensions(0)
+    
+    #get the indices of the subsystems being traced over:
+    subsystem_idxs = [labels.index(sslbl) for sslbl in sslbls]
+    #and the remaining indices:
+    identity_idxs = [i for i in range(len(labels)) if i not in subsystem_idxs]
+    
+    #for each subsystem use the udim to identify construct the basis vectors
+    subsystem_basis_elements = []
+    for subsys_idx in subsystem_idxs:
+        udim = udims[subsys_idx]
+        basis_elements_for_udim = []
+        for idx in range(udim):
+            basis_element = _np.zeros(udim)
+            basis_element[idx] = 1
+            basis_elements_for_udim.append(basis_element)
+        subsystem_basis_elements.append(basis_elements_for_udim)
+        
+    #now construct the operators which will be summed to get
+    #the superoperator.
+    partial_trace_suboperators = []
+    for basis_element_indices in product(*[range(len(basis_elements)) for basis_elements in subsystem_basis_elements]):
+        ops_to_tensor = [None]*len(labels)
+        for idx in identity_idxs:
+            ops_to_tensor[idx] = _np.eye(udims[idx])    
+        for i, (bel_idx, subsys_idx) in enumerate(zip(basis_element_indices, subsystem_idxs)):
+            ops_to_tensor[subsys_idx] = subsystem_basis_elements[i][bel_idx]
+        tensored_ops = _functools.reduce(_np.kron, ops_to_tensor)
+        partial_trace_suboperators.append(_np.kron(tensored_ops,tensored_ops))
+    partial_trace_superop_std = _np.sum(partial_trace_suboperators, axis=0)    
+    
+    if isinstance(mx_basis, str):
+        mx_basis_out = _BuiltinBasis(mx_basis, partial_trace_superop_std.shape[0])
+        mx_basis_in = _BuiltinBasis(mx_basis, partial_trace_superop_std.shape[1])
+    else:
+        mx_basis_out = mx_basis[1]
+        mx_basis_in = mx_basis[0]
+    partial_trace_superop = mx_basis_out.from_std_transform_matrix@partial_trace_superop_std@mx_basis_in.to_std_transform_matrix
+    return partial_trace_superop
+
+def partial_projector_superoperator(state_space, sslbls, states, mx_basis='pp'):
+    """
+    Returns a dense representation of the partial projections superoperator which applies a
+    projectors to the subsystems given by the specified state space labels, with projection onto
+    the corresponding set ofstates.
+    
+    Parameters
+    ----------
+    state_space : `StateSpace`
+        State space to construct partial trace superoperator on. Currently restricted
+        to state spaces with a single tensor-product block. I.e. without any additional
+        direct sum structure.
+    
+    sslbls : iterable of str or int
+        An iterable of str or int corresponding to the state space labels of subsytems
+        to apply projectors to.
+    
+    states : iterable of str, int, or np.ndarray
+        An iterable of the same length as sslbls with either a string or integer corresponding to
+        a particular computational basis state, or a numpy array with a pure state of the appropriate
+        dimensions (in the computational basis). 
+    
+    mx_basis : str or `Basis`, optional (default 'pp')
+        Basis to return the matrix for the dense superoperator in.
+        
+    Returns
+    -------
+    partial_projector_superop : np.ndarray
+        Numpy array corresponding to the dense partial projector superoperator on this state space.
+    """    
+    assert state_space.num_tensor_product_blocks == 1, 'Only state spaces with a single tensor product block are currently supported.' 
+    assert len(sslbls) == len(states), 'Number of state space labels and states to project onto must be the same.'
+    #construct in the standard basis and then convert to the requested basis.
+    
+    #get all of the dimensions and state space labels.
+    labels = state_space.tensor_product_block_labels(0)
+    dims = state_space.tensor_product_block_dimensions(0)
+    udims = state_space.tensor_product_block_udimensions(0)
+    
+    #get the indices of the subsystems being traced over:
+    subsystem_idxs = [labels.index(sslbl) for sslbl in sslbls]
+    #and the remaining indices:
+    identity_idxs = [i for i in range(len(labels)) if i not in subsystem_idxs]
+    
+    #for each subsystem use the udim to identify construct the basis vectors
+    subsystem_projector_elements = []
+    for subsys_idx, state in zip(subsystem_idxs, states):
+        udim = udims[subsys_idx]
+        if isinstance(state, (int,str)):
+            proj_state = _np.zeros(udim)
+            proj_state[int(state)] = 1
+        elif isinstance(state, _np.ndarray):
+            assert len(state) == udim, f'{len(state)=}, but udim for sslbl {labels[subsys_idx]} is {udim}.'
+            proj_state = state
+        else:
+            raise ValueError(f'Unsupported type for state, {type(state)}, supported options are str, int and np.ndarray.')
+        
+        subsystem_projector_elements.append(_np.outer(proj_state, proj_state))
+    
+    ops_to_tensor = [None]*len(labels)
+    for idx in identity_idxs:
+        ops_to_tensor[idx] = _np.eye(udims[idx])
+    for subsys_idx, proj in zip(subsystem_idxs, subsystem_projector_elements):
+        ops_to_tensor[subsys_idx] = proj
+    tensored_ops = _functools.reduce(_np.kron, ops_to_tensor) 
+    partial_projector_superop = _np.kron(tensored_ops, tensored_ops)
+    
+    #change to requested basis.
+    partial_projector_superop = _bt.change_basis(partial_projector_superop, 'std', mx_basis)
+    
+    return partial_projector_superop     
 
 
 def spam_error_generator(spamvec, target_spamvec, mx_basis, typ="logGTi"):
