@@ -24,7 +24,8 @@ from pygsti.tools import slicetools as _slct
 from typing import Union, Callable, Literal, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pygsti.models.model import OpModel
+    from pygsti.models.model import Model
+    # Note that this is Model and not OpModel because an SuccessFailSimulator is derived from a ForwardSimulator.
 
 
 class ForwardSimulator(_NicelySerializable):
@@ -99,7 +100,7 @@ class ForwardSimulator(_NicelySerializable):
             return ('ep', 'ep') + cls._array_types_for_method('_bulk_fill_dprobs_block')
         return ()
 
-    def __init__(self, model: Optional[OpModel] = None):
+    def __init__(self, model: Optional[Model] = None):
         super().__init__()
         #self.dim = model.dim
         self.model = model
@@ -131,11 +132,11 @@ class ForwardSimulator(_NicelySerializable):
         return state_dict
 
     @property
-    def model(self) -> Union[OpModel, None]:
+    def model(self) -> Union[Model, None]:
         return self._model
 
     @model.setter
-    def model(self, val: OpModel):
+    def model(self, val: Model):
         self._model = val
         try:
             evotype = None if val is None else self._model.evotype
