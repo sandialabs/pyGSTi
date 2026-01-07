@@ -25,7 +25,10 @@ from pygsti.tools import jamiolkowski as _jam
 from pygsti.tools import lindbladtools as _lt
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools import sdptools as _sdps
-from pygsti.tools.exceptions import NumericalDomainWarning as _NumericalDomainWarning
+from pygsti.tools.exceptions import (
+    NumericalDomainWarning as _NumericalDomainWarning,
+    CVXPYFailure as _CVXPYFailure
+)
 from pygsti.baseobjs import basis as _pgb
 from pygsti.baseobjs.basis import (
     Basis as _Basis,
@@ -391,7 +394,9 @@ def diamonddist(a, b, mx_basis='pp', return_x=False):
     sdp_solvers = ['MOSEK', 'CLARABEL', 'CVXOPT']
     for i, solver in enumerate(sdp_solvers):
         try:
-            prob.solve(solver=solver)
+            with _warnings.catch_warnings():
+                _warnings.filterwarnings('ignore','.*Solution may be inaccurate.*', UserWarning)
+                prob.solve(solver=solver)
             objective_val = prob.value
             varvals = [v.value for v in vars]
             break
@@ -403,7 +408,7 @@ def diamonddist(a, b, mx_basis='pp', return_x=False):
                 else:
                     failure_msg = f"Trying {sdp_solvers[i+1]} next."
                 msg += f'\n{failure_msg}'
-                _warnings.warn(msg)
+                _warnings.warn(msg, _CVXPYFailure)
 
     if return_x:
         return objective_val, varvals
