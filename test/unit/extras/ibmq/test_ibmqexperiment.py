@@ -10,7 +10,6 @@ from pygsti.protocols import ByDepthSummaryStatistics
 from pygsti.modelpacks import smq1Q_XY
 from pygsti.protocols import StandardGSTDesign
 import numpy as np
-import pytest
 
 try:
     from qiskit.providers.fake_provider import GenericBackendV2
