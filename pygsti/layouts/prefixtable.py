@@ -15,7 +15,6 @@ import networkx as _nx
 from math import ceil
 from pygsti.baseobjs import Label as _Label
 from pygsti.circuits.circuit import SeparatePOVMCircuit as _SeparatePOVMCircuit
-from pygsti.tools.tqdm import our_tqdm
 
 
 class PrefixTable(object):
@@ -175,7 +174,7 @@ class PrefixTable(object):
 
         imbalance_threshold : float, optional (default 1.2)
             This number serves as a tolerance parameter for a final load balancing refinement
-            to the splitting. The value coresponds to a threshold value of the ratio of the heaviest
+            to the splitting. The value corresponds to a threshold value of the ratio of the heaviest
             to the lightest subtree such that ratios below this value are considered sufficiently
             balanced and processing stops.
 
@@ -208,7 +207,7 @@ class PrefixTable(object):
             if num_sub_tables is None or num_sub_tables == 1:
                 return [set(range(len(table_contents)))]
             
-        #construct a tree structure describing the prefix strucure of the circuit set.
+        #construct a tree structure describing the prefix structure of the circuit set.
         circuit_tree = _build_prefix_tree(self.sorted_circuits_to_evaluate, self.circuit_reps, self.orig_indices)
         circuit_tree_nx = circuit_tree.to_networkx_graph()
         
@@ -275,7 +274,7 @@ class PrefixTable(object):
                     partitioned_tree.nodes[edge[1]]['prop_cost'] += partitioned_tree.edges[edge[0], edge[1]]['promotion_cost']
             partitioned_tree.remove_edges_from(cut_edges)
         
-        #Collect the original circuit indices for each of the parititioned subtrees.
+        #Collect the original circuit indices for each of the partitioned subtrees.
         orig_index_groups = []
         for root in new_roots:
             if isinstance(root,tuple):
@@ -353,7 +352,7 @@ class PrefixTable(object):
                 def cost_fn(rem): return len(rem)  # length of remainder = #-apply ops needed
             elif cost_metric == "size":
                 def cost_fn(rem): return 1  # everything costs 1 in size of table
-            else: raise ValueError("Uknown cost metric: %s" % cost_metric)
+            else: raise ValueError("Unknown cost metric: %s" % cost_metric)
 
             subTables = []
             curSubTable = set()  # destination index of 0th evaluant
@@ -597,7 +596,7 @@ class PrefixTableJacobian(object):
         sorted_circuit_lengths_by_class = [sorted_circuit_lengths[class_indices[0]] 
                                            for class_indices in unique_parameter_circuit_dependency_classes.values()]
         
-        #also need representatives fo the entries in sorted_parameter_circuit_dependencies for each class,
+        #also need representatives for the entries in sorted_parameter_circuit_dependencies for each class,
         #and for sorted_parameter_circuit_dependencies_orig_indices
         sorted_parameter_circuit_dependencies_by_class = [sorted_parameter_circuit_dependencies[class_indices[0]] 
                                                           for class_indices in unique_parameter_circuit_dependency_classes.values()]
@@ -690,7 +689,7 @@ def _cache_hits(circuit_reps, circuit_lengths):
     cacheIndices = []  # indices into circuits_to_evaluate of the results to cache
     cache_hits = [0]*len(circuit_reps)
 
-    for i in our_tqdm(range(len(circuit_reps)), 'Prefix table : _cache_hits '):
+    for i in range(len(circuit_reps)):
         circuit = circuit_reps[i] 
         L = circuit_lengths[i]  # can be a Circuit or a label tuple
         for cached_index in reversed(cacheIndices):
@@ -711,8 +710,7 @@ def _build_table(sorted_circuits_to_evaluate, cache_hits, max_cache_size, circui
     num_sorted_circuits = len(sorted_circuits_to_evaluate)
     table_contents = [None]*num_sorted_circuits
     curCacheSize = 0
-    for i in our_tqdm(range(num_sorted_circuits), 'Prefix table : _build_table '):
-        j = orig_indices[i]
+    for j, (i, _) in zip(orig_indices, enumerate(sorted_circuits_to_evaluate)):
         circuit_rep = circuit_reps[i] 
         L = circuit_lengths[i]
 
@@ -1644,7 +1642,7 @@ def tree_partition_kundu_misra(tree, max_weight, weight_key='cost', test_leaves 
         assert all([tree_nodes[leaf][weight_key]<=max_weight for leaf in leaves]), msg
         
     #precompute a list of subtree weights which will be dynamically updated as we make cuts. Also
-    #parition tree into levels based on distance from root.
+    #partition tree into levels based on distance from root.
     if precomp_levels is None and precomp_weights is None:
         tree_levels, subtree_weights = _partition_levels_and_compute_subtree_weights(tree, root, weight_key)
     else:
@@ -1718,7 +1716,7 @@ def _bisection_pass(partitioned_tree, cut_edges, new_roots, num_sub_tables, weig
             new_roots.append(cut_edge[1])
             #cut the prescribed edge.
             partitioned_tree.remove_edge(cut_edge[0], cut_edge[1])
-        #check whether we need to continue paritioning subtrees.
+        #check whether we need to continue partitioning subtrees.
         if len(new_roots) == num_sub_tables:
             break
     #sort the new root nodes in case there are determinism issues
