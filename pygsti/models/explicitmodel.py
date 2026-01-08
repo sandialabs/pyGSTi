@@ -10,6 +10,8 @@ Defines the ExplicitOpModel class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
+
 import collections as _collections
 import itertools as _itertools
 import uuid as _uuid
@@ -1532,11 +1534,9 @@ class ExplicitOpModel(_mdl.OpModel):
         print("Basis = ", self.basis.name)
         print("Choi Matrices:")
         for (label, gate) in self.operations.items():
-            print(("Choi(%s) in pauli basis = \n" % label,
-                   _mt.mx_to_string_complex(_jt.jamiolkowski_iso(gate))))
-            print(("  --eigenvals = ", sorted(
-                [ev.real for ev in _np.linalg.eigvals(
-                    _jt.jamiolkowski_iso(gate))]), "\n"))
+            jmx : _np.ndarray = _jt.jamiolkowski_iso(gate) # type: ignore
+            print(("Choi(%s) in pauli basis = \n" % label, _mt.mx_to_string_complex(jmx)))
+            print(("  --eigenvals = ", sorted(_mt.eigenvalues(jmx, assume_hermitian=True).tolist()), "\n"))
         print(("Sum of negative Choi eigenvalues = ", _jt.sum_of_negative_choi_eigenvalues(self)))
 
     def _effect_labels_for_povm(self, povm_lbl):
@@ -1694,6 +1694,10 @@ class ExplicitOpModel(_mdl.OpModel):
             return _QuditProcessorSpec(qudit_labels, all_udims, list(gate_unitaries.keys()), gate_unitaries,
                                        availability,
                                        instrument_names=list(self.instruments.keys()), nonstd_instruments=self.instruments)
+
+    def copy(self) -> ExplicitOpModel:
+        c = super().copy()  # <-- that is indeed an ExplicitOpModel
+        return c # type: ignore
 
     def create_modelmember_graph(self):
         return _MMGraph({

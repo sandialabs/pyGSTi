@@ -25,7 +25,6 @@ import warnings as _warnings
 
 import numpy as _np
 from pygsti.baseobjs.label import Label as _Label, CircuitLabel as _CircuitLabel
-
 from pygsti.baseobjs import outcomelabeldict as _ld, _compatibility as _compat
 from pygsti.tools import internalgates as _itgs
 from pygsti.tools import slicetools as _slct
@@ -511,7 +510,6 @@ class Circuit(object):
         #Set *all* class attributes (separated so can call bare_init separately for fast internal creation)
         self._bare_init(labels, my_line_labels, editable, name, stringrep, 
                         occurrence, compilable_layer_indices_tup)
-
 
     @classmethod
     def _fastinit(cls, labels, line_labels, editable, name='', stringrep=None, occurrence=None,
@@ -4941,6 +4939,7 @@ class Circuit(object):
                                   else _Label(layer_lbl) for layer_lbl in self._labels])
         self._hashable_tup = self.tup
         self._hash = hash(self._hashable_tup)
+
 
 class CompressedCircuit(object):
     """

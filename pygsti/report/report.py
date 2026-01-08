@@ -12,6 +12,7 @@ Internal model of a report during generation
 
 import pickle as _pickle
 import time as _time
+import os as _os
 from collections import defaultdict as _defaultdict
 from pathlib import Path as _Path
 
@@ -19,6 +20,7 @@ from pygsti.report import merge_helpers as _merge
 from pygsti.report import workspace as _ws
 from pygsti.report.notebook import Notebook as _Notebook
 from pygsti.baseobjs import VerbosityPrinter as _VerbosityPrinter
+from pygsti.protocols import ModelEstimateResults as _ModelEstimateResults
 
 
 # TODO this whole thing needs to be rewritten with different reports as derived classes
@@ -196,7 +198,7 @@ class Report:
                 verbosity=verbosity
             )
 
-    def write_notebook(self, path, auto_open=False, connected=False, verbosity=0):
+    def write_notebook(self, path, auto_open=False, connected=False, verbosity=0, use_pickle=False):
         """
         Write this report to the disk as an IPython notebook
 
@@ -234,22 +236,24 @@ class Report:
         title = self._global_qtys['title']
         confidenceLevel = self._report_params['confidence_level']
 
+        if not path.endswith('.ipynb'):
+            raise ValueError(f'path={path} must have the `.ipynb` suffix for a Jupyter Notebook.')
+
         path = _Path(path)
         printer = _VerbosityPrinter.create_printer(verbosity)
-        templatePath = _Path(__file__).parent / 'templates' / self._templates['notebook']
-        outputDir = path.parent
+        notebook_templates_path = _Path(__file__).parent / 'templates' / self._templates['notebook']
 
         #Copy offline directory into position
         if not connected:
-            _merge.rsync_offline_dir(outputDir)
+            _merge.rsync_offline_dir(path.parent)
 
         #Save results to file
-        # basename = _os.path.splitext(_os.path.basename(filename))[0]
-        basename = path.stem
-        results_file_base = basename + '_results.pkl'
-        results_file = outputDir / results_file_base
-        with open(str(results_file), 'wb') as f:
-            _pickle.dump(self._results, f)
+        results_path = str(path.parent / (path.stem + '_results'))
+        if use_pickle:
+            results_path = results_path + '.pkl'
+            self.write_results_dict(results_path)
+        else:
+            self.write_results_dict(results_path)
 
         nb = _Notebook()
         nb.add_markdown('# {title}\n(Created on {date})'.format(
@@ -261,20 +265,20 @@ class Report:
         "classic Jupyter notebooks for PyGSTi report notebooks. To track this issue, " +
         "see https://github.com/pyGSTio/pyGSTi/issues/205.</font>")
 
-        nb.add_code("""\
-            import pickle
-            import pygsti""")
+        nb.add_code("""
+        import pygsti
+        from pygsti.report import Report
+        """)
 
         dsKeys = list(self._results.keys())
         results = self._results[dsKeys[0]]
         #Note: `results` is always a single Results obj from here down
 
-        nb.add_code("""\
+        nb.add_code(f"""
         #Load results dictionary
-        with open('{infile}', 'rb') as infile:
-            results_dict = pickle.load(infile)
-        print("Available dataset keys: ", ', '.join(results_dict.keys()))\
-        """.format(infile=results_file_base))
+        results_path = '{results_path}'
+        results_dict = Report.results_dict_from_dir(results_path)
+        """)
 
         nb.add_code("""\
         #Set which dataset should be used below
@@ -334,11 +338,15 @@ class Report:
             ws.init_notebook_mode(connected={conn}, autodisplay=True)\
             """.format(conn=str(connected)))
 
+        # The line below injects a whole BUNCH of cell definitions into 
+        # the notebook. Relative to the top-level of the pyGSTi repo,
+        # these files should be located in the folder
+        #       pygsti/report/templates/report_notebook/
         nb.add_notebook_text_files([
-            templatePath / 'summary.txt',
-            templatePath / 'goodness.txt',
-            templatePath / 'gauge_invariant.txt',
-            templatePath / 'gauge_variant.txt'])
+            notebook_templates_path / 'summary.txt',
+            notebook_templates_path / 'goodness.txt',
+            notebook_templates_path / 'gauge_invariant.txt',
+            notebook_templates_path / 'gauge_variant.txt'])
 
         #Insert multi-dataset specific analysis
         if len(dsKeys) > 1:
@@ -352,15 +360,16 @@ class Report:
             dscmp_circuits = results_dict[dslbl1].circuit_lists['final']
             ds1 = results_dict[dslbl1].dataset
             ds2 = results_dict[dslbl2].dataset
-            dscmp = pygsti.baseobjs.DataComparator([ds1, ds2], ds_names=[dslbl1, dslbl2])
+            dscmp = pygsti.data.DataComparator([ds1, ds2], ds_names=[dslbl1, dslbl2])
+            dscmp.run()
             """.format(dsLbl1=dsKeys[0], dsLbl2=dsKeys[1]))
             nb.add_notebook_text_files([
-                templatePath / 'data_comparison.txt'])
+                notebook_templates_path / 'data_comparison.txt'])
 
         #Add reference material
         nb.add_notebook_text_files([
-            templatePath / 'input.txt',
-            templatePath / 'meta.txt'])
+            notebook_templates_path / 'input.txt',
+            notebook_templates_path / 'meta.txt'])
 
         printer.log("Report Notebook created as %s" % path)
 
@@ -457,3 +466,43 @@ class Report:
 
         printer.log("Compiling with `{} {}`".format(latex_cmd, ' '.join(latex_flags)))
         _merge.compile_latex_report(str(path.parent / path.stem), [latex_cmd] + latex_flags, printer, auto_open)
+
+    def write_results_dict(self, path_name: str) -> None:
+        if path_name.endswith('.pkl'):
+            with open(path_name, 'wb') as f:
+                _pickle.dump(self._results, f)
+        else:
+            path : _Path = _Path(path_name)
+            if not path.parent.exists():
+                raise ValueError(f'Parent folder of path_name={path_name} does not exist.')
+            if path.is_file():
+                raise ValueError(f'path_name={path_name} points to a file, but we require a folder.')
+            if not path.exists():
+                path.mkdir()
+            for dskey, mer in self._results.items():
+                mer.write(path / dskey)
+        return
+
+    @staticmethod
+    def results_dict_from_dir(path_name: str) -> dict[str, _ModelEstimateResults]:
+        if path_name.endswith('.pkl'):
+            with open(path_name, 'rb') as infile:
+                results_dict = _pickle.load(infile)
+        else:
+            path = _Path(path_name)
+            if path.is_file():
+                raise ValueError(f'path_name={path_name} points to a file, but we require a folder.')
+            results_dict = dict()
+            for child in path.iterdir():
+                if child.is_file():
+                    continue
+                inner_dict = dict()
+                for estname in _os.listdir(str(child / 'results')):
+                    res = _ModelEstimateResults.from_dir(str(child), name=estname)
+                    inner_dict[estname] = res
+                _, res = inner_dict.popitem()
+                for en, e in inner_dict.items():
+                    res.add_estimate(en, e.estimates[en])
+                results_dict[child.stem + child.suffix] = res
+        return results_dict
+

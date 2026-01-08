@@ -817,7 +817,7 @@ class UnitaryGaugeGroup(OpGaugeGroupWithBasis):
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
     """
 
-    def __init__(self, state_space: _StateSpace, basis: Optional[Union[_Basis, str]],
+    def __init__(self, state_space: _StateSpace, basis: Union[_Basis, str],
                  evotype: Optional[Union[_Evotype, str]] = 'default'):
         state_space = _StateSpace.cast(state_space)
         evotype = _Evotype.cast(str(evotype), default_prefer_dense_reps=True)  # since we use deriv_wrt_params
@@ -1129,25 +1129,36 @@ class TrivialGaugeGroupElement(GaugeGroupElement):
 
 class DirectSumUnitaryGroup(GaugeGroup):
     """
-    A subgroup of the unitary group, where the unitary operators in the group all have a
-    shared block-diagonal structure.
+    A subgroup of the unitary group on a Hilbert space H, where H has a direct sum structure.
 
-    Example setting where this is useful:
-        The system's Hilbert space is naturally expressed as a direct sum, H = U ⨁ V,
-        and we want gauge optimization to preserve the natural separation between U and V.
+    Unitaries in this group are block diagonal and preserve the direct sum structure of H.
     """
 
     def __init__(self, subgroups: Tuple[Union[UnitaryGaugeGroup, TrivialGaugeGroup], ...],
                  basis, name="Direct sum gauge group"):
+
+        # Step 1. Get the size of the direct sum Hilbert space
+        udim = 0
+        for sg in subgroups:
+            udim += sg.state_space.udim
+
+        # Step 2. Infer and validate the provided basis.
+        if isinstance(basis, str):
+            basis = _Basis.cast(basis, udim**2)
+            # NOTE: Strings get cast to BuiltinBasis objects, which subclass LazyBasis.
+            # If a LazyBasis is instantiated with invalid dimensions (e.g., dim=9 when
+            # basis='pp'), then an exception will be raised when we try to actually use
+            # the basis, such as by accessing basis.labels.
+
+        if basis.dim != udim**2:
+            msg = """
+            Inconsistency between `basis.dim` and the dimension of the direct sum Hilbert
+            space implied by the `state_space` members of the provided subgroups.
+            """
+            raise ValueError(msg)
+
+        self.basis = basis
         self.subgroups = subgroups
-        if isinstance(basis, _Basis):
-            self.basis = basis
-        elif isinstance(basis, str):
-            udim = 0
-            for sg in subgroups:
-                udim += sg.state_space.udim
-            ss = _ExplicitStateSpace(['all'], [udim])
-            self.basis = _BuiltinBasis("std", ss)
         self._param_dims = _np.array([sg.num_params for sg in subgroups])
         self._num_params = _np.sum(self._param_dims)
         super().__init__(name)
