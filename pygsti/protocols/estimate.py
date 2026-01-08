@@ -837,8 +837,10 @@ class Estimate(_MongoSerializable):
         mdl_dof = mdl.num_modeltest_params
 
         k = max(ds_dof - mdl_dof, 1)  # expected chi^2 or 2*(logL_ub-logl) mean
-        if ds_dof <= mdl_dof: _warnings.warn("Max-model params (%d) <= model params (%d)!  Using k == 1."
-                                             % (ds_dof, mdl_dof))
+        if ds_dof <= mdl_dof:
+            msg = "Max-model params (%d) <= model params (%d)!  Using k == 1." % (ds_dof, mdl_dof)
+            _warnings.warn( msg, _tools.exceptions.OverparameterizationWarning)
+
         return (fitqty - k) / _np.sqrt(2 * k)
 
     def view(self, gaugeopt_keys, parent=None):
