@@ -310,13 +310,13 @@ class TestHessianMethods(BaseTestCase):
                 u = v.item()
                 return float(u)
             def fnOfSpam_0D(rhoVecs, povms):
-                u = fnOfGate_float(rhoVecs, povms)
+                u = fnOfSpam_float(rhoVecs, povms)
                 return np.array( u )
             def fnOfSpam_1D(rhoVecs, povms):
-                u = fnOfGate_float(rhoVecs, povms)
+                u = fnOfSpam_float(rhoVecs, povms)
                 return np.array( [u, 0] )
             def fnOfSpam_2D(rhoVecs, povms):
-                u = fnOfGate_float(rhoVecs, povms)
+                u = fnOfSpam_float(rhoVecs, povms)
                 return np.array([[u, 0], [0,0]] )
             def fnOfSpam_3D(rhoVecs, povms):
                 return np.zeros( (2,2,2), 'd') # just to test for error
