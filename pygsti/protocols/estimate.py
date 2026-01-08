@@ -480,6 +480,33 @@ class Estimate(_MongoSerializable):
         if ky in self.confidence_region_factories:
             _warnings.warn("Confidence region factory for %s already exists - overwriting!" % str(ky))
 
+        fie = 'final iteration estimate'
+        if model_label != fie and fie in self.models and circuits_label == 'final':
+            mdl_fie = self.models[fie]
+            mdl     = self.models[model_label]
+            if mdl_fie.num_params != mdl.num_params:
+                if mdl.num_params > mdl_fie.num_params:
+                    quantity = 'more'
+                    danger   = ('extremely', 'Extreme caution')
+                else:
+                    quantity = 'fewer'
+                    danger   = ('', 'Caution')
+                msg = \
+                f"""
+                The model labeled '{model_label}' has {quantity} parameters than the
+                model labeled 'final iteration estimate'. By convention, the latter
+                model is the final model from GST model fitting for which optimization
+                was performed. This makes it {danger[0]} unlikely that the former model
+                is actually optimal (e.g., in the sense of log-likelihood) among its
+                entire hypothesis class. Suboptimality of '{model_label}' within its
+                hypothesis class invalidates most statistical assumptions required to
+                compute confidence regions.
+                
+                {danger[1]} should be used when interpeting confidence regions for
+                model '{model_label}'.
+                """
+                _warnings.warn(msg, UserWarning)
+
         new_crf = _ConfidenceRegionFactory(self, model_label, circuits_label)
         self.confidence_region_factories[ky] = new_crf
         return new_crf
