@@ -1247,12 +1247,8 @@ def construct_standard_report(results, title="auto",
                           " confidence interval - please note the updated function signature"))
 
     if title is None or title == "auto":
-        autoname = _autotitle.generate_name()
+        autoname = _autotitle.generate_name(log_warning=True)
         title = "GST Report for " + autoname
-        _warnings.warn(("You should really specify `title=` when generating reports,"
-                        " as this makes it much easier to identify them later on.  "
-                        "Since you didn't, pyGSTi has generated a random one"
-                        " for you: '{}'.").format(autoname))
 
     pdfInfo = [('Author', 'pyGSTi'), ('Title', title),
                ('Keywords', 'GST'), ('pyGSTi Version', _pygsti_version)]
@@ -1504,12 +1500,8 @@ def construct_nqnoise_report(results, title="auto",
                           " confidence interval - please note the updated function signature"))
 
     if title is None or title == "auto":
-        autoname = _autotitle.generate_name()
+        autoname = _autotitle.generate_name(log_warning=True)
         title = "GST Report for " + autoname
-        _warnings.warn(("You should really specify `title=` when generating reports,"
-                        " as this makes it much easier to identify them later on.  "
-                        "Since you didn't, pyGSTi has generated a random one"
-                        " for you: '{}'.").format(autoname))
 
     pdfInfo = [('Author', 'pyGSTi'), ('Title', title),
                ('Keywords', 'GST'), ('pyGSTi Version', _pygsti_version)]
@@ -1665,12 +1657,8 @@ def create_drift_report(results, title='auto', ws=None, verbosity=1):
     ws = ws or _ws.Workspace()
 
     if title is None or title == "auto":
-        autoname = _autotitle.generate_name()
+        autoname = _autotitle.generate_name(log_warning=True)
         title = "Drift Report for " + autoname
-        _warnings.warn(("You should really specify `title=` when generating reports,"
-                        " as this makes it much easier to identify them later on.  "
-                        "Since you didn't, pyGSTi has generated a random one"
-                        " for you: '{}'.").format(autoname))
 
     pdfInfo = [('Author', 'pyGSTi'), ('Title', title),
                ('Keywords', 'GST'), ('pyGSTi Version', _pygsti_version)]
