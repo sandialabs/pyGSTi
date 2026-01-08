@@ -101,3 +101,27 @@ class CVXPYFailure(UserWarning):
     behavior in these cases.
     """
     pass
+
+
+class UntouchedModelNoiseKey(UserWarning):
+    """ 
+    Alert the user that they may have incorrectly
+    constructed an OpModelNoise object.
+    """
+    pass
+
+
+class OverparameterizationWarning(UserWarning):
+    """ 
+    Signal that the maximal model has fewer parameters than
+    the current model.
+    """
+    pass
+
+
+class UnnamedReportWarning(UserWarning):
+    """ 
+    Signal that we're generating a name for a report automatically
+    and randomly, since a user didn't provide a name.
+    """
+    pass
