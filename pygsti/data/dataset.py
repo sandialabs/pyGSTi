@@ -2972,7 +2972,6 @@ class DataSet(_MongoSerializable):
         else:
             f = file_or_filename
 
-        # with _compat.patched_uuid():
         state_dict = _pickle.load(f)
 
         if "gsIndexKeys" in state_dict:
