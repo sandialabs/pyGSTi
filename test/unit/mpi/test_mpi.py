@@ -10,7 +10,6 @@ try:
 except (ImportError, RuntimeError):
     MPI = None
 
-from run_me_with_mpiexec import ALLOWED_MESSAGE
 
 class MPITester:
 
