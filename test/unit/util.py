@@ -6,10 +6,12 @@ import warnings
 from contextlib import contextmanager
 from pathlib import Path
 from tempfile import TemporaryDirectory
-
+from platform import python_version_tuple
 import numpy as np
 import importlib.util
 
+
+py_version_major, py_version_minor = map(int, python_version_tuple()[:2])
 
 __cvxpy_not_importable__ = importlib.util.find_spec('cvxpy') is None
 
@@ -132,7 +134,10 @@ class BaseCase(unittest.TestCase):
         """
 
         filename = filename or "temp_file"  # yeah looks random to me
-        with TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
+        kwargs = dict()
+        if py_version_major > 3 or py_version_minor >= 10:
+            kwargs['ignore_cleanup_errors'] = True
+        with TemporaryDirectory(**kwargs) as tmpdir:
             tmp_path = Path(tmpdir) / filename
             # Yield to context with temporary path
             yield str(tmp_path)
