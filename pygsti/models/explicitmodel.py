@@ -51,6 +51,7 @@ from pygsti.tools import slicetools as _slct
 from pygsti.tools import listtools as _lt
 from pygsti import SpaceT
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
+from typing import Union, Literal
 
 
 class ExplicitOpModel(_mdl.OpModel):
@@ -237,15 +238,15 @@ class ExplicitOpModel(_mdl.OpModel):
         return self._default_gauge_group
 
     @default_gauge_group.setter
-    def default_gauge_group(self, value):
+    def default_gauge_group(self, value: Union[Literal['tp', 'unitary'], _GaugeGroup]):
         """
         The default gauge group.
         """
         if isinstance(value, str):
-            value = value.lower()
-            if value == 'unitary':
+            lower = value.lower()
+            if lower == 'unitary':
                 value = _gg.UnitaryGaugeGroup(self.state_space, self.basis, self.evotype)
-            elif value == 'tp':
+            elif lower == 'tp':
                 value = _gg.TPGaugeGroup(self.state_space, self.basis, self.evotypes)
             else:
                 msg = f'string "{value}" cannot be used to set this model\'s gauge group.'
@@ -994,17 +995,9 @@ class ExplicitOpModel(_mdl.OpModel):
                                          self.factories.items()):
             yield (lbl, obj)
 
-    def members(self, include=('preps', 'operations', 'povms')):
-        out = dict()
-        for member_type in include:
-            member_dict = self.__getattribute__(member_type)
-            for k,v in member_dict.items():
-                out[k] = v
-        return out
-
-#TODO: how to handle these given possibility of different parameterizations...
-#  -- maybe only allow these methods to be called when using a "full" parameterization?
-#  -- or perhaps better to *move* them to the parameterization class
+    # TODO: how to handle these given possibility of different parameterizations...
+    #   -- maybe only allow these methods to be called when using a "full" parameterization?
+    #   -- or perhaps better to *move* them to the parameterization class
     def depolarize(self, op_noise=None, spam_noise=None, max_op_noise=None,
                    max_spam_noise=None, seed=None):
         """
