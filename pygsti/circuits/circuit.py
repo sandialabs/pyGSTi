@@ -11,7 +11,7 @@ Defines the Circuit class
 #***************************************************************************************************
 
 from __future__ import annotations
-from typing import List, Sequence, Literal, Tuple, Any, Hashable, Union, Optional, TYPE_CHECKING, TypeVar
+from typing import List, Sequence, Literal, Tuple, Any, Hashable, Union, Optional, TYPE_CHECKING, Iterable
 if TYPE_CHECKING:
     try:
         import qiskit
@@ -59,10 +59,8 @@ _warnings.filterwarnings('module', message=msg, category=UserWarning)
 
 
 ##############################################################################################
-# NOTE(Riley): these types are work-in-progress. They don't make a whole lot of sense to me
-# right now. It might be possible that they just _DONT_ make sense, and yet they're correct
-# in the context of the current implementation.
-_NestedLabelSeq = List[Union[_Label, Sequence[_Label]]]
+# Some types
+_NestedLabelSeq = Sequence[Union[_Label, Sequence[_Label]]]
 #   ^ An alias to make it easier to see how subsequent types relate.
 #     Don't use this in function signatures.
 LayerTupLike = Union[Tuple[_LabelTupTup,    ...], _NestedLabelSeq, Tuple[_Label, ...]]
@@ -298,8 +296,8 @@ class Circuit(object):
             return cls(tup)
 
     def __init__(self,
-            layer_labels=(), line_labels: Union[str,Tuple[Any,...]] = 'auto', num_lines: Optional[int] = None,
-            editable: Optional[bool]=False, stringrep=None, name: Optional[str]='', check:Optional[bool]=True, expand_subcircuits="default", occurrence=None,
+            layer_labels: Optional[Union[str, Iterable[Union[Iterable[_Label], _Label]]]]=(), line_labels: Union[str,Tuple[Any,...]] = 'auto', num_lines: Optional[int] = None,
+            editable: Optional[bool]=False, stringrep=None, name: Optional[str]='', check:Optional[bool]=True, expand_subcircuits: Union[bool, Literal['default']]="default", occurrence=None,
             compilable_layer_indices=None
         ):
         """
@@ -325,6 +323,9 @@ class Circuit(object):
             - `[Label('Gx'),Label('Gx')]` : same as above
             - `[('Gx',0),('Gy',0)]` : X then Y on qubit 0 (2 layers)
             - `[[('Gx',0),('Gx',1)],[('Gy',0),('Gy',1)]]` : parallel X then Y on qubits 0 & 1
+
+            `Note` Labels stored in an iterable type with a non-deterministic
+            iteration order like dictionaries and sets, may result in unexpected layer orders.
 
         line_labels : iterable, optional
             The (string valued) label for each circuit line.  If `'auto'`, then
@@ -2211,7 +2212,7 @@ class Circuit(object):
         if len(iLayersToRemove) > 0:
             self.delete_layers(iLayersToRemove)
 
-    def insert_layer(self, circuit_layer, j):
+    def insert_layer(self, circuit_layer, j: int):
         """
         Inserts a single layer into a circuit, returning a copy.
 
@@ -2238,7 +2239,7 @@ class Circuit(object):
         if self._static: cpy.done_editing()
         return cpy
 
-    def insert_layer_inplace(self, circuit_layer, j):
+    def insert_layer_inplace(self, circuit_layer, j: int):
         """
         Inserts a single layer into a circuit.
 
