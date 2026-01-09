@@ -827,10 +827,7 @@ class GSTObjFnBuilders(_NicelySerializable):
                 final_builders = [mle_builder]
         else:
             iteration_builders = [chi2_builder]
-            try:
-                final_builders = [_objfns.ObjectiveFunctionBuilder.create_from(objective)]
-            except Exception as e:
-                raise ValueError("Invalid objective: %s" % objective)
+            final_builders = [_objfns.ObjectiveFunctionBuilder.create_from(objective)]
     
         return GSTObjFnBuilders(iteration_builders, final_builders)
 
