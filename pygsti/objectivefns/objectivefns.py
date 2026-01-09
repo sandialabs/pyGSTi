@@ -16,7 +16,7 @@ import itertools as _itertools
 import sys as _sys
 import time as _time
 import pathlib as _pathlib
-from typing import Callable
+from typing import Callable, Literal, Union, Tuple
 
 import numpy as _np
 
@@ -28,7 +28,7 @@ from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from pygsti.models.model import OpModel as _OpModel
+from pygsti.models.model import OpModel as _OpModel, Model as _Model
 
 
 def set_docstring(docstr):
@@ -127,6 +127,9 @@ def _objfn(objfn_cls, model, dataset, circuits=None,
     return ofn
 
 
+CallablePenalty = Callable[[_Model], float]
+
+
 class ObjectiveFunctionBuilder(_NicelySerializable):
     """
     A factory class for building objective functions.
@@ -156,7 +159,13 @@ class ObjectiveFunctionBuilder(_NicelySerializable):
         Penalty values (allowed keys depend on `cls_to_build`).
     """
 
-    # This was a classmethod, but I made it static because this class has no derived classes.
+    ObjectiveType = Union[
+        Literal['logl'], Literal['chi2'],
+        Literal['tvd'],  Literal['normalized-tvd'],
+        Tuple[Literal['Lp^p'], float]
+        # ^ The second entry in that tuple is the power "p"
+    ]
+
     @staticmethod
     def cast(obj):
         """
@@ -175,23 +184,33 @@ class ObjectiveFunctionBuilder(_NicelySerializable):
         ObjectiveFunctionBuilder
         """
         cls = ObjectiveFunctionBuilder
-        if isinstance(obj, cls): return obj
-        elif obj is None: return cls.create_from()
-        elif isinstance(obj, str): return cls.create_from(objective=obj)
-        elif isinstance(obj, dict): return cls.create_from(**obj)
-        elif isinstance(obj, (list, tuple)): return cls(*obj)
-        else: raise ValueError("Cannot create an %s object from '%s'" % (cls.__name__, str(type(obj))))
+        if isinstance(obj, cls):
+            return obj
+        if isinstance(obj, dict):
+            return cls.create_from(**obj)
+        if isinstance(obj, str) or (len(obj) == 2 and obj[0] == 'Lp^p'):
+            return cls.create_from(obj)  # type: ignore
+        
+        assert isinstance(obj, (list, tuple))
+        return cls(*obj)
 
     # This was a classmethod, but I made it static because this class has no derived classes.
     @staticmethod
-    def create_from(objective='logl', freq_weighted_chi2=False, callable_penalty=None):
+    def create_from(
+            objective: Union[ObjectiveType, Tuple[ObjectiveType, CallablePenalty]]='logl', freq_weighted_chi2=False
+        ):
         """
         Creates common :class:`ObjectiveFunctionBuilder` from a few arguments.
 
         Parameters
         ----------
-        objective : {'logl', 'chi2', 'tvd'}, optional
-            The objective function type: log-likelihood, chi-squared, or TVD.
+        objective : ObjectiveType, optional
+            Specifies a negative-log-likelihood loss ('logl'), a chi-squared loss ('chi2'),
+            a total variation distance loss ('tvd' or 'normalized tvd'), or an Lp-norm loss.
+
+            We have experimental support to accomodate when objective is a tuple whose
+            second entry is callable. In this case, the callable is assumed to be a function
+            that maps a model to a nonnegative float.
 
         freq_weighted_chi2 : bool, optional
             Whether to use 1/frequency values as the weights in the `"chi2"` case.
@@ -200,11 +219,12 @@ class ObjectiveFunctionBuilder(_NicelySerializable):
         -------
         ObjectiveFunctionBuilder
         """
-        if callable_penalty is None and isinstance(objective, tuple) and len(objective) >= 2 and isinstance(objective[1], Callable):
+        if isinstance(objective, tuple) and isinstance(objective[1], Callable):
             callable_penalty = objective[1]
-            # callable_penalty_scale = 1.0 if len(objective) == 2 else objective[2]
-            objective = objective[0]
-            
+            objective        = objective[0]  # type: ignore
+        else:
+            callable_penalty = None
+ 
 
         if objective == "chi2":
             if freq_weighted_chi2:
@@ -234,7 +254,7 @@ class ObjectiveFunctionBuilder(_NicelySerializable):
             )
 
         elif 'tvd' in objective:
-            descr = "Total Variational Distance (TVD)"
+            descr = "Total Variation Distance (TVD)"
             if 'normalized' in objective:
                 descr = descr + ', normalized by circuit depth'
                 assert objective == 'normalized tvd'

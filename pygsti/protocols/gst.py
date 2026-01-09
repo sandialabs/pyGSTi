@@ -54,6 +54,9 @@ from pygsti.circuits import Circuit
 from pygsti.forwardsims import ForwardSimulator
 
 
+ObjectiveType = _objfns.ObjectiveFunctionBuilder.ObjectiveType
+
+
 #For results object:
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]
 DEFAULT_BAD_FIT_THRESHOLD = 2.0
@@ -782,26 +785,28 @@ class GSTObjFnBuilders(_NicelySerializable):
 
     # This used to be a class method, but this class has no derived classes.
     @staticmethod
-    def create_from(objective='logl', freq_weighted_chi2=False, always_perform_mle=False, only_perform_mle=False):
+    def create_from(objective: ObjectiveType='logl', freq_weighted_chi2=False, always_perform_mle=False, only_perform_mle=False):
         """
         Creates a common :class:`GSTObjFnBuilders` object from several arguments.
 
         Parameters
         ----------
-        objective : {'logl', 'chi2', 'tvd'}, optional
-            Whether to create builders for maximum-likelihood or minimum-chi-squared GST.
+        objective : ObjectiveType, optional
+            Specifies whether the final GST iteration uses a negative-log-likelihood loss ('logl'),
+            a chi-squared loss ('chi2'), a total variation distance loss ('tvd' or 'normalized tvd'),
+            or an Lp-norm loss.
 
         freq_weighted_chi2 : bool, optional
             Whether chi-squared objectives use frequency-weighting.  If you're not sure
             what this is, leave it as `False`.
 
         always_perform_mle : bool, optional
-            Perform a ML-GST step on *each* iteration (usually this is only done for the
-            final iteration).
+            Only used if objective == 'logl'. If True, then each GST iteration consists
+            of an ML-GST step.
 
         only_perform_mle : bool, optional
-            Only perform a ML-GST step on each iteration, i.e. do *not* perform any chi2
-            minimization to "seed" the ML-GST step.
+            Only used if objective == 'logl'. If False (default), then each ML-GST step is
+            seeded with the results of a chi2-GST step with the same circuit list.
 
         Returns
         -------
@@ -810,13 +815,7 @@ class GSTObjFnBuilders(_NicelySerializable):
         chi2_builder = _objfns.ObjectiveFunctionBuilder.create_from('chi2', freq_weighted_chi2)
         mle_builder = _objfns.ObjectiveFunctionBuilder.create_from('logl')
 
-        if not isinstance(objective, str):
-            import warnings
-            warnings.warn(f'Trying to create an objective function from non-string specification, "{objective}". \
-                           \nSupport for this kind of specification is experimental!')
-            iteration_builders = [chi2_builder]
-            final_builders = [_objfns.ObjectiveFunctionBuilder.create_from(objective)]
-        elif objective == "chi2":
+        if objective == "chi2":
             iteration_builders = [chi2_builder]
             final_builders = []
         elif objective == "logl":
