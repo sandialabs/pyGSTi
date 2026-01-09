@@ -4143,7 +4143,7 @@ class RawTVDFunction(RawObjectiveFunction):
         numpy.ndarray
             A 1D array of length equal to that of each array argument.
         """
-        raise NotImplementedError("Derivatives not implemented for TVD yet!")
+        raise NotImplementedError("TVD is not twice-differentiable.")
 
     #Required zero-term methods for omitted probs support in model-based objective functions
     def zero_freq_terms(self, total_counts, probs):
@@ -4191,7 +4191,9 @@ class RawTVDFunction(RawObjectiveFunction):
         numpy.ndarray
             A 1D array of the same length as `total_counts` and `probs`.
         """
-        raise NotImplementedError("Derivatives not implemented for TVD yet!")
+        d = 0.5*_np.ones_like(probs)
+        d[probs < 0] = -0.5  # it's technically possible to predict negative probs.
+        return d
 
     def zero_freq_hterms(self, total_counts, probs):
         """
@@ -4216,10 +4218,13 @@ class RawTVDFunction(RawObjectiveFunction):
         numpy.ndarray
             A 1D array of the same length as `total_counts` and `probs`.
         """
-        raise NotImplementedError("Derivatives not implemented for TVD yet!")
+        raise NotImplementedError("TVD is not twice-differentiable.")
 
 
 class RawAbsPower(RawObjectiveFunction):
+    """
+    The function `(1/power) * |p-f|^power`.
+    """
 
     def __init__(self, power: float,  regularization=None, resource_alloc=None,
                  name='Lp^p', description="Elementwise absolute value and raising to a power.", verbosity=0):
@@ -4231,17 +4236,21 @@ class RawAbsPower(RawObjectiveFunction):
         return -1
     
     def terms(self, probs, counts, total_counts, freqs, intermediates=None):
-        return _np.abs(probs - freqs) ** self.power
+        return (1/self.power) * _np.abs(probs - freqs) ** self.power
     
     def dterms(self, probs, counts, total_counts, freqs, intermediates=None):
         t = probs - freqs
-        d = self.power * _np.abs(t) ** (self.power - 1)
+        d = _np.abs(t) ** (self.power - 1)
         d[t < 0] *= -1
         return d
     
     def zero_freq_terms(self, total_counts, probs):
         return _np.abs(probs) ** self.power
 
+    def zero_freq_dterms(self, total_counts, probs):
+        d = _np.abs(probs) ** (self.power - 1)
+        d[probs < 0] *= -1
+        return d
 
 ######################################################
 #
@@ -5186,7 +5195,7 @@ class LpNormToPowerP(TermWeighted):
 
     TEMPLATE_FIELDS = (
     """
-    Model-based loss function: `0.5 * |p-f|^power`.
+    Model-based loss function: `1/power * |p-f|^power`.
     """, "",
     """
     power : float, optonal
