@@ -6,30 +6,12 @@
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 # ***************************************************************************************************
-import copy as _copy
-import numpy as _np
-import itertools as _itertools
-import pathlib as _pathlib
-import warnings as _warnings
 
-from pygsti.protocols.treenode import TreeNode as _TreeNode
-from pygsti import io as _io
+import numpy as _np
+
 from collections.abc import Container as _Container
-from pygsti.circuits import (
-    Circuit as _Circuit, 
-    CircuitList as _CircuitList,
-    CircuitPlaquette as _CircuitPlaquette
-)
-from pygsti import data as _data
-from pygsti.tools import NamedDict as _NamedDict
-from pygsti.tools import listtools as _lt
-from pygsti.tools.dataframetools import _process_dataframe
-from pygsti.baseobjs.label import (
-    LabelStr as _LabelStr
-)
-from pygsti.baseobjs.mongoserializable import MongoSerializable as _MongoSerializable
-from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
-from pygsti.protocols.protocol import Protocol as _Protocol, CircuitListsDesign as _CircuitListsDesign
+from pygsti.circuits import Circuit as _Circuit, CircuitList as _CircuitList
+from pygsti.baseobjs.label import LabelStr as _LabelStr
 
 from typing import Union, Literal
 
@@ -44,7 +26,7 @@ def histonested_circuitlists(
         circuits: Union[_CircuitList, list[_Circuit]],
         bins: BinningStrategy = 'auto-int',
         trans: LengthTransformer = 'log'
-    ) -> list[_Circuit]:
+    ) -> list[list[_Circuit]]:
     """
     This is a helper function for building CircuitListsDesign objects with certain
     nested structures. If `clists` is the output of this function, then the induced
@@ -77,20 +59,7 @@ def histonested_circuitlists(
     for j, c in zip(assignments, circuits):
         for i in range(j, num_bins):
             circuit_lists[i].append(c)
-    """
-    # The following approch to building circuit_lists is (in theory) less efficient than
-    # the approach above, but it has the advantage of avoiding the nested for-loop.
-    circuit_lists = []
-    last_size = 0
-    edges = _np.histogram_bin_edges(lengths, bins)
-    for upperbound in edges[1:]:
-        cur_inds = _np.where(lengths < upperbound)[0]
-        if cur_inds.size == last_size:
-            continue  # empty bin
-        last_size = cur_inds.size
-        circuit_lists.append([circuits[j] for j in cur_inds])
-    """
-    return circuit_lists # type: ignore
+    return circuit_lists
 
 
 def logspaced_prefix_circuits(
