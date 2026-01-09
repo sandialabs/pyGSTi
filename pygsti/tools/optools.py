@@ -41,14 +41,14 @@ from typing import Union, Optional, Any
 BasisLike = Union[str, _Basis]
 
 
-__SCALAR_TOL_EXPONENT__ = 0.75
+__SCALAR_TOL_EXPONENT__ = 0.5
 """^
 __SCALAR_TOL_EXPONENT__ is used when checking properties of matrices and vectors.
 It's intended only when we can check the property without incurring rounding
 errors from some reduction (like a sum or a matrix-vector product). If we're
 working with a matrix whose dtype is `d`, then we set
 
-    __SCALAR_TOL__ = d.eps ** __SCALAR_TOL_EXPONENT__,
+    __SCALAR_TOL__ = _np.finfo(d).eps ** __SCALAR_TOL_EXPONENT__,
 
 or a modest multiple thereof.
 """
@@ -151,7 +151,7 @@ def fidelity(a, b):
     float
         The resulting fidelity.
     """
-    __SCALAR_TOL__ = _np.finfo(a.dtype).eps ** 0.5
+    __SCALAR_TOL__ = _np.finfo(a.dtype).eps ** __SCALAR_TOL_EXPONENT__
     # ^ use for checks that have no dimensional dependence; about 1e-8 for double precision.
     
     _mt.assert_hermitian(a, __SCALAR_TOL__)
