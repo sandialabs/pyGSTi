@@ -4526,6 +4526,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             omitted_probs_firsts_terms = self.raw_objfn.zero_freq_terms(self.total_counts[self.firsts], omitted_probs)
             terms[self.firsts] += omitted_probs_firsts_terms
         
+        self._reweight_terms(terms)
         unit_ralloc.host_comm_barrier()
 
         self.raw_objfn.resource_alloc.profiler.add_time(profiler_str, tm)
@@ -4583,6 +4584,8 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             omitted_dprobs_firsts_dterms = self.raw_objfn.zero_freq_dterms(total_counts_firsts, omitted_probs)
             dprobs[self.firsts] -= omitted_dprobs_firsts_dterms[:, None] * self.dprobs_omitted_rowsum
         
+        self._reweight_jac(dprobs)
+
         if shared_mem_leader and self._process_penalties:
             self._dterms_fill_penalty(paramvec, self.jac[self.nelements:, :])
 
@@ -4613,6 +4616,14 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
     
     # Helpers, supporting main public instance functions
     
+    def _reweight_terms(self, terms) -> None:
+        # Optional: multiply terms elementwise by some constants.
+        return
+
+    def _reweight_jac(self, terms_jac) -> None:
+        # Optional: multiply terms_jac rowwise by some constants.
+        return
+
     def _dterms_fill_penalty(self, paramvec, terms_jac):
         wrtslice = self.layout.global_param_slice if isinstance(self.layout, _DistributableCOPALayout) else slice(0, len(paramvec))  # all params
         off = 0
@@ -5062,94 +5073,23 @@ class TermWeighted(TimeIndependentMDCObjectiveFunction):
     duplication with the implementations in TimeIndependentMDCObjectiveFunction
     """
 
-    @property
-    def terms_weights(self) -> _np.ndarray:
-        if not hasattr(self, '_terms_weights'):
-            self._update_terms_weights()
-        return self._terms_weights
+    def __init__(self, raw_objfn, mdc_store, penalties=None, verbosity=0, **kwargs):
+        super().__init__(raw_objfn, mdc_store, penalties, verbosity, **kwargs)
+        self._terms_weights = _np.ones(self.layout.num_elements)
 
     def _update_terms_weights(self):
-        self._terms_weights = _np.ones(self.layout.num_elements)
+        # Default implementation does nothing.
+        return
+    
+    def _reweight_terms(self, terms):
+        self._update_terms_weights()
+        terms[:self.nelements] *= self._terms_weights
         return
 
-    def terms(self, paramvec=None, oob_check=False, profiler_str="TERMS OBJECTIVE"):
-        tm = _time.time()
-        if paramvec is None:
-            paramvec = self.model.to_vector()
-        else:
-            self.model.from_vector(paramvec)
-        terms = self.obj.view()
-
-        unit_ralloc = self.layout.resource_alloc('atom-processing')
-        shared_mem_leader = unit_ralloc.is_host_leader
-
-        with self.resource_alloc.temporarily_track_memory(self.nelements):  # 'e' (terms)
-            self.model.sim.bulk_fill_probs(self.probs, self.layout)
-            self._clip_probs()
-    
-            if oob_check:  # Only used for termgap cases
-                if not self.model.sim.bulk_test_if_paths_are_sufficient(self.layout, self.probs, verbosity=1):
-                    raise ValueError("Out of bounds!")  # signals LM optimizer
-
-            if shared_mem_leader:
-                terms_no_penalty = self.raw_objfn.terms(self.probs, self.counts, self.total_counts, self.freqs)
-                terms[:self.nelements] = terms_no_penalty
-                if self._process_penalties:
-                    terms[self.nelements:] = self._terms_penalty(paramvec)
-
-        if self.firsts is not None and shared_mem_leader:
-            omitted_probs = 1.0 - _np.array([self.probs[self.layout.indices_for_index(i)].sum() for i in self.indicesOfCircuitsWithOmittedData])
-            omitted_probs_firsts_terms = self.raw_objfn.zero_freq_terms(self.total_counts[self.firsts], omitted_probs)
-            terms[self.firsts] += omitted_probs_firsts_terms
-        
+    def _reweight_jac(self, terms_jac):
         self._update_terms_weights()
-        terms[:self.nelements] *= self.terms_weights
-        
-        unit_ralloc.host_comm_barrier()
-
-        self.raw_objfn.resource_alloc.profiler.add_time(profiler_str, tm)
-        assert(terms.shape == (self.nelements + self.local_ex,))
-        terms *= self.terms_weights
-        return terms
-
-    def dterms(self, paramvec=None):
-        tm = _time.time()
-        unit_ralloc = self.layout.resource_alloc('param-processing')
-        shared_mem_leader = unit_ralloc.is_host_leader
-
-        if paramvec is None:
-            paramvec = self.model.to_vector()
-        else:
-            self.model.from_vector(paramvec)
-    
-        dprobs = self.jac[0:self.nelements, :]
-        dprobs.shape = (self.nelements, self.nparams)
-
-        with self.resource_alloc.temporarily_track_memory(2 * self.nelements):
-            self.model.sim.bulk_fill_dprobs(dprobs, self.layout, self.probs)
-            self._clip_probs()
-            if shared_mem_leader:
-                if self.firsts is not None:
-                    for ii, i in enumerate(self.indicesOfCircuitsWithOmittedData):
-                        self.dprobs_omitted_rowsum[ii, :] = _np.sum(dprobs[self.layout.indices_for_index(i), :], axis=0)
-                dg_probs = self.raw_objfn.dterms(self.probs, self.counts, self.total_counts, self.freqs)
-                dprobs *= dg_probs[:, None]
-        
-        if shared_mem_leader and self.firsts is not None:
-            total_counts_firsts = self.total_counts[self.firsts]
-            omitted_probs = 1.0 - _np.array([_np.sum(self.probs[self.layout.indices_for_index(i)]) for i in self.indicesOfCircuitsWithOmittedData])
-            omitted_dprobs_firsts_dterms = self.raw_objfn.zero_freq_dterms(total_counts_firsts, omitted_probs)
-            dprobs[self.firsts] -= omitted_dprobs_firsts_dterms[:, None] * self.dprobs_omitted_rowsum
-    
-        self._update_terms_weights()
-        dprobs[:self.nelements] *= self.terms_weights[:, None]
-
-        if shared_mem_leader and self._process_penalties:
-            self._dterms_fill_penalty(paramvec, self.jac[self.nelements:, :])
-
-        unit_ralloc.host_comm_barrier()
-        self.raw_objfn.resource_alloc.profiler.add_time("JACOBIAN", tm)
-        return self.jac
+        terms_jac[:self.nelements] *= self._terms_weights[:, None]
+        return
 
 
 class TVDFunction(TermWeighted):
@@ -5179,7 +5119,7 @@ class TVDFunction(TermWeighted):
                 circuit_sizes[elind] = 1 + circuit.num_gates
             assert _np.all(circuit_sizes > 0)
             self._terms_weights = 1 / circuit_sizes
-            self._terms_weights /= _np.mean(self.terms_weights)
+            self._terms_weights /= _np.mean(self._terms_weights)
             # ^ Make the weights mean-1 to avoid unintended changes to Levenberg-Marquardt
             #   stopping criteria. This has an undesirable side effect of affecting how
             #   one would interpret individual circuits' contributions to the terms vector.
