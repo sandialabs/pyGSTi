@@ -3053,18 +3053,27 @@ class ModelEstimateResults(_proto.ProtocolResults):
         if 'iteration' not in self.circuit_lists:
             raise ValueError(("Circuits must be initialized"
                               "*before* adding estimates"))
+        
+        if estimates_to_add is None:
+            estimates_to_add = list(results.estimates)
 
         assert(results.dataset is self.dataset), "DataSet inconsistency: cannot import estimates!"
         assert(len(self.circuit_lists['iteration']) == len(results.circuit_lists['iteration'])), \
             "Iteration count inconsistency: cannot import estimates!"
 
-        for estimate_key in results.estimates:
-            if estimates_to_add is None or estimate_key in estimates_to_add:
-                if estimate_key in self.estimates:
-                    _warnings.warn("Re-initializing the %s estimate" % estimate_key
-                                   + " of this Results object!  Usually you don't"
-                                   + " want to do this.")
-                self.estimates[estimate_key] = results.estimates[estimate_key]
+        for estimate_key in estimates_to_add:
+            to_add = results.estimates[estimate_key]
+            if estimate_key in self.estimates:
+                _warnings.warn("Re-initializing the %s estimate" % estimate_key
+                                + " of this Results object!  Usually you don't"
+                                + " want to do this.")
+            if  to_add.parent is None:
+                to_add.parent = self
+            elif id(to_add.parent) != id(self):
+                msg = f'Provided estimate {estimate_key} has different parent than `self`.\n' \
+                + 'This is likely to result in bugs!'
+                _warnings.warn(msg)
+            self.estimates[estimate_key] = to_add
 
     def rename_estimate(self, old_name, new_name):
         """
@@ -3128,6 +3137,10 @@ class ModelEstimateResults(_proto.ProtocolResults):
             
         if estimate.parent is None:
             estimate.set_parent(self)
+        elif id(estimate.parent) != id(self):
+            msg = 'Provided estimate has different parent than `self`.\n' \
+              + 'This is likely to result in bugs!'
+            _warnings.warn(msg)
 
         self.estimates[estimate_key] = estimate
 
