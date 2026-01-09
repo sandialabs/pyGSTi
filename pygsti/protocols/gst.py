@@ -1949,7 +1949,7 @@ class StandardGST(_proto.Protocol):
                                          disable_checkpointing=disable_checkpointing,
                                          checkpoint=child_checkpoint,
                                          checkpoint_path=checkpoint_path)
-                    ret.add_estimates(result)
+                    ret.add_estimates(result, silent_steal=True)
 
                 elif mode in models_to_test:
                     mdl = models_to_test[mode]
@@ -1961,7 +1961,7 @@ class StandardGST(_proto.Protocol):
                                          disable_checkpointing=disable_checkpointing,
                                          checkpoint=child_checkpoint,
                                          checkpoint_path=checkpoint_path)
-                    ret.add_estimates(result)
+                    ret.add_estimates(result, silent_steal=True)
 
                 else:
                     if target_model is None:
@@ -1987,7 +1987,7 @@ class StandardGST(_proto.Protocol):
                                      disable_checkpointing=disable_checkpointing,
                                      checkpoint=child_checkpoint,
                                      checkpoint_path=checkpoint_path)
-                    ret.add_estimates(result)
+                    ret.add_estimates(result, silent_steal=True)
 
         return ret
 
@@ -3027,7 +3027,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
             ret[k] = v
         return ret
 
-    def add_estimates(self, results, estimates_to_add=None):
+    def add_estimates(self, results, estimates_to_add=None, silent_steal=False):
         """
         Add some or all of the estimates from `results` to this `Results` object.
 
@@ -3067,12 +3067,12 @@ class ModelEstimateResults(_proto.ProtocolResults):
                 _warnings.warn("Re-initializing the %s estimate" % estimate_key
                                 + " of this Results object!  Usually you don't"
                                 + " want to do this.")
-            if  to_add.parent is None:
-                to_add.parent = self
-            elif id(to_add.parent) != id(self):
-                msg = f'Provided estimate {estimate_key} has different parent than `self`.\n' \
-                + 'This is likely to result in bugs!'
+            if (not silent_steal) and (id(to_add.parent) != id(self)) and (to_add.parent is not None):
+                msg  = f"Provided estimate {estimate_key} has different parent than `self`.\n"
+                msg += "We'll make a copy of this estimate and set its parent to `self`."
                 _warnings.warn(msg)
+                to_add = to_add.copy()
+            to_add.parent = self
             self.estimates[estimate_key] = to_add
 
     def rename_estimate(self, old_name, new_name):
@@ -3102,7 +3102,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
         keys_to_move = ordered_keys[ordered_keys.index(old_name) + 1:]  # everything after old_name
         for key in keys_to_move: self.estimates.move_to_end(key)
 
-    def add_estimate(self, estimate, estimate_key='default'):
+    def add_estimate(self, estimate, estimate_key='default', silent_steal=False):
         """
         Add a set of `Model` estimates to this `Results` object.
 
@@ -3135,13 +3135,12 @@ class ModelEstimateResults(_proto.ProtocolResults):
                            + " of this Results object!  Usually you don't"
                            + " want to do this.")
             
-        if estimate.parent is None:
-            estimate.set_parent(self)
-        elif id(estimate.parent) != id(self):
-            msg = 'Provided estimate has different parent than `self`.\n' \
-              + 'This is likely to result in bugs!'
+        if (not silent_steal) and (id(estimate.parent) != id(self)) and (estimate.parent is not None):
+            msg  = f"Provided estimate {estimate_key} has different parent than `self`.\n"
+            msg += "We'll make a copy of this estimate and set its parent to `self`."
             _warnings.warn(msg)
-
+            estimate = estimate.copy()
+        estimate.parent = self
         self.estimates[estimate_key] = estimate
 
     def add_model_test(self, target_model, themodel,
@@ -3199,7 +3198,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
         mdltest = _ModelTest(themodel, target_model, gaugeopt_suite,
                              objfn_builder, badfit_options, name=estimate_key, verbosity=verbosity)
         test_result = mdltest.run(self.data, simulator=simulator)
-        self.add_estimates(test_result)
+        self.add_estimates(test_result, silent_steal=True)
 
     def view(self, estimate_keys, gaugeopt_keys=None):
         """
