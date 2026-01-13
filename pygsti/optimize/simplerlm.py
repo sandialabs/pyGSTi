@@ -374,7 +374,7 @@ def simplish_leastsq(
     obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
     rel_ftol=1e-6, rel_xtol=1e-6, max_iter=100, num_fd_iters=0, max_dx_scale=1.0,
     init_munu="auto", oob_check_interval=0, oob_action="reject", oob_check_mode=0,
-    resource_alloc=None, arrays_interface=None, serial_solve_proc_threshold=100,
+    resource_alloc=None, arrays_interface=None, serial_solve_proc_threshold=10_000,
     x_limits=None, verbosity=0, profiler=None
     ):
     """
