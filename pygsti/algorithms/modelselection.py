@@ -260,7 +260,7 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
         if  np.abs(error) > recompute_H_thresh_percentage*er_thresh:
             recompute_Hessian = True
             if verbosity > 0 and rank == 0:
-                print("Recomputing Hessian, approximation error is ", error)
+                print("Recomputing Hessian, approximation error is ", error, "norm is:: ", np.linalg.norm(best_model[0]))
             sim = pygsti.forwardsims.MapForwardSimulator(processor_grid=(1,size))
             red_model_fit = _parallel_GST(create_red_model(deltalogl_fn.model, np.delete(deltalogl_model_projector, best_model[2], axis=1), sim=sim, vec=None), data, builders, tol, maxiter, verbosity, comm=comm, mem_limit=mem_limit).estimates['GateSetTomography'].models['final iteration estimate']
             red_model_fit.sim = pygsti.forwardsims.MapForwardSimulator(processor_grid=(1,1,size),param_blk_sizes=(100,100))
@@ -282,8 +282,8 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
             red_rowandcol_H = H
             if rank == 0 and verbosity > 0:
                 print('New exact evidence ratio is ', best_model[1], f', improved by {deltalogl_fn.fn()-prev_dlogl}')
+                print('new norm is :!:', np.linalg.norm(expansion_point_x0))
             
-
         if best_model[1] > er_thresh or len(best_model[0]) == 1:
             exceeded_threshold = True
         if not hessian_recomputed_previous_level and exceeded_threshold:

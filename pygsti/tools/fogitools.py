@@ -61,7 +61,7 @@ def first_order_gauge_action_matrix(clifford_superop_mx, target_sslbls, model_st
         gen_expanded = _embed(gen, gen_sslbls, action_space)  # expand gen to shared action_space
         U_expanded = _embed(clifford_superop_mx, target_sslbls, action_space)  # expand to shared action_space
         if _sps.issparse(gen_expanded):
-            conjugated_gen = U_expanded.dot(gen_expanded.dot(U_expanded.transpose().conjugate()))  # sparse matrices
+            conjugated_gen = U_expanded @ gen_expanded @ U_expanded.transpose().conjugate()  # sparse matrices
         else:
             conjugated_gen = _np.dot(U_expanded, _np.dot(gen_expanded, _np.conjugate(U_expanded.T)))
         gauge_action_deriv = gen_expanded - conjugated_gen  # (on action_space)

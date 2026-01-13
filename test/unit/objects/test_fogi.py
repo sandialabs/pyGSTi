@@ -111,7 +111,7 @@ class FogiTester(BaseCase):
                                         expected_num_params_after_setup=31,  # 31 FOGI
                                         include_spam=True, reparam=True)
 
-    def test_std_fogi_GLND(self):
+    def test_std_fogi_HS(self):
         model_type = "H+s"
         errgen_types = ('H', 'S')
 
