@@ -28,6 +28,7 @@ from pygsti.baseobjs.label import Label as _Label, CircuitLabel as _CircuitLabel
 from pygsti.baseobjs import outcomelabeldict as _ld, _compatibility as _compat
 from pygsti.tools import internalgates as _itgs
 from pygsti.tools import slicetools as _slct
+from pygsti.tools.warningtools import PoorPerformanceRuntimeWarning
 from pygsti.tools.legacytools import deprecate as _deprecate_fn
 
 
@@ -990,7 +991,7 @@ class Circuit(object):
             elif self.in_canonical_form != x.in_canonical_form:
                 _warnings.warn((" Either compare circuits both in canonical form or neither in canonical form."
                             " To convert a circuit to canonical form you should call."
-                            " circuit.canonical_form() beforehand."))
+                            " circuit.canonical_form() beforehand."), PoorPerformanceRuntimeWarning)
                 if not self.in_canonical_form:
                     tmp = self.canonicalize_circuit()
                     if tmp._static and x._static and tmp._hash != x._hash:

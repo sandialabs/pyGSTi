@@ -470,19 +470,28 @@ class CircuitMethodTester(BaseCase):
         self.assertEqual(c.depth, 3)
 
     def test_logically_equivalent_circuits_are_equal(self):
-
-        circ1 = circuit.Circuit(["Gxpi2:0", "Gypi2:1"])
-        circ2 = circuit.Circuit(["Gypi2:1", "Gxpi2:0"])
+        from pygsti.tools.warningtools import PoorPerformanceRuntimeWarning
+        circ1 = circuit.Circuit([[("Gxpi2", 0), ("Gypi2", 1)]])
+        circ2 = circuit.Circuit([[("Gypi2", 1), ("Gxpi2", 0)]])
 
         self.assertTrue(circ1 != circ2)
 
-        tmp = circ1.canonicalize_circuit()
-        self.assertTrue(tmp, circ1)
-        self.assertTrue(tmp, circ2)
+        canonical1 = circ1.canonicalize_circuit()
+        with self.assertWarns(PoorPerformanceRuntimeWarning):
+            self.assertTrue(canonical1 == circ1)
+        with self.assertWarns(PoorPerformanceRuntimeWarning):
+            self.assertTrue(canonical1 == circ2)
 
-        tmp2 = circ2.canonicalize_circuit()
-        self.assertTrue(tmp, tmp2)
+        canonical2 = circ2.canonicalize_circuit()
+        with self.assertNoWarns(PoorPerformanceRuntimeWarning):
+            self.assertTrue(canonical1 == canonical2)
 
+        circ3 = circuit.Circuit([("Gxpi2", 0), ("Gypi2", 1)])  # initialize circ1 as a new circuit with 2 layers.
+        circ4 = circuit.Circuit([("Gypi2", 1), ("Gxpi2", 0)])
+
+        self.assertTrue(circ3 != circ4)
+        # (X, I) (I, Y) does not have the same effect as (I, Y) (X, I) with not perfect idles.
+        self.assertTrue(circ3.canonicalize_circuit() != circ4.canonicalize_circuit())
 
     def test_convert_to_quil(self):
         # Quil string with setup, each layer, and block_between_layers=True (current default)
