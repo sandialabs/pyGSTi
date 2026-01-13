@@ -108,7 +108,10 @@ def tensorized_teststate_density(op_basis: Basis) -> np.ndarray:
         udim = int(np.sqrt(op_basis.dim))
         E = np.eye(udim)
     else:
-        E = op_basis.ellookup['I'].copy()
+        try:
+            E = op_basis.ellookup['I'] # type: ignore
+        except KeyError:
+            E = op_basis.ellookup['II']
         if la.norm(E.imag) > 0:
             raise ValueError()
     psi = pgbt.stdmx_to_stdvec(E).ravel()
@@ -492,7 +495,10 @@ This is the computational\neffect of mx_basis.
 """ + NOTATION )
 def gate_leakage_profile(op: np.ndarray, mx_basis: Basis) -> tuple[np.ndarray, list[np.ndarray]]:
     mx_basis = Basis.cast(mx_basis, dim=int(np.sqrt(op.size)))
-    E_comp_mat = mx_basis.ellookup['I'] # type: ignore
+    try:
+        E_comp_mat = mx_basis.ellookup['I'] # type: ignore
+    except KeyError:
+        E_comp_mat = mx_basis.ellookup['II']
     n = int(np.sqrt(E_comp_mat.size))
     assert E_comp_mat.shape == (n, n)
     dim_comp = np.linalg.matrix_rank(E_comp_mat, hermitian=True)
@@ -516,7 +522,10 @@ the identity in M[H] minus the computational effect of mx_basis.
 """ + NOTATION )
 def gate_seepage_profile(op, mx_basis) -> tuple[np.ndarray, list[np.ndarray]]:
     mx_basis = Basis.cast(mx_basis, dim=int(np.sqrt(op.size)))
-    E_comp_mat = mx_basis.ellookup['I'] # type: ignore
+    try:
+        E_comp_mat = mx_basis.ellookup['I'] # type: ignore
+    except KeyError:
+        E_comp_mat = mx_basis.ellookup['II']
     n = int(np.sqrt(E_comp_mat.size))
     assert E_comp_mat.shape == (n, n)
     dim_comp = np.linalg.matrix_rank(E_comp_mat, hermitian=True)
@@ -644,6 +653,94 @@ def leaky_qubit_model_from_pspec(
     tm_3level.default_gauge_group = g_full
     tm_3level.sim = 'map'  # can use 'matrix', if that's preferred for whatever reason.
     return tm_3level
+
+
+def promote_bb_to_bt(
+        qubit_model: ExplicitOpModel,
+        sys0_basis: Union[str, Basis]='pp',
+        sys1_basis: Union[str, Basis]='l2p1',
+        levels_readout_zero=(0,), default_idle_gatename: Label = Label(())
+    ) -> ExplicitOpModel:
+
+    from pygsti.models import ExplicitOpModel
+    from pygsti.baseobjs.statespace import ExplicitStateSpace
+    from pygsti.modelmembers.povms import UnconstrainedPOVM
+    from pygsti.modelmembers.states import FullState
+
+    assert qubit_model.state_space.num_qubits == 2
+    ps_4level = qubit_model.create_processor_spec()
+    if '{idle}' in ps_4level.gate_names:
+        ps_4level.rename_gate_inplace('{idle}', default_idle_gatename)
+    sys0_name, sys1_name = ps_4level.qudit_labels
+
+    sys0_basis = Basis.cast(sys0_basis, dim=4)
+    sys1_basis = Basis.cast(sys1_basis, dim=9)
+    mx_basis   = TensorProdBasis((sys0_basis, sys1_basis))
+    ss_6level  = ExplicitStateSpace([sys0_name, sys1_name], [2, 3])
+    tm_6level  = ExplicitOpModel(ss_6level, mx_basis) # type: ignore
+    tm_6level.operations[default_idle_gatename] = np.eye(36)
+
+    I_b    = np.eye(2, dtype='cdouble')
+    I_t    = np.eye(3, dtype='cdouble')
+    E0_b   = np.array([[1,0],[0,0]], dtype='cdouble')
+    E1_b   = I_b - E0_b
+    E0_t   = np.zeros((3, 3))
+    E0_t[levels_readout_zero, levels_readout_zero] = 1
+    E1_t   = I_t - E0_t
+    effects = {
+        '00': np.kron(E0_b, E0_t),
+        '01': np.kron(E0_b, E1_t),
+        '10': np.kron(E1_b, E0_t),
+        '11': np.kron(E1_b, E1_t)
+    }
+    effect_superkets = [(k, stdmx_to_vec(v, mx_basis)) for k, v in effects.items()]
+    tm_6level.povms['Mdefault'] = UnconstrainedPOVM(effect_superkets, evotype='default')
+
+    rho0 = np.zeros((6, 6))
+    rho0[0,0] = 1.0
+    tm_6level.preps['rho0'] = FullState(stdmx_to_vec(rho0, mx_basis))
+    
+    PP_1q_basis : BuiltinBasis = Basis.cast( 'PP', 4  )  # type: ignore
+    PP_2q_basis : BuiltinBasis = Basis.cast( 'PP', 16 )  # type: ignore
+    I_6x6 = np.eye(6, dtype='complex')
+
+    def lift_u_2q(u: np.ndarray) -> np.ndarray:
+        u_6x6 = np.zeros((6,6), 'complex')
+        tj_mx = np.zeros((3,3), 'complex')
+        tj_mx[2,2] = 1.0
+        for ij_lbl, pij_mx in zip(PP_2q_basis.labels, PP_2q_basis.elements):  # type: ignore
+            c_ij = np.vdot(pij_mx, u) / 4
+            i_lbl, j_lbl = ij_lbl
+            pi_mx  = PP_1q_basis.ellookup[i_lbl]
+            pj_mx  = PP_1q_basis.ellookup[j_lbl]
+            tj_mx[:2,:2] = pj_mx
+            u_6x6 += c_ij * np.kron(pi_mx, tj_mx)
+        expect_I = u_6x6 @ u_6x6.T.conj()
+        if (nrm := np.linalg.norm(expect_I - I_6x6)) > 1e-14:
+            warnings.warn(f'Nominally-unitary operator {op_lbl} fails self-inverse check with norm {nrm}.')
+        superop = pgot.unitary_to_superop(u_6x6, mx_basis)  # type: ignore
+        return superop
+
+    from pygsti.tools.internalgates import standard_gatename_unitaries
+    u_swap = standard_gatename_unitaries()['Gswap']
+
+    non_idle_ops = [k for k in qubit_model.operations.keys() if k != Label(())]
+    for op_lbl in non_idle_ops:
+        u = ps_4level.gate_unitaries[op_lbl[0]]
+        op_registers  = op_lbl[1:]
+        num_registers = len(op_registers)
+        assert u.shape == (2**num_registers, 2**num_registers)
+        if op_registers[0] == sys0_name:
+            u_op = np.kron(u, I_b) if num_registers == 1 else u
+        else:
+            u_op = np.kron(I_b, u) if num_registers == 1 else u_swap @ u @ u_swap
+        u_lifted_superop = lift_u_2q(u_op)
+        tm_6level.operations[op_lbl] = u_lifted_superop
+
+    from pygsti.models.gaugegroup import UnitaryGaugeGroup
+    tm_6level.default_gauge_group = UnitaryGaugeGroup(tm_6level.state_space, mx_basis)
+    tm_6level.sim = 'map'
+    return tm_6level
 
 
 # MARK: gauge optimization

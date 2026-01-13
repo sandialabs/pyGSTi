@@ -326,9 +326,12 @@ class Basis(_NicelySerializable):
     @property
     def implies_leakage_modeling(self) -> bool:
         if (not hasattr(self, '_implies_leakage')) or self._implies_leakage is None:
-            if 'I' not in self.labels:
+            id_label = 'I'
+            if id_label not in self.labels:
+                id_label = 'II'
+            if id_label not in self.labels:
                 return False
-            I = self.ellookup['I']
+            I = self.ellookup[id_label]
             self._implies_leakage = _np.linalg.matrix_rank(I) < I.shape[0]
         return self._implies_leakage
 

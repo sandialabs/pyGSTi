@@ -15,7 +15,7 @@ from __future__ import annotations
 import numpy as _np
 
 from pygsti.tools import basistools as _bt
-from pygsti.baseobjs.basis import Basis as _Basis
+from pygsti.baseobjs.basis import Basis as _Basis, LazyBasis as _LazyBasis
 from typing import Union, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -129,7 +129,13 @@ def jamiolkowski_iso(operation_mx: Union[_np.ndarray, Expression], op_mx_basis: 
     if not isinstance(choi_mx_basis, _Basis):
         choi_mx_basis = _Basis.cast(choi_mx_basis, N)  # we'd like a basis of dimension N
 
-    BVec = choi_mx_basis.create_simple_equivalent().elements
+    try:
+        BVec = choi_mx_basis.create_simple_equivalent().elements
+    except AssertionError as e:
+        assert 'Unknown builtin basis name' in str(e)
+        assert isinstance(choi_mx_basis, _LazyBasis)
+        BVec = choi_mx_basis.elements
+
     M = len(BVec)  # can be < N if basis has multiple block dims
     assert(M == N), 'Expected {}, got {}'.format(M, N)
 
