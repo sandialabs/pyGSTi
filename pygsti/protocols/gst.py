@@ -1532,6 +1532,44 @@ class GateSetTomography(_proto.Protocol):
         
         return ret
 
+    def run_mpi_unsafe(self, data: _proto.ProtocolData, num_ranks: int, mpicommand: str) -> "ModelEstimateResults":
+        from tempfile import TemporaryDirectory
+        from pathlib import Path
+        import subprocess
+        # step 0: check that commands work, particularly `mpicommand`.
+        # TODO: implement this step.
+        with TemporaryDirectory() as tempdir:
+            tempdir_str = str(Path(tempdir))
+            # step 1: write dataset and protocol (us!)
+            data.write(tempdir_str)
+            self.write(tempdir_str)
+            # step 2: create MPI script
+            script_contents = [
+                "import pygsti\n",
+                "from mpi4py import MPI\n",
+                "comm = MPI.COMM_WORLD\n",
+                "data = pygsti.io.read_data_from_dir('%s')\n"                      % tempdir_str,
+                "protocol = pygsti.protocols.GateSetTomography.from_dir('%s', False)\n"   % tempdir_str,
+                "results = protocol.run(data, comm=comm)\n"
+                "if comm.Get_rank() == 0:\n"
+                "    results.write('%s')\n"                                  % tempdir_str,
+                "results=None # needed to free shared memory before garbage collection is torn down\n"
+            ]
+            # step 3: write MPI script to disk.
+            scriptloc_str = tempdir_str + '/mpiexec_me.py'
+            with open(scriptloc_str, 'w') as f:
+                f.writelines(script_contents)
+            # step 4: launch script with mpiexec.
+            try:
+                command = f'which python; {mpicommand} -n {num_ranks} python {scriptloc_str}'
+                subprocess.run(command, shell=True)
+            except subprocess.CalledProcessError as e:
+                print(f"{mpicommand} failed with error : {e}!")
+            # step 4: read in the results
+            res = ModelEstimateResults.from_dir(tempdir_str, self.name)
+        return res
+
+
 
 class LinearGateSetTomography(_proto.Protocol):
     """
