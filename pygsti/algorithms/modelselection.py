@@ -273,7 +273,7 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
             red_model_fit.sim._processor_grid = (1,1,1)
             temp_model = deltalogl_fn.model
             deltalogl_fn.model = red_model_fit
-
+            prev_quantity = best_model[1]
             best_model[1] = (deltalogl_fn.fn() - prev_dlogl )*2
             print(f'{deltalogl_fn.fn()=}, {prev_dlogl=}')
             expansion_point_logl = deltalogl_fn.fn()
@@ -281,7 +281,7 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
             red_row_H = H
             red_rowandcol_H = H
             if rank == 0 and verbosity > 0:
-                print('New exact evidence ratio is ', best_model[1], f', improved by {deltalogl_fn.fn()-prev_dlogl}')
+                print('New exact evidence ratio is ', best_model[1], f', improved by {prev_quantity - best_model[1]}')
                 print('new norm is :!:', np.linalg.norm(expansion_point_x0))
             
         if best_model[1] > er_thresh or len(best_model[0]) == 1:
@@ -295,7 +295,7 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
                 sim = pygsti.forwardsims.MapForwardSimulator(processor_grid=(1,size))
 
                 if recompute_Hessian:
-                    deltalogl_fn.model = temp_model
+                    deltalogl_fn.model = create_red_model(temp_model, deltalogl_model_projector,sim=sim)
                 else:
                     deltalogl_fn.model = create_red_model(deltalogl_fn.model, deltalogl_model_projector,sim=sim)
                 deltalogl_fn.model.sim = sim
