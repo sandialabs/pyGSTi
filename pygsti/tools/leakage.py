@@ -97,7 +97,7 @@ def set_docstring(docstr):
 
 
 def computational_effect(basis: Basis) -> np.ndarray:
-    E = basis.ellookup.get('I', basis.ellookup['II']).copy()  # type: ignore
+    E = basis.ellookup.get('I', basis.ellookup.get('II', None)).copy()  # type: ignore
     k = np.linalg.matrix_rank(E)
     E *= (k/np.trace(E))
     return E
