@@ -96,6 +96,13 @@ def set_docstring(docstr):
     return assign
 
 
+def computational_effect(basis: Basis) -> np.ndarray:
+    E = basis.ellookup.get('I', basis.ellookup['II']).copy()  # type: ignore
+    k = np.linalg.matrix_rank(E)
+    E *= (k/np.trace(E))
+    return E
+
+
 # MARK: metrics
 
 
@@ -108,10 +115,7 @@ def tensorized_teststate_density(op_basis: Basis) -> np.ndarray:
         udim = int(np.sqrt(op_basis.dim))
         E = np.eye(udim)
     else:
-        try:
-            E = op_basis.ellookup['I'] # type: ignore
-        except KeyError:
-            E = op_basis.ellookup['II']
+        E = computational_effect(op_basis)
         if la.norm(E.imag) > 0:
             raise ValueError()
     psi = pgbt.stdmx_to_stdvec(E).ravel()
@@ -218,6 +222,21 @@ def subspace_jtracedist(op_x: np.ndarray, op_y: np.ndarray, op_basis) -> float:
 
 # MARK: projected metrics
 
+
+# TODO: remove this function before PR merge.
+def _computational_superkets(dim_pure_compsub, dim_pure, basis: Basis) -> np.ndarray:
+    from pygsti.tools.leakage import leading_dxd_submatrix_basis_vectors, computational_superkets
+    if dim_pure >= 6:
+        # At this size it's unreasonable to assume the computational subspace is
+        # the span of the first (udim-n_leak) standard basis vectors. We have to
+        # get the computational subspace from the Basis object.
+        U = computational_superkets(basis)
+        assert U.shape[1] < basis.dim
+    else:
+        U = leading_dxd_submatrix_basis_vectors(dim_pure_compsub, dim_pure, basis)
+    return U
+
+
 @set_docstring(
 """
 Here, H has dimension n and C ⊂ H has dimension d ≤ n, and current_basis
@@ -253,12 +272,12 @@ def computational_superkets(basis: Basis, E: Optional[np.ndarray] = None) -> np.
     if not basis.is_hermitian():
         raise ValueError()
     if E is None:
-        E = basis.ellookup['I'].copy()  # type: ignore
+        E = computational_effect(basis)
     else:
+        assert isinstance(E, np.ndarray)
         E = E.copy()
-    assert isinstance(E, np.ndarray)
-    k = np.linalg.matrix_rank(E)
-    E *= (k/np.trace(E))
+        k = np.linalg.matrix_rank(E)
+        E *= (k/np.trace(E))
     if not pgmt.is_projector(E):
         raise ValueError()
     proj_elements  = [ E @ B @ E for B in basis.elements ]
@@ -284,12 +303,10 @@ def computational_projector(*args) -> np.ndarray:
         basis = args[0]
         if not isinstance(basis, Basis):
             raise ValueError()
-        if not hasattr(basis, 'ellookup') or ('I' not in basis.ellookup):
-            raise ValueError()
         dim = basis.dim
         if basis.first_element_is_identity:
             return np.eye(dim)
-        E = basis.ellookup['I']
+        E = computational_effect(basis)
         U = computational_superkets(basis, E)
 
     else:
@@ -494,16 +511,10 @@ TRANSPORT_PROFILES_TEMPLATE.replace('SUB', 'C') % """
 This is the computational\neffect of mx_basis.
 """ + NOTATION )
 def gate_leakage_profile(op: np.ndarray, mx_basis: Basis) -> tuple[np.ndarray, list[np.ndarray]]:
-    mx_basis = Basis.cast(mx_basis, dim=int(np.sqrt(op.size)))
-    try:
-        E_comp_mat = mx_basis.ellookup['I'] # type: ignore
-    except KeyError:
-        E_comp_mat = mx_basis.ellookup['II']
-    n = int(np.sqrt(E_comp_mat.size))
-    assert E_comp_mat.shape == (n, n)
-    dim_comp = np.linalg.matrix_rank(E_comp_mat, hermitian=True)
-    E_comp_mat = E_comp_mat * (dim_comp / np.trace(E_comp_mat))
-    if dim_comp == n:
+    mx_basis   = Basis.cast(mx_basis, dim=int(np.sqrt(op.size)))
+    E_comp_mat = computational_effect(mx_basis)
+    dim_comp   = round(np.trace(E_comp_mat))
+    if dim_comp**2 == E_comp_mat.size:
         msg = \
         """
         The provided basis suggests that the computational subspace is equal to
@@ -522,16 +533,10 @@ the identity in M[H] minus the computational effect of mx_basis.
 """ + NOTATION )
 def gate_seepage_profile(op, mx_basis) -> tuple[np.ndarray, list[np.ndarray]]:
     mx_basis = Basis.cast(mx_basis, dim=int(np.sqrt(op.size)))
-    try:
-        E_comp_mat = mx_basis.ellookup['I'] # type: ignore
-    except KeyError:
-        E_comp_mat = mx_basis.ellookup['II']
-    n = int(np.sqrt(E_comp_mat.size))
-    assert E_comp_mat.shape == (n, n)
-    dim_comp = np.linalg.matrix_rank(E_comp_mat, hermitian=True)
-    E_comp_mat = E_comp_mat * (dim_comp / np.trace(E_comp_mat))
+    E_comp_mat = computational_effect(mx_basis)
+    n = round(E_comp_mat.size ** 0.5)
     E_leak_mat = np.eye(n) - E_comp_mat
-    if dim_comp == n:
+    if round(np.trace(E_comp_mat)) == n:
         msg = \
         """
         The provided basis suggests that the computational subspace is equal to

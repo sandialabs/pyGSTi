@@ -1538,6 +1538,8 @@ class GateSetTomography(_proto.Protocol):
         import subprocess
         # step 0: check that commands work, particularly `mpicommand`.
         # TODO: implement this step.
+
+        # TODO: https://pypi.org/project/threadpoolctl/
         with TemporaryDirectory() as tempdir:
             tempdir_str = str(Path(tempdir))
             # step 1: write dataset and protocol (us!)
@@ -2495,7 +2497,8 @@ def _compute_1d_reference_values(target_model: _ExplicitOpModel, gopped_models: 
         if n_leak == 0:
             P = I
         elif n_leak > 0:
-            U = _tools.leading_dxd_submatrix_basis_vectors(udim - n_leak, udim, basis)
+            from pygsti.tools.leakage import _computational_superkets
+            U = _computational_superkets(udim - n_leak, udim, basis)
             P = U @ U.T.conj()
             P = P.real
 
