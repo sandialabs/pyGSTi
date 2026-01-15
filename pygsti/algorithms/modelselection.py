@@ -84,6 +84,7 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
     lowest_vec : numpy array
         vector corresponding to the fitted best reduced model found at its corresponding level
     """
+
     new_checkpoint = None
     loaded_checkpoint = None
     if comm is not None:
@@ -92,6 +93,8 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
     else:
         rank = 0
         size = 1
+    if rank == 0:
+        print('starting AMS with H recomp thresh of ', recompute_H_thresh_percentage)
     if not disable_checkpoints:
         new_checkpoint = _AMSCheckpoint(data.dataset.to_str(), er_thresh, maxiter, tol, prob_clip, None, None, None)
     
