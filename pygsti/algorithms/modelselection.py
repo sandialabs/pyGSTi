@@ -10,7 +10,7 @@ from pygsti.tools.modelselectiontools import custom_builder as _custom_builders,
 import os as _os
 
 
-def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, maxiter=100, tol=1.0, prob_clip=1e-3, recompute_H_thresh_percentage = 1, disable_checkpoints = False, checkpoint = None, comm = None, mem_limit = None):
+def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, maxiter=100, tol=1.0, prob_clip=1e-3, recompute_H_thresh_percentage = 1, disable_checkpoints = False, checkpoint = None, comm = None, mem_limit = None, recomp_interval=1e10):
     """
     An automated model selection greedy algorithm. Specifically made for FOGI models, but it should be compatible
     with any model that has a linear interposer. It is considered "fast" because on most model fits, GST analysis is
@@ -24,8 +24,8 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
         likelihood function. This is done in reduced_model_approx_GST() and reduced_model_approx_GST_fast(). If multiple processes
         are available, the list of reduced models to be evaluated gets evenly split amongst them.
 
-        4) Grab the reduced model with the lowest difference in MLE (MLE(full_model) - MLE(red_model)), use this as your full_model
-        and go back to step 1.
+        4) Grab the reduced model with the lowest difference in MLE (MLE(full_model) - MLE(red_model)), use this as your new 
+        full_model and go back to step 1.
 
     Parameters
     ----------
@@ -260,7 +260,7 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
             
         if verbosity and rank == 0:
                 print(f'Model {best_model[2]} has lowest evidence ratio {best_model[1]}')
-        if  np.abs(error) > recompute_H_thresh_percentage*er_thresh:
+        if  (np.abs(error) > recompute_H_thresh_percentage*er_thresh) or (len(graph_levels) % recomp_interval == 0):
             recompute_Hessian = True
             if verbosity > 0 and rank == 0:
                 print("Recomputing Hessian, approximation error is ", error, "norm is:: ", np.linalg.norm(best_model[0]))
