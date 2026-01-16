@@ -273,6 +273,7 @@ def computational_superkets(basis: Basis, E: Optional[np.ndarray] = None) -> np.
         raise ValueError()
     if E is None:
         E = computational_effect(basis)
+        k = np.linalg.matrix_rank(E)
     else:
         assert isinstance(E, np.ndarray)
         E = E.copy()

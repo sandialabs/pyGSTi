@@ -20,6 +20,8 @@ from pygsti.modelmembers import modelmember as _modelmember
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GlobalElementaryErrorgenLabel, LocalElementaryErrorgenLabel as _LocalElementaryErrorgenLabel
 from pygsti import SpaceT
+
+
 class EmbeddedOp(_LinearOperator):
     """
     An operation containing a single lower (or equal) dimensional operation within it.
@@ -138,11 +140,15 @@ class EmbeddedOp(_LinearOperator):
         self.embedded_op.set_time(t)
 
     def _iter_matrix_elements_precalc(self, on_space):
-        divisor = 1; divisors = []
+        divisor = 1
+        divisors = []
         for l in self.target_labels:
             divisors.append(divisor)
-            dim = self.state_space.label_udimension(l) if on_space == "Hilbert" \
-                else self.state_space.label_dimension(l)   # e.g. 4 or 2 for qubits (depending on on_space)
+            if on_space == "Hilbert":
+                dim = self.state_space.label_udimension(l)
+            else:
+                # e.g. 4 or 2 for qubits (depending on on_space)
+                dim = self.state_space.label_dimension(l)
             divisor *= dim
 
         iTensorProdBlk = [self.state_space.label_tensor_product_block_index(label) for label in self.target_labels][0]
@@ -217,6 +223,8 @@ class EmbeddedOp(_LinearOperator):
         #Begin iteration loop
         self._iter_elements_cache[on_space] = []
         embedded_dim = self.embedded_op.state_space.udim if on_space == "Hilbert" else self.embedded_op.state_space.dim
+        # TODO: figure out if it's possible that differing targets (e.g., [1, 0] versus [0, 1])
+        # can result in different behavior from this function.
         for op_i in range(embedded_dim):     # rows ~ "output" of the operation map
             for op_j in range(embedded_dim):  # cols ~ "input"  of the operation map
                 op_b1 = _decomp_op_index(op_i, divisors)  # op_b? are lists of dm basis indices, one index per
@@ -297,6 +305,11 @@ class EmbeddedOp(_LinearOperator):
         finalOp = _np.identity(self.state_space.udim if (on_space == 'Hilbert') else self.state_space.dim,
                                embedded_dense.dtype)
 
+        shape_matches = embedded_dense.shape == self.shape
+        space_matches = self.state_space == self.embedded_op.state_space
+        if shape_matches and space_matches:
+            finalOp[:] = embedded_dense
+            return finalOp
         #fill in embedded_op contributions (always overwrites the diagonal
         # of finalOp where appropriate, so OK it starts as identity)
         for i, j, gi, gj in self._iter_matrix_elements(on_space):
