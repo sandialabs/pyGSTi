@@ -2,7 +2,7 @@
 Defines the ErrorgenSpace class and supporting functionality.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -11,26 +11,44 @@ Defines the ErrorgenSpace class and supporting functionality.
 #***************************************************************************************************
 
 import numpy as _np
-
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.tools import matrixtools as _mt
+from pygsti.baseobjs.errorgenbasis import ExplicitElementaryErrorgenBasis
 
+class ErrorgenSpace(_NicelySerializable):
 
-class ErrorgenSpace(object):
-    """
-    A vector space of error generators, spanned by some basis.
-
-    This object collects the information needed to specify a space
-    within the space of all error generators.
-    """
 
     def __init__(self, vectors, basis):
+        """
+        A vector space of error generators, spanned by some basis.
+
+        This object collects the information needed to specify a space
+        within the space of all error generators.
+
+        Parameters
+        ----------
+        vectors : numpy array
+            List of vectors that span the space
+        
+            elemgen_basis : ElementaryErrorgenBasis
+                The elementary error generator basis that define the entries of self.vectors 
+        """
+        super().__init__()
         self.vectors = vectors
         self.elemgen_basis = basis
         #Question: have multiple bases or a single one?
         #self._vectors = [] if (items is None) else items  # list of (basis, vectors_mx) pairs
         # map sslbls => (vectors, basis) where basis.sslbls == sslbls
         # or basis => vectors if bases can hash well(?)
-
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'vectors' : self._encodemx(self.vectors),
+                      'basis': self.elemgen_basis._to_nice_serialization()
+        })
+        return state
+    @classmethod
+    def from_nice_serialization(cls, state):
+        return cls(cls._decodemx(state['vectors']), ExplicitElementaryErrorgenBasis.from_nice_serialization(state['basis']))
     def intersection(self, other_space, free_on_unspecified_space=False, use_nice_nullspace=False):
         """
         TODO: docstring
@@ -75,6 +93,18 @@ class ErrorgenSpace(object):
 
         return ErrorgenSpace(intersection_vecs, common_basis)
 
+    def __eq__(self, other):
+        """Compare self with other. Return true only if they are identical, including the order of their vectors.
+
+        Args:
+            other (ErrorgenSpace): Error generator space to compare against
+
+        Returns:
+            Boolean: True if they are identical, False otherwise
+        """
+        if not isinstance(other, ErrorgenSpace):
+            return False
+        return _np.allclose(self.vectors, other.vectors) and self.elemgen_basis.__eq__(other.elemgen_basis)
     def union(self, other_space):
         """
         TODO: docstring

@@ -2,7 +2,7 @@
 The StaticStandardOp class and supporting functionality.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -19,6 +19,7 @@ from pygsti.baseobjs import statespace as _statespace
 from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
 from pygsti.tools import internalgates as _itgs
+from pygsti import SpaceT
 
 
 class StaticStandardOp(_LinearOperator, _NoErrorGeneratorInterface):
@@ -58,7 +59,7 @@ class StaticStandardOp(_LinearOperator, _NoErrorGeneratorInterface):
         rep = evotype.create_standard_rep(name, basis, state_space)
         _LinearOperator.__init__(self, rep, evotype)
 
-    def to_dense(self, on_space='minimal'):
+    def to_dense(self, on_space: SpaceT='minimal'):
         """
         Return the dense array used to represent this operation within its evolution type.
 

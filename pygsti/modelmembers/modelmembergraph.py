@@ -2,7 +2,7 @@
 Modelmember dependency graph related utility functions
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -19,8 +19,8 @@ from pygsti.modelmembers.modelmember import ModelMember
 class ModelMemberGraph(object):
     """A directed acyclic graph of dependencies of ModelMembers"""
 
-    @classmethod
-    def load_modelmembers_from_serialization_dict(cls, sdict, parent_model):
+    @staticmethod
+    def load_modelmembers_from_serialization_dict(sdict, parent_model):
         """Create a nested dictionary of model members from a previously serialized graph.
 
         Parameters

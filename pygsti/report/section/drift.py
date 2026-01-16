@@ -1,6 +1,6 @@
 """ Drift report sections """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -46,11 +46,11 @@ class DriftSection(_Section):
     @_Section.figure_factory()
     def drift_detector_colorbox_plot(workspace, stabilityanalyzer=None, circuit_list=None, **kwargs):
         return workspace.ColorBoxPlot(
-            'driftdetector', circuit_list, None, None, linlg_pcntle=.05, stabilityanalyzer=stabilityanalyzer
+            'driftdetector', circuit_list, None, None, linlg_pcntle=0.05, stabilityanalyzer=stabilityanalyzer
         )
 
     @_Section.figure_factory()
     def drift_size_colorbox_plot(workspace, stabilityanalyzer=None, circuit_list=None, **kwargs):
         return workspace.ColorBoxPlot(
-            'driftsize', circuit_list, None, None, linlg_pcntle=.05, stabilityanalyzer=stabilityanalyzer
+            'driftsize', circuit_list, None, None, linlg_pcntle=0.05, stabilityanalyzer=stabilityanalyzer
         )

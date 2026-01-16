@@ -15,7 +15,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest] # No Mac
-        python-version: [3.8, 3.9, '3.10', '3.11']
+        python-version: [3.9, '3.10', '3.11', '3.12']
         use-cython: ['true', 'false']
     uses: ./.github/workflows/reuseable-main.yml
     name: Run pyGSTi tests

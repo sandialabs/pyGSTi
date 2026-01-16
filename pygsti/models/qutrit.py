@@ -2,7 +2,7 @@
 Routines for building qutrit gates and models
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -22,11 +22,12 @@ from pygsti.models import ExplicitOpModel as _ExplicitOpModel
 from pygsti.tools import unitary_to_superop, change_basis
 
 #Define 2 qubit to symmetric (+) antisymmetric space transformation A:
-A = _np.matrix([[1, 0, 0, 0],
+A = _np.array([[1, 0, 0, 0],
                 #               [0,0,0,1],
                 [0, 1. / _np.sqrt(2), 1. / _np.sqrt(2), 0],
                 [0, 1. / _np.sqrt(2), -1. / _np.sqrt(2), 0],
                 [0, 0, 0, 1], ])
+invA = A.T.conj()
 
 X = _np.array([[0, 1], [1, 0]])
 Y = _np.array([[0, -1j], [1j, 0]])
@@ -122,7 +123,7 @@ def to_qutrit_space(input_mat):
     numpy.ndarray
     """
     input_mat = _np.array(input_mat)
-    return _remove_from_matrix(A * input_mat * _np.linalg.inv(A), [2], [2])
+    return _remove_from_matrix(A @ input_mat @ A.T.conj(), [2], [2])
 #    return (A * input_mat * A**-1)[:3,:3]#Comment out above line and uncomment this line if you want the state space
 #labelling to be |0>=|00>,|1>=|11>,|2>~|01>+|10>
 

@@ -2,7 +2,7 @@
 Defines CompilationLibrary class and supporting functions
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -555,8 +555,23 @@ class CliffordCompilationRules(CompilationRules):
                                 (_Label(H_name, 1), _Label(cphase_name, (0, 1)), _Label(H_name, 1))]
                             compilation_rules._clifford_templates['CNOT'].append(
                                 (_Label(H_name, 1), _Label(cphase_name, (1, 0)), _Label(H_name, 1)))
+                
+                if all((gn in base_processor_spec.gate_names) for gn in ('Giswap', 'Gxpi2', 'Gzpi2', 'Gzmpi2')):
+                    # add standard local compilation of CNOT via iswap and pi/2 gates
+                    # See https://www.researchgate.net/publication/228870309_Effects_of_noise_on_spin_network_cloning
+                    available_gatenames = compilation_rules.processor_spec.available_gatenames((0,1))  # gates on qubits 0,1
+                    available_srep_dict = compilation_rules.processor_spec.compute_clifford_symplectic_reps(available_gatenames)
 
-        # After adding default templates, we know generate compilations for CNOTs between all connected pairs. If the
+                    compilation_rules.add_given_clifford_compilation_template(
+                        'CNOT', nqubits=2, unitary=None, srep=None,
+                        compilation=(_Label('Gxpi2',1), _Label('Gzmpi2', 0), _Label('Gzpi2', 1), #_Label([('Gzmpi2', 0), ('Gzpi2', 1)]),
+                                     _Label('Giswap', (0, 1)), _Label('Gxpi2', 0), _Label('Giswap', (0,1)),
+                                     _Label('Gzpi2', 1)),
+                        available_gatelabels=available_gatenames,
+                        available_sreps=available_srep_dict,
+                    )
+
+        # After adding default templates, we now generate compilations for CNOTs between all connected pairs. If the
         # default templates were not relevant or aren't relevant for some qubits, this will generate new templates by
         # brute force.
         for gate in two_q_gates:
@@ -880,8 +895,10 @@ class CliffordCompilationRules(CompilationRules):
                 all_layers.append(gls_in_layer)
 
         # Find the symplectic action of all possible circuits of length 1 on the qubits
-        for layer in all_layers:
-            obtained_sreps[layer] = _symp.symplectic_rep_of_clifford_layer(layer, nqubits, srep_dict=available_sreps)
+        all_layer_sreps = [_symp.symplectic_rep_of_clifford_layer(layer, nqubits, srep_dict=available_sreps)
+                           for layer in all_layers]  # store in parallel list for later use
+        for layer, srep in zip(all_layers, all_layer_sreps):
+            obtained_sreps[layer] = srep
 
         # find the 1Q identity gate name
         I_name = self._find_std_gate(self.processor_spec, 'I')
@@ -896,14 +913,19 @@ class CliffordCompilationRules(CompilationRules):
                                                                                     len(obtained_sreps)))
 
             candidates = []  # all valid compilations, if any, of this length.
+            next_percent = 1
 
             # Look to see if we have found a compilation
-            for seq, (s, p) in obtained_sreps.items():
+            for i, (seq, (s, p)) in enumerate(obtained_sreps.items()):
                 if _np.array_equal(smatrix, s):
                     if self.compile_type == 'paulieq' or \
                        (self.compile_type == 'absolute' and _np.array_equal(svector, p)):
                         candidates.append(seq)
                         found = True
+                if verbosity > 0 and len(obtained_sreps) > 5000:
+                    if i > len(obtained_sreps) * next_percent / 100:
+                        print(f"    - {next_percent}% done...", end='\r')
+                        next_percent += 1
 
             # If there is more than one way to compile gate at this circuit length, pick the
             # one containing the most idle gates.
@@ -947,17 +969,24 @@ class CliffordCompilationRules(CompilationRules):
             # Construct the gates obtained from the next length sequences.
             new_obtained_sreps = {}
 
-            for seq, (s, p) in obtained_sreps.items():
+            next_percent = 1
+            if verbosity > 0: print(f"  - Building sequences of length {counter + 2}")
+            for i, (seq, (s, p)) in enumerate(obtained_sreps.items()):
                 # Add all possible tensor products of single-qubit gates to the end of the sequence
-                for layer in all_layers:
+                for layer, layer_srep in zip(all_layers, all_layer_sreps):
 
                     # Calculate the symp rep of this parallel gate
-                    sadd, padd = _symp.symplectic_rep_of_clifford_layer(layer, nqubits, srep_dict=available_sreps)
+                    sadd, padd = layer_srep # == _symp.symplectic_rep_of_clifford_layer(layer, nqubits, ...)
                     key = seq + layer  # tuple/Circuit concatenation
 
                     # Calculate and record the symplectic rep of this gate sequence.
                     new_obtained_sreps[key] = _symp.compose_cliffords(s, p, sadd, padd)
 
+                if verbosity > 0 and len(obtained_sreps) > 5000:    
+                    if i+1 > len(obtained_sreps) * next_percent / 100:
+                        print(f"    - {next_percent}% done...", end='\r')
+                        next_percent += 1
+                    
             # Update list of potential compilations
             obtained_sreps = new_obtained_sreps
 
@@ -969,6 +998,89 @@ class CliffordCompilationRules(CompilationRules):
         self._clifford_templates[gate_name].append(compilation)
 
         return compilation
+    
+    def add_given_clifford_compilation_template(self, gate_name, nqubits, unitary, srep,
+                                            compilation, available_sreps):
+        """
+        Adds a specific compilation template (as opposed to searching for one) after checking its validity.
+
+        Parameters
+        ----------
+        gate_name : str
+            The gate name to create a compilation for.  If it is
+            recognized standard Clifford name (e.g. 'H', 'P', 'X', 'CNOT')
+            then `unitary` and `srep` can be None. Otherwise, you must specify
+            either (or both) of `unitary` or `srep`.
+
+        nqubits : int
+            The number of qubits this gate acts upon.
+
+        unitary : numpy.ndarray
+            The unitary action of the gate being templated.  If, as is typical,
+            you're compiling using Clifford gates, then this unitary should
+            correspond to a Clifford operation.  If you specify `unitary`,
+            you don't need to specify `srep` - it is computed automatically.
+
+        srep : tuple, optional
+            The `(smatrix, svector)` tuple giving the symplectic representation
+            of the gate being templated.
+
+        available_sreps : dict
+            A dictionary of available symplectic representations.  Keys are gate
+            labels and values are numpy arrays.
+
+        verbosity : int, optional
+            An integer >= 0 specifying how much detail to send to stdout.
+
+        Returns
+        -------
+        tuple
+            A tuple of the operation labels (essentially a circuit) specifying
+            the template compilation that was generated.
+        """
+        # The unitary is specifed, this takes priority and we use it to construct the
+        # symplectic rep of the gate.
+        if unitary is not None:
+            srep = _symp.unitary_to_symplectic(unitary, flagnonclifford=True)
+
+        # If the unitary has not been provided and smatrix and svector are both None, then
+        # we find them from the dictionary of standard gates.
+        if srep is None:
+            template_lbl = _Label(gate_name, tuple(range(nqubits)))  # integer ascending qubit labels
+            smatrix, svector = _symp.symplectic_rep_of_clifford_layer(template_lbl, nqubits)
+        else:
+            smatrix, svector = srep
+
+        assert(_symp.check_valid_clifford(smatrix, svector)), "The gate is not a valid Clifford!"
+        assert(_np.shape(smatrix)[0] // 2 == nqubits), \
+            "The gate acts on a different number of qubits to stated by `nqubits`"
+
+        # get srep for compilation
+        s = None
+        p = None
+        for layer in compilation:
+            sadd, padd = _symp.symplectic_rep_of_clifford_layer(layer, nqubits, srep_dict=available_sreps)
+            if s is None:
+                s, p = sadd, padd
+            else:
+                s, p = _symp.compose_cliffords(s, p, sadd, padd)
+
+        # check to see if we have found a compilation
+        if _np.array_equal(smatrix, s):
+            if self.compile_type == 'paulieq' or (
+                self.compile_type == 'absolute' and _np.array_equal(svector, p)):
+
+                # find the 1Q identity gate name
+                I_name = self._find_std_gate(self.processor_spec, 'I')
+
+                #Compilation done: remove identity labels, as these are just used to
+                # explicitly keep track of the number of identity gates in a circuit (really needed?)
+                compilation = list(filter(lambda gl: gl.name != I_name, compilation))
+
+                #Store & return template that was verified
+                self._clifford_templates[gate_name].append(compilation)
+                return  # compilation added - no error raised
+        raise ValueError("The provided compilation template for {} is not valid!".format(gate_name))
 
     #PRIVATE
     def _compute_connectivity_of(self, gate_name):

@@ -2,7 +2,7 @@
 ModelTest Protocol objects
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -16,7 +16,7 @@ from pygsti.protocols import protocol as _proto
 from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.data.freedataset import FreeformDataSet as _FreeformDataSet
 from pygsti.modelmembers import states as _state
-
+from pygsti import SpaceT
 
 class FreeformDataSimulator(_proto.DataSimulator):
     """
@@ -114,7 +114,7 @@ class ModelFreeformSimulator(FreeformDataSimulator):
         if include_final_state or include_probabilities:
             ret = [mx]
             rho = model.circuit_layer_operator(prep, 'prep')
-            final_state = _state.StaticState(_np.dot(mx, rho.to_dense(on_space='HilbertSchmidt')),
+            final_state = _state.StaticState(_np.dot(mx, rho.to_dense("HilbertSchmidt")),
                                              model.basis, model.evotype, model.state_space)
             if include_final_state:
                 ret.append(final_state)

@@ -2,7 +2,7 @@
 The EigenvalueParamDenseOp class and supporting functionality.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -83,7 +83,10 @@ class EigenvalueParamDenseOp(_DenseOperator):
         #  conjugate pairs.  Find and sort by conjugate pairs.
 
         assert(_np.linalg.norm(_np.imag(matrix)) < IMAG_TOL)  # matrix should be real
-        evals, B = _np.linalg.eig(matrix)  # matrix == B * diag(evals) * Bi
+        evals, B = _np.linalg.eig(matrix)
+        # ^ matrix == B * diag(evals) * Bi
+        #   NOTE: we use eig intentionally. This is not a context when we can
+        #   expect that `matrix` is Hermitian.
         dim = len(evals)
 
         #Sort eigenvalues & eigenvectors by:

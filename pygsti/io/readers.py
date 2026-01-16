@@ -2,7 +2,7 @@
 Functions for loading GST objects from text files.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -374,7 +374,11 @@ def convert_strings_to_circuits(obj):
         if isinstance(x, dict):  # this case isn't written anymore - just to read old-format files (TODO REMOVE LATER)
             return {_replace_strs_with_circuits(k): _replace_strs_with_circuits(v) for k, v in x.items()}
         if isinstance(x, str):
-            return std.parse_circuit(x, create_subcircuits=not _Circuit.default_expand_subcircuits)
+            try:
+                return std.parse_circuit(x, create_subcircuits=not _Circuit.default_expand_subcircuits)
+            except ValueError:
+                # Failed to parse, possible this string is not a circuit
+                pass
         return x
 
     return _replace_strs_with_circuits(obj)

@@ -74,4 +74,4 @@ ws.ChoiTable(mdl, None, cri, display=("barplot",))
 A heat map of the Error Generator for each gate, which is the Lindbladian $\mathbb{L}$ that describes *how* the gate is failing to match the target, along with the result of projecting each generator onto some subspaces of the error generator space.
 @@code
 errgen_type = "logTiG" # or "logGTi" or "logG-logT"
-ws.ErrgenTable(mdl, target_model, cri, ("errgen","H","S","A"), "boxes", errgen_type)
+ws.ErrgenTable(mdl, target_model, cri, ("errgen","H","S","CA"), "boxes", errgen_type)

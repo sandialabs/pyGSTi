@@ -2,7 +2,7 @@
 POVM effect representation classes for the `stabilizer_slow` evolution type.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -13,7 +13,7 @@ POVM effect representation classes for the `stabilizer_slow` evolution type.
 from .. import basereps as _basereps
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from ...tools import matrixtools as _mt
-
+from pygsti import SpaceT
 
 class EffectRep(_basereps.EffectRep):
     def __init__(self, state_space):
@@ -29,7 +29,7 @@ class EffectRep(_basereps.EffectRep):
     def amplitude(self, state):
         return state.sframe.extract_amplitude(self.zvals)
 
-    def to_dense(self, on_space):
+    def to_dense(self, on_space: SpaceT):
         return _mt.zvals_to_dense(self.zvals, superket=bool(on_space not in ('minimal', 'Hilbert')))
 
 
@@ -46,7 +46,7 @@ class EffectRepComputational(EffectRep):
         s = "Stabilizer effect vector for %d qubits with outcome %s" % (nQubits, str(self.zvals))
         return s
 
-    def to_dense(self, on_space, outvec=None):
+    def to_dense(self, on_space: SpaceT, outvec=None):
         return _mt.zvals_to_dense(self.zvals, superket=bool(on_space not in ('minimal', 'Hilbert')))
 
 

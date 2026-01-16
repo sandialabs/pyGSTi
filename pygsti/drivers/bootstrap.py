@@ -2,7 +2,7 @@
 Functions for generating bootstrapped error bars
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -224,7 +224,7 @@ def create_bootstrap_models(num_models, input_data_set, generation_method,
                 datasetList[run], target_model,
                 fiducial_prep, fiducial_measure, germs, max_lengths,
                 verbosity=verbosity)
-        modelList.append(results.estimates.get('default', next(iter(results.estimates.values()))).models['go0'])
+        modelList.append(results.estimates.get('default', next(iter(results.estimates.values()))).models['stdgaugeopt'])
 
     if not return_data:
         return modelList

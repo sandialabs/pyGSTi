@@ -2,7 +2,7 @@
 Defines the ModelParamsInterposer class and supporting functionality.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -66,12 +66,12 @@ class LinearInterposer(ModelParamsInterposer):
         self.transform_matrix = transform_matrix  # cols specify a model parameter in terms of op params.
         self.inv_transform_matrix = _np.linalg.pinv(self.transform_matrix)
         super().__init__(transform_matrix.shape[1], transform_matrix.shape[0])
-
+    
     def model_paramvec_to_ops_paramvec(self, v):
-        return _np.dot(self.transform_matrix, v)
+        return self.transform_matrix @ v
 
     def ops_paramvec_to_model_paramvec(self, w):
-        return _np.dot(self.inv_transform_matrix, w)
+        return self.inv_transform_matrix @ w
 
     def ops_paramlbls_to_model_paramlbls(self, wl):
         # This can and should be improved later - particularly this will be awful when labels (els of wl) are tuples.
@@ -99,4 +99,11 @@ class LinearInterposer(ModelParamsInterposer):
     @classmethod
     def _from_nice_serialization(cls, state):  # memo holds already de-serialized objects
         return cls(cls._decodemx(state['transform_matrix']))
+    
+    def __eq__(self, other):
+        assert isinstance(other, LinearInterposer), 'Object provided is not of LinearInterposer type'
 
+        if self.transform_matrix.shape != other.transform_matrix.shape:
+            return False
+        return _np.allclose(self.transform_matrix, other.transform_matrix)
+    

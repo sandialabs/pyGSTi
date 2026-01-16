@@ -2,7 +2,7 @@
 Defines JSON-format encoding and decoding functions
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -10,14 +10,12 @@ Defines JSON-format encoding and decoding functions
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-# XXX this module should certainly be rewritten as a custom `json.JSONEncoder`
 
 import base64 as _base64
 import collections as _collections
 import importlib as _importlib
 import types as _types
 import uuid as _uuid
-
 import numpy as _np
 import scipy.sparse as _sps
 

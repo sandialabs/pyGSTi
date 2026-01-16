@@ -2,7 +2,7 @@
 Defines the QubitGraph class and supporting functions
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -853,7 +853,7 @@ class QubitGraph(_NicelySerializable):
         self._refresh_dists_and_predecessors()
         return self._predecessors.copy()
 
-    def subgraph(self, nodes_to_keep, reset_nodes=False):
+    def subgraph(self, nodes_to_keep, reset_nodes=False, include_directions=True):
         """
         Return a graph that includes only `nodes_to_keep` and the edges between them.
 
@@ -867,6 +867,10 @@ class QubitGraph(_NicelySerializable):
             be the integers starting at 0 (in 1-1 correspondence
             with the ordering in `nodes_to_keep`).
 
+        include_directions : bool, optional
+            Whether the subgraph should retain the direction information
+            of the parent graph. Defaults to True.
+
         Returns
         -------
         QubitGraph
@@ -878,7 +882,7 @@ class QubitGraph(_NicelySerializable):
             qubit_labels = nodes_to_keep
 
         edges = []
-        for edge in self.edges():
+        for edge in self.edges(include_directions=include_directions):
             if edge[0] in nodes_to_keep and edge[1] in nodes_to_keep:
                 if reset_nodes:
                     edges.append((labelmap[edge[0]], labelmap[edge[1]]))

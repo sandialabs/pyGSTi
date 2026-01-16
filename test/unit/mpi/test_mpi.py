@@ -1,7 +1,8 @@
-import subprocess
-import pytest
 import os
 from pathlib import Path
+import pytest
+import subprocess
+import sys
 
 try:
     from mpi4py import MPI
@@ -16,11 +17,18 @@ class MPITester:
         current_filepath = Path(os.path.abspath(__file__))
         to_run = current_filepath.parents[0] / Path('run_me_with_mpiexec.py')
         subprocess_args = (f"mpiexec -np 4 python -W ignore {str(to_run)}").split(' ')
+
+        # Oversubscribe is needed because latest Mac runners have only 3 cores
+        # Cannot have in general though because then Windows breaks (not right arg name)
+        if sys.platform == "darwin":
+            subprocess_args.insert(3, "-oversubscribe")
         
         result = subprocess.run(subprocess_args, capture_output=False, text=True)
         out, err = capfd.readouterr()
-        if len(out) + len(err) > 0:
+
+        #strip new lines/carriage returns before checking length.
+        if len(out.replace('\n', '').replace('\r', '')) + len(err.replace('\n', '').replace('\r', '')) > 0:
             msg = out + '\n'+ 80*'-' + err
             raise RuntimeError(msg)
         return
-
+    

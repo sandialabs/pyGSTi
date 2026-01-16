@@ -2,7 +2,7 @@
 Functions for the construction of new models.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -47,6 +47,7 @@ from pygsti.tools import basistools as _bt
 from pygsti.tools import internalgates as _itgs
 from pygsti.tools import optools as _ot
 from pygsti.tools import listtools as _lt
+from pygsti import SpaceT
 from pygsti.baseobjs.basisconstructors import sqrt2, id2x2, sigmax, sigmay, sigmaz
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
@@ -252,7 +253,7 @@ def create_operation(op_expr, state_space, basis="pp", parameterization="full", 
             # a complex 2*num_qubits x 2*num_qubits mx unitary on full space in Pauli-product basis
             Uop_embed = _op.EmbeddedOp(state_space, labels, Uop)
             # a real 4*num_qubits x 4*num_qubits mx superoperator in final basis
-            superop_mx_pp = Uop_embed.to_dense(on_space='HilbertSchmidt')
+            superop_mx_pp = Uop_embed.to_dense("HilbertSchmidt")
             # a real 4*num_qubits x 4*num_qubits mx superoperator in final basis
             superop_mx_in_basis = _bt.change_basis(superop_mx_pp, 'pp', basis)
 
@@ -299,7 +300,7 @@ def create_operation(op_expr, state_space, basis="pp", parameterization="full", 
             # a complex 2*num_qubits x 2*num_qubits mx unitary on full space in Pauli-product basis
             Uop_embed = _op.EmbeddedOp(state_space, (label,), Uop)
             # a real 4*num_qubits x 4*num_qubits mx superoperator in Pauli-product basis
-            superop_mx_pp = Uop_embed.to_dense(on_space='HilbertSchmidt')
+            superop_mx_pp = Uop_embed.to_dense("HilbertSchmidt")
             # a real 4*num_qubits x 4*num_qubits mx superoperator in final basis
             superop_mx_in_basis = _bt.change_basis(superop_mx_pp, 'pp', basis)
 
@@ -319,7 +320,7 @@ def create_operation(op_expr, state_space, basis="pp", parameterization="full", 
             # a complex 2*num_qubits x 2*num_qubits mx unitary on full space in Pauli-product basis
             Uop_embed = _op.EmbeddedOp(state_space, (label,), Uop)
             # a real 4*num_qubits x 4*num_qubits mx superoperator in Pauli-product basis
-            superop_mx_pp = Uop_embed.to_dense(on_space='HilbertSchmidt')
+            superop_mx_pp = Uop_embed.to_dense("HilbertSchmidt")
             # a real 4*num_qubits x 4*num_qubits mx superoperator in final basis
             superop_mx_in_basis = _bt.change_basis(superop_mx_pp, 'pp', basis)
 
@@ -362,7 +363,7 @@ def create_operation(op_expr, state_space, basis="pp", parameterization="full", 
             # a complex 2*num_qubits x 2*num_qubits mx unitary on full space
             Uop_embed = _op.EmbeddedOp(state_space, [label1, label2], Uop)
             # a real 4*num_qubits x 4*num_qubits mx superoperator in Pauli-product basis
-            superop_mx_pp = Uop_embed.to_dense(on_space='HilbertSchmidt')
+            superop_mx_pp = Uop_embed.to_dense("HilbertSchmidt")
             # a real 4*num_qubits x 4*num_qubits mx superoperator in final basis
             superop_mx_in_basis = _bt.change_basis(superop_mx_pp, 'pp', basis)
 
@@ -891,7 +892,7 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
                         raise NotImplementedError("'Iz' instrument can only be constructed on a space of *qubits*")
                     for ekey, effect_vec in _povm.ComputationalBasisPOVM(nqubits=len(qudit_labels), evotype=evotype,
                                                                          state_space=state_space).items():
-                        E = effect_vec.to_dense('HilbertSchmidt').reshape((state_space.dim, 1))
+                        E = effect_vec.to_dense("HilbertSchmidt").reshape((state_space.dim, 1))
                         inst_members[ekey] = _np.dot(E, E.T)  # (effect vector is a column vector)
                     ideal_instrument = _instrument.Instrument(inst_members)
                 else:

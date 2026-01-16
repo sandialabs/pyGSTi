@@ -2,7 +2,7 @@
 The StochasticNoiseOp class and supporting functionality.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -19,7 +19,7 @@ from pygsti.evotypes import Evotype as _Evotype
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
-
+from pygsti import SpaceT
 
 class StochasticNoiseOp(_LinearOperator, _KrausOperatorInterface):
     """
@@ -100,7 +100,7 @@ class StochasticNoiseOp(_LinearOperator, _KrausOperatorInterface):
             keys of dicts <=> poly terms, e.g. (1,1) <=> x1^2) """
         return [{(i, i): 1.0} for i in range(self.basis.size - 1)]  # rates are just parameters squared
 
-    def to_dense(self, on_space='minimal'):
+    def to_dense(self, on_space: SpaceT='minimal'):
         """
         Return this operation as a dense matrix.
 
@@ -290,7 +290,7 @@ class StochasticNoiseOp(_LinearOperator, _KrausOperatorInterface):
     @property
     def kraus_operators(self):
         """A list of this operation's Kraus operators as numpy arrays."""
-        kraus_ops = [_np.sqrt(urate) * urep.to_dense('Hilbert')
+        kraus_ops = [_np.sqrt(urate) * urep.to_dense("Hilbert")
                      for urate, urep in zip(self._rep.unitary_rates, self._rep.unitary_reps)]
         return kraus_ops
 

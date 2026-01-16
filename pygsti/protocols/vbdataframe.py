@@ -2,17 +2,41 @@
 Techniques for manipulating benchmarking data stored in a Pandas DataFrame.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
+from __future__ import annotations
+from typing import Callable, Literal, Optional, TYPE_CHECKING
+if TYPE_CHECKING:
+    try:
+        import matplotlib as _mp
+    except:
+        pass
+
+
 import pandas as _pandas
 import numpy as _np
+import tqdm as _tqdm
 from scipy.stats import chi2 as _chi2
 
+from pygsti.protocols import (
+    ExperimentDesign as _ExperimentDesign,
+    FreeformDesign as _FreeformDesign,
+    ProtocolData as _ProtocolData
+)
+
+from pygsti.tools.mcfetools import (hamming_distance_counts,
+                                    effective_polarization,
+                                    predicted_process_fidelity_for_central_pauli_mcs,
+                                    fidelity_to_polarization,
+                                    polarization_to_success_probability,
+                                    rc_predicted_process_fidelity,
+                                    rc_bootstrap_predicted_pfid
+                                    )
 
 def _calculate_summary_statistic(x, statistic, lower_cutoff=None):
     """
@@ -31,21 +55,6 @@ def _calculate_summary_statistic(x, statistic, lower_cutoff=None):
         return v
     else:
         return _np.max([v, lower_cutoff])
-
-
-def polarization_to_success_probability(p, n):
-    """
-    Inverse of success_probability_to_polarization.
-    """
-    return p * (1 - 1 / 2**n) + 1 / 2**n
-
-
-def success_probability_to_polarization(s, n):
-    """
-    Maps a success probablity s for an n-qubit circuit to
-    the polarization, defined by `p = (s - 1/2^n)/(1 - 1/2^n)`
-    """
-    return (s - 1 / 2**n) / (1 - 1 / 2**n)
 
 
 def classify_circuit_shape(success_probabilities, total_counts, threshold, significance=0.05):
@@ -154,8 +163,13 @@ class VBDataFrame(object):
     A class for storing a DataFrame that contains volumetric benchmarking data, and that
     has methods for manipulating that data and creating volumetric-benchmarking-like plots.
     """
-    def __init__(self, df, x_axis='Depth', y_axis='Width', x_values=None, y_values=None,
-                 edesign=None):
+    def __init__(self,
+                 df: _pandas.DataFrame,
+                 x_axis: str = 'Depth',
+                 y_axis: str = 'Width',
+                 x_values: Optional[str] = None,
+                 y_values: Optional[str] = None,
+                 edesign: Optional[_ExperimentDesign] = None):
         """
         Initialize a VBDataFrame object.
 
@@ -199,6 +213,177 @@ class VBDataFrame(object):
             self.y_values.sort()
         else:
             self.y_values = y_values
+
+    @classmethod
+    def from_mirror_experiment(cls,
+                               unmirrored_design: _FreeformDesign,
+                               mirrored_data: _ProtocolData,
+                               include_dropped_gates: bool = False,
+                               bootstrap: bool = True,
+                               num_bootstraps: int = 50,
+                               rand_state: Optional[_np.random.RandomState] = None,
+                               verbose: bool = False,
+                               ) -> VBDataFrame:
+        """
+        Create a dataframe from MCFE data and edesigns.
+
+        Parameters
+        ----------
+        unmirrored_design: pygsti.protocols.protocol.FreeformDesign
+            Edesign containing the circuits whose process fidelities are to be estimated.
+
+        mirrored_data: pygsti.protocols.protocol.ProtocolData
+            Data object containing the full mirror edesign and the outcome counts for each
+            circuit in the full mirror edesign.
+
+        include_dropped_gates: bool
+            Whether to include the number of gates dropped from each subcircuit during
+            subcircuit creation. This flag should be set to False for noise benchmark and
+            fullstack benchmark analysis, but can be set to True for subcircuit benchmark
+            analysis. Default is False.
+
+        bootstrap: bool
+            Toggle the calculation of error bars from bootstrapped process fidelity calculations. If True,
+            error bars are calculated. If False, error bars are not calculated.
+
+        num_bootstraps: int
+            Number of samples to draw from the bootstrapped process fidelity calculations. This argument
+            is ignored if 'bootstrap' is False.
+
+        rand_state: np.random.RandomState
+            random state used to seed bootstrapping. If 'bootstrap' is set to False, this argument is ignored.
+
+        verbose: bool
+            Toggle print statements with debug information. If True, print statements are
+            turned on. If False, print statements are omitted.
+
+        Returns
+        ---------
+        VBDataFrame
+            A VBDataFrame whose dataframe contains calculated MCFE values and circuit statistics.
+        
+        """
+
+        eff_pols = {k: {} for k in mirrored_data.edesign.keys()}
+    
+        # Stats about the base circuit
+        dropped_gates = {}
+        occurrences = {}
+
+        # Get a dict going from id to circuit for easy lookup
+        reverse_circ_ids = {}
+        for k,v in unmirrored_design.aux_info.items():
+            if isinstance(v, dict):
+                reverse_circ_ids[v['id']] = k
+            else:
+                for entry in v:
+                    reverse_circ_ids[entry['id']] = k
+        seen_keys = set()
+
+        for c in _tqdm.tqdm(mirrored_data.dataset, ascii=True, desc='Calculating effective polarizations'):
+            for edkey, ed in mirrored_data.edesign.items():
+                auxlist = ed.aux_info.get(c, None)
+                if auxlist is None:
+                    continue
+                elif isinstance(auxlist, dict):
+                    auxlist = [auxlist]
+
+                for aux in auxlist:
+                    if edkey.endswith('ref'):
+                        # For reference circuits, only width matters, so aggregate on that now
+                        key = (aux['width'], c.line_labels)
+                    else:
+                        key = (aux['base_aux']['width'], aux['base_aux']['depth'], aux['base_aux']['id'], c.line_labels)
+
+
+                    if edkey == 'br':
+                        base_line_labels = reverse_circ_ids[aux['base_aux']['id']].line_labels
+                        if c.line_labels != base_line_labels:
+                            raise RuntimeError('line labels permuted')
+
+                    # Calculate effective polarization
+                    hdc = hamming_distance_counts(mirrored_data.dataset[c], c, (aux['idealout'],))
+                    ep = effective_polarization(hdc)
+                    
+                    # Append to other mirror circuit samples
+                    eps = eff_pols[edkey].get(key, [])
+                    eps.append(ep)
+                    eff_pols[edkey][key] = eps
+
+                    if edkey.endswith('ref') or key in seen_keys:
+                        # Skip statistic gathering for reference circuits or base circuits we've seen already
+                        continue
+
+                    # TODO: add 2Q gate density metric
+
+                    if include_dropped_gates:
+                        dropped_gates[key] = aux['base_aux']['dropped_gates']
+                    occurrences[key] = len(auxlist)
+
+                    seen_keys.add(key)
+
+        # Calculate process fidelities
+        df_data = {}
+        for i, key in enumerate(sorted(list(seen_keys), key=lambda x: x[2])):
+            cp_pfid = cp_pol = cp_success_prob = None
+            if 'cp' in mirrored_data.edesign and 'cpref' in mirrored_data.edesign:
+                if verbose and i == 0: print('Central pauli data detected, computing CP process fidelity')
+                cp_pfid = predicted_process_fidelity_for_central_pauli_mcs(eff_pols['cp'][key],
+                                                                           eff_pols['cpref'][(key[0], key[3])],
+                                                                           key[0])
+                
+                cp_pol = fidelity_to_polarization(cp_pfid, key[0])
+                cp_success_prob = polarization_to_success_probability(cp_pol, key[0])
+                
+            rc_pfid = rc_pol = rc_success_prob = rc_pfid_stdev = None
+            if 'rr' in mirrored_data.edesign and 'br' in mirrored_data.edesign and 'ref' in mirrored_data.edesign:
+                if verbose and i == 0: print('Random compilation data detected, computing RC process fidelity')
+
+            
+                if verbose:
+                    spam_ref_key = (key[0], key[3])
+                    print(f'key for SPAM reference circuits: {spam_ref_key}')
+                    print(f"number of SPAM reference circuits: {len(eff_pols['ref'][spam_ref_key])}")
+
+                rc_pfid = rc_predicted_process_fidelity(eff_pols['br'][key],
+                                                     eff_pols['rr'][key],
+                                                     eff_pols['ref'][(key[0], key[3])],
+                                                     key[0])
+                
+                rc_pol = fidelity_to_polarization(rc_pfid, key[0]) # should this be fidelity_to_polarization?
+                rc_success_prob = polarization_to_success_probability(rc_pol, key[0])
+
+                if bootstrap:
+                # do bootstrapping to obtain confidence intervals
+                    rc_pfid_stdev = rc_bootstrap_predicted_pfid(brs=eff_pols['br'][key],
+                                                            rrs=eff_pols['rr'][key],
+                                                            refs=eff_pols['ref'][(key[0], key[3])],
+                                                            n=key[0],
+                                                            num_bootstraps=num_bootstraps,
+                                                            rand_state=rand_state
+                                                            )
+
+            data_dict = {'Width': key[0], 'Depth': key[1], 'Circuit Id': key[2],
+                        'CP Process Fidelity': cp_pfid,
+                        'CP Polarization': cp_pol, 'CP Success Probability': cp_success_prob,
+                        'RC Process Fidelity': rc_pfid, 'RC Process Fidelity stdev': rc_pfid_stdev,
+                        'RC Polarization': rc_pol, 'RC Success Probability': rc_success_prob,
+                        'Occurrences': occurrences[key],
+                        }
+            
+            if include_dropped_gates:
+                data_dict['Dropped Gates'] = dropped_gates[key]
+                
+        # Depth is doubled for conventions (same happens for RMC/PMC)
+            df_data[i] = data_dict
+            
+
+        df = _pandas.DataFrame.from_dict(df_data, orient='index')
+        df = df.sort_values(by='Circuit Id')
+        df = df.reset_index(drop=True)
+
+        return cls(df, x_axis='Depth', y_axis='Width')
+        
 
     def select_column_value(self, column_label, column_value):
         """
@@ -480,3 +665,136 @@ class VBDataFrame(object):
             capreg = trimmed_capreg
 
         return capreg
+    
+
+
+    def create_vb_plot(self,
+                       title: str,
+                       accumulator: Callable = _np.mean,
+                       cp_or_rc: Literal['cp', 'rc'] = 'rc',
+                       show_dropped_gates: bool = False,
+                       dg_accumulator: Callable = _np.mean,
+                       cmap: _mp.colors.Colormap = None,
+                       margin: float = 0.15,
+                       save_fig: bool = False,
+                       fig_path: str = None,
+                       fig_format: str = None):
+
+        """
+        Generate process fidelity volumetric benchmarking (VB) plot from dataframe.
+        This function is designed with subcircuit volumetric benchmarking in mind,
+        where the x-axis is the subicrcuit depth and the y-axis is the subcircuit
+        width.
+
+        Parameters
+        ------------
+        title : str
+            The title of the plot.
+
+        accumulator : callable, optional
+            Function used to accumulate process fidelities for a (width, depth) pair
+            on the VB plot. Default is np.mean.
+
+        cp_or_rc : str, optional
+            Whether the process fidelities were computed via randomly compiled
+            circuits ('rc') or central Pauli mirroring ('cp'). Default is 'rc'.
+
+        show_dropped_gates : bool, optional
+            Whether the plot should visualize the average (see dg_accumulator)
+            number of dropped gates for each subcircuit width-depth pair. 
+            Subcircuit sampling can drop gates when a gate has only partial support
+            on the qubits in the selected width subset.
+
+        dg_accumulator : callable, optional
+            Function used to accumulate the dropped gate counts
+            for a (width, depth) pair on the VB plot. Default is np.mean.
+
+        cmap : matplotlib.colors.Colormap, optional
+            Colormap to use for plotting process fidelities. Default is spectral.
+
+        margin : float, optional
+            Margin between adjacent width-depth pairs in the VB plot.
+            Default is 0.15.
+
+        save_fig : bool, optional
+            Whether to write the generated VB plot to file. Default is False.
+
+        fig_path : str, optional
+            If `save_fig` is set to True, this argument is used as the path
+            the figure is saved to. If `save_fig` is False, this argument
+            is ignored. Default is None
+
+        fig_format : str, optional
+            If `save_fig` is set to True, this argument is the file format
+            for the generated VB plot. If `save_fig` is False, this argument
+            is ignored. Acceptable values are any file format recognized by matplotlib.
+        """
+        try:
+            import matplotlib.pyplot as _plt
+            import matplotlib as _mp
+        except:
+            raise RuntimeError('matplotlib is required for dataframe plotting, and does not appear to be installed.')
+        
+        if cmap is None:
+            cmap = _mp.colormaps['Spectral']
+
+
+        fig = _plt.figure(figsize=(5.5,8))
+        ax = _plt.gca()
+        ax.set_aspect('equal')
+
+        x_axis = 'Depth'
+        y_axis = 'Width'
+        
+        if cp_or_rc == 'rc':
+            c_axis = 'RC Process Fidelity'
+        elif cp_or_rc == 'cp':
+            c_axis = 'CP Process Fidelity'
+        else:
+            raise ValueError(f"invalid argument passed to 'cp_or_rc': {cp_or_rc}")
+        
+        xticks = self.dataframe[x_axis].unique()
+        yticks = self.dataframe[y_axis].unique()
+        
+        xmap = {j: i for i, j in enumerate(xticks)}
+        ymap = {j: i for i, j in enumerate(yticks)}
+        
+        acc_values = self.dataframe.groupby([x_axis, y_axis])[c_axis].apply(accumulator)
+        if show_dropped_gates:
+            dg_values = self.dataframe.groupby([x_axis, y_axis])["Dropped Gates"].apply(dg_accumulator)
+
+        for xlbl, ylbl in acc_values.keys():
+            x = xmap[xlbl]
+            y = ymap[ylbl]
+
+            side = 0.5-margin
+            
+            cval = acc_values[(xlbl, ylbl)]
+            if show_dropped_gates:
+                dgval = dg_values[(xlbl, ylbl)]
+                # Inner square: Smaller by ratio of dropped gates
+                inside = side * (xlbl-dgval)/xlbl
+
+            else:
+                inside = side
+            
+            inpoints = [(x-side, y-side), (x-side, y+inside), (x+inside , y+inside), (x+inside, y-side)]
+            tin = _plt.Polygon(inpoints, color=cmap(cval))
+            ax.add_patch(tin)
+            
+            # Outer square
+            outer_points = [(x-side, y-side), (x-side, y+side), (x+side, y+side), (x+side, y-side)]
+            tout = _plt.Polygon(outer_points, edgecolor='k', fill=None)
+            ax.add_patch(tout)
+        
+        _plt.xlabel(x_axis, {'size': 20})
+        _plt.ylabel(y_axis, {'size': 20})
+        _plt.xticks(list(range(len(xticks))), labels=xticks)
+        _plt.yticks(list(range(len(yticks))), labels=yticks)
+        _plt.xlim([-0.5, len(xticks)-0.5])
+        _plt.ylim([-0.5, len(yticks)-0.5])
+        ax.tick_params(axis='both', which='major', labelsize=14)
+        _plt.title(title, {"size": 24})
+
+        if save_fig:
+            _plt.savefig(fig_path, format=fig_format)

@@ -2,7 +2,7 @@
 Wildcard budget fitting routines
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -356,6 +356,8 @@ def optimize_wildcard_bisect_alpha(budget, objfn, two_dlogl_threshold, redbox_th
     layout = objfn.layout
     critical_percircuit_budgets = _get_critical_circuit_budgets(objfn, redbox_threshold)  # for *global* circuits
     percircuit_budget_deriv, global_percircuit_budget_deriv = _get_percircuit_budget_deriv(budget, layout)
+    if _np.linalg.norm(percircuit_budget_deriv) < 1e-10:
+        raise ValueError("Wildcard scaling does not affect feasibility (deriv is zero)!")
 
     initial_probs = objfn.probs.copy()
     current_probs = initial_probs.copy()
@@ -383,6 +385,8 @@ def optimize_wildcard_bisect_alpha(budget, objfn, two_dlogl_threshold, redbox_th
             printer.log('Guess value is infeasible, ', 2)
             right = guess
             guess = 2 * right
+            if guess > 1e10:
+                raise ValueError("Feasible wildcard scaling cannot be found!")
     printer.log('Interval found!', 2)
 
     # We now have an interval containing the crossover point
@@ -580,10 +584,8 @@ def NewtonSolve(initial_x, fn, fn_with_derivs=None, dx_tol=1e-6, max_iters=20, p
 
     i = 0
     while i < max_iters:
-
         if fn_with_derivs:
             obj, Dobj, Hobj = fn_with_derivs(x)
-
             #DEBUG - check against finite diff
             #obj_chk = fn(x)
             #Dobj_chk, Hobj_chk = _compute_fd(x, fn)
@@ -593,8 +595,9 @@ def NewtonSolve(initial_x, fn, fn_with_derivs=None, dx_tol=1e-6, max_iters=20, p
         else:
             obj = fn(x)
             Dobj, Hobj = _compute_fd(x, fn)
-
-        evalsH, eigvecsH = _np.linalg.eig(Hobj)
+        Hobj += Hobj.T
+        Hobj /= 2
+        evalsH = _np.linalg.eigvalsh(Hobj)
         assert(min(evalsH) >= 0 or abs(min(evalsH) / max(evalsH)) < 1e-8)
         # Note: OK if evalsH has small negative elements, where "small" is relative to positive elements
 

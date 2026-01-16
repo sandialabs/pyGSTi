@@ -2,7 +2,7 @@
 Defines the CircuitStructure class and supporting functionality.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -140,8 +140,7 @@ class CircuitPlaquette(_NicelySerializable):
             Dictates how to combine the `elementvec` components corresponding to a single
             plaquette entry (circuit).  If "sum", the returned array contains summed
             values.  If a format string, e.g. `"%.2f"`, then the so-formatted components
-            are joined together with separating commas, and the resulting array contains
-            string (object-type) entries.
+            are joined, and the resulting array contains string (object-type) entries.
 
         Returns
         -------
@@ -155,7 +154,7 @@ class CircuitPlaquette(_NicelySerializable):
             fmt = mergeop
             ret = _np.nan * _np.ones((self.num_rows, self.num_cols), dtype=_np.object_)
             for (i, j), opstr in self.elements.items():
-                ret[i, j] = ", ".join(["NaN" if _np.isnan(x) else
+                ret[i, j] = "".join(["NaN" if _np.isnan(x) else
                                        (fmt % x) for x in elementvec[layout.indices(opstr)]])
         else:
             raise ValueError("Invalid `mergeop` arg: %s" % str(mergeop))
@@ -718,16 +717,6 @@ class PlaquetteGridCircuitStructure(_CircuitList):
                       'circuit_weights': ({c.str: weight for c, weight in self.circuit_weights}
                                           if (self.circuit_weights is not None) else None)
                       })
-
-        #state['plaquette_types'] = XXX
-        #state['datacols'] = {
-        #    'Circuit': [circuits]
-        #    'PlaquetteX':
-        #    'PlaquetteY':
-        #    'X':
-        #    'Y':
-        #    'weight':
-        #    # additional circuits have sentinels for Plaquette coords?
 
         return state
 
