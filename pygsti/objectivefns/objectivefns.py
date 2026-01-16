@@ -5794,7 +5794,32 @@ def _errorgen_penalty_size(mdl):
     return 1
 
 
-def _cptp_penalty(mdl, prefactor, op_basis):
+CPTP_PENALTY_SHIFT = 1e-6
+
+
+def _cptp_penalty(mdl, prefactor, op_basis, shift=CPTP_PENALTY_SHIFT):
+    """
+    Helper function - CPTP penalty: (sum of tracenorms of gates),
+    which in least squares optimization means returning an array
+    of the sqrt(tracenorm) of each gate.
+
+    F(herm_mx) = -sqrt( 1 + -Tr(proj herm_mx onto NSD cone ) ).
+
+    Returns
+    -------
+    numpy array
+        a (real) 1D array of length len(mdl.operations).
+    """
+    per_gate_penalties = []
+    for op in mdl.operations.values():
+        val = _tools.sum_of_negative_choi_eigenvalues_gate(op.to_dense('HilbertSchmidt'), op_basis)
+        per_gate_penalties.append(val)
+    lsvec = (shift + _np.array(per_gate_penalties)) ** 0.5
+    lsvec *= prefactor
+    return lsvec
+
+
+def _spam_penalty(mdl, prefactor, op_basis, shift=CPTP_PENALTY_SHIFT):
     """
     Helper function - CPTP penalty: (sum of tracenorms of gates),
     which in least squares optimization means returning an array
@@ -5805,32 +5830,28 @@ def _cptp_penalty(mdl, prefactor, op_basis):
     numpy array
         a (real) 1D array of length len(mdl.operations).
     """
-    return prefactor * _np.sqrt(_np.array([_tools.tracenorm(
-        _tools.fast_jamiolkowski_iso_std(gate, op_basis)
-    ) for gate in mdl.operations.values()], 'd'))
+    expect_psd = []
 
+    for prep in mdl.preps.values():
+        prepvec = prep.to_dense('HilbertSchmidt')
+        prep_mx = _tools.vec_to_stdmx(prepvec, op_basis, keep_complex=True)
+        expect_psd.append(prep_mx)
 
-def _spam_penalty(mdl, prefactor, op_basis):
-    """
-    Helper function - CPTP penalty: (sum of tracenorms of gates),
-    which in least squares optimization means returning an array
-    of the sqrt(tracenorm) of each gate.
+    for povm in mdl.povms.values():
+        for effect in povm.values():
+            effect_vec = effect.to_dense('HilbertSchmidt')
+            effect_mx  = _tools.vec_to_stdmx(effect_vec, op_basis, keep_complex=True)
+            expect_psd.append(effect_mx)
 
-    Returns
-    -------
-    numpy array
-        a (real) 1D array of length len(mdl.operations).
-    """
-    return prefactor * (_np.sqrt(
-        _np.array([
-            _tools.tracenorm(
-                _tools.vec_to_stdmx(prepvec.to_dense("minimal"), op_basis)
-            ) for prepvec in mdl.preps.values()
-        ] + [
-            _tools.tracenorm(
-                _tools.vec_to_stdmx(mdl.povms[plbl][elbl].to_dense("minimal"), op_basis)
-            ) for plbl in mdl.povms for elbl in mdl.povms[plbl]], 'd')
-    ))
+    penalties = []
+    for mx in expect_psd:
+        v = _tools.eigenvalues(mx, assume_hermitian=True)
+        s = -_np.sum(v[v < 0])
+        penalties.append(s)
+
+    penalties = (shift + _np.array(penalties)) ** 0.5
+    penalties *= prefactor
+    return penalties
 
 
 def _errorgen_penalty(mdl, prefactor):
@@ -5862,162 +5883,100 @@ def _paramvec_norm_penalty(reg_factor, paramvec):
     return out
 
 
-def _cptp_penalty_jac_fill(cp_penalty_vec_grad_to_fill, mdl, prefactor, op_basis, wrt_slice, error_tol=1e-4):
+def _grad_of_root_neg_sum_neg_eigvals(herm_mx: _np.ndarray, shift=CPTP_PENALTY_SHIFT) -> _np.ndarray:
+    """
+    Computes the gradient of the function F that maps a Hermitian matrix to its
+    projection onto the negative semidefinite cone, then takes the trace, negates,
+    and takes a square root of that (negated) sum.
+
+    Strictly speaking, this only returns a subgradient of F. If all eigenvalues
+    of herm_mx are distinct then the subgradient is unique.
+
+    If the computed subgradient is zero, then we return an empty array of size
+    zero.
+
+    What if F(herm_mx) = -sqrt( 1 + -Tr(proj herm_mx onto NSD cone ) ).
+    """
+    U, v, _  = _tools.eigendecomposition(herm_mx, assume_hermitian=True)
+    selector = v < 0
+    num_neg  = _np.count_nonzero(selector)
+    if num_neg == 0:
+        return _np.empty((0,))
+    U =  U[:, selector].reshape((-1, num_neg))
+    G = -U @ U.T.conj()   # shape = (dim, dim)
+    G *= 0.5/_np.sqrt(shift + (_np.sum(-v[selector])))  # handles the sqrt() wrap.
+    return G
+
+
+def _cptp_penalty_jac_fill(cp_penalty_vec_grad_to_fill, mdl, prefactor, op_basis, wrt_slice):
     """
     Helper function - jacobian of CPTP penalty (sum of tracenorms of gates)
     Returns a (real) array of shape (len(mdl.operations), n_params).
     """
-    from .. import tools as _tools
-
-    # d( sqrt(|chi|_Tr) ) = (0.5 / sqrt(|chi|_Tr)) * d( |chi|_Tr )
     for i, gate in enumerate(mdl.operations.values()):
-        nparams = gate.num_params
+        cp_penalty_vec_grad_to_fill[i, :] = 0
+        # Step 1: gradient of sqrt(-Trace(projection of choi mx onto the negative semidefinite cone)).
+        mx    = gate.to_dense('HilbertSchmidt')
+        J     = _tools.fast_jamiolkowski_iso_std(mx, op_basis, normalized=True)
+        dFdJ  = _grad_of_root_neg_sum_neg_eigvals(J)
+        if dFdJ.size == 0:
+            continue
 
-        #get sgn(chi-matrix) == d(|chi|_Tr)/dchi in std basis
-        # so sgnchi == d(|chi_std|_Tr)/dchi_std
-        chi = _tools.fast_jamiolkowski_iso_std(gate, op_basis)
-        assert(_np.linalg.norm(chi - chi.T.conjugate()) < error_tol), \
-            "chi should be Hermitian!"
+        # Step 2: chain rule with Jacobian of the map from real param vec to the choi matrix.
+        dmx_dp = gate.deriv_wrt_params()       # shape (mdl.dim**2, nP)
+        dmx_dp = _np.swapaxes(dmx_dp, 0, 1)    # shape (nP, mdl.dim**2)
+        dmx_dp = _np.reshape(dmx_dp, (gate.num_params, mdl.dim, mdl.dim))
+        g      = _np.zeros((gate.num_params,))
+        for j, panel in enumerate(dmx_dp):
+            dJ_dpj = _tools.fast_jamiolkowski_iso_std(panel, op_basis, normalized=True)
+            val  = _np.vdot(dFdJ, dJ_dpj)
+            g[j] = val.real
 
-        # Alt#1 way to compute sgnchi (evals) - works equally well to svd below
-        #evals,U = _np.linalg.eig(chi)
-        #sgnevals = [ ev/abs(ev) if (abs(ev) > 1e-7) else 0.0 for ev in evals]
-        #sgnchi = _np.dot(U,_np.dot(_np.diag(sgnevals),_np.linalg.inv(U)))
-
-        # Alt#2 way to compute sgnchi (sqrtm) - DOESN'T work well; sgnchi NOT very hermitian!
-        #sgnchi = _np.dot(chi, _np.linalg.inv(
-        #        _spl.sqrtm(_np.matrix(_np.dot(chi.T.conjugate(),chi)))))
-
-        sgnchi = _tools.matrix_sign(chi)
-        assert(_np.linalg.norm(sgnchi - sgnchi.T.conjugate()) < error_tol), \
-            "sgnchi should be Hermitian!"
-
-        # get d(gate)/dp in op_basis [shape == (nP,dim,dim)]
-        #OLD: dGdp = mdl.dproduct((gl,)) but wasteful
-        dgate_dp = gate.deriv_wrt_params()  # shape (dim**2, nP)
-        dgate_dp = _np.swapaxes(dgate_dp, 0, 1)  # shape (nP, dim**2, )
-        dgate_dp.shape = (nparams, mdl.dim, mdl.dim)
-
-        # Let M be the "shuffle" operation performed by fast_jamiolkowski_iso_std
-        # which maps a gate onto the choi-jamiolkowsky "basis" (i.e. performs that C-J
-        # transform).  This shuffle op commutes with the derivative, so that
-        # dchi_std/dp := d(M(G))/dp = M(dG/dp), which we call "MdGdp_std" (the choi
-        # mapping of dGdp in the std basis)
-        m_dgate_dp_std = _np.empty((nparams, mdl.dim, mdl.dim), 'complex')
-        for p in range(nparams):  # p indexes param
-            m_dgate_dp_std[p] = _tools.fast_jamiolkowski_iso_std(dgate_dp[p], op_basis)  # now "M(dGdp_std)"
-            assert(_np.linalg.norm(m_dgate_dp_std[p] - m_dgate_dp_std[p].T.conjugate()) < error_tol**2)  # check hermitian
-            # Riley note: not clear to me why we're using the square of error_tol in the above.
-
-        m_dgate_dp_std = _np.conjugate(m_dgate_dp_std)  # so element-wise multiply
-        # of complex number (einsum below) results in separately adding
-        # Re and Im parts (also see NOTE in spam_penalty_jac_fill below)
-
-        #contract to get (note contract along both mx indices b/c treat like a
-        # mx basis): d(|chi_std|_Tr)/dp = d(|chi_std|_Tr)/dchi_std * dchi_std/dp
-        #v =  _np.einsum("ij,aij->a",sgnchi,MdGdp_std)
-        v = _np.tensordot(sgnchi, m_dgate_dp_std, ((0, 1), (1, 2)))
-        v *= prefactor * (0.5 / _np.sqrt(_tools.tracenorm(chi)))  # add 0.5/|chi|_Tr factor
-        assert(_np.linalg.norm(v.imag) < error_tol)
-        cp_penalty_vec_grad_to_fill[i, :] = 0.0
-
-        gate_gpinds_subset, within_wrtslice, within_gpinds = _slct.intersect_within(wrt_slice, gate.gpindices)
-        cp_penalty_vec_grad_to_fill[i, within_wrtslice] = v.real[within_gpinds]  # indexing w/array OR
-        #slice works as expected in this case
-        chi = sgnchi = dgate_dp = m_dgate_dp_std = v = None  # free mem
-
-    return len(mdl.operations)  # the number of leading-dim indicies we filled in
+        # Step 3: embed into the row of the Jacobian.
+        _, within_wrtslice, within_gpinds = _slct.intersect_within(wrt_slice, gate.gpindices)
+        cp_penalty_vec_grad_to_fill[i, within_wrtslice] = prefactor * g[within_gpinds]
+        
+    return len(mdl.operations)
 
 
-def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl, prefactor, op_basis, wrt_slice, error_tol=1e-4):
-    """
-    Helper function - jacobian of CPTP penalty (sum of tracenorms of gates)
-    Returns a (real) array of shape ( _spam_penalty_size(mdl), n_params).
-    """
-    basis_mxs = op_basis.elements  # shape [mdl.dim, dmDim, dmDim]
-    ddenmx_dv = demx_dv = basis_mxs.conjugate()  # b/c denMx = sum( spamvec[i] * Bmx[i] ) and "V" == spamvec
-    #NOTE: conjugate() above is because ddenMxdV and dEMxdV will get *elementwise*
-    # multiplied (einsum below) by another complex matrix (sgndm or sgnE) and summed
-    # in order to gather the different components of the total derivative of the trace-norm
-    # wrt some spam-vector change dV.  If left un-conjugated, we'd get A*B + A.C*B.C (just
-    # taking the (i,j) and (j,i) elements of the sum, say) which would give us
-    # 2*Re(A*B) = A.r*B.r - B.i*A.i when we *want* (b/c Re and Im parts are thought of as
-    # separate, independent degrees of freedom) A.r*B.r + A.i*B.i = 2*Re(A*B.C) -- so
-    # we need to conjugate the "B" matrix, which is ddenMxdV or dEMxdV below.
+def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl, prefactor, op_basis, wrt_slice):
 
-    # d( sqrt(|denMx|_Tr) ) = (0.5 / sqrt(|denMx|_Tr)) * d( |denMx|_Tr )
-    for i, prepvec in enumerate(mdl.preps.values()):
-        nparams = prepvec.num_params
+    def handle_herm_modelmember(herm_mm, i):
+        spam_penalty_vec_grad_to_fill[i, :] = 0
 
-        #get sgn(denMx) == d(|denMx|_Tr)/d(denMx) in std basis
-        # dmDim = denMx.shape[0]
-        denmx = _tools.vec_to_stdmx(prepvec, op_basis)
-        assert(_np.linalg.norm(denmx - denmx.T.conjugate()) < error_tol), \
-            "denMx should be Hermitian!"
+        # step 1: gradient with respect to Hermitian mx representation of herm_mm.
+        #   ---> Short-circuit steps 2 and 3 if the gradient is zero.
+        vec = herm_mm.to_dense('HilbertSchmidt')
+        mx  = _tools.vec_to_stdmx(vec, op_basis, keep_complex=True)
+        dF_dmx = _grad_of_root_neg_sum_neg_eigvals(mx)
+        if dF_dmx.size == 0:
+            return
 
-        sgndm = _tools.matrix_sign(denmx)
-        assert(_np.linalg.norm(sgndm - sgndm.T.conjugate()) < error_tol), \
-            "sgndm should be Hermitian!"
+        # Step 2: chain rule with Jacobian of the map from real param vector to
+        # Hermitian matrix representation of herm_mm.
+        dvec_dp = herm_mm.deriv_wrt_params()  # shape (dim, nP)
+        dvec_dp = dvec_dp.T                   # shape (nP, dim)
+        g = _np.zeros((herm_mm.num_params,))
+        for j, dvec_dpj in enumerate(dvec_dp):
+            dmx_dpj = _tools.vec_to_stdmx(dvec_dpj, op_basis, keep_complex=True)
+            val     = _np.vdot(dF_dmx, dmx_dpj)
+            g[j]    = val.real
 
-        # get d(prepvec)/dp in op_basis [shape == (nP,dim)]
-        dv_dp = prepvec.deriv_wrt_params()  # shape (dim, nP)
-        assert(dv_dp.shape == (mdl.dim, nparams))
+        # Step 3: embed into the row of the Jacobian
+        _, within_wrtslice, within_gpinds = _slct.intersect_within(wrt_slice, herm_mm.gpindices)
+        spam_penalty_vec_grad_to_fill[i, within_wrtslice] = prefactor * g[within_gpinds]
+        return
 
-        # denMx = sum( spamvec[i] * Bmx[i] )
-
-        #contract to get (note contrnact along both mx indices b/c treat like a mx basis):
-        # d(|denMx|_Tr)/dp = d(|denMx|_Tr)/d(denMx) * d(denMx)/d(spamvec) * d(spamvec)/dp
-        # [dmDim,dmDim] * [mdl.dim, dmDim,dmDim] * [mdl.dim, nP]
-        #v =  _np.einsum("ij,aij,ab->b",sgndm,ddenMxdV,dVdp)
-        v = _np.tensordot(_np.tensordot(sgndm, ddenmx_dv, ((0, 1), (1, 2))), dv_dp, (0, 0))
-        v *= prefactor * (0.5 / _np.sqrt(_tools.tracenorm(denmx)))  # add 0.5/|denMx|_Tr factor
-        assert(_np.linalg.norm(v.imag) < error_tol)
-        spam_penalty_vec_grad_to_fill[i, :] = 0.0
-        gpinds_subset, within_wrtslice, within_gpinds = _slct.intersect_within(wrt_slice, prepvec.gpindices)
-        spam_penalty_vec_grad_to_fill[i, within_wrtslice] = v.real[within_gpinds]  # slice or array index works!
-        denmx = sgndm = dv_dp = v = None  # free mem
-
-    #Compute derivatives for effect terms
-    i = len(mdl.preps)
+    count = 0
+    for prep in mdl.preps.values():
+        handle_herm_modelmember(prep, count)
+        count += 1
     for povmlbl, povm in mdl.povms.items():
-        #Simplify effects of povm so we can take their derivatives
-        # directly wrt parent Model parameters
-        for _, effectvec in povm.simplify_effects(povmlbl).items():
-            nparams = effectvec.num_params
+        for _, effect in povm.simplify_effects(povmlbl).items():
+            handle_herm_modelmember(effect, count)
+            count += 1
 
-            #get sgn(EMx) == d(|EMx|_Tr)/d(EMx) in std basis
-            emx = _tools.vec_to_stdmx(effectvec, op_basis)
-            # dmDim = EMx.shape[0]
-            assert(_np.linalg.norm(emx - emx.T.conjugate()) < error_tol), \
-                "EMx should be Hermitian!"
-
-            sgn_e = _tools.matrix_sign(emx)
-            assert(_np.linalg.norm(sgn_e - sgn_e.T.conjugate()) < error_tol), \
-                "sgnE should be Hermitian!"
-
-            # get d(prepvec)/dp in op_basis [shape == (nP,dim)]
-            dv_dp = effectvec.deriv_wrt_params()  # shape (dim, nP)
-            assert(dv_dp.shape == (mdl.dim, nparams))
-
-            # emx = sum( spamvec[i] * basis_mx[i] )
-
-            #contract to get (note contract along both mx indices b/c treat like a mx basis):
-            # d(|EMx|_Tr)/dp = d(|EMx|_Tr)/d(EMx) * d(EMx)/d(spamvec) * d(spamvec)/dp
-            # [dmDim,dmDim] * [mdl.dim, dmDim,dmDim] * [mdl.dim, nP]
-            #v =  _np.einsum("ij,aij,ab->b",sgnE,dEMxdV,dVdp)
-            v = _np.tensordot(_np.tensordot(sgn_e, demx_dv, ((0, 1), (1, 2))), dv_dp, (0, 0))
-            v *= prefactor * (0.5 / _np.sqrt(_tools.tracenorm(emx)))  # add 0.5/|EMx|_Tr factor
-            assert(_np.linalg.norm(v.imag) < error_tol)
-
-            spam_penalty_vec_grad_to_fill[i, :] = 0.0
-            gpinds_subset, within_wrtslice, within_gpinds = _slct.intersect_within(wrt_slice, effectvec.gpindices)
-            spam_penalty_vec_grad_to_fill[i, within_wrtslice] = v.real[within_gpinds]
-            i += 1
-
-            sgn_e = dv_dp = v = None  # free mem
-
-    #return the number of leading-dim indicies we filled in
-    return len(mdl.preps) + sum([len(povm) for povm in mdl.povms.values()])
+    return count
 
 
 def _errorgen_penalty_jac_fill(errorgen_penalty_vec_grad_to_fill, mdl, prefactor, wrt_slice):
