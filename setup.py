@@ -84,6 +84,7 @@ try:
                 # # see http://docs.cython.org/en/latest/src/reference/compilation.html#configuring-the-c-build
                 # define_macros = [('CYTHON_TRACE','1')], #for profiling
                 include_dirs=['.', np.get_include()],
+                extra_compile_args=['-O3','-fopenmp']
                 # libraries=['m'] #math lib?
             ),
             Extension(

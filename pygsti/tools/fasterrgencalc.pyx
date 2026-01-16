@@ -54,19 +54,11 @@ cdef inline np.complex128_t get_phase0_ascii(unsigned char op, bint dual):
       'Z' -> 1
     For any unrecognized operator, defaults to 1.
     """
-    if op == 95:  # '_' ASCII 95
+    if op != 89:  # 'Y' ASCII 89
         return 1
-    elif op == 88:  # 'X' ASCII 88
-        return 1
-    elif op == 89:  # 'Y' ASCII 89
-        if dual:
-            return -1j
-        else:
-            return 1j
-    elif op == 90:  # 'Z' ASCII 90
-        return 1
-    else:
-        return 1
+    elif dual:
+        return -1j
+    return 1j
 
 cdef inline bint pauli_flip_ascii(unsigned char op):
     """
@@ -148,9 +140,8 @@ cpdef tuple fast_pauli_phase_update_all_zeros(str pauli_str, bint dual=False):
     out_buffer = <char*> PyMem_Malloc((n + 1) * sizeof(char))
     if not out_buffer:
         raise MemoryError("Failed to allocate memory for output buffer")
-     # Initialize the buffer with the ASCII code for '0' (48).
-    for i in range(n):
-        out_buffer[i] = 48
+
+    # We do not need to initialize the buffer. Just specify the answer in the loop.
     out_buffer[n] = 0  # null termination
 
     for i in range(n):
@@ -160,6 +151,8 @@ cpdef tuple fast_pauli_phase_update_all_zeros(str pauli_str, bint dual=False):
         if pauli_flip_ascii(op):
             # Use ASCII 49 for '1'.
             out_buffer[i] = 49  # Flip bit from '0' to '1'
+        else:
+            out_buffer[i] = 48
     overall_phase *= sign
     
     # Create a Python string from the out_buffer.
@@ -319,20 +312,15 @@ cpdef tuple fast_pauli_phase_update(str pauli_str, str bit_str, bint dual=False)
         op = p[prefix_len + i]
         # Get the corresponding input bit from bit_str.
         # (Assume bit_str characters are '0' or '1')
-        if b[i] == 49: # ASCII '1'
-            bit_val = 1
-        else:
-            bit_val = 0
+        # 49 ASCII '1'
+        bit_val = b[i] - 48
         # Multiply overall_phase by factor given by the operator and bit.
         overall_phase *= get_phase_ascii(op, bit_val, dual)
         # Determine the output bit.
         # If the pauli operator flips, then output the inverted bit.
         if pauli_flip_ascii(op):
             # Flip: output '1' if input was '0' and vice versa.
-            if bit_val:
-                out_buffer[i] = 48
-            else:
-                out_buffer[i] = 49
+            out_buffer[i] = (not bit_val) + 48
         else:
             # No flip: just copy the input bit.
             out_buffer[i] = b[i]
@@ -407,7 +395,8 @@ cpdef np.complex128_t fast_amplitude_of_state(object tableau, str desired_state,
     dptr = PyUnicode_AsUTF8(desired_state)
     for q in range(n):
         # ASCII '1' = 49
-        bs[q] = 1 if dptr[q] == 49 else 0
+        # assume only '1' and '0' in dptr[q].
+        bs[q] = dptr[q] - 48
 
     # 3) First pass: postselect and count random bits.
     num_random = 0
