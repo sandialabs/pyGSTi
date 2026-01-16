@@ -5837,8 +5837,8 @@ def _spam_penalty(mdl, prefactor, op_basis, shift=CPTP_PENALTY_SHIFT):
         prep_mx = _tools.vec_to_stdmx(prepvec, op_basis, keep_complex=True)
         expect_psd.append(prep_mx)
 
-    for povm in mdl.povms.values():
-        for effect in povm.values():
+    for povmlbl, povm in mdl.povms.items():
+        for _, effect in povm.simplify_effects(povmlbl).items():
             effect_vec = effect.to_dense('HilbertSchmidt')
             effect_mx  = _tools.vec_to_stdmx(effect_vec, op_basis, keep_complex=True)
             expect_psd.append(effect_mx)
