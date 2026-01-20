@@ -302,12 +302,12 @@ def create_embedder_matrix_from_trace(graph_levels, embedder_matrix = None):
     return embedder_matrix
 
 
-def custom_builder(min_prob_clip):
+def custom_builder(min_prob_clip, cptp_penalty=50):
 
     chi2_builder = pygsti.objectivefns.Chi2Function.builder(
-        'chi2', regularization={'min_prob_clip_for_weighting': min_prob_clip}, penalties={'cptp_penalty_factor': 0.0})
+        'chi2', regularization={'min_prob_clip_for_weighting': min_prob_clip}, penalties={'cptp_penalty_factor': cptp_penalty})
     mle_builder = pygsti.objectivefns.PoissonPicDeltaLogLFunction.builder(
-        'logl', regularization={'min_prob_clip': min_prob_clip, 'radius': min_prob_clip})
+        'logl', regularization={'min_prob_clip': min_prob_clip, 'radius': min_prob_clip}, penalties={'cptp_penalty_factor': cptp_penalty})
     iteration_builders = [chi2_builder] 
     final_builders = [mle_builder]
     builders = pygsti.protocols.GSTObjFnBuilders(iteration_builders, final_builders)

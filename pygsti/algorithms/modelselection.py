@@ -266,6 +266,7 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
                 print("Recomputing Hessian, approximation error is ", error, "norm is:: ", np.linalg.norm(best_model[0]))
             sim = pygsti.forwardsims.MapForwardSimulator(processor_grid=(1,size))
             red_model_fit = _parallel_GST(create_red_model(deltalogl_fn.model, np.delete(deltalogl_model_projector, best_model[2], axis=1), sim=sim, vec=None), data, builders, tol, maxiter, verbosity, comm=comm, mem_limit=mem_limit).estimates['GateSetTomography'].models['final iteration estimate']
+            assert red_model_fit.num_params == len(best_model[0])
             red_model_fit.sim = pygsti.forwardsims.MapForwardSimulator(processor_grid=(1,1,size),param_blk_sizes=(100,100))
             H = pygsti.tools.logl_hessian(red_model_fit, data.dataset, comm=comm, mem_limit=mem_limit, verbosity = verbosity)
             if comm is not None:
@@ -289,6 +290,7 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
             
         if best_model[1] > er_thresh or len(best_model[0]) == 1:
             exceeded_threshold = True
+        #TODO why does this check if hessian was recomputed in previous level? I wish I could talk to myself from two weeks ago
         if not hessian_recomputed_previous_level and exceeded_threshold:
                 if rank == 0 and verbosity > 0:
                     print('All models from this level exceeded evidence ratio threshold, model rejected. Stopping!')
@@ -353,7 +355,7 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
 
 
 
-def do_greedy_from_full_exact(initial_model, data, er_thresh=2.0, verbosity=2, maxiter=100, tol=1e-7, prob_clip=1e-3, comm = None):
+def do_greedy_from_full_exact(initial_model, data, er_thresh=2.0, verbosity=2, maxiter=100, tol=1e-7, prob_clip=1e-3, comm = None, skip_initial_GST=False, transfer_seed=False):
     """
     An automated model selection greedy algorithm. Specifically made for FOGI models, but it should be compatible
     with any model that has a linear interposer. It is considered "exact" because every model considered is found through GST, as opposed to
@@ -445,8 +447,10 @@ def do_greedy_from_full_exact(initial_model, data, er_thresh=2.0, verbosity=2, m
                 print('starting GST ', size)
         
             start = time.time()
-
-            deltalogl_fn.model.from_vector(_parallel_GST(initial_model, data, builders, tol, maxiter, verbosity).estimates['GateSetTomography'].models['final iteration estimate'].to_vector().copy())
+            if skip_initial_GST:
+                deltalogl_fn.model.from_vector(initial_model.to_vector().copy())
+            else:
+                deltalogl_fn.model.from_vector(_parallel_GST(initial_model, data, builders, tol, maxiter, verbosity).estimates['GateSetTomography'].models['final iteration estimate'].to_vector().copy())
         
         if comm is not None:
             deltalogl_fn.model.from_vector(comm.bcast(deltalogl_fn.model.to_vector(), root = 0))
@@ -476,12 +480,19 @@ def do_greedy_from_full_exact(initial_model, data, er_thresh=2.0, verbosity=2, m
         chunk_range = range(rank*bucket_size, (rank+1)*bucket_size)
         level_chunk = []
         for i in chunk_range:
-            deltalogl_fn.model = _parallel_GST(remove_param(reduced_model, i), data, builders, maxiter=maxiter, tol=tol, verbosity=0).estimates['GateSetTomography'].models['final iteration estimate']
+            candidate_model = remove_param(reduced_model, i, zero=not transfer_seed)
+            for l in range(candidate_model.num_params):
+                if l < i:
+                    assert np.allclose(reduced_model.to_vector()[l], candidate_model.to_vector()[l])
+                if l>=i:
+                    assert np.allclose(reduced_model.to_vector()[l+1], candidate_model.to_vector()[l])
+            deltalogl_fn.model = _parallel_GST(candidate_model, data, builders, maxiter=maxiter, tol=tol, verbosity=0).estimates['GateSetTomography'].models['final iteration estimate']
+            candidate_model = None
 
             quantity = (deltalogl_fn.fn()- prev_dlogl)*2
             if  verbosity > 1:
                 if i  % 1 == 0:
-                    print('Model ', i, ' has ev. ratio of ', quantity, f' with its own logl {deltalogl_fn.fn()=}', flush=True)
+                    print('Model ', i, ' has ev. ratio of ', quantity, f' with delta logl of {deltalogl_fn.fn()=}', flush=True)
             level_chunk.append([deltalogl_fn.model.to_vector(), quantity, i])
 
             
@@ -489,12 +500,12 @@ def do_greedy_from_full_exact(initial_model, data, er_thresh=2.0, verbosity=2, m
 
         if (left_over_start_index + rank) < num_total_models:
 
-            deltalogl_fn.model = _parallel_GST(remove_param(reduced_model, i), data, builders, maxiter=maxiter, tol=tol, verbosity=0).estimates['GateSetTomography'].models['final iteration estimate']
+            deltalogl_fn.model = _parallel_GST(remove_param(reduced_model, i, zero=not transfer_seed), data, builders, maxiter=maxiter, tol=tol, verbosity=0).estimates['GateSetTomography'].models['final iteration estimate']
 
             quantity = (deltalogl_fn.fn()- prev_dlogl)*2
             if  verbosity > 1:
                 if i  % 1 == 0:
-                    print('Model ', i, ' has ev. ratio of ', quantity, f' with its own logl {deltalogl_fn.fn()=}', flush=True)
+                    print('Model ', i, ' has ev. ratio of ', quantity, f' with delta logl of {deltalogl_fn.fn()=}', flush=True)
             
             level_chunk.append([deltalogl_fn.model.to_vector(), quantity, i])
         
@@ -510,7 +521,7 @@ def do_greedy_from_full_exact(initial_model, data, er_thresh=2.0, verbosity=2, m
             
         best_model = sorted(level, key=lambda x: x[1])[0]
 
-        reduced_model = remove_param(reduced_model, best_model[2])
+        reduced_model = remove_param(reduced_model, best_model[2], zero=not transfer_seed)
 
         if verbosity and rank == 0:
             print(f'Model {best_model[2]} has lowest evidence ratio {best_model[1]:.4f}')

@@ -276,8 +276,8 @@ def convert(state, to_type, basis, ideal_state=None, flatten_structure=False, cp
                         exp_errgen = _ExpErrorgenOp(errgen)
 
                         #Compute the jacobian with respect to the error generators. This will allow us to see which
-                        #error generators change the POVM entries
-                        J = _np.zeros((state.num_params, num_errgens))
+                        #error generators change the superket entries
+                        J = _np.zeros((ideal_prep.shape[0]-1, num_errgens))
 
                         for i in range(num_errgens):
                             new_vec = _np.zeros(num_errgens)

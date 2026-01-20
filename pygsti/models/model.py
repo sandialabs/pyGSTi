@@ -2553,7 +2553,7 @@ class OpModel(Model):
 
     def setup_fogi(self, initial_gauge_basis, create_complete_basis_fn=None,
                    op_label_abbrevs=None, reparameterize=False, reduce_to_model_space=True,
-                   dependent_fogi_action='drop', include_spam=True, primitive_op_labels=None):
+                   dependent_fogi_action='drop', include_spam=True, primitive_op_labels=None, include_fogv=False):
 
         from pygsti.baseobjs.errorgenbasis import CompleteElementaryErrorgenBasis as _CompleteElementaryErrorgenBasis
 
@@ -2711,10 +2711,14 @@ class OpModel(Model):
                                      op_label_abbrevs, dependent_fogi_action,
                                      norm_order=norm_order)
         if reparameterize:
-            
+            if include_fogv:
+                directions = _np.vstack((self.fogi_store.fogi_directions.toarray().T,self.fogi_store.fogv_directions.toarray().T)).T
+            else:
+                directions = self.fogi_store.fogi_directions.toarray()
+
             self.param_interposer = self._add_reparameterization(
                 primitive_op_labels + primitive_prep_labels + primitive_povm_labels,
-                self.fogi_store.fogi_directions.toarray(),  # DENSE now (leave sparse in FUTURE?)
+                directions,  # DENSE now (leave sparse in FUTURE?)
                 self.fogi_store.errorgen_space_op_elem_labels)
             #self.param_interposer = _LinearInterposer
 
