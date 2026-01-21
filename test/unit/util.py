@@ -38,7 +38,7 @@ def needs_matplotlib(fn):
 
 
 def needs_csaps(fn):
-    """Shortcut decorator for skipping tests that require CVXPY"""
+    """Shortcut decorator for skipping tests that require CSAPS"""
     cond = __csaps_not_importable__ or ('SKIP_CSAPS' in os.environ)
     return unittest.skipIf(cond, "skipping csaps tests")(fn)
 
