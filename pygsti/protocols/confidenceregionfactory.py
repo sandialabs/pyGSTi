@@ -1033,9 +1033,8 @@ class ConfidenceRegionFactoryView(object):
         #elements of fn_dependencies are either 'all', 'spam', or
         # the "type:label" of a specific gate or spam vector.
         all_gpindices = []
+        mdl = self.model
         for dependency in fn_dependencies:
-            mdl = self.model.copy()  # copy that will contain the "+eps" model
-
             if dependency == 'all':
                 all_gpindices.extend(range(mdl.num_params))
             else:
@@ -1054,15 +1053,12 @@ class ConfidenceRegionFactoryView(object):
                     elif typ == "instrument": modelObj = mdl.instrument_blks['layers'][lbl]
                     else: raise ValueError("Invalid dependency type: %s" % typ)
                 all_gpindices.extend(modelObj.gpindices_as_array())
-
-        vec0 = mdl.to_vector()
         all_gpindices = sorted(list(set(all_gpindices)))  # remove duplicates
-
+        
+        vec0 = mdl.to_vector()
         for igp in all_gpindices:  # iterate over "global" Model-parameter indices
             vec = vec0.copy(); vec[igp] += eps
             mdl.from_vector(vec)
-            mdl.basis = self.model.basis  # we're still in the same basis (maybe needed by fn_obj)
-
             f = fn_obj.evaluate_nearby(mdl)
             if isinstance(f0, dict):  # special behavior for dict: process each item separately
                 for ky in gradF:
@@ -1071,8 +1067,10 @@ class ConfidenceRegionFactoryView(object):
                 assert(_np.linalg.norm(_np.imag(f - f0)) < 1e-12 or _np.iscomplexobj(gradF)
                        ), "gradF seems to be the wrong type!"
                 gradF[igp] = _np.real_if_close(f - f0) / eps
+        mdl.from_vector(vec0)
+        
         return gradF
-    
+
     def compute_confidence_interval(self, fn_obj, eps=1e-7,
                                     return_fn_val=False, verbosity=0):
         """
