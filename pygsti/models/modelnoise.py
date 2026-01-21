@@ -18,6 +18,7 @@ import numpy as _np
 from pygsti.models.stencillabel import StencilLabel as _StencilLabel
 from pygsti.tools import listtools as _lt
 from pygsti.tools import optools as _ot
+from pygsti.tools.exceptions import UntouchedModelNoiseKey as _UntouchedModelNoiseKey
 from pygsti.modelmembers import operations as _op
 from pygsti.modelmembers.operations.lindbladcoefficients import LindbladCoefficientBlock as _LindbladCoefficientBlock
 from pygsti.baseobjs.basis import Basis as _Basis
@@ -364,8 +365,13 @@ class OpModelNoise(ModelNoise):
         """
         untouched_keys = [k for k, touch_cnt in self._opkey_access_counters.items() if touch_cnt == 0]
         if len(untouched_keys) > 0:
-            _warnings.warn(("The following model-noise entries were unused: %s.  You may want to double check"
-                            " that you've entered a valid noise specification.") % ", ".join(map(str, untouched_keys)))
+            msg = \
+            f"""
+            The following model-noise entries were unused: {', '.join(map(str, untouched_keys))}.
+            You may want to double check that you've entered a valid noise specification.
+            """
+            _warnings.warn(msg, _UntouchedModelNoiseKey)
+        return
 
     def compute_stencil_absolute_sslbls(self, stencil, state_space, target_labels=None, qudit_graph=None):
         """

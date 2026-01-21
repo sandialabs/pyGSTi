@@ -1258,7 +1258,7 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
     return errorgens
 
 def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=None):
-    """
+    r"""
     Returns the composition of two error generators. I.e. errorgen_1[errorgen_2[\cdot]].
     
     Parameters

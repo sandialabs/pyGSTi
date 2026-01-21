@@ -1179,8 +1179,7 @@ class ConfidenceRegionFactoryView(object):
             delta.shape = f0.shape  # reshape to un-flattened
         else:
             assert(isinstance(f0, float))
-            delta = float(delta)
-
+            delta = delta.item()
         return delta
 
     def _compute_df_from_grad_f_hessian(self, grad_f, f0, verbosity):
