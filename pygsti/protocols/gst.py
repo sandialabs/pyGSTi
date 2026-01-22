@@ -1009,6 +1009,7 @@ class GSTGaugeOptSuite(_NicelySerializable):
 
         if self.gaugeopt_target is not None:
             assert(isinstance(self.gaugeopt_target, _Model)), "`gaugeopt_target` must be None or a Model"
+            id_gaugeopt_target = id(self.gaugeopt_target)
             for goparams in gaugeopt_suite_dict.values():
                 if hasattr(goparams, 'keys'):
                     goparams_list = [goparams] 
@@ -1016,13 +1017,14 @@ class GSTGaugeOptSuite(_NicelySerializable):
                     continue
                 else:
                     goparams_list = goparams
-
+                assert isinstance(goparams_list, list)
+                assert len(goparams_list) > 0
                 for goparams_dict in goparams_list:
-                    if 'target_model' in goparams_dict:
-                        _warnings.warn(("`gaugeOptTarget` argument is overriding"
-                                        " user-defined target_model in gauge opt"
-                                        " param dict(s)"))
-                    goparams_dict.update({'target_model': self.gaugeopt_target})
+                    assert isinstance(goparams_dict, dict)
+                    if id_gaugeopt_target != id(goparams_dict.get('target_model', self.gaugeopt_target)):
+                        msg = "`self.gaugeopt_target` member is overriding `target_model` in inner dict of gaugeopt_suite_dict."
+                        _warnings.warn(msg)
+                    goparams_dict['target_model'] = self.gaugeopt_target
 
         return gaugeopt_suite_dict
 
@@ -1091,7 +1093,7 @@ class GSTGaugeOptSuite(_NicelySerializable):
                 'verbosity': printer
             })
 
-            if suite_name == "stdgaugeopt-unreliable2Q" and model.dim == 16:
+            if suite_name == "stdgaugeopt-unreliable2Q" and model.dim == 16 and len(unreliable_ops) > 0:
                 if any([gl in model.operations for gl in unreliable_ops]):
                     stage2_item_weights = {'gates': 1.0, 'spam': 0.0}
                     for gl in unreliable_ops:

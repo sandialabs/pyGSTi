@@ -25,6 +25,10 @@ from pygsti.tools import jamiolkowski as _jam
 from pygsti.tools import lindbladtools as _lt
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools import sdptools as _sdps
+from pygsti.tools.exceptions import (
+    NumericalDomainWarning as _NumericalDomainWarning,
+    CVXPYFailure as _CVXPYFailure
+)
 from pygsti.baseobjs import basis as _pgb
 from pygsti.baseobjs.basis import (
     Basis as _Basis,
@@ -157,12 +161,12 @@ def fidelity(a, b):
     _mt.assert_hermitian(a, __SCALAR_TOL__)
     _mt.assert_hermitian(b, __SCALAR_TOL__)
 
-    trace_warning = f"The input matrix %s is not trace-1 up to tolerance {__SCALAR_TOL__}. Beware result!"
+    trace_warning = f"The input matrix %s has trace %s, which deviates from 1 by more than {__SCALAR_TOL__}. Beware result!"
 
     if _np.abs(_np.trace(a) - 1) > __SCALAR_TOL__:
-        _warnings.warn(trace_warning % 'a')
+        _warnings.warn(trace_warning % ('a', str(_np.trace(a))), _NumericalDomainWarning)
     if _np.abs(_np.trace(b) - 1) > __SCALAR_TOL__:
-        _warnings.warn(trace_warning % 'b')
+        _warnings.warn(trace_warning % ('b', str(_np.trace(b))), _NumericalDomainWarning)
 
     r, vec = fast_density_rank(a, __SCALAR_TOL__)
     if r <= 1:
@@ -184,11 +188,11 @@ def fidelity(a, b):
         evals, U = _np.linalg.eigh(mat)
         if _np.min(evals) < -__SCALAR_TOL__:
             message = f"""
-            Input matrix is not PSD up to tolerance {__SCALAR_TOL__}.
-            The negative eigenvalues are {evals[evals < 0]}.
+            Input matrix has smallest eigenvalue {_np.min(evals)}, and so is not
+            PSD up to tolerance {__SCALAR_TOL__}.
             We'll project out the bad eigenspaces to only work with the PSD part.
             """
-            _warnings.warn(message)
+            _warnings.warn(message, _NumericalDomainWarning)
         evals[evals < 0] = 0.0
         sqrt_mat = U @ (_np.sqrt(evals).reshape((-1, 1)) * U.T.conj())
         return sqrt_mat
@@ -401,7 +405,9 @@ def diamonddist(a, b, mx_basis='pp', return_x=False):
     sdp_solvers = ['MOSEK', 'CLARABEL', 'CVXOPT']
     for i, solver in enumerate(sdp_solvers):
         try:
-            prob.solve(solver=solver)
+            with _warnings.catch_warnings():
+                _warnings.filterwarnings('ignore','.*Solution may be inaccurate.*', UserWarning)
+                prob.solve(solver=solver)
             objective_val = prob.value
             varvals = [v.value for v in vars]
             break
@@ -413,7 +419,7 @@ def diamonddist(a, b, mx_basis='pp', return_x=False):
                 else:
                     failure_msg = f"Trying {sdp_solvers[i+1]} next."
                 msg += f'\n{failure_msg}'
-                _warnings.warn(msg)
+                _warnings.warn(msg, _CVXPYFailure)
 
     if return_x:
         return objective_val, varvals

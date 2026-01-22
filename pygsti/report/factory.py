@@ -18,6 +18,8 @@ import zipfile as _zipfile
 
 import numpy as _np
 
+from typing import Union
+
 from pygsti.report import Report as _Report
 from pygsti.report import autotitle as _autotitle
 from pygsti.report import merge_helpers as _merge
@@ -1125,6 +1127,24 @@ def find_std_clifford_compilation(model, verbosity=0):
     return None
 
 
+def _validated_confidence_level(cl: Union[float, int, None]):
+    if cl is None:
+        return cl
+    if cl < 1:
+        msg = \
+        f"""
+        Confidence level should be specified as a percent from 0 to 100. Reasonable
+        values for this argument are usually between 80 and 99.5.
+        
+        We received confidence level={cl}, which we assume was accidentally passed as
+        a proportion. We'll multiply by 100 and proceed. 
+        """
+        _warnings.warn(msg)
+        cl = cl * 100
+    assert 0 < cl and cl < 100
+    return cl
+
+
 # TODO these factories should really be Report subclasses
 def construct_standard_report(results, title="auto",
                               confidence_level=None, comm=None, ws=None,
@@ -1229,6 +1249,7 @@ def construct_standard_report(results, title="auto",
 
     printer = _VerbosityPrinter.create_printer(verbosity, comm=comm)
     ws = ws or _ws.Workspace()
+    confidence_level = _validated_confidence_level(confidence_level)
 
     advanced_options = advanced_options or {}
     n_leak = advanced_options.get('n_leak', 0)
@@ -1248,12 +1269,8 @@ def construct_standard_report(results, title="auto",
                           " confidence interval - please note the updated function signature"))
 
     if title is None or title == "auto":
-        autoname = _autotitle.generate_name()
+        autoname = _autotitle.generate_name(log_warning=True)
         title = "GST Report for " + autoname
-        _warnings.warn(("You should really specify `title=` when generating reports,"
-                        " as this makes it much easier to identify them later on.  "
-                        "Since you didn't, pyGSTi has generated a random one"
-                        " for you: '{}'.").format(autoname))
 
     pdfInfo = [('Author', 'pyGSTi'), ('Title', title),
                ('Keywords', 'GST'), ('pyGSTi Version', _pygsti_version)]
@@ -1505,12 +1522,8 @@ def construct_nqnoise_report(results, title="auto",
                           " confidence interval - please note the updated function signature"))
 
     if title is None or title == "auto":
-        autoname = _autotitle.generate_name()
+        autoname = _autotitle.generate_name(log_warning=True)
         title = "GST Report for " + autoname
-        _warnings.warn(("You should really specify `title=` when generating reports,"
-                        " as this makes it much easier to identify them later on.  "
-                        "Since you didn't, pyGSTi has generated a random one"
-                        " for you: '{}'.").format(autoname))
 
     pdfInfo = [('Author', 'pyGSTi'), ('Title', title),
                ('Keywords', 'GST'), ('pyGSTi Version', _pygsti_version)]
@@ -1666,12 +1679,8 @@ def create_drift_report(results, title='auto', ws=None, verbosity=1):
     ws = ws or _ws.Workspace()
 
     if title is None or title == "auto":
-        autoname = _autotitle.generate_name()
+        autoname = _autotitle.generate_name(log_warning=True)
         title = "Drift Report for " + autoname
-        _warnings.warn(("You should really specify `title=` when generating reports,"
-                        " as this makes it much easier to identify them later on.  "
-                        "Since you didn't, pyGSTi has generated a random one"
-                        " for you: '{}'.").format(autoname))
 
     pdfInfo = [('Author', 'pyGSTi'), ('Title', title),
                ('Keywords', 'GST'), ('pyGSTi Version', _pygsti_version)]

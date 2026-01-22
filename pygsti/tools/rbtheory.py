@@ -334,11 +334,11 @@ def L_matrix(model, target_model, weights=None):  # noqa N802
     #   3. Have the option to return this matrix as an implicit abstract linear operator, so that anyone who wants
     #      eigenvalue info can try to get it from an iterative method instead of a full eigendecomposition.
     #   
-    L_matrix = (1 / normalizer) * _np.sum(
+    L_matrix = (1 / normalizer) * _np.sum([
         weights[key] * _np.kron(
             model.operations[key].to_dense("HilbertSchmidt").T,
             _np.linalg.inv(target_model.operations[key].to_dense("HilbertSchmidt"))
-        ) for key in target_model.operations.keys())
+        ) for key in target_model.operations.keys()])
 
     return L_matrix
 
