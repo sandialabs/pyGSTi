@@ -64,7 +64,9 @@ _NestedLabelSeq = Sequence[Union[_Label, Sequence[_Label]]]
 #     Don't use this in function signatures.
 LayerTupLike = Union[Tuple[_LabelTupTup,    ...], _NestedLabelSeq, Tuple[_Label, ...]]
 LabelsLike   = Union[Tuple[_NestedLabelSeq, ...], _NestedLabelSeq]
-IndexStringOrInt = Union[Union[str, int], slice, List[Union[str, int]], Tuple[Union[str, int], ...]]
+LinesLike    = Union[
+    slice, str, int, Sequence[Union[str, int]]
+]
 IndexIntOnly = Union[int, slice, List[int], Tuple[int, ...]]
 ##############################################################################################
 
@@ -295,8 +297,15 @@ class Circuit(object):
             return cls(tup)
 
     def __init__(self,
-            layer_labels: Optional[Union[str, Iterable[Union[Iterable[_Label], _Label]]]]=(), line_labels: Union[str,Tuple[Any,...]] = 'auto', num_lines: Optional[int] = None,
-            editable: Optional[bool]=False, stringrep=None, name: Optional[str]='', check:Optional[bool]=True, expand_subcircuits: Union[bool, Literal['default']]="default", occurrence=None,
+            layer_labels: Union[None, str, Iterable[Union[Iterable[_Label], _Label]]]=(),
+            line_labels:  Union[str,Tuple[Any,...]] = 'auto',
+            num_lines: Optional[int]=None,
+            editable: bool=False,
+            stringrep=None,
+            name: Optional[str]='',
+            check: bool=True,
+            expand_subcircuits: Union[bool, Literal['default']]="default",
+            occurrence=None,
             compilable_layer_indices=None
         ):
         """
@@ -337,7 +346,7 @@ class Circuit(object):
             Specify this instead of `line_labels` to set the latter to the
             integers between 0 and `num_lines-1`.
 
-        editable : bool, optional
+        editable : bool
             Whether the created `Circuit` is created in able to be modified.  If
             `True`, then you should call `done_editing()` once the circuit is
             completely assembled, as this makes the circuit read-only and
@@ -599,7 +608,7 @@ class Circuit(object):
                 self._hash = hash(self._hashable_tup)
 
 
-    def to_label(self, nreps:Optional[int]=1) -> _CircuitLabel:
+    def to_label(self, nreps:int=1) -> _CircuitLabel:
         """
         Construct and return this entire circuit as a :class:`CircuitLabel`.
 
@@ -1126,7 +1135,7 @@ class Circuit(object):
             layers = (layers,)
         return layers
 
-    def _proc_lines_arg(self, lines: Optional[IndexStringOrInt]):
+    def _proc_lines_arg(self, lines: Optional[LinesLike]):
         """ Pre-process the lines argument used by many methods """
         if lines is None:
             lines = self._line_labels
@@ -1189,9 +1198,9 @@ class Circuit(object):
             assert(indx == 0), "Only index 0 exists for a single-simple-Label level"
             self._labels[ilayer] = val
 
-    def extract_labels(self, layers:Optional[Union[int, slice, list[int], tuple[int, ...]]]=None,
-                       lines:Optional[Union[int, slice, list[int], tuple[int, ...]]]=None,
-                       strict: Optional[bool]=True) -> Union[Circuit, _Label]:
+    def extract_labels(self, layers: Union[None, int, slice, list[int], tuple[int, ...]]=None,
+                       lines: Union[None, int, slice, list[int], tuple[int, ...]]=None,
+                       strict: bool=True) -> Union[Circuit, _Label]:
         """
         Get a subregion - a "rectangle" - of this Circuit.
 
@@ -1307,7 +1316,7 @@ class Circuit(object):
         else:
             return _Label(ret[0])
 
-    def set_labels(self, lbls, layers=None, lines: Optional[IndexStringOrInt]=None):
+    def set_labels(self, lbls, layers=None, lines: Optional[LinesLike]=None):
         """
         Write `lbls` to the block defined by the `layers` and `lines` arguments.
 
@@ -1415,7 +1424,7 @@ class Circuit(object):
         else:  # single layer using integer layer index (so lbls is a single Label)
             self._labels[layers[0]].extend(_label_to_nested_lists_of_simple_labels(lbls, def_sslbls))
 
-    def insert_idling_layers(self, insert_before: int, num_to_insert: int, lines: Optional[IndexStringOrInt]=None) -> Circuit:
+    def insert_idling_layers(self, insert_before: int, num_to_insert: int, lines: Optional[LinesLike]=None) -> Circuit:
         """
         Inserts into this circuit one or more idling (blank) layers,
         returning a copy.
@@ -1449,7 +1458,7 @@ class Circuit(object):
         if self._static: cpy.done_editing()
         return cpy
 
-    def insert_idling_layers_inplace(self, insert_before: int, num_to_insert: int, lines: Optional[IndexStringOrInt]=None):
+    def insert_idling_layers_inplace(self, insert_before: int, num_to_insert: int, lines: Optional[LinesLike]=None):
         """
         Inserts into this circuit one or more idling (blank) layers.
 
@@ -1515,7 +1524,7 @@ class Circuit(object):
                     del self._labels[i][k]
             #Note: do not adjust compilable indices when only partial layers are inserted
 
-    def _append_idling_layers_inplace(self, num_to_insert: int, lines: Optional[IndexStringOrInt]=None):
+    def _append_idling_layers_inplace(self, num_to_insert: int, lines: Optional[LinesLike]=None):
         """
         Adds one or more idling (blank) layers to the end of this circuit.
 
@@ -1540,7 +1549,7 @@ class Circuit(object):
         assert(not self._static), "Cannot edit a read-only circuit!"
         self.insert_idling_layers_inplace(None, num_to_insert, lines)
 
-    def insert_labels_into_layers(self, lbls, layer_to_insert_before: Optional[int], lines: Optional[IndexStringOrInt]=None):
+    def insert_labels_into_layers(self, lbls, layer_to_insert_before: Optional[int], lines: Optional[LinesLike]=None):
         """
         Inserts into this circuit the contents of `lbls` into new full or partial layers,
         returning a copy.
@@ -1576,7 +1585,7 @@ class Circuit(object):
         if self._static: cpy.done_editing()
         return cpy
 
-    def insert_labels_into_layers_inplace(self, lbls, layer_to_insert_before: Optional[int], lines: Optional[IndexStringOrInt]=None):
+    def insert_labels_into_layers_inplace(self, lbls, layer_to_insert_before: Optional[int], lines: Optional[LinesLike]=None):
         """
         Inserts into this circuit the contents of `lbls` into new full or partial layers.
 
@@ -1615,7 +1624,7 @@ class Circuit(object):
         self.set_labels(lbls, slice(layer_to_insert_before, layer_to_insert_before + numLayersToInsert), lines)
         #Note: set_labels expects lbls to be a list/tuple of Label-like items b/c it's given a layer *slice*
 
-    def insert_idling_lines(self, insert_before: Optional[Union[str, int]], line_labels: Union[List[Union[int, str]], Tuple[Union[int, str], ...]]):
+    def insert_idling_lines(self, insert_before: Union[None, str, int], line_labels: Union[List[Union[int, str]], Tuple[Union[int, str], ...]]):
         """
         Insert one or more idling (blank) lines into this circuit, returning a copy.
 
@@ -1638,7 +1647,7 @@ class Circuit(object):
         if self._static: cpy.done_editing()
         return cpy
 
-    def insert_idling_lines_inplace(self, insert_before: Optional[Union[str, int]], line_labels: Union[List[Union[int, str]], Tuple[Union[int, str], ...]]):
+    def insert_idling_lines_inplace(self, insert_before: Union[None, str, int], line_labels: Union[List[Union[int, str]], Tuple[Union[int, str], ...]]):
         """
         Insert one or more idling (blank) lines into this circuit.
 
@@ -1679,7 +1688,7 @@ class Circuit(object):
         """
         self.insert_idling_lines_inplace(None, line_labels)
 
-    def insert_labels_as_lines_inplace(self, lbls, layer_to_insert_before: Optional[int]=None, line_to_insert_before: Optional[Union[str, int]]=None,
+    def insert_labels_as_lines_inplace(self, lbls, layer_to_insert_before: Optional[int]=None, line_to_insert_before: Union[None, str, int]=None,
                                        line_labels: Union[list, tuple, Literal['auto']]="auto"):
         """
         Inserts into this circuit the contents of `lbls` into new lines.
@@ -1739,7 +1748,7 @@ class Circuit(object):
         #Note: set_labels expects lbls to be a list/tuple of Label-like items b/c it's given a layer *slice*
         self.set_labels(lbls, slice(layer_to_insert_before, layer_to_insert_before + numLayersToInsert), line_labels)
 
-    def insert_labels_as_lines(self, lbls, layer_to_insert_before: Optional[int]=None, line_to_insert_before: Optional[Union[str, int]]=None, line_labels: Union[list, tuple, Literal['auto']]="auto"):
+    def insert_labels_as_lines(self, lbls, layer_to_insert_before: Optional[int]=None, line_to_insert_before: Union[None, str, int]=None, line_labels: Union[list, tuple, Literal['auto']]="auto"):
         """
         Inserts into this circuit the contents of `lbls` into new lines, returning a copy.
 
@@ -1810,7 +1819,7 @@ class Circuit(object):
         """
         return self.insert_labels_as_lines(lbls, layer_to_insert_before, None, line_labels)
 
-    def _clear_labels(self, layers: IndexIntOnly, lines: IndexStringOrInt, clear_straddlers=False):
+    def _clear_labels(self, layers: IndexIntOnly, lines: LinesLike, clear_straddlers=False):
         """ remove all labels in a block given by layers and lines
             Note: layers & lines must be lists/tuples of values; they can't be slices or single vals
         """
@@ -1827,7 +1836,7 @@ class Circuit(object):
             self._labels[i] = new_layer
         self._compilable_layer_indices_tup = ()
 
-    def clear_labels(self, layers: Optional[IndexIntOnly]=None, lines: Optional[IndexStringOrInt]=None, clear_straddlers=False):
+    def clear_labels(self, layers: Optional[IndexIntOnly]=None, lines: Optional[LinesLike]=None, clear_straddlers=False):
         """
         Removes all the gates within the given circuit region.  Does not reduce the number of layers or lines.
 
@@ -1881,7 +1890,7 @@ class Circuit(object):
                 new_inds = [i if (i < deleted_i) else (i - 1) for i in new_inds]  # Note i never == deleted_i (filtered)
             self._compilable_layer_indices_tup = tuple(new_inds)
 
-    def delete_lines(self, lines: Optional[IndexStringOrInt], delete_straddlers=False):
+    def delete_lines(self, lines: Optional[LinesLike], delete_straddlers=False):
         """
         Deletes one or more lines from the circuit.
 
@@ -2405,7 +2414,7 @@ class Circuit(object):
         assert(not self._static), "Cannot edit a read-only circuit!"
         self.insert_circuit_inplace(circuit, 0)
 
-    def tensor_circuit_inplace(self, circuit: Circuit, line_order: Optional[Union[List[Union[str, int]], Tuple[Union[str, int], ...]]]=None):
+    def tensor_circuit_inplace(self, circuit: Circuit, line_order: Union[None, List[Union[str, int]], Tuple[Union[str, int], ...]]=None):
         """
         The tensor product of this circuit and `circuit`.
 
@@ -2459,7 +2468,7 @@ class Circuit(object):
         self.insert_labels_as_lines_inplace(circuit._labels, line_labels=circuit.line_labels)
         self._line_labels = new_line_labels  # essentially just reorders labels if needed
 
-    def tensor_circuit(self, circuit: Circuit, line_order: Optional[Union[List[Union[str, int]], Tuple[Union[str, int], ...]]]=None) -> Circuit:
+    def tensor_circuit(self, circuit: Circuit, line_order: Union[None, List[Union[str, int]], Tuple[Union[str, int], ...]]=None) -> Circuit:
         """
         The tensor product of this circuit and `circuit`, returning a copy.
 
@@ -4312,7 +4321,9 @@ class Circuit(object):
         #if it is None, build a default mapping.
         else:
             # default mapping is the identity mapping: qubit i in the Qiskit circuit maps to qubit i in the pyGSTi circuit
-            qubit_conversion = {circuit._qbit_argument_conversion(i)[0]: f'Q{i}' for i in range(circuit.num_qubits)} # in Qiskit 1.1.1, the method is called qbit_argument_conversion. In Qiskit >=1.2 (as far as Noah can tell), the method is called _qbit_argument_conversion.
+            qubit_conversion = {circuit._qbit_argument_conversion(i)[0]: f'Q{i}' for i in range(circuit.num_qubits)}
+            # ^ in Qiskit 1.1.1, the method is called qbit_argument_conversion. In Qiskit >=1.2 (as far as Noah can tell),
+            #   the method is called _qbit_argument_conversion.
 
             qubit_idx_conversion = {i: f'Q{i}' for i in range(circuit.num_qubits)}
 
@@ -4582,11 +4593,11 @@ class Circuit(object):
 
 
     def convert_to_qiskit(self,
-                          num_qubits: int = None,
-                          qubit_conversion: Optional[Union[str, Dict[str, Union[int, qiskit.circuit.Qubit]]]] = None,
+                          num_qubits: Optional[int] = None,
+                          qubit_conversion: Union[None, str, Dict[str, Union[int, qiskit.circuit.Qubit]]] = None,
                           gatename_conversion: Optional[Dict[str, qiskit.circuit.Instruction]] = None,
                           block_between_layers: bool = True,
-                          qubits_to_measure: Optional[Union[str, List[str]]] = None,
+                          qubits_to_measure: Union[None, str, List[str]] = None,
                           ) -> qiskit.QuantumCircuit:
 
         """
@@ -5010,7 +5021,7 @@ class CompressedCircuit(object):
         takes more time but could result in better compressing.
     """
 
-    def __init__(self, circuit: Circuit, min_len_to_compress:Optional[int]=20, max_period_to_look_for:Optional[int]=20):
+    def __init__(self, circuit: Circuit, min_len_to_compress:int=20, max_period_to_look_for:int=20):
         """
         Create a new CompressedCircuit object
 
@@ -5020,11 +5031,11 @@ class CompressedCircuit(object):
             The operation sequence object which is compressed to create
             a new CompressedCircuit object.
 
-        min_len_to_compress : int, optional
+        min_len_to_compress : int
             The minimum length string to compress.  If len(circuit)
             is less than this amount its tuple is returned.
 
-        max_period_to_look_for : int, optional
+        max_period_to_look_for : int
             The maximum period length to use when searching for periodic
             structure within circuit.  Larger values mean the method
             takes more time but could result in better compressing.
@@ -5088,11 +5099,11 @@ class CompressedCircuit(object):
         circuit : tuple of operation labels or Circuit
             The operation sequence to compress.
 
-        min_len_to_compress : int, optional
+        min_len_to_compress : int
             The minimum length string to compress.  If len(circuit)
             is less than this amount its tuple is returned.
 
-        max_period_to_look_for : int, optional
+        max_period_to_look_for : int
             The maximum period length to use when searching for periodic
             structure within circuit.  Larger values mean the method
             takes more time but could result in better compressing.

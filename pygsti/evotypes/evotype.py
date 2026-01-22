@@ -25,9 +25,10 @@ class Evotype(object):
         in order to get a performance gain.
     """
     default_evotype = None
-    Castable = Union['Evotype',
-                     Literal['default'],
-                     str] # Type alias to be used for type checking.
+    Castable = Union['Evotype', Literal[
+        'default', 'chp', 'densitymx', 'densitymx_slow',
+        'stabilizer', 'stabilizer_slow', 'statevec', 'statevec_slow'
+    ]]
 
     _reptype_to_attrs = {
         'dense superop': 'OpRepDenseSuperop',
