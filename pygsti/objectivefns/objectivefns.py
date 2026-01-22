@@ -5794,16 +5794,20 @@ def _errorgen_penalty_size(mdl):
     return 1
 
 
-CPTP_PENALTY_SHIFT = 1e-6
+
+NEG_EIG_PENALTY_USE_SQRT   = True
+# ^ If we omit the sqrt (i.e., set this to False), then the regularization is
+#   twice-differentiable. The regularization strength needed to acheive similar
+#   effects encouraging PSD-ness will be different depending on if this is True.
+NEG_EIG_PENALTY_SQRT_SHIFT = 1e-6
+# ^ Only relevant if NEG_EIG_PENALTY_USE_SQRT is True. This keeps the derivative
+#   of the penality bounded when we're close to the PSD cone.
 
 
-def _cptp_penalty(mdl, prefactor, op_basis, shift=CPTP_PENALTY_SHIFT):
+def _cptp_penalty(mdl, prefactor, op_basis):
     """
-    Helper function - CPTP penalty: (sum of tracenorms of gates),
-    which in least squares optimization means returning an array
-    of the sqrt(tracenorm) of each gate.
-
-    F(herm_mx) = -sqrt( 1 + -Tr(proj herm_mx onto NSD cone ) ).
+    Helper function - CPTP penalty: sum of (negated) negative
+    choi eigenvalues; compute for each gate.
 
     Returns
     -------
@@ -5814,16 +5818,18 @@ def _cptp_penalty(mdl, prefactor, op_basis, shift=CPTP_PENALTY_SHIFT):
     for op in mdl.operations.values():
         val = _tools.sum_of_negative_choi_eigenvalues_gate(op.to_dense('HilbertSchmidt'), op_basis)
         per_gate_penalties.append(val)
-    lsvec = (shift + _np.array(per_gate_penalties)) ** 0.5
+    lsvec = _np.array(per_gate_penalties)
+    if NEG_EIG_PENALTY_USE_SQRT:
+        lsvec = (NEG_EIG_PENALTY_SQRT_SHIFT + lsvec) ** 0.5
     lsvec *= prefactor
     return lsvec
 
 
-def _spam_penalty(mdl, prefactor, op_basis, shift=CPTP_PENALTY_SHIFT):
+def _spam_penalty(mdl, prefactor, op_basis):
     """
-    Helper function - CPTP penalty: (sum of tracenorms of gates),
-    which in least squares optimization means returning an array
-    of the sqrt(tracenorm) of each gate.
+    Helper function - CPTP penalty: sum of (negated) negative
+    eigenvalues of Hermitian matrices that should be psd;
+    compute one for each Hermitian matrix across preps and POVMs.
 
     Returns
     -------
@@ -5849,7 +5855,9 @@ def _spam_penalty(mdl, prefactor, op_basis, shift=CPTP_PENALTY_SHIFT):
         s = -_np.sum(v[v < 0])
         penalties.append(s)
 
-    penalties = (shift + _np.array(penalties)) ** 0.5
+    penalties = _np.array(penalties)
+    if NEG_EIG_PENALTY_USE_SQRT:
+        penalties = (NEG_EIG_PENALTY_SQRT_SHIFT + penalties) ** 0.5
     penalties *= prefactor
     return penalties
 
@@ -5883,19 +5891,20 @@ def _paramvec_norm_penalty(reg_factor, paramvec):
     return out
 
 
-def _grad_of_root_neg_sum_neg_eigvals(herm_mx: _np.ndarray, shift=CPTP_PENALTY_SHIFT) -> _np.ndarray:
+def _grad_of_neg_sum_neg_eigvals(herm_mx: _np.ndarray) -> _np.ndarray:
     """
     Computes the gradient of the function F that maps a Hermitian matrix to its
-    projection onto the negative semidefinite cone, then takes the trace, negates,
-    and takes a square root of that (negated) sum.
+    projection onto the negative semidefinite cone, then takes the trace and negates.
+
+    If the parent-scope variable NEG_EIG_PENALTY_USE_SQRT is True, then the returned
+    gradient is for sqrt(NEG_EIG_PENALTY_SQRT_SHIFT + F(herm_mx)), rather than
+    for F(herm_mx).
 
     Strictly speaking, this only returns a subgradient of F. If all eigenvalues
     of herm_mx are distinct then the subgradient is unique.
 
     If the computed subgradient is zero, then we return an empty array of size
     zero.
-
-    What if F(herm_mx) = -sqrt( 1 + -Tr(proj herm_mx onto NSD cone ) ).
     """
     U, v, _  = _tools.eigendecomposition(herm_mx, assume_hermitian=True)
     selector = v < 0
@@ -5904,21 +5913,24 @@ def _grad_of_root_neg_sum_neg_eigvals(herm_mx: _np.ndarray, shift=CPTP_PENALTY_S
         return _np.empty((0,))
     U =  U[:, selector].reshape((-1, num_neg))
     G = -U @ U.T.conj()   # shape = (dim, dim)
-    G *= 0.5/_np.sqrt(shift + (_np.sum(-v[selector])))  # handles the sqrt() wrap.
+    if NEG_EIG_PENALTY_USE_SQRT:
+        G *= 0.5/_np.sqrt(NEG_EIG_PENALTY_SQRT_SHIFT + (_np.sum(-v[selector])))  # handles the sqrt() wrap.
     return G
 
 
 def _cptp_penalty_jac_fill(cp_penalty_vec_grad_to_fill, mdl, prefactor, op_basis, wrt_slice):
     """
-    Helper function - jacobian of CPTP penalty (sum of tracenorms of gates)
-    Returns a (real) array of shape (len(mdl.operations), n_params).
+    Helper function - jacobian of CPTP penalty map. This writes directly to the first
+    len(mdl.operations) rows of cp_penalty_vec_grad_to_fill.
+
+    Returns len(mdl.operations).
     """
     for i, gate in enumerate(mdl.operations.values()):
         cp_penalty_vec_grad_to_fill[i, :] = 0
         # Step 1: gradient of sqrt(-Trace(projection of choi mx onto the negative semidefinite cone)).
         mx    = gate.to_dense('HilbertSchmidt')
         J     = _tools.fast_jamiolkowski_iso_std(mx, op_basis, normalized=True)
-        dFdJ  = _grad_of_root_neg_sum_neg_eigvals(J)
+        dFdJ  = _grad_of_neg_sum_neg_eigvals(J)
         if dFdJ.size == 0:
             continue
 
@@ -5948,7 +5960,7 @@ def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl, prefactor, op_bas
         #   ---> Short-circuit steps 2 and 3 if the gradient is zero.
         vec = herm_mm.to_dense('HilbertSchmidt')
         mx  = _tools.vec_to_stdmx(vec, op_basis, keep_complex=True)
-        dF_dmx = _grad_of_root_neg_sum_neg_eigvals(mx)
+        dF_dmx = _grad_of_neg_sum_neg_eigvals(mx)
         if dF_dmx.size == 0:
             return
 
