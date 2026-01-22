@@ -20,6 +20,7 @@ from pygsti.baseobjs import statespace as _statespace
 from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.tools import jamiolkowski as _jt
 from pygsti.tools import basistools as _bt
+from pygsti.tools import matrixtools as _mt
 from pygsti import SpaceT
 
 IMAG_TOL = 1e-7
@@ -76,21 +77,20 @@ class FullCPTPOp(_KrausOperatorInterface, _LinearOperator):
         if not _np.isclose(trc, 1.0):  # truncate to trace == 1
             choi_mx -= _np.identity(dim, 'd') / dim * (trc - 1.0)
 
-        #push any slightly negative evals of density_mx positive
+        # push any slightly negative evals of density_mx positive
         # so that the Cholesky decomp will work.
-        evals, U = _np.linalg.eig(choi_mx)
-        Ui = _np.linalg.inv(U)
+        U, evals, Ui = _mt.eigendecomposition(choi_mx, assume_hermitian=True)
 
         assert(truncate or all([ev >= -1e-12 for ev in evals])), \
             "`choi_mx` must be positive (truncate == False)!"
 
         pos_evals = evals.clip(1e-16, 1e100)
-        choi_mx = _np.dot(U, _np.dot(_np.diag(pos_evals), Ui))
+        choi_mx = U @ _np.diag(pos_evals) @ Ui
         try:
             Lmx = _np.linalg.cholesky(choi_mx)
         except _np.linalg.LinAlgError:  # Lmx not postitive definite?
             pos_evals = evals.clip(1e-12, 1e100)  # try again with 1e-12
-            choi_mx = _np.dot(U, _np.dot(_np.diag(pos_evals), Ui))
+            choi_mx = U @ _np.diag(pos_evals) @ Ui
             Lmx = _np.linalg.cholesky(choi_mx)
 
         #check TP condition: that diagonal els of Lmx squared add to 1.0
@@ -134,7 +134,7 @@ class FullCPTPOp(_KrausOperatorInterface, _LinearOperator):
     def _update_kraus_rep(self):
         choi_mx = self._get_choi_mx_from_params(); d = self.state_space.udim
         choi_mx = _bt.change_basis(choi_mx, self._basis, _Basis.cast('std', choi_mx.shape[0]))
-        evals, evecs = _np.linalg.eig(choi_mx * d)  # 'un-normalize' choi_mx so that:
+        evals, evecs = _np.linalg.eigh(choi_mx * d)  # 'un-normalize' choi_mx so that:
         # op(rho) = sum_IJ choi_IJ BI rho BJ_dag is true (assumed for kraus op construction below)
 
         assert(all([ev > -1e-7 for ev in evals])), "Failed Kraus decomp - Choi mx must not be positive!"

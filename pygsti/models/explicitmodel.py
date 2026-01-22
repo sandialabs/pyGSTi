@@ -51,6 +51,8 @@ from pygsti.tools import slicetools as _slct
 from pygsti.tools import listtools as _lt
 from pygsti import SpaceT
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
+from pygsti.tools.exceptions import UnknownGaugeSpaceDimension as _UnknownGaugeSpaceDimension
+
 
 
 class ExplicitOpModel(_mdl.OpModel):
@@ -578,6 +580,42 @@ class ExplicitOpModel(_mdl.OpModel):
         instSize = [i.num_elements for i in self.instruments.values()]
         #Don't count self.factories?
         return sum(rhoSize) + sum(povmSize) + sum(opSize) + sum(instSize)
+
+    @property
+    def num_modeltest_params(self) -> int:
+        """
+        The parameter count to use when testing this model against data.
+
+        Often times, this is the same as :meth:`num_params`, but there are times
+        when it can convenient or necessary to use a parameter count different than
+        the actual number of parameters in this model.
+        """
+        if not hasattr(self, '_num_modeltest_params'):
+            self._num_modeltest_params = None
+
+        if self._num_modeltest_params is not None:
+            return self._num_modeltest_params
+
+        from pygsti.models.model import MEMLIMIT_FOR_NONGAUGE_PARAMS
+        if MEMLIMIT_FOR_NONGAUGE_PARAMS is not None:
+            # We'd like to return self.num_nongauge_params, but accessing that property
+            # performs a memory-intensive computation in ExplicitOpModelCalc._buildup_dpg.
+            # If we have inadequate memory then we skip that computation.
+            buildup_dpg_mem = _np.dtype('d').itemsize * (self.num_params + self.state_space.dim**2)
+            buildup_dpg_mem *= self.num_elements  # type: ignore
+            if buildup_dpg_mem > MEMLIMIT_FOR_NONGAUGE_PARAMS:
+                _warnings.warn(("ExplicitOpModel.num_modeltest_params did not compute number of *non-gauge* parameters - "
+                                "using total (make MEMLIMIT_FOR_NONGAUGE_PARAMS larger if you really want "
+                                "the count of nongauge params)"), _UnknownGaugeSpaceDimension)
+                return self.num_params
+
+        try:
+            return self.num_nongauge_params
+        except:  # numpy can throw a LinAlgError or sparse cases can throw a NotImplementedError
+            _warnings.warn(("ExplicOpModel.num_modeltest_params could not obtain number of *non-gauge* parameters"
+                            " - using total instead"), _UnknownGaugeSpaceDimension)
+            return self.num_params
+
 
     @property
     def num_nongauge_params(self):
@@ -1474,11 +1512,9 @@ class ExplicitOpModel(_mdl.OpModel):
         print("Basis = ", self.basis.name)
         print("Choi Matrices:")
         for (label, gate) in self.operations.items():
-            print(("Choi(%s) in pauli basis = \n" % label,
-                   _mt.mx_to_string_complex(_jt.jamiolkowski_iso(gate))))
-            print(("  --eigenvals = ", sorted(
-                [ev.real for ev in _np.linalg.eigvals(
-                    _jt.jamiolkowski_iso(gate))]), "\n"))
+            jmx : _np.ndarray = _jt.jamiolkowski_iso(gate) # type: ignore
+            print(("Choi(%s) in pauli basis = \n" % label, _mt.mx_to_string_complex(jmx)))
+            print(("  --eigenvals = ", sorted(_mt.eigenvalues(jmx, assume_hermitian=True).tolist()), "\n"))
         print(("Sum of negative Choi eigenvalues = ", _jt.sum_of_negative_choi_eigenvalues(self)))
 
     def _effect_labels_for_povm(self, povm_lbl):

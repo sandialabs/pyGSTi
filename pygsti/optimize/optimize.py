@@ -178,7 +178,8 @@ def minimize(fn, x0, method='cg', callback=None,
         # with different settings.
         solution = _spo.minimize(fn, x0, method=method, options=opts, tol=tol, callback=callback, jac=jac)
         if not solution.success:
-            tempsol = _spo.minimize(fn, x0, method='COBYLA', options=opts)
+            opts_cobyla = {k: v for (k, v) in opts.items() if (k not in ('gtol', 'ftol'))}
+            tempsol = _spo.minimize(fn, x0, method='COBYLA', options=opts_cobyla)
             # ^ It's wise to pass through `opts` in case it contains bound constraints.
             if not hasattr(jac, '__call__'):
                 jac = '3-point'  # more expensive than the default 2-point finite-difference, but more reliable.

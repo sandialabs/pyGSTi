@@ -177,7 +177,7 @@ def choi_eigenvalues(gate, mx_basis):
     numpy.ndarray
     """
     choi = _tools.jamiolkowski_iso(gate, mx_basis, mx_basis)
-    choi_eigvals = _np.linalg.eigvals(choi)
+    choi_eigvals = _tools.eigenvalues(choi, assume_hermitian=True)
     return _np.array(sorted(choi_eigvals))
 
 
@@ -237,7 +237,10 @@ class GateEigenvalues(_modf.ModelFunction):
         -------
         numpy.ndarray
         """
-        evals, evecs = _np.linalg.eig(model.operations[self.oplabel].to_dense("HilbertSchmidt"))
+        mx = model.operations[self.oplabel].to_dense("HilbertSchmidt")
+        evals, evecs = _np.linalg.eig(mx)
+        # ^ NOTE: the use of eig is intentional. We can't assume mx is
+        #   Hermitian, or even normal.
 
         ev_list = list(enumerate(evals))
         ev_list.sort(key=lambda tup: abs(tup[1]), reverse=True)
@@ -304,6 +307,8 @@ class CircuitEigenvalues(_modf.ModelFunction):
         """
         Mx = model.sim.product(self.circuit)
         evals, evecs = _np.linalg.eig(Mx)
+        # ^ NOTE: the use of eig is intentional. We can't assume Mx is
+        #   Hermitian, or even normal.
 
         ev_list = list(enumerate(evals))
         ev_list.sort(key=lambda tup: abs(tup[1]), reverse=True)
@@ -1424,7 +1429,7 @@ def eigenvalue_unitarity(a, b):
     try:
         Lambda = _np.dot(a, _np.linalg.inv(b))
         d2 = Lambda.shape[0]
-        lmb = _np.linalg.eigvals(Lambda)
+        lmb = _np.linalg.eigvals(Lambda)  # intentionally use eigvals rather than eigvalsh.
         return float(_np.real(_np.linalg.norm(lmb)**2) - 1.0) / (d2 - 1.0)
     except _np.linalg.LinAlgError as e:
         _warnings.warn(str(e))
@@ -1598,9 +1603,9 @@ def eigenvalue_entanglement_infidelity(
     if is_tp is None:
         is_tp = _tools.is_trace_preserving(a, mx_basis, tol) and _tools.is_trace_preserving(b, mx_basis, tol) 
 
-    if is_unitary and is_tp and (not mx_basis.implies_leakage_modeling):
-        evA = _np.linalg.eigvals(a)
-        evB = _np.linalg.eigvals(b)
+    if is_unitary and is_tp:
+        evA = _tools.eigenvalues(a)
+        evB = _tools.eigenvalues(b, assume_normal=True)
         _, pairs = _tools.minweight_match(evA, evB, lambda x, y: abs(x - y),
                                         return_pairs=True)  # just to get pairing
         fid = abs(_np.sum([_np.conjugate(evB[j]) * evA[i] for i, j in pairs])) / d2
@@ -1843,7 +1848,7 @@ def rel_eigenvalues(a, b, mx_basis):
     """
     try:
         target_op_inv = _np.linalg.inv(b)
-        rel_op = _np.dot(target_op_inv, a)
+        rel_op = target_op_inv @ a
         return _np.linalg.eigvals(rel_op).astype("complex")  # since they generally *can* be complex
     except _np.linalg.LinAlgError as e:
         _warnings.warn(str(e))
@@ -1874,7 +1879,7 @@ def rel_log_tig_eigenvalues(a, b, mx_basis):
     numpy.ndarray
     """
     rel_op = _tools.error_generator(a, b, mx_basis, "logTiG")
-    return _np.linalg.eigvals(rel_op).astype("complex")  # since they generally *can* be complex
+    return _tools.eigenvalues(rel_op).astype("complex")  # since they generally *can* be complex
 
 
 Rel_logTiG_eigvals = _modf.opsfn_factory(rel_log_tig_eigenvalues)
@@ -2281,7 +2286,7 @@ def general_decomposition(model_a, model_b):
         targetOp = model_b.operations[gl].to_dense("HilbertSchmidt")
         gl = str(gl)  # Label -> str for decomp-dict keys
 
-        target_evals = _np.linalg.eigvals(targetOp)
+        target_evals = _tools.eigenvalues(targetOp)
         failed = False
         try:
             if _np.any(_np.isclose(target_evals, -1.0)):
@@ -2332,7 +2337,7 @@ def general_decomposition(model_a, model_b):
         # REMOVE hamMx = sum([s * c * bmx for s, c, bmx in zip(scalings, hamProjs, basis_mxs)])
         #really want hamProjs[i] * lindbladian_to_hamiltonian(hamGens[i]) but fn doesn't exists (yet)
         hamMx = sum([c * bmx for c, bmx in zip(hamProjs, basis_mxs)])
-        decomp[gl + ' hamiltonian eigenvalues'] = _np.array(_np.linalg.eigvals(hamMx))
+        decomp[gl + ' hamiltonian eigenvalues'] = _tools.eigenvalues(hamMx)
 
     for gl in opLabels:
         for gl_other in opLabels:
@@ -2534,7 +2539,7 @@ def vec_as_stdmx_eigenvalues(vec, mx_basis):
     numpy.ndarray
     """
     mx = _tools.vec_to_stdmx(vec, mx_basis)
-    return _np.linalg.eigvals(mx)
+    return _tools.eigenvalues(mx, assume_hermitian=True)
 
 
 Vec_as_stdmx_eigenvalues = _modf.vecfn_factory(vec_as_stdmx_eigenvalues)
