@@ -28,6 +28,7 @@ on:
 
 env:
   SKIP_DEAP: 1
+  PYGSTI_NO_CUSTOMLM_SIGINT: 1
 
 jobs:
   build-and-test:

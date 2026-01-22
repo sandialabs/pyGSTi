@@ -16,8 +16,6 @@ from ..testutils import BaseTestCase, compare_files, temp_files
 from pygsti.baseobjs import Label as L
 
 from pygsti.modelpacks.legacy import std1Q_XYI
-#from pygsti.io import enable_old_object_unpickling
-from pygsti.baseobjs._compatibility import patched_uuid
 
 def Ls(*args):
     """ Convert args to a tuple to Labels """
@@ -287,31 +285,6 @@ class TestGateSetMethods(GateSetTestCase):
                     
                 except MemoryError:
                     pass #OK - when memlimit is too small and splitting is unproductive
-
-    @unittest.skip("TODO: add backward compatibility for old gatesets?")
-    def test_load_old_gateset(self):
-        #pygsti.baseobjs.results.enable_old_python_results_unpickling()
-        from pygsti.io import enable_old_object_unpickling
-        with enable_old_object_unpickling(), patched_uuid():
-            with open(compare_files + "/pygsti0.9.6.gateset.pkl", 'rb') as f:
-                mdl = pickle.load(f)
-        #pygsti.baseobjs.results.disable_old_python_results_unpickling()
-        #pygsti.io.disable_old_object_unpickling()
-        with open(temp_files + "/repickle_old_gateset.pkl", 'wb') as f:
-            pickle.dump(mdl, f)
-
-        with enable_old_object_unpickling("0.9.7"), patched_uuid():
-            with open(compare_files + "/pygsti0.9.7.gateset.pkl", 'rb') as f:
-                mdl = pickle.load(f)
-        with open(temp_files + "/repickle_old_gateset.pkl", 'wb') as f:
-            pickle.dump(mdl, f)
-
-        #OLD: we don't do this anymore (_calcClass has been removed)
-        #also test automatic setting of _calcClass
-        #mdl = self.model.copy()
-        #del mdl._calcClass
-        #c = mdl._fwdsim() #automatically sets _calcClass
-        #self.assertTrue(hasattr(mdl,'_calcClass'))
 
     def test_ondemand_probabilities(self):
         #First create a "sparse" dataset
