@@ -4977,12 +4977,8 @@ class Circuit(object):
         cpy = self.copy(editable=True)
         for layer_num in range(self.num_layers):
             layer = cpy.layer(layer_num)
-            tmp = {}
-            for gate in layer:
-                tmp[gate.qubits] = gate
-            tmp2 = []
-            for key in sorted(tmp.keys()):
-                tmp2.append(tmp[key])
+            tmp1 = { lbl.sslbls: lbl for lbl in layer }
+            tmp2 = [ tmp1[k] for k in sorted(tmp1.keys()) ]
             cpy[layer_num] = tmp2
         
         cpy.in_canonical_form = True
