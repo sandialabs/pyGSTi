@@ -16,7 +16,7 @@ import scipy.sparse.linalg as _spsl
 import scipy as _scp
 from . import matrixtools as _mt
 from . import optools as _ot
-
+import re as _re
 
 def first_order_gauge_action_matrix(clifford_superop_mx, target_sslbls, model_state_space,
                                     elemgen_gauge_basis, elemgen_row_basis):
@@ -475,7 +475,8 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
         for egname, egname_abbrev in zip(errgen_names, errgen_names_abbrev):
             egname_with_op = "%s_%s" % ((("(%s)" % egname) if (' ' in egname) else egname),
                                         op_label_abbrevs.get(op_label, str(op_label)))
-            fogi_meta.append({'name': egname_with_op, 'abbrev': egname_abbrev, 'r': 0,
+            #regular expression that removes all coefficients
+            fogi_meta.append({'name': egname_with_op, 'abbrev': egname_abbrev,'r': 0,
                               'gaugespace_dir': None, 'opset': (op_label,)})
 
         complement = _mt.nice_nullspace(commutant.T,

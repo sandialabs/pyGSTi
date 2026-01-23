@@ -8,9 +8,11 @@ from pygsti.tools.modelselectiontools import create_red_model, reduced_model_app
 from pygsti.tools.modelselectiontools import parallel_GST as _parallel_GST, AMSCheckpoint as _AMSCheckpoint, remove_param, remove_params, create_approx_logl_fn
 from pygsti.tools.modelselectiontools import random_jumps_logl_GST, NON_CP_THRESHOLD
 from pygsti.tools.modelselectiontools import custom_builder as _custom_builders, AMSGreedyResult as _AMSGreedyResult, better_model as _better_model
-from pygsti.tools.modelselectiontools import custom_optimizers as _custom_optimizers
+from pygsti.tools.modelselectiontools import custom_optimizers as _custom_optimizers, custom_fit_heuristic as _custom_fit_heuristic
 import os as _os
 from pygsti.tools import sum_of_negative_choi_eigenvalues as non_cp_metric
+
+
 
 
 def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, maxiter=100, tol=1.0, prob_clip=1e-3, recompute_H_thresh_percentage = 1, disable_checkpoints = False, checkpoint = None, comm = None, mem_limit = None, recomp_interval=1e10):
@@ -455,7 +457,8 @@ def do_greedy_from_full_exact(initial_model, data, er_thresh=2.0, verbosity=2, m
             if skip_initial_GST:
                 deltalogl_fn.model.from_vector(initial_model.to_vector().copy())
             else:
-                deltalogl_fn.model.from_vector(_parallel_GST(initial_model, data, builders, optimizers, verbosity).to_vector().copy())
+
+                deltalogl_fn.model.from_vector(_custom_fit_heuristic(initial_model.copy(), data, builders, optimizers, cptp_penalty, verbosity))
         
         if comm is not None:
             deltalogl_fn.model.from_vector(comm.bcast(deltalogl_fn.model.to_vector(), root = 0))
@@ -486,29 +489,9 @@ def do_greedy_from_full_exact(initial_model, data, er_thresh=2.0, verbosity=2, m
         chunk_range = range(rank*bucket_size, (rank+1)*bucket_size)
         level_chunk = []
         for i in chunk_range:
+            
             candidate_model = remove_param(reduced_model, i, zero=False)
-            candidate_model_zero = remove_param(reduced_model, i, zero=True)
-            assert np.linalg.norm(candidate_model.to_vector()) != 0
-            for l in range(candidate_model.num_params):
-                if l < i:
-                    assert np.allclose(reduced_model.to_vector()[l], candidate_model.to_vector()[l])
-                if l>=i:
-                    assert np.allclose(reduced_model.to_vector()[l+1], candidate_model.to_vector()[l])
-            candidate_model_fit = _parallel_GST(candidate_model, data, builders, optimizers, verbosity=0) 
-            candidate_model_zero_fit = _parallel_GST(candidate_model_zero, data, builders, optimizers, verbosity=0) 
-            candidate_model = _better_model(candidate_model_fit, candidate_model_zero_fit, data.dataset)
-            random_jump_model = random_jumps_logl_GST(data, candidate_model, cptp_penalty, optimizer=optimizers[-1])
-
-            deltalogl_fn.model = _better_model(random_jump_model, candidate_model, data.dataset).copy()
-
-            #if not np.allclose(candidate_model.to_vector(), deltalogl_fn.model.to_vector()):
-                    #print('Random jump found a better model')
-            candidate_model = None
-            candidate_model_fit = None
-            candidate_model_zero = None
-            candidate_model_zero_fit = None
-            random_jump_model = None
-
+            deltalogl_fn.model = _custom_fit_heuristic(candidate_model, data, builders, optimizers, cptp_penalty, verbosity)
 
             quantity = (deltalogl_fn.fn()- prev_dlogl)*2
             non_cpness = non_cp_metric(deltalogl_fn.model)
@@ -530,21 +513,9 @@ def do_greedy_from_full_exact(initial_model, data, er_thresh=2.0, verbosity=2, m
             
             i = left_over_start_index + rank 
             candidate_model = remove_param(reduced_model, i, zero=False)
-            candidate_model_zero = remove_param(reduced_model, i, zero=True)
-            candidate_model_fit = _parallel_GST(candidate_model, data, builders, optimizers, verbosity=0) 
-            candidate_model_zero_fit = _parallel_GST(candidate_model_zero, data, builders, optimizers, verbosity=0) 
+            
 
-            candidate_model = _better_model(candidate_model_fit, candidate_model_zero_fit, data.dataset)
-            random_jump_model = random_jumps_logl_GST(data, candidate_model, cptp_penalty, optimizer=optimizers[-1])
-
-            deltalogl_fn.model = _better_model(random_jump_model, candidate_model, data.dataset).copy()
-
-            candidate_model = None
-            candidate_model_fit = None
-            candidate_model_zero = None
-            candidate_model_zero_fit = None
-            random_jump_model = None
-
+            deltalogl_fn.model = _custom_fit_heuristic(candidate_model, data, builders, optimizers, cptp_penalty, verbosity)
             quantity = (deltalogl_fn.fn()- prev_dlogl)*2
             if  verbosity > 1:
                 if i  % 1 == 0:

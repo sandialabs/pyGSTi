@@ -13,6 +13,7 @@ Defines the FirstOrderGaugeInvariantStore class and supporting functionality.
 import numpy as _np
 import scipy.sparse as _sps
 import copy as _copy
+import re as _re
 from pygsti.baseobjs import Basis as _Basis
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools import slicetools as _slct
@@ -246,6 +247,7 @@ class FirstOrderGaugeInvariantStore(_NicelySerializable):
         for j, meta in enumerate(fogi_metadata):
             meta['raw'] = _fogit.op_elem_vec_name(fogi_directions[:, j], errorgen_space_op_elem_labels,
                                                   op_label_abbrevs if (op_label_abbrevs is not None) else {})
+            meta['unweighted']  = _re.sub(r'(?<!:)\d+|\.','', meta['raw'])
 
         assert(len(errorgen_space_op_elem_labels) == fogi_directions.shape[0])
 
@@ -481,6 +483,7 @@ class FirstOrderGaugeInvariantStore(_NicelySerializable):
         if typ == 'normal': return tuple([meta['name'] for meta in self.fogi_metadata])
         elif typ == 'raw': return tuple([meta['raw'] for meta in self.fogi_metadata])
         elif typ == 'abbrev': return tuple([meta['abbrev'] for meta in self.fogi_metadata])
+        elif typ == 'unweighted': return tuple([meta['unweighted'] for meta in self.fogi_metadata])
         else: raise ValueError("Invalid `typ` argument: %s" % str(typ))
 
     def fogv_errorgen_direction_labels(self, typ='normal'):

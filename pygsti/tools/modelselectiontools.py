@@ -100,6 +100,16 @@ class AMSGreedyResult(_NicelySerializable):
             
         else:
             return create_red_model(self.full_model, self.embedder_matrix, vec=self.trace[-1][0])
+    
+    def compare_parameters(self, hide_gauge=True):
+
+        num_fogis = self.full_model.fogi_store.fogi_directions.shape[1]
+        num_gauge = self.full_model.num_params - num_fogis
+        print('This table omits gauge directions')
+        if hide_gauge:
+            compare_parameters_simple(self.trace[0][0][:num_fogis], self.trace[-1][0][:-num_gauge],  self.embedder_matrix[:num_fogis])
+        else:
+            compare_parameters_simple(self.trace[0][0], self.trace[-1][0], self.embedder_matrix)
 
 
 class AMSCheckpoint(_NicelySerializable):
@@ -459,6 +469,22 @@ def random_jumps_logl_GST(data, seed_model, cptp_penalty, min_prob_clip=1e-7, op
             best_model = better_model(best_model, model_fit2, data.dataset)
     return best_model
 
+def custom_fit_heuristic(candidate_model, data, builders, optimizers, cptp_penalty, verbosity):
+
+    best_model = None
+    candidate_model_zero = candidate_model.copy()
+    candidate_model_zero.from_vector(_np.zeros(candidate_model.num_params))
+
+    candidate_model_fit = parallel_GST(candidate_model, data, builders, optimizers, verbosity=verbosity) 
+    candidate_model_zero_fit = parallel_GST(candidate_model_zero, data, builders, optimizers, verbosity=verbosity) 
+    best_model = better_model(candidate_model_fit, candidate_model_zero_fit, data.dataset)
+    random_jump_model = random_jumps_logl_GST(data, best_model, cptp_penalty, optimizer=optimizers[-1])
+
+    candidate_model_zero.from_vector(_np.zeros(candidate_model.num_params))
+    random_jump_from_target_model = random_jumps_logl_GST(data, candidate_model_zero, cptp_penalty, optimizer=optimizers[-1])
+
+    return better_model(better_model(random_jump_model, candidate_model, data.dataset), random_jump_from_target_model, data.dataset)
+
 def create_red_model(parent_model, embedder_matrix, vec=None, sim=None):
     """TODO
 
@@ -569,8 +595,11 @@ def compare_parameters_simple(parent_model_vec, red_model_vec, embedder_matrix):
             table_data.append([parent_model_vec[i], red_model_vec[j]])
             j += 1
     assert len(red_model_vec) == j
-    for row in table_data:
-        print("{: <25} {: <25}".format(*row), '\n')
+    for l, row in enumerate(table_data):
+        if l == 0:
+            print("   {: <25} {: <25}".format(*row), '\n')
+        else:
+            print(str(l-1)+"   {: <25} {: <25}".format(*row), '\n')
 
 def ams_results_table(trace, ev_ratio_costs, extra_column=None):
     reducer = create_embedder_matrix_from_trace(trace).T
