@@ -1137,31 +1137,28 @@ class LindbladCoefficientBlock(_NicelySerializable):
     def _superop_deriv_wrt_params_ham(self, superops):
         if self._param_mode == 'elements':
             # d/dp_k of H‐term superop = the k’th superop itself
-            return superops.transpose((1, 2, 0))
+            return superops.transpose((1, 2, 0)) # PRETRANS, this was:
+            # _np.einsum("ik,akl,lj->ija", self.leftTrans, self.hamGens, self.rightTrans)
         else:
             raise InvalidParamModeError(self._param_mode, self._block_type)
 
     def _superop_deriv_wrt_params_otherdiag(self, superops, v):
         transposed = _np.transpose(superops, (1, 2, 0))  # shape = (d, d, nBEL)
 
-        if self._param_mode == 'depol':
-            # all coeffs = p^2, so d/dp = 2 p * sum_m superops[m]
-            base = _np.sum(transposed, axis=2)  # shape (d,d)
-            return base[:, :, None] * 2.0 * v[0]
-
-        elif self._param_mode == 'reldepol':
-            # all coeffs = p, so d/dp = sum_m superops[m]
-            base = _np.sum(transposed, axis=2)
-            return base[:, :, None] * 1.0
-
-        elif self._param_mode == 'cholesky':
-            # coeffs = p_i^2, so d/dp_i = 2 p_i * superops[i]
-            return transposed * (2.0 * v)[None, None, :]
-
-        elif self._param_mode == 'elements':
-            # coeffs = p_i, so d/dp_i = superops[i]
+        # Derivative of exponent wrt other param; shape == [dim,dim,bs-1]
+        #  except "depol" & "reldepol" cases, when shape == [dim,dim,1]
+        if self._param_mode == "depol":  # all coeffs same & == param^2
+            # dOdp  = _np.einsum('alj->lj', self.otherGens)[:,:,None] * 2*otherParams[0]
+            return _np.sum(transposed, axis=2)[:, :, None] * 2 * v[0]
+        elif self._param_mode == "reldepol":  # all coeffs same & == param
+            # dOdp  = _np.einsum('alj->lj', self.otherGens)[:,:,None]
+            return _np.sum(transposed, axis=2)[:, :, None]
+        elif self._param_mode == "cholesky":  # (coeffs = params^2)
+            # dOdp  = _np.einsum('alj,a->lja', self.otherGens, 2*otherParams)
+            return transposed * 2 * v  # just a broadcast
+        elif self._param_mode == "elements":  # "unconstrained" (coeff == params)
+            # dOdp  = _np.einsum('alj->lja', self.otherGens)
             return transposed
-
         else:
             raise InvalidParamModeError(self._param_mode, self._block_type)
 
@@ -1179,11 +1176,12 @@ class LindbladCoefficientBlock(_NicelySerializable):
             F1 = _np.tril(_np.ones((num_bels, num_bels), 'd'))
             F2 = _np.triu(_np.ones((num_bels, num_bels), 'd'), 1) * 1j
 
-            # using Einstein sums to build ∂O/∂p_{ab}
-            dOdp  = _np.einsum('amlj,mb,ab->ljab', superops, Lbar, F1)
-            dOdp += _np.einsum('malj,mb,ab->ljab', superops,   L, F1)
-            dOdp += _np.einsum('bmlj,ma,ab->ljab', superops, Lbar, F2)
-            dOdp += _np.einsum('mblj,ma,ab->ljab', superops,   L, F2.conjugate())
+            # Derivative of exponent wrt other param; shape == [dim,dim,bel_index,bel_index]
+            # Note: replacing einsums here results in at least 3 numpy calls (probably slower?)
+            dOdp  = _np.einsum('amlj,mb,ab->ljab', superops, Lbar, F1)        # only a >= b nonzero (F1)
+            dOdp += _np.einsum('malj,mb,ab->ljab', superops,    L, F1)        # ditto
+            dOdp += _np.einsum('bmlj,ma,ab->ljab', superops, Lbar, F2)        # only b > a nonzero (F2)
+            dOdp += _np.einsum('mblj,ma,ab->ljab', superops,    L, F2.conj()) # ditto 
             return dOdp
 
         elif self._param_mode == 'elements':
@@ -1192,13 +1190,19 @@ class LindbladCoefficientBlock(_NicelySerializable):
             F1 = _np.tril(_np.ones((num_bels, num_bels), 'd'), -1)
             F2 = _np.triu(_np.ones((num_bels, num_bels), 'd'),  1) * 1j
 
-            # reorder superops so indices = (l,j,a,b)
-            AB_LJ = _np.transpose(superops, (2, 3, 0, 1))
-            BA_LJ = _np.transpose(superops, (2, 3, 1, 0))
+            # Derivative of exponent wrt other param; shape == [dim,dim,bs-1,bs-1]
+            # dOdp  = _np.einsum('ablj,ab->ljab', self.otherGens, F0) # a == b case
+            # dOdp += _np.einsum('ablj,ab->ljab', self.otherGens, F1)
+            #      += _np.einsum('balj,ab->ljab', self.otherGens, F1) # a > b (F1)
+            # dOdp += _np.einsum('balj,ab->ljab', self.otherGens, F2) 
+            #      -= _np.einsum('ablj,ab->ljab', self.otherGens, F2) # a < b (F2)
 
-            dOdp  = AB_LJ * F0[None, None, :, :]
-            dOdp += AB_LJ * F1[None, None, :, :] + BA_LJ * F1[None, None, :, :]
-            dOdp += BA_LJ * F2[None, None, :, :] - AB_LJ * F2[None, None, :, :]
+            # reorder superops so indices = (l,j,a,b)
+            AB_LJ = _np.transpose(superops, (2, 3, 0, 1))  # ablj -> ljab
+            BA_LJ = _np.transpose(superops, (2, 3, 1, 0))  # balj -> ljab
+            dOdp  = AB_LJ * F0[None, None, :, :]                                 # a == b case
+            dOdp += AB_LJ * F1[None, None, :, :] + BA_LJ * F1[None, None, :, :]  # a > b (F1)
+            dOdp += BA_LJ * F2[None, None, :, :] - AB_LJ * F2[None, None, :, :]  # a < b (F2)
             return dOdp
 
         else:
