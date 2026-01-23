@@ -229,6 +229,32 @@ class LindbladCoefficientBlock(_NicelySerializable):
         else:
             raise InvalidParamModeError(self._param_mode, self._block_type)
 
+    def create_lindblad_term_superoperators(self, mx_basis='pp', sparse: Union[Literal['auto'], bool]="auto", include_1norms=False, flat=False):
+        assert(self._basis is not None), "Cannot create lindblad superoperators without a basis!"
+        basis = self._basis
+        sparse = basis.sparse if (sparse == "auto") else sparse
+        mxs = [basis[lbl] for lbl in self._bel_labels]
+        if len(mxs) == 0:
+            return ([], []) if include_1norms else []  # short circuit - no superops to return
+
+        d = mxs[0].shape[0]
+        d2 = d**2  # if mxs[0] is sparse, then d2 != mxs[0].size.
+        mx_basis = _Basis.cast(mx_basis, d2, sparse=sparse)
+
+        cache_key = (self._block_type, tuple(self._bel_labels), mx_basis, basis)
+        if cache_key not in self._superops_cache:
+            self._update_superops_cache(mxs, mx_basis, cache_key)
+        cached_superops, cached_superops_1norms = self._superops_cache[cache_key]
+
+        if flat or self._block_type in ('ham', 'other_diagonal'):
+            if include_1norms:
+                return _copy.deepcopy(cached_superops), cached_superops_1norms.copy()
+            else:
+                return _copy.deepcopy(cached_superops)
+
+        out = _unflatten_cached_other_lindblad_term_superoperators(cached_superops, cached_superops_1norms, include_1norms)
+        return out
+
     def _update_superops_cache(self, mxs, mx_basis, cache_key):
         d2 = mx_basis.dim
         sparse = mx_basis.sparse
@@ -255,32 +281,6 @@ class LindbladCoefficientBlock(_NicelySerializable):
 
         self._superops_cache[cache_key] = (superops, superop_1norms)
         return 
-
-    def create_lindblad_term_superoperators(self, mx_basis='pp', sparse: Union[Literal['auto'], bool]="auto", include_1norms=False, flat=False):
-        assert(self._basis is not None), "Cannot create lindblad superoperators without a basis!"
-        basis = self._basis
-        sparse = basis.sparse if (sparse == "auto") else sparse
-        mxs = [basis[lbl] for lbl in self._bel_labels]
-        if len(mxs) == 0:
-            return ([], []) if include_1norms else []  # short circuit - no superops to return
-
-        d = mxs[0].shape[0]
-        d2 = d**2  # if mxs[0] is sparse, then d2 != mxs[0].size.
-        mx_basis = _Basis.cast(mx_basis, d2, sparse=sparse)
-
-        cache_key = (self._block_type, tuple(self._bel_labels), mx_basis, basis)
-        if cache_key not in self._superops_cache:
-            self._update_superops_cache(mxs, mx_basis, cache_key)
-        cached_superops, cached_superops_1norms = self._superops_cache[cache_key]
-
-        if flat or self._block_type in ('ham', 'other_diagonal'):
-            if include_1norms:
-                return _copy.deepcopy(cached_superops), cached_superops_1norms.copy()
-            else:
-                return _copy.deepcopy(cached_superops)
-
-        out = _unflatten_cached_other_lindblad_term_superoperators(cached_superops, cached_superops_1norms, include_1norms)
-        return out
 
     def create_lindblad_term_objects(self, parameter_index_offset, max_polynomial_vars, evotype, state_space):
         mpv = max_polynomial_vars
@@ -1357,6 +1357,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
         if len(self._bel_labels) < 10:
             s += " Coefficients are:\n" + str(_np.round(self.block_data, 4))
         return s
+
 
 @lru_cache(maxsize=16)
 def cached_diag_indices(n):
