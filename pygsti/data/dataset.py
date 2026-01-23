@@ -30,6 +30,7 @@ from pygsti.baseobjs.label import Label as _Label
 from pygsti.tools import NamedDict as _NamedDict
 from pygsti.tools import listtools as _lt
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
+from pygsti.tools.exceptions import HashingEditableCircuitWarning as _HashingEditableCircuitWarning
 
 # import scipy.special as _sps
 # import scipy.fftpack as _fft
@@ -1412,9 +1413,13 @@ class DataSet(_MongoSerializable):
         if self.collisionAction == "keepseparate":
             if circuit in self.cirIndex:
                 tagged_circuit = circuit.copy(editable=True)
-                i = 1; tagged_circuit.occurrence = i
-                while tagged_circuit in self.cirIndex:
-                    i += 1; tagged_circuit.occurrence = i
+                with _warnings.catch_warnings():
+                    i = 1; tagged_circuit.occurrence = i
+                    _warnings.simplefilter('ignore', _HashingEditableCircuitWarning)
+                    # ^ We need that to suppress the warning in triggered from
+                    #   evaluation of `tagged_circuit in self.cirIndex`.
+                    while tagged_circuit in self.cirIndex:
+                        i += 1; tagged_circuit.occurrence = i
                 tagged_circuit.done_editing()
                 #add data for a new (duplicate) circuit
                 circuit = tagged_circuit
@@ -2967,8 +2972,7 @@ class DataSet(_MongoSerializable):
         else:
             f = file_or_filename
 
-        with _compat.patched_uuid():
-            state_dict = _pickle.load(f)
+        state_dict = _pickle.load(f)
 
         if "gsIndexKeys" in state_dict:
             _warnings.warn("Loading a deprecated-format DataSet.  Please re-save asap.")
