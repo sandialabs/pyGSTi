@@ -472,28 +472,48 @@ class CircuitMethodTester(BaseCase):
         self.assertEqual(c.depth, 3)
 
     def test_logically_equivalent_circuits_are_equal(self):
-        from pygsti.tools.warningtools import PoorPerformanceRuntimeWarning
+        from pygsti.tools.exceptions import PoorPerformanceWarning
         circ1 = circuit.Circuit([[("Gxpi2", 0), ("Gypi2", 1)]])
         circ2 = circuit.Circuit([[("Gypi2", 1), ("Gxpi2", 0)]])
 
+        self.assertFalse(circ1.in_canonical_form)
+        self.assertFalse(circ2.in_canonical_form)
         self.assertTrue(circ1 != circ2)
+        # ^ pre-(PR #684) behavior is preserved, since neither operand
+        #   in __eq__ has its `in_canonical_form` flag set to True.
 
-        canonical1 = circ1.canonicalize_circuit()
-        with self.assertWarns(PoorPerformanceRuntimeWarning):
+        canonical1 = circ1.canonicalized()
+        with self.assertWarns(PoorPerformanceWarning):
             self.assertTrue(canonical1 == circ1)
-        with self.assertWarns(PoorPerformanceRuntimeWarning):
+            # ^ canonical1's `in_canonical_form` flag is True, while
+            #   circ1's      `in_canonical_form` flag is False.
+            #
+            #   This triggers an out-of-place canonicalization
+            #   of circ1, and hence raises a performance warning.
+            #
+        self.assertTrue(canonical1.__hash__() == circ1.__hash__())
+        # ^ https://docs.python.org/3.11/reference/datamodel.html#object.__hash__
+        #   "The only required property is that objects which compare equal have
+        #    the same hash value."
+        #
+        
+        with self.assertWarns(PoorPerformanceWarning):
             self.assertTrue(canonical1 == circ2)
+        self.assertTrue(canonical1.__hash__() == circ2.__hash__())
 
-        canonical2 = circ2.canonicalize_circuit()
-        with self.assertNoWarns(PoorPerformanceRuntimeWarning):
+        canonical2 = circ2.canonicalized()
+        with self.assertNoWarns(PoorPerformanceWarning):
             self.assertTrue(canonical1 == canonical2)
+            self.assertTrue(circ1      == canonical2)
+        self.assertTrue(canonical1.__hash__() == canonical2.__hash__())
 
         circ3 = circuit.Circuit([("Gxpi2", 0), ("Gypi2", 1)])  # initialize circ1 as a new circuit with 2 layers.
         circ4 = circuit.Circuit([("Gypi2", 1), ("Gxpi2", 0)])
 
         self.assertTrue(circ3 != circ4)
         # (X, I) (I, Y) does not have the same effect as (I, Y) (X, I) with not perfect idles.
-        self.assertTrue(circ3.canonicalize_circuit() != circ4.canonicalize_circuit())
+        self.assertTrue(circ3.canonicalized() != circ4.canonicalized())
+        return
 
     def test_convert_to_quil(self):
         # Quil string with setup, each layer, and block_between_layers=True (current default)

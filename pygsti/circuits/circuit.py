@@ -28,7 +28,7 @@ from pygsti.baseobjs.label import Label as _Label, CircuitLabel as _CircuitLabel
 from pygsti.baseobjs import outcomelabeldict as _ld, _compatibility as _compat
 from pygsti.tools import internalgates as _itgs
 from pygsti.tools import slicetools as _slct
-from pygsti.tools.warningtools import PoorPerformanceRuntimeWarning
+from pygsti.tools.exceptions import PoorPerformanceWarning, HashingEditableCircuitWarning
 from pygsti.tools.legacytools import deprecate as _deprecate_fn
 
 
@@ -813,9 +813,12 @@ class Circuit(object):
 
     def __hash__(self):
         if not self._static:
-            _warnings.warn(("Editable circuit is being converted to read-only"
-                            " mode in order to hash it.  You should call"
-                            " circuit.done_editing() beforehand."))
+            msg = \
+            """
+            Editable circuit is being converted to read-only mode in order to hash it.
+            You should call circuit.done_editing() beforehand.
+            """
+            _warnings.warn(msg, HashingEditableCircuitWarning)
             self.done_editing()
         return self._hash
 
@@ -991,15 +994,15 @@ class Circuit(object):
             elif self.in_canonical_form != x.in_canonical_form:
                 _warnings.warn((" Either compare circuits both in canonical form or neither in canonical form."
                             " To convert a circuit to canonical form you should call."
-                            " circuit.canonical_form() beforehand."), PoorPerformanceRuntimeWarning)
+                            " circuit.canonical_form() beforehand."), PoorPerformanceWarning)
                 if not self.in_canonical_form:
-                    tmp = self.canonicalize_circuit()
+                    tmp = self.canonicalized()
                     if tmp._static and x._static and tmp._hash != x._hash:
                         return False
                     return tmp.tup == x.tup
                 else:
                     # X not in form.
-                    tmp = x.canonicalize_circuit()
+                    tmp = x.canonicalized()
                     if tmp._static and self._static and tmp._hash != self._hash:
                         return False
                     return self.tup == tmp.tup
@@ -4958,7 +4961,7 @@ class Circuit(object):
         self._hashable_tup = self.tup
         self._hash = hash(self._hashable_tup)
 
-    def canonicalize_circuit(self):
+    def canonicalized(self):
         """
         Convert a circuit into a canonical form where each of the gates within a layer is sorted in increasing order
         of the qubits it is operating on.
