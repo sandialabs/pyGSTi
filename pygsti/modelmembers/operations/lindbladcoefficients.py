@@ -993,7 +993,6 @@ class LindbladCoefficientBlock(_NicelySerializable):
             raise InvalidBlockTypeError()
 
     def _deriv_wrt_params_ham(self) -> _np.ndarray:
-        """deriv_wrt_params for the 'ham' block."""
         num_bels = len(self._bel_labels)
         if self._param_mode == 'elements':
             # d(block_data[i])/d v[j] = δ_{i,j}
@@ -1002,7 +1001,6 @@ class LindbladCoefficientBlock(_NicelySerializable):
             raise InvalidParamModeError(self._param_mode, self._block_type)
 
     def _deriv_wrt_params_otherdiag(self, v: _np.ndarray) -> _np.ndarray:
-        """deriv_wrt_params for the 'other_diagonal' block."""
         num_bels = len(self._bel_labels)
         nP = len(v)
         mat = _np.zeros((num_bels, nP), 'd')
@@ -1030,39 +1028,41 @@ class LindbladCoefficientBlock(_NicelySerializable):
         return mat
 
     def _deriv_wrt_params_other(self, v: _np.ndarray) -> _np.ndarray:
-        """deriv_wrt_params for the 'other' block (full Hermitian matrix)."""
         num_bels = len(self._bel_labels)
         nP = len(v)
         params = v.reshape((num_bels, num_bels))
+        stride = num_bels
 
         if self._param_mode == 'cholesky':
-            # We have block_data = C C†, where C = cache_mx depends on params.
-            # Build C and dC/dp, then d(block_data)/dp = dC·C† + C·(dC)†
-            cache_mx : _np.ndarray = self._cache_mx  # type: ignore
+            # We have block_data = C C†, where C is the matrix
+            #   C[i,i] = params[i,i]
+            #   C[i,j] = params[i,j] + 1j * params[j,i] (i > j).
+            #
+            # We need to compute d(block_data)/dp.
+            #   --> We'll build C and dC/dp, then d(block_data)/dp = dC·C† + C·(dC)†.
+            #
             dC = _np.zeros((nP, num_bels, num_bels), 'complex')
-            stride = num_bels
+            C : _np.ndarray = self._cache_mx  # type: ignore
 
-            # fill C and dC
             for i in range(num_bels):
-                cache_mx[i, i] = params[i, i]
+                C[i, i] = params[i, i]
                 dC[i*stride + i, i, i] = 1.0
                 for j in range(i):
-                    cache_mx[i, j] = params[i, j] + 1j * params[j, i]
+                    C[i, j] = params[i, j] + 1j * params[j, i]
                     dC[i*stride + j, i, j] = 1.0
                     dC[j*stride + i, i, j] = 1.0j
 
-            # form the Jacobian: shape = (num_bels, num_bels, nP)
-            term1 = _np.tensordot(dC, cache_mx.T.conj(), (1, 0))  # (nP,i,j)
-            term2 = _np.tensordot(cache_mx, dC.conjugate().transpose((0,2,1)), (1,0))  # (i,j,nP)
-            # combine and roll axis 0 → last
-            dB = term1 + term2.transpose((2,0,1))
-            return _np.rollaxis(dB, 0, 3)
+            dBdp  = _np.dot(dC, C.T.conjugate())
+            dBdp += _np.dot(C, dC.conjugate().transpose((0, 2, 1))).transpose((1, 0, 2))
+            # deriv = dC * C^T + C * dC^T
+
+            dBdp = _np.rollaxis(dBdp, 0, 3)  # => shape = (num_bels, num_bels, nP)
+            return dBdp
 
         elif self._param_mode == 'elements':
             # direct Hermitian: block_data[i,j] = v[i,j]_real + i v[j,i]_real
             # so we only get linear contributions
             mat = _np.zeros((num_bels, num_bels, nP), 'complex')
-            stride = num_bels
             for i in range(num_bels):
                 # diag
                 mat[i, i, i*stride + i] = 1.0
