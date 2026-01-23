@@ -1209,19 +1209,8 @@ class LindbladCoefficientBlock(_NicelySerializable):
             raise InvalidParamModeError(self._param_mode, self._block_type)
 
     def superop_hessian_wrt_params(self, superops, v=None, superops_are_flat=False):
-        """
-        Second derivative (Hessian) of the Lindblad-term superoperators w.r.t. the real parameters.
+        # NOTE: `v` is here for consistency with superop_deriv_wrt_params.
 
-        v: ignored. Here for consistency with superop_deriv_wrt_params.
-
-        Returns
-        -------
-        ndarray
-            Tensor of shape (d, d, …) with either 2 or 4 derivative dimensions:
-            - For 'ham' and 'other_diagonal' blocks: shape (d, d, nP, nP)
-            - For 'other' blocks: shape (d, d, snP, snP, snP, snP)
-              where snP = sqrt(self.num_params)
-        """
         # static blocks always have zero Hessian
         if self._param_mode == 'static':
             if superops_are_flat or self._block_type != 'other':
@@ -1241,8 +1230,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
 
         # sanity checks & real‐cast
         tr = d2.ndim
-        assert (tr - 2) in (2, 4), \
-            "Currently, d2Odp2 can only have 2 or 4 derivative dimensions"
+        assert (tr - 2) in (2, 4), "Currently, d2Odp2 can only have 2 or 4 derivative dimensions"
         assert _np.linalg.norm(_np.imag(d2)) < IMAG_TOL
         return _np.real(d2)
 
