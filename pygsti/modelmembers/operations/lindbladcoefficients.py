@@ -1212,6 +1212,8 @@ class LindbladCoefficientBlock(_NicelySerializable):
         """
         Second derivative (Hessian) of the Lindblad-term superoperators w.r.t. the real parameters.
 
+        v: ignored. Here for consistency with superop_deriv_wrt_params.
+
         Returns
         -------
         ndarray
@@ -1227,16 +1229,11 @@ class LindbladCoefficientBlock(_NicelySerializable):
             else:
                 return _np.zeros((superops.shape[2], superops.shape[3], 0, 0), 'd')
 
-        # pull in v for other_diagonal (even though not needed numerically here, for consistency/checks)
-        if self._block_type == 'other_diagonal' and v is None:
-            v = self.to_vector()
-            assert len(v) == self.num_params
-
         # dispatch to block‐type helper
         if   self._block_type == 'ham':
             d2 = self._superop_hessian_wrt_params_ham(superops)
         elif self._block_type == 'other_diagonal':
-            d2 = self._superop_hessian_wrt_params_otherdiag(superops, v)
+            d2 = self._superop_hessian_wrt_params_otherdiag(superops)
         elif self._block_type == 'other':
             d2 = self._superop_hessian_wrt_params_other(superops, superops_are_flat)
         else:
@@ -1253,22 +1250,24 @@ class LindbladCoefficientBlock(_NicelySerializable):
         """Hessian for the 'ham' block: always zero (linear in parameters)."""
         if self._param_mode != 'elements':
             raise InvalidParamModeError(self._param_mode, self._block_type)
-        # shape = (d, d, nP, nP)
-        d = superops.shape[1]
+        d1, d2 = superops.shape[1:3]
         nP = self.num_params
-        return _np.zeros((d, d, nP, nP), 'd')
+        return _np.zeros((d1, d2, nP, nP), 'd')
 
-    def _superop_hessian_wrt_params_otherdiag(self, superops, v):
+    def _superop_hessian_wrt_params_otherdiag(self, superops):
         """Hessian for the 'other_diagonal' block."""
-        d = superops.shape[1]
         nP = self.num_params
 
+        # Derivative of exponent wrt other param; shape == [dim,dim,nP,nP]
         if self._param_mode == 'depol':
-            # d²O/dp² = 2 * sum_i superops[i]
+            # d2Odp2  = _np.einsum('alj->lj', self.otherGens)[:,:,None,None] * 2
             base = _np.sum(superops, axis=0)   # shape (d,d)
             return base[:, :, None, None] * 2.0
 
         elif self._param_mode == 'cholesky':
+            # d2Odp2  = _np.einsum('alj,aq->ljaq', self.otherGens, 2*_np.identity(nP,'d'))
+            # ^ old implementation 
+
             # d²O/dp_i dp_j = 0 if i≠j;  = 2 superops[i] if i==j
             # build (d,d,nP,1) then broadcast with I_{nP}
             trans = _np.transpose(superops, (1, 2, 0))      # shape (d,d,nP)
@@ -1277,7 +1276,8 @@ class LindbladCoefficientBlock(_NicelySerializable):
 
         elif self._param_mode in ('elements', 'reldepol'):
             # second derivative is zero for direct or relative‐depol modes
-            return _np.zeros((d, d, nP, nP), 'd')
+            d1, d2 = superops.shape[1:3]
+            return _np.zeros((d1, d2, nP, nP), 'd')
 
         else:
             raise InvalidParamModeError(self._param_mode, self._block_type)
@@ -1285,19 +1285,19 @@ class LindbladCoefficientBlock(_NicelySerializable):
     def _superop_hessian_wrt_params_other(self, superops, superops_are_flat):
         """Hessian for the full 'other' block (Pauli correlation / active errors)."""
         num_bels = len(self._bel_labels)
-        nP = self.num_params
 
         if superops_are_flat:
             superops = superops.reshape((num_bels, num_bels, superops.shape[1], superops.shape[2]))
 
+        sqrt_nP = _np.sqrt(self.num_params)
+        snP = int(sqrt_nP)
+        assert snP == sqrt_nP == num_bels
+
         if self._param_mode == 'cholesky':
-            sqrt_nP = _np.sqrt(nP)
-            snP = int(sqrt_nP)
-            assert snP == sqrt_nP == num_bels
             d2Odp2 = _np.zeros([superops.shape[2], superops.shape[3], snP, snP, snP, snP], 'complex')
             # yikes! maybe make this SPARSE in future?
 
-            #Note: correspondence w/Erik's notes: a=alpha, b=beta, q=gamma, r=delta
+            # Note: correspondence w/Erik's notes: a=alpha, b=beta, q=gamma, r=delta
             # indices of d2Odp2 are [i,j,a,b,q,r]
 
             def iter_base_ab_qr(ab_inc_eq, qr_inc_eq):
@@ -1326,9 +1326,6 @@ class LindbladCoefficientBlock(_NicelySerializable):
 
         elif self._param_mode == 'elements':
             # unconstrained Hermitian: Hessian is identically zero
-            sqrt_nP = _np.sqrt(nP)
-            snP = int(sqrt_nP)
-            assert snP == sqrt_nP == num_bels
             d2Odp2 = _np.zeros([superops.shape[2], superops.shape[3], snP, snP, snP, snP], 'd')  # all params linear
             return d2Odp2
 
