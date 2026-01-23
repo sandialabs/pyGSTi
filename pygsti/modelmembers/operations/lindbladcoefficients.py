@@ -457,32 +457,39 @@ class LindbladCoefficientBlock(_NicelySerializable):
         return idx
 
     def _elementary_errorgen_indices_ham(self):
+        from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LEEL
         elem_errgen_indices = _collections.OrderedDict()
         for i, lbl in enumerate(self._bel_labels):
             elem_errgen_indices[_LEEL('H', (lbl,))] = [(1.0, i)]
         return elem_errgen_indices
 
     def _elementary_errorgen_indices_otherdiag(self):
+        from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LEEL
         elem_errgen_indices = _collections.OrderedDict()
         for i, lbl in enumerate(self._bel_labels):
             elem_errgen_indices[_LEEL('S', (lbl,))] = [(1.0, i)]
         return elem_errgen_indices
 
     def _elementary_errorgen_indices_other(self):
+        from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LEEL
         elem_errgen_indices = _collections.OrderedDict()
+        # Difficult case, as coefficients do not correspond to elementary errorgens, so
+        # there's no single index for, e.g. ('C', lbl1, lbl2) - rather this elementary
+        # errorgen is a linear combination of two coefficients.
         stride = len(self._bel_labels)
         for i, lbl1 in enumerate(self._bel_labels):
             ii = i * stride + i
-            # the diagonal (stochastic) term
             elem_errgen_indices[_LEEL('S', (lbl1,))] = [(1.0, ii)]
-            # the off-diagonal C and A combinations
-            for j, lbl2 in enumerate(self._bel_labels[i+1:], start=i+1):
+
+            for j, lbl2 in enumerate(self._bel_labels[i + 1:], start=i + 1):
                 ij = i * stride + j
                 ji = j * stride + i
-                # C_{P,Q} = ( NH_{P,Q} + NH_{Q,P} )
-                elem_errgen_indices[_LEEL('C', (lbl1, lbl2))] = [(0.5, ij), (0.5, ji)]
-                # A_{P,Q} = i ( NH_{Q,P} – NH_{P,Q} )
-                elem_errgen_indices[_LEEL('A', (lbl1, lbl2))] = [(0.5j, ij), (-0.5j, ji)]
+
+                #Contributions from C_PQ and A_PQ coeffs NH_PQ and NH_QP coeffs:
+                # NH_PQ = (C_PQ + i A_PQ)/2
+                # NH_QP = (C_PQ - i A_PQ)/2
+                elem_errgen_indices[_LEEL('C', (lbl1, lbl2))] = [(0.5, ij), (0.5, ji)]  # C_PQ contributions
+                elem_errgen_indices[_LEEL('A', (lbl1, lbl2))] = [(0.5j, ij), (-0.5j, ji)]  # A_PQ contributions
         return elem_errgen_indices
 
     @property
