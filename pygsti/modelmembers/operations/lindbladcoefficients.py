@@ -457,21 +457,18 @@ class LindbladCoefficientBlock(_NicelySerializable):
         return idx
 
     def _elementary_errorgen_indices_ham(self):
-        from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LEEL
         elem_errgen_indices = _collections.OrderedDict()
         for i, lbl in enumerate(self._bel_labels):
             elem_errgen_indices[_LEEL('H', (lbl,))] = [(1.0, i)]
         return elem_errgen_indices
 
     def _elementary_errorgen_indices_otherdiag(self):
-        from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LEEL
         elem_errgen_indices = _collections.OrderedDict()
         for i, lbl in enumerate(self._bel_labels):
             elem_errgen_indices[_LEEL('S', (lbl,))] = [(1.0, i)]
         return elem_errgen_indices
 
     def _elementary_errorgen_indices_other(self):
-        from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LEEL
         elem_errgen_indices = _collections.OrderedDict()
         # Difficult case, as coefficients do not correspond to elementary errorgens, so
         # there's no single index for, e.g. ('C', lbl1, lbl2) - rather this elementary
