@@ -64,10 +64,8 @@ _NestedLabelSeq = Sequence[Union[_Label, Sequence[_Label]]]
 #     Don't use this in function signatures.
 LayerTupLike = Union[Tuple[_LabelTupTup,    ...], _NestedLabelSeq, Tuple[_Label, ...]]
 LabelsLike   = Union[Tuple[_NestedLabelSeq, ...], _NestedLabelSeq]
-LinesLike    = Union[
-    slice, str, int, Sequence[Union[str, int]]
-]
-IndexIntOnly = Union[int, slice, List[int], Tuple[int, ...]]
+LinesIndex   = Union[int, slice, str, Sequence[Union[str, int]]]
+LayersIndex  = Union[int, slice,      Sequence[int]]
 ##############################################################################################
 
 
@@ -1122,7 +1120,7 @@ class Circuit(object):
         assert(not self._static), "Cannot edit a read-only circuit!"
         self._labels = []
 
-    def _proc_layers_arg(self, layers: Optional[IndexIntOnly]):
+    def _proc_layers_arg(self, layers: Optional[LayersIndex]):
         """ Pre-process the layers argument used by many methods """
         if layers is None:
             layers = list(range(len(self._labels)))
@@ -1135,7 +1133,7 @@ class Circuit(object):
             layers = (layers,)
         return layers
 
-    def _proc_lines_arg(self, lines: Optional[LinesLike]):
+    def _proc_lines_arg(self, lines: Optional[LinesIndex]):
         """ Pre-process the lines argument used by many methods """
         if lines is None:
             lines = self._line_labels
@@ -1316,7 +1314,7 @@ class Circuit(object):
         else:
             return _Label(ret[0])
 
-    def set_labels(self, lbls, layers=None, lines: Optional[LinesLike]=None):
+    def set_labels(self, lbls, layers=None, lines: Optional[LinesIndex]=None):
         """
         Write `lbls` to the block defined by the `layers` and `lines` arguments.
 
@@ -1424,7 +1422,7 @@ class Circuit(object):
         else:  # single layer using integer layer index (so lbls is a single Label)
             self._labels[layers[0]].extend(_label_to_nested_lists_of_simple_labels(lbls, def_sslbls))
 
-    def insert_idling_layers(self, insert_before: int, num_to_insert: int, lines: Optional[LinesLike]=None) -> Circuit:
+    def insert_idling_layers(self, insert_before: int, num_to_insert: int, lines: Optional[LinesIndex]=None) -> Circuit:
         """
         Inserts into this circuit one or more idling (blank) layers,
         returning a copy.
@@ -1458,7 +1456,7 @@ class Circuit(object):
         if self._static: cpy.done_editing()
         return cpy
 
-    def insert_idling_layers_inplace(self, insert_before: int, num_to_insert: int, lines: Optional[LinesLike]=None):
+    def insert_idling_layers_inplace(self, insert_before: int, num_to_insert: int, lines: Optional[LinesIndex]=None):
         """
         Inserts into this circuit one or more idling (blank) layers.
 
@@ -1524,7 +1522,7 @@ class Circuit(object):
                     del self._labels[i][k]
             #Note: do not adjust compilable indices when only partial layers are inserted
 
-    def _append_idling_layers_inplace(self, num_to_insert: int, lines: Optional[LinesLike]=None):
+    def _append_idling_layers_inplace(self, num_to_insert: int, lines: Optional[LinesIndex]=None):
         """
         Adds one or more idling (blank) layers to the end of this circuit.
 
@@ -1549,7 +1547,7 @@ class Circuit(object):
         assert(not self._static), "Cannot edit a read-only circuit!"
         self.insert_idling_layers_inplace(None, num_to_insert, lines)
 
-    def insert_labels_into_layers(self, lbls, layer_to_insert_before: Optional[int], lines: Optional[LinesLike]=None):
+    def insert_labels_into_layers(self, lbls, layer_to_insert_before: Optional[int], lines: Optional[LinesIndex]=None):
         """
         Inserts into this circuit the contents of `lbls` into new full or partial layers,
         returning a copy.
@@ -1585,7 +1583,7 @@ class Circuit(object):
         if self._static: cpy.done_editing()
         return cpy
 
-    def insert_labels_into_layers_inplace(self, lbls, layer_to_insert_before: Optional[int], lines: Optional[LinesLike]=None):
+    def insert_labels_into_layers_inplace(self, lbls, layer_to_insert_before: Optional[int], lines: Optional[LinesIndex]=None):
         """
         Inserts into this circuit the contents of `lbls` into new full or partial layers.
 
@@ -1819,7 +1817,7 @@ class Circuit(object):
         """
         return self.insert_labels_as_lines(lbls, layer_to_insert_before, None, line_labels)
 
-    def _clear_labels(self, layers: IndexIntOnly, lines: LinesLike, clear_straddlers=False):
+    def _clear_labels(self, layers: LayersIndex, lines: LinesIndex, clear_straddlers=False):
         """ remove all labels in a block given by layers and lines
             Note: layers & lines must be lists/tuples of values; they can't be slices or single vals
         """
@@ -1836,7 +1834,7 @@ class Circuit(object):
             self._labels[i] = new_layer
         self._compilable_layer_indices_tup = ()
 
-    def clear_labels(self, layers: Optional[IndexIntOnly]=None, lines: Optional[LinesLike]=None, clear_straddlers=False):
+    def clear_labels(self, layers: Optional[LayersIndex]=None, lines: Optional[LinesIndex]=None, clear_straddlers=False):
         """
         Removes all the gates within the given circuit region.  Does not reduce the number of layers or lines.
 
@@ -1863,7 +1861,7 @@ class Circuit(object):
         lines = self._proc_lines_arg(lines)
         self._clear_labels(layers, lines, clear_straddlers)
 
-    def delete_layers(self, layers: Optional[IndexIntOnly]=None):
+    def delete_layers(self, layers: Optional[LayersIndex]=None):
         """
         Deletes one or more layers from the circuit.
 
@@ -1890,7 +1888,7 @@ class Circuit(object):
                 new_inds = [i if (i < deleted_i) else (i - 1) for i in new_inds]  # Note i never == deleted_i (filtered)
             self._compilable_layer_indices_tup = tuple(new_inds)
 
-    def delete_lines(self, lines: Optional[LinesLike], delete_straddlers=False):
+    def delete_lines(self, lines: Optional[LinesIndex], delete_straddlers=False):
         """
         Deletes one or more lines from the circuit.
 
