@@ -751,29 +751,29 @@ class LindbladCoefficientBlock(_NicelySerializable):
         if self._param_mode in ("depol", "reldepol"):
             if self._param_mode == "depol":
                 nonneg = [v >= ttol for v in self.block_data]
-                assert all(nonneg), "Lindblad stochastic coefficients are not positive!"
+                assert all(nonneg), f"Lindblad stochastic coefficients are not positive! (tol={ttol})"
             # check all diagonal entries are equal
             first = self.block_data[0]
             all_equal = [_np.isclose(v, first, atol=1e-6) for v in self.block_data]
-            assert all(all_equal), "Diagonal lindblad coefficients are not equal!"
+            assert all(all_equal), f"Diagonal lindblad coefficients are not equal! (tol={ttol})"
             # build the single parameter
             if self._param_mode == "depol":
-                avg = _np.mean(self.block_data.clip(0, 1e100))
-                return _np.array([_np.sqrt(_np.real(avg))], 'd')
+                avg = _np.mean(self.block_data.clip(0, 1e100))  # was 1e-16
+                return _np.array([_np.sqrt(_np.real(avg))], 'd') # shape (1,)
             else:  # 'reldepol'
                 avg = _np.mean(self.block_data)
-                return _np.array([_np.real(avg)], 'd')
+                return _np.array([_np.real(avg)], 'd') # shape (1,)
 
         # cholesky: each block_data[i] = param[i]**2
         elif self._param_mode == "cholesky":
             nonneg = [v >= ttol for v in self.block_data]
             assert all(nonneg), "Lindblad stochastic coefficients are not positive!"
-            clipped = self.block_data.clip(0, 1e100)
-            return _np.sqrt(clipped.real)
+            clipped = self.block_data.clip(0, 1e100)  # was 1e-16
+            return _np.sqrt(clipped.real)  # shape (len(self._bel_labels),)
 
         # elements: unconstrained real diag
         elif self._param_mode == "elements":
-            return self.block_data.real
+            return self.block_data.real  # shape (len(self._bel_labels),)
 
         else:
             raise InvalidParamModeError(self._param_mode, self._block_type)
@@ -796,14 +796,14 @@ class LindbladCoefficientBlock(_NicelySerializable):
             num_nonzero = num_bels - len(zero_inds)
 
             # permute zero rows/cols to end
+            next_nonzero = 0; next_zero = num_nonzero
             perm = _np.zeros((num_bels, num_bels), 'd')
-            ni = nz = 0
             for i in range(num_bels):
                 if i in zero_inds:
-                    perm[num_nonzero + nz, i] = 1.0; nz += 1
+                    perm[next_zero, i] = 1.0; next_zero += 1
                 else:
-                    perm[ni, i] = 1.0; ni += 1
-
+                    perm[next_nonzero, i] = 1.0; next_nonzero += 1
+                
             # extract nonzero block, compute eigen‐decomp & cholesky
             pdata = perm @ self.block_data @ perm.T
             small = pdata[0:num_nonzero, 0:num_nonzero]
@@ -824,9 +824,12 @@ class LindbladCoefficientBlock(_NicelySerializable):
                 Lsmall = _np.linalg.cholesky(small)
 
             # re‐embed into full L
-            Lfull = _np.zeros((num_bels, num_bels), 'complex')
-            Lfull[:num_nonzero, :num_nonzero] = Lsmall
-            Lmx = perm.T @ Lfull @ perm
+            perm_Lmx = _np.zeros((num_bels, num_bels), 'complex')
+            perm_Lmx[:num_nonzero, :num_nonzero] = Lsmall
+            Lmx = perm.T @ perm_Lmx @ perm
+            # ^ That's a little weird (one might expect to just set `Lmx = perm.T @ perm_Lmx`),
+            #   but the result still satisfies self.block_data \approx Lmx @ Lmx.T.conj().
+            #   I.e., the permutation of perm_Lmx's columns doesn't make things *wrong.*
 
             # now extract the real diag & real/imag lower‐triangle
             for i in range(num_bels):
