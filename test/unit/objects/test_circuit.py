@@ -2,11 +2,13 @@ import copy
 import pickle
 import unittest
 import numpy as np
+import warnings
 
 from pygsti.circuits import circuit
 from pygsti.baseobjs import Label, CircuitLabel
 from pygsti.processors import QubitProcessorSpec
 from pygsti.tools import symplectic
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning
 from pygsti.models import modelconstruction as mc
 from ..util import BaseCase
 
@@ -747,7 +749,9 @@ MEASURE 2 ro[2]
         # Tests the circuit simulator
         mdl = mc.create_crosstalk_free_model(ps)
         c = circuit.Circuit(layer_labels=[Label('Gh', 'Q0'), Label('Gcnot', ('Q0', 'Q1'))], line_labels=['Q0', 'Q1'])
-        out = c.simulate(mdl)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', category=pyGSTiDeprecationWarning)
+            out = c.simulate(mdl)
         self.assertLess(abs(out['00'] - 0.5), 10**-10)
         self.assertLess(abs(out['11'] - 0.5), 10**-10)
 
@@ -797,30 +801,34 @@ MEASURE 2 ro[2]
         self.assertAlmostEqual(pdict['1'], 0.5)
 
         ## SAME results from circuit.simulate, except with smaller dicts (because 0s are dropped)
-        pdict = c.simulate(mdl)
-        self.assertEqual(len(pdict), 2)
-        self.assertAlmostEqual(pdict['0000'], 0.5)
-        self.assertAlmostEqual(pdict['1000'], 0.5)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', category=pyGSTiDeprecationWarning)
+            
+            pdict = c.simulate(mdl)
+            self.assertEqual(len(pdict), 2)
+            self.assertAlmostEqual(pdict['0000'], 0.5)
+            self.assertAlmostEqual(pdict['1000'], 0.5)
 
-        pdict = cp.simulate(mdl)
-        self.assertEqual(len(pdict), 2)
-        self.assertAlmostEqual(pdict['0000'], 0.5)
-        self.assertAlmostEqual(pdict['0010'], 0.5)
+            pdict = cp.simulate(mdl)
+            self.assertEqual(len(pdict), 2)
+            self.assertAlmostEqual(pdict['0000'], 0.5)
+            self.assertAlmostEqual(pdict['0010'], 0.5)
 
-        pdict = c01.simulate(mdl)
-        self.assertEqual(len(pdict), 2)
-        self.assertAlmostEqual(pdict['00'], 0.5)
-        self.assertAlmostEqual(pdict['10'], 0.5)
+            pdict = c01.simulate(mdl)
+            self.assertEqual(len(pdict), 2)
+            self.assertAlmostEqual(pdict['00'], 0.5)
+            self.assertAlmostEqual(pdict['10'], 0.5)
 
-        pdict = c10.simulate(mdl)
-        self.assertEqual(len(pdict), 2)
-        self.assertAlmostEqual(pdict['00'], 0.5)
-        self.assertAlmostEqual(pdict['01'], 0.5)
+            pdict = c10.simulate(mdl)
+            self.assertEqual(len(pdict), 2)
+            self.assertAlmostEqual(pdict['00'], 0.5)
+            self.assertAlmostEqual(pdict['01'], 0.5)
 
-        pdict = c0.simulate(mdl)
-        self.assertEqual(len(pdict), 2)
-        self.assertAlmostEqual(pdict['0'], 0.5)
-        self.assertAlmostEqual(pdict['1'], 0.5)
+            pdict = c0.simulate(mdl)
+            self.assertEqual(len(pdict), 2)
+            self.assertAlmostEqual(pdict['0'], 0.5)
+            self.assertAlmostEqual(pdict['1'], 0.5)
+        return
 
 
 class CircuitOperationTester(BaseCase):
