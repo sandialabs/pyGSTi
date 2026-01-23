@@ -7,6 +7,13 @@ from mpi4py import MPI
 import time as _time
 import datetime as _datetime
 from pygsti.models import Model as _Model
+from pygsti.algorithms.core import run_gst_fit_simple as _run_gst_fit_simple
+from pygsti.objectivefns import PoissonPicDeltaLogLFunction as _PoissonPicDeltaLogLFunction
+from pygsti.optimize.simplerlm import SimplerLMOptimizer as _SimplerLMOptimizer
+from pygsti import baseobjs as _baseobjs
+from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
+
+NON_CP_THRESHOLD = 1e-4
 
 class TrackedComm():
     def __init__(self, comm, parent=None):
@@ -305,15 +312,35 @@ def create_embedder_matrix_from_trace(graph_levels, embedder_matrix = None):
 def custom_builder(min_prob_clip, cptp_penalty=50):
 
     chi2_builder = pygsti.objectivefns.Chi2Function.builder(
-        'chi2', regularization={'min_prob_clip_for_weighting': min_prob_clip}, penalties={'cptp_penalty_factor': cptp_penalty})
+        'chi2', regularization={'min_prob_clip_for_weighting': min_prob_clip}, penalties={'cptp_penalty_factor': cptp_penalty, 'spam_penalty_factor':cptp_penalty})
     mle_builder = pygsti.objectivefns.PoissonPicDeltaLogLFunction.builder(
-        'logl', regularization={'min_prob_clip': min_prob_clip, 'radius': min_prob_clip}, penalties={'cptp_penalty_factor': cptp_penalty})
+        'logl', regularization={'min_prob_clip': min_prob_clip, 'radius': min_prob_clip}, penalties={'cptp_penalty_factor': cptp_penalty, 'spam_penalty_factor':cptp_penalty})
     iteration_builders = [chi2_builder] 
     final_builders = [mle_builder]
     builders = pygsti.protocols.GSTObjFnBuilders(iteration_builders, final_builders)
     return builders
+def custom_optimizers(maxiter=300, tol=1e-10):
+    
+    if isinstance(maxiter, list) or isinstance(tol, list):
+        if not (isinstance(maxiter, list) and isinstance(tol, list)):
+            raise ValueError('Invalid optimizer settings')
+        else:
+            optimizers = []
+            for i in range(len(maxiter)):
+                if type(tol[i]) == dict:
+                    tolerances = tol[i]
+                else:
+                    tolerances = {'f':tol[i], 'relf': tol[i]}
+                optimizers.append(pygsti.optimize.customlm.CustomLMOptimizer(maxiter=maxiter[i], tol=tolerances))
+    else:
+        if type(tol[i]) == dict:
+            tolerances = tol
+        else:
+            tolerances = {'f':tol, 'relf': tol}
+        optimizers = [pygsti.optimize.customlm.CustomLMOptimizer(maxiter=maxiter, tol=tolerances)]
+    return optimizers 
 
-def parallel_GST(full_model, data, builders, tol=1e-10, maxiter=300, verbosity=0, comm=None, mem_limit=None):
+def parallel_GST(full_model, data, builders, optimizers, verbosity=0, comm=None, mem_limit=None):
     """
     Wrapper to run GST with MPI with custom builders where the tolerance, probability clip and max iterations
     are easily accesible. The seed model, "target model", gets reset to its error-less version before doing
@@ -352,20 +379,85 @@ def parallel_GST(full_model, data, builders, tol=1e-10, maxiter=300, verbosity=0
           The return value of running protocols.GateSetTomography()
     """
      
-    if isinstance(maxiter, list) or isinstance(tol, list):
-        if not (isinstance(maxiter, list) and isinstance(tol, list)):
-            raise ValueError('Invalid optimizer settings')
-        else:
-            optimizers = []
-            for i in range(len(maxiter)):
-                optimizers.append(pygsti.optimize.customlm.CustomLMOptimizer(maxiter=maxiter[i], tol={'f':tol[i], 'relf': tol[i]}))
-    else:
-        optimizers = [pygsti.optimize.customlm.CustomLMOptimizer(maxiter=maxiter, tol={'f':tol, 'relf': tol})]
+    
     protoOpt = pygsti.protocols.GateSetTomography(full_model, verbosity=verbosity, optimizer=optimizers[0], gaugeopt_suite=None, objfn_builders=builders)
 
     result = protoOpt.run(data, comm=comm,
                 memlimit=mem_limit, optimizers=optimizers)
-    return result
+    return result.estimates['GateSetTomography'].models['final iteration estimate']
+
+def better_model(model1, model2, dataset):
+    """Given two models, it returns the better model of the 2. A better model is either one that is CP while the other one is not.
+    Otherwise, if they are both either CP or non-CP then returns the model with better likelihood.
+    TODO
+    Args:
+        model1 (): _description_
+        model2 (_type_): _description_
+        dataset (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    two_delta_logl = pygsti.tools.two_delta_logl
+    non_cpness_model1 = pygsti.tools.sum_of_negative_choi_eigenvalues(model1)
+    non_cpness_model2 = pygsti.tools.sum_of_negative_choi_eigenvalues(model2)
+    model1_is_cp = non_cpness_model1 < NON_CP_THRESHOLD
+    model2_is_cp = non_cpness_model2 < NON_CP_THRESHOLD
+
+    if (model1_is_cp and model2_is_cp):
+        return model1 if two_delta_logl(model1, dataset) < two_delta_logl(model2, dataset) else model2
+    
+    elif (not model1_is_cp and not model2_is_cp):
+        return model1 if non_cpness_model1 < non_cpness_model2 else model2
+    
+    else:
+        return model1 if model1_is_cp else model2
+    
+def logl_GST(data, seed_model, cptp_penalty: float, min_prob_clip=1e-7, optimizer=None, comm = None, memlimit = None):
+
+    seed_model = seed_model.copy()
+    dataset = data.dataset
+    circuits = list(dataset.keys())
+    mle_builder = _PoissonPicDeltaLogLFunction.builder('logl',
+    regularization={'min_prob_clip': min_prob_clip, 'radius': min_prob_clip},
+    penalties={'cptp_penalty_factor': cptp_penalty}
+    )
+
+    if optimizer is None:
+        default_tol   = 1e-12
+        default_maxit = 6000
+        tols = {'f':default_tol, 'relf': default_tol}
+        optimizer = _SimplerLMOptimizer(maxiter=default_maxit, tol=tols)
+    if comm is not None:
+
+        profiler = _baseobjs.Profiler(comm, False)
+
+        resource_alloc = _ResourceAllocation(comm, memlimit, profiler,
+                                            distribute_method='default')
+    else:
+        resource_alloc = None
+    out = _run_gst_fit_simple(dataset, seed_model, circuits, optimizer, mle_builder, resource_alloc=resource_alloc)
+    learned_model = out[1]
+
+    return learned_model
+
+def random_jumps_logl_GST(data, seed_model, cptp_penalty, min_prob_clip=1e-7, optimizer=None, memlimit=None):
+    jump_sizes = [.0001, .0003, .0006, .0009, .0013, .0016, .0019]
+    best_model = seed_model
+    seed_copy = seed_model.copy()
+    for jump_size in jump_sizes:
+        for i in range(30):
+            paramvec = _np.random.normal(0, 1e-2, seed_model.num_params)
+            paramvec = paramvec*jump_size/_np.linalg.norm(paramvec)
+            seed_copy.from_vector(paramvec + seed_model.to_vector())
+            model_fit = logl_GST(data, seed_copy, cptp_penalty, min_prob_clip, optimizer, memlimit)
+            best_model = better_model(best_model, model_fit, data.dataset)
+
+            paramvec2 = paramvec*(-1)
+            seed_copy.from_vector(paramvec2 + seed_model.to_vector())
+            model_fit2 = logl_GST(data, seed_copy, cptp_penalty, min_prob_clip, optimizer, memlimit)
+            best_model = better_model(best_model, model_fit2, data.dataset)
+    return best_model
 
 def create_red_model(parent_model, embedder_matrix, vec=None, sim=None):
     """TODO
@@ -378,7 +470,9 @@ def create_red_model(parent_model, embedder_matrix, vec=None, sim=None):
     Returns:
         _type_: _description_
     """
-    
+    if embedder_matrix.shape[0] == embedder_matrix.shape[1]:
+        print('Model was not reduced')
+        return parent_model
     if vec is None:
         vec = _np.zeros(embedder_matrix.shape[1])
     assert embedder_matrix.shape[1] == len(vec)

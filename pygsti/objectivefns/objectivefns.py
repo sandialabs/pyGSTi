@@ -5946,12 +5946,12 @@ def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl, prefactor, op_bas
     # we need to conjugate the "B" matrix, which is ddenMxdV or dEMxdV below.
 
     # d( sqrt(|denMx|_Tr) ) = (0.5 / sqrt(|denMx|_Tr)) * d( |denMx|_Tr )
-    for i, prepvec in enumerate(mdl.preps.values()):
-        nparams = prepvec.num_params
+    for i, prep in enumerate(mdl.preps.values()):
+        nparams = prep.num_params
 
         #get sgn(denMx) == d(|denMx|_Tr)/d(denMx) in std basis
         # dmDim = denMx.shape[0]
-        denmx = _tools.vec_to_stdmx(prepvec, op_basis)
+        denmx = _tools.vec_to_stdmx(prep.to_dense(), op_basis)
         assert(_np.linalg.norm(denmx - denmx.T.conjugate()) < error_tol), \
             "denMx should be Hermitian!"
 
@@ -5960,7 +5960,7 @@ def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl, prefactor, op_bas
             "sgndm should be Hermitian!"
 
         # get d(prepvec)/dp in op_basis [shape == (nP,dim)]
-        dv_dp = prepvec.deriv_wrt_params()  # shape (dim, nP)
+        dv_dp = prep.deriv_wrt_params()  # shape (dim, nP)
         assert(dv_dp.shape == (mdl.dim, nparams))
 
         # denMx = sum( spamvec[i] * Bmx[i] )
@@ -5973,7 +5973,7 @@ def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl, prefactor, op_bas
         v *= prefactor * (0.5 / _np.sqrt(_tools.tracenorm(denmx)))  # add 0.5/|denMx|_Tr factor
         assert(_np.linalg.norm(v.imag) < error_tol)
         spam_penalty_vec_grad_to_fill[i, :] = 0.0
-        gpinds_subset, within_wrtslice, within_gpinds = _slct.intersect_within(wrt_slice, prepvec.gpindices)
+        gpinds_subset, within_wrtslice, within_gpinds = _slct.intersect_within(wrt_slice, prep.gpindices)
         spam_penalty_vec_grad_to_fill[i, within_wrtslice] = v.real[within_gpinds]  # slice or array index works!
         denmx = sgndm = dv_dp = v = None  # free mem
 
@@ -5982,11 +5982,11 @@ def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl, prefactor, op_bas
     for povmlbl, povm in mdl.povms.items():
         #Simplify effects of povm so we can take their derivatives
         # directly wrt parent Model parameters
-        for _, effectvec in povm.simplify_effects(povmlbl).items():
-            nparams = effectvec.num_params
+        for _, effect in povm.simplify_effects(povmlbl).items():
+            nparams = effect.num_params
 
             #get sgn(EMx) == d(|EMx|_Tr)/d(EMx) in std basis
-            emx = _tools.vec_to_stdmx(effectvec, op_basis)
+            emx = _tools.vec_to_stdmx(effect.to_dense(), op_basis)
             # dmDim = EMx.shape[0]
             assert(_np.linalg.norm(emx - emx.T.conjugate()) < error_tol), \
                 "EMx should be Hermitian!"
@@ -5996,7 +5996,7 @@ def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl, prefactor, op_bas
                 "sgnE should be Hermitian!"
 
             # get d(prepvec)/dp in op_basis [shape == (nP,dim)]
-            dv_dp = effectvec.deriv_wrt_params()  # shape (dim, nP)
+            dv_dp = effect.deriv_wrt_params()  # shape (dim, nP)
             assert(dv_dp.shape == (mdl.dim, nparams))
 
             # emx = sum( spamvec[i] * basis_mx[i] )
@@ -6010,7 +6010,7 @@ def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl, prefactor, op_bas
             assert(_np.linalg.norm(v.imag) < error_tol)
 
             spam_penalty_vec_grad_to_fill[i, :] = 0.0
-            gpinds_subset, within_wrtslice, within_gpinds = _slct.intersect_within(wrt_slice, effectvec.gpindices)
+            gpinds_subset, within_wrtslice, within_gpinds = _slct.intersect_within(wrt_slice, effect.gpindices)
             spam_penalty_vec_grad_to_fill[i, within_wrtslice] = v.real[within_gpinds]
             i += 1
 

@@ -6,8 +6,11 @@ import warnings
 import time
 from pygsti.tools.modelselectiontools import create_red_model, reduced_model_approx_GST_fast as _reduced_model_approx_GST_fast
 from pygsti.tools.modelselectiontools import parallel_GST as _parallel_GST, AMSCheckpoint as _AMSCheckpoint, remove_param, remove_params, create_approx_logl_fn
-from pygsti.tools.modelselectiontools import custom_builder as _custom_builders, AMSGreedyResult as _AMSGreedyResult
+from pygsti.tools.modelselectiontools import random_jumps_logl_GST, NON_CP_THRESHOLD
+from pygsti.tools.modelselectiontools import custom_builder as _custom_builders, AMSGreedyResult as _AMSGreedyResult, better_model as _better_model
+from pygsti.tools.modelselectiontools import custom_optimizers as _custom_optimizers
 import os as _os
+from pygsti.tools import sum_of_negative_choi_eigenvalues as non_cp_metric
 
 
 def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, maxiter=100, tol=1.0, prob_clip=1e-3, recompute_H_thresh_percentage = 1, disable_checkpoints = False, checkpoint = None, comm = None, mem_limit = None, recomp_interval=1e10):
@@ -144,7 +147,7 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
             start = time.time()
         initial_model.sim = pygsti.forwardsims.MapForwardSimulator(processor_grid=(1,size))
         
-        expansion_point_x0 = _parallel_GST(initial_model, data, builders, tol, maxiter, verbosity, comm=comm, mem_limit=mem_limit).estimates['GateSetTomography'].models['final iteration estimate'].to_vector().copy()
+        expansion_point_x0 = _parallel_GST(initial_model, data, builders, tol, maxiter, verbosity, comm=comm, mem_limit=mem_limit) .to_vector().copy()
         initial_model.sim._processor_grid = (1,1,1)
         deltalogl_fn.model.from_vector(expansion_point_x0)
         if comm is not None:
@@ -265,7 +268,7 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
             if verbosity > 0 and rank == 0:
                 print("Recomputing Hessian, approximation error is ", error, "norm is:: ", np.linalg.norm(best_model[0]))
             sim = pygsti.forwardsims.MapForwardSimulator(processor_grid=(1,size))
-            red_model_fit = _parallel_GST(create_red_model(deltalogl_fn.model, np.delete(deltalogl_model_projector, best_model[2], axis=1), sim=sim, vec=None), data, builders, tol, maxiter, verbosity, comm=comm, mem_limit=mem_limit).estimates['GateSetTomography'].models['final iteration estimate']
+            red_model_fit = _parallel_GST(create_red_model(deltalogl_fn.model, np.delete(deltalogl_model_projector, best_model[2], axis=1), sim=sim, vec=None), data, builders, tol, maxiter, verbosity, comm=comm, mem_limit=mem_limit) 
             assert red_model_fit.num_params == len(best_model[0])
             red_model_fit.sim = pygsti.forwardsims.MapForwardSimulator(processor_grid=(1,1,size),param_blk_sizes=(100,100))
             H = pygsti.tools.logl_hessian(red_model_fit, data.dataset, comm=comm, mem_limit=mem_limit, verbosity = verbosity)
@@ -304,7 +307,7 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
                 else:
                     deltalogl_fn.model = create_red_model(deltalogl_fn.model, deltalogl_model_projector,sim=sim)
                 deltalogl_fn.model.sim = sim
-                final_fit_model = _parallel_GST(deltalogl_fn.model, data, builders, tol, maxiter, verbosity, comm=comm, mem_limit=mem_limit).estimates['GateSetTomography'].models['final iteration estimate']
+                final_fit_model = _parallel_GST(deltalogl_fn.model, data, builders, tol, maxiter, verbosity, comm=comm, mem_limit=mem_limit)
                 final_fit_model.sim._processor_grid = (1,1,1)
                 deltalogl_fn.model = final_fit_model
                 curr_dlogl = deltalogl_fn.fn()
@@ -355,7 +358,7 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
 
 
 
-def do_greedy_from_full_exact(initial_model, data, er_thresh=2.0, verbosity=2, maxiter=100, tol=1e-7, prob_clip=1e-3, comm = None, skip_initial_GST=False, transfer_seed=False):
+def do_greedy_from_full_exact(initial_model, data, er_thresh=2.0, verbosity=2, maxiter=100, tol=1e-7, prob_clip=1e-3, comm = None, skip_initial_GST=False, transfer_seed=False, cptp_penalty=50):
     """
     An automated model selection greedy algorithm. Specifically made for FOGI models, but it should be compatible
     with any model that has a linear interposer. It is considered "exact" because every model considered is found through GST, as opposed to
@@ -435,10 +438,12 @@ def do_greedy_from_full_exact(initial_model, data, er_thresh=2.0, verbosity=2, m
         size = 1
 
     graph_levels = []
+    num_fogis = initial_model.fogi_store.fogi_directions.shape[1]
     initial_model.param_interposer.full_span_inv_transform_matrix = initial_model.param_interposer.inv_transform_matrix
     initial_model.param_interposer.inv_transform_matrix_projector = np.eye(initial_model.num_params)
-    builders = _custom_builders(prob_clip)
-    deltalogl_fn =  builders.final_builders[0].build(initial_model, data.dataset, list(data.dataset.keys()))
+    builders = _custom_builders(prob_clip, cptp_penalty=cptp_penalty)
+    optimizers = _custom_optimizers(maxiter=maxiter, tol=tol)
+    deltalogl_fn =  _custom_builders(prob_clip, cptp_penalty=0).final_builders[0].build(initial_model, data.dataset, list(data.dataset.keys()))
     original_dlogl = None
 
     if original_dlogl is None:
@@ -450,64 +455,107 @@ def do_greedy_from_full_exact(initial_model, data, er_thresh=2.0, verbosity=2, m
             if skip_initial_GST:
                 deltalogl_fn.model.from_vector(initial_model.to_vector().copy())
             else:
-                deltalogl_fn.model.from_vector(_parallel_GST(initial_model, data, builders, tol, maxiter, verbosity).estimates['GateSetTomography'].models['final iteration estimate'].to_vector().copy())
+                deltalogl_fn.model.from_vector(_parallel_GST(initial_model, data, builders, optimizers, verbosity).to_vector().copy())
         
         if comm is not None:
             deltalogl_fn.model.from_vector(comm.bcast(deltalogl_fn.model.to_vector(), root = 0))
-        
         
         if comm is not None:
             comm.free_all_children()
         original_dlogl = deltalogl_fn.fn()
         prev_dlogl = original_dlogl
     
-    if len(graph_levels) == 0:
+    if len(graph_levels) == 0 and rank == 0:
         print(f'{original_dlogl=}')
-        graph_levels.append([deltalogl_fn.model.to_vector(),original_dlogl, 0])
+    graph_levels.append([deltalogl_fn.model.to_vector(),original_dlogl, 0])
         
     reduced_model = deltalogl_fn.model.copy()
-    
     exceeded_threshold = False
-    while not exceeded_threshold:
+
+    if rank == 0:
+        print(f'Starting model has {original_dlogl=} and sum-of-negative-choi-eigenvals = ', non_cp_metric(deltalogl_fn.model))
+    while not exceeded_threshold and len(graph_levels) < num_fogis:
         if rank == 0 and verbosity > 0:
             print(f'>> Working on level {len(graph_levels)} <<',flush = True)
             start = time.time()
                         
             print(f'comparing with {prev_dlogl=}')
-
-        num_total_models = len(graph_levels[-1][0])
+        all_non_cp = False
+        num_total_models = num_fogis - len(graph_levels) + 1
         bucket_size = num_total_models // size
         chunk_range = range(rank*bucket_size, (rank+1)*bucket_size)
         level_chunk = []
         for i in chunk_range:
-            candidate_model = remove_param(reduced_model, i, zero=not transfer_seed)
+            candidate_model = remove_param(reduced_model, i, zero=False)
+            candidate_model_zero = remove_param(reduced_model, i, zero=True)
+            assert np.linalg.norm(candidate_model.to_vector()) != 0
             for l in range(candidate_model.num_params):
                 if l < i:
                     assert np.allclose(reduced_model.to_vector()[l], candidate_model.to_vector()[l])
                 if l>=i:
                     assert np.allclose(reduced_model.to_vector()[l+1], candidate_model.to_vector()[l])
-            deltalogl_fn.model = _parallel_GST(candidate_model, data, builders, maxiter=maxiter, tol=tol, verbosity=0).estimates['GateSetTomography'].models['final iteration estimate']
+            candidate_model_fit = _parallel_GST(candidate_model, data, builders, optimizers, verbosity=0) 
+            candidate_model_zero_fit = _parallel_GST(candidate_model_zero, data, builders, optimizers, verbosity=0) 
+            candidate_model = _better_model(candidate_model_fit, candidate_model_zero_fit, data.dataset)
+            random_jump_model = random_jumps_logl_GST(data, candidate_model, cptp_penalty, optimizer=optimizers[-1])
+
+            deltalogl_fn.model = _better_model(random_jump_model, candidate_model, data.dataset).copy()
+
+            #if not np.allclose(candidate_model.to_vector(), deltalogl_fn.model.to_vector()):
+                    #print('Random jump found a better model')
             candidate_model = None
+            candidate_model_fit = None
+            candidate_model_zero = None
+            candidate_model_zero_fit = None
+            random_jump_model = None
+
 
             quantity = (deltalogl_fn.fn()- prev_dlogl)*2
+            non_cpness = non_cp_metric(deltalogl_fn.model)
             if  verbosity > 1:
                 if i  % 1 == 0:
-                    print('Model ', i, ' has ev. ratio of ', quantity, f' with delta logl of {deltalogl_fn.fn()=}', flush=True)
-            level_chunk.append([deltalogl_fn.model.to_vector(), quantity, i])
+                    if non_cpness < NON_CP_THRESHOLD:
+                        print('Model ', i, ' has ev. ratio of ', quantity, f' with sum-negative-choi-eigenvals= {non_cpness}', flush=True)
+                    else:
+                        print('Model ', i, ' has ev. ratio of ', quantity, f' with sum-negative-choi-eigenvals= {non_cpness}, ignoring', flush=True)
+            if non_cpness < NON_CP_THRESHOLD:
+                level_chunk.append([deltalogl_fn.model.to_vector(), quantity, i])
+            else:
+                level_chunk.append([deltalogl_fn.model.to_vector(), None, i])
 
             
         left_over_start_index = size * bucket_size
-
+        
         if (left_over_start_index + rank) < num_total_models:
+            
+            i = left_over_start_index + rank 
+            candidate_model = remove_param(reduced_model, i, zero=False)
+            candidate_model_zero = remove_param(reduced_model, i, zero=True)
+            candidate_model_fit = _parallel_GST(candidate_model, data, builders, optimizers, verbosity=0) 
+            candidate_model_zero_fit = _parallel_GST(candidate_model_zero, data, builders, optimizers, verbosity=0) 
 
-            deltalogl_fn.model = _parallel_GST(remove_param(reduced_model, i, zero=not transfer_seed), data, builders, maxiter=maxiter, tol=tol, verbosity=0).estimates['GateSetTomography'].models['final iteration estimate']
+            candidate_model = _better_model(candidate_model_fit, candidate_model_zero_fit, data.dataset)
+            random_jump_model = random_jumps_logl_GST(data, candidate_model, cptp_penalty, optimizer=optimizers[-1])
+
+            deltalogl_fn.model = _better_model(random_jump_model, candidate_model, data.dataset).copy()
+
+            candidate_model = None
+            candidate_model_fit = None
+            candidate_model_zero = None
+            candidate_model_zero_fit = None
+            random_jump_model = None
 
             quantity = (deltalogl_fn.fn()- prev_dlogl)*2
             if  verbosity > 1:
                 if i  % 1 == 0:
-                    print('Model ', i, ' has ev. ratio of ', quantity, f' with delta logl of {deltalogl_fn.fn()=}', flush=True)
-            
-            level_chunk.append([deltalogl_fn.model.to_vector(), quantity, i])
+                    if non_cpness < NON_CP_THRESHOLD:
+                        print('Model ', i, ' has ev. ratio of ', quantity, f' with sum-negative-choi-eigenvals= {non_cpness}', flush=True)
+                    else:
+                        print('Model ', i, ' has ev. ratio of ', quantity, f' with sum-negative-choi-eigenvals= {non_cpness}, ignoring', flush=True)
+            if non_cpness < NON_CP_THRESHOLD:
+                level_chunk.append([deltalogl_fn.model.to_vector(), quantity, i])
+            else:
+                level_chunk.append([deltalogl_fn.model.to_vector(), None, i])
         
         if comm is not None:
             level_raw = comm.allgather(level_chunk)
@@ -516,19 +564,28 @@ def do_greedy_from_full_exact(initial_model, data, er_thresh=2.0, verbosity=2, m
         else:
             level = level_chunk
 
-        #Purge out all entries from processes that did not compute anything
-        level = [candidate for candidate in level if candidate[2] != -1]
-            
-        best_model = sorted(level, key=lambda x: x[1])[0]
+        #DEBUG make sure we computed every model
+        params_removed = [candidate[2] for candidate in level]
+        params_removed = sorted(params_removed)
+        assert   params_removed == list(range(num_total_models)), 'rank ' + str(rank) + ' ' + str(params_removed) + '\n' + str(list(range(num_total_models)))
 
-        reduced_model = remove_param(reduced_model, best_model[2], zero=not transfer_seed)
+        #Purge non-CP-models
+        level = [candidate for candidate in level if candidate[1] is not None]
 
-        if verbosity and rank == 0:
-            print(f'Model {best_model[2]} has lowest evidence ratio {best_model[1]:.4f}')
-        
-        if best_model[1] > er_thresh or len(best_model[0]) == 1:
+        if len(level) > 0:
+            best_model = sorted(level, key=lambda x: x[1])[0]
+
+            reduced_model = remove_param(reduced_model, best_model[2], zero=not transfer_seed)
+
+            if verbosity and rank == 0:
+                print(f'Model {best_model[2]} has lowest evidence ratio {best_model[1]:.4f}')
+            if best_model[1] > er_thresh:
+                exceeded_threshold = True
+        else:
+            all_non_cp = True
+        if  exceeded_threshold or all_non_cp:
                 if rank == 0 and verbosity > 0:
-                    print('All models from this level exceeded evidence ratio threshold, model rejected. Stopping!')
+                    print('All CP models from this level exceeded evidence ratio threshold, model rejected. Stopping!')
                 exceeded_threshold = True
                 if rank == 0 and verbosity > 0:
                     print('Removed ', len(graph_levels)-1, ' parameters')
