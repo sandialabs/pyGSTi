@@ -924,23 +924,33 @@ class LindbladCoefficientBlock(_NicelySerializable):
         num_bels = len(self._bel_labels)
         params = v.reshape((num_bels, num_bels))
 
+        params_upper_indices = triu_indices(num_bels)
         if self._param_mode == 'cholesky':
-            # rebuild the Hermitian block_data = L · L† from the Cholesky‐style params
+            # params is an array of length num_bels*num_bels that
+            # encodes a lower-triangular matrix "cache_mx" via:
+            #  cache_mx[i,i] = params[i,i]
+            #  cache_mx[i,j] = params[i,j] + 1j*params[j,i] (i > j)
             cache_mx : _np.ndarray = self._cache_mx # type: ignore
-            # fill cache_mx from params:
-            #   diag entries:
-            diag_idxs = cached_diag_indices(num_bels)
-            cache_mx[diag_idxs] = params[diag_idxs]
-            # lower‐triangle real, upper‐triangle imaginary
-            upper = triu_indices(num_bels)
-            cache_mx_T = cache_mx.T
-            cache_mx_T[upper] = params.T[upper] + 1j * params[upper]
-            cache_mx[:] = cache_mx_T.T
-            # now form block_data = L L†
-            self.block_data[:, :] = cache_mx @ cache_mx.conjugate().T
+
+            params_upper = 1j * params[params_upper_indices]
+            params_lower = (params.T)[params_upper_indices]
+
+            cache_mx_trans = cache_mx.T
+            cache_mx_trans[params_upper_indices] = params_lower + params_upper
+            diag_indices = cached_diag_indices(num_bels)
+            cache_mx[diag_indices] = params[diag_indices]
+
+            # The matrix of (complex) "other"-coefficients is build by assuming
+            # cache_mx is its Cholesky decomp; means otherCoeffs is pos-def.
+
+            # NOTE that the Cholesky decomp with all positive real diagonal
+            # elements is *unique* for a given positive-definite block_data
+            # matrix, but we don't care about this uniqueness criteria and so
+            # the diagonal els of cache_mx can be negative and that's fine -
+            # block_data will still be posdef.
+            self.block_data[:, :] = cache_mx @ cache_mx.T.conj()
 
         elif self._param_mode == 'elements':
-            params_upper_indices = triu_indices(num_bels) 
             params_upper = -1j*params[params_upper_indices]
             params_lower = (params.T)[params_upper_indices]
 
