@@ -458,7 +458,7 @@ def do_greedy_from_full_exact(initial_model, data, er_thresh=2.0, verbosity=2, m
                 deltalogl_fn.model.from_vector(initial_model.to_vector().copy())
             else:
 
-                deltalogl_fn.model.from_vector(_custom_fit_heuristic(initial_model.copy(), data, builders, optimizers, cptp_penalty, verbosity))
+                deltalogl_fn.model.from_vector(_custom_fit_heuristic(initial_model.copy(), data, builders, optimizers, cptp_penalty, verbosity=0))
         
         if comm is not None:
             deltalogl_fn.model.from_vector(comm.bcast(deltalogl_fn.model.to_vector(), root = 0))
@@ -491,16 +491,17 @@ def do_greedy_from_full_exact(initial_model, data, er_thresh=2.0, verbosity=2, m
         for i in chunk_range:
             
             candidate_model = remove_param(reduced_model, i, zero=False)
-            deltalogl_fn.model = _custom_fit_heuristic(candidate_model, data, builders, optimizers, cptp_penalty, verbosity)
+            deltalogl_fn.model = _custom_fit_heuristic(candidate_model, data, builders, optimizers, cptp_penalty, verbosity=0)
 
             quantity = (deltalogl_fn.fn()- prev_dlogl)*2
             non_cpness = non_cp_metric(deltalogl_fn.model)
+            norm = np.linalg.norm(deltalogl_fn.model.to_vector())
             if  verbosity > 1:
                 if i  % 1 == 0:
                     if non_cpness < NON_CP_THRESHOLD:
-                        print('Model ', i, ' has ev. ratio of ', quantity, f' with sum-negative-choi-eigenvals= {non_cpness}', flush=True)
+                        print('Model ', i, ' has ev. ratio of ', quantity, f' with sum-negative-choi-eigenvals= {non_cpness}, |x|={norm}', flush=True)
                     else:
-                        print('Model ', i, ' has ev. ratio of ', quantity, f' with sum-negative-choi-eigenvals= {non_cpness}, ignoring', flush=True)
+                        print('Model ', i, ' has ev. ratio of ', quantity, f' with sum-negative-choi-eigenvals= {non_cpness}, |x|={norm} ignoring', flush=True)
             if non_cpness < NON_CP_THRESHOLD:
                 level_chunk.append([deltalogl_fn.model.to_vector(), quantity, i])
             else:
@@ -513,16 +514,14 @@ def do_greedy_from_full_exact(initial_model, data, er_thresh=2.0, verbosity=2, m
             
             i = left_over_start_index + rank 
             candidate_model = remove_param(reduced_model, i, zero=False)
-            
-
-            deltalogl_fn.model = _custom_fit_heuristic(candidate_model, data, builders, optimizers, cptp_penalty, verbosity)
+            deltalogl_fn.model = _custom_fit_heuristic(candidate_model, data, builders, optimizers, cptp_penalty, verbosity=0)
             quantity = (deltalogl_fn.fn()- prev_dlogl)*2
             if  verbosity > 1:
                 if i  % 1 == 0:
                     if non_cpness < NON_CP_THRESHOLD:
-                        print('Model ', i, ' has ev. ratio of ', quantity, f' with sum-negative-choi-eigenvals= {non_cpness}', flush=True)
+                        print('Model ', i, ' has ev. ratio of ', quantity, f' with sum-negative-choi-eigenvals= {non_cpness}, |x|={norm}', flush=True)
                     else:
-                        print('Model ', i, ' has ev. ratio of ', quantity, f' with sum-negative-choi-eigenvals= {non_cpness}, ignoring', flush=True)
+                        print('Model ', i, ' has ev. ratio of ', quantity, f' with sum-negative-choi-eigenvals= {non_cpness}, |x|={norm} ignoring', flush=True)
             if non_cpness < NON_CP_THRESHOLD:
                 level_chunk.append([deltalogl_fn.model.to_vector(), quantity, i])
             else:

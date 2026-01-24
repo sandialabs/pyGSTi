@@ -105,9 +105,10 @@ class AMSGreedyResult(_NicelySerializable):
 
         num_fogis = self.full_model.fogi_store.fogi_directions.shape[1]
         num_gauge = self.full_model.num_params - num_fogis
+        labels = self.full_model.fogi_errorgen_component_labels(typ='unweighted')
         print('This table omits gauge directions')
         if hide_gauge:
-            compare_parameters_simple(self.trace[0][0][:num_fogis], self.trace[-1][0][:-num_gauge],  self.embedder_matrix[:num_fogis])
+            compare_parameters_simple(self.trace[0][0][:num_fogis], self.trace[-1][0][:-num_gauge],  self.embedder_matrix[:num_fogis], labels)
         else:
             compare_parameters_simple(self.trace[0][0], self.trace[-1][0], self.embedder_matrix)
 
@@ -451,12 +452,30 @@ def logl_GST(data, seed_model, cptp_penalty: float, min_prob_clip=1e-7, optimize
 
     return learned_model
 
-def random_jumps_logl_GST(data, seed_model, cptp_penalty, min_prob_clip=1e-7, optimizer=None, memlimit=None):
-    jump_sizes = [.0001, .0003, .0006, .0009, .0013, .0016, .0019]
+def random_jumps_logl_GST(data, seed_model, cptp_penalty, min_prob_clip=1e-7, optimizer=None, jumps_per_size=None, jump_sizes=None ,memlimit=None):
+    """Given a model, make random jumps of arbitrary size in its parameter space, and seed an instance of logl GST
+    with the result. This function was implemented to supplement regular GST in a search landscape
+    with many local minima.
+
+    Args:
+        data (_type_): _description_
+        seed_model (_type_): _description_
+        cptp_penalty (_type_): _description_
+        min_prob_clip (_type_, optional): _description_. Defaults to 1e-7.
+        optimizer (_type_, optional): _description_. Defaults to None.
+        memlimit (_type_, optional): _description_. Defaults to None.
+
+    Returns:
+        _type_: _description_
+    """
     best_model = seed_model
     seed_copy = seed_model.copy()
-    for jump_size in jump_sizes:
-        for i in range(30):
+    if jumps_per_size is None:
+        jumps_per_size = _np.linspace(2, 10, num=5)
+    if jump_sizes is None:
+        jump_sizes = _np.linspace(0, _np.linalg.norm(seed_model.to_vector())*1.5, num=5)
+    for j, jump_size in enumerate(jump_sizes):
+        for i in range(int(jumps_per_size[j])):
             paramvec = _np.random.normal(0, 1e-2, seed_model.num_params)
             paramvec = paramvec*jump_size/_np.linalg.norm(paramvec)
             seed_copy.from_vector(paramvec + seed_model.to_vector())
@@ -470,20 +489,43 @@ def random_jumps_logl_GST(data, seed_model, cptp_penalty, min_prob_clip=1e-7, op
     return best_model
 
 def custom_fit_heuristic(candidate_model, data, builders, optimizers, cptp_penalty, verbosity):
+    """A heuristic meant to avoid local minima traps that involves doing GST from many different
+    initial points.
 
+    Args:
+        candidate_model (_type_): _description_
+        data (_type_): _description_
+        builders (_type_): _description_
+        optimizers (_type_): _description_
+        cptp_penalty (_type_): _description_
+        verbosity (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
     best_model = None
+    #Create model at target (zero errors)
     candidate_model_zero = candidate_model.copy()
     candidate_model_zero.from_vector(_np.zeros(candidate_model.num_params))
-
+    
+    #do GST from seed and from target model
     candidate_model_fit = parallel_GST(candidate_model, data, builders, optimizers, verbosity=verbosity) 
     candidate_model_zero_fit = parallel_GST(candidate_model_zero, data, builders, optimizers, verbosity=verbosity) 
+
+    #Only keep better option
     best_model = better_model(candidate_model_fit, candidate_model_zero_fit, data.dataset)
+
+    #Do GST starting at random points away from the best model found so far: best_model.to_vector() + random_vector 
     random_jump_model = random_jumps_logl_GST(data, best_model, cptp_penalty, optimizer=optimizers[-1])
+    best_model = better_model(best_model, random_jump_model, data.dataset)
 
-    candidate_model_zero.from_vector(_np.zeros(candidate_model.num_params))
-    random_jump_from_target_model = random_jumps_logl_GST(data, candidate_model_zero, cptp_penalty, optimizer=optimizers[-1])
+    #Do GST starting at random points away from the target model: target_model.to_vector() + random_vector 
+    #candidate_model_zero.from_vector(_np.zeros(candidate_model.num_params))
+    #random_jump_from_target_model = random_jumps_logl_GST(data, candidate_model_zero, cptp_penalty, optimizer=optimizers[-1])
+    
+    best_model = better_model(best_model, random_jump_from_target_model, data.dataset)
 
-    return better_model(better_model(random_jump_model, candidate_model, data.dataset), random_jump_from_target_model, data.dataset)
+    return best_model
 
 def create_red_model(parent_model, embedder_matrix, vec=None, sim=None):
     """TODO
@@ -575,7 +617,7 @@ def reduced_model_approx_GST_fast(red_rowandcol_H, red_row_H, x0, param_to_remov
 
         return x0_prime
 
-def compare_parameters_simple(parent_model_vec, red_model_vec, embedder_matrix):
+def compare_parameters_simple(parent_model_vec, red_model_vec, embedder_matrix, labels=None):
     """TODO: docstring
 
     Args:
@@ -584,22 +626,26 @@ def compare_parameters_simple(parent_model_vec, red_model_vec, embedder_matrix):
         embedder_matrix (_type_): _description_
     """
     projector = embedder_matrix @ embedder_matrix.T
-    assert len(parent_model_vec) == len(projector)
+    
     table_data = [['Full', 'Reduced']]
+    if labels is None:
+        labels = ['']*len(projector)
+
+    assert len(parent_model_vec) == len(projector) and len(projector) == len(labels)
     j = 0
     for i in range(len(parent_model_vec)):
           
         if projector[i][i] == 0:
-            table_data.append([parent_model_vec[i], 'removed'])
+            table_data.append([parent_model_vec[i], 'removed', labels[i]])
         else:
-            table_data.append([parent_model_vec[i], red_model_vec[j]])
+            table_data.append([parent_model_vec[i], red_model_vec[j], labels[i]])
             j += 1
     assert len(red_model_vec) == j
     for l, row in enumerate(table_data):
         if l == 0:
-            print("   {: <25} {: <25}".format(*row), '\n')
+            print("   {: <25} {: <25} ".format(*row), '\n')
         else:
-            print(str(l-1)+"   {: <25} {: <25}".format(*row), '\n')
+            print(str(l-1)+"   {: <25} {: <25} {: <25}".format(*row), '\n')
 
 def ams_results_table(trace, ev_ratio_costs, extra_column=None):
     reducer = create_embedder_matrix_from_trace(trace).T
