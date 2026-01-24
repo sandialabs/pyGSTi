@@ -523,7 +523,7 @@ def custom_fit_heuristic(candidate_model, data, builders, optimizers, cptp_penal
     #candidate_model_zero.from_vector(_np.zeros(candidate_model.num_params))
     #random_jump_from_target_model = random_jumps_logl_GST(data, candidate_model_zero, cptp_penalty, optimizer=optimizers[-1])
     
-    best_model = better_model(best_model, random_jump_from_target_model, data.dataset)
+    #best_model = better_model(best_model, random_jump_from_target_model, data.dataset)
 
     return best_model
 
