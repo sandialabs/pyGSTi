@@ -24,11 +24,11 @@ import itertools as _itertools
 import warnings as _warnings
 
 import numpy as _np
-from pygsti.baseobjs.label import Label as _Label, CircuitLabel as _CircuitLabel
+from pygsti.baseobjs.label import Label as _Label, CircuitLabel as _CircuitLabel, Label as _Label
 from pygsti.baseobjs import outcomelabeldict as _ld, _compatibility as _compat
 from pygsti.tools import internalgates as _itgs
 from pygsti.tools import slicetools as _slct
-from pygsti.tools.exceptions import PoorPerformanceWarning, HashingEditableCircuitWarning
+from pygsti.tools.exceptions import HashingEditableCircuitWarning
 from pygsti.tools.legacytools import deprecate as _deprecate_fn
 
 
@@ -113,6 +113,7 @@ def _label_to_nested_lists_of_simple_labels(lbl, default_sslbls=None, always_ret
     return [_label_to_nested_lists_of_simple_labels(l, default_sslbls, False)
             for l in lbl.components]  # a *list*
 
+
 def _sslbls_of_nested_lists_of_simple_labels(obj, labels_to_ignore=None):
     """ Get state space labels from a nested lists of simple (not compound) Labels. """
     if isinstance(obj, _Label):
@@ -123,7 +124,8 @@ def _sslbls_of_nested_lists_of_simple_labels(obj, labels_to_ignore=None):
         sub_sslbls = [_sslbls_of_nested_lists_of_simple_labels(sub, labels_to_ignore) for sub in obj]
         return None if (None in sub_sslbls) else set(_itertools.chain(*sub_sslbls))
 
-def _accumulate_explicit_sslbls(obj):
+
+def _accumulate_explicit_sslbls(obj) -> set:
     """
     Get all the explicitly given state-space labels within `obj`,
     which can be a Label or a list/tuple of labels.  Returns a *set*.
@@ -418,11 +420,30 @@ class Circuit(object):
             else:  # check == True
                 if layer_labels_objs is None:
                     layer_labels_objs = tuple(map(to_label, layer_labels))
-                if layer_labels_objs != tuple(chk):
-                    raise ValueError(("Error initializing Circuit: "
-                                      " `layer_labels` and `stringrep` do not match: %s != %s\n"
-                                      "(set `layer_labels` to None to infer it from `stringrep`)")
-                                     % (layer_labels, stringrep))
+                expect_len = len(chk)
+                actual_len = len(layer_labels_objs)
+                if expect_len != actual_len:
+                    msg = \
+                    f"""
+                    Error initializing Circuit: `layer_labels` and `stringrep` indicate
+                    a different number of circuit layers: {expect_len} vs {actual_len}.
+                    """
+                    raise ValueError(msg)
+                for i in range(actual_len):
+                    inner_lbls_obj   = layer_labels_objs[i]
+                    inner_chk        = chk[i]
+                    inner_chk_parsed = _Label(inner_chk).with_sorted_inner_labels()
+                    if inner_lbls_obj != inner_chk_parsed:
+                        msg = \
+                        f"""
+                        Error initializing Circuit: `layer_labels` and `stringrep` disagree at
+                        layer index {i}:
+
+                            {inner_lbls_obj} != {inner_chk_parsed}.
+                        
+                        Set `layer_labels` to None to infer it from `stringrep`.
+                        """
+                        raise ValueError(msg)
             if chk_labels is not None:
                 if line_labels == 'auto':
                     line_labels = chk_labels
@@ -493,8 +514,13 @@ class Circuit(object):
         #  or a tuple of Label objects (static case)
         if not editable:
             if layer_labels_objs is None:
-                layer_labels_objs = tuple(map(to_label, layer_labels))
-            labels = layer_labels_objs
+                layer_labels_objs = map(to_label, layer_labels)
+            new_labels = []
+            for layer_lbl in layer_labels_objs: # type: ignore
+                layer_lbl = layer_lbl.with_sorted_inner_labels()
+                new_labels.append(layer_lbl)
+            labels = tuple(new_labels)
+            layer_labels_objs = labels
         else:
             labels = [_label_to_nested_lists_of_simple_labels(layer_lbl)
                       for layer_lbl in layer_labels]
@@ -532,27 +558,29 @@ class Circuit(object):
             self._hash = hash(self._hashable_tup)
             self._str = stringrep
         else:
+            self._hashable_tup = None
+            self._hash = None
             self._str = None # can be None (lazy generation)
         self._name = name  # can be None
         #self._times = None  # for FUTURE expansion
         self.auxinfo = {}  # for FUTURE expansion / user metadata
-        self.in_canonical_form: bool = False
 
     #Note: If editing _copy_init one should also check _bare_init in case changes must be propagated.
     #specialized codepath for copying
     def _copy_init(self, labels, line_labels, editable, name='', stringrep=None, occurrence=None,
-                compilable_layer_indices_tup=(), hashable_tup=None, precomp_hash=None, in_canonical_form=False):
+                compilable_layer_indices_tup=(), hashable_tup=None, precomp_hash=None):
         self._labels = labels
         self._line_labels = line_labels
         self._occurrence_id = occurrence
         self._compilable_layer_indices_tup = compilable_layer_indices_tup # always a tuple, but can be empty.
         self._static = not editable
-        self.in_canonical_form = in_canonical_form # are the layers so that qubit indices are in increasing order?
         if self._static:
             self._hashable_tup = hashable_tup #if static we have already precomputed and cached the hashable circuit tuple.
             self._hash = precomp_hash #Same as previous comment. Only meant to be used in settings where we're explicitly checking for self._static.
             self._str = stringrep
         else:
+            self._hashable_tup = None
+            self._hash = None
             self._str = None # can be None (lazy generation)
         self._name = name  # can be None
         #self._times = None  # for FUTURE expansion
@@ -991,22 +1019,11 @@ class Circuit(object):
         if isinstance(x, Circuit):
             if len(self) != len(x):
                 return False
-            elif self.in_canonical_form != x.in_canonical_form:
-                _warnings.warn((" Either compare circuits both in canonical form or neither in canonical form."
-                            " To convert a circuit to canonical form you should call."
-                            " circuit.canonical_form() beforehand."), PoorPerformanceWarning)
-                if not self.in_canonical_form:
-                    tmp = self.canonicalized()
-                    if tmp._static and x._static and tmp._hash != x._hash:
-                        return False
-                    return tmp.tup == x.tup
-                else:
-                    # X not in form.
-                    tmp = x.canonicalized()
-                    if tmp._static and self._static and tmp._hash != self._hash:
-                        return False
-                    return self.tup == tmp.tup
-            elif self._static and x._static and self._hash != x._hash:
+            if not self._static:
+                self.done_editing()
+            if not x._static:
+                x.done_editing()
+            if self._hash != x._hash:
                 return False
             else:
                 return self.tup == x.tup
@@ -1075,13 +1092,13 @@ class Circuit(object):
                 editable_labels =[[lbl] if lbl.IS_SIMPLE else list(lbl.components) for lbl in self._labels]
                 return ret._copy_init(editable_labels, self._line_labels, editable, 
                                       self._name, self._str, self._occurrence_id, 
-                                      self._compilable_layer_indices_tup, in_canonical_form=self.in_canonical_form)
+                                      self._compilable_layer_indices_tup)
             else:
                 #copy the editable labels (avoiding shallow copy issues)
                 editable_labels = [sublist.copy() for sublist in self._labels]
                 return ret._copy_init(editable_labels, self._line_labels, editable, 
                                       self._name, self._str, self._occurrence_id, 
-                                      self._compilable_layer_indices_tup, in_canonical_form=self.in_canonical_form)
+                                      self._compilable_layer_indices_tup)
         else: #create static copy
             if self._static:
                 #if presently static leverage precomputed hashable_tup and hash. 
@@ -1090,7 +1107,7 @@ class Circuit(object):
                 return ret._copy_init(self._labels, self._line_labels, editable, 
                                       self._name, self._str, self._occurrence_id, 
                                       self._compilable_layer_indices_tup, 
-                                      self._hashable_tup, self._hash, in_canonical_form=self.in_canonical_form)
+                                      self._hashable_tup, self._hash)
             else:
                 static_labels = tuple([layer_lbl if isinstance(layer_lbl, _Label) else _Label(layer_lbl) 
                                        for layer_lbl in self._labels])
@@ -1098,7 +1115,7 @@ class Circuit(object):
                 return ret._copy_init(static_labels, self._line_labels, 
                                       editable, self._name, self._str, self._occurrence_id, 
                                       self._compilable_layer_indices_tup, 
-                                      hashable_tup, hash(hashable_tup), in_canonical_form=self.in_canonical_form)
+                                      hashable_tup, hash(hashable_tup))
 
     def clear(self):
         """
@@ -4956,35 +4973,15 @@ class Circuit(object):
         """
         if not self._static:
             self._static = True
-            self._labels = tuple([layer_lbl if isinstance(layer_lbl, _Label) 
-                                  else _Label(layer_lbl) for layer_lbl in self._labels])
+            labels_list = []
+            for layer_lbl in self._labels: # type: ignore
+                if not isinstance(layer_lbl, _Label):
+                    layer_lbl = _Label(layer_lbl)
+                layer_lbl = layer_lbl.with_sorted_inner_labels()
+                labels_list.append(layer_lbl)
+            self._labels = tuple(labels_list)
         self._hashable_tup = self.tup
         self._hash = hash(self._hashable_tup)
-
-    def canonicalized(self):
-        """
-        Convert a circuit into a canonical form where each of the gates within a layer is sorted in increasing order
-        of the qubits it is operating on.
-        Note that this will not force the qubits to be labeled `0 \dots q` or `Q0 \dots Qq`.
-        
-        It is assumed that the circuit will be fully expanded before calling this function.
-
-        Returns the canonical version of the circuit.
-        Two equivalent canonical circuits will have the same hash.
-        """
-        if self.in_canonical_form:
-            return self # No need to update it.
-        cpy = self.copy(editable=True)
-        for layer_num in range(self.num_layers):
-            layer = cpy.layer(layer_num)
-            tmp1 = { lbl.sslbls: lbl for lbl in layer }
-            tmp2 = [ tmp1[k] for k in sorted(tmp1.keys()) ]
-            cpy[layer_num] = tmp2
-        
-        cpy.in_canonical_form = True
-        cpy.done_editing()
-        return cpy
-
 
 
 class CompressedCircuit(object):
