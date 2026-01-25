@@ -255,8 +255,7 @@ class CircuitTester(BaseCase):
         self.assertEqual(c.compilable_layer_indices, (1,))
         self.assertArraysEqual(c.compilable_by_layer, np.array([False,True,False]))
         
-
-        expected_tup = (Label(('Gi', 'Q0')), Label(('Gy', 'Q1')), Label(('Gx', 'Q8')), '@', 'Q0', 'Q1', 'Q8', 'Q12', '__CMPLBL__', 1)
+        expected_tup = (Label(('Gi', 'Q0')), Label(('Gx', 'Q8')), Label(('Gy', 'Q1')), '@', 'Q0', 'Q1', 'Q8', 'Q12', '__CMPLBL__', 1)
         self.assertEqual(c.tup, expected_tup)
 
         cstr = "Gi:Q0Gx:Q8~Gy:Q1@(Q0,Q1,Q8,Q12)"
