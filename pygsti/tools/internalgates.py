@@ -460,6 +460,9 @@ def standard_gatenames_stim_conversions():
     gate_dict['Gc22'] = stim.Tableau.from_unitary_matrix(_np.array([[0.5 + 0.5j, 0.5 - 0.5j], [-0.5 + 0.5j, -0.5 - 0.5j]], complex), endian='big')  # This is P H Pdag
     gate_dict['Gc23'] = stim.Tableau.from_unitary_matrix(_np.array([[1, 0], [0, -1j]], complex), endian='big') # This is Gzmpi2 / Gpdag (up to phase)
 
+    gate_dict['Gx'] = gate_dict['Gxpi2']
+    gate_dict['Gy'] = gate_dict['Gypi2']
+    gate_dict['Gz'] = gate_dict['Gzpi2']
 
     return gate_dict
 

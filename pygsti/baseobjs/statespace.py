@@ -14,6 +14,7 @@ import copy as _copy
 import numbers as _numbers
 import sys as _sys
 import numpy as _np
+from math import log2
 
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 
@@ -1402,7 +1403,7 @@ def default_space_for_dim(dim):
     -------
     StateSpace
     """
-    nqubits = int(round(_np.log2(dim) / 2))
+    nqubits = int(round(log2(dim) / 2))
     if 4**nqubits == dim:
         return QubitSpace(nqubits)
     else:
