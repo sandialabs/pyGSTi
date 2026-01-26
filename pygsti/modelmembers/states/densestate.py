@@ -267,7 +267,11 @@ class DenseState(DenseStateInterface, _State):
             if 'Basis object has unexpected dimension' in se and len(serial_memo) > 0:
                 member = list(serial_memo.values())[0]
                 basis = member.parent.basis
-                state_space = basis.state_space
+                from pygsti.baseobjs.basis import DirectSumBasis
+                if not isinstance(basis, DirectSumBasis):
+                    state_space = basis.state_space
+                else:
+                    state_space = member.parent.state_space
                 return cls(vec, basis, mm_dict['evotype'], state_space)
             raise e
 
