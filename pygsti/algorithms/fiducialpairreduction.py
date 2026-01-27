@@ -2074,6 +2074,32 @@ def _make_spam_static(model):
 
 
 def _copy_to_static_explicitop_model(mdl):
+    """Create and return an "effective" a copy of `mdl` that is an ExplicitOpModel with static elements.
+    
+    If `mdl` is already an ExplicitOpModel it is copied and returned
+     after setting all paramterizations to 'static'.
+    Otherwise an ExplicitOpModel is constructed from quantities within
+     `mdl` (for instance, if `mdl` is an ImplicitOpModel), namely:
+      mdl.state_space, mdl.basis, mdl.sim, and mdl.evotype.  Then elements
+      from mdl.operation_blks['layers'], mdl.prep_blks['layers'], and mdl.povm_blks['layers']
+      are copied into the new ExplicitOpModel as static dense elements.
+    
+    NOTE: instruments are not currently handled, nor is every operation or spam element
+      necessarily copied, so this function should be used with caution, as it falls
+      short of a full converter between model types.
+
+    This function is primarily useful within FPR applications where code 
+    assumes an ExplicitOpModel but the user may pass in other model types.
+
+    Parameters
+    ----------
+    mdl : Model
+        The model to copy.  Must be an ExplicitOpModel or ImplicitOpModel.
+    Returns
+    -------
+    Model
+        A copy of `mdl` with all SPAM elements set to 'static' parameterization.
+    """
     if isinstance(mdl, _ExplicitOpModel):
         ret = mdl.copy()
         ret.set_all_parameterizations('static')
