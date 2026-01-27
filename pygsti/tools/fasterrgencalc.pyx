@@ -20,7 +20,7 @@ from cpython.mem cimport PyMem_Malloc, PyMem_Free
 import stim
 from libc.math cimport pow
 
-cdef np.complex128_t[32] POSSIBLE_PHASE_VALUES_INDEXED_NEGJ_J_NEG1 = [1, -1, 1j, -1j,
+cdef const np.complex128_t[32] POSSIBLE_PHASE_VALUES_INDEXED_NEGJ_J_NEG1 = [1, -1, 1j, -1j,
                                                                      -1, 1, -1j, 1j,
                                                                      -1j, 1j, 1, -1,
                                                                      1j, -1j, -1, 1,
