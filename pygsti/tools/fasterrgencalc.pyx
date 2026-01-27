@@ -20,6 +20,18 @@ from cpython.mem cimport PyMem_Malloc, PyMem_Free
 import stim
 from libc.math cimport pow
 
+cdef np.complex128_t[32] POSSIBLE_PHASE_VALUES_INDEXED_NEGJ_J_NEG1 = [1, -1, 1j, -1j,
+                                                                     -1, 1, -1j, 1j,
+                                                                     -1j, 1j, 1, -1,
+                                                                     1j, -1j, -1, 1,
+                                                                     -1, 1, -1j, 1j,
+                                                                     1, -1, 1j, -1j,
+                                                                     1j, -1j, -1, 1,
+                                                                     -1j, 1j, 1, -1]
+
+cdef inline np.complex128_t get_phase_from_array(int count_negj, int count_j, int count_negone):
+    return POSSIBLE_PHASE_VALUES_INDEXED_NEGJ_J_NEG1[count_negone + 2*count_j + 8*count_negj]
+
 # Optimized implementations of functions from errgenproptools.py
 
 # Optimized version of pauli_phase_update_all_zeros,
@@ -100,6 +112,7 @@ cpdef tuple fast_pauli_phase_update_all_zeros(str pauli_str, bint dual=False):
     cdef:
         int prefix_len = 0
         int i, n, pauli_len
+        int count_y = 0
         np.complex128_t overall_phase = 1.0
         np.complex128_t sign = 1.0
         unsigned char op   # declare op outside the loop
@@ -142,17 +155,35 @@ cpdef tuple fast_pauli_phase_update_all_zeros(str pauli_str, bint dual=False):
         raise MemoryError("Failed to allocate memory for output buffer")
 
     # We do not need to initialize the buffer. Just specify the answer in the loop.
-    out_buffer[n] = 0  # null termination
 
     for i in range(n):
-        # Retrieve the operator character from the pointer.
         op = p[prefix_len + i]
-        overall_phase *= get_phase0_ascii(op, dual)
-        if pauli_flip_ascii(op):
-            # Use ASCII 49 for '1'.
-            out_buffer[i] = 49  # Flip bit from '0' to '1'
+        if (op == 89):
+            count_y += (op == 89)
+            count_y &= 0x03 # we only need 0,1,2,3.
+            out_buffer[i] = 49
+        elif (op == 88):
+            out_buffer[i] = 49
         else:
             out_buffer[i] = 48
+    out_buffer[n] = 0  # null termination
+
+    # Look up the result of the matrix multiplication.    
+    if dual:
+        if count_y == 1:
+            overall_phase = -1j
+        elif count_y == 2:
+            overall_phase = -1
+        elif count_y == 3:
+            overall_phase = 1j
+    else:
+        if count_y == 1:
+            overall_phase = 1j
+        elif count_y == 2:
+            overall_phase = -1
+        elif count_y == 3:
+            overall_phase = -1j
+
     overall_phase *= sign
     
     # Create a Python string from the out_buffer.
@@ -257,9 +288,11 @@ cpdef tuple fast_pauli_phase_update(str pauli_str, str bit_str, bint dual=False)
     """
     cdef:
         int prefix_len = 0
+        int count_negj = 0
+        int count_j = 0
+        int count_negone = 0
         int i, n, pauli_len, bit_len
         np.complex128_t overall_phase = 1.0
-        np.complex128_t sign = 1.0   # holds the sign from the pauli's prefix
         unsigned char op   # for each operator character
         bint bit_val     # current bit value, 0 or 1
         char* out_buffer
@@ -276,21 +309,19 @@ cpdef tuple fast_pauli_phase_update(str pauli_str, str bit_str, bint dual=False)
     if pauli_len > 0:
         if p[0] == ord('+'):
             if pauli_len >= 2 and p[1] == ord('i'):
-                sign = 1j
+                count_j = 1
                 prefix_len = 2
             else:
-                sign = 1
                 prefix_len = 1
         elif p[0] == ord('-'):
             if pauli_len >= 2 and p[1] == ord('i'):
-                sign = -1j
+                count_negj = 1
                 prefix_len = 2
             else:
-                sign = -1
+                count_negone = 1
                 prefix_len = 1
         else:
             # No recognized sign prefix.
-            sign = 1
             prefix_len = 0
     else:
         # Empty pauli string.
@@ -306,6 +337,29 @@ cpdef tuple fast_pauli_phase_update(str pauli_str, str bit_str, bint dual=False)
     if not out_buffer:
         raise MemoryError("Failed to allocate memory for output buffer")
 
+    if dual: # specializing on dual.
+        for i in range(n):
+            op = p[prefix_len + i]
+            bit_val = b[i] - 48
+            if (op == 89) and bit_val: # Y ASCII 89
+                count_j = (count_j + 1) & 0x03
+            elif (op == 89):
+                count_negj = (count_negj + 1) & 0x03
+            elif (op == 90) and bit_val:  # Z ASCII 90
+                count_negone = (count_negone + 1) & 0x01
+
+    else:
+        for i in range(n):
+            op = p[prefix_len + i]
+            bit_val = b[i] - 48
+            if (op == 89) and bit_val:
+                count_negj = (count_negj + 1) & 0x03
+            elif (op == 89):
+                count_j = (count_j + 1) & 0x03
+            elif (op == 90) and bit_val:
+                count_negone = (count_negone + 1) & 0x01
+
+
     # Process each qubit position.
     for i in range(n):
         # Get the operator character from the pointer.
@@ -314,8 +368,6 @@ cpdef tuple fast_pauli_phase_update(str pauli_str, str bit_str, bint dual=False)
         # (Assume bit_str characters are '0' or '1')
         # 49 ASCII '1'
         bit_val = b[i] - 48
-        # Multiply overall_phase by factor given by the operator and bit.
-        overall_phase *= get_phase_ascii(op, bit_val, dual)
         # Determine the output bit.
         # If the pauli operator flips, then output the inverted bit.
         if pauli_flip_ascii(op):
@@ -325,7 +377,9 @@ cpdef tuple fast_pauli_phase_update(str pauli_str, str bit_str, bint dual=False)
             # No flip: just copy the input bit.
             out_buffer[i] = b[i]
     out_buffer[n] = 0  # null-terminate output C string
-    overall_phase *= sign
+
+    # Since each term only has phases of +/-1, +/-1j, just precompute the options and store in a table.
+    overall_phase = get_phase_from_array(count_negj, count_j, count_negone)
 
     # Create a Python string from the out_buffer.
     cdef object out_pystr = PyUnicode_FromStringAndSize(out_buffer, n)
