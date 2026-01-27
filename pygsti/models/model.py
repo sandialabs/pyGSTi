@@ -10,6 +10,8 @@ Defines the Model class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
+
 import bisect as _bisect
 import copy as _copy
 import itertools as _itertools
@@ -32,6 +34,7 @@ from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.tools import slicetools as _slct
 from pygsti.tools import matrixtools as _mt
+from pygsti.tools.exceptions import UnknownGaugeSpaceDimension as _UnknownGaugeSpaceDimension
 from pygsti.circuits import Circuit as _Circuit, SeparatePOVMCircuit as _SeparatePOVMCircuit
 
 MEMLIMIT_FOR_NONGAUGE_PARAMS = None
@@ -105,46 +108,23 @@ class Model(_NicelySerializable):
         return len(self._paramvec)
 
     @property
-    def num_modeltest_params(self):
+    def num_modeltest_params(self) -> int:
         """
         The parameter count to use when testing this model against data.
 
         Often times, this is the same as :meth:`num_params`, but there are times
         when it can convenient or necessary to use a parameter count different than
         the actual number of parameters in this model.
-
-        Returns
-        -------
-        int
-            the number of model parameters.
         """
         if not hasattr(self, '_num_modeltest_params'):  # for backward compatibility
             self._num_modeltest_params = None
 
         if self._num_modeltest_params is not None:
             return self._num_modeltest_params
-        elif 'num_nongauge_params' in dir(self):  # better than hasattr, which *runs* the @property method
-            if MEMLIMIT_FOR_NONGAUGE_PARAMS is not None:
-                if hasattr(self, 'num_elements'):
-                    memForNumGaugeParams = self.num_elements * (self.num_params + self.state_space.dim**2) \
-                        * _np.dtype('d').itemsize  # see Model._buildup_dpg (this is mem for dPG)
-                else:
-                    return self.num_params
-
-                if memForNumGaugeParams > MEMLIMIT_FOR_NONGAUGE_PARAMS:
-                    _warnings.warn(("Model.num_modeltest_params did not compute number of *non-gauge* parameters - "
-                                    "using total (make MEMLIMIT_FOR_NONGAUGE_PARAMS larger if you really want "
-                                    "the count of nongauge params"))
-                    return self.num_params
-
-            try:
-                return self.num_nongauge_params  # len(x0)
-            except:  # numpy can throw a LinAlgError or sparse cases can throw a NotImplementedError
-                _warnings.warn(("Model.num_modeltest_params could not obtain number of *non-gauge* parameters"
-                                " - using total instead"))
-                return self.num_params
-        else:
-            return self.num_params
+        
+        _warnings.warn(("Model.num_modeltest_params could not obtain number of *non-gauge* parameters"
+                        " - using total instead"), _UnknownGaugeSpaceDimension)
+        return self.num_params
 
     @num_modeltest_params.setter
     def num_modeltest_params(self, count):
@@ -326,7 +306,7 @@ class Model(_NicelySerializable):
         """
         pass
 
-    def copy(self):
+    def copy(self) -> Model:
         """
         Copy this model.
 
@@ -2309,7 +2289,7 @@ class OpModel(Model):
         copy_into._reinit_opcaches()
         super(OpModel, self)._post_copy(copy_into, memo)
 
-    def copy(self):
+    def copy(self) -> OpModel:
         """
         Copy this model.
 
@@ -2320,7 +2300,7 @@ class OpModel(Model):
         """
         self._clean_paramvec()  # ensure _paramvec is rebuilt if needed
         if OpModel._pcheck: self._check_paramvec()
-        ret = Model.copy(self)
+        ret = Model.copy(self) # <-- don't be fooled. That's an OpModel!
         if self._param_bounds is not None and self.parameter_labels is not None:
             ret._clean_paramvec()  # will *always* rebuild paramvec; do now so we can preserve param bounds
             assert _np.all(self.parameter_labels == ret.parameter_labels)  # ensure ordering is the same

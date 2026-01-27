@@ -10,14 +10,20 @@ Defines the ModelChild and ModelMember classes, which represent Model members
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
+
 from collections import OrderedDict
 import copy as _copy
 
 import numpy as _np
 
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
+from pygsti.pgtypes import SpaceT
 from pygsti.tools import listtools as _lt
 from pygsti.tools import slicetools as _slct
+from pygsti.tools import matrixtools as _mt
+
+from typing import Optional
 
 
 class ModelChild(object):
@@ -801,6 +807,74 @@ class ModelMember(ModelChild, _NicelySerializable):
 
     def to_dense(self) -> _np.ndarray:
         raise NotImplementedError('Derived classes must implement .to_dense().')
+
+    def _to_transformed_dense(self, T_domain: _mt.OperatorLike, T_codomain: _mt.OperatorLike, on_space: SpaceT='minimal') -> _np.ndarray:
+        """
+        Return an array, XT, obtained by suitably transforming X = self.to_dense(on_space).
+
+        The basic nature of the transformation X --> XT depends on the category of `self`,
+        as determined by its domain and codomain.
+
+            | abstract category | domain       | codomain     |
+            | ----------------- | ------------ | ------------ |
+            | vector            | field        | vector space |
+            | functional        | vector space | field        |
+            | operator          | vector space | vector space |
+
+        To state the specific transformation X --> XT, let op(X) denote the operator
+        representation of X obtained by (1) interpreting fields as 1-dimensional vector
+        spaces, and (2) having linear operators act on vectors by left-multiplication.
+
+        The returned array, XT, is defined through its op(XT) representation:
+
+            | abstract category | op(XT) representation of XT   |
+            | ----------------- | ----------------------------- |
+            | vector            | T_codomain @ op(X)            |
+            | functional        |              op(X) @ T_domain |
+            | operator          | T_codomain @ op(X) @ T_domain |
+
+        Note that T_domain is ignored for abstract vectors (i.e., state prep), and T_codomain
+        is ignored for abstract functionals (i.e., POVM effects).
+        """
+        raise NotImplementedError()
+
+    def residuals(self, other: ModelMember,
+            transform: Optional[_mt.OperatorLike]=None, inv_transform: Optional[_mt.OperatorLike]=None
+        ) -> _np.ndarray:
+        # This implementation was introduced as part of a heavy refactor, but it preserves all intended
+        # semantics of the old implementation.
+        T_domain   = _mt.to_operatorlike(transform)
+        T_codomain = _mt.to_operatorlike(inv_transform)
+        # ^ to_operatorlike casts None to IdentityOperator
+        X = self._to_transformed_dense(T_domain, T_codomain)
+        if isinstance(inv_transform, _mt.IdentityOperator):
+            # Passing inv_transform as an IdentityOperator (rather than casting from None)
+            # is a flag. It indicates that we want to apply `transform` to `other` as well.
+            #
+            # (Yes, this sort of flag interpretation is bad design. No, I don't want to
+            #  spend the time on a good design.)
+            Y = other._to_transformed_dense(T_domain, inv_transform)
+        else:
+            Y = other.to_dense()
+        return (X - Y).ravel()
+
+    def frobeniusdist_squared(self, other: ModelMember,
+            transform: Optional[_mt.OperatorLike]=None, inv_transform: Optional[_mt.OperatorLike]=None
+        ) -> _np.floating:
+        """
+        Return the squared Frobenius norm of the difference between `self` and `other`,
+        possibly after transformation by `transform` and/or `inv_transform`.
+        """
+        return _np.linalg.norm(self.residuals(other, transform, inv_transform))**2
+
+    def frobeniusdist(self, other: ModelMember,
+            transform: Optional[_mt.OperatorLike]=None, inv_transform: Optional[_mt.OperatorLike]=None
+        ) -> _np.floating:
+        """
+        Return the Frobenius norm of the difference between `self` and `other`,
+        possibly after transformation by `transform` and/or `inv_transform`.
+        """
+        return _np.linalg.norm(self.residuals(other, transform, inv_transform))
 
     def _is_similar(self, other, rtol, atol):
         """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
