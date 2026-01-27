@@ -1,0 +1,18 @@
+{
+    "type": "pygsti.protocols.rb.RandomizedBenchmarking",
+    "auxfile_types": {},
+    "name": "RB",
+    "tags": {},
+    "_nameddict_attributes": [],
+    "seed": [
+        0.8,
+        0.95
+    ],
+    "depths": "all",
+    "bootstrap_samples": 200,
+    "asymptote": "std",
+    "rtype": "EI",
+    "datatype": "adjusted_success_probabilities",
+    "defaultfit": "A-fixed",
+    "energies": false
+}
