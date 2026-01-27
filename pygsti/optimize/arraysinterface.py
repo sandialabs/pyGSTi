@@ -2,7 +2,7 @@
 Implements the ArraysInterface object and supporting functionality.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -579,6 +579,19 @@ class UndistributedArraysInterface(ArraysInterface):
         """
         return _np.diag_indices_from(jtj)
 
+    def jtj_update_regularization(self, jtj, prd, mu):
+        ind = self.jtj_diag_indices(jtj)
+        jtj[ind] = prd + mu
+        return
+
+    def jtj_pre_regularization_data(self, jtj):
+        return jtj[self.jtj_diag_indices(jtj)].copy()
+    
+    
+    def jtj_max_diagonal_element(self, jtj):
+        diag = jtj[self.jtj_diag_indices(jtj)]
+        return self.max_x(diag)
+
 
 class DistributedArraysInterface(ArraysInterface):
     """
@@ -625,6 +638,9 @@ class DistributedArraysInterface(ArraysInterface):
     def allocate_jac(self):
         """
         Allocate an array for holding a Jacobian matrix (type `'ep'`).
+
+        Note: this function is only called when the Jacobian needs to be
+        approximated with finite differences.
 
         Returns
         -------
@@ -1266,3 +1282,15 @@ class DistributedArraysInterface(ArraysInterface):
         col_indices = _np.arange(global_param_indices.start, global_param_indices.stop)
         assert(len(row_indices) == len(col_indices))  # checks that global_param_indices is good
         return row_indices, col_indices  # ~ _np.diag_indices_from(jtj)
+
+    def jtj_update_regularization(self, jtj, prd, mu):
+        ind = self.jtj_diag_indices(jtj)
+        jtj[ind] = prd + mu
+        return
+
+    def jtj_pre_regularization_data(self, jtj):
+        return jtj[self.jtj_diag_indices(jtj)].copy()
+    
+    def jtj_max_diagonal_element(self, jtj):
+        diag = jtj[self.jtj_diag_indices(jtj)]
+        return self.max_x(diag)

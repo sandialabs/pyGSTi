@@ -2,7 +2,7 @@
 Defines the ErrorgenSpace class and supporting functionality.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -97,13 +97,3 @@ class ErrorgenSpace(object):
         for j in range(self.vectors.shape[1]):
             sign = +1 if max(self.vectors[:, j]) >= -min(self.vectors[:, j]) else -1
             self.vectors[:, j] /= sign * _np.linalg.norm(self.vectors[:, j], ord=norm_order)
-
-
-#class LowWeightErrorgenSpace(ErrorgenSpace):
-#    """
-#    Like a SimpleErrorgenSpace but spanned by only the elementary error generators corresponding to
-#    low-weight (up to some maximum weight) basis elements
-#    (so far, only Pauli-product bases work for this, since `Basis` objects don't keep track of each
-#    element's weight (?)).
-#    """
-#    pass

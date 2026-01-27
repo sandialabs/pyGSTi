@@ -2,7 +2,7 @@
 Volumetric Benchmarking Protocol objects
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -11,11 +11,12 @@ Volumetric Benchmarking Protocol objects
 #***************************************************************************************************
 
 import numpy as _np
+import copy as _copy
 
-from pygsti.protocols import protocol as _proto
-from pygsti.models.oplessmodel import SuccessFailModel as _SuccessFailModel
 from pygsti import tools as _tools
 from pygsti.algorithms import randomcircuit as _rc
+from pygsti.protocols import protocol as _proto
+from pygsti.models.oplessmodel import SuccessFailModel as _SuccessFailModel
 
 
 class ByDepthDesign(_proto.CircuitListsDesign):
@@ -67,6 +68,25 @@ class ByDepthDesign(_proto.CircuitListsDesign):
         mapped_qubit_labels = self._mapped_qubit_labels(mapper)
         return ByDepthDesign(self.depths, mapped_circuit_lists, mapped_qubit_labels, remove_duplicates=False)
 
+    def truncate_to_lists(self, list_indices_to_keep):
+        """
+        Truncates this experiment design by only keeping a subset of its circuit lists.
+
+        Parameters
+        ----------
+        list_indices_to_keep : iterable
+            A list of the (integer) list indices to keep.
+
+        Returns
+        -------
+        ByDepthDesign
+            The truncated experiment design.
+        """
+        ret = _copy.deepcopy(self) # Works for derived classes too
+        ret.depths = [self.depths[i] for i in list_indices_to_keep]
+        ret.circuit_lists = [self.circuit_lists[i] for i in list_indices_to_keep]
+        return ret
+
 
 class BenchmarkingDesign(ByDepthDesign):
     """
@@ -98,12 +118,27 @@ class BenchmarkingDesign(ByDepthDesign):
         Whether to remove duplicates when automatically creating
         all the circuits that need data.
     """
+    
+    paired_with_circuit_attrs = None
+    """List of attributes which are paired up with circuit lists
+
+    These will be saved as external files during serialization,
+    and are truncated when circuit lists are truncated.
+    """
 
     def __init__(self, depths, circuit_lists, ideal_outs, qubit_labels=None, remove_duplicates=False):
         assert(len(depths) == len(ideal_outs))
         super().__init__(depths, circuit_lists, qubit_labels, remove_duplicates)
+        
         self.idealout_lists = ideal_outs
-        self.auxfile_types['idealout_lists'] = 'json'
+
+        if self.paired_with_circuit_attrs is None:
+            self.paired_with_circuit_attrs = ['idealout_lists']
+        else:
+            self.paired_with_circuit_attrs.insert(0, 'idealout_lists')
+        
+        for paired_attr in self.paired_with_circuit_attrs:
+            self.auxfile_types[paired_attr] = 'json'
 
     def _mapped_circuits_and_idealouts_by_depth(self, mapper):
         """ Used in derived classes """
@@ -133,6 +168,76 @@ class BenchmarkingDesign(ByDepthDesign):
         mapped_qubit_labels = self._mapped_qubit_labels(mapper)
         return BenchmarkingDesign(self.depths, mapped_circuit_lists, list(self.idealout_lists),
                                   mapped_qubit_labels, remove_duplicates=False)
+    
+    def truncate_to_lists(self, list_indices_to_keep):
+        """
+        Truncates this experiment design by only keeping a subset of its circuit lists.
+
+        Parameters
+        ----------
+        list_indices_to_keep : iterable
+            A list of the (integer) list indices to keep.
+
+        Returns
+        -------
+        BenchmarkingDesign
+            The truncated experiment design.
+        """
+        ret = _copy.deepcopy(self) # Works for derived classes too
+        ret.depths = [self.depths[i] for i in list_indices_to_keep]
+        ret.circuit_lists = [self.circuit_lists[i] for i in list_indices_to_keep]
+        for paired_attr in self.paired_with_circuit_attrs:
+            val = getattr(self, paired_attr)
+            new_val = [val[i] for i in list_indices_to_keep]
+            setattr(ret, paired_attr, new_val)
+        return ret
+
+    def _truncate_to_circuits_inplace(self, circuits_to_keep):
+        truncated_circuit_lists = []
+        paired_attr_lists_list = [getattr(self, paired_attr) for paired_attr in self.paired_with_circuit_attrs]
+        truncated_paired_attr_lists_list = [[] for _ in range(len(self.paired_with_circuit_attrs))]
+        for list_idx, circuits in enumerate(self.circuit_lists):
+            paired_attrs = [pal[list_idx] for pal in paired_attr_lists_list]
+            # Do the same filtering as CircuitList.truncate, but drag along any paired attributes
+            new_data = list(zip(*filter(lambda ci: ci[0] in set(circuits_to_keep), zip(circuits, *paired_attrs))))
+            if len(new_data):
+                truncated_circuit_lists.append(new_data[0])
+                for i, attr_data in enumerate(new_data[1:]):
+                    truncated_paired_attr_lists_list[i].append(attr_data)
+            else:
+                # If we have truncated all circuits, append empty lists
+                truncated_circuit_lists.append([])
+                truncated_paired_attr_lists_list.append([[] for _ in range(len(self.paired_with_circuit_attrs))])
+
+        self.circuit_lists = truncated_circuit_lists
+        for paired_attr, paired_attr_lists in zip(self.paired_with_circuit_attrs, truncated_paired_attr_lists_list):
+            setattr(self, paired_attr, paired_attr_lists)
+        super()._truncate_to_circuits_inplace(circuits_to_keep)
+
+    def _truncate_to_design_inplace(self, other_design):
+        truncated_circuit_lists = []
+        paired_attr_lists_list = [getattr(self, paired_attr) for paired_attr in self.paired_with_circuit_attrs]
+        truncated_paired_attr_lists_list = [[] for _ in range(len(self.paired_with_circuit_attrs))]
+        for list_idx, circuits in enumerate(self.circuit_lists):
+            paired_attrs = [pal[list_idx] for pal in paired_attr_lists_list]
+            # Do the same filtering as CircuitList.truncate, but drag along any paired attributes
+            new_data = list(zip(*filter(lambda ci: ci[0] in set(other_design.circuit_lists[list_idx]), zip(circuits, *paired_attrs))))
+            if len(new_data):
+                truncated_circuit_lists.append(new_data[0])
+                for i, attr_data in enumerate(new_data[1:]):
+                    truncated_paired_attr_lists_list[i].append(attr_data)
+            else:
+                # If we have truncated all circuits, append empty lists
+                truncated_circuit_lists.append([])
+                truncated_paired_attr_lists_list.append([[] for _ in range(len(self.paired_with_circuit_attrs))])
+
+        self.circuit_lists = truncated_circuit_lists
+        for paired_attr, paired_attr_lists in zip(self.paired_with_circuit_attrs, truncated_paired_attr_lists_list):
+            setattr(self, paired_attr, paired_attr_lists)
+        super()._truncate_to_design_inplace(other_design)
+
+    def _truncate_to_available_data_inplace(self, dataset):
+        self._truncate_to_circuits_inplace(set(dataset.keys()))
 
 
 class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
@@ -351,10 +456,6 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
                                                                   self.descriptor)
 
 
-
-
-
-
 class SummaryStatistics(_proto.Protocol):
     """
     A protocol that can construct "summary" quantities from raw data.
@@ -520,17 +621,6 @@ class SummaryStatistics(_proto.Protocol):
             return ret
 
         return self._compute_dict(data, self.circuit_statistics, _get_circuit_values, for_passes="first")
-
-    # def compute_dscmp_data(self, data, dscomparator):
-
-    #     def get_dscmp_values(icirc, circ, dsrow, idealout):
-    #         ret = {'tvds': dscomparator.tvds.get(circ, _np.nan),
-    #                'pvals': dscomparator.pVals.get(circ, _np.nan),
-    #                'jsds': dscomparator.jsds.get(circ, _np.nan),
-    #                'llrs': dscomparator.llrs.get(circ, _np.nan)}
-    #         return ret
-
-    #     return self.compute_dict(data, "dscmpdata", self.dsmp_statistics, get_dscmp_values, for_passes="none")
 
     def _compute_predicted_probs(self, data, model):
         """
@@ -908,17 +998,6 @@ class ByDepthSummaryStatistics(SummaryStatistics):
                                      {i: j for i, j in enumerate(percircuitdata)})
             results.statistics[statistic_nm] = statistic_per_dwc
         return results
-
-# This is currently not used I think
-# class PredictedByDepthSummaryStatsConstructor(ByDepthSummaryStatsConstructor):
-#     """
-#     Runs a volumetric benchmark on success/fail data predicted from a model
-
-#     """
-#     def __init__(self, model_or_summary_data, depths='all', statistic='mean',
-#                  dscomparator=None, name=None):
-#         super().__init__(depths, 'success_probabilities', statistic,
-#                          dscomparator, model_or_summary_data, name)
 
 
 class SummaryStatisticsResults(_proto.ProtocolResults):

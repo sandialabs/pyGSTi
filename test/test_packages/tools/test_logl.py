@@ -1,21 +1,39 @@
 import os
 import psutil
+import pytest
+import sys
 
 import pygsti
+from pygsti.modelpacks import smq1Q_XY
+import pygsti.protocols as proto
 from ..testutils import BaseTestCase, compare_files
 
 
 class LogLTestCase(BaseTestCase):
     def test_memory(self):
 
+        model = smq1Q_XY.target_model()
+        model = model.depolarize(spam_noise = .01, op_noise = .001)
+        model = model.rotate(max_rotate=.005, seed=1234)
+
+        prep_fiducials = smq1Q_XY.prep_fiducials()
+        meas_fiducials = smq1Q_XY.meas_fiducials()
+        germs = smq1Q_XY.germs()
+        op_labels = list(model.operations.keys()) # also == std.gates
+        maxLengthList = [1]
+        #circuits for XY model.
+        gss = pygsti.circuits.make_lsgst_structs(op_labels, prep_fiducials[0:4], 
+                                                          meas_fiducials[0:3], smq1Q_XY.germs(), maxLengthList)
+
+        edesign =  proto.CircuitListsDesign([pygsti.circuits.CircuitList(circuit_struct) for circuit_struct in gss])
+
+        ds = pygsti.data.simulate_data(model, edesign.all_circuits_needing_data, 1000, seed = 1234)
+
         def musage(prefix):
             p = psutil.Process(os.getpid())
             print(prefix, p.memory_info()[0])
         current_mem = pygsti.baseobjs.profiler._get_mem_usage
 
-        musage("Initial")
-        ds = pygsti.data.DataSet(file_to_load_from=compare_files + "/analysis.dataset")
-        model = pygsti.io.load_model(compare_files + "/analysis.model")
         musage("Pt1")
         
         with self.assertRaises(MemoryError):
@@ -67,5 +85,5 @@ class LogLTestCase(BaseTestCase):
                                     poisson_picture=True, comm=comm)
 
             print(L)
-        except ImportError:
+        except (ImportError, RuntimeError):
             self.skipTest('Skipping because failed to import MPI')

@@ -4,7 +4,7 @@
 # filename: fastcalc.pyx
 
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -69,7 +69,7 @@ def bulk_eval_compact_polynomials_real(np.ndarray[np.int64_t, ndim=1, mode="c"] 
                                  np.ndarray[double, ndim=1, mode="c"] ctape,
                                  np.ndarray[double, ndim=1, mode="c"] paramvec,
                                  dest_shape):
-    cdef INT dest_size = np.product(dest_shape)
+    cdef INT dest_size = np.prod(dest_shape)
     cdef np.ndarray[np.float64_t, ndim=1, mode="c"] res = np.empty(dest_size, np.float64)
 
     cdef INT c = 0
@@ -108,7 +108,7 @@ def bulk_eval_compact_polynomials_complex(np.ndarray[np.int64_t, ndim=1, mode="c
                                     np.ndarray[double, ndim=1, mode="c"] paramvec,
                                     dest_shape):
     cdef INT k
-    cdef INT dest_size = 1  # np.product(dest_shape) #SLOW!
+    cdef INT dest_size = 1  # np.prod(dest_shape) #SLOW!
     for k in range(len(dest_shape)):
         dest_size *= dest_shape[k]
     cdef np.ndarray[np.complex128_t, ndim=1, mode="c"] res = np.empty(dest_size, np.complex128)

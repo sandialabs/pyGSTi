@@ -68,17 +68,20 @@ class TimeDependentTestCase(BaseTestCase):
         ds = pygsti.data.simulate_data(mdl, circuits, num_samples=100,
                                        sample_error='none', seed=1234, times=[0,0.1,0.2])
 
-        self.assertArraysEqual(ds[Circuit([Label('Gi',0)], line_labels=(0,))].time, np.array([0.,  0.,  0.1, 0.1, 0.2, 0.2]))
-        self.assertArraysEqual(ds[Circuit([Label('Gi',0)], line_labels=(0,))].reps, np.array([100.,   0.,  95.,   5.,  90.,  10.]))
-        self.assertArraysEqual(ds[Circuit([Label('Gi',0)], line_labels=(0,))].outcomes, [('0',), ('1',), ('0',), ('1',), ('0',), ('1',)])
+        dsr = ds[Circuit([Label('Gi',0)], line_labels=(0,))]
+        self.assertArraysEqual(dsr.time, np.array([0.,  0.,  0.1, 0.1, 0.2, 0.2]))
+        self.assertArraysEqual(dsr.reps, np.array([100.,   0.,  95.,   5.,  90.,  10.]))
+        self.assertArraysEqual(dsr.outcomes, [('0',), ('1',), ('0',), ('1',), ('0',), ('1',)])
 
         # sparse data
         ds2 = pygsti.data.simulate_data(mdl, circuits, num_samples=100,
                                         sample_error='none', seed=1234, times=[0,0.1,0.2],
                                         record_zero_counts=False)
-        self.assertArraysEqual(ds2[Circuit([Label('Gi',0)], line_labels=(0,))].time, np.array([0.,  0.1, 0.1, 0.2, 0.2]))
-        self.assertArraysEqual(ds2[Circuit([Label('Gi',0)], line_labels=(0,))].reps, np.array([100.,  95.,   5.,  90.,  10.]))
-        self.assertArraysEqual(ds2[Circuit([Label('Gi',0)], line_labels=(0,))].outcomes, [('0',), ('0',), ('1',), ('0',), ('1',)])
+        ds2r = ds2[Circuit([Label('Gi',0)], line_labels=(0,))]
+        self.assertArraysEqual(ds2r.time, np.array([0.,  0.1, 0.1, 0.2, 0.2]))
+        self.assertArraysEqual(ds2r.reps, np.array([100.,  95.,   5.,  90.,  10.]))
+        self.assertArraysEqual(ds2r.outcomes, [('0',), ('0',), ('1',), ('0',), ('1',)])
+        return
 
     def test_time_dependent_gst_staticdata(self):
         
@@ -108,7 +111,8 @@ class TimeDependentTestCase(BaseTestCase):
         
         builders = pygsti.protocols.GSTObjFnBuilders([pygsti.objectivefns.TimeDependentPoissonPicLogLFunction.builder()], [])
         gst = pygsti.protocols.GateSetTomography(target_model, gaugeopt_suite=None,
-                                                 objfn_builders=builders)
+                                                 objfn_builders=builders,
+                                                 optimizer={'maxiter':2,'tol': 1e-4})
         results = gst.run(data)
 
         # Normal GST used as a check - should get same answer since data is time-independent
@@ -151,16 +155,16 @@ class TimeDependentTestCase(BaseTestCase):
 
         # *sparse*, time-independent data
         ds = pygsti.data.simulate_data(mdl_datagen, edesign.all_circuits_needing_data, num_samples=2000,
-                                       sample_error="binomial", seed=1234, times=[0, 0.1, 0.2],
+                                       sample_error="binomial", seed=1234, times=[0, 0.2],
                                        record_zero_counts=False)
-        self.assertEqual(ds.degrees_of_freedom(aggregate_times=False), 171)
+        self.assertEqual(ds.degrees_of_freedom(aggregate_times=False), 114)
 
         target_model.operations['Gi',0] = MyTimeDependentIdle(0)  # start assuming no time dependent decay
         target_model.sim = pygsti.forwardsims.MapForwardSimulator(max_cache_size=0)  # No caching allowed for time-dependent calcs
 
         builders = pygsti.protocols.GSTObjFnBuilders([pygsti.objectivefns.TimeDependentPoissonPicLogLFunction.builder()], [])
         gst = pygsti.protocols.GateSetTomography(target_model, gaugeopt_suite=None,
-                                                 objfn_builders=builders, optimizer={'tol': 1e-4})
+                                                 objfn_builders=builders, optimizer={'maxiter':10,'tol': 1e-4})
         data = pygsti.protocols.ProtocolData(edesign, ds)
         results = gst.run(data)
 

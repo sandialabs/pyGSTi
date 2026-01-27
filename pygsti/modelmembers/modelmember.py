@@ -2,7 +2,7 @@
 Defines the ModelChild and ModelMember classes, which represent Model members
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -339,23 +339,6 @@ class ModelMember(ModelChild, _NicelySerializable):
 
         if (self.parent is not None) and (force or self.parent._obj_refcount(self) == 0):
             self._parent = None
-
-    # UNUSED - as this doesn't mark parameter for reallocation like it used to
-    #def clear_gpindices(self):
-    #    """
-    #    Sets gpindices to None, along with any submembers' gpindices.
-    #
-    #    This essentially marks these members for parameter re-allocation
-    #    (e.g. if the number - not just the value - of parameters they have
-    #    changes).
-    #
-    #    Returns
-    #    -------
-    #    None
-    #    """
-    #    for subm in self.submembers():
-    #        subm.clear_gpindices()
-    #    self._gpindices = None
 
     def set_gpindices(self, gpindices, parent, memo=None):
         """

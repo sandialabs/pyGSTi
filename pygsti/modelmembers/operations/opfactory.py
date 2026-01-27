@@ -2,7 +2,7 @@
 Defines the OpFactory class
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -98,7 +98,7 @@ class OpFactory(_gm.ModelMember):
     def __init__(self, state_space, evotype):
         #self._paramvec = _np.zeros(nparams, 'd')
         state_space = _statespace.StateSpace.cast(state_space)
-        evotype = _Evotype.cast(evotype)
+        evotype = _Evotype.cast(evotype, state_space=state_space)
         _gm.ModelMember.__init__(self, state_space, evotype)
 
     def create_object(self, args=None, sslbls=None):

@@ -4,7 +4,7 @@ Routines for converting python objects to latex.
 Parallel rountines as html.py has for HTML conversion.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -50,9 +50,9 @@ def table(custom_headings, col_headings_formatted, rows, spec):
             and "latex" in custom_headings:
         latex = custom_headings['latex']
     else:
-        latex = "\\begin{%s}[l]{%s}\n\hline\n" % \
+        latex = "\\begin{%s}[l]{%s}\n\\hline\n" % \
             (table, "|c" * len(col_headings_formatted) + "|")
-        latex += ("%s \\\\ \hline\n"
+        latex += ("%s \\\\ \\hline\n"
                   % (" & ".join(col_headings_formatted)))
 
     for formatted_rowData in rows:
@@ -82,9 +82,9 @@ def table(custom_headings, col_headings_formatted, rows, spec):
             #        latex += "\cline{%d-%d} "%(lineStart,col-1)
             #    latex += "\n"
             #else:
-            latex += " \\\\ \hline\n"
+            latex += " \\\\ \\hline\n"
 
-    latex += "\end{%s}\n" % table
+    latex += "\\end{%s}\n" % table
     return {'latex': latex}
 
 
@@ -129,7 +129,7 @@ def list(l, specs):
         latex string for l.
     """
     return "\\begin{tabular}{c}\n" + \
-        " \\\\ \n".join(l) + "\n \end{tabular}\n"
+        " \\\\ \n".join(l) + "\n \\end{tabular}\n"
 
 
 def vector(v, specs):
@@ -154,10 +154,10 @@ def vector(v, specs):
         lines.append(value(el, specs, mathmode=True))
     if specs['brackets']:
         return "\\ensuremath{ \\begin{pmatrix}\n" + \
-            " \\\\ \n".join(lines) + "\n \end{pmatrix} }\n"
+            " \\\\ \n".join(lines) + "\n \\end{pmatrix} }\n"
     else:
         return "\\ensuremath{ \\begin{pmatrix}\n" + \
-            " \\\\ \n".join(lines) + "\n \end{pmatrix} }\n"
+            " \\\\ \n".join(lines) + "\n \\end{pmatrix} }\n"
 
 
 def matrix(m, specs):
@@ -182,7 +182,7 @@ def matrix(m, specs):
     fontsize = specs['fontsize']
 
     if fontsize is not None:
-        prefix += "\\fontsize{%f}{%f}\selectfont " % (fontsize, fontsize * 1.2)
+        prefix += "\\fontsize{%f}{%f}\\selectfont " % (fontsize, fontsize * 1.2)
 
     for r in range(m.shape[0]):
         lines.append(" & ".join(
@@ -190,10 +190,10 @@ def matrix(m, specs):
 
     if specs['brackets']:
         return prefix + "\\ensuremath{ \\begin{pmatrix}\n" + \
-            " \\\\ \n".join(lines) + "\n \end{pmatrix} }\n"
+            " \\\\ \n".join(lines) + "\n \\end{pmatrix} }\n"
     else:
         return prefix + "\\ensuremath{ \\begin{pmatrix}\n" + \
-            " \\\\ \n".join(lines) + "\n \end{pmatrix} }\n"
+            " \\\\ \n".join(lines) + "\n \\end{pmatrix} }\n"
 
 
 def value(el, specs, mathmode=False):
@@ -304,5 +304,5 @@ def escaped(txt, specs):
     -------
     string
     """
-    ret = txt.replace("_", "\_")
+    ret = txt.replace("_", r"\_")
     return ret

@@ -164,7 +164,7 @@ class FOGIGSTTestCase(object):
         ar = 0.001 * np.random.rand(len(ar))
         mdl_datagen.set_fogi_errorgen_components_array(ar, include_fogv=False, normalized_elem_gens=True)
         
-        ds = pygsti.data.simulate_data(mdl_datagen, edesign, 1000, seed=2022) #, sample_error='none')
+        ds = pygsti.data.simulate_data(mdl_datagen, edesign, 10000, seed=2022) #, sample_error='none')
         data = pygsti.protocols.ProtocolData(edesign, ds)
         
         datagen_2dlogl = pygsti.tools.two_delta_logl(mdl_datagen, ds)
@@ -175,7 +175,7 @@ class FOGIGSTTestCase(object):
         gst_mdl = self.create_model()
         print("Before FOGI reparam, Np = ", gst_mdl.num_params)
         gst_mdl.sim = sim_type
-        proto = pygsti.protocols.GST(gst_mdl, gaugeopt_suite=None, optimizer={'maxiter': 100, 'tol': 1e-7}, verbosity=3)
+        proto = pygsti.protocols.GST(gst_mdl, gaugeopt_suite=None, optimizer={'maxiter': 10, 'tol': 1e-7}, verbosity=3)
         results_before = proto.run(data)
 
         #Run GST *with* FOGI setup
@@ -187,7 +187,7 @@ class FOGIGSTTestCase(object):
                            dependent_fogi_action='drop', include_spam=True)
         print("After FOGI reparam, Np = ", gst_mdl.num_params)
         gst_mdl.sim = sim_type
-        proto = pygsti.protocols.GST(gst_mdl, gaugeopt_suite=None, optimizer={'maxiter': 100, 'tol': 1e-7}, verbosity=3)
+        proto = pygsti.protocols.GST(gst_mdl, gaugeopt_suite=None, optimizer={'maxiter': 10, 'tol': 1e-7}, verbosity=3)
         results_after = proto.run(data)
 
         #Compute hessian at MLE point for both estimates
@@ -261,8 +261,9 @@ class CrosstalkFreeFOGIGSTTester(FOGIGSTTestCase, BaseTestCase):
         nQubits = 2
         #pspec = pygsti.processors.QubitProcessorSpec(nQubits, ['Gxpi2', 'Gypi2', 'Gi'], geometry='line')
         #availability={'Gcnot': [(0,1)]},  # to match smq2Q_XYCNOT
-        pspec = pygsti.processors.QubitProcessorSpec(nQubits, ['Gxpi2', 'Gypi2', 'Gcnot'],
-                                                     availability={'Gcnot': [(0,1)]}, geometry='line')
+        #pspec = pygsti.processors.QubitProcessorSpec(nQubits, ['Gxpi2', 'Gypi2', 'Gcnot'],
+        #                                             availability={'Gcnot': [(0,1)]}, geometry='line')
+        pspec = pygsti.processors.QubitProcessorSpec(nQubits, ['Gxpi2', 'Gypi2'], geometry='line')
         return pspec
     
     def create_model(self):

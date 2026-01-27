@@ -306,7 +306,7 @@ class ComplementPOVMEffectTester(POVMEffectBase, BaseCase):
         return tppovm['1']  # complement POVM
 
     def test_vector_conversion(self):
-        with self.assertRaises(ValueError):
+        with self.assertRaises(RuntimeError):
             self.vec.to_vector()
 
 

@@ -2,7 +2,7 @@
 Functions for generating bootstrapped error bars
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -492,52 +492,3 @@ def _to_rms_model(gs_list, target_gs):
     output_gs = target_gs.copy()
     output_gs.from_vector(_np.mean(gsVecArray))
     return output_gs
-
-#Unused?
-#def gateset_jtracedist(mdl,target_model,mx_basis="gm"):
-#    output = _np.zeros(3,dtype=float)
-#    for i, gate in enumerate(target_model.operations.keys()):
-#        output[i] = _tools.jtracedist(mdl.operations[gate],target_model.operations[gate],mx_basis=mx_basis)
-##    print output
-#    return output
-#
-#def gateset_entanglement_fidelity(mdl,target_model):
-#    output = _np.zeros(3,dtype=float)
-#    for i, gate in enumerate(target_model.operations.keys()):
-#        output[i] = _tools.entanglement_fidelity(mdl.operations[gate],target_model.operations[gate])
-#    return output
-#
-#def gateset_decomp_angle(mdl):
-#    output = _np.zeros(3,dtype=float)
-#    for i, gate in enumerate(mdl.operations.keys()):
-#        output[i] = _tools.decompose_gate_matrix(mdl.operations[gate]).get('pi rotations',0)
-#    return output
-#
-#def gateset_decomp_decay_diag(mdl):
-#    output = _np.zeros(3,dtype=float)
-#    for i, gate in enumerate(mdl.operations.keys()):
-#        output[i] = _tools.decompose_gate_matrix(mdl.operations[gate]).get('decay of diagonal rotation terms',0)
-#    return output
-#
-#def gateset_decomp_decay_offdiag(mdl):
-#    output = _np.zeros(3,dtype=float)
-#    for i, gate in enumerate(mdl.operations.keys()):
-#        output[i] = _tools.decompose_gate_matrix(mdl.operations[gate]).get('decay of off diagonal rotation terms',0)
-#    return output
-#
-##def gateset_fidelity(mdl,target_model,mx_basis="gm"):
-##    output = _np.zeros(3,dtype=float)
-##    for i, gate in enumerate(target_model.operations.keys()):
-##        output[i] = _tools.fidelity(mdl.operations[gate],target_model.operations[gate])
-##    return output
-#
-#def gateset_diamonddist(mdl,target_model,mx_basis="gm"):
-#    output = _np.zeros(3,dtype=float)
-#    for i, gate in enumerate(target_model.operations.keys()):
-#        output[i] = _tools.diamonddist(mdl.operations[gate],target_model.operations[gate],mx_basis=mx_basis)
-#    return output
-#
-#def spamrameter(mdl):
-#    firstRho = list(mdl.preps.keys())[0]
-#    firstE = list(mdl.effects.keys())[0]
-#    return _np.dot(mdl.preps[firstRho].T,mdl.effects[firstE])[0,0]

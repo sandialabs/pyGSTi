@@ -3,7 +3,7 @@
 # cython: linetrace=False
 
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -540,7 +540,7 @@ def _compute_embedding_quantities_cachekey(state_space, target_labels, embedded_
     # final map just acts as identity w.r.t.
     labelIndices = [tensorProdBlkLabels.index(label) for label in target_labels]
     cdef _np.ndarray[_np.int64_t, ndim=1, mode='c'] action_inds = _np.array(labelIndices, _np.int64)
-    assert(_np.product([num_basis_els[i] for i in action_inds]) == embedded_rep_dim), \
+    assert(_np.prod([num_basis_els[i] for i in action_inds]) == embedded_rep_dim), \
         "Embedded operation has dimension (%d) inconsistent with the given target labels (%s)" % (
             embedded_rep_dim, str(target_labels))
 
@@ -550,7 +550,7 @@ def _compute_embedding_quantities_cachekey(state_space, target_labels, embedded_
     cdef INT ncomponents_in_active_block = len(state_space.tensor_product_block_labels(active_block_index))
     cdef INT embedded_dim = embedded_rep_dim
     cdef _np.ndarray[_np.int64_t, ndim=1, mode='c'] blocksizes = \
-        _np.array([_np.product(state_space.tensor_product_block_dimensions(k))
+        _np.array([_np.prod(state_space.tensor_product_block_dimensions(k))
                    for k in range(nblocks)], _np.int64)
     cdef INT i, j
 

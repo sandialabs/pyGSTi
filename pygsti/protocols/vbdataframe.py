@@ -2,7 +2,7 @@
 Techniques for manipulating benchmarking data stored in a Pandas DataFrame.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -19,7 +19,7 @@ def _calculate_summary_statistic(x, statistic, lower_cutoff=None):
     Utility function that returns statistic(x), or the maximum
     of statistic(x) and lower_cutoff if lower_cutoff is not None.
     """
-    if len(x) == 0 or _np.all(_np.isnan(x)): return _np.NaN
+    if len(x) == 0 or _np.all(_np.isnan(x)): return _np.nan
     if statistic == 'mean': func = _np.nanmean
     elif statistic == 'max' or statistic == 'monotonic_max': func = _np.nanmax
     elif statistic == 'min' or statistic == 'monotonic_min': func = _np.nanmin

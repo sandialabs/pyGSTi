@@ -2,7 +2,7 @@
 A custom MPI-enabled linear solver.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -13,7 +13,7 @@ A custom MPI-enabled linear solver.
 import numpy as _np
 import scipy as _scipy
 
-from pygsti.optimize.arraysinterface import UndistributedArraysInterface as _UndistributedArraysInterface
+from pygsti.optimize.arraysinterface import DistributedArraysInterface as _DistributedArraysInterface
 from pygsti.tools import sharedmemtools as _smt
 from pygsti.tools import slicetools as _slct
 
@@ -90,7 +90,7 @@ def custom_solve(a, b, x, ari, resource_alloc, proc_threshold=100):
     host_comm = resource_alloc.host_comm
     ok_buf = _np.empty(1, _np.int64)
 
-    if comm is None or isinstance(ari, _UndistributedArraysInterface):
+    if comm is None or (not isinstance(ari, _DistributedArraysInterface)):
         x[:] = _scipy.linalg.solve(a, b, assume_a='pos')
         return
 

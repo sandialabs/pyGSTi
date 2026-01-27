@@ -3,7 +3,7 @@
 # cython: linetrace=False
 
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -111,7 +111,7 @@ cdef class EffectRepTensorProduct(EffectRep):
         cdef _np.ndarray[_np.int64_t, ndim=1, mode='c'] factor_dims = \
             _np.ascontiguousarray(_np.array([fct.state_space.udim for fct in povm_factors], _np.int64))
 
-        cdef INT dim = _np.product(factor_dims)
+        cdef INT dim = _np.prod(factor_dims)
         cdef INT nfactors = len(self.povm_factors)
         self.povm_factors = povm_factors
         self.effect_labels = effect_labels

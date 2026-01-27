@@ -124,8 +124,9 @@ class LocalNoiseModelInstanceTester(BaseCase):
         prob2 = mdl_local.probabilities(c2)
         self.assertEqual(len(prob2), 4) # Full 2 qubit space
 
-        c3 = Circuit( [('Gx','qb0'),('Gx','qb1')])
+        c3 = Circuit( [('Gx','qb0'),('Gx','qb1')], editable=True)
         c3.insert_idling_lines_inplace(None, ['qb2', 'qb3'])
+        c3.done_editing()
         prob3 = mdl_local.probabilities(c3)
         self.assertEqual(len(prob3), 16) # Full 4 qubit space
 

@@ -2,7 +2,7 @@
 Utility functions for creating and acting on lists of circuits.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -182,10 +182,6 @@ def repeat_with_max_length(x, max_length, assert_at_least_one_rep=False):
         the repeated operation sequence
     """
     return repeat(x, repeat_count_with_max_length(x, max_length, assert_at_least_one_rep), assert_at_least_one_rep)
-
-#Useful for anything?
-#def repeat_empty(x,max_length,assert_at_least_one_rep=False):
-#    return ()
 
 
 def repeat_and_truncate(x, n, assert_at_least_one_rep=False):

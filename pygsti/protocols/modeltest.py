@@ -2,7 +2,7 @@
 ModelTest Protocol objects
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -100,6 +100,7 @@ class ModelTest(_proto.Protocol):
                  set_trivial_gauge_group=True, verbosity=2, name=None):
 
         from .gst import GSTBadFitOptions as _GSTBadFitOptions
+        from .gst import GSTGaugeOptSuite as _GSTGaugeOptSuite
 
         if set_trivial_gauge_group:
             model_to_test = model_to_test.copy()
@@ -109,7 +110,7 @@ class ModelTest(_proto.Protocol):
         super().__init__(name)
         self.model_to_test = model_to_test
         self.target_model = target_model
-        self.gaugeopt_suite = gaugeopt_suite
+        self.gaugeopt_suite = _GSTGaugeOptSuite.cast(gaugeopt_suite)
         self.badfit_options = _GSTBadFitOptions.cast(badfit_options)
         self.verbosity = verbosity
 
@@ -126,12 +127,6 @@ class ModelTest(_proto.Protocol):
         self.oplabel_aliases = None
         self.circuit_weights = None
         self.unreliable_ops = ('Gcnot', 'Gcphase', 'Gms', 'Gcn', 'Gcx', 'Gcz')
-
-    #def run_using_germs_and_fiducials(self, model, dataset, target_model, prep_fiducials,
-    #                                  meas_fiducials, germs, maxLengths):
-    #    from .gst import StandardGSTDesign as _StandardGSTDesign
-    #    design = _StandardGSTDesign(target_model, prep_fiducials, meas_fiducials, germs, maxLengths)
-    #    return self.run(_proto.ProtocolData(design, dataset))
 
     def run(self, data, memlimit=None, comm=None, checkpoint=None, checkpoint_path=None, disable_checkpointing=False,
             simulator: Optional[ForwardSimulator.Castable]=None):
@@ -179,6 +174,7 @@ class ModelTest(_proto.Protocol):
         the_model = self.model_to_test
         if simulator is not None:
             the_model.sim = simulator
+            
         target_model = self.target_model  # can be None; target model isn't necessary
 
         #Create profiler
@@ -281,8 +277,8 @@ class ModelTest(_proto.Protocol):
             models['target'] = target_model
         ret.add_estimate(_Estimate(ret, models, parameters, extra_parameters=extra_parameters), estimate_key=self.name)
 
-        #Add some better handling for when gauge optimization is turned off (current code path isn't working.
-        if self.gaugeopt_suite is not None:
+        #Add some better handling for when gauge optimization is turned off (current code path isn't working.)
+        if not self.gaugeopt_suite.is_empty():
             ret= _add_gaugeopt_and_badfit(ret, self.name, target_model, self.gaugeopt_suite,
                                             self.unreliable_ops, self.badfit_options,
                                             None, resource_alloc, printer)
@@ -293,8 +289,8 @@ class ModelTest(_proto.Protocol):
             #and add a key for this to the goparameters dict (this is what the report
             #generation looks at to determine the names of the gauge optimized models).
             #Set the value to None as a placeholder.
-            from .gst import GSTGaugeOptSuite
             ret.estimates[self.name].goparameters['trivial_gauge_opt']= None
+        
         return ret
 
 

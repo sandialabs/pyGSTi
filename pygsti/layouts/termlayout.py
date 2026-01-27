@@ -2,7 +2,7 @@
 Defines the TermCOPALayout class.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -57,7 +57,7 @@ class _TermCOPALayoutAtom(_DistributableAtom):
         expanded_circuit_outcomes = _collections.OrderedDict()
         for i in group:
             observed_outcomes = None if (dataset is None) else dataset[ds_circuits[i]].outcomes
-            d = unique_complete_circuits[i].expand_instruments_and_separate_povm(model, observed_outcomes)
+            d = model.expand_instruments_and_separate_povm(unique_complete_circuits[i], observed_outcomes)
             expanded_circuit_outcomes_by_unique[i] = d
             expanded_circuit_outcomes.update(d)
 

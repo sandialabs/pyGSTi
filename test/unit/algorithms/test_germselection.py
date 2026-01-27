@@ -147,7 +147,8 @@ class GenerateGermsTester(GermSelectionData, BaseCase):
     def test_generate_germs_with_candidate_germ_counts(self):
         germs = germsel.find_germs(
             self.mdl_target_noisy, randomize=False,
-            candidate_germ_counts={3: 'all upto', 4: 10, 5: 10, 6: 10}
+            candidate_germ_counts={3: 'all upto', 4: 10, 5: 10, 6: 10},
+            candidate_seed=1234
         )
         # TODO assert correctness
 

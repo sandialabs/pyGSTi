@@ -2,7 +2,7 @@
 Defines the LocalNoiseModel class and supporting functions
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -152,8 +152,7 @@ class LocalNoiseModel(_ImplicitOpModel):
 
         simulator = _FSim.cast(simulator,
                                state_space.num_qubits if isinstance(state_space, _statespace.QubitSpace) else None)
-        prefer_dense_reps = isinstance(simulator, _MatrixFSim)
-        evotype = _Evotype.cast(evotype, default_prefer_dense_reps=prefer_dense_reps)
+        evotype = _Evotype.cast(evotype, state_space=state_space)
 
         # Build gate dictionaries. A value of `gatedict` can be an array, a LinearOperator, or an OpFactory.
         # For later processing, we'll create mm_gatedict to contain each item as a ModelMember.  In local noise

@@ -2,7 +2,7 @@
 The TreeNode class
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -106,11 +106,14 @@ class TreeNode(object):
         #else:  # just take from already-loaded edesign
         #    child_id_suffixes = preloaded_edesign._dirs.copy()
 
-        self._dirs = {nm: subdir for subdir, nm in doc['children'].items()}
+        def _to_immutable(x):
+            return tuple(x) if isinstance(x, list) else x
+
+        self._dirs = {_to_immutable(nm): subdir for subdir, nm in doc['children'].items()}
         self._vals = {}
 
         for subdir, child_id in doc['children_ids'].items():
-            child_nm = doc['children'][subdir]
+            child_nm = _to_immutable(doc['children'][subdir])
             child_doc = mongodb[doc['children_collection_name']].find_one({'_id': child_id})
             if child_doc is None:  # if there's no child document, generate the child value later
                 continue  # don't load anything - create child value on demand
@@ -133,6 +136,9 @@ class TreeNode(object):
 
     def __len__(self):
         return len(self._dirs)
+
+    def __iter__(self):
+        return iter(self._dirs)
 
     def items(self):
         """

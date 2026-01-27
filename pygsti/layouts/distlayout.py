@@ -2,7 +2,7 @@
 Defines the DistributableCOPALayout class.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -360,9 +360,6 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
             to_send = 0  # default = contribute nothing to MPI.SUM below
 
             if i in atoms_dict:
-                #print("DB (%d): updating elindex_outcome_tuples w/Atom %d:\n%s"
-                #      % (rank, i, "\n".join(["%d: %s" % (indx, str(tups))
-                #                             for indx, tups in atoms_dict[i].elindex_outcome_tuples.items()])))
                 if start is None:
                     start = stop = offset
                 assert(stop == offset)  # This should be checked by _assert_sequential(myAtomIndices) above
@@ -809,43 +806,6 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
 
         super().__init__(local_circuits, local_unique_circuits, local_to_unique, local_elindex_outcome_tuples,
                          local_unique_complete_circuits, param_dimensions, resource_alloc)
-
-        #DEBUG LAYOUT PRINTING
-        #def cnt_str(cnt):
-        #    if cnt is None: return "%4s" % '-'
-        #    return "%4d" % cnt
-        #def slc_str(slc):
-        #    if slc is None: return "%14s" % '--'
-        #    return "%3d->%3d (%3d)" % (slc.start, slc.stop, slc.stop - slc.start) \
-        #        if isinstance(slc, slice) else "%14s" % str(slc)
-        #shm = bool(resource_alloc.host_comm is not None)  # shared mem?
-        #if rank == 0:
-        #    print("%11s %-14s %-14s %-14s   %-14s %-4s %-14s %-4s %-14s %-4s" % (
-        #        '#', 'g-elements', 'g-params', 'g-param2s',
-        #        'h-elements','tot', 'h-params','tot', 'h-params2','tot'),
-        #          flush=True)
-        #resource_alloc.comm.barrier()
-        #for r in range(resource_alloc.comm.size):
-        #    if r == rank:
-        #        my_desc = ("%3d (%2d.%2d)" % (rank, resource_alloc.host_index, resource_alloc.host_comm.rank)) \
-        #                  if shm else ("%11d" % rank)
-        #        print(my_desc, slc_str(self.global_element_slice), slc_str(self.global_param_slice),
-        #              slc_str(self.global_param2_slice), ' ',
-        #              slc_str(self.host_element_slice), cnt_str(self.host_num_elements),
-        #              slc_str(self.host_param_slice), cnt_str(self.host_num_params),
-        #              slc_str(self.host_param2_slice), cnt_str(self.host_num_params2),  flush=True)
-        #    resource_alloc.comm.barrier()
-        #
-        #if rank == 0:
-        #    print("%11s %-14s %-14s %-4s" % ('#', 'g-pfine', 'h-pfine', 'tot'), flush=True)
-        #resource_alloc.comm.barrier()
-        #for r in range(resource_alloc.comm.size):
-        #    if r == rank:
-        #        my_desc = ("%3d (%2d.%2d)" % (rank, resource_alloc.host_index, resource_alloc.host_comm.rank)) \
-        #                  if shm else ("%11d" % rank)
-        #        print(my_desc, slc_str(self.global_param_fine_slice), slc_str(self.host_param_fine_slice),
-        #              cnt_str(self.host_num_params_fine), flush=True)
-        #    resource_alloc.comm.barrier()
 
     @property
     def max_atom_elements(self):

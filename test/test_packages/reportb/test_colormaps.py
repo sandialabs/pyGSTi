@@ -41,17 +41,14 @@ class ColormapTests(BaseTestCase):
         layout = go.Layout(
 	    width=800,
             height=400,
-            title="my title",
-            titlefont=dict(size=16),
+            title=dict(text="my title", font=dict(size=16)),
 	    xaxis=dict(
-                title="my xlabel",
-		titlefont=dict(size=14),
+                title=dict(text="my xlabel", font=dict(size=14)),
                 side="top",
                 type="log",
             ),
             yaxis=dict(
-                title='Mean survival probability',
-                titlefont=dict(size=14),
+                title=dict(text='Mean survival probability', font=dict(size=14)),
                 side="right",
                 type="log",
             ),

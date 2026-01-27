@@ -2,7 +2,7 @@
 The EmbeddedPureState class and supporting functionality.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -64,7 +64,7 @@ class EmbeddedPureState(_State):
         self.pure_state = pure_state
         self.basis = dm_basis  # only used for dense conversion
 
-        evotype = _Evotype.cast(evotype)
+        evotype = _Evotype.cast(evotype, state_space=self.pure_state.state_space)
         #rep = evotype.create_state_rep()
         #rep.init_from_dense_purevec(pure_state)
         raise NotImplementedError("Maybe this class isn't even needed, or need to create a static pure state class?")

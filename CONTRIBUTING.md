@@ -4,7 +4,7 @@ Thanks for taking the time to contribute to pyGSTi! Open-source
 projects like ours couldn't exist without contributors like you.
 
 This document contains a set of guidelines for contributing to pyGSTi
-and related packages hosted under the [pyGSTio group][pygstio]. We ask
+and related packages hosted under the SandiaLabs organization. We ask
 that contributors make an earnest effort to follow these guidelines,
 but no one's keeping score here -- just use your best judgement, and
 by all means, feel free to propose changes to these guidelines in a
@@ -15,7 +15,10 @@ pull request.
 Found a bug in pyGSTi? We'd appreciate letting us know!
 
 * First, **see if the bug has already been reported** by searching on
-  Github under [Issues][issues].
+  Github under [Issues][issues]. Make sure to check for issues that
+  are closed but have the *fixed-but-not-in-release* tag also - these
+  mean they are fixed in our `develop` branch, so you can try that to
+  see if it fixes your issue.
 
 * If you can't find an open issue about the problem,
   [open a new one][issues:bug]! Be sure to include a **title**, a
@@ -46,24 +49,20 @@ contributors working at Sandia.
 
 #### For non-Sandians
 
-Unfortunately, **we can't currently accept pull requests from
-contributors outside of SNL.** We're working on setting up a
-contributor license agreement, so, someday, this may change.  If you're
-interested in making contributions please let us know by email at
-[pygsti@sandia.gov][email] so we can make a strong case to our lawyers for
-getting this done!
+If you're interested in making contributions please let us know by email at
+[pygsti@sandia.gov][email] so we can get you a Contributor License Agreement
+(CLA). This needs to be signed and through our system before you can contribute.
 
 #### For Sandians
 
+* **Join the SandiaLabs organization**.
+
 * **Contact the authors** at [pygsti@sandia.gov][email] to
-  request an invite to the [pyGSTio group][pygstio].
+  request an invite to the [repository][pygsti].
 
-* **Follow the guidelines** [on the project wiki][contributing].
-
-[contributing]: https://github.com/pyGSTio/pyGSTi/wiki/Contributing
 [email]: mailto:pygsti@sandia.gov
-[issues:bug]: https://github.com/pyGSTio/pyGSTi/issues/new?labels=bug&template=bug_report.md
-[issues:feature]: https://github.com/pyGSTio/pyGSTi/issues/new?labels=enhancement&template=feature_request.md
-[issues:new]: https://github.com/pyGSTio/pyGSTi/issues/new
-[issues]: https://github.com/pyGSTio/pyGSTi/issues
-[pygstio]: https://github.com/pyGSTio
+[issues:bug]: https://github.com/sandialabs/pyGSTi/issues/new?labels=bug&template=bug_report.md
+[issues:feature]: https://github.com/sandialabs/pyGSTi/issues/new?labels=enhancement&template=feature_request.md
+[issues:new]: https://github.com/sandialabs/pyGSTi/issues/new
+[issues]: https://github.com/sandialabs/pyGSTi/issues
+[pygsti]: https://github.com/sandialabs/pyGSTi

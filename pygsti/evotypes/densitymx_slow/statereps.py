@@ -2,7 +2,7 @@
 State representation classes for the `densitymx_slow` evolution type.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -14,7 +14,6 @@ import functools as _functools
 
 import numpy as _np
 
-from .. import basereps as _basereps
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from ...tools import basistools as _bt
 from ...tools import optools as _ot
@@ -25,13 +24,17 @@ except ImportError:
     _fastcalc = None
 
 
-class StateRep(_basereps.StateRep):
+class StateRep:
+    """A real superket representation of an element in Hilbert-Schmidt space."""
+
     def __init__(self, data, state_space):
         #vec = _np.asarray(vec, dtype='d')
         assert(data.dtype == _np.dtype('d'))
         self.data = _np.require(data.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
         self.state_space = _StateSpace.cast(state_space)
-        assert(len(self.data) == self.state_space.dim)
+        ds0 = self.data.shape[0]
+        assert(ds0 == self.state_space.dim)
+        assert(ds0 == self.data.size)
 
     def __reduce__(self):
         return (StateRep, (self.data, self.state_space), (self.data.flags.writeable,))
@@ -62,6 +65,10 @@ class StateRep(_basereps.StateRep):
 
 
 class StateRepDense(StateRep):
+    """
+    An almost-trivial wrapper around StateRep.
+    Implements the "base" property and defines a trivial "base_has_changed" function.
+    """
 
     def __init__(self, data, state_space, basis):
         #ignore basis for now (self.basis = basis in future?)

@@ -2,7 +2,7 @@
 The ComplementPOVMEffect class and supporting functionality.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -135,16 +135,11 @@ class ComplementPOVMEffect(_ConjugatedStatePOVMEffect):
         return len(self.gpindices_as_array())
 
     def to_vector(self):
+        msg = """
+        ComplementPOVMEffect.to_vector() should never be called.
+        Use use TPPOVM.to_vector() instead.
         """
-        Get the POVM effect vector parameters as an array of values.
-
-        Returns
-        -------
-        numpy array
-            The parameters as a 1D array with length num_params().
-        """
-        raise ValueError(("ComplementPOVMEffect.to_vector() should never be called"
-                          " - use TPPOVM.to_vector() instead"))
+        raise RuntimeError(msg)
 
     def from_vector(self, v, close=False, dirty_value=True):
         """

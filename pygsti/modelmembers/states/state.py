@@ -2,7 +2,7 @@
 The State class and supporting functionality.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -350,11 +350,10 @@ class State(_modelmember.ModelMember):
         float
         """
         vec = self.to_dense(on_space='minimal')
-        if inv_transform is None:
-            return _ot.residuals(vec, other_spam_vec.to_dense(on_space='minimal'))
-        else:
-            return _ot.residuals(_np.dot(inv_transform, vec),
-                                 other_spam_vec.to_dense(on_space='minimal'))
+        if inv_transform is not None:
+            vec = inv_transform @ vec
+        return (vec - other_spam_vec.to_dense(on_space='minimal')).ravel()
+
 
     def transform_inplace(self, s):
         """
@@ -573,4 +572,4 @@ class State(_modelmember.ModelMember):
                 vector = _np.array(v, typ)[:, None]  # make into a 2-D column vec
 
         assert(len(vector.shape) == 2 and vector.shape[1] == 1)
-        return vector.flatten()  # HACK for convention change -> (N,) instead of (N,1)
+        return vector.ravel()  # HACK for convention change -> (N,) instead of (N,1)

@@ -2,7 +2,7 @@
 Functions for creating the standard sets of matrices in the standard, Pauli, Gell-Mann, and qutrit bases
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -442,7 +442,7 @@ class VectorBasisConstructor(object):
 def std_matrices(matrix_dim):
     """
     Get the elements of the matrix unit, or "standard", basis of matrix-dimension `matrix_dim`.
-    The matrices are ordered so that the row index changes the fastest.
+    The matrices are ordered so that the column index changes the fastest.
 
     Constructs the standard basis spanning the density-matrix space given by
     `matrix_dim` x `matrix_dim` matrices.

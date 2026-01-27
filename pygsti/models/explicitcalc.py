@@ -2,7 +2,7 @@
 Defines the ExplicitOpModelCalc class and supporting functionality.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -283,7 +283,7 @@ class ExplicitOpModelCalc(object):
                     wt * Evec.residuals(other_calc.effects[lbl]))
                 nSummands += wt**2 * Evec.dim
 
-        resids = [r.flatten() for r in resids]
+        resids = [r.ravel() for r in resids]
         resids = _np.concatenate(resids)
         return resids, nSummands
 
@@ -545,7 +545,7 @@ class ExplicitOpModelCalc(object):
                 # parameterization object, which gives a vector of length
                 # equal to the number of model *elements*.
                 to_vector = _np.concatenate(
-                    [obj.flatten() for obj in _itertools.chain(
+                    [obj.ravel() for obj in _itertools.chain(
                         mdlDeriv_preps.values(), mdlDeriv_effects.values(),
                         mdlDeriv_ops.values())], axis=0)
                 dPG[:, nParams + i * dim + j] = to_vector
@@ -688,7 +688,7 @@ class ExplicitOpModelCalc(object):
                                 - unitMx_i @ gate @ unitMx_j - unitMx_j @ gate @ unitMx_i
 
                         to_vector = _np.concatenate(
-                            [obj.flatten() for obj in _itertools.chain(
+                            [obj.ravel() for obj in _itertools.chain(
                                 mdlHess_preps.values(), mdlHess_effects.values(),
                                 mdlHess_ops.values())], axis=0)
                         Heps[:, i1 * dim + i2, j1 * dim + j2] = to_vector

@@ -2,7 +2,7 @@
 POVM effect representation classes for the `statevec_slow` evolution type.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -179,9 +179,6 @@ class EffectRepComposed(EffectRep):
         assert(self.state_space.is_compatible_with(effect_rep.state_space))
 
         super(EffectRepComposed, self).__init__(effect_rep.state_space)
-
-    #def __reduce__(self):
-    #    return (EffectRepComposed, (self.op_rep, self.effect_rep, self.op_id, self.state_space))
 
     def probability(self, state):
         state = self.op_rep.acton(state)  # *not* acton_adjoint

@@ -2,7 +2,7 @@
 Defines the Workspace class and supporting functionality.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -1444,13 +1444,8 @@ class SwitchValue(object):
         #use __dict__ so no chance for recursive __getattr__
         return getattr(self.__dict__['base'], attr)
 
-    def __len__(self): return len(self.base)
-    #Future - arithmetic ops should return a new SwitchValue
-    #def __add__(self,x):       return self.base + x
-    #def __sub__(self,x):       return self.base - x
-    #def __mul__(self,x):       return self.base * x
-    #def __truediv__(self, x):  return self.base / x
-
+    def __len__(self):
+        return len(self.base)
 
 class WorkspaceOutput(object):
     """
@@ -2516,13 +2511,6 @@ class WorkspacePlot(WorkspaceOutput):
         plotID = "plot_" + id
 
         if typ == "html":
-
-            #def getPlotlyDivID(html):
-            #    #could make this more robust using lxml or something later...
-            #    iStart = html.index('div id="')
-            #    iEnd = html.index('"', iStart+8)
-            #    return html[iStart+8:iEnd]
-
             ##pick "master" plot, whose resizing dictates the resizing of other plots,
             ## as the largest-height plot.
             #iMaster = None; maxH = 0;

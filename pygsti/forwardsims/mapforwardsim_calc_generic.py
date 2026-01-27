@@ -1,6 +1,6 @@
 """Defines generic Python-version of map forward simuator calculations"""
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -51,7 +51,6 @@ def mapfill_probs_atom(fwdsim, mx_to_fill, dest_indices, layout_atom, resource_a
 
     #TODO: if layout_atom is split, distribute somehow among processors(?) instead of punting for all but rank-0 above
     for iDest, iStart, remainder, iCache in layout_atom.table.contents:
-        remainder = remainder.circuit_without_povm.layertup
 
         if iStart is None:  # then first element of remainder is a state prep label
             rholabel = remainder[0]
@@ -73,7 +72,63 @@ def mapfill_probs_atom(fwdsim, mx_to_fill, dest_indices, layout_atom, resource_a
                 mx_to_fill[final_indices] = povmreps[povm_lbl].probabilities(final_state, None, effect_labels)
         else:
             ereps = [effectreps[j] for j in layout_atom.elbl_indices_by_expcircuit[iDest]]
+            #print(ereps)
+            if shared_mem_leader:
+                for j, erep in zip(final_indices, ereps):
+                    mx_to_fill[j] = erep.probability(final_state)  # outcome probability
+    #raise Exception
+#Version of the probability calculation that updates circuit probabilities conditionally based on
+#Whether the circuit is sensitive to the parameter. If not we leave that circuit alone.
+def cond_update_probs_atom(fwdsim, mx_to_fill, dest_indices, layout_atom, param_index, resource_alloc):
 
+    # The required ending condition is that array_to_fill on each processor has been filled.  But if
+    # memory is being shared and resource_alloc contains multiple processors on a single host, we only
+    # want *one* (the rank=0) processor to perform the computation, since array_to_fill will be
+    # shared memory that we don't want to have muliple procs using simultaneously to compute the
+    # same thing.  Thus, we carefully guard any shared mem updates/usage
+    # using "if shared_mem_leader" (and barriers, if needed) below.
+    shared_mem_leader = resource_alloc.is_host_leader if (resource_alloc is not None) else True
+
+    dest_indices = _slct.to_array(dest_indices)  # make sure this is an array and not a slice
+    cacheSize = layout_atom.jac_table.cache_size_by_parameter[param_index]
+
+    #Create rhoCache
+    rho_cache = [None] * cacheSize  # so we can store (s,p) tuples in cache
+
+    #Get operationreps and ereps now so we don't make unnecessary ._rep references
+    rhoreps = {rholbl: fwdsim.model._circuit_layer_operator(rholbl, 'prep')._rep for rholbl in layout_atom.rho_labels}
+    operationreps = {gl: fwdsim.model._circuit_layer_operator(gl, 'op')._rep for gl in layout_atom.op_labels}
+    povmreps = {plbl: fwdsim.model._circuit_layer_operator(plbl, 'povm')._rep for plbl in layout_atom.povm_labels}
+    if any([(povmrep is None) for povmrep in povmreps.values()]):
+        effectreps = {i: fwdsim.model._circuit_layer_operator(Elbl, 'povm')._rep
+                      for i, Elbl in enumerate(layout_atom.full_effect_labels)}  # cache these in future
+    else:
+        effectreps = None  # not needed, as we use povm reps directly
+
+
+    #TODO: if layout_atom is split, distribute somehow among processors(?) instead of punting for all but rank-0 above
+
+    for iDest, iStart, remainder, iCache in layout_atom.jac_table.contents_by_parameter[param_index]:
+ 
+        if iStart is None:  # then first element of remainder is a state prep label
+            rholabel = remainder[0]
+            init_state = rhoreps[rholabel]
+            remainder = remainder[1:]
+        else:
+            init_state = rho_cache[iStart]  # [:,None]
+
+        final_state = propagate_staterep(init_state, [operationreps[gl] for gl in remainder])
+        if iCache is not None: rho_cache[iCache] = final_state  # [:,0] #store this state in the cache
+
+        final_indices = [dest_indices[j] for j in layout_atom.elindices_by_expcircuit[iDest]]
+
+        if effectreps is None:
+            povm_lbl, *effect_labels = layout_atom.povm_and_elbls_by_expcircuit[iDest]
+
+            if shared_mem_leader:
+                mx_to_fill[final_indices] = povmreps[povm_lbl].probabilities(final_state, None, effect_labels)
+        else:
+            ereps = [effectreps[j] for j in layout_atom.elbl_indices_by_expcircuit[iDest]]
             if shared_mem_leader:
                 for j, erep in zip(final_indices, ereps):
                     mx_to_fill[j] = erep.probability(final_state)  # outcome probability
@@ -82,11 +137,10 @@ def mapfill_probs_atom(fwdsim, mx_to_fill, dest_indices, layout_atom, resource_a
 def mapfill_dprobs_atom(fwdsim, mx_to_fill, dest_indices, dest_param_indices, layout_atom, param_indices,
                         resource_alloc, eps):
 
-    #eps = 1e-7
-    #shared_mem_leader = resource_alloc.is_host_leader if (resource_alloc is not None) else True
+    num_params = fwdsim.model.num_params
 
     if param_indices is None:
-        param_indices = list(range(fwdsim.model.num_params))
+        param_indices = list(range(num_params))
     if dest_param_indices is None:
         dest_param_indices = list(range(_slct.length(param_indices)))
 
@@ -105,19 +159,43 @@ def mapfill_dprobs_atom(fwdsim, mx_to_fill, dest_indices, dest_param_indices, la
     nEls = layout_atom.num_elements
     probs, shm = _smt.create_shared_ndarray(resource_alloc, (nEls,), 'd', memory_tracker=None)
     probs2, shm2 = _smt.create_shared_ndarray(resource_alloc, (nEls,), 'd', memory_tracker=None)
+    #probs2_test, shm2_test = _smt.create_shared_ndarray(resource_alloc, (nEls,), 'd', memory_tracker=None)
+    
+    #mx_to_fill_test = mx_to_fill.copy()
+
     mapfill_probs_atom(fwdsim, probs, slice(0, nEls), layout_atom, resource_alloc)  # probs != shared
 
-    for i in range(fwdsim.model.num_params):
-        #print("dprobs cache %d of %d" % (i,self.Np))
-        if i in iParamToFinal:
-            iFinal = iParamToFinal[i]
-            vec = orig_vec.copy(); vec[i] += eps
-            fwdsim.model.from_vector(vec, close=True)
-            mapfill_probs_atom(fwdsim, probs2, slice(0, nEls), layout_atom, resource_alloc)
-            _fas(mx_to_fill, [dest_indices, iFinal], (probs2 - probs) / eps)
-    fwdsim.model.from_vector(orig_vec, close=True)
+    #Split off the first finite difference step, as the pattern I want in the loop with each step
+    #is to simultaneously undo the previous update and apply the new one.
+    if len(param_indices)>0:
+        probs2[:] = probs[:]
+        first_param_idx = param_indices[0]
+        iFinal = iParamToFinal[first_param_idx]
+        fwdsim.model.set_parameter_value(first_param_idx, orig_vec[first_param_idx]+eps)
+        #mapfill_probs_atom(fwdsim, probs2, slice(0, nEls), layout_atom, resource_alloc)
+        cond_update_probs_atom(fwdsim, probs2, slice(0, nEls), layout_atom, first_param_idx, resource_alloc)
+        #assert _np.linalg.norm(probs2_test-probs2) < 1e-10
+        #print(f'{_np.linalg.norm(probs2_test-probs2)=}')
+        _fas(mx_to_fill, [dest_indices, iFinal], (probs2 - probs) / eps)
+
+
+    for i in range(1, len(param_indices)):
+        probs2[:] = probs[:]
+        iFinal = iParamToFinal[param_indices[i]]
+        fwdsim.model.set_parameter_values([param_indices[i-1], param_indices[i]], 
+                                          [orig_vec[param_indices[i-1]], orig_vec[param_indices[i]]+eps])
+        #mapfill_probs_atom(fwdsim, probs2, slice(0, nEls), layout_atom, resource_alloc)
+        cond_update_probs_atom(fwdsim, probs2, slice(0, nEls), layout_atom, param_indices[i], resource_alloc)
+        #assert _np.linalg.norm(probs2_test-probs2) < 1e-10
+        #print(f'{_np.linalg.norm(probs2_test-probs2)=}')
+        _fas(mx_to_fill, [dest_indices, iFinal], (probs2 - probs) / eps)
+
+    #reset the final model parameter we changed to it's original value.
+    fwdsim.model.set_parameter_value(param_indices[-1], orig_vec[param_indices[-1]])
+
     _smt.cleanup_shared_ndarray(shm)
     _smt.cleanup_shared_ndarray(shm2)
+    #_smt.cleanup_shared_ndarray(shm2_test)
 
 
 def mapfill_TDchi2_terms(fwdsim, array_to_fill, dest_indices, num_outcomes, layout_atom, dataset_rows,

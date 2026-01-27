@@ -2,7 +2,7 @@
 The FullPureState class and supporting functionality.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -43,30 +43,6 @@ class FullPureState(_DensePureState):
         _DensePureState.__init__(self, purevec, basis, evotype, state_space)
         self._paramlbls = _np.array(["VecElement Re(%d)" % i for i in range(self.state_space.udim)]
                                     + ["VecElement Im(%d)" % i for i in range(self.state_space.udim)], dtype=object)
-
-    #REMOVE (Cannot set to arbitrary vector) - but maybe could set to pure vector?
-    #def set_dense(self, vec):
-    #    """
-    #    Set the dense-vector value of this SPAM vector.
-    #
-    #    Attempts to modify this SPAM vector's parameters so that the raw
-    #    SPAM vector becomes `vec`.  Will raise ValueError if this operation
-    #    is not possible.
-    #
-    #    Parameters
-    #    ----------
-    #    vec : array_like or State
-    #        A numpy array representing a SPAM vector, or a State object.
-    #
-    #    Returns
-    #    -------
-    #    None
-    #    """
-    #    vec = State._to_vector(vec)
-    #    if(vec.size != self.dim):
-    #        raise ValueError("Argument must be length %d" % self.dim)
-    #    self._ptr[:] = vec
-    #    self.dirty = True
 
     @property
     def num_params(self):

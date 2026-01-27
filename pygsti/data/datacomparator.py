@@ -2,7 +2,7 @@
 Defines the DataComparator class used to compare multiple DataSets.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -49,11 +49,6 @@ def _loglikelihood(p_list, n_list):
         output += _xlogy(n_list[i], pVal)
     return output
 
-# Only used by the rectify data function, which is commented out,
-# so this is also commented out.
-# def loglikelihoodRatioObj(alpha,n_list_list,dof):
-#     return _np.abs(dof - _loglikelihood_ratio(alpha*n_list_list))
-
 
 def _loglikelihood_ratio(n_list_list):
     """
@@ -75,11 +70,11 @@ def _loglikelihood_ratio(n_list_list):
         The log-likehood ratio for this model comparison.
     """
     nListC = _np.sum(n_list_list, axis=0)
-    pListC = nListC / _np.float_(_np.sum(nListC))
+    pListC = nListC / _np.float64(_np.sum(nListC))
     lC = _loglikelihood(pListC, nListC)
     li_list = []
     for nList in n_list_list:
-        pList = _np.array(nList) / _np.float_(_np.sum(nList))
+        pList = _np.array(nList) / _np.float64(_np.sum(nList))
         li_list.append(_loglikelihood(pList, nList))
     lS = _np.sum(li_list)
     return -2 * (lC - lS)
@@ -647,9 +642,9 @@ class DataComparator():
             if self.inconsistent_datasets_detected:
                 print("The data are INCONSISTENT at {0:.2f}% significance.".format(self.significance * 100))
                 print("  - Details:")
-                print("    - The aggregate log-_likelihood ratio test is "
+                print("    - The aggregate log-likelihood ratio test is "
                       "significant at {0:.2f} standard deviations.".format(self._aggregate_nsigma))
-                print("    - The aggregate log-_likelihood ratio test "
+                print("    - The aggregate log-likelihood ratio test "
                       "standard deviations signficance threshold is {0:.2f}".format(self._aggregate_nsigma_threshold))
                 print(
                     "    - The number of sequences with data that is "

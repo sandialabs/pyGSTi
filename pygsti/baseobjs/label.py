@@ -2,7 +2,7 @@
 Defines the Label class
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -13,8 +13,7 @@ Defines the Label class
 import itertools as _itertools
 import numbers as _numbers
 import sys as _sys
-
-_debug_record = {}
+import numpy as _np
 
 
 class Label(object):
@@ -63,12 +62,11 @@ class Label(object):
             could be an argument of a gate label, and one might create a label:
             `Label('Gx', (0,), args=(pi/3,))`
         """
-        #print("Label.__new__ with name=", name, "sslbls=", state_space_labels, "t=", time, "args=", args)
+        
         if isinstance(name, Label) and state_space_labels is None:
             return name  # Note: Labels are immutable, so no need to copy
 
-        if not isinstance(name, str) and state_space_labels is None \
-           and isinstance(name, (tuple, list)):
+        if isinstance(name, (tuple, list)) and state_space_labels is None:
 
             #We're being asked to initialize from a non-string with no
             # state_space_labels, explicitly given.  `name` could either be:
@@ -130,14 +128,17 @@ class Label(object):
             time = 0.0  # for non-TupTup labels not setting a time is equivalent to setting it to 0.0
 
         #print(" -> preproc with name=", name, "sslbls=", state_space_labels, "t=", time, "args=", args)
-        if state_space_labels is None or state_space_labels in ((), (None,)):
-            if args:
+        # If numpy object, we have to check size=0 for empty; otherwise, check for empty tuple
+        if state_space_labels is None \
+            or (isinstance(state_space_labels, (_np.ndarray, _np.generic)) and state_space_labels.size == 0) \
+            or (not isinstance(state_space_labels, (_np.ndarray, _np.generic)) and state_space_labels in ((), (None,))):
+            if args is not None:
                 return LabelTupWithArgs.init(name, (), time, args)  # just use empty sslbls
             else:
                 return LabelStr.init(name, time)
 
         else:
-            if args: return LabelTupWithArgs.init(name, state_space_labels, time, args)
+            if args is not None: return LabelTupWithArgs.init(name, state_space_labels, time, args)
             else:
                 if time == 0.0:
                     return LabelTup.init(name, state_space_labels)
@@ -190,6 +191,15 @@ class Label(object):
             :class:`CircuitLabel` objects).
         """
         return (self,)  # most labels just expand to themselves
+    
+    @property
+    def is_simple(self):
+        """
+        Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.    
+        """
+
+        return self.IS_SIMPLE
+
 
 
 class LabelTup(Label, tuple):
@@ -200,6 +210,10 @@ class LabelTup(Label, tuple):
     more generally, parts of the Hilbert space that is
     acted upon by the object this label refers to.
     """
+
+    #flag used in certain Circuit subroutines
+    #Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.
+    IS_SIMPLE = True
 
     @classmethod
     def init(cls, name, state_space_labels):
@@ -250,10 +264,6 @@ class LabelTup(Label, tuple):
         return tuple.__new__(cls, tup)
 
     __new__ = tuple.__new__
-    #def __new__(cls, tup, time=0.0):
-    #    ret = tuple.__new__(cls, tup)  # creates a LabelTup object using tuple's __new__
-    #    ret.time = time
-    #    return ret
 
     @property
     def time(self):
@@ -354,26 +364,10 @@ class LabelTup(Label, tuple):
             mapped_sslbls = [mapper(sslbl) for sslbl in self.sslbls]
         return Label(self.name, mapped_sslbls)
 
-    #OLD
-    #def __iter__(self):
-    #    return self.tup.__iter__()
-
-    #OLD
-    #def __iter__(self):
-    #    """ Iterate over the name + state space labels """
-    #    # Note: tuple(.) uses __iter__ to construct tuple rep.
-    #    yield self.name
-    #    if self.sslbls is not None:
-    #        for ssl in self.sslbls:
-    #            yield ssl
-
     def __str__(self):
         """
         Defines how a Label is printed out, e.g. Gx:0 or Gcnot:1:2
         """
-        #caller = inspect.getframeinfo(inspect.currentframe().f_back)
-        #ky = "%s:%s:%d" % (caller[2],os.path.basename(caller[0]),caller[1])
-        #_debug_record[ky] = _debug_record.get(ky, 0) + 1
         s = str(self.name)
         if self.sslbls:  # test for None and len == 0
             s += ":" + ":".join(map(str, self.sslbls))
@@ -393,13 +387,7 @@ class LabelTup(Label, tuple):
         Defines equality between gates, so that they are equal if their values
         are equal.
         """
-        #Unnecessary now that we have a separate LabelStr
-        #if isinstance(other, str):
-        #    if self.sslbls: return False # tests for None and len > 0
-        #    return self.name == other
-
         return tuple.__eq__(self, other)
-        #OLD return self.name == other.name and self.sslbls == other.sslbls # ok to compare None
 
     def __lt__(self, x):
         return tuple.__lt__(self, tuple(x))
@@ -445,16 +433,6 @@ class LabelTup(Label, tuple):
         """
         return LabelTup.init(newname, self.sslbls) if (self.name == oldname) else self
 
-    def is_simple(self):
-        """
-        Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.
-
-        Returns
-        -------
-        bool
-        """
-        return True
-
     __hash__ = tuple.__hash__  # this is why we derive from tuple - using the
     # native tuple.__hash__ directly == speed boost
 
@@ -467,6 +445,10 @@ class LabelTupWithTime(Label, tuple):
     more generally, parts of the Hilbert space that is
     acted upon by the object this label refers to.
     """
+
+    #flag used in certain Circuit subroutines
+    #Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.
+    IS_SIMPLE = True
 
     @classmethod
     def init(cls, name, state_space_labels, time=0.0):
@@ -617,19 +599,6 @@ class LabelTupWithTime(Label, tuple):
             mapped_sslbls = [mapper(sslbl) for sslbl in self.sslbls]
         return Label(self.name, mapped_sslbls)
 
-    #OLD
-    #def __iter__(self):
-    #    return self.tup.__iter__()
-
-    #OLD
-    #def __iter__(self):
-    #    """ Iterate over the name + state space labels """
-    #    # Note: tuple(.) uses __iter__ to construct tuple rep.
-    #    yield self.name
-    #    if self.sslbls is not None:
-    #        for ssl in self.sslbls:
-    #            yield ssl
-
     def __str__(self):
         """
         Defines how a Label is printed out, e.g. Gx:0 or Gcnot:1:2
@@ -659,13 +628,8 @@ class LabelTupWithTime(Label, tuple):
         Defines equality between gates, so that they are equal if their values
         are equal.
         """
-        #Unnecessary now that we have a separate LabelStr
-        #if isinstance(other, str):
-        #    if self.sslbls: return False # tests for None and len > 0
-        #    return self.name == other
 
         return tuple.__eq__(self, other)
-        #OLD return self.name == other.name and self.sslbls == other.sslbls # ok to compare None
 
     def __lt__(self, x):
         return tuple.__lt__(self, tuple(x))
@@ -711,16 +675,6 @@ class LabelTupWithTime(Label, tuple):
         """
         return LabelTupWithTime(newname, self.sslbls) if (self.name == oldname) else self
 
-    def is_simple(self):
-        """
-        Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.
-
-        Returns
-        -------
-        bool
-        """
-        return True
-
     __hash__ = tuple.__hash__  # this is why we derive from tuple - using the
     # native tuple.__hash__ directly == speed boost
 
@@ -735,6 +689,10 @@ class LabelStr(Label, str):
     "hardcoded" way - if we put switching logic in __hash__
     the hashing gets *much* slower.
     """
+
+    #flag used in certain Circuit subroutines
+    #Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.
+    IS_SIMPLE = True
 
     @classmethod
     def init(cls, name, time=0.0):
@@ -863,6 +821,10 @@ class LabelStr(Label, str):
         # Need to tell serialization logic how to create a new Label since it's derived
         # from the immutable tuple type (so cannot have its state set after creation)
         return (LabelStr, (str(self), self.time), None)
+    
+    def __contains__(self, x):
+        #need to get a string rep of the tested label.
+        return str(x) in str(self)
 
     def to_native(self):
         """
@@ -894,16 +856,6 @@ class LabelStr(Label, str):
         """
         return LabelStr(newname) if (self.name == oldname) else self
 
-    def is_simple(self):
-        """
-        Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.
-
-        Returns
-        -------
-        bool
-        """
-        return True
-
     __hash__ = str.__hash__  # this is why we derive from tuple - using the
     # native tuple.__hash__ directly == speed boost
 
@@ -914,6 +866,10 @@ class LabelTupTup(Label, tuple):
 
     This typically labels a layer of a circuit (a parallel level of gates).
     """
+
+    #flag used in certain Circuit subroutines
+    #Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.
+    IS_SIMPLE = False
 
     @classmethod
     def init(cls, tup_of_tups):
@@ -934,9 +890,9 @@ class LabelTupTup(Label, tuple):
         -------
         LabelTupTup
         """
-        tupOfLabels = tuple((Label(tup) for tup in tup_of_tups))  # Note: tup can also be a Label obj
-        if len(tupOfLabels) > 0:
-            assert(max([lbl.time for lbl in tupOfLabels]) == 0.0), \
+        tupOfLabels = tuple([Label(tup) for tup in tup_of_tups])  # Note: tup can also be a Label obj
+        if tupOfLabels:
+            assert(all([lbl.time==0.0 for lbl in tupOfLabels])), \
                 "Cannot create a LabelTupTup containing labels with time != 0"
         return cls.__new__(cls, tupOfLabels)
 
@@ -1071,13 +1027,7 @@ class LabelTupTup(Label, tuple):
         Defines equality between gates, so that they are equal if their values
         are equal.
         """
-        #Unnecessary now that we have a separate LabelStr
-        #if isinstance(other, str):
-        #    if self.sslbls: return False # tests for None and len > 0
-        #    return self.name == other
-
         return tuple.__eq__(self, other)
-        #OLD return self.name == other.name and self.sslbls == other.sslbls # ok to compare None
 
     def __lt__(self, x):
         return tuple.__lt__(self, tuple(x))
@@ -1127,16 +1077,6 @@ class LabelTupTup(Label, tuple):
         """
         return LabelTupTup(tuple((x.replace_name(oldname, newname) for x in self)))
 
-    def is_simple(self):
-        """
-        Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.
-
-        Returns
-        -------
-        bool
-        """
-        return False
-
     @property
     def depth(self):
         """
@@ -1181,6 +1121,10 @@ class LabelTupTupWithTime(Label, tuple):
 
     This typically labels a layer of a circuit (a parallel level of gates).
     """
+
+    #flag used in certain Circuit subroutines
+    #Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.
+    IS_SIMPLE = False
 
     @classmethod
     def init(cls, tup_of_tups, time=None):
@@ -1340,13 +1284,7 @@ class LabelTupTupWithTime(Label, tuple):
         Defines equality between gates, so that they are equal if their values
         are equal.
         """
-        #Unnecessary now that we have a separate LabelStr
-        #if isinstance(other, str):
-        #    if self.sslbls: return False # tests for None and len > 0
-        #    return self.name == other
-
         return tuple.__eq__(self, other)
-        #OLD return self.name == other.name and self.sslbls == other.sslbls # ok to compare None
 
     def __lt__(self, x):
         return tuple.__lt__(self, tuple(x))
@@ -1396,16 +1334,6 @@ class LabelTupTupWithTime(Label, tuple):
         """
         return LabelTupTupWithTime(tuple((x.replace_name(oldname, newname) for x in self)))
 
-    def is_simple(self):
-        """
-        Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.
-
-        Returns
-        -------
-        bool
-        """
-        return False
-
     @property
     def depth(self):
         """
@@ -1454,6 +1382,11 @@ class CircuitLabel(Label, tuple):
     (held as the label's components) and line labels (held as the label's
     state-space labels)
     """
+
+    #flag used in certain Circuit subroutines
+    #Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.
+    IS_SIMPLE = True
+
     def __new__(cls, name, tup_of_layers, state_space_labels, reps=1, time=None):
         # Note: may need default args for all but 1st for pickling!
         """
@@ -1633,13 +1566,7 @@ class CircuitLabel(Label, tuple):
         Defines equality between gates, so that they are equal if their values
         are equal.
         """
-        #Unnecessary now that we have a separate LabelStr
-        #if isinstance(other, str):
-        #    if self.sslbls: return False # tests for None and len > 0
-        #    return self.name == other
-
         return tuple.__eq__(self, other)
-        #OLD return self.name == other.name and self.sslbls == other.sslbls # ok to compare None
 
     def __lt__(self, x):
         return tuple.__lt__(self, tuple(x))
@@ -1692,16 +1619,6 @@ class CircuitLabel(Label, tuple):
                             self.sslbls,
                             self[2])
 
-    def is_simple(self):
-        """
-        Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.
-
-        Returns
-        -------
-        bool
-        """
-        return True  # still true - even though can have components!
-
     @property
     def depth(self):
         """
@@ -1729,11 +1646,6 @@ class CircuitLabel(Label, tuple):
     # native tuple.__hash__ directly == speed boost
 
 
-#class NamedLabelTupTup(Label,tuple):
-#    def __new__(cls,name,tup_of_tups):
-#        pass
-
-
 class LabelTupWithArgs(Label, tuple):
     """
     A label consisting of a string along with a tuple of integers or state-space-names.
@@ -1742,6 +1654,10 @@ class LabelTupWithArgs(Label, tuple):
     parts of the Hilbert space that is acted upon by the object this label
     refers to.  This label type also supports having arguments and a time value.
     """
+
+    #flag used in certain Circuit subroutines
+    #Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.
+    IS_SIMPLE = True
 
     @classmethod
     def init(cls, name, state_space_labels, time=0.0, args=()):
@@ -1943,13 +1859,7 @@ class LabelTupWithArgs(Label, tuple):
         Defines equality between gates, so that they are equal if their values
         are equal.
         """
-        #Unnecessary now that we have a separate LabelStr
-        #if isinstance(other, str):
-        #    if self.sslbls: return False # tests for None and len > 0
-        #    return self.name == other
-
         return tuple.__eq__(self, other)
-        #OLD return self.name == other.name and self.sslbls == other.sslbls # ok to compare None
 
     def __lt__(self, x):
         try:
@@ -2001,16 +1911,6 @@ class LabelTupWithArgs(Label, tuple):
         """
         return LabelTupWithArgs(newname, self.sslbls, self.time, self.args) if (self.name == oldname) else self
 
-    def is_simple(self):
-        """
-        Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.
-
-        Returns
-        -------
-        bool
-        """
-        return True
-
     __hash__ = tuple.__hash__  # this is why we derive from tuple - using the
     # native tuple.__hash__ directly == speed boost
 
@@ -2022,6 +1922,10 @@ class LabelTupTupWithArgs(Label, tuple):
     This typically labels a layer of a circuit (a parallel level of gates).
     This label type also supports having arguments and a time value.
     """
+
+    #flag used in certain Circuit subroutines
+    #Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.
+    IS_SIMPLE = False
 
     @classmethod
     def init(cls, tup_of_tups, time=None, args=()):
@@ -2199,14 +2103,8 @@ class LabelTupTupWithArgs(Label, tuple):
         Defines equality between gates, so that they are equal if their values
         are equal.
         """
-        #Unnecessary now that we have a separate LabelStr
-        #if isinstance(other, str):
-        #    if self.sslbls: return False # tests for None and len > 0
-        #    return self.name == other
-
         return tuple.__eq__(self, other)
-        #OLD return self.name == other.name and self.sslbls == other.sslbls # ok to compare None
-
+        
     def __lt__(self, x):
         return tuple.__lt__(self, tuple(x))
 
@@ -2255,16 +2153,6 @@ class LabelTupTupWithArgs(Label, tuple):
         """
         return LabelTupTupWithArgs(tuple((x.replace_name(oldname, newname) for x in self.components)),
                                    self.time, self.args)
-
-    def is_simple(self):
-        """
-        Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.
-
-        Returns
-        -------
-        bool
-        """
-        return False
 
     @property
     def depth(self):

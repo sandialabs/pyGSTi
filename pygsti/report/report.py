@@ -2,7 +2,7 @@
 Internal model of a report during generation
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -206,6 +206,11 @@ class Report:
         who want to tinker with the standard analysis presented in the static
         HTML or LaTeX format reports.
 
+        Note that interactive cells in report notebooks require JavaScript,
+        and therefore do not work with JupyterLab. Please continue to use
+        classic Jupyter notebooks for PyGSTi report notebooks. To track this issue,
+        see https://github.com/pyGSTio/pyGSTi/issues/205.
+
         Parameters
         ----------
         path : str or path-like object
@@ -249,6 +254,12 @@ class Report:
         nb = _Notebook()
         nb.add_markdown('# {title}\n(Created on {date})'.format(
             title=title, date=_time.strftime("%B %d, %Y")))
+        
+        nb.add_markdown("## JupyterLab Incompatibility Warning\n" + 
+        "<font color='red'>Note that interactive cells in report notebooks require JavaScript, " +
+        "and therefore do not work with JupyterLab. Please continue to use " +
+        "classic Jupyter notebooks for PyGSTi report notebooks. To track this issue, " +
+        "see https://github.com/pyGSTio/pyGSTi/issues/205.</font>")
 
         nb.add_code("""\
             import pickle
@@ -352,6 +363,11 @@ class Report:
             templatePath / 'meta.txt'])
 
         printer.log("Report Notebook created as %s" % path)
+
+        printer.warning("""Note that interactive cells in report notebooks require JavaScript,
+         and therefore do not work with JupyterLab. Please continue to use
+         classic Jupyter notebooks for PyGSTi report notebooks. To track this issue,
+         see https://github.com/pyGSTio/pyGSTi/issues/205.""")
 
         if auto_open:
             port = "auto" if auto_open is True else int(auto_open)

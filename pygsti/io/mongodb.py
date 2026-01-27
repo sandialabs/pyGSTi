@@ -2,7 +2,7 @@
 Serialization routines to/from a MongoDB database
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -158,7 +158,6 @@ def read_auxtree_from_mongodb_doc(mongodb, doc, auxfile_types_member='auxfile_ty
 
 
 def _load_auxdoc_member(mongodb, member_name, typ, metadata, quick_load):
-    from pymongo import ASCENDING, DESCENDING
     subtypes = typ.split(':')
     cur_typ = subtypes[0]
     next_typ = ':'.join(subtypes[1:])
@@ -809,7 +808,6 @@ def remove_auxtree_from_mongodb(mongodb, collection_name, doc_id, auxfile_types_
 
 
 def _remove_auxdoc_member(mongodb, member_name, typ, metadata, session, recursive):
-    from pymongo import ASCENDING, DESCENDING
     subtypes = typ.split(':')
     cur_typ = subtypes[0]
     next_typ = ':'.join(subtypes[1:])

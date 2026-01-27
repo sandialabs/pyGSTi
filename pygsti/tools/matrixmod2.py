@@ -2,7 +2,7 @@
 General matrix utilities. Some, but not all, are specific to matrices over the ints modulo 2.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -468,7 +468,7 @@ def fix_top(a):
     found_B = False
     for ind in range(t):
         aa, P = permute_top(a, ind)
-        B = _np.round_(aa[1:, 1:])
+        B = _np.round(aa[1:, 1:])
 
         if det_mod2(B) == 0:
             continue
