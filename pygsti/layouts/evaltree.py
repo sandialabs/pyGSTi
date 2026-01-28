@@ -340,7 +340,7 @@ class EvalTree(list):
                             (_time.time() - tm)); tm = _time.time()
 
                 #merge_method = "fast"
-                #Another possible algorith (but slower)
+                #Another possible algorithm (but slower)
                 #if merge_method == "best":
                 #    while len(indicesLeft) > 0:
                 #        iToMergeInto,_ = min(enumerate(map(len,subTreeSetList)),

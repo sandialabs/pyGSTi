@@ -16,6 +16,7 @@ from typing import Union, Optional, Literal, Any, Sequence, Callable
 import itertools as _itertools
 import numbers as _numbers
 import sys as _sys
+import copy as _copy
 import numpy as _np
 
 
@@ -149,7 +150,8 @@ class Label(object):
                 return LabelStr.init(name, time)
 
         else:
-            if args is not None: return LabelTupWithArgs.init(name, state_space_labels, time, args)
+            if args is not None:
+                return LabelTupWithArgs.init(name, state_space_labels, time, args)
             else:
                 if time == 0.0:
                     return LabelTup.init(name, state_space_labels)
@@ -264,6 +266,12 @@ class Label(object):
         #   we hit the right codepath in Label.__new__; all codepaths that
         #   lead to LabelTupTup-like objects require state_space_labels=None.
         return out
+
+    def copy(self):
+        return _copy.deepcopy(self)
+
+    def replace_name(self, oldname, newname):
+        raise NotImplementedError()
 
 
 class LabelTup(Label, tuple):

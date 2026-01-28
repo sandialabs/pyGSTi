@@ -1398,10 +1398,21 @@ def dmvec_to_state(dmvec, tol=1e-6):
     dim = int(dmvec.size**0.5)
     dm = dmvec.reshape((dim, dim))
     _mt.assert_hermitian(dm, tol)
+
+    def resolve_phase_ambiguity(vec):
+        # Choose a phase where the element with largest
+        # absolute value is real (and nonnegative).
+        entry = vec[_np.argmax(_np.abs(vec))]
+        phase = entry / _np.abs(entry)
+        vec  *= _np.conj(phase)
+        return
+
     r, psi = fast_density_rank(dm, tol)
     if r == 1:
         # The most common codepath goes up front.
-        return psi.reshape((-1, 1))
+        psi = psi.reshape((-1, 1))
+        resolve_phase_ambiguity(psi)
+        return psi
     if r == 2:
         raise ValueError('Cannot convert mixed dmvec to pure state!')
     if r == 0:
@@ -1416,6 +1427,7 @@ def dmvec_to_state(dmvec, tol=1e-6):
         raise ValueError('Cannot convert zero dmvec to pure state!')
     else:
         psi = evecs[:,-1].reshape((-1, 1))
+        resolve_phase_ambiguity(psi)
         return psi
 
 
