@@ -475,7 +475,7 @@ class CircuitMethodTester(BaseCase):
         circ2 = circuit.Circuit([[("Gypi2", 1), ("Gxpi2", 0)]], editable=True)
 
         self.assertTrue(circ1 == circ2)
-        self.assertTrue(circ1._hash == circ2._hash)
+        self.assertTrue(hash(circ1) == hash(circ2))
 
         circ3 = circuit.Circuit([("Gxpi2", 0), ("Gypi2", 1)])  # initialize circ1 as a new circuit with 2 layers.
         circ4 = circuit.Circuit([("Gypi2", 1), ("Gxpi2", 0)])
