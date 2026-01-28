@@ -205,6 +205,10 @@ class Label(object):
     def copy(self):
         return _copy.deepcopy(self)
 
+    def replace_name(self, oldname, newname):
+        raise NotImplementedError()
+
+
 class LabelTup(Label, tuple):
     """
     A label consisting of a string along with a tuple of integers or state-space-names.
