@@ -218,11 +218,7 @@ class Label(object):
         """
         return self.IS_SIMPLE  # type: ignore
 
-    def with_sorted_inner_labels(self) -> Union[
-        LabelTup,    LabelTupWithArgs,    LabelTupWithTime,
-        LabelTupTup, LabelTupTupWithArgs, LabelTupTupWithTime,
-        LabelStr, CircuitLabel
-        ]:
+    def with_sorted_inner_labels(self) -> ConcreteLabel:
         """
         Returns `self` if either (1) we aren't a LabelTupTup or (2) we are a LabelTupTup,
         but one or more inner Label objects have sslbls == None.

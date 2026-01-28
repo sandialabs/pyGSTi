@@ -1019,14 +1019,12 @@ class Circuit(object):
         if isinstance(x, Circuit):
             if len(self) != len(x):
                 return False
-            if not self._static:
-                self.done_editing()
-            if not x._static:
-                x.done_editing()
-            if self._hash != x._hash:
+            y = self if self._static else self.copy(editable=False)
+            x = x    if    x._static else    x.copy(editable=False)
+            if y._hash != x._hash:
                 return False
             else:
-                return self.tup == x.tup
+                return y.tup == x.tup
         elif x is None: 
             return False
         else:
@@ -1109,8 +1107,13 @@ class Circuit(object):
                                       self._compilable_layer_indices_tup, 
                                       self._hashable_tup, self._hash)
             else:
-                static_labels = tuple([layer_lbl if isinstance(layer_lbl, _Label) else _Label(layer_lbl) 
-                                       for layer_lbl in self._labels])
+                labels_list = []
+                for layer_lbl in self._labels: # type: ignore
+                    if not isinstance(layer_lbl, _Label):
+                        layer_lbl = _Label(layer_lbl)
+                    layer_lbl = layer_lbl.with_sorted_inner_labels()
+                    labels_list.append(layer_lbl)
+                static_labels = tuple(labels_list)
                 hashable_tup = self._tup_copy(static_labels)
                 return ret._copy_init(static_labels, self._line_labels, 
                                       editable, self._name, self._str, self._occurrence_id, 
