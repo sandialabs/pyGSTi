@@ -915,12 +915,15 @@ class ModelMember(ModelChild, _NicelySerializable):
         bool
             True if structure (all but parameter *values*) matches
         """
-        if not isinstance(self, type(other)): return False
+        if not isinstance(self, type(other)):
+            return False
         #if str(self.evotype) != str(other.evotype): return False  # allow models of different evotypes to be similar
-        if not self._is_similar(other, rtol, atol): return False
+        if not self._is_similar(other, rtol, atol):
+            return False
 
         # Recursive check on submembers
-        if len(self.submembers()) != len(other.submembers()): return False
+        if len(self.submembers()) != len(other.submembers()):
+            return False
         for sm1, sm2 in zip(self.submembers(), other.submembers()):
             if not sm1.is_similar(sm2): return False
 
