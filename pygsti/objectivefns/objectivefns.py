@@ -4283,7 +4283,8 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
     # Main public instance functions
 
     def set_penalties(self, regularize_factor=0, cptp_penalty_factor=0, spam_penalty_factor=0,
-                      errorgen_penalty_factor=0, frobenius_penalty_factor=0, forcefn_grad=None, shift_fctr=100,
+                      errorgen_penalty_factor=0, model_L2_penalty_factor=0,
+                      frobenius_penalty_factor=0, forcefn_grad=None, shift_fctr=100,
                       prob_clip_interval=(-10000, 1000), target_model=None):
 
         """
@@ -4315,6 +4316,11 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             The prefactor of a term that penalizes nonzero error generators.  Specifically, adds a
             `errorgen_L2_penalty_factor * sum_i(|errorgen_coeff_i|**2)` penalty where the sum ranges
             over all the error generator coefficients of each model operation.
+
+        model_L2_penalty_factor : float, optional
+            The prefactor of a term that penalizes nonzero model coefficients.  Specifically, adds a
+            `model_L2_penalty_factor * sum_i(|model_coeff_i|)` penalty where the sum ranges
+            over all the model coefficients of each model operation.
 
         frobenius_penalty_factor : float, optional
             The prefactor of a term that penalizes frobenius distance to a target model. Used
@@ -4352,6 +4358,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         self.cptp_penalty_factor = cptp_penalty_factor
         self.spam_penalty_factor = spam_penalty_factor
         self.errorgen_L2_penalty_factor = errorgen_penalty_factor
+        self.model_L2_penalty_factor = model_L2_penalty_factor
         self.frobenius_penalty_factor = frobenius_penalty_factor
         self.forcefn_grad = forcefn_grad
 
@@ -4384,6 +4391,8 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             ex += _spam_penalty_size(self.model)
         if self.errorgen_L2_penalty_factor != 0: 
             ex += _errorgen_penalty_size(self.model)
+        if self.model_L2_penalty_factor != 0:
+            ex += _model_L2_penalty_size(self.model)
         if self.frobenius_penalty_factor !=0: 
             ex += _frobenius_penalty_size(self.model)
 
@@ -4538,6 +4547,12 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             errorgen_penalty = _errorgen_L2_penalty(self.model, self.errorgen_L2_penalty_factor)
             terms_jac[off:off+n, :] *= 2*errorgen_penalty[:, None]
             off += n
+        
+        if self.model_L2_penalty_factor > 0:
+            n = _model_L2_penalty_jac_fill(terms_jac[off:, :], self.model, self.model_L2_penalty_factor, wrtslice)
+            model_penalty = _model_L2_penalty(self.model, self.model_L2_penalty_factor)
+            terms_jac[off:off+n, :] *= 2*model_penalty[:, None]
+            off += n
 
         if self.frobenius_penalty_factor > 0:
             n = _frobenius_penalty_jac_fill(terms_jac[off:, :], self.model, self.target_model, self.frobenius_penalty_factor, wrtslice)
@@ -4572,6 +4587,10 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         if self.errorgen_L2_penalty_factor > 0:
             errorgen_penalty = _errorgen_L2_penalty(self.model, self.errorgen_L2_penalty_factor)
             blocks.append(errorgen_penalty)
+        
+        if self.model_L2_penalty_factor > 0:
+            model_L2_penalty = _model_L2_penalty(self.model, self.model_L2_penalty_factor)
+            blocks.append(model_L2_penalty)
 
         if self.frobenius_penalty_factor > 0:
             #don't square is this is frobenius squared, else do square.
@@ -5789,6 +5808,8 @@ def _cptp_penalty_size(mdl):
 def _spam_penalty_size(mdl):
     return len(mdl.preps) + sum([len(povm) for povm in mdl.povms.values()])
 
+def _model_L2_penalty_size(mdl):
+    return 1
 
 def _errorgen_penalty_size(mdl):
     return 1
@@ -5854,6 +5875,17 @@ def _errorgen_L2_penalty(mdl, prefactor):
     #for lbl in mdl.primitive_povm_labels:
     #    op = mdl.circuit_layer_operator(lbl, 'povm')
     #    val += _np.sum(_np.abs(op.errorgen_coefficients_array()))
+
+    return prefactor * _np.array([val], 'd')
+
+def _model_L2_penalty(mdl, prefactor):
+    """
+    Helper function - model L2 penalty: sum_i |model_coeff_i|**2
+    """
+    val = 0.0
+    for lbl in mdl.primitive_op_labels:
+        op = mdl.circuit_layer_operator(lbl, 'op')
+        val += _np.dot(op.to_vector(), op.to_vector())
 
     return prefactor * _np.array([val], 'd')
 
@@ -6065,6 +6097,18 @@ def _errorgen_L2_penalty_jac_fill(errorgen_penalty_vec_grad_to_fill, mdl, prefac
     errorgen_penalty_vec_grad_to_fill[0, :] *= 0.5 / val  # final == 1/sqrt(sum(terms)) * dsumterms
 
     #return the number of leading-dim indicies we filled in
+    return 1
+
+def _model_L2_penalty_jac_fill(l2_penalty_vec_grad_to_fill, mdl, prefactor, wrt_slice):
+
+    l2_penalty_vec_grad_to_fill[0, :] = 0.0
+    orig_vec = mdl.to_vector()
+
+    full_grad = 2.0 * prefactor * orig_vec
+
+    for param_idx in _slct.indices(wrt_slice):
+        l2_penalty_vec_grad_to_fill[0, param_idx] = full_grad[param_idx]
+
     return 1
 
 def _frobenius_penalty_jac_fill(frobenius_penalty_vec_grad_to_fill, mdl, target_model, prefactor, wrt_slice):
