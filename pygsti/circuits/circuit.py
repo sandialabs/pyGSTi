@@ -255,8 +255,8 @@ class Circuit(object):
     default_expand_subcircuits = True
     Castable = Union['Circuit', tuple, list, str]
 
-    @classmethod
-    def cast(cls, obj: Castable):
+    @staticmethod
+    def cast(obj: Castable):
         """
         Convert `obj` into a :class:`Circuit`.
 
@@ -269,13 +269,13 @@ class Circuit(object):
         -------
         Circuit
         """
-        if isinstance(obj, cls): return obj
-        if isinstance(obj, (tuple, list)): return cls.from_tuple(obj)
-        if isinstance(obj, str): return cls(obj)
-        raise ValueError("Cannot create an %s object from '%s'" % (cls.__name__, str(type(obj))))
+        if isinstance(obj, Circuit): return obj
+        if isinstance(obj, (tuple, list)): return Circuit.from_tuple(obj)
+        if isinstance(obj, str): return Circuit(obj)
+        raise ValueError("Cannot create Circuit object from '%s'" % str(type(obj)))
 
-    @classmethod
-    def from_tuple(cls, tup: Union[List, Tuple]):
+    @staticmethod
+    def from_tuple(tup: Union[List, Tuple]):
         """
         Creates a :class:`Circuit` from a tuple
 
@@ -290,9 +290,9 @@ class Circuit(object):
         """
         if '@' in tup:
             k = tup.index('@')
-            return cls(tup[0:k], tup[k + 1:])
+            return Circuit(tup[0:k], tup[k + 1:])
         else:
-            return cls(tup)
+            return Circuit(tup)
 
     def __init__(self,
             layer_labels: Union[None, str, Iterable[Union[Iterable[_Label], _Label]]]=(),
@@ -541,10 +541,10 @@ class Circuit(object):
         self._bare_init(labels, my_line_labels, editable, name, stringrep,
                         occurrence, compilable_layer_indices_tup)
 
-    @classmethod
-    def _fastinit(cls, labels, line_labels, editable, name='', stringrep=None, occurrence=None,
+    @staticmethod
+    def _fastinit(labels, line_labels, editable, name='', stringrep=None, occurrence=None,
                   compilable_layer_indices_tup=()):
-        ret = cls.__new__(cls)
+        ret = Circuit.__new__(Circuit)
         ret._bare_init(labels, line_labels, editable, name, stringrep, occurrence, compilable_layer_indices_tup)
         return ret
 
@@ -947,7 +947,6 @@ class Circuit(object):
         return Circuit._fastinit(self.layertup + x.layertup, new_line_labels, editable=False, name='',
                                  stringrep=s, occurrence=None)
 
-
     def sandwich(self, x, y) -> Circuit:
         """
         Method for sandwiching labels around this circuit.
@@ -1196,9 +1195,9 @@ class Circuit(object):
             assert(indx == 0), "Only index 0 exists for a single-simple-Label level"
             self._labels[ilayer] = val
 
-    def extract_labels(self, layers: Union[None, int, slice, list[int], tuple[int, ...]]=None,
-                       lines: Union[None, int, slice, list[int], tuple[int, ...]]=None,
-                       strict: bool=True) -> Union[Circuit, _Label]:
+    def extract_labels(
+            self, layers: Optional[LayersIndex]=None, lines: Optional[LinesIndex]=None, strict: bool=True
+        ) -> Union[Circuit, _Label]:
         """
         Get a subregion - a "rectangle" - of this Circuit.
 
@@ -1489,6 +1488,10 @@ class Circuit(object):
             insert_before = len(self._labels)
         elif insert_before < 0:
             insert_before = len(self._labels) + insert_before
+        
+        assert num_to_insert >= 0
+        if num_to_insert == 0:
+            return
 
         if lines is None:  # insert complete layers
             for i in range(num_to_insert):
@@ -1496,11 +1499,9 @@ class Circuit(object):
 
             #Shift compilable layer indices as needed
             if self._compilable_layer_indices_tup:
-                if num_to_insert <= 0 and insert_before < len(self._labels):
-                    raise ValueError('Undefined behavior (at least until the ' \
-                    'documentation is updated).')
-                shifted_inds = [i if (i < insert_before) else (i + num_to_insert)
-                                for i in self._compilable_layer_indices_tup]
+                shifted_inds = [
+                    i if (i < insert_before) else (i + num_to_insert) for i in self._compilable_layer_indices_tup
+                ]
                 self._compilable_layer_indices_tup = tuple(shifted_inds)
 
         else:  # insert layers only on given lines - shift existing labels to right
@@ -1969,8 +1970,8 @@ class Circuit(object):
             c = chr(ord(c) + 1)
         return "".join([translateDict[opLabel] for opLabel in self.layertup])
 
-    @classmethod
-    def from_pythonstr(cls, python_string, op_labels):
+    @staticmethod
+    def from_pythonstr(python_string, op_labels):
         """
         Decode an "encoded string" into a :class:`Circuit`.
 
@@ -2001,7 +2002,7 @@ class Circuit(object):
         for opLabel in op_labels:
             translateDict[c] = opLabel
             c = chr(ord(c) + 1)
-        return cls(tuple([translateDict[cc] for cc in python_string]))
+        return Circuit(tuple([translateDict[cc] for cc in python_string]))
 
     def serialize(self, expand_subcircuits=False):
         """
@@ -2558,26 +2559,36 @@ class Circuit(object):
         None
         """
         assert(not self._static), "Cannot edit a read-only circuit!"
+        if not isinstance(old_gatename, str):
+            _warnings.warn(f'Casting `old_gatename` of type {type(old_gatename)} to the string "{str(old_gatename)}".')
+            old_gatename = str(old_gatename)
+        if not isinstance(new_gatename, str):
+            _warnings.warn(f'Casting `old_gatename` of type {type(new_gatename)} to the string "{str(new_gatename)}".')
+            new_gatename = str(new_gatename)
+        
+        if ':' in old_gatename or ':' in new_gatename:
+            msg = \
+            """
+            Gate names cannot include the character ":"! Note
+            that the name of a gate like "Gx:1" is just "Gx".
+            """
+            raise ValueError(msg)
+        
+        default_sslbls = self.line_labels if len(old_gatename) == 0 else tuple()
 
-        def replace(obj):  # obj is either a simple label or a list
+        def replace(obj):  # obj can be a Label, a str, or a sequence thereof.
             if isinstance(obj, _Label):
-                if obj.name == old_gatename:
-                    newobj = _Label(new_gatename, obj.sslbls)
-                else:
-                    newobj = obj
+                newobj = obj.replace_name(old_gatename, new_gatename)
             elif obj == old_gatename:
-                if len(obj) == 0:
-                    sslbls = self.line_labels
-                else:
-                    import warnings
-                    warnings.warn(f'Cannot infer target of gate(s) of {obj}.')
-                    sslbls = tuple()
-                newobj = _Label((new_gatename,) + sslbls)
+                # we can infer that isinstance(obj, str) == True.
+                newobj = _Label(new_gatename, state_space_labels=default_sslbls)
             else:
                 newobj = [replace(sub) for sub in obj]
             return newobj
 
-        self._labels = replace(self._labels)
+        newlabels = [replace(layer) for layer in self._labels]
+        self._labels = newlabels
+        return
 
     def replace_gatename(self, old_gatename: str, new_gatename: str) -> Circuit:
         """
@@ -4230,9 +4241,8 @@ class Circuit(object):
         else:
             return Circuit(circuit_layers)
 
-    @classmethod
-    def from_qiskit(cls,
-                    circuit: qiskit.QuantumCircuit,
+    @staticmethod
+    def from_qiskit(circuit: qiskit.QuantumCircuit,
                     qubit_conversion: Optional[Dict[qiskit.circuit.Qubit, str]] = None,
                     qiskit_gate_conversion: Optional[Dict[str, str]] = None,
                     use_standard_gate_conversion_as_backup: bool = True,
@@ -4417,10 +4427,9 @@ class Circuit(object):
                     for pygsti_qubit in pygsti_gate_qubits:
                         layer_indices[pygsti_qubit] = len(pygsti_circ_layers)
 
-        circuit = cls(pygsti_circ_layers, line_labels=line_labels)
+        circuit = Circuit(pygsti_circ_layers, line_labels=line_labels)
 
         return (circuit, qubit_idx_conversion)
-
 
     def convert_to_quil(self,
                         num_qubits=None,
@@ -4986,7 +4995,10 @@ class Circuit(object):
         self._hashable_tup = self.tup
         self._hash = hash(self._hashable_tup)
         self._str = None
-        self._str = self.str # this accessor recomputes the value of self._str
+        self._str = self.str
+        # ^ the accessor on the right-hand side sees that self._str
+        #   is None, and so returns a value computed from scratch.
+        return
 
 
 
@@ -5075,7 +5087,7 @@ class CompressedCircuit(object):
                        check=False, occurrence=occurrence)
 
     @staticmethod
-    def _get_num_periods(circuit, period_len):
+    def _get_num_periods(circuit, period_len: int) -> int:
         n = 0
         if len(circuit) < period_len: return 0
         while circuit[0:period_len] == circuit[n * period_len:(n + 1) * period_len]:
@@ -5083,7 +5095,7 @@ class CompressedCircuit(object):
         return n
 
     @staticmethod
-    def compress_op_label_tuple(circuit: Union[Circuit, list], min_len_to_compress=20, max_period_to_look_for=20):
+    def compress_op_label_tuple(circuit: Union[Circuit, tuple], min_len_to_compress:int=20, max_period_to_look_for:int=20):
         """
         Compress a operation sequence.
 
