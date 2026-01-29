@@ -95,6 +95,15 @@ class LabelTester(BaseCase):
         self.assertEqual(str(l), "GrotX;1.4:0:1!0.2")  # make sure we do print time when it's nonzero
         self.assertEqual(l.time, 0.2)
 
+    def test_need_to_explicitly_say_its_sorted(self):
+
+        l = L((('Gx', 0),('Ga', 1)))
+        self.assertFalse(l.is_sorted, "We will not check for sorting unless asked. The starting assumption is that the label is not sorted.")
+
+        l = l.with_sorted_inner_labels()
+        self.assertTrue(l.is_sorted, f"We just sorted the label {l}!")
+
+
     def test_label_rep_evalulation(self):
         """ Make sure Label reps evaluate back to the correct Label """
         from pygsti.baseobjs import Label, CircuitLabel
