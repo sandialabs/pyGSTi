@@ -234,6 +234,8 @@ class WildcardBudget(_NicelySerializable):
             elInds = layout.indices_for_index(i)
             fvec = freqs[elInds]
             qvec = probs_in[elInds]
+            if any(el > 1.0 or el < 0.0 for el in qvec):
+                raise ValueError("Invalid input probabilities: %s" % str(qvec))
 
             initialTVD = sum(tvd_precomp[elInds])  # 0.5 * sum(_np.abs(qvec - fvec))
 

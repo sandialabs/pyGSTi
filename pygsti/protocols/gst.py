@@ -2241,25 +2241,16 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options,
             #If this estimate is the target model then skip adding the diamond distance wildcard.
             if base_estimate_label != 'Target':
                 try:
-                    budget = _compute_wildcard_budget_1d_model(base_estimate, mdc_objfn, printer - 1, gaugeopt_suite)
-                    #if gaugeopt_labels is None then budget with be a PrimitiveOpsSingleScaleWildcardBudget
-                    #if it was non-empty though then we'll instead have budge as a dictionary with keys
-                    #corresponding to the elements of gaugeopt_labels. In this case let's  make
-                    #base_estimate.extra_parameters['wildcard1d' + "_unmodeled_error"] a dictionary of
-                    #the serialized PrimitiveOpsSingleScaleWildcardBudget elements
-                    if gaugeopt_suite is not None:
-                        gaugeopt_labels = budget.keys()
-                        base_estimate.extra_parameters['wildcard1d' + "_unmodeled_error"] = {lbl: budget[lbl].to_nice_serialization() for lbl in gaugeopt_labels} 
-                        base_estimate.extra_parameters['wildcard1d' + "_unmodeled_active_constraints"] = None
+                    budgets_by_label = _compute_wildcard_budget_1d_model(base_estimate, mdc_objfn, printer - 1, gaugeopt_suite)
+                    #budgets_by_label is a dictionary with keys labeling different gauge optimizations. We make
+                    # base_estimate.extra_parameters['wildcard1d' + "_unmodeled_error"] a dictionary of
+                    # the serialized PrimitiveOpsSingleScaleWildcardBudget elements (values of the dict)
+                    gaugeopt_labels = budgets_by_label.keys()
+                    base_estimate.extra_parameters['wildcard1d' + "_unmodeled_error"] = {lbl: budgets_by_label[lbl].to_nice_serialization() for lbl in gaugeopt_labels} 
+                    base_estimate.extra_parameters['wildcard1d' + "_unmodeled_active_constraints"] = None
 
-                        base_estimate.extra_parameters["unmodeled_error"] = {lbl: budget[lbl].to_nice_serialization() for lbl in gaugeopt_labels}
-                        base_estimate.extra_parameters["unmodeled_active_constraints"] = None
-                    else:
-                        base_estimate.extra_parameters['wildcard1d' + "_unmodeled_error"] = budget.to_nice_serialization() 
-                        base_estimate.extra_parameters['wildcard1d' + "_unmodeled_active_constraints"] = None
-
-                        base_estimate.extra_parameters["unmodeled_error"] = budget.to_nice_serialization()
-                        base_estimate.extra_parameters["unmodeled_active_constraints"] = None
+                    base_estimate.extra_parameters["unmodeled_error"] = {lbl: budgets_by_label[lbl].to_nice_serialization() for lbl in gaugeopt_labels}
+                    base_estimate.extra_parameters["unmodeled_active_constraints"] = None
                 except NotImplementedError as e:
                     printer.warning("Failed to get wildcard budget - continuing anyway.  Error was:\n" + str(e))
                     new_params['unmodeled_error'] = None
@@ -2337,7 +2328,7 @@ def _compute_wildcard_budget_1d_model(estimate, mdc_objfn, verbosity, gaugeopt_s
 
     Returns
     -------
-    PrimitiveOpsWildcardBudget or dict
+    dict of PrimitiveOpsWildcardBudget
         A dictionary of budgets keyed by gauge optimization labels.
 
     """
@@ -2363,6 +2354,8 @@ def _compute_wildcard_budget_1d_model(estimate, mdc_objfn, verbosity, gaugeopt_s
     two_dlogl_threshold = _chi2.ppf(1 - percentile, max(ds_dof - nparams, 1))
     redbox_threshold = _chi2.ppf(1 - percentile / nboxes, 1)
 
+    if gaugeopt_suite is None:
+        gaugeopt_suite = GSTGaugeOptSuite()
     target = gaugeopt_suite.gaugeopt_target
     if target is None:
         target = estimate.models['target']
