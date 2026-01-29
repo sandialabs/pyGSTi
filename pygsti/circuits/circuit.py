@@ -27,7 +27,7 @@ from pygsti.baseobjs.label import Label as _Label, CircuitLabel as _CircuitLabel
 from pygsti.baseobjs import outcomelabeldict as _ld, _compatibility as _compat
 from pygsti.tools import internalgates as _itgs
 from pygsti.tools import slicetools as _slct
-from pygsti.tools.exceptions import HashingEditableCircuitWarning
+from pygsti.tools.exceptions import ImplicitlyDoneEditingCircuitWarning
 from pygsti.tools.legacytools import deprecate as _deprecate_fn
 
 
@@ -871,7 +871,7 @@ class Circuit(object):
             Editable circuit is being converted to read-only mode in order to hash it.
             You should call circuit.done_editing() beforehand.
             """
-            _warnings.warn(msg, HashingEditableCircuitWarning)
+            _warnings.warn(msg, ImplicitlyDoneEditingCircuitWarning)
             self.done_editing()
         return self._hash
 
@@ -1143,6 +1143,27 @@ class Circuit(object):
                                       editable, self._name, self._str, self._occurrence_id,
                                       self._compilable_layer_indices_tup,
                                       hashable_tup, hash(hashable_tup))
+    
+    def sort_layer_labels(self):
+        """
+        For every layer of the circuit ensure that the gates mentioned within the
+        layer are sorted in increasing order of the qubits that the gate acts on.
+
+        Note that any two qubit gate acting on i, j will not be flipped to act on j,i.
+        
+        If this circuit believes that the layer is already sorted then it will not
+        resort the layer.
+
+        Updates the circuit inplace.
+        """
+        assert not self._static, "One may only sort the labels of a circuit when that circuit is editable."
+        labels_list = []
+        for layer_lbl in self._labels: # type: ignore
+            if not isinstance(layer_lbl, _Label):
+                layer_lbl = _Label(layer_lbl)
+                layer_lbl = layer_lbl.with_sorted_inner_labels()
+                labels_list.append(layer_lbl)
+        self._labels = tuple(labels_list)
 
     def clear(self):
         """
