@@ -636,7 +636,7 @@ if __name__ == "__main__":
             for i, item in enumerate(data):
                 printer.show_progress(i, len(data)-1,
                           verbose_messages=['%s gates' % i], prefix='--- GST (', suffix=') ---')
-                time.sleep(.05)
+                time.sleep(0.05)
 
     def nested_demo(verbosity):
         printer = VerbosityPrinter.create_printer(verbosity)

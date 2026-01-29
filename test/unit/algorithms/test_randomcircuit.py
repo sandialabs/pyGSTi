@@ -11,8 +11,8 @@ class RandomCircuitTest(BaseCase):
     def test_random_circuit(self):
 
         n_qubits = 4
-        qubit_labels = ['Q0','Q1','Q2','Q3'] 
-        gate_names = ['Gxpi2', 'Gxmpi2', 'Gypi2', 'Gympi2', 'Gcphase'] 
+        qubit_labels = ['Q0','Q1','Q2','Q3']
+        gate_names = ['Gxpi2', 'Gxmpi2', 'Gypi2', 'Gympi2', 'Gcphase']
         availability = {'Gcphase':[('Q0','Q1'), ('Q1','Q2'), ('Q2','Q3'), ('Q3','Q0')]}
         pspec = QPS(n_qubits, gate_names, availability=availability, qubit_labels=qubit_labels)
         depth = 10
@@ -22,23 +22,23 @@ class RandomCircuitTest(BaseCase):
 
         C2QGs1 = [] #  A list containing no 2-qubit gates is an acceptable set of compatible 2-qubit gates.
         C2QGs2 = [L('Gcphase',('Q0','Q1')),]
-        C2QGs3 = [L('Gcphase',('Q1','Q2')),] 
-        C2QGs4 = [L('Gcphase',('Q2','Q3')),] 
-        C2QGs5 = [L('Gcphase',('Q3','Q0')),] 
-        C2QGs6 = [L('Gcphase',('Q0','Q1')), L('Gcphase',('Q2','Q3')),] 
+        C2QGs3 = [L('Gcphase',('Q1','Q2')),]
+        C2QGs4 = [L('Gcphase',('Q2','Q3')),]
+        C2QGs5 = [L('Gcphase',('Q3','Q0')),]
+        C2QGs6 = [L('Gcphase',('Q0','Q1')), L('Gcphase',('Q2','Q3')),]
         C2QGs7 = [L('Gcphase',('Q1','Q2')), L('Gcphase',('Q3','Q0')),]
 
         co2Qgates = [C2QGs1, C2QGs2, C2QGs3, C2QGs4, C2QGs5, C2QGs6, C2QGs7]
         co2Qgatesprob = [0.5, 0.125, 0.125, 0.125, 0.125, 0, 0]
-        twoQprob = 1 
+        twoQprob = 1
 
         samplerargs = [co2Qgates, co2Qgatesprob, twoQprob]
         circuit = _rc.create_random_circuit(pspec, depth, sampler='co2Qgates', samplerargs=samplerargs)
 
         co2Qgates = [C2QGs1,[C2QGs2,C2QGs3,C2QGs4, C2QGs5]]
-        co2Qgatesprob = [0.5,0.5] 
-        twoQprob = 1 
-        samplerargs = [co2Qgates,] 
+        co2Qgatesprob = [0.5,0.5]
+        twoQprob = 1
+        samplerargs = [co2Qgates,]
         circuit = _rc.create_random_circuit(pspec, depth, sampler='co2Qgates', samplerargs=samplerargs)
 
 
@@ -60,18 +60,18 @@ class LayerSamplerTester(BaseCase):
 
         q_set = ('Q0', 'Q1', 'Q2')
 
-        l1 = _rc.sample_circuit_layer_by_edgegrab(pspec1, qubit_labels=q_set, two_q_gate_density=0.25, one_q_gate_names=None, 
+        l1 = _rc.sample_circuit_layer_by_edgegrab(pspec1, qubit_labels=q_set, two_q_gate_density=0.25, one_q_gate_names=None,
                         gate_args_lists={'Gczr':[('-0.1',),('+0.1',)]})
 
-        l2 = _rc.sample_circuit_layer_by_edgegrab(pspec2, qubit_labels=q_set,  two_q_gate_density=0.25, one_q_gate_names=[], 
+        l2 = _rc.sample_circuit_layer_by_edgegrab(pspec2, qubit_labels=q_set,  two_q_gate_density=0.25, one_q_gate_names=[],
          gate_args_lists=None)
 
-        l3 = _rc.sample_circuit_layer_by_edgegrab(pspec3, qubit_labels=q_set,  two_q_gate_density=0.25, one_q_gate_names=[], 
+        l3 = _rc.sample_circuit_layer_by_edgegrab(pspec3, qubit_labels=q_set,  two_q_gate_density=0.25, one_q_gate_names=[],
                 gate_args_lists=None)
 
-        l4 = _rc.sample_circuit_layer_by_edgegrab(pspec3, qubit_labels=q_set,  two_q_gate_density=0.25, one_q_gate_names=['Gxpi2',], 
+        l4 = _rc.sample_circuit_layer_by_edgegrab(pspec3, qubit_labels=q_set,  two_q_gate_density=0.25, one_q_gate_names=['Gxpi2',],
                 gate_args_lists={'Gczr':[('-0.1',),('+0.1',)]})
-        
+
     def test_qelimination(self):
 
         n = 4

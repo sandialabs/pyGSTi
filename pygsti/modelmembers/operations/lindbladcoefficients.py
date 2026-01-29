@@ -528,7 +528,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
                     raise ValueError("Missing entry for %s in dictionary of elementary errorgens." % str(eeg_lbl))
             flat_data[i] = val
 
-        self.block_data[(slice(None, None),) * self.block_data.ndim] = flat_data.reshape(self.block_data.shape)
+        self.block_data[:] = flat_data.reshape(self.block_data.shape)
         self._truncate_block_data(truncate)
 
         #set a flag to indicate that the coefficients (as returned by elementary_errorgens)
@@ -652,7 +652,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
             in the case of `'other'` blocks.
         """
         if truncate is False:
-            ttol = -1e-15  # (was -1e-12) # truncation tolerance
+            ttol = -1e-14  # (was -1e-12) # truncation tolerance
         elif truncate is True:
             ttol = -_np.inf
         else:
@@ -725,25 +725,24 @@ class LindbladCoefficientBlock(_NicelySerializable):
                 nonzero_block_data = perm_block_data[0:num_nonzero, 0:num_nonzero]
                 assert(_np.isclose(_np.linalg.norm(self.block_data), _np.linalg.norm(nonzero_block_data)))
 
-                #evals, U = _np.linalg.eigh(nonzero_block_data)  # works too (assert hermiticity above)
-                evals, U = _np.linalg.eig(nonzero_block_data)
+                evals, U = _np.linalg.eigh(nonzero_block_data)
 
                 assert(all([ev > ttol for ev in evals])), \
                     ("Lindblad coefficients are not CPTP (truncate == %s)! (largest neg = %g)"
-                     % (str(truncate), min(evals.real)))
+                     % (str(truncate), min(evals)))
 
                 if ttol < 0:  # if we're truncating and assert above allows *negative* eigenvalues
                     #push any slightly negative evals of other_projs positive so that
                     # the Cholesky decomp will work.
-                    Ui = _np.linalg.inv(U)
+                    Ui = U.T.conj()
                     pos_evals = evals.clip(1e-16, None)
-                    nonzero_block_data = _np.dot(U, _np.dot(_np.diag(pos_evals), Ui))
+                    nonzero_block_data = U @ (pos_evals[:, None] * Ui)
                     try:
                         nonzero_Lmx = _np.linalg.cholesky(nonzero_block_data)
                         # if Lmx not postitive definite, try again with 1e-12 (same lines as above)
-                    except _np.linalg.LinAlgError:                         # pragma: no cover
+                    except _np.linalg.LinAlgError:                          # pragma: no cover
                         pos_evals = evals.clip(1e-12, 1e100)                # pragma: no cover
-                        nonzero_block_data = _np.dot(U, _np.dot(_np.diag(pos_evals), Ui))  # pragma: no cover
+                        nonzero_block_data = U @ (pos_evals[:, None] * Ui)  # pragma: no cover
                         nonzero_Lmx = _np.linalg.cholesky(nonzero_block_data)
                 else:  # truncate == False or == 0 case
                     nonzero_Lmx = _np.linalg.cholesky(nonzero_block_data)
@@ -753,7 +752,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
                 Lmx = perm.T @ perm_Lmx @ perm
 
                 for i in range(num_bels):
-                    assert(_np.linalg.norm(_np.imag(Lmx[i, i])) < IMAG_TOL)
+                    assert(_np.abs(Lmx[i, i].imag) < IMAG_TOL)
                     params[i, i] = Lmx[i, i].real
                     for j in range(i):
                         params[i, j] = Lmx[i, j].real
@@ -761,7 +760,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
 
             elif self._param_mode == "elements":  # params mx stores block_data (hermitian) directly
                 for i in range(num_bels):
-                    assert(_np.linalg.norm(_np.imag(self.block_data[i, i])) < IMAG_TOL)
+                    assert(_np.abs(self.block_data[i, i].imag) < IMAG_TOL)
                     params[i, i] = self.block_data[i, i].real
                     for j in range(i):
                         params[i, j] = self.block_data[i, j].real

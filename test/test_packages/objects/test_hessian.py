@@ -19,8 +19,8 @@ class TestHessianMethods(BaseTestCase):
         super(TestHessianMethods, self).setUp()
 
         self.model = smq1Q_XY.target_model()
-        self.model = self.model.depolarize(spam_noise = .01, op_noise = .001)
-        self.model = self.model.rotate(max_rotate=.005, seed=1234)
+        self.model = self.model.depolarize(spam_noise = 0.01, op_noise = 0.001)
+        self.model = self.model.rotate(max_rotate=0.005, seed=1234)
 
         prep_fiducials = smq1Q_XY.prep_fiducials()
         meas_fiducials = smq1Q_XY.meas_fiducials()
@@ -304,21 +304,22 @@ class TestHessianMethods(BaseTestCase):
                     df, f0 = self.runSilent(ci_cur.compute_confidence_interval,
                                             FnObj, return_fn_val=True, verbosity=4)
 
-
             def fnOfSpam_float(rhoVecs, povms):
                 lbls = list(povms[0].keys())
-                return float( np.dot( rhoVecs[0].T, povms[0][lbls[0]] ) )
+                v = rhoVecs[0].T @ povms[0][lbls[0]]
+                u = v.item()
+                return float(u)
             def fnOfSpam_0D(rhoVecs, povms):
-                lbls = list(povms[0].keys())
-                return np.array( float( np.dot( rhoVecs[0].T, povms[0][lbls[0]] ) ) )
+                u = fnOfSpam_float(rhoVecs, povms)
+                return np.array( u )
             def fnOfSpam_1D(rhoVecs, povms):
-                lbls = list(povms[0].keys())
-                return np.array( [ float(np.dot( rhoVecs[0].T, povms[0][lbls[0]]) ), 0] )
+                u = fnOfSpam_float(rhoVecs, povms)
+                return np.array( [u, 0] )
             def fnOfSpam_2D(rhoVecs, povms):
-                lbls = list(povms[0].keys())
-                return np.array( [[ float(np.dot( rhoVecs[0].T, povms[0][lbls[0]] )), 0],[0,0]] )
+                u = fnOfSpam_float(rhoVecs, povms)
+                return np.array([[u, 0], [0,0]] )
             def fnOfSpam_3D(rhoVecs, povms):
-                return np.zeros( (2,2,2), 'd') #just to test for error
+                return np.zeros( (2,2,2), 'd') # just to test for error
 
             for fnOfSpam in (fnOfSpam_float, fnOfSpam_0D, fnOfSpam_1D, fnOfSpam_2D, fnOfSpam_3D):
                 FnClass = gsf.spamfn_factory(fnOfSpam)

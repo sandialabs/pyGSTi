@@ -115,7 +115,7 @@ def prs_as_polynomials(fwdsim, rholabel, elabels, circuit, polynomial_vindices_p
     #        for term in termlist:
     #            print("Coeff: ",str(term.coeff))
 
-    global DEBUG_FCOUNT  # DEBUG!!!
+    # global DEBUG_FCOUNT  # DEBUG!!!
     # db_part_cnt = 0
     # db_factor_cnt = 0
     #print("DB: pr_as_poly for ",str(tuple(map(str,circuit))), " max_order=",fwdsim.max_order)

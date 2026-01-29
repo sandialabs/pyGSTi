@@ -248,10 +248,10 @@ cdef get_next_simple_lbl(unicode s, INT start, INT end, bool integerize_sslbls, 
         last = i; is_float = True
         while i < end:
             c = s[i]
-            if u'a' <= c <= u'z' or c == u'_' or c == u'Q' or c == u'/':
-                i += 1; is_float = False
-            elif u'0' <= c <= u'9' or c == u'.' or c == u'-':
+            if u'0' <= c <= u'9' or c == u'.' or c == u'-' or c == u'e': #last case for scientific notation
                 i += 1
+            elif u'a' <= c <= u'z' or c == u'_' or c == u'Q' or c == u'/':
+                i += 1; is_float = False
             else:
                 break
         args.append(float(s[last:i]) if is_float else s[last:i]); last = i

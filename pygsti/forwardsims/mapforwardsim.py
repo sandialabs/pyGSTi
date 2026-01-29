@@ -27,6 +27,7 @@ from pygsti.tools import sharedmemtools as _smt
 from pygsti.tools import slicetools as _slct
 from pygsti.tools.matrixtools import _fas
 from pygsti.tools import listtools as _lt
+from pygsti import SpaceT
 from pygsti.circuits import CircuitList as _CircuitList
 
 _dummy_profiler = _DummyProfiler()
@@ -238,7 +239,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
             Allowed options are 'size', which corresponds to balancing the number of circuits, 
             and 'propagations', which corresponds to balancing the number of state propagations.
 
-        load_balancing_parameters : tuple of floats, optional (default (1.15, .1))
+        load_balancing_parameters : tuple of floats, optional (default (1.15, 0.1))
             A tuple of floats used as load balancing parameters when splitting a layout across atoms,
             as in the multi-processor setting when using MPI. These parameters correspond to the `imbalance_threshold`
             and `minimum_improvement_threshold` parameters described in the method `find_splitting_new`
@@ -728,22 +729,29 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
             is to allow a trace or other linear operation to be done
             prior to the scaling.
         """
-        _warnings.warn('Generating dense process matrix representations of circuits or gates \n'
-                       'can be inefficient and should be avoided for the purposes of forward \n'
-                       'simulation/calculation of circuit outcome probability distributions \n' 
-                       'when using the MapForwardSimulator.')
-        
+        superop_dim = self.model.evotype.minimal_dim(self.model.state_space)
+        if superop_dim <= 16:
+            msg = \
+            """
+            Generating dense process matrix representations of circuits or gates
+            can be inefficient and should be avoided for the purposes of forward
+            simulation/calculation of circuit outcome probability distributions
+            when using the MapForwardSimulator. This operator is small enough
+            that it could be computed with MatrixForwardSimulator instead.
+            """
+            from pygsti.tools.exceptions import ForwardSimulatorSuitabilityWarning
+            _warnings.warn(msg, ForwardSimulatorSuitabilityWarning)
+
         # Smallness tolerances, used internally for conditional scaling required
         # to control bulk products, their gradients, and their Hessians.
         _PSMALL = 1e-100
-        
+        G = _np.identity(superop_dim)
         if scale:
             scaledGatesAndExps = {}
             scale_exp = 0
-            G = _np.identity(self.model.evotype.minimal_dim(self.model.state_space))
             for lOp in circuit:
                 if lOp not in scaledGatesAndExps:
-                    opmx = self.model.circuit_layer_operator(lOp, 'op').to_dense(on_space='minimal')
+                    opmx = self.model.circuit_layer_operator(lOp, 'op').to_dense("minimal")
                     ng = max(_nla.norm(opmx), 1.0)
                     scaledGatesAndExps[lOp] = (opmx / ng, _np.log(ng))
 
@@ -762,8 +770,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
             return G, scale
 
         else:
-            G = _np.identity(self.model.evotype.minimal_dim(self.model.state_space))
             for lOp in circuit:
-                G = _np.dot(self.model.circuit_layer_operator(lOp, 'op').to_dense(on_space='minimal'), G)
+                G = _np.dot(self.model.circuit_layer_operator(lOp, 'op').to_dense("minimal"), G)
                 # above line: LEXICOGRAPHICAL VS MATRIX ORDER
             return G

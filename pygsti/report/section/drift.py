@@ -46,11 +46,11 @@ class DriftSection(_Section):
     @_Section.figure_factory()
     def drift_detector_colorbox_plot(workspace, stabilityanalyzer=None, circuit_list=None, **kwargs):
         return workspace.ColorBoxPlot(
-            'driftdetector', circuit_list, None, None, linlg_pcntle=.05, stabilityanalyzer=stabilityanalyzer
+            'driftdetector', circuit_list, None, None, linlg_pcntle=0.05, stabilityanalyzer=stabilityanalyzer
         )
 
     @_Section.figure_factory()
     def drift_size_colorbox_plot(workspace, stabilityanalyzer=None, circuit_list=None, **kwargs):
         return workspace.ColorBoxPlot(
-            'driftsize', circuit_list, None, None, linlg_pcntle=.05, stabilityanalyzer=stabilityanalyzer
+            'driftsize', circuit_list, None, None, linlg_pcntle=0.05, stabilityanalyzer=stabilityanalyzer
         )

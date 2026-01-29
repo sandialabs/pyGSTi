@@ -93,7 +93,7 @@ class InterpygateConstructionTester(BaseCase):
     @classmethod
     def setUpClass(cls):
         super(InterpygateConstructionTester, cls).setUpClass()
-        cls.static_target = np.bmat([[np.eye(2),np.zeros([2,2])],
+        cls.static_target = np.block([[np.eye(2),np.zeros([2,2])],
                                      [np.zeros([2,2]),np.sqrt(2)/2*(sigI++1.j*sigY)]])
         cls.target_op = SingleQubitTargetOp()
 
@@ -159,26 +159,25 @@ class InterpygateGSTTester(BaseCase):
         y_gate = opfactory.create_op([np.pi/2,np.pi/4]) 
 
         cls.model = pygsti.models.ExplicitOpModel([0],'pp')
-        cls.model['rho0'] = [ 1/np.sqrt(2), 0, 0, 1/np.sqrt(2) ] # density matrix [[1, 0], [0, 0]] in Pauli basis
-        cls.model['Mdefault'] = pygsti.modelmembers.povms.UnconstrainedPOVM(
+        cls.model.preps['rho0'] = [ 1/np.sqrt(2), 0, 0, 1/np.sqrt(2) ] # density matrix [[1, 0], [0, 0]] in Pauli basis
+        cls.model.povms['Mdefault'] = pygsti.modelmembers.povms.UnconstrainedPOVM(
             {'0': [ 1/np.sqrt(2), 0, 0, 1/np.sqrt(2) ],   # projector onto [[1, 0], [0, 0]] in Pauli basis
              '1': [ 1/np.sqrt(2), 0, 0, -1/np.sqrt(2) ] }, evotype="default") # projector onto [[0, 0], [0, 1]] in Pauli basis
-        cls.model['Gxpi2',0] = x_gate
-        cls.model['Gypi2',0] = y_gate
+        cls.model.operations['Gxpi2',0] = x_gate
+        cls.model.operations['Gypi2',0] = y_gate
 
-        
     def test_gpindices(self):
         model = self.model.copy()
-        model['rho0'].set_gpindices(slice(0,4),model)
-        model['Mdefault'].set_gpindices(slice(4,12),model)
-        model['Gxpi2',0].set_gpindices(slice(12,13),model)
-        model['Gypi2',0].set_gpindices(slice(12,13),model)
+        model.preps['rho0'].set_gpindices(slice(0,4),model)
+        model.povms['Mdefault'].set_gpindices(slice(4,12),model)
+        model.operations['Gxpi2',0].set_gpindices(slice(12,13),model)
+        model.operations['Gypi2',0].set_gpindices(slice(12,13),model)
         model._rebuild_paramvec()
         self.assertEqual(model.num_params,13)
         
     def test_circuit_probabilities(self):
         datagen_model = self.model.copy()
-        datagen_params = datagen_model.to_vector()
+        datagen_params = datagen_model.to_vector().copy()
         datagen_params[-2:] = [1.1,1.1]
         datagen_model.from_vector(datagen_params)
         probs = datagen_model.probabilities( (('Gxpi2',0),))
@@ -186,7 +185,8 @@ class InterpygateGSTTester(BaseCase):
 
     def test_germ_selection(self):
         datagen_model = self.model.copy()
-        datagen_params = datagen_model.to_vector()
+
+        datagen_params = datagen_model.to_vector().copy()
         datagen_params[-2:] = [1.1,1.1]
         datagen_model.from_vector(datagen_params)
         
@@ -198,7 +198,15 @@ class InterpygateGSTTester(BaseCase):
         self.assertEqual(final_germs, [pygsti.circuits.circuit.Circuit('Gxpi2:0')])
 
 
+    def test_modifying_view_of_model_params_desynchronizes_the_global_parameter_vector(self):
+        datagen_model = self.model.copy()
 
+        datagen_params = datagen_model.to_vector()
+        datagen_params[-2:] = [1.1,1.1]
+
+        with self.assertRaises(ValueError):
+            datagen_model._check_paramvec()
+        # Modify a copy of the parameter array instead!
 
 
 
