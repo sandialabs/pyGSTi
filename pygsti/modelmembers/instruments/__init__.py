@@ -15,6 +15,7 @@ from .tpinstrument import TPInstrument
 from .tpinstrumentop import TPInstrumentOp
 from .cptpinstrument import RootConjOperator, SummedOperator
 
+import warnings as _warnings
 import scipy.linalg as _la
 import numpy as _np
 from pygsti.tools import optools as _ot, basistools as _bt
@@ -53,6 +54,9 @@ def instrument_type_from_op_type(op_type):
         'full TP': 'full TP',
         'full CPTP': 'full CPTP',
         'full unitary': 'full unitary',
+        'GLND': 'full TP',
+        # ^ It's pretty harmless to associate GLND operations with "full TP"
+        #   instruments. In both cases we're relaxing positivity constraints.
         'CPTPLND': 'CPTPLND'
     }
 
@@ -60,8 +64,19 @@ def instrument_type_from_op_type(op_type):
     for typ in op_type_preferences:
         instr_type = instr_conversion.get(typ, None)
 
-        if instr_type is None:
-            continue
+        if instr_type is None and _ot.is_valid_lindblad_paramtype(typ):
+            # NOTE: need to update the message below if more lindblad
+            # types are added as keys to the instr_conversion dict.
+            msg = \
+            f"""
+            Operation type {typ} is a Lindblad parameterization, but
+            is neither 'GLND' or 'CPTPLND'. That means you might be
+            asking for a reduced-order model that's a subset of all
+            CPTP models. We don't support that parameterization at this
+            time. We're falling back to a 'full TP' parameterization!
+            """
+            _warnings.warn(msg)
+            instr_type = 'full TP' # non-CPTPLND falls back to full TP.
 
         if instr_type not in instr_type_preferences:
             instr_type_preferences.append(instr_type)
