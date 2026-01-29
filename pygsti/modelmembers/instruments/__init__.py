@@ -47,6 +47,7 @@ def instrument_type_from_op_type(op_type):
 
     # Limited set (only matching what is in convert)
     instr_conversion = {
+        'auto': 'full TP',
         'static unitary': 'static unitary',
         'static clifford': 'static clifford',
         'static': 'static',
