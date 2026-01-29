@@ -2241,15 +2241,15 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options,
             #If this estimate is the target model then skip adding the diamond distance wildcard.
             if base_estimate_label != 'Target':
                 try:
-                    budgets_by_label = _compute_wildcard_budget_1d_model(base_estimate, mdc_objfn, printer - 1, gaugeopt_suite)
-                    #budgets_by_label is a dictionary with keys labeling different gauge optimizations. We make
+                    budget_dict = _compute_wildcard_budget_1d_model(base_estimate, mdc_objfn, printer - 1, gaugeopt_suite)
+                    #budgets_dict is a dictionary with keys labeling different gauge optimizations. We make
                     # base_estimate.extra_parameters['wildcard1d' + "_unmodeled_error"] a dictionary of
                     # the serialized PrimitiveOpsSingleScaleWildcardBudget elements (values of the dict)
-                    gaugeopt_labels = budgets_by_label.keys()
-                    base_estimate.extra_parameters['wildcard1d' + "_unmodeled_error"] = {lbl: budgets_by_label[lbl].to_nice_serialization() for lbl in gaugeopt_labels} 
+                    gaugeopt_labels = budget_dict.keys()
+                    base_estimate.extra_parameters['wildcard1d' + "_unmodeled_error"] = {lbl: budget_dict[lbl].to_nice_serialization() for lbl in gaugeopt_labels} 
                     base_estimate.extra_parameters['wildcard1d' + "_unmodeled_active_constraints"] = None
 
-                    base_estimate.extra_parameters["unmodeled_error"] = {lbl: budgets_by_label[lbl].to_nice_serialization() for lbl in gaugeopt_labels}
+                    base_estimate.extra_parameters["unmodeled_error"] = {lbl: budget_dict[lbl].to_nice_serialization() for lbl in gaugeopt_labels}
                     base_estimate.extra_parameters["unmodeled_active_constraints"] = None
                 except NotImplementedError as e:
                     printer.warning("Failed to get wildcard budget - continuing anyway.  Error was:\n" + str(e))
