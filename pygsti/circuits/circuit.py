@@ -17,13 +17,13 @@ if TYPE_CHECKING:
     import qiskit
     import stim
     from cirq.circuits.circuit import Circuit as CirqCircuit
+    from pygsti.baseobjs.label import ConcreteLabel
 
 import itertools as _itertools
 import warnings as _warnings
 
 import numpy as _np
 from pygsti.baseobjs.label import Label as _Label, CircuitLabel as _CircuitLabel, LabelTupTup as _LabelTupTup
-
 from pygsti.baseobjs import outcomelabeldict as _ld, _compatibility as _compat
 from pygsti.tools import internalgates as _itgs
 from pygsti.tools import slicetools as _slct
