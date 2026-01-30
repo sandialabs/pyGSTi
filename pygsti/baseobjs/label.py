@@ -347,6 +347,7 @@ class LabelTup(Label, tuple):
         sslbls = tuple(integerized_sslbls)
         tup = (_sys.intern(name),) + sslbls
         obj = tuple.__new__(cls, tup)
+        obj._is_sorted = True
         return obj
 
     __new__ = tuple.__new__
@@ -675,24 +676,6 @@ class LabelTupWithTime(LabelTup, tuple):
         else:
             raise NotImplementedError("Cannot add %s to a Label" % str(type(s)))
 
-    def __eq__(self, other) -> bool:
-        """
-        Defines equality between gates, so that they are equal if their values
-        are equal.
-        """
-        # NOTE: this does not depend on self.time!
-        return tuple.__eq__(self, other)
-
-    def __lt__(self, x) -> bool:
-        # NOTE: this does not depend on self.time!
-        return tuple.__lt__(self, tuple(x))
-
-    def __gt__(self, x) -> bool:
-        return tuple.__gt__(self, tuple(x))
-
-    def __pygsti_reduce__(self) -> tuple[type, tuple[tuple, float], None]:
-        return self.__reduce__()
-
     def __reduce__(self) -> tuple[type, tuple[tuple, float], None]:
         # Need to tell serialization logic how to create a new Label since it's derived
         # from the immutable tuple type (so cannot have its state set after creation)
@@ -781,6 +764,7 @@ class LabelStr(Label, str):
     def __new__(cls, name, time=0.0) -> LabelStr:
         ret = str.__new__(cls, name)
         ret.time = time
+        ret._is_sorted = True # there is only one value so it must be sorted.
         return ret
 
     @property
@@ -989,6 +973,7 @@ class LabelTupTup(Label, tuple):
     def __new__(cls, tup_of_labels: tuple[ConcreteLabel, ...]) -> LabelTupTup:
         ret = tuple.__new__(cls, tup_of_labels)
         ret._sslbls : Optional[tuple] = None  # type: ignore
+        ret._is_sorted = False
         return ret
 
     @property
@@ -1175,7 +1160,7 @@ class LabelTupTup(Label, tuple):
         if len(self.components) == 0: return 1  # still depth 1 even if empty
         return max([x.depth for x in self.components])
 
-    def expand_subcircuits(self) -> tuple[LabelTupTup]:
+    def expand_subcircuits(self) -> tuple[LabelTupTup, ...]:
         """
         Expand any sub-circuits within this label.
 
@@ -1294,48 +1279,16 @@ class LabelTupTupWithTime(LabelTupTup, tuple):
         time : float = self.time  # type: ignore
         return LabelTupTupWithTime.__new__(LabelTupTupWithTime, stripped, time)
 
-    def __str__(self) -> str:
-        """
-        Defines how a Label is printed out, e.g. Gx:0 or Gcnot:1:2
-        """
-        return "[" + "".join([str(lbl) for lbl in self]) + "]"
-
     def __repr__(self) -> str:
         time : float = self.time  # type: ignore
         timearg = ",time=" + repr(time) if (time != 0.0) else ""
         return "Label(" + repr(self[:]) + timearg + ")"
-
-    def __add__(self, s: None) -> None:
-        raise NotImplementedError("Cannot add %s to a Label" % str(type(s)))
-
-    def __eq__(self, other) -> bool:
-        """
-        Defines equality between gates, so that they are equal if their values
-        are equal.
-        """
-        #  NOTE: This does not depend on self.time!
-        return tuple.__eq__(self, other)
-
-    def __lt__(self, x) -> bool:
-        #  NOTE: This does not depend on self.time!
-        return tuple.__lt__(self, tuple(x))
-
-    def __gt__(self, x) -> bool:
-        #  NOTE: This does not depend on self.time!
-        return tuple.__gt__(self, tuple(x))
-
-    def __pygsti_reduce__(self) -> tuple[type, tuple[tuple, float], None]:
-        return self.__reduce__()
 
     def __reduce__(self) -> tuple[type, tuple[tuple, float], None]:
         # Need to tell serialization logic how to create a new Label since it's derived
         # from the immutable tuple type (so cannot have its state set after creation)
         time : float = self.time  # type: ignore
         return (LabelTupTupWithTime, (self[:], time), None)
-
-    def __contains__(self, x) -> bool:
-        # "recursive" contains checks component containers
-        return any([(x == layer or x in layer) for layer in self.components])
 
     def to_native(self) -> tuple[tuple, ...]:
         """
@@ -1474,6 +1427,7 @@ class CircuitLabel(Label, tuple):
                 sum([lbl.time for lbl in tupOfLabels])  # sum b/c components are *layers* of sub-circuit
         else:
             ret.time = time
+        ret._is_sorted = False
         return ret
 
     @property
@@ -1801,13 +1755,6 @@ class LabelTupWithArgs(LabelTup, tuple):
         This label's arguments.
         """
         return self[2:self[1]]
-    
-    @property
-    def is_sorted(self) -> bool:
-        """
-        There is only ever one gate associated with this label.
-        """
-        return True
 
     def map_state_space_labels(self, mapper) -> LabelTupWithArgs:
         """
@@ -1869,14 +1816,6 @@ class LabelTupWithArgs(LabelTup, tuple):
         else:
             raise NotImplementedError("Cannot add %s to a Label" % str(type(s)))
 
-    def __eq__(self, other) -> bool:
-        """
-        Defines equality between gates, so that they are equal if their values
-        are equal.
-        """
-        # NOTE: does not depend on self.time!
-        return tuple.__eq__(self, other)
-
     def __lt__(self, x) -> bool:
         # NOTE: does not depend on self.time!
         try:
@@ -1890,9 +1829,6 @@ class LabelTupWithArgs(LabelTup, tuple):
             return tuple.__gt__(self, tuple(x))
         except:
             return tuple.__gt__(tuple(map(str, self)), tuple(map(str, x)))
-
-    def __pygsti_reduce__(self) -> tuple[type, tuple[tuple, float], None]:
-        return self.__reduce__()
 
     def __reduce__(self) -> tuple[type, tuple[tuple, float], None]:
         # Need to tell serialization logic how to create a new Label since it's derived
@@ -2077,36 +2013,10 @@ class LabelTupTupWithArgs(LabelTupTup, tuple):
         timearg = ",time=" + repr(self.time) if (self.time != 0.0) else ""
         return "Label(" + repr(self[:]) + timearg + ")"
 
-    def __add__(self, s: None) -> None:
-        raise NotImplementedError("Cannot add %s to a Label" % str(type(s)))
-
-    def __eq__(self, other) -> bool:
-        """
-        Defines equality between gates, so that they are equal if their values
-        are equal.
-        """
-        # NOTE: does not consider self.time!
-        return tuple.__eq__(self, other)
-        
-    def __lt__(self, x) -> bool:
-        # NOTE: does not consider self.time!
-        return tuple.__lt__(self, tuple(x))
-
-    def __gt__(self, x) -> bool:
-        # NOTE: does not consider self.time!
-        return tuple.__gt__(self, tuple(x))
-
-    def __pygsti_reduce__(self) -> tuple[type, tuple[tuple[Any, ...], float], None]:
-        return self.__reduce__()
-
     def __reduce__(self) -> tuple[type, tuple[tuple[Any, ...], float], None]:
         # Need to tell serialization logic how to create a new Label since it's derived
         # from the immutable tuple type (so cannot have its state set after creation)
         return (LabelTupTupWithArgs, (self[:], self.time), None)
-
-    def __contains__(self, x) -> bool:
-        # "recursive" contains checks component containers
-        return any([(x == layer or x in layer) for layer in self.components])
 
     def to_native(self) -> tuple[Any, ...]:
         """

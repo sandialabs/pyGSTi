@@ -3,6 +3,7 @@ import pytest
 import pickle
 
 from pygsti.baseobjs.label import Label as L
+from pygsti.baseobjs.label import LabelTup, LabelTupTup, CircuitLabel, LabelStr
 
 from pygsti.serialization import jsoncodec
 from pygsti.circuits import Circuit
@@ -49,10 +50,11 @@ class LabelTester(BaseCase):
 
     def test_labels_with_time_and_arguments(self):
         #Label with time and args
-        l = L('Gx', (0, 1), time=1.2, args=('1.4', '1.7'))
+        l = L('Gx', (0, 1), time=1.2, args=('1.4', '1.7')) # LabelTupWithArgs
         self.assertEqual(l.time, 1.2)
         self.assertEqual(l.args, ('1.4', '1.7'))
         self.assertEqual(tuple(l), ('Gx', 4, '1.4', '1.7', 0, 1))
+        self.assertEqual(tuple(l + l.name), ('GxGx', 4, '1.4', '1.7', 0, 1))
 
         l2 = L(('Gx', ';1.4', ';1.7', 0, 1, '!1.25'))
         self.assertEqual(tuple(l2), ('Gx', 4, '1.4', '1.7', 0, 1))
@@ -99,6 +101,17 @@ class LabelTester(BaseCase):
 
         l = L((('Gx', 0),('Ga', 1)))
         self.assertFalse(l.is_sorted, "We will not check for sorting unless asked. The starting assumption is that the label is not sorted.")
+
+        for label in labels:
+            self.assertTrue(hasattr(label,"is_sorted"), f"label {label} which has type {type(label)} does not have an attribute to check for sorting.")
+            self.assertTrue(hasattr(label,"_is_sorted"), f"label {label} which has type {type(label)} does not have the data member which holds its sorted state.")
+
+            if isinstance(label, (LabelTup, LabelStr)):
+                self.assertTrue(label.is_sorted, f"{type(label)} should be sorted by default since there is only one value in it.")
+            elif isinstance(label, CircuitLabel):
+                self.assertFalse(label.is_sorted, f"{CircuitLabel} can have multiple objects within a single layer so must be checked for sortedness.")
+            elif isinstance(label, LabelTupTup):
+                self.assertFalse(label.is_sorted, f"{LabelTupTup} can have multiple objects within a single layer so must be checked for sortedness.")
 
         l = l.with_sorted_inner_labels()
         self.assertTrue(l.is_sorted, f"We just sorted the label {l}!")
