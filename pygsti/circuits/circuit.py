@@ -189,6 +189,22 @@ def _op_seq_to_str(seq, line_labels, occurrence_id, compilable_layer_indices):
                          for i, layer_el in enumerate(processed_seq)]
         return ''.join(str_processed) + _op_seq_str_suffix(line_labels, occurrence_id)
 
+def _sort_layer_labels(label_list: list[ConcreteLabel]) -> tuple[_Label]:
+    """
+    For every layer of the label list ensure that the gates mentioned within the
+    layer are sorted in increasing order of the qubits that the gate acts on.
+
+    `Note` that any two qubit gate acting on i, j will not be flipped to act on j,i.
+    
+    """
+    sorted_labels_list = []
+    for layer_lbl in label_list: # type: ignore
+        if not isinstance(layer_lbl, _Label):
+            layer_lbl = _Label(layer_lbl)
+            layer_lbl = layer_lbl.with_sorted_inner_labels()
+            sorted_labels_list.append(layer_lbl)
+    return tuple(sorted_labels_list)
+
 
 def to_label(x):
     """
@@ -455,10 +471,10 @@ class Circuit(object):
                     """
                     raise ValueError(msg)
                 for i in range(actual_len):
-                    inner_lbls_obj   = layer_labels_objs[i]
+                    inner_lbls_obj   = layer_labels_objs[i].with_sorted_inner_labels()
                     inner_chk        = chk[i]
                     inner_chk_parsed = _Label(inner_chk).with_sorted_inner_labels()
-                    if inner_lbls_obj != inner_chk_parsed:
+                    if inner_lbls_obj != inner_chk_parsed: # Check sorted against sorted.
                         msg = \
                         f"""
                         Error initializing Circuit: `layer_labels` and `stringrep` disagree at
@@ -540,11 +556,7 @@ class Circuit(object):
         if not editable:
             if layer_labels_objs is None:
                 layer_labels_objs = map(to_label, layer_labels)
-            new_labels = []
-            for layer_lbl in layer_labels_objs: # type: ignore
-                layer_lbl = layer_lbl.with_sorted_inner_labels()
-                new_labels.append(layer_lbl)
-            labels = tuple(new_labels)
+            labels = _sort_layer_labels(layer_labels_objs)
             layer_labels_objs = labels
         else:
             labels = [_label_to_nested_lists_of_simple_labels(layer_lbl)
@@ -747,7 +759,7 @@ class Circuit(object):
                         + comp_lbl_flag + self._compilable_layer_indices_tup
             # Note: we *always* need line labels (even if they're empty) when using occurrence id
 
-    def _tup_copy(self, labels):
+    def _tup_copy(self, labels) -> tuple:
         """
         This Circuit as a standard Python tuple of layer Labels and line labels.
         This version takes as input a precomputed set of static layer labels
@@ -1131,20 +1143,14 @@ class Circuit(object):
                                       self._compilable_layer_indices_tup,
                                       self._hashable_tup, self._hash)
             else:
-                labels_list = []
-                for layer_lbl in self._labels: # type: ignore
-                    if not isinstance(layer_lbl, _Label):
-                        layer_lbl = _Label(layer_lbl)
-                    layer_lbl = layer_lbl.with_sorted_inner_labels()
-                    labels_list.append(layer_lbl)
-                static_labels = tuple(labels_list)
+                static_labels = _sort_layer_labels(self._labels)
                 hashable_tup = self._tup_copy(static_labels)
                 return ret._copy_init(static_labels, self._line_labels,
                                       editable, self._name, self._str, self._occurrence_id,
                                       self._compilable_layer_indices_tup,
                                       hashable_tup, hash(hashable_tup))
     
-    def sort_layer_labels(self):
+    def sort_layer_labels_inplace(self):
         """
         For every layer of the circuit ensure that the gates mentioned within the
         layer are sorted in increasing order of the qubits that the gate acts on.
@@ -1156,14 +1162,7 @@ class Circuit(object):
 
         Updates the circuit inplace.
         """
-        assert not self._static, "One may only sort the labels of a circuit when that circuit is editable."
-        labels_list = []
-        for layer_lbl in self._labels: # type: ignore
-            if not isinstance(layer_lbl, _Label):
-                layer_lbl = _Label(layer_lbl)
-                layer_lbl = layer_lbl.with_sorted_inner_labels()
-                labels_list.append(layer_lbl)
-        self._labels = tuple(labels_list)
+        self._labels = _sort_layer_labels(self._labels)
 
     def clear(self):
         """
@@ -5047,13 +5046,7 @@ class Circuit(object):
         """
         if not self._static:
             self._static = True
-            labels_list = []
-            for layer_lbl in self._labels: # type: ignore
-                if not isinstance(layer_lbl, _Label):
-                    layer_lbl = _Label(layer_lbl)
-                layer_lbl = layer_lbl.with_sorted_inner_labels()
-                labels_list.append(layer_lbl)
-            self._labels = tuple(labels_list)
+            self.sort_layer_labels_inplace()
         self._hashable_tup = self.tup
         self._hash = hash(self._hashable_tup)
         self._str = None

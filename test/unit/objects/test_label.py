@@ -116,6 +116,17 @@ class LabelTester(BaseCase):
         l = l.with_sorted_inner_labels()
         self.assertTrue(l.is_sorted, f"We just sorted the label {l}!")
 
+    def test_sortedness_respects_order_of_two_qubit_gates(self):
+        label1 = L((("Gx", 1), ("GCnot", 0, 2)))
+        label2 = L((("Gx", 1), ("GCnot", 2, 0)))
+        self.assertNotEqual(label1.with_sorted_inner_labels(), label2.with_sorted_inner_labels())
+        # Note that if one uses this for checking that this random circuit has not already been done before
+        # then there is a possibility that it could return false even if it has been done before.
+        # Consider the case that one assumes a two qubit gate Gii which is a noisy idle gate.
+        # If we assume that there is not a handedness to the noisy idle so that Gii 0, 2 == Gii 2, 0.
+        # then this sorting check will not handle this.
+        # Since a two qubit gate typically has a handedness structure this behavior is desired.
+
 
     def test_label_rep_evalulation(self):
         """ Make sure Label reps evaluate back to the correct Label """

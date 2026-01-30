@@ -239,11 +239,12 @@ class Label(object):
         In all other situations, we return a LabelTupTup whose inner labels are sorted
         according to their sslbls. This may raise an error if any of the sslbls are not
         comparable to one another.
+        
+        Note that we are sorting in increasing order of the first qubit that the label
+        acts on and respect the order of the sslbls for each label.
         """
 
-        if self.is_simple:
-            # ^ We check is_simple rather than isinstance(self, LabelTupTup), since
-            #   LabelTupTupWithTime and LabelTupTupWithArgs don't subclass LabelTupTup.
+        if not isinstance(self, LabelTupTup):
             return self  # type: ignore
         
         assert isinstance(self, tuple)
@@ -254,8 +255,8 @@ class Label(object):
             # The inner labels are trivially sorted.
             return self  # type: ignore
         
-        # if self.is_sorted:
-        #     return self
+        if self.is_sorted:
+            return self
 
         tmp1 = dict()
         for inner in self.components:
