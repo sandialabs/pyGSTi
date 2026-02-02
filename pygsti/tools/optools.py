@@ -373,7 +373,6 @@ def diamonddist(a, b, mx_basis='pp', return_x=False):
         `dm = trace( |(J(a)-J(b)).T * W| )`.
     """
     assert _sdps.CVXPY_ENABLED
-    import cvxpy as _cp
 
     assert a.shape == b.shape
     mx_basis = _bt.create_basis_for_matrix(a, mx_basis)
@@ -382,31 +381,22 @@ def diamonddist(a, b, mx_basis='pp', return_x=False):
     # It will convert c a "single-block" basis representation
     # when mx_basis has multiple blocks.
     J = _jam.fast_jamiolkowski_iso_std(c, mx_basis, normalized=False)
-    prob, vars = _sdps.diamond_norm_model_jamiolkowski(J)
+    problem, vars   = _sdps.diamond_norm_model_jamiolkowski(J)
+    objval, varvals = _sdps.solve_sdp(problem)
 
-    objective_val = -2
-    varvals = [_np.zeros_like(J), None, None]
-    sdp_solvers = ['MOSEK', 'CLARABEL', 'CVXOPT']
-    for i, solver in enumerate(sdp_solvers):
-        try:
-            prob.solve(solver=solver)
-            objective_val = prob.value
-            varvals = [v.value for v in vars]
-            break
-        except (AssertionError, _cp.SolverError) as e:
-            if solver != 'MOSEK':
-                msg = f"Received error {e} when trying to use solver={solver}."
-                if i + 1 == len(sdp_solvers):
-                    failure_msg = "Out of solvers. Returning -2 for diamonddist."
-                else:
-                    failure_msg = f"Trying {sdp_solvers[i+1]} next."
-                msg += f'\n{failure_msg}'
-                _warnings.warn(msg)
+    if _np.isnan(objval):
+        objval = -2
+        varvals = [_np.zeros_like(J), None, None]
+    else:
+        # the returned `varvals` is a dict keyed by
+        # variable name. We care about the variables
+        # as ordered by `vars`.
+        varvals = [v.value for v in vars]
 
     if return_x:
-        return objective_val, varvals
+        return objval, varvals
     else:
-        return objective_val
+        return objval
 
 
 def jtracedist(a, b, mx_basis='pp'):  # Jamiolkowski trace distance:  Tr(|J(a)-J(b)|)

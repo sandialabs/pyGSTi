@@ -14,7 +14,7 @@ import functools as _functools
 import itertools as _itertools
 import warnings as _warnings
 
-from typing import Protocol, Any, runtime_checkable, TypeVar, Optional, Union
+from typing import Protocol, Any, runtime_checkable, TypeVar, Optional, Union, Literal
 
 import numpy as _np
 import scipy.linalg as _spl
@@ -148,6 +148,54 @@ def is_valid_density_mx(mx, tol=1e-9):
     """
     # is_pos_def includes a check that the matrix is Hermitian.
     return abs(_np.trace(mx) - 1.0) < tol and is_pos_def(mx, tol)
+
+
+def project_onto_simplex(vec: _np.ndarray, ord:Literal[1,2,'inf']) -> _np.ndarray:
+    """ 
+    Return the solution, `proj`, to the optimization problem
+
+        min{ ||vec - proj||_ord : 0 <= proj, sum(proj) == 1  },
+
+    where ||*||_ord refers to the standard vector `ord`-norm.
+    """
+    vec = vec.ravel()
+    if ord == 2:
+        # Sort in descending order
+        u = _np.sort(vec)[::-1]
+        css = _np.cumsum(u)
+        # Find the largest index rho such that
+        #   u[rho] > (css[rho] - 1) / (rho + 1)
+        inds = _np.arange(vec.size) + 1
+        cond = u - (css - 1) / inds > 0
+        if not _np.any(cond):
+            # fallback: if no positive entries, project uniformly on first coordinate
+            theta = (css[0] - 1) / 1
+        else:
+            rho = _np.where(cond)[0][-1]
+            theta = (css[rho] - 1) / (rho + 1)
+        # The projection is max(flat - theta, 0)
+        proj = _np.maximum(vec - theta, 0)
+    else:
+        raise NotImplementedError()
+    return proj
+
+
+def project_onto_densities(herm_mx: _np.ndarray, ord:Literal['fro','nuc']='fro') -> _np.ndarray:
+    if ord != 'fro':
+        raise NotImplementedError()
+    assert_hermitian(herm_mx, 1e-8)
+    u, v, udag = eigendecomposition(herm_mx, assume_hermitian=True)
+    proj_v = project_onto_simplex(v, 2)
+    density_mx = u @ (proj_v[:, None] * udag)
+    return density_mx
+
+
+def clip_eigenvalues(herm_mx: _np.ndarray, lower: float, upper:float) -> _np.ndarray:
+    assert_hermitian(herm_mx, 1e-8)
+    u, v, udag = eigendecomposition(herm_mx, assume_hermitian=True)
+    proj_v = _np.clip(v, lower, upper)
+    clipped_mx = u @ (proj_v[:, None] * udag)
+    return clipped_mx
 
 
 def nullspace(m, tol=1e-7):

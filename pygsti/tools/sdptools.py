@@ -13,13 +13,15 @@ Functions for constructing semidefinite programming models
 from __future__ import annotations
 
 import numpy as np
+import warnings
 
-from typing import Union, List, Tuple, TYPE_CHECKING
+from typing import Union, List, Tuple, Sequence, TYPE_CHECKING
 if TYPE_CHECKING:
     import cvxpy as cp
     ExpressionLike = Union[cp.Expression, np.ndarray]
 
 from pygsti.baseobjs import Basis
+from pygsti.tools.matrixtools import assert_hermitian
 from pygsti.tools.basistools import stdmx_to_vec
 from pygsti.tools.jamiolkowski import jamiolkowski_iso
 
@@ -33,6 +35,68 @@ try:
     warnings.filterwarnings('ignore', mosek_warning_pattern)
 except:
     CVXPY_ENABLED = False
+
+
+SDP_SOLVER_PRIORITY = ['MOSEK', 'CLARABEL', 'CVXOPT']
+
+
+def solve_sdp(prob: cp.Problem) -> tuple[np.floating, dict[str, np.ndarray]]:
+
+    objective_val = np.array(np.NaN).item()
+    varvals = dict()
+    for i, solver in enumerate(SDP_SOLVER_PRIORITY):
+        try:
+            prob.solve(solver=solver)
+            objective_val = prob.value
+            varvals.update({k: v.value for (k, v) in prob.var_dict})
+            break
+        except (AssertionError, cp.SolverError) as e:
+            if solver != 'MOSEK':
+                msg = f"Received error {e} when trying to use solver={solver}."
+                if i + 1 == len(SDP_SOLVER_PRIORITY):
+                    failure_msg = "Out of solvers. Returning NaN."
+                else:
+                    failure_msg = f"Trying {SDP_SOLVER_PRIORITY[i+1]} next."
+                msg += f'\n{failure_msg}'
+                warnings.warn(msg)
+
+    return objective_val, varvals
+
+
+def povm_projection_model(effects: Sequence[np.ndarray], independent_complement: bool=False) -> cp.Problem:
+    N = round(effects[0].size ** 0.5)
+    cumsum_E = np.zeros((N, N), dtype=complex)
+    for E in effects:
+        assert_hermitian(E, tol=1e-8)
+        cumsum_E += E
+    if np.real(np.trace(cumsum_E)) < (N - 0.01):
+        # we're going to assume the complement POVM effect was omitted.
+        complement_E = np.eye(N) - np.sum(effects, axis=0)
+        effects = [E for E in effects]  # shallow-copy
+        effects.append( complement_E )
+
+    proj_effects, constraints = povm_effect_variables(N, len(effects), independent_complement)
+    objective_expr = cp.Constant(0.0)
+    for E_proj, E in zip( proj_effects, effects ):
+        objective_expr = objective_expr + cp.sum_squares(E_proj - E)
+    objective = cp.Minimize(objective_expr)
+
+    prob = cp.Problem(objective, constraints)
+    return prob
+
+
+def povm_effect_variables(N: int, num_effects: int, independent_complement: bool) -> tuple[list[cp.Variable], list[cp.Constraint]]:
+    num_vars = num_effects if independent_complement else num_effects - 1
+    vars = [cp.Variable(shape=(N, N), hermitian=True) for _ in range(num_vars)]
+    cons = [v >> 0 for v in vars]
+    if num_vars == num_effects:
+        expr = cp.sum(vars)
+        cons.append( expr == np.eye(N) )
+    else:
+        expr = np.eye(N) - cp.sum(vars)
+        cons.append( expr >> 0 )
+        vars.append( expr )
+    return vars, cons
 
 
 def diamond_norm_model_jamiolkowski(J: ExpressionLike) -> tuple[cp.Problem, List[cp.Variable]]:
