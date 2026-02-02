@@ -201,8 +201,8 @@ def _sort_layer_labels(label_list: list[ConcreteLabel]) -> tuple[_Label]:
     for layer_lbl in label_list: # type: ignore
         if not isinstance(layer_lbl, _Label):
             layer_lbl = _Label(layer_lbl)
-            layer_lbl = layer_lbl.with_sorted_inner_labels()
-            sorted_labels_list.append(layer_lbl)
+        layer_lbl = layer_lbl.with_sorted_inner_labels()
+        sorted_labels_list.append(layer_lbl)
     return tuple(sorted_labels_list)
 
 

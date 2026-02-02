@@ -258,12 +258,24 @@ class Label(object):
         if self.is_sorted:
             return self
 
+        if isinstance(self, CircuitLabel):
+            # Each of the components are assumed to define a distinct layer in the circuit.
+            # This is the case even if the circuit could be parallelized to have smaller depth.
+            # As such we do not want to sort at this level but recurse until we reach the level of
+            # multiple labels for the same layer. Then, we can sort those based upon the statespace
+            # labels they are acting on.
+
+            ret = CircuitLabel(self.name, [layer.with_sorted_inner_labels() for layer in self.components],
+                               self.sslbls, self.reps, self.time)
+            ret._is_sorted = True
+            return ret
+
         tmp1 = dict()
         for inner in self.components:
             sslbls = inner.sslbls
             if sslbls is None:
                 return self  # type: ignore
-            tmp1[sslbls] = inner
+            tmp1[sslbls] = inner.with_sorted_inner_labels() # Recurse so that all parallel sections are in sorted order locally.
         tmp2 = tuple( (tmp1[k] for k in sorted(tmp1.keys())) )
 
         if len(tmp2) != len(self.components):
@@ -361,7 +373,7 @@ class LabelTup(Label, tuple):
         return 0.0
 
     @property
-    def is_sorted(self) -> bool:
+    def is_sorted(self) -> Literal[True]:
         """
         There is only ever one gate recognized by this label.
         """
@@ -616,13 +628,6 @@ class LabelTupWithTime(LabelTup, tuple):
     @time.setter
     def time(self, val: float):
         self._time = val
-    
-    @property
-    def is_sorted(self) -> bool:
-        """
-        There is only ever one gate associated with this label.
-        """
-        return True
 
     def map_state_space_labels(self, mapper) -> LabelTupWithTime:
         """
@@ -767,6 +772,13 @@ class LabelStr(Label, str):
         ret.time = time
         ret._is_sorted = True # there is only one value so it must be sorted.
         return ret
+
+    @property
+    def is_sorted(self) -> Literal[True]:
+        """
+        There is only ever one gate recognized by this label.
+        """
+        return True
 
     @property
     def name(self) -> str:
@@ -1358,7 +1370,7 @@ class LabelTupTupWithTime(LabelTupTup, tuple):
     #   NOTE: this does not depend on self.time!
 
 
-class CircuitLabel(Label, tuple):
+class CircuitLabel(LabelTupTupWithTime, tuple):
     """
     A (sub-)circuit label.
 
@@ -1466,20 +1478,6 @@ class CircuitLabel(Label, tuple):
         """
         return self[3:]
 
-    @property
-    def qubits(self) -> Optional[StateSpaceLabels]:
-        """
-        An alias for sslbls, since commonly these are just qubit indices. (a tuple)
-        """
-        return self.sslbls
-
-    @property
-    def num_qubits(self) -> Optional[int]:
-        """
-        The number of qubits this label "acts" on (an integer). `None` if `self.ssbls is None`.
-        """
-        return len(self.sslbls) if (self.sslbls is not None) else None
-
     def has_prefix(self, prefix: str, typ="all") -> bool:
         """
         Whether this label has the given `prefix`.
@@ -1554,32 +1552,6 @@ class CircuitLabel(Label, tuple):
         return "CircuitLabel(" + repr(self.name) + "," + repr(self[3:]) + "," \
             + repr(self[1]) + "," + repr(self[2]) + "," + repr(self.time) + ")"
 
-    def __add__(self, s: None) -> None:
-        raise NotImplementedError("Cannot add %s to a Label" % str(type(s)))
-
-    def __eq__(self, other) -> bool:
-        """
-        Defines equality between gates, so that they are equal if their values
-        are equal.
-        """
-        # NOTE: does not depend on self.time!
-        return tuple.__eq__(self, other)
-
-    def __lt__(self, x) -> bool:
-        # NOTE: does not depend on self.time!
-        return tuple.__lt__(self, tuple(x))
-
-    def __gt__(self, x) -> bool:
-        # NOTE: does not depend on self.time!
-        return tuple.__gt__(self, tuple(x))
-
-    def __pygsti_reduce__(self) -> tuple[
-            type, 
-            tuple[str, tuple[ConcreteLabel, ...], Optional[StateSpaceLabels], int, float],
-            None
-        ]:
-        return self.__reduce__()
-
     def __reduce__(self) -> tuple[
             type, 
             tuple[str, tuple[ConcreteLabel, ...], Optional[StateSpaceLabels], int, float],
@@ -1588,10 +1560,6 @@ class CircuitLabel(Label, tuple):
         # Need to tell serialization logic how to create a new Label since it's derived
         # from the immutable tuple type (so cannot have its state set after creation)
         return (CircuitLabel, (self[0], self[3:], self[1], self[2], self.time), None)
-
-    def __contains__(self, x) -> bool:
-        # "recursive" contains checks component containers
-        return any([(x == layer or x in layer) for layer in self.components])
 
     def to_native(self) -> tuple:
         """

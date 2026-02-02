@@ -127,6 +127,40 @@ class LabelTester(BaseCase):
         # then this sorting check will not handle this.
         # Since a two qubit gate typically has a handedness structure this behavior is desired.
 
+    def test_label_sorting_circuit_labels_recurses_correctly(self):
+
+        label1 = L((("Gx", 1), ("GCnot", 2, 0)))
+
+        cirLabel = CircuitLabel('mycir', [label1,], None, 5, None)
+
+        self.assertEqual(cirLabel.components[0], label1)
+        self.assertEqual(cirLabel.with_sorted_inner_labels().components[0], label1.with_sorted_inner_labels())
+
+        cirLabel2 = CircuitLabel('embedded', [label1, cirLabel, L('Gz', 2)], None, 1, None)
+
+        sorted_c2 = cirLabel2.with_sorted_inner_labels()
+
+        for comp in sorted_c2.components:
+            self.assertTrue(comp.is_sorted)
+
+
+    def test_labeltuptup_sorting_recurses_if_necessary(self):
+
+        inner_label1 = L('Gx', 1)
+        inner_label2 = L('Gz', 2)
+        out_of_order = L((inner_label2, inner_label1))
+
+        in_order = L((inner_label1, inner_label2))
+
+        cirLabelOOO = L((out_of_order,
+                         CircuitLabel('embedded', [out_of_order,], (1,2), 2, None).map_state_space_labels({1: 0, 2: 3}),
+                         out_of_order.map_state_space_labels({1: 4, 2: 5})))
+
+        cirLabelInOrder = L((CircuitLabel('embedded', [in_order,], (1,2), 2, None).map_state_space_labels({1:0, 2:3}),
+                             in_order,
+                             in_order.map_state_space_labels({1:4, 2: 5})))
+        
+        self.assertEqual(cirLabelOOO.with_sorted_inner_labels().components, cirLabelInOrder.components)
 
     def test_label_rep_evalulation(self):
         """ Make sure Label reps evaluate back to the correct Label """
