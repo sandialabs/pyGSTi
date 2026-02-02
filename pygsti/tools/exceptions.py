@@ -125,12 +125,3 @@ class UnnamedReportWarning(UserWarning):
     and randomly, since a user didn't provide a name.
     """
     pass
-
-
-class PoorPerformanceWarning(RuntimeWarning):
-    """
-    This warning indicates that the subsequent code is a slower code path
-    then is available in a different path. One should not follow the
-    slower code path in a performance critical code path.
-    """
-    pass
