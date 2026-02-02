@@ -12,26 +12,22 @@ Defines the Circuit class
 
 from __future__ import annotations
 from typing import List, Sequence, Literal, Tuple, Any, Union, Optional, TYPE_CHECKING, Iterable, Dict
+
 if TYPE_CHECKING:
-    try:
-        import qiskit
-        import stim
-    except:
-        pass
+    import qiskit
+    import stim
+    from cirq.circuits.circuit import Circuit as CirqCircuit
+    from pygsti.baseobjs.label import ConcreteLabel
 
 import itertools as _itertools
 import warnings as _warnings
-if TYPE_CHECKING:
-    import stim
-    from cirq.circuits.circuit import Circuit as CirqCircuit
 
 import numpy as _np
 from pygsti.baseobjs.label import Label as _Label, CircuitLabel as _CircuitLabel, LabelTupTup as _LabelTupTup
-
-
 from pygsti.baseobjs import outcomelabeldict as _ld, _compatibility as _compat
 from pygsti.tools import internalgates as _itgs
 from pygsti.tools import slicetools as _slct
+from pygsti.tools.exceptions import ImplicitlyDoneEditingCircuitWarning
 from pygsti.tools.legacytools import deprecate as _deprecate_fn
 
 
@@ -129,6 +125,7 @@ def _label_to_nested_lists_of_simple_labels(lbl, default_sslbls=None, always_ret
     return [_label_to_nested_lists_of_simple_labels(l, default_sslbls, False)
             for l in lbl.components]  # a *list*
 
+
 def _sslbls_of_nested_lists_of_simple_labels(obj, labels_to_ignore=None):
     """ Get state space labels from a nested lists of simple (not compound) Labels. """
     if isinstance(obj, _Label):
@@ -139,7 +136,8 @@ def _sslbls_of_nested_lists_of_simple_labels(obj, labels_to_ignore=None):
         sub_sslbls = [_sslbls_of_nested_lists_of_simple_labels(sub, labels_to_ignore) for sub in obj]
         return None if (None in sub_sslbls) else set(_itertools.chain(*sub_sslbls))
 
-def _accumulate_explicit_sslbls(obj):
+
+def _accumulate_explicit_sslbls(obj) -> set:
     """
     Get all the explicitly given state-space labels within `obj`,
     which can be a Label or a list/tuple of labels.  Returns a *set*.
@@ -190,6 +188,22 @@ def _op_seq_to_str(seq, line_labels, occurrence_id, compilable_layer_indices):
         str_processed = [(str(layer_el) + marker) if (i in marked_set) else str(layer_el)
                          for i, layer_el in enumerate(processed_seq)]
         return ''.join(str_processed) + _op_seq_str_suffix(line_labels, occurrence_id)
+
+def _sort_layer_labels(label_list: list[ConcreteLabel]) -> tuple[_Label]:
+    """
+    For every layer of the label list ensure that the gates mentioned within the
+    layer are sorted in increasing order of the qubits that the gate acts on.
+
+    `Note` that any two qubit gate acting on i, j will not be flipped to act on j,i.
+    
+    """
+    sorted_labels_list = []
+    for layer_lbl in label_list: # type: ignore
+        if not isinstance(layer_lbl, _Label):
+            layer_lbl = _Label(layer_lbl)
+        layer_lbl = layer_lbl.with_sorted_inner_labels()
+        sorted_labels_list.append(layer_lbl)
+    return tuple(sorted_labels_list)
 
 
 def to_label(x):
@@ -447,11 +461,30 @@ class Circuit(object):
             else:  # check == True
                 if layer_labels_objs is None:
                     layer_labels_objs = tuple(map(to_label, layer_labels))
-                if layer_labels_objs != tuple(chk):
-                    raise ValueError(("Error initializing Circuit: "
-                                      " `layer_labels` and `stringrep` do not match: %s != %s\n"
-                                      "(set `layer_labels` to None to infer it from `stringrep`)")
-                                     % (layer_labels, stringrep))
+                expect_len = len(chk)
+                actual_len = len(layer_labels_objs)
+                if expect_len != actual_len:
+                    msg = \
+                    f"""
+                    Error initializing Circuit: `layer_labels` and `stringrep` indicate
+                    a different number of circuit layers: {expect_len} vs {actual_len}.
+                    """
+                    raise ValueError(msg)
+                for i in range(actual_len):
+                    inner_lbls_obj   = layer_labels_objs[i].with_sorted_inner_labels()
+                    inner_chk        = chk[i]
+                    inner_chk_parsed = _Label(inner_chk).with_sorted_inner_labels()
+                    if inner_lbls_obj != inner_chk_parsed: # Check sorted against sorted.
+                        msg = \
+                        f"""
+                        Error initializing Circuit: `layer_labels` and `stringrep` disagree at
+                        layer index {i}:
+
+                            {inner_lbls_obj} != {inner_chk_parsed}.
+                        
+                        Set `layer_labels` to None to infer it from `stringrep`.
+                        """
+                        raise ValueError(msg)
             if chk_labels is not None:
                 if line_labels == 'auto':
                     line_labels = chk_labels
@@ -522,8 +555,9 @@ class Circuit(object):
         #  or a tuple of Label objects (static case)
         if not editable:
             if layer_labels_objs is None:
-                layer_labels_objs = tuple(map(to_label, layer_labels))
-            labels = layer_labels_objs
+                layer_labels_objs = map(to_label, layer_labels)
+            labels = _sort_layer_labels(layer_labels_objs)
+            layer_labels_objs = labels
         else:
             labels = [_label_to_nested_lists_of_simple_labels(layer_lbl)
                       for layer_lbl in layer_labels]
@@ -561,6 +595,8 @@ class Circuit(object):
             self._hash = hash(self._hashable_tup)
             self._str = stringrep
         else:
+            self._hashable_tup = None
+            self._hash = None
             self._str = None # can be None (lazy generation)
         self._name = name  # can be None
         #self._times = None  # for FUTURE expansion
@@ -580,6 +616,8 @@ class Circuit(object):
             self._hash = precomp_hash #Same as previous comment. Only meant to be used in settings where we're explicitly checking for self._static.
             self._str = stringrep
         else:
+            self._hashable_tup = None
+            self._hash = None
             self._str = None # can be None (lazy generation)
         self._name = name  # can be None
         #self._times = None  # for FUTURE expansion
@@ -721,7 +759,7 @@ class Circuit(object):
                         + comp_lbl_flag + self._compilable_layer_indices_tup
             # Note: we *always* need line labels (even if they're empty) when using occurrence id
 
-    def _tup_copy(self, labels):
+    def _tup_copy(self, labels) -> tuple:
         """
         This Circuit as a standard Python tuple of layer Labels and line labels.
         This version takes as input a precomputed set of static layer labels
@@ -840,9 +878,12 @@ class Circuit(object):
 
     def __hash__(self):
         if not self._static:
-            _warnings.warn(("Editable circuit is being converted to read-only"
-                            " mode in order to hash it.  You should call"
-                            " circuit.done_editing() beforehand."))
+            msg = \
+            """
+            Editable circuit is being converted to read-only mode in order to hash it.
+            You should call circuit.done_editing() beforehand.
+            """
+            _warnings.warn(msg, ImplicitlyDoneEditingCircuitWarning)
             self.done_editing()
         return self._hash
 
@@ -1014,11 +1055,13 @@ class Circuit(object):
         if isinstance(x, Circuit):
             if len(self) != len(x):
                 return False
-            elif self._static and x._static and self._hash != x._hash:
+            y = self if self._static else self.copy(editable=False)
+            x = x    if    x._static else    x.copy(editable=False)
+            if y._hash != x._hash:
                 return False
             else:
-                return self.tup == x.tup
-        elif x is None:
+                return y.tup == x.tup
+        elif x is None: 
             return False
         else:
             tup_x = tuple(x)
@@ -1100,13 +1143,26 @@ class Circuit(object):
                                       self._compilable_layer_indices_tup,
                                       self._hashable_tup, self._hash)
             else:
-                static_labels = tuple([layer_lbl if isinstance(layer_lbl, _Label) else _Label(layer_lbl)
-                                       for layer_lbl in self._labels])
+                static_labels = _sort_layer_labels(self._labels)
                 hashable_tup = self._tup_copy(static_labels)
                 return ret._copy_init(static_labels, self._line_labels,
                                       editable, self._name, self._str, self._occurrence_id,
                                       self._compilable_layer_indices_tup,
                                       hashable_tup, hash(hashable_tup))
+    
+    def sort_layer_labels_inplace(self):
+        """
+        For every layer of the circuit ensure that the gates mentioned within the
+        layer are sorted in increasing order of the qubits that the gate acts on.
+
+        Note that any two qubit gate acting on i, j will not be flipped to act on j,i.
+        
+        If this circuit believes that the layer is already sorted then it will not
+        resort the layer.
+
+        Updates the circuit inplace.
+        """
+        self._labels = _sort_layer_labels(self._labels)
 
     def clear(self):
         """
@@ -4990,8 +5046,7 @@ class Circuit(object):
         """
         if not self._static:
             self._static = True
-            t = [LL if isinstance(LL, _Label) else _Label(LL) for LL in self._labels]
-            self._labels = tuple(t) # type: ignore
+            self.sort_layer_labels_inplace()
         self._hashable_tup = self.tup
         self._hash = hash(self._hashable_tup)
         self._str = None
@@ -4999,7 +5054,6 @@ class Circuit(object):
         # ^ the accessor on the right-hand side sees that self._str
         #   is None, and so returns a value computed from scratch.
         return
-
 
 
 class CompressedCircuit(object):
