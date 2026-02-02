@@ -495,10 +495,10 @@ def first_order_outcome_probabilities_tensors_concise(circuits, pspec, indices, 
                 #print(egtype)
                 if egtype == 'H' and (_np.isclose(probabilities[i, l], 0.) or _np.isclose(probabilities[i, l], 1.)):
                     alpha = 0
-                elif egtype == 'S' and not (_np.isclose(probabilities[i, l], 0.) or _np.isclose(probabilities[i, l], 1.)):
-                    alpha = 0
-                else:
-                    alpha = scale * alpha_coefficient(error_generator_index, num_qubits, tableau, bs)
+                #elif egtype == 'S' and not (_np.isclose(probabilities[i, l], 0.) or _np.isclose(probabilities[i, l], 1.)):
+                #    alpha = 0
+                #else:
+                alpha = scale * alpha_coefficient(error_generator_index, num_qubits, tableau, bs)
                 alphas_dict[l, error_generator_index] = alpha
 
 
