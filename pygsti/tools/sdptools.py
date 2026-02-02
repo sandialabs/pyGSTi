@@ -46,6 +46,9 @@ def solve_sdp(prob: cp.Problem) -> tuple[np.floating, dict[str, np.ndarray]]:
     varvals = dict()
     for i, solver in enumerate(SDP_SOLVER_PRIORITY):
         try:
+            with warnings.catch_warnings():
+                warnings.filterwarnings('ignore','.*Solution may be inaccurate.*', UserWarning)
+                prob.solve(solver=solver)
             prob.solve(solver=solver)
             objective_val = prob.value
             varvals.update({k: v.value for (k, v) in prob.var_dict})
