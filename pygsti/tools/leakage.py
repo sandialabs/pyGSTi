@@ -499,7 +499,7 @@ def pop_transport_profile(E_sub: np.ndarray, op: np.ndarray, mx_basis: Basis, E_
     transport_E_mat  = E_sub @ transport_E_mat @ E_sub
 
     rates, states = la.eigh(transport_E_mat)
-    dim_proj = int(np.round(np.trace(E_sub).real))
+    dim_proj = round(np.trace(E_sub).real)
     ind = np.argsort(np.abs(rates))[::-1][:dim_proj]
     rates  = rates[ind]
     states = [s for s in states.T[ind]]
@@ -514,7 +514,7 @@ This is the computational\neffect of mx_basis.
 def gate_leakage_profile(op: np.ndarray, mx_basis: Basis) -> tuple[np.ndarray, list[np.ndarray]]:
     mx_basis   = Basis.cast(mx_basis, dim=int(np.sqrt(op.size)))
     E_comp_mat = computational_effect(mx_basis)
-    dim_comp   = round(np.trace(E_comp_mat))
+    dim_comp   = round(np.trace(E_comp_mat).real)
     if dim_comp**2 == E_comp_mat.size:
         msg = \
         """
@@ -537,7 +537,7 @@ def gate_seepage_profile(op, mx_basis) -> tuple[np.ndarray, list[np.ndarray]]:
     E_comp_mat = computational_effect(mx_basis)
     n = round(E_comp_mat.size ** 0.5)
     E_leak_mat = np.eye(n) - E_comp_mat
-    if round(np.trace(E_comp_mat)) == n:
+    if round(np.trace(E_comp_mat).real) == n:
         msg = \
         """
         The provided basis suggests that the computational subspace is equal to
