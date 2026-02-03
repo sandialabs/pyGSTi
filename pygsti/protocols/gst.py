@@ -2302,7 +2302,8 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options,
                     gauge_opt_params.copy(), go_gs_final, gokey, comm, printer - 1)
 
 
-def _compute_wildcard_budget_1d_model(estimate, mdc_objfn, verbosity, gaugeopt_suite):
+def _compute_wildcard_budget_1d_model(estimate: _Estimate, mdc_objfn: _objfns.ModelDatasetCircuitsStore,
+                                      verbosity: int, gaugeopt_suite: GSTGaugeOptSuite) -> dict[str, _wild.PrimitiveOpsWildcardBudget]:
     """
     Create a wildcard budget for a model estimate. This version of the function produces a wildcard estimate
     using the model introduced in https://doi.org/10.1038/s41534-023-00764-y.
@@ -2314,9 +2315,6 @@ def _compute_wildcard_budget_1d_model(estimate, mdc_objfn, verbosity, gaugeopt_s
 
     mdc_objfn : ModelDatasetCircuitsStore
         An object that stores the model, dataset, and circuits to be used in the computation.
-
-    parameters : dict
-        Various parameters of the estimate at hand.
 
     verbosity : int, optional
         Level of detail printed to stdout.
