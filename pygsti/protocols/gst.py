@@ -2463,7 +2463,15 @@ def _compute_1d_reference_values(target_model: _ExplicitOpModel, gopped_models: 
             Y = target_ops[key].to_dense()
             X_restricted = X @ P
             Y_restricted = Y @ P
-            dd[lbl][key] : float = 0.5 * _tools.diamonddist(X_restricted, Y_restricted, mx_basis=basis) # type: ignore
+
+            # Get basis for this operation.
+            op_basis = basis # start with the model's basis
+            if (basis.dim != X_restricted.shape[0] and isinstance(basis, _tools.TensorProdBasis)
+                and basis.component_bases[0].dim == X_restricted.shape[0]):
+                # use first component of a TensorProdBasis if a smaller dim is needed and matches.
+                op_basis = basis.component_bases[0]
+
+            dd[lbl][key] : float = 0.5 * _tools.diamonddist(X_restricted, Y_restricted, mx_basis=op_basis) # type: ignore
             if dd[lbl][key] < 0:  # indicates that diamonddist failed (cvxpy failure)
                 msg = f"""
                 Diamond distance failed to compute {key} reference value for 1D wildcard budget!
