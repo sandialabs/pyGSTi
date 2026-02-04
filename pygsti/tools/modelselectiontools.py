@@ -111,6 +111,9 @@ class AMSGreedyResult(_NicelySerializable):
             compare_parameters_simple(self.trace[0][0][:num_fogis], self.trace[-1][0][:-num_gauge],  self.embedder_matrix[:num_fogis], labels)
         else:
             compare_parameters_simple(self.trace[0][0], self.trace[-1][0], self.embedder_matrix)
+    def write(self, path):
+        print('Saving AMS Greedy results in: ', path)
+        super().write(path)
 
 
 class AMSCheckpoint(_NicelySerializable):
