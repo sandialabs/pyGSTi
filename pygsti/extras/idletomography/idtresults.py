@@ -7,7 +7,13 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 """ Idle Tomography results object """
+from typing import TYPE_CHECKING, Literal, Union
 
+if TYPE_CHECKING:
+    import numpy as _np
+    from pygsti.circuits import Circuit
+    from pygsti.data.dataset import DataSet
+    from pygsti.extras.idletomography.pauliobjs import NQPauliOp, NQOutcome
 
 class IdleTomographyResults(object):
     """
@@ -15,9 +21,12 @@ class IdleTomographyResults(object):
     along with supporting information.
     """
 
-    def __init__(self, dataset, max_lengths, max_error_weight, fit_order,
-                 pauli_dicts, idle_str, error_list, intrinsic_rates,
-                 pauli_fidpairs, observed_rate_infos):
+    def __init__(self, dataset: DataSet, max_lengths: list[int], max_error_weight: int, fit_order: int,
+                 pauli_dicts: tuple[dict[str, str], dict[str, str]], idle_str: Circuit,
+                 error_list: list[NQPauliOp],
+                 intrinsic_rates: dict[Literal['stochastic', 'affine', 'hamiltonian'], _np.ndarray],
+                 pauli_fidpairs: dict[Literal['samebasis', 'diffbasis'], list[tuple[NQPauliOp, NQPauliOp]]],
+                 observed_rate_infos: dict[Literal['samebasis', 'diffbasis'], dict[tuple[NQPauliOp, NQPauliOp], dict[Union[NQPauliOp, NQOutcome]], float]]):
         """
         Create a IdleTomographyResults object.
 

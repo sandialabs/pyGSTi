@@ -12,6 +12,7 @@ import collections as _collections
 import itertools as _itertools
 import time as _time
 import warnings as _warnings
+from typing import Union, TYPE_CHECKING, Optional
 
 import numpy as _np
 
@@ -27,11 +28,12 @@ from ...modelmembers import operations as _op
 from ...baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from ...circuits.circuit import Circuit as _Circuit
 
+from pygsti.data.dataset import DataSet as _DataSet
 
 # This module implements idle tomography, which deals only with
 # many-qubit idle gates (on some number of qubits) and single-
 # qubit gates (or tensor products of them) used to fiducials.
-# As such, it is conventient to represent operations as native
+# As such, it is convenient to represent operations as native
 # Python strings, where there is one I,X,Y, or Z letter per
 # qubit.
 
@@ -158,7 +160,7 @@ def affine_jac_element(prep, error, meas, outcome):
     probability of `outcome` changes with respect to the rate of `error`
     when preparing state `prep` and measuring in basis `meas`.
 
-    Note: Affine error maps leave qubits corresponging to I's in
+    Note: Affine error maps leave qubits corresponding to I's in
     `error` alone.  An affine error is defined as replacing
     portions of the density matrix corresponding to *non-trivial*
     Pauli operators with those operators.
@@ -237,7 +239,7 @@ def affine_jac_obs_element(prep, error, observable):
     expectation value of `observable` changes with respect to the rate of
     `error` when preparing state `prep`.
 
-    Note: Affine error maps leave qubits corresponging to I's in
+    Note: Affine error maps leave qubits corresponding to I's in
     `error` alone.  An affine error is defined as replacing
     portions of the density matrix corresponding to *non-trivial*
     Pauli operators with those operators.
@@ -320,7 +322,7 @@ def idle_tomography_fidpairs(nqubits, maxweight=2, include_hamiltonian=True,
         "Y", or "Z"), describing how to construct the fiducial pairs used to
         detect Hamiltonian errors.  The special (and default) value "auto"
         uses `("X","Y","Z")` and `("ZY","ZX","XZ","YZ","YX","XY")` for
-        `maxweight` equal to 1 and 2, repectively, and will generate an error
+        `maxweight` equal to 1 and 2, respectively, and will generate an error
         if `maxweight > 2`.
 
     preferred_prep_basis_signs, preferred_meas_basis_signs: tuple, optional
@@ -339,8 +341,8 @@ def idle_tomography_fidpairs(nqubits, maxweight=2, include_hamiltonian=True,
 
     #convert +'s and -'s to dictionaries of +/-1 used later:
     def conv(x): return 1 if x == "+" else -1
-    base_prep_signs = {l: conv(s) for l, s in zip(('X', 'Y', 'Z'), preferred_prep_basis_signs)}
-    base_meas_signs = {l: conv(s) for l, s in zip(('X', 'Y', 'Z'), preferred_meas_basis_signs)}
+    base_prep_signs = {lbl: conv(sign) for lbl, sign in zip(('X', 'Y', 'Z'), preferred_prep_basis_signs)}
+    base_meas_signs = {lbl: conv(sign) for lbl, sign in zip(('X', 'Y', 'Z'), preferred_meas_basis_signs)}
     #these dicts give the preferred sign for prepping or measuring along each 1Q axis.
 
     if include_stochastic:
@@ -371,8 +373,8 @@ def idle_tomography_fidpairs(nqubits, maxweight=2, include_hamiltonian=True,
             for basisLets in _itertools.product(('X', 'Y', 'Z'), repeat=maxweight):
 
                 # flip base (preferred) basis signs as instructed by fliptup
-                prep_signs = [f * base_prep_signs[l] for f, l in zip(fliptup, basisLets)]
-                meas_signs = [f * base_meas_signs[l] for f, l in zip(fliptup, basisLets)]
+                prep_signs = [fopt * base_prep_signs[lbl] for fopt, lbl in zip(fliptup, basisLets)]
+                meas_signs = [fopt * base_meas_signs[lbl] for fopt, lbl in zip(fliptup, basisLets)]
                 sto_tmpl_pairs.append((_pobjs.NQPauliState(''.join(basisLets), prep_signs),
                                        _pobjs.NQPauliState(''.join(basisLets), meas_signs)))
 
@@ -699,7 +701,7 @@ def make_idle_tomography_list(nqubits, max_lengths, pauli_basis_dicts, maxweight
         "Y", or "Z"), describing how to construct the fiducial pairs used to
         detect Hamiltonian errors.  The special (and default) value "auto"
         uses `("X","Y","Z")` and `("ZY","ZX","XZ","YZ","YX","XY")` for
-        `maxweight` equal to 1 and 2, repectively, and will generate an error
+        `maxweight` equal to 1 and 2, respectively, and will generate an error
         if `maxweight > 2`.
 
     preferred_prep_basis_signs, preferred_meas_basis_signs: tuple, optional
@@ -784,7 +786,7 @@ def make_idle_tomography_lists(nqubits, max_lengths, pauli_basis_dicts, maxweigh
         "Y", or "Z"), describing how to construct the fiducial pairs used to
         detect Hamiltonian errors.  The special (and default) value "auto"
         uses `("X","Y","Z")` and `("ZY","ZX","XZ","YZ","YX","XY")` for
-        `maxweight` equal to 1 and 2, repectively, and will generate an error
+        `maxweight` equal to 1 and 2, respectively, and will generate an error
         if `maxweight > 2`.
 
     preferred_prep_basis_signs, preferred_meas_basis_signs: tuple, optional
@@ -827,12 +829,38 @@ def make_idle_tomography_lists(nqubits, max_lengths, pauli_basis_dicts, maxweigh
     return listOfListsOfExperiments
 
 
+def make_qubit_state_space_mapping_from_enumerated_zero_to_custom(dataset: _DataSet,
+                                                                  idle_string: _Circuit) -> dict[int, Union[int, str]]:
+    """
+    Idle string may have custom labels for state space. We normally assume for the purpose of SPAM that the
+    labels are 0, 1, ..., n-1 where n is the number of qubits. However, the user may want something else.
+    Therefore we will discover the mapping used.
+
+    We will also check that the dataset and idle_string have the same state space. Otherwise we will error.
+
+    Returns:
+    --------
+        map from [0, n-1] to the qubit labels listed in the idle string.
+    """
+    from pygsti.baseobjs.statespace import StateSpace
+
+    idle_state_space = StateSpace.cast(idle_string.line_labels)
+    for cir in dataset:
+        ss_cir = StateSpace.cast(cir.line_labels)
+        assert ss_cir.intersection(idle_state_space) == idle_state_space
+
+    out_mapping = {}
+    for i, label in enumerate(idle_string.line_labels):
+        out_mapping[i] = label
+    return out_mapping
+
 # -----------------------------------------------------------------------------
 # Running idle tomography
 # -----------------------------------------------------------------------------
 
-def compute_observed_samebasis_err_rate(dataset, pauli_fidpair, pauli_basis_dicts, idle_string,
-                                        outcome, max_lengths, fit_order=1):
+def compute_observed_samebasis_err_rate(dataset: _DataSet, pauli_fidpair, pauli_basis_dicts, idle_string,
+                                        outcome, max_lengths, fit_order=1,
+                                        map_to_custom_qubit_labels: Optional[dict[int, Union[int, str]]] = None):
     """
     Extract the observed error rate from a series of experiments which prepares
     and measures in the *same* Pauli basis and tracks a particular `outcome`.
@@ -876,13 +904,17 @@ def compute_observed_samebasis_err_rate(dataset, pauli_fidpair, pauli_basis_dict
     pauli_prep, pauli_meas = pauli_fidpair
 
     prepDict, measDict = pauli_basis_dicts
-    prepFid = pauli_prep.to_circuit(prepDict)
-    measFid = pauli_meas.to_circuit(measDict)
+    prepFid: _Circuit = pauli_prep.to_circuit(prepDict)
+    measFid: _Circuit = pauli_meas.to_circuit(measDict)
+
+    if map_to_custom_qubit_labels:
+        prepFid = prepFid.map_state_space_labels(map_to_custom_qubit_labels)
+        measFid = measFid.map_state_space_labels(map_to_custom_qubit_labels)
 
     #Note on weights:
     # data point with frequency f and N samples should be weighted w/ sqrt(N)/sqrt(f*(1-f))
     # but in case f is 0 or 1 we use proxy f' by adding a dummy 0 and 1 count.
-    def freq_and_weight(circuit, outcome):
+    def freq_and_weight(circuit: _Circuit, outcome):
         """Get the frequency, weight, and errobar for a ptic circuit"""
         cnts = dataset[circuit].counts  # a normal dict
         total = sum(cnts.values())
@@ -919,8 +951,9 @@ def compute_observed_samebasis_err_rate(dataset, pauli_fidpair, pauli_basis_dict
             'weights': wts}
 
 
-def compute_observed_diffbasis_err_rate(dataset, pauli_fidpair, pauli_basis_dicts,
-                                        idle_string, observable, max_lengths, fit_order=1):
+def compute_observed_diffbasis_err_rate(dataset: _DataSet, pauli_fidpair, pauli_basis_dicts,
+                                        idle_string, observable, max_lengths, fit_order=1,
+                                        map_to_custom_qubit_labels: Optional[dict[int, Union[int, str]]] = None):
     """
     Extract the observed error rate from a series of experiments which prepares
     and measures in *different* Pauli basis and tracks the expectation value of
@@ -965,8 +998,12 @@ def compute_observed_diffbasis_err_rate(dataset, pauli_fidpair, pauli_basis_dict
     pauli_prep, pauli_meas = pauli_fidpair
 
     prepDict, measDict = pauli_basis_dicts
-    prepFid = pauli_prep.to_circuit(prepDict)
-    measFid = pauli_meas.to_circuit(measDict)
+    prepFid: _Circuit = pauli_prep.to_circuit(prepDict)
+    measFid: _Circuit = pauli_meas.to_circuit(measDict)
+
+    if map_to_custom_qubit_labels:
+        prepFid = prepFid.map_state_space_labels(map_to_custom_qubit_labels)
+        measFid = measFid.map_state_space_labels(map_to_custom_qubit_labels)
 
     #observable is always equal to pauli_meas (up to signs) with all but 1 or 2
     # (maxErrWt in general) of it's elements replaced with 'I', essentially just
@@ -975,7 +1012,7 @@ def compute_observed_diffbasis_err_rate(dataset, pauli_fidpair, pauli_basis_dict
     obs_indices = [i for i, letter in enumerate(observable.rep) if letter != 'I']
     minus_sign = _np.prod([pauli_meas.signs[i] for i in obs_indices])
 
-    def unsigned_exptn_and_weight(circuit, observed_indices):
+    def unsigned_exptn_and_weight(circuit: _Circuit, observed_indices):
         #compute expectation value of observable
         drow = dataset[circuit]  # dataset row
         total = drow.total
@@ -1037,10 +1074,11 @@ def compute_observed_diffbasis_err_rate(dataset, pauli_fidpair, pauli_basis_dict
             'weights': wts}
 
 
-def do_idle_tomography(nqubits, dataset, max_lengths, pauli_basis_dicts, maxweight=2,
+def do_idle_tomography(nqubits, dataset: _DataSet, max_lengths, pauli_basis_dicts, maxweight=2,
                        idle_string=((),), include_hamiltonian="auto",
                        include_stochastic="auto", include_affine="auto",
-                       advanced_options=None, verbosity=0, comm=None):
+                       advanced_options=None, verbosity=0, comm=None,
+                       has_custom_qubit_labels: bool=False):
     """
     Analyze `dataset` using the idle tomography protocol to characterize
     `idle_string`.
@@ -1098,6 +1136,10 @@ def do_idle_tomography(nqubits, dataset, max_lengths, pauli_basis_dicts, maxweig
         When not None, an MPI communicator for distributing the computation
         across multiple processors.
 
+    has_custom_qubit_labels: bool, optional defaults to False.
+        When true will detect the qubit labels used in the dataset and idle string.
+        Then, convert the SPAM circuits to use those labels.
+        
     Returns
     -------
     IdleTomographyResults
@@ -1152,6 +1194,10 @@ def do_idle_tomography(nqubits, dataset, max_lengths, pauli_basis_dicts, maxweig
     pauli_fidpair_dict = {}
     observed_rate_infos = {}
 
+    map_custom_labels: Optional[dict[int, Union[int, str]]] = None
+    if has_custom_qubit_labels:
+        map_custom_labels = make_qubit_state_space_mapping_from_enumerated_zero_to_custom(dataset, GiStr)
+
     if include_stochastic in (True, "auto"):
         tStart = _time.time()
         if 'pauli_fidpairs' in advanced_options:
@@ -1186,7 +1232,7 @@ def do_idle_tomography(nqubits, dataset, max_lengths, pauli_basis_dicts, maxweig
                 my_J.append(Jrow)
 
                 info = compute_observed_samebasis_err_rate(dataset, pauli_fidpair, pauli_basis_dicts, GiStr,
-                                                           out, max_lengths, fit_order)
+                                                           out, max_lengths, fit_order, map_custom_labels)
                 info['jacobian row'] = _np.array(Jrow)
                 infos_for_this_fidpair[out] = info
 
@@ -1296,7 +1342,7 @@ def do_idle_tomography(nqubits, dataset, max_lengths, pauli_basis_dicts, maxweig
                     my_Jaff.append(Jaff_row)
 
                 info = compute_observed_diffbasis_err_rate(dataset, pauli_fidpair, pauli_basis_dicts, GiStr, obs,
-                                                           max_lengths, fit_order)
+                                                           max_lengths, fit_order, map_custom_labels)
                 info['jacobian row'] = _np.array(Jrow)
                 if include_affine: info['affine jacobian row'] = _np.array(Jaff_row)
                 infos_for_this_fidpair[obs] = info
