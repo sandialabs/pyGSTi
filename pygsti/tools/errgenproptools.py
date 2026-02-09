@@ -7185,6 +7185,169 @@ def iterative_error_generator_composition_numerical(errorgen_labels, rates, erro
     composition *= _np.prod(rates)
     return composition
 
+# ----------- Error Generator Polynomials -----------#
+
+def magnus_symbolic(errorgen_layers, errorgen_transform_maps, magnus_order=1):
+    """
+    Function for computing the symbolic magnus approximation for the effective end-or-circuit error generator.
+    
+    Parameters
+    ----------
+    errorgen_layers : list of dict
+        A list of dictionaries whose keys are LocalStimErrorgenLabels and whose values are their rates.
+        Each list corresponds to a single propagated error generator.
+        
+    errorgen_transform_maps : list of dicts
+        List of dictionaries mapping tuples of LocalStimErrorgenLabels and circuit layer indices to 
+        tuples of final error generators and phases. 
+        
+    magnus_order : int, optional (default 1)
+        Order of the magnus approximation to apply.
+    
+    Returns
+    -------
+    TBD    
+    """
+    assert magnus_order == 1 or magnus_order == 2, "Magnus expansions up to second order are currently supported for symbolic computations."
+    
+    magnus_terms_by_order = []
+    #start off with the first-order magnus case.
+    #initialize a dictionary with all of the keys that may appear in the first order magnus expansion
+    #values initialized with empty lists to accumulate contributions.    
+    first_order_magnus_dict = {key: [] for key in chain(*errorgen_layers)}
+    
+    #loop through each key of errorgen_transform_map, use the value to index into current_combined_coeff_lbls
+    #and append the key's label and the phase value from the transformed value.
+    for transform_map in errorgen_transform_maps:
+        for key, val in transform_map.items():
+            first_order_magnus_dict[val[0]].append((key, val[1]))
+    if magnus_order == 1:
+        return first_order_magnus_dict
+    
+    magnus_terms_by_order.append(first_order_magnus_dict)
+    
+    if magnus_order == 2:
+        second_order_magnus_dict = _second_order_magnus_term_symbolic(errorgen_transform_maps)
+        magnus_terms_by_order.append(second_order_magnus_dict)
+        
+    #loop through the magnus terms by order and initialize a dictionary to accumulate results.
+    combined_magnus_order_dict = {key: [] for key in chain(*magnus_terms_by_order)}
+    for order_dict in magnus_terms_by_order:
+        for errgen, coeffs in order_dict.items():
+            combined_magnus_order_dict[errgen].extend(coeffs)
+    
+    return combined_magnus_order_dict
+    
+def _second_order_magnus_term_symbolic(errorgen_transform_maps, identity=None):
+    """
+    Helper function for computing the second-order correction term in the
+    magnus expansion.
+
+    (1/2)\sum_{t1=1}^n \sum_{t2=1}^{t1-1} [A(t1), A(t2)]
+
+    Parameters:
+    ----------
+    errorgen_transform_maps : list of dicts
+        List of dictionaries mapping tuples of LocalStimErrorgenLabels and circuit layer indices to 
+        tuples of final error generators and phases. 
+
+    identity : stim.PauliString, optional (default None)
+        An optional stim.PauliString to use for comparisons to the identity.
+        Passing in this kwarg isn't necessary, but can allow for reduced 
+        stim.PauliString creation when calling this function many times for
+        improved efficiency.
+
+    Returns
+    -------
+    TBD
+    """
+        
+    errorgen_pairs = []
+    for i in range(len(errorgen_transform_maps)):
+        for j in range(i):
+            errorgen_pairs.append((errorgen_transform_maps[i], errorgen_transform_maps[j]))
+    
+    # precompute an identity string for comparisons in commutator calculations if one is not provided.
+    if identity is None and errorgen_transform_maps:
+        for layer in errorgen_transform_maps:
+            if layer:
+                identity = stim.PauliString('I'*len(next(iter(layer))[0].basis_element_labels[0]))
+                break
+    
+    # compute second-order BCH correction for each pair of error generators in the
+    # errorgen_pairs list.
+    commuted_errgen_list = []
+    commuted_errgen_coeff_list = []
+    for errorgen_pair in errorgen_pairs:
+        pairwise_comm_errgens, pairwise_comm_coeffs = _error_generator_layer_pairwise_commutator_symbolic(errorgen_pair[0], errorgen_pair[1], addl_weight=0.5, 
+                                                                                                          identity=identity)
+        commuted_errgen_list.extend(pairwise_comm_errgens)
+        commuted_errgen_coeff_list.extend(pairwise_comm_coeffs)
+                
+    # loop through all of the elements of commuted_errorgen_list and instantiate a dictionary with the requisite keys.
+    second_order_comm_dict = {errorgen: [] for errorgen in commuted_errgen_list}
+
+    # Accumulate the coefficients contributing to each term.    
+    for errorgen, coeff in zip(commuted_errgen_list, commuted_errgen_coeff_list):
+        second_order_comm_dict[errorgen].append(coeff)
+
+    return second_order_comm_dict
+
+def _error_generator_layer_pairwise_commutator_symbolic(errorgen_layer_1, errorgen_layer_2, addl_weight=1.0, identity=None):
+    """
+    Helper function for computing the pairwise commutator of two error generator layers symbolically, i.e. returning a data 
+    structure which expresses the rates as polynomials in the original generators. 
+    
+    Parameters
+    ----------
+    errorgen_layer_1 : dict
+        A dictionary whose keys are tuples of LocalStimErrorgenLabels and integers, and whose values are tuples of 
+        LocalStimErrorgenLabels and floats, corresponding to a layer-by-layer mapping from input error generators
+        to their final propagated values and phases. As returned by the method `ErrorGeneratorPropagator.errorgen_transform_maps`.
+     
+    errorgen_layer_2 : dict
+        See above.
+        
+    addl_weight : float
+        An additional weight to add to the coefficients of the returned commutator polynomials.
+        
+    identity : stim.PauliString
+        An optional stim.PauliString to use for comparisons to the identity.
+        Passing in this kwarg isn't necessary, but can allow for reduced 
+        stim.PauliString creation when calling this function many times for
+        improved efficiency.
+        
+    Returns
+    -------
+    commuted_errgen_list : list of LocalStimErrorgenLabels
+        List of error generator labels corresponding to the results of the 
+        application of the pairwise commutators.
+    
+    coeff_list : list of tuples
+        A list of three element tuples. The first two elements correspond to initial
+        error generators whose rates should be multiplied to give a corresponding
+        coefficient for the commutator output. The third term gives an addititonal overall
+        phase and scale for this coefficient.
+    """    
+    commuted_errgen_list = []
+    coeff_list = []
+    for initial_error1, final_error1 in errorgen_layer_1.items():
+        #print(f'{initial_error1=}')
+        #print(f'{final_error1=}')
+        for initial_error2, final_error2 in errorgen_layer_2.items():
+            #print(f'{initial_error2=}')
+            #print(f'{final_error2=}')
+            # get the list of error generator labels
+            init_weight = addl_weight*final_error1[1]*final_error2[1]
+            commuted_errgen_sublist = error_generator_commutator(final_error1[0], final_error2[0], 
+                                                                 identity=identity)
+            for error_tup in commuted_errgen_sublist:
+                commuted_errgen_list.append(error_tup[0])
+                coeff_list.append((initial_error1, initial_error2, init_weight*error_tup[1]))
+    
+    return commuted_errgen_list, coeff_list
+
+
 # -----------First-Order Approximate Error Generator Probabilities and Expectation Values---------------# 
 
 def random_support(tableau, return_support=False):

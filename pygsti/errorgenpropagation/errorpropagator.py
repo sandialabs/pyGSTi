@@ -336,7 +336,7 @@ class ErrorGeneratorPropagator:
 #
 #        return propagated_errorgen_layers
 
-
+    #TODO: Refactor this to just use the concatenation of the individual maps.
     def errorgen_transform_map(self, circuit, include_spam=True, circuit_conversion_kwargs=None):
         """
         Construct a map giving the relationship between input error generators and their final
@@ -387,6 +387,62 @@ class ErrorGeneratorPropagator:
 
         return input_output_errgen_map
     
+    def errorgen_transform_maps(self, circuit, include_spam=True, circuit_conversion_kwargs=None):
+        """
+        Construct a list of maps giving the relationship between input error generators and their final
+        value following propagation through the circuit on an input-layer-by-input-layer basis.  
+
+        Parameters
+        ----------
+        circuit : `Circuit`
+            Circuit to construct error generator transform map for.
+
+        include_spam : bool, optional (default True)
+            If True then we include in the propagation the error generators associated
+            with state preparation and measurement.
+
+        circuit_conversion_kwargs : dict, optional (default None)
+            A set of optional kwargs which will be passed into the `convert_to_stim_tableau_layers`
+            method of the `Circuit` class to control the behavior of the conversion. Please see the
+            documentation for this method for additional information on supported arguments and
+            values.
+
+        Returns
+        -------
+        list of dicts
+            A list of dictionaries whose keys are tuples consisting of input error generators and circuit layer indices
+            and whose values are tuples of output error generators and the corresponding accumulated phase.
+        """
+        #start by converting the input circuit into a list of stim Tableaus with the 
+        #first element dropped.
+        stim_layers = self.construct_stim_layers(circuit, drop_first_layer = not include_spam, circuit_conversion_kwargs=circuit_conversion_kwargs)
+        
+        #We next want to construct a new set of Tableaus corresponding to the cumulative products
+        #of each of the circuit layers with those that follow. These Tableaus correspond to the
+        #clifford operations each error generator will be propagated through in order to reach the
+        #end of the circuit.
+        propagation_layers = self.construct_propagation_layers(stim_layers)
+
+        #Next we take the input circuit and construct a list of dictionaries, each corresponding
+        #to the error generators for a particular gate layer.
+        #TODO: Add proper inferencing for number of qubits:
+        assert circuit.line_labels is not None and circuit.line_labels != ('*',)
+        errorgen_layers = self.construct_errorgen_layers(circuit, len(circuit.line_labels), include_spam, fixed_rate=1)
+        #propagate the errorgen_layers through the propagation_layers to get a list
+        #of end of circuit error generator dictionaries.
+        propagated_errorgen_layers = self._propagate_errorgen_layers(errorgen_layers, propagation_layers, include_spam)
+
+        #there should be a one-to-one mapping between the index into propagated_errorgen_layers and the
+        #index of the circuit layer where the error generators in that propagated layer originated.
+        #Moreover, LocalStimErrorgenLabels remember who they were at instantiation.
+        input_output_errgen_maps = [dict() for _ in range(len(propagated_errorgen_layers))]
+        for i, output_layer in enumerate(propagated_errorgen_layers):
+            for output_label, output_rate in output_layer.items():
+                original_label = _LSE.cast(output_label.initial_label)
+                input_output_errgen_maps[i][(original_label, i)] = (output_label, output_rate)
+
+        return input_output_errgen_maps
+
     def errorgen_gate_contributors(self, errorgen, circuit, layer_idx, include_spam=True):
         """
         Walks through the gates in the specified circuit layer and query the parent 
