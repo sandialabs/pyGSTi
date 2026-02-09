@@ -10,6 +10,7 @@ Functions for selecting a complete set of germs for a GST analysis.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
 import warnings as _warnings
 
 import numpy as _np
@@ -24,22 +25,30 @@ from pygsti.algorithms import scoring as _scoring
 from pygsti import circuits as _circuits
 from pygsti import baseobjs as _baseobjs
 from pygsti.tools import mpitools as _mpit
-from pygsti.baseobjs.statespace import ExplicitStateSpace as _ExplicitStateSpace
-from pygsti.baseobjs.statespace import QuditSpace as _QuditSpace
 from pygsti.models import ExplicitOpModel as _ExplicitOpModel
 from pygsti.forwardsims import MatrixForwardSimulator as _MatrixForwardSimulator
 
+from typing import Optional, Union, TYPE_CHECKING, Callable
+
+if TYPE_CHECKING:
+    import mpi4py
+    from pygsti.baseobjs.profiler import Profiler   
+    from pygsti.models import Model
+
 FLOATSIZE = 8  # in bytes: TODO: a better way
 
-def find_germs(target_model, randomize=True, randomization_strength=1e-2,
-               num_gs_copies=5, seed=None, candidate_germ_counts=None,
-               candidate_seed=None, force="singletons", algorithm='greedy',
-               algorithm_kwargs=None, mem_limit=None, comm=None,
-               profiler=None, verbosity=1, num_nongauge_params=None,
-               assume_real=False, float_type=_np.cdouble,
-               mode="all-Jac", toss_random_frac=None,
-               force_rank_increase=False, save_cevd_cache_filename= None,
-               load_cevd_cache_filename=None, file_compression=False):
+def find_germs(target_model: Model, randomize: bool=True, randomization_strength: float=1e-2,
+               num_gs_copies: int=5, seed: Optional[int]=None, 
+               candidate_germ_counts: Optional[dict[int, Union[str,int]]]=None,
+               candidate_seed: Optional[int]=None, 
+               force: Optional[Union[str, list[_circuits.Circuit]]]="singletons", 
+               algorithm: str='greedy', algorithm_kwargs: Optional[dict]=None, mem_limit: Optional[int]=None, 
+               comm: Optional[mpi4py.MPI.Comm]=None,
+               profiler: Optional[Profiler]=None, verbosity: int=1, num_nongauge_params: Optional[int]=None,
+               assume_real: bool=False, float_type: _np.dtype=_np.cdouble,
+               mode: str="all-Jac", toss_random_frac: Optional[float]=None,
+               force_rank_increase: bool=False, save_cevd_cache_filename: Optional[str]=None,
+               load_cevd_cache_filename: Optional[str]=None, file_compression: bool=False) -> list[_circuits.Circuit]:
     """
     Generate a germ set for doing GST with a given target model.
 
@@ -102,7 +111,7 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
         options are:
         'greedy' : Add germs one-at-a-time until the set is AC, picking the germ that
         improves the germ-set score by the largest amount at each step. See
-        :func:`find_germs_breadthfirst` for more details.
+        :func:`find_germs_breadthfirst_greedy` for more details.
         
         'grasp': Use GRASP to generate random greedy germ sets and then locally
         optimize them. See :func:`find_germs_grasp` for more 
@@ -234,7 +243,7 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
         #if missing append to the list of available germs.
         if isinstance(force, list):
             for forced_germ in force:
-                if not forced_germ in availableGermsList:
+                if forced_germ not in availableGermsList:
                     availableGermsList.append(forced_germ)
         printer.log('Length Available Germ List After Adding Back In Forced Germs: '+ str(len(availableGermsList)), 1)
     
@@ -254,7 +263,7 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
     dim = target_model.dim
     #Np = model_list[0].num_params #wrong:? includes spam...
     Np = target_model.num_params
-    if randomize==False:
+    if not randomize:
         num_gs_copies=1
     memEstimatealljac = FLOATSIZE * num_gs_copies * len(availableGermsList) * Np**2
     # for _compute_bulk_twirled_ddd
@@ -303,7 +312,8 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
             'load_cevd_cache_filename': load_cevd_cache_filename,
             'file_compression': file_compression,
             'evd_tol': 1e-10,
-            'initial_germ_set_test': True
+            'initial_germ_set_test': True,
+            'gate_penalty': None
         }
         for key in default_kwargs:
             if key not in algorithm_kwargs:
@@ -319,7 +329,8 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
                 score_func=algorithm_kwargs['score_func'],
                 op_penalty=algorithm_kwargs['op_penalty'],
                 num_nongauge_params=num_nongauge_params,
-                float_type=float_type)
+                float_type=float_type,
+                gate_penalty=algorithm_kwargs['gate_penalty'])
             printer.log('Constructed germ set:', 1)
             printer.log(str([germ.str for germ in germList]), 1)
             printer.log(germsetScore, 1)
@@ -339,7 +350,8 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
             'return_all': False,
             'score_func': 'all',
             'num_nongauge_params': num_nongauge_params,
-            'float_type': float_type
+            'float_type': float_type,
+            'gate_penalty':None
         }
         for key in default_kwargs:
             if key not in algorithm_kwargs:
@@ -355,7 +367,8 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
                 op_penalty=algorithm_kwargs['op_penalty'],
                 l1_penalty=algorithm_kwargs['l1_penalty'],
                 num_nongauge_params=num_nongauge_params,
-                float_type=float_type)
+                float_type=float_type,
+                )
             printer.log(str([germ.str for germ in germList[0]]), 1)
             printer.log(germsetScore)
         elif not algorithm_kwargs['return_all'] and germList is not None:
@@ -430,11 +443,12 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
     return finalGermList
 
 
-def compute_germ_set_score(germs, target_model=None, neighborhood=None,
-                           neighborhood_size=5,
-                           randomization_strength=1e-2, score_func='all',
-                           op_penalty=0.0, l1_penalty=0.0, num_nongauge_params=None,
-                           float_type=_np.cdouble):
+def compute_germ_set_score(germs: list[_circuits.Circuit], target_model: Optional[Model]=None, 
+                           neighborhood: Optional[list[Model]]=None,
+                           neighborhood_size: Optional[int]=5,
+                           randomization_strength: float=1e-2, score_func: str='all',
+                           op_penalty: float=0.0, l1_penalty: float=0.0, num_nongauge_params: Optional[int]=None,
+                           float_type: _np.dtype=_np.cdouble, gate_penalty: Optional[dict[str,float]]=None) -> _scoring.CompositeScore:
     """
     Calculate the score of a germ set with respect to a model.
 
@@ -442,7 +456,6 @@ def compute_germ_set_score(germs, target_model=None, neighborhood=None,
     to the number of amplified parameters) for a cloud of models.
     If `target_model` is given, it serves as the center of the cloud,
     otherwise the cloud must be supplied directly via `neighborhood`.
-
 
     Parameters
     ----------
@@ -478,6 +491,13 @@ def compute_germ_set_score(germs, target_model=None, neighborhood=None,
     float_type : numpy dtype object, optional
         Numpy data type to use for floating point arrays.
 
+    gate_penalty : dict, optional (default None)
+        An optional dictionary allowing the specification of gate-specific penalties to add for each instance
+        of the specified gate(s) in each germ. Should be specified as a dictionary whose keys are strings
+        corresponding to gate names, and whose values are the penalty factor to add for each instance of that
+        gate. E.g. {'Gcnot':2} would correspond to a penalty term where each instance of a 'Gcnot' gate
+        gets and additional 2 units added to the cost function for a candidate germ. 
+
     Returns
     -------
     CompositeScore
@@ -492,7 +512,9 @@ def compute_germ_set_score(germs, target_model=None, neighborhood=None,
                                                op_penalty=op_penalty,
                                                l1_penalty=l1_penalty,
                                                num_nongauge_params=num_nongauge_params,
-                                               float_type=float_type)
+                                               float_type=float_type, 
+                                               gate_penalty=gate_penalty,
+                                               germ_list=germs)
               for model in neighborhood]
 
     return max(scores)
@@ -579,11 +601,13 @@ def _setup_model_list(model_list, randomize, randomization_strength,
     return model_list
 
 
-def compute_composite_germ_set_score(score_fn, threshold_ac=1e6, init_n=1,
-                                     partial_deriv_dagger_deriv=None, model=None,
-                                     partial_germs_list=None, eps=None, germ_lengths=None,
-                                     op_penalty=0.0, l1_penalty=0.0, num_nongauge_params=None,
-                                     float_type=_np.cdouble):
+def compute_composite_germ_set_score(score_fn: Callable, threshold_ac: float=1e6, init_n: int=1,
+                                     partial_deriv_dagger_deriv: Optional[_np.ndarray]=None, 
+                                     model: Optional[Model]=None, partial_germs_list: Optional[list[_circuits.Circuit]]=None, 
+                                     eps: Optional[float]=None, germ_lengths: _np.ndarray=None,
+                                     op_penalty: float=0.0, l1_penalty: float=0.0, num_nongauge_params: Optional[int]=None,
+                                     float_type: _np.dtype=_np.cdouble, gate_penalty: Optional[dict[str,float]]=None, 
+                                     germ_list: Optional[list[_circuits.Circuit]]=None) -> _scoring.CompositeScore:
     """
     Compute the score for a germ set when it is not AC against a model.
 
@@ -650,6 +674,20 @@ def compute_composite_germ_set_score(score_fn, threshold_ac=1e6, init_n=1,
     num_nongauge_params : int, optional
         Force the number of nongauge parameters rather than rely on automated gauge optimization.
 
+    float_type : numpy dtype object, optional
+        Numpy data type to use for floating point arrays.
+    
+    gate_penalty : dict, optional (default None)
+        An optional dictionary allowing the specification of gate-specific penalties to add for each instance
+        of the specified gate(s) in each germ. Should be specified as a dictionary whose keys are strings
+        corresponding to gate names, and whose values are the penalty factor to add for each instance of that
+        gate. E.g. {'Gcnot':2} would correspond to a penalty term where each instance of a 'Gcnot' gate
+        gets and additional 2 units added to the cost function for a candidate germ.
+
+    germ_list : list of `Circuit`s, optional (default None)
+        A list of circuits corresponding to the current candidate set of germs (including the candidate addition
+        being evaluated). Must be specified when using the `gate_penalty` kwarg.    
+
     Returns
     -------
     CompositeScore
@@ -696,6 +734,9 @@ def compute_composite_germ_set_score(score_fn, threshold_ac=1e6, init_n=1,
                                          for germ in partial_germs_list])
         opScore = op_penalty * _np.sum(germ_lengths)
     
+    #add the gate penalties.
+    gate_score = _compute_gate_penalty(gate_penalty, germ_list)
+
     if partial_deriv_dagger_deriv is not None:
         combinedDDD = _np.sum(partial_deriv_dagger_deriv, axis=0)
     sortedEigenvals = _np.sort(_np.real(_nla.eigvalsh(combinedDDD)))
@@ -717,7 +758,7 @@ def compute_composite_germ_set_score(score_fn, threshold_ac=1e6, init_n=1,
     #minor_score = AC_score + l1Score + opScore
 
     # Apply penalties to the major score
-    major_score = -N_AC + opScore + l1Score
+    major_score = -N_AC + opScore + l1Score + gate_score
     minor_score = AC_score
     ret = _scoring.CompositeScore(major_score, minor_score, N_AC)
     #DEBUG: ret.extra = {'opScore': opScore,
@@ -1673,12 +1714,13 @@ def find_germs_depthfirst(model_list, germs_list, randomize=True,
 
     return goodGerms
 
-def find_germs_breadthfirst(model_list, germs_list, randomize=True,
-                            randomization_strength=1e-3, num_copies=None, seed=0,
-                            op_penalty=0, score_func='all', tol=1e-6, threshold=1e6,
-                            check=False, force="singletons", pretest=True, mem_limit=None,
-                            comm=None, profiler=None, verbosity=0, num_nongauge_params=None, 
-                            float_type= _np.cdouble, mode="all-Jac"):
+def find_germs_breadthfirst(model_list: list[Model], germs_list: list[_circuits.Circuit], randomize: bool=True,
+                            randomization_strength: float=1e-3, num_copies: Optional[int]=None, seed: int=0,
+                            op_penalty: float=0, score_func: str='all', tol: float=1e-6, threshold: float=1e6,
+                            check: bool=False, force: Optional[Union[str, list[_circuits.Circuit]]]="singletons", 
+                            pretest: bool=True, mem_limit: Optional[int]=None, comm: Optional[mpi4py.MPI.Comm]=None, 
+                            profiler: Optional[Profiler]=None, verbosity: int=0, num_nongauge_params: Optional[int]=None, 
+                            float_type: _np.dtype= _np.cdouble, mode: str="all-Jac", gate_penalty: Optional[dict[str,float]]=None)-> list[_circuits.Circuit]:
     """
     Greedy algorithm starting with 0 germs.
 
@@ -1768,6 +1810,13 @@ def find_germs_breadthfirst(model_list, germs_list, randomize=True,
     float_type : numpy dtype object, optional
         Use an alternative data type for the values of the numpy arrays generated.
 
+    gate_penalty : dict, optional (default None)
+        An optional dictionary allowing the specification of gate-specific penalties to add for each instance
+        of the specified gate(s) in each germ. Should be specified as a dictionary whose keys are strings
+        corresponding to gate names, and whose values are the penalty factor to add for each instance of that
+        gate. E.g. {'Gcnot':2} would correspond to a penalty term where each instance of a 'Gcnot' gate
+        gets and additional 2 units added to the cost function for a candidate germ.
+        
     Returns
     -------
     list
@@ -1933,7 +1982,8 @@ def find_germs_breadthfirst(model_list, germs_list, randomize=True,
         'num_nongauge_params': numNonGaugeParams,
         'op_penalty': op_penalty,
         'germ_lengths': germLengths,
-        'float_type': float_type
+        'float_type': float_type,
+        'gate_penalty':gate_penalty
     }
 
     initN = 1
@@ -1943,6 +1993,7 @@ def find_germs_breadthfirst(model_list, germs_list, randomize=True,
         worstScore = _scoring.CompositeScore(-1.0e100, 0, None)  # worst of all models
         for k, currentDDD in enumerate(currentDDDList):
             nonAC_kwargs['germ_lengths'] = _np.array([len(germ) for germ in goodGerms])
+            nonAC_kwargs['germ_list'] = goodGerms
             worstScore = max(worstScore, compute_composite_germ_set_score(
                 partial_deriv_dagger_deriv=currentDDD[None, :, :], init_n=initN,
                 **nonAC_kwargs))
@@ -1999,6 +2050,7 @@ def find_germs_breadthfirst(model_list, germs_list, randomize=True,
                     nonAC_kwargs['germ_lengths'] = \
                         _np.array([len(germ) for germ in
                                    (goodGerms + [germs_list[candidateGermIdx]])])
+                    nonAC_kwargs['germ_list'] = goodGerms + [germs_list[candidateGermIdx]]
                     worstScore = max(worstScore, compute_composite_germ_set_score(
                         partial_deriv_dagger_deriv=testDDD[None, :, :], init_n=initN,
                         **nonAC_kwargs))
@@ -2161,6 +2213,9 @@ def find_germs_integer_slack(model_list, germs_list, randomize=True,
 
     verbosity : int, optional
         Integer >= 0 indicating the amount of detail to print.
+
+    float_type : numpy dtype object, optional
+        Use an alternative data type for the values of the numpy arrays generated.
 
     See Also
     --------
@@ -2386,6 +2441,8 @@ def _germ_set_score_grasp(germ_set, germs_list, twirled_deriv_dagger_deriv_list,
         kwargs = non_ac_kwargs.copy()
         if 'germ_lengths' in non_ac_kwargs:
             kwargs['germ_lengths'] = germ_lengths
+        if non_ac_kwargs.get('gate_penalty') is not None:
+            kwargs['germ_list'] = germ_set
         germsVsModelScores.append(compute_composite_germ_set_score(
             partial_deriv_dagger_deriv=partialDDD, init_n=init_n, **kwargs))
     # Take the score for the current germ set to be its worst score over all
@@ -2393,13 +2450,13 @@ def _germ_set_score_grasp(germ_set, germs_list, twirled_deriv_dagger_deriv_list,
     return max(germsVsModelScores)
 
 
-def find_germs_grasp(model_list, germs_list, alpha, randomize=True,
-                     randomization_strength=1e-3, num_copies=None,
-                     seed=None, l1_penalty=1e-2, op_penalty=0.0,
-                     score_func='all', tol=1e-6, threshold=1e6,
-                     check=False, force="singletons",
-                     iterations=5, return_all=False, shuffle=False,
-                     verbosity=0, num_nongauge_params=None, float_type=_np.cdouble):
+def find_germs_grasp(model_list: list[Model], germs_list: list[_circuits.Circuit], alpha: float, randomize: bool=True,
+                     randomization_strength: float=1e-3, num_copies: Optional[int]=None, seed: Optional[int]=None, 
+                     l1_penalty: float=1e-2, op_penalty: float=0.0, score_func: str='all', tol: float=1e-6, 
+                     threshold: float=1e6, check: bool=False, force: Optional[Union[str, list[_circuits.Circuit]]]="singletons",
+                     iterations: int=5, return_all: bool=False, shuffle: bool=False, verbosity: int=0, 
+                     num_nongauge_params: Optional[int]=None, float_type: _np.dtype=_np.cdouble,
+                     gate_penalty: Optional[dict[str,float]]=None) -> list[_circuits.Circuit]:
     """
     Use GRASP to find a high-performing germ set.
 
@@ -2506,6 +2563,13 @@ def find_germs_grasp(model_list, germs_list, alpha, randomize=True,
     float_type : Numpy dtype object, optional
         Numpy data type to use for floating point arrays
 
+    gate_penalty : dict, optional (default None)
+        An optional dictionary allowing the specification of gate-specific penalties to add for each instance
+        of the specified gate(s) in each germ. Should be specified as a dictionary whose keys are strings
+        corresponding to gate names, and whose values are the penalty factor to add for each instance of that
+        gate. E.g. {'Gcnot':2} would correspond to a penalty term where each instance of a 'Gcnot' gate
+        gets and additional 2 units added to the cost function for a candidate germ. 
+
     Returns
     -------
     finalGermList : list of Circuit
@@ -2565,7 +2629,8 @@ def find_germs_grasp(model_list, germs_list, alpha, randomize=True,
         'op_penalty': op_penalty,
         'germ_lengths': germLengths,
         'num_nongauge_params': numNonGaugeParams,
-        'float_type' : float_type
+        'float_type' : float_type,
+        'gate_penalty': gate_penalty
     }
 
     final_nonAC_kwargs = nonAC_kwargs.copy()
@@ -3489,7 +3554,7 @@ def minamide_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=
         try:
             central_mat_chol= _np.linalg.cholesky(central_mat)
             cholesky_success=True
-        except _np.linalg.LinAlgError as err:
+        except _np.linalg.LinAlgError:
             #Cholesky decomposition probably failed.
             #I'm not sure why it failed though so print some diagnostic info:
             cholesky_success=False
@@ -3541,7 +3606,7 @@ def minamide_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=
         try:
             Dinv_chol= _np.linalg.cholesky(_np.linalg.inv(_np.eye(pinv_R_update.shape[0]) + B@(pinv_E_beta.T@pinv_E_beta)@B))
             cholesky_success=True
-        except _np.linalg.LinAlgError as err:
+        except _np.linalg.LinAlgError:
             #Cholesky decomposition probably failed.
             #I'm not sure why it failed though so print some diagnostic info:
             #Is B symmetric or hermitian?
@@ -3587,15 +3652,15 @@ def minamide_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=
 #updates to speed the calculation of eigenvalues for additive
 #updates.
     
-def find_germs_breadthfirst_greedy(model_list, germs_list, randomize=True,
-                            randomization_strength=1e-3, num_copies=None, seed=0,
-                            op_penalty=0, score_func='all', tol=1e-6, threshold=1e6,
-                            check=False, force="singletons", pretest=True, mem_limit=None,
-                            comm=None, profiler=None, verbosity=0, num_nongauge_params=None,
-                            float_type= _np.cdouble, 
-                            mode="all-Jac", force_rank_increase=False,
-                            save_cevd_cache_filename=None, load_cevd_cache_filename=None,
-                            file_compression=False, evd_tol=1e-10, initial_germ_set_test=True):
+def find_germs_breadthfirst_greedy(model_list: list[Model], germs_list: list[_circuits.Circuit], randomize: bool=True,
+                            randomization_strength: float=1e-3, num_copies: Optional[int]=None, seed: Optional[int]=0,
+                            op_penalty: float=0, score_func: str='all', tol: float=1e-6, threshold: float=1e6,
+                            check: bool=False, force: Optional[Union[str, list[_circuits.Circuit]]]="singletons", pretest: bool=True, 
+                            mem_limit: Optional[int]=None, comm: Optional[mpi4py.MPI.Comm]=None, profiler: Optional[Profiler]=None, 
+                            verbosity: int=0, num_nongauge_params: Optional[int]=None, float_type: _np.dtype= _np.cdouble, 
+                            mode: str="all-Jac", force_rank_increase: bool=False, save_cevd_cache_filename: Optional[str]=None, 
+                            load_cevd_cache_filename: Optional[str]=None, file_compression: bool=False, evd_tol: float=1e-10, 
+                            initial_germ_set_test: bool=True, gate_penalty: Optional[dict[str,float]]=None) -> list[_circuits.Circuit]:
     """
     Greedy algorithm starting with 0 germs.
 
@@ -3703,6 +3768,13 @@ def find_germs_breadthfirst_greedy(model_list, germs_list, randomize=True,
         initial germ if force=None. This can be skipped to save computational time (the test can
         be expensive) if the user has reason to believe this initial set won't be AC. Most of the time
         this initial set won't be.
+
+    gate_penalty : dict, optional (default None)
+        An optional dictionary allowing the specification of gate-specific penalties to add for each instance
+        of the specified gate(s) in each germ. Should be specified as a dictionary whose keys are strings
+        corresponding to gate names, and whose values are the penalty factor to add for each instance of that
+        gate. E.g. {'Gcnot':2} would correspond to a penalty term where each instance of a 'Gcnot' gate
+        gets and additional 2 units added to the cost function for a candidate germ. 
 
     Returns
     -------
@@ -3837,6 +3909,7 @@ def find_germs_breadthfirst_greedy(model_list, germs_list, randomize=True,
         'num_nongauge_params': numNonGaugeParams,
         'op_penalty': op_penalty,
         'float_type': float_type,
+        'gate_penalty': gate_penalty
     }
 
     #For all-Jac and compactEVD build out the requisite caches (plus all-zeros placeholders for single-Jac):
@@ -3889,11 +3962,13 @@ def find_germs_breadthfirst_greedy(model_list, germs_list, randomize=True,
         #all models. 
         initial_scores= [[_scoring.CompositeScore(-1.0e100, 0, None)]*len(model_list) for _ in range(len(germs_list))]
         for i in range(len(germs_list)):
+            if nonAC_kwargs.get('gate_penalty') is not None:
+                nonAC_kwargs['germ_list'] = [germs_list[i]]
             for j in range(len(model_list)):
                 if mode=='all-Jac':                
                     #standard slicing squeezes the array losing the first index, which compute_composite_germ_set_score
                     #is expecting, so use a trick with integer array slicing to preserve this
-                    derivDaggerDeriv = twirledDerivDaggerDerivList[j][[i],:,:]
+                    derivDaggerDeriv = twirledDerivDaggerDerivList[j][[i],:,:]                    
                     initial_scores[i][j] = compute_composite_germ_set_score(
                                 partial_deriv_dagger_deriv=derivDaggerDeriv, init_n=1, germ_lengths= [germLengths[i]],
                                 **nonAC_kwargs)
@@ -4052,6 +4127,7 @@ def find_germs_breadthfirst_greedy(model_list, germs_list, randomize=True,
                         nonAC_kwargs['germ_lengths'] = \
                         _np.array([len(germ) for germ in
                                    (goodGerms + [germs_list[candidateGermIdx]])])
+                        nonAC_kwargs['germ_list'] = goodGerms + [germs_list[candidateGermIdx]]
                         worstScore = max(worstScore, compute_composite_germ_set_score(
                                     partial_deriv_dagger_deriv=testDDD[None, :, :], init_n=initN,
                                     **nonAC_kwargs))
@@ -4070,6 +4146,7 @@ def find_germs_breadthfirst_greedy(model_list, germs_list, randomize=True,
                         nonAC_kwargs['germ_lengths'] = \
                         _np.array([len(germ) for germ in
                                    (goodGerms + [germs_list[candidateGermIdx]])])
+                        nonAC_kwargs['germ_list'] = goodGerms + [germs_list[candidateGermIdx]]
                         worstScore = max(worstScore, compute_composite_germ_set_score(
                                     partial_deriv_dagger_deriv=testDDD[None, :, :], init_n=initN,
                                     **nonAC_kwargs))
@@ -4082,6 +4159,7 @@ def find_germs_breadthfirst_greedy(model_list, germs_list, randomize=True,
                         nonAC_kwargs['germ_lengths'] = \
                             _np.array([len(germ) for germ in
                                        (goodGerms + [germs_list[candidateGermIdx]])])
+                        nonAC_kwargs['germ_list'] = goodGerms + [germs_list[candidateGermIdx]]
                         nonAC_kwargs['num_params']=Np
                         nonAC_kwargs['force_rank_increase']= force_rank_increase
                         
@@ -4148,12 +4226,13 @@ def find_germs_breadthfirst_greedy(model_list, germs_list, randomize=True,
 
     return goodGerms
     
-def compute_composite_germ_set_score_compactevd(current_update_cache, germ_update, 
-                                                score_fn="all", threshold_ac=1e6, init_n=1, model=None,
-                                                 partial_germs_list=None, eps=None, num_germs=None,
-                                                 op_penalty=0.0, l1_penalty=0.0, num_nongauge_params=None,
-                                                 num_params=None, force_rank_increase=False,
-                                                 germ_lengths=None, float_type=_np.cdouble):
+def compute_composite_germ_set_score_compactevd(current_update_cache: tuple[_np.ndarray], germ_update: _np.ndarray, 
+                                                score_fn: str="all", threshold_ac: float=1e6, init_n: int=1, model: Optional[Model]=None,
+                                                partial_germs_list: Optional[list[_circuits.Circuit]]=None, eps: Optional[float]=None, 
+                                                num_germs: Optional[int]=None, op_penalty: float=0.0, l1_penalty: float=0.0, 
+                                                num_nongauge_params: Optional[int]=None, num_params: Optional[int]=None, 
+                                                force_rank_increase: bool=False, germ_lengths: _np.ndarray=None, float_type: _np.dtype=_np.cdouble,
+                                                gate_penalty: Optional[dict[str,float]]=None, germ_list: Optional[list[_circuits.Circuit]]=None) -> _scoring.CompositeScore:
     """
     Compute the score for a germ set when it is not AC against a model.
 
@@ -4229,7 +4308,20 @@ def compute_composite_germ_set_score_compactevd(current_update_cache, germ_updat
         with respect to the chosen score function). Also results in pruning in subsequent
         optimization iterations. Defaults to False.
     
+    float_type : numpy dtype object, optional
+        Numpy data type to use for floating point arrays.
     
+    gate_penalty : dict, optional (default None)
+        An optional dictionary allowing the specification of gate-specific penalties to add for each instance
+        of the specified gate(s) in each germ. Should be specified as a dictionary whose keys are strings
+        corresponding to gate names, and whose values are the penalty factor to add for each instance of that
+        gate. E.g. {'Gcnot':2} would correspond to a penalty term where each instance of a 'Gcnot' gate
+        gets and additional 2 units added to the cost function for a candidate germ.
+
+    germ_list : list of `Circuit`s, optional (default None)
+        A list of circuits corresponding to the current candidate set of germs (including the candidate addition
+        being evaluated). Must be specified when using the `gate_penalty` kwarg.  
+        
     Returns
     -------
     CompositeScore
@@ -4257,6 +4349,9 @@ def compute_composite_germ_set_score_compactevd(current_update_cache, germ_updat
     opScore = 0.0
     if op_penalty != 0.0:
         opScore = op_penalty * _np.sum(germ_lengths)
+    
+    #add the gate penalties.
+    gate_score = _compute_gate_penalty(gate_penalty, germ_list)
     
     #calculate the updated eigenvalues
     updated_eigenvalues, rank_increase_flag = symmetric_low_rank_spectrum_update(germ_update, current_update_cache[0], current_update_cache[1], current_update_cache[2], force_rank_increase)
@@ -4289,18 +4384,19 @@ def compute_composite_germ_set_score_compactevd(current_update_cache, germ_updat
                 N_AC = N
 
     # Apply penalties to the major score
-    major_score = -N_AC + opScore + l1Score
+    major_score = -N_AC + opScore + l1Score + gate_score
     minor_score = AC_score
     ret = _scoring.CompositeScore(major_score, minor_score, N_AC)
 
     return ret
 
-def compute_composite_germ_set_score_low_rank_trace(current_update_cache, germ_update, 
-                                                score_fn="all", threshold_ac=1e6, init_n=1, model=None,
-                                                 partial_germs_list=None, eps=None, num_germs=None,
-                                                 op_penalty=0.0, l1_penalty=0.0, num_nongauge_params=None,
-                                                 num_params=None, force_rank_increase=False,
-                                                 germ_lengths=None, float_type=_np.cdouble):
+def compute_composite_germ_set_score_low_rank_trace(current_update_cache: tuple[_np.ndarray], germ_update: _np.ndarray, 
+                                                score_fn: str="all", threshold_ac: float=1e6, init_n: int=1, model: Optional[Model]=None,
+                                                partial_germs_list: Optional[list[_circuits.Circuit]]=None, eps: Optional[float]=None, 
+                                                num_germs: Optional[int]=None, op_penalty: float=0.0, l1_penalty: float=0.0, 
+                                                num_nongauge_params: Optional[int]=None, num_params: Optional[int]=None, 
+                                                force_rank_increase: bool=False, germ_lengths: _np.ndarray=None, float_type: _np.dtype=_np.cdouble,
+                                                gate_penalty: Optional[dict[str,float]]=None, germ_list: Optional[list[_circuits.Circuit]]=None) -> _scoring.CompositeScore:
     """
     Compute the score for a germ set when it is not AC against a model.
 
@@ -4375,7 +4471,20 @@ def compute_composite_germ_set_score_low_rank_trace(current_update_cache, germ_u
         of the jacobian at each iteration (this may result in choosing a germ that is sub-optimal
         with respect to the chosen score function). Also results in pruning in subsequent
         optimization iterations. Defaults to False.
+
+    float_type : numpy dtype object, optional
+        Numpy data type to use for floating point arrays.
     
+    gate_penalty : dict, optional (default None)
+        An optional dictionary allowing the specification of gate-specific penalties to add for each instance
+        of the specified gate(s) in each germ. Should be specified as a dictionary whose keys are strings
+        corresponding to gate names, and whose values are the penalty factor to add for each instance of that
+        gate. E.g. {'Gcnot':2} would correspond to a penalty term where each instance of a 'Gcnot' gate
+        gets and additional 2 units added to the cost function for a candidate germ.
+
+    germ_list : list of `Circuit`s, optional (default None)
+        A list of circuits corresponding to the current candidate set of germs (including the candidate addition
+        being evaluated). Must be specified when using the `gate_penalty` kwarg.   
     
     Returns
     -------
@@ -4408,6 +4517,9 @@ def compute_composite_germ_set_score_low_rank_trace(current_update_cache, germ_u
     opScore = 0.0
     if op_penalty != 0.0:
         opScore = op_penalty * _np.sum(germ_lengths)
+
+    #add the gate penalties.
+    gate_score = _compute_gate_penalty(gate_penalty, germ_list)
     
     #calculate the updated eigenvalues
     inverse_trace, updated_rank, rank_increase_flag = minamide_style_inverse_trace(germ_update, current_update_cache[0], current_update_cache[1], current_update_cache[2], force_rank_increase)
@@ -4422,7 +4534,7 @@ def compute_composite_germ_set_score_low_rank_trace(current_update_cache, germ_u
         N_AC = updated_rank
         
     # Apply penalties to the major score
-    major_score = -N_AC + opScore + l1Score
+    major_score = -N_AC + opScore + l1Score + gate_score
     minor_score = AC_score
     ret = _scoring.CompositeScore(major_score, minor_score, N_AC)
     
@@ -4431,7 +4543,7 @@ def compute_composite_germ_set_score_low_rank_trace(current_update_cache, germ_u
     
     return ret#, rank_increase_flag
 
-#Function for even faster kronecker products courtesy of stackexchange:
+#Function for even faster kronecker products courtesy of stackexchange:g
 def fast_kron(a,b):
     #Don't really understand the numpy tricks going on here,
     #But this does appear to work correctly in testing and
@@ -4655,7 +4767,7 @@ def germ_set_spanning_vectors(target_model, germ_list, assume_real=False, float_
             if prev_update_cache is None:
                 current_update_cache = construct_update_cache_rank_one(currentDDD, evd_tol=evd_tol)
             else:
-                if update_cache_low_rank == True:
+                if update_cache_low_rank:
                     #do a rank one psuedoinverse update wrt the best vector from the prior round
                     current_update_cache = construct_update_cache_rank_one(currentDDD, evd_tol=evd_tol, 
                                                                            prev_update_cache = prev_update_cache,
@@ -4721,7 +4833,7 @@ def germ_set_spanning_vectors(target_model, germ_list, assume_real=False, float_
             #compare these to the results of the greedy search and raise and error if they are significantly different.
             #Hardcoded tolerance is primarily meant to detect catastrophic failures, hence it being pretty large.
             if (abs(final_test_pinv - best_vec_score.minor) > 1) or (final_test_rank != best_vec_score.N): #HARDCODED
-                raise ValueError(f'Final test failed. Either the psuedoinverse traces are different or the final ranks are different. \n'
+                raise ValueError('Final test failed. Either the psuedoinverse traces are different or the final ranks are different. \n'
                                  + f'The final psuedoinverse-trace from the test is: {final_test_pinv} and the final rank from the test is: {final_test_rank} \n'
                                  + f'The final psuedoinverse-trace from the greedy search is: {best_vec_score.minor} and the final rank from the greedy search is: {best_vec_score.N}')
             
@@ -5046,5 +5158,16 @@ def rank_one_psuedoinverse_update(vector_update, pinv_A, proj_A, force_rank_incr
     
     return updated_pinv, rank_increase_flag
     
-
-                                                   
+#helper function for computing gate penalties    
+def _compute_gate_penalty(gate_penalty: Optional[dict[str,float]], germ_list: Optional[list[_circuits.Circuit]]):
+    gate_score = 0.0
+    if gate_penalty is not None:
+        assert germ_list is not None, 'Must specify `germ_list` when using `gate_penalty`.'
+        for gate, penalty_value in gate_penalty.items():
+            #loop through each ckt in the fiducial list.
+            for germ in germ_list:
+                #alternative approach using the string 
+                #representation of the ckt.
+                num_gate_instances= germ.str.count(gate)
+                gate_score += num_gate_instances*penalty_value
+    return gate_score

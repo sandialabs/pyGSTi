@@ -151,8 +151,8 @@ class InstrumentTestCase(BaseTestCase):
 
         #LSGST
         results = pygsti.run_long_sequence_gst(ds, self.target_model, fiducials, fiducials, germs, max_lengths)
-        #print(results.estimates[results.name].models['go0'])
-        mdl_est = results.estimates[results.name].models['go0']
+        #print(results.estimates[results.name].models['stdgaugeopt'])
+        mdl_est = results.estimates[results.name].models['stdgaugeopt']
         mdl_est_opt = pygsti.gaugeopt_to_target(mdl_est, mdl_datagen)
         print("Frobdiff = ", mdl_datagen.frobeniusdist(mdl_est))
         print("Frobdiff after GOpt = ", mdl_datagen.frobeniusdist(mdl_est_opt))
@@ -164,7 +164,7 @@ class InstrumentTestCase(BaseTestCase):
         self.assertEqual(mdl_targetTP.num_params,71) # 3 + 4*2 + 12*5 = 71
         #print(mdl_targetTP)
         resultsTP = pygsti.run_long_sequence_gst(ds, mdl_targetTP, fiducials, fiducials, germs, max_lengths, verbosity=4)
-        mdl_est = resultsTP.estimates[resultsTP.name].models['go0']
+        mdl_est = resultsTP.estimates[resultsTP.name].models['stdgaugeopt']
         mdl_est_opt = pygsti.gaugeopt_to_target(mdl_est, mdl_datagen)
         print("TP Frobdiff = ", mdl_datagen.frobeniusdist(mdl_est))
         print("TP Frobdiff after GOpt = ", mdl_datagen.frobeniusdist(mdl_est_opt))

@@ -78,7 +78,7 @@ except ImportError:
 
         def reinit(self, int_coeff_dict):
             """
-            Reinitialize this polynomial using new coefficents.
+            Reinitialize this polynomial using new coefficients.
 
             Parameters
             ----------
@@ -131,7 +131,7 @@ except ImportError:
 
         def abs(self):
             """
-            Return a polynomial whose coefficents are the absolute values of this PolynomialRep's coefficients.
+            Return a polynomial whose coefficients are the absolute values of this PolynomialRep's coefficients.
 
             Returns
             -------

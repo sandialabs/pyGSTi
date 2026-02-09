@@ -29,6 +29,7 @@ from pygsti.tools import mpitools as _mpit
 from pygsti.tools import sharedmemtools as _smt
 from pygsti.tools import slicetools as _slct
 from pygsti.tools.matrixtools import _fas
+from pygsti import SpaceT
 from pygsti.tools import listtools as _lt
 from pygsti.circuits import CircuitList as _CircuitList
 
@@ -86,7 +87,7 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
             G = _np.identity(self.model.evotype.minimal_dim(self.model.state_space))
             for lOp in circuit:
                 if lOp not in scaledGatesAndExps:
-                    opmx = self.model.circuit_layer_operator(lOp, 'op').to_dense(on_space='minimal')
+                    opmx = self.model.circuit_layer_operator(lOp, 'op').to_dense("minimal")
                     ng = max(_nla.norm(opmx), 1.0)
                     scaledGatesAndExps[lOp] = (opmx / ng, _np.log(ng))
 
@@ -107,15 +108,15 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
         else:
             G = _np.identity(self.model.evotype.minimal_dim(self.model.state_space))
             for lOp in circuit:
-                G = _np.dot(self.model.circuit_layer_operator(lOp, 'op').to_dense(on_space='minimal'), G)
+                G = _np.dot(self.model.circuit_layer_operator(lOp, 'op').to_dense("minimal"), G)
                 # above line: LEXICOGRAPHICAL VS MATRIX ORDER
             return G
 
     def _rho_es_from_spam_tuples(self, rholabel, elabels):
         # This calculator uses the convention that rho has shape (N,1)
-        rho = self.model.circuit_layer_operator(rholabel, 'prep').to_dense(on_space='minimal')[:, None]
+        rho = self.model.circuit_layer_operator(rholabel, 'prep').to_dense("minimal")[:, None]
         Es = [_np.conjugate(_np.transpose(self.model.circuit_layer_operator(
-              elabel, 'povm').to_dense(on_space='minimal')[:, None]))
+              elabel, 'povm').to_dense("minimal")[:, None]))
               for elabel in elabels]  # [:, None] becuse of convention: E has shape (1,N)
         return rho, Es
 
@@ -341,13 +342,13 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
         leftProds = []
         G = _np.identity(dim); leftProds.append(G)
         for opLabel in revOpLabelList:
-            G = _np.dot(G, self.model.circuit_layer_operator(opLabel, 'op').to_dense(on_space='minimal'))
+            G = _np.dot(G, self.model.circuit_layer_operator(opLabel, 'op').to_dense("minimal"))
             leftProds.append(G)
 
         rightProdsT = []
         G = _np.identity(dim); rightProdsT.append(_np.transpose(G))
         for opLabel in reversed(revOpLabelList):
-            G = _np.dot(self.model.circuit_layer_operator(opLabel, 'op').to_dense(on_space='minimal'), G)
+            G = _np.dot(self.model.circuit_layer_operator(opLabel, 'op').to_dense("minimal"), G)
             rightProdsT.append(_np.transpose(G))
 
         # Allocate memory for the final result
@@ -468,7 +469,7 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
             prods[(i, i - 1)] = ident  # product of no gates
             G = ident
             for (j, opLabel2) in enumerate(revOpLabelList[i:], start=i):  # loop over "ending" gate (>= starting gate)
-                G = _np.dot(G, self.model.circuit_layer_operator(opLabel2, 'op').to_dense(on_space='minimal'))
+                G = _np.dot(G, self.model.circuit_layer_operator(opLabel2, 'op').to_dense("minimal"))
                 prods[(i, j)] = G
         prods[(len(revOpLabelList), len(revOpLabelList) - 1)] = ident  # product of no gates
 
@@ -749,7 +750,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
                     prodCache[iDest] = _np.identity(dim)
                     # Note: scaleCache[i] = 0.0 from initialization
                 else:
-                    gate = self.model.circuit_layer_operator(opLabel, 'op').to_dense(on_space='minimal')
+                    gate = self.model.circuit_layer_operator(opLabel, 'op').to_dense("minimal")
                     nG = max(_nla.norm(gate), 1.0)
                     prodCache[iDest] = gate / nG
                     scaleCache[iDest] = _np.log(nG)
@@ -1205,9 +1206,9 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
     def _rho_e_from_spam_tuple(self, spam_tuple):
         # This calculator uses the convention that rho has shape (N,1)
         rholabel, elabel = spam_tuple
-        rho = self.model.circuit_layer_operator(rholabel, 'prep').to_dense(on_space='minimal')[:, None]
+        rho = self.model.circuit_layer_operator(rholabel, 'prep').to_dense("minimal")[:, None]
         E = _np.conjugate(_np.transpose(self.model.circuit_layer_operator(
-            elabel, 'povm').to_dense(on_space='minimal')[:, None]))
+            elabel, 'povm').to_dense("minimal")[:, None]))
         return rho, E
 
     def _probs_from_rho_e(self, rho, e, gs, scale_vals):

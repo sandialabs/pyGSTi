@@ -47,6 +47,7 @@ from pygsti.tools import basistools as _bt
 from pygsti.tools import internalgates as _itgs
 from pygsti.tools import optools as _ot
 from pygsti.tools import listtools as _lt
+from pygsti import SpaceT
 from pygsti.baseobjs.basisconstructors import sqrt2, id2x2, sigmax, sigmay, sigmaz
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
@@ -252,7 +253,7 @@ def create_operation(op_expr, state_space, basis="pp", parameterization="full", 
             # a complex 2*num_qubits x 2*num_qubits mx unitary on full space in Pauli-product basis
             Uop_embed = _op.EmbeddedOp(state_space, labels, Uop)
             # a real 4*num_qubits x 4*num_qubits mx superoperator in final basis
-            superop_mx_pp = Uop_embed.to_dense(on_space='HilbertSchmidt')
+            superop_mx_pp = Uop_embed.to_dense("HilbertSchmidt")
             # a real 4*num_qubits x 4*num_qubits mx superoperator in final basis
             superop_mx_in_basis = _bt.change_basis(superop_mx_pp, 'pp', basis)
 
@@ -299,7 +300,7 @@ def create_operation(op_expr, state_space, basis="pp", parameterization="full", 
             # a complex 2*num_qubits x 2*num_qubits mx unitary on full space in Pauli-product basis
             Uop_embed = _op.EmbeddedOp(state_space, (label,), Uop)
             # a real 4*num_qubits x 4*num_qubits mx superoperator in Pauli-product basis
-            superop_mx_pp = Uop_embed.to_dense(on_space='HilbertSchmidt')
+            superop_mx_pp = Uop_embed.to_dense("HilbertSchmidt")
             # a real 4*num_qubits x 4*num_qubits mx superoperator in final basis
             superop_mx_in_basis = _bt.change_basis(superop_mx_pp, 'pp', basis)
 
@@ -319,7 +320,7 @@ def create_operation(op_expr, state_space, basis="pp", parameterization="full", 
             # a complex 2*num_qubits x 2*num_qubits mx unitary on full space in Pauli-product basis
             Uop_embed = _op.EmbeddedOp(state_space, (label,), Uop)
             # a real 4*num_qubits x 4*num_qubits mx superoperator in Pauli-product basis
-            superop_mx_pp = Uop_embed.to_dense(on_space='HilbertSchmidt')
+            superop_mx_pp = Uop_embed.to_dense("HilbertSchmidt")
             # a real 4*num_qubits x 4*num_qubits mx superoperator in final basis
             superop_mx_in_basis = _bt.change_basis(superop_mx_pp, 'pp', basis)
 
@@ -362,7 +363,7 @@ def create_operation(op_expr, state_space, basis="pp", parameterization="full", 
             # a complex 2*num_qubits x 2*num_qubits mx unitary on full space
             Uop_embed = _op.EmbeddedOp(state_space, [label1, label2], Uop)
             # a real 4*num_qubits x 4*num_qubits mx superoperator in Pauli-product basis
-            superop_mx_pp = Uop_embed.to_dense(on_space='HilbertSchmidt')
+            superop_mx_pp = Uop_embed.to_dense("HilbertSchmidt")
             # a real 4*num_qubits x 4*num_qubits mx superoperator in final basis
             superop_mx_in_basis = _bt.change_basis(superop_mx_pp, 'pp', basis)
 
@@ -566,8 +567,26 @@ def _create_explicit_model_from_expressions(state_space, basis,
         if len(effect_vecs) > 0:  # don't add POVMs with 0 effects
             ret.povms[povmLbl] = _povm.create_from_dmvecs(effect_vecs, povm_type, basis, evotype, state_space)
 
-    for (opLabel, opExpr) in zip(op_labels, op_expressions):
-        ret.operations[opLabel] = create_operation(opExpr, state_space, basis, gate_type, evotype)
+    from pygsti.circuits.circuitparser import parse_label
+
+    parsed_op_labels = [parse_label(str(opLabel)) for opLabel in op_labels]
+    if len(set(parsed_op_labels)) != len(op_labels):
+        msg = f"""
+        There are fewer unique Label objects after parsing op_labels than
+        there are elements in op_labels. If we proceeded with the current
+        op_labels then we would not be able to return a model that could
+        be serialized and subequently deserialized (specifically,
+        deserialization would fail). Since all pyGSTi Model objects implement
+        the NicelySerializable API, we're raising an error.
+
+            The initial op_labels are {op_labels}.
+
+            The parsed op_labels are {parsed_op_labels}.
+        """
+        raise ValueError(msg)
+
+    for (lbl, opExpr) in zip(parsed_op_labels, op_expressions):
+        ret.operations[lbl] = create_operation(opExpr, state_space, basis, gate_type, evotype)
 
     if gate_type == "full":
         ret.default_gauge_group = _gg.FullGaugeGroup(ret.state_space, basis, evotype)
@@ -891,7 +910,7 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
                         raise NotImplementedError("'Iz' instrument can only be constructed on a space of *qubits*")
                     for ekey, effect_vec in _povm.ComputationalBasisPOVM(nqubits=len(qudit_labels), evotype=evotype,
                                                                          state_space=state_space).items():
-                        E = effect_vec.to_dense('HilbertSchmidt').reshape((state_space.dim, 1))
+                        E = effect_vec.to_dense("HilbertSchmidt").reshape((state_space.dim, 1))
                         inst_members[ekey] = _np.dot(E, E.T)  # (effect vector is a column vector)
                     ideal_instrument = _instrument.Instrument(inst_members)
                 else:

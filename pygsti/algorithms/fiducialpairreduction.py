@@ -1174,12 +1174,12 @@ def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, prep_povm_tuple
                 found_from_seed_set=True
                 goodPairList = bestPairs
                 break
-        if found_from_seed_set==False:
+        if not found_from_seed_set:
             printer.log('Failed to find acceptable candidate from among the seed set.', 3)
                 
     #if we've found a good candidate set from the user specified seed then this will be skipped, else if we haven't
     #or there wasn't a candidate_set_seed passed in we'll default to the standard algorithm.
-    if (candidate_set_seed is None) or (found_from_seed_set==False):
+    if (candidate_set_seed is None) or (not found_from_seed_set):
         for nNeededPairs in range(min_pairs_needed, nPossiblePairs):
             printer.log("Beginning search for a good set of %d pairs (%d pair lists to test)" %
                         (nNeededPairs, _nCr(nPossiblePairs, nNeededPairs)), 2)
@@ -1246,7 +1246,7 @@ def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, prep_povm_tuple
                                 #of fiducial pair sets and from the list of eigenvalues.
                                 try:
                                     bestPairs.pop(bestFirstEval[-1])
-                                except KeyError as err:
+                                except KeyError:
                                     printer.log(f"Trying to drop the element from bestPairs with key: {bestFirstEval[-1]}", 3)
                                     printer.log(f"Current keys in this dictionary: {bestPairs.keys()}", 3)
                                     

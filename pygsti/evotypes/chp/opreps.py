@@ -17,6 +17,7 @@ from .statereps import _update_chp_op, StateRep as _StateRep
 from .. import basereps as _basereps
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from ...tools import internalgates as _itgs
+from pygsti import SpaceT
 
 
 class OpRep(_basereps.OpRep):
@@ -49,7 +50,7 @@ class OpRep(_basereps.OpRep):
     def _chp_ops(self, seed_or_state=None):
         return self.base_chp_ops
 
-    def to_dense(self, on_space):
+    def to_dense(self, on_space: SpaceT):
         try:
             str_ops = str(self._chp_ops())
         except Exception:

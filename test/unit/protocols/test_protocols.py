@@ -134,7 +134,8 @@ class ExperimentDesignTester(BaseCase):
         self.assertTrue(all([a == b for a,b in zip(edesign3['subdir2'].all_circuits_needing_data, self.gst_design.circuit_lists[1])]))
 
     def test_map_edesign_sslbls(self):
-        for edesign in self.edesigns:
+        edesigns = self._get_tester_edesigns()
+        for edesign in edesigns:
             print("Testing edesign of type: ", str(type(edesign)))
             orig_qubits = edesign.qubit_labels
             for c in edesign.all_circuits_needing_data:
@@ -150,6 +151,93 @@ class ExperimentDesignTester(BaseCase):
             self.assertEqual(mapped_edesign.qubit_labels, mapped_qubits)
             for c in mapped_edesign.all_circuits_needing_data:
                 self.assertTrue(set(c.line_labels).issubset(mapped_qubits))
+
+    @with_temp_path
+    def test_serialization(self, root_path):
+        edesigns = self._get_tester_edesigns()
+        for i, edesign in enumerate(edesigns):
+            print("Testing edesign of type: ", str(type(edesign)))
+            root = pathlib.Path(root_path) / str(i)
+            edesign.write(root)
+            loaded_edesign = type(edesign).from_dir(root)
+            # TODO: We don't have good edesign equality
+            self.assertEqual(set(edesign.all_circuits_needing_data), set(loaded_edesign.all_circuits_needing_data))
+            self.assertEqual(edesign.auxfile_types, loaded_edesign.auxfile_types)
+            self.assertEqual(edesign._vals.keys(), loaded_edesign._vals.keys())
+
+            if isinstance(edesign, (pygsti.protocols.CanCreateAllCircuitsDesign)):
+                # We also need to test that all_circuits_needing_data is not dumped by default
+                self.assertTrue(not (root / 'edesign' / 'all_circuits_needing_data.txt').exists())
+
+                root2 = pathlib.Path(root_path) / f'{i}_2'
+                edesign.all_circuits_needing_data = []
+                edesign.write(root2)
+                loaded_edesign = type(edesign).from_dir(root2)
+                # TODO: We don't have good edesign equality
+                self.assertEqual(set(edesign.all_circuits_needing_data), set(loaded_edesign.all_circuits_needing_data))
+                self.assertEqual(edesign.auxfile_types, loaded_edesign.auxfile_types)
+                self.assertEqual(edesign._vals.keys(), loaded_edesign._vals.keys())
+                self.assertTrue((root2 / 'edesign' / 'all_circuits_needing_data.txt').exists())
+    
+    def test_dataframe_conversion(self):
+        #self.skipTest('Will turn this back on when we figure out a new incompatibility due to changes in python 3.12 and pandas 2.3.1')
+        # Currently this is just FreeformDesign, but who knows if we add dataframe support to others in the future
+        edesigns = self._get_tester_edesigns()
+        freeform_design = edesigns[4]
+
+        df = freeform_design.to_dataframe()
+        freeform_design2 = pygsti.protocols.FreeformDesign.from_dataframe(df)
+
+        for (c1, aux1), (c2, aux2) in zip(freeform_design.aux_info.items(), freeform_design2.aux_info.items()):
+            self.assertEqual(str(c1), str(c2))
+            self.assertEqual(aux1, aux2)
+    
+    def _get_tester_edesigns(self):
+        #Create a bunch of experiment designs:
+        from pygsti.protocols import ExperimentDesign, CircuitListsDesign, CombinedExperimentDesign, \
+            SimultaneousExperimentDesign, FreeformDesign, StandardGSTDesign, GateSetTomographyDesign, \
+            CliffordRBDesign, DirectRBDesign, MirrorRBDesign
+        from pygsti.processors import CliffordCompilationRules as CCR
+
+        circuits_on0 = pygsti.circuits.to_circuits(["{}@(0)", "Gxpi2:0", "Gypi2:0"], line_labels=(0,))
+        circuits_on0b = pygsti.circuits.to_circuits(["Gxpi2:0^2", "Gypi2:0^2"], line_labels=(0,))
+        circuits_on1 = pygsti.circuits.to_circuits(["Gxpi2:1^2", "Gypi2:1^2"], line_labels=(1,))
+        circuits_on01 = pygsti.circuits.to_circuits(["Gcnot:0:1", "Gxpi2:0Gypi2:1^2Gcnot:0:1Gxpi:0"],
+                                                    line_labels=(0,1))
+
+        #For GST edesigns
+        mdl = std.target_model()
+        gst_pspec = mdl.create_processor_spec()
+
+        #For RB edesigns
+        pspec = pygsti.processors.QubitProcessorSpec(2, ["Gxpi2", "Gypi2","Gxx"],
+                                                     geometry='line', qubit_labels=(0,1))
+        compilations = {"absolute": CCR.create_standard(pspec, "absolute", ("paulis", "1Qcliffords"), verbosity=0),
+                        "paulieq": CCR.create_standard(pspec, "paulieq", ("1Qcliffords", "allcnots"), verbosity=0),
+                        }
+
+        pspec1Q = pygsti.processors.QubitProcessorSpec(1, ["Gxpi2", "Gypi2","Gxmpi2", "Gympi2"],
+                                                       geometry='line', qubit_labels=(0,))
+        compilations1Q = {"absolute": CCR.create_standard(pspec1Q, "absolute", ("paulis", "1Qcliffords"), verbosity=0),
+                          "paulieq": CCR.create_standard(pspec1Q, "paulieq", ("1Qcliffords", "allcnots"), verbosity=0),
+                          }
+
+        edesigns = []
+        edesigns.append(ExperimentDesign(circuits_on0))
+        edesigns.append(CircuitListsDesign([circuits_on0, circuits_on0b]))
+        edesigns.append(CombinedExperimentDesign({'one': ExperimentDesign(circuits_on0),
+                                                  'two': ExperimentDesign(circuits_on1),
+                                                  'three': ExperimentDesign(circuits_on01)}, qubit_labels=(0,1)))
+        edesigns.append(SimultaneousExperimentDesign([ExperimentDesign(circuits_on0), ExperimentDesign(circuits_on1)]))
+        edesigns.append(FreeformDesign({c: {'id': i} for i,c in enumerate(circuits_on01)}))
+        edesigns.append(std.create_gst_experiment_design(2))
+        edesigns.append(GateSetTomographyDesign(gst_pspec, [circuits_on0, circuits_on0b]))
+        edesigns.append(CliffordRBDesign(pspec, compilations, depths=[0,2,5], circuits_per_depth=4))
+        edesigns.append(DirectRBDesign(pspec, compilations, depths=[0,2,5], circuits_per_depth=4))
+        edesigns.append(MirrorRBDesign(pspec1Q, depths=[0,2,4], circuits_per_depth=4,
+                                       clifford_compilations=compilations1Q))
+
+        return edesigns
     
     def test_truncation(self):
         from pygsti.protocols import BenchmarkingDesign

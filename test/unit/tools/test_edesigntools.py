@@ -138,7 +138,7 @@ class FisherInformationTester(BaseCase):
         prep_fiducials = smq1Q_XYI.prep_fiducials()
         meas_fiducials = smq1Q_XYI.meas_fiducials()
         self.lsgst_list_instruments = create_lsgst_circuit_lists(
-            self.target_model_inst,prep_fiducials,meas_fiducials,germs,self.Ls)
+            self.target_model_inst,prep_fiducials,meas_fiducials,germs, self.Ls[:-1])
 
     def test_calculate_fisher_information_matrix(self):
         
@@ -194,7 +194,7 @@ class FisherInformationTester(BaseCase):
         #Test by L:
         fim_approx_by_L = et.calculate_fisher_information_matrices_by_L(self.target_model_inst, self.lsgst_list_instruments, self.Ls,
                                                                         approx=True)
-        self.assertTrue(_np.linalg.norm(fim_approx-fim_approx_by_L[8])<1e-3)
+        self.assertTrue(_np.linalg.norm(fim_approx-fim_approx_by_L[4])<1e-3)
 
 
 class EdesignPaddingTester(BaseCase):

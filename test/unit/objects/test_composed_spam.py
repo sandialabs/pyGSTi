@@ -47,12 +47,12 @@ class ComposedSpamvecBase(object):
         indep_mdl['rho0'] = pure_vec
         indep_mdl['G0'] = noise_op
         indep_mdl['Mdefault'] = self.base_povm
-        indep_mdl.num_params  # triggers paramvec rebuild
-        
+        indep_mdl._rebuild_paramvec()  # trigger paramvec rebuild directly.
+
         composed_mdl = ExplicitOpModel(['Q0'], evotype='default')
         composed_mdl['rho0'] = self.vec
         composed_mdl['Mdefault'] = self.base_povm
-        composed_mdl.num_params  # triggers paramvec rebuild
+        composed_mdl._rebuild_paramvec()  # trigger paramvec rebuild directly.
         
         # Sanity check
         indep_circ = Circuit(['rho0', 'G0', 'Mdefault'])
@@ -167,7 +167,7 @@ class ComposedPovmBase(object):
         indep_mdl['rho0'] = self.base_prep
         indep_mdl['G0'] = noise_op.copy()
         indep_mdl['Mdefault'] = pure_povm
-        indep_mdl._clean_paramvec()
+        indep_mdl._rebuild_paramvec()
         
         composed_mdl = ExplicitOpModel(['Q0'], evotype='default')
         composed_mdl['rho0'] = self.base_prep

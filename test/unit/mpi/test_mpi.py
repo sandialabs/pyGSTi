@@ -25,7 +25,9 @@ class MPITester:
         
         result = subprocess.run(subprocess_args, capture_output=False, text=True)
         out, err = capfd.readouterr()
-        if len(out) + len(err) > 0:
+
+        #strip new lines/carriage returns before checking length.
+        if len(out.replace('\n', '').replace('\r', '')) + len(err.replace('\n', '').replace('\r', '')) > 0:
             msg = out + '\n'+ 80*'-' + err
             raise RuntimeError(msg)
         return

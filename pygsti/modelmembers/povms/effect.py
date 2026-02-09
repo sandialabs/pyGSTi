@@ -9,11 +9,14 @@ The POVMEffect class and supporting functionality.
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
+from __future__ import annotations
 
 import numpy as _np
 
+from pygsti.pgtypes import SpaceT
 from pygsti.modelmembers import modelmember as _modelmember
 from pygsti.tools import optools as _ot
+from pygsti.tools import matrixtools as _mt
 from pygsti.baseobjs.opcalc import bulk_eval_compact_polynomials_complex as _bulk_eval_compact_polynomials_complex
 
 
@@ -117,62 +120,19 @@ class POVMEffect(_modelmember.ModelMember):
 
     ## PUT term calc methods here if appropriate...
 
-    def frobeniusdist_squared(self, other_spam_vec, transform=None,
-                              inv_transform=None):
+    def _to_transformed_dense(self, T_domain: _mt.OperatorLike, T_codomain: _mt.OperatorLike, on_space: SpaceT='minimal') -> _np.ndarray:
         """
-        Return the squared frobenius difference between this operation and `other_spam_vec`.
-
-        Optionally transforms this vector first using `transform` and
-        `inv_transform`.
-
-        Parameters
-        ----------
-        other_spam_vec : POVMEffect
-            The other spam vector
-
-        transform : numpy.ndarray, optional
-            Transformation matrix.
-
-        inv_transform : numpy.ndarray, optional
-            Inverse of `tranform`.
-
-        Returns
-        -------
-        float
+        Return an array representation of the linear operator obtained by composing T_domain
+        and self.to_dense(). The representation interprets POVM effects as linear functionals
+        on density matrices. It allows for --- but does not strictly require --- the convention
+        that POVM effects are represented as column-vector superkets.
+        
+        T_codomain (ignored) is only here for consistency across the ModelMember API.
         """
-        vec = self.to_dense()
-        if transform is None:
-            return _ot.frobeniusdist_squared(vec, other_spam_vec.to_dense())
-        else:
-            return _ot.frobeniusdist_squared(_np.dot(_np.transpose(transform),
-                                                     vec), other_spam_vec.to_dense())
-
-    def residuals(self, other_spam_vec, transform=None, inv_transform=None):
-        """
-        Return a vector of residuals between this spam vector and `other_spam_vec`.
-
-        Optionally transforms this vector first using `transform` and
-        `inv_transform`.
-
-        Parameters
-        ----------
-        other_spam_vec : POVMEffect
-            The other spam vector
-
-        transform : numpy.ndarray, optional
-            Transformation matrix.
-
-        inv_transform : numpy.ndarray, optional
-            Inverse of `tranform`.
-
-        Returns
-        -------
-        float
-        """
-        vec = self.to_dense()
-        if transform is not None:
-            vec = transform.T @ vec
-        return (vec - other_spam_vec.to_dense()).ravel()
+        X = self.to_dense(on_space=on_space) # type: ignore
+        assert X.ndim == 1 or X.shape[1] == 1
+        out = T_domain.T @ X
+        return out
 
     def transform_inplace(self, s):
         """
