@@ -7187,6 +7187,7 @@ def iterative_error_generator_composition_numerical(errorgen_labels, rates, erro
 
 # ----------- Error Generator Polynomials -----------#
 
+#TODO: Get rid of first kwarg and get the needed info from the second.
 def magnus_symbolic(errorgen_layers, errorgen_transform_maps, magnus_order=1):
     """
     Function for computing the symbolic magnus approximation for the effective end-or-circuit error generator.
@@ -7347,6 +7348,83 @@ def _error_generator_layer_pairwise_commutator_symbolic(errorgen_layer_1, errorg
     
     return commuted_errgen_list, coeff_list
 
+def error_generator_taylor_expansion_symbolic(errorgen_dict, order = 1):
+    """
+    Compute the nth-order taylor expansion for the exponentiation of the error generator described by the input
+    error generator dictionary. (Excluding the zeroth-order identity).
+    
+    Parameters
+    ----------
+    errorgen_dict : dict
+        Dictionary whose keys are `LocalStimErrorgenLabel` and whose values are corresponding
+        rates.
+    
+    order : int, optional (default 1)
+        Order of the correction (i.e. order of the taylor series expansion for
+        the exponentiated error generator) to compute.
+    
+    Returns
+    -------
+    list of dictionaries
+        List of dictionaries whose keys are error generator labels and whose values are rates (including
+        whatever scaling comes from order of taylor expansion). Each list corresponds to an order
+        of the taylor expansion.
+    """
+    assert order == 1 or order == 2, "First and second-order symbolic taylor series approximations are currently supported."   
+ 
+    if order == 1:
+        return [errorgen_dict] #TODO, check if this should be a copy
+        
+    taylor_order_terms = [dict() for _ in range(order)]
+    taylor_order_terms[0] = errorgen_dict
+    
+    if order > 1:
+        # The order of the approximation determines the combinations of error generators
+        # which need to be composed. (given by cartesian products of labels in errorgen_dict).
+        labels_by_order = [list(product(errorgen_dict.keys(), repeat = i+1)) for i in range(1,order)]
+        # Get a similar structure for the corresponding rates
+        coeffs_by_order = [list(product(errorgen_dict.values(), repeat = i+1)) for i in range(1,order)]
+        
+        for current_order, (current_order_labels, current_order_coeffs) in enumerate(zip(labels_by_order, coeffs_by_order), start=2):
+            order_scale = 1/factorial(current_order)
+            composition_errgen_labels = []
+            composition_errgen_coeffs = []
+            rate_tup = tuple([1]*current_order)
+            for label_tup, coeff_tup in zip(current_order_labels, current_order_coeffs):
+                composed_labels, composed_rates = zip(*iterative_error_generator_composition(label_tup, rate_tup))
+                composition_errgen_labels.extend(composed_labels)
+                #get the product of the coefficient polynomials in coeff_tup
+                #this composite polynomial needs to have the rate appropriately scaled according to additional rate from the composition of the labels.
+                #TODO: Work out more efficient way to reuse product and rescale the rates directly.
+                for rate in composed_rates:
+                    composition_errgen_coeffs.append(iterative_errorgen_polynomial_composition(coeff_tup, addl_weight=rate))
+
+            # aggregate together any overlapping terms into a single dictionary
+            composition_results_dict = {errorgen: [] for errorgen in composition_errgen_labels}
+            # Accumulate the coefficients contributing to each term.    
+            for errorgen, coeff in zip(composition_errgen_labels, composition_errgen_coeffs):
+                composition_results_dict[errorgen].extend(coeff)
+            
+            taylor_order_terms[current_order-1] = composition_results_dict
+
+    return taylor_order_terms
+
+def iterative_errorgen_polynomial_composition(errorgen_polys, addl_weight=1.0):
+    """
+    Helper function for iteratively composing (multiplying out) polynomials constructed from
+    error generator coefficients.    
+    """
+    #multiplying these all out is just the same as taking a big overall cartesian product.
+    composite_poly = []
+    for group in product(*errorgen_polys):
+        new_composite_term = []
+        new_composite_scale = addl_weight
+        for term in group:
+            new_composite_term.extend(term[:-1])
+            new_composite_scale*=term[-1]
+        new_composite_term.append(new_composite_scale)
+        composite_poly.append(tuple(new_composite_term))
+    return composite_poly
 
 # -----------First-Order Approximate Error Generator Probabilities and Expectation Values---------------# 
 
