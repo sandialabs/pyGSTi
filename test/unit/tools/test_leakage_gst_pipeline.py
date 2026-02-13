@@ -66,9 +66,9 @@ class TestLeakageGSTPipeline(unittest.TestCase):
 
             | Gate    | ent. infidelity | 1/2 trace dist | 1/2 diamond dist | Max TOP  | Unmodeled error |
             |---------|-----------------|----------------|------------------|----------|-----------------|
-            | []      | 0.000001        | 0.000522       | 0.000729         | 0.000384 | 0.000001        |
-            | Gxpi2:0 | 0.00207         | 0.045378       | 0.062144         | 0.048625 | 0.003824        |
-            | Gypi2:0 | 0.000188        | 0.013716       | 0.016257         | 0.010192 | 0.000152        |
+            | []      | 0.000003        | 0.001533       | 0.002159         | 0.001986 | 0.000005        |
+            | Gxpi2:0 | 0.00094         | 0.030536       | 0.040153         | 0.031146 | 0.001579        |
+            | Gypi2:0 | 0.00038         | 0.019496       | 0.025513         | 0.017248 | 0.000542        |
         
         Standard gauge optimization
 
@@ -80,8 +80,8 @@ class TestLeakageGSTPipeline(unittest.TestCase):
 
         We'll run tests with subspace entanglement infidelity.
 
-            * For LAGO, infidelity of Gxpi2 is 10x larger than that of Gypi2;
-              we'll test for a 5x difference.
+            * For LAGO, infidelity of Gxpi2 is 2.47x larger than that of Gypi2;
+              we'll test for a 2x difference.
             
             * For standard gauge optimization, Gxpi2 and Gypi2 have almost identical infidelities;
               we'll test for a factor 1.1x there.
@@ -99,6 +99,10 @@ class TestLeakageGSTPipeline(unittest.TestCase):
         for lbl in ['LAGO', 'stdgaugeopt']:
             infids[lbl] = {g: 1 - fidelity(gates[lbl][g], gates['target'][g], 'l2p1', n_leak=1) for g in ['x', 'y'] } 
 
-        self.assertGreater( infids['LAGO']['x'],        5.0 * infids['LAGO']['y']        )
+        self.assertGreater( infids['LAGO']['x'],        2.0 * infids['LAGO']['y']        )
         self.assertLess(    infids['stdgaugeopt']['x'], 1.1 * infids['stdgaugeopt']['y'] )
         return
+
+if __name__ == '__main__':
+    TestLeakageGSTPipeline().test_pipeline_1Q_XYI()
+    print()

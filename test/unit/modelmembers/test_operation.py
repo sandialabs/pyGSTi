@@ -815,8 +815,9 @@ class StochasticNoiseOpTester(BaseCase):
         self.assertArraysAlmostEqual(sop.to_dense(), expected_mx)
 
         rho = create_spam_vector("0", "Q0", Basis.cast("pp", [4]))
-        self.assertAlmostEqual(float(np.dot(rho.T, np.dot(sop.to_dense(), rho))),
-                               0.99)  # b/c X dephasing w/rate is 0.1^2 = 0.01
+        v = (rho.T @ sop.to_dense() @ rho).item()
+        u = float(v)
+        self.assertAlmostEqual(u, 0.99)  # b/c X dephasing w/rate is 0.1^2 = 0.01
 
 
 class DepolarizeOpTester(BaseCase):
@@ -832,4 +833,6 @@ class DepolarizeOpTester(BaseCase):
 
         rho = create_spam_vector("0", "Q0", Basis.cast("pp", [4]))
         # b/c both X and Y dephasing rates => 0.01 reduction
-        self.assertAlmostEqual(float(np.dot(rho.T, np.dot(dop.to_dense(), rho))), 0.98)
+        v = (rho.T @ dop.to_dense() @ rho).item()
+        u = float(v)
+        self.assertAlmostEqual(u, 0.98)

@@ -18,6 +18,7 @@ import scipy.stats as _stats
 from pygsti.tools import basistools as _bt
 from pygsti.tools import jamiolkowski as _jam
 from pygsti.tools import listtools as _lt
+from pygsti.tools.exceptions import OverparameterizationWarning as _OverparameterizationWarning
 
 #from ..baseobjs.smartcache import smart_cached
 
@@ -790,7 +791,8 @@ def two_delta_logl(model, dataset, circuits=None,
     ds_dof = dataset.degrees_of_freedom(ds_strs)
     k = max(ds_dof - mdl_dof, 1)
     if ds_dof <= mdl_dof:
-        _warnings.warn("Max-model params (%d) <= model params (%d)!  Using k == 1." % (ds_dof, mdl_dof))
+        msg = "Max-model params (%d) <= model params (%d)!  Using k == 1." % (ds_dof, mdl_dof)
+        _warnings.warn(msg, _OverparameterizationWarning)
 
     nsigma = (two_delta_logl - k) / _np.sqrt(2 * k)
     pvalue = 1.0 - _stats.chi2.cdf(two_delta_logl, k)

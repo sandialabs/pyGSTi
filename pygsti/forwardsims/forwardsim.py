@@ -21,7 +21,11 @@ from pygsti.baseobjs import outcomelabeldict as _ld
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.tools import slicetools as _slct
-from typing import Union, Callable, Literal
+from typing import Union, Callable, Literal, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pygsti.models.model import Model
+    # Note that this is Model and not OpModel because an SuccessFailSimulator is derived from a ForwardSimulator.
 
 
 class ForwardSimulator(_NicelySerializable):
@@ -96,7 +100,7 @@ class ForwardSimulator(_NicelySerializable):
             return ('ep', 'ep') + cls._array_types_for_method('_bulk_fill_dprobs_block')
         return ()
 
-    def __init__(self, model=None):
+    def __init__(self, model: Optional[Model] = None):
         super().__init__()
         #self.dim = model.dim
         self.model = model
@@ -128,11 +132,11 @@ class ForwardSimulator(_NicelySerializable):
         return state_dict
 
     @property
-    def model(self):
+    def model(self) -> Union[Model, None]:
         return self._model
 
     @model.setter
-    def model(self, val):
+    def model(self, val: Model):
         self._model = val
         try:
             evotype = None if val is None else self._model.evotype
@@ -149,7 +153,7 @@ class ForwardSimulator(_NicelySerializable):
         raise NotImplementedError("Derived classes should implement this!")
 
     def _compute_sparse_circuit_outcome_probabilities(self, circuit, resource_alloc, time=None):
-        raise NotImplementedError("Derived classes should implement this to provide sparse (non-zero) probabilites!")
+        raise NotImplementedError("Derived classes should implement this to provide sparse (non-zero) probabilities!")
 
     def _compute_circuit_outcome_probability_derivatives(self, array_to_fill, circuit, outcomes, param_slice,
                                                          resource_alloc):
@@ -304,7 +308,7 @@ class ForwardSimulator(_NicelySerializable):
 
         derivative_dimensions : tuple, optional
             A tuple containing, optionally, the parameter-space dimension used when taking first
-            and second derivatives with respect to the cirucit outcome probabilities.  This should
+            and second derivatives with respect to the circuit outcome probabilities.  This should
             have minimally 1 or 2 elements when `array_types` contains `'ep'` or `'epp'` types,
             respectively. If `array_types` contains either of these strings and derivative_dimensions
             is None on input then we automatically set derivative_dimensions based on self.model.
@@ -696,7 +700,7 @@ class ForwardSimulator(_NicelySerializable):
 
         This routine can be useful when memory constraints make constructing
         the entire Hessian at once impractical, and as it only computes a subset of
-        the Hessian's rows and colums (a "rectangle") at once.  For example, the
+        the Hessian's rows and columns (a "rectangle") at once.  For example, the
         Hessian of a function of many circuit probabilities can often be computed
         rectangle-by-rectangle and without the need to ever store the entire Hessian at once.
 
@@ -818,7 +822,7 @@ class CacheForwardSimulator(ForwardSimulator):
 
         derivative_dimensions : tuple, optional
             A tuple containing, optionally, the parameter-space dimension used when taking first
-            and second derivatives with respect to the cirucit outcome probabilities.  This must be
+            and second derivatives with respect to the circuit outcome probabilities.  This must be
             have minimally 1 or 2 elements when `array_types` contains `'ep'` or `'epp'` types,
             respectively.
 
