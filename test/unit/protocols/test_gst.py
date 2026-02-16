@@ -3,6 +3,7 @@ from pygsti.forwardsims.mapforwardsim import MapForwardSimulator
 from pygsti.modelpacks import smq1Q_XYI
 from pygsti.modelpacks.legacy import std1Q_XYI, std2Q_XYICNOT
 from pygsti.objectivefns.objectivefns import PoissonPicDeltaLogLFunction, ObjectiveFunctionBuilder
+from pygsti.models.explicitmodel import ExplicitOpMode
 from pygsti.models.gaugegroup import TrivialGaugeGroup
 from pygsti.objectivefns import FreqWeightedChi2Function
 from pygsti.optimize.simplerlm import SimplerLMOptimizer
@@ -232,7 +233,7 @@ class MapForwardSimulatorWrapper(MapForwardSimulator):
         super(MapForwardSimulatorWrapper, self)._bulk_fill_probs_atom(array_to_fill, layout_atom, resource_alloc)
 
 
-class TestGateSetTomography(BaseProtocolData):
+class GateSetTomographyTester(BaseProtocolData):
     """
     Tests for methods in the GateSetTomography class.
 
@@ -261,9 +262,21 @@ class TestGateSetTomography(BaseProtocolData):
 
         for estimate in results.estimates.values():
             for model in estimate.models.values():
-                assert isinstance(model, MapForwardSimulatorWrapper)
+                assert isinstance(model, ExplicitOpModel)
         pass
 
+    def test_run_with_no_gaugeoptsuite(self, capfd: pytest.LogCaptureFixture):
+        self.setUpClass()
+        proto = gst.GateSetTomography(smq1Q_XYI.target_model("CPTPLND"),
+                                      gaugeopt_suite=None, name="testGST",
+                                      badfit_options={"threshold": -1000, "actions": ("wildcard1d",)},)
+        results = proto.run(self.gst_data, simulator=MapForwardSimulatorWrapper())
+        stdout, _ = capfd.readouterr()
+        assert MapForwardSimulatorWrapper.Message in stdout
+
+        mdl_result = results.estimates["testGST"].models['final iteration estimate']
+        twoDLogL = two_delta_logl(mdl_result, self.gst_data.dataset)
+        assert twoDLogL <= 1.0  # should be near 0 for perfect data
     
     def test_write_and_read_to_dir(self):
         #integration test to at least confirm we are writing and reading

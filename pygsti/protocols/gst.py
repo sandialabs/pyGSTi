@@ -2250,25 +2250,16 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options,
             #If this estimate is the target model then skip adding the diamond distance wildcard.
             if base_estimate_label != 'Target':
                 try:
-                    budget = _compute_wildcard_budget_1d_model(base_estimate, mdc_objfn, printer - 1, gaugeopt_suite)
-                    #if gaugeopt_labels is None then budget with be a PrimitiveOpsSingleScaleWildcardBudget
-                    #if it was non-empty though then we'll instead have budge as a dictionary with keys
-                    #corresponding to the elements of gaugeopt_labels. In this case let's  make
-                    #base_estimate.extra_parameters['wildcard1d' + "_unmodeled_error"] a dictionary of
-                    #the serialized PrimitiveOpsSingleScaleWildcardBudget elements
-                    if gaugeopt_suite is not None:
-                        gaugeopt_labels = budget.keys()
-                        base_estimate.extra_parameters['wildcard1d' + "_unmodeled_error"] = {lbl: budget[lbl].to_nice_serialization() for lbl in gaugeopt_labels} 
-                        base_estimate.extra_parameters['wildcard1d' + "_unmodeled_active_constraints"] = None
+                    budget_dict = _compute_wildcard_budget_1d_model(base_estimate, mdc_objfn, printer - 1, gaugeopt_suite)
+                    #budgets_dict is a dictionary with keys labeling different gauge optimizations. We make
+                    # base_estimate.extra_parameters['wildcard1d' + "_unmodeled_error"] a dictionary of
+                    # the serialized PrimitiveOpsSingleScaleWildcardBudget elements (values of the dict)
+                    gaugeopt_labels = budget_dict.keys()
+                    base_estimate.extra_parameters['wildcard1d' + "_unmodeled_error"] = {lbl: budget_dict[lbl].to_nice_serialization() for lbl in gaugeopt_labels} 
+                    base_estimate.extra_parameters['wildcard1d' + "_unmodeled_active_constraints"] = None
 
-                        base_estimate.extra_parameters["unmodeled_error"] = {lbl: budget[lbl].to_nice_serialization() for lbl in gaugeopt_labels}
-                        base_estimate.extra_parameters["unmodeled_active_constraints"] = None
-                    else:
-                        base_estimate.extra_parameters['wildcard1d' + "_unmodeled_error"] = budget.to_nice_serialization() 
-                        base_estimate.extra_parameters['wildcard1d' + "_unmodeled_active_constraints"] = None
-
-                        base_estimate.extra_parameters["unmodeled_error"] = budget.to_nice_serialization()
-                        base_estimate.extra_parameters["unmodeled_active_constraints"] = None
+                    base_estimate.extra_parameters["unmodeled_error"] = {lbl: budget_dict[lbl].to_nice_serialization() for lbl in gaugeopt_labels}
+                    base_estimate.extra_parameters["unmodeled_active_constraints"] = None
                 except NotImplementedError as e:
                     printer.warning("Failed to get wildcard budget - continuing anyway.  Error was:\n" + str(e))
                     new_params['unmodeled_error'] = None
@@ -2320,7 +2311,8 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options,
                     gauge_opt_params.copy(), go_gs_final, gokey, comm, printer - 1)
 
 
-def _compute_wildcard_budget_1d_model(estimate, mdc_objfn, verbosity, gaugeopt_suite):
+def _compute_wildcard_budget_1d_model(estimate: _Estimate, mdc_objfn: _objfns.ModelDatasetCircuitsStore,
+                                      verbosity: int, gaugeopt_suite: GSTGaugeOptSuite) -> dict[str, _wild.PrimitiveOpsWildcardBudget]:
     """
     Create a wildcard budget for a model estimate. This version of the function produces a wildcard estimate
     using the model introduced in https://doi.org/10.1038/s41534-023-00764-y.
@@ -2333,9 +2325,6 @@ def _compute_wildcard_budget_1d_model(estimate, mdc_objfn, verbosity, gaugeopt_s
     mdc_objfn : ModelDatasetCircuitsStore
         An object that stores the model, dataset, and circuits to be used in the computation.
 
-    parameters : dict
-        Various parameters of the estimate at hand.
-
     verbosity : int, optional
         Level of detail printed to stdout.
 
@@ -2346,7 +2335,7 @@ def _compute_wildcard_budget_1d_model(estimate, mdc_objfn, verbosity, gaugeopt_s
 
     Returns
     -------
-    PrimitiveOpsWildcardBudget or dict
+    dict of PrimitiveOpsWildcardBudget
         A dictionary of budgets keyed by gauge optimization labels.
 
     """
@@ -2372,6 +2361,8 @@ def _compute_wildcard_budget_1d_model(estimate, mdc_objfn, verbosity, gaugeopt_s
     two_dlogl_threshold = _chi2.ppf(1 - percentile, max(ds_dof - nparams, 1))
     redbox_threshold = _chi2.ppf(1 - percentile / nboxes, 1)
 
+    if gaugeopt_suite is None:
+        gaugeopt_suite = GSTGaugeOptSuite()
     target = gaugeopt_suite.gaugeopt_target
     if target is None:
         target = estimate.models['target']
@@ -2479,7 +2470,15 @@ def _compute_1d_reference_values(target_model: _ExplicitOpModel, gopped_models: 
             Y = target_ops[key].to_dense()
             X_restricted = X @ P
             Y_restricted = Y @ P
-            dd[lbl][key] : float = 0.5 * _tools.diamonddist(X_restricted, Y_restricted, mx_basis=basis) # type: ignore
+
+            # Get basis for this operation.
+            op_basis = basis # start with the model's basis
+            if (basis.dim != X_restricted.shape[0] and isinstance(basis, _tools.TensorProdBasis)
+                and basis.component_bases[0].dim == X_restricted.shape[0]):
+                # use first component of a TensorProdBasis if a smaller dim is needed and matches.
+                op_basis = basis.component_bases[0]
+
+            dd[lbl][key] : float = 0.5 * _tools.diamonddist(X_restricted, Y_restricted, mx_basis=op_basis) # type: ignore
             if dd[lbl][key] < 0:  # indicates that diamonddist failed (cvxpy failure)
                 msg = f"""
                 Diamond distance failed to compute {key} reference value for 1D wildcard budget!
