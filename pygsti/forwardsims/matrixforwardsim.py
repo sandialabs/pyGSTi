@@ -1103,7 +1103,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         if mem_limit is not None:
             if mem_limit <= 0:
                 raise MemoryError("Attempted layout creation w/memory limit = %g <= 0!" % mem_limit)
-            printer.log("Layout creation w/mem limit = %.2fGB" % (mem_limit * C))
+            printer.log("Layout creation w/mem limit = %.2fGB" % (mem_limit * C), message_level=2)
 
         natoms, na, npp, param_dimensions, param_blk_sizes = self._compute_processor_distribution(
             array_types, nprocs, num_params, len(circuits), default_natoms=1)
@@ -1114,10 +1114,11 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             natoms = 1  # save all processor division for within the (single) atom, for different timestamps
             na, npp = 1, (1, 1)  # save all processor division for within the (single) atom, for different timestamps
 
-        printer.log("MatrixLayout: %d processors divided into %s (= %d) grid along circuit and parameter directions." %
-                    (nprocs, ' x '.join(map(str, (na,) + npp)), _np.prod((na,) + npp)))
-        printer.log("   %d atoms, parameter block size limits %s" % (natoms, str(param_blk_sizes)))
-        assert(_np.prod((na,) + npp) <= nprocs), "Processor grid size exceeds available processors!"
+        if comm is not None:
+            printer.log("MatrixLayout: %d processors divided into %s (= %d) grid along circuit and parameter directions." %
+                        (nprocs, ' x '.join(map(str, (na,) + npp)), _np.prod((na,) + npp)), message_level=2)
+            printer.log("   %d atoms, parameter block size limits %s" % (natoms, str(param_blk_sizes)), message_level=2)
+            assert(_np.prod((na,) + npp) <= nprocs), "Processor grid size exceeds available processors!"
 
         layout = _MatrixCOPALayout(circuits, self.model, dataset, natoms,
                                    na, npp, param_dimensions, param_blk_sizes, resource_alloc, verbosity, 
@@ -1153,7 +1154,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
                 raise MemoryError("Not enough memory for desired layout! (limit=%.1fGB, required=%.1fGB)" % (
                     mem_limit * GB, mem_estimate * GB))
             else:
-                printer.log("   Esimated memory required = %.1fGB" % (mem_estimate * GB))
+                printer.log("   Estimated memory required = %.1fGB" % (mem_estimate * GB))
 
         return layout
     
