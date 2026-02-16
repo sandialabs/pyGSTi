@@ -3,7 +3,7 @@ from pygsti.forwardsims.mapforwardsim import MapForwardSimulator
 from pygsti.modelpacks import smq1Q_XYI
 from pygsti.modelpacks.legacy import std1Q_XYI, std2Q_XYICNOT
 from pygsti.objectivefns.objectivefns import PoissonPicDeltaLogLFunction, ObjectiveFunctionBuilder
-from pygsti.models.explicitmodel import ExplicitOpMode
+from pygsti.models.explicitmodel import ExplicitOpModel
 from pygsti.models.gaugegroup import TrivialGaugeGroup
 from pygsti.objectivefns import FreqWeightedChi2Function
 from pygsti.optimize.simplerlm import SimplerLMOptimizer
