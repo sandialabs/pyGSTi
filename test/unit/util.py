@@ -19,10 +19,6 @@ __deap_not_importable__  = importlib.util.find_spec('deap')  is None
 
 __csaps_not_importable__ = importlib.util.find_spec('csaps') is None
 
-__cvxpy_not_importable__ = importlib.util.find_spec('cvxpy') is None
-
-__deap_not_importable__ = importlib.util.find_spec('deap') is None
-
 
 def needs_cvxpy(fn):
     """Shortcut decorator for skipping tests that require CVXPY"""
