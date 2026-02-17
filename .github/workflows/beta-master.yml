@@ -23,6 +23,7 @@ jobs:
       python-version: ${{ matrix.python-version }}
       use-cython: ${{ matrix.use-cython }}
       run-unit-tests: 'true'
+      run-workflow-tests: 'true'
       run-extra-tests: 'true'
       run-notebook-tests: 'false' # TODO: Turn off failing notebook tests for runner failures starting end of May 2024
 
