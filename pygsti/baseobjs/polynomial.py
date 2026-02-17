@@ -21,7 +21,11 @@ PLATFORM_BITS = int(_platform.architecture()[0].strip("bit"))
 
 
 def _vinds_to_int(vinds, vindices_per_int, max_num_vars):
-    """ Convert tuple index of ints to single int given max_numvars """
+    """ 
+    Convert tuple index of ints to single int given max_numvars 
+    
+    """
+    vinds = sorted(vinds)  # <-- canonicalize for commutative variables
     ints_in_key = int(_np.ceil(len(vinds) / vindices_per_int))
     ret_tup = []
     for k in range(ints_in_key):
@@ -33,7 +37,6 @@ def _vinds_to_int(vinds, vindices_per_int, max_num_vars):
         assert(ret >= 0), "vinds = %s -> %d!!" % (str(vinds), ret)
         ret_tup.append(ret)
     return tuple(ret_tup)
-
 
 class Polynomial(object):
     """
@@ -163,7 +166,13 @@ class Polynomial(object):
         """
         vindices_per_int = Polynomial._vindices_per_int(max_num_vars)
 
-        int_coeffs = {_vinds_to_int(k, vindices_per_int, max_num_vars): v for k, v in coeffs.items()}
+        #int_coeffs = {_vinds_to_int(k, vindices_per_int, max_num_vars): v for k, v in coeffs.items()}
+
+        int_coeffs = {}
+        for k, v in coeffs.items():
+            ik = _vinds_to_int(k, vindices_per_int, max_num_vars)  # now sorts internally
+            int_coeffs[ik] = int_coeffs.get(ik, 0) + v
+
         self._rep = _PolynomialRep(int_coeffs, max_num_vars, vindices_per_int)
 
     @property
@@ -356,9 +365,16 @@ class Polynomial(object):
         -------
         None
         """
-        new_coeffs = {mapfn(k): v for k, v in self.coeffs.items()}
-        new_int_coeffs = {_vinds_to_int(k, self._rep.vindices_per_int, self._rep.max_num_vars): v
-                          for k, v in new_coeffs.items()}
+        #new_coeffs = {mapfn(k): v for k, v in self.coeffs.items()}
+        #new_int_coeffs = {_vinds_to_int(k, self._rep.vindices_per_int, self._rep.max_num_vars): v
+        #                  for k, v in new_coeffs.items()}
+        
+        vindices_per_int = self._rep.vindices_per_int
+        max_num_vars = self._rep.max_num_vars
+        new_int_coeffs = {}
+        for k, v in self.coeffs.items():
+            ik = _vinds_to_int(mapfn(k), vindices_per_int, max_num_vars)
+            new_int_coeffs[ik] = new_int_coeffs.get(ik, 0) + v
         self._rep.reinit(new_int_coeffs)
 
     def mapvec_indices(self, mapvec):
