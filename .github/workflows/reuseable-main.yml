@@ -19,6 +19,9 @@ on:
       run-unit-tests:
         required: true
         type: string
+      run-workflow-tests:
+         required: true
+         type: string
       run-extra-tests:
         required: true
         type: string
@@ -88,7 +91,7 @@ jobs:
       if: ${{ inputs.run-workflow-tests == 'true' }}
       run: |
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-        python -m pytest -n auto --dist loadscope --cov=pygsti test/workflow
+        python -m pytest -n auto --dist loadscope --cov=pygsti test/workflows
     - name: Run test_packages
       if: ${{ inputs.run-extra-tests == 'true' }}
       run: |
