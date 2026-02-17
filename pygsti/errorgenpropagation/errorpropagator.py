@@ -591,9 +591,7 @@ class ErrorGeneratorPropagator:
     def construct_errorgen_layers(self, circuit, num_qubits, include_spam=True, include_circuit_time=False, fixed_rate=None):
         """
         Construct a nested list of lists of dictionaries corresponding to the error generators for each circuit layer.
-        This is currently (as implemented) only well defined for `ExplicitOpModels` where each layer corresponds
-        to a single 'gate'. This should also in principle work for crosstalk-free `ImplicitOpModels`, but is not
-        configured to do so just yet. The entries of the top-level list correspond to circuit layers, while the entries
+        The entries of the top-level list correspond to circuit layers, while the entries
         of the second level (i.e. the dictionaries at each layer) correspond to different orders of the BCH approximation.
 
         Parameters
