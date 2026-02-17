@@ -41,6 +41,8 @@ class TestLeakageGSTPipeline(unittest.TestCase):
         num_samples = 100_000
         # ^ The number of samples is large to compensate for short circuit length.
         from pygsti.objectivefns import objectivefns
+        OLD_MIN_PROB_CLIP = objectivefns.DEFAULT_MIN_PROB_CLIP  # restore before exit
+        OLD_RADIUS        = objectivefns.DEFAULT_RADIUS         # restore before exit
         objectivefns.DEFAULT_MIN_PROB_CLIP = objectivefns.DEFAULT_RADIUS = 1e-12
         # ^ The lines above change numerical thresholding rules in objective evaluation
         #   to be appropriate when the number of shots/circuit is extremely large.
@@ -63,6 +65,8 @@ class TestLeakageGSTPipeline(unittest.TestCase):
         in Gxpi2 than Gypi2. (It's not clear to me why stdgaugeopt lacks wildcard error.)
 
         Leakage-aware guage optimization.
+
+            # TODO: figure out why unmodeled error doesn't show up in the report anymore.
 
             | Gate    | ent. infidelity | 1/2 trace dist | 1/2 diamond dist | Max TOP  | Unmodeled error |
             |---------|-----------------|----------------|------------------|----------|-----------------|
@@ -101,7 +105,11 @@ class TestLeakageGSTPipeline(unittest.TestCase):
 
         self.assertGreater( infids['LAGO']['x'],        2.0 * infids['LAGO']['y']        )
         self.assertLess(    infids['stdgaugeopt']['x'], 1.1 * infids['stdgaugeopt']['y'] )
+
+        objectivefns.DEFAULT_MIN_PROB_CLIP = OLD_MIN_PROB_CLIP
+        objectivefns.DEFAULT_RADIUS = OLD_RADIUS
         return
+
 
 if __name__ == '__main__':
     TestLeakageGSTPipeline().test_pipeline_1Q_XYI()
