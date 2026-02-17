@@ -13,7 +13,7 @@ Clifford circuit, CNOT circuit, and stabilizer state/measurement generation comp
 import copy as _copy
 
 import numpy as _np
-from typing import Literal, Optional, Union
+from typing import Literal, Optional, Union, Callable, TypeAlias
 
 from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.baseobjs.label import Label as _Label
@@ -22,6 +22,7 @@ from pygsti.tools import symplectic as _symp
 from pygsti.processors.processorspec import QubitProcessorSpec as _QubitProcessorSpec
 from pygsti.processors.compilationrules import CompilationRules as _CompilationRules
 
+CNOT_ALG_CHOICE: TypeAlias = Literal['BGE', 'OCAGE', 'OiCAGE', 'ROCAGE', 'COCAGE', 'COiCAGE']
 
 def _create_standard_costfunction(name: Union[Literal['2QGC', 'depth'], str]):
     """
@@ -69,7 +70,7 @@ def _create_standard_costfunction(name: Union[Literal['2QGC', 'depth'], str]):
     return costfunction
 
 
-def compile_clifford(s, p, pspec: Optional[_QubitProcessorSpec]=None, absolute_compilation: Optional[_CompilationRules]=None, paulieq_compilation: Optional[_CompilationRules]=None,
+def compile_clifford(s: _np.ndarray, p: _np.ndarray, pspec: Optional[_QubitProcessorSpec]=None, absolute_compilation: Optional[_CompilationRules]=None, paulieq_compilation: Optional[_CompilationRules]=None,
                      qubit_labels=None, iterations: int=20, algorithm: Literal['ROGGE', 'BGGE', 'iAGvGE']='ROGGE', aargs=None,
                      costfunction='2QGC:10:depth:1', prefixpaulis: Optional[bool]=False, paulirandomize: Optional[bool]=False,
                      rand_state=None) -> _Circuit:
@@ -249,7 +250,7 @@ def compile_clifford(s, p, pspec: Optional[_QubitProcessorSpec]=None, absolute_c
     return circuit
 
 
-def compile_symplectic(s, pspec: Optional[_QubitProcessorSpec]=None, absolute_compilation: Optional[_CompilationRules]=None, paulieq_compilation: Optional[_CompilationRules]=None, qubit_labels=None,
+def compile_symplectic(s: _np.ndarray, pspec: Optional[_QubitProcessorSpec]=None, absolute_compilation: Optional[_CompilationRules]=None, paulieq_compilation: Optional[_CompilationRules]=None, qubit_labels=None,
                        iterations: int=20, algorithms: Optional[list[Literal['BGGE', 'ROGGE', 'iAGvGE']]]=None, costfunction='2QGC:10:depth:1', paulirandomize: Optional[bool]=False,
                        aargs=None, check=True, rand_state=None):
     """
@@ -490,7 +491,7 @@ def compile_symplectic(s, pspec: Optional[_QubitProcessorSpec]=None, absolute_co
     return circuit
 
 
-def _compile_symplectic_using_rogge_algorithm(s, pspec: Optional[_QubitProcessorSpec]=None, paulieq_compilation: Optional[_CompilationRules]=None, qubit_labels=None, ctype='basic',
+def _compile_symplectic_using_rogge_algorithm(s: _np.ndarray, pspec: Optional[_QubitProcessorSpec]=None, paulieq_compilation: Optional[_CompilationRules]=None, qubit_labels=None, ctype='basic',
                                               costfunction='2QGC:10:depth:1', iterations: int=10, check=True,
                                               rand_state=None):
     """
@@ -598,7 +599,7 @@ def _compile_symplectic_using_rogge_algorithm(s, pspec: Optional[_QubitProcessor
     return bestcircuit
 
 
-def _compile_symplectic_using_ogge_algorithm(s, eliminationorder, pspec: Optional[_QubitProcessorSpec]=None, paulieq_compilation: Optional[_CompilationRules]=None,
+def _compile_symplectic_using_ogge_algorithm(s: _np.ndarray, eliminationorder, pspec: Optional[_QubitProcessorSpec]=None, paulieq_compilation: Optional[_CompilationRules]=None,
                                              qubit_labels=None, ctype='basic', check=True) -> _Circuit:
     """
     Creates a :class:`Circuit` that implements a Clifford gate using the OGGE algorithm.
@@ -712,7 +713,7 @@ def _compile_symplectic_using_ogge_algorithm(s, eliminationorder, pspec: Optiona
     return circuit
 
 
-def _compile_symplectic_using_gge_core(s, check: Optional[bool]=True) -> _Circuit:
+def _compile_symplectic_using_gge_core(s: _np.ndarray, check: Optional[bool]=True) -> _Circuit:
     """
     Creates a :class:`Circuit` that implements a Clifford gate using the GGE algorithm.
 
@@ -1000,8 +1001,9 @@ def _compile_symplectic_using_ag_algorithm(s, pspec: Optional[_QubitProcessorSpe
     return circuit
 
 
-def _compile_symplectic_using_riag_algoritm(s, pspec, paulieq_compilation: Optional[_CompilationRules], qubit_labels=None, iterations: int=20,
-                                            cnotalg='COiCAGE', cargs=None, costfunction='2QGC:10:depth:1',
+def _compile_symplectic_using_riag_algoritm(s: _np.ndarray, pspec: Optional[_QubitProcessorSpec], paulieq_compilation: Optional[_CompilationRules], qubit_labels=None, iterations: int=20,
+                                            cnotalg='COiCAGE', cargs=None,
+                                            costfunction: Union[str, Callable[[_Circuit, Optional[_QubitProcessorSpec]], int]]='2QGC:10:depth:1',
                                             check=True, rand_state=None):
     """
     Creates a :class:`Circuit` that implements a Clifford gate using the RIAG algorithm.
@@ -1120,7 +1122,7 @@ def _compile_symplectic_using_riag_algoritm(s, pspec, paulieq_compilation: Optio
     return bestcircuit
 
 
-def _compile_symplectic_using_iag_algorithm(s, pspec: Optional[_QubitProcessorSpec], qubit_labels=None, cnotalg='COCAGE', cargs=None,
+def _compile_symplectic_using_iag_algorithm(s: _np.ndarray, pspec: Optional[_QubitProcessorSpec], qubit_labels=None, cnotalg='COCAGE', cargs=None,
                                             check=True, rand_state=None):
     """
     Creates a :class:`Circuit` that implements a Clifford gate using the IAG algorithm.
@@ -1268,7 +1270,7 @@ def _compile_symplectic_using_iag_algorithm(s, pspec: Optional[_QubitProcessorSp
     return circuit
 
 
-def compile_cnot_circuit(s, pspec: _QubitProcessorSpec, compilation: _CompilationRules, qubit_labels=None,
+def compile_cnot_circuit(s: _np.ndarray, pspec: _QubitProcessorSpec, compilation: _CompilationRules, qubit_labels=None,
                          algorithm: Literal['BGE', 'OCAGE', 'OiCAGE', 'ROCAGE', 'COCAGE', 'COiCAGE']='COiCAGE',
                          compile_to_native=False, check: Optional[bool]=True, aargs=None, rand_state=None):
     """
@@ -1434,7 +1436,7 @@ def compile_cnot_circuit(s, pspec: _QubitProcessorSpec, compilation: _Compilatio
     return circuit
 
 
-def _compile_cnot_circuit_using_bge_algorithm(s, pspec, qubit_labels=None, compile_to_native=False, check=True):
+def _compile_cnot_circuit_using_bge_algorithm(s: _np.ndarray, pspec, qubit_labels=None, compile_to_native=False, check=True):
     """
     Compile a CNOT circuit.
 
@@ -1546,7 +1548,7 @@ def _add_cnot(qubitgraph, controllabel, targetlabel):
 # algorithm is only slightly better on average than this one).
 
 
-def _compile_cnot_circuit_using_ocage_algorithm(s, pspec, qubitorder, qubit_labels=None, check=True,
+def _compile_cnot_circuit_using_ocage_algorithm(s: _np.ndarray, pspec: Optional[_QubitProcessorSpec], qubitorder, qubit_labels=None, check=True,
                                                 respect_connectivity=True):
     """
     An ordered and connectivity-adjusted Gaussian-elimination (OCAGE) algorithm for compiling a CNOT circuit.
@@ -1817,7 +1819,7 @@ def _compile_cnot_circuit_using_ocage_algorithm(s, pspec, qubitorder, qubit_labe
     return cnot_circuit
 
 
-def _compile_cnot_circuit_using_oicage_algorithm(s, pspec, qubitorder, qubit_labels=None, compile_to_native=False,
+def _compile_cnot_circuit_using_oicage_algorithm(s: _np.ndarray, pspec: Optional[_QubitProcessorSpec], qubitorder, qubit_labels=None, compile_to_native=False,
                                                  check=True):
     """
     An improved, ordered and connectivity-adjusted Gaussian-elimination (OiCAGE) algorithm for compiling a CNOT circuit.
@@ -2029,9 +2031,9 @@ def _compile_cnot_circuit_using_oicage_algorithm(s, pspec, qubitorder, qubit_lab
     return cnot_circuit
 
 
-def compile_stabilizer_state(s, p, pspec: Optional[_QubitProcessorSpec], absolute_compilation: _CompilationRules, paulieq_compilation: _CompilationRules, qubit_labels=None,
-                             iterations=20, paulirandomize: Optional[bool]=False,
-                             algorithm='COiCAGE', aargs=None, costfunction='2QGC:10:depth:1',
+def compile_stabilizer_state(s: _np.ndarray, p: _np.ndarray, pspec: Optional[_QubitProcessorSpec], absolute_compilation: _CompilationRules, paulieq_compilation: _CompilationRules, qubit_labels=None,
+                             iterations=20, paulirandomize: Optional[bool]=False, algorithm: CNOT_ALG_CHOICE='COiCAGE', aargs=None,
+                             costfunction: Union[str, Callable[[_Circuit, Optional[_QubitProcessorSpec]], int]]='2QGC:10:depth:1',
                              rand_state=None):
     """
     Generates a circuit to create the stabilizer state from the standard input state `|0,0,0,...>`.
@@ -2206,9 +2208,9 @@ def compile_stabilizer_state(s, p, pspec: Optional[_QubitProcessorSpec], absolut
     return circuit
 
 
-def compile_stabilizer_measurement(s, p, pspec, absolute_compilation, paulieq_compilation, qubit_labels=None,
-                                   iterations=20, paulirandomize: Optional[bool]=False,
-                                   algorithm='COCAGE', aargs=None, costfunction='2QGC:10:depth:1', rand_state=None):
+def compile_stabilizer_measurement(s: _np.ndarray, p: _np.ndarray, pspec: Optional[_QubitProcessorSpec], absolute_compilation: _CompilationRules, paulieq_compilation: _CompilationRules, qubit_labels=None,
+                                   iterations=20, paulirandomize: Optional[bool]=False, algorithm='COCAGE', aargs=None,
+                                   costfunction: Union[str, Callable[[_Circuit, Optional[_QubitProcessorSpec]], int]]='2QGC:10:depth:1', rand_state=None):
     """
     Generates a circuit to map the stabilizer state to the standard state `|0,0,0,...>`.
 
@@ -2405,7 +2407,7 @@ def compile_stabilizer_measurement(s, p, pspec, absolute_compilation, paulieq_co
     return circuit
 
 
-def _convert_submatrix_to_echelon_form_using_cnots(s, optype: Literal['row', 'column'], position: Literal['UL', 'UR', 'LL', 'LR'], qubit_labels):
+def _convert_submatrix_to_echelon_form_using_cnots(s: _np.ndarray, optype: Literal['row', 'column'], position: Literal['UL', 'UR', 'LL', 'LR'], qubit_labels):
     """
     Converts a submatrix of `s` to row- or column-echelon form.
 
@@ -2518,7 +2520,7 @@ def _convert_submatrix_to_echelon_form_using_cnots(s, optype: Literal['row', 'co
     return sout, instruction_list, True
 
 
-def _submatrix_gaussian_elimination_using_cnots(s, optype: Literal['row', 'column'], position: Literal['UL', 'UR', 'LL', 'LR'], qubit_labels):
+def _submatrix_gaussian_elimination_using_cnots(s: _np.ndarray, optype: Literal['row', 'column'], position: Literal['UL', 'UR', 'LL', 'LR'], qubit_labels):
     """
     Converts a submatrix of `s` to the identity matrix using CNOTs.
 
@@ -2614,7 +2616,7 @@ def _submatrix_gaussian_elimination_using_cnots(s, optype: Literal['row', 'colum
     return sout, instruction_list, True
 
 
-def _make_submatrix_invertable_using_hadamards(s, optype: Literal['row', 'column'], position: Literal['UL', 'UR', 'LL', 'LR'], qubit_labels, rand_state=None):
+def _make_submatrix_invertable_using_hadamards(s: _np.ndarray, optype: Literal['row', 'column'], position: Literal['UL', 'UR', 'LL', 'LR'], qubit_labels, rand_state=None):
     """
     Uses row-action or column-action Hadamard gates to make a submatrix of `s` invertable.
 
@@ -2692,7 +2694,7 @@ def _make_submatrix_invertable_using_hadamards(s, optype: Literal['row', 'column
     return sout, instructions
 
 
-def _make_submatrix_invertable_using_phases_and_idsubmatrix(s, optype: Literal['row', 'column'], position: Literal['UL', 'UR', 'LL', 'LR'], qubit_labels):
+def _make_submatrix_invertable_using_phases_and_idsubmatrix(s: _np.ndarray, optype: Literal['row', 'column'], position: Literal['UL', 'UR', 'LL', 'LR'], qubit_labels):
     """
     Uses row-action or column-action Phase gates to make a submatrix of `s` invertable.
 
@@ -2777,7 +2779,7 @@ def _make_submatrix_invertable_using_phases_and_idsubmatrix(s, optype: Literal['
     return sout, instructions
 
 
-def find_albert_factorization_transform_using_cnots(s, optype: Literal['row', 'column'], position: Literal['UL', 'UR', 'LL', 'LR'], qubit_labels, rand_state=None):
+def find_albert_factorization_transform_using_cnots(s: _np.ndarray, optype: Literal['row', 'column'], position: Literal['UL', 'UR', 'LL', 'LR'], qubit_labels, rand_state=None):
     """
     Performs an Albert factorization transform on `s`.
 
@@ -2860,7 +2862,7 @@ def find_albert_factorization_transform_using_cnots(s, optype: Literal['row', 'c
     return sout, instructions
 
 
-def _apply_phase_to_all_qubits(s, optype, qubit_labels):
+def _apply_phase_to_all_qubits(s: _np.ndarray, optype: Literal['row', 'column'], qubit_labels):
     """
     Applies phase gates to all qubits
 
@@ -2897,7 +2899,7 @@ def _apply_phase_to_all_qubits(s, optype, qubit_labels):
     return sout, instructions
 
 
-def _apply_hadamard_to_all_qubits(s, optype, qubit_labels):
+def _apply_hadamard_to_all_qubits(s: _np.ndarray, optype: Literal['row', 'column'], qubit_labels):
     """
     Applies Hadamard gates to all qubits
 
@@ -2946,7 +2948,7 @@ def _apply_hadamard_to_all_qubits(s, optype, qubit_labels):
     return sout, instructions
 
 
-def compile_conditional_symplectic(s, pspec, qubit_labels=None, calg='COiCAGE', cargs=None, check=True, rand_state=None):
+def compile_conditional_symplectic(s: _np.ndarray, pspec: Optional[_QubitProcessorSpec], qubit_labels=None, calg: CNOT_ALG_CHOICE='COiCAGE', cargs=None, check=True, rand_state=None):
     """
     Finds circuits that partially (conditional on the input) implement the Clifford given by `s`.
 
