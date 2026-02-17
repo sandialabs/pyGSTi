@@ -39,7 +39,7 @@ class TestRobustGSTPipeline(unittest.TestCase):
         target_model.default_gauge_group = 'unitary'
         pdata   = ProtocolData(edesign, ds)
         proto   = GateSetTomography(target_model, 'stdgaugeopt', objfn_builders={'objective': final_objective}, name=mode, verbosity=verbosity)
-        results = proto.run(pdata,  checkpoint_path='/Users/rjmurr/Documents/pygsti-tvd/repo/test/workflows/debugging/both/')
+        results = proto.run(pdata, disable_checkpointing=True)
         return results
 
     def test_pipeline_1Q_XYI(self, generate_report=False):
