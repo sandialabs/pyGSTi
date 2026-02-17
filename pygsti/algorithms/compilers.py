@@ -13,7 +13,7 @@ Clifford circuit, CNOT circuit, and stabilizer state/measurement generation comp
 import copy as _copy
 
 import numpy as _np
-from typing import Literal, Optional, Union, Callable, TypeAlias
+from typing import Literal, Optional, Union, Callable
 
 from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.baseobjs.label import Label as _Label
@@ -22,7 +22,7 @@ from pygsti.tools import symplectic as _symp
 from pygsti.processors.processorspec import QubitProcessorSpec as _QubitProcessorSpec
 from pygsti.processors.compilationrules import CompilationRules as _CompilationRules
 
-CNOT_ALG_CHOICE: TypeAlias = Literal['BGE', 'OCAGE', 'OiCAGE', 'ROCAGE', 'COCAGE', 'COiCAGE']
+CNOT_ALG_CHOICE = Literal['BGE', 'OCAGE', 'OiCAGE', 'ROCAGE', 'COCAGE', 'COiCAGE']
 
 def _create_standard_costfunction(name: Union[Literal['2QGC', 'depth'], str]):
     """
