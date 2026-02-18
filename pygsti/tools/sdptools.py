@@ -159,7 +159,7 @@ def cptp_superop_variable(purestate_dim: int, basis: BasisLike) -> Tuple[cp.Expr
     return X, constraints
 
 
-def diamond_distance_projection_model(superop: np.ndarray, basis: Basis, leakfree: bool=False, seepfree: bool=False, n_leak: int=0, cptp: bool=True, subspace_diamond: bool=False):
+def diamond_distance_projection_model(superop: np.ndarray, basis: Basis, leakfree: bool=False, seepfree: bool=False, cptp: bool=True, subspace_diamond: bool=False):
     assert CVXPY_ENABLED
     dim_mixed = superop.shape[0]
     dim_pure = int(np.sqrt(dim_mixed))
@@ -172,10 +172,9 @@ def diamond_distance_projection_model(superop: np.ndarray, basis: Basis, leakfre
         proj_superop = cp.Variable((dim_mixed, dim_mixed))
     diamondnorm_arg = superop - proj_superop
     if (leakfree or seepfree or subspace_diamond):
-        assert n_leak == 1
-        from pygsti.tools.leakage import _computational_superkets
-        dim_pure_compsub  = dim_pure - n_leak
-        U = _computational_superkets(dim_pure_compsub, dim_pure, basis)
+        assert basis.implies_leakage_modeling
+        from pygsti.tools.leakage import computational_superkets
+        U = computational_superkets(basis)
         P = U @ U.T.conj()
         I = np.eye(dim_mixed)
         if leakfree:

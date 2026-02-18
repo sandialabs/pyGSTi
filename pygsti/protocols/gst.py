@@ -2499,8 +2499,8 @@ def _compute_1d_reference_values(target_model: _ExplicitOpModel, gopped_models: 
         if n_leak == 0:
             P = I
         elif n_leak > 0:
-            from pygsti.tools.leakage import _computational_superkets
-            U = _computational_superkets(udim - n_leak, udim, basis)
+            from pygsti.tools.leakage import computational_superkets
+            U = computational_superkets(basis)
             P = U @ U.T.conj()
             P = P.real
 
@@ -2518,7 +2518,7 @@ def _compute_1d_reference_values(target_model: _ExplicitOpModel, gopped_models: 
                 Falling back to trace distance.
                 """
                 _warnings.warn(msg)
-                dd[lbl][key] = _tools.subspace_jtracedist(X, Y, basis, n_leak=n_leak)
+                dd[lbl][key] = _tools.subspace_jtracedist(X, Y, basis)
         
         for key, op in insts.items():
             inst_dd : float = 0.5* _tools.instrument_diamonddist(

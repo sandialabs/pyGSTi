@@ -1034,7 +1034,7 @@ Leaky_maximum_trace_dist = _modf.opfn_factory(leaky_maximum_trace_dist)
 def diamonddist_to_leakfree_cptp(op, ignore, mx_basis):
     import pygsti.tools.sdptools as _sdps
     prob, _, solvers = _sdps.diamond_distance_projection_model(
-        op, mx_basis, leakfree=True, seepfree=False, n_leak=1, cptp=True, subspace_diamond=False
+        op, mx_basis, leakfree=True, seepfree=False, cptp=True, subspace_diamond=False
     )
     for s in solvers:
         try:
@@ -1049,7 +1049,7 @@ Diamonddist_to_leakfree_cptp = _modf.opsfn_factory(diamonddist_to_leakfree_cptp)
 def subspace_diamonddist_to_leakfree_cptp(op, ignore, mx_basis):
     import pygsti.tools.sdptools as _sdps
     prob, _, solvers = _sdps.diamond_distance_projection_model(
-        op, mx_basis, leakfree=True, seepfree=False, n_leak=1, cptp=True, subspace_diamond=True
+        op, mx_basis, leakfree=True, seepfree=False, cptp=True, subspace_diamond=True
     )
     for s in solvers:
         try:

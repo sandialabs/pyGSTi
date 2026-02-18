@@ -97,7 +97,12 @@ def set_docstring(docstr):
 
 
 def computational_effect(basis: Basis) -> np.ndarray:
-    E = basis.ellookup.get('I', basis.ellookup.get('II', None)).copy()  # type: ignore
+    assert hasattr(basis, 'labels')
+    candidates = [ell for ell in basis.labels if len(ell.strip('I')) == 0]  # type: ignore
+    candidates = sorted(candidates, key=lambda ell: -len(ell))
+    assert len(candidates) > 0
+    label = candidates[0]
+    E = basis.ellookup[label].copy()  # type: ignore
     k = np.linalg.matrix_rank(E)
     E *= (k/np.trace(E))
     return E
@@ -221,20 +226,6 @@ def subspace_jtracedist(op_x: np.ndarray, op_y: np.ndarray, op_basis) -> float:
 
 
 # MARK: projected metrics
-
-
-# TODO: remove this function before PR merge.
-def _computational_superkets(dim_pure_compsub, dim_pure, basis: Basis) -> np.ndarray:
-    from pygsti.tools.leakage import leading_dxd_submatrix_basis_vectors, computational_superkets
-    if dim_pure >= 6:
-        # At this size it's unreasonable to assume the computational subspace is
-        # the span of the first (udim-n_leak) standard basis vectors. We have to
-        # get the computational subspace from the Basis object.
-        U = computational_superkets(basis)
-        assert U.shape[1] < basis.dim
-    else:
-        U = leading_dxd_submatrix_basis_vectors(dim_pure_compsub, dim_pure, basis)
-    return U
 
 
 @set_docstring(
