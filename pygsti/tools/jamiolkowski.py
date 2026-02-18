@@ -15,8 +15,9 @@ from __future__ import annotations
 import numpy as _np
 
 from pygsti.tools import basistools as _bt
-from pygsti.baseobjs.basis import Basis as _Basis, LazyBasis as _LazyBasis
 from pygsti.tools import matrixtools as _mt
+from pygsti.baseobjs.basis import Basis as _Basis
+from pygsti.baseobjs.basis import LazyBasis as _LazyBasis 
 from typing import Union, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -131,12 +132,12 @@ def jamiolkowski_iso(operation_mx: Union[_np.ndarray, Expression], op_mx_basis: 
         choi_mx_basis = _Basis.cast(choi_mx_basis, N)  # we'd like a basis of dimension N
 
     try:
-        BVec = choi_mx_basis.create_simple_equivalent().elements
-    except AssertionError as e:
-        assert 'Unknown builtin basis name' in str(e)
-        assert isinstance(choi_mx_basis, _LazyBasis)
-        BVec = choi_mx_basis.elements
-
+        temp = choi_mx_basis.create_simple_equivalent()
+        BVec : Union[_np.ndarray, list] = temp.elements  # type: ignore
+    except:
+        assert hasattr(choi_mx_basis, 'elements')
+        BVec : Union[_np.ndarray, list] = choi_mx_basis.elements  # type: ignore
+    
     M = len(BVec)  # can be < N if basis has multiple block dims
     assert(M == N), 'Expected {}, got {}'.format(M, N)
 
@@ -157,7 +158,7 @@ def jamiolkowski_iso(operation_mx: Union[_np.ndarray, Expression], op_mx_basis: 
     # This construction results in a Jmx with trace == dim(H) = sqrt(operation_mx.shape[0])
     #  (dimension of density matrix) but we'd like a Jmx with trace == 1, so normalize:
     if normalized:
-        choiMx /= dmDim
+        choiMx = choiMx / dmDim
     return choiMx
 
 # GStd = sum_ij Jij (BSi x BSj^*)
