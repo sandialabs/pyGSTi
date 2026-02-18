@@ -60,7 +60,10 @@ def calc_dim(x):
     -------
     int
     """
-    return _np.sum(_np.where(x.shape > 1, 1,0))
+    d = 0
+    for l in x.shape:
+        if l > 1: d += 1
+    return d
 
 
 def item_type(x):
