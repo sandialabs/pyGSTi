@@ -42,7 +42,7 @@ class TestRobustGSTPipeline(unittest.TestCase):
         results = proto.run(pdata, disable_checkpointing=True)
         return results
 
-    def test_pipeline_1Q_XYI(self, generate_report=False):
+    def test_pipeline_1Q_XYI(self, generate_report=True):
         """
         Variable naming conventions:
             * Suffix _ori refers to "original" dataset. Only has Markovian error (depolarization).
@@ -52,7 +52,7 @@ class TestRobustGSTPipeline(unittest.TestCase):
         mp : GSTModelPack  = smq1Q_XYI  # type: ignore
 
         target       = mp.target_model()
-        circuitlists = mp.create_gst_circuitlists(64)
+        circuitlists = mp.create_gst_circuitlists(16)
         edesign      = GateSetTomographyDesign(target.create_processor_spec(), circuitlists, nested=True)
         depol_model  = target.depolarize(op_noise=0.01)
         ds_ori       = pygsti.data.simulate_data(depol_model, circuitlists[-1], num_samples=10_000, seed=0)
@@ -115,20 +115,23 @@ class TestRobustGSTPipeline(unittest.TestCase):
 
         lls_train_ori, lls_train_cor = log_likelihood_summaries()
 
-        self.assertLessEqual(5 * lls_train_cor['tvd']['original'], lls_train_cor['-logl']['original'])
-        # ^ We observe LHS == RHS * 8.073866449382384. Test for RHS / LHS <= 5.
+        test_ratio = lls_train_cor['-logl']['original'] / lls_train_cor['tvd']['original']
+        self.assertGreaterEqual(test_ratio, 10)
+        # ^ We observe (-logl)/(tvd) == 36.07064855751099; test for >= 10.
 
         val  = lls_train_ori['tvd']['original'] - lls_train_ori['-logl']['original']
         val /= lls_train_ori['tvd']['original']
-        # ^ We observe val == 0.05306327522607523; we test for  0 <= val <= 0.1.
+        # ^ We observe val == 0.028266922986669028; we test for  0 <= val <= 0.05.
         self.assertGreaterEqual(val, 0.0)
-        self.assertLessEqual(val, 0.1)
+        self.assertLessEqual(val, 0.05)
 
         if generate_report:
             with tempfile.TemporaryDirectory() as tmpdirname:
                 report = construct_standard_report(
                     {'eval-original'  : results_ori, 'eval-corrupted' : results_cor},
-                    advanced_options={'skip_sections': ('colorbox',)},
+                    advanced_options={'skip_sections':
+                        ('colorbox', 'input', 'meta', 'help', 'variantraw', 'varianterrorgen')
+                    },
                     title="Total variation distance (TVD) GST", verbosity=0
                 )
                 report.write_html(tmpdirname, auto_open=False, verbosity=0)

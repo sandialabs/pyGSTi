@@ -1,5 +1,6 @@
 
 
+from tempfile import TemporaryDirectory
 from pygsti.modelpacks import smq1Q_XYI
 from pygsti.tools.leakage import leaky_qubit_model_from_pspec, construct_leakage_report
 from pygsti.data import simulate_data
@@ -32,8 +33,13 @@ class TestLeakageGSTPipeline(unittest.TestCase):
     def test_pipeline_1Q_XYI(self):
         # This is adapted from the Leakage-automagic ipython notebook.
         mp = smq1Q_XYI
-        ed = mp.create_gst_experiment_design(max_max_length=8)
+        ed = mp.create_gst_experiment_design(max_max_length=4)
         # ^ The max length is small so we don't have to wait as long for the GST fit.
+        #
+        #       GST at L=2 has 168 data params and 161 effective model params;
+        #       this is barely outside the overparameterized regime. GST at L=4
+        #       (which we use here) has 285 data params and 160 model params.
+        #
         tm3 = leaky_qubit_model_from_pspec(mp.processor_spec())
         # ^ Target model.
         dgm3, _ = with_leaky_gate(tm3, ('Gxpi2', 0), strength=0.125)
@@ -48,14 +54,22 @@ class TestLeakageGSTPipeline(unittest.TestCase):
         #   to be appropriate when the number of shots/circuit is extremely large.
         ds = simulate_data(dgm3, ed.all_circuits_needing_data, num_samples=num_samples, seed=1997)
         gst = StandardGST(
-            modes=('CPTPLND',), target_model=tm3, verbosity=2,
+            modes=('CPTPLND',), target_model=tm3, verbosity=4,
             badfit_options={'actions': ['wildcard1d'], 'threshold': 0.0}
         )
         pd = ProtocolData(ed, ds)
         res = gst.run(pd)
-        _, updated_res = construct_leakage_report(res, title='easy leakage analysis!')
-        # ^ we do that as a smoke test for construct_leakage_report and to get our hands
-        #   on the results updated with leakage-aware gauge optimization.
+        kwargs_stdreport = {
+            'advanced_options' : {
+                'show_unmodeled_error' : True,
+                'skip_sections'        : ['colorbox', 'input', 'meta', 'help']
+            },
+        }
+        report, updated_res = construct_leakage_report(res, title='easy leakage analysis!', kwargs_stdreport=kwargs_stdreport)
+        # ^ updated_res contains the leakage-aware gauge optimization model.
+        with TemporaryDirectory() as dirname:
+            report.write_html(dirname)
+            # ^ That update makes sure the report generates without error.
         est = updated_res.estimates['CPTPLND']
 
         """
@@ -66,25 +80,24 @@ class TestLeakageGSTPipeline(unittest.TestCase):
 
         Leakage-aware guage optimization.
 
-            # TODO: figure out why unmodeled error doesn't show up in the report anymore.
-
             | Gate    | ent. infidelity | 1/2 trace dist | 1/2 diamond dist | Max TOP  | Unmodeled error |
             |---------|-----------------|----------------|------------------|----------|-----------------|
-            | []      | 0.000003        | 0.001533       | 0.002159         | 0.001986 | 0.000005        |
-            | Gxpi2:0 | 0.00094         | 0.030536       | 0.040153         | 0.031146 | 0.001579        |
-            | Gypi2:0 | 0.00038         | 0.019496       | 0.025513         | 0.017248 | 0.000542        |
+            | []      | 0.000009        | 0.002639   	 | 0.003724	        | 0.000014 | 0.00007         |
+            | Gxpi2:0 | 0.000965        | 0.030946       | 0.040751	        | 0.001629 | 0.000764        |
+            | Gypi2:0 | 0.000375        | 0.019367       | 0.025308         | 0.000531 | 0.000475        |
+
         
         Standard gauge optimization
 
             | Gate    | ent. infidelity | 1/2 trace dist | 1/2 diamond dist | Max TOP  |
             |---------|-----------------|----------------|------------------|----------|
-            | []      | 0.000006        | 0.002033       | 0.002866         | 0.002749 |
-            | Gxpi2:0 | 0.00061         | 0.024568       | 0.032364         | 0.024514 |
-            | Gypi2:0 | 0.000602        | 0.024526       | 0.033052         | 0.023098 |
+            | []      | 0.000016        | 0.003644       | 0.005146         | 0.000026 |
+            | Gxpi2:0 | 0.000620        | 0.024758       | 0.032616         | 0.001000 |
+            | Gypi2:0 | 0.000611        | 0.024714       | 0.033323         | 0.001001 |
 
         We'll run tests with subspace entanglement infidelity.
 
-            * For LAGO, infidelity of Gxpi2 is 2.47x larger than that of Gypi2;
+            * For LAGO, infidelity of Gxpi2 is 2.57x larger than that of Gypi2;
               we'll test for a 2x difference.
             
             * For standard gauge optimization, Gxpi2 and Gypi2 have almost identical infidelities;
