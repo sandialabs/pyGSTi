@@ -1002,7 +1002,7 @@ def _compile_symplectic_using_ag_algorithm(s, pspec: Optional[_QubitProcessorSpe
 
 
 def _compile_symplectic_using_riag_algoritm(s: _np.ndarray, pspec: Optional[_QubitProcessorSpec], paulieq_compilation: Optional[_CompilationRules], qubit_labels=None, iterations: int=20,
-                                            cnotalg='COiCAGE', cargs=None,
+                                            cnotalg: CNOT_ALG_CHOICE='COiCAGE', cargs=None,
                                             costfunction: Union[str, Callable[[_Circuit, Optional[_QubitProcessorSpec]], int]]='2QGC:10:depth:1',
                                             check=True, rand_state=None):
     """
@@ -1122,7 +1122,7 @@ def _compile_symplectic_using_riag_algoritm(s: _np.ndarray, pspec: Optional[_Qub
     return bestcircuit
 
 
-def _compile_symplectic_using_iag_algorithm(s: _np.ndarray, pspec: Optional[_QubitProcessorSpec], qubit_labels=None, cnotalg='COCAGE', cargs=None,
+def _compile_symplectic_using_iag_algorithm(s: _np.ndarray, pspec: Optional[_QubitProcessorSpec], qubit_labels=None, cnotalg: CNOT_ALG_CHOICE='COCAGE', cargs=None,
                                             check=True, rand_state=None):
     """
     Creates a :class:`Circuit` that implements a Clifford gate using the IAG algorithm.
@@ -1271,7 +1271,7 @@ def _compile_symplectic_using_iag_algorithm(s: _np.ndarray, pspec: Optional[_Qub
 
 
 def compile_cnot_circuit(s: _np.ndarray, pspec: _QubitProcessorSpec, compilation: _CompilationRules, qubit_labels=None,
-                         algorithm: Literal['BGE', 'OCAGE', 'OiCAGE', 'ROCAGE', 'COCAGE', 'COiCAGE']='COiCAGE',
+                         algorithm: CNOT_ALG_CHOICE='COiCAGE',
                          compile_to_native=False, check: Optional[bool]=True, aargs=None, rand_state=None):
     """
     A CNOT circuit compiler.
@@ -1436,7 +1436,7 @@ def compile_cnot_circuit(s: _np.ndarray, pspec: _QubitProcessorSpec, compilation
     return circuit
 
 
-def _compile_cnot_circuit_using_bge_algorithm(s: _np.ndarray, pspec, qubit_labels=None, compile_to_native=False, check=True):
+def _compile_cnot_circuit_using_bge_algorithm(s: _np.ndarray, pspec: _QubitProcessorSpec, qubit_labels=None, compile_to_native=False, check=True):
     """
     Compile a CNOT circuit.
 
