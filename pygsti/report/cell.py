@@ -11,7 +11,9 @@ Defines the Cell class
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from typing import Optional, Any
 from pygsti.report.convert import convert_dict as _convert_dict
+from pygsti.report.reportableqty import ReportableQty as _ReportableQty
 from pygsti.report.formatters import format_dict as _format_dict
 
 
@@ -31,7 +33,7 @@ class Cell(object):
         label of the cell
     """
 
-    def __init__(self, data=None, formatter_name=None, label=None):
+    def __init__(self, data: _ReportableQty=None, formatter_name: Optional[str]=None, label: Optional[str]=None):
         '''
         Creates Cell object
 
@@ -52,10 +54,10 @@ class Cell(object):
         state_dict = self.__dict__.copy()
         return state_dict
 
-    def __setstate__(self, d):
+    def __setstate__(self, d: dict[str, Any]):
         self.__dict__.update(d)
 
-    def _render_data(self, fmt, spec):
+    def _render_data(self, fmt: str, spec: dict):
         '''
         Render self.data as a string
 
@@ -81,7 +83,7 @@ class Cell(object):
             else:
                 raise ValueError("Unformatted None in Cell")
 
-    def render(self, fmt, spec):
+    def render(self, fmt: str, spec: dict):
         """
         Render full cell as a string
 

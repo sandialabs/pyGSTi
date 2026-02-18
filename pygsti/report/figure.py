@@ -10,7 +10,8 @@ Defines the ReportTable class
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
-
+from pygsti.report.colormaps import Colormap as _Colormap
+from typing import Optional
 
 class ReportFigure(object):
     """
@@ -35,7 +36,7 @@ class ReportFigure(object):
         Additional meta-data relevant to this figure
     """
 
-    def __init__(self, plotlyfig, colormap=None, python_value=None, **kwargs):
+    def __init__(self, plotlyfig, colormap: Optional[_Colormap]=None, python_value: Optional[object]=None, **kwargs):
         '''
         Create a table object
 

@@ -10,8 +10,10 @@ The ReportableQty class
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
 from copy import deepcopy as _deepcopy
 
+from typing import Union
 import numpy as _np
 
 from pygsti.baseobjs.label import Label as _Label
@@ -86,7 +88,7 @@ class ReportableQty(object):
         Returns the size of this ReportableQty's value.
     """
 
-    def __init__(self, value, errbar=None, non_markovian_ebs=False):
+    def __init__(self, value: object, errbar=None, non_markovian_ebs=False):
         """
         Initialize a new ReportableQty object, which
         is essentially a container for a value and error bars.
@@ -192,7 +194,7 @@ class ReportableQty(object):
         else:
             return ReportableQty(_np.imag(self.value))
 
-    def absdiff(self, constant_value, separate_re_im=False):
+    def absdiff(self, constant_value: Union[float, _np.ndarray], separate_re_im: bool=False):
         """
         Create a ReportableQty that is the difference between `constant_value` and this one.
 
@@ -233,7 +235,7 @@ class ReportableQty(object):
             else:
                 return ReportableQty(v)
 
-    def infidelity_diff(self, constant_value):
+    def infidelity_diff(self, constant_value: Union[float, _np.ndarray]):
         """
         Creates a ReportableQty that is the difference between `constant_value` and this one.
 
@@ -262,7 +264,7 @@ class ReportableQty(object):
         else:
             return ReportableQty(v)
 
-    def mod(self, x):
+    def mod(self, x: int):
         """
         Creates a ReportableQty that holds `this_qty mod x`.
 

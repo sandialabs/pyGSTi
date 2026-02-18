@@ -12,8 +12,11 @@ Colormap and derived class definitions
 
 import numpy as _np
 from scipy.stats import chi2 as _chi2
+from typing import Optional, Union, Literal
+
 
 from pygsti.baseobjs.smartcache import smart_cached
+PRIMARY_and_PRINTING_PRIMARY_COLORS = Literal['red', 'blue', 'green', 'cyan', 'yellow', 'purple']
 
 
 @smart_cached
@@ -36,7 +39,7 @@ def _vnorm(x, vmin, vmax):
 
 
 @smart_cached
-def to_rgb_array(color_str):
+def to_rgb_array(color_str: str) -> _np.ndarray[tuple[int], float]:
     """
     Convert a color string, such as `"rgb(0,255,128)"` or `"#00FF88"` to a numpy array of length 3.
 
@@ -67,7 +70,7 @@ def to_rgb_array(color_str):
     return _np.array(rgb)
 
 
-def interpolate_plotly_colorscale(plotly_colorscale, normalized_value):
+def interpolate_plotly_colorscale(plotly_colorscale: list[tuple[float, str]], normalized_value: float):
     """
     Evaluates plotly colorscale at a particular value.
 
@@ -139,7 +142,8 @@ class Colormap(object):
         in [0,1]) that lie outside the [0,1] range of `rgb_colors`.
     """
 
-    def __init__(self, rgb_colors, hmin, hmax, invalid_color=None):
+    def __init__(self, rgb_colors: list[tuple[float, tuple[float, float, float]]], hmin: float,
+                 hmax: float,invalid_color: Optional[tuple[float, float, float]]=None):
         """
         Create a new Colormap.
 
@@ -173,7 +177,7 @@ class Colormap(object):
         # Perceived brightness calculation from http://alienryderflex.com/hsp.html
         return _np.sqrt(0.299 * r**2 + 0.587 * g**2 + 0.114 * b**2)
 
-    def normalize(self, value):
+    def normalize(self, value: Union[float, _np.ndarray]):
         """
         Normalize value as it would be prior to linearly interpolating onto the [0,1] range of the color map.
 
@@ -194,7 +198,7 @@ class Colormap(object):
         # between a heatmap's zmin and zmax to [0,1].
         return value
     
-    def normalize_interpolate(self, value):
+    def normalize_interpolate(self, value: Union[float, _np.ndarray]):
         """
         Normalize value to between zero and one as you would for use with the 
         `interpolate_color` method.
@@ -211,7 +215,7 @@ class Colormap(object):
         raise NotImplementedError('This should be defined by children.')
 
 
-    def besttxtcolor(self, value):
+    def besttxtcolor(self, value: float) -> Literal['black', 'white']:
         """
         Return the better text color, "black" or "white", given an un-normalized `value`.
 
@@ -238,7 +242,7 @@ class Colormap(object):
         P = self._brightness(R, G, B)
         return "black" if 0.5 <= P else "white"
 
-    def create_plotly_colorscale(self):
+    def create_plotly_colorscale(self) -> list[tuple[float, str]]:
         """
         Construct and return the plotly colorscale of this color map.
 
@@ -252,7 +256,7 @@ class Colormap(object):
                              for z, (r, g, b) in self.rgb_colors]
         return plotly_colorscale
 
-    def interpolate_color(self, value):
+    def interpolate_color(self, value: float) -> str:
         """
         Retrieves the color at a particular colormap value.
 
@@ -338,7 +342,8 @@ class LinlogColormap(Colormap):
         The color to use for the non-grayscale part of the color scale.
     """
 
-    def __init__(self, vmin, vmax, num_boxes, pcntle, dof_per_box, color="red"):
+    def __init__(self, vmin: float, vmax: float, num_boxes: int, pcntle: float,
+                 dof_per_box: int, color: PRIMARY_and_PRINTING_PRIMARY_COLORS="red"):
         """
         Create a new LinlogColormap.
 
@@ -415,7 +420,7 @@ class LinlogColormap(Colormap):
              [0.5, c], [1.0, mx]], hmin, hmax, invalid_color)
 
     @classmethod
-    def set_manual_transition_point(cls, vmin, vmax, trans, color="red"):
+    def set_manual_transition_point(cls, vmin: float, vmax: float, trans: float, color: PRIMARY_and_PRINTING_PRIMARY_COLORS="red"):
         """
         Create a new LinlogColormap with a manually-specified transition point.
 
@@ -560,7 +565,7 @@ class DivergingColormap(Colormap):
         What colors to use.
     """
 
-    def __init__(self, vmin, vmax, midpoint=0.0, color="RdBu"):
+    def __init__(self, vmin: float, vmax: float, midpoint: Optional[float]=0.0, color: Literal['RdBu']="RdBu"):
         """
         Create a new DivergingColormap
 
@@ -626,7 +631,7 @@ class SequentialColormap(Colormap):
     A sequential color map
     """
 
-    def __init__(self, vmin, vmax, color="whiteToBlack"):
+    def __init__(self, vmin: float, vmax: float, color: Literal['whiteToBlack', 'blackToWhite', 'whiteToBlue', 'whiteToRed']="whiteToBlack"):
         """
         Create a new SequentialColormap
 
@@ -708,7 +713,7 @@ class PiecewiseLinearColormap(Colormap):
         elements in this list.
     """
 
-    def __init__(self, rgb_colors):
+    def __init__(self, rgb_colors: list[tuple[float, tuple[float, float, float]]]):
         """
         Create a new PiecewiseLinearColormap
 
