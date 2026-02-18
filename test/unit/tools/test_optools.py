@@ -12,7 +12,7 @@ import pygsti.tools.basistools as bt
 import pygsti.tools.lindbladtools as lt
 import pygsti.tools.optools as ot
 import pygsti.tools.sdptools as sdps
-import pygsti.tools.leakage as pgleak
+import pygsti.leakage as pgleak
 from pygsti.modelmembers.operations.lindbladcoefficients import LindbladCoefficientBlock
 from pygsti.modelpacks.legacy import std2Q_XXYYII
 from ..util import BaseCase, needs_cvxpy

@@ -1,7 +1,7 @@
 
 
 from pygsti.modelpacks import smq1Q_XYI
-from pygsti.tools.leakage import leaky_qubit_model_from_pspec, construct_leakage_report
+from pygsti.leakage import leaky_qubit_model_from_pspec, construct_leakage_report
 from pygsti.data import simulate_data
 from pygsti.protocols import StandardGST, ProtocolData
 import unittest
@@ -86,7 +86,7 @@ class TestLeakageGSTPipeline(unittest.TestCase):
             * For standard gauge optimization, Gxpi2 and Gypi2 have almost identical infidelities;
               we'll test for a factor 1.1x there.
         """
-        from pygsti.tools.leakage import subspace_entanglement_fidelity as fidelity
+        from pygsti.leakage import subspace_entanglement_fidelity as fidelity
         
         mdls = {lbl: est.models[lbl] for lbl in {'target', 'LAGO', 'stdgaugeopt'}}
         assert mdls['target'].basis.name == mdls['stdgaugeopt'].basis.name == mdls['LAGO'].basis.name == 'l2p1'

@@ -15,6 +15,7 @@ from . import baseobjs
 from . import algorithms as alg
 from . import circuits
 from . import data
+from . import leakage
 from . import models
 from . import modelmembers as mm
 from . import forwardsims

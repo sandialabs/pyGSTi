@@ -2499,7 +2499,7 @@ def _compute_1d_reference_values(target_model: _ExplicitOpModel, gopped_models: 
         if n_leak == 0:
             P = I
         elif n_leak > 0:
-            from pygsti.tools.leakage import computational_superkets
+            from pygsti.leakage.core import computational_superkets
             U = computational_superkets(basis)
             P = U @ U.T.conj()
             P = P.real

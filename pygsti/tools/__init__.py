@@ -20,7 +20,30 @@ from .hypothesis import *
 from .jamiolkowski import *
 from .legacytools import *
 from .likelihoodfns import *
-from .leakage import *
+# Leakage functions are now in pygsti.leakage; re-exported here for backward compatibility.
+from pygsti.leakage import (
+    computational_effect,
+    computational_superkets,
+    tensorized_teststate_density,
+    apply_tensorized_to_teststate,
+    choi_state,
+    subspace_entanglement_fidelity,
+    subspace_jtracedist,
+    leading_dxd_submatrix_basis_vectors,
+    computational_projector,
+    superop_subspace_projector,
+    subspace_superop_fro_dist,
+    subspace_diamonddist,
+    pop_transport_profile,
+    gate_leakage_profile,
+    gate_seepage_profile,
+    leaky_qubit_model_from_pspec,
+    promote_bb_to_bt,
+    lagoified_gopparams_dicts,
+    std_lago_gopsuite,
+    add_lago_models,
+    construct_leakage_report,
+)
 from .lindbladtools import *
 from .listtools import *
 from .matrixmod2 import *

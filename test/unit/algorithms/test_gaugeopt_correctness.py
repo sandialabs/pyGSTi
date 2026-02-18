@@ -300,7 +300,7 @@ class FindPerfectGauge_DirectSumGaugeGroupTester(BaseCase):
 
     
     def _prep(self, seed):
-        from pygsti.tools.leakage import leaky_qubit_model_from_pspec
+        from pygsti.leakage import leaky_qubit_model_from_pspec
         tm2 = smq1Q_XYI.target_model()
         self.target = leaky_qubit_model_from_pspec(tm2.create_processor_spec())
         self.model = self.target.copy()

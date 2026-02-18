@@ -173,7 +173,7 @@ def diamond_distance_projection_model(superop: np.ndarray, basis: Basis, leakfre
     diamondnorm_arg = superop - proj_superop
     if (leakfree or seepfree or subspace_diamond):
         assert basis.implies_leakage_modeling
-        from pygsti.tools.leakage import computational_superkets
+        from pygsti.leakage.core import computational_superkets
         U = computational_superkets(basis)
         P = U @ U.T.conj()
         I = np.eye(dim_mixed)

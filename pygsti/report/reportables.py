@@ -1065,7 +1065,7 @@ def subspace_diamonddist(op_a, op_b, basis):
     dim_mixed = op_a.shape[0]
     dim_pure  = int(dim_mixed**0.5)
     dim_pure_compsub = dim_pure - 1
-    from pygsti.tools.leakage import leading_dxd_submatrix_basis_vectors
+    from pygsti.leakage import leading_dxd_submatrix_basis_vectors
     U = leading_dxd_submatrix_basis_vectors(dim_pure_compsub, dim_pure, basis)
     P = U @ U.T.conj()
     assert _np.linalg.norm(P - P.real) < 1e-10
