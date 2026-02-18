@@ -336,7 +336,6 @@ class Basis(_NicelySerializable):
                 self._implies_leakage = _np.linalg.matrix_rank(I) < I.shape[0]
         return self._implies_leakage  # type: ignore
 
-
     @property
     def first_element_is_identity(self):
         """
