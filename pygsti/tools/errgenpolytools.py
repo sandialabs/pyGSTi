@@ -331,7 +331,7 @@ def stabilizer_probability_correction_symbolic_polynomial(errorgen_dict, errorge
 
     Returns
     -------
-    correction : Polynomia
+    correction : Polynomial
         Polynomial corresponding to the correction to the output probability for the
         desired bitstring induced by the error generator (to specified order).
     """    
@@ -341,18 +341,7 @@ def stabilizer_probability_correction_symbolic_polynomial(errorgen_dict, errorge
     scale = 1/2**(num_random) 
     
     taylor_expansion = error_generator_taylor_expansion_symbolic_polynomial(errorgen_dict, errorgen_to_var_map, order)
-    
-    #accumulate the terms accross orders (with short circuit logic for order 1 to save time):
-    if order == 1:
-        combined_taylor_dict = taylor_expansion[0]
-    else:
-        # Accumulate all of the dictionaries in taylor expansion into a single one, summing overlapping terms.
-        combined_taylor_dict_keys = {key: None for order_dict in taylor_expansion for key in order_dict}
-        max_num_vars = len(errorgen_to_var_map)
-        combined_taylor_dict = {key: _Polynomial({}, max_num_vars=max_num_vars) for key in combined_taylor_dict_keys}
-        for order_dict in taylor_expansion:
-            for errorgen, coeff_poly in order_dict.items():
-                combined_taylor_dict[errorgen] += coeff_poly
+    combined_taylor_dict = _combined_taylor_expansion_polynomial(taylor_expansion, errorgen_to_var_map)
     complete_taylor_errgen_labels = list(combined_taylor_dict.keys())
     
     #can now do the correction computation in a single-shot.
@@ -368,3 +357,89 @@ def stabilizer_probability_correction_symbolic_polynomial(errorgen_dict, errorge
     correction_poly = _Polynomial.sum(nonzero_alpha_coeffs)
     
     return correction_poly
+
+def stabilizer_pauli_expectation_correction_symbolic_polynomial(errorgen_dict, errorgen_to_var_map, tableau, pauli, order = 1):
+    """
+    Compute the kth-order correction to the expectation value of the specified pauli.
+    
+    Parameters
+    ----------
+    errorgen_dict : dict
+        Dictionary whose keys are `LocalStimErrorgenLabel` and whose values are corresponding
+        rates.
+        
+    errorgen_to_var_map : dict
+        A dictionary whose keys are tuples of LocalStimErrorgenLabels and integer circuit layer indices
+        and whose value is an integer corresponding to the corresponding variable index to use in constructed
+        Polynomials.
+    
+    tableau : stim.Tableau
+        Stim tableau corresponding to a particular stabilizer state being measured.
+        
+    pauli : stim.PauliString
+        Pauli operator to compute expectation value correction for.
+
+    order : int, optional (default 1)
+        Order of the correction (i.e. order of the taylor series expansion for
+        the exponentiated error generator) to compute.
+    
+    Returns
+    -------
+    correction : Polynomial
+        Polynomial corresponding to the correction to the output Pauli expectation value for the
+        desired Pauli induced by the error generator (to specified order).
+    """
+    #accumulate the terms across orders (with short circuit logic for order 1 to save time):
+    taylor_expansion = error_generator_taylor_expansion_symbolic_polynomial(errorgen_dict, errorgen_to_var_map, order)
+    combined_taylor_dict = _combined_taylor_expansion_polynomial(taylor_expansion, errorgen_to_var_map)
+    complete_taylor_errgen_labels = list(combined_taylor_dict.keys())
+
+    #can now do the correction computation in a single-shot.
+    alphas = _np.ravel(_eprop.bulk_alpha_pauli(complete_taylor_errgen_labels, tableau, [pauli]))
+    #use the nonzero alphas to filter 
+    nonzero_alpha_idxs = _np.nonzero(alphas)[0]
+    nonzero_alpha = alphas[nonzero_alpha_idxs]
+    nonzero_alpha_labels = [complete_taylor_errgen_labels[idx] for idx in nonzero_alpha_idxs]
+
+    #gather the coefficients corresponding to each of the labels with nonzero alpha and sum this into a
+    #single polynomial. Take care of the scale factor from the number of random variables at the same time.
+    nonzero_alpha_coeffs = [combined_taylor_dict[lbl].scalar_mult(alpha) for lbl, alpha in zip(nonzero_alpha_labels, nonzero_alpha)]
+    correction_poly = _Polynomial.sum(nonzero_alpha_coeffs)
+    
+    return correction_poly    
+
+#helper function for forming the combined taylor-expansion polynomials.
+def _combined_taylor_expansion_polynomial(taylor_expansion, errorgen_to_var_map):
+    """
+    Helper function for combining the polynomial dictionaries for each order of the taylor
+    expansion which combines terms across orders.
+
+    Parameters
+    ----------
+    taylor_expansion : list of dicts
+        Dictionaries, one per order, with keys that are LocalStimErrorgenLabels and values that are 
+        Polynomials corresponding to the rate.
+
+    errorgen_to_var_map : dict
+        A dictionary whose keys are tuples of LocalStimErrorgenLabels and integer circuit layer indices
+        and whose value is an integer corresponding to the corresponding variable index to use in constructed
+        Polynomials.
+
+    Returns
+    -------
+    combined_taylor_dict
+        Dictionary with keys that are LocalStimErrorgenLabels and values that are Polynomials
+        corresponding to the combined rate across Taylor expansion orders.
+    """
+    #accumulate the terms across orders (with short circuit logic for order 1 to save time):
+    if len(taylor_expansion) == 1:
+        combined_taylor_dict = taylor_expansion[0]
+    else:
+        # Accumulate all of the dictionaries in taylor expansion into a single one, summing overlapping terms.
+        combined_taylor_dict_keys = {key: None for order_dict in taylor_expansion for key in order_dict}
+        max_num_vars = len(errorgen_to_var_map)
+        combined_taylor_dict = {key: _Polynomial({}, max_num_vars=max_num_vars) for key in combined_taylor_dict_keys}
+        for order_dict in taylor_expansion:
+            for errorgen, coeff_poly in order_dict.items():
+                combined_taylor_dict[errorgen] += coeff_poly
+    return combined_taylor_dict
