@@ -2769,7 +2769,7 @@ def instrument_infidelity(a, b, mx_basis):
     -------
     float
     """
-    sqrt_component_fidelities = [_np.sqrt(entanglement_fidelity(a[l], b[l], mx_basis))
+    sqrt_component_fidelities = [_np.sqrt(_tools.entanglement_fidelity(a[l], b[l], mx_basis))
                                  for l in a.keys()]
     return 1 - sum(sqrt_component_fidelities)**2
 
