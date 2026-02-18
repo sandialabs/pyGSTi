@@ -93,7 +93,7 @@ def _eformat(f, prec):
         except:
             return str(s)[0:3]
 
-    elif type(prec) == int:
+    elif isinstance(prec, int):
         if prec >= 0:
             return "%.*f" % (prec, f)
         else:

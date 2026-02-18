@@ -656,7 +656,7 @@ def special_keyplot(pygsti_fig, save_to, fontsize):
     def _val_filter(vals):  # filter to latex-ify circuits.  Later add filter as a possible parameter
         formatted_vals = []
         for val in vals:
-            if type(val) in (tuple, _Circuit) and all([type(el) == str for el in val]):
+            if isinstance(val, (tuple, _Circuit)) and all([isinstance(el, str) for el in val]):
                 if len(val) == 0:
                     formatted_vals.append(r"$\{\}$")
                 else:
