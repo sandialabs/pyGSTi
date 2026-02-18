@@ -67,7 +67,7 @@ class ForwardSimulatorSuitabilityWarning(UserWarning):
     pass
 
 
-class HashingEditableCircuitWarning(UserWarning):
+class ImplicitlyDoneEditingCircuitWarning(UserWarning):
     """
     Inform the user that a Circuit.__hash__ has been called
     on a Circuit with Circuit.editable == True. This is often

@@ -255,7 +255,6 @@ class CircuitTester(BaseCase):
         self.assertEqual(c.compilable_layer_indices, (1,))
         self.assertArraysEqual(c.compilable_by_layer, np.array([False,True,False]))
         
-
         expected_tup = (Label(('Gi', 'Q0')), Label(('Gx', 'Q8')), Label(('Gy', 'Q1')), '@', 'Q0', 'Q1', 'Q8', 'Q12', '__CMPLBL__', 1)
         self.assertEqual(c.tup, expected_tup)
 
@@ -470,6 +469,20 @@ class CircuitMethodTester(BaseCase):
         oneQrelations = symplectic.one_q_clifford_symplectic_group_relations()
         c.compress_depth_inplace(one_q_gate_relations=oneQrelations)
         self.assertEqual(c.depth, 3)
+
+    def test_logically_equivalent_circuits_are_equal(self):
+        circ1 = circuit.Circuit([[("Gxpi2", 0), ("Gypi2", 1)]])
+        circ2 = circuit.Circuit([[("Gypi2", 1), ("Gxpi2", 0)]], editable=True)
+
+        self.assertTrue(circ1 == circ2)
+        self.assertTrue(hash(circ1) == hash(circ2))
+
+        circ3 = circuit.Circuit([("Gxpi2", 0), ("Gypi2", 1)])  # initialize circ1 as a new circuit with 2 layers.
+        circ4 = circuit.Circuit([("Gypi2", 1), ("Gxpi2", 0)])
+
+        self.assertTrue(circ3 != circ4)
+        # (X, I) (I, Y) does not have the same effect as (I, Y) (X, I) with not perfect idles.
+        return
 
     def test_convert_to_quil(self):
         # Quil string with setup, each layer, and block_between_layers=True (current default)

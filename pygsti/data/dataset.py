@@ -30,7 +30,7 @@ from pygsti.baseobjs.label import Label as _Label
 from pygsti.tools import NamedDict as _NamedDict
 from pygsti.tools import listtools as _lt
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
-from pygsti.tools.exceptions import HashingEditableCircuitWarning as _HashingEditableCircuitWarning
+from pygsti.tools.exceptions import ImplicitlyDoneEditingCircuitWarning as _ImplicitlyDoneEditingCircuitWarning
 
 # import scipy.special as _sps
 # import scipy.fftpack as _fft
@@ -1415,7 +1415,7 @@ class DataSet(_MongoSerializable):
                 tagged_circuit = circuit.copy(editable=True)
                 with _warnings.catch_warnings():
                     i = 1; tagged_circuit.occurrence = i
-                    _warnings.simplefilter('ignore', _HashingEditableCircuitWarning)
+                    _warnings.simplefilter('ignore', _ImplicitlyDoneEditingCircuitWarning)
                     # ^ We need that to suppress the warning in triggered from
                     #   evaluation of `tagged_circuit in self.cirIndex`.
                     while tagged_circuit in self.cirIndex:
