@@ -584,8 +584,9 @@ def merge_jinja_template(qtys, output_filename, template_dir=None, template_name
 
     # Render main page template to output path
     template = env.get_template(template_name)
-    with open(str(output_filename), 'w') as outfile:
-        outfile.write(template.render(render_params))
+    with open(str(output_filename), 'w', encoding='utf-8') as outfile:
+        contents = template.render(render_params)
+        outfile.write(contents)
 
     if auto_open:
         url = 'file://' + _os.path.abspath(str(output_filename))
