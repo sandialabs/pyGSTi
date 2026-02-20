@@ -52,7 +52,8 @@ from pygsti.modelmembers import states as _states, povms as _povms
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
 from pygsti.circuits import Circuit
 from pygsti.forwardsims import ForwardSimulator
-
+from pygsti.optimize.simplerlm import SimplerLMOptimizer as _SimplerLMOptimizer
+from pygsti.optimize.customlm import CustomLMOptimizer as _CustomLMOptimizer
 
 #For results object:
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]
@@ -1397,38 +1398,10 @@ class GateSetTomography(_proto.Protocol):
                                                       data.dataset, comm)
         if simulator is not None:
             mdl_start.sim = simulator
-        
         if optimizers is None:
             optimizers = [self.optimizer]*len(circuit_lists)
-        
         else:
-            if isinstance(optimizers, (_opt.Optimizer, dict)):    
-                optimizers = [optimizers]*len(circuit_lists)
-            if isinstance(optimizers, list):
-                if len(optimizers) == 1:
-                    optimizers = optimizers*len(circuit_lists)
-            else:
-                if not isinstance(optimizers, (list, dict)):
-                    raise ValueError(f'Invalid argument for optimizers of type {type(optimizers)}, supported types are list, Optimizer')
-                temp_optimizers = []
-                default_first_fditer = 1 if mdl_start and isinstance(mdl_start.sim, _MatrixFSim) else 0
-                for optimizer in optimizers:
-                    
-                    if isinstance(optimizer, _opt.Optimizer):
-                        temp_optimizer = _copy.deepcopy(optimizer)  # don't mess with caller's optimizer
-                        if hasattr(optimizer,'first_fditer') and optimizer.first_fditer is None:
-                            # special behavior: can set optimizer's first_fditer to `None` to mean "fill with default"
-                            temp_optimizer.first_fditer = default_first_fditer
-
-                    else:
-                        if optimizer is None:
-                            temp_optimizer = {}
-                        else:
-                            temp_optimizer = _copy.deepcopy(optimizer)  # don't mess with caller's optimizer
-                        if 'first_fditer' not in optimizer:  # then add default first_fditer value
-                            temp_optimizer['first_fditer'] = default_first_fditer
-                        temp_optimizers.append(_opt.SimplerLMOptimizer.cast(temp_optimizer))
-                optimizers = temp_optimizers
+            optimizers = _validate_and_extend_optimizers(self.optimizer, len(circuit_lists), mdl_start)
 
         if disable_checkpointing:
             seed_model = mdl_start.copy()
@@ -2636,7 +2609,62 @@ def _compute_robust_scaling(scale_typ, objfn_cache, mdc_objfn):
 
     return circuit_weights  # contains *global* circuits as keys
 
+def _validate_and_extend_optimizers(optimizers: Union[_CustomLMOptimizer, _SimplerLMOptimizer,dict, list[_CustomLMOptimizer],list[_SimplerLMOptimizer], list[dict]], size, model: _Model) -> Union[list[_CustomLMOptimizer], list[_SimplerLMOptimizer]]:
+    """
+    GST allows for the user to provide a single optimizer,
+    or a list of optimizers to be used in every different
+    GST iteration. This function validates the optimizer
+    provided is an acceptable format, and if it is a single
+    optimizer, it generates a list of "size" copies of it.
 
+    Parameters
+    ----------
+    optimizers: Union[_Optimizer, dict, list[_Optimizer], list[dict]]
+        Either a single optimizer or the settings to create an optimizer to be used in all GST iterations
+        or a list of optimizers or settings to create optimizers to be used in each different
+        GST iteration
+
+    size: int
+        The number of GST iterations. This is equal to the length of circuit_lists to be considered
+        for GST.
+
+    model: _Model
+        The starting model used within a GST run
+
+    Returns
+    -------
+    optimizers: list[_Optimizer]
+    """
+    from pygsti.forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
+
+    if isinstance(optimizers, (_opt.Optimizer, dict)):    
+        optimizers = [optimizers]*size
+    if isinstance(optimizers, list):
+        if len(optimizers) == 1:
+            optimizers = optimizers*size
+    else:
+        if not isinstance(optimizers, (list, dict)):
+            raise ValueError(f'Invalid argument for optimizers of type {type(optimizers)}, supported types are list, Optimizer')
+        temp_optimizers = []
+        default_first_fditer = 1 if model and isinstance(model.sim, _MatrixFSim) else 0
+        for optimizer in optimizers:
+            if isinstance(optimizer, _SimplerLMOptimizer) or isinstance(optimizer, _CustomLMOptimizer):
+                temp_optimizer = _copy.deepcopy(optimizer)  # don't mess with caller's optimizer
+                if hasattr(optimizer,'first_fditer') and optimizer.first_fditer is None:
+                    # special behavior: can set optimizer's first_fditer to `None` to mean "fill with default"
+                    temp_optimizer.first_fditer = default_first_fditer
+
+            else:
+                if optimizer is None:
+                    temp_optimizer = {}
+                else:
+                    temp_optimizer = _copy.deepcopy(optimizer)  # don't mess with caller's optimizer
+                if 'first_fditer' not in optimizer:  # then add default first_fditer value
+                    temp_optimizer['first_fditer'] = default_first_fditer
+                temp_optimizers.append(_opt.SimplerLMOptimizer.cast(temp_optimizer))
+        optimizers = temp_optimizers
+    return optimizers
+    
 def _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options, verbosity):
     """
     Create a wildcard budget for a model estimate.

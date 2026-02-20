@@ -34,6 +34,7 @@ from pygsti.modelmembers import states as _state
 from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.optimize.simplerlm import Optimizer as _Optimizer, SimplerLMOptimizer as _SimplerLMOptimizer
+from pygsti.optimizer.customlm import CustomLMOptimizer as _CustomLMOptimizer
 from pygsti import forwardsims as _fwdsims
 
 _dummy_profiler = _DummyProfiler()
@@ -785,8 +786,48 @@ def run_iterative_gst(dataset, start_model, circuit_lists,
         
     return models, optimums, final_objfn, mdc_store_list
 
+def validate_and_extend_optimizer(optimizer: Union[_CustomLMOptimizer, _SimplerLMOptimizer, dict, list[_CustomLMOptimizer],list[_SimplerLMOptimizer], list[dict]], size:int) -> Union[list[_CustomLMOptimizer], list[_SimplerLMOptimizer]]:
+    """
+    GST allows for the user to provide a single optimizer,
+    or a list of optimizers to be used in every different
+    GST iteration. This function validates the optimizer
+    provided is an acceptable format, and if it is a single
+    optimizer, it generates a list of "size" copies of it.
+
+    Parameters
+    ----------
+    optimizer: Union[_Optimizer, dict, list[_Optimizer], list[dict]]
+        Either a single optimizer or the settings to create an optimizer to be used in all GST iterations
+        or a list of optimizers or settings to create optimizers to be used in each different
+        GST iteration
+
+    size: int
+        The number of GST iterations. This is equal to the length of circuit_lists to be considered
+        for GST.
+
+    Returns
+    -------
+    optimizers: list[_Optimizer]
+
+    """
+    if optimizer is None:
+        optimizer = _SimplerLMOptimizer.cast(None)
+    if isinstance(optimizer,list):
+        if len(optimizer) == 1:
+            optimizer = optimizer*size
+    if isinstance(optimizer, (_Optimizer, dict)):
+        optimizers = [optimizer]*size
+    
+    elif not isinstance(optimizer, list):
+        raise ValueError(f'Invalid argument for optimizers of type {type(optimizer)}, supported types are list, Optimizer, or dict.')
+    else:
+        optimizers = optimizer
+
+    assert len(optimizers) == 1 or len(optimizers) == size, f'Optimizers must be length 1 or length {size}'
+    return optimizers
+
 def iterative_gst_generator(dataset, start_model, circuit_lists,
-                      optimizer: Union[_SimplerLMOptimizer, dict, list[_SimplerLMOptimizer], list[dict]],
+                      optimizer: Union[_Optimizer, dict, list[_Optimizer], list[dict]],
                         iteration_objfn_builders, final_objfn_builders,
                       resource_alloc, starting_index=0, verbosity=0):
     """
@@ -852,20 +893,8 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
           (an "evaluated" model-dataset-circuits store).
     """
     resource_alloc = _ResourceAllocation.cast(resource_alloc)
-    if optimizer is None:
-        optimizer = _SimplerLMOptimizer.cast(None)
-    if isinstance(optimizer,list):
-        if len(optimizer) == 1:
-            optimizer = optimizer*len(circuit_lists)
-    if isinstance(optimizer, (_Optimizer, dict)):
-        optimizers = [optimizer]*len(circuit_lists)
     
-    elif not isinstance(optimizer, list):
-        raise ValueError(f'Invalid argument for optimizers of type {type(optimizer)}, supported types are list, Optimizer, or dict.')
-    else:
-        optimizers = optimizer
-
-    assert len(optimizers) == 1 or len(optimizers) == len(circuit_lists), f'Optimizers must be length 1 or length {len(circuit_lists)=}'
+    optimizers = validate_and_extend_optimizer(optimizer, len(circuit_lists))
 
     temp_optimizers = []
     for  opt in optimizers:
