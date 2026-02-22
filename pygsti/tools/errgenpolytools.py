@@ -86,8 +86,8 @@ def error_generator_to_polynomial_variable_maps_by_gate(model, errorgen_var_map,
         Circuit associated with input errorgen_var_map argument.
     
     include_spam : bool, optional (default True)
-            If True include the spam circuit layers at the beginning and 
-            end of the circuit.
+        If True include the spam circuit layers at the beginning and 
+        end of the circuit.
     
     aggregate_shared_parameter_gates : bool, optional (default False)
         If True then an attempt then gates with matching model parameter indices (gpindices)
@@ -331,6 +331,57 @@ def errorgen_gate_contributors(model, errorgen, circuit, layer_idx, include_spam
     else:
         return label_list_for_errorgen
 
+def construct_polynomial_parameter_vector_from_propagator(error_propagator, var_to_errorgen_map, circuit, include_spam=True):
+    """
+    Constructs a vector of polynomial variable parameters for use in evaluation of error generator Polynomial
+    objects corresponding to the error generator rate dictionary associated with the input ErrorGeneratorPropagator's 
+    model and the input circuit.
+    
+    Parameters
+    ----------
+    error_propagator : `ErrorGeneratorPropagator`
+        `ErrorGeneratorPropagator` object to use for the construction of the error generator
+        rates to map to Polynomial variable parameters.
+        
+    var_to_errorgen_map : dict
+        A dictionary whose keys are Polynomial variable indices and whose values are tuples (or lists of tuples) 
+        of LocalStimErrorgenLabels and integer circuit layer indices whose values corresponds these variable indices. 
+        
+    circuit: Circuit
+        Circuit associated with input errorgen_var_map argument.
+    
+    include_spam : bool, optional (default True)
+        If True include the spam circuit layers at the beginning and 
+        end of the circuit.
+        
+    Returns
+    -------
+    poly_paramvec : np.ndarray
+        A vector of polynomial parameter values to use in evaluation of Polynomial objects.
+    """
+    
+    errorgen_layers = error_propagator.construct_errorgen_layers(circuit, len(circuit.line_labels), include_spam=include_spam)
+    indexed_errorgen_layers = dict()
+    for i, layer in enumerate(errorgen_layers):
+        for errorgen, rate in layer.items():
+            indexed_errorgen_layers[(errorgen,i)] = rate 
+    
+    num_poly_vars = len(var_to_errorgen_map) 
+    poly_paramvec = _np.zeros(num_poly_vars)
+    
+    many_to_one = isinstance(next(iter(var_to_errorgen_map.values())), list)
+
+    if many_to_one:
+        for i in range(num_poly_vars):
+            poly_paramvec[i] = indexed_errorgen_layers[var_to_errorgen_map[i][0]]
+    else:
+        for i in range(num_poly_vars):
+            poly_paramvec[i] = indexed_errorgen_layers[var_to_errorgen_map[i]]
+    
+    return poly_paramvec
+
+#---------------- Error Generator Polynomial Construction -------------------#
+
 def magnus_symbolic_polynomial(errorgen_transform_maps, errorgen_to_var_map, magnus_order=1):
     """
     Function for computing the symbolic magnus approximation for the effective end-or-circuit error generator.
@@ -351,9 +402,9 @@ def magnus_symbolic_polynomial(errorgen_transform_maps, errorgen_to_var_map, mag
     
     Returns
     -------
-        combined_magnus_order_dict : dict
-            A dictionary whose keys are LocalStimErrorgenLabels and whose values are Polynomial
-            objects corresponding to the rates.
+    combined_magnus_order_dict : dict
+        A dictionary whose keys are LocalStimErrorgenLabels and whose values are Polynomial
+        objects corresponding to the rates.
     """
     assert magnus_order == 1 or magnus_order == 2, "Magnus expansions up to second order are currently supported for symbolic computations."
     
