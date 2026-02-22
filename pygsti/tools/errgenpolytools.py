@@ -21,21 +21,315 @@ except ImportError:
     warnings.warn(msg)
 
 import numpy as _np
-from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
 from itertools import chain, product
 from math import factorial
-from typing import Literal, Optional, Union, Callable, Iterable
+from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
 import pygsti.tools.errgenproptools as _eprop
+import pygsti.tools.slicetools as _slct
+from pygsti.models.model import OpModel as _OpModel
+from pygsti.models import (ExplicitOpModel as _ExplicitOpModel, ImplicitOpModel as _ImplicitOpModel, 
+                          LocalNoiseModel as _LocalNoiseModel)
+from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LEEL 
+from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GEEL
+from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE
 
+from typing import Literal, Optional, Union, Callable, Iterable
 
-def error_generator_to_polynomial_variable_maps(errorgen_transform_map):
+# ----------- Error Generator to Polynomial Variable Utilities ---------- #
+
+def error_generator_to_polynomial_variable_maps(errorgen_transform_map, return_reverse=False):
     """
-    Helper function which returns two dictionaries. One is a map from error generator label + layer index tuples to integers, and the second is the reverse map from integers to error
-    generator label + layer index tuples.
+    Helper function which returns a map from error generator label + layer index tuples to integers for use
+    as variable indices for Polynomials.
+
+    Parameters
+    ----------
+    errorgen_transform_map : dict
+        Dictionary mapping tuples of LocalStimErrorgenLabels and circuit layer indices to 
+        tuples of final error generators and phases. 
+    
+    return_reverse : bool, optional (default, False)
+        Optional flag that returns the reverse variable to errorgen label mapping.
+
+    Returns
+    -------
+        errorgen_to_var_map : dict
+            Dictionary with keys that are tuples with pairs of LocalStimErrorgenLabels and layer indices,
+            and values that are integers corresponding to a Polynomial variable index.
+
+        var_to_errorgen_map : dict
+            Returned if return_reverse == True, this is a dictionary with the keys and values of errorgen_to_var_map
+            reversed.
     """
     errorgen_to_var_map = {key:i for i,key in enumerate(errorgen_transform_map.keys())}
-    var_to_errorgen_map = {i:key for i,key in enumerate(errorgen_transform_map.keys())}
-    return errorgen_to_var_map, var_to_errorgen_map
+    if return_reverse:
+        var_to_errorgen_map = {i:key for i,key in enumerate(errorgen_transform_map.keys())}
+        return errorgen_to_var_map, var_to_errorgen_map
+    else:
+        return errorgen_to_var_map
+
+def error_generator_to_polynomial_variable_maps_by_gate(model, errorgen_var_map, circuit, include_spam=True, 
+                                                        aggregate_shared_parameter_gates=False, return_reverse=False):
+    """
+    Function which takes an existing mapping from error generator circuit layer index
+    pairs to integer variable indices and aggregates error generators that
+    can be associated with the same gate into a single polynomial parameter.
+    
+    Parameters
+    ----------
+    errorgen_to_var_map : dict
+        A dictionary whose keys are tuples of LocalStimErrorgenLabels and integer circuit layer indices
+        and whose value is an integer corresponding to the corresponding variable index to use in constructed
+        Polynomials.
+        
+    circuit : Circuit
+        Circuit associated with input errorgen_var_map argument.
+    
+    include_spam : bool, optional (default True)
+            If True include the spam circuit layers at the beginning and 
+            end of the circuit.
+    
+    aggregate_shared_parameter_gates : bool, optional (default False)
+        If True then an attempt then gates with matching model parameter indices (gpindices)
+        are treated as the same and their error generators are aggregated into a single
+        variable index.
+
+    return_reverse : bool, optional (default False)
+        If True return a map from variable indices to corresponding error generators.
+    
+    Returns
+    -------
+    errorgen_var_gate_aggregated_map : 
+    """
+    
+    if not isinstance(model, _OpModel):
+            raise ValueError('This method does not work for non-OpModel models.')
+    if isinstance(model, _ImplicitOpModel) and not isinstance(model, _LocalNoiseModel):
+        raise ValueError('This method does not work for ImplicitModels that are not LocalNoiseModels.')
+
+    if include_spam:
+        circuit = model.complete_circuit(circuit)
+    
+    new_keys = []
+    if not aggregate_shared_parameter_gates:
+        #keys of errorgen_to_var map are tuples of LSE and integer layer indices.
+        aggregated_error_generator_indices_by_gate = dict()
+        for errorgen, layer_idx in errorgen_var_map:
+            gate_contributors = errorgen_gate_contributors(model, errorgen, circuit, layer_idx)
+            if len(gate_contributors) > 1:
+                msg = f'Encountered more than 1 gate contributing to this error generator {errorgen}. ' \
+                      'Support for aggregating variables by gate when there is more than 1 contributor is not currently supported.'
+                raise RuntimeError(msg)
+            gate = gate_contributors[0]
+            if gate not in aggregated_error_generator_indices_by_gate:
+                aggregated_error_generator_indices_by_gate[gate] = dict()
+            if errorgen not in aggregated_error_generator_indices_by_gate[gate]:
+                aggregated_error_generator_indices_by_gate[gate][errorgen] = []
+            aggregated_error_generator_indices_by_gate[gate][errorgen].append(layer_idx)
+    
+        #loop through aggregated_error_generator_indices_by_gate, assign an index to each error generator equivalence class.
+        #output map will still consist of maps from error generator layer index tuples, but the output index will be this joint index.
+        errorgen_var_gate_aggregated_map = dict()
+        var_idx = 0
+        for errorgen_classes_by_gate in aggregated_error_generator_indices_by_gate.values():
+            for class_lbl, layer_indices in errorgen_classes_by_gate.items():
+                for layer_idx in layer_indices:
+                    errorgen_var_gate_aggregated_map[(class_lbl, layer_idx)] = var_idx
+                var_idx+=1
+
+    #try to aggregate variable indices accross gates that share a set of parameters by checking whether two gates
+    #share the same set of gpindices.
+    else:
+        aggregated_error_generator_indices_by_gate = dict()
+        for errorgen, layer_idx in errorgen_var_map:
+            gate_contributors, gate_contributor_operators = errorgen_gate_contributors(model, errorgen, circuit, layer_idx, return_operators=True)
+            if len(gate_contributors) > 1:
+                msg = f'Encountered more than 1 gate contributing to this error generator {errorgen}. ' \
+                      'Support for aggregating variables by gate when there is more than 1 contributor is not currently supported.'
+                raise RuntimeError(msg)
+            gate = gate_contributors[0]
+            gate_name = gate.name
+            gate_sslbls = gate.sslbls
+            gate_operator = gate_contributor_operators[0]
+            gate_gpindices = gate_operator.gpindices
+            #use the pair of gate_name and gpindices as the aggregator
+            if isinstance(gate_gpindices, slice):
+                gate_gpindices = _slct.indices(gate_gpindices)
+            if isinstance(gate_gpindices, (list, _np.ndarray)):
+                gate_gpindices = tuple(gate_gpindices)
+            
+            gate_name_model_indices_tup = (gate_name, gate_gpindices)
+            
+            if gate_name_model_indices_tup not in aggregated_error_generator_indices_by_gate:
+                aggregated_error_generator_indices_by_gate[gate_name_model_indices_tup] = dict()
+            
+            #break the error generators into equivalence classes based on truncations, enforcing locality.
+            #print(errorgen)
+            #print(errorgen.basis_element_labels[0])
+            #print(_truncate_lse_support(errorgen, gate_sslbls))
+            try:
+                truncated_errorgen = _truncate_lse_support(errorgen, gate_sslbls, validate_locality=True)
+            except RuntimeError:
+                msg = "An error generator with nonlocal support relative to the gate with which it is associated has been detected."
+                msg += " Aggregation of error generators by gates and shared model parameters together is only supported models with local errors "
+                msg += "(those with support restricted to the target qubits of the gate in question) at present."
+                raise RuntimeError(msg)
+            if truncated_errorgen not in aggregated_error_generator_indices_by_gate[gate_name_model_indices_tup]:
+                aggregated_error_generator_indices_by_gate[gate_name_model_indices_tup][truncated_errorgen] = []
+            #keep track of the original errorgen layer pair
+            aggregated_error_generator_indices_by_gate[gate_name_model_indices_tup][truncated_errorgen].append((errorgen, layer_idx))
+        
+        #print(aggregated_error_generator_indices_by_gate)
+        
+        #loop through aggregated_error_generator_indices_by_gate, assign an index to each error generator equivalence class.
+        #output map will still consist of maps from error generator layer index tuples, but the output index will be this joint index.
+        errorgen_var_gate_aggregated_map = dict()
+        var_idx = 0
+        for errorgen_classes_by_gate in aggregated_error_generator_indices_by_gate.values():
+            #print(errorgen_classes_by_gate)
+            for errorgen_layer_idx_pairs in errorgen_classes_by_gate.values():
+                #print(errorgen_layer_idx_pairs)
+                for pair in errorgen_layer_idx_pairs:
+                    errorgen_var_gate_aggregated_map[pair] = var_idx
+                var_idx+=1
+        
+    if return_reverse:
+        var_gate_aggregated_errorgen_map = dict()
+        for errorgen_layer_idx_pair, var_idx in errorgen_var_gate_aggregated_map.items():
+            if var_idx not in var_gate_aggregated_errorgen_map:
+                var_gate_aggregated_errorgen_map[var_idx] = []
+            var_gate_aggregated_errorgen_map[var_idx].append(errorgen_layer_idx_pair)
+        return errorgen_var_gate_aggregated_map, var_gate_aggregated_errorgen_map
+    else:
+        return errorgen_var_gate_aggregated_map
+
+def _truncate_lse_support(errorgen, qubit_indices, validate_locality=True):
+    """
+    Helper function for truncating the support of a LocalStimErrorgenLabel to a subset of qubit indices
+    with the option of checking for locality of the input error generator on these indices, raising
+    an exception if that check fails.
+    
+    Parameters
+    ----------
+    errorgen : LocalStimErrorgenLabel
+        Error generator label to truncate.
+    
+    qubit_indices : iterable of int
+        Indices to truncate support to.
+    
+    validate_locality : bool, optional (default True)
+        If True then the remaining Paulis outside the truncation
+        are checked to confirm that they are all identities. If not
+        then a RuntimeError exception is raised.
+        
+    Returns
+    -------
+    truncated_errorgen : LocalStimErrorgenLabel
+        Error generator label with support truncated to the specified qubit indices.        
+    """
+    
+    bels = errorgen.basis_element_labels
+    assert len(bels[0]) >= len(qubit_indices), "More qubit indices specified than there are qubits for this LocalStimErrorgenLabel." 
+    
+    #casting a stim.PauliString to a list gives a list of integers in the range 0 to 3, corresponding to I, X, Y and Z respectively.
+    #sign information is not part of this list (which is fine for basis element labels). stim.PauliStrings can be initialized
+    #from a list of integers of this form.
+    new_bels = []
+    for bel in bels:
+        pauli_index_list = list(bel)
+        new_bel = stim.PauliString([pauli_index_list[qubit_idx] for qubit_idx in qubit_indices])
+        new_bels.append(new_bel)
+        if validate_locality:
+            if not all([pauli_index==0 for qubit_idx, pauli_index in enumerate(pauli_index_list) if qubit_idx not in qubit_indices]):
+                msg = 'Some paulis outside of specified qubit indices are not identities, violating requested locality constraint.'
+                raise RuntimeError(msg)
+    new_errorgen = _LSE(errorgen.errorgen_type, new_bels)
+    return new_errorgen
+
+def errorgen_gate_contributors(model, errorgen, circuit, layer_idx, include_spam=True, return_operators=False):
+        """
+        Walks through the gates in the specified circuit layer and query the parent 
+        model to figure out which gates could have given rise to a particular error generator
+        in a layer.
+        
+        Parameters
+        ----------
+        errorgen : `ElementaryErrorgenLabel`
+            Error generator layer to find instance of.
+            
+        circuit : `Circuit`
+            Circuit to identify potential gates in.
+        
+        layer_idx : int
+            Index of circuit layer.
+        
+        include_spam : bool, optional (default True)
+            If True include the spam circuit layers at the beginning and 
+            end of the circuit.
+        
+        return_operators : bool, optional (default False)
+            If True return the circuit layer operators for the gates identified.
+        
+        Returns
+        -------
+        label_list_for_errorgen : list of `Label`
+            A list of gate labels contained within this circuit layer that could have
+            contributed this error generator.   
+
+        circuit_layer_operators : list of `ModelMembers` (returned when return_operators==True)
+            Optional list of ModelMembers corresponding to the gate contributors identified.
+        """
+        
+        if not isinstance(model, _OpModel):
+            raise ValueError('This method does not work for non-OpModel models.')
+        
+        if include_spam:
+            circuit = model.complete_circuit(circuit)
+            
+        assert layer_idx < len(circuit), f'layer_idx {layer_idx} is out of range for circuit with length {len(circuit)}'
+        
+        if isinstance(errorgen, _GEEL):
+            errorgen = _LEEL.cast(errorgen, sslbls = model.state_space.qubit_labels)
+        elif isinstance(errorgen, _LSE):
+            errorgen = errorgen.to_local_eel()
+        else:
+            assert isinstance(errorgen, _LEEL), f'Unsupported `errorgen` type {type(errorgen)}.'
+        
+        circuit_layer = circuit.layer(layer_idx)
+
+        if isinstance(model, _ExplicitOpModel):
+            #check if this error generator is in the error generator coefficient dictionary for this layer, and if not return the empty dictionary.
+            circuit_layer_operator = model.circuit_layer_operator(circuit_layer)
+            layer_errorgen_coeff_dict = circuit_layer_operator.errorgen_coefficients(label_type='local')
+            
+            if errorgen in layer_errorgen_coeff_dict:
+                label_list_for_errorgen = [circuit_layer]
+                if return_operators:
+                    circuit_layer_operators = [circuit_layer_operator]
+            else:
+                label_list_for_errorgen = []
+            
+        elif isinstance(model, _ImplicitOpModel):
+            #Loop through each label in this layer and ask for the circuit layer operator
+            #for each. Then query this for the error generator coefficients associated
+            #with that layer.
+            #Note: This may not be 100% robust, I'm assuming there aren't any exotic layer rules
+            #that would, e.g., add in totally new error generators when certain pairs of gates appear in a layer.
+            label_list_for_errorgen = []
+            circuit_layer_operators = []
+            for lbl in circuit_layer:
+                circuit_layer_operator = model.circuit_layer_operator(lbl)
+                label_errorgen_coeff_dict = circuit_layer_operator.errorgen_coefficients(label_type='local')
+                if errorgen in label_errorgen_coeff_dict:
+                    label_list_for_errorgen.append(lbl)
+                    circuit_layer_operators.append(circuit_layer_operator)    
+        else:
+            raise ValueError(f'Type of model {type(model)=} is not supported with this method.')
+        
+        if return_operators:
+            return label_list_for_errorgen, circuit_layer_operators
+        else:
+            return label_list_for_errorgen
 
 def magnus_symbolic_polynomial(errorgen_transform_maps, errorgen_to_var_map, magnus_order=1):
     """
@@ -235,7 +529,7 @@ def _error_generator_layer_pairwise_commutator_symbolic_polynomial(errorgen_laye
     
     return commuted_errorgen_poly_dict
 
-def error_generator_taylor_expansion_symbolic_polynomial(errorgen_dict, errorgen_to_var_map, order = 1):
+def error_generator_taylor_expansion_symbolic_polynomial(errorgen_dict, errorgen_to_var_map, order=1):
     """
     Compute the nth-order taylor expansion for the exponentiation of the error generator described by the input
     error generator dictionary. (Excluding the zeroth-order identity).
@@ -303,7 +597,7 @@ def error_generator_taylor_expansion_symbolic_polynomial(errorgen_dict, errorgen
 
     return taylor_order_terms
 
-def stabilizer_probability_correction_symbolic_polynomial(errorgen_dict, errorgen_to_var_map, tableau, desired_bitstring, order = 1):
+def stabilizer_probability_correction_symbolic_polynomial(errorgen_dict, errorgen_to_var_map, tableau, desired_bitstring, order=1):
     """
     Compute the kth-order correction to the probability of the specified bit string.
     
