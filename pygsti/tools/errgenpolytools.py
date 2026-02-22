@@ -247,89 +247,89 @@ def _truncate_lse_support(errorgen, qubit_indices, validate_locality=True):
     return new_errorgen
 
 def errorgen_gate_contributors(model, errorgen, circuit, layer_idx, include_spam=True, return_operators=False):
-        """
-        Walks through the gates in the specified circuit layer and query the parent 
-        model to figure out which gates could have given rise to a particular error generator
-        in a layer.
+    """
+    Walks through the gates in the specified circuit layer and query the parent 
+    model to figure out which gates could have given rise to a particular error generator
+    in a layer.
+    
+    Parameters
+    ----------
+    errorgen : `ElementaryErrorgenLabel`
+        Error generator layer to find instance of.
         
-        Parameters
-        ----------
-        errorgen : `ElementaryErrorgenLabel`
-            Error generator layer to find instance of.
-            
-        circuit : `Circuit`
-            Circuit to identify potential gates in.
-        
-        layer_idx : int
-            Index of circuit layer.
-        
-        include_spam : bool, optional (default True)
-            If True include the spam circuit layers at the beginning and 
-            end of the circuit.
-        
-        return_operators : bool, optional (default False)
-            If True return the circuit layer operators for the gates identified.
-        
-        Returns
-        -------
-        label_list_for_errorgen : list of `Label`
-            A list of gate labels contained within this circuit layer that could have
-            contributed this error generator.   
+    circuit : `Circuit`
+        Circuit to identify potential gates in.
+    
+    layer_idx : int
+        Index of circuit layer.
+    
+    include_spam : bool, optional (default True)
+        If True include the spam circuit layers at the beginning and 
+        end of the circuit.
+    
+    return_operators : bool, optional (default False)
+        If True return the circuit layer operators for the gates identified.
+    
+    Returns
+    -------
+    label_list_for_errorgen : list of `Label`
+        A list of gate labels contained within this circuit layer that could have
+        contributed this error generator.   
 
-        circuit_layer_operators : list of `ModelMembers` (returned when return_operators==True)
-            Optional list of ModelMembers corresponding to the gate contributors identified.
-        """
+    circuit_layer_operators : list of `ModelMembers` (returned when return_operators==True)
+        Optional list of ModelMembers corresponding to the gate contributors identified.
+    """
+    
+    if not isinstance(model, _OpModel):
+        raise ValueError('This method does not work for non-OpModel models.')
+    
+    if include_spam:
+        circuit = model.complete_circuit(circuit)
         
-        if not isinstance(model, _OpModel):
-            raise ValueError('This method does not work for non-OpModel models.')
+    assert layer_idx < len(circuit), f'layer_idx {layer_idx} is out of range for circuit with length {len(circuit)}'
+    
+    if isinstance(errorgen, _GEEL):
+        errorgen = _LEEL.cast(errorgen, sslbls = model.state_space.qubit_labels)
+    elif isinstance(errorgen, _LSE):
+        errorgen = errorgen.to_local_eel()
+    else:
+        assert isinstance(errorgen, _LEEL), f'Unsupported `errorgen` type {type(errorgen)}.'
+    
+    circuit_layer = circuit.layer(layer_idx)
+
+    if isinstance(model, _ExplicitOpModel):
+        #check if this error generator is in the error generator coefficient dictionary for this layer, and if not return the empty dictionary.
+        circuit_layer_operator = model.circuit_layer_operator(circuit_layer)
+        layer_errorgen_coeff_dict = circuit_layer_operator.errorgen_coefficients(label_type='local')
         
-        if include_spam:
-            circuit = model.complete_circuit(circuit)
-            
-        assert layer_idx < len(circuit), f'layer_idx {layer_idx} is out of range for circuit with length {len(circuit)}'
-        
-        if isinstance(errorgen, _GEEL):
-            errorgen = _LEEL.cast(errorgen, sslbls = model.state_space.qubit_labels)
-        elif isinstance(errorgen, _LSE):
-            errorgen = errorgen.to_local_eel()
+        if errorgen in layer_errorgen_coeff_dict:
+            label_list_for_errorgen = [circuit_layer]
+            if return_operators:
+                circuit_layer_operators = [circuit_layer_operator]
         else:
-            assert isinstance(errorgen, _LEEL), f'Unsupported `errorgen` type {type(errorgen)}.'
-        
-        circuit_layer = circuit.layer(layer_idx)
-
-        if isinstance(model, _ExplicitOpModel):
-            #check if this error generator is in the error generator coefficient dictionary for this layer, and if not return the empty dictionary.
-            circuit_layer_operator = model.circuit_layer_operator(circuit_layer)
-            layer_errorgen_coeff_dict = circuit_layer_operator.errorgen_coefficients(label_type='local')
-            
-            if errorgen in layer_errorgen_coeff_dict:
-                label_list_for_errorgen = [circuit_layer]
-                if return_operators:
-                    circuit_layer_operators = [circuit_layer_operator]
-            else:
-                label_list_for_errorgen = []
-            
-        elif isinstance(model, _ImplicitOpModel):
-            #Loop through each label in this layer and ask for the circuit layer operator
-            #for each. Then query this for the error generator coefficients associated
-            #with that layer.
-            #Note: This may not be 100% robust, I'm assuming there aren't any exotic layer rules
-            #that would, e.g., add in totally new error generators when certain pairs of gates appear in a layer.
             label_list_for_errorgen = []
-            circuit_layer_operators = []
-            for lbl in circuit_layer:
-                circuit_layer_operator = model.circuit_layer_operator(lbl)
-                label_errorgen_coeff_dict = circuit_layer_operator.errorgen_coefficients(label_type='local')
-                if errorgen in label_errorgen_coeff_dict:
-                    label_list_for_errorgen.append(lbl)
-                    circuit_layer_operators.append(circuit_layer_operator)    
-        else:
-            raise ValueError(f'Type of model {type(model)=} is not supported with this method.')
         
-        if return_operators:
-            return label_list_for_errorgen, circuit_layer_operators
-        else:
-            return label_list_for_errorgen
+    elif isinstance(model, _ImplicitOpModel):
+        #Loop through each label in this layer and ask for the circuit layer operator
+        #for each. Then query this for the error generator coefficients associated
+        #with that layer.
+        #Note: This may not be 100% robust, I'm assuming there aren't any exotic layer rules
+        #that would, e.g., add in totally new error generators when certain pairs of gates appear in a layer.
+        label_list_for_errorgen = []
+        circuit_layer_operators = []
+        for lbl in circuit_layer:
+            circuit_layer_operator = model.circuit_layer_operator(lbl)
+            label_errorgen_coeff_dict = circuit_layer_operator.errorgen_coefficients(label_type='local')
+            if errorgen in label_errorgen_coeff_dict:
+                label_list_for_errorgen.append(lbl)
+                circuit_layer_operators.append(circuit_layer_operator)    
+    else:
+        raise ValueError(f'Type of model {type(model)=} is not supported with this method.')
+    
+    if return_operators:
+        return label_list_for_errorgen, circuit_layer_operators
+    else:
+        return label_list_for_errorgen
 
 def magnus_symbolic_polynomial(errorgen_transform_maps, errorgen_to_var_map, magnus_order=1):
     """
