@@ -1422,7 +1422,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         # Note: don't need paramvec here since above call sets it
         return (0.5 / denom)[:, None] * self.dpercircuit()
 
-    def fn_local(self, paramvec=None, stateless=False):
+    def fn_local(self, paramvec=None, stateless=False) -> float:
         """
         Evaluate the *local* value of this objective function.
 
@@ -1437,19 +1437,29 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
             The vector of (model) parameters to evaluate the objective function at.
             If `None`, then the model's current parameter vector is used (held internally).
 
+        stateless: bool
+            The callsequence triggered by this function can modify self.model.
+            If stateless=True, then we restore self.model's state before returning.
+
         Returns
         -------
         float
         """
-        if paramvec is None or not stateless:
-            return _np.sum(self.terms(paramvec))
-        else:
+        if (paramvec is not None) and stateless:
             old_paramvec = self.model.to_vector()
-            val = _np.sum(self.terms(paramvec))
+            self.model.from_vector(paramvec)
+            val = _np.sum(self.terms())
             self.model.from_vector(old_paramvec)
             return val
+        else:
+            # Based on TimeIndependentMDCObjectiveFunction.terms(...),
+            # the function call below will trigger a call to
+            # self.model.from_vector(paramvec) if and only if paramvec
+            # is not None. If paramvec is None, then we proceed by
+            # redefining paramvec = self.model.to_vector().
+            return _np.sum(self.terms(paramvec))
 
-    def fn(self, paramvec=None, stateless=False):
+    def fn(self, paramvec=None, stateless=False) -> float:
         """
         Evaluate the value of this objective function.
 
@@ -1458,6 +1468,10 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         paramvec : numpy.ndarray, optional
             The vector of (model) parameters to evaluate the objective function at.
             If `None`, then the model's current parameter vector is used (held internally).
+
+        stateless: bool
+            The callsequence triggered by this function can modify self.model.
+            If stateless=True, then we restore self.model's state before returning.
 
         Returns
         -------
@@ -1471,10 +1485,16 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         _smt.cleanup_shared_ndarray(result_shm)
         return global_fnval
 
-    def fn_from_model(self, model):
+    def fn_from_model(self, model) -> float:
+        """
+        Evaluate this objective function when `self.model` is replaced by
+        `model`, and then restore `self.model` before returning.
+        """
         m = self.model
         self.model = model
-        val = self.fn()
+        val = self.fn(paramvec=None)
+        # ^ That function call gets paramvec from self.model (via
+        #   self.model.to_vector()) if and when paramvec is needed.
         self.model = m
         return val
 
