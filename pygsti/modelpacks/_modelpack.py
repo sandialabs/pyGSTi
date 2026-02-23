@@ -425,6 +425,11 @@ class GSTModelPack(ModelPack):
             you have a need to use the more pessimistic "full" set of germs,
             leave this set to True.
 
+        kwargs
+        -----
+        This function invokes pygsti.circuits.create_lsgst_circuit_lists(..., **kwargs).
+        See that function's documentation for its accepted keyword arguments.
+
         Returns
         -------
          : list[class:`pygsti.objects.CircuitList`]
@@ -450,7 +455,7 @@ class GSTModelPack(ModelPack):
                                   **kwargs)
         return lists
 
-    # TODO: deprecate this function?
+    _deprecated_fn('`GSTModelPack.create_gst_circuitlists(...)[-1]`')
     def create_gst_circuits(self, max_max_length, qubit_labels=None, fpr=False, lite=True, **kwargs):
         """
         Construct a :class:`pygsti.objects.CircuitList` from this modelpack.
