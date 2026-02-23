@@ -547,6 +547,10 @@ class RawObjectiveFunction(ObjectiveFunction):
         """
         return self.hterms(probs, counts, total_counts, freqs)  # same as dterms b/c only i-th term depends on p_i
 
+    # NOTE: the implementations of "terms" and "lsvec" call one another;
+    # a child class must override one of these functions in order to 
+    # be usable.
+
     def terms(self, probs, counts, total_counts, freqs, intermediates=None):
         """
         Compute the terms of the objective function.
@@ -615,7 +619,9 @@ class RawObjectiveFunction(ObjectiveFunction):
         """
         return _np.sqrt(self.terms(probs, counts, total_counts, freqs, intermediates))
 
-    # Infinite loop in evaluation of "dterms" and "dlsvec".
+    # NOTE: the implementations of "dterms" and "dlsvec" call one another;
+    # a child class must override one of these functions in order to 
+    # be usable.
 
     def dterms(self, probs, counts, total_counts, freqs, intermediates=None):
         """
