@@ -21,7 +21,11 @@ PLATFORM_BITS = int(_platform.architecture()[0].strip("bit"))
 
 
 def _vinds_to_int(vinds, vindices_per_int, max_num_vars):
-    """ Convert tuple index of ints to single int given max_numvars """
+    """ 
+    Convert tuple index of ints to single int given max_numvars 
+    
+    """
+    vinds = sorted(vinds)  # <-- canonicalize for commutative variables
     ints_in_key = int(_np.ceil(len(vinds) / vindices_per_int))
     ret_tup = []
     for k in range(ints_in_key):
@@ -33,7 +37,6 @@ def _vinds_to_int(vinds, vindices_per_int, max_num_vars):
         assert(ret >= 0), "vinds = %s -> %d!!" % (str(vinds), ret)
         ret_tup.append(ret)
     return tuple(ret_tup)
-
 
 class Polynomial(object):
     """
@@ -74,8 +77,8 @@ class Polynomial(object):
         into a single int when there are at most `max_num_vars` variables.
     """
 
-    @classmethod
-    def _vindices_per_int(cls, max_num_vars):
+    @staticmethod
+    def _vindices_per_int(max_num_vars):
         """
         The number of variable indices that fit into a single int when there are at most `max_num_vars` variables.
 
@@ -119,8 +122,8 @@ class Polynomial(object):
         self._rep = rep
         return self
 
-    @classmethod
-    def product(cls, list_of_polys):
+    @staticmethod
+    def product(list_of_polys):
         """
         Take the product of multiple polynomials.
 
@@ -137,10 +140,40 @@ class Polynomial(object):
         for p in list_of_polys[1:]:
             rep = rep.mult(p._rep)
         return Polynomial.from_rep(rep)
+    
+    @staticmethod
+    def sum(list_of_polys):
+        """
+        Take the product of multiple polynomials.
+
+        Parameters
+        ----------
+        list_of_polys : list
+            List of polynomials to take the product of.
+
+        Returns
+        -------
+        Polynomial
+        """
+        if not list_of_polys:
+            return Polynomial({})
+        max_num_vars = list_of_polys[0].max_num_vars
+        assert all([max_num_vars == poly.max_num_vars for poly in list_of_polys])
+        vindices_per_int = Polynomial._vindices_per_int(max_num_vars) 
+        
+        #initalize an empty PolynomialRep and accumulate into this.
+        #TODO: There is a bug/incompatibility between the cython and python
+        #versions of the PolynomalRep code. The python version accepts None for the int_coeff_dict
+        #but cython doesn't. Making a new Polynomial is a workaround.
+        newpoly = Polynomial({}, max_num_vars)
+        rep = newpoly._rep
+        for p in list_of_polys:
+            rep.add_inplace(p._rep)
+        return newpoly
 
     def __init__(self, coeffs=None, max_num_vars=100):
         """
-        Initializes a new Polynomial object (a subclass of dict).
+        Initializes a new Polynomial object.
 
         Internally (as a dict) a Polynomial represents variables by integer
         indices, e.g. "2" means "x_2".  Keys are tuples of variable indices and
@@ -163,8 +196,46 @@ class Polynomial(object):
         """
         vindices_per_int = Polynomial._vindices_per_int(max_num_vars)
 
-        int_coeffs = {_vinds_to_int(k, vindices_per_int, max_num_vars): v for k, v in coeffs.items()}
+        #int_coeffs = {_vinds_to_int(k, vindices_per_int, max_num_vars): v for k, v in coeffs.items()}
+
+        int_coeffs = {}
+        for k, v in coeffs.items():
+            ik = _vinds_to_int(k, vindices_per_int, max_num_vars)  # now sorts internally
+            int_coeffs[ik] = int_coeffs.get(ik, 0) + v
+
         self._rep = _PolynomialRep(int_coeffs, max_num_vars, vindices_per_int)
+
+    @classmethod
+    def from_variable_and_coefficient_lists(cls, variables, coefficients, max_num_vars=100):
+        """
+        Alternative constructor for Polynomial objects which allows initialization from a list of
+        monomial terms with corresponding weights.
+
+        Parameters
+        ----------
+        variables : iterable of tuples
+            Iterable of tuples of integers corrrespondng to the monomial terms 
+
+        max_num_vars : int, optional
+            The maximum number of variables the represenatation is allowed to
+            have (x_0 to x_(`max_num_vars-1`)).  This sets the maximum allowed
+            variable index within this polynomial.
+        Returns
+        -------
+        Polynomial
+        """
+        assert len(variables) == len(coefficients), "Iterable of variables and coefficients must have the same length."
+        
+        ret = cls.__new__(cls)
+        vindices_per_int = Polynomial._vindices_per_int(max_num_vars)
+        int_coeffs = {}
+
+        for k, v in zip(variables, coefficients):
+            ik = _vinds_to_int(k, vindices_per_int, max_num_vars)  # now sorts internally
+            int_coeffs[ik] = int_coeffs.get(ik, 0) + v
+
+        ret._rep = _PolynomialRep(int_coeffs, max_num_vars, vindices_per_int)
+        return ret
 
     @property
     def coeffs(self):
@@ -356,9 +427,16 @@ class Polynomial(object):
         -------
         None
         """
-        new_coeffs = {mapfn(k): v for k, v in self.coeffs.items()}
-        new_int_coeffs = {_vinds_to_int(k, self._rep.vindices_per_int, self._rep.max_num_vars): v
-                          for k, v in new_coeffs.items()}
+        #new_coeffs = {mapfn(k): v for k, v in self.coeffs.items()}
+        #new_int_coeffs = {_vinds_to_int(k, self._rep.vindices_per_int, self._rep.max_num_vars): v
+        #                  for k, v in new_coeffs.items()}
+        
+        vindices_per_int = self._rep.vindices_per_int
+        max_num_vars = self._rep.max_num_vars
+        new_int_coeffs = {}
+        for k, v in self.coeffs.items():
+            ik = _vinds_to_int(mapfn(k), vindices_per_int, max_num_vars)
+            new_int_coeffs[ik] = new_int_coeffs.get(ik, 0) + v
         self._rep.reinit(new_int_coeffs)
 
     def mapvec_indices(self, mapvec):
@@ -523,6 +601,10 @@ class Polynomial(object):
 
     def __copy__(self):
         return self.copy()
+    
+    #TODO: Write a more efficient "rep-level" equality test. (will require updates in c-land).
+    def __eq__(self, other):
+        return self.coeffs == other.coeffs
 
     def to_rep(self):  # , max_num_vars=None not needed anymore -- given at __init__ time
         """

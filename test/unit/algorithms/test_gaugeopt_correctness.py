@@ -13,6 +13,8 @@ import pygsti.tools.optools as pgo
 import pygsti.baseobjs.label as pgl
 import pygsti.baseobjs.basisconstructors as pgbc
 import pygsti.algorithms.gaugeopt as gop
+from pygsti.models import ExplicitOpModel
+import pytest
 
 
 
@@ -69,8 +71,7 @@ def check_gate_metrics_near_zero(metrics, tol):
     return
 
 
-
-class sm1QXYI_FindPerfectGauge:
+class FindPerfectGauge_sm1QXYI:
 
     @property
     def default_gauge_group(self):
@@ -97,10 +98,15 @@ class sm1QXYI_FindPerfectGauge:
         return self._gauge_space_name
 
     def setUp(self):
+        # The end of this function raises an error! The function is here just to be
+        # a template for usable implementations.
         np.random.seed(0)
         target = smq1Q_XYI.target_model()
         self.target = target.depolarize(op_noise=0.01, spam_noise=0.001)
+        # ^ That's a noisy data-generating model. We'll gauge-optimize to this noisy
+        #   data-generating model rather than to an ideal model.
         self.model = None
+        # ^ We'll initialize that later on as something that's gauge-equivalent to target.
         self._default_gauge_group = None
         self._gauge_grp_el_class = None
         self._gauge_space_name = ''
@@ -156,13 +162,11 @@ class sm1QXYI_FindPerfectGauge:
         print(f'GaugeOpt over {self.gauge_space_name} w.r.t. Frobenius dist, using LS    : {times}.')
         return
 
-    pass
 
-
-"""
-This class' test for minimizing trace distance with L-BFGS takes excessively long (about 5 seconds).
-"""
-class FindPerfectGauge_TPGroup_Tester(BaseCase, sm1QXYI_FindPerfectGauge):
+class FindPerfectGauge_TPGroup_Tester(BaseCase, FindPerfectGauge_sm1QXYI):
+    """
+    This class' test for minimizing trace distance with L-BFGS takes excessively long (about 5 seconds).
+    """
 
     def setUp(self):
         np.random.seed(0)
@@ -174,14 +178,9 @@ class FindPerfectGauge_TPGroup_Tester(BaseCase, sm1QXYI_FindPerfectGauge):
         self._gauge_space_name = 'TPGaugeGroup'
         self.N_REPS = 1
         return
-    
-    def gauge_transform_model(self, seed):
-        sm1QXYI_FindPerfectGauge.gauge_transform_model(self, seed)
-        # ^ That sets self.model
-        return
 
 
-class FindPerfectGauge_UnitaryGroup_Tester(BaseCase, sm1QXYI_FindPerfectGauge):
+class FindPerfectGauge_UnitaryGroup_Tester(BaseCase, FindPerfectGauge_sm1QXYI):
 
     def setUp(self):
         np.random.seed(0)
@@ -194,17 +193,12 @@ class FindPerfectGauge_UnitaryGroup_Tester(BaseCase, sm1QXYI_FindPerfectGauge):
         self.N_REPS = 3
         # ^ This is fast, so we can afford more tests.
         return
-    
-    def gauge_transform_model(self, seed):
-        sm1QXYI_FindPerfectGauge.gauge_transform_model(self, seed)
-        # ^ That sets self.model
-        return
 
 
-"""
-This class' test for minimizing trace distance with L-BFGS takes excessively long (about 5 seconds).
-"""
-class FindPerfectGauge_FullGroup_Tester(BaseCase, sm1QXYI_FindPerfectGauge):
+class FindPerfectGauge_FullGroup_Tester(BaseCase, FindPerfectGauge_sm1QXYI):
+    """
+    This class' test for minimizing trace distance with L-BFGS takes excessively long (about 5 seconds).
+    """
 
     def setUp(self):
         np.random.seed(0)
@@ -217,7 +211,85 @@ class FindPerfectGauge_FullGroup_Tester(BaseCase, sm1QXYI_FindPerfectGauge):
         self.N_REPS = 1
         return
 
-    def gauge_transform_model(self, seed):
-        sm1QXYI_FindPerfectGauge.gauge_transform_model(self, seed)
-        # ^ That sets self.model
+
+class FindPerfectGauge_Instruments_Tester(BaseCase):
+
+    def setUp(self, seed: int = 0):
+        from pygsti.baseobjs import QubitSpace
+        from pygsti.modelmembers.povms import TPPOVM
+        from pygsti.modelmembers.instruments import Instrument
+        from pygsti.tools.basistools import stdmx_to_ppvec
+        from pygsti.tools.optools import unitary_to_superop
+
+        ss = QubitSpace(1)
+        target = ExplicitOpModel(ss, basis='pp')
+        E0 = np.array([[1,0],[0,0]], dtype=np.cdouble)
+        target.preps['rho0'] = stdmx_to_ppvec(E0)
+        E1 = np.eye(2) - E0
+        target.povms['Mdefault'] = TPPOVM({'0': stdmx_to_ppvec(E0), '1': stdmx_to_ppvec(E1)}, state_space=ss, evotype='default')
+
+        rng = np.random.default_rng(seed)
+        U = la.qr(rng.standard_normal((2,2)) + 1j*rng.standard_normal((2,2)))[0]
+        G = unitary_to_superop(U, 'pp')
+        target.instruments['I_trivial'] = Instrument({'p0': 0.25*G, 'p1': 0.75*G})
+        target.default_gauge_group = UnitaryGaugeGroup(target.state_space, target.basis)
+
+        self.target = target
+        self.model : ExplicitOpModel = target.copy() # type: ignore
+        tweak = 1.0 + 0.5j
+        tweak /= abs(tweak)
+        ggel = UnitaryGaugeGroupElement(unitary_to_superop(np.array([[1,0], [0, tweak]])))
+        self.model.transform_inplace(ggel)
+
+        self.dist_initial = self.model.frobeniusdist(self.target)
+        self.assertGreaterEqual(self.dist_initial, 1e-2)
         return
+
+    def _main_tester(self, method, seed, test_tol, alg_tol, gop_objective):
+        assert gop_objective in {'frobenius', 'frobenius_squared', 'tracedist', 'fidelity'}
+        self.setUp(seed)
+        tic = time.time()
+        item_weights = {'spam': 1.0, 'gates': 1.0} if gop_objective == 'tracedist' else None
+        newmodel : ExplicitOpModel = gop.gaugeopt_to_target(
+            self.model, self.target, item_weights=item_weights, method=method,
+            tol=alg_tol, spam_metric=gop_objective, gates_metric=gop_objective
+        ) # type: ignore
+        toc = time.time()
+        dt = toc - tic
+        dist_final = newmodel.frobeniusdist(self.target)
+        self.assertLessEqual(dist_final, test_tol)
+        return dt
+    
+    def test_lbfgs_frodist(self):
+        times = []
+        for seed in range(3):
+            dt = self._main_tester('L-BFGS-B', seed, test_tol=1e-6, alg_tol=1e-8, gop_objective='frobenius')
+            times.append(dt)
+        print(f'L-BFGS GaugeOpt over UnitaryGaugeGroup w.r.t. Frobenius dist: {times}.')
+        return
+    
+    def test_lbfgs_tracedist(self):
+        times = []
+        for seed in [1]:
+            dt = self._main_tester('L-BFGS-B', seed, test_tol=1e-6, alg_tol=1e-8, gop_objective='tracedist')
+            times.append(dt)
+        print(f'L-BFGS GaugeOpt over UnitaryGaugeGroup w.r.t. trace dist: {times}.')
+        return
+    
+    @pytest.mark.skip('See https://github.com/sandialabs/pyGSTi/pull/672#issuecomment-3428804478.')
+    def test_lbfgs_fidelity(self):
+        times = []
+        for seed in range(3):
+            dt = self._main_tester('L-BFGS-B', seed, test_tol=1e-6, alg_tol=1e-8, gop_objective='fidelity')
+            times.append(dt)
+        print(f'L-BFGS GaugeOpt over UnitaryGaugeGroup w.r.t. fidelity : {times}.')
+        return
+
+    def test_ls(self):
+        times = []
+        for seed in range(3):
+            dt = self._main_tester('ls', seed, test_tol=1e-6, alg_tol=1e-15, gop_objective='frobenius')
+            times.append(dt)
+        print(f'LS GaugeOpt over UnitaryGaugeGroup : {times}.')
+        return
+

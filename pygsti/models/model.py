@@ -10,6 +10,8 @@ Defines the Model class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
+
 import bisect as _bisect
 import copy as _copy
 import itertools as _itertools
@@ -326,7 +328,7 @@ class Model(_NicelySerializable):
         """
         pass
 
-    def copy(self):
+    def copy(self) -> Model:
         """
         Copy this model.
 
@@ -2309,7 +2311,7 @@ class OpModel(Model):
         copy_into._reinit_opcaches()
         super(OpModel, self)._post_copy(copy_into, memo)
 
-    def copy(self):
+    def copy(self) -> OpModel:
         """
         Copy this model.
 
@@ -2320,7 +2322,7 @@ class OpModel(Model):
         """
         self._clean_paramvec()  # ensure _paramvec is rebuilt if needed
         if OpModel._pcheck: self._check_paramvec()
-        ret = Model.copy(self)
+        ret = Model.copy(self) # <-- don't be fooled. That's an OpModel!
         if self._param_bounds is not None and self.parameter_labels is not None:
             ret._clean_paramvec()  # will *always* rebuild paramvec; do now so we can preserve param bounds
             assert _np.all(self.parameter_labels == ret.parameter_labels)  # ensure ordering is the same

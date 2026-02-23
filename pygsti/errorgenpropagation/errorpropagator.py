@@ -402,7 +402,7 @@ class ErrorGeneratorPropagator:
 
         return nonmarkovian_generators
 
-
+    #TODO: Refactor this to just use the concatenation of the individual maps.
     def errorgen_transform_map(self, circuit, include_spam=True, circuit_conversion_kwargs=None):
         """
         Construct a map giving the relationship between input error generators and their final
@@ -452,13 +452,11 @@ class ErrorGeneratorPropagator:
                 input_output_errgen_map[(original_label, i)] = (output_label, output_rate)
 
         return input_output_errgen_map
-    
-    #TODO: Combine this and the above into one function.
-    def errorgen_transform_phases(self, circuit, include_spam=True):
+
+    def errorgen_transform_maps(self, circuit, include_spam=True, circuit_conversion_kwargs=None):
         """
-        Construct a map which gives a list of maps from input error generators
-        to the overall phase that error generator accrues as a result of propagation through
-        a circuit.
+        Construct a list of maps giving the relationship between input error generators and their final
+        value following propagation through the circuit on an input-layer-by-input-layer basis.  
 
         Parameters
         ----------
@@ -469,18 +467,21 @@ class ErrorGeneratorPropagator:
             If True then we include in the propagation the error generators associated
             with state preparation and measurement.
 
+        circuit_conversion_kwargs : dict, optional (default None)
+            A set of optional kwargs which will be passed into the `convert_to_stim_tableau_layers`
+            method of the `Circuit` class to control the behavior of the conversion. Please see the
+            documentation for this method for additional information on supported arguments and
+            values.
+
         Returns
         -------
-        A list of dictionaries, corresponding one-to-one to original error generator layer
-        for the circuit. The keys of each dictionary are error generator coefficients 
-        corresponding to the original error generators for each circuit layer 
-        (as `LocalElementaryErrorgenLabel`s) and whose values correspond to the overall sign that 
-        error generator's rate has picked up as a result of propagation.
+        list of dicts
+            A list of dictionaries whose keys are tuples consisting of input error generators and circuit layer indices
+            and whose values are tuples of output error generators and the corresponding accumulated phase.
         """
-        
         #start by converting the input circuit into a list of stim Tableaus with the 
         #first element dropped.
-        stim_layers = self.construct_stim_layers(circuit, drop_first_layer = not include_spam)
+        stim_layers = self.construct_stim_layers(circuit, drop_first_layer = not include_spam, circuit_conversion_kwargs=circuit_conversion_kwargs)
         
         #We next want to construct a new set of Tableaus corresponding to the cumulative products
         #of each of the circuit layers with those that follow. These Tableaus correspond to the
@@ -500,85 +501,13 @@ class ErrorGeneratorPropagator:
         #there should be a one-to-one mapping between the index into propagated_errorgen_layers and the
         #index of the circuit layer where the error generators in that propagated layer originated.
         #Moreover, LocalStimErrorgenLabels remember who they were at instantiation.
-        input_output_errgen_maps = []
+        input_output_errgen_maps = [dict() for _ in range(len(propagated_errorgen_layers))]
         for i, output_layer in enumerate(propagated_errorgen_layers):
-            io_errgen_map = dict()
             for output_label, output_rate in output_layer.items():
-                original_label = output_label.initial_label
-                io_errgen_map[original_label] = output_rate
-            input_output_errgen_maps.append(io_errgen_map)
+                original_label = _LSE.cast(output_label.initial_label)
+                input_output_errgen_maps[i][(original_label, i)] = (output_label, output_rate)
 
         return input_output_errgen_maps
-
-    def errorgen_gate_contributors(self, errorgen, circuit, layer_idx, include_spam=True):
-        """
-        Walks through the gates in the specified circuit layer and query the parent 
-        model to figure out which gates could have given rise to a particular error generator
-        in a layer.
-        
-        Parameters
-        ----------
-        errorgen : `ElementaryErrorgenLabel`
-            Error generator layer to find instance of.
-            
-        circuit : `Circuit`
-            Circuit to identify potential gates in.
-        
-        layer_idx : int
-            Index of circuit layer.
-        
-        include_spam : bool, optional (default True)
-            If True include the spam circuit layers at the beginning and 
-            end of the circuit.
-        
-        Returns
-        -------
-        label_list_for_errorgen : list of `Label`
-            A list of gate labels contained within this circuit layer that could have
-            contributed this error generator.   
-        """
-        
-        if not isinstance(self.model, _OpModel):
-            raise ValueError('This method does not work for non-OpModel models.')
-        
-        if include_spam:
-            circuit = self.model.complete_circuit(circuit)
-            
-        assert layer_idx < len(circuit), f'layer_idx {layer_idx} is out of range for circuit with length {len(circuit)}'
-        
-        if isinstance(errorgen, _GlobalElementaryErrorgenLabel):
-            errorgen = _LocalElementaryErrorgenLabel.cast(errorgen, sslbls = self.model.state_space.qubit_labels)
-        elif isinstance(errorgen, _LSE):
-            errorgen = errorgen.to_local_eel()
-        else:
-            assert isinstance(errorgen, _LocalElementaryErrorgenLabel), f'Unsupported `errorgen` type {type(errorgen)}.'
-        
-        circuit_layer = circuit.layer(layer_idx)
-
-        if isinstance(self.model, _ExplicitOpModel):
-            #check if this error generator is in the error generator coefficient dictionary for this layer, and if not return the empty dictionary.
-            layer_errorgen_coeff_dict = self.model.circuit_layer_operator(circuit_layer).errorgen_coefficients(label_type='local')
-            if errorgen in layer_errorgen_coeff_dict:
-                label_list_for_errorgen = [circuit_layer]
-            else:
-                label_list_for_errorgen = []
-            
-        elif isinstance(self.model, _ImplicitOpModel):
-            #Loop through each label in this layer and ask for the circuit layer operator
-            #for each. Then query this for the error generator coefficients associated
-            #with that layer.
-            #Note: This may not be 100% robust, I'm assuming there aren't any exotic layer rules
-            #that would, e.g., add in totally new error generators when certain pairs of gates appear in a layer.
-            label_list_for_errorgen = []
-            for lbl in circuit_layer:
-                circuit_layer_operator = self.model.circuit_layer_operator(lbl)
-                label_errorgen_coeff_dict = circuit_layer_operator.errorgen_coefficients(label_type='local')
-                if errorgen in label_errorgen_coeff_dict:
-                    label_list_for_errorgen.append(lbl)    
-        else:
-            raise ValueError(f'Type of model {type(self.model)=} is not supported with this method.')
-        
-        return label_list_for_errorgen
 
     def construct_stim_layers(self, circuit, drop_first_layer=True, circuit_conversion_kwargs=None):
         """
@@ -690,9 +619,7 @@ class ErrorGeneratorPropagator:
                                   drop_zero_rates=False, include_gate_label=False):
         """
         Construct a nested list of lists of dictionaries corresponding to the error generators for each circuit layer.
-        This is currently (as implemented) only well defined for `ExplicitOpModels` where each layer corresponds
-        to a single 'gate'. This should also in principle work for crosstalk-free `ImplicitOpModels`, but is not
-        configured to do so just yet. The entries of the top-level list correspond to circuit layers, while the entries
+        The entries of the top-level list correspond to circuit layers, while the entries
         of the second level (i.e. the dictionaries at each layer) correspond to different orders of the BCH approximation.
 
         Parameters

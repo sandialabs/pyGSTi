@@ -575,18 +575,18 @@ class _DataSetRow(object):
                         cntDict.setitem_unsafe(ol, cnt)
             else:
                 for ol, i in self.dataset.olIndex.items():
-                    inds = oli_tslc[oli_tslc == i]
+                    inds = _np.where(oli_tslc == i)[0]
                     if len(inds) > 0 or all_outcomes:
                         cntDict.setitem_unsafe(ol, float(sum(self.reps[tslc][inds])))
         else:
             if self.reps is None:
                 for ol_index in oli_tslc:
                     ol = self.dataset.ol[ol_index]
-                    cntDict.setitem_unsafe(ol, 1.0 + cntDict.getitem_unsafe(ol, 0.0))
+                    cntDict.setitem_unsafe(ol, float(1.0 + cntDict.getitem_unsafe(ol, 0.0)))
             else:
                 for ol_index, reps in zip(oli_tslc, self.reps[tslc]):
                     ol = self.dataset.ol[ol_index]
-                    cntDict.setitem_unsafe(ol, reps + cntDict.getitem_unsafe(ol, 0.0))
+                    cntDict.setitem_unsafe(ol, float(reps + cntDict.getitem_unsafe(ol, 0.0)))
 
         return cntDict
 
