@@ -3028,9 +3028,10 @@ class ModelEstimateResults(_proto.ProtocolResults):
             ret[k] = v
         return ret
 
-    def add_estimates(self, results, estimates_to_add=None, silent_steal=False):
+    def add_estimates(self, results: 'ModelEstimateResults', estimates_to_add:Optional[list[str]]=None, silent_steal:bool=False):
         """
-        Add some or all of the estimates from `results` to this `Results` object.
+        Add some or all of the estimates from `results` to `self`, possibly making
+        copies in the process.
 
         Parameters
         ----------
@@ -3042,6 +3043,12 @@ class ModelEstimateResults(_proto.ProtocolResults):
         estimates_to_add : list, optional
             A list of estimate keys to import from `results`.  If None, then all
             the estimates contained in `results` are imported.
+
+        silent_steal: bool, optional
+            Consider some `est` in results.estimates.values(). If silent_steal
+            is True, then then we can update `est.parent` without regard to its
+            current value. If silent_steal is False and `est.parent` is neither
+            None nor self, then we update self with a deep-copy of `est`.
 
         Returns
         -------
@@ -3103,7 +3110,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
         keys_to_move = ordered_keys[ordered_keys.index(old_name) + 1:]  # everything after old_name
         for key in keys_to_move: self.estimates.move_to_end(key)
 
-    def add_estimate(self, estimate, estimate_key='default', silent_steal=False):
+    def add_estimate(self, estimate: _Estimate, estimate_key: str='default', silent_steal: bool=False):
         """
         Add a set of `Model` estimates to this `Results` object.
 
@@ -3114,6 +3121,11 @@ class ModelEstimateResults(_proto.ProtocolResults):
 
         estimate_key : str, optional
             The key or label used to identify this estimate.
+
+        silent_steal: bool, optional
+            If silent_steal is True, then then we can update `estimate.parent` without
+            regard to its current value. If silent_steal is False and `estimate.parent`
+            is neither None nor self, then we update self with a deep-copy of `estimate`.
 
         Returns
         -------
