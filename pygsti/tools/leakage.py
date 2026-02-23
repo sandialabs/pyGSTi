@@ -14,12 +14,11 @@ from functools import lru_cache
 import copy
 from pygsti.tools import optools as pgot
 from pygsti.tools import basistools as pgbt
-from pygsti.tools import matrixtools as pgmt
 from pygsti.tools.basistools import stdmx_to_vec
+from pygsti.tools.metaprogramming import set_docstring
 from pygsti.baseobjs import Label
 from pygsti.baseobjs.basis import TensorProdBasis, Basis, BuiltinBasis
 import numpy as np
-import scipy.linalg as la
 import warnings
 
 import warnings
@@ -58,12 +57,6 @@ Default notation (deferential to text above)
    S[M[U]] by S[U].
 \n
 """
-
-def set_docstring(docstr):
-    def assign(fn):
-        fn.__doc__ = docstr
-        return fn
-    return assign
 
 
 # MARK: metrics

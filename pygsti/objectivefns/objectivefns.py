@@ -24,18 +24,13 @@ from pygsti import tools as _tools
 from pygsti.layouts.distlayout import DistributableCOPALayout as _DistributableCOPALayout
 from pygsti.layouts.matrixlayout import MatrixCOPALayout as _MatrixCOPALayout
 from pygsti.tools import slicetools as _slct, mpitools as _mpit, sharedmemtools as _smt
+from pygsti.tools.metaprogramming import set_docstring
 from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from pygsti.models.model import OpModel as _OpModel, Model as _Model
 
-
-def set_docstring(docstr):
-    def assign(fn):
-        fn.__doc__ = docstr
-        return fn
-    return assign
 
 
 DEFAULT_MIN_PROB_CLIP = 1e-4
