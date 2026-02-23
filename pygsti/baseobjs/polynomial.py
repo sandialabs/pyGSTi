@@ -601,6 +601,10 @@ class Polynomial(object):
 
     def __copy__(self):
         return self.copy()
+    
+    #TODO: Write a more efficient "rep-level" equality test. (will require updates in c-land).
+    def __eq__(self, other):
+        return self.coeffs == other.coeffs
 
     def to_rep(self):  # , max_num_vars=None not needed anymore -- given at __init__ time
         """

@@ -680,6 +680,41 @@ def stabilizer_probability_correction_symbolic_polynomial(errorgen_dict, errorge
         Polynomial corresponding to the correction to the output probability for the
         desired bitstring induced by the error generator (to specified order).
     """    
+    correction_polys = bulk_stabilizer_probability_correction_symbolic_polynomial(errorgen_dict, errorgen_to_var_map, 
+                                                                                  tableau, [desired_bitstring], order=order)
+    return correction_polys[0]
+
+def bulk_stabilizer_probability_correction_symbolic_polynomial(errorgen_dict, errorgen_to_var_map, tableau, desired_bitstrings, order=1):
+    """
+    Compute the kth-order correction to the probability of the specified bit string.
+    
+    Parameters
+    ----------
+    errorgen_dict : dict
+        Dictionary whose keys are `LocalStimErrorgenLabel` and whose values are corresponding
+        rates as polynomials in the original error generator rates.
+    
+    errorgen_to_var_map : dict
+        A dictionary whose keys are tuples of LocalStimErrorgenLabels and integer circuit layer indices
+        and whose value is an integer corresponding to the corresponding variable index to use in constructed
+        Polynomials.
+    
+    tableau : stim.Tableau
+        Stim tableau corresponding to a particular stabilizer state being measured.
+        
+    desired_bitstrings : iterable of str
+        iterable of strings of 0's and 1's corresponding to the output bitstrings being measured.
+
+    order : int, optional (default 1)
+        Order of the correction (i.e. order of the taylor series expansion for
+        the exponentiated error generator) to compute.
+
+    Returns
+    -------
+    correction : Polynomial
+        Polynomial corresponding to the correction to the output probability for the
+        desired bitstring induced by the error generator (to specified order).
+    """    
     num_random = _eprop.random_support(tableau)
     if num_random > 2148:
         raise RuntimeError('Number of random bits is greater than 1074, magnitude of probability scale will underflow!')
@@ -690,18 +725,23 @@ def stabilizer_probability_correction_symbolic_polynomial(errorgen_dict, errorge
     complete_taylor_errgen_labels = list(combined_taylor_dict.keys())
     
     #can now do the correction computation in a single-shot.
-    alphas = _np.ravel(_eprop.bulk_alpha(complete_taylor_errgen_labels, tableau, [desired_bitstring]))
+    alphas_by_bitstring = _eprop.bulk_alpha(complete_taylor_errgen_labels, tableau, desired_bitstrings)
+
     #use the nonzero alphas to filter 
-    nonzero_alpha_idxs = _np.nonzero(alphas)[0]
-    nonzero_alpha = alphas[nonzero_alpha_idxs]
-    nonzero_alpha_labels = [complete_taylor_errgen_labels[idx] for idx in nonzero_alpha_idxs]
+    nonzero_alpha_idxs_by_bitstring = [row.nonzero()[0] for row in alphas_by_bitstring]
+    nonzero_alphas_by_bitstring =  [alpha_row[nonzero_alpha_idxs] for alpha_row, nonzero_alpha_idxs in 
+                                    zip(alphas_by_bitstring, nonzero_alpha_idxs_by_bitstring)]
+    nonzero_alpha_labels_by_bitstring = [[complete_taylor_errgen_labels[idx] for idx in nonzero_alpha_idxs] 
+                                         for nonzero_alpha_idxs in  nonzero_alpha_idxs_by_bitstring]
 
     #gather the coefficients corresponding to each of the labels with nonzero alpha and sum this into a
     #single polynomial. Take care of the scale factor from the number of random variables at the same time.
-    nonzero_alpha_coeffs = [combined_taylor_dict[lbl].scalar_mult(alpha*scale) for lbl, alpha in zip(nonzero_alpha_labels, nonzero_alpha)]
-    correction_poly = _Polynomial.sum(nonzero_alpha_coeffs)
+    correction_polys = []
+    for nonzero_alpha_labels, nonzero_alpha in zip(nonzero_alpha_labels_by_bitstring, nonzero_alphas_by_bitstring):
+        nonzero_alpha_coeffs = [combined_taylor_dict[lbl].scalar_mult(alpha*scale) for lbl, alpha in zip(nonzero_alpha_labels, nonzero_alpha)]
+        correction_polys.append(_Polynomial.sum(nonzero_alpha_coeffs))
     
-    return correction_poly
+    return correction_polys
 
 def stabilizer_pauli_expectation_correction_symbolic_polynomial(errorgen_dict, errorgen_to_var_map, tableau, pauli, order = 1):
     """
@@ -734,24 +774,65 @@ def stabilizer_pauli_expectation_correction_symbolic_polynomial(errorgen_dict, e
         Polynomial corresponding to the correction to the output Pauli expectation value for the
         desired Pauli induced by the error generator (to specified order).
     """
+    correction_polys = bulk_stabilizer_pauli_expectation_correction_symbolic_polynomial(errorgen_dict, errorgen_to_var_map, 
+                                                                                        tableau, [pauli], order = order)
+    return correction_polys[0]
+
+
+def bulk_stabilizer_pauli_expectation_correction_symbolic_polynomial(errorgen_dict, errorgen_to_var_map, tableau, paulis, order = 1):
+    """
+    Compute the kth-order correction to the expectation value of the specified pauli.
+    
+    Parameters
+    ----------
+    errorgen_dict : dict
+        Dictionary whose keys are `LocalStimErrorgenLabel` and whose values are corresponding
+        rates.
+        
+    errorgen_to_var_map : dict
+        A dictionary whose keys are tuples of LocalStimErrorgenLabels and integer circuit layer indices
+        and whose value is an integer corresponding to the corresponding variable index to use in constructed
+        Polynomials.
+    
+    tableau : stim.Tableau
+        Stim tableau corresponding to a particular stabilizer state being measured.
+        
+    paulis : iterable of stim.PauliString
+        Pauli operator to compute expectation value correction for.
+
+    order : int, optional (default 1)
+        Order of the correction (i.e. order of the taylor series expansion for
+        the exponentiated error generator) to compute.
+    
+    Returns
+    -------
+    correction : Polynomial
+        Polynomial corresponding to the correction to the output Pauli expectation value for the
+        desired Pauli induced by the error generator (to specified order).
+    """
     #accumulate the terms across orders (with short circuit logic for order 1 to save time):
     taylor_expansion = error_generator_taylor_expansion_symbolic_polynomial(errorgen_dict, errorgen_to_var_map, order)
     combined_taylor_dict = _combined_taylor_expansion_polynomial(taylor_expansion, errorgen_to_var_map)
     complete_taylor_errgen_labels = list(combined_taylor_dict.keys())
 
     #can now do the correction computation in a single-shot.
-    alphas = _np.ravel(_eprop.bulk_alpha_pauli(complete_taylor_errgen_labels, tableau, [pauli]))
+    alphas_by_pauli = _eprop.bulk_alpha_pauli(complete_taylor_errgen_labels, tableau, paulis)
+
     #use the nonzero alphas to filter 
-    nonzero_alpha_idxs = _np.nonzero(alphas)[0]
-    nonzero_alpha = alphas[nonzero_alpha_idxs]
-    nonzero_alpha_labels = [complete_taylor_errgen_labels[idx] for idx in nonzero_alpha_idxs]
+    nonzero_alpha_idxs_by_pauli = [row.nonzero()[0] for row in alphas_by_pauli]
+    nonzero_alphas_by_pauli =  [alpha_row[nonzero_alpha_idxs] for alpha_row, nonzero_alpha_idxs in 
+                                    zip(alphas_by_pauli, nonzero_alpha_idxs_by_pauli)]
+    nonzero_alpha_labels_by_pauli = [[complete_taylor_errgen_labels[idx] for idx in nonzero_alpha_idxs] 
+                                         for nonzero_alpha_idxs in  nonzero_alpha_idxs_by_pauli]
 
     #gather the coefficients corresponding to each of the labels with nonzero alpha and sum this into a
     #single polynomial. Take care of the scale factor from the number of random variables at the same time.
-    nonzero_alpha_coeffs = [combined_taylor_dict[lbl].scalar_mult(alpha) for lbl, alpha in zip(nonzero_alpha_labels, nonzero_alpha)]
-    correction_poly = _Polynomial.sum(nonzero_alpha_coeffs)
+    correction_polys = []
+    for nonzero_alpha_labels, nonzero_alpha in zip(nonzero_alpha_labels_by_pauli, nonzero_alphas_by_pauli):
+        nonzero_alpha_coeffs = [combined_taylor_dict[lbl].scalar_mult(alpha) for lbl, alpha in zip(nonzero_alpha_labels, nonzero_alpha)]
+        correction_polys.append(_Polynomial.sum(nonzero_alpha_coeffs))
     
-    return correction_poly    
+    return correction_polys
 
 #helper function for forming the combined taylor-expansion polynomials.
 def _combined_taylor_expansion_polynomial(taylor_expansion, errorgen_to_var_map):
