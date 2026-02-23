@@ -284,6 +284,8 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
                         (nprocs, ' x '.join(map(str, (na,) + npp)), _np.prod((na,) + npp)),message_level=2)
             printer.log("   %d atoms, parameter block size limits %s" % (natoms, str(param_blk_sizes)), message_level=2)
             assert(_np.prod((na,) + npp) <= nprocs), "Processor grid size exceeds available processors!"
+        else:
+            printer.log('Using MapForwardSimulator without MPI', message_level=2)
 
         layout = _MapCOPALayout(circuits, self.model, dataset, self._max_cache_size, natoms, na, npp,
                                 param_dimensions, param_blk_sizes, resource_alloc,circuit_partition_cost_functions,

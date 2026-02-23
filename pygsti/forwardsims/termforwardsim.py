@@ -326,6 +326,8 @@ class TermForwardSimulator(_DistributableForwardSimulator):
                         (nprocs, ' x '.join(map(str, (na,) + npp)), _np.prod((na,) + npp)), message_level=2)
             printer.log("   %d atoms, parameter block size limits %s" % (natoms, str(param_blk_sizes)), message_level=2)
             assert(_np.prod((na,) + npp) <= nprocs), "Processor grid size exceeds available processors!"
+        else:
+            printer.log('Using TermForwardSimulator without MPI', message_level=2)
 
         # TODO: Layout circuit creation cache unused for TermCOPALayout
         layout = _TermCOPALayout(circuits, self.model, dataset, natoms, na, npp, param_dimensions,
