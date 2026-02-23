@@ -4164,7 +4164,7 @@ class RawTVDFunction(RawObjectiveFunction):
         numpy.ndarray
             A 1D array of length equal to that of each array argument.
         """
-        raise NotImplementedError("TVD is not twice-differentiable.")
+        return _np.zeros_like(probs)
 
     #Required zero-term methods for omitted probs support in model-based objective functions
     def zero_freq_terms(self, total_counts, probs):
@@ -4239,7 +4239,7 @@ class RawTVDFunction(RawObjectiveFunction):
         numpy.ndarray
             A 1D array of the same length as `total_counts` and `probs`.
         """
-        raise NotImplementedError("TVD is not twice-differentiable.")
+        return _np.zeros_like(probs)
 
 
 class RawAbsPower(RawObjectiveFunction):
