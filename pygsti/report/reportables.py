@@ -29,7 +29,8 @@ from pygsti import tools as _tools
 from pygsti.baseobjs.basis import (
     Basis as _Basis,
     DirectSumBasis as _DirectSumBasis,
-    BuiltinBasis as _BuiltinBasis
+    BuiltinBasis as _BuiltinBasis,
+    BasisLike
 )
 from pygsti.baseobjs.label import Label as _Lbl
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LEEL
@@ -40,8 +41,6 @@ from pygsti import SpaceT
 _CVXPY_AVAILABLE = importlib.util.find_spec('cvxpy') is not None
 
 FINITE_DIFF_EPS = 1e-7
-
-BasisLike = Union[_Basis, str]
 
 
 def _null_fn(*arg):

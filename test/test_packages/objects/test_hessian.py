@@ -130,7 +130,7 @@ class TestHessianMethods(BaseTestCase):
         res = proto.ModelEstimateResults(data, proto.StandardGST(modes="full TP"))
 
         #Add estimate for hessian-based CI --------------------------------------------------
-        builder = pygsti.objectivefns.PoissonPicDeltaLogLFunction.builder()
+        builder = pygsti.objectivefns.ObjectiveFunctionBuilder(pygsti.objectivefns.PoissonPicDeltaLogLFunction)
         res.add_estimate(
             proto.estimate.Estimate.create_gst_estimate(
                 res, smq1Q_XY.target_model(), smq1Q_XY.target_model(),

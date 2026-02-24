@@ -19,6 +19,9 @@ on:
       run-unit-tests:
         required: true
         type: string
+      run-integration-tests:
+         required: true
+         type: string
       run-extra-tests:
         required: true
         type: string
@@ -84,6 +87,11 @@ jobs:
       run: |
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
         python -m pytest -n auto --dist loadscope --cov=pygsti --durations=25 test/unit
+    - name: Run workflow tests
+      if: ${{ inputs.run-integration-tests == 'true' }}
+      run: |
+        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
+        python -m pytest -n auto --dist loadscope --cov=pygsti test/integration
     - name: Run test_packages
       if: ${{ inputs.run-extra-tests == 'true' }}
       run: |

@@ -54,6 +54,9 @@ from pygsti.circuits import Circuit
 from pygsti.forwardsims import ForwardSimulator
 
 
+ObjectiveType = _objfns.ObjectiveFunctionBuilder.ObjectiveType
+
+
 #For results object:
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]
 DEFAULT_BAD_FIT_THRESHOLD = 2.0
@@ -756,8 +759,9 @@ class GSTObjFnBuilders(_NicelySerializable):
         on the final GST iteration.
     """
 
-    @classmethod
-    def cast(cls, obj):
+    # This used to be a class method, but this class has no derived classes.
+    @staticmethod
+    def cast(obj):
         """
         Cast `obj` to a :class:`GSTObjFnBuilders` object.
 
@@ -772,33 +776,37 @@ class GSTObjFnBuilders(_NicelySerializable):
         -------
         GSTObjFnBuilders
         """
+        cls = GSTObjFnBuilders
         if isinstance(obj, cls): return obj
         elif obj is None: return cls.create_from()
         elif isinstance(obj, dict): return cls.create_from(**obj)
         elif isinstance(obj, (list, tuple)): return cls(*obj)
         else: raise ValueError("Cannot create an %s object from '%s'" % (cls.__name__, str(type(obj))))
 
-    @classmethod
-    def create_from(cls, objective='logl', freq_weighted_chi2=False, always_perform_mle=False, only_perform_mle=False):
+    # This used to be a class method, but this class has no derived classes.
+    @staticmethod
+    def create_from(objective: ObjectiveType='logl', freq_weighted_chi2=False, always_perform_mle=False, only_perform_mle=False):
         """
         Creates a common :class:`GSTObjFnBuilders` object from several arguments.
 
         Parameters
         ----------
-        objective : {'logl', 'chi2'}, optional
-            Whether to create builders for maximum-likelihood or minimum-chi-squared GST.
+        objective : ObjectiveType, optional
+            Specifies whether the final GST iteration uses a negative-log-likelihood loss ('logl'),
+            a chi-squared loss ('chi2'), a total variation distance loss ('tvd' or 'normalized tvd'),
+            or an Lp-norm loss.
 
         freq_weighted_chi2 : bool, optional
             Whether chi-squared objectives use frequency-weighting.  If you're not sure
             what this is, leave it as `False`.
 
         always_perform_mle : bool, optional
-            Perform a ML-GST step on *each* iteration (usually this is only done for the
-            final iteration).
+            Only used if objective == 'logl'. If True, then each GST iteration consists
+            of an ML-GST step.
 
         only_perform_mle : bool, optional
-            Only perform a ML-GST step on each iteration, i.e. do *not* perform any chi2
-            minimization to "seed" the ML-GST step.
+            Only used if objective == 'logl'. If False (default), then each ML-GST step is
+            seeded with the results of a chi2-GST step with the same circuit list.
 
         Returns
         -------
@@ -810,7 +818,6 @@ class GSTObjFnBuilders(_NicelySerializable):
         if objective == "chi2":
             iteration_builders = [chi2_builder]
             final_builders = []
-
         elif objective == "logl":
             if always_perform_mle:
                 iteration_builders = [mle_builder] if only_perform_mle else [chi2_builder, mle_builder]
@@ -819,8 +826,10 @@ class GSTObjFnBuilders(_NicelySerializable):
                 iteration_builders = [chi2_builder]
                 final_builders = [mle_builder]
         else:
-            raise ValueError("Invalid objective: %s" % objective)
-        return cls(iteration_builders, final_builders)
+            iteration_builders = [chi2_builder]
+            final_builders = [_objfns.ObjectiveFunctionBuilder.create_from(objective)]
+    
+        return GSTObjFnBuilders(iteration_builders, final_builders)
 
     def __init__(self, iteration_builders, final_builders=()):
         super().__init__()
@@ -1686,7 +1695,7 @@ class LinearGateSetTomography(_proto.Protocol):
         parameters['protocol'] = self  # Estimates can hold sub-Protocols <=> sub-results
         parameters['profiler'] = profiler
         parameters['final_mdc_store'] = final_store
-        parameters['final_objfn_builder'] = _objfns.PoissonPicDeltaLogLFunction.builder()
+        parameters['final_objfn_builder'] = _objfns.ObjectiveFunctionBuilder(_objfns.PoissonPicDeltaLogLFunction)
         # just set final objective function as default logl objective (for ease of later comparison)
 
         ret = ModelEstimateResults(data, self)
@@ -1942,7 +1951,7 @@ class StandardGST(_proto.Protocol):
                                          disable_checkpointing=disable_checkpointing,
                                          checkpoint=child_checkpoint,
                                          checkpoint_path=checkpoint_path)
-                    ret.add_estimates(result)
+                    ret.add_estimates(result, silent_steal=True)
 
                 elif mode in models_to_test:
                     mdl = models_to_test[mode]
@@ -1954,7 +1963,7 @@ class StandardGST(_proto.Protocol):
                                          disable_checkpointing=disable_checkpointing,
                                          checkpoint=child_checkpoint,
                                          checkpoint_path=checkpoint_path)
-                    ret.add_estimates(result)
+                    ret.add_estimates(result, silent_steal=True)
 
                 else:
                     if target_model is None:
@@ -1980,7 +1989,7 @@ class StandardGST(_proto.Protocol):
                                      disable_checkpointing=disable_checkpointing,
                                      checkpoint=child_checkpoint,
                                      checkpoint_path=checkpoint_path)
-                    ret.add_estimates(result)
+                    ret.add_estimates(result, silent_steal=True)
 
         return ret
 
@@ -3019,9 +3028,10 @@ class ModelEstimateResults(_proto.ProtocolResults):
             ret[k] = v
         return ret
 
-    def add_estimates(self, results, estimates_to_add=None):
+    def add_estimates(self, results: 'ModelEstimateResults', estimates_to_add:Optional[list[str]]=None, silent_steal:bool=False):
         """
-        Add some or all of the estimates from `results` to this `Results` object.
+        Add some or all of the estimates from `results` to `self`, possibly making
+        copies in the process.
 
         Parameters
         ----------
@@ -3034,6 +3044,12 @@ class ModelEstimateResults(_proto.ProtocolResults):
             A list of estimate keys to import from `results`.  If None, then all
             the estimates contained in `results` are imported.
 
+        silent_steal: bool, optional
+            Consider some `est` in results.estimates.values(). If silent_steal
+            is True, then then we can update `est.parent` without regard to its
+            current value. If silent_steal is False and `est.parent` is neither
+            None nor self, then we update self with a deep-copy of `est`.
+
         Returns
         -------
         None
@@ -3045,18 +3061,27 @@ class ModelEstimateResults(_proto.ProtocolResults):
         if 'iteration' not in self.circuit_lists:
             raise ValueError(("Circuits must be initialized"
                               "*before* adding estimates"))
+        
+        if estimates_to_add is None:
+            estimates_to_add = list(results.estimates)
 
         assert(results.dataset is self.dataset), "DataSet inconsistency: cannot import estimates!"
         assert(len(self.circuit_lists['iteration']) == len(results.circuit_lists['iteration'])), \
             "Iteration count inconsistency: cannot import estimates!"
 
-        for estimate_key in results.estimates:
-            if estimates_to_add is None or estimate_key in estimates_to_add:
-                if estimate_key in self.estimates:
-                    _warnings.warn("Re-initializing the %s estimate" % estimate_key
-                                   + " of this Results object!  Usually you don't"
-                                   + " want to do this.")
-                self.estimates[estimate_key] = results.estimates[estimate_key]
+        for estimate_key in estimates_to_add:
+            to_add = results.estimates[estimate_key]
+            if estimate_key in self.estimates:
+                _warnings.warn("Re-initializing the %s estimate" % estimate_key
+                                + " of this Results object!  Usually you don't"
+                                + " want to do this.")
+            if (not silent_steal) and (id(to_add.parent) != id(self)) and (to_add.parent is not None):
+                msg  = f"Provided estimate {estimate_key} has different parent than `self`.\n"
+                msg += "We'll make a copy of this estimate and set its parent to `self`."
+                _warnings.warn(msg)
+                to_add = to_add.copy()
+            to_add.parent = self
+            self.estimates[estimate_key] = to_add
 
     def rename_estimate(self, old_name, new_name):
         """
@@ -3085,7 +3110,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
         keys_to_move = ordered_keys[ordered_keys.index(old_name) + 1:]  # everything after old_name
         for key in keys_to_move: self.estimates.move_to_end(key)
 
-    def add_estimate(self, estimate, estimate_key='default'):
+    def add_estimate(self, estimate: _Estimate, estimate_key: str='default', silent_steal: bool=False):
         """
         Add a set of `Model` estimates to this `Results` object.
 
@@ -3096,6 +3121,11 @@ class ModelEstimateResults(_proto.ProtocolResults):
 
         estimate_key : str, optional
             The key or label used to identify this estimate.
+
+        silent_steal: bool, optional
+            If silent_steal is True, then then we can update `estimate.parent` without
+            regard to its current value. If silent_steal is False and `estimate.parent`
+            is neither None nor self, then we update self with a deep-copy of `estimate`.
 
         Returns
         -------
@@ -3117,7 +3147,13 @@ class ModelEstimateResults(_proto.ProtocolResults):
             _warnings.warn("Re-initializing the %s estimate" % estimate_key
                            + " of this Results object!  Usually you don't"
                            + " want to do this.")
-
+            
+        if (not silent_steal) and (id(estimate.parent) != id(self)) and (estimate.parent is not None):
+            msg  = f"Provided estimate {estimate_key} has different parent than `self`.\n"
+            msg += "We'll make a copy of this estimate and set its parent to `self`."
+            _warnings.warn(msg)
+            estimate = estimate.copy()
+        estimate.parent = self
         self.estimates[estimate_key] = estimate
 
     def add_model_test(self, target_model, themodel,
@@ -3175,7 +3211,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
         mdltest = _ModelTest(themodel, target_model, gaugeopt_suite,
                              objfn_builder, badfit_options, name=estimate_key, verbosity=verbosity)
         test_result = mdltest.run(self.data, simulator=simulator)
-        self.add_estimates(test_result)
+        self.add_estimates(test_result, silent_steal=True)
 
     def view(self, estimate_keys, gaugeopt_keys=None):
         """
