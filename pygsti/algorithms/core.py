@@ -34,7 +34,7 @@ from pygsti.modelmembers import states as _state
 from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.optimize.simplerlm import Optimizer as _Optimizer, SimplerLMOptimizer as _SimplerLMOptimizer
-from pygsti.optimizer.customlm import CustomLMOptimizer as _CustomLMOptimizer
+from pygsti.optimize.customlm import CustomLMOptimizer as _CustomLMOptimizer
 from pygsti import forwardsims as _fwdsims
 
 _dummy_profiler = _DummyProfiler()
