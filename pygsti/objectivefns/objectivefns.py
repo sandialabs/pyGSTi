@@ -4244,11 +4244,16 @@ class RawTVDFunction(RawObjectiveFunction):
 
 class RawAbsPower(RawObjectiveFunction):
     """
-    The function `(1/power) * |p-f|^power`.
+    The function `|p-f|^power`.
     """
 
-    def __init__(self, power: float,  regularization=None, resource_alloc=None,
-                 name='Lp^p', description="Elementwise absolute value and raising to a power.", verbosity=0):
+    def __init__(self, power: float,  regularization=None, resource_alloc=None, name: Optional[str]='Lp^p',
+            description: Optional[str]="Elementwise absolute value and raising to a power.", verbosity=0):
+        if name is None:
+            name = 'Lp^p'
+        if description is None:
+            description = "Elementwise absolute value and raising to a power."
+
         super().__init__(regularization, resource_alloc, name, description, verbosity)
         assert power >= 1
         self.power = power
@@ -4257,12 +4262,13 @@ class RawAbsPower(RawObjectiveFunction):
         return -1
     
     def terms(self, probs, counts, total_counts, freqs, intermediates=None):
-        return (1/self.power) * _np.abs(probs - freqs) ** self.power
+        return _np.abs(probs - freqs) ** self.power
     
     def dterms(self, probs, counts, total_counts, freqs, intermediates=None):
         t = probs - freqs
         d = _np.abs(t) ** (self.power - 1)
         d[t < 0] *= -1
+        d *= self.power
         return d
     
     def zero_freq_terms(self, total_counts, probs):
@@ -4271,6 +4277,7 @@ class RawAbsPower(RawObjectiveFunction):
     def zero_freq_dterms(self, total_counts, probs):
         d = _np.abs(probs) ** (self.power - 1)
         d[probs < 0] *= -1
+        d *= self.power
         return d
 
 ######################################################
@@ -5156,7 +5163,7 @@ class LpNormToPowerP(TermWeighted):
 
     TEMPLATE_FIELDS = (
     """
-    Model-based loss function: `1/power * |p-f|^power`.
+    Model-based loss function: `|p-f|^power`.
     """, "",
     """
     power : float, optonal
