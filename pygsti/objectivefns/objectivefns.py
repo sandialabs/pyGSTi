@@ -10,17 +10,16 @@ Defines objective-function objects
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from typing import Optional
-
 import itertools as _itertools
 import sys as _sys
 import time as _time
 import pathlib as _pathlib
-from typing import Callable, Literal, Union, Tuple
+from typing import Callable, Literal, Union, Tuple, Hashable, Optional
 
 import numpy as _np
 
 from pygsti import tools as _tools
+from pygsti.layouts.copalayout import CircuitOutcomeProbabilityArrayLayout as _COPALayout
 from pygsti.layouts.distlayout import DistributableCOPALayout as _DistributableCOPALayout
 from pygsti.layouts.matrixlayout import MatrixCOPALayout as _MatrixCOPALayout
 from pygsti.tools import slicetools as _slct, mpitools as _mpit, sharedmemtools as _smt
@@ -4055,8 +4054,12 @@ class RawTVDFunction(RawObjectiveFunction):
     verbosity : int, optional
         Level of detail to print to stdout.
     """
-    def __init__(self, regularization=None,
-                 resource_alloc=None, name='tvd', description="Total Variational Distance (TVD)", verbosity=0):
+    def __init__(self, regularization=None, resource_alloc=None, name: Optional[str]='tvd',
+            description: Optional[str]="Total Variational Distance (TVD)", verbosity=0):
+        if name is None:
+            name = 'tvd'
+        if description is None:
+            description = "Total Variational Distance (TVD)"
         super().__init__(regularization, resource_alloc, name, description, verbosity)
 
     def chi2k_distributed_qty(self, objective_function_value):
@@ -5104,18 +5107,36 @@ class TermWeighted(TimeIndependentMDCObjectiveFunction):
     def __init__(self, raw_objfn, mdc_store, penalties=None, verbosity=0, **kwargs):
         super().__init__(raw_objfn, mdc_store, penalties, verbosity, **kwargs)
         self._terms_weights = _np.ones(self.layout.num_elements)
+        self._terms_layout_info = TermWeighted._cheap_layout_spec(self.layout)
+        return
+
+    @staticmethod
+    def _cheap_layout_spec(layout: _COPALayout) -> tuple[int, int, int]:
+        return (id(layout), layout.num_circuits, layout.num_elements)
+
+    def _must_update_terms_weights(self) -> bool:
+        # separate from _update_terms_weights since _update_terms_weights
+        # includes logic specific to the weighting method.
+        temp = TermWeighted._cheap_layout_spec(self.layout)
+        if temp == self._terms_layout_info:
+            return False
+        else:
+            self._terms_layout_info = temp
+            return True
 
     def _update_terms_weights(self):
-        # Default implementation does nothing.
+        self._terms_weights = _np.ones(self.layout.num_elements)
         return
     
     def _reweight_terms(self, terms):
-        self._update_terms_weights()
+        if self._must_update_terms_weights():
+            self._update_terms_weights()
         terms[:self.nelements] *= self._terms_weights
         return
 
     def _reweight_jac(self, terms_jac):
-        self._update_terms_weights()
+        if self._must_update_terms_weights:
+            self._update_terms_weights()
         terms_jac[:self.nelements] *= self._terms_weights[:, None]
         return
 
@@ -5135,9 +5156,10 @@ class TVDFunction(TermWeighted):
     def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0, **kwargs):
         raw_objfn = RawTVDFunction(regularization, mdc_store.resource_alloc, name, description, verbosity)
         super().__init__(raw_objfn, mdc_store, penalties, verbosity, **kwargs)
+        # ^ initializes self._terms_weights to an array of all ones
         self.normalized = name == 'normalized tvd'
-        self._terms_weights = None
         self._update_terms_weights()
+        return
 
     def _update_terms_weights(self):
         if self.normalized:
@@ -5154,7 +5176,7 @@ class TVDFunction(TermWeighted):
             #   However, this function is first and foremost a sum of terms, and the sum
             #   never has an interesting interpretation. 
             #
-        elif self._terms_weights is None:
+        else:
             self._terms_weights = _np.ones(self.layout.num_elements)
         return
 
@@ -5178,6 +5200,7 @@ class LpNormToPowerP(TermWeighted):
         super().__init__(raw_objfn, mdc_store, penalties, verbosity, **kwargs)
         self.power = raw_objfn.power
         self._update_terms_weights()
+        return
 
 
 class TimeDependentMDCObjectiveFunction(MDCObjectiveFunction):
