@@ -29,20 +29,18 @@ from pygsti.tools.exceptions import (
     NumericalDomainWarning as _NumericalDomainWarning,
     CVXPYFailure as _CVXPYFailure
 )
-from pygsti.baseobjs import basis as _pgb
 from pygsti.baseobjs.basis import (
     Basis as _Basis,
     BuiltinBasis as _BuiltinBasis,
     DirectSumBasis as _DirectSumBasis,
-    TensorProdBasis as _TensorProdBasis
+    TensorProdBasis as _TensorProdBasis,
+    BasisLike
 )
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LocalElementaryErrorgenLabel
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
-from pygsti import SpaceT
 
 from typing import Union, Optional, Any
-BasisLike = Union[str, _Basis]
 
 
 __SCALAR_TOL_EXPONENT__ = 0.5

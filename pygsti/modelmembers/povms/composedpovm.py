@@ -11,13 +11,16 @@ Defines the ComposedPOVM class
 #***************************************************************************************************
 
 import collections as _collections
+from typing import Optional
 
 from pygsti.modelmembers.povms.composedeffect import ComposedPOVMEffect as _ComposedPOVMEffect
 from pygsti.modelmembers.povms.computationalpovm import ComputationalBasisPOVM as _ComputationalBasisPOVM
 from pygsti.modelmembers.povms.povm import POVM as _POVM
-from pygsti.modelmembers import modelmember as _mm
+from pygsti.modelmembers.operations import LinearOperator as _LinearOperator
+
+from pygsti.evotypes import Evotype as _Evotype
 from pygsti.modelmembers import operations as _op
-from pygsti.baseobjs import Basis as _Basis
+from pygsti.baseobjs.basis import BasisLike as _BasisLike, Basis as _Basis
 
 
 class ComposedPOVM(_POVM):
@@ -27,10 +30,10 @@ class ComposedPOVM(_POVM):
 
     Parameters
     ----------
-    errormap : MapOperator
+    errormap : LinearOperator
         The error generator action and parameterization, encapsulated in
-        a gate object.  Usually a :class:`LindbladOp`
-        or :class:`ComposedOp` object.  (This argument is *not* copied,
+        a gate object.  Usually an :class:`ExpErrorGenOp`
+        or a :class:`ComposedOp` object.  (This argument is *not* copied,
         to allow ComposedPOVMEffects to share error generator
         parameters with other gates and spam vectors.)
 
@@ -49,10 +52,12 @@ class ComposedPOVM(_POVM):
         `errormap`.
     """
 
-    def __init__(self, errormap, povm=None, mx_basis=None):
+    def __init__(self,
+            errormap : _LinearOperator, povm: Optional[_POVM]=None, mx_basis: Optional[_BasisLike]=None
+        ):
         self.error_map = errormap
         state_space = errormap.state_space
-        evotype = errormap._evotype
+        evotype : _Evotype = errormap._evotype  # type: ignore
     
         if povm is None:
             povm = _ComputationalBasisPOVM(state_space.num_qubits, evotype)
@@ -67,7 +72,7 @@ class ComposedPOVM(_POVM):
         assert(povm.num_params == 0), \
             "Given `povm` must be static (have 0 parameters)!"
         
-        self.base_povm = povm
+        self.base_povm : _POVM = povm
 
         if mx_basis is None:
             if hasattr(errormap, 'errorgen') and isinstance(errormap.errorgen, _op.LindbladErrorgen): # type: ignore
