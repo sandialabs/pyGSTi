@@ -1,6 +1,8 @@
+from typing import Literal
+
 import pygsti
 from pygsti.modelpacks import smq1Q_XYI, GSTModelPack
-from pygsti.protocols import GateSetTomography, GateSetTomographyDesign, ProtocolData
+from pygsti.protocols import GateSetTomography, GateSetTomographyDesign, ProtocolData, ModelEstimateResults
 from pygsti.report import construct_standard_report
 from pygsti.models import ExplicitOpModel
 from pygsti.data.dataset import DataSet
@@ -33,7 +35,10 @@ class TestRobustGSTPipeline(unittest.TestCase):
         return dsc, selected
 
     @staticmethod
-    def gst_runner(ds: DataSet, edesign: GateSetTomographyDesign, target_model: ExplicitOpModel, final_objective: str, verbosity: int, mode: str):
+    def gst_runner(
+            ds: DataSet, final_objective: Literal['tvd', 'logl'],
+            edesign: GateSetTomographyDesign, target_model: ExplicitOpModel, verbosity: int, mode: str
+        ) -> ModelEstimateResults:
         target_model = target_model.copy()
         target_model.convert_members_inplace(mode)
         target_model.default_gauge_group = 'unitary'
@@ -56,61 +61,59 @@ class TestRobustGSTPipeline(unittest.TestCase):
         edesign      = GateSetTomographyDesign(target.create_processor_spec(), circuitlists, nested=True)
         depol_model  = target.depolarize(op_noise=0.01)
         ds_ori       = pygsti.data.simulate_data(depol_model, circuitlists[-1], num_samples=10_000, seed=0)
+        ds_cor, _    = TestRobustGSTPipeline.corrupt_dataset(ds_ori, prop_corrupt=0.025)
         fit_mode     = 'full TP'
+        verbosity    = 0
 
-        print('##### fits using original data #######')
-        results_ori = TestRobustGSTPipeline.gst_runner(ds_ori, edesign, target, 'logl', verbosity=0, mode=fit_mode)
+        common_args = (edesign, target, verbosity, fit_mode)
+
+        ##### train GST models with original data #######
+        results_ori = TestRobustGSTPipeline.gst_runner(  ds_ori, 'logl', *common_args )  # type: ignore
+        temp        = TestRobustGSTPipeline.gst_runner(  ds_ori,  'tvd', *common_args )  # type: ignore
         results_ori.rename_estimate(fit_mode, 'fit-original-logl')
-        temp = TestRobustGSTPipeline.gst_runner(ds_ori, edesign, target, 'tvd', verbosity=0, mode=fit_mode)
-        temp = temp.estimates.pop(fit_mode)
-        temp.parent = None
-        results_ori.add_estimate(temp, 'fit-original-tvd')
+        results_ori.add_estimate(temp.estimates[fit_mode], 'fit-original-tvd', silent_steal=True)
 
-        print('##### fits using corrupted data #######')
-        ds_cor, _   = TestRobustGSTPipeline.corrupt_dataset(ds_ori, prop_corrupt=0.025)
-        results_cor = TestRobustGSTPipeline.gst_runner(ds_cor, edesign, target, 'logl', verbosity=0, mode=fit_mode)
+        ##### train GST models with corrupted data #######
+        results_cor = TestRobustGSTPipeline.gst_runner( ds_cor, 'logl', *common_args)  # type: ignore
+        temp        = TestRobustGSTPipeline.gst_runner( ds_cor,  'tvd', *common_args)  # type: ignore
         results_cor.rename_estimate(fit_mode, 'fit-corrupted-logl')
-        temp = TestRobustGSTPipeline.gst_runner(ds_cor, edesign, target, 'tvd', verbosity=0, mode=fit_mode)
-        temp = temp.estimates.pop(fit_mode)
-        temp.parent = None
-        results_cor.add_estimate(temp, 'fit-corrupted-tvd')
+        results_cor.add_estimate(temp.estimates[fit_mode], 'fit-corrupted-tvd', silent_steal=True)
 
-        ##### add test models (fitted w.r.t. corrupted data) to results_ori ######
+        ##### add test models (trained on corrupted data) to results_ori ######
         mdl = results_cor.estimates['fit-corrupted-logl'].models['stdgaugeopt']
         results_ori.add_model_test(target, mdl, 'fit-corrupted-logl')
         mdl = results_cor.estimates['fit-corrupted-tvd'].models['stdgaugeopt']
         results_ori.add_model_test(target, mdl, 'fit-corrupted-tvd')
 
-        ##### add test models (fitted w.r.t. original data) to results_cor ######
+        ##### add test models (trained on original data) to results_cor ######
         mdl = results_ori.estimates['fit-original-logl'].models['stdgaugeopt']
         results_cor.add_model_test(target, mdl, 'fit-original-logl')
         mdl = results_ori.estimates['fit-original-tvd'].models['stdgaugeopt']
         results_cor.add_model_test(target, mdl, 'fit-original-tvd')
 
-        def log_likelihood_summaries():
-            f_cor = results_cor.estimates['fit-corrupted-logl'].final_objective_fn()
+        # The following function is here to format data in a way that's useful for 
+        # the test and that's similar to what we see in the example notebook.
+        def log_likelihood_summaries() -> tuple[pd.DataFrame, pd.DataFrame]:
             f_ori = results_ori.estimates['fit-original-logl'].final_objective_fn()
+            f_cor = results_cor.estimates['fit-corrupted-logl'].final_objective_fn()
 
-            vals_cor = [(en, f_cor.fn_from_model(e.models['final iteration estimate'])) for en,e in results_cor.estimates.items()  ]
-            vals_ori = [(en, f_ori.fn_from_model(e.models['final iteration estimate'])) for en,e in results_cor.estimates.items()  ]
+            modelname = 'final iteration estimate'
+            estimates = results_cor.estimates  # results_cor holds ModelTest estimates as well
+            vals_cor = [(en, f_cor.fn_from_model(e.models[modelname])) for en,e in estimates.items()  ]
+            vals_ori = [(en, f_ori.fn_from_model(e.models[modelname])) for en,e in estimates.items()  ]
 
-            dfo = pd.DataFrame([
-                    [ v  for n,v in vals_cor   if 'original' in n],
-                    [ v  for n,v in vals_ori   if 'original' in n]
-                ],
-                columns=[n for n,_ in vals_cor if 'original' in n], index=['corrupted','original']
-            )
-            dfo.index.name = 'test dataset'
-            dfo = dfo.rename(columns={'fit-original-logl': '-logl', 'fit-original-tvd': 'tvd'})
+            def summary_dataframe(dataset_name: Literal['original', 'corrupted']):
+                name_map = {f'fit-{dataset_name}-logl': '-logl', f'fit-{dataset_name}-tvd': 'tvd'}
+                df = pd.DataFrame([
+                        [ v  for n,v in vals_cor  if  dataset_name in n],
+                        [ v  for n,v in vals_ori  if  dataset_name in n]],
+                    columns=[name_map[n] for n,_ in vals_cor if dataset_name in n], 
+                    index=['corrupted','original']  # row labels
+                )
+                return df
             
-            dfc = pd.DataFrame([
-                    [ v  for n,v in vals_cor   if 'corrupted' in n],
-                    [ v  for n,v in vals_ori   if 'corrupted' in n]
-                ],
-                columns=[n for n,_ in vals_cor if 'corrupted' in n], index=['corrupted','original']
-            )
-            dfc.index.name = 'test dataset'
-            dfc = dfc.rename(columns={'fit-corrupted-logl': '-logl', 'fit-corrupted-tvd': 'tvd'})
+            dfo = summary_dataframe('original')
+            dfc = summary_dataframe('corrupted')
             return dfo, dfc
 
         lls_train_ori, lls_train_cor = log_likelihood_summaries()
