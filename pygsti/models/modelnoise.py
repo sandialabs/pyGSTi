@@ -18,6 +18,7 @@ import numpy as _np
 from pygsti.models.stencillabel import StencilLabel as _StencilLabel
 from pygsti.tools import listtools as _lt
 from pygsti.tools import optools as _ot
+from pygsti.tools.exceptions import UntouchedModelNoiseKey as _UntouchedModelNoiseKey
 from pygsti.modelmembers import operations as _op
 from pygsti.modelmembers.operations.lindbladcoefficients import LindbladCoefficientBlock as _LindbladCoefficientBlock
 from pygsti.baseobjs.basis import Basis as _Basis
@@ -364,8 +365,13 @@ class OpModelNoise(ModelNoise):
         """
         untouched_keys = [k for k, touch_cnt in self._opkey_access_counters.items() if touch_cnt == 0]
         if len(untouched_keys) > 0:
-            _warnings.warn(("The following model-noise entries were unused: %s.  You may want to double check"
-                            " that you've entered a valid noise specification.") % ", ".join(map(str, untouched_keys)))
+            msg = \
+            f"""
+            The following model-noise entries were unused: {', '.join(map(str, untouched_keys))}.
+            You may want to double check that you've entered a valid noise specification.
+            """
+            _warnings.warn(msg, _UntouchedModelNoiseKey)
+        return
 
     def compute_stencil_absolute_sslbls(self, stencil, state_space, target_labels=None, qudit_graph=None):
         """
@@ -537,7 +543,7 @@ class OpModelPerOpNoise(OpModelNoise):
                 # `None` in list signals a non-present direction => skip these terms
                 sslbls_list = list(filter(lambda x: x is not None, sslbls_list))
             for sslbls in sslbls_list:
-                op_to_embed = local_errormap if (sslbls is None or state_space.is_entire_space(sslbls)) \
+                op_to_embed = local_errormap if (sslbls is None) \
                     else _op.EmbeddedOp(state_space, sslbls, local_errormap)
                 embedded_errmaps.append(op_to_embed.copy() if copy else op_to_embed)
 

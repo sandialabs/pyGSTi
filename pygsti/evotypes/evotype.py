@@ -1,4 +1,6 @@
+from __future__ import annotations
 import importlib as _importlib
+from typing import Union, Literal
 
 from . import basereps as _basereps
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
@@ -23,6 +25,10 @@ class Evotype(object):
         in order to get a performance gain.
     """
     default_evotype = None
+    Castable = Union['Evotype', Literal[
+        'default', 'chp', 'densitymx', 'densitymx_slow',
+        'stabilizer', 'stabilizer_slow', 'statevec', 'statevec_slow'
+    ]]
 
     _reptype_to_attrs = {
         'dense superop': 'OpRepDenseSuperop',
@@ -51,7 +57,7 @@ class Evotype(object):
     }
 
     @classmethod
-    def cast(cls, obj, default_prefer_dense_reps=None, state_space=None):
+    def cast(cls, obj: Evotype.Castable, default_prefer_dense_reps=None, state_space=None):
         """
         Cast the specified object to an Evotype with options for default Evotype
         handling.

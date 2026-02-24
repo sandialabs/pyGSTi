@@ -10,6 +10,8 @@ Defines the Model class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
+
 import bisect as _bisect
 import copy as _copy
 import itertools as _itertools
@@ -32,6 +34,7 @@ from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.tools import slicetools as _slct
 from pygsti.tools import matrixtools as _mt
+from pygsti.tools.exceptions import UnknownGaugeSpaceDimension as _UnknownGaugeSpaceDimension
 from pygsti.circuits import Circuit as _Circuit, SeparatePOVMCircuit as _SeparatePOVMCircuit
 
 MEMLIMIT_FOR_NONGAUGE_PARAMS = None
@@ -52,7 +55,7 @@ class Model(_NicelySerializable):
         The state space of this model.
     """
 
-    def __init__(self, state_space):
+    def __init__(self, state_space: _statespace.StateSpace.Castable):
         super().__init__()
         self._state_space = _statespace.StateSpace.cast(state_space)
         self._num_modeltest_params = None
@@ -105,46 +108,23 @@ class Model(_NicelySerializable):
         return len(self._paramvec)
 
     @property
-    def num_modeltest_params(self):
+    def num_modeltest_params(self) -> int:
         """
         The parameter count to use when testing this model against data.
 
         Often times, this is the same as :meth:`num_params`, but there are times
         when it can convenient or necessary to use a parameter count different than
         the actual number of parameters in this model.
-
-        Returns
-        -------
-        int
-            the number of model parameters.
         """
         if not hasattr(self, '_num_modeltest_params'):  # for backward compatibility
             self._num_modeltest_params = None
 
         if self._num_modeltest_params is not None:
             return self._num_modeltest_params
-        elif 'num_nongauge_params' in dir(self):  # better than hasattr, which *runs* the @property method
-            if MEMLIMIT_FOR_NONGAUGE_PARAMS is not None:
-                if hasattr(self, 'num_elements'):
-                    memForNumGaugeParams = self.num_elements * (self.num_params + self.state_space.dim**2) \
-                        * _np.dtype('d').itemsize  # see Model._buildup_dpg (this is mem for dPG)
-                else:
-                    return self.num_params
-
-                if memForNumGaugeParams > MEMLIMIT_FOR_NONGAUGE_PARAMS:
-                    _warnings.warn(("Model.num_modeltest_params did not compute number of *non-gauge* parameters - "
-                                    "using total (make MEMLIMIT_FOR_NONGAUGE_PARAMS larger if you really want "
-                                    "the count of nongauge params"))
-                    return self.num_params
-
-            try:
-                return self.num_nongauge_params  # len(x0)
-            except:  # numpy can throw a LinAlgError or sparse cases can throw a NotImplementedError
-                _warnings.warn(("Model.num_modeltest_params could not obtain number of *non-gauge* parameters"
-                                " - using total instead"))
-                return self.num_params
-        else:
-            return self.num_params
+        
+        _warnings.warn(("Model.num_modeltest_params could not obtain number of *non-gauge* parameters"
+                        " - using total instead"), _UnknownGaugeSpaceDimension)
+        return self.num_params
 
     @num_modeltest_params.setter
     def num_modeltest_params(self, count):
@@ -164,7 +144,7 @@ class Model(_NicelySerializable):
         Parameters
         ----------
         index : int
-            The index of the paramter whose bounds should be set.
+            The index of the parameter whose bounds should be set.
 
         lower_bound, upper_bound : float, optional
             The lower and upper bounds for the parameter.  Can be set to the special
@@ -212,7 +192,7 @@ class Model(_NicelySerializable):
         Parameters
         ----------
         index : int
-            The index of the paramter whose label should be set.
+            The index of the parameter whose label should be set.
 
         label : object
             An object that serves to label this parameter.  Often a string.
@@ -326,7 +306,7 @@ class Model(_NicelySerializable):
         """
         pass
 
-    def copy(self):
+    def copy(self) -> Model:
         """
         Copy this model.
 
@@ -426,7 +406,7 @@ class OpModel(Model):
     and POMV effects.
 
     Thirdly, an `OpModel` is assumed to use a *layer-by-layer* evolution, and,
-    because of circuit simplification process, the calculaton of circuit
+    because of circuit simplification process, the calculation of circuit
     outcome probabilities has been pushed to a :class:`ForwardSimulator`
     object which just deals with the forward simulation of simplified circuits.
     Furthermore, instead of relying on a static set of operations a forward
@@ -461,7 +441,7 @@ class OpModel(Model):
         layer_rules : LayerRules
             The "layer rules" used for constructing operators for circuit
             layers.  This functionality is essential to using this model to
-            simulate ciruits, and is typically supplied by derived classes.
+            simulate circuits, and is typically supplied by derived classes.
 
         simulator : ForwardSimulator or {"auto", "matrix", "map"}
             The forward simulator (or typ) that this model should use.  `"auto"`
@@ -622,7 +602,7 @@ class OpModel(Model):
         Parameters
         ----------
         index : int
-            The index of the paramter whose label should be set.
+            The index of the parameter whose label should be set.
 
         label : object
             An object that serves to label this parameter.  Often a string.
@@ -761,7 +741,7 @@ class OpModel(Model):
         if OpModel._pcheck: self._check_paramvec()
 
     def _mark_for_rebuild(self, modified_obj=None):
-        #re-initialze any members that also depend on the updated parameters
+        #re-initialize any members that also depend on the updated parameters
         self._need_to_rebuild = True
 
         # Specifically, we need to re-allocate indices for every object that
@@ -873,7 +853,7 @@ class OpModel(Model):
 
     def uncollect_parameters(self, param_to_uncollect):
         """
-        Updates this model's parameters so that a common paramter becomes independent parameters.
+        Updates this model's parameters so that a common parameter becomes independent parameters.
 
         The model's parameterization is modified so that each usage of the given parameter
         in the model's parameterized operations is promoted to being a new independent
@@ -1389,7 +1369,7 @@ class OpModel(Model):
             the `complete_circuits` kwargs should be used.
 
         completed_circuits : list of Circuits, optional (default None)
-            If specified, this is a list of compeleted circuits with prep and povm labels included.
+            If specified, this is a list of completed circuits with prep and povm labels included.
             This is the format produced by the :meth:complete_circuit(s) method, and this can
             be used to accelerate this method call when that has been previously run. Should not
             be used in conjunction with `split_circuits`.
@@ -1679,7 +1659,7 @@ class OpModel(Model):
             the `complete_circuits` kwargs should be used.
 
         completed_circuits : list of Circuits, optional (default None)
-            If specified, this is a list of compeleted circuits with prep and povm labels included.
+            If specified, this is a list of completed circuits with prep and povm labels included.
             This is the format produced by the :meth:complete_circuit(s) method, and this can
             be used to accelerate this method call when that has been previously run. Should not
             be used in conjunction with `split_circuits`.
@@ -1723,7 +1703,7 @@ class OpModel(Model):
         def add_expanded_circuit_outcomes(circuit, running_outcomes, ootree, start):
             """
             """
-            cir = circuit if start == 0 else circuit[start:]  # for performance, avoid uneeded slicing
+            cir = circuit if start == 0 else circuit[start:]  # for performance, avoid unneeded slicing
             for k, layer_label in enumerate(cir, start=start):
                 components = layer_label.components
                 #instrument_inds = _np.nonzero([model._is_primitive_instrument_layer_lbl(component)
@@ -1806,17 +1786,18 @@ class OpModel(Model):
             already has a prep label this argument will be ignored.
 
         povm_lbl_to_append : Label, optional (default None)
-            Optional user specified prep label to prepend. If not
+            Optional user specified povm label to prepend. If not
             specified will use the default value as given by
             :meth:_default_primitive_prep_layer_lbl. If the circuit
-            already has a prep label this argument will be ignored.
-        
+            already has a povm label this argument will be ignored.
+
         return_split : bool, optional (default False)
             If True we additionally return a list of tuples of the form:
             (prep_label, no_spam_circuit, povm_label)
             for each circuit. This is of the same format returned by
             :meth:split_circuits when using the kwarg combination:
             erroron=('prep', 'povm'), split_prep=True, split_povm=True
+
         Returns
         -------
         Circuit
@@ -1836,7 +1817,7 @@ class OpModel(Model):
 
         #precompute unique default povm labels.
         unique_sslbls = set([ckt._line_labels for ckt in circuits])
-        default_povm_labels = {sslbls:(self._default_primitive_povm_layer_lbl(sslbls),) for sslbls in unique_sslbls}
+        default_povm_labels = {sslbls: (self._default_primitive_povm_layer_lbl(sslbls),) for sslbls in unique_sslbls}
 
         comp_circuits = []
         if return_split:
@@ -1924,11 +1905,11 @@ class OpModel(Model):
         
         #we should now have in completed_circuits_by_prep_povm a list of completed circuits
         #for each prep, povm pair. Unique layers by circuit will then be the union of these
-        #accross each of the sublists.
+        #across each of the sublists.
 
         unique_layers_by_circuit = []
         for circuits_by_prep_povm in zip(*completed_circuits_by_prep_povm):    
-            #Take the complete set of circuits and get the unique layers which appear accross all of them
+            #Take the complete set of circuits and get the unique layers which appear across all of them
             #then use this to pre-compute circuit_layer_operators and gpindices.
             unique_layers_by_circuit.append(set(sum([ckt.layertup for ckt in circuits_by_prep_povm], ())))
 
@@ -2309,7 +2290,7 @@ class OpModel(Model):
         copy_into._reinit_opcaches()
         super(OpModel, self)._post_copy(copy_into, memo)
 
-    def copy(self):
+    def copy(self) -> OpModel:
         """
         Copy this model.
 
@@ -2320,7 +2301,7 @@ class OpModel(Model):
         """
         self._clean_paramvec()  # ensure _paramvec is rebuilt if needed
         if OpModel._pcheck: self._check_paramvec()
-        ret = Model.copy(self)
+        ret = Model.copy(self) # <-- don't be fooled. That's an OpModel!
         if self._param_bounds is not None and self.parameter_labels is not None:
             ret._clean_paramvec()  # will *always* rebuild paramvec; do now so we can preserve param bounds
             assert _np.all(self.parameter_labels == ret.parameter_labels)  # ensure ordering is the same
@@ -2819,7 +2800,7 @@ class OpModel(Model):
 
         hessian_for_errorbars : numpy.ndarray, optional
             If not `None`, a hessian matrix for this model (with shape `(Np, Np)`
-            where `Np == self.num_params`, the number of model paramters) that is
+            where `Np == self.num_params`, the number of model parameters) that is
             used to compute and return 1-sigma error bars.
 
         Returns

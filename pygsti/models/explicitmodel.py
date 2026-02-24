@@ -10,6 +10,8 @@ Defines the ExplicitOpModel class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
+
 import collections as _collections
 import itertools as _itertools
 import uuid as _uuid
@@ -49,6 +51,9 @@ from pygsti.tools import slicetools as _slct
 from pygsti.tools import listtools as _lt
 from pygsti import SpaceT
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
+from typing import Union, Literal
+from pygsti.tools.exceptions import UnknownGaugeSpaceDimension as _UnknownGaugeSpaceDimension
+
 
 
 class ExplicitOpModel(_mdl.OpModel):
@@ -235,10 +240,19 @@ class ExplicitOpModel(_mdl.OpModel):
         return self._default_gauge_group
 
     @default_gauge_group.setter
-    def default_gauge_group(self, value):
+    def default_gauge_group(self, value: Union[Literal['tp', 'unitary'], _GaugeGroup]):
         """
         The default gauge group.
         """
+        if isinstance(value, str):
+            lower = value.lower()
+            if lower == 'unitary':
+                value = _gg.UnitaryGaugeGroup(self.state_space, self.basis, self.evotype)
+            elif lower == 'tp':
+                value = _gg.TPGaugeGroup(self.state_space, self.basis, self.evotypes)
+            else:
+                msg = f'string "{value}" cannot be used to set this model\'s gauge group.'
+                raise ValueError(msg)
         self._default_gauge_group = value
 
     @property
@@ -576,6 +590,42 @@ class ExplicitOpModel(_mdl.OpModel):
         instSize = [i.num_elements for i in self.instruments.values()]
         #Don't count self.factories?
         return sum(rhoSize) + sum(povmSize) + sum(opSize) + sum(instSize)
+
+    @property
+    def num_modeltest_params(self) -> int:
+        """
+        The parameter count to use when testing this model against data.
+
+        Often times, this is the same as :meth:`num_params`, but there are times
+        when it can convenient or necessary to use a parameter count different than
+        the actual number of parameters in this model.
+        """
+        if not hasattr(self, '_num_modeltest_params'):
+            self._num_modeltest_params = None
+
+        if self._num_modeltest_params is not None:
+            return self._num_modeltest_params
+
+        from pygsti.models.model import MEMLIMIT_FOR_NONGAUGE_PARAMS
+        if MEMLIMIT_FOR_NONGAUGE_PARAMS is not None:
+            # We'd like to return self.num_nongauge_params, but accessing that property
+            # performs a memory-intensive computation in ExplicitOpModelCalc._buildup_dpg.
+            # If we have inadequate memory then we skip that computation.
+            buildup_dpg_mem = _np.dtype('d').itemsize * (self.num_params + self.state_space.dim**2)
+            buildup_dpg_mem *= self.num_elements  # type: ignore
+            if buildup_dpg_mem > MEMLIMIT_FOR_NONGAUGE_PARAMS:
+                _warnings.warn(("ExplicitOpModel.num_modeltest_params did not compute number of *non-gauge* parameters - "
+                                "using total (make MEMLIMIT_FOR_NONGAUGE_PARAMS larger if you really want "
+                                "the count of nongauge params)"), _UnknownGaugeSpaceDimension)
+                return self.num_params
+
+        try:
+            return self.num_nongauge_params
+        except:  # numpy can throw a LinAlgError or sparse cases can throw a NotImplementedError
+            _warnings.warn(("ExplicOpModel.num_modeltest_params could not obtain number of *non-gauge* parameters"
+                            " - using total instead"), _UnknownGaugeSpaceDimension)
+            return self.num_params
+
 
     @property
     def num_nongauge_params(self):
@@ -983,9 +1033,9 @@ class ExplicitOpModel(_mdl.OpModel):
                                          self.factories.items()):
             yield (lbl, obj)
 
-#TODO: how to handle these given possibility of different parameterizations...
-#  -- maybe only allow these methods to be called when using a "full" parameterization?
-#  -- or perhaps better to *move* them to the parameterization class
+    # TODO: how to handle these given possibility of different parameterizations...
+    #   -- maybe only allow these methods to be called when using a "full" parameterization?
+    #   -- or perhaps better to *move* them to the parameterization class
     def depolarize(self, op_noise=None, spam_noise=None, max_op_noise=None,
                    max_spam_noise=None, seed=None):
         """
@@ -1157,7 +1207,7 @@ class ExplicitOpModel(_mdl.OpModel):
         newModel._clean_paramvec()  # rotate may leave dirty members
         return newModel
 
-    def randomize_with_unitary(self, scale, seed=None, rand_state=None):
+    def randomize_with_unitary(self, scale, seed=None, rand_state=None, transform_spam=False, param_preserving=False):
         """
         Create a new model with random unitary perturbations.
 
@@ -1181,6 +1231,12 @@ class ExplicitOpModel(_mdl.OpModel):
             across multiple random function calls but you don't want to bother
             with manually incrementing seeds between those calls.
 
+        param_preserving : bool
+            If False, then all members of the returned model will have "full" parameterization.
+
+            If True, then we use ComposedOp (and ComposedState and ComposedPOVM) to define a 
+            model with unitarily-transformed members while retaining the parameterization of `self`.
+
         Returns
         -------
         Model
@@ -1198,18 +1254,55 @@ class ExplicitOpModel(_mdl.OpModel):
 
         mdl_randomized = self.copy()
 
+        def rand_unitary_as_superop():
+            rand_mat = rndm.randn(unitary_dim, unitary_dim) + 1j * rndm.randn(unitary_dim, unitary_dim)
+            rand_herm = rand_mat.T.conj() + rand_mat
+            rand_herm /= _scipy.linalg.norm(rand_herm)
+            rand_herm *= scale * _np.sqrt(unitary_dim)
+            rand_unitary = _scipy.linalg.expm(-1j * rand_herm)
+            rand_op = _op.StaticUnitaryOp(rand_unitary, self.basis)
+            return rand_op
+
+        if param_preserving:
+            from pygsti.modelmembers.states import ComposedState
+            from pygsti.modelmembers.povms import ComposedPOVM
+            def transformed_gate(rand_op, gate): # type: ignore
+                ops_to_compose = gate.factorops if hasattr(gate, 'factorops') else [gate]
+                ops_to_compose.append(rand_op)
+                return _op.ComposedOp(ops_to_compose)    
+            def transformed_stateprep(rand_op, rho): # type: ignore
+                return ComposedState(rho, rand_op)
+            def transformed_povm(rand_op, M): # type: ignore
+                return ComposedPOVM(rand_op, M)
+        else:
+            from pygsti.modelmembers.states import FullState
+            from pygsti.modelmembers.povms import create_from_dmvecs
+            def transformed_gate(rand_op, gate):
+                rand_op = rand_op.to_dense()
+                return _op.FullArbitraryOp(rand_op @ gate.to_dense())
+            def transformed_stateprep(rand_op, rho):
+                rand_op = rand_op.to_dense()
+                return FullState(rand_op @ rho)
+            def transformed_povm(rand_op, M):
+                rand_op = rand_op.to_dense()
+                dmvecs = {elbl: rand_op @ e.to_dense() for elbl, e in M.items()}
+                return create_from_dmvecs(dmvecs, 'full')
+
         for opLabel, gate in self.operations.items():
-            randMat = scale * (rndm.randn(unitary_dim, unitary_dim)
-                               + 1j * rndm.randn(unitary_dim, unitary_dim))
-            randMat = _np.transpose(_np.conjugate(randMat)) + randMat
-            # make randMat Hermetian: (A_dag + A)^dag = (A_dag + A)
-            randUnitary = _scipy.linalg.expm(-1j * randMat)
+            rand_op = rand_unitary_as_superop()
+            mdl_randomized.operations[opLabel] = transformed_gate(rand_op, gate)
 
-            randOp = _ot.unitary_to_superop(randUnitary, self.basis)
+        if transform_spam:
+    
+            for preplbl, rho in self.preps.items():
+                rand_op = rand_unitary_as_superop()
+                mdl_randomized.preps[preplbl] = transformed_stateprep(rand_op, rho)
 
-            mdl_randomized.operations[opLabel] = _op.FullArbitraryOp(_np.dot(randOp, gate.to_dense("HilbertSchmidt")))
-
-        #Note: this function does NOT randomize instruments
+            for povmlbl, M in self.povms.items():
+                rand_op = rand_unitary_as_superop()
+                mdl_randomized.povms[povmlbl] = transformed_povm(rand_op, M)
+                
+        # Note: this function does NOT randomize instruments
 
         return mdl_randomized
 
@@ -1472,11 +1565,9 @@ class ExplicitOpModel(_mdl.OpModel):
         print("Basis = ", self.basis.name)
         print("Choi Matrices:")
         for (label, gate) in self.operations.items():
-            print(("Choi(%s) in pauli basis = \n" % label,
-                   _mt.mx_to_string_complex(_jt.jamiolkowski_iso(gate))))
-            print(("  --eigenvals = ", sorted(
-                [ev.real for ev in _np.linalg.eigvals(
-                    _jt.jamiolkowski_iso(gate))]), "\n"))
+            jmx : _np.ndarray = _jt.jamiolkowski_iso(gate) # type: ignore
+            print(("Choi(%s) in pauli basis = \n" % label, _mt.mx_to_string_complex(jmx)))
+            print(("  --eigenvals = ", sorted(_mt.eigenvalues(jmx, assume_hermitian=True).tolist()), "\n"))
         print(("Sum of negative Choi eigenvalues = ", _jt.sum_of_negative_choi_eigenvalues(self)))
 
     def _effect_labels_for_povm(self, povm_lbl):
@@ -1634,6 +1725,10 @@ class ExplicitOpModel(_mdl.OpModel):
             return _QuditProcessorSpec(qudit_labels, all_udims, list(gate_unitaries.keys()), gate_unitaries,
                                        availability,
                                        instrument_names=list(self.instruments.keys()), nonstd_instruments=self.instruments)
+
+    def copy(self) -> ExplicitOpModel:
+        c = super().copy()  # <-- that is indeed an ExplicitOpModel
+        return c # type: ignore
 
     def create_modelmember_graph(self):
         return _MMGraph({

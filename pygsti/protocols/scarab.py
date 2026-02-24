@@ -1,6 +1,6 @@
 """
-B-Sqale is a software tool for creating scalable, robust benchmarks from any quantum circuit.
-Please see <paper link forthcoming> for more information.
+scarab is a software tool for creating scalable, robust benchmarks from any quantum circuit.
+Please see https://arxiv.org/abs/2511.02134 for more information.
 """
 #***************************************************************************************************
 # Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -33,7 +33,7 @@ from pygsti.protocols import (
 import numpy as _np
 
 
-def noise_mirror_benchmark(qk_circs: Union[Dict[Any, qiskit.QuantumCircuit], List[qiskit.QuantumCircuit]],
+def lowlevel_mirror_benchmark(qk_circs: Union[Dict[Any, qiskit.QuantumCircuit], List[qiskit.QuantumCircuit]],
                          mirroring_kwargs_dict: Dict[str, Any] = {}
                          ) -> Tuple[_FreeformDesign, _CombinedExperimentDesign]:
     """
