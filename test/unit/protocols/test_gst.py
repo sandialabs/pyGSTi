@@ -277,7 +277,7 @@ class GateSetTomographyTester(BaseProtocolData):
     def test_run_custom_sim(self, capfd: pytest.LogCaptureFixture):
         self.setUpClass()
         proto = gst.GateSetTomography(smq1Q_XYI.target_model("CPTPLND"), 'stdgaugeopt', name="testGST")
-        results = proto.run(self.gst_data, simulator=MapForwardSimulatorWrapper())
+        results = proto.run(self.gst_data, simulator=MapForwardSimulatorWrapper)
         stdout, _ = capfd.readouterr()
         assert MapForwardSimulatorWrapper.Message in stdout
 
@@ -295,7 +295,7 @@ class GateSetTomographyTester(BaseProtocolData):
         proto = gst.GateSetTomography(smq1Q_XYI.target_model("CPTPLND"),
                                       gaugeopt_suite=None, name="testGST",
                                       badfit_options={"threshold": -1000, "actions": ("wildcard1d",)},)
-        results = proto.run(self.gst_data, simulator=MapForwardSimulatorWrapper())
+        results = proto.run(self.gst_data, simulator=MapForwardSimulatorWrapper)
         stdout, _ = capfd.readouterr()
         assert MapForwardSimulatorWrapper.Message in stdout
 
