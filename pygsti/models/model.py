@@ -34,7 +34,10 @@ from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.tools import slicetools as _slct
 from pygsti.tools import matrixtools as _mt
-from pygsti.tools.exceptions import UnknownGaugeSpaceDimension as _UnknownGaugeSpaceDimension
+from pygsti.tools.exceptions import (
+    UnknownGaugeSpaceDimension as _UnknownGaugeSpaceDimension,
+    StolenResourceWarning as _StolenResourceWarning
+)
 from pygsti.circuits import Circuit as _Circuit, SeparatePOVMCircuit as _SeparatePOVMCircuit
 
 MEMLIMIT_FOR_NONGAUGE_PARAMS = None
@@ -484,11 +487,22 @@ class OpModel(Model):
     def sim(self, simulator):
         try:  # don't fail if state space doesn't have an integral # of qubits
             nqubits = self.state_space.num_qubits
-        except:
+        except ValueError:
             nqubits = None
         # TODO: This should probably also take evotype (e.g. 'chp' should probably use a CHPForwardSim, etc)
-        self._sim = _fwdsim.ForwardSimulator.cast(simulator, nqubits)
-        self._sim.model = self  # ensure the simulator's `model` is set to this object
+        simulator = _fwdsim.ForwardSimulator.cast(simulator, nqubits)
+        if isinstance(simulator.model, OpModel) and id(simulator.model) != id(self):
+            msg =\
+            f"""
+            S={simulator.__repr__()} is attached to an OpModel,
+            M={simulator.model.__repr__()}. We're stealing this simulator for
+            {self.__repr__()} and setting M.sim = S.copy().
+            """
+            _warnings.warn(msg, _StolenResourceWarning)
+            simulator.model.sim = simulator.copy()
+        simulator.model = self
+        self._sim = simulator
+        return
 
     @property
     def evotype(self):
