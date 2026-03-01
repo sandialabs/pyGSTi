@@ -382,6 +382,51 @@ def construct_polynomial_parameter_vector_from_propagator(error_propagator, var_
 
 #---------------- Error Generator Polynomial Construction -------------------#
 
+def error_generator_symbolic_polynomial(errorgen_transform_map, errorgen_to_var_map):
+    """
+    Function for constructing an equivalent polynomial representation of an error generator
+    from an input error generator transform map which is a dictionary mapping input error
+    generator rates to final output generators along with their sign corrections. As returned,
+    for example, by `ErrorGeneratorPropagator.errorgen_transform_maps` or 
+    `ErrorGeneratorPropagator.errorgen_transform_map`.
+
+    Parameters
+    ----------
+    errorgen_transform_map : dict
+        Dictionary mapping tuples of LocalStimErrorgenLabels and circuit layer indices to 
+        tuples of final error generators and phases. 
+
+    errorgen_to_var_map : dict
+        A dictionary whose keys are tuples of LocalStimErrorgenLabels and integer circuit layer indices
+        and whose value is an integer corresponding to the corresponding variable index to use in constructed
+        Polynomials.
+
+    Returns
+    -------
+    errorgen_poly : dict
+        A dictionary with keys that are LocalStimErrorgenLabels corresponding to output error generator
+        labels from errorgen_transform_map and values corresponding to Polynomial objects for the rates
+        of these error generators (as a function of the input error generators).
+    """
+
+
+    var_dict = {output_errgen_tup[0]: [] for output_errgen_tup in errorgen_transform_map.values()}
+    coeff_dict = {key: [] for key in var_dict}
+    #loop through each key of errorgen_transform_map, use the value to index into current_combined_coeff_lbls
+    #and append the key's label and the phase value from the transformed value.
+    for key, val in errorgen_transform_map.items():
+        var_dict[val[0]].append((errorgen_to_var_map[key],))
+        coeff_dict[val[0]].append(val[1])
+
+    #for each output error generator construct the corresponding polynomials.
+    errorgen_poly = dict()
+    max_num_vars = len(errorgen_to_var_map)
+    for (key, variables), coefficients in zip(var_dict.items(), coeff_dict.values()):
+        errorgen_poly[key] = _Polynomial.from_variable_and_coefficient_lists(variables, coefficients, max_num_vars)
+
+    return errorgen_poly
+
+
 def magnus_symbolic_polynomial(errorgen_transform_maps, errorgen_to_var_map, magnus_order=1):
     """
     Function for computing the symbolic magnus approximation for the effective end-or-circuit error generator.
