@@ -412,9 +412,11 @@ def magnus_symbolic_polynomial(errorgen_transform_maps, errorgen_to_var_map, mag
     #start off with the first-order magnus case.
     #initialize a dictionary with all of the keys that may appear in the first order magnus expansion
     #values initialized with empty lists to accumulate contributions.
-    
-    first_order_magnus_var_dict = {key[0]: [] for key in chain(*errorgen_transform_maps)}
+      
+    output_errgen_iterables = [transform_map.values() for transform_map in errorgen_transform_maps]
+    first_order_magnus_var_dict = {output_errgen_tup[0]: [] for output_errgen_tup in chain(*output_errgen_iterables)}
     first_order_magnus_coeff_dict = {key: [] for key in first_order_magnus_var_dict}
+
     #loop through each key of errorgen_transform_map, use the value to index into current_combined_coeff_lbls
     #and append the key's label and the phase value from the transformed value.
     for transform_map in errorgen_transform_maps:
