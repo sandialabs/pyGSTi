@@ -10,7 +10,7 @@ Stability analysis protocol objects
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from typing import Literal
+from typing import Literal, Optional, Union
 from pygsti.protocols import protocol as _proto
 from pygsti.circuits import Circuit as _Circuit
 from pygsti.extras.drift.stabilityanalyzer import StabilityAnalyzer as _StabilityAnalyzer
@@ -30,7 +30,7 @@ class StabilityAnalysisDesign(_proto.ExperimentDesign):
         be the line labels of `circuits`.
     """
 
-    def __init__(self, circuits: list[_Circuit], qubit_labels=None):
+    def __init__(self, circuits: list[_Circuit], qubit_labels: Optional[Union[tuple[Union[int, str], ...], Literal['multiple']]]=None):
         self.needs_timestamps = True
         super().__init__(circuits, qubit_labels=qubit_labels)
 
