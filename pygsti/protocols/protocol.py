@@ -9,6 +9,7 @@ Protocol object
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 # ***************************************************************************************************
+from typing import Optional, Literal
 import collections as _collections
 import copy as _copy
 import numpy as _np
@@ -3197,7 +3198,7 @@ class DataSimulator(object):
     def __init__(self):
         pass
 
-    def run(self, edesign, memlimit=None, comm=None):
+    def run(self, edesign: ExperimentDesign, memlimit: Optional[int]=None, comm=None):
         """
         Run this data simulator on an experiment design.
 
@@ -3290,9 +3291,11 @@ class DataCountsSimulator(DataSimulator):
         value as its *start time*.
     """
 
-    def __init__(self, model, num_samples=1000, sample_error='multinomial',
+    def __init__(self, model, num_samples=1000,
+                 sample_error: Literal['multinomial', 'binomial', 'none', 'clip', 'round']='multinomial',
                  seed=None, rand_state=None, alias_dict=None,
-                 collision_action="aggregate", record_zero_counts=True, times=None):
+                 collision_action: Literal['aggregate', 'keepseperate']="aggregate",
+                 record_zero_counts=True, times=None):
         super().__init__()
         self.model = model
         self.num_samples = num_samples

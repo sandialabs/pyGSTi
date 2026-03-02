@@ -10,13 +10,13 @@ ModelTest Protocol objects
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from typing import Optional
 import numpy as _np
 
 from pygsti.protocols import protocol as _proto
 from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.data.freedataset import FreeformDataSet as _FreeformDataSet
 from pygsti.modelmembers import states as _state
-from pygsti import SpaceT
 
 class FreeformDataSimulator(_proto.DataSimulator):
     """
@@ -27,7 +27,7 @@ class FreeformDataSimulator(_proto.DataSimulator):
     def __init__(self):
         super().__init__()
 
-    def compute_freeform_data(self, circuit):
+    def compute_freeform_data(self, circuit: _Circuit):
         """
         Computes the simulated free-form data for a single circuit.
 
@@ -42,7 +42,7 @@ class FreeformDataSimulator(_proto.DataSimulator):
         """
         raise NotImplementedError("Derived classes should implement this!")
 
-    def run(self, edesign, memlimit=None, comm=None):
+    def run(self, edesign: _proto.ExperimentDesign, memlimit: Optional[int]=None, comm=None):
         """
         Run this data simulator on an experiment design.
 
@@ -108,7 +108,7 @@ class ModelFreeformSimulator(FreeformDataSimulator):
     def __init__(self, models):
         self.models = models
 
-    def compute_process_matrix(self, model, circuit, include_final_state=False, include_probabilities=False):
+    def compute_process_matrix(self, model, circuit: _Circuit, include_final_state=False, include_probabilities=False):
         prep, circuit_ops, povm = model.split_circuit(circuit)
         mx = model.sim.product(circuit_ops)
         if include_final_state or include_probabilities:
@@ -126,11 +126,11 @@ class ModelFreeformSimulator(FreeformDataSimulator):
         else:
             return mx
 
-    def compute_process_matrices(self, circuit, include_final_state=False, include_probabilities=False):
+    def compute_process_matrices(self, circuit: _Circuit, include_final_state=False, include_probabilities=False):
         return {model_lbl: self.compute_process_matrix(model, circuit, include_final_state, include_probabilities)
                 for model_lbl, model in self.models.items()}
 
-    def compute_final_state(self, model, circuit, include_probabilities=False):
+    def compute_final_state(self, model, circuit: _Circuit, include_probabilities=False):
         complete_circuit = model.complete_circuit(circuit).layertup
         rho = model.circuit_layer_operator(complete_circuit[0], 'prep')
         for layer in complete_circuit[1:-1]:
@@ -142,16 +142,16 @@ class ModelFreeformSimulator(FreeformDataSimulator):
             return rho, probs
         return rho
 
-    def compute_final_states(self, circuit, include_probabilities=False):
+    def compute_final_states(self, circuit: _Circuit, include_probabilities=False):
         return {model_lbl: self.compute_final_state(model, circuit, include_probabilities)
                 for model_lbl, model in self.models.items()}
 
-    def compute_circuit_probabilities(self, model, circuit):
+    def compute_circuit_probabilities(self, model, circuit: _Circuit):
         # FUTURE: add a flag in __init__ (?) for computing bulk probabilities at the beginning of
         # run(...) (we'll need to overload run for this) and then this function just indexes the
         # precomputed values.
         return model.probabilities(circuit)
 
-    def compute_probabilities(self, circuit, include_probabilities=False):
+    def compute_probabilities(self, circuit: _Circuit, include_probabilities=False):
         return {model_lbl: self.compute_circuit_probabilities(model, circuit)
                 for model_lbl, model in self.models.items()}

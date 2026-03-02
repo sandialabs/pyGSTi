@@ -10,6 +10,7 @@ Functions for creating data
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from typing import Literal
 import collections as _collections
 import itertools as _itertools
 import warnings as _warnings
@@ -23,8 +24,9 @@ from pygsti.baseobjs import label as _lbl, outcomelabeldict as _ld
 
 
 def simulate_data(model_or_dataset, circuit_list, num_samples,
-                  sample_error="multinomial", seed=None, rand_state=None,
-                  alias_dict=None, collision_action="aggregate",
+                  sample_error: Literal['binomial', 'multinomial', 'clip', 'round', 'none']="multinomial",
+                  seed=None, rand_state=None,
+                  alias_dict=None, collision_action: Literal['aggregate', 'keepseperate']="aggregate",
                   record_zero_counts=True, comm=None, mem_limit=None, times=None):
     """
     Creates a DataSet using the probabilities obtained from a model.
