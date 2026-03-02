@@ -12,7 +12,7 @@ from pygsti.objectivefns import PoissonPicDeltaLogLFunction as _PoissonPicDeltaL
 from pygsti.optimize.simplerlm import SimplerLMOptimizer as _SimplerLMOptimizer
 from pygsti import baseobjs as _baseobjs
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
-
+from pygsti.tools import sum_of_negative_choi_eigenvalues as sum_of_neg_chois
 NON_CP_THRESHOLD = 1e-4
 
 class TrackedComm():
@@ -102,15 +102,194 @@ class AMSGreedyResult(_NicelySerializable):
             return create_red_model(self.full_model, self.embedder_matrix, vec=self.trace[-1][0])
     
     def compare_parameters(self, hide_gauge=True):
-
+        """
+        """
         num_fogis = self.full_model.fogi_store.fogi_directions.shape[1]
         num_gauge = self.full_model.num_params - num_fogis
-        labels = self.full_model.fogi_errorgen_component_labels(typ='unweighted')
-        print('This table omits gauge directions')
-        if hide_gauge:
-            compare_parameters_simple(self.trace[0][0][:num_fogis], self.trace[-1][0][:-num_gauge],  self.embedder_matrix[:num_fogis], labels)
+        fogi_labels = self.full_model.fogi_errorgen_component_labels(typ='unweighted')
+        
+        if num_gauge == 0:
+            compare_parameters_simple(self.trace[0][0], self.trace[-1][0], self.embedder_matrix, fogi_labels)
         else:
-            compare_parameters_simple(self.trace[0][0], self.trace[-1][0], self.embedder_matrix)
+            if hide_gauge:
+                print('This table omits gauge directions')
+                compare_parameters_simple(self.trace[0][0][:num_fogis], self.trace[-1][0][:-num_gauge],  self.embedder_matrix[:num_fogis], fogi_labels)
+                
+            else:
+                compare_parameters_simple(self.trace[0][0], self.trace[-1][0], self.embedder_matrix)
+
+    def compare_results(self, other_results=[], print_parameter_list=True, data_labels=None, print_parameter_labels=False, csv_name=None):
+        """ TODO: finish docstring
+        Prints information comparing self with another result object including
+        - settings for AMS
+        - logl of seed model
+        - logl of reduced model
+        - average evidence ratio
+        - parameters removed in all models
+        - parameters kept in all models
+        - sum of negative choi eigenvals for both initial and final model
+
+
+        Args:
+            results2 (_type_): _description_
+        """
+        if not isinstance(other_results, list):
+            other_results = [other_results]
+        num_results = 1 + len(other_results)
+        if data_labels is None:
+            data_labels = ['result ' + str(i) for i in range(num_results)]
+        #Check that all results have the same max number of parameters
+        for result in other_results:
+            assert result.embedder_matrix.shape[0] == self.embedder_matrix.shape[0]
+        csv_string = ''
+        ev_ratios = [[ev_ratio for [_,ev_ratio, _] in self.trace[1:]]]
+        #The trace of AMS stores the logL for the parent model in level 0 (trace[0][1])
+        #but then only stores evidence ratios. Thus, to obtain the log-L
+        #of a model we subtract half the evidence ratio found at every
+        #AMS step from the initial log-L
+        logls = [self.trace[0][1] - .5*_np.sum(ev_ratios[0])]
+        initial_logls = [self.trace[0][1]]
+
+        list_numparams = [self.embedder_matrix.shape[1]]
+        
+        list_params_kept = [self.full_model_params_kept]
+
+        all_params = list(range(self.embedder_matrix.shape[0]))
+        #complement of intersection of parameters
+        params_removed = list(set(all_params) - (set(all_params) & set(list_params_kept[0])))
+
+        common_params_kept = self.full_model_params_kept
+        common_params_removed = params_removed
+
+        avg_ev_ratios = [_np.average(ev_ratios[0])]
+        initial_sum_of_chois = [sum_of_neg_chois(self.full_model)]
+        final_sum_of_chois = [sum_of_neg_chois(self.model)]
+
+        for result in other_results:
+            ev_ratios = [ev_ratio for [_,ev_ratio, _] in result.trace[1:]]
+            logl = result.trace[0][1] - _np.sum(ev_ratios )
+            numparams = result.embedder_matrix.shape[1]
+            params_kept = result.full_model_params_kept
+            params_removed = list(set(all_params) - (set(all_params) & set(params_kept)))
+            avg_ev_ratio = _np.average(ev_ratios)
+            final_sum_of_choi_eigenvals = sum_of_neg_chois(result.model)
+            initial_sum_of_choi_eigenvals = sum_of_neg_chois(result.full_model)
+            
+            logls.append(logl)
+            initial_logls.append(result.trace[0][1])
+            list_numparams.append(numparams)
+            list_params_kept.append(params_kept)
+            avg_ev_ratios.append(avg_ev_ratio)
+            initial_sum_of_chois.append(initial_sum_of_choi_eigenvals)
+            final_sum_of_chois.append(final_sum_of_choi_eigenvals)
+
+            common_params_kept = set(common_params_kept) & set(params_kept)
+            common_params_removed = set(common_params_removed) & set(params_removed)
+
+        print("Total number of parameters: ", self.embedder_matrix.shape[0])
+        csv_string += "Total number of parameters: " + str(self.embedder_matrix.shape[0]) + '\n'
+
+        print("AMS settings "+ data_labels[0],': ', self.ams_settings)
+        #TODO also add AMS settings to csv
+        for i,result in enumerate(other_results):
+            print("AMS settings "+ data_labels[i+1],': ', result.ams_settings)
+
+        if data_labels is not None:
+            print("                               ", (" {: <25} "*len(logls)).format(*data_labels))
+            csv_string += ',' + (" , "*len(logls)).format(*data_labels) +'\n'
+
+        print("Initial model log-likelihoods: ", (" {: <25} "*len(logls)).format(*initial_logls))
+        print("Final models log-likelihoods:  ", (" {: <25} "*len(logls)).format( *logls))
+        print("Num. params. removed:          ", (" {: <25} "*len(logls)).format( *[self.embedder_matrix.shape[0] - num_param for num_param in list_numparams]))
+        print("Avg. ev. ratio:                ", (" {: <25} "*len(logls)).format( *avg_ev_ratios))
+        print("Full Model Sum NCE:            ", (" {: <25} "*len(logls)).format( *initial_sum_of_chois))
+        print("Red Model Sum NCE:             ", (" {: <25} "*len(logls)).format( *final_sum_of_chois))
+        print('NCE: Negative Choi eigenvalues')
+        if csv_name is not None:
+            assert '.csv' in csv_name, 'invalid csv file extension'
+            data_titles = ["Initial model log-likelihoods", "Final models log-likelihoods", "Num. params. removed", "Avg. ev. ratio", 
+                           "Full Model Sum NCE", "Red Model Sum NCE"]
+            data = [initial_logls, logls, [self.embedder_matrix.shape[0] - num_param for num_param in list_numparams], 
+                    avg_ev_ratios, initial_sum_of_chois, final_sum_of_chois]
+            
+            for title, values in zip(data_titles, data):
+                csv_string += title + ',' + ("{:},"*len(logls)).format(*values) + '\n'
+
+
+        if print_parameter_labels:
+            labels = self.full_model.fogi_errorgen_component_labels(typ='unweighted')
+            print('\n\nParameters kept in all results:\n')
+            csv_string += '\n\nParameters kept in all results:\n'
+            for i,index in enumerate(common_params_kept):
+                print(i,': ', labels[index])
+                csv_string +=  labels[index].replace(',',';') + '\n'
+            print('\n\nParameters removed in all results:\n')
+            csv_string += '\n\nParameters removed in all results:\n'
+            for i,index in enumerate(common_params_removed):
+                print(i,': ', labels[index])
+                csv_string +=  labels[index].replace(',',';') + '\n'
+
+        if print_parameter_list:
+            print('\n\nNumbers below represent: param_value (evidende_ratio_cost)')
+            csv_string += '\n\n Numbers below in parenthesis represent: param_value (evidende_ratio_cost)'
+            print("\n\n\n    ", ("  {: <22} "*len(data_labels)).format(*data_labels))
+            csv_string += "\n\n\n" + ("  {:}, "*len(data_labels)).format(*data_labels) + '\n'
+            
+            projectors = [self.embedder_matrix @ self.embedder_matrix.T]
+            embedded_param_vecs = [self.embedder_matrix @ self.model.to_vector()]
+            if self.ev_ratio_costs != []:
+                embedded_ev_ratios = [self.embedder_matrix @ self.ev_ratio_costs]
+                sci_w = 10   # outside parenthesis, always 4 sig-figs in sci-notation
+                gen_w =  6
+                num_cell = f"  {{:<{sci_w}.4e}} ({{:<{gen_w}.4g}})  "
+                cell_w = len(num_cell.format(0.0, 0.0))
+                removed_cell = f"{{:^{cell_w}}}"
+            else:
+                sci_w = 10   # outside parenthesis, always 4 sig-figs in sci-notation
+                gen_w =  6
+                num_cell = f"  {{:<{sci_w}.4e}}  "
+                cell_w = len(num_cell.format(0.0))
+                removed_cell = f"{{:^{cell_w}}}"
+                
+
+            for result in other_results:
+                projectors.append(result.embedder_matrix @ result.embedder_matrix.T)
+                embedded_param_vecs.append(result.embedder_matrix @ result.model.to_vector())
+                if self.ev_ratio_costs != []:
+                    embedded_ev_ratios.append(result.embedder_matrix @ result.ev_ratio_costs)
+
+            if self.ev_ratio_costs == []:
+                embedded_ev_ratios = embedded_param_vecs.copy()
+            
+            for index in range(len(projectors[0])):
+                
+                #print('{:<3}: '.format(index), end='')
+                print(f"{index:<3}: ", end="")
+                for projector,param_vec, ev_ratios in zip(projectors,embedded_param_vecs, embedded_ev_ratios):
+                    
+                    if projector[index][index] == 1 and self.ev_ratio_costs != []:
+                        print(num_cell.format(param_vec[index], ev_ratios[index]), end="")
+                        csv_string += num_cell.format(param_vec[index], ev_ratios[index]) + ','
+                        #print("  {:<10.4e} ({:<6.4g})  ".format(param_vec[index], ev_ratios[index]), end="")
+                    elif projector[index][index] == 1:
+                        print(num_cell.format(param_vec[index]), end="")
+                        csv_string += num_cell.format(param_vec[index]) + ','
+                    else:
+                        print(removed_cell.format("removed"), end="")
+                        csv_string += 'removed,'
+                if print_parameter_labels:
+                    csv_string += labels[index].replace(',',';') + '\n'
+                    print(labels[index])
+                print('\n')
+        
+
+            
+        if csv_name is not None:
+            with open(csv_name, 'w') as file:
+                file.write(csv_string)
+
+
+
     def write(self, path):
         print('Saving AMS Greedy results in: ', path)
         super().write(path)
@@ -252,12 +431,13 @@ class AMSCheckpoint(_NicelySerializable):
         else:
              return False
 
-def remove_params(parent_model, params_to_remove):
+def remove_params(parent_model, params_to_remove, zero=True):
+    params_to_remove = sorted(params_to_remove, reverse=True)
     for param in params_to_remove:
-        parent_model = remove_param(parent_model, param )
+        parent_model = remove_param(parent_model, param, zero=zero )
     return parent_model
 
-def remove_param(parent_model, param_to_remove, zero = True):
+def remove_param(parent_model, param_to_remove, zero=True):
     next_model = parent_model.copy()
     embedder_matrix = _np.delete(parent_model.param_interposer.embedder_matrix, param_to_remove, axis=1)
     next_model.param_interposer.transform_matrix = parent_model.param_interposer.full_span_transform_matrix @ embedder_matrix
@@ -323,7 +503,7 @@ def create_embedder_matrix_from_trace(graph_levels, embedder_matrix = None):
     return embedder_matrix
 
 
-def custom_builder(min_prob_clip, cptp_penalty=50):
+def custom_builder(min_prob_clip, cptp_penalty=0):
 
     chi2_builder = pygsti.objectivefns.Chi2Function.builder(
         'chi2', regularization={'min_prob_clip_for_weighting': min_prob_clip}, penalties={'cptp_penalty_factor': cptp_penalty, 'spam_penalty_factor':cptp_penalty})
@@ -344,13 +524,13 @@ def custom_optimizers(maxiter=300, tol=1e-10):
                 if type(tol[i]) == dict:
                     tolerances = tol[i]
                 else:
-                    tolerances = {'f':tol[i], 'relf': tol[i]}
-                optimizers.append(pygsti.optimize.customlm.CustomLMOptimizer(maxiter=maxiter[i], tol=tolerances))
+                    tolerances = {'relx': 1e-8, 'relf': tol[i], 'f': tol[i], 'jac': 1e-6, 'maxdx': 1.0}
+                optimizers.append(pygsti.optimize.customlm.CustomLMOptimizer(maxiter=maxiter[i], tol=tolerances))#, damping_basis='singular_values'))
     else:
-        if type(tol[i]) == dict:
+        if type(tol) == dict:
             tolerances = tol
         else:
-            tolerances = {'f':tol, 'relf': tol}
+            tolerances = {'relx': 1e-8, 'relf': tol, 'f': tol, 'jac': 1e-6, 'maxdx': 1.0}
         optimizers = [pygsti.optimize.customlm.CustomLMOptimizer(maxiter=maxiter, tol=tolerances)]
     return optimizers 
 
@@ -620,6 +800,14 @@ def reduced_model_approx_GST_fast(red_rowandcol_H, red_row_H, x0, param_to_remov
 
         return x0_prime
 
+def print_table(table):
+    columns = "  " + " {: <25}"*len(len(table))
+    for l, row in enumerate(table):
+        if l == 0:
+            print(columns.format(*row), '\n')
+
+
+
 def compare_parameters_simple(parent_model_vec, red_model_vec, embedder_matrix, labels=None):
     """TODO: docstring
 
@@ -644,11 +832,13 @@ def compare_parameters_simple(parent_model_vec, red_model_vec, embedder_matrix, 
             table_data.append([parent_model_vec[i], red_model_vec[j], labels[i]])
             j += 1
     assert len(red_model_vec) == j
+    print_table(table_data)
+    """
     for l, row in enumerate(table_data):
         if l == 0:
             print("   {: <25} {: <25} ".format(*row), '\n')
         else:
-            print(str(l-1)+"   {: <25} {: <25} {: <25}".format(*row), '\n')
+            print(str(l-1)+"   {: <25} {: <25} {: <25}".format(*row), '\n')"""
 
 def ams_results_table(trace, ev_ratio_costs, extra_column=None):
     reducer = create_embedder_matrix_from_trace(trace).T

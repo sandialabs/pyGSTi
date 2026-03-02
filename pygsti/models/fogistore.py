@@ -247,7 +247,7 @@ class FirstOrderGaugeInvariantStore(_NicelySerializable):
         for j, meta in enumerate(fogi_metadata):
             meta['raw'] = _fogit.op_elem_vec_name(fogi_directions[:, j], errorgen_space_op_elem_labels,
                                                   op_label_abbrevs if (op_label_abbrevs is not None) else {})
-            meta['unweighted']  = _re.sub(r'(?<!:)\d+|\.','', meta['raw'])
+            meta['unweighted']  = _re.sub(r'(?<!:)\d+|\.','', meta['raw']).replace(' + ', ', ').replace(' - ', ', ')
 
         assert(len(errorgen_space_op_elem_labels) == fogi_directions.shape[0])
 

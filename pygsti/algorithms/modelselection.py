@@ -15,7 +15,7 @@ from pygsti.tools import sum_of_negative_choi_eigenvalues as non_cp_metric
 
 
 
-def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, maxiter=100, tol=1.0, prob_clip=1e-3, recompute_H_thresh_percentage = 1, disable_checkpoints = False, checkpoint = None, comm = None, mem_limit = None, recomp_interval=1e10):
+def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, maxiter=100, tol=1.0, prob_clip=1e-3, recompute_H_thresh_percentage = 1, disable_checkpoints = False, checkpoint = None, comm = None, mem_limit = None):
     """
     An automated model selection greedy algorithm. Specifically made for FOGI models, but it should be compatible
     with any model that has a linear interposer. It is considered "fast" because on most model fits, GST analysis is
@@ -108,6 +108,7 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
     initial_model.param_interposer.full_span_inv_transform_matrix = initial_model.param_interposer.inv_transform_matrix
     initial_model.param_interposer.inv_transform_matrix_projector = np.eye(initial_model.num_params)
     builders = _custom_builders(prob_clip)
+    optimizers = _custom_optimizers(maxiter,tol)
     deltalogl_fn =  builders.final_builders[0].build(initial_model, data.dataset, list(data.dataset.keys()))
     hessian_recomputed_previous_level = True
     H = None
@@ -149,7 +150,7 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
             start = time.time()
         initial_model.sim = pygsti.forwardsims.MapForwardSimulator(processor_grid=(1,size))
         
-        expansion_point_x0 = _parallel_GST(initial_model, data, builders, tol, maxiter, verbosity, comm=comm, mem_limit=mem_limit) .to_vector().copy()
+        expansion_point_x0 = _parallel_GST(initial_model, data, builders, optimizers, verbosity, comm=comm, mem_limit=mem_limit).to_vector().copy()
         initial_model.sim._processor_grid = (1,1,1)
         deltalogl_fn.model.from_vector(expansion_point_x0)
         if comm is not None:
@@ -265,12 +266,12 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
             
         if verbosity and rank == 0:
                 print(f'Model {best_model[2]} has lowest evidence ratio {best_model[1]}')
-        if  (np.abs(error) > recompute_H_thresh_percentage*er_thresh) or (len(graph_levels) % recomp_interval == 0):
+        if  (np.abs(error) > recompute_H_thresh_percentage*er_thresh):
             recompute_Hessian = True
             if verbosity > 0 and rank == 0:
                 print("Recomputing Hessian, approximation error is ", error, "norm is:: ", np.linalg.norm(best_model[0]))
             sim = pygsti.forwardsims.MapForwardSimulator(processor_grid=(1,size))
-            red_model_fit = _parallel_GST(create_red_model(deltalogl_fn.model, np.delete(deltalogl_model_projector, best_model[2], axis=1), sim=sim, vec=None), data, builders, tol, maxiter, verbosity, comm=comm, mem_limit=mem_limit) 
+            red_model_fit = _parallel_GST(create_red_model(deltalogl_fn.model, np.delete(deltalogl_model_projector, best_model[2], axis=1), sim=sim, vec=None), data, builders, optimizers, verbosity, comm=comm, mem_limit=mem_limit) 
             assert red_model_fit.num_params == len(best_model[0])
             red_model_fit.sim = pygsti.forwardsims.MapForwardSimulator(processor_grid=(1,1,size),param_blk_sizes=(100,100))
             H = pygsti.tools.logl_hessian(red_model_fit, data.dataset, comm=comm, mem_limit=mem_limit, verbosity = verbosity)
@@ -309,7 +310,7 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
                 else:
                     deltalogl_fn.model = create_red_model(deltalogl_fn.model, deltalogl_model_projector,sim=sim)
                 deltalogl_fn.model.sim = sim
-                final_fit_model = _parallel_GST(deltalogl_fn.model, data, builders, tol, maxiter, verbosity, comm=comm, mem_limit=mem_limit)
+                final_fit_model = _parallel_GST(deltalogl_fn.model, data, builders, optimizers, verbosity, comm=comm, mem_limit=mem_limit)
                 final_fit_model.sim._processor_grid = (1,1,1)
                 deltalogl_fn.model = final_fit_model
                 curr_dlogl = deltalogl_fn.fn()
@@ -360,7 +361,7 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
 
 
 
-def do_greedy_from_full_exact(initial_model, data, er_thresh=2.0, verbosity=2, maxiter=100, tol=1e-7, prob_clip=1e-3, comm = None, skip_initial_GST=False, transfer_seed=False, cptp_penalty=50):
+def do_greedy_from_full_exact(initial_model, data, er_thresh=2.0, verbosity=2, maxiter=100, tol=1e-7, prob_clip=1e-6, comm = None, skip_initial_GST=False, transfer_seed=False, cptp_penalty=50):
     """
     TODO update docstring
     An automated model selection greedy algorithm. Specifically made for FOGI models, but it should be compatible
@@ -441,7 +442,8 @@ def do_greedy_from_full_exact(initial_model, data, er_thresh=2.0, verbosity=2, m
         size = 1
 
     graph_levels = []
-    num_fogis = initial_model.fogi_store.fogi_directions.shape[1]
+
+    num_fogis = initial_model.fogi_store.fogi_directions.shape[1] - (initial_model.param_interposer.embedder_matrix.shape[0] - initial_model.param_interposer.embedder_matrix.shape[1])
     initial_model.param_interposer.full_span_inv_transform_matrix = initial_model.param_interposer.inv_transform_matrix
     initial_model.param_interposer.inv_transform_matrix_projector = np.eye(initial_model.num_params)
     builders = _custom_builders(prob_clip, cptp_penalty=cptp_penalty)
