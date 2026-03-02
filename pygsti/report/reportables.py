@@ -138,7 +138,7 @@ def spam_dotprods(rho_vecs, povms):
 Spam_dotprods = _modf.spamfn_factory(spam_dotprods)  # init args == (model)
 
 
-def choi_matrix(gate, mx_basis):
+def choi_matrix(gate, mx_basis: BasisLike):
     """
     Choi matrix
 
@@ -160,7 +160,7 @@ def choi_matrix(gate, mx_basis):
 Choi_matrix = _modf.opfn_factory(choi_matrix)  # init args == (model, op_label)
 
 
-def choi_eigenvalues(gate, mx_basis):
+def choi_eigenvalues(gate, mx_basis: BasisLike):
     """
     Choi matrix eigenvalues
 
@@ -184,7 +184,7 @@ def choi_eigenvalues(gate, mx_basis):
 Choi_evals = _modf.opfn_factory(choi_eigenvalues)  # init args == (model, op_label)
 
 
-def choi_trace(gate, mx_basis):
+def choi_trace(gate, mx_basis: BasisLike):
     """
     Trace of the Choi matrix
 
@@ -923,7 +923,7 @@ def decomposition(gate):
         return _ReportableQty({})
 
 
-def upper_bound_fidelity(gate, mx_basis):
+def upper_bound_fidelity(gate, mx_basis: BasisLike):
     """
     Upper bound on entanglement fidelity
 
@@ -949,7 +949,7 @@ Upper_bound_fidelity = _modf.opfn_factory(upper_bound_fidelity)
 # init args == (model, op_label)
 
 
-def closest_ujmx(gate, mx_basis):
+def closest_ujmx(gate, mx_basis: BasisLike):
     """
     Jamiolkowski state of closest unitary to `gate`
 
@@ -973,7 +973,7 @@ Closest_ujmx = _modf.opfn_factory(closest_ujmx)
 # init args == (model, op_label)
 
 
-def maximum_fidelity(gate, mx_basis):
+def maximum_fidelity(gate, mx_basis: BasisLike):
     """
     Fidelity between `gate` and its closest unitary
 
@@ -999,7 +999,7 @@ Maximum_fidelity = _modf.opfn_factory(maximum_fidelity)
 # init args == (model, op_label)
 
 
-def maximum_trace_dist(gate, mx_basis):
+def maximum_trace_dist(gate, mx_basis: BasisLike):
     """
     Jamiolkowski trace distance between `gate` and its closest unitary
 
@@ -1024,7 +1024,7 @@ def maximum_trace_dist(gate, mx_basis):
 Maximum_trace_dist = _modf.opfn_factory(maximum_trace_dist)
 # init args == (model, op_label)
 
-def leaky_maximum_trace_dist(gate, mx_basis):
+def leaky_maximum_trace_dist(gate, mx_basis: BasisLike):
     closestUOpMx = _alg.find_closest_unitary_opmx(gate)
     _tools.jamiolkowski_iso(closestUOpMx, mx_basis, mx_basis)
     n_leak = 1
@@ -1032,7 +1032,7 @@ def leaky_maximum_trace_dist(gate, mx_basis):
 
 Leaky_maximum_trace_dist = _modf.opfn_factory(leaky_maximum_trace_dist)
 
-def diamonddist_to_leakfree_cptp(op, ignore, mx_basis):
+def diamonddist_to_leakfree_cptp(op, ignore, mx_basis: BasisLike):
     import pygsti.tools.sdptools as _sdps
     prob, _, solvers = _sdps.diamond_distance_projection_model(
         op, mx_basis, leakfree=True, seepfree=False, n_leak=1, cptp=True, subspace_diamond=False
@@ -1047,7 +1047,7 @@ def diamonddist_to_leakfree_cptp(op, ignore, mx_basis):
 
 Diamonddist_to_leakfree_cptp = _modf.opsfn_factory(diamonddist_to_leakfree_cptp)
 
-def subspace_diamonddist_to_leakfree_cptp(op, ignore, mx_basis):
+def subspace_diamonddist_to_leakfree_cptp(op, ignore, mx_basis: BasisLike):
     import pygsti.tools.sdptools as _sdps
     prob, _, solvers = _sdps.diamond_distance_projection_model(
         op, mx_basis, leakfree=True, seepfree=False, n_leak=1, cptp=True, subspace_diamond=True
@@ -1076,7 +1076,7 @@ def subspace_diamonddist(op_a, op_b, basis):
 
 SubspaceDiamonddist = _modf.opsfn_factory(subspace_diamonddist)
 
-def pergate_leakrate_reduction(op, ignore, mx_basis, reduction):
+def pergate_leakrate_reduction(op, ignore, mx_basis: BasisLike, reduction):
     assert op.shape == (9, 9)
     lfb = _BuiltinBasis('l2p1', 9)
     op_lfb = _tools.change_basis(op, mx_basis, lfb)
@@ -1087,16 +1087,16 @@ def pergate_leakrate_reduction(op, ignore, mx_basis, reduction):
     leakage_rates = _np.linalg.eigvalsh(leakage_effect)
     return reduction(leakage_rates)
 
-def pergate_leakrate_max(op, ignore, mx_basis):
+def pergate_leakrate_max(op, ignore, mx_basis: BasisLike):
     return pergate_leakrate_reduction(op, ignore, mx_basis, max)
 
-def pergate_leakrate_min(op, ignore, mx_basis):
+def pergate_leakrate_min(op, ignore, mx_basis: BasisLike):
     return pergate_leakrate_reduction(op, ignore, mx_basis, min)
 
 PerGateLeakRateMax = _modf.opsfn_factory(pergate_leakrate_max)
 PerGateLeakRateMin = _modf.opsfn_factory(pergate_leakrate_min)
 
-def pergate_seeprate(op, ignore, mx_basis):
+def pergate_seeprate(op, ignore, mx_basis: BasisLike):
     assert op.shape == (9, 9)
     lfb = _BuiltinBasis('l2p1', 9)
     op_lfb = _tools.change_basis(op, mx_basis, lfb)
@@ -1152,7 +1152,7 @@ Angles_btwn_rotn_axes = _modf.modelfn_factory(angles_btwn_rotn_axes)
 # init args == (model)
 
 
-def entanglement_fidelity(a, b, mx_basis):
+def entanglement_fidelity(a, b, mx_basis: BasisLike):
     """
     Entanglement fidelity between a and b
 
@@ -1177,14 +1177,14 @@ def entanglement_fidelity(a, b, mx_basis):
 Entanglement_fidelity = _modf.opsfn_factory(entanglement_fidelity)
 # init args == (model1, model2, op_label)
 
-def subspace_entanglement_fidelity(a, b, mx_basis):
+def subspace_entanglement_fidelity(a, b, mx_basis: BasisLike):
     n_leak = 1
     return _tools.subspace_entanglement_fidelity(a, b, mx_basis, n_leak)
 
 Subspace_entanglement_fidelity = _modf.opsfn_factory(subspace_entanglement_fidelity)
 
 
-def entanglement_infidelity(a, b, mx_basis):
+def entanglement_infidelity(a, b, mx_basis: BasisLike):
     """
     Entanglement infidelity between a and b
 
@@ -1209,13 +1209,13 @@ def entanglement_infidelity(a, b, mx_basis):
 Entanglement_infidelity = _modf.opsfn_factory(entanglement_infidelity)
 # init args == (model1, model2, op_label)
 
-def leaky_entanglement_infidelity(a, b, mx_basis):
+def leaky_entanglement_infidelity(a, b, mx_basis: BasisLike):
     return 1 - subspace_entanglement_fidelity(a, b, mx_basis)
 
 Leaky_entanglement_infidelity = _modf.opsfn_factory(leaky_entanglement_infidelity)
 
 
-def closest_unitary_fidelity(a, b, mx_basis):  # assume vary model1, model2 fixed
+def closest_unitary_fidelity(a, b, mx_basis: BasisLike):  # assume vary model1, model2 fixed
     """
     Entanglement infidelity between closest unitaries to a and b
 
@@ -1254,7 +1254,7 @@ Closest_unitary_fidelity = _modf.opsfn_factory(closest_unitary_fidelity)
 # init args == (model1, model2, op_label)
 
 
-def frobenius_diff(a, b, mx_basis):  # assume vary model1, model2 fixed
+def frobenius_diff(a, b, mx_basis: BasisLike):  # assume vary model1, model2 fixed
     """
     Frobenius distance between a and b
 
@@ -1280,7 +1280,7 @@ Fro_diff = _modf.opsfn_factory(frobenius_diff)
 # init args == (model1, model2, op_label)
 
 
-def leaky_gate_frob_dist(a, b, mx_basis):
+def leaky_gate_frob_dist(a, b, mx_basis: BasisLike):
     n_leak = 1
     return _tools.subspace_superop_fro_dist(a, b, mx_basis, n_leak)
 
@@ -1288,7 +1288,7 @@ def leaky_gate_frob_dist(a, b, mx_basis):
 Leaky_gate_frob_dist = _modf.opsfn_factory(leaky_gate_frob_dist)
 
 
-def jtrace_diff(a, b, mx_basis):  # assume vary model1, model2 fixed
+def jtrace_diff(a, b, mx_basis: BasisLike):  # assume vary model1, model2 fixed
     """
     Jamiolkowski trace distance between a and b
 
@@ -1313,7 +1313,7 @@ def jtrace_diff(a, b, mx_basis):  # assume vary model1, model2 fixed
 Jt_diff = _modf.opsfn_factory(jtrace_diff)
 # init args == (model1, model2, op_label)
 
-def leaky_jtrace_diff(a, b, mx_basis):
+def leaky_jtrace_diff(a, b, mx_basis: BasisLike):
     n_leak = 1
     return _tools.subspace_jtracedist(a, b, mx_basis, n_leak)
 
@@ -1396,7 +1396,7 @@ if _CVXPY_AVAILABLE:
             val = 0.5 * (_np.vdot(J.real, self.W[0].real) + _np.vdot(J.imag, self.W[0].imag))
             return val
 
-    def half_diamond_norm(a, b, mx_basis):
+    def half_diamond_norm(a, b, mx_basis: BasisLike):
         """
         Half the diamond distance between `a` and `b`.
 
@@ -1420,7 +1420,7 @@ else:
     HalfDiamondNorm = _null_fn
 
 
-def std_unitarity(a, b, mx_basis):
+def std_unitarity(a, b, mx_basis: BasisLike):
     """
     a gauge-invariant quantity that behaves like the unitarity
 
@@ -1473,7 +1473,7 @@ def eigenvalue_unitarity(a, b):
         return _np.nan
 
 
-def nonunitary_entanglement_infidelity(a, b, mx_basis):
+def nonunitary_entanglement_infidelity(a, b, mx_basis: BasisLike):
     """
     Returns (d^2 - 1)/d^2 * (1 - sqrt(U)), where U is the unitarity of a*b^{-1}
 
@@ -1501,7 +1501,7 @@ Nonunitary_entanglement_infidelity = _modf.opsfn_factory(nonunitary_entanglement
 # init args == (model1, model2, op_label)
 
 
-def nonunitary_avg_gate_infidelity(a, b, mx_basis):
+def nonunitary_avg_gate_infidelity(a, b, mx_basis: BasisLike):
     """
     Returns (d - 1)/d * (1 - sqrt(U)), where U is the unitarity of a*b^{-1}
 
@@ -1530,7 +1530,7 @@ Nonunitary_avg_gate_infidelity = _modf.opsfn_factory(nonunitary_avg_gate_infidel
 # init args == (model1, model2, op_label)
 
 
-def eigenvalue_nonunitary_entanglement_infidelity(a, b, mx_basis):
+def eigenvalue_nonunitary_entanglement_infidelity(a, b, mx_basis: BasisLike):
     """
     Returns (d^2 - 1)/d^2 * (1 - sqrt(U)), where U is the eigenvalue-unitarity of a*b^{-1}
 
@@ -1557,7 +1557,7 @@ Eigenvalue_nonunitary_entanglement_infidelity = _modf.opsfn_factory(eigenvalue_n
 # init args == (model1, model2, op_label)
 
 
-def eigenvalue_nonunitary_avg_gate_infidelity(a, b, mx_basis):
+def eigenvalue_nonunitary_avg_gate_infidelity(a, b, mx_basis: BasisLike):
     """
     Returns (d - 1)/d * (1 - sqrt(U)), where U is the eigenvalue-unitarity of a*b^{-1}
 
@@ -1652,7 +1652,7 @@ Eigenvalue_entanglement_infidelity = _modf.opsfn_factory(eigenvalue_entanglement
 # init args == (model1, model2, op_label)
 
 
-def eigenvalue_avg_gate_infidelity(a, b, mx_basis):
+def eigenvalue_avg_gate_infidelity(a, b, mx_basis: BasisLike):
     """
     Eigenvalue average gate infidelity between a and b
 
@@ -1680,7 +1680,7 @@ Eigenvalue_avg_gate_infidelity = _modf.opsfn_factory(eigenvalue_avg_gate_infidel
 # init args == (model1, model2, op_label)
 
 
-def eigenvalue_diamondnorm(a, b, mx_basis):
+def eigenvalue_diamondnorm(a, b, mx_basis: BasisLike):
     """
     Eigenvalue diamond distance between a and b
 
@@ -1710,7 +1710,7 @@ Eigenvalue_diamondnorm = _modf.opsfn_factory(eigenvalue_diamondnorm)
 # init args == (model1, model2, op_label)
 
 
-def eigenvalue_nonunitary_diamondnorm(a, b, mx_basis):
+def eigenvalue_nonunitary_diamondnorm(a, b, mx_basis: BasisLike):
     """
     Eigenvalue nonunitary diamond distance between a and b
 
@@ -1740,7 +1740,7 @@ Eigenvalue_nonunitary_diamondnorm = _modf.opsfn_factory(eigenvalue_nonunitary_di
 # init args == (model1, model2, op_label)
 
 
-def avg_gate_infidelity(a, b, mx_basis):
+def avg_gate_infidelity(a, b, mx_basis: BasisLike):
     """
     Returns the average gate infidelity between a and b, where b is the "target" operation.
 
@@ -1766,7 +1766,7 @@ Avg_gate_infidelity = _modf.opsfn_factory(avg_gate_infidelity)
 # init args == (model1, model2, op_label)
 
 
-def generator_infidelity(a, b, mx_basis):
+def generator_infidelity(a, b, mx_basis: BasisLike):
     """
     Returns the generator infidelity between a and b, where b is the "target" operation.
     Generator infidelity is given by the sum of the squared hamiltonian error generator
@@ -1797,7 +1797,7 @@ def generator_infidelity(a, b, mx_basis):
 Generator_infidelity = _modf.opsfn_factory(generator_infidelity)
 # init args == (model1, model2, op_label)
 
-def model_model_angles_btwn_axes(a, b, mx_basis):  # Note: default 'gm' basis
+def model_model_angles_btwn_axes(a, b, mx_basis: BasisLike):  # Note: default 'gm' basis
     """
     Angle between the rotation axes of a and b (1-qubit gates)
 
@@ -1841,7 +1841,7 @@ Model_model_angles_btwn_axes = _modf.opsfn_factory(model_model_angles_btwn_axes)
 # init args == (model1, model2, op_label)
 
 
-def rel_eigenvalues(a, b, mx_basis):
+def rel_eigenvalues(a, b, mx_basis: BasisLike):
     """
     Eigenvalues of b^{-1} * a
 
@@ -1873,7 +1873,7 @@ Rel_eigvals = _modf.opsfn_factory(rel_eigenvalues)
 # init args == (model1, model2, op_label)
 
 
-def rel_log_tig_eigenvalues(a, b, mx_basis):
+def rel_log_tig_eigenvalues(a, b, mx_basis: BasisLike):
     """
     Eigenvalues of log(b^{-1} * a)
 
@@ -1900,7 +1900,7 @@ Rel_logTiG_eigvals = _modf.opsfn_factory(rel_log_tig_eigenvalues)
 # init args == (model1, model2, op_label)
 
 
-def rel_log_gti_eigenvalues(a, b, mx_basis):
+def rel_log_gti_eigenvalues(a, b, mx_basis: BasisLike):
     """
     Eigenvalues of log(a * b^{-1})
 
@@ -1927,7 +1927,7 @@ Rel_logGTi_eigvals = _modf.opsfn_factory(rel_log_gti_eigenvalues)
 # init args == (model1, model2, op_label)
 
 
-def rel_log_diff_eigenvalues(a, b, mx_basis):
+def rel_log_diff_eigenvalues(a, b, mx_basis: BasisLike):
     """
     Eigenvalues of log(a) - log(b)
 
@@ -1961,7 +1961,7 @@ Rel_gate_eigenvalues = _modf.opsfn_factory(rel_gate_eigenvalues)
 # init args == (model1, model2, op_label)
 
 
-def errorgen_and_projections(errgen, mx_basis):
+def errorgen_and_projections(errgen, mx_basis: BasisLike):
     """
     Project `errgen` on all of the standard sets of error generators.
 
@@ -2028,7 +2028,7 @@ def errorgen_and_projections(errgen, mx_basis):
     return ret
 
 
-def log_tig_and_projections(a, b, mx_basis):
+def log_tig_and_projections(a, b, mx_basis: BasisLike):
     """
     Projections of `log(b^{-1}*a)`.
 
@@ -2058,7 +2058,7 @@ LogTiG_and_projections = _modf.opsfn_factory(log_tig_and_projections)
 # init args == (model1, model2, op_label)
 
 
-def log_gti_and_projections(a, b, mx_basis):
+def log_gti_and_projections(a, b, mx_basis: BasisLike):
     """
     Projections of `log(a*b^{-1})`.
 
@@ -2088,7 +2088,7 @@ LogGTi_and_projections = _modf.opsfn_factory(log_gti_and_projections)
 # init args == (model1, model2, op_label)
 
 
-def log_diff_and_projections(a, b, mx_basis):
+def log_diff_and_projections(a, b, mx_basis: BasisLike):
     """
     Projections of `log(a)-log(b)`.
 
@@ -2428,7 +2428,7 @@ Predicted_rb_number = _modf.modelfn_factory(predicted_rb_number)
 # init args == (model_a, model_b)
 
 
-def vec_fidelity(a, b, mx_basis):
+def vec_fidelity(a, b, mx_basis: BasisLike):
     """
     State fidelity between state vectors a and b
 
@@ -2456,7 +2456,7 @@ Vec_fidelity = _modf.vecsfn_factory(vec_fidelity)
 # init args == (model1, model2, label, typ)
 
 
-def vec_infidelity(a, b, mx_basis):
+def vec_infidelity(a, b, mx_basis: BasisLike):
     """
     State infidelity fidelity between state vectors a and b
 
@@ -2484,7 +2484,7 @@ Vec_infidelity = _modf.vecsfn_factory(vec_infidelity)
 # init args == (model1, model2, label, typ)
 
 
-def vec_trace_diff(a, b, mx_basis):  # assume vary model1, model2 fixed
+def vec_trace_diff(a, b, mx_basis: BasisLike):  # assume vary model1, model2 fixed
     """
     Trace distance between state vectors a and b
 
@@ -2512,7 +2512,7 @@ Vec_tr_diff = _modf.vecsfn_factory(vec_trace_diff)
 # init args == (model1, model2, label, typ)
 
 
-def vec_as_stdmx(vec, mx_basis):
+def vec_as_stdmx(vec, mx_basis: BasisLike):
     """
     State vector as a standard density matrix
 
@@ -2536,7 +2536,7 @@ Vec_as_stdmx = _modf.vecfn_factory(vec_as_stdmx)
 # init args == (model, label, typ)
 
 
-def vec_as_stdmx_eigenvalues(vec, mx_basis):
+def vec_as_stdmx_eigenvalues(vec, mx_basis: BasisLike):
     """
     Eigenvalues of the density matrix corresponding to a state vector
 
@@ -2764,7 +2764,7 @@ def evaluate_opfn_by_name(name, model, target_model, op_label_or_string,
     return evaluate(fn(model, target_model, gl), confidence_region_info)
 
 
-def instrument_infidelity(a, b, mx_basis):
+def instrument_infidelity(a, b, mx_basis: BasisLike):
     """
     Infidelity between instruments a and b
 
@@ -2792,7 +2792,7 @@ Instrument_infidelity = _modf.instrumentfn_factory(instrument_infidelity)
 # init args == (model1, model2, instrument_label)
 
 
-def instrument_half_diamond_norm(a, b, mx_basis):
+def instrument_half_diamond_norm(a, b, mx_basis: BasisLike):
     """
     The diamond norm distance between instruments a and b.
 

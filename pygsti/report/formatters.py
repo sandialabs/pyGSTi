@@ -201,7 +201,7 @@ Notice that they still have the function signature (item, specs -> string)
 '''
 
 
-def html_figure(fig, specs):
+def html_figure(fig: _ReportableQty, specs: dict) -> str:
     """
     Render a html-format figure
 
@@ -228,7 +228,7 @@ def html_figure(fig, specs):
     return render_out  # a dictionary with 'html' and 'js' keys
 
 
-def latex_figure(fig, specs):
+def latex_figure(fig: _ReportableQty, specs: dict) -> str:
     """
     Render a latex-format figure
 
@@ -253,7 +253,7 @@ def latex_figure(fig, specs):
     return render_out
 
 
-def python_figure(fig, specs):
+def python_figure(fig: _ReportableQty, specs: dict) -> _ReportableQty:
     """
     Render a python-format figure
 
