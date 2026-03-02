@@ -223,7 +223,7 @@ class ModelTest(_proto.Protocol):
                 objfn_vals = checkpoint.objfn_vals
                 chi2k_distributed_vals = checkpoint.chi2k_distributed_vals
             else:
-                NotImplementedError('The only currently valid checkpoint inputs are None and ModelTestCheckpoint.')
+                raise NotImplementedError('The only currently valid checkpoint inputs are None and ModelTestCheckpoint.')
 
             #Check the last completed iteration identified in the checkpoint and set that as the
             #starting point for the iteration through bulk_circuit_lists. This starts at -1 for
