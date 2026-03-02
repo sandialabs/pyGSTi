@@ -20,7 +20,7 @@ from pygsti.report import workspaceplots as _wp
 from pygsti.report.reportables import evaluate as _ev
 from pygsti.report.table import ReportTable as _ReportTable
 from pygsti.report.workspace import WorkspaceTable
-from pygsti.report.reportableqty import ReportableQty as _ReportableQty, minimum as _rqty_minimum
+from pygsti.report.reportableqty import ReportableQty as _ReportableQty
 from pygsti import circuits as _circuits
 from pygsti import models as _models
 from pygsti import baseobjs as _baseobjs
@@ -1082,7 +1082,12 @@ class GaugeRobustMetricTable(WorkspaceTable):
                         el2 = _reportables.evaluate_opfn_by_name(
                             metric, target_mdl_in_best_gauge[i], target_mdl_in_best_gauge[j], lbl,
                             confidence_region_info)
-                        el = _rqty_minimum(el1, el2)
+                        assert isinstance(el1, _ReportableQty)
+                        assert isinstance(el2, _ReportableQty)
+                        if el1 <= el2:
+                            el = el1
+                        else:
+                            el = el2
                     except Exception:
                         _warnings.warn("Error computing %s for %s,%s ops in gauge-robust metrics table!" %
                                        (metric, lbl, lbl2))

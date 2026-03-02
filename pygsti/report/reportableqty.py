@@ -19,49 +19,6 @@ import numpy as _np
 from pygsti.baseobjs.label import Label as _Label
 
 
-def minimum(qty1, qty2):
-    """
-    Returns a ReportableQty that is the minimum of `qty1` and `qty2`.
-
-    Parameters
-    ----------
-    qty1 : ReportableQty
-        First quantity.
-
-    qty2 : ReportableQty
-        Second quantity.
-
-    Returns
-    -------
-    ReportableQty
-    """
-    if qty1.value <= qty2.value:
-        return qty1
-    else:
-        return qty2
-
-
-def maximum(qty1, qty2):
-    """
-    Returns a ReportableQty that is the maximum of `qty1` and `qty2`.
-
-    Parameters
-    ----------
-    qty1 : ReportableQty
-        First quantity.
-
-    qty2 : ReportableQty
-        Second quantity.
-
-    Returns
-    -------
-    ReportableQty
-    """
-    if qty1.value >= qty2.value:
-        return qty1
-    else:
-        return qty2
-
 
 class ReportableQty(object):
     """
@@ -115,6 +72,21 @@ class ReportableQty(object):
 
     def __repr__(self):
         return 'ReportableQty({})'.format(str(self))
+
+    def __le__(self, other):
+        """
+        Compare two ReportableQty based upon their specified value assuming it is a scalar value.
+        """
+        return self.value <= other.value
+
+    def __gt__(self, other):
+        return not (self <= other)
+    
+    def __ge__(self, other):
+        return self.value >= other.value
+    
+    def __lt__(self, other):
+        return not (self >= other)
 
     def __add__(self, x):
         if self.has_errorbar:
