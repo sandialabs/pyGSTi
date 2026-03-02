@@ -10,6 +10,7 @@ RB Protocol objects
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from typing import Optional, Literal, Union
 from collections import defaultdict
 import numpy as _np
 
@@ -1293,7 +1294,7 @@ class InterleavedRBDesign(_proto.CombinedExperimentDesign):
         #set some auxfile information for serializing interleaved_circuit
         self.auxfile_types['interleaved_circuit'] = 'circuit-str-json'
 
-    def average_native_gates_per_clifford(self):
+    def average_native_gates_per_clifford(self) -> tuple[float, float]:
         """
         The average number of native gates per Clifford for all circuits
 
@@ -1556,7 +1557,7 @@ class RandomizedBenchmarkingResults(_proto.ProtocolResults):
         The default key within `fits` to plot when calling :meth:`plot`.
     """
 
-    def __init__(self, data, protocol_instance, fits, depths, defaultfit):
+    def __init__(self, data: _proto.ProtocolData, protocol_instance: _proto.Protocol, fits, depths, defaultfit: str):
         """
         Initialize an empty RandomizedBenchmarkingResults object.
         """
@@ -1692,8 +1693,9 @@ class InterleavedRandomizedBenchmarking(_proto.Protocol):
     the subset of RandomizedBenchmarking's arguments relevant for CRB.
     """
 
-    def __init__(self, defaultfit='full', asymptote='std', rtype='EI', seed=(0.8, 0.95), 
-                 bootstrap_samples=200, depths='all', name=None):
+    def __init__(self, defaultfit: Literal['full', 'A-fixed']='full', asymptote='std',
+                 rtype: Literal['EI', 'AGI']='EI', seed=(0.8, 0.95), 
+                 bootstrap_samples=200, depths: Union[Literal['all'], list]='all', name: Optional[str]=None):
         """
         Initialize an RB protocol for analyzing RB data.
 
@@ -1740,7 +1742,7 @@ class InterleavedRandomizedBenchmarking(_proto.Protocol):
         self.datatype = 'success_probabilities'
         self.defaultfit = defaultfit
 
-    def run(self, data, memlimit=None, comm=None):
+    def run(self, data: _proto.ProtocolData, memlimit: Optional[int]=None, comm=None):
         """
         Run this protocol on `data`.
 
@@ -1812,7 +1814,7 @@ class InterleavedRandomizedBenchmarkingResults(_proto.ProtocolResults):
     information regarding the IRB number estimates.
     """
 
-    def __init__(self, data, protocol, irb_numbers, irb_bounds):
+    def __init__(self, data: _proto.ProtocolData, protocol: _proto.Protocol, irb_numbers, irb_bounds):
         #msg = 'rb_subexperiment_results should be a dictionary with values corresponding to the'\
         #      +' standard CRB and interleaved CRB subexperiments used in performing IRB.'
         #assert(isinstance(rb_subexperiment_results, dict)), msg

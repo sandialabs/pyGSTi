@@ -10,7 +10,7 @@ GST Protocol objects
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
-
+from __future__ import annotations
 import collections as _collections
 import copy as _copy
 import os as _os
@@ -2027,7 +2027,7 @@ def _load_fiducials_and_germs(prep_fiducial_list_or_filename,
     return prep_fiducials, meas_fiducials, germs
 
 
-def _add_gaugeopt_and_badfit(results, estlbl, target_model, gaugeopt_suite,
+def _add_gaugeopt_and_badfit(results: ModelEstimateResults, estlbl, target_model, gaugeopt_suite,
                              unreliable_ops, badfit_options, optimizer, resource_alloc, printer):
     tref = _time.time()
     comm = resource_alloc.comm
@@ -2058,7 +2058,7 @@ def _add_gaugeopt_and_badfit(results, estlbl, target_model, gaugeopt_suite,
     return results
 
 
-def _add_gauge_opt(results, base_est_label, gaugeopt_suite, starting_model,
+def _add_gauge_opt(results: ModelEstimateResults, base_est_label: str, gaugeopt_suite, starting_model,
                    unreliable_ops, comm=None, verbosity=0):
     """
     Add a gauge optimization to an estimate.
@@ -2139,7 +2139,7 @@ def _add_gauge_opt(results, base_est_label, gaugeopt_suite, starting_model,
                         results.estimates[robust_est_label].add_gaugeoptimized(goparams, None, go_label, comm, printer - 3)
 
 
-def _add_badfit_estimates(results, base_estimate_label, badfit_options,
+def _add_badfit_estimates(results: ModelEstimateResults, base_estimate_label, badfit_options,
                           optimizer=None, resource_alloc=None, verbosity=0,
                           gaugeopt_suite=None):
     """
@@ -2920,7 +2920,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
     #even if this is is exposed differently.
 
     @classmethod
-    def from_dir(cls, dirname, name, preloaded_data=None, quick_load=False):
+    def from_dir(cls, dirname: str, name: str, preloaded_data: Optional[_proto.ProtocolData]=None, quick_load=False):
         """
         Initialize a new ModelEstimateResults object from `dirname` / results / `name`.
 
@@ -2965,9 +2965,9 @@ class ModelEstimateResults(_proto.ProtocolResults):
             est.parent = ret  # link estimate to parent results object
         return ret
 
-    def __init__(self, data, protocol_instance, init_circuits=True):
+    def __init__(self, data: _proto.ProtocolData, protocol_instance: _proto.Protocol, init_circuits=True):
         """
-        Initialize an empty Results object.
+        Initialize an empty ModelEstimateResults object.
         """
         super().__init__(data, protocol_instance)
 
@@ -3019,7 +3019,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
             ret[k] = v
         return ret
 
-    def add_estimates(self, results, estimates_to_add=None):
+    def add_estimates(self, results: ModelEstimateResults, estimates_to_add: Optional[list]=None):
         """
         Add some or all of the estimates from `results` to this `Results` object.
 
@@ -3058,7 +3058,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
                                    + " want to do this.")
                 self.estimates[estimate_key] = results.estimates[estimate_key]
 
-    def rename_estimate(self, old_name, new_name):
+    def rename_estimate(self, old_name: str, new_name: str):
         """
         Rename an estimate in this Results object.
 
@@ -3085,7 +3085,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
         keys_to_move = ordered_keys[ordered_keys.index(old_name) + 1:]  # everything after old_name
         for key in keys_to_move: self.estimates.move_to_end(key)
 
-    def add_estimate(self, estimate, estimate_key='default'):
+    def add_estimate(self, estimate: _Estimate, estimate_key='default'):
         """
         Add a set of `Model` estimates to this `Results` object.
 
@@ -3121,7 +3121,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
         self.estimates[estimate_key] = estimate
 
     def add_model_test(self, target_model, themodel,
-                       estimate_key='test', gaugeopt_keys="auto", verbosity=2,
+                       estimate_key: str='test', gaugeopt_keys="auto", verbosity=2,
                        simulator: Optional[ForwardSimulator.Castable]=None):
         """
         Add a new model-test (i.e. non-optimized) estimate to this `Results` object.
@@ -3144,7 +3144,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
             as the model model is assumed to be fixed and to have no
             gauge degrees of freedom.  The special value "auto" creates
             gauge-optimized estimates for all the gauge optimization labels
-            currently in this `Results` object.
+            currently in this `ModelEstimateResults` object.
 
         verbosity : int, optional
             Level of detail printed to stdout.

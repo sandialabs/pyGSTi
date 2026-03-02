@@ -2407,7 +2407,7 @@ class ProtocolResults(_MongoSerializable):
                                                    quick_load=quick_load, comm=None))
         return ret
 
-    def __init__(self, data, protocol_instance):
+    def __init__(self, data: ProtocolData, protocol_instance: Protocol):
         """
         Create a new ProtocolResults object.
 
@@ -2620,7 +2620,7 @@ class MultiPassResults(ProtocolResults):
             partially_loaded_results.protocol = ret.protocol.protocol  # assumes ret.protocol is MultiPassProtocol-like
         return ret
 
-    def __init__(self, data, protocol_instance):
+    def __init__(self, data: ProtocolData, protocol_instance: Protocol):
         """
         Initialize an empty MultiPassResults object, which contain a dictionary
         of sub-results one per "pass".  Usually these sub-results are obtained

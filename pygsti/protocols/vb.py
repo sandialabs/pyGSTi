@@ -10,6 +10,7 @@ Volumetric Benchmarking Protocol objects
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from typing import Union, Optional
 import numpy as _np
 import copy as _copy
 
@@ -17,6 +18,7 @@ from pygsti import tools as _tools
 from pygsti.algorithms import randomcircuit as _rc
 from pygsti.protocols import protocol as _proto
 from pygsti.models.oplessmodel import SuccessFailModel as _SuccessFailModel
+from pygsti.circuits.circuit import Circuit as _Circuit
 
 
 class ByDepthDesign(_proto.CircuitListsDesign):
@@ -42,7 +44,7 @@ class ByDepthDesign(_proto.CircuitListsDesign):
         all the circuits that need data.
     """
 
-    def __init__(self, depths, circuit_lists, qubit_labels=None, remove_duplicates=True):
+    def __init__(self, depths: Union[list[int], tuple[int, ...]], circuit_lists: Union[list[list[_Circuit]], tuple[list[_Circuit]]], qubit_labels=None, remove_duplicates=True):
         assert(len(depths) == len(circuit_lists)), \
             "Number of depths must equal the number of circuit lists!"
         super().__init__(circuit_lists, qubit_labels=qubit_labels, remove_duplicates=remove_duplicates)
@@ -1046,7 +1048,7 @@ class ByDepthSummaryStatistics(SummaryStatistics):
 
         return statistic_per_depth
 
-    def run(self, data, memlimit=None, comm=None, dscomparator=None):
+    def run(self, data: Union[_proto.ProtocolResults, _proto.ProtocolResultsDir], memlimit: Optional[int]=None, comm=None, dscomparator=None):
         """
         Run this protocol on `data`.
         Parameters
@@ -1099,7 +1101,7 @@ class SummaryStatisticsResults(_proto.ProtocolResults):
     protocol_instance : Protocol
         The protocol that generated these results.
     """
-    def __init__(self, data, protocol_instance):
+    def __init__(self, data: _proto.ProtocolData, protocol_instance: _proto.Protocol):
         """
         Initialize an empty SummaryStatisticsResults object.
         """

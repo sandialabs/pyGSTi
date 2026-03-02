@@ -21,6 +21,7 @@ from pygsti.report import workspace as _ws
 from pygsti.report.notebook import Notebook as _Notebook
 from pygsti.baseobjs import VerbosityPrinter as _VerbosityPrinter
 from pygsti.protocols import ModelEstimateResults as _ModelEstimateResults
+from pygsti.protocols import protocol as _proto
 
 
 # TODO this whole thing needs to be rewritten with different reports as derived classes
@@ -65,7 +66,7 @@ class Report:
         A ``Workspace`` used for caching figure computation. By
         default, a new workspace will be used.
     """
-    def __init__(self, templates, results, sections, flags,
+    def __init__(self, templates, results: _proto.ProtocolResults, sections, flags,
                  global_qtys, report_params, build_defaults=None,
                  pdf_available=True, workspace=None):
         self._templates = templates
@@ -496,7 +497,7 @@ class Report:
             for child in path.iterdir():
                 if child.is_file():
                     continue
-                inner_dict = dict()
+                inner_dict: dict[str, _ModelEstimateResults] = dict()
                 for estname in _os.listdir(str(child / 'results')):
                     res = _ModelEstimateResults.from_dir(str(child), name=estname)
                     inner_dict[estname] = res
