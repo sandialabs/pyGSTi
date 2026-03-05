@@ -100,8 +100,7 @@ class ImplicitOpModel(_mdl.OpModel):
                                                  self.povm_blks.items(),
                                                  self.operation_blks.items(),
                                                  self.instrument_blks.items(),
-                                                 self.factories.items(),
-                                                 self.covariance_functions.items()):
+                                                 self.factories.items()):
             for lbl, obj in objdict.items():
                 yield (_Label(dictlbl + ":" + lbl.name, lbl.sslbls), obj)
         if self.covariance_function is not None:
