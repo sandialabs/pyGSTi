@@ -453,40 +453,56 @@ def magnus_symbolic_polynomial(errorgen_transform_maps, errorgen_to_var_map, mag
     """
     assert magnus_order == 1 or magnus_order == 2, "Magnus expansions up to second order are currently supported for symbolic computations."
     
-    magnus_terms_by_order = []
-    #start off with the first-order magnus case.
-    #initialize a dictionary with all of the keys that may appear in the first order magnus expansion
-    #values initialized with empty lists to accumulate contributions.
-      
-    output_errgen_iterables = [transform_map.values() for transform_map in errorgen_transform_maps]
-    first_order_magnus_var_dict = {output_errgen_tup[0]: [] for output_errgen_tup in chain(*output_errgen_iterables)}
-    first_order_magnus_coeff_dict = {key: [] for key in first_order_magnus_var_dict}
-
-    #loop through each key of errorgen_transform_map, use the value to index into current_combined_coeff_lbls
-    #and append the key's label and the phase value from the transformed value.
-    for transform_map in errorgen_transform_maps:
-        for key, val in transform_map.items():
-            first_order_magnus_var_dict[val[0]].append((errorgen_to_var_map[key],))
-            first_order_magnus_coeff_dict[val[0]].append(val[1])
-
-    #for each output error generator construct the corresponding polynomials.
-    first_order_magnus_dict = dict()
-    max_num_vars = len(errorgen_to_var_map)
-    for (key, variables), coefficients in zip(first_order_magnus_var_dict.items(), first_order_magnus_coeff_dict.values()):
-        first_order_magnus_dict[key] = _Polynomial.from_variable_and_coefficient_lists(variables, coefficients, max_num_vars)
+    is_polynomial_input = False
+    for layer in errorgen_transform_maps:
+        if layer and isinstance(next(iter(layer)), _LSE):
+            is_polynomial_input = True
+            max_num_vars = next(iter(layer.values())).max_num_vars
+            break
+    
+    if is_polynomial_input:
+        magnus_terms_by_order = []
+        first_order_magnus_dict = {key: None for key in chain(*errorgen_transform_maps)}
+        first_order_magnus_dict = {key: _Polynomial({}, max_num_vars=max_num_vars) for key in first_order_magnus_dict}
         
+        errgen_iterables = [layer.items() for layer in errorgen_transform_maps]
+        for errorgen, poly in chain(*errgen_iterables):
+            first_order_magnus_dict[errorgen]+=poly
+    
+    else: #input is an error generator transform map.
+        magnus_terms_by_order = []
+        #start off with the first-order magnus case.
+        #initialize a dictionary with all of the keys that may appear in the first order magnus expansion
+        #values initialized with empty lists to accumulate contributions.
+        output_errgen_iterables = [transform_map.values() for transform_map in errorgen_transform_maps]
+        first_order_magnus_var_dict = {output_errgen_tup[0]: [] for output_errgen_tup in chain(*output_errgen_iterables)}
+        first_order_magnus_coeff_dict = {key: [] for key in first_order_magnus_var_dict}
+
+        #loop through each key of errorgen_transform_map, use the value to index into current_combined_coeff_lbls
+        #and append the key's label and the phase value from the transformed value.
+        for transform_map in errorgen_transform_maps:
+            for key, val in transform_map.items():
+                first_order_magnus_var_dict[val[0]].append((errorgen_to_var_map[key],))
+                first_order_magnus_coeff_dict[val[0]].append(val[1])
+
+        #for each output error generator construct the corresponding polynomials.
+        first_order_magnus_dict = dict()
+        max_num_vars = max(errorgen_to_var_map.values())
+        for (key, variables), coefficients in zip(first_order_magnus_var_dict.items(), first_order_magnus_coeff_dict.values()):
+            first_order_magnus_dict[key] = _Polynomial.from_variable_and_coefficient_lists(variables, coefficients, max_num_vars)
+
     if magnus_order == 1:
         return first_order_magnus_dict
-    
+
     magnus_terms_by_order.append(first_order_magnus_dict)
-    
+
     if magnus_order == 2:
         second_order_magnus_dict = _second_order_magnus_term_symbolic_polynomial(errorgen_transform_maps, errorgen_to_var_map)
         magnus_terms_by_order.append(second_order_magnus_dict)
-        
+
     #loop through the magnus terms by order and initialize a dictionary to accumulate results.
     combined_magnus_order_dict_keys = {key: None for key in chain(*magnus_terms_by_order)}
-    combined_magnus_order_dict = {errorgen: _Polynomial({}, max_num_vars=len(errorgen_to_var_map)) for errorgen in combined_magnus_order_dict_keys}
+    combined_magnus_order_dict = {errorgen: _Polynomial({}, max_num_vars=max(errorgen_to_var_map.values())) for errorgen in combined_magnus_order_dict_keys}
 
     # Accumulate the coefficients contributing to each term.    
     for order_dict in magnus_terms_by_order:
@@ -523,17 +539,26 @@ def _second_order_magnus_term_symbolic_polynomial(errorgen_transform_maps, error
     -------
     TBD
     """
-        
     errorgen_pairs = []
     for i in range(len(errorgen_transform_maps)):
         for j in range(i):
             errorgen_pairs.append((errorgen_transform_maps[i], errorgen_transform_maps[j]))
     
+    is_polynomial_input = False
+    for layer in errorgen_transform_maps:
+        if layer and isinstance(next(iter(layer)), _LSE):
+            is_polynomial_input = True
+            max_num_vars = next(iter(layer.values())).max_num_vars
+            break
+    
     # precompute an identity string for comparisons in commutator calculations if one is not provided.
     if identity is None and errorgen_transform_maps:
         for layer in errorgen_transform_maps:
             if layer:
-                identity = stim.PauliString('I'*len(next(iter(layer))[0].basis_element_labels[0]))
+                if is_polynomial_input:
+                    identity = stim.PauliString('I'*len(next(iter(layer)).basis_element_labels[0]))
+                else:
+                    identity = stim.PauliString('I'*len(next(iter(layer))[0].basis_element_labels[0]))
                 break
     
     # compute second-order BCH correction for each pair of error generators in the
@@ -546,7 +571,7 @@ def _second_order_magnus_term_symbolic_polynomial(errorgen_transform_maps, error
     
     # loop through all of the elements of commuted_errgen_poly_dicts and instantiate a dictionary with the requisite keys.
     second_order_comm_dict_keys = {errorgen: None for poly_dict in commuted_errgen_poly_dicts for errorgen in poly_dict}
-    second_order_comm_dict = {errorgen: _Polynomial({}, max_num_vars=len(errorgen_to_var_map)) for errorgen in second_order_comm_dict_keys}
+    second_order_comm_dict = {errorgen: _Polynomial({}, max_num_vars=max(errorgen_to_var_map.values())) for errorgen in second_order_comm_dict_keys}
     
     # Accumulate the coefficients contributing to each term.    
     for poly_dict in commuted_errgen_poly_dicts:
@@ -596,34 +621,63 @@ def _error_generator_layer_pairwise_commutator_symbolic_polynomial(errorgen_laye
         coefficient for the commutator output. The third term gives an addititonal overall
         phase and scale for this coefficient.
     """    
-    commuted_errgen_list = []
-    var_list = []
-    coeff_list = []
+    is_polynomial_input = False
+    for key in errorgen_layer_1:
+        if key and isinstance(key, _LSE):
+            is_polynomial_input = True
+            max_num_vars = errorgen_layer_1[key].max_num_vars
+            break
     
-    for initial_error1, final_error1 in errorgen_layer_1.items():
-        for initial_error2, final_error2 in errorgen_layer_2.items():
-            # get the list of error generator labels
-            init_weight = addl_weight*final_error1[1]*final_error2[1]
-            commuted_errgen_sublist = _eprop.error_generator_commutator(final_error1[0], final_error2[0], 
-                                                                 identity=identity)
-            for error_tup in commuted_errgen_sublist:
-                commuted_errgen_list.append(error_tup[0])
-                var_list.append((errorgen_to_var_map[initial_error1], errorgen_to_var_map[initial_error2]))
-                coeff_list.append(init_weight*error_tup[1])
+    if is_polynomial_input:
+        commuted_errgen_list = []
+        coeff_poly_list = []
+        for error1, poly1 in errorgen_layer_1.items():
+            for error2, poly2 in errorgen_layer_2.items():
+                # get the list of error generator labels
+                init_coeff_poly = poly1*poly2
+                init_coeff_poly.scalar_mult(addl_weight)
+                
+                commuted_errgen_sublist = _eprop.error_generator_commutator(error1, error2, identity=identity)
+                for error_tup in commuted_errgen_sublist:
+                    commuted_errgen_list.append(error_tup[0])
+                    coeff_poly_list.append(init_coeff_poly.scalar_mult(error_tup[1]))
+        #accumulate coefficients by output error generator and construct a combined Polynomial representation for the weight.
+        commuted_errorgen_poly_dict = {errorgen: None for errorgen in commuted_errgen_list}
+        commuted_errorgen_poly_dict = {errorgen: _Polynomial({}, max_num_vars=max_num_vars) for errorgen in commuted_errorgen_poly_dict}
+        
+        # Accumulate the coefficients contributing to each term.    
+        for errorgen, poly in zip(commuted_errgen_list, coeff_poly_list):
+            commuted_errorgen_poly_dict[errorgen]+= poly
     
-    #accumulate coefficients by output error generator and construct a combined Polynomial representation for the weight.
-    # loop through all of the elements of commuted_errorgen_list and instantiate a dictionary with the requisite keys.
-    commuted_errorgen_var_dict = {errorgen: [] for errorgen in commuted_errgen_list}
-    commuted_errorgen_coeff_dict = {errorgen: [] for errorgen in commuted_errorgen_var_dict}
-    # Accumulate the coefficients contributing to each term.    
-    for errorgen, var, coeff in zip(commuted_errgen_list, var_list, coeff_list):
-        commuted_errorgen_var_dict[errorgen].append(var)
-        commuted_errorgen_coeff_dict[errorgen].append(coeff)
-    
-    max_num_vars = len(errorgen_to_var_map)
-    commuted_errorgen_poly_dict = dict()
-    for (key, variables), coefficients in zip(commuted_errorgen_var_dict.items(), commuted_errorgen_coeff_dict.values()):
-        commuted_errorgen_poly_dict[key] = _Polynomial.from_variable_and_coefficient_lists(variables, coefficients, max_num_vars)    
+    else:
+        commuted_errgen_list = []
+        var_list = []
+        coeff_list = []
+
+        for initial_error1, final_error1 in errorgen_layer_1.items():
+            for initial_error2, final_error2 in errorgen_layer_2.items():
+                # get the list of error generator labels
+                init_weight = addl_weight*final_error1[1]*final_error2[1]
+                commuted_errgen_sublist = _eprop.error_generator_commutator(final_error1[0], final_error2[0], 
+                                                                     identity=identity)
+                for error_tup in commuted_errgen_sublist:
+                    commuted_errgen_list.append(error_tup[0])
+                    var_list.append((errorgen_to_var_map[initial_error1], errorgen_to_var_map[initial_error2]))
+                    coeff_list.append(init_weight*error_tup[1])
+
+        #accumulate coefficients by output error generator and construct a combined Polynomial representation for the weight.
+        # loop through all of the elements of commuted_errorgen_list and instantiate a dictionary with the requisite keys.
+        commuted_errorgen_var_dict = {errorgen: [] for errorgen in commuted_errgen_list}
+        commuted_errorgen_coeff_dict = {errorgen: [] for errorgen in commuted_errorgen_var_dict}
+        # Accumulate the coefficients contributing to each term.    
+        for errorgen, var, coeff in zip(commuted_errgen_list, var_list, coeff_list):
+            commuted_errorgen_var_dict[errorgen].append(var)
+            commuted_errorgen_coeff_dict[errorgen].append(coeff)
+
+        max_num_vars = max(errorgen_to_var_map.values())
+        commuted_errorgen_poly_dict = dict()
+        for (key, variables), coefficients in zip(commuted_errorgen_var_dict.items(), commuted_errorgen_coeff_dict.values()):
+            commuted_errorgen_poly_dict[key] = _Polynomial.from_variable_and_coefficient_lists(variables, coefficients, max_num_vars)    
     
     return commuted_errorgen_poly_dict
 
@@ -916,3 +970,385 @@ def _combined_taylor_expansion_polynomial(taylor_expansion, errorgen_to_var_map)
             for errorgen, coeff_poly in order_dict.items():
                 combined_taylor_dict[errorgen] += coeff_poly
     return combined_taylor_dict
+
+# ----------------- Cumulant Polynomial ------------------------#
+
+def cumulant_expansion_symbolic_polynomial(errorgen_transform_maps, errorgen_to_var_map, cov_to_var_map, cumulant_order=2):
+    """
+    Function for computing the nth-order cumulant expansion for a set of error generator layers.
+
+    Parameters
+    ----------
+    errorgen_transform_maps : list of dicts
+        List of dictionaries mapping tuples of LocalStimErrorgenLabels and circuit layer indices to 
+        tuples of final error generators and phases. 
+
+    errorgen_to_var_map : dict
+        A dictionary whose keys are tuples of LocalStimErrorgenLabels and integer circuit layer indices
+        and whose value is an integer corresponding to the corresponding variable index to use in constructed
+        Polynomials.
+        
+    cov_to_var_map : dict
+        A dictionary whose keys are five element tuples, with the first element being a LocalStimErrorgenLabel,
+        the second a gate Label object. The second set of two elements are of the same type as the first two. 
+        The last argument is the difference in circuit times. These are equivalent to the arguments of most CovarianceFunction
+        ModelMembers.
+    
+    cumulant_order : int, optional (default 2)
+        Order of the cumulant expansion to apply. At present only the first-order cumulant expansion is supported.
+        
+    Returns
+    -------
+    nm_error_generator_polys : dict
+        A list of dictionaries, one for each error generator layer in errorgen_transform_maps, with keys that
+        are LocalStimErrorgenLabels and rates given by Polynomials in the original error generator rates and
+        covariance function values at the selected order of the cumulant expansion.
+    """
+    #predefine the identity pauli to reduce number of instantiations.
+    for layer in errorgen_transform_maps:
+        if layer:
+            identity = stim.PauliString('I'*len(next(iter(layer))[0].basis_element_labels[0]))
+            break
+    else:
+        identity = None
+        
+    nm_error_generator_polys = []
+    #TODO: See if I can't do this in a way that reuses computations across the nonmarkovian generators.
+    for i in range(1, len(errorgen_transform_maps)+1):
+        current_errorgen_transform_maps = errorgen_transform_maps[:i]
+        nm_error_generator_polys.append(nonmarkovian_generator_symbolic_polynomial(current_errorgen_transform_maps, errorgen_to_var_map, cov_to_var_map,
+                                                                                   cumulant_order, identity))
+    return nm_error_generator_polys
+
+def nonmarkovian_generator_symbolic_polynomial(errorgen_transform_maps, errorgen_to_var_map, cov_to_var_map, cumulant_order=2, identity=None):
+    """
+    Compute a particular non-Markovian error generator from the specified error generator layers.
+
+    Parameters
+    ----------
+    errorgen_transform_maps : list of dicts
+        List of dictionaries mapping tuples of LocalStimErrorgenLabels and circuit layer indices to 
+        tuples of final error generators and phases. 
+
+    errorgen_to_var_map : dict
+        A dictionary whose keys are tuples of LocalStimErrorgenLabels and integer circuit layer indices
+        and whose value is an integer corresponding to the corresponding variable index to use in constructed
+        Polynomials.
+        
+    cov_to_var_map : dict
+        A dictionary whose keys are five element tuples, with the first element being a LocalStimErrorgenLabel,
+        the second a gate Label object. The second set of two elements are of the same type as the first two. 
+        The last argument is the difference in circuit times. These are equivalent to the arguments of most CovarianceFunction
+        ModelMembers.
+    
+    cumulant_order : int, optional (default 2)
+        Order of the cumulant expansion to apply. At present only the first-order cumulant expansion is supported.
+
+    identity : stim.PauliString, optional (default None)
+        Optional pauli string corresponding to the all identity string with the correct number
+        of qubits (can reduce overhead of many stim.PauliString instantations).
+        
+    Returns
+    -------
+    combined_cumulant_dict : dict
+        A dictionary with LocalStimErrorgenLabel keys and values that are Polynomials corresponding to the terms and rates
+        for the given order of the cumulant expansion.
+    """
+    if cumulant_order !=2:
+        raise ValueError('Only second-order cumulant expansions are currently supported!')
+    num_layers = len(errorgen_transform_maps)
+
+    final_layer_transform_map = errorgen_transform_maps[-1]
+    cumulants = []
+    for starting_index in range(num_layers-1):
+        current_transform_map = errorgen_transform_maps[starting_index]
+        cumulants.append(error_generator_cumulant_symbolic_polynomial(final_layer_transform_map, current_transform_map, errorgen_to_var_map, 
+                                                                      cov_to_var_map, cumulant_order, identity=identity))
+    #add in the final layer with itself:
+    cumulants.append(error_generator_cumulant_symbolic_polynomial(final_layer_transform_map, final_layer_transform_map, errorgen_to_var_map, 
+                                                                      cov_to_var_map, cumulant_order, addl_weight=.5, identity=identity))
+    
+    #The contents of cumulants needs to get added to the first-order cumulant of the final layer, which is just the value
+    #of final_layer.
+    cumulants.append(error_generator_symbolic_polynomial(final_layer_transform_map, errorgen_to_var_map))
+    
+    combined_cumulant_keys = {key: None for key in chain(*cumulants)}
+    max_num_vars = max(errorgen_to_var_map.values()) + len(cov_to_var_map)
+    combined_cumulant_dict = {errorgen: _Polynomial({}, max_num_vars=max_num_vars) for errorgen in combined_cumulant_keys}
+
+    # Accumulate the coefficients contributing to each term.    
+    for cumulant_dict in cumulants:
+        for errorgen, poly in cumulant_dict.items():
+            #HACK: Need better way to clear circuit time information after it is no longer needed.
+            #errorgen.circuit_time = None
+            combined_cumulant_dict[errorgen] += poly
+    
+    return combined_cumulant_dict
+
+def error_generator_cumulant_symbolic_polynomial(errorgen_transform_map_1, errorgen_transform_map_2, 
+                                                 errorgen_to_var_map, cov_to_var_map,
+                                                 order=2, addl_weight=1.0, identity=None):
+    """
+    Function for computing the correlation function of two error generators
+    represented as dictionaries of elementary error generator rates.
+
+    Parameters
+    ----------
+    errorgen_transform_map_1 : dict
+        Dictionary whose keys are error generator coefficients corresponding to the original
+        (pre-propagation) error generators which gave rise to the elements of errgen_layer_1
+        and whose values correspond to the sign that error generator's rate has picked up as a
+        result of propagation.
+
+    errorgen_transform_map_2 : dict
+        See errorgen_transform_map_1.
+
+    errorgen_to_var_map : dict
+        A dictionary whose keys are tuples of LocalStimErrorgenLabels and integer circuit layer indices
+        and whose value is an integer corresponding to the corresponding variable index to use in constructed
+        Polynomials.
+        
+    cov_to_var_map : dict
+        A dictionary whose keys are five element tuples, with the first element being a LocalStimErrorgenLabel,
+        the second a gate Label object. The second set of two elements are of the same type as the first two. 
+        The last argument is the difference in circuit times. These are equivalent to the arguments of most CovarianceFunction
+        ModelMembers.
+
+    order : int, optional (default 2)
+        Order of the cumulant to compute.
+
+    addl_weight : float, optional (default 1.0)
+        Additional scaling to apply to cumulant.
+
+    identity : stim.PauliString, optional (default None)
+        Optional stim.PauliString corresponding to the all identity string with the correct number
+        of qubits (can reduce overhead of many stim.PauliString instantations).
+
+    Returns
+    -------
+    cumulant_errorgen_poly_dict : dict
+        A dictionary whose keys are LocalStimErrorgenLabels, and whose values are Polynomials corresponding
+        to the rates of those error generators as computed according to the cumulant of the two
+        input error generators.
+    """    
+    #TODO: Enforce/check for time-ordering constraints
+    if order !=2:
+        raise ValueError('Only second-order cumulants are currently supported!')
+
+    if not errorgen_transform_map_1 or not errorgen_transform_map_2:
+        return dict()
+
+    #avoid generating more stim PauliStrings than needed in composition.
+    if identity is None:
+        identity = stim.PauliString('I'*len(next(iter(errorgen_transform_map_1))[0].basis_element_labels[0]))
+
+    composed_errgen_list = [] #for accumulating the tuples of weights and 
+    var_list = []
+    coeff_list = []
+    #loop through error generator pairs in each of the dictionaries.
+    for (errgen_1, layer_idx1), (output_errgen_1, sign_correction_1) in errorgen_transform_map_1.items():
+        for (errgen_2, layer_idx2), (output_errgen_2, sign_correction_2) in errorgen_transform_map_2.items():
+            cov_var = cov_to_var_map.get((errgen_1, errgen_1.gate_label, errgen_2, errgen_2.gate_label, abs(errgen_1.circuit_time-errgen_2.circuit_time)), None)
+            if cov_var is not None:
+                init_weight = addl_weight*sign_correction_1*sign_correction_2
+                composed_coeff_sublist = _eprop.error_generator_composition(output_errgen_1, output_errgen_2, 
+                                                                            identity=identity)
+                for error_tup in composed_coeff_sublist:                
+                    composed_errgen_list.append(error_tup[0])
+                    var_list.append((errorgen_to_var_map[(errgen_1, layer_idx1)], errorgen_to_var_map[(errgen_2, layer_idx2)], cov_var))
+                    coeff_list.append(init_weight*error_tup[1])
+                    
+    #accumulate coefficients by output error generator and construct a combined Polynomial representation for the weight.
+    # loop through all of the elements of commuted_errorgen_list and instantiate a dictionary with the requisite keys.
+    composed_errorgen_var_dict = {errorgen: [] for errorgen in composed_errgen_list}
+    composed_errorgen_coeff_dict = {errorgen: [] for errorgen in composed_errorgen_var_dict}
+    
+    # Accumulate the coefficients contributing to each term.    
+    for errorgen, var, coeff in zip(composed_errgen_list, var_list, coeff_list):
+        composed_errorgen_var_dict[errorgen].append(var)
+        composed_errorgen_coeff_dict[errorgen].append(coeff)
+        
+    max_num_vars = max(errorgen_to_var_map.values()) + len(cov_to_var_map)
+    cumulant_errorgen_poly_dict = dict()
+    for (key, variables), coefficients in zip(composed_errorgen_var_dict.items(), composed_errorgen_coeff_dict.values()):
+        cumulant_errorgen_poly_dict[key] = _Polynomial.from_variable_and_coefficient_lists(variables, coefficients, max_num_vars)    
+    
+    return cumulant_errorgen_poly_dict
+
+def covariance_to_polynomial_variable_maps(errorgen_transform_maps, covariance_function, cumulant_order=2, starting_index=0, return_reverse=False):
+    """
+    Function for computing the nth-order cumulant expansion for a set of error generator layers.
+
+    Parameters
+    ----------
+    errorgen_transform_maps : list of dicts
+        List of dictionaries mapping tuples of LocalStimErrorgenLabels and circuit layer indices to 
+        tuples of final error generators and phases. 
+    
+    covariance_function : CovarianceFunction
+        Covariance function to use in polynomial variable map construction.
+
+    cumulant_order : int, optional (default 2)
+        Order of the cumulant expansion to apply. At present only the first-order cumulant expansion is supported.
+    
+    starting_index : int, optional (default 0)
+        An optional integer to use as the starting polynomial variable index.
+        
+    return_reverse : bool, optional (default, False)
+        Optional flag that returns the reverse variable to errorgen label mapping.
+        
+    Returns
+    -------
+    cov_to_var_map : dict
+        A dictionary whose keys are five-element tuples. The first element being a gate Label object, the second a LocalStimErrorgenLabel. 
+        The second set of two elements are of the same type as the first two. 
+        The last argument is the difference in circuit times. These are equivalent to the arguments of most CovarianceFunction
+        ModelMembers. The values are integers corresponding to Polynomial variable indices to use for this covariance value. 
+    """
+        
+    covariance_arguments = []
+    for i in range(1, len(errorgen_transform_maps)+1):
+        current_errorgen_transform_maps = errorgen_transform_maps[:i]
+        covariance_arguments.extend(nonmarkovian_generator_covariance_arguments(current_errorgen_transform_maps, covariance_function, cumulant_order=cumulant_order))    
+    
+    #do another pass to get the unique arguments
+    unique_covariance_arguments = {arg: None for arg in covariance_arguments}
+    
+    cov_to_var_map = {arg:i for i,arg in enumerate(unique_covariance_arguments, start=starting_index)}
+    if return_reverse:
+        var_to_cov_map = {i:arg for i,arg in enumerate(unique_covariance_arguments, start=starting_index)}
+        return cov_to_var_map, var_to_cov_map
+    else:
+        return cov_to_var_map
+    
+def nonmarkovian_generator_covariance_arguments(errorgen_transform_maps, covariance_function, cumulant_order=2):
+    """
+    Compute a particular non-Markovian error generator from the specified error generator layers.
+
+    Parameters
+    ----------
+    errorgen_transform_maps : list of dicts
+        List of dictionaries mapping tuples of LocalStimErrorgenLabels and circuit layer indices to 
+        tuples of final error generators and phases. 
+    
+    covariance_function : CovarianceFunction
+        Covariance function to use in polynomial variable map construction.
+        
+    cumulant_order : int, optional (default 2)
+        Order of the cumulant expansion to apply. At present only the first-order cumulant expansion is supported.
+        
+    Returns
+    -------
+    unique_covariance_arguments : list of tuples
+        A list of five-element tuples. The first element being a gate Label object, the second a LocalStimErrorgenLabel. 
+        The second set of two elements are of the same type as the first two. 
+        The last argument is the difference in circuit times. These are equivalent to the arguments of most CovarianceFunction
+        ModelMembers. 
+    """
+    if cumulant_order !=2:
+        raise ValueError('Only second-order cumulant expansions are currently supported!')
+    num_layers = len(errorgen_transform_maps)
+
+    final_layer_transform_map = errorgen_transform_maps[-1]
+    covariance_arguments = []
+    for starting_index in range(num_layers-1):
+        current_transform_map = errorgen_transform_maps[starting_index]
+        covariance_arguments.extend(error_generator_cumulant_covariance_arguments(final_layer_transform_map, current_transform_map, covariance_function,
+                                                                                order=cumulant_order))
+
+    #add in the final layer with itself:
+    covariance_arguments.extend(error_generator_cumulant_covariance_arguments(final_layer_transform_map, final_layer_transform_map, covariance_function, 
+                                                                            order=cumulant_order))
+    
+    #do another pass to get the unique arguments
+    unique_covariance_arguments = {arg: None for arg in covariance_arguments}
+    unique_covariance_arguments = list(unique_covariance_arguments)
+
+    return unique_covariance_arguments
+
+def error_generator_cumulant_covariance_arguments(errorgen_transform_map_1, errorgen_transform_map_2, covariance_function,
+                                                  order=2):
+    """
+    Function for returning a list of unique covariance function arguments that appear in the computation
+    of the cumulant between the two input error generators (as represented by their transform maps).
+
+    Parameters
+    ----------
+    errorgen_transform_map_1 : dict
+        Dictionary whose keys are error generator coefficients corresponding to the original
+        (pre-propagation) error generators which gave rise to the elements of errgen_layer_1
+        and whose values correspond to the sign that error generator's rate has picked up as a
+        result of propagation.
+
+    errorgen_transform_map_2 : dict
+        See errorgen_transform_map_1.
+    
+    covariance_function : CovarianceFunction
+        Covariance function to use in polynomial variable map construction.
+    
+    order : int, optional (default 2)
+        Order of the cumulant to compute.
+
+    Returns
+    -------
+    unique_covariance_arguments : list of tuples
+        A list of five-element tuples. The first element being a gate Label object, the second a LocalStimErrorgenLabel. 
+        The second set of two elements are of the same type as the first two. 
+        The last argument is the difference in circuit times. These are equivalent to the arguments of most CovarianceFunction
+        ModelMembers. 
+
+    """    
+    #TODO: Enforce/check for time-ordering constraints
+    if order !=2:
+        raise ValueError('Only second-order cumulants are currently supported!')
+
+    if not errorgen_transform_map_1 or not errorgen_transform_map_2:
+        return []
+
+    covariance_arguments = []
+    #loop through error generator pairs in each of the dictionaries.
+    for (errgen_1, layer_idx1), (output_errgen_1, sign_correction_1) in errorgen_transform_map_1.items():
+        for (errgen_2, layer_idx2), (output_errgen_2, sign_correction_2) in errorgen_transform_map_2.items():
+            cov_func_argument_tup = (errgen_1.gate_label, errgen_1, errgen_2.gate_label, errgen_2)
+            #print(f'{cov_func_argument_tup=}')
+            if covariance_function._errgen_label_to_param_idx.get(cov_func_argument_tup, None) is not None:
+                covariance_arguments.append((errgen_1, errgen_1.gate_label, errgen_1.circuit_time, errgen_2, errgen_2.gate_label, errgen_2.circuit_time))
+    #get just the unique subset of these covariance arguments.
+    unique_covariance_arguments = {arg: None for arg in covariance_arguments}
+    unique_covariance_arguments = list(unique_covariance_arguments)
+            
+    return unique_covariance_arguments
+
+def construct_polynomial_covariance_parameter_vector(covariance_function, var_to_cov_map):
+    """
+    Constructs a vector of polynomial variable parameters for covariance values to use in evaluation of error generator Polynomial
+    objects.
+    
+    Parameters
+    ----------
+    covariance_function : CovarianceFunction
+        Covariance function to use in polynomial parameter vector construction.
+        
+    var_to_cov_map : dict
+        A dictionary whose keys integers corresponding to Polynomial variable indices, and whose values are five element tuples, 
+        with the first element being a LocalStimErrorgenLabel, the second a gate Label object. The second set of two elements 
+        are of the same type as the first two. The last argument is the difference in circuit times. These are equivalent to the 
+        arguments of most CovarianceFunction ModelMembers.
+        
+    Returns
+    -------
+    cov_param_vec : np.ndarray
+        A vector of polynomial parameter values for covariances to use in evaluation of Polynomial objects.
+    """
+    
+    #make sure we iterate through the variable indices in sorted order. I'm pretty sure they already would be, but still.
+    sorted_var_indices = sorted(var_to_cov_map.keys())
+    
+    cov_param_vec = _np.zeros(len(var_to_cov_map))
+    for i, var_idx in enumerate(sorted_var_indices):
+        cov_arg_tup = var_to_cov_map[var_idx]
+        #print(cov_arg_tup)
+        cov_func_val = covariance_function(cov_arg_tup[0], cov_arg_tup[1], cov_arg_tup[2], cov_arg_tup[3], cov_arg_tup[4], 0)
+        cov_param_vec[i] = cov_func_val
+        
+    return cov_param_vec

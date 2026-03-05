@@ -25,7 +25,7 @@ def cumulant_expansion(errorgen_layers, errorgen_transform_maps, cov_func, cumul
         List of dictionaries of the error generator coefficients and rates for a circuit layer. 
         The error generator coefficients are represented using LocalStimErrorgenLabel.
 
-    errorgen_transform_maps : dict
+    errorgen_transform_maps : list of dict
         Map giving the relationship between input error generators and their final
         value following propagation through the circuit. Needed to track any sign updates
         for terms with zero mean but nontrivial covariance.
@@ -187,12 +187,18 @@ def error_generator_cumulant(errgen_layer_1, errgen_layer_2, phase_update_map_1,
     if identity is None:
         identity = stim.PauliString('I'*len(next(iter(errgen_layer_1)).basis_element_labels[0]))
 
+    #Need to pull out the layer indices for indexing into the phase update maps
+    if phase_update_map_1:
+        layer_index_1 = next(iter(phase_update_map_1))[1]
+    if phase_update_map_2:
+        layer_index_2 = next(iter(phase_update_map_2))[1]
+
     cumulant_coeff_list = [] #for accumulating the tuples of weights and 
     #loop through error generator pairs in each of the dictionaries.
-    for errgen1 in errgen_layer_1:
-        sign_correction_1 = phase_update_map_1[errgen1.initial_label]
-        for errgen2 in errgen_layer_2:
-            sign_correction_2 = phase_update_map_2[errgen2.initial_label]
+    for errgen1, phase_update_tup_1 in zip(errgen_layer_1, phase_update_map_1.values()):
+        sign_correction_1 = phase_update_tup_1[1]
+        for errgen2, phase_update_tup_2 in zip(errgen_layer_2, phase_update_map_2.values()):
+            sign_correction_2 = phase_update_tup_2[1]
             cov_val = cov_func(errgen1.initial_label, errgen1.gate_label, errgen1.circuit_time, errgen2.initial_label, 
                                errgen1.gate_label, errgen2.circuit_time) #can this be negative? Not for gaussian processes I don't think.
             if abs(cov_val) > truncation_threshold:
