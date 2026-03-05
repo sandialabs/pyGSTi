@@ -10,11 +10,12 @@ Defines the ModelFunction class
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from typing import Literal, Union
 from pygsti.models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
 from pygsti.models.localnoisemodel import LocalNoiseModel as _LocalNoiseModel
 from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.baseobjs.basis import TensorProdBasis as _TensorProdBasis
-from pygsti import SpaceT
+from pygsti.baseobjs.label import Label as _Label
 
 class ModelFunction(object):
     """
@@ -47,7 +48,7 @@ class ModelFunction(object):
         derivative needed to find the error bars.
     """
 
-    def __init__(self, model, dependencies):
+    def __init__(self, model, dependencies: Union[list[Literal['all','spam']], list[tuple[Literal['gate','prep','povm','instrument'], _Label]]]):
         """
         Creates a new ModelFunction object.
 
@@ -161,14 +162,14 @@ def spamfn_factory(fn):
     GSFTemp.__name__ = fn.__name__ + str("_class")
     return GSFTemp
 
-#Note: the 'basis' argument is unnecesary here, as it could be passed as an additional arg
+#Note: the 'basis' argument is unnecessary here, as it could be passed as an additional arg
 
 
 def opfn_factory(fn):
     """
     Creates a class that evaluates `fn(gate,basis,...)`.
 
-    Hhere `gate` is a single operation matrix, `basis` describes what basis it's
+    Here `gate` is a single operation matrix, `basis` describes what basis it's
     in, and `...` are additional arguments (see below).
 
     Parameters
@@ -202,7 +203,7 @@ def opfn_factory(fn):
     return GSFTemp
 
 
-#Note: the 'op2' and 'basis' arguments are unnecesary here, as they could be
+#Note: the 'op2' and 'basis' arguments are unnecessary here, as they could be
 # passed as additional args
 def opsfn_factory(fn):
     """
@@ -236,7 +237,7 @@ def opsfn_factory(fn):
             self.kwargs = kwargs
             ModelFunction.__init__(self, model1, [("gate", gl)])
 
-        def evaluate(self, model):
+        def evaluate(self, model: Union[_ExplicitOpModel, _LocalNoiseModel]):
             """ Evaluate this gate-set-function at `model`."""
             if isinstance(model, _ExplicitOpModel):
                 return fn(model.operations[self.gl].to_dense("HilbertSchmidt"),
@@ -380,7 +381,7 @@ def vecsfn_factory(fn):
     class GSFTemp(ModelFunction):
         """ ModelFunction class created by vecsfn_factory """
 
-        def __init__(self, model1, model2, lbl, typ, *args, **kwargs):
+        def __init__(self, model1, model2, lbl: _Label, typ: Literal['prep', 'effect'], *args, **kwargs):
             """ Creates a new ModelFunction dependent on a single SPAM vector"""
             self.other_model = model2
             self.lbl = lbl
@@ -440,7 +441,7 @@ def povmfn_factory(fn):
             """
             self.args = args
             self.kwargs = kwargs
-            dps = [("povm", l) for l in model.povms]
+            dps = [("povm", lbl) for lbl in model.povms]
             ModelFunction.__init__(self, model, dps)
 
         def evaluate(self, model):
@@ -475,7 +476,7 @@ def modelfn_factory(fn):
         def __init__(self, model, *args, **kwargs):
             """
             Creates a new ModelFunction dependent on all of its Model
-            argument's paramters
+            argument's parameters
             """
             self.args = args
             self.kwargs = kwargs

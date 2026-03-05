@@ -17,7 +17,7 @@ Named quantities as well as their confidence-region error bars are
 """
 import importlib
 import warnings as _warnings
-from typing import Union
+from typing import Union, Optional, Literal
 
 import numpy as _np
 import scipy.linalg as _spl
@@ -33,6 +33,7 @@ from pygsti.baseobjs.basis import (
 )
 from pygsti.baseobjs.label import Label as _Lbl
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LEEL
+from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.modelmembers.operations.lindbladcoefficients import LindbladCoefficientBlock as _LindbladCoefficientBlock
 from pygsti.models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
 from pygsti import SpaceT
@@ -70,7 +71,7 @@ def _make_reportable_qty_or_dict(f0, df=None, non_markovian_ebs=False):
         return _ReportableQty(f0, df, non_markovian_ebs)
 
 
-def evaluate(model_fn, cri=None, verbosity=0):
+def evaluate(model_fn: Optional[_modf.ModelFunction], cri=None, verbosity: Optional[int]=0):
     """
     Evaluate a ModelFunction object using confidence region information
 
@@ -220,7 +221,7 @@ class GateEigenvalues(_modf.ModelFunction):
         The gate's label within `model`.
     """
 
-    def __init__(self, model, oplabel):
+    def __init__(self, model, oplabel: _Lbl):
         self.oplabel = oplabel
         _modf.ModelFunction.__init__(self, model, [("gate", oplabel)])
 
@@ -288,7 +289,7 @@ class CircuitEigenvalues(_modf.ModelFunction):
         The circuit whose process matrix we want the eigenvalues of.
     """
 
-    def __init__(self, model, circuit):
+    def __init__(self, model, circuit: _Circuit):
         self.circuit = circuit
         _modf.ModelFunction.__init__(self, model, ["all"])
 
@@ -344,7 +345,7 @@ class CircuitEigenvalues(_modf.ModelFunction):
     # ref for eigenvalue derivatives: https://www.win.tue.nl/casa/meetings/seminar/previous/_abstract051019_files/Presentation.pdf                              # noqa
 
 
-def rel_circuit_eigenvalues(model_a, model_b, circuit):
+def rel_circuit_eigenvalues(model_a, model_b, circuit: _Circuit):
     """
     Eigenvalues of dot(productB(circuit)^-1, productA(circuit))
 
@@ -372,7 +373,7 @@ Rel_circuit_eigenvalues = _modf.modelfn_factory(rel_circuit_eigenvalues)
 # init args == (model_a, model_b, circuit)
 
 
-def circuit_frobenius_diff(model_a, model_b, circuit):
+def circuit_frobenius_diff(model_a, model_b, circuit: _Circuit):
     """
     Frobenius distance btwn productA(circuit) and productB(circuit)
 
@@ -400,7 +401,7 @@ Circuit_fro_diff = _modf.modelfn_factory(circuit_frobenius_diff)
 # init args == (model_a, model_b, circuit)
 
 
-def circuit_entanglement_infidelity(model_a, model_b, circuit):
+def circuit_entanglement_infidelity(model_a, model_b, circuit: _Circuit):
     """
     Entanglement infidelity btwn productA(circuit) and productB(circuit)
 
@@ -428,7 +429,7 @@ Circuit_entanglement_infidelity = _modf.modelfn_factory(circuit_entanglement_inf
 # init args == (model_a, model_b, circuit)
 
 
-def circuit_avg_gate_infidelity(model_a, model_b, circuit):
+def circuit_avg_gate_infidelity(model_a, model_b, circuit: _Circuit):
     """
     Average gate infidelity between productA(circuit) and productB(circuit).
 
@@ -456,7 +457,7 @@ Circuit_avg_gate_infidelity = _modf.modelfn_factory(circuit_avg_gate_infidelity)
 # init args == (model_a, model_b, circuit)
 
 
-def circuit_generator_infidelity(model_a, model_b, circuit):
+def circuit_generator_infidelity(model_a, model_b, circuit: _Circuit):
     """
     Generator infidelity between productA(circuit) and productB(circuit).
 
@@ -484,7 +485,7 @@ Circuit_generator_infidelity = _modf.modelfn_factory(circuit_generator_infidelit
 # init args == (model_a, model_b, circuit)
 
 
-def circuit_jtrace_diff(model_a, model_b, circuit):
+def circuit_jtrace_diff(model_a, model_b, circuit: _Circuit):
     """
     Jamiolkowski trace distance between productA(circuit) and productB(circuit)
 
@@ -529,7 +530,7 @@ if _CVXPY_AVAILABLE:
             The circuit.
         """
 
-        def __init__(self, model_a, model_b, circuit):
+        def __init__(self, model_a, model_b, circuit: _Circuit):
             self.circuit = circuit
             self.B = model_b.sim.product(circuit)
             self.d = int(round(_np.sqrt(model_a.dim)))
@@ -580,7 +581,7 @@ else:
     CircuitHalfDiamondNorm = _null_fn
 
 
-def circuit_nonunitary_entanglement_infidelity(model_a, model_b, circuit):
+def circuit_nonunitary_entanglement_infidelity(model_a, model_b, circuit: _Circuit):
     """
     Nonunitary entanglement infidelity between productA(circuit) and productB(circuit)
 
@@ -608,7 +609,7 @@ Circuit_nonunitary_entanglement_infidelity = _modf.modelfn_factory(circuit_nonun
 # init args == (model_a, model_b, circuit)
 
 
-def circuit_nonunitary_avg_gate_infidelity(model_a, model_b, circuit):
+def circuit_nonunitary_avg_gate_infidelity(model_a, model_b, circuit: _Circuit):
     """
     Nonunitary average gate infidelity between productA(circuit) and productB(circuit).
 
@@ -636,7 +637,7 @@ Circuit_nonunitary_avg_gate_infidelity = _modf.modelfn_factory(circuit_nonunitar
 # init args == (model_a, model_b, circuit)
 
 
-def circuit_eigenvalue_entanglement_infidelity(model_a, model_b, circuit):
+def circuit_eigenvalue_entanglement_infidelity(model_a, model_b, circuit: _Circuit):
     """
     Eigenvalue entanglement infidelity between productA(circuit) and productB(circuit).
 
@@ -664,7 +665,7 @@ Circuit_eigenvalue_entanglement_infidelity = _modf.modelfn_factory(circuit_eigen
 # init args == (model_a, model_b, circuit)
 
 
-def circuit_eigenvalue_avg_gate_infidelity(model_a, model_b, circuit):
+def circuit_eigenvalue_avg_gate_infidelity(model_a, model_b, circuit: _Circuit):
     """
     Eigenvalue average gate infidelity between productA(circuit) and productB(circuit).
 
@@ -692,7 +693,7 @@ Circuit_eigenvalue_avg_gate_infidelity = _modf.modelfn_factory(circuit_eigenvalu
 # init args == (model_a, model_b, circuit)
 
 
-def circuit_eigenvalue_nonunitary_entanglement_infidelity(model_a, model_b, circuit):
+def circuit_eigenvalue_nonunitary_entanglement_infidelity(model_a, model_b, circuit: _Circuit):
     """
     Eigenvalue nonunitary entanglement infidelity between productA(circuit) and productB(circuit).
 
@@ -721,7 +722,7 @@ Circuit_eigenvalue_nonunitary_entanglement_infidelity = _modf.modelfn_factory(
 # init args == (model_a, model_b, circuit)
 
 
-def circuit_eigenvalue_nonunitary_avg_gate_infidelity(model_a, model_b, circuit):
+def circuit_eigenvalue_nonunitary_avg_gate_infidelity(model_a, model_b, circuit: _Circuit):
     """
     Eigenvalue nonunitary average gate infidelity between productA(circuit) and productB(circuit).
 
@@ -750,7 +751,7 @@ Circuit_eigenvalue_nonunitary_avg_gate_infidelity = _modf.modelfn_factory(
 # init args == (model_a, model_b, circuit)
 
 
-def circuit_eigenvalue_diamondnorm(model_a, model_b, circuit):
+def circuit_eigenvalue_diamondnorm(model_a, model_b, circuit: _Circuit):
     """
     Eigenvalue diamond distance between productA(circuit) and productB(circuit).
 
@@ -778,7 +779,7 @@ Circuit_eigenvalue_diamondnorm = _modf.modelfn_factory(circuit_eigenvalue_diamon
 # init args == (model_a, model_b, circuit)
 
 
-def circuit_eigenvalue_nonunitary_diamondnorm(model_a, model_b, circuit):
+def circuit_eigenvalue_nonunitary_diamondnorm(model_a, model_b, circuit: _Circuit):
     """
     Eigenvalue nonunitary diamond distance between productA(circuit) and productB(circuit).
 
@@ -1324,7 +1325,7 @@ if _CVXPY_AVAILABLE:
 
     class HalfDiamondNorm(_modf.ModelFunction):
         """
-        Half the diamond distance bewteen `model_a.operations[op_label]` and `model_b.operations[op_label]`
+        Half the diamond distance between `model_a.operations[op_label]` and `model_b.operations[op_label]`
 
         Parameters
         ----------
