@@ -26,12 +26,13 @@ from pygsti.baseobjs import Label, ExplicitElementaryErrorgenBasis as _ExplicitE
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LocalElementaryErrorgenLabel 
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GlobalElementaryErrorgenLabel
 import pygsti.tools.errgenproptools as _eprop
+import pygsti.tools.errgenpolytools as _epoly
 import pygsti.tools.cumulanttools as _cumul
 import pygsti.tools.basistools as _bt
 import pygsti.tools.matrixtools as _mt
 import pygsti.tools.optools as _ot
 from pygsti.models.model import OpModel as _OpModel
-from pygsti.models import ExplicitOpModel as _ExplicitOpModel, ImplicitOpModel as _ImplicitOpModel
+from pygsti.models import ExplicitOpModel as _ExplicitOpModel, ImplicitOpModel as _ImplicitOpModel, LocalNoiseModel as _LocalNoiseModel 
 from pygsti.modelmembers.operations import LindbladErrorgen as _LindbladErrorgen
 from itertools import islice
 import warnings as _warnings
@@ -396,7 +397,7 @@ class ErrorGeneratorPropagator:
         #we also need to compute the error generator transform map because we need to pick up any sign corrections which
         #might get missed for error generators with zero mean but nontrivial covariance.
         if errorgen_phase_corrections is None:
-            errorgen_phase_corrections = self.errorgen_transform_phases(circuit, include_spam=include_spam) #TODO: This is requires twice the propagation atm, figure out how to combine these.
+            errorgen_phase_corrections = self.errorgen_transform_maps(circuit, include_spam=include_spam) #TODO: This is requires twice the propagation atm, figure out how to combine these.
         #now get the nonmarkovian error generators by applying the cumulant expansion
         nonmarkovian_generators = _cumul.cumulant_expansion(propagated_errorgen_layers, errorgen_phase_corrections, cov_func, cumulant_order)
 
@@ -453,7 +454,7 @@ class ErrorGeneratorPropagator:
 
         return input_output_errgen_map
 
-    def errorgen_transform_maps(self, circuit, include_spam=True, circuit_conversion_kwargs=None):
+    def errorgen_transform_maps(self, circuit, include_spam=True, circuit_conversion_kwargs=None, include_circuit_time=False, include_gate_label=False):
         """
         Construct a list of maps giving the relationship between input error generators and their final
         value following propagation through the circuit on an input-layer-by-input-layer basis.  
@@ -472,6 +473,14 @@ class ErrorGeneratorPropagator:
             method of the `Circuit` class to control the behavior of the conversion. Please see the
             documentation for this method for additional information on supported arguments and
             values.
+
+        include_circuit_time : bool, optional (default False)
+            If True then include as part of the error generator coefficient labels the circuit
+            time from which that error generator arose.
+        
+        include_gate_label : bool, optional (default False)
+            Whether to include the originating gate label with the error generator metadata. Note this can only
+            be set to True when using a Model where each error generator corresponds to a single gate.
 
         Returns
         -------
@@ -493,7 +502,8 @@ class ErrorGeneratorPropagator:
         #to the error generators for a particular gate layer.
         #TODO: Add proper inferencing for number of qubits:
         assert circuit.line_labels is not None and circuit.line_labels != ('*',)
-        errorgen_layers = self.construct_errorgen_layers(circuit, len(circuit.line_labels), include_spam, fixed_rate=1)
+        errorgen_layers = self.construct_errorgen_layers(circuit, len(circuit.line_labels), include_spam, fixed_rate=1,
+                                                         include_circuit_time=include_circuit_time, include_gate_label=include_gate_label)
         #propagate the errorgen_layers through the propagation_layers to get a list
         #of end of circuit error generator dictionaries.
         propagated_errorgen_layers = self._propagate_errorgen_layers(errorgen_layers, propagation_layers, include_spam)
@@ -502,10 +512,9 @@ class ErrorGeneratorPropagator:
         #index of the circuit layer where the error generators in that propagated layer originated.
         #Moreover, LocalStimErrorgenLabels remember who they were at instantiation.
         input_output_errgen_maps = [dict() for _ in range(len(propagated_errorgen_layers))]
-        for i, output_layer in enumerate(propagated_errorgen_layers):
-            for output_label, output_rate in output_layer.items():
-                original_label = _LSE.cast(output_label.initial_label)
-                input_output_errgen_maps[i][(original_label, i)] = (output_label, output_rate)
+        for i, (output_layer, input_layer) in enumerate(zip(propagated_errorgen_layers, errorgen_layers)):
+            for (output_label, output_rate), input_label in zip(output_layer.items(), input_layer.keys()):
+                input_output_errgen_maps[i][(input_label, i)] = (output_label, output_rate)
 
         return input_output_errgen_maps
 
@@ -646,7 +655,8 @@ class ErrorGeneratorPropagator:
 
         include_gate_label : bool, optional (default False)
             Whether to include the originating gate label with the error generator metadata. Note this can only
-            be set to True when using an `ExplicitOpModel` at present.
+            be set to True when using a Model where each error generator corresponds to a single gate.
+             
         Returns
         -------
         List of dictionaries, each one containing the error generator coefficients and rates for a circuit layer,
@@ -658,7 +668,8 @@ class ErrorGeneratorPropagator:
             circuit = self.model.complete_circuit(circuit)
 
         if include_gate_label:
-            assert isinstance(self.model, _ExplicitOpModel), 'Gate labels only supported when using an explicit model at present.'
+            assert isinstance(self.model, _ExplicitOpModel) or isinstance(self.model, _LocalNoiseModel),\
+                  'Gate labels only supported when using an explicit or local noise model at present.'
 
         #TODO: Infer the number of qubits from the model and/or the circuit somehow.
         #Pull out the error generator dictionaries for each operation (may need to generalize this for implicit models):
@@ -697,15 +708,23 @@ class ErrorGeneratorPropagator:
                     #TODO: Can probably replace this function call with `padded_basis_element_labels` method of `GlobalElementaryErrorgenLabel`
                     paulis = _eprop.errgen_coeff_label_to_stim_pauli_strs(errgen_coeff_lbl, num_qubits)
                     pauli_strs = errgen_coeff_lbl.basis_element_labels #get the original python string reps from local labels
+                    
+                    if include_gate_label:
+                        gate_contributors = _epoly.errorgen_gate_contributors(self.model, errgen_coeff_lbl, circuit, j, include_spam=include_spam) 
+                        assert len(gate_contributors) == 1, 'Cannot unambiguously map this error generator to a corresponding gate.'
+                        gate_label = gate_contributors[0]
+                    else:
+                        gate_label = None
+
                     if include_circuit_time:
                         #TODO: Refactor the fixed rate stuff to reduce the number of if statement evaluations.
                         errorgen_layer[_LSE(errgen_coeff_lbl.errorgen_type, paulis, circuit_time=j, 
                                             initial_label=initial_label, pauli_str_reps=pauli_strs, 
-                                            gate_label=circuit_layer if include_gate_label else None)] = rate if fixed_rate is None else fixed_rate
+                                            gate_label=gate_label)] = rate if fixed_rate is None else fixed_rate
                     else:
                         errorgen_layer[_LSE(errgen_coeff_lbl.errorgen_type, paulis, initial_label=initial_label, 
                                             pauli_str_reps=pauli_strs,
-                                            gate_label=circuit_layer if include_gate_label else None)] = rate if fixed_rate is None else fixed_rate
+                                            gate_label=gate_label)] = rate if fixed_rate is None else fixed_rate
            
             error_gen_dicts_by_layer.append(errorgen_layer)
         return error_gen_dicts_by_layer
