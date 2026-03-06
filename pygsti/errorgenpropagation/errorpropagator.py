@@ -397,10 +397,9 @@ class ErrorGeneratorPropagator:
         #we also need to compute the error generator transform map because we need to pick up any sign corrections which
         #might get missed for error generators with zero mean but nontrivial covariance.
         if errorgen_phase_corrections is None:
-            errorgen_phase_corrections = self.errorgen_transform_maps(circuit, include_spam=include_spam) #TODO: This is requires twice the propagation atm, figure out how to combine these.
+            errorgen_phase_corrections = self.errorgen_transform_maps(circuit, include_spam=include_spam, include_circuit_time=True, include_gate_label=True) #TODO: This is requires twice the propagation atm, figure out how to combine these.
         #now get the nonmarkovian error generators by applying the cumulant expansion
         nonmarkovian_generators = _cumul.cumulant_expansion(propagated_errorgen_layers, errorgen_phase_corrections, cov_func, cumulant_order)
-
         return nonmarkovian_generators
 
     #TODO: Refactor this to just use the concatenation of the individual maps.

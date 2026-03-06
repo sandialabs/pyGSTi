@@ -303,7 +303,7 @@ def errorgen_gate_contributors(model, errorgen, circuit, layer_idx, include_spam
         layer_errorgen_coeff_dict = circuit_layer_operator.errorgen_coefficients(label_type='local')
         
         if errorgen in layer_errorgen_coeff_dict:
-            label_list_for_errorgen = [circuit_layer]
+            label_list_for_errorgen = [circuit.layer_label(layer_idx)]
             if return_operators:
                 circuit_layer_operators = [circuit_layer_operator]
         else:
@@ -487,7 +487,7 @@ def magnus_symbolic_polynomial(errorgen_transform_maps, errorgen_to_var_map, mag
 
         #for each output error generator construct the corresponding polynomials.
         first_order_magnus_dict = dict()
-        max_num_vars = max(errorgen_to_var_map.values())
+        max_num_vars = max(errorgen_to_var_map.values()) + 1
         for (key, variables), coefficients in zip(first_order_magnus_var_dict.items(), first_order_magnus_coeff_dict.values()):
             first_order_magnus_dict[key] = _Polynomial.from_variable_and_coefficient_lists(variables, coefficients, max_num_vars)
 
@@ -502,7 +502,7 @@ def magnus_symbolic_polynomial(errorgen_transform_maps, errorgen_to_var_map, mag
 
     #loop through the magnus terms by order and initialize a dictionary to accumulate results.
     combined_magnus_order_dict_keys = {key: None for key in chain(*magnus_terms_by_order)}
-    combined_magnus_order_dict = {errorgen: _Polynomial({}, max_num_vars=max(errorgen_to_var_map.values())) for errorgen in combined_magnus_order_dict_keys}
+    combined_magnus_order_dict = {errorgen: _Polynomial({}, max_num_vars=max(errorgen_to_var_map.values())+1) for errorgen in combined_magnus_order_dict_keys}
 
     # Accumulate the coefficients contributing to each term.    
     for order_dict in magnus_terms_by_order:
@@ -571,7 +571,7 @@ def _second_order_magnus_term_symbolic_polynomial(errorgen_transform_maps, error
     
     # loop through all of the elements of commuted_errgen_poly_dicts and instantiate a dictionary with the requisite keys.
     second_order_comm_dict_keys = {errorgen: None for poly_dict in commuted_errgen_poly_dicts for errorgen in poly_dict}
-    second_order_comm_dict = {errorgen: _Polynomial({}, max_num_vars=max(errorgen_to_var_map.values())) for errorgen in second_order_comm_dict_keys}
+    second_order_comm_dict = {errorgen: _Polynomial({}, max_num_vars=max(errorgen_to_var_map.values())+1) for errorgen in second_order_comm_dict_keys}
     
     # Accumulate the coefficients contributing to each term.    
     for poly_dict in commuted_errgen_poly_dicts:
@@ -674,7 +674,7 @@ def _error_generator_layer_pairwise_commutator_symbolic_polynomial(errorgen_laye
             commuted_errorgen_var_dict[errorgen].append(var)
             commuted_errorgen_coeff_dict[errorgen].append(coeff)
 
-        max_num_vars = max(errorgen_to_var_map.values())
+        max_num_vars = max(errorgen_to_var_map.values())+1
         commuted_errorgen_poly_dict = dict()
         for (key, variables), coefficients in zip(commuted_errorgen_var_dict.items(), commuted_errorgen_coeff_dict.values()):
             commuted_errorgen_poly_dict[key] = _Polynomial.from_variable_and_coefficient_lists(variables, coefficients, max_num_vars)    
@@ -1073,7 +1073,7 @@ def nonmarkovian_generator_symbolic_polynomial(errorgen_transform_maps, errorgen
     cumulants.append(error_generator_symbolic_polynomial(final_layer_transform_map, errorgen_to_var_map))
     
     combined_cumulant_keys = {key: None for key in chain(*cumulants)}
-    max_num_vars = max(errorgen_to_var_map.values()) + len(cov_to_var_map)
+    max_num_vars = (max(errorgen_to_var_map.values()) + 1) + len(cov_to_var_map)
     combined_cumulant_dict = {errorgen: _Polynomial({}, max_num_vars=max_num_vars) for errorgen in combined_cumulant_keys}
 
     # Accumulate the coefficients contributing to each term.    
@@ -1148,14 +1148,14 @@ def error_generator_cumulant_symbolic_polynomial(errorgen_transform_map_1, error
     #loop through error generator pairs in each of the dictionaries.
     for (errgen_1, layer_idx1), (output_errgen_1, sign_correction_1) in errorgen_transform_map_1.items():
         for (errgen_2, layer_idx2), (output_errgen_2, sign_correction_2) in errorgen_transform_map_2.items():
-            cov_var = cov_to_var_map.get((errgen_1, errgen_1.gate_label, errgen_2, errgen_2.gate_label, abs(errgen_1.circuit_time-errgen_2.circuit_time)), None)
+            cov_var = cov_to_var_map.get((errgen_1, errgen_1.gate_label, errgen_1.circuit_time, errgen_2, errgen_2.gate_label, errgen_2.circuit_time), None)
             if cov_var is not None:
                 init_weight = addl_weight*sign_correction_1*sign_correction_2
                 composed_coeff_sublist = _eprop.error_generator_composition(output_errgen_1, output_errgen_2, 
                                                                             identity=identity)
                 for error_tup in composed_coeff_sublist:                
                     composed_errgen_list.append(error_tup[0])
-                    var_list.append((errorgen_to_var_map[(errgen_1, layer_idx1)], errorgen_to_var_map[(errgen_2, layer_idx2)], cov_var))
+                    var_list.append((cov_var,))
                     coeff_list.append(init_weight*error_tup[1])
                     
     #accumulate coefficients by output error generator and construct a combined Polynomial representation for the weight.
@@ -1168,7 +1168,7 @@ def error_generator_cumulant_symbolic_polynomial(errorgen_transform_map_1, error
         composed_errorgen_var_dict[errorgen].append(var)
         composed_errorgen_coeff_dict[errorgen].append(coeff)
         
-    max_num_vars = max(errorgen_to_var_map.values()) + len(cov_to_var_map)
+    max_num_vars = (max(errorgen_to_var_map.values()) + 1) + len(cov_to_var_map)
     cumulant_errorgen_poly_dict = dict()
     for (key, variables), coefficients in zip(composed_errorgen_var_dict.items(), composed_errorgen_coeff_dict.values()):
         cumulant_errorgen_poly_dict[key] = _Polynomial.from_variable_and_coefficient_lists(variables, coefficients, max_num_vars)    
@@ -1312,6 +1312,7 @@ def error_generator_cumulant_covariance_arguments(errorgen_transform_map_1, erro
             cov_func_argument_tup = (errgen_1.gate_label, errgen_1, errgen_2.gate_label, errgen_2)
             #print(f'{cov_func_argument_tup=}')
             if covariance_function._errgen_label_to_param_idx.get(cov_func_argument_tup, None) is not None:
+
                 covariance_arguments.append((errgen_1, errgen_1.gate_label, errgen_1.circuit_time, errgen_2, errgen_2.gate_label, errgen_2.circuit_time))
     #get just the unique subset of these covariance arguments.
     unique_covariance_arguments = {arg: None for arg in covariance_arguments}
