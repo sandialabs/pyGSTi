@@ -4,22 +4,15 @@ as needed in from_vector(). We implement to_vector() by extracting
 the projected density matrix and then returning
 """
 from __future__ import annotations
-from typing import TYPE_CHECKING, Literal, Any, Tuple, Optional, Callable
+from typing import TYPE_CHECKING, Literal, Any, Tuple
 
 if TYPE_CHECKING:
     import cvxpy as cp
 
-import cvxpy as cp
 import numpy as np
 import jax
-jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp
 from pygsti.baseobjs.basis import ExplicitBasis, Basis
-
-from pygsti.modelmembers import ModelMember
-from pygsti.modelmembers.states import State, TPState
-from pygsti.tools.basistools import vec_to_stdmx, change_basis, stdmx_to_vec
-from pygsti.tools import sdptools as _sdps
 
 
 def strict_triu_op_data(N: int):
@@ -55,8 +48,7 @@ def tpvec_to_herm_parts(vec: cp.Expression | jnp.ndarray):
     if isinstance(vec, cp.Expression):
         tri_real  = cp.vec_to_upper_tri(block0, strict=True)
         tri_imag  = cp.vec_to_upper_tri(block1, strict=True)
-        tail      = 1 - cp.sum(block2)
-        diag      = cp.diag(cp.concatenate([block2, tail.reshape((1,))]))
+        diag      = cp.diag(cp.concatenate([block2, 1 - cp.sum(block2)]))
     elif isinstance(vec, jnp.ndarray):
         tri_real = jax_vec_to_strict_upper_tri(block0)
         tri_imag = jax_vec_to_strict_upper_tri(block1)
@@ -166,53 +158,13 @@ def recollect_expanded_eigendecomposition(evals, evecs_real, evecs_imag):
     return herm_real, herm_imag
 
 
-def demo_derivatives_cvxpy():
-    import cvxpy as cp
-
-    __var = cp.Variable(shape=(3,), pos=True)
-    x = __var[0]
-    y = __var[1]
-    z = __var[2]
-
-    __param_ab = cp.Parameter(shape=(2,), pos=True)
-    a = __param_ab[0]
-    b = __param_ab[1]
-    c = 0.5
-
-    objective_fn = 1/(x*y*z)
-    objective = cp.Minimize(objective_fn)
-    constraints = [a*(x*y + x*z + y*z) <= b, x >= y**c]
-    problem = cp.Problem(objective, constraints)
-
-    problem.is_dgp(dpp=True)
-
-    __param_ab.value = np.array([2.0, 1.0])
-    problem.solve(gp=True, requires_grad=True, solver='CLARABEL')
-
-    d__var = []
-    EPS = 1e-4
-    for i in range(__param_ab.size):
-        __param_ab.delta = np.zeros_like(__param_ab.value)
-        __param_ab.delta[i] = EPS
-        problem.derivative()
-        d__var.append(__var.delta.copy() / EPS )
-
-    return d__var
-
-
-def density_projection_model(N: int, firstEl: np.ndarray, basis, param_name='parameters', var_name='projection', param_transform: Optional[Callable]=None):
+def density_projection_model(N: int, param_name='parameters', var_name='projection'):
     import cvxpy as cp
     param  = cp.Parameter(shape=(N**2 - 1,), name=param_name)
-    if param_transform is not None:
-        param = param_transform(param)
     herm_real, herm_imag = tpvec_to_herm_parts(param)
     herm_expr = herm_real + 1j * herm_imag
 
-    free_params = cp.Variable(shape=(N**2 - 1,), name=var_name)
-    assert firstEl.size == 1
-    superket    = cp.concatenate([firstEl.ravel(), free_params])
-    basisMx     = np.column_stack([B.ravel() for B in basis.elements])
-    X = cp.hermitian_wrap((basisMx @ superket).reshape((N, N)))
+    X = cp.Variable(shape=(N, N), hermitian=True, name=var_name)
     F = cp.sum_squares(herm_expr - X)
     C = [ 0 << X, cp.trace(cp.real(X)) == 1 ]
     problem = cp.Problem( cp.Minimize(F), C )
@@ -286,99 +238,23 @@ def project_onto_densities_tpvec( tpvec, full_superket=False ):
 
 
 
-class ProjectedState_CVXPY(TPState):
-    
-    def __init__(self, vec: np.ndarray, basis: Basis, evotype="default", state_space=None):
-        super().__init__(vec, basis, evotype, state_space)
-        self._working_basis = herm_parts_basis(self.state_space.udim)
+class ProjectedState_CVXPY:
 
-        self._n2w_np = self._basis.create_transform_matrix(self._working_basis).real
-        self._w2n_np = self._working_basis.create_transform_matrix(self._basis).real
-
-        self._natural_firstEl = np.array([self._basis.elsize ** -0.25])
-        self._cvxpy_model = density_projection_model(
-            self.state_space.udim, self._natural_firstEl,
-            self._basis, param_transform=self._natural_vec_to_working_vec
-        )
-        # ^ the param_transform means that the 
-        self._cvxpy_param = self._cvxpy_model.param_dict['parameters']
+    def __init__(self, N: int) -> None:
+        problem = density_projection_model(N)
+        self._cvxpy_model = problem
+        self._cvxpy_param = problem.param_dict['parameters']
         return
 
-    @staticmethod
-    def _project_onto_densities_natural(model, param, natvec):
-        param.value = natvec
-        _, vars = _sdps.solve_sdp(model)
-        superket = vars['projection']
-        return superket
-
-    def to_vector(self) -> np.ndarray:
-        return super().to_vector()
-    
-    def _natural_vec_to_working_vec(self, natvec):
-        if isinstance(natvec, cp.Expression):
-            sket =  cp.concatenate([self._natural_firstEl, natvec])
-        else:
-            sket = np.concatenate([self._natural_firstEl, natvec])
-        workvec = self._n2w_np[:-1, :] @  sket
-        return workvec
-    
-    def from_vector(self, v, close=False, dirty_value=True) -> None:
-        v_projected = ProjectedState_CVXPY._project_onto_densities_natural( self._cvxpy_model, self._cvxpy_param, v )
-        super().from_vector(v_projected, False, True)
-        return
-    
-    def set_dense(self, vec):
-        super().set_dense(vec)
-        self.from_vector(self.to_vector(), False, True) 
-        return
-    
-    def deriv_wrt_params(self, wrt_filter=None):
-        # return the Jacobian of the map from [the vector `v` most recently 
-        # passed to `self.from_vector(v)`] to [self.to_dense()].
-        assert wrt_filter is None
-        ALL_SOLVERS = _sdps.SDP_SOLVER_PRIORITY
-        _sdps.SDP_SOLVER_PRIORITY = ['CLARABEL']
-        _sdps.solve_sdp(self._cvxpy_model, requires_grad=True)
-        var   = self._cvxpy_model.var_dict['projection']
-        param = self._cvxpy_param
-        jac_cols = []
-        EPS = 1e-4
-        param.value = self.to_vector()
-        for i in range(param.size):
-            param.delta = np.zeros_like(param.value)
-            param.delta[i] = EPS
-            self._cvxpy_model.derivative()
-            jac_cols.append(var.delta.copy() / EPS)
-        jac_val = np.column_stack(jac_cols)
-        jac_val = np.row_stack([np.zeros((1, self.state_space.dim-1)), jac_val])
-        _sdps.SDP_SOLVER_PRIORITY = ALL_SOLVERS
-        return jac_val
-    
-    def stateless_data(self) -> Tuple[int]:
-        raise NotImplementedError()
-    
-    @staticmethod
-    def torch_base(sd, t_param):
-        raise NotImplementedError()
-    
-    def has_nonzero_hessian(self):
-        return False
-
+from pygsti.modelmembers import ModelMember
+from pygsti.modelmembers.states import State, TPState
+from pygsti.tools.basistools import vec_to_stdmx, change_basis
 
 
 # TODO: need a routine for changing basis of to_vector()/from_vector() with TPState
 # versus ProjectedState.
 
-"""
-TODO: modify to_vector so that it returns the raw un-projected v from the last from_vector.
-Only have the projection happen in to_dense() and deriv_wrt_params(). This viewpoint
-means the underlying vector in a ProjectedState is viewed through an equivalence class
-based on how the resulting Hermitian matrix projects onto the set of density matrices.
 
-^ Would be desirable if we wanted to satisfy
-
-    assert( modelmember.to_vector(modelmember.from_vector(v)) == v)
-"""
 
 
 
@@ -393,7 +269,7 @@ class ProjectedState(TPState):
         self._n2w = jnp.array( self._n2w_np )
         self._w2n = jnp.array( self._w2n_np )
 
-        self._natural_firstEl = np.array([self._basis.elsize ** -0.25])
+        self._natural_firstEl = np.array([self.basis.elsize ** -0.25])
         return
 
     def to_vector(self) -> np.ndarray:
@@ -466,6 +342,4 @@ if __name__ == '__main__':
     tpvec = np.random.rand(3)
     jac2 = jax.jacobian(project_onto_densities_tpvec)
     x,y = tpvec_to_herm_parts(jnp.array(tpvec))
-    print()
-    demo_derivatives_cvxpy()
     print()
