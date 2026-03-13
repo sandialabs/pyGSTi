@@ -15,7 +15,7 @@ from __future__ import annotations
 import numpy as np
 import warnings
 
-from typing import Union, List, Tuple, Sequence, TYPE_CHECKING
+from typing import Any, Union, List, Tuple, Sequence, TYPE_CHECKING
 if TYPE_CHECKING:
     import cvxpy as cp
     ExpressionLike = Union[cp.Expression, np.ndarray]
@@ -40,18 +40,17 @@ except:
 SDP_SOLVER_PRIORITY = ['MOSEK', 'CLARABEL', 'CVXOPT']
 
 
-def solve_sdp(prob: cp.Problem) -> tuple[np.floating, dict[str, np.ndarray]]:
+def solve_sdp(prob: cp.Problem, **kwargs) -> tuple[np.floating, dict[str, np.ndarray]]:
 
-    objective_val = np.array(np.NaN).item()
-    varvals = dict()
+    objective_val : np.floating = np.array(np.NaN).item()
+    varvals : dict[str, np.ndarray] = dict()
     for i, solver in enumerate(SDP_SOLVER_PRIORITY):
         try:
             with warnings.catch_warnings():
                 warnings.filterwarnings('ignore','.*Solution may be inaccurate.*', UserWarning)
-                prob.solve(solver=solver)
-            prob.solve(solver=solver)
-            objective_val = prob.value
-            varvals.update({k: v.value for (k, v) in prob.var_dict})
+                prob.solve(solver=solver, **kwargs)
+            objective_val = prob.value                                       # type: ignore
+            varvals.update({k: v.value for (k, v) in prob.var_dict.items()}) # type: ignore
             break
         except (AssertionError, cp.SolverError) as e:
             if solver != 'MOSEK':
@@ -88,15 +87,15 @@ def povm_projection_model(effects: Sequence[np.ndarray], independent_complement:
     return prob
 
 
-def povm_effect_variables(N: int, num_effects: int, independent_complement: bool) -> tuple[list[cp.Variable], list[cp.Constraint]]:
+def povm_effect_variables(N: int, num_effects: int, independent_complement: bool) -> tuple[list[cp.Expression], list[cp.Constraint]]:
     num_vars = num_effects if independent_complement else num_effects - 1
-    vars = [cp.Variable(shape=(N, N), hermitian=True) for _ in range(num_vars)]
-    cons = [v >> 0 for v in vars]
+    vars : list[cp.Expression] = [cp.Variable(shape=(N, N), hermitian=True) for _ in range(num_vars)]  # type: ignore
+    cons : list[cp.Constraint] = [v >> 0 for v in vars]
     if num_vars == num_effects:
-        expr = cp.sum(vars)
+        expr : cp.Expression = cp.sum(vars)              # type: ignore
         cons.append( expr == np.eye(N) )
     else:
-        expr = np.eye(N) - cp.sum(vars)
+        expr : cp.Expression = np.eye(N) - cp.sum(vars)  # type: ignore
         cons.append( expr >> 0 )
         vars.append( expr )
     return vars, cons
