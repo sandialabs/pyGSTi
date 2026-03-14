@@ -16,13 +16,11 @@ import numpy as _np
 
 from pygsti.tools import basistools as _bt
 from pygsti.tools import matrixtools as _mt
-from pygsti.baseobjs.basis import Basis as _Basis
+from pygsti.baseobjs.basis import Basis as _Basis, BasisLike
 from typing import Union, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from cvxpy import Expression
-
-BasisLike = Union[_Basis, str]
 
 
 

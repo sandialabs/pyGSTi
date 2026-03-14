@@ -20,12 +20,11 @@ if TYPE_CHECKING:
     import cvxpy as cp
     ExpressionLike = Union[cp.Expression, np.ndarray]
 
-from pygsti.baseobjs import Basis
+from pygsti.baseobjs import Basis, BasisLike
 from pygsti.tools.matrixtools import assert_hermitian
 from pygsti.tools.basistools import stdmx_to_vec
 from pygsti.tools.jamiolkowski import jamiolkowski_iso
 
-BasisLike = Union[str, Basis]
 
 try:
     import cvxpy as cp
