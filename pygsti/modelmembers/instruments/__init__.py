@@ -13,7 +13,7 @@ Sub-package holding model instrument objects.
 from .instrument import Instrument
 from .tpinstrument import TPInstrument
 from .tpinstrumentop import TPInstrumentOp
-from .cptpinstrument import RootConjOperator, SummedOperator
+from ..operations.cptrop import RootConjOperator, SummedOperator
 
 import warnings as _warnings
 import scipy.linalg as _la
@@ -165,7 +165,57 @@ def convert(instrument, to_type, basis, ideal_instrument=None, flatten_structure
     raise ValueError("Cannot convert an instrument to type %s" % to_type)
 
 
-def cptp_instrument(op_arrays: dict[str, _np.ndarray], basis: Basis, error_tol:float=1e-6, trunc_tol:float=1e-7, povm_errormap=None) -> Instrument:
+def cptp_instrument(op_arrays: dict[str, _np.ndarray], basis: Basis,
+                    error_tol: float = 1e-6, trunc_tol: float = 1e-7,
+                    povm_errormap=None) -> Instrument:
+    """
+    Construct a CPTPLND-parameterized instrument from a dictionary of dense superoperator arrays.
+
+    Each operator in `op_arrays` must be a completely positive trace-reducing (CPTR) map.
+    The function Kraus-decomposes each operator, polar-decomposes each Kraus operator into
+    a unitary and a positive semidefinite part, then assembles the result using
+    CPTPLND-parameterized unitaries and a shared `ComposedPOVM` that enforces the
+    completeness (trace-preservation) constraint across all instrument outcomes.
+
+    The construction follows these steps:
+
+    1. For each outcome label, compute a minimal Kraus decomposition and polar-decompose
+       each Kraus operator ``K = u p`` (``p`` PSD, ``u`` unitary).
+    2. Represent each Kraus term as the composition of a ``RootConjOperator`` (encoding
+       ``ρ ↦ p² ρ p²``, parameterized by the POVM effect for ``p²``) and a
+       CPTPLND-parameterized unitary channel.
+    3. Collect all POVM effects into a shared ``ComposedPOVM`` whose error map is
+       constrained to be CPTPLND.  This enforces that the effects sum to ≤ I, which
+       ensures the full instrument is CPTR.
+    4. If an outcome requires more than one Kraus term, wrap the summands in a
+       ``SummedOperator``; otherwise use the single term directly.
+
+    Parameters
+    ----------
+    op_arrays : dict of str → numpy.ndarray
+        Mapping from outcome label to dense superoperator matrix (in the given basis).
+        Each matrix must represent a CPTR map; the function raises or warns if the
+        Kraus decomposition is inconsistent with this.
+    basis : Basis or str
+        The operator basis in which the superoperators are expressed (e.g. ``'pp'``).
+    error_tol : float, optional
+        Tolerance for eigenvalue errors in the minimal Kraus decomposition.  Eigenvalues
+        below ``-error_tol`` cause an error to be raised.  Default ``1e-6``.
+    trunc_tol : float, optional
+        Truncation tolerance for the minimal Kraus decomposition.  Eigenvalues between
+        ``-error_tol`` and ``trunc_tol`` are silently set to zero.  Default ``1e-7``.
+    povm_errormap : LinearOperator, optional
+        A CPTPLND-parameterized error map to use as the shared POVM error map.
+        If ``None`` (default), the identity channel is used as the starting point
+        and converted to CPTPLND parameterization.
+
+    Returns
+    -------
+    Instrument
+        An ``Instrument`` whose member operations are CPTR maps sharing a common set
+        of CPTPLND parameters.  The instrument is not itself a ``TPInstrument`` because
+        the completeness constraint is enforced implicitly through the shared POVM.
+    """
     unitaries = dict()
     effects   = dict()
 

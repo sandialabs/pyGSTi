@@ -1,5 +1,14 @@
 """
-Defines the CPTPInstrument class
+Operators used in CPTR (completely positive trace-reducing) parameterizations.
+
+A completely positive trace-reducing (CPTR) map is a completely positive map
+whose Kraus operators satisfy sum_i K_i^† K_i ≤ I (i.e., trace is non-increasing).
+Every CPTR map can be decomposed as a CPTP map followed by a "root-conjugation"
+by a positive semidefinite matrix E with 0 ≤ E ≤ I.
+
+The two classes here, `RootConjOperator` and `SummedOperator`, are `LinearOperator`
+subclasses used as building blocks when constructing CPTPLND-parameterized instruments
+via :func:`pygsti.modelmembers.instruments.cptp_instrument`.
 """
 #***************************************************************************************************
 # Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -14,7 +23,7 @@ import numpy as _np
 from pygsti.pgtypes import SpaceT
 from pygsti.baseobjs.basis import Basis
 from pygsti.modelmembers.povms.effect import POVMEffect
-from pygsti.modelmembers.operations import LinearOperator
+from pygsti.modelmembers.operations.linearop import LinearOperator
 from pygsti.tools import optools as _ot
 
 from typing import Union
@@ -23,9 +32,31 @@ BasisLike = Union[Basis, str]
 
 class RootConjOperator(LinearOperator):
     """
-    A linear operator parameterized by a matrix E where 0 ≤ E ≤ 1, whose action takes ρ to E½ ρ E½ .
-    
-    Every CPTR map can be obtained by pre-composing a CPTP map with this kind of linear operator.
+    A linear operator parameterized by a PSD matrix E with 0 ≤ E ≤ I, acting as ρ ↦ E^½ ρ E^½.
+
+    Every CPTR (completely positive trace-reducing) map can be expressed as the
+    composition of a CPTP map with a ``RootConjOperator``.  This class implements
+    the "root-conjugation" factor: given a POVM effect E (representing the PSD matrix
+    in superket form), the superoperator for ρ ↦ E^½ ρ E^½ is constructed and kept
+    up to date as the effect's parameters change.
+
+    The effect E encodes the constraint 0 ≤ E ≤ I; its parameters are inherited
+    directly as the parameters of this operator.
+
+    Parameters
+    ----------
+    effect : POVMEffect
+        A POVM effect whose superket encodes the PSD matrix E.  The effect's
+        parameter vector is shared (via gpindices) with this operator.
+    basis : Basis or str
+        The operator basis in which the superoperator is represented.
+
+    Attributes
+    ----------
+    EIGTOL_WARNING : float
+        Eigenvalue tolerance below which a warning is issued during construction.
+    EIGTOL_ERROR : float
+        Eigenvalue tolerance below which an error is raised during construction.
     """
 
     EIGTOL_WARNING = 1e-10
@@ -38,16 +69,18 @@ class RootConjOperator(LinearOperator):
         self._evotype      = effect.evotype
 
         dim = self._state_space.dim
-        self._rep = self._evotype.create_dense_superop_rep( _np.zeros((dim, dim)), self._basis, self._state_space )
+        self._rep = self._evotype.create_dense_superop_rep(
+            _np.zeros((dim, dim)), self._basis, self._state_space
+        )
         self._update_rep_base()
         LinearOperator.__init__(self, self._rep, self._evotype)
         self.init_gpindices()
-    
+
     def submembers(self):
         return [self._effect]
-    
+
     def _update_rep_base(self):
-        # This function is directly analogous to TPInstrumentOp._construct_matrix.
+        # Analogous to TPInstrumentOp._construct_matrix.
         self._rep.base.flags.writeable = True
         assert(self._rep.base.shape == (self.dim, self.dim))
         effect_superket = self._effect.to_dense()
@@ -55,21 +88,19 @@ class RootConjOperator(LinearOperator):
         self._rep.base[:] = mx
         self._rep.base.flags.writeable = False
         self._rep.base_has_changed()
-        return
-    
+
     def deriv_wrt_params(self, wrt_filter=None):
         return LinearOperator.deriv_wrt_params(self, wrt_filter)
-    
+
     def has_nonzero_hessian(self):
-        # This is not affine in its parameters.
+        # Not affine in its parameters.
         return True
 
     def from_vector(self, v, close=False, dirty_value=True):
         for sm, local_inds in zip(self.submembers(), self._submember_rpindices):
             sm.from_vector(v[local_inds], close, dirty_value)
         self._update_rep_base()
-        return
-    
+
     @property
     def num_params(self):
         return len(self.gpindices_as_array())
@@ -88,7 +119,33 @@ class RootConjOperator(LinearOperator):
 
 
 class SummedOperator(LinearOperator):
+    """
+    A linear operator whose superoperator is the sum of a list of constituent operators.
 
+    ``SummedOperator`` wraps a sequence of ``LinearOperator`` objects and exposes
+    their pointwise sum as a single ``LinearOperator``.  It is used inside
+    :func:`~pygsti.modelmembers.instruments.cptp_instrument` when a CPTR map requires
+    more than one Kraus term: each term contributes a separate summand, and the full
+    map is their sum.
+
+    The parameter vector is the concatenation (with shared-index deduplication via
+    gpindices) of the submembers' parameter vectors.  The constituent operators' ``_rep``
+    objects are linked directly, so calling ``from_vector`` on a submember automatically
+    updates this operator's representation.
+
+    Parameters
+    ----------
+    operators : list of LinearOperator
+        The operators to sum.  All must share the same evotype, state space, and
+        superoperator dimension.
+    basis : Basis or str
+        The operator basis (used for bookkeeping; the operators themselves must
+        already be expressed in this basis).
+
+    Notes
+    -----
+    ``deriv_wrt_params`` is not implemented for this class.
+    """
 
     def __init__(self, operators, basis: BasisLike):
         op = operators[0]
@@ -97,15 +154,13 @@ class SummedOperator(LinearOperator):
         self._state_space  = op.state_space
         self._evotype      = op.evotype
         self._subreps      = [op._rep for op in self._operators]
-        self._rep = self._evotype.create_sum_rep( self._subreps, self._state_space )
+        self._rep = self._evotype.create_sum_rep(self._subreps, self._state_space)
         LinearOperator.__init__(self, self._rep, self._evotype)
         self.init_gpindices()
-        # NOTE: This class doesn't have a function analogous to _update_rep_base
-        # that we use in RootConjOperator. We can get away with not having such
-        # a function because it's the responsibility of op.from_vector(...)
-        # to update op's attached OpRep.
-        return
-    
+        # NOTE: No _update_rep_base analogue is needed here.  Each constituent
+        # operator's from_vector(...) updates its own attached OpRep, and the
+        # sum rep reflects those changes automatically.
+
     def submembers(self):
         out = []
         hit = set()
@@ -116,18 +171,17 @@ class SummedOperator(LinearOperator):
                     hit.add(id(temp))
                     out.append(sm)
         return out
-    
+
     def deriv_wrt_params(self, wrt_filter=None):
         raise NotImplementedError()
-    
+
     def has_nonzero_hessian(self):
-        return any(op.has_nonzero_hession() for op in self._operators)
+        return any(op.has_nonzero_hessian() for op in self._operators)
 
     def from_vector(self, v, close=False, dirty_value=True):
         for sm, local_inds in zip(self.submembers(), self._submember_rpindices):
             sm.from_vector(v[local_inds], close, dirty_value)
-        return
-    
+
     @property
     def num_params(self):
         return len(self.gpindices_as_array())
@@ -140,11 +194,9 @@ class SummedOperator(LinearOperator):
 
     def to_dense(self, on_space: SpaceT = 'HilbertSchmidt') -> _np.ndarray:
         assert on_space in ('HilbertSchmidt', 'minimal')
-        on_space = 'HilbertSchmidt'
-        out = self._operators[0].to_dense(on_space)
+        out = self._operators[0].to_dense('HilbertSchmidt')
         if not out.flags.writeable:
             out = out.copy()
         for op in self._operators[1:]:
-            temp = op.to_dense(on_space)
-            out += temp
+            out += op.to_dense('HilbertSchmidt')
         return out

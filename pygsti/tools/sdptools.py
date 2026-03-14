@@ -42,7 +42,7 @@ SDP_SOLVER_PRIORITY = ['MOSEK', 'CLARABEL', 'CVXOPT']
 
 def solve_sdp(prob: cp.Problem, **kwargs) -> tuple[np.floating, dict[str, np.ndarray]]:
 
-    objective_val : np.floating = np.array(np.NaN).item()
+    objective_val : np.floating = np.array(np.nan).item()
     varvals : dict[str, np.ndarray] = dict()
     for i, solver in enumerate(SDP_SOLVER_PRIORITY):
         try:

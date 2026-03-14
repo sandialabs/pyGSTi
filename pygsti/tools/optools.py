@@ -1210,7 +1210,7 @@ def povm_diamonddist(model, target_model, povmlbl, _premultiplier=None):
         return diamonddist(povm_mx, target_povm_mx, target_model.basis)
     except AssertionError as e:
         assert '`dim` must be a perfect square' in str(e)
-        return _np.NaN
+        return _np.nan
 
 
 def instrument_infidelity(a, b, mx_basis):
