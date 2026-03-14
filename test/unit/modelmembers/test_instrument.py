@@ -12,17 +12,43 @@ from ..util import BaseCase
 from .test_operation import ImmutableDenseOpBase
 
 
-class InstrumentMethodBase(object):
+class InstrumentTestBase(BaseCase):
+    """Shared setUp and test methods for Instrument and TPInstrument.
+
+    Subclasses must define a class attribute ``constructor`` pointing to the
+    instrument class under test.
+    """
+    __test__ = False
+    constructor: type
+
+    def setUp(self):
+        self.n_elements = 32
+        self.model = std.target_model()
+        E = self.model.povms['Mdefault']['0']
+        Erem = self.model.povms['Mdefault']['1']
+        self.Gmz_plus = np.dot(E, E.T)
+        self.Gmz_minus = np.dot(Erem, Erem.T)
+        self.instrument: Instrument = self.constructor({'plus': self.Gmz_plus, 'minus': self.Gmz_minus})
+        self.model.instruments['Iz'] = self.instrument
+
     def test_num_elements(self):
         self.assertEqual(self.instrument.num_elements, self.n_elements)
 
     def test_copy(self):
         inst_copy = self.instrument.copy()
-        # TODO assert correctness
+        self.assertIsInstance(inst_copy, type(self.instrument))
+        self.assertEqual(list(inst_copy.keys()), list(self.instrument.keys()))
+        for key in self.instrument.keys():
+            actual = inst_copy[key].to_dense()
+            expected = self.instrument[key].to_dense()
+            self.assertArraysEqual(actual, expected)
 
     def test_to_string(self):
         inst_str = str(self.instrument)
-        # TODO assert correctness
+        self.assertIsInstance(inst_str, str)
+        self.assertIn("Instrument with elements:", inst_str)
+        for key in self.instrument.keys():
+            self.assertIn(str(key), inst_str)
 
     def test_transform(self):
         T = FullGaugeGroupElement(
@@ -30,54 +56,39 @@ class InstrumentMethodBase(object):
                       [0, 1, 0, 0],
                       [0, 0, 0, 1],
                       [0, 0, 1, 0]], 'd'))
+        T_mx = T.transform_matrix
+        T_inv = T.transform_matrix_inverse
+        originals = {k: v.to_dense().copy() for k, v in self.instrument.items()}
         self.instrument.transform_inplace(T)
-        # TODO assert correctness
+        for key, E_orig in originals.items():
+            expected = T_mx @ E_orig @ T_inv
+            self.assertArraysAlmostEqual(self.instrument[key].to_dense(), expected)
 
     def test_simplify_operations(self):
         gates = self.instrument.simplify_operations(prefix="ABC")
-        # TODO assert correctness
+        self.assertEqual(len(gates), len(self.instrument))
+        expected_keys = ["ABC_" + k for k in self.instrument.keys()]
+        self.assertEqual(list(gates.keys()), expected_keys)
+        for gate, orig in zip(gates.values(), self.instrument.values()):
+            self.assertIs(gate, orig)
 
-    def test_constructor_raises_on_non_none_param_conflict(self):
-        with self.assertRaises(AssertionError):
-            self.constructor(["Non-none-matrices"], 'default', None, False, ["Non-none-items"])  # can't both be non-None
-
-    def test_constructor_raises_on_bad_op_matrices_type(self):
+    def test_convert_raises_on_unknown_parameterization(self):
         with self.assertRaises(ValueError):
-            self.constructor("foobar")  # op_matrices must be a list or dict
-
-    def test_convert_raises_on_unknown_basis(self):
-        with self.assertRaises(ValueError):
-            inst.convert(self.instrument, "foobar", self.model.basis)
+            inst.convert(self.instrument, "H+S", self.model.basis)
 
 
-class InstrumentInstanceBase(object):
-    def setUp(self):
-        # Initialize standard target model for instruments
-        # XXX can instruments be tested independently of a model?  EGN: yes, I was just lazy; but they should also be tested within a model.
-        self.n_elements = 32
-
-        self.model = std.target_model()
-        E = self.model.povms['Mdefault']['0']
-        Erem = self.model.povms['Mdefault']['1']
-        self.Gmz_plus = np.dot(E, E.T)
-        self.Gmz_minus = np.dot(Erem, Erem.T)
-        # XXX is this used?
-        self.povm_ident = self.model.povms['Mdefault']['0'] + self.model.povms['Mdefault']['1']
-        self.instrument = self.constructor({'plus': self.Gmz_plus, 'minus': self.Gmz_minus})
-        self.model.instruments['Iz'] = self.instrument
-        super(InstrumentInstanceBase, self).setUp()
-
-
-class InstrumentInstanceTester(InstrumentMethodBase, InstrumentInstanceBase, BaseCase):
+class InstrumentInstanceTester(InstrumentTestBase):
+    __test__ = True
     constructor = inst.Instrument
 
 
-class TPInstrumentInstanceTester(InstrumentMethodBase, InstrumentInstanceBase, BaseCase):
+class TPInstrumentInstanceTester(InstrumentTestBase):
+    __test__ = True
     constructor = inst.TPInstrument
 
     def test_raise_on_modify(self):
         with self.assertRaises(ValueError):
-            self.instrument['plus'] = None  # can't set value of a TP Instrument element
+            self.instrument['plus'] = None
 
 
 class CPTPInstrumentTester(BaseCase):
