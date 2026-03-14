@@ -602,7 +602,7 @@ def rootconj_superop(effect_superket: _np.ndarray, basis: _Basis, abstol_warn: f
     if _np.any(vals < 0.0 - abstol_error) or _np.any(vals > 1.0 + abstol_error):
         raise ValueError( msg % abstol_error )
     if _np.any(vals < 0.0 - abstol_warn)  or _np.any(vals > 1.0 + abstol_warn ):
-        _warnings.warn( msg % abstol_warn )
+        _warnings.warn( msg % abstol_warn, _NumericalDomainWarning )
     vals = _np.clip(vals, a_min=0.0, a_max=1.0)
     
     rooteffect_mat = (vecs * _np.sqrt(vals)[_np.newaxis, :]) @ inv_vecs
