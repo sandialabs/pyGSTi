@@ -15,15 +15,16 @@ from __future__ import annotations
 import numpy as np
 import warnings
 
-from typing import Any, Union, List, Tuple, Sequence, TYPE_CHECKING
+from typing import Union, List, Tuple, Sequence, TYPE_CHECKING
 if TYPE_CHECKING:
     import cvxpy as cp
     ExpressionLike = Union[cp.Expression, np.ndarray]
 
-from pygsti.baseobjs import Basis, BasisLike
+from pygsti.baseobjs.basis import Basis, BasisLike
 from pygsti.tools.matrixtools import assert_hermitian
 from pygsti.tools.basistools import stdmx_to_vec
 from pygsti.tools.jamiolkowski import jamiolkowski_iso
+from pygsti.tools.exceptions import CVXPYFailure
 
 
 try:
@@ -55,11 +56,11 @@ def solve_sdp(prob: cp.Problem, **kwargs) -> tuple[np.floating, dict[str, np.nda
             if solver != 'MOSEK':
                 msg = f"Received error {e} when trying to use solver={solver}."
                 if i + 1 == len(SDP_SOLVER_PRIORITY):
-                    failure_msg = "Out of solvers. Returning NaN."
+                    failure_msg  = "Out of solvers. Returning NaN."
                 else:
-                    failure_msg = f"Trying {SDP_SOLVER_PRIORITY[i+1]} next."
+                    failure_msg  = f"Trying {SDP_SOLVER_PRIORITY[i+1]} next."
                 msg += f'\n{failure_msg}'
-                warnings.warn(msg)
+                warnings.warn(msg, CVXPYFailure)
 
     return objective_val, varvals
 

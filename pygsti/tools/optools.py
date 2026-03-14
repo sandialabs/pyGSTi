@@ -26,8 +26,7 @@ from pygsti.tools import lindbladtools as _lt
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools import sdptools as _sdps
 from pygsti.tools.exceptions import (
-    NumericalDomainWarning as _NumericalDomainWarning,
-    CVXPYFailure as _CVXPYFailure
+    NumericalDomainWarning as _NumericalDomainWarning
 )
 from pygsti.baseobjs.basis import (
     Basis as _Basis,
@@ -41,6 +40,7 @@ from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _Local
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
 
 from typing import Union, Optional, Any
+from pygsti.pgtypes import SpaceT
 
 
 __SCALAR_TOL_EXPONENT__ = 0.5
