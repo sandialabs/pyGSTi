@@ -2,7 +2,7 @@ import numpy as np
 
 import pygsti.modelmembers.operations as op
 from pygsti.modelmembers import instruments as inst
-from pygsti.modelmembers.instruments import cptp_instrument
+from pygsti.modelmembers.instruments import kraus_polar_instrument
 from pygsti.modelmembers.instruments import Instrument, TPInstrument
 from pygsti.modelmembers.operations import RootConjOperator, SummedOperator
 from pygsti.modelmembers import povms as pv
@@ -91,8 +91,8 @@ class TPInstrumentInstanceTester(InstrumentTestBase):
             self.instrument['plus'] = None
 
 
-class CPTPInstrumentTester(BaseCase):
-    """Tests for cptp_instrument and the CPTR operation primitives."""
+class KrausPolarInstrumentTester(BaseCase):
+    """Tests for kraus_polar_instrument and the CPTR operation primitives."""
 
     def setUp(self):
         model = std.target_model()
@@ -102,9 +102,9 @@ class CPTPInstrumentTester(BaseCase):
         self.Gmz_minus = np.dot(Erem, Erem.T)
         self.basis = model.basis
         self.op_arrays = {'plus': self.Gmz_plus, 'minus': self.Gmz_minus}
-        self.instrument = cptp_instrument(self.op_arrays, self.basis)
+        self.instrument = kraus_polar_instrument(self.op_arrays, self.basis)
 
-    # --- cptp_instrument factory tests ---
+    # --- kraus_polar_instrument factory tests ---
 
     def test_construction_returns_instrument(self):
         self.assertIsInstance(self.instrument, Instrument)

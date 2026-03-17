@@ -10,18 +10,20 @@ Sub-package holding model instrument objects.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from typing import Optional, Union
+
 from .instrument import Instrument
 from .tpinstrument import TPInstrument
 from .tpinstrumentop import TPInstrumentOp
-from ..operations.cptrop import RootConjOperator, SummedOperator
 
 import warnings as _warnings
 import scipy.linalg as _la
 import numpy as _np
 from pygsti.tools import optools as _ot, basistools as _bt
+from pygsti.tools.exceptions import DubiousTargetWarning as _DubiousTargetWarning
 from types import NoneType
 from pygsti.baseobjs.label import Label
-from pygsti.baseobjs.basis import Basis
+from pygsti.baseobjs.basis import BasisLike
 from pygsti.modelmembers import operations as _op
 from pygsti.modelmembers import povms as _pv
 from pygsti.modelmembers.povms.basepovm import _BasePOVM
@@ -159,55 +161,71 @@ def convert(instrument, to_type, basis, ideal_instrument=None, flatten_structure
 
     if to_type == 'CPTPLND':
         op_arrays = {k: v.to_dense('HilbertSchmidt') for (k,v) in instrument.items()}
-        inst = cptp_instrument(op_arrays, basis)
+        inst = kraus_polar_instrument(op_arrays, basis)
         return inst
 
     raise ValueError("Cannot convert an instrument to type %s" % to_type)
 
 
-def cptp_instrument(op_arrays: dict[str, _np.ndarray], basis: Basis,
-                    error_tol: float = 1e-6, trunc_tol: float = 1e-7,
-                    povm_errormap=None) -> Instrument:
+ErrorMapSpec = str
+
+
+def kraus_polar_instrument(
+        op_arrays: dict[str, _np.ndarray], basis: BasisLike,
+        error_tol: float = 1e-6, trunc_tol: float = 1e-7,
+        post_unitary_error: ErrorMapSpec='CPTPLND',
+        povm_errormap: Optional[Union[_op.LinearOperator, str]]='CPTPLND'  # type: ignore
+    ) -> Instrument:
     """
-    Construct a CPTPLND-parameterized instrument from a dictionary of dense superoperator arrays.
+    Construct an appropriately parameterized Instrument from the `op_arrays` dict,
+    which holds CPTR maps as dense arrays with respect to `basis`.
 
-    Each operator in `op_arrays` must be a completely positive trace-reducing (CPTR) map.
-    The function Kraus-decomposes each operator, polar-decomposes each Kraus operator into
-    a unitary and a positive semidefinite part, then assembles the result using
-    CPTPLND-parameterized unitaries and a shared `ComposedPOVM` that enforces the
-    completeness (trace-preservation) constraint across all instrument outcomes.
+    Our approach is as follows.
 
-    The construction follows these steps:
+        For a given CPTR operator, we compute its Kraus representation and
+        then polar-decompose its Kraus operators into their unitary and psd
+        parts. Each unitary is then promoted to a noisy (parameterized)
+        channel and each psd part is cast to a static POVMEffect.
+        
+        The condition that the CPTR operators sum to a TP map can be enforced
+        by saying these POVM effects sum to the identity. Therefore we can
+        encode this constraint in *parameterized* CPTR operators by saying that
+        the effects in their polar-decomposed Kraus operators all belong to a 
+        single parameterized POVM. We use a ComposedPOVM for that purpose,
+        with an error channel specified by `povm_errormap`. It's important that
+        the parameterization be CPTP by construction.
 
-    1. For each outcome label, compute a minimal Kraus decomposition and polar-decompose
-       each Kraus operator ``K = u p`` (``p`` PSD, ``u`` unitary).
-    2. Represent each Kraus term as the composition of a ``RootConjOperator`` (encoding
-       ``ρ ↦ p² ρ p²``, parameterized by the POVM effect for ``p²``) and a
-       CPTPLND-parameterized unitary channel.
-    3. Collect all POVM effects into a shared ``ComposedPOVM`` whose error map is
-       constrained to be CPTPLND.  This enforces that the effects sum to ≤ I, which
-       ensures the full instrument is CPTR.
-    4. If an outcome requires more than one Kraus term, wrap the summands in a
-       ``SummedOperator``; otherwise use the single term directly.
+        The Instrument class requires that the CPTR operators are LinearOperator
+        objects. We do this with ComposedOp and possibily SummedOperator. The
+        latter class only comes into play if an input CPTR operator has Kraus
+        rank > 1, which is unusual but not forbidden.
 
     Parameters
     ----------
-    op_arrays : dict of str → numpy.ndarray
+    op_arrays : dict[str, numpy.ndarray]
         Mapping from outcome label to dense superoperator matrix (in the given basis).
         Each matrix must represent a CPTR map; the function raises or warns if the
         Kraus decomposition is inconsistent with this.
-    basis : Basis or str
-        The operator basis in which the superoperators are expressed (e.g. ``'pp'``).
+
+    basis : BasisLike
+        A Basis object (or string identifier for a built-in basis) specifying how
+        op_arrays are represented.
+
     error_tol : float, optional
         Tolerance for eigenvalue errors in the minimal Kraus decomposition.  Eigenvalues
         below ``-error_tol`` cause an error to be raised.  Default ``1e-6``.
+
     trunc_tol : float, optional
         Truncation tolerance for the minimal Kraus decomposition.  Eigenvalues between
         ``-error_tol`` and ``trunc_tol`` are silently set to zero.  Default ``1e-7``.
-    povm_errormap : LinearOperator, optional
-        A CPTPLND-parameterized error map to use as the shared POVM error map.
-        If ``None`` (default), the identity channel is used as the starting point
-        and converted to CPTPLND parameterization.
+
+    post_unitary_error : ErrorMapSpec
+        Specifies how we parameterize post-unitary error channels. We do not require 
+        that the parameterization ensures completely positivity.
+
+    povm_errormap : LinearOperator or str
+        Either a LinearOperator that's CPTP by construction or a string specification
+        for a such an operator in the error generator formalism. 
 
     Returns
     -------
@@ -216,67 +234,61 @@ def cptp_instrument(op_arrays: dict[str, _np.ndarray], basis: Basis,
         of CPTPLND parameters.  The instrument is not itself a ``TPInstrument`` because
         the completeness constraint is enforced implicitly through the shared POVM.
     """
-    unitaries = dict()
-    effects   = dict()
+    udim = round(basis.dim ** 0.5)
+    I_hilbert = _np.eye(udim, dtype='complex')
 
-    # Step 1. Build CPTPLND-parameterized unitaries and static POVM effects
-    #   from Kraus decompositions of the provided operators.
+    if not isinstance(povm_errormap, _op.LinearOperator):
+        assert isinstance(povm_errormap, str)
+        I_static = _op.StaticUnitaryOp(I_hilbert, basis)          # type: ignore
+        I_param  = _op.convert(I_static, povm_errormap, basis)
+        povm_errormap : _op.LinearOperator = I_param.factorops[1] # type: ignore  
+
+    per_cptr_unitaries = dict()
+    shared_effects     = dict()
+
+    # Kraus decompose each CPTR operator and polar decompose each Kraus operator.
+    # Define the parameterized unitaries and static POVM effects as we go.
+    
+    effects_sum = _np.zeros((udim, udim), dtype='complex')
     for oplbl, op in op_arrays.items():
         krausops = _ot.minimal_kraus_decomposition(op, basis, error_tol, trunc_tol)
-        cur_effects   = []
-        cur_unitaries = []
-        for K in krausops:
-            # Define F(rho) := K rho K^\\dagger. If we compute a polar decomposition
-            # K = u p, then we can express F(rho) = u (p rho p) u^\\dagger, which is
-            # a composition of a unitary channel and the "RootConjOperator" of p@p.
-            u, p = _la.polar(K, side='right')
-            u_linop = _op.StaticUnitaryOp(u, basis)  # type: ignore
-            u_cptp = _op.convert(u_linop, 'CPTPLND', basis)
-            cur_unitaries.append(u_cptp)
-            E_superket = _bt.stdmx_to_vec(p @ p, basis)
-            E = _pv.StaticPOVMEffect(E_superket)
-            cur_effects.append(E)
-        effects[oplbl]   = cur_effects
-        unitaries[oplbl] = cur_unitaries
 
-    # Step 2. Build a CPTPLND-parameterized POVM from the static POVM effects.
-    # 
-    #   We can't use povms.convert(...) because we might have more
-    #   effects than the Hilbert space dimension.
-    #
-    base_povm_effects = {}
-    for oplbl, cur_effects in effects.items():
-        for i, E in enumerate(cur_effects):
-            elbl = Label((oplbl, i))
-            base_povm_effects[elbl] = E
-    base_povm = _BasePOVM(base_povm_effects, preserve_sum=False)
-    udim = int(_np.round(basis.dim ** 0.5))
-    if povm_errormap is None:
-        I_ideal   = _op.StaticUnitaryOp(_np.eye(udim), basis) # type: ignore
-        I_cptplnd = _op.convert(I_ideal, 'CPTPLND', basis) 
-        povm_errormap = I_cptplnd.factorops[1]
-    povm_cptp = _pv.ComposedPOVM(povm_errormap, base_povm)
+        if len(krausops) > 1:
+            msg = f"Target CPTR operator {oplbl} has Kraus rank {len(krausops)} > 1."
+            _warnings.warn(msg, _DubiousTargetWarning)
 
-    # Step 3. Assemble the CPTPLND-parameterized unitaries and POVM
-    #   effects to represent each operator as a completely-positive
-    #   trace-reducing map.
-    # 
-    inst_ops = dict()
+        per_cptr_unitaries[oplbl] = []
+        for i, K in enumerate(krausops):
+            u, root_p = _la.polar(K, side='right')
+            u_static = _op.StaticUnitaryOp(u, basis)  # type: ignore
+            u_param  = _op.convert(u_static, post_unitary_error, basis)
+            per_cptr_unitaries[oplbl].append(u_param)
+            p = root_p @ root_p
+            effects_sum += p
+            E_superket = _bt.stdmx_to_vec(p, basis)
+            E_static   = _pv.StaticPOVMEffect(E_superket)
+            shared_effects[Label((oplbl, i))] = E_static
+
+    if not _np.allclose(effects_sum, I_hilbert):
+        raise ValueError('Values in op_arrays dict do not sum to a TP channel.')
+
+    M_static = _BasePOVM(shared_effects)
+    M_param  = _pv.ComposedPOVM(povm_errormap, M_static)
+
+    # Stitch the unitaries and root-conj channels together into instrument operations.
+    inst_ops : dict[str, Union[_op.ComposedOp, _op.SummedOperator]] = dict()
     for lbl in op_arrays:
-        cur_effects   = effects[lbl]
-        cur_unitaries = unitaries[lbl]
-
-        op_summands = []
-        for i, U_cptplnd in enumerate(cur_unitaries):
-            E_cptp = povm_cptp[Label((lbl, i))]
-            rcop = RootConjOperator(E_cptp, basis)
-            cptr = _op.ComposedOp([rcop, U_cptplnd])
-            op_summands.append(cptr)
+        op_unitaries = per_cptr_unitaries[lbl]
+        op_summands  = []
+        for i, U_param in enumerate(op_unitaries):
+            E_param = M_param[Label((lbl, i))]
+            summand = _op.ComposedOp([ _op.RootConjOperator(E_param, basis), U_param ])
+            op_summands.append(summand)
         if len(op_summands) == 1:
-            op = op_summands[0]
+            inst_ops[lbl] = op_summands[0]
         else:
-            op = SummedOperator(op_summands, basis)
+            inst_ops[lbl] = _op.SummedOperator(op_summands, basis)
 
-        inst_ops[lbl] = op
     inst = Instrument(inst_ops)
+
     return inst

@@ -16,6 +16,7 @@ import numpy as _np
 import scipy.linalg as _spl
 import scipy.optimize as _spo
 
+# from .basepovm import _BasePOVM  # TODO: rename to BasePOVM and import here?
 from .complementeffect import ComplementPOVMEffect
 from .composedeffect import ComposedPOVMEffect
 from .composedpovm import ComposedPOVM
@@ -26,7 +27,7 @@ from .effect import POVMEffect
 from .fulleffect import FullPOVMEffect
 from .fullpureeffect import FullPOVMPureEffect
 from .marginalizedpovm import MarginalizedPOVM
-from .povm import POVM
+from .povm import POVM  # TODO: replace implementation with that of _BasePOVM ?
 from .staticeffect import StaticPOVMEffect
 from .staticpureeffect import StaticPOVMPureEffect
 from .tensorprodeffect import TensorProductPOVMEffect

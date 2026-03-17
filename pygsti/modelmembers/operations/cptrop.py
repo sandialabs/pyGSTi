@@ -1,14 +1,25 @@
 """
-Operators used in CPTR (completely positive trace-reducing) parameterizations.
+The classes in this file help us represent CPTR (completely positive trace-reducing)
+channels using the error generator formalism.
 
-A completely positive trace-reducing (CPTR) map is a completely positive map
-whose Kraus operators satisfy sum_i K_i^† K_i ≤ I (i.e., trace is non-increasing).
-Every CPTR map can be decomposed as a CPTP map followed by a "root-conjugation"
-by a positive semidefinite matrix E with 0 ≤ E ≤ I.
+Definition
+----------
+A map is CPTR if and only if it has Kraus operators {K_i} where sum_i K_i^† K_i ≤ I.
 
-The two classes here, `RootConjOperator` and `SummedOperator`, are `LinearOperator`
-subclasses used as building blocks when constructing CPTPLND-parameterized instruments
-via :func:`pygsti.modelmembers.instruments.cptp_instrument`.
+Method
+------
+Let K_i = u p^½ be the polar decomposition of K_i. (We denote the psd factor from the
+polar decomposition by p^½ instead of p because a K_i is *itself* a type of square-root.)
+
+The Kraus-rank-1 channel σ ↦ (K_i) σ (K_i)^† can be represented as a composition of two
+linear maps:
+
+    1. A "root-conj" operator σ ↦ p^½ σ p^½, parameterized by the psd matrix p, and
+    2. A standard unitary evolution, σ ↦ u σ u^†, parameterized by u.
+
+pyGSTi has long had dozens of ways of representing (noisy) unitary evolution. This
+file adds classes to represent the root-conj part of a CPTR map, and to sum multiple
+Kraus-rank-1 terms together when needed.
 """
 #***************************************************************************************************
 # Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -32,27 +43,24 @@ BasisLike = Union[Basis, str]
 
 class RootConjOperator(LinearOperator):
     """
-    A linear operator parameterized by a PSD matrix E with 0 ≤ E ≤ I, acting as ρ ↦ E^½ ρ E^½.
-
-    Every CPTR (completely positive trace-reducing) map can be expressed as the
-    composition of a CPTP map with a ``RootConjOperator``.  This class implements
-    the "root-conjugation" factor: given a POVM effect E (representing the PSD matrix
-    in superket form), the superoperator for ρ ↦ E^½ ρ E^½ is constructed and kept
-    up to date as the effect's parameters change.
-
-    The effect E encodes the constraint 0 ≤ E ≤ I; its parameters are inherited
-    directly as the parameters of this operator.
+    Represents a linear operator that acts as ρ ↦ E^½ ρ E^½, where E is a
+    Hermitian matrix represented by a POVMEffect object.
+    
+    We need 0 ≤ E ≤ I for this operator to be well-defined. This is gauranteed
+    by some POVMEffect subclasses, but not all. The RootConjOperator will raise
+    an error if E's eigenvalues fall too far outside the range [0, 1].
 
     Parameters
     ----------
     effect : POVMEffect
-        A POVM effect whose superket encodes the PSD matrix E.  The effect's
-        parameter vector is shared (via gpindices) with this operator.
+        A POVM effect whose superket encodes the PSD matrix E. This linear
+        operator's gpindices are shared with those of E.
+    
     basis : Basis or str
         The operator basis in which the superoperator is represented.
 
-    Attributes
-    ----------
+    Class attributes
+    ----------------
     EIGTOL_WARNING : float
         Eigenvalue tolerance below which a warning is issued during construction.
     EIGTOL_ERROR : float
@@ -122,11 +130,9 @@ class SummedOperator(LinearOperator):
     """
     A linear operator whose superoperator is the sum of a list of constituent operators.
 
-    ``SummedOperator`` wraps a sequence of ``LinearOperator`` objects and exposes
-    their pointwise sum as a single ``LinearOperator``.  It is used inside
-    :func:`~pygsti.modelmembers.instruments.cptp_instrument` when a CPTR map requires
-    more than one Kraus term: each term contributes a separate summand, and the full
-    map is their sum.
+    This class is used inside :func:`~pygsti.modelmembers.instruments.kraus_polar_instrument`
+    when a CPTR map requires more than one Kraus term: each term contributes a separate
+    summand, and the full map is their sum.
 
     The parameter vector is the concatenation (with shared-index deduplication via
     gpindices) of the submembers' parameter vectors.  The constituent operators' ``_rep``

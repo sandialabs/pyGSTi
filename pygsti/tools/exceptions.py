@@ -140,3 +140,11 @@ class StolenResourceWarning(UserWarning):
     changes the value of `id(F.child)`.
     """
     pass
+
+
+class DubiousTargetWarning(UserWarning):
+    """
+    Alert the user that a target specification is somehow unusual and may not
+    be what they intended.
+    """
+    pass
