@@ -124,6 +124,98 @@ class Protocol(_MongoSerializable):
         """
         raise NotImplementedError("Derived classes should implement this!")
 
+    def run_mpi(self, data, num_workers, mpiexec='mpiexec', extra_mpi_args=None, **run_kwargs):
+        """
+        Run this protocol in parallel using MPI workers launched as a subprocess.
+
+        Unlike :meth:`run`, this method can be called from anywhere (Jupyter notebooks,
+        interactive sessions, scripts) without requiring the caller to manage MPI
+        communicators or write launcher scripts manually.
+
+        Parameters
+        ----------
+        data : ProtocolData
+            The input data.
+
+        num_workers : int
+            Number of MPI worker processes to launch.  When 1, falls back to
+            a plain :meth:`run` call with no MPI overhead.
+
+        mpiexec : str, optional
+            Path or name of the MPI launcher executable (default ``'mpiexec'``).
+
+        extra_mpi_args : list of str, optional
+            Additional arguments inserted between ``mpiexec`` and the Python
+            executable, e.g. ``['--oversubscribe']`` or ``['--hostfile', 'hosts.txt']``.
+
+        **run_kwargs
+            Additional keyword arguments forwarded to :meth:`run` in each worker
+            (e.g. ``memlimit``, ``checkpoint_path``, ``disable_checkpointing``,
+            ``simulator``, ``optimizers``).  Complex objects are serialized via
+            :mod:`pickle` and written to a temporary file read by the workers.
+
+        Returns
+        -------
+        ProtocolResults
+        """
+        import subprocess as _subprocess
+        import sys as _sys
+        import pickle as _pickle
+        import tempfile as _tempfile
+        import pathlib as _pathlib2
+
+        if num_workers == 1:
+            return self.run(data, **run_kwargs)
+
+        with _tempfile.TemporaryDirectory() as _tmpdir:
+            tmpdir = _pathlib2.Path(_tmpdir)
+
+            # Determine data directory — reuse the on-disk path if available
+            if data.edesign._loaded_from is not None:
+                data_dir = str(data.edesign._loaded_from)
+            else:
+                data_dir = str(tmpdir / 'work')
+                data.write(data_dir)
+
+            # Write protocol so workers can restore it with the correct subclass
+            protocol_dir = str(tmpdir / 'protocol')
+            self.write(protocol_dir)
+
+            # Pickle run_kwargs so arbitrary objects (checkpoints, simulators, etc.) pass through.
+            # Disable checkpointing by default — checkpoint files written to a subprocess CWD
+            # are useless, and the auto-generated checkpoint path can fail for non-trivial mode names.
+            run_kwargs.setdefault('disable_checkpointing', True)
+            kwargs_path = str(tmpdir / 'run_kwargs.pkl')
+            with open(kwargs_path, 'wb') as _f:
+                _pickle.dump(run_kwargs, _f)
+
+            # Generate runner script; only the two path strings are inlined
+            runner_path = str(tmpdir / 'mpi_runner.py')
+            runner_script = (
+                "import pickle\n"
+                "import pygsti\n"
+                "from mpi4py import MPI\n"
+                "comm = MPI.COMM_WORLD\n"
+                f"data = pygsti.io.read_data_from_dir({data_dir!r})\n"
+                f"protocol = pygsti.io.read_protocol_from_dir({protocol_dir!r})\n"
+                f"with open({kwargs_path!r}, 'rb') as _f:\n"
+                "    _kwargs = pickle.load(_f)\n"
+                "results = protocol.run(data, comm=comm, **_kwargs)\n"
+                "if comm.Get_rank() == 0:\n"
+                f"    results.write({data_dir!r}, data_already_written=True)\n"
+                "results = None  # free shared memory before MPI teardown\n"
+            )
+            with open(runner_path, 'w') as _f:
+                _f.write(runner_script)
+
+            cmd = [mpiexec, '-n', str(num_workers)]
+            if extra_mpi_args:
+                cmd.extend(extra_mpi_args)
+            cmd.extend([_sys.executable, runner_path])
+            _subprocess.run(cmd, check=True)
+            results = _io.read_results_from_dir(data_dir, name=self.name)
+            return results
+
     def write(self, dirname):
         """
         Write this protocol to a directory.
