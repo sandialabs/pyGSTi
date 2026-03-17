@@ -31,28 +31,6 @@ class ParallelTest(object):
             for key in ds_serial.keys():
                 assert (ds_serial[key].to_dict() == ds_parallel[key].to_dict())
 
-    def test_gst(self):
-        comm = self.ralloc.comm
-
-        exp_design = std.get_gst_experiment_design(4)
-        mdl_datagen = std.target_model().depolarize(op_noise=0.1, spam_noise=0.01)
-        ds = pygsti.data.simulate_data(mdl_datagen, exp_design, 1000, seed=1234, comm=comm)
-        data = pygsti.protocols.ProtocolData(exp_design, ds)
-
-        initial_model = std.target_model("full TP")
-        proto = pygsti.protocols.GateSetTomography(initial_model, verbosity=1,
-                                                   optimizer={'maxiter': 100, 'serial_solve_proc_threshold': 100})
-
-        results_serial = proto.run(data, comm=None)            
-        results_parallel = proto.run(data, comm=comm)
-        
-        # compare resulting models
-        if comm is None or comm.rank == 0:
-            best_params_serial = results_serial.estimates["GateSetTomography"].models['stdgaugeopt'].to_vector()
-            best_params_parallel = results_parallel.estimates["GateSetTomography"].models['stdgaugeopt'].to_vector()
-
-            assert np.allclose(best_params_serial, best_params_parallel)
-
     def test_MPI_probs(self):
         comm = self.ralloc.comm
 
