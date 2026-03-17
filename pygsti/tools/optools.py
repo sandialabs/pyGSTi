@@ -161,10 +161,10 @@ def fidelity(a, b):
 
     trace_warning = f"The input matrix %s has trace %s, which deviates from 1 by more than {__SCALAR_TOL__}. Beware result!"
 
-    if _np.abs(_np.trace(a) - 1) > __SCALAR_TOL__:
-        _warnings.warn(trace_warning % ('a', str(_np.trace(a))), _NumericalDomainWarning)
-    if _np.abs(_np.trace(b) - 1) > __SCALAR_TOL__:
-        _warnings.warn(trace_warning % ('b', str(_np.trace(b))), _NumericalDomainWarning)
+    if _np.abs(_np.trace(a).real - 1) > __SCALAR_TOL__:
+        _warnings.warn(trace_warning % ('a', str(_np.trace(a).real)), _NumericalDomainWarning)
+    if _np.abs(_np.trace(b).real - 1) > __SCALAR_TOL__:
+        _warnings.warn(trace_warning % ('b', str(_np.trace(b).real)), _NumericalDomainWarning)
 
     r, vec = fast_density_rank(a, __SCALAR_TOL__)
     if r <= 1:
