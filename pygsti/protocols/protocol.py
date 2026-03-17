@@ -124,7 +124,7 @@ class Protocol(_MongoSerializable):
         """
         raise NotImplementedError("Derived classes should implement this!")
 
-    def run_mpi(self, data, num_workers, mpiexec='mpiexec', extra_mpi_args=None, **run_kwargs):
+    def run_mpi(self, data, num_workers, mpiexec='auto', extra_mpi_args=None, **run_kwargs):
         """
         Run this protocol in parallel using MPI workers launched as a subprocess.
 
@@ -142,7 +142,9 @@ class Protocol(_MongoSerializable):
             a plain :meth:`run` call with no MPI overhead.
 
         mpiexec : str, optional
-            Path or name of the MPI launcher executable (default ``'mpiexec'``).
+            Path or name of the MPI launcher executable.  Pass ``'auto'`` to
+            search PATH for ``mpiexec``, ``mpirun``, or ``mpiexec.hydra`` (in
+            that order) and print the resolved path before launching.
 
         extra_mpi_args : list of str, optional
             Additional arguments inserted between ``mpiexec`` and the Python
@@ -161,8 +163,23 @@ class Protocol(_MongoSerializable):
         import subprocess as _subprocess
         import sys as _sys
         import pickle as _pickle
+        import shutil as _shutil
         import tempfile as _tempfile
         import pathlib as _pathlib2
+
+        if mpiexec == 'auto':
+            for _candidate in ('mpiexec', 'mpirun', 'mpiexec.hydra'):
+                _found = _shutil.which(_candidate)
+                if _found is not None:
+                    print(f"run_mpi: using MPI launcher '{_candidate}' at {_found}\n")
+                    mpiexec = _found
+                    break
+            if _found is None:
+                raise FileNotFoundError(
+                    "run_mpi: could not find an MPI launcher on PATH. "
+                    "Tried: mpiexec, mpirun, mpiexec.hydra. "
+                    "Install an MPI distribution or pass mpiexec=<path> explicitly."
+                )
 
         if num_workers == 1:
             return self.run(data, **run_kwargs)
@@ -170,9 +187,11 @@ class Protocol(_MongoSerializable):
         with _tempfile.TemporaryDirectory() as _tmpdir:
             tmpdir = _pathlib2.Path(_tmpdir)
 
-            # Determine data directory — reuse the on-disk path if available
-            if data.edesign._loaded_from is not None:
-                data_dir = str(data.edesign._loaded_from)
+            # Determine data directory — reuse the on-disk path only if it still exists.
+            # (data.edesign._loaded_from may point to a now-deleted temp dir from a prior run.)
+            _prior_path = data.edesign._loaded_from
+            if _prior_path is not None and _pathlib2.Path(_prior_path).is_dir():
+                data_dir = str(_prior_path)
             else:
                 data_dir = str(tmpdir / 'work')
                 data.write(data_dir)
