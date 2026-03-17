@@ -22,8 +22,23 @@ class RunMpiTester:
             pytest.skip("No MPI launcher (mpiexec/mpirun) found on PATH")
 
     def _extra_mpi_args(self):
-        # CI runners tend to have fewer than four cores
-        return ['--oversubscribe']
+        # CI runners tend to have fewer than four cores.
+        # --oversubscribe is an Open MPI flag; Intel MPI (Hydra) and MPICH
+        # don't recognise it, so only add it when Open MPI is detected.
+        import subprocess, shutil
+        launcher = shutil.which('mpiexec') or shutil.which('mpirun')
+        if launcher is not None:
+            try:
+                result = subprocess.run(
+                    [launcher, '--version'],
+                    capture_output=True, text=True, timeout=10,
+                )
+                output = result.stdout + result.stderr
+                if 'Open MPI' in output or 'OpenRTE' in output:
+                    return ['--oversubscribe']
+            except Exception:
+                pass
+        return []
 
     def test_run_mpi_matches_serial(self):
         """run_mpi with num_workers>1 should produce the same model as serial run."""
