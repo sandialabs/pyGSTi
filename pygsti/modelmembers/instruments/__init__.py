@@ -21,15 +21,11 @@ import scipy.linalg as _la
 import numpy as _np
 from pygsti.tools import optools as _ot, basistools as _bt
 from pygsti.tools.exceptions import DubiousTargetWarning as _DubiousTargetWarning
-from types import NoneType
 from pygsti.baseobjs.label import Label
 from pygsti.baseobjs.basis import BasisLike
 from pygsti.modelmembers import operations as _op
 from pygsti.modelmembers import povms as _pv
 from pygsti.modelmembers.povms.basepovm import _BasePOVM
-
-# Avoid circular import
-import pygsti.modelmembers as _mm
 
 
 def instrument_type_from_op_type(op_type):
@@ -45,53 +41,8 @@ def instrument_type_from_op_type(op_type):
     instr_type_preferences: tuple of str
         POVM parameterization types
     """
-    op_type_preferences = _mm.operations.verbose_type_from_op_type(op_type)
-
-    # Limited set (only matching what is in convert)
-    instr_conversion = {
-        'auto': 'full TP',
-        'static unitary': 'static unitary',
-        'static clifford': 'static clifford',
-        'static': 'static',
-        'full': 'full',
-        'full TP': 'full TP',
-        'full CPTP': 'full CPTP',
-        'full unitary': 'full unitary',
-        'GLND': 'full TP',
-        # ^ It's pretty harmless to associate GLND operations with "full TP"
-        #   instruments. In both cases we're relaxing positivity constraints.
-        'CPTPLND': 'CPTPLND'
-    }
-
-    instr_type_preferences = []
-    for typ in op_type_preferences:
-        instr_type = instr_conversion.get(typ, None)
-
-        if instr_type is None and _ot.is_valid_lindblad_paramtype(typ):
-            # NOTE: need to update the message below if more lindblad
-            # types are added as keys to the instr_conversion dict.
-            msg = \
-            f"""
-            Operation type {typ} is a Lindblad parameterization, but
-            is neither 'GLND' or 'CPTPLND'. That means you might be
-            asking for a reduced-order model that's a subset of all
-            CPTP models. We don't support that parameterization at this
-            time. We're falling back to a 'full TP' parameterization!
-            """
-            _warnings.warn(msg)
-            instr_type = 'full TP' # non-CPTPLND falls back to full TP.
-
-        if instr_type not in instr_type_preferences:
-            instr_type_preferences.append(instr_type)
-
-    if len(instr_type_preferences) == 0:
-        raise ValueError(
-            'Could not convert any op types from {}.\n'.format(op_type_preferences)
-            + '\tKnown op_types: Lindblad types or {}\n'.format(sorted(list(instr_conversion.keys())))
-            + '\tValid instrument_types: Lindblad types or {}'.format(sorted(list(set(instr_conversion.values()))))
-        )
-
-    return instr_type_preferences
+    op_type_preferences = _op.verbose_type_from_op_type(op_type)
+    return op_type_preferences[0]
 
 
 def convert(instrument, to_type, basis, ideal_instrument=None, flatten_structure=False):
@@ -132,39 +83,47 @@ def convert(instrument, to_type, basis, ideal_instrument=None, flatten_structure
         The converted instrument, usually a distinct
         object from the object passed as input.
     """
+    if ideal_instrument is None:
+        ideal_instrument = dict()
+
     if not isinstance(to_type, str):
         if len(to_type) > 1:
             raise ValueError(f"Expected to_type to be a string, but got {to_type}")
         to_type = to_type[0]
         assert isinstance(to_type, str)
-
-    destination_types = {'full TP': TPInstrument}
-    
-    if isinstance(instrument, destination_types.get( to_type, NoneType ) ):
-        return instrument
     
     if to_type == "full TP":
+        if isinstance(instrument, TPInstrument):
+            return instrument
         inst_arrays = dict()
         for k, v in instrument.items():
             if hasattr(v, 'to_dense'):
                 inst_arrays[k] = v.to_dense('HilbertSchmidt')
             else:
                 inst_arrays[k] = v
-        return TPInstrument(list(inst_arrays.items()), instrument.evotype, instrument.state_space)
+        members = list(inst_arrays.items())
+        return TPInstrument(members, instrument.evotype, instrument.state_space)
     
     if to_type in ("full", "static", "static unitary"):
-        from ..operations import convert as _op_convert
-        ideal_items = dict(ideal_instrument.items()) if (ideal_instrument is not None) else {}
-        members = [(k, _op_convert(g, to_type, basis, ideal_items.get(k, None), flatten_structure))
-                    for k, g in instrument.items()]
+        members = []
+        for k, g in instrument.items():
+            g_ideal = ideal_instrument.get(k, None)
+            g_conv  = _op.convert(g, to_type, basis, g_ideal, flatten_structure)
+            members.append((k, g_conv))
         return Instrument(members, instrument.evotype, instrument.state_space)
 
-    if to_type == 'CPTPLND':
-        op_arrays = {k: v.to_dense('HilbertSchmidt') for (k,v) in instrument.items()}
-        inst = kraus_polar_instrument(op_arrays, basis)
-        return inst
+    # Else, we're falling back on the operations.convert(...) function inside kraus_polar_instrument,
+    # which will be called on StaticUnitary channels.
+    op_arrays          = {k: v.to_dense('HilbertSchmidt') for (k,v) in instrument.items()}
+    post_unitary_error = to_type
+    povm_errormap      = _op.LindbladParameterization.minimal_cp_paramtype(to_type)
+    inst = kraus_polar_instrument(
+        op_arrays, basis,
+        post_unitary_error=post_unitary_error,
+        povm_errormap=povm_errormap
+    )
+    return inst
 
-    raise ValueError("Cannot convert an instrument to type %s" % to_type)
 
 
 ErrorMapSpec = str

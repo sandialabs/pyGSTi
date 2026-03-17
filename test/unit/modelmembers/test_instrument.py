@@ -72,10 +72,6 @@ class InstrumentTestBase(BaseCase):
         for gate, orig in zip(gates.values(), self.instrument.values()):
             self.assertIs(gate, orig)
 
-    def test_convert_raises_on_unknown_parameterization(self):
-        with self.assertRaises(ValueError):
-            inst.convert(self.instrument, "H+S", self.model.basis)
-
 
 class InstrumentInstanceTester(InstrumentTestBase):
     __test__ = True
