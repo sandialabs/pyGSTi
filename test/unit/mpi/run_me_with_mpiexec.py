@@ -20,7 +20,7 @@ class ParallelTest(object):
     def test_simulate_data(self):
         comm = self.ralloc.comm
 
-        exp_design = std.get_gst_experiment_design(4)
+        exp_design = std.create_gst_experiment_design(4)
         mdl_datagen = std.target_model().depolarize(op_noise=0.1, spam_noise=0.01)
 
         ds_serial = pygsti.data.simulate_data(mdl_datagen, exp_design, 1000, seed=1234, comm=None)
@@ -120,7 +120,7 @@ class ParallelTest(object):
         comm = self.ralloc.comm
 
         mdl = std.target_model()
-        exp_design = std.get_gst_experiment_design(1)
+        exp_design = std.create_gst_experiment_design(1)
         mdl_datagen = mdl.depolarize(op_noise=0.01, spam_noise=0.01)
         ds = pygsti.data.simulate_data(mdl_datagen, exp_design, 1000, seed=1234, comm=comm)
     

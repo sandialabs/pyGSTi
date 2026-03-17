@@ -22,12 +22,12 @@ class RunMpiTester:
             pytest.skip("No MPI launcher (mpiexec/mpirun) found on PATH")
 
     def _extra_mpi_args(self):
-        # macOS CI runners often have fewer cores than num_workers
-        return ['--oversubscribe'] if sys.platform == 'darwin' else []
+        # CI runners tend to have fewer than four cores
+        return ['--oversubscribe']
 
     def test_run_mpi_matches_serial(self):
         """run_mpi with num_workers>1 should produce the same model as serial run."""
-        exp_design = std.get_gst_experiment_design(4)
+        exp_design = std.create_gst_experiment_design(4)
         mdl_datagen = std.target_model().depolarize(op_noise=0.1, spam_noise=0.01)
         ds = pygsti.data.simulate_data(mdl_datagen, exp_design, 1000, seed=1234)
         data = pygsti.protocols.ProtocolData(exp_design, ds)
@@ -50,7 +50,7 @@ class RunMpiTester:
 
     def test_run_mpi_num_workers_1(self):
         """num_workers=1 short-circuits to self.run() — no subprocess spawned."""
-        exp_design = std.get_gst_experiment_design(4)
+        exp_design = std.create_gst_experiment_design(4)
         mdl_datagen = std.target_model().depolarize(op_noise=0.1, spam_noise=0.01)
         ds = pygsti.data.simulate_data(mdl_datagen, exp_design, 1000, seed=1234)
         data = pygsti.protocols.ProtocolData(exp_design, ds)
@@ -67,7 +67,7 @@ class RunMpiTester:
         After the context manager exits that temp dir is deleted.
         Second call must detect the stale path and re-write, not crash.
         """
-        exp_design = std.get_gst_experiment_design(4)
+        exp_design = std.create_gst_experiment_design(4)
         mdl_datagen = std.target_model().depolarize(op_noise=0.1, spam_noise=0.01)
         ds = pygsti.data.simulate_data(mdl_datagen, exp_design, 1000, seed=1234)
         data = pygsti.protocols.ProtocolData(exp_design, ds)
