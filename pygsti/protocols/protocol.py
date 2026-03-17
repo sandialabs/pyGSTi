@@ -124,7 +124,9 @@ class Protocol(_MongoSerializable):
         """
         raise NotImplementedError("Derived classes should implement this!")
 
-    def run_mpi(self, data, num_workers, mpiexec='auto', extra_mpi_args=None, **run_kwargs):
+    def run_mpi(self, data, num_ranks, *, mpiexec='auto', extra_mpi_args=None,
+                ranks_per_host=None, env=None, work_dir=None, dry_run=False,
+                blas_threads_per_rank=0, **run_kwargs):
         """
         Run this protocol in parallel using MPI workers launched as a subprocess.
 
@@ -137,29 +139,96 @@ class Protocol(_MongoSerializable):
         data : ProtocolData
             The input data.
 
-        num_workers : int
+        num_ranks : int
             Number of MPI worker processes to launch.  When 1, falls back to
             a plain :meth:`run` call with no MPI overhead.
 
-        mpiexec : str, optional
-            Path or name of the MPI launcher executable.  Pass ``'auto'`` to
-            search PATH for ``mpiexec``, ``mpirun``, or ``mpiexec.hydra`` (in
-            that order) and print the resolved path before launching.
+        mpiexec : str, keyword-only
+            MPI launcher executable name or path.  ``'auto'`` (default) searches
+            PATH for ``mpiexec``, ``mpirun``, or ``mpiexec.hydra`` in that order.
 
-        extra_mpi_args : list of str, optional
-            Additional arguments inserted between ``mpiexec`` and the Python
-            executable, e.g. ``['--oversubscribe']`` or ``['--hostfile', 'hosts.txt']``.
+        extra_mpi_args : list of str, keyword-only
+            Extra arguments inserted between the launcher and the Python executable,
+            e.g. ``['--oversubscribe']`` or ``['--hostfile', 'hosts.txt']``.
+
+        ranks_per_host : int, keyword-only
+            Number of ranks per virtual host.  Sets ``PYGSTI_MAX_HOST_PROCS`` in
+            the worker environment.  ``None`` (default) uses actual hostnames.
+
+        env : dict, keyword-only
+            Extra environment variables forwarded to worker processes, merged on top
+            of the current ``os.environ``.  ``ranks_per_host`` takes precedence over
+            ``PYGSTI_MAX_HOST_PROCS`` supplied here.
+
+        work_dir : str or Path, keyword-only
+            Permanent directory for data and results.  When ``None`` (default),
+            the existing on-disk data path is reused if available; otherwise a
+            temporary directory is used and deleted on return.
+
+        dry_run : bool, keyword-only
+            When ``True``, write working files and print the launch command but do
+            not execute it.  Returns ``None``.
+
+        blas_threads_per_rank : int, keyword-only
+            Number of threads each worker rank allows BLAS libraries to use.
+            ``0`` (default) auto-detects an appropriate value.  See Notes.
 
         **run_kwargs
-            Additional keyword arguments forwarded to :meth:`run` in each worker
-            (e.g. ``memlimit``, ``checkpoint_path``, ``disable_checkpointing``,
-            ``simulator``, ``optimizers``).  Complex objects are serialized via
-            :mod:`pickle` and written to a temporary file read by the workers.
+            Forwarded to :meth:`run` in each worker (e.g. ``memlimit``,
+            ``checkpoint_path``, ``simulator``, ``optimizers``).  Serialized via
+            :mod:`pickle`.
 
         Returns
         -------
-        ProtocolResults
+        ProtocolResults or None
+            ``None`` when ``dry_run=True``.
+
+        Notes
+        -----
+        **Shared memory and host topology.**
+        pyGSTi uses a two-level communicator hierarchy: a *host communicator*
+        (``host_comm``) groups ranks that share a physical host and can exchange
+        data via shared memory, while an *inter-host communicator*
+        (``interhost_comm``) connects one rank per host for cross-host MPI.
+        Collective operations (gather, allreduce, broadcast) use a two-phase
+        pattern — first within the host, then across hosts — when shared memory
+        is enabled.
+
+        Setting ``PYGSTI_USE_SHARED_MEMORY=0`` (via ``env``) disables shared
+        memory entirely.  In this case ``host_comm`` is ``None`` and all
+        communication goes directly through the full communicator; the host
+        grouping has no effect.  ``ranks_per_host`` is therefore only meaningful
+        when shared memory is enabled.
+
+        **Choosing** ``ranks_per_host``.
+        On a single compute node all ranks share one hostname, so by default
+        pyGSTi places them all in one host group and uses shared memory across
+        all of them.  Setting ``ranks_per_host=k`` splits the ranks into
+        ``num_ranks // k`` virtual hosts of ``k`` ranks each, producing
+        ``k``-rank shared-memory groups connected by MPI across groups.  This
+        is useful for testing multi-node behavior on a single machine, or for
+        matching a known NUMA or hardware partition boundary.
+
+        **Thread oversubscription.**
+        When ``blas_threads_per_rank > 0``, that value is set for
+        ``OMP_NUM_THREADS``, ``OPENBLAS_NUM_THREADS``, ``MKL_NUM_THREADS``,
+        ``NUMEXPR_NUM_THREADS``, and ``BLIS_NUM_THREADS`` in the worker
+        environment.  When ``blas_threads_per_rank == 0`` (the default), the
+        value is computed as ``max(1, num_cpus // num_ranks)`` where
+        ``num_cpus`` is the physical CPU core count of the current machine
+        (falling back to the logical count if the physical count is
+        unavailable).  This auto-detected value is printed to stdout.
+        These variables are applied before ``env``, so explicit entries in
+        ``env`` override them.
+
+        **Job schedulers.**
+        On HPC systems where jobs must be submitted via SLURM, PBS, or similar,
+        use ``dry_run=True`` together with ``work_dir`` to write the data,
+        protocol, and runner script to a permanent location and print the launch
+        command without executing it.  The printed command can then be embedded
+        in a batch script.
         """
+        import os as _os
         import subprocess as _subprocess
         import sys as _sys
         import pickle as _pickle
@@ -181,22 +250,48 @@ class Protocol(_MongoSerializable):
                     "Install an MPI distribution or pass mpiexec=<path> explicitly."
                 )
 
-        if num_workers == 1:
+        if num_ranks == 1:
             return self.run(data, **run_kwargs)
+
+        # Determine BLAS thread count.
+        if blas_threads_per_rank == 0:
+            try:
+                import psutil as _psutil
+                _num_cpus = _psutil.cpu_count(logical=False) or _os.cpu_count()
+            except ImportError:
+                _num_cpus = _os.cpu_count()
+            blas_threads_per_rank = max(1, _num_cpus // num_ranks)
+            print(f"run_mpi: setting blas_threads_per_rank={blas_threads_per_rank} "
+                  f"({_num_cpus} CPUs // {num_ranks} workers)\n")
+
+        _blas_env = {k: str(blas_threads_per_rank) for k in (
+            'OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS',
+            'MKL_NUM_THREADS', 'NUMEXPR_NUM_THREADS', 'BLIS_NUM_THREADS',
+        )}
+
+        # Build the worker environment: current env + BLAS defaults + caller overrides + ranks_per_host.
+        worker_env = {**_os.environ, **_blas_env, **(env or {})}
+        if ranks_per_host is not None:
+            worker_env['PYGSTI_MAX_HOST_PROCS'] = str(ranks_per_host)
 
         with _tempfile.TemporaryDirectory() as _tmpdir:
             tmpdir = _pathlib2.Path(_tmpdir)
 
-            # Determine data directory — reuse the on-disk path only if it still exists.
-            # (data.edesign._loaded_from may point to a now-deleted temp dir from a prior run.)
-            _prior_path = data.edesign._loaded_from
-            if _prior_path is not None and _pathlib2.Path(_prior_path).is_dir():
-                data_dir = str(_prior_path)
-            else:
-                data_dir = str(tmpdir / 'work')
+            # Determine data directory.
+            if work_dir is not None:
+                data_dir = str(_pathlib2.Path(work_dir))
                 data.write(data_dir)
+            else:
+                # Reuse the on-disk path only if it still exists.
+                # (data.edesign._loaded_from may point to a deleted temp dir from a prior run.)
+                _prior_path = data.edesign._loaded_from
+                if _prior_path is not None and _pathlib2.Path(_prior_path).is_dir():
+                    data_dir = str(_prior_path)
+                else:
+                    data_dir = str(tmpdir / 'work')
+                    data.write(data_dir)
 
-            # Write protocol so workers can restore it with the correct subclass
+            # Write protocol so workers can restore it with the correct subclass.
             protocol_dir = str(tmpdir / 'protocol')
             self.write(protocol_dir)
 
@@ -208,7 +303,7 @@ class Protocol(_MongoSerializable):
             with open(kwargs_path, 'wb') as _f:
                 _pickle.dump(run_kwargs, _f)
 
-            # Generate runner script; only the two path strings are inlined
+            # Generate runner script; only path strings are inlined.
             runner_path = str(tmpdir / 'mpi_runner.py')
             runner_script = (
                 "import pickle\n"
@@ -227,11 +322,17 @@ class Protocol(_MongoSerializable):
             with open(runner_path, 'w') as _f:
                 _f.write(runner_script)
 
-            cmd = [mpiexec, '-n', str(num_workers)]
+            cmd = [mpiexec, '-n', str(num_ranks)]
             if extra_mpi_args:
                 cmd.extend(extra_mpi_args)
             cmd.extend([_sys.executable, runner_path])
-            _subprocess.run(cmd, check=True)
+
+            if dry_run:
+                print("run_mpi dry_run — runner script written to:", runner_path)
+                print("Command:", ' '.join(cmd))
+                return None
+
+            _subprocess.run(cmd, check=True, env=worker_env)
             results = _io.read_results_from_dir(data_dir, name=self.name)
             return results
 
