@@ -611,62 +611,6 @@ def rootconj_superop(effect_superket: _np.ndarray, basis: _Basis, abstol_warn: f
     return mx
 
 
-def partial_trace(mx: _np.ndarray, dims: tuple[int,...], axis: int) -> _np.ndarray:
-    """
-    
-    Notes
-    -----
-    This implementation is stolen from CVXPY, which was stolen from some Julia library.
-    """
-    if mx.ndim < 2 or mx.shape[0] != mx.shape[1]:
-        raise ValueError("partial_trace only supports 2-d square arrays.")
-    if axis < 0 or axis >= len(dims):
-        msg = f"Invalid axis argument, should be between 0 and {len(dims)}, got {axis}."
-        raise ValueError(msg)
-    if mx.shape[0] != _np.prod(dims):
-        raise ValueError("Dimension of system doesn't correspond to dimension of subsystems.")
-
-    def _term(j: int) -> _np.ndarray:
-        a = _sps.coo_matrix(([1.0], ([0], [0])))
-        b = _sps.coo_matrix(([1.0], ([0], [0])))
-        for (i_axis, dim) in enumerate(dims):
-            if i_axis == axis:
-                v = _sps.coo_matrix(([1], ([j], [0])), shape=(dim, 1))
-                a = _sps.kron(a, v.T)
-                b = _sps.kron(b, v)
-            else:
-                eye_mat = _sps.eye_array(dim)
-                a = _sps.kron(a, eye_mat)
-                b = _sps.kron(b, eye_mat)
-        return a @ mx @ b
-
-    return _np.sum([_term(j) for j in range(dims[axis])])
-
-
-def trace_effect(op: _np.ndarray, op_basis: BasisLike, on_space: SpaceT = 'HilbertSchmidt'):
-    """
-    Let `op` be the array representation of a superoperator G in `op_basis`,
-    where G maps from and to the space of order-d Hermitian operators.
-    
-    The trace effect of G is the Heritian operator E that satifies
-
-        trace(G(ρ)) = trace(E ρ) for all order-d Hermitian matrices ρ.
-
-    If on_space='HilbertSchmidt', then this function returns a superket representation
-    of E in `op_basis`. If on_space='Hilbert', then we return E itself.
-    """
-    d = int(_np.round(op.size ** 0.25))
-    assert op.shape == (d**2, d**2)
-    basis = op_basis if isinstance(op_basis, _Basis) else _Basis.cast(op_basis, dim=d**2)
-    vecI = _bt.stdmx_to_vec(_np.eye(d), basis)
-    vecE = op.T.conj() @ vecI
-    if on_space == 'HilbertSchmidt':
-        return vecE
-    else:
-        E = _bt.vec_to_stdmx(vecE, op_basis)
-        return E
-
-
 def minimal_kraus_decomposition(op_x: _np.ndarray, op_basis: _Basis, error_tol:float=1e-6, trunc_tol:float=1e-7) -> list[_np.ndarray]:
     """
     The array `op_x` represents a completely positive superoperator X on
