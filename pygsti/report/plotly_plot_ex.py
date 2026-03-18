@@ -132,8 +132,14 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
     # Separate the HTML and JS in plot_html so we can insert
     # initial-sizing JS between them.  NOTE: this is FRAGILE and depends
     # on Plotly output (_plot_html) being HTML followed by JS
-    tag = '<script type="text/javascript">'; end_tag = '</script>'
-    iTag = plot_html.index(tag)
+    tag = '<script type="text/javascript">'
+    try:
+        iTag = plot_html.index(tag)
+    except ValueError:
+        # plotly.js >= 3.3.1 changed the script tag to not include the type attribute, so try again with the new tag
+        tag = '<script>'
+        iTag = plot_html.index(tag)
+    end_tag = '</script>'
     plot_js = plot_html[iTag + len(tag):-len(end_tag)].strip()
     plot_html = plot_html[0:iTag].strip()
 
