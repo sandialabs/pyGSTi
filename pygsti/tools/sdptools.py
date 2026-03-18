@@ -65,42 +65,6 @@ def solve_sdp(prob: cp.Problem, **kwargs) -> tuple[np.floating, dict[str, np.nda
     return objective_val, varvals
 
 
-def povm_projection_model(effects: Sequence[np.ndarray], independent_complement: bool=False) -> cp.Problem:
-    N = round(effects[0].size ** 0.5)
-    cumsum_E = np.zeros((N, N), dtype=complex)
-    for E in effects:
-        assert_hermitian(E, tol=1e-8)
-        cumsum_E += E
-    if np.real(np.trace(cumsum_E)) < (N - 0.01):
-        # we're going to assume the complement POVM effect was omitted.
-        complement_E = np.eye(N) - np.sum(effects, axis=0)
-        effects = [E for E in effects]  # shallow-copy
-        effects.append( complement_E )
-
-    proj_effects, constraints = povm_effect_variables(N, len(effects), independent_complement)
-    objective_expr = cp.Constant(0.0)
-    for E_proj, E in zip( proj_effects, effects ):
-        objective_expr = objective_expr + cp.sum_squares(E_proj - E)
-    objective = cp.Minimize(objective_expr)
-
-    prob = cp.Problem(objective, constraints)
-    return prob
-
-
-def povm_effect_variables(N: int, num_effects: int, independent_complement: bool) -> tuple[list[cp.Expression], list[cp.Constraint]]:
-    num_vars = num_effects if independent_complement else num_effects - 1
-    vars : list[cp.Expression] = [cp.Variable(shape=(N, N), hermitian=True) for _ in range(num_vars)]  # type: ignore
-    cons : list[cp.Constraint] = [v >> 0 for v in vars]
-    if num_vars == num_effects:
-        expr : cp.Expression = cp.sum(vars)              # type: ignore
-        cons.append( expr == np.eye(N) )
-    else:
-        expr : cp.Expression = np.eye(N) - cp.sum(vars)  # type: ignore
-        cons.append( expr >> 0 )
-        vars.append( expr )
-    return vars, cons
-
-
 def diamond_norm_model_jamiolkowski(J: ExpressionLike) -> tuple[cp.Problem, List[cp.Variable]]:
     # return a model for computing the diamond norm.
     #
