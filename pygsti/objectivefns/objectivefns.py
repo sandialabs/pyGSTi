@@ -280,7 +280,7 @@ class ObjectiveFunctionBuilder(_NicelySerializable):
         self.cls_to_build = cls_to_build
         self.regularization = regularization
         self.penalties = penalties
-        self.additional_args = {'kwargs': kwargs}
+        self.additional_args = kwargs
 
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
@@ -293,12 +293,16 @@ class ObjectiveFunctionBuilder(_NicelySerializable):
                       })
         return state
 
-    @classmethod
-    def _from_nice_serialization(cls, state):
+    @staticmethod
+    def _from_nice_serialization(state):
         from pygsti.io.metadir import _class_for_name
-        kwargs = state['additional_arguments'].pop('kwargs', dict())
-        return cls(_class_for_name(state['class_to_build']), state['name'], state['description'],
-                   state['regularization'], state['penalties'], *state['additional_arguments'], **kwargs)
+        classhandle = _class_for_name(state['class_to_build'])
+        pos_args    = (classhandle, state['name'], state['description'], state['regularization'], state['penalties'])
+        try:
+            return ObjectiveFunctionBuilder(*pos_args, **state['additional_arguments'])
+        except ValueError:
+            # Old behavior. Wrong, but here in case someone's pickled file relies on it. Will remove in the future.
+            return ObjectiveFunctionBuilder(*pos_args,  *state['additional_arguments'])
 
     def compute_array_types(self, method_names, forwardsim):
         return self.cls_to_build.compute_array_types(method_names, forwardsim)
