@@ -1844,36 +1844,40 @@ class ExplicitOpModel(_mdl.OpModel):
 
 def transform_composed_model(mdl: ExplicitOpModel, s : _GaugeGroupElement) -> ExplicitOpModel:
     """
-    Return a copy of `mdl` whose members have been gauge-transformed by `s`,
-    while retaining the parameterization of `mdl`.
+    Return a copy of `mdl` whose members have been gauge-transformed by `s`, while retaining
+    the parameterization of `mdl`.
     
-    This function's implementation requires that `mdl` use ComposedState for
-    stateprep and ComposedPOVM for measurements. It does NOT require that
-    operations be represented with ComposedOp. It ignores any factories that
-    might be present in mdl.
+    Notes
+    -----
+    We require that `mdl` use ComposedState and ComposedPOVM for SPAM modelmembers.
+
+    Each key-value pair in `mdl.operations` will be be updated to replace the value
+    by a suitable ComposedOp object.
+    
+    The key-value pairs `(inst, lbl)` in `mdl.instruments` will be updated in one of 
+    two ways, depending on the type of `inst`.
+
+        If `inst` is of type `Instrument`, then its component operations will be replaced
+        with ComposedOp objects in a way that's consistent with changes to operations in `mdl`.
+
+        If `inst` is of type `TPInstrument`, then it will be updated by calling its
+        `transform_inplace` method. This may result in runtime errors if the gauge group
+        element `s` is not compatible with the structure of `inst`.
+    
+    This function ignores any factories that might be present in mdl.
     """
     from pygsti.models import ExplicitOpModel
     assert isinstance(mdl, ExplicitOpModel)
     if len(mdl.factories) > 0:
         _warnings.warn('The returned model will not retain the factories in mdl.')
-    if len(mdl.instruments) > 0:
-        raise NotImplementedError('Models with instruments are not supported.')
 
     oldmdl = mdl
-
-    def mycopy(_m):
-        # This function is a hack. It makes us robust to errors
-        # arising from copy.deepcopy in (re)linking model members
-        # to parent model objects.
-        s = _m.to_nice_serialization()
-        t = ExplicitOpModel.from_nice_serialization(s)
-        return t
-    
-    mdl = mycopy(oldmdl)
+    mdl = oldmdl.copy()
 
     from pygsti.modelmembers.operations import ComposedOp, StaticArbitraryOp
     from pygsti.modelmembers.povms import ComposedPOVM
     from pygsti.modelmembers.states import ComposedState
+    from pygsti.modelmembers.instruments import TPInstrument
 
     U    = StaticArbitraryOp(s.transform_matrix,         basis=oldmdl.basis)
     invU = StaticArbitraryOp(s.transform_matrix_inverse, basis=oldmdl.basis) 
@@ -1887,7 +1891,7 @@ def transform_composed_model(mdl: ExplicitOpModel, s : _GaugeGroupElement) -> Ex
         # do this by packing invU into a new ComposedState's error map.
         assert isinstance(rho, ComposedState)
         static_rho = rho.state_vec
-        errmap  = ComposedOp([rho.error_map, invU])
+        errmap  = ComposedOp([rho.error_map, invU], state_space=mdl.state_space) # type: ignore
         mdl.preps[key] = ComposedState(static_rho, errmap)
 
     for key, povm in oldmdl.povms.items():
@@ -1896,13 +1900,24 @@ def transform_composed_model(mdl: ExplicitOpModel, s : _GaugeGroupElement) -> Ex
         # belonging to `q`. Do this by packing U into the error map of `q`.
         assert isinstance(povm, ComposedPOVM)
         static_povm = povm.base_povm
-        errmap = ComposedOp([U, povm.error_map])
+        errmap = ComposedOp([U, povm.error_map], state_space=mdl.state_space) # type: ignore
         mdl.povms[key] = ComposedPOVM(errmap, static_povm, mx_basis=oldmdl.basis)
 
     for key, op in oldmdl.operations.items():
         # replace each operation `G` with `invU @ G @ U`.
         op_s = ComposedOp([U, op, invU])
         mdl.operations[key] = op_s
+
+    for key, inst in mdl.instruments.items():
+        if isinstance(inst, TPInstrument):
+            inst.transform_inplace(s)
+        else:
+            inst._readonly = False
+            for ek in list(inst.keys()):
+                op = inst[ek]
+                op_s = ComposedOp([U, op, invU], state_space=mdl.state_space) # type: ignore
+                inst[ek] = op_s
+            inst._readonly = True
 
     mdl._clean_paramvec()  # transform may leave dirty members
     return mdl
