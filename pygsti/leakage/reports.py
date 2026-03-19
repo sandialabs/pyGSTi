@@ -101,7 +101,9 @@ def construct_leakage_report(
 
     # Wrap it up in a bow.
     from pygsti.report import construct_standard_report
+    advanced_options = kwargs_stdreport.pop('advanced_options', dict())
+    advanced_options['n_leak'] = 1
     report = construct_standard_report(
-        res_out, advanced_options={'n_leak': 1}, **kwargs_stdreport
+        res_out, advanced_options=advanced_options, **kwargs_stdreport
     )
     return report, res_out

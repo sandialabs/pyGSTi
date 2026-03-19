@@ -51,6 +51,7 @@ from pygsti.tools import slicetools as _slct
 from pygsti.tools import listtools as _lt
 from pygsti import SpaceT
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
+from typing import Union, Literal
 from pygsti.tools.exceptions import UnknownGaugeSpaceDimension as _UnknownGaugeSpaceDimension
 
 
@@ -239,10 +240,19 @@ class ExplicitOpModel(_mdl.OpModel):
         return self._default_gauge_group
 
     @default_gauge_group.setter
-    def default_gauge_group(self, value):
+    def default_gauge_group(self, value: Union[Literal['tp', 'unitary'], _GaugeGroup]):
         """
         The default gauge group.
         """
+        if isinstance(value, str):
+            lower = value.lower()
+            if lower == 'unitary':
+                value = _gg.UnitaryGaugeGroup(self.state_space, self.basis, self.evotype)
+            elif lower == 'tp':
+                value = _gg.TPGaugeGroup(self.state_space, self.basis, self.evotypes)
+            else:
+                msg = f'string "{value}" cannot be used to set this model\'s gauge group.'
+                raise ValueError(msg)
         self._default_gauge_group = value
 
     @property
@@ -1023,9 +1033,9 @@ class ExplicitOpModel(_mdl.OpModel):
                                          self.factories.items()):
             yield (lbl, obj)
 
-#TODO: how to handle these given possibility of different parameterizations...
-#  -- maybe only allow these methods to be called when using a "full" parameterization?
-#  -- or perhaps better to *move* them to the parameterization class
+    # TODO: how to handle these given possibility of different parameterizations...
+    #   -- maybe only allow these methods to be called when using a "full" parameterization?
+    #   -- or perhaps better to *move* them to the parameterization class
     def depolarize(self, op_noise=None, spam_noise=None, max_op_noise=None,
                    max_spam_noise=None, seed=None):
         """
@@ -1197,7 +1207,7 @@ class ExplicitOpModel(_mdl.OpModel):
         newModel._clean_paramvec()  # rotate may leave dirty members
         return newModel
 
-    def randomize_with_unitary(self, scale, seed=None, rand_state=None):
+    def randomize_with_unitary(self, scale, seed=None, rand_state=None, transform_spam=False, param_preserving=False):
         """
         Create a new model with random unitary perturbations.
 
@@ -1221,6 +1231,12 @@ class ExplicitOpModel(_mdl.OpModel):
             across multiple random function calls but you don't want to bother
             with manually incrementing seeds between those calls.
 
+        param_preserving : bool
+            If False, then all members of the returned model will have "full" parameterization.
+
+            If True, then we use ComposedOp (and ComposedState and ComposedPOVM) to define a 
+            model with unitarily-transformed members while retaining the parameterization of `self`.
+
         Returns
         -------
         Model
@@ -1238,18 +1254,55 @@ class ExplicitOpModel(_mdl.OpModel):
 
         mdl_randomized = self.copy()
 
+        def rand_unitary_as_superop():
+            rand_mat = rndm.randn(unitary_dim, unitary_dim) + 1j * rndm.randn(unitary_dim, unitary_dim)
+            rand_herm = rand_mat.T.conj() + rand_mat
+            rand_herm /= _scipy.linalg.norm(rand_herm)
+            rand_herm *= scale * _np.sqrt(unitary_dim)
+            rand_unitary = _scipy.linalg.expm(-1j * rand_herm)
+            rand_op = _op.StaticUnitaryOp(rand_unitary, self.basis)
+            return rand_op
+
+        if param_preserving:
+            from pygsti.modelmembers.states import ComposedState
+            from pygsti.modelmembers.povms import ComposedPOVM
+            def transformed_gate(rand_op, gate): # type: ignore
+                ops_to_compose = gate.factorops if hasattr(gate, 'factorops') else [gate]
+                ops_to_compose.append(rand_op)
+                return _op.ComposedOp(ops_to_compose)    
+            def transformed_stateprep(rand_op, rho): # type: ignore
+                return ComposedState(rho, rand_op)
+            def transformed_povm(rand_op, M): # type: ignore
+                return ComposedPOVM(rand_op, M)
+        else:
+            from pygsti.modelmembers.states import FullState
+            from pygsti.modelmembers.povms import create_from_dmvecs
+            def transformed_gate(rand_op, gate):
+                rand_op = rand_op.to_dense()
+                return _op.FullArbitraryOp(rand_op @ gate.to_dense())
+            def transformed_stateprep(rand_op, rho):
+                rand_op = rand_op.to_dense()
+                return FullState(rand_op @ rho)
+            def transformed_povm(rand_op, M):
+                rand_op = rand_op.to_dense()
+                dmvecs = {elbl: rand_op @ e.to_dense() for elbl, e in M.items()}
+                return create_from_dmvecs(dmvecs, 'full')
+
         for opLabel, gate in self.operations.items():
-            randMat = scale * (rndm.randn(unitary_dim, unitary_dim)
-                               + 1j * rndm.randn(unitary_dim, unitary_dim))
-            randMat = _np.transpose(_np.conjugate(randMat)) + randMat
-            # make randMat Hermetian: (A_dag + A)^dag = (A_dag + A)
-            randUnitary = _scipy.linalg.expm(-1j * randMat)
+            rand_op = rand_unitary_as_superop()
+            mdl_randomized.operations[opLabel] = transformed_gate(rand_op, gate)
 
-            randOp = _ot.unitary_to_superop(randUnitary, self.basis)
+        if transform_spam:
+    
+            for preplbl, rho in self.preps.items():
+                rand_op = rand_unitary_as_superop()
+                mdl_randomized.preps[preplbl] = transformed_stateprep(rand_op, rho)
 
-            mdl_randomized.operations[opLabel] = _op.FullArbitraryOp(_np.dot(randOp, gate.to_dense("HilbertSchmidt")))
-
-        #Note: this function does NOT randomize instruments
+            for povmlbl, M in self.povms.items():
+                rand_op = rand_unitary_as_superop()
+                mdl_randomized.povms[povmlbl] = transformed_povm(rand_op, M)
+                
+        # Note: this function does NOT randomize instruments
 
         return mdl_randomized
 

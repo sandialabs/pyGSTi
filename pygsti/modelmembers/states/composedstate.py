@@ -19,21 +19,25 @@ from pygsti.modelmembers import modelmember as _modelmember, term as _term
 from pygsti.modelmembers.errorgencontainer import ErrorMapContainer as _ErrorMapContainer
 from pygsti import SpaceT
 
-class ComposedState(_State):  # , _ErrorMapContainer
+class ComposedState(_State):
     """
-    TODO: update docstring
-    A Lindblad-parameterized State (that is also expandable into terms).
+    A representation of the superket `errormap @ state_vec` induced by a superoperator
+    `errormap` and a superket `state_vec`, where `state_vec.num_params == 0`. 
+
 
     Parameters
     ----------
-    pure_vec : numpy array or State
+    static_state : numpy array or StaticState or ComposedState
         An array or State in the *full* density-matrix space (this
-        vector will have dimension 4 in the case of a single qubit) which
-        represents a pure-state preparation or projection.  This is used as
-        the "base" preparation or projection that is followed or preceded
-        by, respectively, the parameterized Lindblad-form error generator.
-        (This argument is *not* copied if it is a State.  A numpy array
-        is converted to a new StaticState.)
+        vector will have dimension 4 in the case of a single qubit).
+        
+        This argument is *not* copied if it is a State. If it's an
+        ndarray then we convert it to a new StaticState. If it's a
+        ComposedState, then we use a ComposedOp to pack `errormap`
+        and `static_state.errormap` into a single superoperator, and
+        we replace `static_state = static_state.state_vec`.
+
+        After possible conversions, we set `self.state_vec = static_state`.
 
     errormap : MapOperator
         The error generator action and parameterization, encapsulated in
@@ -43,21 +47,23 @@ class ComposedState(_State):  # , _ErrorMapContainer
         parameters with other gates and spam vectors.)
     """
 
+    STATIC_STATE_ERROR_MSG = "`static_state` 'reference' must have *zero* parameters!"
+
     def __init__(self, static_state, errormap):
         evotype = errormap._evotype
-        #from .operation import LindbladOp as _LPGMap
-        #assert(evotype in ("densitymx", "svterm", "cterm")), \
-        #    "Invalid evotype: %s for %s" % (evotype, self.__class__.__name__)
-
         if not isinstance(static_state, _State):
             # UNSPECIFIED BASIS - change None to static_state.basis once we have a std attribute
             static_state = _StaticState(static_state, None, evotype)  # assume spamvec is just a vector
 
+        if isinstance(static_state, ComposedState):
+            from pygsti.modelmembers.operations import ComposedOp
+            errormap = ComposedOp([static_state.error_map, errormap])
+            static_state = static_state.state_vec
+
         assert(static_state._evotype == evotype), \
             "`static_state` evotype must match `errormap` ('%s' != '%s')" % (static_state._evotype, evotype)
-        assert(static_state.num_params == 0), "`static_state` 'reference' must have *zero* parameters!"
+        assert(static_state.num_params == 0), ComposedState.STATIC_STATE_ERROR_MSG
 
-        #d2 = static_state.dim
         self.state_vec = static_state
         self.error_map = errormap
         self.terms = {}
@@ -67,7 +73,7 @@ class ComposedState(_State):  # , _ErrorMapContainer
         rep = evotype.create_composed_state_rep(self.state_vec._rep, self.error_map._rep, static_state.state_space)
 
         _State.__init__(self, rep, evotype)
-        _ErrorMapContainer.__init__(self, self.error_map)
+        _ErrorMapContainer.__init__(self, self.error_map) # type: ignore
         self.init_gpindices()  # initialize our gpindices based on sub-members
 
     @classmethod

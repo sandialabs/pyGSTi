@@ -75,7 +75,7 @@ def leaky_qubit_model_from_pspec(
     from pygsti.modelmembers.povms import UnconstrainedPOVM
     from pygsti.modelmembers.states import FullState
     assert ps_2level.num_qubits == 1
-    if ps_2level.idle_gate_names == ['{idle}']:
+    if '{idle}' in ps_2level.gate_names:
         ps_2level.rename_gate_inplace('{idle}', default_idle_gatename)
 
     if isinstance(mx_basis, str):

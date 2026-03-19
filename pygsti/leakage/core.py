@@ -17,6 +17,7 @@ import scipy.linalg as la
 from pygsti.baseobjs.basis import Basis
 from pygsti.tools import basistools as pgbt
 from pygsti.tools import matrixtools as pgmt
+from pygsti.tools.metaprogramming import set_docstring
 
 
 NOTATION = \
@@ -72,13 +73,6 @@ The computational basis matrix defines a few related objects.
     S[H] that orthogonally projects from M[H] to M[C].
 
 """
-
-
-def set_docstring(docstr):
-    def assign(fn):
-        fn.__doc__ = docstr
-        return fn
-    return assign
 
 
 def computational_effect(basis: Basis) -> np.ndarray:
