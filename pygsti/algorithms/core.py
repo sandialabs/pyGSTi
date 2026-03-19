@@ -23,7 +23,8 @@ import scipy.stats as _stats
 
 from pygsti.baseobjs.profiler import DummyProfiler as _DummyProfiler
 from pygsti import models as _models
-from pygsti.baseobjs import BuiltinBasis, VerbosityPrinter, DirectSumBasis, Basis
+from pygsti.baseobjs import VerbosityPrinter
+from pygsti.baseobjs.basis import BuiltinBasis, DirectSumBasis, BasisLike
 from pygsti import tools as _tools
 from pygsti import circuits as _circuits
 from pygsti import objectivefns as _objfns
@@ -38,11 +39,6 @@ from pygsti.optimize.customlm import CustomLMOptimizer as _CustomLMOptimizer
 from pygsti import forwardsims as _fwdsims
 
 _dummy_profiler = _DummyProfiler()
-
-
-from typing import Union
-
-BasisLike = Union[str, Basis]
 
 
 CUSTOMLM = True
