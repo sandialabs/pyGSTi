@@ -301,18 +301,28 @@ class FindPerfectGauge_Instruments_Tester(BaseCase):
 class FindPerfectGauge_DirectSumGaugeGroupTester(BaseCase):
 
     
-    def _prep(self, seed):
+    def _prep(self, seed, use_u1gaugegroup: bool):
+        from pygsti.baseobjs.basis import Basis
         from pygsti.leakage import leaky_qubit_model_from_pspec
+        from pygsti.leakage.gaugeopt import _direct_sum_unitary_group
         tm2 = smq1Q_XYI.target_model()
         self.target = leaky_qubit_model_from_pspec(tm2.create_processor_spec())
+
+        bases  = [Basis.cast('pp', 4), Basis.cast('pp', 1)]
+        tflags = [False, not use_u1gaugegroup]
+        ggrp = _direct_sum_unitary_group(bases, self.target.basis, triviality_flags=tflags)
+        self.target.default_gauge_group = ggrp
+
         self.model = self.target.copy()
         np.random.seed(seed)
         U2x2 = la.expm(np.random.randn()/2 * -1j * (pgbc.sigmax + pgbc.sigmaz)/np.sqrt(2))
         self.U = la.block_diag(U2x2, np.array([[1j]]))
         U_superop = FullArbitraryOp(pgo.unitary_to_superop(self.U, 'l2p1'), 'l2p1')
+
         self.gauge_grp_el = FullGaugeGroupElement(U_superop)
         self.model.transform_inplace(self.gauge_grp_el)
         self.metrics_before = gate_metrics_dict(self.model, self.target)
+
         check_gate_metrics_are_nontrivial(self.metrics_before, tol=1e-2)
         return
     
@@ -320,13 +330,14 @@ class FindPerfectGauge_DirectSumGaugeGroupTester(BaseCase):
         self.setUp()
         times = []
         for seed in [1]:
-            self._prep(seed)
-            tic = time.time()
-            newmodel = gop.gaugeopt_to_target(self.model, self.target, method='L-BFGS-B', tol=1e-14, spam_metric='frobenius squared', gates_metric='frobenius squared')
-            toc = time.time()
-            dt = toc - tic
-            metrics_after = gate_metrics_dict(newmodel, self.target)
-            check_gate_metrics_near_zero(metrics_after, tol=1e-6)
-            times.append(dt)
+            for tf in [False, True]:
+                self._prep(seed, tf)
+                tic = time.time()
+                newmodel = gop.gaugeopt_to_target(self.model, self.target, method='L-BFGS-B', tol=1e-14, spam_metric='frobenius squared', gates_metric='frobenius squared')
+                toc = time.time()
+                dt = toc - tic
+                metrics_after = gate_metrics_dict(newmodel, self.target)
+                check_gate_metrics_near_zero(metrics_after, tol=1e-6)
+                times.append(dt)
         return
 
