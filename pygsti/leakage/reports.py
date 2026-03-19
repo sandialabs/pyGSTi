@@ -91,14 +91,17 @@ def construct_leakage_report(
             kwargs_stdreport[k] = a
 
     # Actual work. Deep-copy results and mutate that object in-place.
-    results_out = copy.deepcopy(results)
-    _add_lago_estimates( results_out, gaugeopt_verbosity )
-    if kwargs_stdreport['confidence_level'] is not None:
-        _add_all_hessians( results_out, kwargs_projhess )
+    res_out  = copy.deepcopy(results)
+    res_list = list(res_out.values()) if isinstance(res_out, dict) else [res_out]
+
+    for r in res_list:
+        _add_lago_estimates(r, gaugeopt_verbosity)
+        if kwargs_stdreport['confidence_level'] is not None:
+            _add_all_hessians(r, kwargs_projhess)
 
     # Wrap it up in a bow.
     from pygsti.report import construct_standard_report
     report = construct_standard_report(
-        results_out, advanced_options={'n_leak': 1}, **kwargs_stdreport
+        res_out, advanced_options={'n_leak': 1}, **kwargs_stdreport
     )
-    return report, results_out
+    return report, res_out
