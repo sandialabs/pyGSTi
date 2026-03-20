@@ -111,6 +111,16 @@ class ComputationalSuperketsTester(BaseCase):
         proj = U @ (U.T @ rho_vec)
         self.assertArraysAlmostEqual(proj, rho_vec)
 
+    def test_explicit_nonprojector_E_raises(self):
+        # diag(1, 0.5, 0) is not a scalar multiple of any projector: after the
+        # internal normalization E *= (rank/trace) = (2/1.5), it becomes
+        # diag(4/3, 2/3, 0), which is Hermitian but not idempotent.
+        E_bad = np.diag([1., 0.5, 0.])
+        with self.assertRaises(ValueError):
+            computational_superkets(self.basis, E=E_bad)
+        # Note: line 102 (non-Hermitian leakage basis) is unreachable from the
+        # public API — all standard leakage bases (e.g. 'l2p1') are Hermitian.
+
 
 class ComputationalProjectorTester(BaseCase):
 
@@ -118,37 +128,14 @@ class ComputationalProjectorTester(BaseCase):
         self.basis    = BuiltinBasis('l2p1', 9)
         self.pp_basis = Basis.cast('pp', 4)
 
-    # --- 1-arg (basis-aware) form ---
-
-    def test_idempotent_1arg(self):
+    def test_idempotent(self):
         P = computational_projector(self.basis)
         self.assertArraysAlmostEqual(P @ P, P)
 
-    def test_symmetric_1arg(self):
+    def test_symmetric(self):
         P = computational_projector(self.basis)
         self.assertArraysAlmostEqual(P, P.T)
 
-    def test_nonleakage_is_identity_1arg(self):
+    def test_nonleakage_is_identity(self):
         P = computational_projector(self.pp_basis)
         self.assertArraysAlmostEqual(P, np.eye(4))
-
-    # --- 3-arg (explicit dimensions) form ---
-
-    def test_idempotent_3arg(self):
-        P = computational_projector(2, 3, self.basis)
-        self.assertArraysAlmostEqual(P @ P, P)
-
-    def test_symmetric_3arg(self):
-        P = computational_projector(2, 3, self.basis)
-        self.assertArraysAlmostEqual(P, P.T)
-
-    def test_d_equals_n_returns_identity(self):
-        P = computational_projector(3, 3, self.basis)
-        self.assertArraysAlmostEqual(P, np.eye(9))
-
-    # --- consistency between forms ---
-
-    def test_1arg_3arg_agree(self):
-        P1 = computational_projector(self.basis)
-        P3 = computational_projector(2, 3, self.basis)
-        self.assertArraysAlmostEqual(P1, P3)

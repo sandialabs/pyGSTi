@@ -31,7 +31,6 @@ from pygsti.leakage import (
     subspace_jtracedist,
     leading_dxd_submatrix_basis_vectors,
     computational_projector,
-    superop_subspace_projector,
     subspace_superop_fro_dist,
     subspace_diamonddist,
     pop_transport_profile,

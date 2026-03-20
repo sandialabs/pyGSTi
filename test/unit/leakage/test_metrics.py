@@ -1,10 +1,13 @@
 import numpy as np
 
-from pygsti.baseobjs.basis import BuiltinBasis
+import warnings
+
+from pygsti.baseobjs.basis import Basis, BuiltinBasis
 from pygsti.tools import optools as pgot, basistools as pgbt
 from pygsti.leakage.core import computational_effect
 from pygsti.leakage.metrics import (
     choi_state,
+    leading_dxd_submatrix_basis_vectors,
     subspace_jtracedist,
     subspace_superop_fro_dist,
     subspace_entanglement_fidelity,
@@ -168,3 +171,78 @@ class TransportProfileTester(BaseCase):
         E_bad = 0.5 * np.eye(3)  # Hermitian but not a projector
         with self.assertRaises(ValueError):
             pop_transport_profile(E_bad, self.op_id, self.basis)
+
+
+class NonLeakageBasisTester(BaseCase):
+    """
+    Tests for metric functions called with a non-leakage basis (pp).
+
+    When implies_leakage_modeling is False several functions degrade gracefully:
+    - tensorized_teststate_density: uses the full identity as the computational
+      effect (lines 40-41).
+    - subspace_superop_fro_dist: uses IdentityOperator instead of the projector
+      (line 187).
+    - gate_leakage_profile / gate_seepage_profile: warn and return empty arrays
+      when the computational subspace equals the whole Hilbert space (lines
+      339-345, 361-367).
+    """
+
+    def setUp(self):
+        self.pp_basis = Basis.cast('pp', 4)
+        self.op_id    = np.eye(4)
+
+    # Lines 40-41: non-leakage path in tensorized_teststate_density, reached
+    # through subspace_jtracedist (which calls apply_tensorized_to_teststate
+    # which calls tensorized_teststate_density).
+    def test_jtracedist_nonleakage_basis_self_is_zero(self):
+        d = subspace_jtracedist(self.op_id, self.op_id, self.pp_basis)
+        self.assertAlmostEqual(d, 0.0, places=10)
+
+    # Line 187: non-leakage path in subspace_superop_fro_dist.
+    def test_fro_dist_nonleakage_basis_self_is_zero(self):
+        d = subspace_superop_fro_dist(self.op_id, self.op_id, self.pp_basis)
+        self.assertAlmostEqual(d, 0.0, places=10)
+
+    # Line 240: non-leakage path in subspace_diamonddist.
+    @needs_cvxpy
+    def test_diamonddist_nonleakage_basis_self_is_zero(self):
+        from pygsti.leakage.metrics import subspace_diamonddist
+        d = subspace_diamonddist(self.op_id, self.op_id, self.pp_basis)
+        self.assertAlmostEqual(d, 0.0, places=6)
+
+    # Lines 339-345: warn + return empty in gate_leakage_profile.
+    def test_leakage_profile_fullspace_warns_and_empty(self):
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always')
+            rates, states = gate_leakage_profile(self.op_id, self.pp_basis)
+        self.assertTrue(len(w) > 0, "Expected a warning but none were raised")
+        self.assertEqual(rates.shape, (0,))
+        self.assertEqual(states, [])
+
+    # Lines 361-367: warn + return empty in gate_seepage_profile.
+    def test_seepage_profile_fullspace_warns_and_empty(self):
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always')
+            rates, states = gate_seepage_profile(self.op_id, self.pp_basis)
+        self.assertTrue(len(w) > 0, "Expected a warning but none were raised")
+        self.assertEqual(rates.shape, (0,))
+        self.assertEqual(states, [])
+
+
+class LeadingSubmatrixBasisVectorsTester(BaseCase):
+    """
+    Tests for the deprecated leading_dxd_submatrix_basis_vectors function.
+    """
+
+    def setUp(self):
+        self.basis = BuiltinBasis('l2p1', 9)  # n=3, elsize=9
+
+    # Line 165: d == n early return — returns identity of size n^2.
+    def test_d_equals_n_returns_identity(self):
+        B = leading_dxd_submatrix_basis_vectors(3, 3, self.basis)
+        self.assertArraysAlmostEqual(B, np.eye(9))
+
+    def test_d_less_than_n_column_orthonormal(self):
+        B = leading_dxd_submatrix_basis_vectors(2, 3, self.basis)
+        # d^2 = 4 columns, each of length n^2 = 9; columns must be orthonormal.
+        self.assertArraysAlmostEqual(B.T @ B, np.eye(4))

@@ -12,7 +12,6 @@ import scipy.linalg as la
 import pygsti.tools.optools as pgo
 import pygsti.baseobjs.label as pgl
 import pygsti.baseobjs.basisconstructors as pgbc
-import pygsti.baseobjs as pgb
 import pygsti.algorithms.gaugeopt as gop
 from pygsti.models import ExplicitOpModel
 from pygsti.modelmembers.operations import FullArbitraryOp

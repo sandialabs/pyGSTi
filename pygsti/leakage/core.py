@@ -123,58 +123,11 @@ def computational_superkets(basis: Basis, E: Optional[np.ndarray] = None) -> np.
 
 
 @set_docstring(NOTATION)
-def computational_projector(*args) -> np.ndarray:
-
-    num_positional_args = len(args) 
-    if num_positional_args not in {3, 1}:
-        raise ValueError()
-
-    if num_positional_args == 1:
-        basis = args[0]
-        if not isinstance(basis, Basis):
-            raise ValueError()
-        dim = basis.dim
-        if basis.first_element_is_identity:
-            return np.eye(dim)
-        E = computational_effect(basis)
-        U = computational_superkets(basis, E)
-
-    else:
-        """
-        This function returns the superoperator in S[H] that projects orthogonally from
-        M[H] to M[C], where H is n-dimensional and C ⊂ H is d-dimensional (d ≤ n).
-
-        The action of this operator is easy to understand when M[H] and M[C] are viewed
-        as spaces of n-by-n matrices rather than spaces of length-n^2 vectors.
-
-        For v in M[H] and u = P v, we have
-
-            mat(v) = [x11,  x12]         and      mat(u) = [x11,  0]
-                     [x21,  x22]                           [  0,  0].
-
-        This characterization makes two facts about P apparent. First, P is positive
-        (i.e., it takes Hermitian psd operators to Hermitian psd operators). Second,
-        P is trace-non-increasing.
-        """
-        d, n, basis = args
-        types_ok = isinstance(d, int) and isinstance(n, int) and isinstance(basis, Basis)
-        if not types_ok:
-            raise ValueError()
-        if d > n:
-            raise ValueError()
-        if n**2 != basis.elsize:
-            raise ValueError()
-        if d == n:
-            return np.eye(n**2)
-        E = np.eye(n)
-        E[d:, d:] = 0.0
-        U = computational_superkets(basis, E)
-
+def computational_projector(basis: Basis) -> np.ndarray:
+    dim = basis.dim
+    if basis.first_element_is_identity:
+        return np.eye(dim)
+    E = computational_effect(basis)
+    U = computational_superkets(basis, E)
     P = U @ U.T
     return P
-
-
-superop_subspace_projector = computational_projector
-# ^ Deprecated alias.
-
-

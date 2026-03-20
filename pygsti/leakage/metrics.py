@@ -22,7 +22,7 @@ from pygsti.tools import optools as pgot
 
 from pygsti.leakage.core import (
     NOTATION, set_docstring, computational_effect,
-    computational_superkets, computational_projector, superop_subspace_projector,
+    computational_superkets, computational_projector
 )
 
 BasisLike = Union[Basis, str]
@@ -154,7 +154,7 @@ is a Hermitian basis for superoperator space S[H].
 
 This function returns a column-orthonormal matrix B where P = B B^† is the
 orthogonal projector from M[H] to M[C] with respect to current_basis. If
-you only care about P, then you can call superop_subspace_projector instead.
+you only care about P, then you can call computational_projector instead.
 """ + NOTATION)
 def leading_dxd_submatrix_basis_vectors(d: int, n: int, current_basis: Basis) -> np.ndarray:
     """
@@ -182,7 +182,7 @@ projector of op_basis.
 def subspace_superop_fro_dist(op_x: np.ndarray, op_y: np.ndarray, op_basis: Basis) -> float:
     diff = op_x -  op_y
     if op_basis.implies_leakage_modeling:
-        P = superop_subspace_projector(op_basis) # type: ignore
+        P = computational_projector(op_basis) # type: ignore
     else:
         P = pgmt.IdentityOperator()
     return la.norm(diff @ P)  # type: ignore
@@ -235,7 +235,7 @@ def subspace_diamonddist(op_x: np.ndarray, op_y: np.ndarray, op_basis) -> float:
     """
     from pygsti.tools.optools import diamonddist
     if op_basis.implies_leakage_modeling:
-        P = superop_subspace_projector(op_basis)
+        P = computational_projector(op_basis)
     else:
         P = pgmt.IdentityOperator()
     val : float = diamonddist(op_x @ P, op_y @ P, op_basis, return_x=False) / 2 # type: ignore

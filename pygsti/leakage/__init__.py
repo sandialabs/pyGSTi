@@ -10,8 +10,7 @@
 from pygsti.leakage.core import (
     computational_effect,
     computational_superkets,
-    computational_projector,
-    superop_subspace_projector,            # deprecated alias
+    computational_projector
 )
 from pygsti.leakage.metrics import (
     tensorized_teststate_density,

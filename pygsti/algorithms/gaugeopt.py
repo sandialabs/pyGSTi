@@ -569,7 +569,7 @@ def _legacy_create_scalar_objective(model, target_model,
 
     I = _tools.matrixtools.IdentityOperator()
     if mxBasis.implies_leakage_modeling:
-        P = _tools.superop_subspace_projector(mxBasis)
+        P = _tools.computational_projector(mxBasis)
     else:
         P = I
     transform_mx_arg = (P, I)
