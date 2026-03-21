@@ -2,6 +2,7 @@ import numpy as np
 
 from pygsti.baseobjs.basis import BuiltinBasis, Basis
 from pygsti.tools.matrixtools import is_projector
+from pygsti.tools import basistools as pgbt
 from pygsti.tools.basistools import stdmx_to_vec
 from pygsti.leakage.core import (
     computational_effect, computational_superkets, computational_projector,
@@ -16,8 +17,12 @@ class BasisLeakagePropertiesTester(BaseCase):
         self.pp   = Basis.cast('pp', 4)
         self.std  = Basis.cast('std', 4)
 
-    def test_implies_leakage_modeling_l2p1(self):
-        self.assertTrue(self.l2p1.implies_leakage_modeling)
+    def test_l2p1_implies_leakage(self):
+        val = self.l2p1.implies_leakage_modeling
+        self.assertTrue(val)
+        # Result is cached after the first access.
+        self.assertTrue(hasattr(self.l2p1, '_implies_leakage'))
+        self.assertEqual(self.l2p1.implies_leakage_modeling, val)
 
     def test_implies_leakage_modeling_pp(self):
         # pp basis has a full-rank 'I' element (identity), so no leakage
@@ -33,12 +38,6 @@ class BasisLeakagePropertiesTester(BaseCase):
     def test_is_hermitian_std(self):
         self.assertFalse(self.std.is_hermitian())
 
-    def test_implies_leakage_is_cached(self):
-        # First call populates the cache; second call returns the same value.
-        val1 = self.l2p1.implies_leakage_modeling
-        self.assertTrue(hasattr(self.l2p1, '_implies_leakage'))
-        val2 = self.l2p1.implies_leakage_modeling
-        self.assertEqual(val1, val2)
 
 
 class IsProjectorTester(BaseCase):
@@ -63,24 +62,33 @@ class IsProjectorTester(BaseCase):
         M = 0.5 * np.eye(3)
         self.assertFalse(is_projector(M))
 
+    def test_nondiagonal_rank1_projector(self):
+        # |+><+| in C^2 — rank-1, mixes both standard-basis vectors
+        P = 0.5 * np.array([[1., 1.], [1., 1.]])
+        self.assertTrue(is_projector(P))
+
+    def test_nondiagonal_rank2_projector(self):
+        # Projector onto span{|+>, |2>} in C^3, where |+> = (|0>+|1>)/sqrt(2).
+        # Off-diagonal in the standard basis.
+        P = np.array([[0.5, 0.5, 0.],
+                      [0.5, 0.5, 0.],
+                      [0.,  0.,  1.]])
+        self.assertTrue(is_projector(P))
+
 
 class ComputationalEffectTester(BaseCase):
 
     def setUp(self):
         self.basis = BuiltinBasis('l2p1', 9)
 
-    def test_is_projector(self):
+    def test_l2p1_effect_properties(self):
+        # l2p1 has a 2-dimensional computational subspace.
         E = computational_effect(self.basis)
+        self.assertArraysAlmostEqual(E, E.conj().T)       # Hermitian
+        self.assertArraysAlmostEqual(E @ E, E)             # idempotent
+        self.assertEqual(np.linalg.matrix_rank(E), 2)     # rank 2
+        self.assertAlmostEqual(np.trace(E).real, 2.0, places=10)  # tr = rank
         self.assertTrue(is_projector(E))
-
-    def test_rank_equals_2(self):
-        # l2p1 has a 2-dimensional computational subspace
-        E = computational_effect(self.basis)
-        self.assertEqual(np.linalg.matrix_rank(E), 2)
-
-    def test_idempotent(self):
-        E = computational_effect(self.basis)
-        self.assertArraysAlmostEqual(E @ E, E)
 
 
 class ComputationalSuperketsTester(BaseCase):
@@ -89,25 +97,38 @@ class ComputationalSuperketsTester(BaseCase):
         self.basis    = BuiltinBasis('l2p1', 9)
         self.pp_basis = Basis.cast('pp', 4)
 
-    def test_column_orthonormality(self):
+    def test_l2p1_superkets_properties(self):
         U = computational_superkets(self.basis)
-        # For k=2 computational levels, we expect k^2 = 4 columns
-        k_sq = U.shape[1]
-        self.assertArraysAlmostEqual(U.T @ U, np.eye(k_sq))
+        # k=2 computational levels → k^2=4 columns; must be column-orthonormal.
+        self.assertArraysAlmostEqual(U.T @ U, np.eye(U.shape[1]))
+        # A density matrix with support only on the computational subspace
+        # must lie in the column span of U.
+        rho = np.zeros((3, 3), complex)
+        rho[0, 0] = 0.7
+        rho[1, 1] = 0.3
+        rho_vec = stdmx_to_vec(rho, self.basis).real
+        self.assertArraysAlmostEqual(U @ (U.T @ rho_vec), rho_vec)
 
     def test_nonleakage_returns_identity(self):
         U = computational_superkets(self.pp_basis)
         self.assertArraysAlmostEqual(U, np.eye(4))
 
-    def test_span_contains_comp_state(self):
-        # A density matrix with support only on the computational subspace
-        # must lie in the column span of the computational superkets.
-        basis = self.basis
-        rho = np.zeros((3, 3), complex)
-        rho[0, 0] = 0.7
-        rho[1, 1] = 0.3
-        rho_vec = stdmx_to_vec(rho, basis).real
-        U   = computational_superkets(basis)
+    def test_nondiagonal_explicit_projector(self):
+        # Projector onto span{(|0>+|2>)/sqrt(2), |1>} in C^3 — rank-2, non-diagonal.
+        # Exercises the QR path in computational_superkets with an input that mixes
+        # standard-basis columns.
+        E_nd = np.array([[0.5, 0., 0.5],
+                         [0.,  1., 0. ],
+                         [0.5, 0., 0.5]])
+        U = computational_superkets(self.basis, E=E_nd)
+        # k=2 computational levels → k^2=4 columns; columns must be orthonormal.
+        self.assertArraysAlmostEqual(U.T @ U, np.eye(U.shape[1]))
+        # A density matrix with support inside the computational subspace must lie
+        # in the column span of U.  Use |+><+| where |+> = (|0>+|2>)/sqrt(2).
+        rho = np.array([[0.5, 0., 0.5],
+                        [0.,  0., 0. ],
+                        [0.5, 0., 0.5]], dtype=complex)
+        rho_vec = pgbt.stdmx_to_vec(rho, self.basis).real
         proj = U @ (U.T @ rho_vec)
         self.assertArraysAlmostEqual(proj, rho_vec)
 
@@ -128,14 +149,24 @@ class ComputationalProjectorTester(BaseCase):
         self.basis    = BuiltinBasis('l2p1', 9)
         self.pp_basis = Basis.cast('pp', 4)
 
-    def test_idempotent(self):
+    def test_l2p1_projector_properties(self):
+        # l2p1 with k=2 computational levels: P projects the 9-dim superop space
+        # onto the k^2=4-dimensional subspace S[C].
         P = computational_projector(self.basis)
-        self.assertArraysAlmostEqual(P @ P, P)
-
-    def test_symmetric(self):
-        P = computational_projector(self.basis)
-        self.assertArraysAlmostEqual(P, P.T)
+        self.assertArraysAlmostEqual(P @ P, P)             # idempotent
+        self.assertArraysAlmostEqual(P, P.T)               # symmetric
+        self.assertEqual(np.linalg.matrix_rank(P), 4)     # rank 4
+        self.assertAlmostEqual(np.trace(P).real, 4.0, places=10)  # tr = rank
 
     def test_nonleakage_is_identity(self):
         P = computational_projector(self.pp_basis)
         self.assertArraysAlmostEqual(P, np.eye(4))
+
+    def test_rank_and_trace(self):
+        # For l2p1 (k=2 computational levels), P projects the 9-dim superop space
+        # onto the k^2=4-dimensional subspace S[C].  So rank(P) = tr(P) = 4.
+        P = computational_projector(self.basis)
+        k_sq = 4
+        self.assertEqual(np.linalg.matrix_rank(P), k_sq)
+        self.assertAlmostEqual(np.trace(P).real, float(k_sq), places=10)
+

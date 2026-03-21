@@ -4,6 +4,7 @@ import warnings
 
 from pygsti.baseobjs.basis import Basis, BuiltinBasis
 from pygsti.tools import optools as pgot, basistools as pgbt
+from pygsti.tools.basistools import vec_to_stdmx
 from pygsti.leakage.core import computational_effect
 from pygsti.leakage.metrics import (
     choi_state,
@@ -19,7 +20,7 @@ from ..util import BaseCase, needs_cvxpy
 
 
 def _make_superop(u3x3, basis):
-    """Convert a 3×3 unitary to its superoperator in `basis`."""
+    """Convert a 3x3 unitary to its superoperator in `basis`."""
     superop_std = pgot.unitary_to_std_process_mx(u3x3)
     return pgbt.change_basis(superop_std, 'std', basis)
 
@@ -48,29 +49,19 @@ class ChoistateTester(BaseCase):
         self.op_id   = np.eye(9)
         self.op_xpi2 = _xpi2_superop(self.basis)
 
-    def test_choi_state_hermitian(self):
+    def test_choi_state_id(self):
         C = choi_state(self.op_id, self.basis)
         self.assertArraysAlmostEqual(C, C.conj().T)
-
-    def test_choi_state_psd(self):
-        C = choi_state(self.op_id, self.basis)
         eigvals = np.linalg.eigvalsh(C)
-        self.assertTrue(
-            np.all(eigvals >= -1e-10),
-            f"Choi state has negative eigenvalue: {eigvals.min():.3e}"
-        )
+        self.assertTrue(np.all(eigvals >= -1e-10), f"Negative eigenvalue: {eigvals.min():.3e}")
+        self.assertAlmostEqual(np.trace(C).real, 1.0, places=10)
 
-    def test_choi_state_xpi2_hermitian(self):
+    def test_choi_state_xpi2(self):
         C = choi_state(self.op_xpi2, self.basis)
         self.assertArraysAlmostEqual(C, C.conj().T)
-
-    def test_choi_state_xpi2_psd(self):
-        C = choi_state(self.op_xpi2, self.basis)
         eigvals = np.linalg.eigvalsh(C)
-        self.assertTrue(
-            np.all(eigvals >= -1e-10),
-            f"Choi state has negative eigenvalue: {eigvals.min():.3e}"
-        )
+        self.assertTrue(np.all(eigvals >= -1e-10), f"Negative eigenvalue: {eigvals.min():.3e}")
+        self.assertAlmostEqual(np.trace(C).real, 1.0, places=10)
 
 
 class DistanceMetricsTester(BaseCase):
@@ -86,9 +77,10 @@ class DistanceMetricsTester(BaseCase):
         d = subspace_jtracedist(self.op_id, self.op_id, self.basis)
         self.assertAlmostEqual(d, 0.0, places=10)
 
-    def test_jtracedist_positive_for_different_ops(self):
-        d = subspace_jtracedist(self.op_id, self.op_xpi2, self.basis)
-        self.assertGreater(d, 0.0)
+    def test_jtracedist_id_vs_xpi2(self):
+        d_ab = subspace_jtracedist(self.op_id, self.op_xpi2, self.basis)
+        self.assertGreater(d_ab, 0.0)
+        self.assertAlmostEqual(d_ab, subspace_jtracedist(self.op_xpi2, self.op_id, self.basis), places=10)
 
     # subspace_superop_fro_dist
 
@@ -96,9 +88,10 @@ class DistanceMetricsTester(BaseCase):
         d = subspace_superop_fro_dist(self.op_id, self.op_id, self.basis)
         self.assertAlmostEqual(d, 0.0, places=10)
 
-    def test_fro_dist_positive_for_different_ops(self):
-        d = subspace_superop_fro_dist(self.op_id, self.op_xpi2, self.basis)
-        self.assertGreater(d, 0.0)
+    def test_fro_dist_id_vs_xpi2(self):
+        d_ab = subspace_superop_fro_dist(self.op_id, self.op_xpi2, self.basis)
+        self.assertGreater(d_ab, 0.0)
+        self.assertAlmostEqual(d_ab, subspace_superop_fro_dist(self.op_xpi2, self.op_id, self.basis), places=10)
 
     # subspace_entanglement_fidelity
 
@@ -106,9 +99,10 @@ class DistanceMetricsTester(BaseCase):
         f = subspace_entanglement_fidelity(self.op_id, self.op_id, self.basis)
         self.assertAlmostEqual(f, 1.0, places=10)
 
-    def test_entanglement_fidelity_different_ops_less_than_one(self):
-        f = subspace_entanglement_fidelity(self.op_id, self.op_xpi2, self.basis)
-        self.assertLess(f, 1.0)
+    def test_entanglement_fidelity_id_vs_xpi2(self):
+        f_ab = subspace_entanglement_fidelity(self.op_id, self.op_xpi2, self.basis)
+        self.assertLess(f_ab, 1.0)
+        self.assertAlmostEqual(f_ab, subspace_entanglement_fidelity(self.op_xpi2, self.op_id, self.basis), places=10)
 
     # subspace_diamonddist (requires cvxpy)
 
@@ -155,22 +149,28 @@ class TransportProfileTester(BaseCase):
         rates, _ = gate_seepage_profile(self.op_leaky, self.basis)
         self.assertGreater(float(np.max(np.abs(rates))), 1e-6)
 
-    def test_pop_transport_profile_eigenvalues_in_0_1(self):
-        E = computational_effect(self.basis)
-        rates, _ = pop_transport_profile(E, self.op_leaky, self.basis)
-        self.assertTrue(
-            np.all(rates >= -1e-10),
-            f"Negative transport rate: {rates.min():.3e}"
-        )
-        self.assertTrue(
-            np.all(rates <= 1.0 + 1e-10),
-            f"Transport rate > 1: {rates.max():.3e}"
-        )
-
     def test_pop_transport_profile_non_projector_raises(self):
         E_bad = 0.5 * np.eye(3)  # Hermitian but not a projector
         with self.assertRaises(ValueError):
             pop_transport_profile(E_bad, self.op_id, self.basis)
+
+    def test_pop_transport_profile_leaky(self):
+        E = computational_effect(self.basis)
+        rates, states = pop_transport_profile(E, self.op_leaky, self.basis)
+        # Count: one pair per dimension of E_sub (rank(E) = 2 for l2p1).
+        expected_count = int(round(np.trace(E).real))
+        self.assertEqual(len(rates), expected_count)
+        self.assertEqual(len(states), expected_count)
+        # Eigenvalue bounds: transport rates are probabilities.
+        self.assertTrue(np.all(rates >= -1e-10), f"Negative transport rate: {rates.min():.3e}")
+        self.assertTrue(np.all(rates <= 1.0 + 1e-10), f"Transport rate > 1: {rates.max():.3e}")
+        # Eigenvector equation: E_transport @ state ≈ rate * state.
+        n = E.shape[0]
+        E_perp_vec = pgbt.stdmx_to_vec(np.eye(n) - E, self.basis)
+        transport_mat = vec_to_stdmx(self.op_leaky.T @ E_perp_vec, self.basis, keep_complex=True)
+        transport_mat = E @ transport_mat @ E
+        for rate, state in zip(rates, states):
+            self.assertArraysAlmostEqual(transport_mat @ state, rate * state)
 
 
 class NonLeakageBasisTester(BaseCase):
