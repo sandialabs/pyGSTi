@@ -22,7 +22,7 @@ from pygsti.tools import optools as pgot
 
 from pygsti.leakage.core import (
     NOTATION, set_docstring, computational_effect,
-    computational_superkets, computational_projector
+    computational_projector
 )
 
 BasisLike = Union[Basis, str]
@@ -145,28 +145,6 @@ def subspace_jtracedist(op_x: np.ndarray, op_y: np.ndarray, op_basis) -> float:
 
 
 # MARK: projected metrics
-
-
-@set_docstring(
-"""
-Here, H has dimension n and C ⊂ H has dimension d ≤ n, and current_basis
-is a Hermitian basis for superoperator space S[H].
-
-This function returns a column-orthonormal matrix B where P = B B^† is the
-orthogonal projector from M[H] to M[C] with respect to current_basis. If
-you only care about P, then you can call computational_projector instead.
-""" + NOTATION)
-def leading_dxd_submatrix_basis_vectors(d: int, n: int, current_basis: Basis) -> np.ndarray:
-    """
-    TODO: deprecate this function.
-    """
-    assert d <= n
-    if d == n:
-        return np.eye(n**2)
-    else:
-        E = np.zeros((n,n))
-        E[:d, :d] = np.eye(d)
-        return computational_superkets(current_basis, E)
 
 
 PROJECTION_INDUCED_METRIC_TEMPLATE = \

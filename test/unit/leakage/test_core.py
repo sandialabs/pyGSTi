@@ -4,8 +4,11 @@ from pygsti.baseobjs.basis import BuiltinBasis, Basis
 from pygsti.tools.matrixtools import is_projector
 from pygsti.tools import basistools as pgbt
 from pygsti.tools.basistools import stdmx_to_vec
+import scipy.linalg as la
+
 from pygsti.leakage.core import (
     computational_effect, computational_superkets, computational_projector,
+    augment_for_leakage_modeling,
 )
 from ..util import BaseCase
 
@@ -113,35 +116,6 @@ class ComputationalSuperketsTester(BaseCase):
         U = computational_superkets(self.pp_basis)
         self.assertArraysAlmostEqual(U, np.eye(4))
 
-    def test_nondiagonal_explicit_projector(self):
-        # Projector onto span{(|0>+|2>)/sqrt(2), |1>} in C^3 — rank-2, non-diagonal.
-        # Exercises the QR path in computational_superkets with an input that mixes
-        # standard-basis columns.
-        E_nd = np.array([[0.5, 0., 0.5],
-                         [0.,  1., 0. ],
-                         [0.5, 0., 0.5]])
-        U = computational_superkets(self.basis, E=E_nd)
-        # k=2 computational levels → k^2=4 columns; columns must be orthonormal.
-        self.assertArraysAlmostEqual(U.T @ U, np.eye(U.shape[1]))
-        # A density matrix with support inside the computational subspace must lie
-        # in the column span of U.  Use |+><+| where |+> = (|0>+|2>)/sqrt(2).
-        rho = np.array([[0.5, 0., 0.5],
-                        [0.,  0., 0. ],
-                        [0.5, 0., 0.5]], dtype=complex)
-        rho_vec = pgbt.stdmx_to_vec(rho, self.basis).real
-        proj = U @ (U.T @ rho_vec)
-        self.assertArraysAlmostEqual(proj, rho_vec)
-
-    def test_explicit_nonprojector_E_raises(self):
-        # diag(1, 0.5, 0) is not a scalar multiple of any projector: after the
-        # internal normalization E *= (rank/trace) = (2/1.5), it becomes
-        # diag(4/3, 2/3, 0), which is Hermitian but not idempotent.
-        E_bad = np.diag([1., 0.5, 0.])
-        with self.assertRaises(ValueError):
-            computational_superkets(self.basis, E=E_bad)
-        # Note: line 102 (non-Hermitian leakage basis) is unreachable from the
-        # public API — all standard leakage bases (e.g. 'l2p1') are Hermitian.
-
 
 class ComputationalProjectorTester(BaseCase):
 
@@ -170,3 +144,97 @@ class ComputationalProjectorTester(BaseCase):
         self.assertEqual(np.linalg.matrix_rank(P), k_sq)
         self.assertAlmostEqual(np.trace(P).real, float(k_sq), places=10)
 
+
+class AugmentForLeakageModelingTester(BaseCase):
+
+    def setUp(self):
+        self.l2p1  = BuiltinBasis('l2p1', 9)
+        self.gm9   = Basis.cast('gm', 9)
+        self.E     = computational_effect(self.l2p1)   # rank-2 projector in 3×3 space
+        self.k     = 2
+        self.b_aug = augment_for_leakage_modeling(self.gm9, self.E)
+
+    # --- structural / happy-path tests ---
+
+    def test_implies_leakage_modeling(self):
+        self.assertTrue(self.b_aug.implies_leakage_modeling)
+
+    def test_element_count(self):
+        self.assertEqual(len(self.b_aug.elements), self.gm9.dim)
+
+    def test_first_element_proportional_to_E(self):
+        E_norm = self.E / la.norm(self.E)
+        self.assertArraysAlmostEqual(self.b_aug.elements[0], E_norm)
+
+    def test_first_label_is_all_I(self):
+        lbl = self.b_aug.labels[0]
+        self.assertEqual(lbl.strip('I'), '')
+        self.assertGreater(len(lbl), 0)
+
+    def test_elements_are_normalized(self):
+        for elem in self.b_aug.elements:
+            self.assertAlmostEqual(la.norm(elem), 1.0, places=12)
+
+    def test_cs_elements_span_mc(self):
+        # Any matrix E A E (supported on C) must lie in the span of the first k² elements.
+        k = self.k
+        V = np.column_stack([e.ravel() for e in self.b_aug.elements[:k**2]])
+        A = self.E @ np.diag([1., 0., 0.]) @ self.E
+        a_vec = A.ravel()
+        proj = V @ np.linalg.lstsq(V, a_vec, rcond=None)[0]
+        self.assertArraysAlmostEqual(proj, a_vec)
+
+    def test_oc_elements_span_mc_perp(self):
+        # The complement projector I - E lives entirely in M[C]⊥.
+        k = self.k
+        W = np.column_stack([e.ravel() for e in self.b_aug.elements[k**2:]])
+        E_comp = np.eye(self.E.shape[0]) - self.E
+        a_vec  = E_comp.ravel()
+        proj   = W @ np.linalg.lstsq(W, a_vec, rcond=None)[0]
+        self.assertArraysAlmostEqual(proj, a_vec)
+
+    def test_leakage_labels_format(self):
+        # Every label after the first k² must start with 'L'.
+        for lbl in self.b_aug.labels[self.k**2:]:
+            self.assertTrue(lbl.startswith('L'), msg=f"expected 'L...' label, got {lbl!r}")
+
+    def test_final_label_is_L(self):
+        self.assertEqual(self.b_aug.labels[-1], 'L')
+
+    def test_output_name(self):
+        self.assertIn('Leakage augmented', self.b_aug.name)
+
+    # --- non-diagonal projector (closes the commented-out test above) ---
+
+    def test_nondiagonal_projector(self):
+        # Rank-2 projector onto span{(|0>+|2>)/sqrt(2), |1>} in C^3 — non-diagonal.
+        E_nd = np.array([[0.5, 0., 0.5],
+                         [0.,  1., 0. ],
+                         [0.5, 0., 0.5]])
+        b_nd = augment_for_leakage_modeling(self.gm9, E_nd)
+        self.assertTrue(b_nd.implies_leakage_modeling)
+        self.assertArraysAlmostEqual(computational_effect(b_nd), E_nd)
+        U = computational_superkets(b_nd)
+        self.assertArraysAlmostEqual(U.T @ U, np.eye(4))
+
+    # --- input validation ---
+
+    def test_invalid_complex_E_raises(self):
+        E_complex = self.E.astype(complex)
+        E_complex[0, 1] += 1e-5j
+        with self.assertRaises(ValueError):
+            augment_for_leakage_modeling(self.gm9, E_complex)
+
+    def test_invalid_non_projector_raises(self):
+        # Diagonal matrix with eigenvalues 1, 0.5, 0 — Hermitian but not a projector at
+        # any scale (eigenvalues can't be simultaneously scaled to lie in {0, 1}).
+        E_bad = np.diag([1., 0.5, 0.])
+        with self.assertRaises(ValueError):
+            augment_for_leakage_modeling(self.gm9, E_bad)
+
+    def test_invalid_non_hermitian_raises(self):
+        E_bad = np.array([[1., 1., 0.],
+                          [0., 1., 0.],
+                          [0., 0., 0.]])
+        with self.assertRaises(ValueError):
+            augment_for_leakage_modeling(self.gm9, E_bad)

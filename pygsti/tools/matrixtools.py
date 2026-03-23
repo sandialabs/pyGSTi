@@ -112,6 +112,15 @@ def is_projector(mx, tol=1e-14):
     return _np.allclose(mx, mx2, atol=tol, rtol=tol)
 
 
+def assert_projector(mx, tol=1e-14):
+    if not is_projector(mx, tol):
+        message = f"""
+            Input matrix 'mx' is not a projector, up to tolerance {tol}.
+            The absolute values of entries in (mx^2 - mx) are \n{_np.abs(mx @ mx - mx)}. 
+        """
+        raise ValueError(message)
+
+
 def is_pos_def(mx, tol=1e-9, attempt_cholesky=False):
     """
     Test whether mx is a positive-definite matrix.
@@ -160,6 +169,23 @@ def is_valid_density_mx(mx, tol=1e-9):
     """
     # is_pos_def includes a check that the matrix is Hermitian.
     return abs(_np.trace(mx) - 1.0) < tol and is_pos_def(mx, tol)
+
+
+def pivot_indices_after_deflation(m_fixed: _np.ndarray, m: _np.ndarray) -> _np.ndarray:
+    """ 
+    m_fixed and m have the same number of rows.
+
+    Returns an index vector J of columns of m, chosen by QRCP
+    after projecting out the contributions from m_fixed.
+    """
+    # type declarations to make linters (relatively) happy
+    Q : _np.ndarray
+    J : _np.ndarray
+    Q  = _spl.qr(m_fixed, mode='economic')[0]           # type: ignore
+    M  = m.copy()
+    M -= Q @ (Q.T.conj() @ M)
+    J  = _spl.qr(M, mode='economic', pivoting=True)[2]  # type: ignore
+    return J
 
 
 def nullspace(m, tol=1e-7):

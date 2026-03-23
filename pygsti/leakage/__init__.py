@@ -10,7 +10,8 @@
 from pygsti.leakage.core import (
     computational_effect,
     computational_superkets,
-    computational_projector
+    computational_projector,
+    augment_for_leakage_modeling,
 )
 from pygsti.leakage.metrics import (
     tensorized_teststate_density,
@@ -18,7 +19,6 @@ from pygsti.leakage.metrics import (
     choi_state,
     subspace_entanglement_fidelity,
     subspace_jtracedist,
-    leading_dxd_submatrix_basis_vectors,   # deprecated, keep for compat
     subspace_superop_fro_dist,
     subspace_diamonddist,
     pop_transport_profile,

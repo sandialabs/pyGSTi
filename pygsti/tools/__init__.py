@@ -29,7 +29,6 @@ from pygsti.leakage import (
     choi_state,
     subspace_entanglement_fidelity,
     subspace_jtracedist,
-    leading_dxd_submatrix_basis_vectors,
     computational_projector,
     subspace_superop_fro_dist,
     subspace_diamonddist,

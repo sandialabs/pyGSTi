@@ -8,7 +8,6 @@ from pygsti.tools.basistools import vec_to_stdmx
 from pygsti.leakage.core import computational_effect
 from pygsti.leakage.metrics import (
     choi_state,
-    leading_dxd_submatrix_basis_vectors,
     subspace_jtracedist,
     subspace_superop_fro_dist,
     subspace_entanglement_fidelity,
@@ -227,22 +226,3 @@ class NonLeakageBasisTester(BaseCase):
         self.assertTrue(len(w) > 0, "Expected a warning but none were raised")
         self.assertEqual(rates.shape, (0,))
         self.assertEqual(states, [])
-
-
-class LeadingSubmatrixBasisVectorsTester(BaseCase):
-    """
-    Tests for the deprecated leading_dxd_submatrix_basis_vectors function.
-    """
-
-    def setUp(self):
-        self.basis = BuiltinBasis('l2p1', 9)  # n=3, elsize=9
-
-    # Line 165: d == n early return — returns identity of size n^2.
-    def test_d_equals_n_returns_identity(self):
-        B = leading_dxd_submatrix_basis_vectors(3, 3, self.basis)
-        self.assertArraysAlmostEqual(B, np.eye(9))
-
-    def test_d_less_than_n_column_orthonormal(self):
-        B = leading_dxd_submatrix_basis_vectors(2, 3, self.basis)
-        # d^2 = 4 columns, each of length n^2 = 9; columns must be orthonormal.
-        self.assertArraysAlmostEqual(B.T @ B, np.eye(4))
