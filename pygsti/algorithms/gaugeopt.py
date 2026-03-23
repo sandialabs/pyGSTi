@@ -18,6 +18,7 @@ import numpy as _np
 from pygsti import baseobjs as _baseobjs
 from pygsti import optimize as _opt
 from pygsti import tools as _tools
+from pygsti.leakage import metrics as _lm
 from pygsti.tools import mpitools as _mpit
 from pygsti.tools import slicetools as _slct
 from pygsti.models import (
@@ -644,7 +645,7 @@ def _legacy_create_scalar_objective(model, target_model,
                 wt = item_weights.get(opLbl, opWeight)
                 top = tgt_ops[opLbl].to_dense()
                 mop = mdl_ops[opLbl].to_dense()
-                ret += wt * _tools.subspace_jtracedist(top, mop, mxBasis)
+                ret += wt * _lm.subspace_jtracedist(top, mop, mxBasis)
 
         else:
             raise ValueError("Invalid gates_metric: %s" % gates_metric)

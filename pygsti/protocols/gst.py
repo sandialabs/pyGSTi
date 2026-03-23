@@ -2476,36 +2476,39 @@ def _compute_1d_reference_values(target_model: _ExplicitOpModel, gopped_models: 
             n_leak = argdicts[0].get('n_leak', n_leak)
 
         basis = gaugeopt_model.basis
-        I = _tools.matrixtools.IdentityOperator()
         if n_leak == 0:
-            P = I
+            P = _tools.matrixtools.IdentityOperator()
+            def diamonddist_fn(*args, **kwargs):
+                return 0.5 * _tools.diamonddist(*args, **kwargs, mx_basis=basis)  # type: ignore
+            jtracedist_fn = _tools.jtracedist
         elif n_leak > 0:
             from pygsti.leakage.core import computational_projector
-            P = computational_projector(basis)
+            from pygsti.leakage.metrics import subspace_diamonddist, subspace_jtracedist
+            P = computational_projector(basis) 
+            diamonddist_fn  = subspace_diamonddist
+            jtracedist_fn   = subspace_jtracedist
 
         ops, preps, _, insts = _memberdicts(gaugeopt_model)
 
         for key, op in ops.items():
             X = op.to_dense()
             Y = target_ops[key].to_dense()
-            X_restricted = X @ P
-            Y_restricted = Y @ P
 
             # Get basis for this operation.
             op_basis = basis # start with the model's basis
-            if (basis.dim != X_restricted.shape[0] and isinstance(basis, _tools.TensorProdBasis)
-                and basis.component_bases[0].dim == X_restricted.shape[0]):
+            if (basis.dim != X.shape[0] and isinstance(basis, _tools.TensorProdBasis)
+                and basis.component_bases[0].dim == X.shape[0]):
                 # use first component of a TensorProdBasis if a smaller dim is needed and matches.
                 op_basis = basis.component_bases[0]
 
-            dd[lbl][key] : float = 0.5 * _tools.diamonddist(X_restricted, Y_restricted, mx_basis=op_basis) # type: ignore
+            dd[lbl][key] : float = diamonddist_fn(X, Y, mx_basis=op_basis) # type: ignore
             if dd[lbl][key] < 0:  # indicates that diamonddist failed (cvxpy failure)
                 msg = f"""
                 Diamond distance failed to compute {key} reference value for 1D wildcard budget!
                 Falling back to trace distance.
                 """
                 _warnings.warn(msg)
-                dd[lbl][key] = _tools.subspace_jtracedist(X, Y, basis)
+                dd[lbl][key] = jtracedist_fn(X, Y, basis)
         
         for key, op in insts.items():
             inst_dd : float = 0.5* _tools.instrument_diamonddist(

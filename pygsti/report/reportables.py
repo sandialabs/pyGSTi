@@ -36,6 +36,7 @@ from pygsti.baseobjs.label import Label as _Lbl
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LEEL
 from pygsti.modelmembers.operations.lindbladcoefficients import LindbladCoefficientBlock as _LindbladCoefficientBlock
 from pygsti.models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
+from pygsti.leakage import metrics as _lm
 from pygsti import SpaceT
 
 _CVXPY_AVAILABLE = importlib.util.find_spec('cvxpy') is not None
@@ -1026,7 +1027,7 @@ Maximum_trace_dist = _modf.opfn_factory(maximum_trace_dist)
 def leaky_maximum_trace_dist(gate, mx_basis):
     closestUOpMx = _alg.find_closest_unitary_opmx(gate)
     _tools.jamiolkowski_iso(closestUOpMx, mx_basis, mx_basis)
-    return _tools.subspace_jtracedist(gate, closestUOpMx, mx_basis)
+    return _lm.subspace_jtracedist(gate, closestUOpMx, mx_basis)
 
 Leaky_maximum_trace_dist = _modf.opfn_factory(leaky_maximum_trace_dist)
 
@@ -1060,16 +1061,10 @@ def subspace_diamonddist_to_leakfree_cptp(op, ignore, mx_basis):
 
 SubspaceDiamonddist_to_leakfree_cptp = _modf.opsfn_factory(subspace_diamonddist_to_leakfree_cptp)
 
-def subspace_diamonddist(op_a, op_b, basis):
-    from pygsti.leakage import computational_projector
-    P = computational_projector(basis)
-    from pygsti.tools.optools import diamonddist
-    return diamonddist(op_a @ P, op_b @ P, basis) / 2
-
-SubspaceDiamonddist = _modf.opsfn_factory(subspace_diamonddist)
+SubspaceDiamonddist = _modf.opsfn_factory(_lm.subspace_diamonddist)
 
 def pergate_leakrate_reduction(op, ignore, mx_basis, reduction):
-    leakage_rates = _tools.gate_leakage_profile(op, mx_basis)[0]
+    leakage_rates = _lm.gate_leakage_profile(op, mx_basis)[0]
     return reduction(leakage_rates)
 
 def pergate_leakrate_max(op, ignore, mx_basis):
@@ -1082,7 +1077,7 @@ PerGateLeakRateMax = _modf.opsfn_factory(pergate_leakrate_max)
 PerGateLeakRateMin = _modf.opsfn_factory(pergate_leakrate_min)
 
 def pergate_seeprate(op, ignore, mx_basis):
-    seepage_rates = _tools.gate_seepage_profile(op, mx_basis)[0]
+    seepage_rates = _lm.gate_seepage_profile(op, mx_basis)[0]
     seeprate = max(seepage_rates)
     return seeprate
 
@@ -1139,9 +1134,7 @@ Entanglement_fidelity = _modf.opsfn_factory(
 )
 # init args == (model1, model2, op_label)
 
-Subspace_entanglement_fidelity = _modf.opsfn_factory(
-    _tools.subspace_entanglement_fidelity
-)
+Subspace_entanglement_fidelity = _modf.opsfn_factory(_lm.subspace_entanglement_fidelity)
 
 
 def entanglement_infidelity(a, b, mx_basis):
@@ -1170,7 +1163,7 @@ Entanglement_infidelity = _modf.opsfn_factory(entanglement_infidelity)
 # init args == (model1, model2, op_label)
 
 def leaky_entanglement_infidelity(a, b, mx_basis):
-    return 1 - _tools.subspace_entanglement_fidelity(a, b, mx_basis)
+    return 1 - _lm.subspace_entanglement_fidelity(a, b, mx_basis)
 
 Leaky_entanglement_infidelity = _modf.opsfn_factory(leaky_entanglement_infidelity)
 
@@ -1240,9 +1233,7 @@ Fro_diff = _modf.opsfn_factory(frobenius_diff)
 # init args == (model1, model2, op_label)
 
 
-Leaky_gate_frob_dist = _modf.opsfn_factory(
-    _tools.subspace_superop_fro_dist
-)
+Leaky_gate_frob_dist = _modf.opsfn_factory(_lm.subspace_superop_fro_dist)
 
 
 def jtrace_diff(a, b, mx_basis):  # assume vary model1, model2 fixed
@@ -1271,9 +1262,7 @@ Jt_diff = _modf.opsfn_factory(jtrace_diff)
 # init args == (model1, model2, op_label)
 
 
-Leaky_Jt_diff = _modf.opsfn_factory(
-     _tools.subspace_jtracedist
-)
+Leaky_Jt_diff = _modf.opsfn_factory(_lm.subspace_jtracedist)
 
 
 if _CVXPY_AVAILABLE:
