@@ -2476,15 +2476,12 @@ def _compute_1d_reference_values(target_model: _ExplicitOpModel, gopped_models: 
             n_leak = argdicts[0].get('n_leak', n_leak)
 
         basis = gaugeopt_model.basis
-        udim = int(_np.round(_np.sqrt(basis.dim)))
         I = _tools.matrixtools.IdentityOperator()
         if n_leak == 0:
             P = I
         elif n_leak > 0:
-            from pygsti.leakage.core import computational_superkets
-            U = computational_superkets(basis)
-            P = U @ U.T.conj()
-            P = P.real
+            from pygsti.leakage.core import computational_projector
+            P = computational_projector(basis)
 
         ops, preps, _, insts = _memberdicts(gaugeopt_model)
 

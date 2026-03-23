@@ -1061,14 +1061,8 @@ def subspace_diamonddist_to_leakfree_cptp(op, ignore, mx_basis):
 SubspaceDiamonddist_to_leakfree_cptp = _modf.opsfn_factory(subspace_diamonddist_to_leakfree_cptp)
 
 def subspace_diamonddist(op_a, op_b, basis):
-    dim_mixed = op_a.shape[0]
-    dim_pure  = int(dim_mixed**0.5)
-    dim_pure_compsub = dim_pure - 1
-    from pygsti.leakage import leading_dxd_submatrix_basis_vectors
-    U = leading_dxd_submatrix_basis_vectors(dim_pure_compsub, dim_pure, basis)
-    P = U @ U.T.conj()
-    assert _np.linalg.norm(P - P.real) < 1e-10
-    P = P.real
+    from pygsti.leakage import computational_projector
+    P = computational_projector(basis)
     from pygsti.tools.optools import diamonddist
     return diamonddist(op_a @ P, op_b @ P, basis) / 2
 
