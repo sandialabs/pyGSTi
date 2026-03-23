@@ -2479,7 +2479,7 @@ def _compute_1d_reference_values(target_model: _ExplicitOpModel, gopped_models: 
         if n_leak == 0:
             P = _tools.matrixtools.IdentityOperator()
             def diamonddist_fn(*args, **kwargs):
-                return 0.5 * _tools.diamonddist(*args, **kwargs, mx_basis=basis)  # type: ignore
+                return 0.5 * _tools.diamonddist(*args, **kwargs)  # type: ignore
             jtracedist_fn = _tools.jtracedist
         elif n_leak > 0:
             from pygsti.leakage.core import computational_projector
