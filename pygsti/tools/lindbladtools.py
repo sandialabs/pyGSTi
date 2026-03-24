@@ -751,14 +751,20 @@ def random_CPTP_error_generator_rates(num_qubits, errorgen_types=('H', 'S', 'C',
     #generator infidelity and sector weights.
     if error_metric is not None:
         #Get the free parameter's  For both generator infidelity we use the sum of the S rates
-        current_S_sum_free = _np.sum([random_rates_dicts['S'][key] for key in S_free_keys])
-        if error_metric == 'generator_infidelity':
-            #for generator infidelity we use the sum of the squared H rates.
-            current_H_sum_free = _np.sum([random_rates_dicts['H'][key]**2 for key in H_free_keys])
-        elif error_metric == 'total_generator_error':
-            #for total generator error we use the sum of the H rates directly.
-            current_H_sum_free = _np.sum([abs(random_rates_dicts['H'][key]) for key in H_free_keys])
-        
+        if 'S' in errorgen_types:
+            current_S_sum_free = _np.sum([random_rates_dicts['S'][key] for key in S_free_keys])
+        else:
+            current_S_sum_free = 0
+        if 'H' in errorgen_types:
+            if error_metric == 'generator_infidelity':
+                #for generator infidelity we use the sum of the squared H rates.
+                current_H_sum_free = _np.sum([random_rates_dicts['H'][key]**2 for key in H_free_keys])
+            elif error_metric == 'total_generator_error':
+                #for total generator error we use the sum of the H rates directly.
+                current_H_sum_free = _np.sum([abs(random_rates_dicts['H'][key]) for key in H_free_keys])
+        else:
+            current_H_sum_free = 0
+
         total_H_sum = current_H_sum_free + fixed_H_contribution
         total_S_sum = current_S_sum_free + fixed_S_contribution
         
@@ -777,30 +783,29 @@ def random_CPTP_error_generator_rates(num_qubits, errorgen_types=('H', 'S', 'C',
             current_S_contribution = 1-current_H_contribution
             req_H_sum = current_H_contribution*error_metric_value
             req_S_sum = current_S_contribution*error_metric_value
-            
         #this is how much we still need to be contributed by the free parameters
         needed_H_free = req_H_sum - fixed_H_contribution
         needed_S_free = req_S_sum - fixed_S_contribution
-        
-        if error_metric == 'generator_infidelity':
-            #The scale factor for the H rates is sqrt(req_squared_H_sum/current_squared_H_sum)
-            H_scale_factor = _np.sqrt(needed_H_free/current_H_sum_free)
-        elif error_metric == 'total_generator_error':
+        if 'H' in errorgen_types:
+            if error_metric == 'generator_infidelity':
+                #The scale factor for the H rates is sqrt(req_squared_H_sum/current_squared_H_sum)
+                H_scale_factor = _np.sqrt(needed_H_free/current_H_sum_free)
+            elif error_metric == 'total_generator_error':
+                #The scale factor for the S rates is req_S_sum/current_S_sum
+                H_scale_factor = needed_H_free/current_H_sum_free
+            for key in H_free_keys:
+                random_rates_dicts['H'][key]*=H_scale_factor
+        if 'S' in errorgen_types:    
             #The scale factor for the S rates is req_S_sum/current_S_sum
-            H_scale_factor = needed_H_free/current_H_sum_free    
-        #The scale factor for the S rates is req_S_sum/current_S_sum
-        S_scale_factor = needed_S_free/current_S_sum_free    
-
-        #Rescale the free random rates, note that the free SCA terms will all be scaled by the S_scale_factor
-        #to preserve PSD.
-        for key in H_free_keys:
-            random_rates_dicts['H'][key]*=H_scale_factor
-        for key in S_free_keys:
-            random_rates_dicts['S'][key]*=S_scale_factor
-        for key in C_free_keys:
-            random_rates_dicts['C'][key]*=S_scale_factor
-        for key in A_free_keys:
-            random_rates_dicts['A'][key]*=S_scale_factor
+            S_scale_factor = needed_S_free/current_S_sum_free    
+            #Rescale the free random rates, note that the free SCA terms will all be scaled by the S_scale_factor
+            #to preserve PSD.
+            for key in S_free_keys:
+                random_rates_dicts['S'][key]*=S_scale_factor
+            for key in C_free_keys:
+                random_rates_dicts['C'][key]*=S_scale_factor
+            for key in A_free_keys:
+                random_rates_dicts['A'][key]*=S_scale_factor
                 
     #Now turn this into a rates dict
     errorgen_rates_dict = dict()
