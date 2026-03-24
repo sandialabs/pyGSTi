@@ -1,6 +1,7 @@
 import numpy as np
 import scipy.sparse as sps
-
+import scipy.linalg as spl
+from pygsti.tools import generator_infidelity
 from pygsti.tools import lindbladtools as lt
 from pygsti.modelmembers.operations import LindbladErrorgen
 from pygsti.baseobjs import Basis, QubitSpace
@@ -241,3 +242,17 @@ class RandomErrorgenRatesTester(BaseCase):
         #with CPTP parameterization. This should fail if the error generator dictionary is not CPTP.
         errorgen = LindbladErrorgen.from_elementary_errorgens(random_errorgen_rates, parameterization='CPTPLND', truncate=False, state_space=QubitSpace(2))
 
+    def test_respect_fidelity_constraint_issue_716(self):
+        # This test is meant to confirm that the issue described in
+        # https://github.com/sandialabs/pyGSTi/issues/716.
+        #
+        random_Honly_errors = lt.random_CPTP_error_generator_rates(
+            1, ('H',),
+            error_metric="generator_infidelity",
+            error_metric_value=1e-2,
+            label_type="local")
+        errgen = LindbladErrorgen.from_elementary_errorgens(random_Honly_errors, state_space=["Q0"])
+        noisy_ptm = spl.expm(errgen.to_dense("HilbertSchmidt"))
+        actual = generator_infidelity(noisy_ptm, np.eye(4))
+        self.assertAlmostEqual(actual, 1e-2, places=5)
+        return

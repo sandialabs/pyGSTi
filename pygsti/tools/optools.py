@@ -637,7 +637,8 @@ def entanglement_infidelity(a, b, mx_basis: BasisLike = 'pp', is_tp=None, is_uni
     """
     return 1 - entanglement_fidelity(a, b, mx_basis, is_tp, is_unitary)
 
-def generator_infidelity(a, b, mx_basis = 'pp'):
+
+def generator_infidelity(a, b, mx_basis = 'pp') -> float:
     """
     Returns the generator infidelity between a and b, where b is the "target" operation.
     Generator infidelity is given by the sum of the squared hamiltonian error generator
@@ -685,7 +686,8 @@ def generator_infidelity(a, b, mx_basis = 'pp'):
         if coeff_block._block_type == 'other': #S terms on diagonal, added directly
             gen_infid+= _np.sum(_np.diag(coeff_block.block_data))
 
-    return _np.real_if_close(gen_infid)
+    return _np.real_if_close(gen_infid).item()
+
 
 def gateset_infidelity(model, target_model, itype='EI',
                        weights=None, mx_basis=None, is_tp=None, is_unitary=None):
@@ -2006,6 +2008,7 @@ def create_elementary_errorgen_nqudit(typ, basis_element_labels, basis_1q, norma
                                               normalize, sparse, tensorprod_basis, create_dual=False)
     return eglist[0]
 
+
 def create_elementary_errorgen_nqudit_dual(typ, basis_element_labels, basis_1q, normalize=False,
                                            sparse=False, tensorprod_basis=False):
     """
@@ -2042,6 +2045,7 @@ def create_elementary_errorgen_nqudit_dual(typ, basis_element_labels, basis_1q, 
     eglist =  _create_elementary_errorgen_nqudit([typ], [basis_element_labels], basis_1q,
                                               normalize, sparse, tensorprod_basis, create_dual=True)
     return eglist[0]
+
 
 def bulk_create_elementary_errorgen_nqudit(typ, basis_element_labels, basis_1q, normalize=False,
                                            sparse=False, tensorprod_basis=False):
@@ -2119,6 +2123,7 @@ def bulk_create_elementary_errorgen_nqudit_dual(typ, basis_element_labels, basis
 
     return _create_elementary_errorgen_nqudit(typ, basis_element_labels, basis_1q, normalize,
                                               sparse, tensorprod_basis, create_dual=True)
+
 
 def _create_elementary_errorgen_nqudit(typ, basis_element_labels, basis_1q, normalize=False,
                                        sparse=False, tensorprod_basis=False, create_dual=False):
