@@ -247,7 +247,7 @@ def create_elementary_errorgen_dual_pauli(typ, p, q=None, sparse=False):
 
 #TODO: The construction can be made a bit more efficient if we know we will be constructing multiple
 #error generators with overlapping indices by reusing intermediate results.
-def create_elementary_errorgen(typ, p, q=None, sparse=False):
+def create_elementary_errorgen(typ : Literal['H', 'S', 'C', 'A'], p, q=None, sparse=False):
     """
     Construct an elementary error generator as a matrix in the "standard" (matrix-unit) basis.
 
@@ -282,25 +282,39 @@ def create_elementary_errorgen(typ, p, q=None, sparse=False):
     -------
     ndarray or Scipy CSR matrix
     """
+    eeg_dtype : _np.typing.DTypeLike
+    if typ == 'H':
+        assert q is None, "q must not be provided for H-type elementary error generator!"
+        eeg_dtype = _np.complex128
+    elif typ == 'S':
+        assert q is None, "q must not be provided for S-type elementary error generator!"
+        eeg_dtype = p.dtype
+    elif typ == 'C':
+        assert q is not None, "q must be provided for C-type elementary error generator!"
+        eeg_dtype = _np.result_type(p.dtype, q.dtype)
+    elif typ == 'A':
+        assert q is not None, "q must be provided for A-type elementary error generator!"
+        eeg_dtype = _np.complex128
+    else:
+        raise ValueError(f'`typ` must be one of "H", "S", "C", or "A"; received {typ}.')
+
     d = p.shape[0]
     d2 = d**2
     if sparse:
-        elem_errgen = _sps.lil_matrix((d2, d2), dtype=p.dtype)
+        elem_errgen = _sps.lil_matrix((d2, d2), dtype=eeg_dtype)
     else:
-        elem_errgen = _np.empty((d2, d2), dtype=p.dtype)
-
-    assert(typ in ('H', 'S', 'C', 'A')), "`typ` must be one of 'H', 'S', 'C', or 'A'"
-    assert((typ in 'HS' and q is None) or (typ in 'CA' and q is not None)), \
-        "Wrong number of basis elements provided for %s-type elementary errorgen!" % typ
+        elem_errgen = _np.empty((d2, d2), dtype=eeg_dtype)
 
     pdag = p.T.conjugate()
     qdag = q.T.conjugate() if (q is not None) else None
 
     if typ in 'CA':
-        pq_plus_qp = pdag @ q + qdag @ p
+        pq_plus_qp  = pdag @ q + qdag @ p
         pq_minus_qp = pdag @ q - qdag @ p
+    if typ in 'S':
+        pdag_p = pdag @ p
 
-    #if p or q is a sparse matrix fall back to original implementation
+    # if p or q is a sparse matrix fall back to original implementation
     if not isinstance(p, _np.ndarray) or (q is not None and not isinstance(q, _np.ndarray)):
         # Loop through the standard basis as all possible input density matrices
         for i, rho0 in enumerate(basis_matrices('std', d2)):  # rho0 == input density mx
@@ -308,7 +322,6 @@ def create_elementary_errorgen(typ, p, q=None, sparse=False):
             if typ == 'H':
                 rho1 = -1j * (p @ rho0 - rho0 @ p)  # Add "/2" to have PP ham gens match previous versions of pyGSTi
             elif typ == 'S':
-                pdag_p = (pdag @ p)
                 rho1 = p @ rho0 @ pdag - 0.5 * (pdag_p @ rho0 + rho0 @ pdag_p)
             elif typ == 'C':
                 rho1 = p @ rho0 @ qdag + q @ rho0 @ pdag - 0.5 * (pq_plus_qp @ rho0 + rho0 @ pq_plus_qp)
@@ -317,30 +330,35 @@ def create_elementary_errorgen(typ, p, q=None, sparse=False):
             elem_errgen[:, i] = rho1.flatten()[:, None] if sparse else rho1.flatten()
     else:
         # Loop through the standard basis as all possible input density matrices
+        rho1 = _np.zeros((d,d), dtype=eeg_dtype)
         for i in range(d): 
             for j in range(d):
                 # Only difference between H/S/C/A is how they transform input density matrices
                 if typ == 'H':
-                    rho1 = _np.zeros((d,d), dtype=_np.complex128)
-                    rho1[:, j] = -1j*p[:, i]
+                    # rho1 complex
+                    rho1[:] = 0
+                    rho1[:, j] -= 1j*p[:, i]
                     rho1[i, :] += 1j*p[j, :]
                 elif typ == 'S':
-                    pdag_p = (pdag @ p)
-                    rho1 = p[:,i].reshape((d,1))@pdag[j,:].reshape((1,d))
-                    rho1[:, j] += -0.5*pdag_p[:, i]
-                    rho1[i, :] += -0.5*pdag_p[j, :]
+                    # rho1 same dtype as p
+                    rho1[:] = p[:,i].reshape((d,1)) @ pdag[j,:].reshape((1,d))
+                    rho1[:, j] -= 0.5*pdag_p[:, i]
+                    rho1[i, :] -= 0.5*pdag_p[j, :]
                 elif typ == 'C':
-                    rho1 = p[:,i].reshape((d,1))@qdag[j,:].reshape((1,d)) + q[:,i].reshape((d,1))@pdag[j,:].reshape((1,d))
-                    rho1[:, j] += -0.5*pq_plus_qp[:, i]
-                    rho1[i, :] += -0.5*pq_plus_qp[j, :]
+                    # rho1 the result dtype of (p, q)
+                    rho1[:] = p[:,i].reshape((d,1)) @ qdag[j,:].reshape((1,d)) + q[:,i].reshape((d,1)) @ pdag[j,:].reshape((1,d))
+                    rho1[:, j] -= 0.5*pq_plus_qp[:, i]
+                    rho1[i, :] -= 0.5*pq_plus_qp[j, :]
                 elif typ == 'A':
-                    rho1 = 1j*(p[:,i].reshape((d,1))@ qdag[j,:].reshape((1,d))) - 1j*(q[:,i].reshape((d,1))@pdag[j,:].reshape((1,d)))
-                    rho1[:, j] += 1j*.5*pq_minus_qp[:, i]
-                    rho1[i, :] += 1j*.5*pq_minus_qp[j, :]
+                    # rho1 complex
+                    rho1[:] = 1j*(p[:,i].reshape((d,1)) @ qdag[j,:].reshape((1,d))) - 1j*(q[:,i].reshape((d,1)) @ pdag[j,:].reshape((1,d)))
+                    rho1[:, j] += 1j*0.5*pq_minus_qp[:, i]
+                    rho1[i, :] += 1j*0.5*pq_minus_qp[j, :]
 
                 elem_errgen[:, d*i+j] = rho1.flatten()[:, None] if sparse else rho1.flatten()
 
-    if sparse: elem_errgen = elem_errgen.tocsr()
+    if sparse:
+        elem_errgen = elem_errgen.tocsr()
 
     return elem_errgen
 
