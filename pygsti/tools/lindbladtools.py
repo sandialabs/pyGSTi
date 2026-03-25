@@ -527,66 +527,66 @@ def _filtered_leeldict_to_array(
 
 
 def _validate_random_CPTP_params(
-        errorgen_types     : tuple[str, ...],
-        H_params           : tuple[float, float],
-        SCA_params         : tuple[float, float],
-        error_metric       : str   | None,
-        error_metric_value : float | None,
-        rel_HS_contrib     : tuple[float, float] | None,
-        fixed_errorgen_rates: dict,
-        max_weights: dict[str, int] | None
+        errorgen_types       : tuple[str, ...],
+        H_params             : tuple[float, float],
+        SCA_params           : tuple[float, float],
+        error_metric         : Literal['generator_infidelity', 'total_generator_error'] | None,
+        error_metric_value   : float | None,
+        rel_HS_contrib       : tuple[float, float] | None,
+        fixed_errorgen_rates : dict,
+        max_weights          : dict[str, int] | None
     ) -> tuple[float, float]:
     """Validate inputs for random_CPTP_error_generator_rates. Returns (fixed_H_contrib, fixed_S_contrib)."""
-    if error_metric is None:
-        return 0, 0
+
+    if 'C' in errorgen_types or 'A' in errorgen_types:
+        msg = 'Must include S terms when C and A present. Cannot have a CP error generator otherwise.'
+        assert 'S' in errorgen_types, msg
+
+    if max_weights is not None:
+        msg = 'The maximum weight of the %s and A terms should be <= the maximum weight of S.'
+        assert max_weights.get('C', 0) <= max_weights.get('S', 0), msg % 'C'
+        assert max_weights.get('A', 0) <= max_weights.get('S', 0), msg % 'A'
+
+    if len(fixed_errorgen_rates) == 0 or error_metric is None:
+        return 0.0, 0.0
     
-    assert error_metric_value is not None, 'error_metric_value must be specified when error_metric is not None.'
-    assert H_params[0] == 0. and SCA_params[0] == 0., \
-        'Specifying non-zero HSCA means together with a target error metric is not supported.'
-    if error_metric not in ('generator_infidelity', 'total_generator_error'):
-        raise ValueError('Unsupported error metric type. Currently supported options are generator_infidelity and total_generator_error')
-    
-    if not fixed_errorgen_rates:
-        return 0, 0
+    msg = 'Specifying non-zero HSCA means together with a target error metric is not supported.'
+    assert H_params[0] == 0. and SCA_params[0] == 0., msg
+
+    msg = 'error_metric_value must be specified when error_metric is not None.'
+    assert error_metric_value is not None, msg
     
     msg = 'All keys of fixed_errorgen_rates must be LocalElementaryErrorgenLabel.'
     assert all([isinstance(key, _LEEL) for key in fixed_errorgen_rates.keys()]), msg
+    
     fixed_H_rates = _filtered_leeldict_to_array(fixed_errorgen_rates, 'H')
     fixed_S_rates = _filtered_leeldict_to_array(fixed_errorgen_rates, 'S')
     fixed_S_contrib = _np.sum(fixed_S_rates)
+
     if error_metric == 'generator_infidelity':
-        fixed_H_contrib = _np.sum(fixed_H_rates**2)
-    elif error_metric == 'total_generator_error':
-        fixed_H_contrib = _np.sum(_np.abs(fixed_H_rates))
+        fixed_H_rates = fixed_H_rates ** 2
+    if error_metric == 'total_generator_error':
+        fixed_H_rates = _np.abs(fixed_H_rates)
+    fixed_H_contrib = _np.sum(fixed_H_rates)
+
     fixed_error_metric_value = fixed_S_contrib + fixed_H_contrib
-    msg = (f'Incompatible values of error_metric_value and fixed_errorgen_rates. The value of '
-            f'{error_metric}={error_metric_value} is less than the value of {fixed_error_metric_value} '
-            f'corresponding to the given fixed_errorgen_rates_dict.')
-    assert fixed_error_metric_value < error_metric_value, msg
+    msg  = f'Incompatible values of error_metric_value and fixed_errorgen_rates. The value of '
+    msg += f'{error_metric}={error_metric_value} is less than the value of {fixed_error_metric_value} '
+    msg += f'corresponding to the given fixed_errorgen_rates_dict.'
+    assert fixed_error_metric_value <= error_metric_value, msg
+    
     if rel_HS_contrib is not None:
-        msg_H = (f'Fixed H contribution to {error_metric} of {fixed_H_contrib} exceeds overall '
-                    f'H contribution target value of {rel_HS_contrib[0]*error_metric_value}.')
-        msg_S = (f'Fixed S contribution to {error_metric} of {fixed_S_contrib} exceeds overall '
-                    f'S contribution target value of {rel_HS_contrib[1]*error_metric_value}.')
-        assert fixed_H_contrib < rel_HS_contrib[0]*error_metric_value, msg_H
-        assert fixed_S_contrib < rel_HS_contrib[1]*error_metric_value, msg_S
 
+        msg = f'Fixed %s contribution to {error_metric} of %f exceeds overall %s contribution target value of %f.'
+        abs_H_contrib = rel_HS_contrib[0]*error_metric_value
+        abs_S_contrib = rel_HS_contrib[1]*error_metric_value
+        assert fixed_H_contrib <= abs_H_contrib, msg % ('H', fixed_H_contrib, 'H', abs_H_contrib )
+        assert fixed_S_contrib <= abs_S_contrib, msg % ('S', fixed_S_contrib, 'S', abs_S_contrib )
 
-    if rel_HS_contrib is not None:
-        assert ('H' in errorgen_types and 'S' in errorgen_types), \
-            'Invalid rel_HS_contrib, one of either H or S is not in errorgen_types.'
-        if error_metric is None:
-            _warnings.warn('The rel_HS_contrib kwarg is only utilized when error_metric is not None, the specified value is ignored otherwise.')
-        else:
-            assert abs(1-sum(rel_HS_contrib)) <= 1e-7, 'The rel_HS_contrib should sum to 1.'
-
-    if 'C' in errorgen_types or 'A' in errorgen_types:
-        assert 'S' in errorgen_types, 'Must include S terms when C and A present. Cannot have a CP error generator otherwise.'
-
-    if max_weights is not None:
-        assert (max_weights.get('C', 0) <= max_weights.get('S', 0)
-                and max_weights.get('A', 0) <= max_weights.get('S', 0)), \
-            'The maximum weight of the C and A terms should be less than or equal to the maximum weight of S.'
+        msg = 'Invalid rel_HS_contrib, %s is not in errorgen_types.'
+        assert 'H' in errorgen_types, msg % 'H'
+        assert 'S' in errorgen_types, msg % 'S'
+        assert abs(1-sum(rel_HS_contrib)) <= 1e-7, 'The rel_HS_contrib should sum to 1.'
 
     return fixed_H_contrib, fixed_S_contrib
 
@@ -666,7 +666,7 @@ def _apply_fixed_rates(
 
 def _rescale_to_error_metric(
         random_rates_dicts: dict[str, dict[_LEEL, float]],
-        error_metric: str,
+        error_metric: Literal['generator_infidelity', 'total_generator_error'],
         error_metric_value: float,
         relative_HS_contribution: tuple[float, float] | None,
         fixed_H_contrib: float,
@@ -678,15 +678,20 @@ def _rescale_to_error_metric(
         A_free_keys: list[_LEEL]
     ) -> None:
     """Scale free H/S/C/A rates so the overall error metric equals error_metric_value (mutates random_rates_dicts)."""
-    current_S_sum_free = (_np.sum([random_rates_dicts['S'][key] for key in S_free_keys])
-                          if 'S' in errorgen_types else 0)
+
+    current_S_sum_free = 0.0 
+    current_H_sum_free = 0.0
+
+    if 'S' in errorgen_types:
+        rrd = random_rates_dicts['S']
+        current_S_sum_free = _np.sum( [ rrd[key] for key in S_free_keys ] )
+
     if 'H' in errorgen_types:
+        rrd = random_rates_dicts['H']
         if error_metric == 'generator_infidelity':
-            current_H_sum_free = _np.sum([random_rates_dicts['H'][key]**2 for key in H_free_keys])
-        else:  # total_generator_error
-            current_H_sum_free = _np.sum([abs(random_rates_dicts['H'][key]) for key in H_free_keys])
-    else:
-        current_H_sum_free = 0
+            current_H_sum_free = _np.sum( [ rrd[key] ** 2 for key in H_free_keys ] )
+        if error_metric == 'total_generator_error':
+            current_H_sum_free = _np.sum( [ abs(rrd[key]) for key in H_free_keys ] )
 
     total_H_sum = current_H_sum_free + fixed_H_contrib
     total_S_sum = current_S_sum_free + fixed_S_contrib
@@ -705,10 +710,11 @@ def _rescale_to_error_metric(
     if 'H' in errorgen_types:
         if error_metric == 'generator_infidelity':
             H_scale_factor = _np.sqrt(needed_H_free / current_H_sum_free)
-        else:  # total_generator_error
+        if error_metric == 'total_generator_error':
             H_scale_factor = needed_H_free / current_H_sum_free
         for key in H_free_keys:
             random_rates_dicts['H'][key] *= H_scale_factor
+
     if 'S' in errorgen_types:
         S_scale_factor = needed_S_free / current_S_sum_free
         for key in S_free_keys:
@@ -717,6 +723,8 @@ def _rescale_to_error_metric(
             random_rates_dicts['C'][key] *= S_scale_factor
         for key in A_free_keys:
             random_rates_dicts['A'][key] *= S_scale_factor
+
+    return
 
 
 def _convert_to_global_labels(
@@ -830,14 +838,13 @@ def random_CPTP_error_generator_rates(num_qubits, errorgen_types=('H', 'S', 'C',
 
     fixed_H_contrib, fixed_S_contrib = _validate_random_CPTP_params(
         errorgen_types, H_params, SCA_params, error_metric, error_metric_value,
-        relative_HS_contribution, fixed_errorgen_rates, max_weights)
+        relative_HS_contribution, fixed_errorgen_rates, max_weights
+    )
     rng = _np.random.default_rng(seed)
 
-    state_space = _QubitSpace.cast(num_qubits)
-    errorgen_basis = _bo.CompleteElementaryErrorgenBasis('PP', state_space,
-                                                         elementary_errorgen_types=errorgen_types,
-                                                         max_weights=max_weights, sslbl_overlap=sslbl_overlap,
-                                                         default_label_type='local')
+    state_space    = _QubitSpace.cast(num_qubits)
+    errorgen_basis = _bo.CompleteElementaryErrorgenBasis('PP', state_space, errorgen_types, max_weights, sslbl_overlap, 'local')
+    
     errgen_labels_H = _sort_errorgen_labels(errorgen_basis.sublabels('H'))
     errgen_labels_S = _sort_errorgen_labels(errorgen_basis.sublabels('S'))
     errgen_labels_C = _sort_errorgen_labels(errorgen_basis.sublabels('C'))
@@ -845,8 +852,9 @@ def random_CPTP_error_generator_rates(num_qubits, errorgen_types=('H', 'S', 'C',
     errgen_labels_C = _filter_labels_for_cp(errgen_labels_C, errgen_labels_S)
     errgen_labels_A = _filter_labels_for_cp(errgen_labels_A, errgen_labels_S)
 
-    random_rates_dicts = _generate_random_rates(errgen_labels_H, errgen_labels_S, errgen_labels_C,
-                                                errgen_labels_A, H_params, SCA_params, rng)
+    random_rates_dicts = _generate_random_rates(
+        errgen_labels_H, errgen_labels_S, errgen_labels_C, errgen_labels_A, H_params, SCA_params, rng
+    )
     _check_ca_cp_constraint(random_rates_dicts['C'], random_rates_dicts['S'], 'C')
     _check_ca_cp_constraint(random_rates_dicts['A'], random_rates_dicts['S'], 'A')
     _apply_fixed_rates(random_rates_dicts, fixed_errorgen_rates)
@@ -855,11 +863,14 @@ def random_CPTP_error_generator_rates(num_qubits, errorgen_types=('H', 'S', 'C',
     S_free_keys = [key for key in errgen_labels_S if key not in fixed_errorgen_rates]
     C_free_keys = [key for key in errgen_labels_C if key not in fixed_errorgen_rates]
     A_free_keys = [key for key in errgen_labels_A if key not in fixed_errorgen_rates]
-    if error_metric is not None:
-        assert error_metric_value is not None
-        _rescale_to_error_metric(random_rates_dicts, error_metric, error_metric_value,
-                                 relative_HS_contribution, fixed_H_contrib, fixed_S_contrib,
-                                 errorgen_types, H_free_keys, S_free_keys, C_free_keys, A_free_keys)
+    
+    if error_metric is not None and error_metric_value is not None: 
+        # ^ The `and` in that check is redundant, but keep it for type checking.
+        _rescale_to_error_metric(
+            random_rates_dicts, error_metric, error_metric_value,
+            relative_HS_contribution, fixed_H_contrib, fixed_S_contrib,
+            errorgen_types, H_free_keys, S_free_keys, C_free_keys, A_free_keys
+        )
 
     errorgen_rates_dict = {}
     for errgen_type in errorgen_types:
@@ -869,6 +880,7 @@ def random_CPTP_error_generator_rates(num_qubits, errorgen_types=('H', 'S', 'C',
         raise ValueError('Unsupported label type {label_type}.')
     if label_type == 'global':
         errorgen_rates_dict = _convert_to_global_labels(errorgen_rates_dict, state_space, qubit_labels)
+
     return errorgen_rates_dict
 
 
