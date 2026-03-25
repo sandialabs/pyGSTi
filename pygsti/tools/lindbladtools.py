@@ -12,6 +12,8 @@ Utility functions relevant to Lindblad forms and projections
 
 from typing import Any, Callable, Literal
 
+Literal_HSCA = Literal['H', 'S', 'C', 'A']
+
 import numpy as _np
 import scipy.sparse as _sps
 
@@ -247,7 +249,7 @@ def create_elementary_errorgen_dual_pauli(typ, p, q=None, sparse=False):
 
 #TODO: The construction can be made a bit more efficient if we know we will be constructing multiple
 #error generators with overlapping indices by reusing intermediate results.
-def create_elementary_errorgen(typ : Literal['H', 'S', 'C', 'A'], p, q=None, sparse=False):
+def create_elementary_errorgen(typ : Literal_HSCA, p, q=None, sparse=False):
     """
     Construct an elementary error generator as a matrix in the "standard" (matrix-unit) basis.
 
@@ -538,30 +540,30 @@ def create_lindbladian_term_errorgen(typ, Lm, Ln=None, sparse=False):  # noqa N8
 
 def _filtered_leeldict_to_array(
         d: dict[_LEEL, float],
-        t: Literal['H', 'S', 'C', 'A'],
+        t: Literal_HSCA,
     ) -> _np.ndarray:
     """Return the values of d whose key's errorgen type matches t."""
     return _np.array([val for key, val in d.items() if key.errorgen_type == t])
 
 
 def _validate_random_CPTP_params(
-        errorgen_types       : tuple[str, ...],
+        errorgen_types       : tuple[Literal_HSCA, ...],
         H_params             : tuple[float, float],
         SCA_params           : tuple[float, float],
         error_metric         : Literal['generator_infidelity', 'total_generator_error'] | None,
         error_metric_value   : float | None,
         rel_HS_contrib       : tuple[float, float] | None,
-        fixed_errorgen_rates : dict,
+        fixed_errorgen_rates : dict[_LEEL, float],
         max_weights          : dict[str, int] | None
     ) -> tuple[float, float]:
     """Validate inputs for random_CPTP_error_generator_rates. Returns (fixed_H_contrib, fixed_S_contrib)."""
 
     if 'C' in errorgen_types or 'A' in errorgen_types:
-        msg = 'Must include S terms when C and A present. Cannot have a CP error generator otherwise.'
+        msg = 'Must include S terms when C or A present. Cannot have a CP error generator otherwise.'
         assert 'S' in errorgen_types, msg
 
     if max_weights is not None:
-        msg = 'The maximum weight of the %s and A terms should be <= the maximum weight of S.'
+        msg = 'The maximum weight of the %s terms should be <= the maximum weight of S.'
         assert max_weights.get('C', 0) <= max_weights.get('S', 0), msg % 'C'
         assert max_weights.get('A', 0) <= max_weights.get('S', 0), msg % 'A'
 
@@ -577,10 +579,10 @@ def _validate_random_CPTP_params(
     msg = 'All keys of fixed_errorgen_rates must be LocalElementaryErrorgenLabel.'
     assert all([isinstance(key, _LEEL) for key in fixed_errorgen_rates.keys()]), msg
     
-    fixed_H_rates = _filtered_leeldict_to_array(fixed_errorgen_rates, 'H')
     fixed_S_rates = _filtered_leeldict_to_array(fixed_errorgen_rates, 'S')
     fixed_S_contrib = _np.sum(fixed_S_rates)
 
+    fixed_H_rates = _filtered_leeldict_to_array(fixed_errorgen_rates, 'H')
     if error_metric == 'generator_infidelity':
         fixed_H_rates = fixed_H_rates ** 2
     if error_metric == 'total_generator_error':
@@ -609,7 +611,7 @@ def _validate_random_CPTP_params(
     return fixed_H_contrib, fixed_S_contrib
 
 
-def _filter_labels_for_cp(
+def _filter_ca_labels_for_cp(
         labels:   list[_LEEL],
         s_labels: list[_LEEL]
     ) -> list[_LEEL]:
@@ -650,7 +652,7 @@ def _generate_random_rates(
         H_params    : tuple[float, float],
         SCA_params  : tuple[float, float],
         rng         : _np.random.Generator
-    ) -> dict[str, dict[_LEEL, float]]:
+    ) -> dict[Literal_HSCA, dict[_LEEL, float]]:
     """Generate random H/S/C/A rates; S/C/A come from PSD matrices to satisfy CP constraints."""
     num_H_rates = len(errgen_labels_H)
     num_S_rates = len(errgen_labels_S)
@@ -670,20 +672,8 @@ def _generate_random_rates(
     return rates
 
 
-def _apply_fixed_rates(
-        random_rates_dicts: dict[str, dict[_LEEL, float]],
-        fixed_errorgen_rates: dict[_LEEL, float]
-    ) -> None:
-    """Override randomly generated rates with fixed_errorgen_rates (mutates random_rates_dicts)."""
-    by_type = {'H': [], 'S': [], 'C': [], 'A': []}
-    for key in fixed_errorgen_rates:
-        by_type[key.errorgen_type].append(key)
-    for t, keys in by_type.items():
-        random_rates_dicts[t].update({key: fixed_errorgen_rates[key] for key in keys})
-
-
 def _rescale_to_error_metric(
-        random_rates_dicts: dict[str, dict[_LEEL, float]],
+        random_rates_dicts: dict[Literal_HSCA, dict[_LEEL, float]],
         error_metric: Literal['generator_infidelity', 'total_generator_error'],
         error_metric_value: float,
         relative_HS_contribution: tuple[float, float] | None,
@@ -759,11 +749,21 @@ def _convert_to_global_labels(
     return result
 
 
-def random_CPTP_error_generator_rates(num_qubits, errorgen_types=('H', 'S', 'C', 'A'), max_weights=None,
-                                      H_params=(0., .01), SCA_params=(0., .01), error_metric=None,
-                                      error_metric_value=None, relative_HS_contribution=None,
-                                      fixed_errorgen_rates=None, sslbl_overlap=None,
-                                      label_type='global', seed=None, qubit_labels=None):
+def random_CPTP_error_generator_rates(
+        num_qubits        : int,
+        errorgen_types    : tuple[Literal_HSCA, ...] = ('H', 'S', 'C', 'A'),
+        max_weights       : dict[str, int] | None = None,
+        H_params          : tuple[float, float] = (0., .01),
+        SCA_params        : tuple[float, float] = (0., .01),
+        error_metric      : Literal['generator_infidelity', 'total_generator_error'] | None = None,
+        error_metric_value        : float | None = None,
+        relative_HS_contribution  : tuple[float, float] | None = None,
+        fixed_errorgen_rates      : dict[_LEEL, float] | None = None,
+        sslbl_overlap             : list | None = None,
+        label_type                : Literal['global', 'local'] = 'global',
+        seed           : int | None = None,
+        qubit_labels   : list | None = None
+    ) -> dict:
     """
     Function for generating a random set of CPTP error generator rates.
 
@@ -854,6 +854,9 @@ def random_CPTP_error_generator_rates(num_qubits, errorgen_types=('H', 'S', 'C',
     if fixed_errorgen_rates is None:
         fixed_errorgen_rates = {}
 
+    if label_type not in ['global', 'local']:
+        raise ValueError('Unsupported label type {label_type}.')
+
     fixed_H_contrib, fixed_S_contrib = _validate_random_CPTP_params(
         errorgen_types, H_params, SCA_params, error_metric, error_metric_value,
         relative_HS_contribution, fixed_errorgen_rates, max_weights
@@ -867,15 +870,18 @@ def random_CPTP_error_generator_rates(num_qubits, errorgen_types=('H', 'S', 'C',
     errgen_labels_S = _sort_errorgen_labels(errorgen_basis.sublabels('S'))
     errgen_labels_C = _sort_errorgen_labels(errorgen_basis.sublabels('C'))
     errgen_labels_A = _sort_errorgen_labels(errorgen_basis.sublabels('A'))
-    errgen_labels_C = _filter_labels_for_cp(errgen_labels_C, errgen_labels_S)
-    errgen_labels_A = _filter_labels_for_cp(errgen_labels_A, errgen_labels_S)
+    errgen_labels_C = _filter_ca_labels_for_cp(errgen_labels_C, errgen_labels_S)
+    errgen_labels_A = _filter_ca_labels_for_cp(errgen_labels_A, errgen_labels_S)
 
-    random_rates_dicts = _generate_random_rates(
+    random_rates_dicts : dict[Literal_HSCA, dict[_LEEL, float]] = _generate_random_rates(
         errgen_labels_H, errgen_labels_S, errgen_labels_C, errgen_labels_A, H_params, SCA_params, rng
     )
     _check_ca_cp_constraint(random_rates_dicts['C'], random_rates_dicts['S'], 'C')
     _check_ca_cp_constraint(random_rates_dicts['A'], random_rates_dicts['S'], 'A')
-    _apply_fixed_rates(random_rates_dicts, fixed_errorgen_rates)
+    for egtyp, rate_dict in random_rates_dicts.items():
+        for leel, rate in fixed_errorgen_rates.items():
+            if leel.errorgen_type == egtyp:
+                rate_dict[leel] = rate
 
     H_free_keys = [key for key in errgen_labels_H if key not in fixed_errorgen_rates]
     S_free_keys = [key for key in errgen_labels_S if key not in fixed_errorgen_rates]
@@ -894,8 +900,6 @@ def random_CPTP_error_generator_rates(num_qubits, errorgen_types=('H', 'S', 'C',
     for errgen_type in errorgen_types:
         errorgen_rates_dict.update(random_rates_dicts[errgen_type])
 
-    if label_type not in ['global', 'local']:
-        raise ValueError('Unsupported label type {label_type}.')
     if label_type == 'global':
         errorgen_rates_dict = _convert_to_global_labels(errorgen_rates_dict, state_space, qubit_labels)
 
