@@ -10,7 +10,8 @@ Utility functions relevant to Lindblad forms and projections
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from typing import Any, Callable, Literal
+from __future__ import annotations
+from typing import Literal
 
 Literal_HSCA = Literal['H', 'S', 'C', 'A']
 
@@ -29,7 +30,6 @@ from pygsti.baseobjs.statespace import (
     QubitSpace as _QubitSpace,
     StateSpace as _StateSpace
 )
-import warnings as _warnings
 
 
 def create_elementary_errorgen_dual(typ, p, q=None, sparse=False, normalization_factor='auto'):
@@ -339,8 +339,8 @@ def create_elementary_errorgen(typ : Literal_HSCA, p, q=None, sparse=False):
                 if typ == 'H':
                     # rho1 complex
                     rho1[:] = 0
-                    rho1[:, j] -= 1j*p[:, i]
-                    rho1[i, :] += 1j*p[j, :]
+                    rho1[:, j] = -1j*p[:, i]
+                    rho1[i, :] =  1j*p[j, :]
                 elif typ == 'S':
                     # rho1 same dtype as p
                     rho1[:] = p[:,i].reshape((d,1)) @ pdag[j,:].reshape((1,d))
@@ -354,8 +354,8 @@ def create_elementary_errorgen(typ : Literal_HSCA, p, q=None, sparse=False):
                 elif typ == 'A':
                     # rho1 complex
                     rho1[:] = 1j*(p[:,i].reshape((d,1)) @ qdag[j,:].reshape((1,d))) - 1j*(q[:,i].reshape((d,1)) @ pdag[j,:].reshape((1,d)))
-                    rho1[:, j] += 1j*0.5*pq_minus_qp[:, i]
-                    rho1[i, :] += 1j*0.5*pq_minus_qp[j, :]
+                    rho1[:, j] += 0.5j * pq_minus_qp[:, i]
+                    rho1[i, :] += 0.5j * pq_minus_qp[j, :]
 
                 elem_errgen[:, d*i+j] = rho1.flatten()[:, None] if sparse else rho1.flatten()
 
