@@ -339,8 +339,8 @@ def create_elementary_errorgen(typ : Literal_HSCA, p, q=None, sparse=False):
                 if typ == 'H':
                     # rho1 complex
                     rho1[:] = 0
-                    rho1[:, j] = -1j*p[:, i]
-                    rho1[i, :] =  1j*p[j, :]
+                    rho1[:, j]  = -1j*p[:, i]  # plain assignment
+                    rho1[i, :] +=  1j*p[j, :]  # in-place update
                 elif typ == 'S':
                     # rho1 same dtype as p
                     rho1[:] = p[:,i].reshape((d,1)) @ pdag[j,:].reshape((1,d))
@@ -526,9 +526,8 @@ def create_lindbladian_term_errorgen(typ, Lm, Ln=None, sparse=False):  # noqa N8
         # Only difference between H/S/C/A is how they transform input density matrices
         if typ == 'H':
             rho1 = -1j * (Lm @ rho0 - rho0 @ Lm)
-        elif typ == 'O':
+        else: # typ == 'O':
             rho1 = Ln @ rho0 @ Lm_dag - 0.5 * (Lmdag_Ln @ rho0 + rho0 @ Lmdag_Ln)
-        else: raise ValueError("Invalid lindblad term errogen type!")
         lind_errgen[:, i] = rho1.ravel()
         # ^ That line used to branch based on the value of sparse, but both branches
         #   produced the same result.
