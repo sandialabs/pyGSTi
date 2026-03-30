@@ -47,12 +47,12 @@ def _custom_superops_stdbasis_conversion(mx_basis, sparse, superops):
         if _sps.issparse(mxbasis_to_std):
             std_to_mxbasis = _spsl.inv(mxbasis_to_std.tocsc()).tocsr()
         else:
-            std_to_mxbasis = mx_basis.inverse_transform_matrix(builtin_std)
+            std_to_mxbasis = mx_basis.reverse_transform_matrix(builtin_std)
         superops = [std_to_mxbasis @ (mx @ mxbasis_to_std) for mx in superops]
         for mx in superops:
             mx.sort_indices()
     else:
-        std_to_mxbasis = mx_basis.inverse_transform_matrix(builtin_std)
+        std_to_mxbasis = mx_basis.reverse_transform_matrix(builtin_std)
         # superops = _np.einsum("ik,akl,lj->aij", std_to_mxbasis, superops, mxbasis_to_std)
         temp     = _np.tensordot(std_to_mxbasis, superops, (1, 1)) # type: ignore
         temp     = _np.tensordot(temp,     mxbasis_to_std, (2, 0))
