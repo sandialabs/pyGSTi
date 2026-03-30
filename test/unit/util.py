@@ -34,7 +34,11 @@ def needs_deap(fn):
 
 def needs_matplotlib(fn):
     """Shortcut decorator for skipping tests that require matplotlib"""
-    return unittest.skipIf('SKIP_MATPLOTLIB' in os.environ, "skipping matplotlib tests")(fn)
+    try:
+        import matplotlib
+        return unittest.skipIf('SKIP_MATPLOTLIB' in os.environ, "skipping matplotlib tests")(fn)
+    except ImportError:
+        return unittest.skip('matplotlib is not installed')
 
 
 def needs_csaps(fn):
