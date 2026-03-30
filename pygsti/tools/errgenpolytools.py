@@ -115,7 +115,7 @@ def error_generator_to_polynomial_variable_maps_by_gate(model, errorgen_var_map,
         #keys of errorgen_to_var map are tuples of LSE and integer layer indices.
         aggregated_error_generator_indices_by_gate = dict()
         for errorgen, layer_idx in errorgen_var_map:
-            gate_contributors = errorgen_gate_contributors(model, errorgen, circuit, layer_idx)
+            gate_contributors = errorgen_gate_contributors(model, errorgen, circuit, layer_idx, include_spam=include_spam)
             if len(gate_contributors) > 1:
                 msg = f'Encountered more than 1 gate contributing to this error generator {errorgen}. ' \
                       'Support for aggregating variables by gate when there is more than 1 contributor is not currently supported.'
@@ -142,7 +142,7 @@ def error_generator_to_polynomial_variable_maps_by_gate(model, errorgen_var_map,
     else:
         aggregated_error_generator_indices_by_gate = dict()
         for errorgen, layer_idx in errorgen_var_map:
-            gate_contributors, gate_contributor_operators = errorgen_gate_contributors(model, errorgen, circuit, layer_idx, return_operators=True)
+            gate_contributors, gate_contributor_operators = errorgen_gate_contributors(model, errorgen, circuit, layer_idx, return_operators=True, include_spam=include_spam)
             if len(gate_contributors) > 1:
                 msg = f'Encountered more than 1 gate contributing to this error generator {errorgen}. ' \
                       'Support for aggregating variables by gate when there is more than 1 contributor is not currently supported.'
@@ -630,13 +630,15 @@ def error_generator_taylor_expansion_symbolic_polynomial(errorgen_dict, errorgen
             composition_errgen_coeffs = []
             rate_tup = tuple([1]*current_order)
             for label_tup, coeff_tup in zip(current_order_labels, current_order_coeffs):
-                composed_labels, composed_rates = zip(*_eprop.iterative_error_generator_composition(label_tup, rate_tup))
-                composition_errgen_labels.extend(composed_labels)
-                #get the product of the coefficient polynomials in coeff_tup
-                composition_coeff_poly_product = _Polynomial.product(coeff_tup).scalar_mult(order_scale)
-                #this composite polynomial needs to have the rate appropriately scaled according to additional rate from the composition of the labels.
-                for rate in composed_rates:
-                    composition_errgen_coeffs.append(composition_coeff_poly_product.scalar_mult(rate))
+                res = _eprop.iterative_error_generator_composition(label_tup, rate_tup)
+                if len(res)>0: #hack
+                    composed_labels, composed_rates = zip(*res)
+                    composition_errgen_labels.extend(composed_labels)
+                    #get the product of the coefficient polynomials in coeff_tup
+                    composition_coeff_poly_product = _Polynomial.product(coeff_tup).scalar_mult(order_scale)
+                    #this composite polynomial needs to have the rate appropriately scaled according to additional rate from the composition of the labels.
+                    for rate in composed_rates:
+                        composition_errgen_coeffs.append(composition_coeff_poly_product.scalar_mult(rate))
                 
             # aggregate together any overlapping terms into a single dictionary
             composition_results_dict_keys = {errorgen: None for errorgen in composition_errgen_labels}
