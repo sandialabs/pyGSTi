@@ -32,28 +32,31 @@ def _custom_superops_stdbasis_conversion(mx_basis, sparse, superops):
     The input superops is either:
         (1) a list of CSR matrices, or 
         (2) an ndarray of shape (n, d, d) for some d,
-    where superops[i] is a superoperator in the mx_basis representation.
+    where superops[i] is a superoperator in the standard (matrix-unit) basis.
 
     The output superops has the same datatype as the input, although
-    the superoperators are now in the standard (matrix-unit) basis.
+    the superoperators are now in mx_basis.
     """
-    mxBasisToStd = mx_basis.create_transform_matrix(_BuiltinBasis("std", mx_basis.dim, sparse))
-    # use BuiltinBasis("std") instead of just "std" in case mx_basis is a TensorProdBasis
-
-    rightTrans = mxBasisToStd
-    leftTrans = _spsl.inv(mxBasisToStd.tocsc()).tocsr() if _sps.issparse(mxBasisToStd) \
-        else _np.linalg.inv(mxBasisToStd)
+    builtin_std = _BuiltinBasis("std", mx_basis.dim, sparse)
+    # ^ use instead of just "std" in case mx_basis is a TensorProdBasis
+    mxbasis_to_std = mx_basis.create_transform_matrix(builtin_std)
 
     if sparse:
         # Note: complex OK here sometimes, as only linear combos of "other" gens
         # (like (i,j) + (j,i) terms) need to be real.
-        superops = [leftTrans @ (mx @ rightTrans) for mx in superops]
+        if _sps.issparse(mxbasis_to_std):
+            std_to_mxbasis = _spsl.inv(mxbasis_to_std.tocsc()).tocsr()
+        else:
+            std_to_mxbasis = mx_basis.inverse_transform_matrix(builtin_std)
+        superops = [std_to_mxbasis @ (mx @ mxbasis_to_std) for mx in superops]
         for mx in superops:
             mx.sort_indices()
     else:
-        # superops = _np.einsum("ik,akl,lj->aij", leftTrans, superops, rightTrans)
-        superops = _np.transpose(_np.tensordot(
-            _np.tensordot(leftTrans, superops, (1, 1)), rightTrans, (2, 0)), (1, 0, 2))
+        std_to_mxbasis = mx_basis.inverse_transform_matrix(builtin_std)
+        # superops = _np.einsum("ik,akl,lj->aij", std_to_mxbasis, superops, mxbasis_to_std)
+        temp     = _np.tensordot(std_to_mxbasis, superops, (1, 1)) # type: ignore
+        temp     = _np.tensordot(temp,     mxbasis_to_std, (2, 0))
+        superops = _np.transpose(temp, (1, 0, 2))
     return superops
 
 
