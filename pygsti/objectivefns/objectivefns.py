@@ -280,7 +280,7 @@ class ObjectiveFunctionBuilder(_NicelySerializable):
         self.cls_to_build = cls_to_build
         self.regularization = regularization
         self.penalties = penalties
-        self.additional_args = {'kwargs': kwargs}
+        self.additional_args = kwargs
 
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
@@ -293,12 +293,16 @@ class ObjectiveFunctionBuilder(_NicelySerializable):
                       })
         return state
 
-    @classmethod
-    def _from_nice_serialization(cls, state):
+    @staticmethod
+    def _from_nice_serialization(state):
         from pygsti.io.metadir import _class_for_name
-        kwargs = state['additional_arguments'].pop('kwargs', dict())
-        return cls(_class_for_name(state['class_to_build']), state['name'], state['description'],
-                   state['regularization'], state['penalties'], *state['additional_arguments'], **kwargs)
+        classhandle = _class_for_name(state['class_to_build'])
+        pos_args    = (classhandle, state['name'], state['description'], state['regularization'], state['penalties'])
+        try:
+            return ObjectiveFunctionBuilder(*pos_args, **state['additional_arguments'])
+        except ValueError:
+            # Old behavior. Wrong, but here in case someone's pickled file relies on it. Will remove in the future.
+            return ObjectiveFunctionBuilder(*pos_args,  *state['additional_arguments'])
 
     def compute_array_types(self, method_names, forwardsim):
         return self.cls_to_build.compute_array_types(method_names, forwardsim)
@@ -6138,7 +6142,7 @@ class LogLWildcardFunction(ObjectiveFunction):
         raise NotImplementedError("No jacobian yet")
 
 
-class CachedObjectiveFunction(_NicelySerializable):
+class CachedObjectiveFunction:
     """
     Holds various values of an objective function at a particular point.
 
@@ -6148,7 +6152,15 @@ class CachedObjectiveFunction(_NicelySerializable):
     the elements of various probability vectors, etc., but we demand that this
     layout not depend on comm objects.
 
-    The cache may only have values on the rank-0 proc (??)
+    Notes
+    -----
+     * The serialization mechanism is the ``.write`` and ``.from_dir`` API pattern
+       that's used throughout the codebase for serializing objects to disk. 
+     * We don't necessarily exploit this class for improved efficiency anywhere.
+       This is largely an artifact from an incomplete feature. It's fair game in
+       the future to either (1) try and extend the use case of this class in a
+       material way, or (2) remove this class altogether.
+    
     """
     collection_name = "pygsti_cached_objective_fns"
 
@@ -6176,16 +6188,8 @@ class CachedObjectiveFunction(_NicelySerializable):
         """
         import pygsti.io as _io
         ret = cls.__new__(cls)
-        _NicelySerializable.__init__(ret)
-        ret.__dict__.update(_io.load_meta_based_dir(_pathlib.Path(dirname), 'auxfile_types', quick_load=quick_load))
-        return ret
-
-    @classmethod
-    def _create_obj_from_doc_and_mongodb(cls, doc, mongodb, quick_load=False):
-        import pygsti.io as _io
-        ret = cls.__new__(cls)
-        _NicelySerializable.__init__(ret, doc.get('_id', None))
-        ret.__dict__.update(_io.read_auxtree_from_mongodb_doc(mongodb, doc, 'auxfile_types', quick_load=quick_load))
+        temp = _io.load_meta_based_dir(_pathlib.Path(dirname), 'auxfile_types', quick_load=quick_load)
+        ret.__dict__.update(temp)
         return ret
 
     def __init__(self, objective_function):
@@ -6202,8 +6206,6 @@ class CachedObjectiveFunction(_NicelySerializable):
         self.chi2k_distributed_terms = objective_function.chi2k_distributed_qty(self.terms)
         self.num_elements = len(self.terms)
 
-        #local_percircuit = objective_function.percircuit()
-        #self.percircuit = objfn_layout.allgather_local_array('c', local_percircuit)
         self.num_circuits = len(self.layout.circuits)
         self.percircuit = _np.empty(self.num_circuits, 'd')
         for i in range(self.num_circuits):
@@ -6254,26 +6256,3 @@ class CachedObjectiveFunction(_NicelySerializable):
         import pygsti.io as _io
         _io.add_obj_auxtree_write_ops_and_update_doc(self, doc, write_ops, mongodb, collection_name,
                                                      'auxfile_types', overwrite_existing=overwrite_existing)
-
-    @classmethod
-    def _remove_from_mongodb(cls, mongodb, collection_name, doc_id, session, recursive):
-        import pygsti.io as _io
-        _io.remove_auxtree_from_mongodb(mongodb, collection_name, doc_id, 'auxfile_types', session,
-                                        recursive=recursive)
-
-    def _to_nice_serialization(self):
-        state = super()._to_nice_serialization()
-        state.update({'name': self.name,
-                      'description': self.description,
-                      'class_to_build': self.cls_to_build.__module__ + '.' + self.cls_to_build.__name__,
-                      'regularization': self.regularization,
-                      'penalties': self.penalties,
-                      'additional_arguments': self.additional_args,
-                      })
-        return state
-
-    @classmethod
-    def _from_nice_serialization(cls, state):
-        from pygsti.io.metadir import _class_for_name
-        return cls(_class_for_name(state['class_to_build']), state['name'], state['description'],
-                   state['regularization'], state['penalties'], *state['additional_arguments'])
