@@ -401,6 +401,61 @@ class GSTModelPack(ModelPack):
             kwargs.get('add_default_protocol', False),
         )
 
+    def create_gst_circuitlists(self, max_max_length, qubit_labels=None, fpr=False, lite=True, **kwargs):
+        """
+        Construct a :class:`pygsti.objects.CircuitList` from this modelpack.
+
+        Parameters
+        ----------
+        max_max_length : number
+            The greatest maximum-length to use. Equivalent to
+            constructing a cicuit struct with a `max_lengths`
+            list of powers of two less than or equal to
+            the given value.
+
+        qubit_labels : tuple, optional
+            A tuple of qubit labels.  None means the integers starting at 0.
+
+        fpr : bool, optional
+            Whether to reduce the number of sequences using fiducial
+            pair reduction (FPR).
+
+        lite : bool, optional
+            Whether to use a smaller "lite" list of germs. Unless you know
+            you have a need to use the more pessimistic "full" set of germs,
+            leave this set to True.
+
+        kwargs
+        -----
+        This function invokes pygsti.circuits.create_lsgst_circuit_lists(..., **kwargs).
+        See that function's documentation for its accepted keyword arguments.
+
+        Returns
+        -------
+         : list[class:`pygsti.objects.CircuitList`]
+        """
+        if fpr:
+            fidpairs = self.pergerm_fidpair_dict_lite(qubit_labels) if lite else \
+                self.pergerm_fidpair_dict(qubit_labels)
+            if fidpairs is None:
+                raise ValueError("No FPR information for lite=%s" % lite)
+        else:
+            fidpairs = None
+
+        qubit_labels = self._sslbls if (qubit_labels is None) else tuple(qubit_labels)
+        assert(len(qubit_labels) == len(self._sslbls)), \
+            "Expected %d qubit labels and got: %s!" % (len(self._sslbls), str(qubit_labels))
+
+        lists = _make_lsgst_lists(self._target_model(qubit_labels, evotype='default'),  # Note: only need gate names
+                                  self.prep_fiducials(qubit_labels),
+                                  self.meas_fiducials(qubit_labels),
+                                  self.germs(qubit_labels, lite),
+                                  list(_gen_max_length(max_max_length)),
+                                  fidpairs,
+                                  **kwargs)
+        return lists
+
+    _deprecated_fn('`GSTModelPack.create_gst_circuitlists(...)[-1]`')
     def create_gst_circuits(self, max_max_length, qubit_labels=None, fpr=False, lite=True, **kwargs):
         """
         Construct a :class:`pygsti.objects.CircuitList` from this modelpack.
@@ -429,25 +484,7 @@ class GSTModelPack(ModelPack):
         -------
          : class:`pygsti.objects.CircuitList`
         """
-        if fpr:
-            fidpairs = self.pergerm_fidpair_dict_lite(qubit_labels) if lite else \
-                self.pergerm_fidpair_dict(qubit_labels)
-            if fidpairs is None:
-                raise ValueError("No FPR information for lite=%s" % lite)
-        else:
-            fidpairs = None
-
-        qubit_labels = self._sslbls if (qubit_labels is None) else tuple(qubit_labels)
-        assert(len(qubit_labels) == len(self._sslbls)), \
-            "Expected %d qubit labels and got: %s!" % (len(self._sslbls), str(qubit_labels))
-
-        lists = _make_lsgst_lists(self._target_model(qubit_labels, evotype='default'),  # Note: only need gate names
-                                  self.prep_fiducials(qubit_labels),
-                                  self.meas_fiducials(qubit_labels),
-                                  self.germs(qubit_labels, lite),
-                                  list(_gen_max_length(max_max_length)),
-                                  fidpairs,
-                                  **kwargs)
+        lists = self.create_gst_circuitlists(max_max_length, qubit_labels, fpr, lite, **kwargs)
         return lists[-1]  # just return final list (for longest sequences)
 
 

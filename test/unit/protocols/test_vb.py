@@ -1,6 +1,8 @@
 from ..util import BaseCase
 
+import warnings
 import pygsti
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning
 from pygsti.protocols import vb as _vb
 from pygsti.processors import CliffordCompilationRules as CCR
 from pygsti.processors import QubitProcessorSpec as QPS
@@ -25,5 +27,10 @@ class TestPeriodicMirrorCircuitsDesign(BaseCase):
         design1 = _vb.PeriodicMirrorCircuitDesign (pspec1, depths, 3, qubit_labels=q_set,
                                         clifford_compilations=clifford_compilations, sampler='edgegrab', samplerargs=(0.25,))
 
-        [[self.assertAlmostEqual(c.simulate(tmodel1)[bs],1.) for c, bs in zip(cl, bsl)] for cl, bsl in zip(design1.circuit_lists, design1.idealout_lists)]
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', category=pyGSTiDeprecationWarning)
+            for cl, bsl in zip(design1.circuit_lists, design1.idealout_lists):
+                 for c, bs in zip(cl, bsl):
+                     self.assertAlmostEqual(c.simulate(tmodel1)[bs], 1.)
+        return
 

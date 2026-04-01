@@ -222,7 +222,8 @@ class GaugeoptToTargetArgs:
             of pyGSTi will infer intended keyword arguments based on the legacy argument 
             positions. Future versions of pyGSTi will raise an error.
             """
-            _warnings.warn(msg)
+            from pygsti.tools.exceptions import DeprecatedPositionalArgumentsWarning
+            _warnings.warn(msg, DeprecatedPositionalArgumentsWarning)
             for k,v in zip(GaugeoptToTargetArgs.old_trailing_positional_args, args):
                 full_kwargs[k] = v
 
@@ -457,12 +458,21 @@ def gaugeopt_custom(model, objective_fn: GGElObjective, gauge_group=None,
         if bToStdout and (comm is None or comm.Get_rank() == 0):
             print_obj_func = _opt.create_objfn_printer(_call_objective_fn)  # only ever prints to stdout!
             # print_obj_func(x0) #print initial point (can be a large vector though)
-        else: print_obj_func = None
+        else:
+            print_obj_func = None
 
-        minSol = _opt.minimize(_call_objective_fn, x0,
-                               method=method, maxiter=maxiter, maxfev=maxfev,
-                               tol=tol, jac=_call_jacobian_fn,
-                               callback=print_obj_func)
+        minimize_kwargs = {'method': method, 'maxiter': maxiter, 'maxfev': maxfev, 'tol': tol}
+        minimize_kwargs['jac'] = '3-point' if _call_jacobian_fn is None else _call_jacobian_fn
+
+        minSol = _opt.minimize(_call_objective_fn, x0, callback=print_obj_func, **minimize_kwargs)
+        if not minSol.success:
+            msg = f"""\n
+            Gauge optimization failed to converge! Algorithm parameters were
+            {minimize_kwargs}.
+            
+            The optimizer returned with message "{minSol.message}".
+            """
+            _warnings.warn(msg)
         solnX = minSol.x
         solnF = minSol.fun
 
