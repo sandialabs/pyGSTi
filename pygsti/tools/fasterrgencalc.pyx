@@ -20,15 +20,20 @@ from cpython.mem cimport PyMem_Malloc, PyMem_Free
 import stim
 from libc.math cimport pow
 
-cdef const np.complex128_t[32] POSSIBLE_PHASE_VALUES_INDEXED_NEGJ_J_NEG1 = [1, -1, 1j, -1j,
-                                                                     -1, 1, -1j, 1j,
-                                                                     -1j, 1j, 1, -1,
-                                                                     1j, -1j, -1, 1,
-                                                                     -1, 1, -1j, 1j,
-                                                                     1, -1, 1j, -1j,
-                                                                     1j, -1j, -1, 1,
-                                                                     -1j, 1j, 1, -1]
+_POSSIBLE_PHASE_VALUES_INDEXED_NEGJ_J_NEG1 = np.array([1, -1, 1j, -1j,
+                                            -1, 1, -1j, 1j,
+                                            -1j, 1j, 1, -1,
+                                            1j, -1j, -1, 1,
+                                            -1, 1, -1j, 1j,
+                                            1, -1, 1j, -1j,
+                                            1j, -1j, -1, 1,
+                                            -1j, 1j, 1, -1], dtype=np.complex128)
+_POSSIBLE_PHASE_VALUES_INDEXED_NEGJ_J_NEG1.flags.writeable = False                               
 
+cdef const np.complex128_t[::1] POSSIBLE_PHASE_VALUES_INDEXED_NEGJ_J_NEG1 = _POSSIBLE_PHASE_VALUES_INDEXED_NEGJ_J_NEG1
+
+@cython.wraparound(False)
+@cython.boundscheck(False)
 cdef inline np.complex128_t get_phase_from_array(int count_negj, int count_j, int count_negone):
     return POSSIBLE_PHASE_VALUES_INDEXED_NEGJ_J_NEG1[count_negone + 2*count_j + 8*count_negj]
 
