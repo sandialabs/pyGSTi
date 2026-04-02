@@ -32,10 +32,10 @@ from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySeri
 class SlurmSettings:
     """
     Settings for auto-generating a SLURM batch script via
-    :meth:`Protocol.run_mpi`.
+    :meth:`Protocol.stage_slurm`.
 
-    Pass an instance as the ``slurm=`` keyword argument to
-    :meth:`Protocol.run_mpi`.  The resulting ``.sbatch`` file can be
+    Pass an instance as the ``slurm`` argument to
+    :meth:`Protocol.stage_slurm`.  The resulting ``.sbatch`` file can be
     submitted directly with ``sbatch <script_path>``.
 
     Parameters
@@ -60,7 +60,7 @@ class SlurmSettings:
 
     job_name : str or None
         Job name (``#SBATCH --job-name``).  Defaults to the protocol
-        class name when passed to :meth:`Protocol.run_mpi`.
+        class name when passed to :meth:`Protocol.stage_slurm`.
 
     output : str or None
         Path for the SLURM stdout log (``#SBATCH --output``).  Defaults
@@ -78,11 +78,11 @@ class SlurmSettings:
 
     ``--cpus-per-task`` and the BLAS thread environment variables
     (``OMP_NUM_THREADS``, ``MKL_NUM_THREADS``, etc.) are set to the
-    value of ``blas_threads_per_rank`` passed to :meth:`Protocol.run_mpi`.
+    value of ``blas_threads_per_rank`` passed to :meth:`Protocol.stage_slurm`.
     If that value is ``0`` (the default auto-detect), note that it is
-    measured on the machine where you call ``run_mpi``, which may differ
+    measured on the machine where you call ``stage_slurm``, which may differ
     from the HPC compute nodes.  Pass an explicit ``blas_threads_per_rank``
-    to :meth:`Protocol.run_mpi` if your nodes have a different core count.
+    to :meth:`Protocol.stage_slurm` if your nodes have a different core count.
 
     The generated script includes a commented block of optional
     ``#SBATCH`` directives (``--account``, ``--qos``, ``--constraint``,
@@ -158,6 +158,92 @@ def _build_slurm_script(*, job_name, nodes, ntasks_per_node, cpus_per_task,
         f"srun python {runner_path}",
     ]
     return "\n".join(lines) + "\n"
+
+
+def _resolve_mpiexec(mpiexec: str) -> str:
+    """Return the resolved path to the MPI launcher, raising if not found.
+
+    When *mpiexec* is ``'auto'``, searches PATH for ``mpiexec``, ``mpirun``,
+    and ``mpiexec.hydra`` in that order.  Otherwise verifies that the
+    caller-supplied value is findable on PATH.
+    """
+    import shutil as _shutil
+    if mpiexec == 'auto':
+        for _candidate in ('mpiexec', 'mpirun', 'mpiexec.hydra'):
+            _found = _shutil.which(_candidate)
+            if _found is not None:
+                print(f"run_mpi: using MPI launcher '{_candidate}' at {_found}\n")
+                return _found
+        raise FileNotFoundError(
+            "run_mpi: could not find an MPI launcher on PATH. "
+            "Tried: mpiexec, mpirun, mpiexec.hydra. "
+            "Install an MPI distribution or pass mpiexec=<path> explicitly."
+        )
+    else:
+        _found = _shutil.which(mpiexec)
+        if _found is None:
+            raise FileNotFoundError(
+                f"run_mpi: the specified MPI launcher '{mpiexec}' was not found on PATH. "
+                "Check the value of the mpiexec= argument."
+            )
+        return _found
+
+
+def _compute_blas_threads(num_ranks: int, blas_threads_per_rank: int) -> int:
+    """Return the resolved BLAS thread count per rank (pure, no side effects)."""
+    if blas_threads_per_rank != 0:
+        return blas_threads_per_rank
+    import os as _os
+    try:
+        import psutil as _psutil
+        _num_cpus = _psutil.cpu_count(logical=False) or _os.cpu_count()
+    except ImportError:
+        _num_cpus = _os.cpu_count()
+    return max(1, _num_cpus // num_ranks)
+
+
+def _write_mpi_runner_artifacts(protocol_obj, data_dir: str, run_kwargs: dict,
+                                artifact_dir: _pathlib.Path) -> str:
+    """Write protocol, pickled kwargs, and runner script into *artifact_dir*.
+
+    Returns the path to the runner script (str).  Callers are responsible for
+    ensuring *artifact_dir* exists or is inside a live TemporaryDirectory.
+    *run_kwargs* is modified in-place to set ``disable_checkpointing`` default.
+    """
+    import pickle as _pickle
+
+    # Write protocol so workers can restore it with the correct subclass.
+    protocol_dir = str(artifact_dir / 'protocol')
+    protocol_obj.write(protocol_dir)
+
+    # Pickle run_kwargs so arbitrary objects (checkpoints, simulators, etc.) pass through.
+    # Disable checkpointing by default — checkpoint files written to a subprocess CWD
+    # are useless, and the auto-generated checkpoint path can fail for non-trivial mode names.
+    run_kwargs.setdefault('disable_checkpointing', True)
+    kwargs_path = str(artifact_dir / 'run_kwargs.pkl')
+    with open(kwargs_path, 'wb') as _f:
+        _pickle.dump(run_kwargs, _f)
+
+    # Generate runner script; only path strings are inlined.
+    runner_path = str(artifact_dir / 'mpi_runner.py')
+    runner_script = (
+        "import pickle\n"
+        "import pygsti\n"
+        "from mpi4py import MPI\n"
+        "comm = MPI.COMM_WORLD\n"
+        f"data = pygsti.io.read_data_from_dir({data_dir!r})\n"
+        f"protocol = pygsti.io.read_protocol_from_dir({protocol_dir!r})\n"
+        f"with open({kwargs_path!r}, 'rb') as _f:\n"
+        "    _kwargs = pickle.load(_f)\n"
+        "results = protocol.run(data, comm=comm, **_kwargs)\n"
+        "if comm.Get_rank() == 0:\n"
+        f"    results.write({data_dir!r}, data_already_written=True)\n"
+        "results = None  # free shared memory before MPI teardown\n"
+    )
+    with open(runner_path, 'w') as _f:
+        _f.write(runner_script)
+
+    return runner_path
 
 
 class Protocol(_MongoSerializable):
@@ -262,10 +348,9 @@ class Protocol(_MongoSerializable):
                 extra_mpi_args: list[str] | None = None,
                 ranks_per_host: int | None = None,
                 env: dict | None = None,
-                work_dir: str | _pathlib.Path | None = None,
+                persistent_dir: str | _pathlib.Path | None = None,
                 dry_run: bool = False,
                 blas_threads_per_rank: int = 0,
-                slurm: SlurmSettings | None = None,
                 **run_kwargs):
         """
         Run this protocol in parallel using MPI workers launched as a subprocess.
@@ -291,7 +376,6 @@ class Protocol(_MongoSerializable):
         mpiexec : str, keyword-only
             MPI launcher executable name or path.  ``'auto'`` (default) searches
             PATH for ``mpiexec``, ``mpirun``, or ``mpiexec.hydra`` in that order.
-            Ignored when ``slurm`` is provided (the generated script uses ``srun``).
 
         extra_mpi_args : list of str, keyword-only
             Extra arguments inserted between the launcher and the Python executable,
@@ -306,26 +390,20 @@ class Protocol(_MongoSerializable):
             of the current ``os.environ``.  ``ranks_per_host`` takes precedence over
             ``PYGSTI_MAX_HOST_PROCS`` supplied here.
 
-        work_dir : str or Path, keyword-only
-            Permanent directory for data and results.  When ``None`` (default),
-            the existing on-disk data path is reused if available; otherwise a
-            temporary directory is used and deleted on return.  Required when
-            ``dry_run=True`` or ``slurm`` is provided.
+        persistent_dir : str or Path, keyword-only
+            Permanent directory for data and results.  Created if it does not
+            already exist.  When ``None`` (default), the existing on-disk data
+            path is reused if available; otherwise a temporary directory is used
+            and deleted on return.  Required when ``dry_run=True``.
 
         dry_run : bool, keyword-only
-            When ``True``, write working files to ``work_dir`` and print the launch
-            command but do not execute it.  Returns ``None``.  Requires ``work_dir``
+            When ``True``, write working files to ``persistent_dir`` and print the launch
+            command but do not execute it.  Returns ``None``.  Requires ``persistent_dir``
             to be set.
 
         blas_threads_per_rank : int, keyword-only
             Number of threads each worker rank allows BLAS libraries to use.
             ``0`` (default) auto-detects an appropriate value.  See Notes.
-
-        slurm : SlurmSettings or None, keyword-only
-            When provided, write all working files to ``work_dir`` and generate a
-            SLURM batch script at ``slurm.script_path``.  Implies dry-run behavior
-            (the job is not submitted automatically).  ``work_dir`` must be set.
-            See :class:`SlurmSettings` for all options.
 
         **run_kwargs
             Forwarded to :meth:`run` in each worker (e.g. ``memlimit``,
@@ -335,7 +413,7 @@ class Protocol(_MongoSerializable):
         Returns
         -------
         ProtocolResults or None
-            ``None`` when ``dry_run=True`` or ``slurm`` is provided.
+            ``None`` when ``dry_run=True``.
 
         Notes
         -----
@@ -375,81 +453,33 @@ class Protocol(_MongoSerializable):
         These variables are applied before ``env``, so explicit entries in
         ``env`` override them.
 
-        **SLURM batch submission.**
-        Pass a :class:`SlurmSettings` instance to generate a ready-to-submit
-        ``.sbatch`` file::
-
-            from pygsti.protocols import SlurmSettings
-            protocol.run_mpi(
-                pdata, num_ranks=64,
-                work_dir='my_gst_job/',
-                slurm=SlurmSettings('my_gst_job/submit.sh',
-                                    partition='regular',
-                                    time='8:00:00',
-                                    nodes=4),
-            )
-            # Then from a terminal:  sbatch my_gst_job/submit.sh
-
-        For other job schedulers (PBS, LSF, etc.), use ``dry_run=True`` together
-        with ``work_dir`` to write the data and runner script to a permanent
-        location and print the launch command for embedding in your own batch script.
+        **Job schedulers.**
+        To generate a SLURM batch script, use :meth:`stage_slurm` instead.
+        For other schedulers (PBS, LSF, etc.), use ``dry_run=True`` together
+        with ``persistent_dir`` to write the data and runner script to a permanent
+        location and print the launch command for embedding in your own batch
+        script.
         """
         import os as _os
         import subprocess as _subprocess
         import sys as _sys
-        import pickle as _pickle
-        import shutil as _shutil
         import tempfile as _tempfile
 
         if num_ranks == 1:
             assert not dry_run, "dry_run=True is not meaningful when num_ranks=1"
-            assert slurm is None, "slurm= is not meaningful when num_ranks=1"
-            return self.run(data, **run_kwargs)
+            out = self.run(data, **run_kwargs)
+            return out
 
-        # Validate that persistent modes have a place to write artifacts.
-        if (dry_run or slurm is not None) and work_dir is None:
-            raise ValueError(
-                "work_dir must be set when dry_run=True or slurm= is provided, "
-                "so that generated files persist after run_mpi returns."
-            )
+        if dry_run and persistent_dir is None:
+            msg  = "persistent_dir must be set when dry_run=True, "
+            msg += "so that generated files persist after run_mpi returns."
+            raise ValueError(msg)
 
-        # MPI launcher detection — skipped when generating a SLURM script (uses srun).
-        if slurm is None:
-            if mpiexec == 'auto':
-                _found = None
-                for _candidate in ('mpiexec', 'mpirun', 'mpiexec.hydra'):
-                    _found = _shutil.which(_candidate)
-                    if _found is not None:
-                        print(f"run_mpi: using MPI launcher '{_candidate}' at {_found}\n")
-                        mpiexec = _found
-                        break
-                if _found is None:
-                    raise FileNotFoundError(
-                        "run_mpi: could not find an MPI launcher on PATH. "
-                        "Tried: mpiexec, mpirun, mpiexec.hydra. "
-                        "Install an MPI distribution or pass mpiexec=<path> explicitly."
-                    )
+        mpiexec  = _resolve_mpiexec(mpiexec)
+        blas_tpr = _compute_blas_threads(num_ranks, blas_threads_per_rank)
+        print(f"run_mpi: setting blas_threads_per_rank={blas_tpr}\n")
 
-        # Determine BLAS thread count.
-        if blas_threads_per_rank == 0:
-            try:
-                import psutil as _psutil
-                _num_cpus = _psutil.cpu_count(logical=False)  # type: ignore
-            finally:
-                _num_cpus : int = _num_cpus if _num_cpus else _os.cpu_count() # type: ignore
-            blas_threads_per_rank = max(1, _num_cpus // num_ranks)
-            _blas_note = (
-                f"run_mpi: setting blas_threads_per_rank={blas_threads_per_rank} "
-                f"({_num_cpus} CPUs // {num_ranks} workers)"
-            )
-            if slurm is not None:
-                _blas_note += (
-                    "\n         Note: measured on this machine; pass blas_threads_per_rank= "
-                    "explicitly if your HPC compute nodes have a different core count."
-                )
-            print(_blas_note + "\n")
-
-        _blas_env = {k: str(blas_threads_per_rank) for k in (
+        _blas_env = {k: str(blas_tpr) for k in (
             'OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS',
             'MKL_NUM_THREADS', 'NUMEXPR_NUM_THREADS', 'BLIS_NUM_THREADS',
         )}
@@ -459,88 +489,15 @@ class Protocol(_MongoSerializable):
         if ranks_per_host is not None:
             worker_env['PYGSTI_MAX_HOST_PROCS'] = str(ranks_per_host)
 
-        with _tempfile.TemporaryDirectory() as _tmpdir:
-            tmpdir = _pathlib.Path(_tmpdir)
+        if persistent_dir is not None:
+            # All artifacts go to the caller-supplied directory, which is created
+            # by data.write() if it does not already exist.
+            persistent_dir = str(_pathlib.Path(persistent_dir))
+            data.write(persistent_dir)
 
-            # Determine data directory.
-            if work_dir is not None:
-                data_dir = str(_pathlib.Path(work_dir))
-                data.write(data_dir)
-            else:
-                # Reuse the on-disk path only if it still exists.
-                # (data.edesign._loaded_from may point to a deleted temp dir from a prior run.)
-                _prior_path = data.edesign._loaded_from
-                if _prior_path is not None and _pathlib.Path(_prior_path).is_dir():
-                    data_dir = str(_prior_path)
-                else:
-                    data_dir = str(tmpdir / 'work')
-                    data.write(data_dir)
-
-            # For dry_run / slurm, artifacts must survive after this function returns,
-            # so write them into work_dir.  For live runs, tmpdir suffices.
-            artifact_base = _pathlib.Path(work_dir) if (dry_run or slurm is not None) else tmpdir
-
-            # Write protocol so workers can restore it with the correct subclass.
-            protocol_dir = str(artifact_base / 'protocol')
-            self.write(protocol_dir)
-
-            # Pickle run_kwargs so arbitrary objects (checkpoints, simulators, etc.) pass through.
-            # Disable checkpointing by default — checkpoint files written to a subprocess CWD
-            # are useless, and the auto-generated checkpoint path can fail for non-trivial mode names.
-            run_kwargs.setdefault('disable_checkpointing', True)
-            kwargs_path = str(artifact_base / 'run_kwargs.pkl')
-            with open(kwargs_path, 'wb') as _f:
-                _pickle.dump(run_kwargs, _f)
-
-            # Generate runner script; only path strings are inlined.
-            runner_path = str(artifact_base / 'mpi_runner.py')
-            runner_script = (
-                "import pickle\n"
-                "import pygsti\n"
-                "from mpi4py import MPI\n"
-                "comm = MPI.COMM_WORLD\n"
-                f"data = pygsti.io.read_data_from_dir({data_dir!r})\n"
-                f"protocol = pygsti.io.read_protocol_from_dir({protocol_dir!r})\n"
-                f"with open({kwargs_path!r}, 'rb') as _f:\n"
-                "    _kwargs = pickle.load(_f)\n"
-                "results = protocol.run(data, comm=comm, **_kwargs)\n"
-                "if comm.Get_rank() == 0:\n"
-                f"    results.write({data_dir!r}, data_already_written=True)\n"
-                "results = None  # free shared memory before MPI teardown\n"
+            runner_path = _write_mpi_runner_artifacts(
+                self, persistent_dir, run_kwargs, _pathlib.Path(persistent_dir)
             )
-            with open(runner_path, 'w') as _f:
-                _f.write(runner_script)
-
-            if slurm is not None:
-                _ntasks_per_node, _remainder = divmod(num_ranks, slurm.nodes)
-                if _remainder != 0:
-                    _warnings.warn(
-                        f"run_mpi: num_ranks={num_ranks} is not evenly divisible by "
-                        f"slurm.nodes={slurm.nodes}; the SLURM script may request "
-                        "a non-uniform task layout."
-                    )
-                _slurm_job_name = slurm.job_name or type(self).__name__
-                _script_content = _build_slurm_script(
-                    job_name=_slurm_job_name,
-                    nodes=slurm.nodes,
-                    ntasks_per_node=_ntasks_per_node,
-                    cpus_per_task=blas_threads_per_rank,
-                    time=slurm.time,
-                    partition=slurm.partition,
-                    output=slurm.output,
-                    error=slurm.error,
-                    ranks_per_host=ranks_per_host,
-                    num_ranks=num_ranks,
-                    runner_path=runner_path,
-                    script_path=str(slurm.script_path),
-                )
-                _script_path = str(slurm.script_path)
-                with open(_script_path, 'w') as _f:
-                    _f.write(_script_content)
-                print(f"run_mpi: SLURM script written to {_script_path}")
-                print(f"Submit with:  sbatch {_script_path}\n")
-                return None
-
             cmd = [mpiexec, '-n', str(num_ranks)]
             if extra_mpi_args:
                 cmd.extend(extra_mpi_args)
@@ -552,8 +509,135 @@ class Protocol(_MongoSerializable):
                 return None
 
             _subprocess.run(cmd, check=True, env=worker_env)
-            results = _io.read_results_from_dir(data_dir, name=self.name)
-            return results
+            out = _io.read_results_from_dir(persistent_dir, name=self.name)
+            return out
+
+        # persistent_dir is None: live run only (dry_run=True was rejected above).
+        # Use a temporary directory for all artifacts; it is cleaned up on return.
+        with _tempfile.TemporaryDirectory() as _tmpdir:
+            tmpdir = _pathlib.Path(_tmpdir)
+            data.write(str(tmpdir))
+
+            runner_path = _write_mpi_runner_artifacts(self, str(tmpdir), run_kwargs, tmpdir)
+            cmd = [mpiexec, '-n', str(num_ranks)]
+            if extra_mpi_args:
+                cmd.extend(extra_mpi_args)
+            cmd.extend([_sys.executable, runner_path])
+
+            _subprocess.run(cmd, check=True, env=worker_env)
+            out = _io.read_results_from_dir(str(tmpdir), name=self.name)
+            return out
+
+    def stage_slurm(self, data: 'ProtocolData', num_ranks: int,
+                    slurm: SlurmSettings,
+                    work_dir: str | _pathlib.Path,
+                    *,
+                    ranks_per_host: int | None = None,
+                    blas_threads_per_rank: int = 0,
+                    **run_kwargs) -> None:
+        """
+        Write all working files to ``work_dir`` and generate a SLURM batch
+        script ready for ``sbatch`` submission.
+
+        This is the SLURM-specific counterpart to :meth:`run_mpi`.  It does
+        **not** launch any processes; call ``sbatch <slurm.script_path>`` from
+        a terminal or batch system to submit the job.
+
+        Parameters
+        ----------
+        data : ProtocolData
+            The input data.
+
+        num_ranks : int
+            Total number of MPI worker processes.  Must be greater than 1.
+
+        slurm : SlurmSettings
+            SLURM script options.  See :class:`SlurmSettings` for details.
+
+        work_dir : str or Path
+            Permanent directory where data, the protocol, the pickled kwargs,
+            and the runner script are written.  All paths embedded in the
+            generated batch script point here.
+
+        ranks_per_host : int, keyword-only
+            Number of ranks per shared-memory group.  When set, a commented
+            ``export PYGSTI_MAX_HOST_PROCS=<value>`` line is emitted in the
+            batch script (uncomment to activate).  ``None`` (default) uses
+            a suggested value of ``num_ranks // slurm.nodes``.
+
+        blas_threads_per_rank : int, keyword-only
+            Number of BLAS threads per rank.  ``0`` (default) auto-detects
+            based on the current machine's CPU count.  This value sets both
+            ``--cpus-per-task`` in the batch script and the BLAS environment
+            variable exports.
+
+            .. note::
+                Auto-detection measures the machine on which you call
+                ``stage_slurm`` (typically a login node), which may differ
+                from the HPC compute nodes.  Pass an explicit value if your
+                compute nodes have a different core count.
+
+        **run_kwargs
+            Forwarded to :meth:`run` in each worker.  Serialized via
+            :mod:`pickle`.
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        The generated script uses ``srun`` as the MPI launcher.  ``srun`` is
+        SLURM-native and inherits the job allocation automatically, so no
+        ``-n`` flag is needed.
+
+        The script also contains a commented block of optional ``#SBATCH``
+        directives (``--account``, ``--qos``, ``--constraint``, etc.) that
+        are commonly needed but too site-specific to set automatically.
+        Uncomment and edit the relevant lines before submitting.
+        """
+        if num_ranks == 1:
+            raise ValueError("stage_slurm: num_ranks must be > 1 (no MPI overhead for a single rank).")
+
+        blas_threads_per_rank = _compute_blas_threads(num_ranks, blas_threads_per_rank)
+        print(
+            f"stage_slurm: setting blas_threads_per_rank={blas_threads_per_rank}\n"
+            "             Note: measured on this machine; pass blas_threads_per_rank= "
+            "explicitly if your HPC compute nodes have a different core count.\n"
+        )
+
+        data_dir = str(_pathlib.Path(work_dir))
+        data.write(data_dir)
+        runner_path = _write_mpi_runner_artifacts(self, data_dir, run_kwargs, _pathlib.Path(work_dir))
+
+        ntasks_per_node, _remainder = divmod(num_ranks, slurm.nodes)
+        if _remainder != 0:
+            _warnings.warn(
+                f"stage_slurm: num_ranks={num_ranks} is not evenly divisible by "
+                f"slurm.nodes={slurm.nodes}; the SLURM script may request "
+                "a non-uniform task layout."
+            )
+
+        script_content = _build_slurm_script(
+            job_name=slurm.job_name or type(self).__name__,
+            nodes=slurm.nodes,
+            ntasks_per_node=ntasks_per_node,
+            cpus_per_task=blas_threads_per_rank,
+            time=slurm.time,
+            partition=slurm.partition,
+            output=slurm.output,
+            error=slurm.error,
+            ranks_per_host=ranks_per_host,
+            num_ranks=num_ranks,
+            runner_path=runner_path,
+            script_path=str(slurm.script_path),
+        )
+        script_path = str(slurm.script_path)
+        with open(script_path, 'w') as _f:
+            _f.write(script_content)
+        print(f"stage_slurm: SLURM script written to {script_path}")
+        print(f"Submit with:  sbatch {script_path}\n")
+        return
 
     def write(self, dirname):
         """
