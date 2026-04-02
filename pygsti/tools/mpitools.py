@@ -1186,6 +1186,16 @@ def compute_blas_threads(num_ranks: int, blas_threads_per_rank: int) -> int:
     return max(1, num_cpus // num_ranks)
 
 
+# Reusable warning message for  callers of write_mpi_runner_artifacts 
+RUN_KWARGS_PICKLE_MSG = """
+    This function has written a pickle file, volatile_run_kwargs.pkl, to a
+    persistent directory. That pickle file holds the `run_kwargs` dict
+    after adding a default value for the `disable_checkpointing` kwarg.
+
+    DO NOT rely on this pickled file for long-term storage.
+"""
+
+
 def write_mpi_runner_artifacts(
         protocol_obj, data_dir: str, run_kwargs: dict, artifact_dir) -> str:
     """
@@ -1225,11 +1235,8 @@ def write_mpi_runner_artifacts(
 
     Notes
     -----
-    This function's use of picle is safe only in the context of Protcol.run_mpi
-    when the keyword argument `persistent_dir` is None. In that case the pickle
-    is created in a temporary directory and deleted before run_mpi returns. 
-    In all other cases the user bears full responsibility for NOT treating the
-    pickled data as portable or long-lived.
+    See RUN_KWARGS_PICKLE_MSG for a warning about this function's behavior when
+    artifact_dir is persistent.
     """
     import pathlib as _pathlib
     import pickle as _pickle

@@ -331,11 +331,6 @@ class Protocol(_MongoSerializable):
             msg  = "persistent_dir must be set when dry_run=True, "
             msg += "so that generated files persist after run_mpi returns."
             raise ValueError(msg)
-        
-        if dry_run and run_kwargs:
-            msg  = "run_kwargs are will be serialized with pickle to a persistent directory."
-            msg += "\nDO NOT rely on this behavior for long-term storage."
-            _warnings.warn(msg)
 
         mpiexec  = _mpitools.resolve_mpiexec(mpiexec)
         blas_tpr = _mpitools.compute_blas_threads(num_ranks, blas_threads_per_rank)
@@ -356,10 +351,12 @@ class Protocol(_MongoSerializable):
             # by data.write() if it does not already exist.
             persistent_dir = str(_pathlib.Path(persistent_dir))
             data.write(persistent_dir)
-
             runner_path = _mpitools.write_mpi_runner_artifacts(
                 self, persistent_dir, run_kwargs, _pathlib.Path(persistent_dir)
             )
+            _warnings.warn(_mpitools.RUN_KWARGS_PICKLE_MSG, UserWarning)
+            # TODO: avoid the pickle unless absolutely necessary, and raise
+            #       the warning above only when pickle is used.
             cmd = [mpiexec, '-n', str(num_ranks)]
             if extra_mpi_args:
                 cmd.extend(extra_mpi_args)
@@ -372,6 +369,7 @@ class Protocol(_MongoSerializable):
 
             _subprocess.run(cmd, check=True, env=worker_env)
             out = _io.read_results_from_dir(persistent_dir, name=self.name)
+            # TODO: delete volatile_run_kwargs.pkl from persistent_dir.
             return out
 
         # persistent_dir is None: live run only (dry_run=True was rejected above).
@@ -381,6 +379,7 @@ class Protocol(_MongoSerializable):
             data.write(str(tmpdir))
 
             runner_path = _mpitools.write_mpi_runner_artifacts(self, str(tmpdir), run_kwargs, tmpdir)
+            # ^ No warning about volatile_run_kwargs.pkl, since tempdir is deleted on return
             cmd = [mpiexec, '-n', str(num_ranks)]
             if extra_mpi_args:
                 cmd.extend(extra_mpi_args)
@@ -469,10 +468,14 @@ class Protocol(_MongoSerializable):
             msg += " explicitly if your HPC compute nodes have a different core count.\n"
             print(msg)
 
-        data_dir = str(_pathlib.Path(work_dir))
-        data.write(data_dir)
-        runner_path = _mpitools.write_mpi_runner_artifacts(self, data_dir, run_kwargs, _pathlib.Path(work_dir))
-
+        work_dir = str(_pathlib.Path(work_dir))
+        data.write(work_dir)
+        runner_path = _mpitools.write_mpi_runner_artifacts(
+            self, work_dir, run_kwargs, _pathlib.Path(work_dir)
+        )
+        _warnings.warn(_mpitools.RUN_KWARGS_PICKLE_MSG, UserWarning)
+        # TODO: avoid the pickle unless absolutely necessary, and raise
+        #       the warning above only when pickle is used.
         ntasks_per_node, _remainder = divmod(num_ranks, slurm.nodes)
         if _remainder != 0:
             msg = f"stage_slurm: num_ranks={num_ranks} is not evenly divisible by "
