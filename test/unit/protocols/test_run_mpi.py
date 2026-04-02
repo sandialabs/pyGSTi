@@ -11,12 +11,12 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 import pygsti
-from pygsti.protocols.protocol import (
-    SlurmSettings,
-    _build_slurm_script,
-    _compute_blas_threads,
-    _resolve_mpiexec,
-    _write_mpi_runner_artifacts,
+from pygsti.protocols.protocol import SlurmSettings
+from pygsti.tools.mpitools import (
+    build_slurm_script,
+    compute_blas_threads,
+    resolve_mpiexec,
+    write_mpi_runner_artifacts,
 )
 
 
@@ -30,60 +30,60 @@ class _MinimalProtocol(pygsti.protocols.Protocol):
 
 
 # ---------------------------------------------------------------------------
-# _resolve_mpiexec
+# resolve_mpiexec
 # ---------------------------------------------------------------------------
 
 class ResolveMpiexecTester:
     def test_auto_finds_mpiexec(self):
         with patch('shutil.which', side_effect=lambda x: '/usr/bin/mpiexec' if x == 'mpiexec' else None):
-            assert _resolve_mpiexec('auto') == '/usr/bin/mpiexec'
+            assert resolve_mpiexec('auto') == '/usr/bin/mpiexec'
 
     def test_auto_skips_to_mpirun(self):
         with patch('shutil.which', side_effect=lambda x: '/usr/bin/mpirun' if x == 'mpirun' else None):
-            assert _resolve_mpiexec('auto') == '/usr/bin/mpirun'
+            assert resolve_mpiexec('auto') == '/usr/bin/mpirun'
 
     def test_auto_skips_to_hydra(self):
         def _which(x):
             return '/usr/bin/mpiexec.hydra' if x == 'mpiexec.hydra' else None
         with patch('shutil.which', side_effect=_which):
-            assert _resolve_mpiexec('auto') == '/usr/bin/mpiexec.hydra'
+            assert resolve_mpiexec('auto') == '/usr/bin/mpiexec.hydra'
 
     def test_auto_nothing_found_raises(self):
         with patch('shutil.which', return_value=None):
             with pytest.raises(FileNotFoundError, match="MPI launcher"):
-                _resolve_mpiexec('auto')
+                resolve_mpiexec('auto')
 
     def test_explicit_valid(self):
         with patch('shutil.which', side_effect=lambda x: f'/opt/{x}'):
-            assert _resolve_mpiexec('myexec') == '/opt/myexec'
+            assert resolve_mpiexec('myexec') == '/opt/myexec'
 
     def test_explicit_invalid_raises(self):
         with patch('shutil.which', return_value=None):
             with pytest.raises(FileNotFoundError, match='badexec'):
-                _resolve_mpiexec('badexec')
+                resolve_mpiexec('badexec')
 
 
 # ---------------------------------------------------------------------------
-# _compute_blas_threads
+# compute_blas_threads
 # ---------------------------------------------------------------------------
 
 class ComputeBlasThreadsTester:
     def test_explicit_value_passthrough(self):
-        assert _compute_blas_threads(4, 3) == 3
+        assert compute_blas_threads(4, 3) == 3
 
     def test_explicit_value_one(self):
-        assert _compute_blas_threads(8, 1) == 1
+        assert compute_blas_threads(8, 1) == 1
 
     def test_auto_with_psutil(self):
         psutil = pytest.importorskip('psutil')
         with patch.object(psutil, 'cpu_count', return_value=8):
-            result = _compute_blas_threads(4, 0)
+            result = compute_blas_threads(4, 0)
         assert result == 2
 
     def test_auto_floors_to_one(self):
         psutil = pytest.importorskip('psutil')
         with patch.object(psutil, 'cpu_count', return_value=4):
-            result = _compute_blas_threads(100, 0)
+            result = compute_blas_threads(100, 0)
         assert result == 1
 
     def test_auto_without_psutil(self):
@@ -100,7 +100,7 @@ class ComputeBlasThreadsTester:
         try:
             with patch.object(builtins, '__import__', side_effect=_blocked):
                 with patch('os.cpu_count', return_value=8):
-                    result = _compute_blas_threads(4, 0)
+                    result = compute_blas_threads(4, 0)
         finally:
             if saved is not sentinel:
                 sys.modules['psutil'] = saved
@@ -108,11 +108,11 @@ class ComputeBlasThreadsTester:
 
 
 # ---------------------------------------------------------------------------
-# _build_slurm_script
+# build_slurm_script
 # ---------------------------------------------------------------------------
 
 class BuildSlurmScriptTester:
-    """_build_slurm_script is a pure function; no patching needed."""
+    """build_slurm_script is a pure function; no patching needed."""
 
     def _call(self, **overrides):
         kwargs = dict(
@@ -123,7 +123,7 @@ class BuildSlurmScriptTester:
             script_path='/work/submit.sh',
         )
         kwargs.update(overrides)
-        return _build_slurm_script(**kwargs)
+        return build_slurm_script(**kwargs)
 
     def test_partition_directive(self):
         assert '#SBATCH --partition=debug' in self._call()
@@ -173,38 +173,38 @@ class BuildSlurmScriptTester:
 
 
 # ---------------------------------------------------------------------------
-# _write_mpi_runner_artifacts
+# write_mpi_runner_artifacts
 # ---------------------------------------------------------------------------
 
 class WriteMpiRunnerArtifactsTester:
     def test_files_created(self, tmp_path):
         mock_proto = MagicMock()
-        runner_path = _write_mpi_runner_artifacts(mock_proto, '/some/data', {}, tmp_path)
+        runner_path = write_mpi_runner_artifacts(mock_proto, '/some/data', {}, tmp_path)
         assert (tmp_path / 'mpi_runner.py').exists()
         assert (tmp_path / 'run_kwargs.pkl').exists()
         assert runner_path == str(tmp_path / 'mpi_runner.py')
 
     def test_protocol_write_called(self, tmp_path):
         mock_proto = MagicMock()
-        _write_mpi_runner_artifacts(mock_proto, '/some/data', {}, tmp_path)
+        write_mpi_runner_artifacts(mock_proto, '/some/data', {}, tmp_path)
         mock_proto.write.assert_called_once_with(str(tmp_path / 'protocol'))
 
     def test_runner_script_has_mpi4py(self, tmp_path):
         mock_proto = MagicMock()
-        _write_mpi_runner_artifacts(mock_proto, '/data/path', {}, tmp_path)
+        write_mpi_runner_artifacts(mock_proto, '/data/path', {}, tmp_path)
         content = (tmp_path / 'mpi_runner.py').read_text()
         assert 'from mpi4py import MPI' in content
 
     def test_runner_script_embeds_data_dir(self, tmp_path):
         mock_proto = MagicMock()
-        _write_mpi_runner_artifacts(mock_proto, '/my/data/dir', {}, tmp_path)
+        write_mpi_runner_artifacts(mock_proto, '/my/data/dir', {}, tmp_path)
         content = (tmp_path / 'mpi_runner.py').read_text()
         assert '/my/data/dir' in content
 
     def test_disable_checkpointing_default(self, tmp_path):
         mock_proto = MagicMock()
         kwargs = {}
-        _write_mpi_runner_artifacts(mock_proto, '/data', kwargs, tmp_path)
+        write_mpi_runner_artifacts(mock_proto, '/data', kwargs, tmp_path)
         with open(tmp_path / 'run_kwargs.pkl', 'rb') as f:
             loaded = pickle.load(f)
         assert loaded['disable_checkpointing'] is True
@@ -212,7 +212,7 @@ class WriteMpiRunnerArtifactsTester:
     def test_disable_checkpointing_not_overwritten(self, tmp_path):
         mock_proto = MagicMock()
         kwargs = {'disable_checkpointing': False}
-        _write_mpi_runner_artifacts(mock_proto, '/data', kwargs, tmp_path)
+        write_mpi_runner_artifacts(mock_proto, '/data', kwargs, tmp_path)
         with open(tmp_path / 'run_kwargs.pkl', 'rb') as f:
             loaded = pickle.load(f)
         assert loaded['disable_checkpointing'] is False
@@ -220,7 +220,7 @@ class WriteMpiRunnerArtifactsTester:
     def test_with_real_protocol(self, tmp_path):
         """Smoke-test that a real Protocol instance serializes without error."""
         proto = _MinimalProtocol()
-        runner_path = _write_mpi_runner_artifacts(proto, str(tmp_path / 'data'), {}, tmp_path)
+        runner_path = write_mpi_runner_artifacts(proto, str(tmp_path / 'data'), {}, tmp_path)
         assert pathlib.Path(runner_path).exists()
         assert (tmp_path / 'protocol').is_dir()
 
@@ -249,8 +249,8 @@ class RunMpiDryRunTester:
     def test_returns_none(self, tmp_path):
         proto = _MinimalProtocol()
         mock_data = MagicMock()
-        with patch('pygsti.protocols.protocol._resolve_mpiexec', return_value='/fake/mpiexec'):
-            with patch('pygsti.protocols.protocol._compute_blas_threads', return_value=2):
+        with patch('pygsti.tools.mpitools.resolve_mpiexec', return_value='/fake/mpiexec'):
+            with patch('pygsti.tools.mpitools.compute_blas_threads', return_value=2):
                 result = proto.run_mpi(
                     mock_data, num_ranks=4, dry_run=True,
                     persistent_dir=str(tmp_path),
@@ -260,8 +260,8 @@ class RunMpiDryRunTester:
     def test_artifacts_written_to_persistent_dir(self, tmp_path):
         proto = _MinimalProtocol()
         mock_data = MagicMock()
-        with patch('pygsti.protocols.protocol._resolve_mpiexec', return_value='/fake/mpiexec'):
-            with patch('pygsti.protocols.protocol._compute_blas_threads', return_value=2):
+        with patch('pygsti.tools.mpitools.resolve_mpiexec', return_value='/fake/mpiexec'):
+            with patch('pygsti.tools.mpitools.compute_blas_threads', return_value=2):
                 proto.run_mpi(
                     mock_data, num_ranks=4, dry_run=True,
                     persistent_dir=str(tmp_path),
@@ -273,8 +273,8 @@ class RunMpiDryRunTester:
     def test_printed_command_includes_launcher(self, tmp_path, capsys):
         proto = _MinimalProtocol()
         mock_data = MagicMock()
-        with patch('pygsti.protocols.protocol._resolve_mpiexec', return_value='/fake/mpiexec'):
-            with patch('pygsti.protocols.protocol._compute_blas_threads', return_value=2):
+        with patch('pygsti.tools.mpitools.resolve_mpiexec', return_value='/fake/mpiexec'):
+            with patch('pygsti.tools.mpitools.compute_blas_threads', return_value=2):
                 proto.run_mpi(
                     mock_data, num_ranks=4, dry_run=True,
                     persistent_dir=str(tmp_path),
@@ -300,7 +300,7 @@ class StageSlurmMethodTester:
         proto = _MinimalProtocol()
         mock_data = MagicMock()
         slurm = SlurmSettings(str(tmp_path / 'submit.sh'), nodes=2)
-        with patch('pygsti.protocols.protocol._compute_blas_threads', return_value=2):
+        with patch('pygsti.tools.mpitools.compute_blas_threads', return_value=2):
             with pytest.warns(UserWarning, match="not evenly divisible"):
                 proto.stage_slurm(mock_data, 5, slurm, str(tmp_path))
 
@@ -309,7 +309,7 @@ class StageSlurmMethodTester:
         mock_data = MagicMock()
         script_path = str(tmp_path / 'submit.sh')
         slurm = SlurmSettings(script_path, partition='debug', time='1:00:00', nodes=2)
-        with patch('pygsti.protocols.protocol._compute_blas_threads', return_value=4):
+        with patch('pygsti.tools.mpitools.compute_blas_threads', return_value=4):
             proto.stage_slurm(mock_data, 8, slurm, str(tmp_path))
         assert pathlib.Path(script_path).exists()
 
@@ -318,7 +318,7 @@ class StageSlurmMethodTester:
         mock_data = MagicMock()
         script_path = str(tmp_path / 'submit.sh')
         slurm = SlurmSettings(script_path, partition='debug', time='2:00:00', nodes=2, job_name='MyJob')
-        with patch('pygsti.protocols.protocol._compute_blas_threads', return_value=4):
+        with patch('pygsti.tools.mpitools.compute_blas_threads', return_value=4):
             proto.stage_slurm(mock_data, 8, slurm, str(tmp_path))
         content = pathlib.Path(script_path).read_text()
         assert 'srun python' in content
@@ -332,7 +332,7 @@ class StageSlurmMethodTester:
         mock_data = MagicMock()
         script_path = str(tmp_path / 'submit.sh')
         slurm = SlurmSettings(script_path, nodes=1)  # job_name=None
-        with patch('pygsti.protocols.protocol._compute_blas_threads', return_value=2):
+        with patch('pygsti.tools.mpitools.compute_blas_threads', return_value=2):
             proto.stage_slurm(mock_data, 4, slurm, str(tmp_path))
         content = pathlib.Path(script_path).read_text()
         assert f'#SBATCH --job-name={type(proto).__name__}' in content
@@ -342,7 +342,7 @@ class StageSlurmMethodTester:
         mock_data = MagicMock()
         script_path = str(tmp_path / 'submit.sh')
         slurm = SlurmSettings(script_path, nodes=1)
-        with patch('pygsti.protocols.protocol._compute_blas_threads', return_value=2):
+        with patch('pygsti.tools.mpitools.compute_blas_threads', return_value=2):
             proto.stage_slurm(mock_data, 4, slurm, str(tmp_path))
         assert (tmp_path / 'mpi_runner.py').exists()
         assert (tmp_path / 'run_kwargs.pkl').exists()
