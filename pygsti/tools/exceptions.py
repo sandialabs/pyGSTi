@@ -125,3 +125,18 @@ class UnnamedReportWarning(UserWarning):
     and randomly, since a user didn't provide a name.
     """
     pass
+
+
+class StolenResourceWarning(UserWarning):
+    """
+    Suppose we have two types with a parent-child relationship, Foo and Bar.
+    In the event of a call sequence like
+
+        B = Bar()        # sets B.parent = None
+        F = Foo(child=B) # sets F.child = B and updates B.parent = F
+        G = make_foo(B)  # sets G.child = B and udpates B.parent = G,
+
+    the `make_foo` function should raise a StolenResourceWarning if it
+    changes the value of `id(F.child)`.
+    """
+    pass

@@ -718,6 +718,9 @@ class Basis(_NicelySerializable):
         return bool(self.dim == state_space.dim)
 
 
+BasisLike = Union[Basis, str]
+
+
 class LazyBasis(Basis):
     """
     A :class:`Basis` whose labels and elements that are constructed only when at least one of them is needed.

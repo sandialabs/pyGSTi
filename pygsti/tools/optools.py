@@ -29,22 +29,31 @@ from pygsti.tools.exceptions import (
     NumericalDomainWarning as _NumericalDomainWarning,
     CVXPYFailure as _CVXPYFailure
 )
-from pygsti.baseobjs import basis as _pgb
 from pygsti.baseobjs.basis import (
     Basis as _Basis,
     BuiltinBasis as _BuiltinBasis,
     DirectSumBasis as _DirectSumBasis,
-    TensorProdBasis as _TensorProdBasis
+    TensorProdBasis as _TensorProdBasis,
+    BasisLike
 )
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LocalElementaryErrorgenLabel
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
-from pygsti import SpaceT
 
 from typing import Union, Optional, Any
-BasisLike = Union[str, _Basis]
 
-IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
+
+__SCALAR_TOL_EXPONENT__ = 0.5
+"""^
+__SCALAR_TOL_EXPONENT__ is used when checking properties of matrices and vectors.
+It's intended only when we can check the property without incurring rounding
+errors from some reduction (like a sum or a matrix-vector product). If we're
+working with a matrix whose dtype is `d`, then we set
+
+    __SCALAR_TOL__ = _np.finfo(d).eps ** __SCALAR_TOL_EXPONENT__,
+
+or a modest multiple thereof.
+"""
 
 
 def _flat_mut_blks(i, j, block_dims):
@@ -144,7 +153,7 @@ def fidelity(a, b):
     float
         The resulting fidelity.
     """
-    __SCALAR_TOL__ = _np.finfo(a.dtype).eps ** 0.5
+    __SCALAR_TOL__ = _np.finfo(a.dtype).eps ** __SCALAR_TOL_EXPONENT__
     # ^ use for checks that have no dimensional dependence; about 1e-8 for double precision.
     
     _mt.assert_hermitian(a, __SCALAR_TOL__)
@@ -726,7 +735,8 @@ def entanglement_infidelity(a, b, mx_basis: BasisLike = 'pp', is_tp=None, is_uni
     """
     return 1 - entanglement_fidelity(a, b, mx_basis, is_tp, is_unitary)
 
-def generator_infidelity(a, b, mx_basis = 'pp'):
+
+def generator_infidelity(a, b, mx_basis = 'pp') -> float:
     """
     Returns the generator infidelity between a and b, where b is the "target" operation.
     Generator infidelity is given by the sum of the squared hamiltonian error generator
@@ -774,7 +784,8 @@ def generator_infidelity(a, b, mx_basis = 'pp'):
         if coeff_block._block_type == 'other': #S terms on diagonal, added directly
             gen_infid+= _np.sum(_np.diag(coeff_block.block_data))
 
-    return _np.real_if_close(gen_infid)
+    return _np.real_if_close(gen_infid).item()
+
 
 def gateset_infidelity(model, target_model, itype='EI',
                        weights=None, mx_basis=None, is_tp=None, is_unitary=None):
@@ -2120,6 +2131,7 @@ def create_elementary_errorgen_nqudit(typ, basis_element_labels, basis_1q, norma
                                               normalize, sparse, tensorprod_basis, create_dual=False)
     return eglist[0]
 
+
 def create_elementary_errorgen_nqudit_dual(typ, basis_element_labels, basis_1q, normalize=False,
                                            sparse=False, tensorprod_basis=False):
     """
@@ -2156,6 +2168,7 @@ def create_elementary_errorgen_nqudit_dual(typ, basis_element_labels, basis_1q, 
     eglist =  _create_elementary_errorgen_nqudit([typ], [basis_element_labels], basis_1q,
                                               normalize, sparse, tensorprod_basis, create_dual=True)
     return eglist[0]
+
 
 def bulk_create_elementary_errorgen_nqudit(typ, basis_element_labels, basis_1q, normalize=False,
                                            sparse=False, tensorprod_basis=False):
@@ -2233,6 +2246,7 @@ def bulk_create_elementary_errorgen_nqudit_dual(typ, basis_element_labels, basis
 
     return _create_elementary_errorgen_nqudit(typ, basis_element_labels, basis_1q, normalize,
                                               sparse, tensorprod_basis, create_dual=True)
+
 
 def _create_elementary_errorgen_nqudit(typ, basis_element_labels, basis_1q, normalize=False,
                                        sparse=False, tensorprod_basis=False, create_dual=False):
