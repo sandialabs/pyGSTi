@@ -102,7 +102,6 @@ class SlurmSettings:
     error: str | None = None
 
 
-
 class Protocol(_MongoSerializable):
     """
     An analysis routine that is run on experimental data.  A generalized notion of a  QCVV protocol.
@@ -254,9 +253,10 @@ class Protocol(_MongoSerializable):
             and deleted on return.  Required when ``dry_run=True``.
 
         dry_run : bool, keyword-only
-            When ``True``, write working files to ``persistent_dir`` and print the launch
-            command but do not execute it.  Returns ``None``.  Requires ``persistent_dir``
-            to be set.
+            When ``True``, we (1) write working files to ``persistent_dir``, (2) print the launch
+            command but do not execute it, and (3) return ``None``. 
+            
+            Requires ``persistent_dir`` to be set.
 
         blas_threads_per_rank : int, keyword-only
             Number of threads each worker rank allows BLAS libraries to use.
@@ -331,6 +331,11 @@ class Protocol(_MongoSerializable):
             msg  = "persistent_dir must be set when dry_run=True, "
             msg += "so that generated files persist after run_mpi returns."
             raise ValueError(msg)
+        
+        if dry_run and run_kwargs:
+            msg  = "run_kwargs are will be serialized with pickle to a persistent directory."
+            msg += "\nDO NOT rely on this behavior for long-term storage."
+            _warnings.warn(msg)
 
         mpiexec  = _mpitools.resolve_mpiexec(mpiexec)
         blas_tpr = _mpitools.compute_blas_threads(num_ranks, blas_threads_per_rank)
@@ -456,12 +461,13 @@ class Protocol(_MongoSerializable):
         if num_ranks == 1:
             raise ValueError("stage_slurm: num_ranks must be > 1 (no MPI overhead for a single rank).")
 
+        should_log = blas_threads_per_rank == 0
         blas_threads_per_rank = _mpitools.compute_blas_threads(num_ranks, blas_threads_per_rank)
-        print(
-            f"stage_slurm: setting blas_threads_per_rank={blas_threads_per_rank}\n"
-            "             Note: measured on this machine; pass blas_threads_per_rank= "
-            "explicitly if your HPC compute nodes have a different core count.\n"
-        )
+        if should_log:
+            msg = f"stage_slurm: computed blas_threads_per_rank={blas_threads_per_rank} for num_ranks={num_ranks}.\n"
+            msg += "             Note: measured on this machine; pass blas_threads_per_rank=<value>"
+            msg += " explicitly if your HPC compute nodes have a different core count.\n"
+            print(msg)
 
         data_dir = str(_pathlib.Path(work_dir))
         data.write(data_dir)
@@ -469,11 +475,10 @@ class Protocol(_MongoSerializable):
 
         ntasks_per_node, _remainder = divmod(num_ranks, slurm.nodes)
         if _remainder != 0:
-            _warnings.warn(
-                f"stage_slurm: num_ranks={num_ranks} is not evenly divisible by "
-                f"slurm.nodes={slurm.nodes}; the SLURM script may request "
-                "a non-uniform task layout."
-            )
+            msg = f"stage_slurm: num_ranks={num_ranks} is not evenly divisible by "
+            msg += f"slurm.nodes={slurm.nodes}; the SLURM script may request "
+            msg += "a non-uniform task layout."
+            _warnings.warn(msg)
 
         script_content = _mpitools.build_slurm_script(
             job_name=slurm.job_name or type(self).__name__,

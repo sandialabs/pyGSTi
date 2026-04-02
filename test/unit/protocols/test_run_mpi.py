@@ -181,7 +181,7 @@ class WriteMpiRunnerArtifactsTester:
         mock_proto = MagicMock()
         runner_path = write_mpi_runner_artifacts(mock_proto, '/some/data', {}, tmp_path)
         assert (tmp_path / 'mpi_runner.py').exists()
-        assert (tmp_path / 'run_kwargs.pkl').exists()
+        assert (tmp_path / 'volatile_run_kwargs.pkl').exists()
         assert runner_path == str(tmp_path / 'mpi_runner.py')
 
     def test_protocol_write_called(self, tmp_path):
@@ -205,7 +205,7 @@ class WriteMpiRunnerArtifactsTester:
         mock_proto = MagicMock()
         kwargs = {}
         write_mpi_runner_artifacts(mock_proto, '/data', kwargs, tmp_path)
-        with open(tmp_path / 'run_kwargs.pkl', 'rb') as f:
+        with open(tmp_path / 'volatile_run_kwargs.pkl', 'rb') as f:
             loaded = pickle.load(f)
         assert loaded['disable_checkpointing'] is True
 
@@ -213,7 +213,7 @@ class WriteMpiRunnerArtifactsTester:
         mock_proto = MagicMock()
         kwargs = {'disable_checkpointing': False}
         write_mpi_runner_artifacts(mock_proto, '/data', kwargs, tmp_path)
-        with open(tmp_path / 'run_kwargs.pkl', 'rb') as f:
+        with open(tmp_path / 'volatile_run_kwargs.pkl', 'rb') as f:
             loaded = pickle.load(f)
         assert loaded['disable_checkpointing'] is False
 
@@ -267,7 +267,7 @@ class RunMpiDryRunTester:
                     persistent_dir=str(tmp_path),
                 )
         assert (tmp_path / 'mpi_runner.py').exists()
-        assert (tmp_path / 'run_kwargs.pkl').exists()
+        assert (tmp_path / 'volatile_run_kwargs.pkl').exists()
         assert (tmp_path / 'protocol').is_dir()
 
     def test_printed_command_includes_launcher(self, tmp_path, capsys):
@@ -345,5 +345,5 @@ class StageSlurmMethodTester:
         with patch('pygsti.tools.mpitools.compute_blas_threads', return_value=2):
             proto.stage_slurm(mock_data, 4, slurm, str(tmp_path))
         assert (tmp_path / 'mpi_runner.py').exists()
-        assert (tmp_path / 'run_kwargs.pkl').exists()
+        assert (tmp_path / 'volatile_run_kwargs.pkl').exists()
         assert (tmp_path / 'protocol').is_dir()

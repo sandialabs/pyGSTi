@@ -10,6 +10,8 @@ Functions for working with MPI processor distributions
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
+
 import itertools as _itertools
 import warnings as _warnings
 
@@ -1093,7 +1095,11 @@ def closest_divisor(a, b):
 # ---------------------------------------------------------------------------
 
 def resolve_mpiexec(mpiexec: str) -> str:
-    """Return the resolved absolute path to an MPI launcher executable.
+    """
+    Return the resolved absolute path to an MPI launcher executable.
+
+    If mpiexec is 'auto', then we search for common launchers on PATH,
+    and we print and return the first one we find.
 
     Parameters
     ----------
@@ -1124,28 +1130,29 @@ def resolve_mpiexec(mpiexec: str) -> str:
             if _found is not None:
                 print(f"resolve_mpiexec: using MPI launcher '{_candidate}' at {_found}\n")
                 return _found
-        raise FileNotFoundError(
-            "resolve_mpiexec: could not find an MPI launcher on PATH. "
-            "Tried: mpiexec, mpirun, mpiexec.hydra. "
-            "Install an MPI distribution or pass mpiexec=<path> explicitly."
-        )
+        msg  = "resolve_mpiexec: could not find an MPI launcher on PATH. "
+        msg += "Tried: mpiexec, mpirun, mpiexec.hydra. "
+        msg += "Install an MPI distribution or pass mpiexec=<path> explicitly."
+        raise FileNotFoundError(msg)
     else:
         _found = _shutil.which(mpiexec)
         if _found is None:
-            raise FileNotFoundError(
-                f"resolve_mpiexec: the specified MPI launcher '{mpiexec}' was not found on PATH. "
-                "Check the value of the mpiexec= argument."
-            )
+            msg = f"resolve_mpiexec: the specified MPI launcher '{mpiexec}' was not found on PATH. "
+            msg += "Check the value of the mpiexec= argument."
+            raise FileNotFoundError(msg)
         return _found
 
 
 def compute_blas_threads(num_ranks: int, blas_threads_per_rank: int) -> int:
-    """Return the number of BLAS threads each MPI rank should use.
+    """
+    Return the number of BLAS threads that should be assigned to each
+    MPI rank on the current node, assuming num_ranks in total.
 
     Parameters
     ----------
     num_ranks : int
-        Total number of MPI ranks that will be launched.
+        Total number of MPI ranks launched on this node.
+
     blas_threads_per_rank : int
         Desired thread count.  When non-zero, returned as-is.
         When ``0``, the value is auto-detected as
@@ -1167,26 +1174,36 @@ def compute_blas_threads(num_ranks: int, blas_threads_per_rank: int) -> int:
     if blas_threads_per_rank != 0:
         return blas_threads_per_rank
     import os as _os
-    try:
+    num_cpus = _os.cpu_count()
+    num_cpus = num_cpus if num_cpus is not None else 1  # os.cpu_count can return None
+    try: 
+        # prefer to override with psutil when available
         import psutil as _psutil
-        _num_cpus = _psutil.cpu_count(logical=False) or _os.cpu_count()
+        temp = _psutil.cpu_count(logical=False)
+        num_cpus = temp if temp is not None else num_cpus
     except ImportError:
-        _num_cpus = _os.cpu_count()
-    return max(1, _num_cpus // num_ranks)
+        pass
+    return max(1, num_cpus // num_ranks)
 
 
-def write_mpi_runner_artifacts(protocol_obj, data_dir: str, run_kwargs: dict,
-                               artifact_dir) -> str:
-    """Serialize a protocol run into a self-contained directory for MPI workers.
+def write_mpi_runner_artifacts(
+        protocol_obj, data_dir: str, run_kwargs: dict, artifact_dir) -> str:
+    """
+    Serialize a protocol run into a self-contained directory for MPI workers.
 
     Writes three files into *artifact_dir*:
 
     * ``protocol/`` — the serialized protocol (via ``protocol_obj.write``).
-    * ``run_kwargs.pkl`` — pickled keyword arguments for ``protocol.run``.
+
+    * ``volatile_run_kwargs.pkl`` — pickled keyword arguments for ``protocol.run``.
+        The "volatile" prfix indicates that this file's contents shouldn't be
+        treated as portable or long-lived.
+
     * ``mpi_runner.py`` — a stand-alone Python script that each MPI worker
-      executes; it reads the data, protocol, and kwargs from disk, calls
-      ``protocol.run(data, comm=MPI.COMM_WORLD, **kwargs)``, and has rank 0
-      write the results back to *data_dir*.
+      executes. The script 
+        (1) reads the data, protocol, and kwargs from disk, then
+        (2) calls ``protocol.run(data, comm=MPI.COMM_WORLD, **kwargs)``, and
+        (3) has rank 0 write the results back to *data_dir*.
 
     Parameters
     ----------
@@ -1205,6 +1222,14 @@ def write_mpi_runner_artifacts(protocol_obj, data_dir: str, run_kwargs: dict,
     -------
     str
         Absolute path to ``mpi_runner.py``.
+
+    Notes
+    -----
+    This function's use of picle is safe only in the context of Protcol.run_mpi
+    when the keyword argument `persistent_dir` is None. In that case the pickle
+    is created in a temporary directory and deleted before run_mpi returns. 
+    In all other cases the user bears full responsibility for NOT treating the
+    pickled data as portable or long-lived.
     """
     import pathlib as _pathlib
     import pickle as _pickle
@@ -1219,7 +1244,7 @@ def write_mpi_runner_artifacts(protocol_obj, data_dir: str, run_kwargs: dict,
     # Disable checkpointing by default — checkpoint files written to a subprocess CWD
     # are useless, and the auto-generated checkpoint path can fail for non-trivial mode names.
     run_kwargs.setdefault('disable_checkpointing', True)
-    kwargs_path = str(artifact_dir / 'run_kwargs.pkl')
+    kwargs_path = str(artifact_dir / 'volatile_run_kwargs.pkl')
     with open(kwargs_path, 'wb') as _f:
         _pickle.dump(run_kwargs, _f)
 
