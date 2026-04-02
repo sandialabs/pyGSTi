@@ -11,6 +11,7 @@ except (ImportError, RuntimeError):
 
 import pygsti
 from pygsti.modelpacks import smq1Q_XYI as std
+from pygsti.protocols.protocol import SlurmSettings
 
 
 @pytest.mark.skipif(MPI is None, reason="mpi4py could not be imported")
@@ -98,3 +99,52 @@ class RunMpiTester:
         results2 = proto.run_mpi(data, num_ranks=2, mpiexec='auto', extra_mpi_args=extra)
         assert "GateSetTomography" in results1.estimates
         assert "GateSetTomography" in results2.estimates
+
+    def test_run_mpi_with_persistent_dir(self, tmp_path):
+        """run_mpi with persistent_dir leaves results on disk and returns them."""
+        exp_design = std.create_gst_experiment_design(4)
+        mdl_datagen = std.target_model().depolarize(op_noise=0.1, spam_noise=0.01)
+        ds = pygsti.data.simulate_data(mdl_datagen, exp_design, 1000, seed=1234)
+        data = pygsti.protocols.ProtocolData(exp_design, ds)
+
+        initial_model = std.target_model("full TP")
+        proto = pygsti.protocols.GateSetTomography(
+            initial_model, verbosity=0,
+            optimizer={'maxiter': 10},
+        )
+
+        results = proto.run_mpi(
+            data, num_ranks=2, mpiexec='auto',
+            extra_mpi_args=self._extra_mpi_args(),
+            persistent_dir=str(tmp_path),
+        )
+        assert "GateSetTomography" in results.estimates
+        # Directory persists and contains written data.
+        assert tmp_path.exists()
+        assert (tmp_path / 'edesign').is_dir()
+
+    def test_stage_slurm_writes_valid_script(self, tmp_path):
+        """stage_slurm produces a script with correct content (no subprocess launched)."""
+        exp_design = std.create_gst_experiment_design(4)
+        mdl_datagen = std.target_model().depolarize(op_noise=0.1, spam_noise=0.01)
+        ds = pygsti.data.simulate_data(mdl_datagen, exp_design, 1000, seed=1234)
+        data = pygsti.protocols.ProtocolData(exp_design, ds)
+
+        initial_model = std.target_model("full TP")
+        proto = pygsti.protocols.GateSetTomography(initial_model, verbosity=0)
+
+        script_path = str(tmp_path / 'submit.sh')
+        slurm = SlurmSettings(script_path, partition='debug', time='1:00:00', nodes=2)
+        proto.stage_slurm(
+            data, num_ranks=4, slurm=slurm, work_dir=str(tmp_path),
+            blas_threads_per_rank=2,
+        )
+
+        import ast
+        content = (tmp_path / 'submit.sh').read_text()
+        assert 'srun python' in content
+        assert '#SBATCH --nodes=2' in content
+        assert '#SBATCH --partition=debug' in content
+        runner_path = tmp_path / 'mpi_runner.py'
+        assert runner_path.exists()
+        ast.parse(runner_path.read_text())  # syntactically valid Python
