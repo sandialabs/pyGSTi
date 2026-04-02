@@ -129,10 +129,18 @@ class Protocol(_MongoSerializable):
                 blas_threads_per_rank=0, **run_kwargs):
         """
         Run this protocol in parallel using MPI workers launched as a subprocess.
+        The subprocess environment variables will be set as
 
-        Unlike :meth:`run`, this method can be called from anywhere (Jupyter notebooks,
-        interactive sessions, scripts) without requiring the caller to manage MPI
-        communicators or write launcher scripts manually.
+            worker_env = {**_os.environ, **_blas_env, **(env or {})}
+
+        where ``_blas_env`` is inferred from `blas_threads_per_rank` (see Notes).
+
+        This method can be called from anywhere (e.g., Jupyter notebooks or scripts)
+        without requiring the caller to manage MPI communicators or write launcher
+        scripts manually.
+
+        This method can also be used to generate a launcher script that you can use
+        with a job scheduler on an HPC system (e.g. SLURM, PBS).  See Notes.
 
         Parameters
         ----------
