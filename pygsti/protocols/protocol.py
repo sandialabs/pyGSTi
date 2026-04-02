@@ -9,6 +9,8 @@ Protocol object
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 # ***************************************************************************************************
+from __future__ import annotations
+
 import collections as _collections
 import copy as _copy
 import dataclasses as _dataclasses
@@ -3845,6 +3847,7 @@ class DataCountsSimulator(DataSimulator):
                             self.alias_dict, self.collision_action,
                             self.record_zero_counts, comm, memlimit, self.times)
         return ProtocolData(edesign, ds)
+
 
 class ProtocolCheckpoint(_NicelySerializable):
     """
