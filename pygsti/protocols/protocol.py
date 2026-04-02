@@ -236,6 +236,10 @@ class Protocol(_MongoSerializable):
         import tempfile as _tempfile
         import pathlib as _pathlib2
 
+        if num_ranks == 1:
+            assert not dry_run, "dry_run=True is not meaningful when num_ranks=1"
+            return self.run(data, **run_kwargs)
+
         if mpiexec == 'auto':
             for _candidate in ('mpiexec', 'mpirun', 'mpiexec.hydra'):
                 _found = _shutil.which(_candidate)
@@ -249,9 +253,6 @@ class Protocol(_MongoSerializable):
                     "Tried: mpiexec, mpirun, mpiexec.hydra. "
                     "Install an MPI distribution or pass mpiexec=<path> explicitly."
                 )
-
-        if num_ranks == 1:
-            return self.run(data, **run_kwargs)
 
         # Determine BLAS thread count.
         if blas_threads_per_rank == 0:
