@@ -1,5 +1,5 @@
 """
-Functions which compute named quantities for Models and Datasets.
+Functions which compute named quantities (and their confidence-regions) for Models and Datasets.
 """
 #***************************************************************************************************
 # Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -9,15 +9,10 @@ Functions which compute named quantities for Models and Datasets.
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
-"""
-Named quantities as well as their confidence-region error bars are
- computed by the functions in this module. These quantities are
- used primarily in reports, so we refer to these quantities as
- "reportables".
-"""
+from __future__ import annotations
 import importlib
 import warnings as _warnings
-from typing import Union, Optional, Literal
+from typing import Optional
 
 import numpy as _np
 import scipy.linalg as _spl
