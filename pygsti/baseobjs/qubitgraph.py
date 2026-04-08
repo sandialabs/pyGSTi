@@ -15,6 +15,7 @@ import itertools as _itertools
 
 import numpy as _np
 from scipy.sparse.csgraph import floyd_warshall as _fw
+from scipy.sparse import lil_array
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 
 
@@ -239,6 +240,7 @@ class QubitGraph(_NicelySerializable):
         # Connectivity matrix (could be sparse in future)
         typ = bool if self.directions is None else int
         self._connectivity = _np.zeros((self.nqubits, self.nqubits), dtype=typ)
+        
 
         if initial_connectivity is not None:
             assert(initial_edges is None), "Cannot specify `initial_connectivity` and `initial_edges`!"
@@ -253,6 +255,8 @@ class QubitGraph(_NicelySerializable):
         self._dirty = True  # because we haven't computed paths yet (no need)
         self._distance_matrix = None
         self._predecessors = None
+
+        self._sparse_connectivity = lil_array(self._connectivity)
 
     def map_qubit_labels(self, mapper):
         """
@@ -437,21 +441,39 @@ class QubitGraph(_NicelySerializable):
         -------
         list
         """
-        ret = set()
-        for ilbl, i in self._nodeinds.items():
-            for jlbl, j in self._nodeinds.items():
-                if self._connectivity[i, j]:
-                    if include_directions and self.directions is not None:
-                        dirname = self.directions[self._connectivity[i, j] - 1]
-                        ret.add((ilbl, jlbl, dirname))  # i < j when undirected
-                        if (not self.directed) and double_for_undirected:
-                            raise ValueError(("Cannot double direction-named edges (no way to tell "
-                                              "what direction name should be)!"))
-                    else:
-                        ret.add((ilbl, jlbl))  # i < j when undirected
-                        if (not self.directed) and double_for_undirected:
-                            ret.add((jlbl, ilbl))
-        return sorted(list(ret))
+        # ret = set()
+        # for ilbl, i in self._nodeinds.items():
+        #     for jlbl, j in self._nodeinds.items():
+        #         if self._connectivity[i, j]:
+        #             if include_directions and self.directions is not None:
+        #                 dirname = self.directions[self._connectivity[i, j] - 1]
+        #                 ret.add((ilbl, jlbl, dirname))  # i < j when undirected
+        #                 if (not self.directed) and double_for_undirected:
+        #                     raise ValueError(("Cannot double direction-named edges (no way to tell "
+        #                                       "what direction name should be)!"))
+        #             else:
+        #                 ret.add((ilbl, jlbl))  # i < j when undirected
+        #                 if (not self.directed) and double_for_undirected:
+        #                     ret.add((jlbl, ilbl))
+        # return sorted(list(ret))
+        ret1 = set()
+        idx_map = {i:ilbl for ilbl, i in self._nodeinds.items()}
+        for i, (row, row_data) in enumerate(zip(self._sparse_connectivity.rows,self._sparse_connectivity.data)):
+            for j in row:
+                ilbl = idx_map[i]
+                jlbl = idx_map[j]
+                if include_directions and self.directions is not None:
+                    dirname = self.directions[row_data[j] - 1]
+                    ret1.add((ilbl, jlbl, dirname))  # i < j when undirected
+                    if (not self.directed) and double_for_undirected:
+                        raise ValueError(("Cannot double direction-named edges (no way to tell "
+                                            "what direction name should be)!"))
+                else:
+                    ret1.add((ilbl, jlbl))  # i < j when undirected
+                    if (not self.directed) and double_for_undirected:
+                        ret1.add((jlbl, ilbl))
+                        
+        return sorted(ret1)
 
     def radius(self, base_nodes, max_hops):
         """
