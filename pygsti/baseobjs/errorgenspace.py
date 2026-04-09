@@ -10,15 +10,16 @@ Defines the ErrorgenSpace class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from typing import Literal, Union
 import numpy as _np
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.tools import matrixtools as _mt
-from pygsti.baseobjs.errorgenbasis import ExplicitElementaryErrorgenBasis
+from pygsti.baseobjs.errorgenbasis import ExplicitElementaryErrorgenBasis, ElementaryErrorgenBasis
 
 class ErrorgenSpace(_NicelySerializable):
 
 
-    def __init__(self, vectors, basis):
+    def __init__(self, vectors, basis : ElementaryErrorgenBasis):
         """
         A vector space of error generators, spanned by some basis.
 
@@ -49,6 +50,7 @@ class ErrorgenSpace(_NicelySerializable):
     @classmethod
     def from_nice_serialization(cls, state):
         return cls(cls._decodemx(state['vectors']), ExplicitElementaryErrorgenBasis.from_nice_serialization(state['basis']))
+
     def intersection(self, other_space, free_on_unspecified_space=False, use_nice_nullspace=False):
         """
         TODO: docstring
@@ -93,7 +95,7 @@ class ErrorgenSpace(_NicelySerializable):
 
         return ErrorgenSpace(intersection_vecs, common_basis)
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         """Compare self with other. Return true only if they are identical, including the order of their vectors.
 
         Args:
@@ -111,7 +113,7 @@ class ErrorgenSpace(_NicelySerializable):
         """
         raise NotImplementedError("TODO in FUTURE")
 
-    def normalize(self, norm_order=2):
+    def normalize(self, norm_order: Union[int, Literal['inf', '-inf']]=2):
         """
         Normalize the vectors defining this space according to a given norm.
 

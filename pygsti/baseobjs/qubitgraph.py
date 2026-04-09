@@ -12,7 +12,7 @@ Defines the QubitGraph class and supporting functions
 from __future__ import annotations
 
 
-from typing import Optional, Union, Iterable, Literal
+from typing import Optional, Union, Iterable, Literal, Sequence
 import collections as _collections
 import itertools as _itertools
 
@@ -586,7 +586,7 @@ class QubitGraph(_NicelySerializable):
         i, j = self._nodeinds[node1], self._nodeinds[node2]
         return self._indices_connected(i, j)
 
-    def _is_connected_subgraph(self, node_indices):
+    def _is_connected_subgraph(self, node_indices: list[int]):
         """
         Whether the nodes indexed by the elements of `node_indices` form a connected subgraph.
         """
@@ -624,7 +624,7 @@ class QubitGraph(_NicelySerializable):
         """
         return self._is_connected_subgraph(list(self._nodeinds.values()))
 
-    def is_connected_subgraph(self, nodes):
+    def is_connected_subgraph(self, nodes: list[QubitLabel_in_Graph]):
         """
         Do a give set of nodes form a connected subgraph?
 
@@ -644,7 +644,7 @@ class QubitGraph(_NicelySerializable):
             if node not in self._nodeinds: return False
         return self._is_connected_subgraph([self._nodeinds[node] for node in nodes])
 
-    def _brute_get_all_connected_sets(self, n):
+    def _brute_get_all_connected_sets(self, n: int):
         """
         Computes all connected sets of `n` qubits using a brute-force approach.
 
@@ -864,7 +864,7 @@ class QubitGraph(_NicelySerializable):
         self._refresh_dists_and_predecessors()
         return self._predecessors.copy()
 
-    def subgraph(self, nodes_to_keep, reset_nodes=False, include_directions=True):
+    def subgraph(self, nodes_to_keep: list[QubitLabel_in_Graph], reset_nodes=False, include_directions=True):
         """
         Return a graph that includes only `nodes_to_keep` and the edges between them.
 
@@ -902,7 +902,7 @@ class QubitGraph(_NicelySerializable):
 
         return QubitGraph(qubit_labels, initial_edges=edges, directed=self.directed)
 
-    def resolve_relative_nodelabel(self, relative_nodelabel, target_labels):
+    def resolve_relative_nodelabel(self, relative_nodelabel: QubitLabel_in_Graph, target_labels: Sequence[Union[str, int]]):
         """
         Resolve a "relative nodelabel" into an actual node in this graph.
 
