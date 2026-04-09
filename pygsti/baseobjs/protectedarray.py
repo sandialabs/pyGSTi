@@ -15,6 +15,8 @@ import numpy as _np
 
 from pygsti.baseobjs import _compatibility as _compat
 
+PROTECTEDARRAYERRORSTRING = "**some or all of assignment destination is read-only"
+
 class ProtectedArray(object):
     """
     A numpy ndarray-like class that allows certain elements to be treated as read-only.
@@ -41,7 +43,7 @@ class ProtectedArray(object):
         is ignored.
     """
 
-    def __init__(self, input_array, indices_to_protect=None, protected_index_mask= None):
+    def __init__(self, input_array: _np.ndarray, indices_to_protect=None, protected_index_mask= None):
         self.base = input_array
 
         if protected_index_mask is not None:
@@ -108,6 +110,47 @@ class ProtectedArray(object):
     def __float__(self): return float(self.base)
     def __complex__(self): return complex(self.base)
 
+    # Arithmetic Assignment Operations
+    def __imul__(self, other):
+        raise ValueError(PROTECTEDARRAYERRORSTRING)
+    
+    def __iadd__(self, other):
+        raise ValueError(PROTECTEDARRAYERRORSTRING)
+    
+    def __itruediv__(self, other):
+        raise ValueError(PROTECTEDARRAYERRORSTRING)
+    
+    def __ifloordiv__(self, other):
+        raise ValueError(PROTECTEDARRAYERRORSTRING)
+    
+    def __ipow__(self, other):
+        raise ValueError(PROTECTEDARRAYERRORSTRING)    
+    
+    def __isub__(self, other):
+        raise ValueError(PROTECTEDARRAYERRORSTRING)
+    
+    def __imod__(self, other):
+        raise ValueError(PROTECTEDARRAYERRORSTRING)
+    
+    def __imatmul__(self, other):
+        raise ValueError(PROTECTEDARRAYERRORSTRING)
+
+    # Logical Assignment Operations
+    def __ilshift__(self, other):
+        raise ValueError(PROTECTEDARRAYERRORSTRING)
+
+    def __irshift__(self, other):
+        raise ValueError(PROTECTEDARRAYERRORSTRING)
+    
+    def __ior__(self, other):
+        raise ValueError(PROTECTEDARRAYERRORSTRING)
+    
+    def __ixor__(self, other):
+        raise ValueError(PROTECTEDARRAYERRORSTRING)
+    
+    def __iand__(self, other):
+        raise ValueError(PROTECTEDARRAYERRORSTRING)
+
     #Pickle plumbing
 
     def __reduce__(self):
@@ -158,7 +201,7 @@ class ProtectedArray(object):
     def __setitem__(self, key, val):
                 #check if any of the indices in key have been masked off.
         if _np.any(self.protected_index_mask[key]):  # assigns to a protected index in each dim
-            raise ValueError("**some or all of assignment destination is read-only")
+            raise ValueError(PROTECTEDARRAYERRORSTRING)
         #not sure what the original logic was for this return statement, but I don't see any
         #harm in keeping it.
         return self.base.__setitem__(key, val)
