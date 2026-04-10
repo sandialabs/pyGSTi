@@ -32,7 +32,8 @@ class ProtectedArrayTester(BaseCase):
         self.assertTrue(np.all(s1.protected_index_mask == np.array([1, 1, 0])))
 
     def test_construction_matrix_but_only_indicate_a_row_to_protect(self):
-        pa2 = pa.ProtectedArray(np.zeros((3, 3), 'd'), 0)
+        with self.assertWarns(RuntimeWarning):
+            pa2 = pa.ProtectedArray(np.zeros((3, 3), 'd'), 0)
         # protect first row (index 0 in 1st dimension) but no cols - so nothing protected
         pa2[0, 0] = 5
 
