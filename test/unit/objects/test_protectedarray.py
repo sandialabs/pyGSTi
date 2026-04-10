@@ -47,22 +47,22 @@ class ProtectedArrayTester(BaseCase):
             pa1[0,0] = 1
         
     def test_raises_on_index_out_of_range(self):
-        pa5 = pa.ProtectedArray(np.zeros((3, 3), 'd'), (0, [0, 1]))
+        pa5 = pa.ProtectedArray(np.zeros((3, 3), 'd'), ([0, 1]))
         with self.assertRaises(IndexError):
             pa5[10, 0] = 4
 
     def test_raises_on_bad_index_type(self):
-        pa5 = pa.ProtectedArray(np.zeros((3, 3), 'd'), (0, [0, 1]))
+        pa5 = pa.ProtectedArray(np.zeros((3, 3), 'd'), ([0, 1]))
         with self.assertRaises(IndexError):
             pa5["str"] = 4
 
     def test_raises_on_construct_index_out_of_range(self):
         with self.assertRaises(IndexError):
-            pa.ProtectedArray(np.zeros((3, 3), 'd'), (0, 10))
+            pa.ProtectedArray(np.zeros((3, 3), 'd'), ([0, 10],))
 
     def test_raises_on_construct_bad_index_type(self):
         with self.assertRaises(IndexError):
-            pa.ProtectedArray(np.zeros((3, 3), 'd'), (0, "str"))
+            pa.ProtectedArray(np.zeros((3, 3), 'd'), ([0, "str"],))
 
     def test_raises_on_iadd(self):
         pa1 = pa.ProtectedArray(np.zeros(3, 'd'), [0])
