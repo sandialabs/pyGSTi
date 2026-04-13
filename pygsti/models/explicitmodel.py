@@ -40,7 +40,7 @@ from pygsti.modelmembers.modelmembergraph import ModelMemberGraph as _MMGraph
 from pygsti.modelmembers.operations import opfactory as _opfactory
 from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.baseobjs.basis import BuiltinBasis as _BuiltinBasis, DirectSumBasis as _DirectSumBasis
-from pygsti.baseobjs.label import Label as _Label, CircuitLabel as _CircuitLabel
+from pygsti.baseobjs.label import Label as _Label, CircuitLabel as _CircuitLabel, LabelTup as _LabelTup
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.tools import basistools as _bt
 from pygsti.tools import jamiolkowski as _jt
@@ -51,8 +51,35 @@ from pygsti.tools import slicetools as _slct
 from pygsti.tools import listtools as _lt
 from pygsti import SpaceT
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
-from typing import Union, Literal
+from typing import Literal, Sequence, Container
 from pygsti.tools.exceptions import UnknownGaugeSpaceDimension as _UnknownGaugeSpaceDimension
+
+
+MMCategoryString = Literal['all', 'ops', 'operations', 'instruments', 'preps', 'povms']
+
+
+class LabelRoster:
+    def __init__(self, arg: Literal['all'] | Container[_Label]):
+        if isinstance(arg, str) and arg == 'all':
+            self.trivial = True
+            self.collection = None
+        else:
+            self.trivial = False
+            self.collection = arg
+    def __contains__(self, item):
+        return self.trivial or (item in self.collection)
+
+
+class ModelView:
+    @staticmethod
+    def cast(arg):
+        return arg if arg is not None else ModelView()
+    def __init__(self):
+        self.operations  = _collections.defaultdict(lambda: None)
+        self.preps       = _collections.defaultdict(lambda: None)
+        self.povms       = _collections.defaultdict(lambda: None)
+        self.instruments = _collections.defaultdict(lambda: None)
+        self.factories   = _collections.defaultdict(lambda: None)
 
 
 
@@ -240,7 +267,7 @@ class ExplicitOpModel(_mdl.OpModel):
         return self._default_gauge_group
 
     @default_gauge_group.setter
-    def default_gauge_group(self, value: Union[Literal['tp', 'unitary'], _GaugeGroup]):
+    def default_gauge_group(self, value: Literal['tp', 'unitary'] | _GaugeGroup):
         """
         The default gauge group.
         """
@@ -348,76 +375,131 @@ class ExplicitOpModel(_mdl.OpModel):
         else:
             raise KeyError("Key %s has an invalid prefix" % label)
 
-    def convert_members_inplace(self, to_type, categories_to_convert='all', labels_to_convert='all',
-                                ideal_model=None, flatten_structure=False, set_default_gauge_group=False, 
-                                cptp_truncation_tol= 1e-7, spam_cp_penalty = 1e-7):
+    def convert_members_inplace(self,
+            to_type : str,
+            categories_to_convert : MMCategoryString | Sequence[MMCategoryString] = 'all',
+            labels_to_convert : Literal['all'] | Container[_Label] = 'all' ,
+            ideal_model: ModelView |_mdl.OpModel | None = None,
+            flatten_structure: bool=False,
+            set_default_gauge_group: bool=False,
+            cptp_truncation_tol: float=1e-7,
+            spam_cp_penalty: float=1e-7,
+            allow_smaller_pp_basis: bool=False
+        ) -> None:
         """
-        Method for converting the parameterizations of modelmembers within this model to new ones in-place.
+        Convert members of category `categories_to_convert` with label in `labels_to_convert`
+        to parameterization `to_type`.
 
         Parameters
         ----------
-        to_type :  str
-            String specifier for the parameterization type to convert to.
-        
-        categories_to_convert : str or list of str, optional (default 'all')
-            Categories of modelmembers to perform conversion on. Allowed options are:
-            'all', 'ops' or 'operations' (these two are aliases for the same option),
-            'instruments', 'povms' or 'preps'.
-        
-        labels_to_convert : str or list of `Label`, optional (default 'all')
-            A string specifier, or list of `Label` objects, specifying the set
-            of objects (state preparations, operations, instruments, etc.) within the model 
-            to apply the conversion to.
+        to_type : string
 
-         ideal_model : `Model`, optional (default None)
-            A model containing modelmembers instantiated such that they all correspond to the ideal
-            actions of the given gate set elements. It is recommended that this be specified when
-            converting to an error-generator-based parameterization.
-        
-        flatten_structure : bool, optional (default False)
-            When `False`, the sub-members of composed and embedded operations
-            are separately converted, leaving the original modelmember structure
-            unchanged.  When `True`, composed and embedded operations are "flattened"
-            into a single modelmember parameterized according to the requested `to_type`.
+            The gate, state, and POVM parameterization type.  Allowed
+            values are (where '*' means " terms" and " clifford terms"
+            evolution-type suffixes are allowed):
 
-        set_default_gauge_group : bool, optional (default False)
-            A flag specifying whether the default gauge group for the model should be updated
-            to the default value associated with the specified value of `to_type`.
-            See `set_default_gauge_group_for_member_type` for more on these default gauge groups.
+            - "full" : each gate / state / POVM effect element is an independent parameter
+            - "TP" : Trace-Preserving gates and state preps
+            - "static" : no parameters
+            - "static unitary" : no parameters; convert superops to unitaries
+            - "clifford" : no parameters; convert unitaries to Clifford symplecitics.
+            - "GLND*" : General unconstrained Lindbladian
+            - "CPTP*" : Completely-Positive-Trace-Preserving
+            - "H+S+A*" : Hamiltoian, Pauli-Stochastic, and Affine errors
+            - "H+S*" : Hamiltonian and Pauli-Stochastic errors
+            - "S+A*" : Pauli-Stochastic and Affine errors
+            - "S*" : Pauli-Stochastic errors
+            - "H+D+A*" : Hamiltoian, Depolarization, and Affine errors
+            - "H+D*" : Hamiltonian and Depolarization errors
+            - "D+A*" : Depolarization and Affine errors
+            - "D*" : Depolarization errors
+            - Any of the above with "S" replaced with "s" or "D" replaced with
+              "d". This removes the CPTP constraint on the gates and SPAM
+              operations (and as such is seldom used).
 
-        cptp_truncation_tol : float, optional (default 1e-7)
-            Tolerance term used to enforce the CPTP constraint on gates when moving between different
-            parameterizations.
+        categories_to_convert
 
-        spam_cp_penalty : float, optional (default 1e-7)
-            Penalty term used to enforce the CP constraint on SPAM when moving between different
-            parameterizations.        
+            A string literal consistent with MMCategoryString, or a sequence thereof.
+
+        ideal_model : Model, optional
+
+            This may specify an ideal model of unitary gates and pure state vectors
+            to be used as the *ideal* operation of each gate/SPAM operation. This
+            is particularly useful as target for CPTP-based conversions.
+            
+        cptp_truncation_tol : float, optional (default 1e-6)
+
+            Tolerance used for conversion to CPTP parameterizations. When converting to
+            CPTP models negative eigenvalues of the choi matrix representation of a superoperator
+            are truncated, which can result in a change in the PTM for that operator. This tolerance
+            indicates the maximum amount of truncation induced deviation from the original operations
+            (measured by frobenius distance) we're willing to accept without marking the conversion
+            as failed.
+
+        spam_cp_penalty : float, optional (default 0.5)
+
+            Converting SPAM operations to an error generator representation may 
+            introduce trivial gauge degrees of freedom. These gauge degrees of freedom 
+            are called trivial because they quite literally do not change the dense representation 
+            (i.e. Hilbert-Schmidt vectors) at all. Despite being trivial, error generators along 
+            this trivial gauge orbit may be non-CP, so this cptp penalty is used to favor channels 
+            within this gauge orbit which are CPTP.
+
+        allow_smaller_pp_basis : bool
+
+            Setting allow_smaller_pp_basis=True allows dimension mismatches between
+            this ExplicitOpModel's operations and the dimensions we'd expect for
+            operations based on the properties of self.basis.
+            
+            We can ONLY handle mismatches when self.basis.name indicates a Pauli product basis
+            or a tensor product thereof. We handle a failed conversion by trying a second time,
+            passing in the string literal `pp` instead of `self.basis` to _op.convert(...).
+    
         """
-        if isinstance(categories_to_convert, str): categories_to_convert = (categories_to_convert,)
+        if isinstance(categories_to_convert, str):
+            if categories_to_convert == 'all':
+                categories_to_convert = ('operations', 'instruments', 'preps', 'povms')
+            elif categories_to_convert == 'ops':
+                categories_to_convert = ('operations', )
+            else:
+                categories_to_convert = (categories_to_convert,)
+        if 
+
+        assert all(c in ['all', 'ops', 'operations', 'instruments', 'preps', 'povms'] for c in categories_to_convert)
+        fallback_basis = '' if not allow_smaller_pp_basis else self.basis.name.replace('pp','').replace('*','') + 'pp'
+        ideal_model = ModelView.cast(ideal_model)
+        roster = LabelRoster(labels_to_convert)
         if any([c in categories_to_convert for c in ('all', 'ops', 'operations')]):
-            for lbl, gate in self.operations.items():
-                if labels_to_convert == 'all' or lbl in labels_to_convert:
-                    ideal = ideal_model.operations.get(lbl, None) if (ideal_model is not None) else None
-                    self.operations[lbl] = _op.convert(gate, to_type, self.basis, ideal, flatten_structure, cptp_truncation_tol)
+            op_items = [(k,v) for (k,v) in self.operations.items() if k in roster]
+            for lbl, gate in op_items:
+                ideal = ideal_model.operations[lbl]
+                try:
+                    op = _op.convert(gate, to_type, self.basis, ideal, flatten_structure, cptp_truncation_tol)
+                except ValueError as e:
+                    if not fallback_basis == 'pp':
+                        raise e
+                    op = _op.convert(gate, to_type, 'pp', ideal, flatten_structure, cptp_truncation_tol)
+                self.operations[lbl] = op
         if any([c in categories_to_convert for c in ('all', 'instruments')]):
-            for lbl, inst in self.instruments.items():
-                if labels_to_convert == 'all' or lbl in labels_to_convert:
-                    ideal = ideal_model.instruments.get(lbl, None) if (ideal_model is not None) else None
-                    self.instruments[lbl] = _instrument.convert(inst, to_type, self.basis, ideal, flatten_structure)
+            inst_items = [(k,v) for (k,v) in self.instruments.items() if k in roster]
+            for lbl, inst in inst_items:
+                ideal = ideal_model.instruments[lbl]
+                self.instruments[lbl] = _instrument.convert(inst, to_type, self.basis, ideal, flatten_structure)
         if any([c in categories_to_convert for c in ('all', 'preps')]):
-            for lbl, prep in self.preps.items():
-                if labels_to_convert == 'all' or lbl in labels_to_convert:
-                    ideal = ideal_model.preps.get(lbl, None) if (ideal_model is not None) else None
-                    self.preps[lbl] = _state.convert(prep, to_type, self.basis, ideal, flatten_structure, cp_penalty=spam_cp_penalty)
+            prep_items = [(k,v) for (k,v) in self.preps.items() if k in roster]
+            for lbl, prep in prep_items:
+                ideal = ideal_model.preps[lbl]
+                self.preps[lbl] = _state.convert(prep, to_type, self.basis, ideal, flatten_structure, cp_penalty=spam_cp_penalty)
         if any([c in categories_to_convert for c in ('all', 'povms')]):
-            for lbl, povm in self.povms.items():
-                if labels_to_convert == 'all' or lbl in labels_to_convert:
-                    ideal = ideal_model.povms.get(lbl, None) if (ideal_model is not None) else None
-                    self.povms[lbl] = _povm.convert(povm, to_type, self.basis, ideal, flatten_structure, cp_penalty=spam_cp_penalty)
+            povm_items = [(k,v) for (k,v) in self.povms.items() if k in roster]
+            for lbl, povm in povm_items:
+                ideal = ideal_model.povms[lbl]
+                self.povms[lbl] = _povm.convert(povm, to_type, self.basis, ideal, flatten_structure, cp_penalty=spam_cp_penalty)
 
         self._clean_paramvec()  # param indices were probabaly updated
         if set_default_gauge_group:
             self.set_default_gauge_group_for_member_type(to_type)
+        return
 
     def set_default_gauge_group_for_member_type(self, member_type):
         """ 
@@ -486,6 +568,7 @@ class ExplicitOpModel(_mdl.OpModel):
             indicates the maximum amount of truncation induced deviation from the original operations
             (measured by frobenius distance) we're willing to accept without marking the conversion
             as failed.
+
         spam_cp_penalty : float, optional (default 0.5)
             Converting SPAM operations to an error generator representation may 
             introduce trivial gauge degrees of freedom. These gauge degrees of freedom 

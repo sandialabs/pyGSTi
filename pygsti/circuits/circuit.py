@@ -601,11 +601,13 @@ class Circuit(object):
         self._name = name  # can be None
         #self._times = None  # for FUTURE expansion
         self.auxinfo = {}  # for FUTURE expansion / user metadata
+        self.saved_auxinfo = {}
+        self.saved_auxinfo["lanes"] = {tuple(line_labels): self._labels}
 
     #Note: If editing _copy_init one should also check _bare_init in case changes must be propagated.
     #specialized codepath for copying
     def _copy_init(self, labels, line_labels, editable, name='', stringrep=None, occurrence=None,
-                compilable_layer_indices_tup=(), hashable_tup=None, precomp_hash=None):
+                compilable_layer_indices_tup=(), hashable_tup=None, precomp_hash=None, saved_aux: Optional[dict[str, dict]]=None):
         self._labels = labels
         self._line_labels = line_labels
         self._occurrence_id = occurrence
@@ -622,7 +624,7 @@ class Circuit(object):
         self._name = name  # can be None
         #self._times = None  # for FUTURE expansion
         self.auxinfo = {}  # for FUTURE expansion / user metadata
-
+        self.saved_auxinfo = saved_aux if saved_aux else dict()
         return self
 
     #pickle management functions
@@ -1126,13 +1128,13 @@ class Circuit(object):
                 editable_labels =[[lbl] if lbl.IS_SIMPLE else list(lbl.components) for lbl in self._labels]
                 return ret._copy_init(editable_labels, self._line_labels, editable,
                                       self._name, self._str, self._occurrence_id,
-                                      self._compilable_layer_indices_tup)
+                                      self._compilable_layer_indices_tup, saved_aux=self.saved_auxinfo)
             else:
                 #copy the editable labels (avoiding shallow copy issues)
                 editable_labels = [sublist.copy() for sublist in self._labels]
                 return ret._copy_init(editable_labels, self._line_labels, editable,
                                       self._name, self._str, self._occurrence_id,
-                                      self._compilable_layer_indices_tup)
+                                      self._compilable_layer_indices_tup, saved_aux=self.saved_auxinfo)
         else: #create static copy
             if self._static:
                 #if presently static leverage precomputed hashable_tup and hash.
@@ -1141,14 +1143,14 @@ class Circuit(object):
                 return ret._copy_init(self._labels, self._line_labels, editable,
                                       self._name, self._str, self._occurrence_id,
                                       self._compilable_layer_indices_tup,
-                                      self._hashable_tup, self._hash)
+                                      self._hashable_tup, self._hash, saved_aux=self.saved_auxinfo)
             else:
                 static_labels = _sort_layer_labels(self._labels)
                 hashable_tup = self._tup_copy(static_labels)
                 return ret._copy_init(static_labels, self._line_labels,
                                       editable, self._name, self._str, self._occurrence_id,
                                       self._compilable_layer_indices_tup,
-                                      hashable_tup, hash(hashable_tup))
+                                      hashable_tup, hash(hashable_tup), saved_aux=self.saved_auxinfo)
     
     def sort_layer_labels_inplace(self):
         """
@@ -2550,6 +2552,32 @@ class Circuit(object):
         cpy.tensor_circuit_inplace(circuit, line_order)
         if self._static: cpy.done_editing()
         return cpy
+    
+    def _cache_tensor_lanes(self, sub_circuit_list: list[_Label],
+                            lane_to_qubits: dict[int, tuple[int, ...]]) -> Circuit:
+        """
+        Store the tensor lanes in the circuit if appropriate. 
+        Note that this should only be called in the case that the sub_circuit_list
+        when tensored is equivalent to the current circuit.
+        """
+
+        if "lanes" in self.saved_auxinfo and len(self) > 0:
+            if len(self.saved_auxinfo["lanes"]) == 1:
+                # We will update this because it is now believed that
+                # we are able to conduct the operation in cross talk free lanes.
+                qubits_used = set()
+                for qub_in_lane in lane_to_qubits.values():
+                    qubits_used = qubits_used.union(qub_in_lane)
+
+                if len(qubits_used) != self.num_lines:
+                    # Do not update.
+                    return self
+                
+                self.saved_auxinfo["lanes"] = {} # Reset lanes info
+                for i, qubit_labels in lane_to_qubits.items():
+                    self.saved_auxinfo["lanes"][tuple(sorted(qubit_labels))] = sub_circuit_list[i]
+                    
+        return self
 
     def replace_layer_with_circuit_inplace(self, circuit: Circuit, j):
         """

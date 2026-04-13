@@ -21,3 +21,5 @@ from .gstcircuits import *
 # Unused: from rpecircuits import *
 
 from .subcircuit_selection import *
+from .split_circuits_into_lanes import *
+
