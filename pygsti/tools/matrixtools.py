@@ -1333,13 +1333,6 @@ def _fas(a, inds, rhs, add=False):
             a[inds] += rhs
         else:
             a[inds]  = rhs
-    elif all([isinstance(i, (int, slice)) for i in inds]):
-        assert len(inds) == rhs.shape[1]
-        for ind, rhs_vec in zip(inds, rhs.T):
-            if add:
-                a[ind] += rhs_vec  # all integers or slices behave nicely
-            else:
-                a[ind]  = rhs_vec  # all integers or slices behave nicely
     else:
         #convert each dimension's index to a list, take a product of
         # these lists, and flatten the right hand side to get the

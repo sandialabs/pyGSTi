@@ -463,7 +463,6 @@ class ExplicitOpModel(_mdl.OpModel):
                 categories_to_convert = ('operations', )
             else:
                 categories_to_convert = (categories_to_convert,)
-        if 
 
         assert all(c in ['all', 'ops', 'operations', 'instruments', 'preps', 'povms'] for c in categories_to_convert)
         fallback_basis = '' if not allow_smaller_pp_basis else self.basis.name.replace('pp','').replace('*','') + 'pp'

@@ -1349,8 +1349,8 @@ class QubitProcessorSpec(QuditProcessorSpec):
                     # else:
                     #     raise ValueError('Availability of the idle gate has not been set.')
                 for sslbls in avail:
-                    i = qubit_labels[sslbls[0]]
-                    j = qubit_labels[sslbls[1]]
+                    i = qubit_labels.index(sslbls[0])
+                    j = qubit_labels.index(sslbls[1])
                     CtwoQ_connectivity[i, j] = True
 
         return _qgraph.QubitGraph(qubit_labels, CtwoQ_connectivity)
@@ -1379,8 +1379,8 @@ class QubitProcessorSpec(QuditProcessorSpec):
                     # else:
                     #     raise ValueError('Availability of the idle gate has not been set.')
                 for sslbls in avail:
-                    i = qubit_labels[sslbls[0]]
-                    j = qubit_labels[sslbls[1]]
+                    i = qubit_labels.index(sslbls[0])
+                    j = qubit_labels.index(sslbls[1])
                     twoQ_connectivity[i, j] = True
 
         return _qgraph.QubitGraph(qubit_labels, twoQ_connectivity)
