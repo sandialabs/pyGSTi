@@ -2,7 +2,7 @@
 Tools for the propagation of error generators through circuits.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -729,7 +729,7 @@ def zassenhaus_formula(errorgen_groups: list[dict[_LSE, float]], zassenhaus_orde
     Please see https://en.wikipedia.org/wiki/Baker%E2%80%93Campbell%E2%80%93Hausdorff_formula#Zassenhaus_formula
     for more information on this approxmation.
 
-    Given an exponentiated sum of operators exp(X1+X2+...+Xn) the Zassenhaus formula gives one disentangle this
+    Given an exponentiated sum of operators exp(X1+X2+...+Xn) the Zassenhaus formula allows one to disentangle this
     exponentiated sum into a product of exponentiated operators given by exp(X1)exp(X2)...exp(Xn)\prod_{k=2}^\infty exp(W_k) where
     the W_k's are Lie polynomials (nested commutators) in the operators {X1, ..., Xn}, and the value of k we go up to gives the order of the
     approximation. 

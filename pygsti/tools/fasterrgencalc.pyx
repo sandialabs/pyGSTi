@@ -5,7 +5,7 @@
 # cython: debug=False
 
 #***************************************************************************************************
-# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -1028,9 +1028,6 @@ cpdef np.ndarray[double, ndim=2] fast_bulk_alpha(object errorgens_iter,
     #
     # 4) Pre‐allocate the output sensitivity arrays:
     #
-    #cdef list sensitivities_by_bitstring = [None] * n_b
-    #for i in range(n_b):
-    #    sensitivities_by_bitstring[i] = [0.0] * n_e
 
     cdef np.ndarray[double, ndim=2] sensitivities_by_bitstring = np.empty((n_b, n_e), dtype=np.double)
     cdef double[:,::1] sensitivities_by_bitstring_view = sensitivities_by_bitstring
@@ -1097,6 +1094,7 @@ cdef inline double _real_if_close(complex val):
         return val.real
 
 cdef inline tuple _com(object P1, object P2):
+    # P1 and P2 will be stim.PauliString
     # P1 and P2 either commute or anticommute.
     if P1.commutes(P2):
         return None
@@ -1105,6 +1103,7 @@ cdef inline tuple _com(object P1, object P2):
         return (P3.sign*2, P3 / P3.sign)
 
 cdef inline tuple _pauli_product(object P1, object P2):
+    # P1 and P2 will be stim.PauliString 
     P3 = P1*P2
     return (P3.sign, P3 / P3.sign)
 
@@ -1249,3 +1248,4 @@ cpdef np.ndarray[double, ndim=2] fast_bulk_alpha_pauli(object errorgens_iter, ob
                             sensitivities_by_pauli_view[i, j] = _real_if_close(1j * 4 * expectation)
                             
     return sensitivities_by_pauli
+    
