@@ -896,15 +896,17 @@ cpdef np.ndarray[np.complex128_t, ndim=1] fast_bulk_phi(object tableau, str desi
     for phase_bit in eff_Q_phase_cache.values():
         unique_bitstrings.add(phase_bit[1])
 
+    cdef list unique_bitstrings_list = list(unique_bitstrings)
+
     # Cache amplitude_of_state for each unique bitstring.
     cdef dict cached_amplitudes = {}
     cdef str bitstr
-    cdef np.ndarray[np.complex128_t, ndim=1] unique_amplitudes = fast_bulk_amplitude_of_state(tableau, unique_bitstrings, True)
+    cdef np.ndarray[np.complex128_t, ndim=1] unique_amplitudes = fast_bulk_amplitude_of_state(tableau, unique_bitstrings_list, True)
     cdef np.complex128_t[::1] unique_amplitudes_view = unique_amplitudes
     cdef int num_unique_amplitudes = len(unique_amplitudes)
 
     for i in range(num_unique_amplitudes):
-        cached_amplitudes[unique_bitstrings[i]] = unique_amplitudes_view[i]
+        cached_amplitudes[unique_bitstrings_list[i]] = unique_amplitudes_view[i]
 
     # (5) Assemble the result for each (P, Q) pair.
     cdef np.ndarray[np.complex128_t, ndim=1] result_phis = np.empty(numPs, dtype=np.complex128)
