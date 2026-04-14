@@ -584,10 +584,8 @@ def NewtonSolve(initial_x, fn, fn_with_derivs=None, dx_tol=1e-6, max_iters=20, p
 
     i = 0
     while i < max_iters:
-
         if fn_with_derivs:
             obj, Dobj, Hobj = fn_with_derivs(x)
-
             #DEBUG - check against finite diff
             #obj_chk = fn(x)
             #Dobj_chk, Hobj_chk = _compute_fd(x, fn)
@@ -597,8 +595,9 @@ def NewtonSolve(initial_x, fn, fn_with_derivs=None, dx_tol=1e-6, max_iters=20, p
         else:
             obj = fn(x)
             Dobj, Hobj = _compute_fd(x, fn)
-
-        evalsH, eigvecsH = _np.linalg.eig(Hobj)
+        Hobj += Hobj.T
+        Hobj /= 2
+        evalsH = _np.linalg.eigvalsh(Hobj)
         assert(min(evalsH) >= 0 or abs(min(evalsH) / max(evalsH)) < 1e-8)
         # Note: OK if evalsH has small negative elements, where "small" is relative to positive elements
 
