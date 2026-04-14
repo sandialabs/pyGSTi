@@ -899,7 +899,7 @@ cpdef np.ndarray[np.complex128_t, ndim=1] fast_bulk_phi(object tableau, str desi
     # Cache amplitude_of_state for each unique bitstring.
     cdef dict cached_amplitudes = {}
     cdef str bitstr
-    cdef np.ndarray[np.complex128_t, ndim=1] unique_amplitudes = bulk_amplitude_of_state(tableau, unique_bitstrings, True)
+    cdef np.ndarray[np.complex128_t, ndim=1] unique_amplitudes = fast_bulk_amplitude_of_state(tableau, unique_bitstrings, True)
     cdef np.complex128_t[::1] unique_amplitudes_view = unique_amplitudes
     cdef int num_unique_amplitudes = len(unique_amplitudes)
 
