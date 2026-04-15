@@ -113,43 +113,43 @@ def create_processor_spec(pcircuit, qubit_labels, gates=['Gcnot','Gh']):
     
     return pspec
 
-def build_model(error_rates, pspec):
-    """
-    Creates a *spatially homogeneous* error model from
-    the given error rates dictionary. Could easily be generalized to
-    spatially inhomogeneous errors. Works only for a 
-    gate set of only Gh and Gcnot.
-    """
-    ######TODO: GENERALIZE TO OTHER MODELS########
-    oneQ_gate_names = ['Gh', ]
-    twoQ_gate_names = ['Gcnot', ]
-    gate_dictionary = dict()
+# def build_model(error_rates, pspec):
+#     """
+#     Creates a *spatially homogeneous* error model from
+#     the given error rates dictionary. Could easily be generalized to
+#     spatially inhomogeneous errors. Works only for a 
+#     gate set of only Gh and Gcnot.
+#     """
+#     ######TODO: GENERALIZE TO OTHER MODELS########
+#     oneQ_gate_names = ['Gh', ]
+#     twoQ_gate_names = ['Gcnot', ]
+#     gate_dictionary = dict()
 
     
-    def create_gate_object(erates, num_qubits, gate_name):
-        state_space = QubitSpace(num_qubits)
-        lindblad_errorgen = LindbladErrorgen.from_elementary_errorgens(erates, 
-                                                                       state_space=state_space,
-                                                                       evotype='stabilizer')
-        perfect_gate = StaticCliffordOp(pspec.gate_unitaries[gate_name], evotype='stabilizer')
-        exp_errorgen = ExpErrorgenOp(lindblad_errorgen)
-        gate_mm = ComposedOp([perfect_gate, exp_errorgen])
-        return gate_mm
+#     def create_gate_object(erates, num_qubits, gate_name):
+#         state_space = QubitSpace(num_qubits)
+#         lindblad_errorgen = LindbladErrorgen.from_elementary_errorgens(erates, 
+#                                                                        state_space=state_space,
+#                                                                        evotype='stabilizer')
+#         perfect_gate = StaticCliffordOp(pspec.gate_unitaries[gate_name], evotype='stabilizer')
+#         exp_errorgen = ExpErrorgenOp(lindblad_errorgen)
+#         gate_mm = ComposedOp([perfect_gate, exp_errorgen])
+#         return gate_mm
     
-    for i, gate_name in enumerate(oneQ_gate_names):         
-        for j, q in enumerate(pspec.qubit_labels):
-            label = pygsti.baseobjs.label.Label(gate_name, q)
-            gate_dictionary[label] = create_gate_object(error_rates[gate_name], 1, gate_name)
+#     for i, gate_name in enumerate(oneQ_gate_names):         
+#         for j, q in enumerate(pspec.qubit_labels):
+#             label = pygsti.baseobjs.label.Label(gate_name, q)
+#             gate_dictionary[label] = create_gate_object(error_rates[gate_name], 1, gate_name)
 
-    for i, gate_name in enumerate(twoQ_gate_names):
-        for j, qs in enumerate(pspec.availability[gate_name]):
-            label = pygsti.baseobjs.label.Label(gate_name, qs)
-            gate_dictionary[label] = create_gate_object(error_rates[gate_name], 2, gate_name)
+#     for i, gate_name in enumerate(twoQ_gate_names):
+#         for j, qs in enumerate(pspec.availability[gate_name]):
+#             label = pygsti.baseobjs.label.Label(gate_name, qs)
+#             gate_dictionary[label] = create_gate_object(error_rates[gate_name], 2, gate_name)
    
-    prep_layers = None
-    povm_layers = None
-    model = LocalNoiseModel(pspec, gate_dictionary, prep_layers, povm_layers, evotype='stabilizer')
-    return model
+#     prep_layers = None
+#     povm_layers = None
+#     model = LocalNoiseModel(pspec, gate_dictionary, prep_layers, povm_layers, evotype='stabilizer')
+#     return model
 
 import numpy as np
 import stim
@@ -264,7 +264,7 @@ def create_processor_spec(pcircuit, qubit_labels, gates=['Gcnot','Gh']):
     # Find all the CNOT gates used in the circuit, using brute force string comprehension
     cleaned_pcstr = pyg_cstr.replace(']', '').replace('[', '').split('@')[0]
     connections = [(int(s.split(':')[1]), int(s.split(':')[2])) for s in cleaned_pcstr.split('G') if len(s.split(':')) > 2]
-    availability={'Gcnot':connections}
+    availability={'Gcnot':connections, 'Gcphase':connections}
     pspec = pygsti.processors.QubitProcessorSpec(len(qubit_labels), gates, qubit_labels=qubit_labels,
                                              availability=availability)
     
@@ -338,7 +338,7 @@ def parse_pauli_product(prod, current_qubit_mapping):
     return (pauli_string, qubits)
 
     
-def stim_to_pygsti_circuit(circuit, qubit_labels, qubit_relabelling_dict=None, show_qubit_mappings=False, include_observables=False, include_idles=False):
+def stim_to_pygsti_circuit(circuit, qubit_labels, qubit_relabelling_dict=None, show_qubit_mappings=False, include_observables=False, separate_observables=False, include_idles=False):
     
     if qubit_relabelling_dict is None:
         qubit_relabelling_dict = {q:q for q in qubit_labels}
@@ -347,6 +347,7 @@ def stim_to_pygsti_circuit(circuit, qubit_labels, qubit_relabelling_dict=None, s
 
     measurements = []
     detectors = []
+    observable_detectors = []
 
     def convert_1q_layer(gatename, stim_layer_string, current_qubit_mapping):
         gate_dict= {'H':'Gh', 
@@ -437,19 +438,35 @@ def stim_to_pygsti_circuit(circuit, qubit_labels, qubit_relabelling_dict=None, s
                     targ = len(measurements)-1*rel_meas
                     det.append(targ)
             detectors.append(det)
+        # elif 'OBSERVABLE_INCLUDE' in line.split('(')[0]:
+        #     if not include_observables:
+        #         pass
+        #     else:
+        #         #TODO PROPERLY EXTRACT THE LABEL OF THE OBSERVABLE
+        #         #print(line)
+        #         det = []
+        #         for arg in line.split(' ')[1:]:
+        #             #get the ref number, it's negative, index into measurements
+        #             if 'rec' in arg:
+        #                 rel_meas = int(re.findall(r'\[-(\d+)\]', arg)[0])
+        #                 targ = len(measurements)-1*rel_meas
+        #                 det.append(targ)
+        #         detectors.append(det)     
         elif 'OBSERVABLE_INCLUDE' in line.split('(')[0]:
-            if not include_observables:
-                pass
-            else:
-                #print(line)
-                det = []
-                for arg in line.split(' ')[1:]:
-                    #get the ref number, it's negative, index into measurements
-                    if 'rec' in arg:
-                        rel_meas = int(re.findall(r'\[-(\d+)\]', arg)[0])
-                        targ = len(measurements)-1*rel_meas
-                        det.append(targ)
-                detectors.append(det)                
+            if include_observables:
+                # Extract the integer j from OBSERVABLE_INCLUDE(j)
+                match = re.search(r'OBSERVABLE_INCLUDE\((\d+)\)', line)
+                if match:
+                    j = int(match.group(1))
+                    if len(observable_detectors) <= j:
+                        observable_detectors.append([])
+                    # Extract measurement references from the line
+                    for arg in line.split(' ')[1:]:
+                        if 'rec' in arg:
+                            rel_meas = int(re.findall(r'\[-(\d+)\]', arg)[0])
+                            targ = len(measurements) - 1 * rel_meas
+                            observable_detectors[j].append(targ)          
+        
         elif 'TICK' in line.split(' ') or 'QUBIT_COORDS' or 'SHIFT_COORDS' in line.split(' '):
             pass
         else:
@@ -458,5 +475,11 @@ def stim_to_pygsti_circuit(circuit, qubit_labels, qubit_relabelling_dict=None, s
     pyg_c = pygsti.circuits.Circuit(''.join(gate_layers)+'@(' + ','.join([str(q) for q in range(1+max(current_qubit_mapping.values()))]) + ')', editable=True)
     pyg_c.delete_idle_layers_inplace()
     pyg_c.done_editing()
+
+    if not separate_observables:
+        detectors.extend(observable_detectors)
     
-    return pyg_c, current_qubit_mapping, measurements, detectors
+        return pyg_c, current_qubit_mapping, measurements, detectors
+    
+    else:
+        return pyg_c, current_qubit_mapping, measurements, detectors, observable_detectors
