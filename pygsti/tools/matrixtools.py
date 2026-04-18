@@ -1327,8 +1327,7 @@ def _fas(a, inds, rhs, add=False):
     # index-list index is fine too.  The case we need to
     # deal with is indexing a multi-dimensional array with
     # one or more index-lists
-    # if all([isinstance(i, (int, slice)) for i in inds]) or len(inds) == 1:
-    if len(inds) == 1:
+    if all([isinstance(i, (int, slice)) for i in inds]) or len(inds) == 1:
         if add:
             a[inds] += rhs
         else:
