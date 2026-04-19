@@ -166,6 +166,69 @@ def stitch_circuits_by_germ_power_only(color_patches: dict, vertices: list,
     return circuit_lists, aux_info
 
 
+def generate_edge_colorings(vertices: list, edges: list) -> list:
+    """
+    Generate a set of edge colorings for a graph until all edges are colored.
+
+    This function takes an edge set of a simple undirected graph and repeatedly 
+    applies the Misra & Gries edge coloring algorithm until every edge is 
+    contained in some edge coloring. It returns a dictionary mapping colors 
+    to the edges colored with that color.
+
+    Parameters:
+    vertices (list): A list of vertices in the graph.
+    edges (list): A list of edges represented as tuples (u, v) where u and v 
+                are vertices in the graph.
+
+    Returns:
+    list: A list of edge colorings (dictionaries whose keys are colors and items are lists colored edges)
+    """
+    list_of_edge_colorings = []
+    uncolored_edges = set(edges)
+
+    while uncolored_edges:
+        # Determine which vertices are neighbors in a graph with only uncolored edges
+        # Could call find_neighbors here...
+        updated_neighbors = {v: [] for v in vertices}
+        for u, v in uncolored_edges:
+            updated_neighbors[u].append(v)
+
+        # Calculate the maximum degree of the graph
+        deg = max(len(updated_neighbors[v]) for v in vertices)
+
+        # Find an edge coloring
+        new_color_patches = find_edge_coloring(deg, vertices, list(uncolored_edges), updated_neighbors)
+        new_color_patches = {k: v for (k, v) in new_color_patches.items() if len(v) > 0}
+
+        # Update color patches and remove newly colored edges from uncolored_edges
+        list_of_edge_colorings.append(new_color_patches)
+        for _, edge_list in new_color_patches.items():
+            uncolored_edges.difference_update(edge_list)
+            uncolored_edges.difference_update([(v,u) for u, v in edge_list]) # need to symmetrize
+
+    return list_of_edge_colorings
+
+
+def make_xfgst_design(nq_pspec, oneq_gstdesign, twoq_gstdesign, seed=0):
+    vertices = nq_pspec.qubit_labels
+    edges = nq_pspec.compute_2Q_connectivity().edges()
+
+    # Generate the sub-experiment designs
+    edge_colorings = generate_edge_colorings(vertices, edges)
+    sub_designs = []
+    for i,ec in enumerate(edge_colorings):
+        ed = CrosstalkFreeExperimentDesign(nq_pspec, oneq_gstdesign, twoq_gstdesign, ec, seed=(seed+i))
+        sub_designs.append(ed)
+    
+    max_circuitlists_len = max([len(sd.circuit_lists) for sd in sub_designs])
+    circuitlists = [[] for _ in range(max_circuitlists_len)]
+    for sd in sub_designs:
+        for i,cl in enumerate(sd.circuit_lists):
+            circuitlists[i].extend(cl)
+    cld = CircuitListsDesign(circuit_lists=circuitlists)
+    return cld
+
+
 class CrosstalkFreeExperimentDesign(CircuitListsDesign):
     """
     This class initializes a crosstalk-free GST experiment design by combining 
