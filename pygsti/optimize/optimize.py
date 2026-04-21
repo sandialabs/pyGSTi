@@ -17,11 +17,7 @@ import time as _time
 import numpy as _np
 import scipy.optimize as _spo
 
-try:
-    from scipy.optimize import Result as _optResult  # for earlier scipy versions
-except:
-    from scipy.optimize import OptimizeResult as _optResult  # for later scipy versions
-
+from scipy.optimize import OptimizeResult as _optResult
 from pygsti.optimize.customcg import fmax_cg
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 
@@ -178,7 +174,8 @@ def minimize(fn, x0, method='cg', callback=None,
         # with different settings.
         solution = _spo.minimize(fn, x0, method=method, options=opts, tol=tol, callback=callback, jac=jac)
         if not solution.success:
-            tempsol = _spo.minimize(fn, x0, method='COBYLA', options=opts)
+            opts_cobyla = {k: v for (k, v) in opts.items() if (k not in ('gtol', 'ftol'))}
+            tempsol = _spo.minimize(fn, x0, method='COBYLA', options=opts_cobyla)
             # ^ It's wise to pass through `opts` in case it contains bound constraints.
             if not hasattr(jac, '__call__'):
                 jac = '3-point'  # more expensive than the default 2-point finite-difference, but more reliable.
@@ -213,7 +210,7 @@ def _fmin_supersimplex(fn, x0, abs_outer_tol, rel_outer_tol, inner_tol, max_oute
         Relative tolerance of outer loop
 
     inner_tol : float
-        Tolerance fo inner loop
+        Tolerance of inner loop
 
     max_outer_iter : int
         Maximum number of outer-loop iterations
@@ -222,7 +219,7 @@ def _fmin_supersimplex(fn, x0, abs_outer_tol, rel_outer_tol, inner_tol, max_oute
         Minimum number of inner-loop iterations
 
     max_inner_maxiter : int
-        Maxium number of outer-loop iterations
+        maximum number of outer-loop iterations
 
     printer : VerbosityPrinter
         Printer for displaying output status messages.
@@ -287,7 +284,7 @@ def _fmin_supersimplex(fn, x0, abs_outer_tol, rel_outer_tol, inner_tol, max_oute
 
 def _fmin_simplex(fn, x0, slide=1.0, tol=1e-8, maxiter=1000):
     """
-    Minimizes a function using a custom simplex implmentation.
+    Minimizes a function using a custom simplex implementation.
 
     This was used primarily to check scipy's Nelder-Mead method
     and runs much slower, so there's not much reason for using
@@ -316,23 +313,23 @@ def _fmin_simplex(fn, x0, slide=1.0, tol=1e-8, maxiter=1000):
         Includes members 'x', 'fun', 'success', and 'message'.
     """
 
-    # Setup intial values
+    # Setup initial values
     n = len(x0)
     f = _np.zeros(n + 1)
     x = _np.zeros((n + 1, n))
 
     x[0] = x0
 
-    # Setup intial X range
+    # Setup initial X range
     for i in range(1, n + 1):
         x[i] = x0
         x[i, i - 1] = x0[i - 1] + slide
 
-    # Setup intial functions based on x's just defined
+    # Setup initial functions based on x's just defined
     for i in range(n + 1):
         f[i] = fn(x[i])
 
-    # Main Loop operation, loops infinitly until break condition
+    # Main Loop operation, loops infinitely until break condition
     counter = 0
     while True:
         low = _np.argmin(f)
@@ -760,7 +757,7 @@ def check_jac(f, x0, jac_to_check, eps=1e-10, tol=1e-6, err_type='rel',
         Epsilon to use in finite difference calculations of jacobian.
 
     tol : float, optional
-        The allowd tolerance on the relative differene between the
+        The allowed tolerance on the relative difference between the
         values of the finite difference and jac_to_check jacobians
         if err_type == 'rel' or the absolute difference if err_type == 'abs'.
 

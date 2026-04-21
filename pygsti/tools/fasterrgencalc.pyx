@@ -2,9 +2,10 @@
 # cython: profile=False
 # cython: linetrace=False
 # filename: fasterrgencalc.pyx
+# cython: debug=False
 
 #***************************************************************************************************
-# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -19,6 +20,23 @@ from cpython.unicode cimport PyUnicode_FromStringAndSize, PyUnicode_AsUTF8
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
 import stim
 from libc.math cimport pow
+
+_POSSIBLE_PHASE_VALUES_INDEXED_NEGJ_J_NEG1 = np.array([1, -1, 1j, -1j,
+                                            -1, 1, -1j, 1j,
+                                            -1j, 1j, 1, -1,
+                                            1j, -1j, -1, 1,
+                                            -1, 1, -1j, 1j,
+                                            1, -1, 1j, -1j,
+                                            1j, -1j, -1, 1,
+                                            -1j, 1j, 1, -1], dtype=np.complex128)
+_POSSIBLE_PHASE_VALUES_INDEXED_NEGJ_J_NEG1.flags.writeable = False                               
+
+cdef const np.complex128_t[::1] POSSIBLE_PHASE_VALUES_INDEXED_NEGJ_J_NEG1 = _POSSIBLE_PHASE_VALUES_INDEXED_NEGJ_J_NEG1
+
+@cython.wraparound(False)
+@cython.boundscheck(False)
+cdef inline np.complex128_t get_phase_from_array(int count_negj, int count_j, int count_negone):
+    return POSSIBLE_PHASE_VALUES_INDEXED_NEGJ_J_NEG1[count_negone + 2*count_j + 8*count_negj]
 
 # Optimized implementations of functions from errgenproptools.py
 
@@ -100,6 +118,7 @@ cpdef tuple fast_pauli_phase_update_all_zeros(str pauli_str, bint dual=False):
     cdef:
         int prefix_len = 0
         int i, n, pauli_len
+        int count_y = 0
         np.complex128_t overall_phase = 1.0
         np.complex128_t sign = 1.0
         unsigned char op   # declare op outside the loop
@@ -142,17 +161,35 @@ cpdef tuple fast_pauli_phase_update_all_zeros(str pauli_str, bint dual=False):
         raise MemoryError("Failed to allocate memory for output buffer")
 
     # We do not need to initialize the buffer. Just specify the answer in the loop.
-    out_buffer[n] = 0  # null termination
 
     for i in range(n):
-        # Retrieve the operator character from the pointer.
         op = p[prefix_len + i]
-        overall_phase *= get_phase0_ascii(op, dual)
-        if pauli_flip_ascii(op):
-            # Use ASCII 49 for '1'.
-            out_buffer[i] = 49  # Flip bit from '0' to '1'
+        if (op == 89):
+            count_y += (op == 89)
+            count_y &= 0x03 # we only need 0,1,2,3.
+            out_buffer[i] = 49
+        elif (op == 88):
+            out_buffer[i] = 49
         else:
             out_buffer[i] = 48
+    out_buffer[n] = 0  # null termination
+
+    # Look up the result of the matrix multiplication.    
+    if dual:
+        if count_y == 1:
+            overall_phase = -1j
+        elif count_y == 2:
+            overall_phase = -1
+        elif count_y == 3:
+            overall_phase = 1j
+    else:
+        if count_y == 1:
+            overall_phase = 1j
+        elif count_y == 2:
+            overall_phase = -1
+        elif count_y == 3:
+            overall_phase = -1j
+
     overall_phase *= sign
     
     # Create a Python string from the out_buffer.
@@ -257,9 +294,11 @@ cpdef tuple fast_pauli_phase_update(str pauli_str, str bit_str, bint dual=False)
     """
     cdef:
         int prefix_len = 0
+        int count_negj = 0
+        int count_j = 0
+        int count_negone = 0
         int i, n, pauli_len, bit_len
         np.complex128_t overall_phase = 1.0
-        np.complex128_t sign = 1.0   # holds the sign from the pauli's prefix
         unsigned char op   # for each operator character
         bint bit_val     # current bit value, 0 or 1
         char* out_buffer
@@ -276,21 +315,19 @@ cpdef tuple fast_pauli_phase_update(str pauli_str, str bit_str, bint dual=False)
     if pauli_len > 0:
         if p[0] == ord('+'):
             if pauli_len >= 2 and p[1] == ord('i'):
-                sign = 1j
+                count_j = 1
                 prefix_len = 2
             else:
-                sign = 1
                 prefix_len = 1
         elif p[0] == ord('-'):
             if pauli_len >= 2 and p[1] == ord('i'):
-                sign = -1j
+                count_negj = 1
                 prefix_len = 2
             else:
-                sign = -1
+                count_negone = 1
                 prefix_len = 1
         else:
             # No recognized sign prefix.
-            sign = 1
             prefix_len = 0
     else:
         # Empty pauli string.
@@ -306,6 +343,28 @@ cpdef tuple fast_pauli_phase_update(str pauli_str, str bit_str, bint dual=False)
     if not out_buffer:
         raise MemoryError("Failed to allocate memory for output buffer")
 
+    if dual: # specializing on dual.
+        for i in range(n):
+            op = p[prefix_len + i]
+            bit_val = b[i] - 48
+            if (op == 89) and bit_val: # Y ASCII 89
+                count_j = (count_j + 1) & 0x03
+            elif (op == 89):
+                count_negj = (count_negj + 1) & 0x03
+            elif (op == 90) and bit_val:  # Z ASCII 90
+                count_negone = (count_negone + 1) & 0x01
+
+    else:
+        for i in range(n):
+            op = p[prefix_len + i]
+            bit_val = b[i] - 48
+            if (op == 89) and bit_val:
+                count_negj = (count_negj + 1) & 0x03
+            elif (op == 89):
+                count_j = (count_j + 1) & 0x03
+            elif (op == 90) and bit_val:
+                count_negone = (count_negone + 1) & 0x01
+
     # Process each qubit position.
     for i in range(n):
         # Get the operator character from the pointer.
@@ -314,8 +373,6 @@ cpdef tuple fast_pauli_phase_update(str pauli_str, str bit_str, bint dual=False)
         # (Assume bit_str characters are '0' or '1')
         # 49 ASCII '1'
         bit_val = b[i] - 48
-        # Multiply overall_phase by factor given by the operator and bit.
-        overall_phase *= get_phase_ascii(op, bit_val, dual)
         # Determine the output bit.
         # If the pauli operator flips, then output the inverted bit.
         if pauli_flip_ascii(op):
@@ -325,7 +382,9 @@ cpdef tuple fast_pauli_phase_update(str pauli_str, str bit_str, bint dual=False)
             # No flip: just copy the input bit.
             out_buffer[i] = b[i]
     out_buffer[n] = 0  # null-terminate output C string
-    overall_phase *= sign
+
+    # Since each term only has phases of +/-1, +/-1j, just precompute the options and store in a table.
+    overall_phase = get_phase_from_array(count_negj, count_j, count_negone)
 
     # Create a Python string from the out_buffer.
     cdef object out_pystr = PyUnicode_FromStringAndSize(out_buffer, n)
@@ -333,42 +392,240 @@ cpdef tuple fast_pauli_phase_update(str pauli_str, str bit_str, bint dual=False)
 
     return overall_phase, out_pystr
 
+cdef inline void _restore_sim(object sim, object orig_tableau_inverse, bint had_simulator):
+    if had_simulator:
+        sim.set_inverse_tableau(orig_tableau_inverse)
+
 @cython.wraparound(False)
 @cython.boundscheck(False)
-cpdef np.complex128_t fast_amplitude_of_state(object tableau, str desired_state, bint only_phase):
+cdef int _random_support(object sim, object orig_tableau_inverse, int n, unsigned char* is_random):
     """
-    Get the amplitude of a particular computational basis state for given
-    stabilizer state.
+    Compute (num_random, is_random_mask) for Z measurements in the canonical
+    left-to-right sequence *on the original state*.
 
-    Parameters
-    ----------
-    tableau : stim.Tableau or stim.TableauSimulator
-        Stim tableau corresponding to the stabilizer state we wish to extract
-        the amplitude from. If a stim.TableauSimulator it is assumed that this
-        simulator has already had the appropriate inverse tableau value instantiated.
-    
-    desired_state : str
-        String of 0's and 1's corresponding to the computational basis state to extract the amplitude for.
-
-    Returns
-    -------
-    amplitude : np.complex128
-        Amplitude of the desired computational basis state for a given stabilizer state.
+    IMPORTANT: This routine must restore simulator state before returning
+    (because it uses postselects to compute the canonical reference branch).
     """
-    cdef bint had_simulator
-    cdef object sim, orig_tableau_inverse
-    cdef int n, q, z, num_random
-    cdef unsigned char *bs
-    cdef unsigned char *refarr
-    cdef const char *dptr
-    cdef bint desired_bit, forced_bit
-    cdef double magnitude
-    cdef object peek_z, postselect_z, swap_op, x_op, cnot_op
-    cdef bint same, found
-    cdef np.complex128_t phase_factor
+    cdef int q, z, num_random
+    cdef object peek_z = sim.peek_z
+    cdef object postselect_z = sim.postselect_z
+
+    num_random = 0
+    for q in range(n):
+        z = peek_z(q)
+        if z == 0:
+            num_random += 1
+            is_random[q] = 1
+        else:
+            is_random[q] = 0
+        # Follow your Python random_support behavior: postselect to forced_bit
+        # to propagate constraints deterministically and make later peek_z values canonical.
+        postselect_z(q, desired_value=(z == -1))
+
+    # restore        
+    sim.set_inverse_tableau(orig_tableau_inverse)
+
+    return num_random
+
+
+@cython.wraparound(False)
+@cython.boundscheck(False)
+cdef unsigned char* _compute_phase_reference(object sim,
+                                             object orig_tableau_inverse,
+                                             int n):
+    """
+    Compute reference bitstring as an unsigned char array of length n.
+    Matches updated Python compute_phase_reference: record forced bits; postselect only on random qubits.
+
+    Returns: malloc'd buffer (caller must PyMem_Free).
+    """
+    cdef int q, z
+    cdef unsigned char* refarr
+    cdef object peek_z = sim.peek_z
+    cdef object postselect_z = sim.postselect_z
+
+    refarr = <unsigned char*> PyMem_Malloc(n * sizeof(unsigned char))
+    if not refarr:
+        raise MemoryError("allocating refarr failed")
+
+    for q in range(n):
+        z = peek_z(q)
+        refarr[q] = (z == -1)
+        if z == 0:
+            postselect_z(q, desired_value=refarr[q])
+
+    # restore for caller convenience (bulk code assumes it can start clean)
+    sim.set_inverse_tableau(orig_tableau_inverse)
+    return refarr
+
+cdef inline bint _in_support_by_postselecting_all_zero(object sim,
+                                                       object orig_tableau_inverse,
+                                                       object ps,
+                                                       int n,
+                                                       object range_n):
+    """
+    Support test in the style of in_stabilizer_support:
+      - Apply X on qubits where desired bit is 1, mapping |desired> -> |0..0>
+      - Attempt to postselect all Z outcomes to 0 in one bulk call.
+
+    Returns True/False. Always restores simulator.
+    """
+    cdef object postselect_z = sim.postselect_z
+    # Map desired -> all-zero by flipping 1 bits.
+    sim.do_pauli_string(ps)
+
+    try:
+        # Bulk postselect (faster in practice for Stim).
+        postselect_z(range_n, desired_value=False)
+    except ValueError:
+        sim.set_inverse_tableau(orig_tableau_inverse)
+        return False
+
+    sim.set_inverse_tableau(orig_tableau_inverse)
+    return True
+
+@cython.wraparound(False)
+@cython.boundscheck(False)
+cdef object _get_ix_pauli_from_mask(const unsigned char* bs,
+                                    int n):
+    """
+    Returns a stim.PauliString consisting only of I/X (no prefix needed),
+    with X where bs[q]==1.
+    """
+    cdef int q
+    cdef char* buf
+    cdef object ps
+    cdef str key
+
+    # Build IX... string
+    buf = <char*> PyMem_Malloc((n + 1) * sizeof(char))
+    if not buf:
+        raise MemoryError("Failed to allocate IX buffer")
+    for q in range(n):
+        buf[q] = 88 if bs[q] else 73   # 'X' or 'I'
+    buf[n] = 0
+    key = PyUnicode_FromStringAndSize(buf, n)
+    PyMem_Free(buf)
+
+    ps = stim.PauliString(key)
+    return ps
+
+@cython.wraparound(False)
+@cython.boundscheck(False)
+cdef inline np.complex128_t _phase_isolation_pass(object sim,
+                                                  object orig_tableau_inverse,
+                                                  const unsigned char* bs,
+                                                  const unsigned char* refarr,
+                                                  const unsigned char* is_random,
+                                                  int n):
+    """
+    Implements your third pass:
+      - postselect away non-(ref or desired) components
+      - map ref -> |0..0>, desired -> |0..01> (difference on qubit 0)
+      - return phase from peek_bloch(0) as ±1,±i
+    Assumes simulator is already set to orig_tableau_inverse by caller.
+    """
+    cdef int q
+    cdef unsigned char desired_bit, ref_bit
+    cdef bint found = False
+    cdef object postselect_z = sim.postselect_z
+    cdef object swap_op = sim.swap
+    cdef object x_op = sim.x
+    cdef object cnot_op = sim.cnot
     cdef str s
 
-    # 1) Instantiate or reuse a TableauSimulator and remember how to restore it.
+    for q in range(n):
+        desired_bit = bs[q]
+        ref_bit = refarr[q]
+
+        if desired_bit == ref_bit:
+            # In Python bulk version you only postselect if is_random[q] in this branch.
+            # Using that here reduces postselects (and should be correct because deterministic
+            # measurements don't need conditioning).
+            if is_random[q]:
+                postselect_z(q, desired_value=ref_bit)
+            if desired_bit:
+                x_op(q)
+
+        elif not found:
+            found = True
+            if q != 0:
+                swap_op(0, q)
+            if ref_bit:
+                x_op(0)
+
+        else:
+            cnot_op(0, q)
+            postselect_z(q, desired_value=ref_bit)
+
+    # If desired differs from ref, found must be true.
+    # If it isn't, something went wrong.
+    if not found:
+        sim.set_inverse_tableau(orig_tableau_inverse)
+        raise RuntimeError('found should be True during normal operation, something went wrong.')
+
+    s = str(sim.peek_bloch(0))
+    sim.set_inverse_tableau(orig_tableau_inverse)
+    
+    if s == "+X":
+        return 1.0
+    elif s == "-X":
+        return -1.0
+    elif s == "+Y":
+        return 1j
+    else:
+        return -1j
+
+
+@cython.wraparound(False)
+@cython.boundscheck(False)
+cpdef np.ndarray[np.complex128_t, ndim=1] fast_bulk_amplitude_of_state(object tableau,
+                                                                      list desired_states,
+                                                                      bint only_phase):
+    """
+    Bulk version of amplitude extraction, modeled after updated_python_amplitude_implementations.slow_bulk_amplitude_of_state.
+    desired_states is a list of bitstrings (str of 0/1). (You can extend to accept PauliString later.)
+    Returns numpy array of complex128 amplitudes.
+    """
+    cdef:
+        bint had_simulator
+        object sim, orig_tableau_inverse
+        int n, m, i, q
+        int num_random
+        double magnitude
+        unsigned char* is_random
+        unsigned char* refarr = NULL
+        np.ndarray[np.complex128_t, ndim=1] out
+        np.complex128_t[::1] out_view
+        const char* dptr
+        unsigned char* bs
+        bint same
+        np.complex128_t phase_factor
+        bint is_str = False
+        bint is_pauli_str = False
+        str ps_str
+        const char* pptr
+        int ps_len
+        object ps
+        unsigned char ch
+        int prefix_len
+    
+    m = len(desired_states)
+    out = np.empty(m, dtype=np.complex128)
+    out_view = out
+
+    if m == 0:
+        return out
+
+    #Validate the first entry of desired_states
+    if isinstance(desired_states[0], str):
+        is_str = True
+    elif isinstance(desired_states[0], stim.PauliString):
+        is_pauli_str = True
+    else:
+        raise ValueError(f'Unsupported input type {type(desired_states[0])} for desired_states, expected string or stim.PauliString entries.')
+
+    # 1) Instantiate/reuse sim
     if isinstance(tableau, stim.Tableau):
         sim = stim.TableauSimulator()
         orig_tableau_inverse = tableau**-1
@@ -384,116 +641,124 @@ cpdef np.complex128_t fast_amplitude_of_state(object tableau, str desired_state,
             "expected stim.Tableau or stim.TableauSimulator"
         )
 
-    # 2) Prepare bit‐pattern buffer for desired_state.
     n = sim.num_qubits
-    if len(desired_state) != n:
+    if len(desired_states[0]) != n:
         raise ValueError("desired_state length must equal number of qubits")
+    cdef object range_n = range(n)
 
-    bs = <unsigned char*>PyMem_Malloc(n * sizeof(unsigned char))
-    if not bs:
-        raise MemoryError("allocating desired_state buffer failed")
-    dptr = PyUnicode_AsUTF8(desired_state)
-    for q in range(n):
-        # ASCII '1' = 49
-        # assume only '1' and '0' in dptr[q].
-        bs[q] = dptr[q] - 48
+    # 2) Precompute random support (once)
+    is_random = <unsigned char*> PyMem_Malloc(n * sizeof(unsigned char))
+    if not is_random:
+        raise MemoryError("allocating is_random failed")
+    
+    num_random = _random_support(sim, orig_tableau_inverse, n, is_random)
 
-    # 3) First pass: postselect and count random bits.
-    num_random = 0
-    peek_z       = sim.peek_z
-    postselect_z = sim.postselect_z
-    for q in range(n):
-        z = peek_z(q)
-        if z == 0:
-            num_random += 1
-        else:
-            forced_bit = (z == -1)
-            if bs[q] != forced_bit:
-                # amplitude zero; restore if needed & cleanup
-                if had_simulator:
-                    sim.set_inverse_tableau(orig_tableau_inverse)
-                PyMem_Free(bs)
-                return 0
-        postselect_z(q, desired_value = bs[q])
-
-    # magnitude = 2^{-num_random/2}
     if only_phase:
-        magnitude = 1
+        magnitude = 1.0
     else:
         if num_random > 2148:
-            raise RuntimeError('Number of random bits is greater than 2148, magnitude of amplitude will underflow!')
+            PyMem_Free(is_random)
+            _restore_sim(sim, orig_tableau_inverse, had_simulator)
+            raise RuntimeError("Number of random bits is greater than 2148; magnitude will underflow.")
         magnitude = pow(2.0, - (num_random / 2.0))
-    # 4) Build reference state.
-    sim.set_inverse_tableau(orig_tableau_inverse)
-    refarr = <unsigned char*>PyMem_Malloc(n * sizeof(unsigned char))
-    if not refarr:
-        PyMem_Free(bs)
-        raise MemoryError("allocating reference buffer failed")
-    for q in range(n):
-        z = peek_z(q)
-        forced_bit = (z == -1)
-        refarr[q] = forced_bit
-        postselect_z(q, desired_value = forced_bit)
 
-    # Quick check: if ref == desired, return magnitude
-    same = True
-    for q in range(n):
-        if bs[q] != refarr[q]:
-            same = False
-            break
-    if same:
-        if had_simulator:
-            sim.set_inverse_tableau(orig_tableau_inverse)
-        PyMem_Free(bs)
-        PyMem_Free(refarr)
-        return magnitude
-
-    # 5) Third pass: isolate phase difference to qubit 0.
-    sim.set_inverse_tableau(orig_tableau_inverse)
-    swap_op       = sim.swap
-    x_op          = sim.x
-    cnot_op       = sim.cnot
-
-    found = False
-    for q in range(n):
-        desired_bit = bs[q]
-        ref_bit  = refarr[q]
-        if desired_bit == ref_bit:
-            postselect_z(q, desired_value = ref_bit)
-            if desired_bit:
-                x_op(q)
-        elif not found:
-            found = True
-            if q != 0:
-                swap_op(0, q)
-            if ref_bit:
-                x_op(0)
+    # 3) Loop desired states
+    for i in range(m):
+        # Convert desired_state to bs buffer
+        bs = <unsigned char*> PyMem_Malloc(n * sizeof(unsigned char))
+        if not bs:
+            PyMem_Free(is_random)
+            if refarr != NULL:
+                PyMem_Free(refarr)
+            _restore_sim(sim, orig_tableau_inverse, had_simulator)
+            raise MemoryError("allocating desired_state buffer failed")
+        if is_str:
+            dptr = PyUnicode_AsUTF8(desired_states[i])
+            for q in range(n):
+                bs[q] = dptr[q] - 48  # '0'/'1' -> 0/1
+            ps = _get_ix_pauli_from_mask(bs, n)
         else:
-            cnot_op(0, q)
-            postselect_z(q, desired_value = ref_bit)
+            # stim.PauliString case. We interpret it as an X-mask mapping |0..0> -> |desired>.
+            # We parse str(ps) and treat positions with 'X' as 1 and all others as 0.
+            ps = desired_states[i]
+            ps_str = str(ps)
+            pptr = PyUnicode_AsUTF8(ps_str)
+            ps_len = len(ps_str)
+            prefix_len = 0
 
-    assert found
+            # parse optional prefix: '+', '-', '+i', '-i'
+            if ps_len == n + 2 and (pptr[0] == 43 or pptr[0] == 45) and pptr[1] == 105:  # ±i
+                prefix_len = 2
+            elif ps_len == n + 1 and (pptr[0] == 43 or pptr[0] == 45):  # ±
+                prefix_len = 1
+            elif ps_len == n:
+                prefix_len = 0
+            else:
+                PyMem_Free(bs)
+                PyMem_Free(is_random)
+                if refarr != NULL:
+                    PyMem_Free(refarr)
+                _restore_sim(sim, orig_tableau_inverse, had_simulator)
+                raise ValueError("PauliString length does not match n qubits")
 
-    # 6) Peek Bloch on qubit 0 for phase
-    s = str(sim.peek_bloch(0))
-    if had_simulator:
-        sim.set_inverse_tableau(orig_tableau_inverse)
+            for q in range(n):
+                ch = <unsigned char>pptr[prefix_len + q]
+                if ch == 88:  # 'X'
+                    bs[q] = 1
+                elif ch == 95:  # '_'
+                    bs[q] = 0
+                else:
+                    PyMem_Free(bs)
+                    PyMem_Free(is_random)
+                    if refarr != NULL:
+                        PyMem_Free(refarr)
+                    _restore_sim(sim, orig_tableau_inverse, had_simulator)
+                    raise ValueError("PauliString desired_state must contain only I/X (up to global phase)")
 
-    # 7) Map to ±1, ±i
-    if s == "+X":
-        phase_factor = 1.0
-    elif s == "-X":
-        phase_factor = -1.0
-    elif s == "+Y":
-        phase_factor = 1j
-    else:  # "-Y"
-        phase_factor = -1j
+        # Support check
+        if not _in_support_by_postselecting_all_zero(sim, orig_tableau_inverse, ps, n, range_n):
+            out_view[i] = 0.0
+            PyMem_Free(bs)
+            continue
 
-    # Cleanup
-    PyMem_Free(bs)
-    PyMem_Free(refarr)
+        # supported: ensure ref exists
+        if refarr == NULL:
+            refarr = _compute_phase_reference(sim, orig_tableau_inverse, n)
 
-    return phase_factor * magnitude
+        # if desired == ref: phase=1
+        same = True
+        for q in range(n):
+            if bs[q] != refarr[q]:
+                same = False
+                break
+        if same:
+            out_view[i] = magnitude
+            PyMem_Free(bs)
+            continue
+
+        # Phase isolation pass
+        phase_factor = _phase_isolation_pass(sim, orig_tableau_inverse, bs, refarr, is_random, n)
+        out_view[i] = phase_factor * magnitude
+        PyMem_Free(bs)
+
+    # cleanup
+    PyMem_Free(is_random)
+    if refarr != NULL:
+        PyMem_Free(refarr)
+
+    return out
+
+
+@cython.wraparound(False)
+@cython.boundscheck(False)
+cpdef np.complex128_t fast_amplitude_of_state(object tableau, object desired_state, bint only_phase):
+    """
+    Refactored: delegate to bulk version for a single state.
+    """
+    cdef np.ndarray[np.complex128_t, ndim=1] arr
+    arr = fast_bulk_amplitude_of_state(tableau, [desired_state], only_phase)
+    return arr[0]
+
 
 """
 Cython implementation of bulk_phi.
@@ -631,11 +896,17 @@ cpdef np.ndarray[np.complex128_t, ndim=1] fast_bulk_phi(object tableau, str desi
     for phase_bit in eff_Q_phase_cache.values():
         unique_bitstrings.add(phase_bit[1])
 
+    cdef list unique_bitstrings_list = list(unique_bitstrings)
+
     # Cache amplitude_of_state for each unique bitstring.
     cdef dict cached_amplitudes = {}
     cdef str bitstr
-    for bitstr in unique_bitstrings:
-        cached_amplitudes[bitstr] = fast_amplitude_of_state(tableau, bitstr, True)
+    cdef np.ndarray[np.complex128_t, ndim=1] unique_amplitudes = fast_bulk_amplitude_of_state(tableau, unique_bitstrings_list, True)
+    cdef np.complex128_t[::1] unique_amplitudes_view = unique_amplitudes
+    cdef int num_unique_amplitudes = len(unique_amplitudes)
+
+    for i in range(num_unique_amplitudes):
+        cached_amplitudes[unique_bitstrings_list[i]] = unique_amplitudes_view[i]
 
     # (5) Assemble the result for each (P, Q) pair.
     cdef np.ndarray[np.complex128_t, ndim=1] result_phis = np.empty(numPs, dtype=np.complex128)
@@ -757,9 +1028,6 @@ cpdef np.ndarray[double, ndim=2] fast_bulk_alpha(object errorgens_iter,
     #
     # 4) Pre‐allocate the output sensitivity arrays:
     #
-    #cdef list sensitivities_by_bitstring = [None] * n_b
-    #for i in range(n_b):
-    #    sensitivities_by_bitstring[i] = [0.0] * n_e
 
     cdef np.ndarray[double, ndim=2] sensitivities_by_bitstring = np.empty((n_b, n_e), dtype=np.double)
     cdef double[:,::1] sensitivities_by_bitstring_view = sensitivities_by_bitstring
@@ -826,6 +1094,7 @@ cdef inline double _real_if_close(complex val):
         return val.real
 
 cdef inline tuple _com(object P1, object P2):
+    # P1 and P2 will be stim.PauliString
     # P1 and P2 either commute or anticommute.
     if P1.commutes(P2):
         return None
@@ -834,6 +1103,7 @@ cdef inline tuple _com(object P1, object P2):
         return (P3.sign*2, P3 / P3.sign)
 
 cdef inline tuple _pauli_product(object P1, object P2):
+    # P1 and P2 will be stim.PauliString 
     P3 = P1*P2
     return (P3.sign, P3 / P3.sign)
 
@@ -978,3 +1248,4 @@ cpdef np.ndarray[double, ndim=2] fast_bulk_alpha_pauli(object errorgens_iter, ob
                             sensitivities_by_pauli_view[i, j] = _real_if_close(1j * 4 * expectation)
                             
     return sensitivities_by_pauli
+    
