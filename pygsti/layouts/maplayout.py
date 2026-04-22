@@ -234,7 +234,7 @@ class MapCOPALayout(_DistributableCOPALayout):
         An optional dictionary containing pre-computed circuit structures/modifications which
         can be used to reduce the overhead of repeated circuit operations during layout creation.
     
-    load_balancing_parameters : tuple of floats, optional (default (1.2, .1))
+    load_balancing_parameters : tuple of floats, optional (default (1.2, 0.1))
         A tuple of floats used as load balancing parameters when splitting a layout across atoms,
         as in the multi-processor setting when using MPI. These parameters correspond to the `imbalance_threshold`
         and `minimum_improvement_threshold` parameters described in the method `find_splitting_new`
@@ -245,7 +245,7 @@ class MapCOPALayout(_DistributableCOPALayout):
                  num_sub_tables=None, num_table_processors=1, num_param_dimension_processors=(),
                  param_dimensions=(), param_dimension_blk_sizes=(), resource_alloc=None, 
                  circuit_partition_cost_functions=('size', 'propagations'), verbosity=0, 
-                 layout_creation_circuit_cache=None, load_balancing_parameters = (1.2, .1)):
+                 layout_creation_circuit_cache=None, load_balancing_parameters = (1.2, 0.1)):
 
         unique_circuits, to_unique = self._compute_unique_circuits(circuits)
         aliases = circuits.op_label_aliases if isinstance(circuits, _CircuitList) else None

@@ -394,6 +394,26 @@ class TPOpTester(MutableDenseOpBase, BaseCase):
         conv = op.convert(self.gate, "full TP", "gm")
         # TODO assert correctness
 
+    def test_deepcopy(self):
+        # Issue #651 showed that an infinite recursion error is possible
+        # when deep-copying a FullTPOp whose ._parent field is not None.
+        # This test triggers that code path. It should pass after applying
+        # the proposed fix in #651.
+        #
+        # In order to use m1.is_equivalent(m2) in the correctness check
+        # we had to resolve GitHub issue #600.
+        import copy
+        from pygsti.modelpacks import smq1Q_XY
+        m1  = smq1Q_XY.target_model('full TP')
+        o1 = m1.operations[('Gxpi2',0)]
+        o2 = copy.deepcopy(o1)
+        m2 = o2.parent
+        assert id(o1) != id(o2)
+        assert id(m1) != id(m2)
+        res = m1.is_equivalent(m2, rtol=0, atol=0)
+        assert res
+        return
+
     def test_first_row_read_only(self):
         # check that first row is read-only
         e1 = self.gate[0, 0]
@@ -795,8 +815,9 @@ class StochasticNoiseOpTester(BaseCase):
         self.assertArraysAlmostEqual(sop.to_dense(), expected_mx)
 
         rho = create_spam_vector("0", "Q0", Basis.cast("pp", [4]))
-        self.assertAlmostEqual(float(np.dot(rho.T, np.dot(sop.to_dense(), rho))),
-                               0.99)  # b/c X dephasing w/rate is 0.1^2 = 0.01
+        v = (rho.T @ sop.to_dense() @ rho).item()
+        u = float(v)
+        self.assertAlmostEqual(u, 0.99)  # b/c X dephasing w/rate is 0.1^2 = 0.01
 
 
 class DepolarizeOpTester(BaseCase):
@@ -812,4 +833,6 @@ class DepolarizeOpTester(BaseCase):
 
         rho = create_spam_vector("0", "Q0", Basis.cast("pp", [4]))
         # b/c both X and Y dephasing rates => 0.01 reduction
-        self.assertAlmostEqual(float(np.dot(rho.T, np.dot(dop.to_dense(), rho))), 0.98)
+        v = (rho.T @ dop.to_dense() @ rho).item()
+        u = float(v)
+        self.assertAlmostEqual(u, 0.98)

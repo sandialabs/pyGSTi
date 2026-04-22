@@ -239,7 +239,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
             Allowed options are 'size', which corresponds to balancing the number of circuits, 
             and 'propagations', which corresponds to balancing the number of state propagations.
 
-        load_balancing_parameters : tuple of floats, optional (default (1.15, .1))
+        load_balancing_parameters : tuple of floats, optional (default (1.15, 0.1))
             A tuple of floats used as load balancing parameters when splitting a layout across atoms,
             as in the multi-processor setting when using MPI. These parameters correspond to the `imbalance_threshold`
             and `minimum_improvement_threshold` parameters described in the method `find_splitting_new`
@@ -267,7 +267,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         if mem_limit is not None:
             if mem_limit <= 0:
                 raise MemoryError("Attempted layout creation w/memory limit = %g <= 0!" % mem_limit)
-            printer.log("Layout creation w/mem limit = %.2fGB" % (mem_limit * C))
+            printer.log("Layout creation w/mem limit = %.2fGB" % (mem_limit * C), message_level=2)
 
         #Start with how we'd like to split processors up (without regard to memory limit):        
         #The current implementation of map (should) benefit more from having a matching between the number of atoms
@@ -278,12 +278,14 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         natoms, na, npp, param_dimensions, param_blk_sizes = self._compute_processor_distribution(
             array_types, nprocs, num_params, len(circuits), default_natoms=default_natoms)  
         
-        printer.log(f'Num Param Processors {npp}')
-        
-        printer.log("MapLayout: %d processors divided into %s (= %d) grid along circuit and parameter directions." %
-                    (nprocs, ' x '.join(map(str, (na,) + npp)), _np.prod((na,) + npp)))
-        printer.log("   %d atoms, parameter block size limits %s" % (natoms, str(param_blk_sizes)))
-        assert(_np.prod((na,) + npp) <= nprocs), "Processor grid size exceeds available processors!"
+        if comm is not None:
+            printer.log(f'Num Param Processors {npp}', message_level=2)
+            printer.log("MapLayout: %d processors divided into %s (= %d) grid along circuit and parameter directions." %
+                        (nprocs, ' x '.join(map(str, (na,) + npp)), _np.prod((na,) + npp)),message_level=2)
+            printer.log("   %d atoms, parameter block size limits %s" % (natoms, str(param_blk_sizes)), message_level=2)
+            assert(_np.prod((na,) + npp) <= nprocs), "Processor grid size exceeds available processors!"
+        else:
+            printer.log('Using MapForwardSimulator without MPI', message_level=2)
 
         layout = _MapCOPALayout(circuits, self.model, dataset, self._max_cache_size, natoms, na, npp,
                                 param_dimensions, param_blk_sizes, resource_alloc,circuit_partition_cost_functions,
@@ -319,7 +321,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
                 raise MemoryError("Not enough memory for desired layout! (limit=%.1fGB, required=%.1fGB)" % (
                     mem_limit * GB, mem_estimate * GB))
             else:
-                printer.log("   Esimated memory required = %.1fGB" % (mem_estimate * GB))
+                printer.log("   Estimated memory required = %.1fGB" % (mem_estimate * GB), message_level=2)
 
         return layout
     
@@ -729,19 +731,26 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
             is to allow a trace or other linear operation to be done
             prior to the scaling.
         """
-        _warnings.warn('Generating dense process matrix representations of circuits or gates \n'
-                       'can be inefficient and should be avoided for the purposes of forward \n'
-                       'simulation/calculation of circuit outcome probability distributions \n' 
-                       'when using the MapForwardSimulator.')
-        
+        superop_dim = self.model.evotype.minimal_dim(self.model.state_space)
+        if superop_dim <= 16:
+            msg = \
+            """
+            Generating dense process matrix representations of circuits or gates
+            can be inefficient and should be avoided for the purposes of forward
+            simulation/calculation of circuit outcome probability distributions
+            when using the MapForwardSimulator. This operator is small enough
+            that it could be computed with MatrixForwardSimulator instead.
+            """
+            from pygsti.tools.exceptions import ForwardSimulatorSuitabilityWarning
+            _warnings.warn(msg, ForwardSimulatorSuitabilityWarning)
+
         # Smallness tolerances, used internally for conditional scaling required
         # to control bulk products, their gradients, and their Hessians.
         _PSMALL = 1e-100
-        
+        G = _np.identity(superop_dim)
         if scale:
             scaledGatesAndExps = {}
             scale_exp = 0
-            G = _np.identity(self.model.evotype.minimal_dim(self.model.state_space))
             for lOp in circuit:
                 if lOp not in scaledGatesAndExps:
                     opmx = self.model.circuit_layer_operator(lOp, 'op').to_dense("minimal")
@@ -763,7 +772,6 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
             return G, scale
 
         else:
-            G = _np.identity(self.model.evotype.minimal_dim(self.model.state_space))
             for lOp in circuit:
                 G = _np.dot(self.model.circuit_layer_operator(lOp, 'op').to_dense("minimal"), G)
                 # above line: LEXICOGRAPHICAL VS MATRIX ORDER

@@ -72,8 +72,8 @@ th .errorbar {
 	}
 
 .dataTable {
-        /* text */
-        font-family: "Computer Modern Serif","times new roman",serif;
+    /* text */
+    font-family: "Computer Modern Serif","times new roman",serif;
 	/*Helvetica, Arial, sans-serif;*/
 
 	/* no space between cells */
@@ -84,9 +84,9 @@ th .errorbar {
 	width: auto;
 	margin: auto;
 	margin-top: 5px;
-	max-width: 100%;
+	max-width: none;
 	overflow: auto; /*hidden; - this hides content sometimes - needed?  */
-        }
+    }
 
 /*.dataTable tr {
     width: 20%;

@@ -27,7 +27,8 @@ dependencies=[
     'stim',
     'plotly>=3.8.0',
     'pandas',
-    'networkx'
+    'networkx',
+    'tqdm>=4.42.0'
 ]
 requires-python='>=3.9'
 keywords=[
@@ -48,7 +49,6 @@ classifiers=[
     "Operating System :: MacOS :: MacOS X",
     "Operating System :: Unix"
 ]
-license = "Apache-2.0"
 
 [project.optional-dependencies]
 diamond_norm = [
@@ -60,7 +60,6 @@ html_reports = ['jinja2', 'MarkupSafe']
 ibmq = [
     'qiskit>1',
     'qiskit-ibm-runtime>=0.17.1',
-    'tqdm>=4.42.0',
     'dill'
 ]
 interpygate = ['csaps']
@@ -85,6 +84,7 @@ testing_no_cython_mpi = [
     'pytest-xdist',
     'pytest-cov',
     'nbval',
+    'nbformat',
     'packaging',
     'zmq',
     'seaborn',

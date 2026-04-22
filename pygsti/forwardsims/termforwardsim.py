@@ -316,15 +316,18 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         if mem_limit is not None:
             if mem_limit <= 0:
                 raise MemoryError("Attempted layout creation w/memory limit = %g <= 0!" % mem_limit)
-            printer.log("Layout creation w/mem limit = %.2fGB" % (mem_limit * C))
+            printer.log("Layout creation w/mem limit = %.2fGB" % (mem_limit * C), message_level=2)
 
         natoms, na, npp, param_dimensions, param_blk_sizes = self._compute_processor_distribution(
             array_types, nprocs, num_params, len(circuits), default_natoms=nprocs)
 
-        printer.log("TermLayout: %d processors divided into %s (= %d) grid along circuit and parameter directions." %
-                    (nprocs, ' x '.join(map(str, (na,) + npp)), _np.prod((na,) + npp)))
-        printer.log("   %d atoms, parameter block size limits %s" % (natoms, str(param_blk_sizes)))
-        assert(_np.prod((na,) + npp) <= nprocs), "Processor grid size exceeds available processors!"
+        if resource_alloc.comm is not None:
+            printer.log("TermLayout: %d processors divided into %s (= %d) grid along circuit and parameter directions." %
+                        (nprocs, ' x '.join(map(str, (na,) + npp)), _np.prod((na,) + npp)), message_level=2)
+            printer.log("   %d atoms, parameter block size limits %s" % (natoms, str(param_blk_sizes)), message_level=2)
+            assert(_np.prod((na,) + npp) <= nprocs), "Processor grid size exceeds available processors!"
+        else:
+            printer.log('Using TermForwardSimulator without MPI', message_level=2)
 
         # TODO: Layout circuit creation cache unused for TermCOPALayout
         layout = _TermCOPALayout(circuits, self.model, dataset, natoms, na, npp, param_dimensions,

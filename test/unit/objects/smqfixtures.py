@@ -18,7 +18,8 @@ def datagen_model(self):
 
 @ns.memo
 def circuits(self):
-    return smq.create_gst_circuits(max_max_length=self.max_max_length)
+    clists = smq.create_gst_circuitlists(max_max_length=self.max_max_length)
+    return clists[-1]
 
 
 @ns.memo
