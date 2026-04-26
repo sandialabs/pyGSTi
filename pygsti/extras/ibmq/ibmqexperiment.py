@@ -609,7 +609,11 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         qiskit_pass_kwargs['layout_method'] = qiskit_pass_kwargs.get('layout_method', 'trivial')
         qiskit_pass_kwargs['routing_method'] = qiskit_pass_kwargs.get('routing_method', 'none')
         qiskit_pass_kwargs['optimization_level'] = qiskit_pass_kwargs.get('optimization_level', 1)
-        qiskit_pass_kwargs['basis_gates'] = qiskit_pass_kwargs.get('basis_gates', ibmq_backend.operation_names)
+        operation_names = ibmq_backend.operation_names 
+        for op in ['measure_2', 'reset_2']: 
+            if op in operation_names:
+                operation_names.remove(op)
+        qiskit_pass_kwargs['basis_gates'] = qiskit_pass_kwargs.get('basis_gates', operation_names)
 
         print(f"transpiling to basis gates {qiskit_pass_kwargs['basis_gates']}")
 
