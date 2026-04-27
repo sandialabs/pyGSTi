@@ -1123,6 +1123,7 @@ class LindbladErrorgen(_LinearOperator):
         """
         return self.coefficients(return_basis=False, logscale_nonham=True, label_type=label_type)
 
+    #TODO: This needs a unit test for correctness (there was an uncaught bug here).
     def set_coefficients(self, elementary_errorgens, action: Literal['update', 'add', 'reset'] = "update", 
                          logscale_nonham=False, truncate=True):
         """
@@ -1173,7 +1174,7 @@ class LindbladErrorgen(_LinearOperator):
             #convert keys to local elementary errorgen labels (the same as those used by the coefficient blocks):
             identity_label_1Q = 'I'  # maybe we could get this from a 1Q basis somewhere?
             sslbls = self.state_space.sole_tensor_product_block_labels  # take first TPB labels as all labels
-            elem_errorgens = {_LocalElementaryErrorgenLabel.cast(k, sslbls, identity_label_1Q): v
+            elementary_errorgens = {_LocalElementaryErrorgenLabel.cast(k, sslbls, identity_label_1Q): v
                               for k, v in elementary_errorgens.items()}
         else:
             assert isinstance(first_key, _LocalElementaryErrorgenLabel), 'Unsupported error generator label type as key.'
@@ -1186,7 +1187,7 @@ class LindbladErrorgen(_LinearOperator):
                 for k in blk_elem_errorgens:
                     blk_elem_errorgens[k] = 0.0
 
-            for k, v in elem_errorgens.items():
+            for k, v in elementary_errorgens.items():
                 if logscale_nonham and k.errorgen_type == "S":
                     # treat the value being set in lindblad_term_dict as the *channel* stochastic error rate, and
                     # set the errgen coefficient to the value that would, in a depolarizing channel, give
