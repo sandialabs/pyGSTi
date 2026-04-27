@@ -291,7 +291,7 @@ def local_depolarizing_errorgen(num_qubits, depolarization_rate):
     return composed_errorgen
     
 
-def build_model(error_rates, pspec, oneQ_gate_names, twoQ_gate_names):
+def build_model(error_rates, pspec, oneQ_gate_names, twoQ_gate_names, meas_err=0):
     gate_dictionary = dict()
 
     
@@ -320,7 +320,8 @@ def build_model(error_rates, pspec, oneQ_gate_names, twoQ_gate_names):
     prep_errorgen = local_depolarizing_errorgen(num_qubits, 0)
     prep_layers = {Label('rho0'): ComposedState(ComputationalBasisState(zvals = ['0']*num_qubits, evotype='stabilizer'), ExpErrorgenOp(prep_errorgen))}
     #setting the number of qubits for the base POVM is a hack...
-    povm_layers = {Label('Mdefault'): ComposedPOVM(ExpErrorgenOp(prep_errorgen), ComputationalBasisPOVM(1, evotype='stabilizer', state_space=QubitSpace(1)))}
+    meas_errorgen = local_depolarizing_errorgen(num_qubits, 0)
+    povm_layers = {Label('Mdefault'): ComposedPOVM(ExpErrorgenOp(meas_errorgen), ComputationalBasisPOVM(1, evotype='stabilizer', state_space=QubitSpace(1)))}
 
 
     #prep_layers = None
