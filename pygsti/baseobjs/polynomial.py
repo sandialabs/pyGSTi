@@ -16,6 +16,8 @@ import numpy as _np
 
 from pygsti.evotypes.basereps import PolynomialRep as _PolynomialRep
 
+from typing import Optional, Sequence, Union
+
 assert(_platform.architecture()[0].endswith("bit"))  # e.g. "64bit"
 PLATFORM_BITS = int(_platform.architecture()[0].strip("bit"))
 
@@ -534,35 +536,101 @@ class Polynomial(object):
         newpoly.scale(x)
         return newpoly
 
-    def __str__(self):
+    def _format_var_label(self, i, var_labels: Optional[Union[dict, Sequence, callable]]=None):
+        """
+        Format the label for variable index `i`.
+
+        Parameters
+        ----------
+        i : int
+            Variable index.
+
+        var_labels : None, dict, sequence, or callable
+            Controls how variable indices are converted to strings:
+
+            - None: use the default label ``x{i}``
+            - dict: use ``var_labels[i]`` when present, otherwise ``x{i}``
+            - sequence: use ``var_labels[i]`` when possible, otherwise ``x{i}``
+            - callable: use ``var_labels(i)``
+
+        Returns
+        -------
+        str
+        """
+        if var_labels is None:
+            return f"x{i}"
+        try:
+            if callable(var_labels):
+                return var_labels(i)
+            elif isinstance(var_labels, dict):
+                return var_labels.get(i, f"x{i}")
+            else: #sequence
+                return var_labels[i]
+        except (IndexError, KeyError, TypeError):
+            return f"x{i}"
+
+    def to_string(self, var_labels: Optional[Union[dict, Sequence, callable]]=None):
+        """
+        Construct a string representation of this polynomial.
+
+        Parameters
+        ----------
+        var_labels : None, dict, sequence, or callable, optional
+            Controls how variable indices are converted to strings:
+
+            - None: use default labels like ``x0``, ``x1``, ...
+            - dict: map variable index to label
+            - sequence: use the i-th element as the label for variable ``i``
+            - callable: a function taking an integer index and returning a label
+
+        Returns
+        -------
+        str
+        """
         def fmt(x):
             if abs(_np.imag(x)) > 1e-6:
-                if abs(_np.real(x)) > 1e-6: return "(%.3f+%.3fj)" % (x.real, x.imag)
-                else: return "(%.3fj)" % x.imag
-            else: return "%.3f" % x.real
+                if abs(_np.real(x)) > 1e-6:
+                    return f"({x.real:.3f}+{x.imag:.3f}j)"
+                else:
+                    return f"({x.imag:.3f}j)"
+            else:
+                return f"{x.real:.3f}"
 
         termstrs = []
         coeffs = self.coeffs
-        sorted_keys = sorted(list(coeffs.keys()))
+        sorted_keys = sorted(coeffs.keys())
+
         for k in sorted_keys:
-            varstr = ""; last_i = None; n = 1
+            varstr = ""
+            last_i = None
+            n = 1
+
             for i in sorted(k):
-                if i == last_i: n += 1
+                if i == last_i:
+                    n += 1
                 elif last_i is not None:
-                    varstr += "x%d%s" % (last_i, ("^%d" % n) if n > 1 else "")
+                    label = self._format_var_label(last_i, var_labels)
+                    power = f"^{n}" if n > 1 else ""
+                    varstr += f"{label}{power}"
                     n = 1
                 last_i = i
+
             if last_i is not None:
-                varstr += "x%d%s" % (last_i, ("^%d" % n) if n > 1 else "")
-            #print("DB: k = ",k, " varstr = ",varstr)
+                label = self._format_var_label(last_i, var_labels)
+                power = f"^{n}" if n > 1 else ""
+                varstr += f"{label}{power}"
+
             if abs(coeffs[k]) > 1e-4:
-                termstrs.append("%s%s" % (fmt(coeffs[k]), varstr))
-        if len(termstrs) > 0:
-            return " + ".join(termstrs)
-        else: return "0"
+                termstrs.append(f"{fmt(coeffs[k])}{varstr}")
+
+        return " + ".join(termstrs) if termstrs else "0"
+
+    def __str__(self):
+        return self.to_string()
+
 
     def __repr__(self):
-        return "Poly[ " + str(self) + " ]"
+        return "Poly[ " + self.__str__() + " ]"
 
     def __add__(self, x):
         newpoly = self.copy()
