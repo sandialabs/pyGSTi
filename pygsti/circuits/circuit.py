@@ -4700,7 +4700,7 @@ class Circuit(object):
                             block_between_layers=True,
                             block_between_gates=False,
                             include_delay_on_idle=False,
-                            gateargs_map=None):  # TODO
+                            gateargs_map=None, auxiliary_lookup=None):  # TODO
         """
         Converts this circuit to an openqasm string.
 
@@ -4785,7 +4785,7 @@ class Circuit(object):
 
         #Currently only using 'Iz' as valid intermediate measurement ('IM') label.
         #Todo:  Expand to all intermediate measurements.
-        num_IMs = self.str.count('Iz')
+        num_IMs = self.str.count('I')
         num_IMs_used = 0
 
         # Init the openqasm string.
@@ -4819,7 +4819,7 @@ class Circuit(object):
                 assert(len(gate_qubits) <= 2), 'Gates on more than 2 qubits given; this is currently not supported!'
 
                 # Find the openqasm for the gate.
-                if gate.name.__str__() != 'Iz':
+                if gate.name.__str__() != 'Iz' and gate.name.__str__() != 'Ipc' and gate.name.__str__() != 'Izr':
                     openqasmlist_for_gate = gatename_conversion.get(gate.name, None)
 
                     if openqasmlist_for_gate is None:
@@ -4856,11 +4856,34 @@ class Circuit(object):
                                 openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[self._line_labels[-1]]))
 
                 else:
-                    assert len(gate.qubits) == 1
-                    q = gate.qubits[0]
-                    # classical_bit = num_IMs_used
-                    openqasm_for_gate = "measure q[{0}] -> cr[{1}];\n".format(str(qubit_conversion[q]), num_IMs_used)
-                    num_IMs_used += 1
+                    assert gate.name.__str__()[0] == 'I', "Please use instrument prefix 'I'. There may also be an object that cannot be parsed to QASM"
+                    assert 'Iz' in gate.name.__str__() or 'Ipc' in gate.name.__str__(), "Only mid-circuit Z basis measurement 'Iz' and various parity checks 'Ipc' supported at present."
+                    if gate.name.__str__() == 'Iz':
+                        assert len(gate.qubits) == 1
+                        q = gate.qubits[0]
+                        # classical_bit = num_IMs_used
+                        openqasm_for_gate = "measure q[{0}] -> cr[{1}];\n".format(str(qubit_conversion[q]), num_IMs_used)
+                        num_IMs_used += 1
+                    elif gate.name.__str__() == 'Izr':
+                        assert len(gate.qubits) == 1
+                        q = gate.qubits[0]
+                        # classical_bit = num_IMs_used
+                        openqasm_for_gate = "measure q[{0}] -> cr[{1}];\n".format(str(qubit_conversion[q]), num_IMs_used)
+                        openqasm_for_gate += "reset q[{0}];\n".format(str(qubit_conversion[q]))
+                        num_IMs_used += 1
+                    else:
+                        assert auxiliary_lookup is not None, "Parity check 'Ipc' requires an ancilla, did you forget to set 'ancilla_label'?"
+                        openqasm_for_gate = ""
+                        for control in gate.qubits:
+                            openqasm_for_gate += 'cx q[{0}], q[{1}];\n'.format(str(qubit_conversion[control]), auxiliary_lookup[gate.qubits])
+                            if block_between_gates:
+                                openqasm_for_gate += 'barrier '
+                                for q in self._line_labels[:-1]:
+                                    openqasm_for_gate += 'q[{0}], '.format(str(qubit_conversion[q]))
+                                openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[self._line_labels[-1]]))
+                        openqasm_for_gate += "measure q[{0}] -> cr[{1}];\n".format(str(auxiliary_lookup[gate.qubits]), num_IMs_used)
+                        openqasm_for_gate += "reset q[{0}];\n".format(str(auxiliary_lookup[gate.qubits]))
+                        num_IMs_used += 1
 
                 # Add the openqasm for the gate to the openqasm string.
                 openqasm += openqasm_for_gate
