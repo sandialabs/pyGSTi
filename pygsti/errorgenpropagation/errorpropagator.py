@@ -23,8 +23,9 @@ from scipy.linalg import expm
 from pygsti.tools.internalgates import standard_gatenames_stim_conversions
 import copy as _copy
 from pygsti.baseobjs import Label, ExplicitElementaryErrorgenBasis as _ExplicitElementaryErrorgenBasis, BuiltinBasis as _BuiltinBasis
-from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LocalElementaryErrorgenLabel 
-from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GlobalElementaryErrorgenLabel
+from pygsti.baseobjs.errorgenlabel import ElementaryErrorgenLabel as _ElementaryErrorgenLabel
+from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LEEL 
+from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GEEL
 import pygsti.tools.errgenproptools as _eprop
 import pygsti.tools.basistools as _bt
 import pygsti.tools.matrixtools as _mt
@@ -34,9 +35,12 @@ from pygsti.models import ExplicitOpModel as _ExplicitOpModel, ImplicitOpModel a
 from pygsti.modelmembers.operations import LindbladErrorgen as _LindbladErrorgen
 from itertools import islice
 
+from typing import Union
+
 class ErrorGeneratorPropagator:
 
-    def __init__(self, model):
+    def __init__(self, model: _OpModel=None, fixed_errorgen_layer: dict[_ElementaryErrorgenLabel,float]=None,
+                 state_space_labels: Union[list,int]=None):
         """
         Initialize an instance of `ErrorGeneratorPropagator`. This class is instantiated with a noise model
         and manages operations related to propagating error generators through circuits, and constructing
@@ -44,11 +48,50 @@ class ErrorGeneratorPropagator:
 
         Parameters
         ----------
-        model: `OpModel` 
+        model: `OpModel`, optional (default None) 
             This model is used to construct error generators for each layer of a circuit
-            through which error generators are to be propagated.   
-        """   
+            through which error generators are to be propagated. Cannot be specified in conjunction
+            with fixed_errorgen_layers.
+        
+        fixed_errorgen_layer : dict, optional (default None)
+            A dictionary corresponding to a fixed per-layer elementary error generator
+            to use as the noise channel for each circuit layer. Keys that are `ElementaryErrorgenLabel`s 
+            and values are floats for the corresponding rates.  
+
+        state_space_labels : list or int, optional (default None)
+            Complete list of qubit state space labels. Used only in conjunction with `fixed_errorgen_layer`,
+            and only when the keys for the error generator labels are `GlobalElementaryErrorgenLabel`s (and thus
+            need to be cast to `LocalStimErrorgenLabel`s prior to propagation. 
+            When an integer the qubit labels are given by the range [0,state_space_labels).
+
+        """ 
+        msg = 'Cannot specify both `model` and `fixed_errorgen_layer` at the same time!'
+        assert not (model is not None and fixed_errorgen_layer is not None), msg
+
+        msg = 'Must specify one of either `model` or `fixed_errorgen_layer`'
+        assert not (model is None and fixed_errorgen_layer is None), msg
+
         self.model = model
+
+        # do some input validation on fixed_errorgen_layer, and also cast all of the labels to LSE.    
+        if fixed_errorgen_layer:
+            # check the first error generator label an if it is a GEEL make sure we have sslbls
+            # safe to assume it is not empty since it is truthy.
+            first_errgen_label = next(iter(fixed_errorgen_layer))
+            if isinstance(first_errgen_label, _GEEL):
+                msg = 'Must specify state_space_labels when using GlobalElementaryErrorgenLabels.'
+                assert state_space_labels is not None, msg
+                if isinstance(state_space_labels, int):
+                    state_space_labels = list(range(state_space_labels))
+            # cast all of the error generator labels to LSE.
+            fixed_errorgen_layer = {_LSE.cast(lbl, sslbls=state_space_labels):val for lbl, val in fixed_errorgen_layer.items()}
+            
+            # validate that all of the new LSE keys have the same length (i.e. same number of qubits).
+            msg = 'Error generators do not all have the same length!'
+            assert len(set([len(lbl.basis_element_labels[0]) for lbl in fixed_errorgen_layer])) == 1, msg
+                  
+        self.fixed_errorgen_layer = fixed_errorgen_layer
+
 
     def eoc_error_channel(self, circuit, include_spam=True, use_bch=False,
                           bch_kwargs=None, mx_basis='pp', circuit_conversion_kwargs=None):
@@ -517,13 +560,11 @@ class ErrorGeneratorPropagator:
         else:
             propagation_layers = []
         return propagation_layers
-    
+
     def construct_errorgen_layers(self, circuit, num_qubits, include_spam=True, include_circuit_time=False, fixed_rate=None):
         """
-        Construct a nested list of lists of dictionaries corresponding to the error generators for each circuit layer.
-        The entries of the top-level list correspond to circuit layers, while the entries
-        of the second level (i.e. the dictionaries at each layer) correspond to different orders of the BCH approximation.
-
+        Construct a list of dictionaries corresponding to the error generators for each circuit layer.
+        
         Parameters
         ----------
         circuit : `Circuit`
@@ -548,9 +589,7 @@ class ErrorGeneratorPropagator:
         with the error generator coefficients now represented using LocalStimErrorgenLabel.
 
         """
-        #If including spam then start by completing the circuit (i.e. adding in the explicit SPAM labels).
-        if include_spam:
-            circuit = self.model.complete_circuit(circuit)
+        
 
         #TODO: Infer the number of qubits from the model and/or the circuit somehow.
         #Pull out the error generator dictionaries for each operation (may need to generalize this for implicit models):
@@ -565,8 +604,31 @@ class ErrorGeneratorPropagator:
         #    for povm_lbl, povm in self.model.povms.items():
         #        model_error_generator_dict[povm_lbl] = povm.errorgen_coefficients()
 
+        #TODO: add circuit time handling, and add in check for conflict with fixed_rate.
+        if self.fixed_errorgen_layer is not None:
+            if self.fixed_errorgen_layer:
+                #ensure the number of qubits for the error generator label matches the circuit.
+                msg = 'Mismatch between number of qubits in support of self.fixed_errorgen_layer and the input circuit.'
+                first_errorgen_label = next(iter(self.fixed_errorgen_layer))
+                assert len(first_errorgen_label.basis_element_labels[0]) == circuit.width, msg
+            #if include_spam is True tack on an extra two copies for the state prep and measurement layers
+            num_layers = len(circuit)+2 if include_spam else len(circuit)
+            
+            # if using a fixed rate construct a new version of the fixed error generator dictionary with said rates.
+            #TODO: I probably don't need the shallow copy operation, maybe remove this?
+            if fixed_rate:
+                fixed_rate_errorgen = {lbl: fixed_rate for lbl in self.fixed_errorgen_layer}
+                errorgen_dicts_by_layer = [fixed_rate_errorgen.copy() for _ in range(num_layers)]
+            else:
+                errorgen_dicts_by_layer = [self.fixed_errorgen_layer.copy() for _ in range(num_layers)]
+            return errorgen_dicts_by_layer
+            
+        #If including spam then start by completing the circuit (i.e. adding in the explicit SPAM labels).
+        if include_spam:
+            circuit = self.model.complete_circuit(circuit)
+
         #TODO: Generalize circuit time to not be in one-to-one correspondence with the layer index.
-        error_gen_dicts_by_layer = []
+        errorgen_dicts_by_layer = []
 
         #cache the error generator coefficients for a circuit layer to accelerate cases where we've already seen that layer.
         circuit_layer_errorgen_cache = dict()
@@ -585,7 +647,7 @@ class ErrorGeneratorPropagator:
             for errgen_coeff_lbl, rate in layer_errorgen_coeff_dict.items(): #for an error in the accompanying error dictionary 
                 #only track this error generator if its rate is not exactly zero. #TODO: Add more flexible initial truncation logic.
                 if rate !=0 or fixed_rate is not None:
-                    #if isinstance(errgen_coeff_lbl, _LocalElementaryErrorgenLabel):
+                    #if isinstance(errgen_coeff_lbl, _LEEL):
                     initial_label = errgen_coeff_lbl
                     #else:
                     #    initial_label = None
@@ -599,8 +661,8 @@ class ErrorGeneratorPropagator:
                     else:
                         errorgen_layer[_LSE(errgen_coeff_lbl.errorgen_type, paulis, initial_label=initial_label, 
                                             pauli_str_reps=pauli_strs)] = rate if fixed_rate is None else fixed_rate
-            error_gen_dicts_by_layer.append(errorgen_layer)
-        return error_gen_dicts_by_layer
+            errorgen_dicts_by_layer.append(errorgen_layer)
+        return errorgen_dicts_by_layer
     
     def _propagate_errorgen_layers(self, errorgen_layers, propagation_layers, include_spam=True):
         """
