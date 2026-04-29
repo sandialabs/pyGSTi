@@ -1275,7 +1275,7 @@ def write_mpi_runner_artifacts(
         "comm = MPI.COMM_WORLD\n"
         f"data = pygsti.io.read_data_from_dir({str(artifact_dir)!r})\n"
         f"protocol = pygsti.io.read_protocol_from_dir({protocol_dir!r})\n"
-        f"with open({kwargs_path!r}, 'rb') as _f:\n"
+        f"with open({str(kwargs_path)!r}, 'rb') as _f:\n"
         "    _kwargs = pickle.load(_f)\n"
         "results = protocol.run(data, comm=comm, **_kwargs)\n"
         "if comm.Get_rank() == 0:\n"
