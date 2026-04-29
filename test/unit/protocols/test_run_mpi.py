@@ -179,48 +179,90 @@ class BuildSlurmScriptTester:
 class WriteMpiRunnerArtifactsTester:
     def test_files_created(self, tmp_path):
         mock_proto = MagicMock()
-        runner_path = write_mpi_runner_artifacts(mock_proto, '/some/data', {}, tmp_path)
+        runner_path = write_mpi_runner_artifacts(mock_proto, {}, tmp_path, artifacts_persistent=False)
         assert (tmp_path / 'mpi_runner.py').exists()
         assert (tmp_path / 'volatile_run_kwargs.pkl').exists()
         assert runner_path == str(tmp_path / 'mpi_runner.py')
 
     def test_protocol_write_called(self, tmp_path):
         mock_proto = MagicMock()
-        write_mpi_runner_artifacts(mock_proto, '/some/data', {}, tmp_path)
+        write_mpi_runner_artifacts(mock_proto, {}, tmp_path, artifacts_persistent=False)
         mock_proto.write.assert_called_once_with(str(tmp_path / 'protocol'))
 
     def test_runner_script_has_mpi4py(self, tmp_path):
         mock_proto = MagicMock()
-        write_mpi_runner_artifacts(mock_proto, '/data/path', {}, tmp_path)
+        write_mpi_runner_artifacts(mock_proto, {}, tmp_path, artifacts_persistent=False)
         content = (tmp_path / 'mpi_runner.py').read_text()
         assert 'from mpi4py import MPI' in content
 
-    def test_runner_script_embeds_data_dir(self, tmp_path):
+    def test_runner_script_embeds_artifact_dir_for_data_io(self, tmp_path):
         mock_proto = MagicMock()
-        write_mpi_runner_artifacts(mock_proto, '/my/data/dir', {}, tmp_path)
+        write_mpi_runner_artifacts(mock_proto, {}, tmp_path, artifacts_persistent=False)
         content = (tmp_path / 'mpi_runner.py').read_text()
-        assert '/my/data/dir' in content
+        assert f"pygsti.io.read_data_from_dir({str(tmp_path)!r})" in content
+        assert f"results.write({str(tmp_path)!r}, data_already_written=True)" in content
 
-    def test_disable_checkpointing_default(self, tmp_path):
+    def test_disable_checkpointing_default_when_artifacts_not_persistent(self, tmp_path):
         mock_proto = MagicMock()
         kwargs = {}
-        write_mpi_runner_artifacts(mock_proto, '/data', kwargs, tmp_path)
+
+        write_mpi_runner_artifacts(mock_proto, kwargs, tmp_path, artifacts_persistent=False)
+
         with open(tmp_path / 'volatile_run_kwargs.pkl', 'rb') as f:
             loaded = pickle.load(f)
-        assert loaded['disable_checkpointing'] is True
 
-    def test_disable_checkpointing_not_overwritten(self, tmp_path):
+        assert loaded['disable_checkpointing'] is True
+        # Optional: verify in-place mutation behavior remains true
+        assert kwargs['disable_checkpointing'] is True
+
+    def test_disable_checkpointing_not_overwritten_when_artifacts_not_persistent(self, tmp_path):
         mock_proto = MagicMock()
         kwargs = {'disable_checkpointing': False}
-        write_mpi_runner_artifacts(mock_proto, '/data', kwargs, tmp_path)
+
+        write_mpi_runner_artifacts(mock_proto, kwargs, tmp_path, artifacts_persistent=False)
+
         with open(tmp_path / 'volatile_run_kwargs.pkl', 'rb') as f:
             loaded = pickle.load(f)
+
         assert loaded['disable_checkpointing'] is False
+        assert kwargs['disable_checkpointing'] is False
+
+    def test_persistent_artifacts_warns_and_does_not_inject_disable_checkpointing(self, tmp_path):
+        mock_proto = MagicMock()
+        kwargs = {}
+
+        with pytest.warns(UserWarning, match='volatile_run_kwargs.pkl'):
+            write_mpi_runner_artifacts(mock_proto, kwargs, tmp_path, artifacts_persistent=True)
+
+        with open(tmp_path / 'volatile_run_kwargs.pkl', 'rb') as f:
+            loaded = pickle.load(f)
+
+        assert 'disable_checkpointing' not in loaded
+        assert 'disable_checkpointing' not in kwargs
+
+    def test_persistent_artifacts_preserves_disable_checkpointing_if_already_present(self, tmp_path):
+        mock_proto = MagicMock()
+        kwargs = {'disable_checkpointing': False}
+
+        with pytest.warns(UserWarning, match='volatile_run_kwargs.pkl'):
+            write_mpi_runner_artifacts(mock_proto, kwargs, tmp_path, artifacts_persistent=True)
+
+        with open(tmp_path / 'volatile_run_kwargs.pkl', 'rb') as f:
+            loaded = pickle.load(f)
+
+        assert loaded['disable_checkpointing'] is False
+        assert kwargs['disable_checkpointing'] is False
+
+    def test_runner_script_embeds_protocol_dir(self, tmp_path):
+        mock_proto = MagicMock()
+        write_mpi_runner_artifacts(mock_proto, {}, tmp_path, artifacts_persistent=False)
+        content = (tmp_path / 'mpi_runner.py').read_text()
+        assert f"pygsti.io.read_protocol_from_dir({str(tmp_path / 'protocol')!r})" in content
 
     def test_with_real_protocol(self, tmp_path):
         """Smoke-test that a real Protocol instance serializes without error."""
         proto = _MinimalProtocol()
-        runner_path = write_mpi_runner_artifacts(proto, str(tmp_path / 'data'), {}, tmp_path)
+        runner_path = write_mpi_runner_artifacts(proto, {}, tmp_path, artifacts_persistent=False)
         assert pathlib.Path(runner_path).exists()
         assert (tmp_path / 'protocol').is_dir()
 
@@ -239,7 +281,7 @@ class RunMpiErrorPathsTester:
     def test_num_ranks_1_with_dry_run_raises(self):
         proto = _MinimalProtocol()
         mock_data = MagicMock()
-        with pytest.raises(AssertionError):
+        with pytest.raises(ValueError, match='dry_run=True is incompatible with num_ranks=1'):
             proto.run_mpi(mock_data, num_ranks=1, dry_run=True)
 
 
@@ -289,13 +331,6 @@ class RunMpiDryRunTester:
 
 class StageSlurmMethodTester:
 
-    def test_num_ranks_1_raises(self, tmp_path):
-        proto = _MinimalProtocol()
-        mock_data = MagicMock()
-        slurm = SlurmSettings(str(tmp_path / 'submit.sh'))
-        with pytest.raises(ValueError):
-            proto.stage_slurm(mock_data, 1, slurm, str(tmp_path))
-
     def test_uneven_divmod_warns(self, tmp_path):
         proto = _MinimalProtocol()
         mock_data = MagicMock()
@@ -333,7 +368,7 @@ class StageSlurmMethodTester:
         script_path = str(tmp_path / 'submit.sh')
         slurm = SlurmSettings(script_path, nodes=1)  # job_name=None
         with patch('pygsti.tools.mpitools.compute_blas_threads', return_value=2):
-            proto.stage_slurm(mock_data, 4, slurm, str(tmp_path))
+            proto.stage_slurm(mock_data, 1, slurm, str(tmp_path))
         content = pathlib.Path(script_path).read_text()
         assert f'#SBATCH --job-name={type(proto).__name__}' in content
 
@@ -343,7 +378,7 @@ class StageSlurmMethodTester:
         script_path = str(tmp_path / 'submit.sh')
         slurm = SlurmSettings(script_path, nodes=1)
         with patch('pygsti.tools.mpitools.compute_blas_threads', return_value=2):
-            proto.stage_slurm(mock_data, 4, slurm, str(tmp_path))
+            proto.stage_slurm(mock_data, 1, slurm, str(tmp_path))
         assert (tmp_path / 'mpi_runner.py').exists()
         assert (tmp_path / 'volatile_run_kwargs.pkl').exists()
         assert (tmp_path / 'protocol').is_dir()

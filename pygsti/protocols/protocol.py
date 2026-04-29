@@ -253,8 +253,9 @@ class Protocol(_MongoSerializable):
             and deleted on return.  Required when ``dry_run=True``.
 
         dry_run : bool, keyword-only
-            When ``True``, we (1) write working files to ``persistent_dir``, (2) print the launch
-            command but do not execute it, and (3) return ``None``. 
+            When ``True``, we write working files to ``persistent_dir`` and return ``None``. 
+            The recommended launch command is printed to console if `self.verbosity` is
+            unset or positive.
             
             Requires ``persistent_dir`` to be set.
 
@@ -263,9 +264,9 @@ class Protocol(_MongoSerializable):
             ``0`` (default) auto-detects an appropriate value.  See Notes.
 
         **run_kwargs
-            Forwarded to :meth:`run` in each worker (e.g. ``memlimit``,
-            ``checkpoint_path``, ``simulator``, ``optimizers``).  Serialized via
-            :mod:`pickle`.
+            Keyword arguments forwarded to `Protocol.run` for each worker. Examples of
+            arguments you might want to forward include `simulator`, `optimizers`, or
+            `disable_checkpointing`. These arguments will be serialized via pickle.
 
         Returns
         -------
@@ -306,24 +307,31 @@ class Protocol(_MongoSerializable):
         value is computed as ``max(1, num_cpus // num_ranks)`` where
         ``num_cpus`` is the physical CPU core count of the current machine
         (falling back to the logical count if the physical count is
-        unavailable).  This auto-detected value is printed to stdout.
-        These variables are applied before ``env``, so explicit entries in
-        ``env`` override them.
+        unavailable). These variables are applied before ``env``, so explicit
+        entries in ``env`` override them.
 
         **Job schedulers.**
         To generate a SLURM batch script, use :meth:`stage_slurm` instead.
         For other schedulers (PBS, LSF, etc.), use ``dry_run=True`` together
         with ``persistent_dir`` to write the data and runner script to a permanent
-        location and print the launch command for embedding in your own batch
-        script.
+        location. The recommended MPI launch command will be written to console
+        if `self.verbosity` is unset or positive.
         """
         import os as _os
         import subprocess as _subprocess
         import sys as _sys
         import tempfile as _tempfile
 
+        if hasattr(self, 'verbosity'):
+            verbosity = self.verbosity  # type: ignore
+        else:
+            verbosity = 1
+
         if num_ranks == 1:
-            assert not dry_run, "dry_run=True is not meaningful when num_ranks=1"
+            if dry_run:
+                msg  = "dry_run=True is incompatible with num_ranks=1, as in this case we revert\n"
+                msg += "back to the standard `run` method without any MPI overhead."
+                raise ValueError(msg)
             out = self.run(data, **run_kwargs)
             return out
 
@@ -334,7 +342,8 @@ class Protocol(_MongoSerializable):
 
         mpiexec  = _mpitools.resolve_mpiexec(mpiexec)
         blas_tpr = _mpitools.compute_blas_threads(num_ranks, blas_threads_per_rank)
-        print(f"run_mpi: setting blas_threads_per_rank={blas_tpr}\n")
+        if verbosity > 0:
+            print(f"run_mpi: setting blas_threads_per_rank={blas_tpr}\n")
 
         _blas_env = {k: str(blas_tpr) for k in (
             'OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS',
@@ -351,51 +360,46 @@ class Protocol(_MongoSerializable):
             # by data.write() if it does not already exist.
             persistent_dir = str(_pathlib.Path(persistent_dir))
             data.write(persistent_dir)
-            runner_path = _mpitools.write_mpi_runner_artifacts(
-                self, persistent_dir, run_kwargs, _pathlib.Path(persistent_dir)
-            )
-            _warnings.warn(_mpitools.RUN_KWARGS_PICKLE_MSG, UserWarning)
-            # TODO: avoid the pickle unless absolutely necessary, and raise
-            #       the warning above only when pickle is used.
+            runner_path = _mpitools.write_mpi_runner_artifacts(self, run_kwargs, persistent_dir, True)
             cmd = [mpiexec, '-n', str(num_ranks)]
             if extra_mpi_args:
                 cmd.extend(extra_mpi_args)
             cmd.extend([_sys.executable, runner_path])
 
             if dry_run:
-                print("run_mpi dry_run — runner script written to:", runner_path)
-                print("Command:", ' '.join(cmd))
+                if verbosity > 0:
+                    print("run_mpi dry_run — runner script written to:", runner_path)
+                    print("Command:", ' '.join(cmd))
                 return None
 
             _subprocess.run(cmd, check=True, env=worker_env)
             out = _io.read_results_from_dir(persistent_dir, name=self.name)
-            # TODO: delete volatile_run_kwargs.pkl from persistent_dir.
             return out
 
         # persistent_dir is None: live run only (dry_run=True was rejected above).
         # Use a temporary directory for all artifacts; it is cleaned up on return.
         with _tempfile.TemporaryDirectory() as _tmpdir:
-            tmpdir = _pathlib.Path(_tmpdir)
-            data.write(str(tmpdir))
+            tmpdir = str(_pathlib.Path(_tmpdir))
+            data.write(tmpdir)
 
-            runner_path = _mpitools.write_mpi_runner_artifacts(self, str(tmpdir), run_kwargs, tmpdir)
-            # ^ No warning about volatile_run_kwargs.pkl, since tempdir is deleted on return
+            runner_path = _mpitools.write_mpi_runner_artifacts(self, run_kwargs, tmpdir, False)
             cmd = [mpiexec, '-n', str(num_ranks)]
             if extra_mpi_args:
                 cmd.extend(extra_mpi_args)
             cmd.extend([_sys.executable, runner_path])
 
             _subprocess.run(cmd, check=True, env=worker_env)
-            out = _io.read_results_from_dir(str(tmpdir), name=self.name)
+            out = _io.read_results_from_dir(tmpdir, name=self.name)
             return out
 
-    def stage_slurm(self, data: 'ProtocolData', num_ranks: int,
+    def stage_slurm(self, data: 'ProtocolData',
+                    num_ranks: int,
                     slurm: SlurmSettings,
                     work_dir: str | _pathlib.Path,
                     *,
                     ranks_per_host: int | None = None,
                     blas_threads_per_rank: int = 0,
-                    **run_kwargs) -> None:
+                    **run_kwargs) -> str:
         """
         Write all working files to ``work_dir`` and generate a SLURM batch
         script ready for ``sbatch`` submission.
@@ -410,7 +414,7 @@ class Protocol(_MongoSerializable):
             The input data.
 
         num_ranks : int
-            Total number of MPI worker processes.  Must be greater than 1.
+            Total number of MPI worker processes.
 
         slurm : SlurmSettings
             SLURM script options.  See :class:`SlurmSettings` for details.
@@ -444,7 +448,8 @@ class Protocol(_MongoSerializable):
 
         Returns
         -------
-        None
+        script_path : str
+            The file path of the generated SLURM script.
 
         Notes
         -----
@@ -457,12 +462,15 @@ class Protocol(_MongoSerializable):
         are commonly needed but too site-specific to set automatically.
         Uncomment and edit the relevant lines before submitting.
         """
-        if num_ranks == 1:
-            raise ValueError("stage_slurm: num_ranks must be > 1 (no MPI overhead for a single rank).")
+        
+        if hasattr(self, 'verbosity'):
+            verbosity : int = self.verbosity  # type: ignore
+        else:
+            verbosity = 1
 
         should_log = blas_threads_per_rank == 0
         blas_threads_per_rank = _mpitools.compute_blas_threads(num_ranks, blas_threads_per_rank)
-        if should_log:
+        if verbosity > 0 and should_log:
             msg = f"stage_slurm: computed blas_threads_per_rank={blas_threads_per_rank} for num_ranks={num_ranks}.\n"
             msg += "             Note: measured on this machine; pass blas_threads_per_rank=<value>"
             msg += " explicitly if your HPC compute nodes have a different core count.\n"
@@ -470,15 +478,10 @@ class Protocol(_MongoSerializable):
 
         work_dir = str(_pathlib.Path(work_dir))
         data.write(work_dir)
-        runner_path = _mpitools.write_mpi_runner_artifacts(
-            self, work_dir, run_kwargs, _pathlib.Path(work_dir)
-        )
-        _warnings.warn(_mpitools.RUN_KWARGS_PICKLE_MSG, UserWarning)
-        # TODO: avoid the pickle unless absolutely necessary, and raise
-        #       the warning above only when pickle is used.
-        ntasks_per_node, _remainder = divmod(num_ranks, slurm.nodes)
-        if _remainder != 0:
-            msg = f"stage_slurm: num_ranks={num_ranks} is not evenly divisible by "
+        runner_path = _mpitools.write_mpi_runner_artifacts(self, run_kwargs, work_dir, True)
+        ntasks_per_node, remainder = divmod(num_ranks, slurm.nodes)
+        if remainder != 0 and verbosity > 0:
+            msg  = f"stage_slurm: num_ranks={num_ranks} is not evenly divisible by "
             msg += f"slurm.nodes={slurm.nodes}; the SLURM script may request "
             msg += "a non-uniform task layout."
             _warnings.warn(msg)
@@ -500,9 +503,11 @@ class Protocol(_MongoSerializable):
         script_path = str(slurm.script_path)
         with open(script_path, 'w') as _f:
             _f.write(script_content)
-        print(f"stage_slurm: SLURM script written to {script_path}")
-        print(f"Submit with:  sbatch {script_path}\n")
-        return
+
+        if verbosity > 0:
+            print(f"stage_slurm: SLURM script written to {script_path}")
+            print(f"Submit with:  sbatch {script_path}\n")
+        return script_path
 
     def write(self, dirname):
         """

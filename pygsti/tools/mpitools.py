@@ -1186,18 +1186,18 @@ def compute_blas_threads(num_ranks: int, blas_threads_per_rank: int) -> int:
     return max(1, num_cpus // num_ranks)
 
 
-# Reusable warning message for  callers of write_mpi_runner_artifacts 
 RUN_KWARGS_PICKLE_MSG = """
-    This function has written a pickle file, volatile_run_kwargs.pkl, to a
-    persistent directory. That pickle file holds the `run_kwargs` dict
-    after adding a default value for the `disable_checkpointing` kwarg.
+    This function is writing a pickle file, volatile_run_kwargs.pkl, to a
+    persistent directory. That pickle file holds the `run_kwargs` dict,
+    possibly after adding default values for some keyword arguments.
 
     DO NOT rely on this pickled file for long-term storage.
 """
 
 
 def write_mpi_runner_artifacts(
-        protocol_obj, data_dir: str, run_kwargs: dict, artifact_dir) -> str:
+        protocol_obj, run_kwargs: dict, artifact_dir, artifacts_persistent: bool
+    ) -> str:
     """
     Serialize a protocol run into a self-contained directory for MPI workers.
 
@@ -1219,14 +1219,21 @@ def write_mpi_runner_artifacts(
     ----------
     protocol_obj : Protocol
         The protocol to serialize.  Must implement a ``write(dirname)`` method.
-    data_dir : str
-        Directory where ``ProtocolData`` has already been written (or will be
-        written by the caller).  Embedded verbatim into the runner script.
+
     run_kwargs : dict
         Keyword arguments forwarded to ``protocol.run``.  Modified **in place**:
         ``disable_checkpointing`` defaults to ``True`` if not already set.
+
     artifact_dir : path-like
-        Directory in which to write the three artifacts.  Must already exist.
+        Directory in which to write the three artifacts.  Must already exist,
+        and must eventually contain serialization of a ``ProtocolData`` object
+        Embedded verbatim into the runner script.
+
+    arifacts_persistent: bool
+        A flag indicating if the arifact_dir should be assumed persistent or
+        not. If the directory is NOT persistent then we disable checkpointing,
+        which would only slow us down. If a directory IS persistent then we
+        log a warning about serializing with pickle.
 
     Returns
     -------
@@ -1250,8 +1257,12 @@ def write_mpi_runner_artifacts(
     # Pickle run_kwargs so arbitrary objects (checkpoints, simulators, etc.) pass through.
     # Disable checkpointing by default — checkpoint files written to a subprocess CWD
     # are useless, and the auto-generated checkpoint path can fail for non-trivial mode names.
-    run_kwargs.setdefault('disable_checkpointing', True)
-    kwargs_path = str(artifact_dir / 'volatile_run_kwargs.pkl')
+    if artifacts_persistent:
+        _warnings.warn(RUN_KWARGS_PICKLE_MSG, UserWarning)
+    else:
+        run_kwargs.setdefault('disable_checkpointing', True)
+    
+    kwargs_path = artifact_dir / 'volatile_run_kwargs.pkl'
     with open(kwargs_path, 'wb') as _f:
         _pickle.dump(run_kwargs, _f)
 
@@ -1262,13 +1273,13 @@ def write_mpi_runner_artifacts(
         "import pygsti\n"
         "from mpi4py import MPI\n"
         "comm = MPI.COMM_WORLD\n"
-        f"data = pygsti.io.read_data_from_dir({data_dir!r})\n"
+        f"data = pygsti.io.read_data_from_dir({str(artifact_dir)!r})\n"
         f"protocol = pygsti.io.read_protocol_from_dir({protocol_dir!r})\n"
         f"with open({kwargs_path!r}, 'rb') as _f:\n"
         "    _kwargs = pickle.load(_f)\n"
         "results = protocol.run(data, comm=comm, **_kwargs)\n"
         "if comm.Get_rank() == 0:\n"
-        f"    results.write({data_dir!r}, data_already_written=True)\n"
+        f"    results.write({str(artifact_dir)!r}, data_already_written=True)\n"
         "results = None  # free shared memory before MPI teardown\n"
     )
     with open(runner_path, 'w') as _f:
