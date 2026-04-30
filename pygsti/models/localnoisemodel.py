@@ -403,6 +403,18 @@ class LocalNoiseModel(_ImplicitOpModel):
 
         return op_coeffs
 
+    def __getitem__(self, key):
+        if 'rho' in key:
+            return self.prep_blks['layers'][key]
+        if 'Mdefault' in key:
+            return self.povm_blks['layers'][key]
+        if ':' in key:
+            key = tuple(key.split(':'))
+        try:
+            return self.operation_blks['gates'][key]
+        except KeyError:
+            return self.operation_blks['layers'][key]
+
 
 class _SimpleCompLayerRules(_LayerRules):
 
