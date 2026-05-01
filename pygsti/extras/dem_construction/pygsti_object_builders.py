@@ -289,9 +289,28 @@ def local_depolarizing_errorgen(num_qubits, depolarization_rate):
     composed_errorgen = ComposedErrorgen(embedded_errorgens, evotype='stabilizer', state_space=big_qubitspace)    
         
     return composed_errorgen
+
+
+def local_x_errorgen(num_qubits, rate):
+    state_space = QubitSpace(1)
+    basis_size = state_space.dim  # e.g. 4 for a single qubit
+    basis = BuiltinBasis('PP', state_space)
+    errdict = {('S', bl): rate for bl in basis.labels[1:] if 'Y' not in bl and 'Z' not in bl}
+    errgen = LindbladErrorgen.from_elementary_errorgens(
+        errdict, "D", basis, mx_basis='pp',
+        truncate=False, evotype='stabilizer', state_space=state_space)
+    #calling this twice is intentional. Second setting adds adjustment to get correct rate adjustment for depol probability.
+    #errgen.set_error_rates(errdict)
+    
+    embedded_errorgens = []
+    for i in range(num_qubits):
+        embedded_errorgens.append(EmbeddedErrorgen(QubitSpace(num_qubits), [i], errgen))
+    composed_errorgen = ComposedErrorgen(embedded_errorgens, evotype='stabilizer', state_space=QubitSpace(num_qubits))    
+        
+    return composed_errorgen
     
 
-def build_model(error_rates, pspec, oneQ_gate_names, twoQ_gate_names, meas_err=0):
+def build_model(error_rates, pspec, oneQ_gate_names, twoQ_gate_names, meas_err=0, prep_err=0):
     gate_dictionary = dict()
 
     
@@ -317,12 +336,31 @@ def build_model(error_rates, pspec, oneQ_gate_names, twoQ_gate_names, meas_err=0
 
     num_qubits = pspec.num_qubits
     
-    prep_errorgen = local_depolarizing_errorgen(num_qubits, 0)
-    prep_layers = {Label('rho0'): ComposedState(ComputationalBasisState(zvals = ['0']*num_qubits, evotype='stabilizer'), ExpErrorgenOp(prep_errorgen))}
-    #setting the number of qubits for the base POVM is a hack...
-    meas_errorgen = local_depolarizing_errorgen(num_qubits, 0)
-    povm_layers = {Label('Mdefault'): ComposedPOVM(ExpErrorgenOp(meas_errorgen), ComputationalBasisPOVM(1, evotype='stabilizer', state_space=QubitSpace(1)))}
+    # prep_errorgen = #local_depolarizing_errorgen(num_qubits, 0)
+    # prep_layers = {Label('rho0'): ComposedState(ComputationalBasisState(zvals = ['0']*num_qubits, evotype='stabilizer'), ExpErrorgenOp(prep_errorgen))}
+    # #setting the number of qubits for the base POVM is a hack...
+    # meas_errorgen = local_depolarizing_errorgen(num_qubits, 0)
+    # povm_layers = {Label('Mdefault'): ComposedPOVM(ExpErrorgenOp(meas_errorgen), ComputationalBasisPOVM(1, evotype='stabilizer', state_space=QubitSpace(1)))}
 
+    # prep_errorgen = LindbladErrorgen.from_elementary_errorgens({('S', 'X'): meas_err}, state_space=QubitSpace(1), evotype='stabilizer')#local_depolarizing_errorgen(num_qubits, 0)
+    # prep_layers = {Label('rho0'): ComposedState(ComputationalBasisState(zvals = ['0']*num_qubits, evotype='stabilizer'), ExpErrorgenOp(prep_errorgen))}
+    # #setting the number of qubits for the base POVM is a hack...
+    # meas_errorgen = local_depolarizing_errorgen(num_qubits, 3*prep_err/2)#LindbladErrorgen.from_elementary_errorgens({('S', 'X'): meas_err}, state_space=QubitSpace(1), evotype='stabilizer') #
+    # povm_layers = {Label('Mdefault'): ComposedPOVM(ExpErrorgenOp(meas_errorgen), ComputationalBasisPOVM(1, evotype='stabilizer', state_space=QubitSpace(1)))}
+
+    nqs = pspec.num_qubits
+
+    povm_errorgen = LindbladErrorgen.from_elementary_errorgens({('S', 'X'): meas_err}, state_space=QubitSpace(1), evotype='stabilizer')
+
+    povm_layers = {Label('Mdefault'): ComposedPOVM(ExpErrorgenOp(povm_errorgen), ComputationalBasisPOVM(1, evotype='stabilizer', state_space=QubitSpace(1)))}
+    
+    prep_errorgen = local_x_errorgen(nqs, prep_err) #LindbladErrorgen.from_elementary_errorgens({('S', 'X'*(nqs-i-1)): error_rates['rho0'][('S','X')] for i in range(nqs)}, evotype='stabilizer', state_space=QubitSpace(nqs))
+
+    #prep_layers = [pygsti.modelmembers.states.composedstate.ComposedState(pygsti.modelmembers.states.computationalstate.ComputationalBasisState([0], evotype='stabilizer'),ExpErrorgenOp(lindblad_errorgen))]
+
+    #povm_layers = [pygsti.modelmembers.povms.composedpovm.ComposedPOVM(ExpErrorgenOp(lindblad_errorgen),pygsti.modelmembers.povms.computationalpovm.ComputationalBasisPOVM(nqs, evotype='stabilizer'))]
+
+    prep_layers = {Label('rho0'): ComposedState(ComputationalBasisState(zvals = ['0']*nqs, evotype='stabilizer'), ExpErrorgenOp(prep_errorgen))}
 
     #prep_layers = None
     #povm_layers = None
@@ -339,7 +377,7 @@ def parse_pauli_product(prod, current_qubit_mapping):
     return (pauli_string, qubits)
 
     
-def stim_to_pygsti_circuit(circuit, qubit_labels, qubit_relabelling_dict=None, show_qubit_mappings=False, include_observables=False, separate_observables=False, include_idles=False):
+def stim_to_pygsti_circuit(circuit, qubit_labels, qubit_relabelling_dict=None, show_qubit_mappings=False, include_observables=False, separate_observables=False, include_meas_idles=False, include_idles=False):
     
     if qubit_relabelling_dict is None:
         qubit_relabelling_dict = {q:q for q in qubit_labels}
@@ -427,6 +465,11 @@ def stim_to_pygsti_circuit(circuit, qubit_labels, qubit_relabelling_dict=None, s
             if gates_happened and line.split(' ')[0] !='MPP': ###MIGHT NEED TO CHANGE MPP case
                 #assuming there aren't initial measurements in the circuit
                 current_qubit_mapping = update_qubit_mapping(line, current_qubit_mapping, qubit_labels) #in a measurement layer, we just need to update our mapping to expanded circuit qubits
+                if show_qubit_mappings:
+                    print(current_qubit_mapping)
+            if include_meas_idles:
+                unused_qs = [current_qubit_mapping[k] for k in qubit_labels if str(k) not in line.split(' ')[1:]]
+                gate_layers.append('[' + ''.join([f'Gi:'+str(s) for s in unused_qs]) + ']')
                 if show_qubit_mappings:
                     print(current_qubit_mapping)
         elif 'DETECTOR' in line.split(' ')[0]: #or 'OBSERVABLE_INCLUDE' in line.split('(')[0]:

@@ -279,7 +279,7 @@ def generate_dem(dets_as_pauli_strings, eoc_eeg, sim, n_rounds=None, n_logical=N
         dem[det_string] += -1*contribution #clearly false
     #convert this to a detector string
     h_terms = [t for t in eoc_eeg_terms if t.errorgen_type == 'H']
-    terms_by_effect = terms_by_effect = sort_terms_by_effect(h_terms, dets_as_pauli_strings, sim)   #make this faster by looking at XY support on ancilla Qs
+    terms_by_effect = sort_terms_by_effect(h_terms, dets_as_pauli_strings, sim)   #make this faster by looking at XY support on ancilla Qs
     for k, eeglist in terms_by_effect.items():   
         for (eeg1, eeg2) in itertools.product(eeglist, repeat=2):
             weight = eoc_eeg[eeg1]*eoc_eeg[eeg2]/2 
