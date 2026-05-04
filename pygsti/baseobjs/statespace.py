@@ -9,11 +9,12 @@ Defines OrderedDict-derived classes used to store specific pyGSTi objects
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 # ***************************************************************************************************
-
+from __future__ import annotations
 import copy as _copy
 import numbers as _numbers
 import sys as _sys
 import numpy as _np
+from typing import Union
 
 from functools import cache
 
@@ -28,8 +29,13 @@ class StateSpace(_NicelySerializable):
     as the direct sum of one or more tensor products of Hilbert spaces.
     """
 
+    Castable = Union['StateSpace',
+                     int,
+                     list[int],
+                     list[str]] # Type alias to use when one wants to cast to a StateSpace.
+
     @classmethod
-    def cast(cls, obj):
+    def cast(cls, obj: StateSpace.Castable):
         """
         Casts `obj` into a :class:`StateSpace` object if possible.
 

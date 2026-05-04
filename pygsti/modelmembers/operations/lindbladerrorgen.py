@@ -1122,6 +1122,7 @@ class LindbladErrorgen(_LinearOperator):
         """
         return self.coefficients(return_basis=False, logscale_nonham=True, label_type=label_type)
 
+    #TODO: This needs a unit test for correctness (there was an uncaught bug here).
     def set_coefficients(self, elementary_errorgens, action: Literal['update', 'add', 'reset'] = "update", 
                          logscale_nonham=False, truncate=True):
         """
@@ -1172,7 +1173,7 @@ class LindbladErrorgen(_LinearOperator):
             #convert keys to local elementary errorgen labels (the same as those used by the coefficient blocks):
             identity_label_1Q = 'I'  # maybe we could get this from a 1Q basis somewhere?
             sslbls = self.state_space.sole_tensor_product_block_labels  # take first TPB labels as all labels
-            elem_errorgens = {_LocalElementaryErrorgenLabel.cast(k, sslbls, identity_label_1Q): v
+            elementary_errorgens = {_LocalElementaryErrorgenLabel.cast(k, sslbls, identity_label_1Q): v
                               for k, v in elementary_errorgens.items()}
         else:
             assert isinstance(first_key, _LocalElementaryErrorgenLabel), 'Unsupported error generator label type as key.'
@@ -1185,7 +1186,7 @@ class LindbladErrorgen(_LinearOperator):
                 for k in blk_elem_errorgens:
                     blk_elem_errorgens[k] = 0.0
 
-            for k, v in elem_errorgens.items():
+            for k, v in elementary_errorgens.items():
                 if logscale_nonham and k.errorgen_type == "S":
                     # treat the value being set in lindblad_term_dict as the *channel* stochastic error rate, and
                     # set the errgen coefficient to the value that would, in a depolarizing channel, give
@@ -1359,6 +1360,8 @@ class LindbladErrorgen(_LinearOperator):
         dim = self.dim
         blk_superop_derivs = []; off = 0
         for blk, (superops, _) in zip(self.coefficient_blocks, self.lindblad_term_superops_and_1norms):
+            if isinstance(superops, list):
+                raise ValueError()
             superop_deriv = blk.superop_deriv_wrt_params(superops, self.paramvals[off: off + blk.num_params], True)
             superop_deriv = superop_deriv.reshape((dim**2, -1))  # [iFlattenedOp, iParam]
             blk_superop_derivs.append(superop_deriv)
