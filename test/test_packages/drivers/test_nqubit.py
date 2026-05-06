@@ -1,11 +1,13 @@
 import unittest
 import pygsti
+import pytest
 import numpy as np
 from pygsti.modelpacks.legacy import std1Q_XY
 from pygsti.baseobjs import Label as L
 from pygsti.circuits import Circuit
 import pygsti.models.modelconstruction as mc
 from pygsti.processors.processorspec import QubitProcessorSpec as _ProcessorSpec
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning
 import warnings
 
 from ..testutils import BaseTestCase, compare_files, regenerate_references
@@ -79,9 +81,13 @@ class NQubitTestCase(BaseTestCase):
                                                     roughNoise=(1234,0.01))
 
         cache = {}
-        gss = cloudcircuitconstruction._create_xycnot_cloudnoise_circuits(
-            nQubits, maxLengths, 'line', cnot_edges, max_idle_weight=2, maxhops=1,
-            extra_weight_1_hops=0, extra_gate_weight=0, verbosity=0, cache=cache, algorithm="sequential")
+        # Asserts gss matches frozen JSON fixture; signature change to
+        # create_cloudnoise_circuits would change the output shape.
+        # See issues/706/c2-create-xycnot-cloudnoise-circuits-not-mechanical.md
+        with pytest.warns(pyGSTiDeprecationWarning):
+            gss = cloudcircuitconstruction._create_xycnot_cloudnoise_circuits(
+                nQubits, maxLengths, 'line', cnot_edges, max_idle_weight=2, maxhops=1,
+                extra_weight_1_hops=0, extra_gate_weight=0, verbosity=0, cache=cache, algorithm="sequential")
         expList = list(gss) #[ tup[0] for tup in expList_tups]
         
         #RUN to SAVE list & dataset
@@ -105,9 +111,10 @@ class NQubitTestCase(BaseTestCase):
                                                     roughNoise=(1234,0.01))
 
         cache = {}
-        gss = cloudcircuitconstruction._create_xycnot_cloudnoise_circuits(
-            nQubits, maxLengths, 'line', cnot_edges, max_idle_weight=1, maxhops=0,
-            extra_weight_1_hops=0, extra_gate_weight=0, verbosity=4, cache=cache, algorithm="greedy")
+        with pytest.warns(pyGSTiDeprecationWarning):
+            gss = cloudcircuitconstruction._create_xycnot_cloudnoise_circuits(
+                nQubits, maxLengths, 'line', cnot_edges, max_idle_weight=1, maxhops=0,
+                extra_weight_1_hops=0, extra_gate_weight=0, verbosity=4, cache=cache, algorithm="greedy")
         #expList = gss.allstrs #[ tup[0] for tup in expList_tups]
 
         #RUN to SAVE list

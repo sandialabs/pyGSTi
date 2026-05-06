@@ -5,11 +5,13 @@ import warnings
 import itertools
 
 import numpy as np
+import pytest
 
 import pygsti
 import pygsti.models.modelconstruction as mc
 from pygsti.processors.processorspec import QubitProcessorSpec as _ProcessorSpec
 from pygsti.extras import idletomography as idt
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning
 from ..testutils import BaseTestCase, compare_files, temp_files, regenerate_references
 
 #Helper functions
@@ -325,9 +327,11 @@ class IDTTestCase(BaseTestCase):
             c = pickle.load(open(compare_files+"/idt_nQsequenceCache.pkl", 'rb'))
 
         t = time.time()
-        gss = pygsti.circuits.cloudcircuitconstruction._create_xycnot_cloudnoise_circuits(
-            nQubits, maxLengths, 'line', [(0,1)], max_idle_weight=2,
-            idle_only=False, parameterization="H+S", cache=c, verbosity=3)
+        # See issues/706/c2-create-xycnot-cloudnoise-circuits-not-mechanical.md
+        with pytest.warns(pyGSTiDeprecationWarning):
+            gss = pygsti.circuits.cloudcircuitconstruction._create_xycnot_cloudnoise_circuits(
+                nQubits, maxLengths, 'line', [(0,1)], max_idle_weight=2,
+                idle_only=False, parameterization="H+S", cache=c, verbosity=3)
         #print("GSS STRINGS: ")
         #print('\n'.join(["%s: %s" % (s.str,str(s.tup)) for s in gss.allstrs]))
 
