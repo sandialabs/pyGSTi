@@ -5,6 +5,7 @@ import sys
 
 import pygsti
 from pygsti.modelpacks import smq1Q_XY
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning
 import pygsti.protocols as proto
 from ..testutils import BaseTestCase, compare_files
 
@@ -79,7 +80,10 @@ class LogLTestCase(BaseTestCase):
             comm = MPI.COMM_WORLD
             current_mem = pygsti.baseobjs.profiler._get_mem_usage
             ds   = pygsti.data.DataSet(file_to_load_from=compare_files + "/analysis.dataset")
-            model = pygsti.io.load_model(compare_files + "/analysis.model")
+            # Legacy .model text format; Model.read only supports JSON.
+            # See issues/706/c2-io-load-write-model-format-mismatch.md
+            with pytest.warns(pyGSTiDeprecationWarning):
+                model = pygsti.io.load_model(compare_files + "/analysis.model")
             L = pygsti.logl_hessian(model, ds,
                                     prob_clip_interval=(-1e6,1e6), mem_limit=500*1024**2+current_mem(),
                                     poisson_picture=True, comm=comm)

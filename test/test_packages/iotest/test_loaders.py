@@ -1,8 +1,10 @@
 import numpy as np
+import pytest
 
 import pygsti
 from pygsti import io
 from pygsti.io import readers
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning
 from . import IOBase, with_temp_path
 from .references import generator as io_gen
 
@@ -73,11 +75,17 @@ class LoadersTester(IOBase):
 
     def test_load_model(self):
         model = io_gen.std_model
-        model2 = readers.load_model(str(self.reference_path('gateset_loadwrite.txt')))
+        # Legacy .txt model format; Model.read only supports JSON.
+        # See issues/706/c2-io-load-write-model-format-mismatch.md
+        with pytest.warns(pyGSTiDeprecationWarning):
+            model2 = readers.load_model(str(self.reference_path('gateset_loadwrite.txt')))
         self.assertAlmostEqual(model2.frobeniusdist(model), 0)
 
     def test_load_model_alt_format(self):
-        mdl_formats = readers.load_model(str(self.reference_path('formatExample.model')))
+        # Whole purpose is to exercise the alt-format text parser, which has
+        # no JSON analogue; see issues/706/c2-io-load-write-model-format-mismatch.md
+        with pytest.warns(pyGSTiDeprecationWarning):
+            mdl_formats = readers.load_model(str(self.reference_path('formatExample.model')))
         sslbls = pygsti.baseobjs.statespace.ExplicitStateSpace("Q0")
 
         rotXPi = pygsti.models.modelconstruction.create_operation("X(pi,Q0)", sslbls, "pp")
@@ -97,5 +105,8 @@ class LoadersTester(IOBase):
                                      1 / np.sqrt(2) * np.array([[1], [0], [0], [1]], 'd'))
 
     def test_load_circuit_dict(self):
-        d = readers.load_circuit_dict(str(self.reference_path('gatestringdict_loadwrite.txt')))
+        # Legacy .txt circuit-dict format; no replacement provided by the
+        # @_deprecated_fn() decorator (see pygsti/io/readers.py:286).
+        with pytest.warns(pyGSTiDeprecationWarning):
+            d = readers.load_circuit_dict(str(self.reference_path('gatestringdict_loadwrite.txt')))
         self.assertEqual(tuple(d['F1']), ('Gx', 'Gx'))

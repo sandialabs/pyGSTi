@@ -1,10 +1,12 @@
 import pickle
 
 import numpy as np
+import pytest
 
 import pygsti
 from pygsti.models import modelconstruction
 from pygsti.modelpacks.legacy import std1Q_XYI as std
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning
 from ..testutils import BaseTestCase, temp_files
 
 
@@ -228,8 +230,12 @@ class InstrumentTestCase(BaseTestCase):
 
 
         print("Model IO")
-        pygsti.io.write_model(model, temp_files + "/testGateset.txt")
-        model2 = pygsti.io.load_model(temp_files + "/testGateset.txt")
+        # Legacy .txt round-trip; Model.read/Model.write only support JSON.
+        # See issues/706/c2-io-load-write-model-format-mismatch.md
+        with pytest.warns(pyGSTiDeprecationWarning):
+            pygsti.io.write_model(model, temp_files + "/testGateset.txt")
+        with pytest.warns(pyGSTiDeprecationWarning):
+            model2 = pygsti.io.load_model(temp_files + "/testGateset.txt")
         self.assertAlmostEqual(model.frobeniusdist(model2),0.0)
         print("Multiplication")
 
@@ -335,7 +341,8 @@ class InstrumentTestCase(BaseTestCase):
             print("Param: ",param)
             mdl.set_all_parameterizations(param)
             filename = temp_files + "/gateset_with_instruments_%s.txt" % param
-            pygsti.io.write_model(mdl, filename)
+            with pytest.warns(pyGSTiDeprecationWarning):
+                pygsti.io.write_model(mdl, filename)
             gs2 = pygsti.io.parse_model(filename)
 
             self.assertAlmostEqual( mdl.frobeniusdist(gs2), 0.0 )
