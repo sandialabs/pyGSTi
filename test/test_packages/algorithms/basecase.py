@@ -20,9 +20,6 @@ class AlgorithmsBase(BaseTestCase):
 
         self.maxLengthList = [1,2,4,8]
 
-        self.elgstStrings = pygsti.circuits.create_elgst_lists(
-            self.op_labels, self.germs, self.maxLengthList )
-
         self.lsgstStrings = pygsti.circuits.create_lsgst_circuit_lists(
             self.op_labels, self.fiducials, self.fiducials, self.germs, self.maxLengthList )
 

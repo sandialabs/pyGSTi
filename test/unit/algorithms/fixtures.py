@@ -31,13 +31,6 @@ def lgstStrings(self):
 
 
 @ns.memo
-def elgstStrings(self):
-    return circuits.create_elgst_lists(
-        self.opLabels, self.germs, self.maxLengthList
-    )
-
-
-@ns.memo
 def lsgstStrings(self):
     return circuits.create_lsgst_circuit_lists(
         self.opLabels, self.prep_fids, self.meas_fids,
