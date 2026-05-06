@@ -57,7 +57,7 @@ def lsgstStrings(self):
 
 @ns.memo
 def lsgstStructs(self):
-    return pygsti.circuits.make_lsgst_structs(
+    return pygsti.circuits.create_lsgst_circuit_lists(
         self.opLabels, self.fiducials, self.fiducials, self.germs,
         self.maxLengthList
     )

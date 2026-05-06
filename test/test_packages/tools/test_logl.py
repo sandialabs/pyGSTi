@@ -22,8 +22,8 @@ class LogLTestCase(BaseTestCase):
         op_labels = list(model.operations.keys()) # also == std.gates
         maxLengthList = [1]
         #circuits for XY model.
-        gss = pygsti.circuits.make_lsgst_structs(op_labels, prep_fiducials[0:4], 
-                                                          meas_fiducials[0:3], smq1Q_XY.germs(), maxLengthList)
+        gss = pygsti.circuits.create_lsgst_circuit_lists(op_labels, prep_fiducials[0:4],
+                                                         meas_fiducials[0:3], smq1Q_XY.germs(), maxLengthList)
 
         edesign =  proto.CircuitListsDesign([pygsti.circuits.CircuitList(circuit_struct) for circuit_struct in gss])
 
