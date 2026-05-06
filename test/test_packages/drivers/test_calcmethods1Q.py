@@ -76,7 +76,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         if regenerate_references():
             ds = pygsti.data.simulate_data(cls.mdl_datagen, cls.listOfExperiments,
                                                    num_samples=10000, sample_error="multinomial", seed=1234)
-            ds.save(compare_files + "/calcMethods1Q.dataset")
+            ds.write_binary(compare_files + "/calcMethods1Q.dataset")
 
         #DEBUG TEST- was to make sure data files have same info -- seemed ultimately unnecessary
         #ds_swp = pygsti.objects.DataSet(file_to_load_from=compare_files + "/calcMethods1Q.datasetv3") # run in Python3
@@ -111,7 +111,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         #RUN BELOW FOR DATAGEN (SAVE)
         if regenerate_references():
             redmod_ds = pygsti.data.simulate_data(cls.mdl_redmod_datagen, expList, 1000, "round", seed=1234)
-            redmod_ds.save(compare_files + "/calcMethods1Q_redmod.dataset")
+            redmod_ds.write_binary(compare_files + "/calcMethods1Q_redmod.dataset")
 
         cls.redmod_ds = pygsti.data.DataSet(file_to_load_from=compare_files + "/calcMethods1Q_redmod.dataset")
 

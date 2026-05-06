@@ -43,10 +43,10 @@ class ReportBaseCase(BaseTestCase):
         if regenerate_references():
             ds = pygsti.data.simulate_data(datagen_gateset, cls.lsgstStrings[-1], num_samples=1000,
                                                    sample_error='binomial', seed=100)
-            ds.save(compare_files + "/reportgen.dataset")
+            ds.write_binary(compare_files + "/reportgen.dataset")
             ds2 = pygsti.data.simulate_data(datagen_gateset2, cls.lsgstStrings[-1], num_samples=1000,
                                                     sample_error='binomial', seed=100)
-            ds2.save(compare_files + "/reportgen2.dataset")
+            ds2.write_binary(compare_files + "/reportgen2.dataset")
 
 
         cls.ds = pygsti.data.DataSet(file_to_load_from=compare_files + "/reportgen.dataset")
