@@ -26,11 +26,10 @@ try:
     use_csaps = True
 except ImportError:
     use_csaps = False
-    import warnings
-    from pygsti.tools.exceptions import MissingDependencyWarning
-    msg = "Warning - Cannot import csaps module for spline interpolation. " \
-          "Interpolated gates will default to linear interpolation."
-    warnings.warn(msg, MissingDependencyWarning)
+    # Spline interpolation falls back to linear (documented in
+    # InterpolatedOpFactory.create_by_interpolating_physical_process).
+    # An explicit interpolator_and_args='spline' request without csaps
+    # raises ValueError where it's actually consulted.
 
 if use_csaps:
     class custom_interpolator():

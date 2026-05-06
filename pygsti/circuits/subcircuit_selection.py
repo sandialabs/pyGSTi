@@ -31,21 +31,7 @@ from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.protocols.protocol import FreeformDesign as _FreeformDesign
 from pygsti.tools import internalgates as _itgs
-from pygsti.tools.exceptions import MissingDependencyWarning
 
-
-QISKIT_VERSION_MISMATCH_MESSAGE_TEMPLATE = \
-f"""
-Simple subcircuit selection with a qiskit CouplingMap and/or InstructionDurations object
-is designed for qiskit version 2.1.1, and may not function properly for your qiskit version,
-which is %s.
-"""
-
-QISKIT_MISSING_MESSAGE = \
-"""
-Qiskit is required if using a CouplingMap or InstructionDurations object
-for subcircuit selection, and does not appear to be installed.
-"""
 
 MAX_STARTING_LAYER_ATTEMPTS = 1000
 
@@ -126,13 +112,11 @@ def sample_subcircuits(full_circs: Union[_Circuit, List[_Circuit]],
         A FreeformDesign object containing the sampled subcircuits and auxiliary
         information, including a circuit ID and depth.
     """
-    try:
-        import qiskit
-        if qiskit.__version__ != '2.1.1':
-            _warnings.warn(QISKIT_VERSION_MISMATCH_MESSAGE_TEMPLATE % qiskit.__version__, MissingDependencyWarning)
-    except:
-        _warnings.warn(QISKIT_MISSING_MESSAGE, MissingDependencyWarning)
-    
+    # Qiskit is only consulted by isinstance checks further down. If the
+    # user passes string/list `coupling_map` and a duck-typed
+    # `instruction_durations`, qiskit is not needed at all; mismatched or
+    # missing qiskit surfaces naturally as an exception when an unsupported
+    # qiskit object reaches one of the qiskit-typed branches.
     if rand_state is None:
         rand_state = _np.random.RandomState()
     
@@ -258,13 +242,8 @@ def simple_weighted_subcirc_selection(full_circ: _Circuit,
         If `stochastic_2q_drops` is set to True, then the returns are extended to include
         the number of dangling gates in each subcircuit and the indices of added layers.
     """
-
-    try:
-        import qiskit
-        if qiskit.__version__ != '2.1.1':
-            _warnings.warn(QISKIT_VERSION_MISMATCH_MESSAGE_TEMPLATE % qiskit.__version__, MissingDependencyWarning)
-    except:
-        _warnings.warn(QISKIT_MISSING_MESSAGE, MissingDependencyWarning)
+    # See sample_subcircuits for the rationale on omitting an
+    # unconditional qiskit-version warning here.
 
     full_width = len(full_circ.line_labels)
     full_depth = len(full_circ)
