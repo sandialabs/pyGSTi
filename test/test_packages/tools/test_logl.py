@@ -5,7 +5,7 @@ import sys
 
 import pygsti
 from pygsti.modelpacks import smq1Q_XY
-from pygsti.tools.exceptions import pyGSTiDeprecationWarning
+from pygsti.modelpacks.legacy import std1Q_XYI
 import pygsti.protocols as proto
 from ..testutils import BaseTestCase, compare_files
 
@@ -80,10 +80,12 @@ class LogLTestCase(BaseTestCase):
             comm = MPI.COMM_WORLD
             current_mem = pygsti.baseobjs.profiler._get_mem_usage
             ds   = pygsti.data.DataSet(file_to_load_from=compare_files + "/analysis.dataset")
-            # Legacy .model text format; Model.read only supports JSON.
-            # See issues/706/c2-io-load-write-model-format-mismatch.md
-            with pytest.warns(pyGSTiDeprecationWarning):
-                model = pygsti.io.load_model(compare_files + "/analysis.model")
+            # The dataset was generated from std1Q_XYI.target_model().depolarize(0.05, 0.1)
+            # (see analysis.dataset producer in test_packages/algorithms/basecase.py).
+            # logl_hessian doesn't require the model to sit at any particular optimum —
+            # it computes the Hessian at whatever model it's given — so the datagen
+            # model is sufficient to keep this MPI integration smoke test alive.
+            model = std1Q_XYI.target_model().depolarize(op_noise=0.05, spam_noise=0.1)
             L = pygsti.logl_hessian(model, ds,
                                     prob_clip_interval=(-1e6,1e6), mem_limit=500*1024**2+current_mem(),
                                     poisson_picture=True, comm=comm)

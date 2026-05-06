@@ -230,12 +230,8 @@ class InstrumentTestCase(BaseTestCase):
 
 
         print("Model IO")
-        # Legacy .txt round-trip; Model.read/Model.write only support JSON.
-        # See issues/706/c2-io-load-write-model-format-mismatch.md
-        with pytest.warns(pyGSTiDeprecationWarning):
-            pygsti.io.write_model(model, temp_files + "/testGateset.txt")
-        with pytest.warns(pyGSTiDeprecationWarning):
-            model2 = pygsti.io.load_model(temp_files + "/testGateset.txt")
+        model.write(temp_files + "/testGateset.json")
+        model2 = pygsti.models.ExplicitOpModel.read(temp_files + "/testGateset.json")
         self.assertAlmostEqual(model.frobeniusdist(model2),0.0)
         print("Multiplication")
 

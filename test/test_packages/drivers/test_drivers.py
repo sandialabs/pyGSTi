@@ -1,11 +1,9 @@
 import unittest # noqa: E999
 import numpy as np
-import pytest
 from pygsti.forwardsims.mapforwardsim import MapForwardSimulator
 from numpy.linalg import norm
 import pygsti
 from pygsti.modelpacks import smq1Q_XY as std
-from pygsti.tools.exceptions import pyGSTiDeprecationWarning
 from ..testutils import BaseTestCase, compare_files, temp_files, regenerate_references
 
 class DriversTestCase(BaseTestCase):
@@ -42,15 +40,13 @@ class TestDriversMethods(DriversTestCase):
         lens = [ len(strct) for strct in fullStructs ]
         self.assertEqual(lens, [19, 33])
 
-        #Global FPR — intentionally exercises the deprecated flat-list shape
-        # of fid_pairs alongside the per-germ dict shape below; see
-        # issues/706/c2-find-sufficient-fiducial-pairs-not-mechanical.md
-        with pytest.warns(pyGSTiDeprecationWarning):
-            fidPairs = pygsti.alg.find_sufficient_fiducial_pairs(
-                self.model, self.prep_fiducials, self.meas_fiducials, self.germs,
-                search_mode="random", n_random=10, seed=1234,
-                verbosity=0, mem_limit=int(2*(1024)**3), minimum_pairs=2,
-                test_lengths = (64, 512))
+        # Global FPR — exercises the flat-list shape of `fid_pairs=` for
+        # create_lsgst_circuit_lists / create_lsgst_circuits / GST. Hand-rolled
+        # rather than computed via find_sufficient_fiducial_pairs (deprecated)
+        # since this half of the test only cares about pipeline shape, not
+        # which pairs are amplificationally complete; per-germ FPR below
+        # provides the correctness-driven half.
+        fidPairs = [(0, 0), (0, 1), (1, 0), (2, 1), (3, 2)]
 
         gfprStructs = pygsti.circuits.create_lsgst_circuit_lists(
             self.model, self.prep_fiducials, self.meas_fiducials, self.germs, maxLens, 
