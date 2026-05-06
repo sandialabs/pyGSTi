@@ -40,7 +40,7 @@ def mdl_lgst(self):
 
 @ns.memo
 def mdl_lgst_go(self):
-    return pygsti.gaugeopt_to_target(self.mdl_lgst, self.model, {'spam': 1.0, 'gates': 1.0}, check_jac=True)
+    return pygsti.gaugeopt_to_target(self.mdl_lgst, self.model, item_weights={'spam': 1.0, 'gates': 1.0}, check_jac=True)
 
 
 @ns.memo
@@ -78,4 +78,4 @@ def mdl_lsgst(self):
 @ns.memo
 def mdl_lsgst_go(self):
     # Was previously written to disk as 'analysis.model'
-    return pygsti.gaugeopt_to_target(self.mdl_lsgst, self.model, {'spam': 1.0})
+    return pygsti.gaugeopt_to_target(self.mdl_lsgst, self.model, item_weights={'spam': 1.0})

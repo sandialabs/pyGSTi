@@ -53,7 +53,7 @@ class ReportBaseCase(BaseTestCase):
         cls.ds2 = pygsti.data.DataSet(file_to_load_from=compare_files + "/reportgen2.dataset")
 
         mdl_lgst = pygsti.run_lgst(cls.ds, cls.min_prep_fids, cls.min_meas_fids, target_model, svd_truncate_to=4, verbosity=0)
-        mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst, target_model, {'gates': 1.0, 'spam': 0.0})
+        mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst, target_model, item_weights={'gates': 1.0, 'spam': 0.0})
         cls.mdl_clgst = pygsti.contract(mdl_lgst_go, "CPTP")
         cls.mdl_clgst_tp = pygsti.contract(cls.mdl_clgst, "vSPAM")
         cls.mdl_clgst_tp.set_all_parameterizations("full TP")
