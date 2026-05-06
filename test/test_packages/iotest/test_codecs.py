@@ -68,9 +68,10 @@ class CodecsTestCase(BaseTestCase):
         crfact.project_hessian('std')
 
         #create a Workspace object
-        self.ws = pygsti.report.create_standard_report(self.results, None,
-                                                       title="GST Codec TEST Report",
-                                                       confidence_level=95)
+        self.ws = pygsti.report.Workspace()
+        pygsti.report.construct_standard_report(
+            self.results, title="GST Codec TEST Report",
+            confidence_level=95, ws=self.ws)
         std.target_model()._check_paramvec()
 
         #create miscellaneous other objects

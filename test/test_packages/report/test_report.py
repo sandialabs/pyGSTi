@@ -5,9 +5,11 @@ import subprocess
 import unittest
 
 import numpy as np
+import pytest
 
 import pygsti
 from pygsti.modelpacks import smq1Q_XY as std
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning
 # Inherit setup from here
 from .reportBaseCase import ReportBaseCase
 from ..testutils import compare_files, temp_files, run_notebook
@@ -41,11 +43,19 @@ class TestReport(ReportBaseCase):
         pygsti.report.create_offline_zip(temp_files + "/.")
 
     def test_failures(self):
+        # All three calls below exercise deprecated entry points by design;
+        # the test exists specifically to verify their failure-mode contracts
+        # remain stable. assertWarns already handles the deprecation warning
+        # for create_general_report; the create_standard_report calls need an
+        # explicit pytest.warns wrap because pytest -W error treats the
+        # warning as an exception that would mask the assertRaises target.
         self.assertWarns(pygsti.report.create_general_report, self.results, temp_files + "/XXX")
-        with self.assertRaises(ValueError): # backward compat catch - when forget to specify title
+        with pytest.warns(pyGSTiDeprecationWarning), self.assertRaises(ValueError):
+            # backward compat catch - when forget to specify title
             pygsti.report.create_standard_report(self.results, temp_files + "/XXX", 95)
 
-        with self.assertRaises(ValueError): #PDF report with multiple gauge opts
+        with pytest.warns(pyGSTiDeprecationWarning), self.assertRaises(ValueError):
+            # PDF report with multiple gauge opts
             pygsti.report.create_standard_report(self.results, temp_files + "/XXX.pdf")
 
     def test_std_clifford_comp(self):
