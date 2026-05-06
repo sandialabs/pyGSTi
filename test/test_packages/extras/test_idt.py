@@ -238,16 +238,18 @@ class IDTTestCase(BaseTestCase):
         self.assertLess(maxA, 1e-6)
 
     def test_idletomog_gstdata_std1Q(self):
-        from pygsti.modelpacks.legacy import std1Q_XYI as std
-        std = pygsti.modelpacks.stdtarget.stdmodule_to_smqmodule(std)
+        from pygsti.modelpacks import smq1Q_XYI as std
 
         maxLens = [1,2,4]
-        expList = pygsti.circuits.create_lsgst_circuits(std.target_model(), std.prepStrs,
-                                                            std.effectStrs, std.germs_lite, maxLens)
+        prep_fids = std.prep_fiducials()
+        meas_fids = std.meas_fiducials()
+        germs_lite = std.germs(lite=True)
+        expList = pygsti.circuits.create_lsgst_circuits(std.target_model(), prep_fids,
+                                                            meas_fids, germs_lite, maxLens)
         ds = pygsti.data.simulate_data(std.target_model().depolarize(0.01, 0.01),
                                        expList, 1000, 'multinomial', seed=1234)
 
-        result = pygsti.run_long_sequence_gst(ds, std.target_model(), std.prepStrs, std.effectStrs, std.germs_lite, maxLens, verbosity=3)
+        result = pygsti.run_long_sequence_gst(ds, std.target_model(), prep_fids, meas_fids, germs_lite, maxLens, verbosity=3)
 
         #standard report will run idle tomography
         report = pygsti.report.construct_standard_report(result, "Test GST Report w/Idle Tomography Tab: StdXYI",
@@ -263,14 +265,15 @@ class IDTTestCase(BaseTestCase):
 
     def test_idletomog_gstdata_1Qofstd2Q(self):
         # perform idle tomography on first qubit of 2Q
-        from pygsti.modelpacks.legacy import std2Q_XYICNOT as std2Q
-        from pygsti.modelpacks.legacy import std1Q_XYI as std
-        std2Q = pygsti.modelpacks.stdtarget.stdmodule_to_smqmodule(std2Q)
-        std = pygsti.modelpacks.stdtarget.stdmodule_to_smqmodule(std)
+        from pygsti.modelpacks import smq2Q_XYICNOT as std2Q
+        from pygsti.modelpacks import smq1Q_XYI as std
 
         maxLens = [1,2,4]
-        expList = pygsti.circuits.create_lsgst_circuits(std2Q.target_model(), std2Q.prepStrs,
-                                                            std2Q.effectStrs, std2Q.germs_lite, maxLens)
+        std2Q_prep = std2Q.prep_fiducials()
+        std2Q_meas = std2Q.meas_fiducials()
+        std2Q_germs_lite = std2Q.germs(lite=True)
+        expList = pygsti.circuits.create_lsgst_circuits(std2Q.target_model(), std2Q_prep,
+                                                            std2Q_meas, std2Q_germs_lite, maxLens)
         mdl_datagen = std2Q.target_model().depolarize(0.01, 0.01)
         ds2Q = pygsti.data.simulate_data(mdl_datagen, expList, 1000, 'multinomial', seed=1234)
 
@@ -279,8 +282,11 @@ class IDTTestCase(BaseTestCase):
 
         start = std.target_model()
         start.set_all_parameterizations("full TP")
-        result = pygsti.run_long_sequence_gst(ds, start, std.prepStrs[0:4], std.effectStrs[0:4],
-                                              std.germs_lite, maxLens, verbosity=3, advanced_options={'objective': 'chi2'})
+        std_prep = std.prep_fiducials()
+        std_meas = std.meas_fiducials()
+        std_germs_lite = std.germs(lite=True)
+        result = pygsti.run_long_sequence_gst(ds, start, std_prep[0:4], std_meas[0:4],
+                                              std_germs_lite, maxLens, verbosity=3, advanced_options={'objective': 'chi2'})
 
         report = pygsti.report.construct_standard_report(result, "Test GST Report w/Idle Tomog.: StdXYI from StdXYICNOT",
                                                          advanced_options={'idt_idle_oplabel': ()}, verbosity=3)
