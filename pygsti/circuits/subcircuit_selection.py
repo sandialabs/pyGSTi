@@ -11,7 +11,7 @@ Utility functions for subcircuit selection
 #***************************************************************************************************
 
 from __future__ import annotations
-from typing import Dict, List, Tuple, Callable, Union, Optional, Any, Protocol, Literal, Set, TYPE_CHECKING
+from typing import Dict, List, Tuple, Callable, Union, Optional, Any, Protocol, Literal, Set, TYPE_CHECKING, runtime_checkable
 
 if TYPE_CHECKING:
     try:
@@ -49,10 +49,11 @@ for subcircuit selection, and does not appear to be installed.
 
 MAX_STARTING_LAYER_ATTEMPTS = 1000
 
-
+@runtime_checkable
 class HasGetMethod(Protocol):
-    def get(gate_name: str, qubits: List[int]) -> float:
-        pass
+    def get(self, gate_name: str, qubits: List[int]) -> float:
+        ...
+
 
 def sample_subcircuits(full_circs: Union[_Circuit, List[_Circuit]],
                        width_depths: Dict[int, List[int]],
