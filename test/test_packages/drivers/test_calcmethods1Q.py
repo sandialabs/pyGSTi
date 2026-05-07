@@ -599,7 +599,12 @@ class CalcMethods1QTestCase(BaseTestCase):
             evotype='statevec', ensure_composed_gates=False)
 
         probs1 = mdl.probabilities(self.circuit3)
-        probs2 = self.circuit3.simulate(mdl) # calls probs - same as above line
+        # Was: `probs2 = self.circuit3.simulate(mdl)`. Circuit.simulate is
+        # deprecated (replacement: Model.probabilities) — its only
+        # difference vs Model.probabilities was that it filtered out
+        # zero-probability outcomes by default. Inline that filter so the
+        # downstream "only-nonzero" assertion below stays meaningful.
+        probs2 = {o: p for o, p in probs1.items() if abs(p) > 1e-12}
         print(probs1)
         print(probs2)
         self.assert_outcomes(probs1, { ('000',): 0.0,
@@ -610,7 +615,7 @@ class CalcMethods1QTestCase(BaseTestCase):
                                        ('101',): 0.0,
                                        ('110',): 0.0,
                                        ('111',): 1.0 } )
-        self.assert_outcomes(probs2, { ('111',): 1.0 } ) # only returns nonzero outcomes by default
+        self.assert_outcomes(probs2, { ('111',): 1.0 } ) # nonzero-only filter mirrors the deprecated Circuit.simulate default
 
 
 

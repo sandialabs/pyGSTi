@@ -1,5 +1,6 @@
 import unittest # noqa: E999
 import numpy as np
+import pytest
 from pygsti.forwardsims.mapforwardsim import MapForwardSimulator
 from numpy.linalg import norm
 import pygsti
@@ -126,9 +127,16 @@ class TestDriversMethods(DriversTestCase):
         pygsti.report.construct_standard_report(result, title="CPTP Gates report", verbosity=0).write_html(temp_files + "/full_report_CPTPGates")
 
 
+    # 'S' (Stochastic) under-parameterises this test's POVM, which trips
+    # PrepareThyself in pygsti.modelmembers.povms.convert (same situation as
+    # SGatesTester in test/unit/drivers/test_longsequence.py). The warning
+    # is emitted by design when 'S' is used with a too-rich POVM; the test
+    # is exercising the GST workflow at this approximate parameterisation,
+    # so silence the warning for the duration of the test.
+    @pytest.mark.filterwarnings("ignore::pygsti.tools.exceptions.PrepareThyself")
     def test_longSequenceGST_Sonly(self):
         ds = self.ds
-        
+
         target_model = self.model.copy()
         target_model.set_all_parameterizations("S")
 
