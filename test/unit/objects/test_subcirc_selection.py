@@ -2,11 +2,20 @@ from ..util import BaseCase
 
 from pygsti.circuits import subcircuit_selection as _subcircsel, Circuit as C
 from pygsti.baseobjs import Label as L
+from pygsti.tools.exceptions import MissingDependencyWarning
 
 import numpy as _np
 import networkx as _nx
+import warnings
 
 from collections import defaultdict
+
+
+# `sample_subcircuits` emits MissingDependencyWarning on every call when
+# qiskit isn't installed at the expected version, regardless of whether
+# the test passes a qiskit-typed input. Tests in this file pass strings
+# / duck-typed inputs and don't actually need qiskit; suppress the
+# resulting noise via a context manager around each call.
 
 class TestSubcircuitSelection(BaseCase):
     def test_random_subgraph_creation(self):
@@ -81,13 +90,15 @@ class TestSubcircuitSelection(BaseCase):
         num_subcircs_per_width_depth = 5
         
 
-        design = _subcircsel.sample_subcircuits(circ, width_depths=width_depths,
-                                                instruction_durations=NoDelayInstructions(),
-                                                coupling_map='linear',
-                                                num_samples_per_width_depth=num_subcircs_per_width_depth,
-                                                rand_state=rand_state
-                                                )
-        
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", MissingDependencyWarning)
+            design = _subcircsel.sample_subcircuits(circ, width_depths=width_depths,
+                                                    instruction_durations=NoDelayInstructions(),
+                                                    coupling_map='linear',
+                                                    num_samples_per_width_depth=num_subcircs_per_width_depth,
+                                                    rand_state=rand_state
+                                                    )
+
         # check that the width and depth metadata agree with the circuit width and depth for each circuit in the design.
         for subcirc, auxlist in design.aux_info.items():
             self.assertTrue(all(subcirc.width == aux['width'] for aux in auxlist))
@@ -107,7 +118,7 @@ class TestSubcircuitSelection(BaseCase):
         self.assertTrue(all(created_width_depths[k] == num_subcircs_per_width_depth for k in reshaped_width_depths))
 
 
-    
+
     def test_simple_subcirc_selection_full_connectivity(self):
 
         rand_state = _np.random.RandomState(0)
@@ -144,14 +155,16 @@ class TestSubcircuitSelection(BaseCase):
         num_subcircs_per_width_depth = 20
         
 
-        design = _subcircsel.sample_subcircuits(circ, width_depths=width_depths,
-                                                instruction_durations=NoDelayInstructions(),
-                                                coupling_map='all-to-all',
-                                                num_samples_per_width_depth=num_subcircs_per_width_depth,
-                                                rand_state=rand_state
-                                                )
-        
-        
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", MissingDependencyWarning)
+            design = _subcircsel.sample_subcircuits(circ, width_depths=width_depths,
+                                                    instruction_durations=NoDelayInstructions(),
+                                                    coupling_map='all-to-all',
+                                                    num_samples_per_width_depth=num_subcircs_per_width_depth,
+                                                    rand_state=rand_state
+                                                    )
+
+
         # check that the width and depth metadata agree with the circuit width and depth for each circuit in the design.
         for subcirc, auxlist in design.aux_info.items():
             self.assertTrue(all(subcirc.width == aux['width'] for aux in auxlist))
@@ -219,14 +232,16 @@ class TestSubcircuitSelection(BaseCase):
         coupling_list = [(f'Q{i}', f'Q{j}') for i,j in int_coupling_list]
         
 
-        design = _subcircsel.sample_subcircuits(circ, width_depths=width_depths,
-                                                instruction_durations=CustomInstructions(),
-                                                coupling_map=coupling_list,
-                                                num_samples_per_width_depth=num_subcircs_per_width_depth,
-                                                rand_state=rand_state
-                                                )
-        
-        
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", MissingDependencyWarning)
+            design = _subcircsel.sample_subcircuits(circ, width_depths=width_depths,
+                                                    instruction_durations=CustomInstructions(),
+                                                    coupling_map=coupling_list,
+                                                    num_samples_per_width_depth=num_subcircs_per_width_depth,
+                                                    rand_state=rand_state
+                                                    )
+
+
         # check that the width and depth metadata agree with the circuit width and depth for each circuit in the design.
         for subcirc, auxlist in design.aux_info.items():
             self.assertTrue(all(subcirc.width == aux['width'] for aux in auxlist))
@@ -273,13 +288,15 @@ class TestSubcircuitSelection(BaseCase):
         
         num_subcircs_per_width_depth = 15
         
-        design = _subcircsel.sample_subcircuits(ps_circ, width_depths=width_depths,
-                                                instruction_durations=backend.instruction_durations,
-                                                coupling_map=backend.coupling_map,
-                                                num_samples_per_width_depth=num_subcircs_per_width_depth,
-                                                rand_state=rand_state
-                                                )
-        
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", MissingDependencyWarning)
+            design = _subcircsel.sample_subcircuits(ps_circ, width_depths=width_depths,
+                                                    instruction_durations=backend.instruction_durations,
+                                                    coupling_map=backend.coupling_map,
+                                                    num_samples_per_width_depth=num_subcircs_per_width_depth,
+                                                    rand_state=rand_state
+                                                    )
+
 
         # check that the width and depth metadata agree with the circuit width and depth for each circuit in the design.
         for subcirc, auxlist in design.aux_info.items():
