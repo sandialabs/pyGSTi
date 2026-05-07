@@ -46,7 +46,7 @@ class TestDriversMethods(DriversTestCase):
         # since this half of the test only cares about pipeline shape, not
         # which pairs are amplificationally complete; per-germ FPR below
         # provides the correctness-driven half.
-        fidPairs = [(0, 0), (0, 1), (1, 0), (2, 1), (3, 2)]
+        fidPairs = [(0, 0), (0, 1), (3, 0), (3, 2)]
 
         gfprStructs = pygsti.circuits.create_lsgst_circuit_lists(
             self.model, self.prep_fiducials, self.meas_fiducials, self.germs, maxLens, 

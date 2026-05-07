@@ -81,10 +81,11 @@ class NQubitTestCase(BaseTestCase):
                                                     roughNoise=(1234,0.01))
 
         cache = {}
-        # Asserts gss matches frozen JSON fixture; signature change to
-        # create_cloudnoise_circuits would change the output shape.
-        # See issues/706/c2-create-xycnot-cloudnoise-circuits-not-mechanical.md
         with pytest.warns(pyGSTiDeprecationWarning):
+            # _create_xycnot_cloudnoise_circuits is deprecated, but the replacement
+            # function, create_cloudnoise_circuits, is not a 1-to-1 match. Just suppressing
+            # this warning for now. Will need to go back and add a test for create_cloudnoise_circuits
+            # in the future.
             gss = cloudcircuitconstruction._create_xycnot_cloudnoise_circuits(
                 nQubits, maxLengths, 'line', cnot_edges, max_idle_weight=2, maxhops=1,
                 extra_weight_1_hops=0, extra_gate_weight=0, verbosity=0, cache=cache, algorithm="sequential")
@@ -112,6 +113,10 @@ class NQubitTestCase(BaseTestCase):
 
         cache = {}
         with pytest.warns(pyGSTiDeprecationWarning):
+            # _create_xycnot_cloudnoise_circuits is deprecated, but the replacement
+            # function, create_cloudnoise_circuits, is not a 1-to-1 match. Just suppressing
+            # this warning for now. Will need to go back and add a test for create_cloudnoise_circuits
+            # in the future.
             gss = cloudcircuitconstruction._create_xycnot_cloudnoise_circuits(
                 nQubits, maxLengths, 'line', cnot_edges, max_idle_weight=1, maxhops=0,
                 extra_weight_1_hops=0, extra_gate_weight=0, verbosity=4, cache=cache, algorithm="greedy")

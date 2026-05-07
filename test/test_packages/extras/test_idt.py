@@ -327,8 +327,11 @@ class IDTTestCase(BaseTestCase):
             c = pickle.load(open(compare_files+"/idt_nQsequenceCache.pkl", 'rb'))
 
         t = time.time()
-        # See issues/706/c2-create-xycnot-cloudnoise-circuits-not-mechanical.md
         with pytest.warns(pyGSTiDeprecationWarning):
+            # _create_xycnot_cloudnoise_circuits is deprecated, but the replacement
+            # function, create_cloudnoise_circuits, is not a 1-to-1 match. Just suppressing
+            # this warning for now. Will need to go back and add a test for create_cloudnoise_circuits
+            # in the future.
             gss = pygsti.circuits.cloudcircuitconstruction._create_xycnot_cloudnoise_circuits(
                 nQubits, maxLengths, 'line', [(0,1)], max_idle_weight=2,
                 idle_only=False, parameterization="H+S", cache=c, verbosity=3)
