@@ -58,18 +58,19 @@ or a modest multiple thereof.
 
 
 @_contextmanager
-def relaxed_scalar_tolerance(exponent: float = 0.08):
+def relaxed_scalar_tolerance(exponent: float = 0.05):
     """
     Temporarily lower the global ``__SCALAR_TOL_EXPONENT__`` used by
     :func:`fidelity` (and any other consumer of that global) to gate
     ``NumericalDomainWarning`` emission.
 
     The effective tolerance becomes ``np.finfo(dtype).eps ** exponent``.
-    Smaller `exponent` => looser tolerance. The default ``0.08`` works
-    out to ~1.5e-1 in float64, which is enough to suppress drift expected
-    from iterative gauge optimization over non-unitary gauge groups.
-    Pass a larger `exponent` (e.g. 0.15 ≈ 1.7e-2) when wrapping calls on
-    already-converged inputs that should be cleaner.
+    Smaller `exponent` => looser tolerance. In float64,
+    ``eps ** 0.05 ≈ 0.165``, which gives roughly a 2× margin over the
+    drift typically observed during gauge optimization over non-unitary
+    gauge groups (largest seen: ~0.08 trace deviation, ~-0.06 minimum
+    eigenvalue). Pass a larger `exponent` (e.g. 0.15 ≈ 0.017) when
+    wrapping calls on already-converged inputs that should be cleaner.
 
     Not thread-safe: mutates a module-level global. Safe under
     pytest-xdist (forked workers have independent module state).
