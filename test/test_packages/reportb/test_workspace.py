@@ -3,6 +3,7 @@ import pickle
 import unittest
 
 import numpy as np
+import pytest
 
 import pygsti.protocols.estimate
 from pygsti.extras import drift
@@ -97,6 +98,7 @@ class TestWorkspace(ReportBaseCase):
         pygsti.report.workspace.ws_custom_digest(M, switchval)
 
 
+    @pytest.mark.filterwarnings("ignore::pygsti.tools.exceptions.NumericalDomainWarning")
     def test_table_creation(self):
         w = pygsti.report.Workspace()
         tbls = []; cr = None
@@ -367,6 +369,7 @@ class TestWorkspace(ReportBaseCase):
         # assert(False),"STOP"
 
 
+    @pytest.mark.filterwarnings("ignore::pygsti.tools.exceptions.NumericalDomainWarning")
     def test_switchboard(self):
         w = pygsti.report.Workspace()
         ds = self.ds
