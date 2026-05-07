@@ -3,6 +3,7 @@ import pickle
 import unittest
 import numpy as np
 import warnings
+import pytest
 
 from pygsti.circuits import circuit
 from pygsti.baseobjs import Label, CircuitLabel
@@ -84,6 +85,11 @@ class CircuitTester(BaseCase):
         c = circuit.Circuit(layer_labels=labels, line_labels=['Q0', 'Q1'], editable=True)
         cnew = circuit.Circuit(c)
         self.assertEqual(cnew, c)
+
+    def test_construct_malformed_input(self):
+        with pytest.raises(ValueError):
+            c = circuit.Circuit([("Gxpi2", "A0")])
+        return
 
     def test_create_circuitlabel(self):
         # test automatic creation of "power" subcircuits when needed
