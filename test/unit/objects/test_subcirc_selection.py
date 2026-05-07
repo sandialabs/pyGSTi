@@ -316,6 +316,76 @@ class TestSubcircuitSelection(BaseCase):
 
         self.assertListEqual(sorted(reshaped_width_depths), sorted(list(created_width_depths.keys())))
         self.assertTrue(all(created_width_depths[k] == num_subcircs_per_width_depth for k in reshaped_width_depths))
-        
 
-        
+
+    def test_simple_subcirc_selection_qiskit_instruction_durations(self):
+        # Like test_simple_subcirc_selection_qiskit_coupling_map but constructs
+        # `qiskit.transpiler.InstructionDurations` directly instead of pulling
+        # one off an IBM-Runtime fake backend, so the test runs anywhere qiskit
+        # is installed (qiskit_ibm_runtime not required).
+        # Exercises the qiskit branch in subcircuit_selection (lines ~324-347):
+        # `isinstance(instruction_durations, qiskit.transpiler.InstructionDurations)`
+        # → True, then the gate-name conversion path and `.get(name, qubits)`
+        # call on the real qiskit object.
+        try:
+            import qiskit
+            from qiskit.transpiler import InstructionDurations
+        except ImportError:
+            self.skipTest('qiskit is required for this test and is not installed.')
+
+        rand_state = _np.random.RandomState(0)
+        line_labels = ['Q0', 'Q1', 'Q2', 'Q3', 'Q4']
+
+        # Build a 5-qubit circuit using pyGSTi gate names that have known
+        # qiskit equivalents in standard_gatenames_qiskit_conversions:
+        #   'Gxpi2' -> 'sx', 'Gcnot' -> 'cx'.
+        layers = [
+            [L('Gxpi2', ['Q0']), L('Gxpi2', ['Q1']), L('Gxpi2', ['Q2']), L('Gxpi2', ['Q3']), L('Gxpi2', ['Q4'])],
+            [L('Gcnot', ['Q0', 'Q1']), L('Gcnot', ['Q2', 'Q3'])],
+            [L('Gxpi2', ['Q0']), L('Gxpi2', ['Q1']), L('Gxpi2', ['Q2']), L('Gxpi2', ['Q3']), L('Gxpi2', ['Q4'])],
+            [L('Gcnot', ['Q1', 'Q2']), L('Gcnot', ['Q3', 'Q4'])],
+            [L('Gxpi2', ['Q0']), L('Gxpi2', ['Q1']), L('Gxpi2', ['Q2']), L('Gxpi2', ['Q3']), L('Gxpi2', ['Q4'])],
+            [L('Gcnot', ['Q0', 'Q1']), L('Gcnot', ['Q3', 'Q4'])],
+            [L('Gxpi2', ['Q0']), L('Gxpi2', ['Q1']), L('Gxpi2', ['Q2']), L('Gxpi2', ['Q3']), L('Gxpi2', ['Q4'])],
+        ]
+        circ = C(layers, line_labels=line_labels)
+
+        # InstructionDurations is keyed by *qiskit* gate names and integer
+        # qubit indices. The qiskit branch in sample_subcircuits applies the
+        # standard_gatenames_qiskit_conversions mapping and strips the 'Q'
+        # prefix from qubit labels before calling .get().
+        durs = InstructionDurations([
+            ('sx', [0], 35),
+            ('sx', [1], 35),
+            ('sx', [2], 35),
+            ('sx', [3], 35),
+            ('sx', [4], 35),
+            ('cx', [0, 1], 300),
+            ('cx', [1, 2], 300),
+            ('cx', [2, 3], 300),
+            ('cx', [3, 4], 300),
+        ])
+
+        width_depths = {2: [2, 4], 3: [3]}
+        num_subcircs_per_width_depth = 5
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", MissingDependencyWarning)
+            design = _subcircsel.sample_subcircuits(
+                circ, width_depths=width_depths,
+                instruction_durations=durs,
+                coupling_map='linear',
+                num_samples_per_width_depth=num_subcircs_per_width_depth,
+                rand_state=rand_state)
+
+        for subcirc, auxlist in design.aux_info.items():
+            self.assertTrue(all(subcirc.width == aux['width'] for aux in auxlist))
+            self.assertTrue(all(subcirc.depth == aux['depth'] for aux in auxlist))
+
+        reshaped_width_depths = [(w, d) for w, ds in width_depths.items() for d in ds]
+        created_width_depths = defaultdict(int)
+        for subcirc, auxlist in design.aux_info.items():
+            created_width_depths[(subcirc.width, subcirc.depth)] += len(auxlist)
+        self.assertListEqual(sorted(reshaped_width_depths), sorted(created_width_depths.keys()))
+        self.assertTrue(all(created_width_depths[k] == num_subcircs_per_width_depth
+                            for k in reshaped_width_depths))
