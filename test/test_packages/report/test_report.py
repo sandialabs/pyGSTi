@@ -63,14 +63,7 @@ class TestReport(ReportBaseCase):
         nonStdGS = std.target_model().rotate((0.15,-0.03,0.03))
         self.assertTrue(pygsti.report.factory.find_std_clifford_compilation(nonStdGS) is None)
 
-    # Report-generation paths compute fidelity-based metrics on post-fit
-    # Choi matrices that drift past the default tolerance — benign for
-    # display but trips NumericalDomainWarning. relaxed_scalar_tolerance
-    # can't be used in source because the threshold doubles as a
-    # rank-detection gate inside fidelity(); filter test-side instead.
-    @pytest.mark.filterwarnings("ignore::pygsti.tools.exceptions.NumericalDomainWarning")
     def test_reports_chi2_noCIs(self):
-
 
         pygsti.report.construct_standard_report(self.results, confidence_level=None, verbosity=3).write_html(temp_files + "/general_reportA", auto_open=False) # omit title as test
 
@@ -99,7 +92,6 @@ class TestReport(ReportBaseCase):
         #Compare the html files?
         #self.checkFile("general_reportA%s.html" % vs)
 
-    @pytest.mark.filterwarnings("ignore::pygsti.tools.exceptions.NumericalDomainWarning")
     def test_reports_chi2_wCIs(self):
         crfact = self.results.estimates['default'].add_confidence_region_factory('go0', 'final')
         crfact.compute_hessian(comm=None)
@@ -111,7 +103,6 @@ class TestReport(ReportBaseCase):
         #Compare the html files?
         #self.checkFile("general_reportB%s.html" % vs)
 
-    @pytest.mark.filterwarnings("ignore::pygsti.tools.exceptions.NumericalDomainWarning")
     def test_reports_chi2_nonMarkCIs(self):
         crfact = self.results.estimates['default'].add_confidence_region_factory('go0', 'final')
         crfact.compute_hessian(comm=None)
@@ -152,7 +143,6 @@ class TestReport(ReportBaseCase):
         #Compare the html files?
         #self.checkFile("general_reportD%s.html" % vs)
 
-    @pytest.mark.filterwarnings("ignore::pygsti.tools.exceptions.NumericalDomainWarning")
     def test_reports_multiple_ds(self):
         #Note: this report will have (un-combined) Robust estimates too
         pygsti.report.construct_standard_report({"chi2": self.results, "logl": self.results_logL},

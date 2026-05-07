@@ -183,6 +183,7 @@ def fidelity(a, b):
     """
     __SCALAR_TOL__ = _np.finfo(a.dtype).eps ** __SCALAR_TOL_EXPONENT__
     # ^ use for checks that have no dimensional dependence; about 1e-8 for double precision.
+    __RANK_TOL__   = _np.finfo(a.dtype).eps ** max(__SCALAR_TOL_EXPONENT__, 0.5)
     
     _mt.assert_hermitian(a, __SCALAR_TOL__)
     _mt.assert_hermitian(b, __SCALAR_TOL__)
@@ -196,13 +197,13 @@ def fidelity(a, b):
     if _np.abs(tr_b - 1) > __SCALAR_TOL__:
         _warnings.warn(trace_warning % ('b', str(tr_b)), _NumericalDomainWarning)
 
-    r, vec = fast_density_rank(a, __SCALAR_TOL__)
+    r, vec = fast_density_rank(a, __RANK_TOL__)
     if r <= 1:
         # special case when a is rank 1, a = vec * vec^T.
         f = (vec.T.conj() @ b @ vec).real  # vec^T * b * vec
         return f
 
-    r, vec = fast_density_rank(b, __SCALAR_TOL__)
+    r, vec = fast_density_rank(b, __RANK_TOL__)
     if r <= 1:
         # special case when b is rank 1 (recall fidelity is sym in args)
         f = (vec.T.conj() @ a @ vec).real  # vec^T * a * vec

@@ -30,12 +30,6 @@ class DriversTestCase(BaseTestCase):
             num_samples=1000,sample_error='binomial', seed=100)
 
 class TestDriversMethods(DriversTestCase):
-    # Report-generation paths in pygsti compute fidelity-based metrics on
-    # post-fit Choi matrices that drift past the default tolerance — but
-    # the drift is benign for display purposes. relaxed_scalar_tolerance
-    # can't be used here without affecting fidelity()'s rank-detection
-    # numerics (the threshold doubles as a rank gate). Filter test-side.
-    @pytest.mark.filterwarnings("ignore::pygsti.tools.exceptions.NumericalDomainWarning")
     def test_longSequenceGST_fiducialPairReduction(self):
         ds = self.ds
         maxLens = self.maxLens
@@ -99,7 +93,6 @@ class TestDriversMethods(DriversTestCase):
                                                    advanced_options= {'max_iterations':3})
         pygsti.report.construct_standard_report(result, title="PFPR report", verbosity=0).write_html(temp_files + "/full_report_PFPR")
 
-    @pytest.mark.filterwarnings("ignore::pygsti.tools.exceptions.NumericalDomainWarning")
     def test_longSequenceGST_randomReduction(self):
         ds = self.ds
         ts = "whole germ powers"
@@ -156,7 +149,6 @@ class TestDriversMethods(DriversTestCase):
         pygsti.report.construct_standard_report(result, title="SGates report", verbosity=0).write_html(temp_files + "/full_report_SGates")
 
 
-    @pytest.mark.filterwarnings("ignore::pygsti.tools.exceptions.NumericalDomainWarning")
     def test_longSequenceGST_GLND(self):
         #General Lindbladian parameterization (allowed to be non-CPTP)
         ds = self.ds
@@ -193,7 +185,6 @@ class TestDriversMethods(DriversTestCase):
         #create a report...
         pygsti.report.construct_standard_report(result, title= "HpS report", verbosity=0).write_html(temp_files + "/full_report_HplusSGates")
 
-    @pytest.mark.filterwarnings("ignore::pygsti.tools.exceptions.NumericalDomainWarning")
     def test_longSequenceGST_badfit(self):
         ds = self.ds
 
