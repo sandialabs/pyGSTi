@@ -119,14 +119,14 @@ class TestSubcircuitSelection(BaseCase):
 
 
 
-    def test_simple_subcirc_selection_full_connectivity(self):
+    def test_simple_subcirc_selection_all_to_all_connectivity(self):
 
         rand_state = _np.random.RandomState(0)
 
         class NoDelayInstructions(object):
             def get(self, *args):
                 return 0.0
-            
+
         line_labels = ['Q1', 'Q2', 'Q3', 'Q4', 'Q5']
 
         I_args = [0,0,0]
@@ -146,14 +146,14 @@ class TestSubcircuitSelection(BaseCase):
             [L('Gu3', ['Q1'], args=Y_args), L('Gu3', ['Q2'], args=X_args), L('Gu3', ['Q3'], args=Z_args), L('Gu3', ['Q4'], args=Y_args), L('Gu3', ['Q5'], args=I_args)],
             [L('Gcphase', ['Q1', 'Q2'], args=None), L('Gcphase', ['Q4', 'Q5'], args=None)]
                   ]
-                
+
         circ = C(layers, line_labels=line_labels)
 
         width_depths = {2: [2,4,6],
                         3: [3,6,9]}
-        
+
         num_subcircs_per_width_depth = 20
-        
+
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", MissingDependencyWarning)
@@ -184,7 +184,7 @@ class TestSubcircuitSelection(BaseCase):
         self.assertTrue(all(created_width_depths[k] == num_subcircs_per_width_depth for k in reshaped_width_depths))
 
 
-    def test_simple_subcirc_selection_full_connectivity(self):
+    def test_simple_subcirc_selection_partial_connectivity(self):
 
         rand_state = _np.random.RandomState(0)
 
@@ -375,6 +375,69 @@ class TestSubcircuitSelection(BaseCase):
                 circ, width_depths=width_depths,
                 instruction_durations=durs,
                 coupling_map='linear',
+                num_samples_per_width_depth=num_subcircs_per_width_depth,
+                rand_state=rand_state)
+
+        for subcirc, auxlist in design.aux_info.items():
+            self.assertTrue(all(subcirc.width == aux['width'] for aux in auxlist))
+            self.assertTrue(all(subcirc.depth == aux['depth'] for aux in auxlist))
+
+        reshaped_width_depths = [(w, d) for w, ds in width_depths.items() for d in ds]
+        created_width_depths = defaultdict(int)
+        for subcirc, auxlist in design.aux_info.items():
+            created_width_depths[(subcirc.width, subcirc.depth)] += len(auxlist)
+        self.assertListEqual(sorted(reshaped_width_depths), sorted(created_width_depths.keys()))
+        self.assertTrue(all(created_width_depths[k] == num_subcircs_per_width_depth
+                            for k in reshaped_width_depths))
+
+
+    def test_simple_subcirc_selection_qiskit_coupling_map_direct(self):
+        # Companion to test_simple_subcirc_selection_qiskit_instruction_durations:
+        # constructs a `qiskit.transpiler.CouplingMap` directly so the qiskit
+        # CouplingMap branch in simple_weighted_subcirc_selection (lines
+        # ~363-380: the `isinstance(coupling_map, qiskit.transpiler.CouplingMap)`
+        # check, the edge iteration, and the 'Q'-prefix join) is exercised
+        # without needing qiskit_ibm_runtime's fake backend.
+        try:
+            import qiskit
+            from qiskit.transpiler import CouplingMap
+        except ImportError:
+            self.skipTest('qiskit is required for this test and is not installed.')
+
+        rand_state = _np.random.RandomState(0)
+
+        class NoDelayInstructions(object):
+            def get(self, *args):
+                return 0.0
+
+        # Same circuit shape as the InstructionDurations test — line labels
+        # 'Q0'..'Q4' so the 'Q'-prefix join in subcircuit_selection.py:374
+        # produces labels that match `full_circ.line_labels`.
+        line_labels = ['Q0', 'Q1', 'Q2', 'Q3', 'Q4']
+        layers = [
+            [L('Gxpi2', ['Q0']), L('Gxpi2', ['Q1']), L('Gxpi2', ['Q2']), L('Gxpi2', ['Q3']), L('Gxpi2', ['Q4'])],
+            [L('Gcnot', ['Q0', 'Q1']), L('Gcnot', ['Q2', 'Q3'])],
+            [L('Gxpi2', ['Q0']), L('Gxpi2', ['Q1']), L('Gxpi2', ['Q2']), L('Gxpi2', ['Q3']), L('Gxpi2', ['Q4'])],
+            [L('Gcnot', ['Q1', 'Q2']), L('Gcnot', ['Q3', 'Q4'])],
+            [L('Gxpi2', ['Q0']), L('Gxpi2', ['Q1']), L('Gxpi2', ['Q2']), L('Gxpi2', ['Q3']), L('Gxpi2', ['Q4'])],
+            [L('Gcnot', ['Q0', 'Q1']), L('Gcnot', ['Q3', 'Q4'])],
+            [L('Gxpi2', ['Q0']), L('Gxpi2', ['Q1']), L('Gxpi2', ['Q2']), L('Gxpi2', ['Q3']), L('Gxpi2', ['Q4'])],
+        ]
+        circ = C(layers, line_labels=line_labels)
+
+        # Linear connectivity expressed as a qiskit CouplingMap rather than
+        # the string 'linear' or a plain list — exercises the qiskit branch.
+        cmap = CouplingMap([(0, 1), (1, 2), (2, 3), (3, 4)])
+
+        width_depths = {2: [2, 4], 3: [3]}
+        num_subcircs_per_width_depth = 5
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", MissingDependencyWarning)
+            design = _subcircsel.sample_subcircuits(
+                circ, width_depths=width_depths,
+                instruction_durations=NoDelayInstructions(),
+                coupling_map=cmap,
                 num_samples_per_width_depth=num_subcircs_per_width_depth,
                 rand_state=rand_state)
 
