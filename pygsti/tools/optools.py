@@ -13,6 +13,7 @@ Utility functions operating on operation matrices
 from __future__ import annotations
 
 import warnings as _warnings
+from contextlib import contextmanager as _contextmanager
 
 import numpy as _np
 import scipy.linalg as _spl
@@ -54,6 +55,32 @@ working with a matrix whose dtype is `d`, then we set
 
 or a modest multiple thereof.
 """
+
+
+@_contextmanager
+def relaxed_scalar_tolerance(exponent: float = 0.08):
+    """
+    Temporarily lower the global ``__SCALAR_TOL_EXPONENT__`` used by
+    :func:`fidelity` (and any other consumer of that global) to gate
+    ``NumericalDomainWarning`` emission.
+
+    The effective tolerance becomes ``np.finfo(dtype).eps ** exponent``.
+    Smaller `exponent` => looser tolerance. The default ``0.08`` works
+    out to ~1.5e-1 in float64, which is enough to suppress drift expected
+    from iterative gauge optimization over non-unitary gauge groups.
+    Pass a larger `exponent` (e.g. 0.15 ≈ 1.7e-2) when wrapping calls on
+    already-converged inputs that should be cleaner.
+
+    Not thread-safe: mutates a module-level global. Safe under
+    pytest-xdist (forked workers have independent module state).
+    """
+    global __SCALAR_TOL_EXPONENT__
+    old = __SCALAR_TOL_EXPONENT__
+    __SCALAR_TOL_EXPONENT__ = exponent
+    try:
+        yield
+    finally:
+        __SCALAR_TOL_EXPONENT__ = old
 
 
 def _flat_mut_blks(i, j, block_dims):
