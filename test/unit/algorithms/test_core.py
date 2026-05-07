@@ -173,16 +173,16 @@ class CoreMC2GSTTester(CoreStdData, BaseCase):
         
         aliased_list = [
             Circuit([
-                (x if x != Label(('Gxpi2',0)) else Label("GA1")) for x in mdl
+                (x if x != Label(('Gxpi2',0)) else Label("Ga1")) for x in mdl
             ], line_labels = (0,)) for mdl in self.lsgstStrings[0]
         ]
-        aliases = {Label('GA1'): Circuit([Label('Gxpi2',0)], line_labels= (0,))}
+        aliases = {Label('Ga1'): Circuit([Label('Gxpi2',0)], line_labels= (0,))}
         aliased_list = CircuitList(aliased_list, aliases)
 
         print(list(aliased_list))
 
         aliased_model = self.mdl_clgst.copy()
-        aliased_model.operations['GA1'] = self.mdl_clgst.operations['Gxpi2',0]
+        aliased_model.operations['Ga1'] = self.mdl_clgst.operations['Gxpi2',0]
         aliased_model.operations.pop(('Gxpi2',0))
 
         mdl_lsgst = core.run_gst_fit_simple(self.ds, aliased_model, aliased_list,
@@ -319,14 +319,14 @@ class CoreMLGSTTester(CoreStdData, BaseCase):
     def test_do_mlgst_alias_model(self):
         aliased_list = [
             Circuit([
-                (x if x != Label('Gxpi2',0) else Label("GA1")) for x in mdl
+                (x if x != Label('Gxpi2',0) else Label("Ga1")) for x in mdl
             ], line_labels=(0,)) for mdl in self.lsgstStrings[0]
         ]
-        aliases = {Label('GA1'): Circuit([Label('Gxpi2',0)], line_labels=(0,))}
+        aliases = {Label('Ga1'): Circuit([Label('Gxpi2',0)], line_labels=(0,))}
         aliased_list = CircuitList(aliased_list, aliases)
 
         aliased_model = self.mdl_clgst.copy()
-        aliased_model.operations['GA1'] = self.mdl_clgst.operations['Gxpi2',0]
+        aliased_model.operations['Ga1'] = self.mdl_clgst.operations['Gxpi2',0]
         aliased_model.operations.pop(('Gxpi2',0))
 
         mdl_lsgst = core.run_gst_fit_simple(self.ds, aliased_model, aliased_list,
