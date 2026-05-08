@@ -605,49 +605,49 @@ def _legacy_create_scalar_objective(model, target_model,
         tgt_ops.update(gates_with_instruments(target_model))
 
     def _objective_fn(gauge_group_el, oob_check):
-        # Inner-loop tolerance relaxation: gauge optimisation over non-unitary
+        # Inner-loop tolerance relaxation: gauge optimization over non-unitary
         # gauge groups (TPGaugeGroup, FullGaugeGroup, etc.) routinely probes
         # intermediate matrices that are far from physical. The fidelity-based
         # metrics call _tools.entanglement_fidelity / _tools.fidelity, which
         # emit NumericalDomainWarning gated by __SCALAR_TOL_EXPONENT__.
-        # Relax that exponent inside the optimiser loop. The warning still
+        # Relax that exponent inside the optimizer loop. The warning still
         # fires for callers outside this loop (e.g., direct `fidelity()`
         # users), and still fires here if drift is large enough to clear the
         # relaxed threshold.
-        with _relaxed_tol():
-            mdl : ExplicitOpModel = _transform_with_oob_check(model, gauge_group_el, oob_check)
-            mdl_ops : dict[_baseobjs.Label, _LinearOperator] = gates_with_instruments(mdl)
-            ret: _np.floating = _np.float64(0.0)
+        mdl : ExplicitOpModel = _transform_with_oob_check(model, gauge_group_el, oob_check)
+        mdl_ops : dict[_baseobjs.Label, _LinearOperator] = gates_with_instruments(mdl)
+        ret: _np.floating = _np.float64(0.0)
 
-            if cptp_penalty_factor > 0:
-                mdl.basis = mxBasis  # set basis for jamiolkowski iso
-                cpPenaltyVec = _cptp_penalty(mdl, cptp_penalty_factor, mdl.basis)
-                ret += _np.sum(cpPenaltyVec)
+        if cptp_penalty_factor > 0:
+            mdl.basis = mxBasis  # set basis for jamiolkowski iso
+            cpPenaltyVec = _cptp_penalty(mdl, cptp_penalty_factor, mdl.basis)
+            ret += _np.sum(cpPenaltyVec)
 
-            if spam_penalty_factor > 0:
-                mdl.basis = mxBasis
-                spamPenaltyVec = _spam_penalty(mdl, spam_penalty_factor, mdl.basis)
-                ret += _np.sum(spamPenaltyVec)
+        if spam_penalty_factor > 0:
+            mdl.basis = mxBasis
+            spamPenaltyVec = _spam_penalty(mdl, spam_penalty_factor, mdl.basis)
+            ret += _np.sum(spamPenaltyVec)
 
-            if target_model is None:
-                return ret
+        if target_model is None:
+            return ret
 
-            if "frobenius" in gates_metric:
-                if spam_metric == gates_metric:
-                    val = mdl.frobeniusdist(target_model, transform_mx_arg, item_weights)
-                else:
-                    wts = item_weights.copy()
-                    wts['spam'] = 0.0
-                    for k in wts:
-                        if k in mdl.preps or k in mdl.povms:
-                            wts[k] = 0.0
-                    val = mdl.frobeniusdist(target_model, transform_mx_arg, wts)
-                if "squared" in gates_metric:
-                    val = val ** 2
-                ret += val
+        if "frobenius" in gates_metric:
+            if spam_metric == gates_metric:
+                val = mdl.frobeniusdist(target_model, transform_mx_arg, item_weights)
+            else:
+                wts = item_weights.copy()
+                wts['spam'] = 0.0
+                for k in wts:
+                    if k in mdl.preps or k in mdl.povms:
+                        wts[k] = 0.0
+                val = mdl.frobeniusdist(target_model, transform_mx_arg, wts)
+            if "squared" in gates_metric:
+                val = val ** 2
+            ret += val
 
-            elif gates_metric == "fidelity":
-                # Leakage-aware metrics NOT available
+        elif gates_metric == "fidelity":
+            # Leakage-aware metrics NOT available
+            with _relaxed_tol(exponent=0.05):
                 for opLbl in mdl_ops:
                     wt = item_weights.get(opLbl, opWeight)
                     mop = mdl_ops[opLbl].to_dense()
@@ -656,34 +656,35 @@ def _legacy_create_scalar_objective(model, target_model,
                     z = _np.abs(t - v)
                     ret += wt * z
 
-            elif gates_metric == "tracedist":
-                # If n_leak==0, then subspace_jtracedist is just jtracedist.
-                for opLbl in mdl_ops:
-                    wt = item_weights.get(opLbl, opWeight)
-                    top = tgt_ops[opLbl].to_dense()
-                    mop = mdl_ops[opLbl].to_dense()
-                    ret += wt * _tools.subspace_jtracedist(top, mop, mxBasis, n_leak)
+        elif gates_metric == "tracedist":
+            # If n_leak==0, then subspace_jtracedist is just jtracedist.
+            for opLbl in mdl_ops:
+                wt = item_weights.get(opLbl, opWeight)
+                top = tgt_ops[opLbl].to_dense()
+                mop = mdl_ops[opLbl].to_dense()
+                ret += wt * _tools.subspace_jtracedist(top, mop, mxBasis, n_leak)
 
-            else:
-                raise ValueError("Invalid gates_metric: %s" % gates_metric)
+        else:
+            raise ValueError("Invalid gates_metric: %s" % gates_metric)
 
-            if "frobenius" in spam_metric and gates_metric == spam_metric:
-                # We already handled SPAM error in this case. Just return.
-                return ret
+        if "frobenius" in spam_metric and gates_metric == spam_metric:
+            # We already handled SPAM error in this case. Just return.
+            return ret
 
-            if "frobenius" in spam_metric:
-                # SPAM and gates can have different choices for squared vs non-squared.
-                wts = item_weights.copy(); wts['gates'] = 0.0
-                for k in wts:
-                    if k in mdl_ops or k in mdl.instruments:
-                        wts[k] = 0.0
-                val = mdl.frobeniusdist(target_model, transform_mx_arg, wts)
-                if "squared" in spam_metric:
-                    val = val ** 2
-                ret += val
+        if "frobenius" in spam_metric:
+            # SPAM and gates can have different choices for squared vs non-squared.
+            wts = item_weights.copy(); wts['gates'] = 0.0
+            for k in wts:
+                if k in mdl_ops or k in mdl.instruments:
+                    wts[k] = 0.0
+            val = mdl.frobeniusdist(target_model, transform_mx_arg, wts)
+            if "squared" in spam_metric:
+                val = val ** 2
+            ret += val
 
-            elif spam_metric == "fidelity":
-                # Leakage-aware metrics NOT available
+        elif spam_metric == "fidelity":
+            # Leakage-aware metrics NOT available
+            with _relaxed_tol(exponent=0.05):
                 val_prep = 0.0
                 for preplbl in target_model.preps:
                     wt_prep = item_weights.get(preplbl, spamWeight)
@@ -704,22 +705,22 @@ def _legacy_create_scalar_objective(model, target_model,
                         val_povm += wt_povm * abs(t_e - v_e)
                 ret += (val_prep + val_povm) # type: ignore
 
-            elif spam_metric == "tracedist":
-                # Leakage-aware metrics NOT available.
-                for preplabel, m_prep in mdl.preps.items():
-                    wt = item_weights.get(preplabel, spamWeight)
-                    rhoMx1 = _tools.vec_to_stdmx(m_prep.to_dense(), mxBasis)
-                    t_prep = target_model.preps[preplabel]
-                    rhoMx2 = _tools.vec_to_stdmx(t_prep.to_dense(), mxBasis)
-                    ret += wt * _tools.tracedist(rhoMx1, rhoMx2)
+        elif spam_metric == "tracedist":
+            # Leakage-aware metrics NOT available.
+            for preplabel, m_prep in mdl.preps.items():
+                wt = item_weights.get(preplabel, spamWeight)
+                rhoMx1 = _tools.vec_to_stdmx(m_prep.to_dense(), mxBasis)
+                t_prep = target_model.preps[preplabel]
+                rhoMx2 = _tools.vec_to_stdmx(t_prep.to_dense(), mxBasis)
+                ret += wt * _tools.tracedist(rhoMx1, rhoMx2)
 
-                for povmlabel in mdl.povms.keys():
-                    wt = item_weights.get(povmlabel, spamWeight)
-                    ret += wt * _tools.povm_jtracedist(mdl, target_model, povmlabel)
-            else:
-                raise ValueError("Invalid spam_metric: %s" % spam_metric)
+            for povmlabel in mdl.povms.keys():
+                wt = item_weights.get(povmlabel, spamWeight)
+                ret += wt * _tools.povm_jtracedist(mdl, target_model, povmlabel)
+        else:
+            raise ValueError("Invalid spam_metric: %s" % spam_metric)
 
-            return ret
+        return ret
 
     return _objective_fn, None
 

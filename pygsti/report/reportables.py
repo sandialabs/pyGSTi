@@ -96,14 +96,10 @@ def evaluate(model_fn, cri=None, verbosity=0):
 
     # Per-cell metric evaluation in report tables. Many of these metrics
     # (entanglement_fidelity, process_fidelity, etc.) compute via Choi-matrix
-    # constructions of intermediate operations whose Choi traces and PSD
-    # properties can drift well past the default `__SCALAR_TOL_EXPONENT__`
-    # — observed up to ~0.24 trace deviation on partially-converged
-    # intermediates. Relax to exponent 0.03 (tol ≈ 0.34) for the duration
-    # of the per-cell evaluation; the warning still fires for direct
-    # fidelity() callers outside report tables. Note: fidelity()'s rank
-    # detection uses its own __RANK_TOL__ that is decoupled from
-    # __SCALAR_TOL_EXPONENT__ and is unaffected by this wrap.
+    # constructions of operations whose Choi traces and negative Choi eigenvalues
+    # can drift well past the default `__SCALAR_TOL_EXPONENT__`. Our standard test
+    # suite seeds trace deviation by up to 0.24. We set __SCALAR_TOL_EXPONENT__ here
+    # to 0.03 (tol ≈ 0.34) for this part of report generation.
     with _relaxed_tol(exponent=0.03):
         if cri:
             nmEBs = bool(cri.errorbar_type == "non-markovian")
