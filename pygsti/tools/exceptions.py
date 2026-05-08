@@ -153,3 +153,20 @@ class QiskitInteropWarning(UserWarning):
     installed at all.
     """
     pass
+
+
+class ForwardSimDiagnosticWarning(UserWarning):
+    """
+    Inner-loop numerical-scaling diagnostic from the forward simulator
+    (e.g., 'Scaled dProd small to keep prod manageable', 'hProd is
+    small'). The scaling code is working as designed; these messages
+    fire frequently and are rarely actionable for end users.
+
+    Suppressed by default via the class-level ``enabled`` flag --
+    emit sites are expected to guard ``warnings.warn`` on this flag,
+    so the warning literally does not fire unless the flag is flipped.
+    Set ``ForwardSimDiagnosticWarning.enabled = True`` at runtime
+    (e.g., when debugging a numerical issue in the forward simulator)
+    to surface them.
+    """
+    enabled = False

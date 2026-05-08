@@ -28,6 +28,7 @@ from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrint
 from pygsti.tools import mpitools as _mpit
 from pygsti.tools import sharedmemtools as _smt
 from pygsti.tools import slicetools as _slct
+from pygsti.tools.exceptions import ForwardSimDiagnosticWarning as _ForwardSimDiagnosticWarning
 from pygsti.tools.matrixtools import _fas
 from pygsti import SpaceT
 from pygsti.tools import listtools as _lt
@@ -825,10 +826,14 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             if abs(scale) > 1e-8:  # _np.isclose(scale,0) is SLOW!
                 dProdCache[iDest] /= _np.exp(scale)
                 if dProdCache[iDest].max() < _DSMALL and dProdCache[iDest].min() > -_DSMALL:
-                    _warnings.warn("Scaled dProd small in order to keep prod managable.")
+                    if _ForwardSimDiagnosticWarning.enabled:
+                        _warnings.warn("Scaled dProd small in order to keep prod managable.",
+                                       _ForwardSimDiagnosticWarning)
             elif (_np.count_nonzero(dProdCache[iDest]) and dProdCache[iDest].max() < _DSMALL
                   and dProdCache[iDest].min() > -_DSMALL):
-                _warnings.warn("Would have scaled dProd but now will not alter scale_cache.")
+                if _ForwardSimDiagnosticWarning.enabled:
+                    _warnings.warn("Would have scaled dProd but now will not alter scale_cache.",
+                                   _ForwardSimDiagnosticWarning)
 
         #profiler.print_mem("DEBUGMEM: POINT2"); profiler.comm.barrier()
 
@@ -898,10 +903,14 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             if abs(scale) > 1e-8:  # _np.isclose(scale,0) is SLOW!
                 hProdCache[iDest] /= _np.exp(scale)
                 if hProdCache[iDest].max() < _HSMALL and hProdCache[iDest].min() > -_HSMALL:
-                    _warnings.warn("Scaled hProd small in order to keep prod managable.")
+                    if _ForwardSimDiagnosticWarning.enabled:
+                        _warnings.warn("Scaled hProd small in order to keep prod managable.",
+                                       _ForwardSimDiagnosticWarning)
             elif (_np.count_nonzero(hProdCache[iDest]) and hProdCache[iDest].max() < _HSMALL
                   and hProdCache[iDest].min() > -_HSMALL):
-                _warnings.warn("hProd is small (oh well!).")
+                if _ForwardSimDiagnosticWarning.enabled:
+                    _warnings.warn("hProd is small (oh well!).",
+                                   _ForwardSimDiagnosticWarning)
 
         return hProdCache
 
