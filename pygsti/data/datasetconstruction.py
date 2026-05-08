@@ -20,6 +20,7 @@ import numpy.random as _rndm
 from pygsti.circuits import circuitconstruction as _gstrc
 from pygsti.data import dataset as _ds
 from pygsti.baseobjs import label as _lbl, outcomelabeldict as _ld
+from pygsti.tools.exceptions import ProbabilityClippingWarning as _ProbabilityClippingWarning
 
 
 def simulate_data(model_or_dataset, circuit_list, num_samples,
@@ -214,10 +215,10 @@ def _adjust_probabilities_inbounds(ps, tol):
     # ps is a dict w/keys = outcome labels and values = probabilities
     for ol in ps:
         if ps[ol] < 0:
-            if ps[ol] < -tol: _warnings.warn("Clipping probs < 0 to 0")
+            if ps[ol] < -tol: _warnings.warn("Clipping probs < 0 to 0", _ProbabilityClippingWarning)
             ps[ol] = 0.0
         elif ps[ol] > 1:
-            if ps[ol] > (1 + tol): _warnings.warn("Clipping probs > 1 to 1")
+            if ps[ol] > (1 + tol): _warnings.warn("Clipping probs > 1 to 1", _ProbabilityClippingWarning)
             ps[ol] = 1.0
 
 
@@ -230,10 +231,10 @@ def _adjust_unit_sum(ps, tol):
     adjusted = False
     if psum > OVERTOL:
         adjusted = True
-        _warnings.warn("Adjusting sum(probs) = %g > 1 to 1" % psum)
+        _warnings.warn("Adjusting sum(probs) = %g > 1 to 1" % psum, _ProbabilityClippingWarning)
     if psum < UNDERTOL:
         adjusted = True
-        _warnings.warn("Adjusting sum(probs) = %g < 1 to 1" % psum)
+        _warnings.warn("Adjusting sum(probs) = %g < 1 to 1" % psum, _ProbabilityClippingWarning)
 
     if not UNDERTOL <= psum <= OVERTOL:
         for lbl in ps.keys():
@@ -241,7 +242,7 @@ def _adjust_unit_sum(ps, tol):
     assert(UNDERTOL <= sum(ps.values()) <= OVERTOL), 'psum={}'.format(sum(ps.values()))
 
     if adjusted:
-        _warnings.warn('Adjustment finished')
+        _warnings.warn('Adjustment finished', _ProbabilityClippingWarning)
 
 
 def _sample_distribution(ps, sample_error, nSamples, rndm_state):

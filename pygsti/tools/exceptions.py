@@ -50,6 +50,17 @@ class NumericalDomainWarning(UserWarning):
     pass
 
 
+class ProbabilityClippingWarning(NumericalDomainWarning):
+    """
+    A simulated outcome probability fell outside [0, 1] (or a set of
+    outcome probabilities did not sum to 1) by more than the configured
+    tolerance, and was clipped/renormalized. Subclass of
+    NumericalDomainWarning so the existing strict-mode filter on the
+    parent catches these too.
+    """
+    pass
+
+
 class pyGSTiDeprecationWarning(UserWarning, DeprecationWarning):
     """
     A helper class so users (and pyGSTi developers) can distinguish
