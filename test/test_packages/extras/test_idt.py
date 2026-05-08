@@ -107,17 +107,21 @@ def make_idle_tomography_data(nQubits, maxLengths=(0,1,2,4), errMags=(0.01,0.001
                 gateset_idleInFids, listOfExperiments, num_samples=Nsamp,
                 sample_error=sampleError, seed=8675309)
             fileroot = get_fileroot(nQubits, maxLengths[-1], errMag, spamMag, nSamples, simulator, True)
-            pickle.dump(gateset_idleInFids, open("%s_gs.pkl" % fileroot, "wb"))
-            pickle.dump(ds_idleInFids, open("%s_ds.pkl" % fileroot, "wb"))
+            with open("%s_gs.pkl" % fileroot, "wb") as f:
+                pickle.dump(gateset_idleInFids, f)
+            with open("%s_ds.pkl" % fileroot, "wb") as f:
+                pickle.dump(ds_idleInFids, f)
             print("Wrote fileroot ",fileroot)
 
             ds_noIdleInFids = pygsti.data.simulate_data(
                                 gateset_noIdleInFids, listOfExperiments, num_samples=Nsamp,
-                                sample_error=sampleError, seed=8675309)            
+                                sample_error=sampleError, seed=8675309)
 
             fileroot = get_fileroot(nQubits, maxLengths[-1], errMag, spamMag, nSamples, simulator, False)
-            pickle.dump(gateset_noIdleInFids, open("%s_gs.pkl" % fileroot, "wb"))
-            pickle.dump(ds_noIdleInFids, open("%s_ds.pkl" % fileroot, "wb"))
+            with open("%s_gs.pkl" % fileroot, "wb") as f:
+                pickle.dump(gateset_noIdleInFids, f)
+            with open("%s_ds.pkl" % fileroot, "wb") as f:
+                pickle.dump(ds_noIdleInFids, f)
 
             #FROM DEBUGGING Python2 vs Python3 issue (ended up being an ordered-dict)
             ##pygsti.io.write_dataset("%s_ds_chk.txt" % fileroot, ds_noIdleInFids)
@@ -136,8 +140,10 @@ def helper_idle_tomography(nQubits, maxLengths=(1,2,4), file_maxLen=4, errMag=0.
     if fileroot is None:
         fileroot = get_fileroot(nQubits, file_maxLen, errMag, spamMag, nSamples, simulator, idleErrorInFiducials)
 
-    mdl_datagen = pickle.load(open("%s_gs.pkl" % fileroot, "rb"))
-    ds = pickle.load(open("%s_ds.pkl" % fileroot, "rb"))
+    with open("%s_gs.pkl" % fileroot, "rb") as f:
+        mdl_datagen = pickle.load(f)
+    with open("%s_ds.pkl" % fileroot, "rb") as f:
+        ds = pickle.load(f)
 
     #print("DB: ",ds[ ('Gi',) ])
     #print("DB: ",ds[ ('Gi','Gi') ])
