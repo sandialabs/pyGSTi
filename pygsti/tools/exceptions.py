@@ -140,3 +140,16 @@ class StolenResourceWarning(UserWarning):
     changes the value of `id(F.child)`.
     """
     pass
+
+
+class QiskitInteropWarning(UserWarning):
+    """
+    Inform the user about a qiskit-interoperability issue: a qiskit
+    version mismatch against the version pyGSTi was developed/tested
+    against, or a lossy round-trip (e.g., pyGSTi circuit mapping that
+    does not preserve qreg structure or classical registers), or a
+    qiskit-specific argument that's being ignored. Distinct from
+    MissingDependencyWarning, which is raised when qiskit is not
+    installed at all.
+    """
+    pass

@@ -31,7 +31,7 @@ from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.protocols.protocol import FreeformDesign as _FreeformDesign
 from pygsti.tools import internalgates as _itgs
-from pygsti.tools.exceptions import MissingDependencyWarning
+from pygsti.tools.exceptions import MissingDependencyWarning, QiskitInteropWarning
 
 
 QISKIT_VERSION_MISMATCH_MESSAGE_TEMPLATE = \
@@ -130,7 +130,7 @@ def sample_subcircuits(full_circs: Union[_Circuit, List[_Circuit]],
     try:
         import qiskit
         if qiskit.__version__ != '2.1.1':
-            _warnings.warn(QISKIT_VERSION_MISMATCH_MESSAGE_TEMPLATE % qiskit.__version__, MissingDependencyWarning)
+            _warnings.warn(QISKIT_VERSION_MISMATCH_MESSAGE_TEMPLATE % qiskit.__version__, QiskitInteropWarning)
     except:
         _warnings.warn(QISKIT_MISSING_MESSAGE, MissingDependencyWarning)
     
@@ -263,7 +263,7 @@ def simple_weighted_subcirc_selection(full_circ: _Circuit,
     try:
         import qiskit
         if qiskit.__version__ != '2.1.1':
-            _warnings.warn(QISKIT_VERSION_MISMATCH_MESSAGE_TEMPLATE % qiskit.__version__, MissingDependencyWarning)
+            _warnings.warn(QISKIT_VERSION_MISMATCH_MESSAGE_TEMPLATE % qiskit.__version__, QiskitInteropWarning)
     except:
         _warnings.warn(QISKIT_MISSING_MESSAGE, MissingDependencyWarning)
 
