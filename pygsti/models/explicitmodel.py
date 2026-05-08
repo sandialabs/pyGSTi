@@ -49,6 +49,7 @@ from pygsti.tools import optools as _ot
 from pygsti.tools import fogitools as _fogit
 from pygsti.tools import slicetools as _slct
 from pygsti.tools import listtools as _lt
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning as _pyGSTiDeprecationWarning
 from pygsti import SpaceT
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
 from typing import Union, Literal
@@ -528,7 +529,8 @@ class ExplicitOpModel(_mdl.OpModel):
 
         if "gates" in state_dict:
             #Unpickling an OLD-version Model (or GateSet)
-            _warnings.warn("Unpickling deprecated-format ExplicitOpModel (GateSet).  Please re-save/pickle asap.")
+            _warnings.warn("Unpickling deprecated-format ExplicitOpModel (GateSet).  Please re-save/pickle asap.",
+                           _pyGSTiDeprecationWarning)
             self.operations = state_dict['gates']
             self.state_space = state_dict['stateSpaceLabels']
             self._paramlbls = None

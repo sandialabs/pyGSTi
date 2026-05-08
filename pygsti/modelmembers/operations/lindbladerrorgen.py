@@ -31,6 +31,7 @@ from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _Local
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GlobalElementaryErrorgenLabel
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools import optools as _ot
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning as _pyGSTiDeprecationWarning
 from pygsti import SpaceT
 from typing import Literal
 
@@ -1602,7 +1603,8 @@ class LindbladParameterization(_NicelySerializable):
                 meta = '1+'
             elif obj.startswith('lindblad '):
                 _warnings.warn(("Use of 'lindblad <type>' is deprecated and will be removed.  "
-                                "You should use 'exp(<type>)' or '1+(<type>)' instead"))
+                                "You should use 'exp(<type>)' or '1+(<type>)' instead"),
+                               _pyGSTiDeprecationWarning)
                 abbrev = obj[len('lindblad '):]
                 meta = 'exp'
             else:
@@ -1610,7 +1612,8 @@ class LindbladParameterization(_NicelySerializable):
                 meta = None  # 'exp' by default?
 
             if abbrev == "CPTP":
-                _warnings.warn("Using 'CPTP' as a Lindblad type is deprecated, and you should now use 'CPTPLND'")
+                _warnings.warn("Using 'CPTP' as a Lindblad type is deprecated, and you should now use 'CPTPLND'",
+                               _pyGSTiDeprecationWarning)
                 block_types = ['ham', 'other']; param_modes = ['elements', 'cholesky']
             elif abbrev == "CPTPLND":
                 block_types = ['ham', 'other']; param_modes = ['elements', 'cholesky']

@@ -23,6 +23,7 @@ from pygsti.pgtypes import SpaceT
 from pygsti.tools import listtools as _lt
 from pygsti.tools import slicetools as _slct
 from pygsti.tools import matrixtools as _mt
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning as _pyGSTiDeprecationWarning
 
 from typing import Optional, TYPE_CHECKING, Union
 
@@ -400,7 +401,7 @@ class ModelMember(ModelChild, _NicelySerializable):
                 subm.set_gpindices(new_subm_gpindices, parent, memo)
 
         if isinstance(parent, ModelMember):
-            warnings.warn("parent should be a Model and not a ModelMember", DeprecationWarning)
+            warnings.warn("parent should be a Model and not a ModelMember", _pyGSTiDeprecationWarning)
         self._set_only_my_gpindices(gpindices, parent)
 
     def shift_gpindices(self, above: int, amount: int, parent_filter: Optional[Model]=None, memo: Optional[set]=None) -> None:

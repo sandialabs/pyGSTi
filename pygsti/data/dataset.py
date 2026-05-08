@@ -31,6 +31,7 @@ from pygsti.tools import NamedDict as _NamedDict
 from pygsti.tools import listtools as _lt
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
 from pygsti.tools.exceptions import ImplicitlyDoneEditingCircuitWarning as _ImplicitlyDoneEditingCircuitWarning
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning as _pyGSTiDeprecationWarning
 
 # import scipy.special as _sps
 # import scipy.fftpack as _fft
@@ -2826,7 +2827,8 @@ class DataSet(_MongoSerializable):
         bStatic = state_dict['bStatic']
 
         if "gsIndexKeys" in state_dict:
-            _warnings.warn("Unpickling a deprecated-format DataSet.  Please re-save/pickle asap.")
+            _warnings.warn("Unpickling a deprecated-format DataSet.  Please re-save/pickle asap.",
+                           _pyGSTiDeprecationWarning)
             cirIndexKeys = [cgstr.expand() for cgstr in state_dict['gsIndexKeys']]
             cirIndex = _OrderedDict(list(zip(cirIndexKeys, state_dict['gsIndexVals'])))
         else:
@@ -2835,7 +2837,8 @@ class DataSet(_MongoSerializable):
 
         if "slIndex" in state_dict:
             #print("DB: UNPICKLING AN OLD DATASET"); print("Keys = ",state_dict.keys())
-            _warnings.warn("Unpickling a *very* deprecated-format DataSet.  Please re-save/pickle asap.")
+            _warnings.warn("Unpickling a *very* deprecated-format DataSet.  Please re-save/pickle asap.",
+                           _pyGSTiDeprecationWarning)
 
             #Turn spam labels into outcome labels
             self.cirIndex = _OrderedDict()
@@ -2975,7 +2978,8 @@ class DataSet(_MongoSerializable):
         state_dict = _pickle.load(f)
 
         if "gsIndexKeys" in state_dict:
-            _warnings.warn("Loading a deprecated-format DataSet.  Please re-save asap.")
+            _warnings.warn("Loading a deprecated-format DataSet.  Please re-save asap.",
+                           _pyGSTiDeprecationWarning)
             state_dict['cirIndexKeys'] = state_dict['gsIndexKeys']
             state_dict['cirIndexVals'] = state_dict['gsIndexVals']
             del state_dict['gsIndexKeys']
@@ -2990,7 +2994,8 @@ class DataSet(_MongoSerializable):
                 # unpickling protocol=0 (the default) info.
             else:
                 _warnings.warn("Deprecated dataset format.  Please re-save "
-                               "this dataset soon to avoid future incompatibility.")
+                               "this dataset soon to avoid future incompatibility.",
+                               _pyGSTiDeprecationWarning)
                 return _cir.Circuit(_cir.CompressedCircuit.expand_op_label_tuple(x))
         cirIndexKeys = [expand(cgstr) for cgstr in state_dict['cirIndexKeys']]
 

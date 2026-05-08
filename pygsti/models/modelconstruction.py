@@ -47,6 +47,7 @@ from pygsti.tools import basistools as _bt
 from pygsti.tools import internalgates as _itgs
 from pygsti.tools import optools as _ot
 from pygsti.tools import listtools as _lt
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning as _pyGSTiDeprecationWarning
 from pygsti import SpaceT
 from pygsti.baseobjs.basisconstructors import sqrt2, id2x2, sigmax, sigmay, sigmaz
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
@@ -802,7 +803,8 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
     elif (global_idle_name is not None) and global_idle_name.startswith('(') and global_idle_name.endswith(')'):
         # For backward compatibility
         _warnings.warn(("Use of parenthesized gate names (e.g. '%s') is deprecated!  Processor spec gate names"
-                        " should be updated to use curly braces.") % str(global_idle_name))
+                        " should be updated to use curly braces.") % str(global_idle_name),
+                       _pyGSTiDeprecationWarning)
         gn_to_make_emptytup = global_idle_name
     else:
         gn_to_make_emptytup = None
