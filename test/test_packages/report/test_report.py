@@ -9,7 +9,7 @@ import pytest
 
 import pygsti
 from pygsti.modelpacks import smq1Q_XY as std
-from pygsti.tools.exceptions import pyGSTiDeprecationWarning
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning, UnnamedReportWarning
 # Inherit setup from here
 from .reportBaseCase import ReportBaseCase
 from ..testutils import compare_files, temp_files, run_notebook
@@ -49,12 +49,14 @@ class TestReport(ReportBaseCase):
         # for create_general_report; the create_standard_report calls need an
         # explicit pytest.warns wrap because pytest -W error treats the
         # warning as an exception that would mask the assertRaises target.
+        # The third call also fires UnnamedReportWarning because the default
+        # title="auto" path runs before ValueError; wrap accordingly.
         self.assertWarns(pygsti.report.create_general_report, self.results, temp_files + "/XXX")
         with pytest.warns(pyGSTiDeprecationWarning), self.assertRaises(ValueError):
             # backward compat catch - when forget to specify title
             pygsti.report.create_standard_report(self.results, temp_files + "/XXX", 95)
 
-        with pytest.warns(pyGSTiDeprecationWarning), self.assertRaises(ValueError):
+        with pytest.warns(pyGSTiDeprecationWarning), pytest.warns(UnnamedReportWarning), self.assertRaises(ValueError):
             # PDF report with multiple gauge opts
             pygsti.report.create_standard_report(self.results, temp_files + "/XXX.pdf")
 
@@ -65,29 +67,36 @@ class TestReport(ReportBaseCase):
 
     def test_reports_chi2_noCIs(self):
 
-        pygsti.report.construct_standard_report(self.results, confidence_level=None, verbosity=3).write_html(temp_files + "/general_reportA", auto_open=False) # omit title as test
+        # All construct_standard_report calls below intentionally omit
+        # title= to exercise the auto-title path; each fires
+        # UnnamedReportWarning, wrapped explicitly.
+        with pytest.warns(UnnamedReportWarning):
+            pygsti.report.construct_standard_report(self.results, confidence_level=None, verbosity=3).write_html(temp_files + "/general_reportA", auto_open=False)
 
         #Test advanced options
         linkto = ()
         if bLatex: linkto = ('tex','pdf') + linkto #Note: can't render as 'tex' without matplotlib b/c of figs
         if bPandas: linkto = ('pkl',) + linkto
         results_odict = collections.OrderedDict([("One", self.results), ("Two",self.results)])
-        pygsti.report.construct_standard_report(results_odict,
-                                             confidence_level=None, verbosity=3,
-                                             advanced_options={'errgen_type': "logG-logT",
-                                                              'precision': {'normal': 2, 'polar': 1, 'sci': 1}}).write_html(temp_files + "/general_reportA_adv1",auto_open=False)
+        with pytest.warns(UnnamedReportWarning):
+            pygsti.report.construct_standard_report(results_odict,
+                                                 confidence_level=None, verbosity=3,
+                                                 advanced_options={'errgen_type': "logG-logT",
+                                                                  'precision': {'normal': 2, 'polar': 1, 'sci': 1}}).write_html(temp_files + "/general_reportA_adv1",auto_open=False)
 
-        pygsti.report.construct_standard_report({"One": self.results, "Two": self.results_logL},
-                                             confidence_level=None, verbosity=3,
-                                             advanced_options={'errgen_type': "logTiG",
-                                                              'precision': 2, #just a single int
-                                                              'resizable': False,
-                                                              'autosize': 'none'}).write_html(temp_files + "/general_reportA_adv2", auto_open=False)
+        with pytest.warns(UnnamedReportWarning):
+            pygsti.report.construct_standard_report({"One": self.results, "Two": self.results_logL},
+                                                 confidence_level=None, verbosity=3,
+                                                 advanced_options={'errgen_type': "logTiG",
+                                                                  'precision': 2, #just a single int
+                                                                  'resizable': False,
+                                                                  'autosize': 'none'}).write_html(temp_files + "/general_reportA_adv2", auto_open=False)
 
         #test latex reporting
         if bLatex:
-            pygsti.report.construct_standard_report(self.results.view("default", "go0"),
-                                                 confidence_level=None, verbosity=3, auto_open=False).write_pdf(temp_files + "/general_reportA.pdf")
+            with pytest.warns(UnnamedReportWarning):
+                pygsti.report.construct_standard_report(self.results.view("default", "go0"),
+                                                     confidence_level=None, verbosity=3, auto_open=False).write_pdf(temp_files + "/general_reportA.pdf")
 
         #Compare the html files?
         #self.checkFile("general_reportA%s.html" % vs)
@@ -154,9 +163,10 @@ class TestReport(ReportBaseCase):
         import os
         os.chdir(temp_files)
         nb_filename = "report_notebook.ipynb"
-        pygsti.report.construct_standard_report(
-            self.results_logL, None, verbosity=3
-        ).write_notebook(nb_filename, use_pickle=True)
+        with pytest.warns(UnnamedReportWarning):
+            pygsti.report.construct_standard_report(
+                self.results_logL, None, verbosity=3
+            ).write_notebook(nb_filename, use_pickle=True)
         err = run_notebook(nb_filename)
         if err is not None:
             raise err
@@ -167,15 +177,17 @@ class TestReport(ReportBaseCase):
         import os
         os.chdir(temp_files)
         nb_filename = "report_notebook.ipynb"
-        pygsti.report.construct_standard_report(
-            self.results_logL, None, verbosity=3
-        ).write_notebook(nb_filename)
+        with pytest.warns(UnnamedReportWarning):
+            pygsti.report.construct_standard_report(
+                self.results_logL, None, verbosity=3
+            ).write_notebook(nb_filename)
         err = run_notebook(nb_filename)
         if err is not None:
             raise err
-        pygsti.report.construct_standard_report(
-            {'one': self.results_logL, 'two': self.results_logL}, None, verbosity=3
-        ).write_notebook(nb_filename) # multiple comparable data
+        with pytest.warns(UnnamedReportWarning):
+            pygsti.report.construct_standard_report(
+                {'one': self.results_logL, 'two': self.results_logL}, None, verbosity=3
+            ).write_notebook(nb_filename) # multiple comparable data
         err = run_notebook(nb_filename)
         if err is not None:
             raise err
