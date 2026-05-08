@@ -2,7 +2,9 @@ from ..util import BaseCase
 
 import warnings
 import numpy as _np
+import pytest
 from pathlib import Path
+from scipy.optimize import OptimizeWarning
 
 import pygsti
 from pygsti.tools.exceptions import pyGSTiDeprecationWarning
@@ -476,6 +478,13 @@ class TestBiRBDesign(BaseCase):
 
         self.assertEqual(birb_design.all_circuits_needing_data, birb_design_read.all_circuits_needing_data)
 
+# RB protocol tests run scipy.optimize.curve_fit on minimal-but-valid
+# fixture data. The covariance matrix on those small fits is often
+# singular, so scipy emits OptimizeWarning. The warning is genuinely
+# useful for users in production but is incidental noise in these
+# fast-running tests; the assertions only check that the fit ran, not
+# that its covariance is meaningful. Suppress at the test class level.
+@pytest.mark.filterwarnings("ignore::scipy.optimize.OptimizeWarning")
 class TestBiRBProtocol(BaseCase):
     def setUp(self):
         self.num_qubits = 2
@@ -528,6 +537,7 @@ class TestBiRBProtocol(BaseCase):
         result = proto.run(self.data_noisy)
 
 
+@pytest.mark.filterwarnings("ignore::scipy.optimize.OptimizeWarning")
 class TestCliffordRBProtocol(BaseCase):
     def setUp(self):
         self.num_qubits = 2
@@ -589,6 +599,7 @@ class TestCliffordRBProtocol(BaseCase):
 
         result = proto.run(self.data_noisy)
 
+@pytest.mark.filterwarnings("ignore::scipy.optimize.OptimizeWarning")
 class TestDirectRBProtocol(BaseCase):
     def setUp(self):
         self.num_qubits = 2
@@ -650,6 +661,7 @@ class TestDirectRBProtocol(BaseCase):
 
         result = proto.run(self.data_noisy)
 
+@pytest.mark.filterwarnings("ignore::scipy.optimize.OptimizeWarning")
 class TestMirrorRBProtocol(BaseCase):
     def setUp(self):
         self.num_qubits = 2
