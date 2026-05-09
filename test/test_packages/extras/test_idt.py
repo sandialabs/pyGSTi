@@ -330,7 +330,8 @@ class IDTTestCase(BaseTestCase):
         if regenerate_references():
             c = {} #Uncomment to re-generate cache SAVE
         else:
-            c = pickle.load(open(compare_files+"/idt_nQsequenceCache.pkl", 'rb'))
+            with open(compare_files+"/idt_nQsequenceCache.pkl", 'rb') as f:
+                c = pickle.load(f)
 
         t = time.time()
         with pytest.warns(pyGSTiDeprecationWarning):
