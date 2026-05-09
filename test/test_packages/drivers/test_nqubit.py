@@ -5,43 +5,13 @@ import numpy as np
 from pygsti.modelpacks.legacy import std1Q_XY
 from pygsti.baseobjs import Label as L
 from pygsti.circuits import Circuit
-import pygsti.models.modelconstruction as mc
-from pygsti.processors.processorspec import QubitProcessorSpec as _ProcessorSpec
 from pygsti.tools.exceptions import pyGSTiDeprecationWarning
 import warnings
 
-from ..testutils import BaseTestCase, compare_files, regenerate_references
+from ..testutils import BaseTestCase, compare_files, regenerate_references, build_XYCNOT_cloudnoise_model
 from pygsti.models import modelconstruction
 from pygsti.circuits import cloudcircuitconstruction
 from pygsti.circuits.circuitstructure import PlaquetteGridCircuitStructure
-
-
-#Mimics a function that used to be in pyGSTi, replaced with create_cloudnoise_model_from_hops_and_weights
-def build_XYCNOT_cloudnoise_model(nQubits, geometry="line", cnot_edges=None,
-                                  maxIdleWeight=1, maxSpamWeight=1, maxhops=0,
-                                  extraWeight1Hops=0, extraGateWeight=0,
-                                  roughNoise=None, simulator="matrix", parameterization="H+S",
-                                  spamtype="lindblad", addIdleNoiseToAllGates=True,
-                                  errcomp_type="gates", evotype="default", return_clouds=False, verbosity=0):
-
-    availability = {}; nonstd_gate_unitaries = {}
-    if cnot_edges is not None: availability['Gcnot'] = cnot_edges
-    pspec = _ProcessorSpec(nQubits, ['Gidle', 'Gx','Gy','Gcnot'], nonstd_gate_unitaries, availability, geometry)
-    assert(spamtype == "lindblad")  # unused and should remove this arg, but should always be "lindblad"
-    mdl = mc.create_cloud_crosstalk_model_from_hops_and_weights(
-        pspec, None,
-        maxIdleWeight, maxSpamWeight, maxhops,
-        extraWeight1Hops, extraGateWeight,
-        simulator, evotype, parameterization, parameterization,
-        "add_global" if addIdleNoiseToAllGates else "none",
-        errcomp_type, True, True, True, 'pp', verbosity)
-
-    if return_clouds:
-        #FUTURE - just return cloud *keys*? (operation label values are never used
-        # downstream, but may still be useful for debugging, so keep for now)
-        return mdl, mdl.clouds
-    else:
-        return mdl
 
 
 class NQubitTestCase(BaseTestCase):
@@ -105,11 +75,6 @@ class NQubitTestCase(BaseTestCase):
         nQubits = 1
         maxLengths = [1,2]
         cnot_edges = []
-
-        mdl_datagen = build_XYCNOT_cloudnoise_model(nQubits, "line", cnot_edges, maxIdleWeight=1, maxhops=0,
-                                                    extraWeight1Hops=0, extraGateWeight=0,
-                                                    verbosity=1, simulator="matrix", parameterization="H+S",
-                                                    roughNoise=(1234,0.01))
 
         cache = {}
         with pytest.warns(pyGSTiDeprecationWarning):

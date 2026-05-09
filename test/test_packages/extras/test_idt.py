@@ -8,11 +8,9 @@ import numpy as np
 import pytest
 
 import pygsti
-import pygsti.models.modelconstruction as mc
-from pygsti.processors.processorspec import QubitProcessorSpec as _ProcessorSpec
 from pygsti.extras import idletomography as idt
 from pygsti.tools.exceptions import pyGSTiDeprecationWarning
-from ..testutils import BaseTestCase, compare_files, temp_files, regenerate_references
+from ..testutils import BaseTestCase, compare_files, temp_files, regenerate_references, build_XYCNOT_cloudnoise_model
 
 #Helper functions
 #Global dicts describing how to prep and measure in various bases
@@ -25,34 +23,6 @@ measDict = { 'X': ('Gy',)*3, 'Y': ('Gx',), 'Z': (),
 hamiltonian=True
 stochastic=True
 affine=False
-
-#Mimics a function that used to be in pyGSTi, replaced with create_cloudnoise_model_from_hops_and_weights
-def build_XYCNOT_cloudnoise_model(nQubits, geometry="line", cnot_edges=None,
-                                  maxIdleWeight=1, maxSpamWeight=1, maxhops=0,
-                                  extraWeight1Hops=0, extraGateWeight=0,
-                                  roughNoise=None, simulator="matrix", parameterization="H+S",
-                                  spamtype="lindblad", addIdleNoiseToAllGates=True,
-                                  errcomp_type="gates", evotype="default", return_clouds=False, verbosity=0):
-
-    availability = {}; nonstd_gate_unitaries = {}
-    if cnot_edges is not None: availability['Gcnot'] = cnot_edges
-    pspec = _ProcessorSpec(nQubits, ['{idle}', 'Gx','Gy','Gcnot'], nonstd_gate_unitaries, availability, geometry)
-    assert(spamtype == "lindblad")  # unused and should remove this arg, but should always be "lindblad"
-    mdl = mc.create_cloud_crosstalk_model_from_hops_and_weights(
-        pspec, None,
-        maxIdleWeight, maxSpamWeight, maxhops,
-        extraWeight1Hops, extraGateWeight,
-        simulator, evotype, parameterization, parameterization,
-        "add_global" if addIdleNoiseToAllGates else "none",
-        errcomp_type, True, True, True, 'pp', verbosity)
-
-    if return_clouds:
-        #FUTURE - just return cloud *keys*? (operation label values are never used
-        # downstream, but may still be useful for debugging, so keep for now)
-        return mdl, mdl.clouds
-    else:
-        return mdl
-
 
 def get_fileroot(nQubits, maxMaxLen, errMag, spamMag, nSamples, simulator, idleErrorInFiducials):
     return temp_files + "/idletomog_%dQ_maxLen%d_errMag%.5f_spamMag%.5f_%s_%s_%s" % \
