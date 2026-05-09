@@ -131,9 +131,11 @@ class ForwardSimulator(_NicelySerializable):
         state_dict['_model'] = None  # don't serialize parent model (will cause recursion)
         return state_dict
 
-    def copy(self):
+    def copy(self, keep_model_attached=True):
         s = self._to_nice_serialization()
         f = type(self)._from_nice_serialization(s)
+        if not keep_model_attached:
+            f.model = None  # type: ignore
         return f
 
     @property

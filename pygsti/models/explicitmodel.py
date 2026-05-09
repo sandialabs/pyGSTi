@@ -1350,7 +1350,7 @@ class ExplicitOpModel(_mdl.OpModel):
         new_model = ExplicitOpModel(sslbls, dumb_basis, "full", "auto", "auto", "auto",
                                     self.preps._prefix, self.effects_prefix,
                                     self.operations._prefix, self.povms._prefix,
-                                    self.instruments._prefix, self._sim.copy())
+                                    self.instruments._prefix, self._sim.copy(keep_model_attached=False))
         #new_model._dim = new_dimension # dim will be set when elements are added
         #new_model.reset_basis() #FUTURE: maybe user can specify how increase is being done?
 
@@ -1432,7 +1432,7 @@ class ExplicitOpModel(_mdl.OpModel):
         new_model = ExplicitOpModel(sslbls, dumb_basis, "full", "auto", "auto", "auto",
                                     self.preps._prefix, self.effects_prefix,
                                     self.operations._prefix, self.povms._prefix,
-                                    self.instruments._prefix, self._sim.copy())
+                                    self.instruments._prefix, self._sim.copy(keep_model_attached=False))
         #new_model._dim = new_dimension # dim will be set when elements are added
         #new_model.reset_basis() #FUTURE: maybe user can specify how decrease is being done?
 
