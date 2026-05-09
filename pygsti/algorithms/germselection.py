@@ -1309,7 +1309,7 @@ def _twirled_deriv(model, circuit, eps=1e-6, float_type=_np.cdouble):
     numpy array
         An array of shape (op_dim^2, num_model_params)
     """
-    prod = model.sim.product(circuit)
+    prod = model.circuit_operator(circuit)
 
     # flattened_op_dim x vec_model_dim
     dProd = model.sim.dproduct(circuit, flat=True)
@@ -2790,7 +2790,7 @@ def create_circuit_cache(model, circuit_list):
     
     circuit_cache= {}
     for circuit in circuit_list:
-        circuit_cache[circuit] = model.sim.product(circuit)
+        circuit_cache[circuit] = model.circuit_operator(circuit)
     
     return circuit_cache
     

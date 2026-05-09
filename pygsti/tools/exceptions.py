@@ -70,14 +70,6 @@ class pyGSTiDeprecationWarning(UserWarning, DeprecationWarning):
     pass
 
 
-class ForwardSimulatorSuitabilityWarning(UserWarning):
-    """
-    Inform the user that they should consider using a different
-    forward simulator class in a given context.
-    """
-    pass
-
-
 class ImplicitlyDoneEditingCircuitWarning(UserWarning):
     """
     Inform the user that a Circuit.__hash__ has been called

@@ -626,7 +626,7 @@ def create_circuit_cache(model, circuit_list):
     
     circuit_cache= {}
     for circuit in circuit_list:
-        circuit_cache[circuit.str] = model.sim.product(circuit)
+        circuit_cache[circuit.str] = model.circuit_operator(circuit)
     
     return circuit_cache
 
@@ -676,7 +676,7 @@ def create_prep_cache(model, available_prep_fid_list, circuit_cache=None):
             new_key= rho.to_vector().tobytes()
             keylist.append(new_key)
             for prepFid in available_prep_fid_list:
-                prep_cache[(new_key,prepFid.str)] = _np.dot(model.sim.product(prepFid), rho.to_dense())
+                prep_cache[(new_key,prepFid.str)] = _np.dot(model.circuit_operator(prepFid), rho.to_dense())
     return prep_cache, keylist
     
 
@@ -723,7 +723,7 @@ def create_meas_cache(model, available_meas_fid_list, circuit_cache=None):
                 new_povm_effect_key_pair= (povm.to_vector().tobytes(), E.to_dense().tobytes())
                 keypairlist.append(new_povm_effect_key_pair)
                 for measFid in available_meas_fid_list:
-                    meas_cache[(new_povm_effect_key_pair[0],new_povm_effect_key_pair[1],measFid.str)] = _np.dot(E.to_dense(), model.sim.product(measFid))
+                    meas_cache[(new_povm_effect_key_pair[0],new_povm_effect_key_pair[1],measFid.str)] = _np.dot(E.to_dense(), model.circuit_operator(measFid))
                     
     return meas_cache, keypairlist
   
@@ -781,7 +781,7 @@ def create_prep_mxs(model, prep_fid_list, prep_cache=None):
         for rho in model.preps.values():
             outputMat = _np.zeros([dimRho, numFid], float)
             for i, prepFid in enumerate(prep_fid_list):
-                outputMat[:, i] = _np.dot(model.sim.product(prepFid), rho.to_dense())
+                outputMat[:, i] = _np.dot(model.circuit_operator(prepFid), rho.to_dense())
             outputMatList.append(outputMat)    
     
     return outputMatList
@@ -840,7 +840,7 @@ def create_meas_mxs(model, meas_fid_list, meas_cache=None):
             for E in povm.values():
                 outputMat = _np.zeros([dimE, numFid], float)
                 for i, measFid in enumerate(meas_fid_list):
-                    outputMat[:, i] = _np.dot(E.to_dense(), model.sim.product(measFid))
+                    outputMat[:, i] = _np.dot(E.to_dense(), model.circuit_operator(measFid))
                 outputMatList.append(outputMat)
             
     return outputMatList

@@ -34,6 +34,8 @@ from pygsti import SpaceT
 from pygsti.tools import listtools as _lt
 from pygsti.circuits import CircuitList as _CircuitList
 
+from pygsti.tools.legacytools import deprecate as _deprecated
+
 _dummy_profiler = _DummyProfiler()
 
 # Smallness tolerances, used internally for conditional scaling required
@@ -56,6 +58,7 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
     # DistributableForwardSimulator and (I think) not need any more implementation.
     # If this is done, then MatrixForwardSimulator wouldn't need to separately subclass DistributableForwardSimulator
 
+    @_deprecated('OpModel.circuit_operator')
     def product(self, circuit, scale=False):
         """
         Compute the product of a specified sequence of operation labels.
@@ -82,36 +85,9 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
             is to allow a trace or other linear operation to be done
             prior to the scaling.
         """
-        if scale:
-            scaledGatesAndExps = {}
-            scale_exp = 0
-            G = _np.identity(self.model.evotype.minimal_dim(self.model.state_space))
-            for lOp in circuit:
-                if lOp not in scaledGatesAndExps:
-                    opmx = self.model.circuit_layer_operator(lOp, 'op').to_dense("minimal")
-                    ng = max(_nla.norm(opmx), 1.0)
-                    scaledGatesAndExps[lOp] = (opmx / ng, _np.log(ng))
-
-                gate, ex = scaledGatesAndExps[lOp]
-                H = _np.dot(gate, G)   # product of gates, starting with identity
-                scale_exp += ex   # scale and keep track of exponent
-                if H.max() < _PSMALL and H.min() > -_PSMALL:
-                    nG = max(_nla.norm(G), _np.exp(-scale_exp))
-                    G = _np.dot(gate, G / nG); scale_exp += _np.log(nG)  # LEXICOGRAPHICAL VS MATRIX ORDER
-                else: G = H
-
-            old_err = _np.seterr(over='ignore')
-            scale = _np.exp(scale_exp)
-            _np.seterr(**old_err)
-
-            return G, scale
-
-        else:
-            G = _np.identity(self.model.evotype.minimal_dim(self.model.state_space))
-            for lOp in circuit:
-                G = _np.dot(self.model.circuit_layer_operator(lOp, 'op').to_dense("minimal"), G)
-                # above line: LEXICOGRAPHICAL VS MATRIX ORDER
-            return G
+        from pygsti.models.model import OpModel as _OpModel  # avoid circular import
+        model : _OpModel = self.model  # type: ignore
+        return model.circuit_operator(circuit, scale)
 
     def _rho_es_from_spam_tuples(self, rholabel, elabels):
         # This calculator uses the convention that rho has shape (N,1)
@@ -611,7 +587,7 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
 
             if use_scaling:
                 old_err = _np.seterr(over='ignore')
-                G, scale = self.product(circuit_ops, True)
+                G, scale = self.model.circuit_operator(circuit_ops, True)
                 # TODO - add a ".dense_space_type" attribute of evotype that == either "Hilbert" or "Hilbert-Schmidt"?
                 if self.model.evotype == "statevec":
                     ps = _np.real(_np.abs(_np.dot(Es, _np.dot(G, rho)) * scale)**2)
@@ -621,7 +597,7 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
                 _np.seterr(**old_err)
 
             else:  # no scaling -- faster but susceptible to overflow
-                G = self.product(circuit_ops, False)
+                G = self.model.circuit_operator(circuit_ops, False)
                 if self.model.evotype == "statevec":
                     ps = _np.real(_np.abs(_np.dot(Es, _np.dot(G, rho)))**2)
                 else:  # evotype == "densitymx"
@@ -713,7 +689,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         #Note: resets processor-distribution information
         return cls(None, state['mode'] == "distribute_by_timestamp")
 
-    def copy(self):
+    def copy(self, keep_model_attached=True):
         """
         Return a shallow copy of this MatrixForwardSimulator
 
@@ -721,7 +697,10 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         -------
         MatrixForwardSimulator
         """
-        return MatrixForwardSimulator(self.model)
+        out = MatrixForwardSimulator(self.model)
+        if not keep_model_attached:
+            out.model = None  # type: ignore
+        return out
 
     def _compute_product_cache(self, layout_atom_tree, resource_alloc):
         """

@@ -96,8 +96,8 @@ class ErrorgenPropTester(BaseCase):
         eoc_error_channel = error_propagator.eoc_error_channel(self.circuit)
 
         #manually compute end-of-circuit error generator
-        ideal_channel = self.target_model.sim.product(self.circuit)
-        noisy_channel_exact = self.error_model.sim.product(self.circuit)
+        ideal_channel = self.target_model.circuit_operator(self.circuit)
+        noisy_channel_exact = self.error_model.circuit_operator(self.circuit)
         eoc_error_channel_exact = noisy_channel_exact@ideal_channel.conj().T  
 
         assert np.linalg.norm(eoc_error_channel - eoc_error_channel_exact) < 1e-10
@@ -200,7 +200,7 @@ def probabilities_errorgen_prop(error_propagator, target_model, circuit, use_bch
                                                                     'mode':bch_mode})
     else:
         eoc_channel = error_propagator.eoc_error_channel(circuit, include_spam=True)
-    ideal_channel = target_model.sim.product(circuit)
+    ideal_channel = target_model.circuit_operator(circuit)
     #also get the ideal state prep and povm:
     ideal_prep = target_model.circuit_layer_operator(Label('rho0'), typ='prep').copy()
     ideal_meas = target_model.circuit_layer_operator(Label('Mdefault'), typ='povm').copy()

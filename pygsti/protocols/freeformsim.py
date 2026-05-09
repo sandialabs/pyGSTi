@@ -110,7 +110,7 @@ class ModelFreeformSimulator(FreeformDataSimulator):
 
     def compute_process_matrix(self, model, circuit, include_final_state=False, include_probabilities=False):
         prep, circuit_ops, povm = model.split_circuit(circuit)
-        mx = model.sim.product(circuit_ops)
+        mx = model.circuit_operator(circuit_ops)
         if include_final_state or include_probabilities:
             ret = [mx]
             rho = model.circuit_layer_operator(prep, 'prep')
