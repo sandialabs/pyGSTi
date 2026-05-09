@@ -3,6 +3,7 @@
 import logging
 mpl_logger = logging.getLogger('matplotlib')
 mpl_logger.setLevel(logging.WARNING)
+import pytest
 
 import unittest
 import numpy as np
@@ -28,8 +29,12 @@ def build_XYCNOT_cloudnoise_model(nQubits, geometry="line", cnot_edges=None,
                                   errcomp_type="gates", evotype="default", return_clouds=False, verbosity=0):
 
     availability = {}; nonstd_gate_unitaries = {}
-    if cnot_edges is not None: availability['Gcnot'] = cnot_edges
-    pspec = _ProcessorSpec(nQubits, ['Gidle', 'Gxpi2','Gypi2','Gcnot'], nonstd_gate_unitaries, availability, geometry)
+    gatenames = ['Gidle', 'Gxpi2','Gypi2']
+    if nQubits > 1:
+        gatenames.append('Gcnot')
+        if cnot_edges is not None:
+            availability['Gcnot'] = cnot_edges
+    pspec = _ProcessorSpec(nQubits, gatenames, nonstd_gate_unitaries, availability, geometry)
     assert(spamtype == "lindblad")  # unused and should remove this arg, but should always be "lindblad"
     mdl = mc.create_cloud_crosstalk_model_from_hops_and_weights(
         pspec, None,
@@ -89,7 +94,7 @@ class CalcMethods1QTestCase(BaseTestCase):
 
         #Reduced model GST dataset
         cls.nQubits=1 # can't just change this now - see op_labels below
-        cls.mdl_redmod_datagen = build_XYCNOT_cloudnoise_model(cls.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
+        cls.mdl_redmod_datagen = build_XYCNOT_cloudnoise_model(cls.nQubits, geometry="line", cnot_edges=None, maxIdleWeight=1, maxhops=1,
                                                                extraWeight1Hops=0, extraGateWeight=1,
                                                                simulator="matrix", verbosity=1, roughNoise=(1234,0.01))
 
@@ -131,7 +136,6 @@ class CalcMethods1QTestCase(BaseTestCase):
 
         os.chdir(origDir) # return to original directory
 
-
     def assert_outcomes(self, probs, expected):
         for k,v in probs.items():
             self.assertAlmostEqual(v, expected[k])
@@ -170,7 +174,6 @@ class CalcMethods1QTestCase(BaseTestCase):
         print(gsEstimate.strdiff(mdl_compare))
         self.assertAlmostEqual( gsEstimate.frobeniusdist(mdl_compare), 0, places=1)
 
-
     def test_stdgst_map(self):
         # Using map-based calculation
         target_model = std.target_model('CPTPLND')
@@ -189,7 +192,6 @@ class CalcMethods1QTestCase(BaseTestCase):
         self.assertAlmostEqual( gsEstimate.frobeniusdist(mdl_compare), 0, places=0)
          # with low tolerance (1e-6), "map" tends to go for more iterations than "matrix",
          # resulting in a model that isn't exactly the same as the "matrix" one
-
 
     def test_stdgst_terms(self):
         # Using term-based (path integral) calculation
@@ -263,7 +265,13 @@ class CalcMethods1QTestCase(BaseTestCase):
     # Reduced, meaning that we use composed and embedded gates to form a more complex error model with
     # shared parameters and qubit connectivity graphs.  Calculations *can* use dense matrices and matrix calcs,
     # but usually will use sparse mxs and map-based calcs.
+    #
+    # All of these functions call misfit_sigma() on an Estimate object, which raises an OverparameterizationWarning
+    # since the underlying dataset has a tiny number of circuits (e.g., 3). The OverparameterizationWarning in this
+    # context is expected and suppressed.
+    #
 
+    @pytest.mark.filterwarnings("ignore::pygsti.tools.exceptions.OverparameterizationWarning")
     def test_reducedmod_matrix(self):
         # Using dense matrices and matrix-based calcs
         target_model = build_XYCNOT_cloudnoise_model(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
@@ -286,6 +294,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         #self.assertAlmostEqual( results.estimates[results.name].models['stdgaugeopt'].frobeniusdist(mdl_compare), 0, places=3)
         #NO frobeniusdist for implicit models (yet)
 
+    @pytest.mark.filterwarnings("ignore::pygsti.tools.exceptions.OverparameterizationWarning")
     def test_reducedmod_map1(self):
         # Using dense embedded matrices and map-based calcs (maybe not really necessary to include?)
         target_model = build_XYCNOT_cloudnoise_model(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
@@ -307,7 +316,7 @@ class CalcMethods1QTestCase(BaseTestCase):
           #Note: models aren't necessarily exactly equal given gauge freedoms that we don't know
           # how to optimizize over exactly - so this is a very loose test...
 
-
+    @pytest.mark.filterwarnings("ignore::pygsti.tools.exceptions.OverparameterizationWarning")
     def test_reducedmod_map1_errorgens(self):
         # Using dense embedded matrices and map-based calcs (same as above)
         # but w/*errcomp_type=errogens* Model (maybe not really necessary to include?)
@@ -326,6 +335,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 0.0, delta=1.0)
         #Note: we don't compare errorgens models to a reference model yet...
 
+    @pytest.mark.filterwarnings("ignore::pygsti.tools.exceptions.OverparameterizationWarning")
     def test_reducedmod_map2(self):
         # Using sparse embedded matrices and map-based calcs
         target_model = build_XYCNOT_cloudnoise_model(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
@@ -347,7 +357,7 @@ class CalcMethods1QTestCase(BaseTestCase):
           #Note: models aren't necessarily exactly equal given gauge freedoms that we don't know
           # how to optimizize over exactly - so this is a very loose test...
 
-
+    @pytest.mark.filterwarnings("ignore::pygsti.tools.exceptions.OverparameterizationWarning")
     def test_reducedmod_map2_errorgens(self):
         # Using sparse embedded matrices and map-based calcs (same as above)
         # but w/*errcomp_type=errogens* Model (maybe not really necessary to include?)
@@ -366,7 +376,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 0.0, delta=1.0)
         #Note: we don't compare errorgens models to a reference model yet...
 
-
+    @pytest.mark.filterwarnings("ignore::pygsti.tools.exceptions.OverparameterizationWarning")
     def test_reducedmod_svterm(self):
         # Using term-based calcs using map-based state-vector propagation
         termsim = pygsti.forwardsims.TermForwardSimulator(mode='taylor-order', max_order=1)
@@ -392,6 +402,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         self.assertAlmostEqual( np.linalg.norm(results.estimates[results.name].models['trivial_gauge_opt'].to_vector()
                                                - mdl_compare.to_vector()), 0, places=3)
 
+    @pytest.mark.filterwarnings("ignore::pygsti.tools.exceptions.OverparameterizationWarning")
     def test_reducedmod_svterm_errorgens(self):
         # Using term-based calcs using map-based state-vector propagation (same as above)
         # but w/errcomp_type=errogens Model
@@ -412,6 +423,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 0.0, delta=1.0)
         #Note: we don't compare errorgens models to a reference model yet...
 
+    @pytest.mark.filterwarnings("ignore::pygsti.tools.exceptions.OverparameterizationWarning")
     def test_reducedmod_prunedpath_svterm_errorgens(self):
         termsim = pygsti.forwardsims.TermForwardSimulator(mode='pruned')
         target_model = build_XYCNOT_cloudnoise_model(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
@@ -436,8 +448,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 0.0, delta=1.0)
         #Note: we don't compare errorgens models to a reference model yet...
 
-
-
+    @pytest.mark.filterwarnings("ignore::pygsti.tools.exceptions.OverparameterizationWarning")
     def test_reducedmod_cterm(self):
         # Using term-based calcs using map-based stabilizer-state propagation
         termsim = pygsti.forwardsims.TermForwardSimulator(mode='taylor-order', max_order=1)
@@ -459,6 +470,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         self.assertAlmostEqual( np.linalg.norm(results.estimates[results.name].models['trivial_gauge_opt'].to_vector()
                                                - mdl_compare.to_vector()), 0, places=1)  #TODO: why this isn't more similar to svterm case??
 
+    @pytest.mark.filterwarnings("ignore::pygsti.tools.exceptions.OverparameterizationWarning")
     def test_reducedmod_cterm_errorgens(self):
         # Using term-based calcs using map-based stabilizer-state propagation (same as above)
         # but w/errcomp_type=errogens Model
@@ -617,8 +629,6 @@ class CalcMethods1QTestCase(BaseTestCase):
                                        ('111',): 1.0 } )
         self.assert_outcomes(probs2, { ('111',): 1.0 } ) # nonzero-only filter mirrors the deprecated Circuit.simulate default
 
-
-
     def test_circuitsim_stabilizer(self):
         # Stabilizer-state simulation (of Clifford gates) using map-based calc
         c0 = pygsti.circuits.Circuit(layer_labels=(), num_lines=1) # 1-qubit circuit
@@ -640,7 +650,6 @@ class CalcMethods1QTestCase(BaseTestCase):
         self.assert_outcomes(probs1, {('0',): 0.5,  ('1',): 0.5} )
         self.assert_outcomes(probs2, {('0',): 0.0,  ('1',): 1.0} )
         self.assert_outcomes(probs3, {('0',): 1.0,  ('1',): 0.0} )
-
 
     def test_circuitsim_stabilizer_1Qcheck(self):
         from pygsti.modelpacks import smq1Q_XYI as stdChk
