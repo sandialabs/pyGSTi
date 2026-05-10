@@ -6,6 +6,7 @@ from numpy.linalg import norm
 import pygsti
 from pygsti.modelpacks import smq1Q_XY as std
 from ..testutils import BaseTestCase, compare_files, temp_files, regenerate_references
+from pygsti.tools.exceptions import OverparameterizationWarning
 
 class DriversTestCase(BaseTestCase):
 
@@ -65,7 +66,8 @@ class TestDriversMethods(DriversTestCase):
         result = pygsti.run_long_sequence_gst_base(ds, self.model, gfprStructs, verbosity=0,
                                                    disable_checkpointing = True,
                                                    advanced_options= {'max_iterations':3})
-        pygsti.report.construct_standard_report(result, title ="GFPR report", verbosity=0).write_html(temp_files + "/full_report_GFPR")
+        with pytest.warns(OverparameterizationWarning):
+            pygsti.report.construct_standard_report(result, title ="GFPR report", verbosity=0).write_html(temp_files + "/full_report_GFPR")
 
         #Per-germ FPR
         fidPairsDict = pygsti.alg.find_sufficient_fiducial_pairs_per_germ(
@@ -91,7 +93,8 @@ class TestDriversMethods(DriversTestCase):
         result = pygsti.run_long_sequence_gst_base(ds, self.model, pfprStructs, verbosity=0,
                                                    disable_checkpointing = True,
                                                    advanced_options= {'max_iterations':3})
-        pygsti.report.construct_standard_report(result, title="PFPR report", verbosity=0).write_html(temp_files + "/full_report_PFPR")
+        with pytest.warns(OverparameterizationWarning):
+            pygsti.report.construct_standard_report(result, title="PFPR report", verbosity=0).write_html(temp_files + "/full_report_PFPR")
 
     def test_longSequenceGST_randomReduction(self):
         ds = self.ds
@@ -109,7 +112,8 @@ class TestDriversMethods(DriversTestCase):
                                 disable_checkpointing=True)
 
         #create a report...
-        pygsti.report.construct_standard_report(result, title="RFPR report", verbosity=0).write_html(temp_files + "/full_report_RFPR")
+        with pytest.warns(OverparameterizationWarning):
+            pygsti.report.construct_standard_report(result, title="RFPR report", verbosity=0).write_html(temp_files + "/full_report_RFPR")
 
     def test_longSequenceGST_CPTP(self):
         ds = self.ds
@@ -124,7 +128,8 @@ class TestDriversMethods(DriversTestCase):
                                 advanced_options= {'max_iterations':3})
 
         #create a report...
-        pygsti.report.construct_standard_report(result, title="CPTP Gates report", verbosity=0).write_html(temp_files + "/full_report_CPTPGates")
+        with pytest.warns(OverparameterizationWarning):
+            pygsti.report.construct_standard_report(result, title="CPTP Gates report", verbosity=0).write_html(temp_files + "/full_report_CPTPGates")
 
 
     # 'S' (Stochastic) under-parameterises this test's POVM, which trips
@@ -168,7 +173,8 @@ class TestDriversMethods(DriversTestCase):
                                 self.germs, maxLens, disable_checkpointing=True, advanced_options= {'max_iterations':3})
 
         #create a report...
-        pygsti.report.construct_standard_report(result, title="GLND report", verbosity=0).write_html( temp_files + "/full_report_GLND")
+        with pytest.warns(OverparameterizationWarning):
+            pygsti.report.construct_standard_report(result, title="GLND report", verbosity=0).write_html( temp_files + "/full_report_GLND")
 
 
     def test_longSequenceGST_HplusS(self):
@@ -195,7 +201,8 @@ class TestDriversMethods(DriversTestCase):
                                 self.germs, maxLens, advanced_options={'bad_fit_threshold': -100, 'max_iterations':3},
                                 disable_checkpointing=True)
 
-        pygsti.report.construct_standard_report(result, title="badfit report", verbosity=0).write_html(temp_files + "/full_report_badfit")
+        with pytest.warns(OverparameterizationWarning):
+            pygsti.report.construct_standard_report(result, title="badfit report", verbosity=0).write_html(temp_files + "/full_report_badfit")
 
     def test_stdpracticeGST(self):
         ds = self.ds
@@ -210,7 +217,8 @@ class TestDriversMethods(DriversTestCase):
                                 models_to_test = {"Test": mdl_guess},
                                 comm=None, mem_limit=None, verbosity=0,
                                 disable_checkpointing=True, advanced_options= {'max_iterations':3})
-        pygsti.report.construct_standard_report(result, title= "Std Practice Test Report", verbosity=2).write_html(temp_files + "/full_report_stdpractice")
+        with pytest.warns(OverparameterizationWarning):
+            pygsti.report.construct_standard_report(result, title= "Std Practice Test Report", verbosity=2).write_html(temp_files + "/full_report_stdpractice")
 
     def test_bootstrap(self):
         """Test bootstrap model generation"""

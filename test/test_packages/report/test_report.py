@@ -3,13 +3,14 @@ import os
 import shutil
 import subprocess
 import unittest
+import warnings
 
 import numpy as np
 import pytest
 
 import pygsti
 from pygsti.modelpacks import smq1Q_XY as std
-from pygsti.tools.exceptions import pyGSTiDeprecationWarning, UnnamedReportWarning
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning, UnnamedReportWarning, OverparameterizationWarning
 # Inherit setup from here
 from .reportBaseCase import ReportBaseCase
 from ..testutils import compare_files, temp_files, run_notebook
@@ -70,33 +71,35 @@ class TestReport(ReportBaseCase):
         # All construct_standard_report calls below intentionally omit
         # title= to exercise the auto-title path; each fires
         # UnnamedReportWarning, wrapped explicitly.
-        with pytest.warns(UnnamedReportWarning):
-            pygsti.report.construct_standard_report(self.results, confidence_level=None, verbosity=3).write_html(temp_files + "/general_reportA", auto_open=False)
-
-        #Test advanced options
-        linkto = ()
-        if bLatex: linkto = ('tex','pdf') + linkto #Note: can't render as 'tex' without matplotlib b/c of figs
-        if bPandas: linkto = ('pkl',) + linkto
-        results_odict = collections.OrderedDict([("One", self.results), ("Two",self.results)])
-        with pytest.warns(UnnamedReportWarning):
-            pygsti.report.construct_standard_report(results_odict,
-                                                 confidence_level=None, verbosity=3,
-                                                 advanced_options={'errgen_type': "logG-logT",
-                                                                  'precision': {'normal': 2, 'polar': 1, 'sci': 1}}).write_html(temp_files + "/general_reportA_adv1",auto_open=False)
-
-        with pytest.warns(UnnamedReportWarning):
-            pygsti.report.construct_standard_report({"One": self.results, "Two": self.results_logL},
-                                                 confidence_level=None, verbosity=3,
-                                                 advanced_options={'errgen_type': "logTiG",
-                                                                  'precision': 2, #just a single int
-                                                                  'resizable': False,
-                                                                  'autosize': 'none'}).write_html(temp_files + "/general_reportA_adv2", auto_open=False)
-
-        #test latex reporting
-        if bLatex:
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', OverparameterizationWarning)
             with pytest.warns(UnnamedReportWarning):
-                pygsti.report.construct_standard_report(self.results.view("default", "go0"),
-                                                     confidence_level=None, verbosity=3, auto_open=False).write_pdf(temp_files + "/general_reportA.pdf")
+                pygsti.report.construct_standard_report(self.results, confidence_level=None, verbosity=3).write_html(temp_files + "/general_reportA", auto_open=False)
+
+            #Test advanced options
+            linkto = ()
+            if bLatex: linkto = ('tex','pdf') + linkto #Note: can't render as 'tex' without matplotlib b/c of figs
+            if bPandas: linkto = ('pkl',) + linkto
+            results_odict = collections.OrderedDict([("One", self.results), ("Two",self.results)])
+            with pytest.warns(UnnamedReportWarning):
+                pygsti.report.construct_standard_report(results_odict,
+                                                     confidence_level=None, verbosity=3,
+                                                     advanced_options={'errgen_type': "logG-logT",
+                                                                      'precision': {'normal': 2, 'polar': 1, 'sci': 1}}).write_html(temp_files + "/general_reportA_adv1",auto_open=False)
+
+            with pytest.warns(UnnamedReportWarning):
+                pygsti.report.construct_standard_report({"One": self.results, "Two": self.results_logL},
+                                                     confidence_level=None, verbosity=3,
+                                                     advanced_options={'errgen_type': "logTiG",
+                                                                      'precision': 2, #just a single int
+                                                                      'resizable': False,
+                                                                      'autosize': 'none'}).write_html(temp_files + "/general_reportA_adv2", auto_open=False)
+
+            #test latex reporting
+            if bLatex:
+                with pytest.warns(UnnamedReportWarning):
+                    pygsti.report.construct_standard_report(self.results.view("default", "go0"),
+                                                         confidence_level=None, verbosity=3, auto_open=False).write_pdf(temp_files + "/general_reportA.pdf")
 
         #Compare the html files?
         #self.checkFile("general_reportA%s.html" % vs)
@@ -106,8 +109,10 @@ class TestReport(ReportBaseCase):
         crfact.compute_hessian(comm=None)
         crfact.project_hessian('intrinsic error')
 
-        pygsti.report.construct_standard_report(self.results,
-                                             "Report B", confidence_level=95, verbosity=3).write_html( temp_files + "/general_reportB", auto_open=False)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', OverparameterizationWarning)
+            pygsti.report.construct_standard_report(self.results,
+                                                 "Report B", confidence_level=95, verbosity=3).write_html( temp_files + "/general_reportB", auto_open=False)
 
         #Compare the html files?
         #self.checkFile("general_reportB%s.html" % vs)
@@ -117,23 +122,26 @@ class TestReport(ReportBaseCase):
         crfact.compute_hessian(comm=None)
         crfact.project_hessian('std')
 
-        #Note: Negative confidence levels no longer trigger non-mark error bars; this is done via "nm threshold"
-        pygsti.report.construct_standard_report(self.results,"Report E", confidence_level=95, verbosity=3,
-                                             advanced_options={'nm threshold': -10}).write_html(temp_files + "/general_reportE", auto_open=False)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', OverparameterizationWarning)
+            #Note: Negative confidence levels no longer trigger non-mark error bars; this is done via "nm threshold"
+            pygsti.report.construct_standard_report(self.results,"Report E", confidence_level=95, verbosity=3,
+                                                    advanced_options={'nm threshold': -10}).write_html(temp_files + "/general_reportE", auto_open=False)
         #Compare the html files?
         #self.checkFile("general_reportC%s.html" % vs)
 
     def test_reports_logL_TP_noCIs(self):
-        #Also test adding a model-test estimate to this report
+            #Also test adding a model-test estimate to this report
         mdl_guess = std.target_model().depolarize(op_noise=0.07,spam_noise=0.03)
         results = self.results_logL.copy()
         results.add_model_test(std.target_model(), mdl_guess, estimate_key='Test', gaugeopt_keys="auto")
 
-
-        #Note: this report will have (un-combined) Robust estimates too
-        pygsti.report.construct_standard_report(results,
-                                             "Report C", confidence_level=None, verbosity=3,
-                                             advanced_options={'combine_robust': False}).write_html(temp_files + "/general_reportC", auto_open=False)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', OverparameterizationWarning)
+            #Note: this report will have (un-combined) Robust estimates too
+            pygsti.report.construct_standard_report(results,
+                                                    "Report C", confidence_level=None, verbosity=3,
+                                                    advanced_options={'combine_robust': False}).write_html(temp_files + "/general_reportC", auto_open=False)
         #Compare the html files?
         #self.checkFile("general_reportC%s.html" % vs)
 
@@ -146,16 +154,20 @@ class TestReport(ReportBaseCase):
         crfact = self.results.estimates['default'].create_confidence_region_factory('go0') #was created by propagation
         crfact.project_hessian('optimal gate CIs')
 
-        #Note: this report will have Robust estimates too
-        pygsti.report.construct_standard_report(self.results_logL,
-                                             "Report D", confidence_level=95, verbosity=3).write_html(temp_files + "/general_reportD", auto_open=False)
-        #Compare the html files?
-        #self.checkFile("general_reportD%s.html" % vs)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', OverparameterizationWarning)
+            #Note: this report will have Robust estimates too
+            pygsti.report.construct_standard_report(self.results_logL,
+                                                    "Report D", confidence_level=95, verbosity=3).write_html(temp_files + "/general_reportD", auto_open=False)
+            #Compare the html files?
+            #self.checkFile("general_reportD%s.html" % vs)
 
     def test_reports_multiple_ds(self):
-        #Note: this report will have (un-combined) Robust estimates too
-        pygsti.report.construct_standard_report({"chi2": self.results, "logl": self.results_logL},
-                                             "Report F", confidence_level=None, verbosity=3).write_html(temp_files + "/general_reportF", auto_open=False)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', OverparameterizationWarning)
+            #Note: this report will have (un-combined) Robust estimates too
+            pygsti.report.construct_standard_report({"chi2": self.results, "logl": self.results_logL},
+                                                 "Report F", confidence_level=None, verbosity=3).write_html(temp_files + "/general_reportF", auto_open=False)
         #Compare the html files?
         #self.checkFile("general_reportC%s.html" % vs)
 

@@ -1,12 +1,14 @@
 import os
 import pickle
 import unittest
+import warnings
 
 import numpy as np
 
 import pygsti.protocols.estimate
 from pygsti.extras import drift
 from pygsti.modelpacks import smq1Q_XY
+from pygsti.tools.exceptions import OverparameterizationWarning
 from ..report.reportBaseCase import ReportBaseCase
 from ..testutils import compare_files, temp_files
 from pygsti.baseobjs import Label
@@ -98,6 +100,8 @@ class TestWorkspace(ReportBaseCase):
 
 
     def test_table_creation(self):
+      with warnings.catch_warnings():
+        warnings.simplefilter('ignore', OverparameterizationWarning)
         w = pygsti.report.Workspace()
         tbls = []; cr = None
 
@@ -271,6 +275,8 @@ class TestWorkspace(ReportBaseCase):
 
 
     def test_plot_creation(self):
+      with warnings.catch_warnings():
+        warnings.simplefilter('ignore', OverparameterizationWarning)
         w = pygsti.report.Workspace()
         prepStrs = self.results.circuit_lists['prep fiducials']
         effectStrs = self.results.circuit_lists['meas fiducials']

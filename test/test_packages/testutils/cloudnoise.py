@@ -11,12 +11,16 @@ def build_XYCNOT_cloudnoise_model(nQubits, geometry="line", cnot_edges=None,
                                   errcomp_type="gates", evotype="default", return_clouds=False, verbosity=0,
                                   xy_gate_names=('Gx', 'Gy')):
 
-    availability = {}; nonstd_gate_unitaries = {}
+    availability = {}
+    nonstd_gate_unitaries = {}
     gatenames = ['{idle}', *xy_gate_names]
     if nQubits > 1:
-        gatenames.append('Gcnot')
-        if cnot_edges is not None:
+        if cnot_edges is None:
+            cnot_edges = [(i, i+1) for i in range(nQubits-1)]
+        if len(cnot_edges) > 0:
+            gatenames.append('Gcnot')
             availability['Gcnot'] = cnot_edges
+
     pspec = _ProcessorSpec(nQubits, gatenames, nonstd_gate_unitaries, availability, geometry)
     assert(spamtype == "lindblad")  # unused and should remove this arg, but should always be "lindblad"
     mdl = mc.create_cloud_crosstalk_model_from_hops_and_weights(
