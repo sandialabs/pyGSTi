@@ -827,9 +827,6 @@ def _legacy_create_least_squares_objective(model, target_model,
         allDerivColSlice = slice(0, N)
         derivSlices, myDerivColSlice, derivOwners, mySubComm = \
             _mpit.distribute_slice(allDerivColSlice, comm)
-        if mySubComm is not None:
-            _warnings.warn("Note: more CPUs(%d)" % comm.Get_size()
-                            + " than gauge-opt derivative columns(%d)!" % N)  # pragma: no cover
 
         n = _slct.length(myDerivColSlice)
         wrtIndices = _slct.indices(myDerivColSlice) if (n < N) else None

@@ -2,7 +2,6 @@ import os
 from pathlib import Path
 import pytest
 import subprocess
-import sys
 import shutil
 
 try:
@@ -12,12 +11,9 @@ except (ImportError, RuntimeError):
 
 
 @pytest.mark.skipif(MPI is None, reason="mpi4py could not be imported")
-class MPITester:
+class TestParallelApply:
 
     def _extra_mpi_args(self):
-        # CI runners tend to have fewer than four cores.
-        # --oversubscribe is an Open MPI flag; Intel MPI (Hydra) and MPICH
-        # don't recognise it, so only add it when Open MPI is detected.
         launcher = shutil.which('mpiexec') or shutil.which('mpirun')
         if launcher is not None:
             try:
@@ -35,29 +31,23 @@ class MPITester:
     @pytest.mark.skipif(MPI is None, reason="mpi4py could not be imported")
     def test_all(self, capfd: pytest.LogCaptureFixture):
         current_filepath = Path(os.path.abspath(__file__))
-        to_run = current_filepath.parents[0] / Path('run_me_with_mpiexec.py')
+        to_run = current_filepath.parent / 'run_parallel_apply_with_mpiexec.py'
 
         launcher = shutil.which('mpiexec') or shutil.which('mpirun')
         if launcher is None:
-            msg = \
-            """
-            mpi4py is installed, but standard MPI launchers (mpiexec and mpirun) are unavailable.
-            We're exitng this test with an error.
+            raise RuntimeError(
+                "mpi4py is installed, but standard MPI launchers (mpiexec and mpirun) are "
+                "unavailable. If one should be available in this shell, perhaps you need to "
+                "run `module load mpi` or `spack load mpi` first."
+            )
 
-            If you think an MPI launcher should be available in this shell, perhaps you need to run
-            `module load mpi` or `spack load mpi` (or something similar) first.
-            """
-            raise RuntimeError(msg)
-
-        launcher = shutil.which('mpiexec') or shutil.which('mpirun')
-        subprocess_args = [launcher, '-np', '4'] + self._extra_mpi_args() + ['python', '-W', 'ignore', str(to_run)]
-
-        result = subprocess.run(subprocess_args, capture_output=False, text=True)
+        subprocess_args = (
+            [launcher, '-np', '4'] + self._extra_mpi_args()
+            + ['python', '-W', 'ignore', str(to_run)]
+        )
+        subprocess.run(subprocess_args, capture_output=False, text=True)
         out, err = capfd.readouterr()
 
-        #strip new lines/carriage returns before checking length.
         if len(out.replace('\n', '').replace('\r', '')) + len(err.replace('\n', '').replace('\r', '')) > 0:
-            msg = out + '\n'+ 80*'-' + err
+            msg = out + '\n' + 80 * '-' + '\n' + err
             raise RuntimeError(msg)
-        return
-    
