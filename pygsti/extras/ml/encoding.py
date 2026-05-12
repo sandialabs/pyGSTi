@@ -18,6 +18,8 @@ from pygsti.extras.ml import errgentools as _tools
 from pygsti.tools import errgenproptools as _egptools
 from pygsti.circuits import Circuit as _Circuit
 from tqdm import trange as _trange
+from multiprocessing import Pool
+from itertools import starmap
 
 class CircuitEncoder(object):
     """
@@ -222,7 +224,7 @@ def dense_dataset_encoding(ds, n, circs=None):
 
     return freqs_array
 
-def error_generator_tensors(circuits, error_generators, pspec, alpha_representation='concise'):
+def error_generator_tensors(circuits, error_generators, pspec, alpha_representation='concise',process_num=5):
     """
     TODO
     """
@@ -230,7 +232,7 @@ def error_generator_tensors(circuits, error_generators, pspec, alpha_representat
     if alpha_representation == 'matrix':
         probabilities, alphas = first_order_outcome_probabilities_tensors(circuits, error_generators, pspec, indices=indices)
     elif alpha_representation == 'concise':
-        probabilities, alphas = first_order_outcome_probabilities_tensors_concise(circuits, pspec, indices, signs)        
+        probabilities, alphas = first_order_outcome_probabilities_tensors_concise(circuits, pspec, indices, signs,process_num=process_num)        
     else:
         _warnings.NotImplementedError('No other representations have been implemented yet!')
     return {'indices':indices, 'signs':signs, 'probabilities':probabilities, 'alphas':alphas}
@@ -434,45 +436,22 @@ def dense_alpha_matrix(circuit, num_qubits, populate_for_error_generators=None, 
 
 #     return contributing_error_generators, alphas
 
-def first_order_outcome_probabilities_tensors(circuits, error_generators, pspec, indices=None, prior_error_generators=None, prior_alphas=None):
+def first_order_outcome_probabilities_tensors_concise(circuits, pspec, indices, signs, process_num: int=5):
     """
     TODO
-    """
-    if prior_error_generators is not None:
-        assert(len(set(error_generators).intersection(set(prior_error_generators))) == 0), "Can only add new error generators!"
 
-    num_qubits = pspec.num_qubits
-    nbit_strings = [''.join(p) for p in _itertools.product('01', repeat=num_qubits)]
+    Parameters
+    ----------
+    circuits: list of circuits we are calculating the probabilities tensors for
 
-    alphas = _np.zeros((len(circuits), 2 ** num_qubits, 2 * 4 ** num_qubits), float)
-    probabilities = _np.zeros((len(circuits), 2 ** num_qubits), float)
-      
-    for i, circuit in enumerate(circuits):
+    pspec: the processor spec of the quantum computer
 
-        # Compute the error-free probabilities for each bit string.
-        tableau = circuit.convert_to_stim_tableau()
-        probabilities[i, :] = _np.array([_egptools.stabilizer_probability(tableau, bs) for bs in nbit_strings]).T
+    indices:
 
-        # Compute the alpha matrix for the circuit, filling in only those 
-        if prior_error_generators is not None:
-            prior_alpha_matrix = prior_alphas[i, :, :]
-        else:
-            prior_alpha_matrix = None
+    signs:
 
-        if indices is not None:
-            unique_end_of_circuit_error_generators = list(set(indices[i,:,:].flatten()))
-        else:
-            # We compute the entire alpha matrix
-            unique_end_of_circuit_error_generators = None
+    process_num: number of processes to use for parallel computation
 
-        alphas[i, :, :] = dense_alpha_matrix(tableau, num_qubits, populate_for_error_generators=unique_end_of_circuit_error_generators,
-                                             existing_alpha_matrix=prior_alpha_matrix)
-    
-    return probabilities, alphas
-
-def first_order_outcome_probabilities_tensors_concise(circuits, pspec, indices, signs):
-    """
-    TODO
     """
     num_qubits = pspec.num_qubits
     nbit_strings = [''.join(p) for p in _itertools.product('01', repeat=num_qubits)]
@@ -480,34 +459,51 @@ def first_order_outcome_probabilities_tensors_concise(circuits, pspec, indices, 
     shape = (indices.shape[0], 2 ** num_qubits, indices.shape[1], indices.shape[2])
     first_order_coefficients = _np.zeros(shape, float)
     probabilities = _np.zeros((len(circuits), 2 ** num_qubits), float)
-      
-    for i in _trange(len(circuits)):
-        circuit = circuits[i]
-        # Compute the error-free probabilities for each bit string.
-        tableau = _get_tableau(circuit)
-        scale = 1 / 2 ** _egptools.random_support(tableau) #TODO: This might overflow
-        probabilities[i, :] = _np.array([_egptools.stabilizer_probability(tableau, bs) for bs in nbit_strings]).T
-        unique_indices = set(indices[i,:,:].flatten())
-        alphas_dict = {}
-        for l, bs in enumerate(nbit_strings):
-            for error_generator_index in unique_indices:
-                egtype =  _tools.index_to_error_gen(error_generator_index, num_qubits)[0]
-                #print(egtype)
-                if egtype == 'H' and (_np.isclose(probabilities[i, l], 0.) or _np.isclose(probabilities[i, l], 1.)):
-                    alpha = 0
-                #elif egtype == 'S' and not (_np.isclose(probabilities[i, l], 0.) or _np.isclose(probabilities[i, l], 1.)):
-                #    alpha = 0
-                #else:
-                alpha = scale * alpha_coefficient(error_generator_index, num_qubits, tableau, bs)
-                alphas_dict[l, error_generator_index] = alpha
 
+    circ_indices_tuples=[]
+    for idx,circ in enumerate(circuits):
+        circ_indices_tuples.append((circ,indices[idx],nbit_strings,num_qubits))  
+    
 
-        for l, bs in enumerate(nbit_strings):
-            for j in range(indices.shape[1]):
-                for k in range(indices.shape[2]):
-                    first_order_coefficients[i, l, j, k] = alphas_dict[l, indices[i,j,k]]
+    with Pool(process_num) as p:
+        output_list = p.starmap(_circuit_loop, circ_indices_tuples)
+
+    for idx, tup in enumerate(output_list):
+        probabilities[idx]=tup[0]
+        first_order_coefficients[idx]=tup[1]
 
     for l, bs in enumerate(nbit_strings):
+        print(l)
         first_order_coefficients[:, l, :, :] = first_order_coefficients[:, l, :, :] * signs
     
     return probabilities, first_order_coefficients
+
+def _circuit_loop(circuit, indices, nbit_strings, num_qubits: int)-> tuple:
+
+    unique_indices = set(indices.flatten())
+    
+    tableau = _get_tableau(circuit)
+    shape = ( 2 ** num_qubits, indices.shape[0], indices.shape[1])
+    first_order_coefficients = _np.zeros(shape, float)
+    scale = 1 / 2 ** _egptools.random_support(tableau) #TODO: This might overflow
+    probabilities = _np.array([_egptools.stabilizer_probability(tableau, bs) for bs in nbit_strings]).T
+    alphas_dict = {}
+    for l, bs in enumerate(nbit_strings):
+        for error_generator_index in unique_indices:
+            egtype =  _tools.index_to_error_gen(error_generator_index, num_qubits)[0]
+            #print(egtype)
+            if egtype == 'H' and (_np.isclose(probabilities[l], 0.) or _np.isclose(probabilities[l], 1.)):
+                alpha = 0
+            #elif egtype == 'S' and not (_np.isclose(probabilities[i, l], 0.) or _np.isclose(probabilities[i, l], 1.)):
+            #    alpha = 0
+            #else:
+            alpha = scale * alpha_coefficient(error_generator_index, num_qubits, tableau, bs)
+            alphas_dict[l, error_generator_index] = alpha
+
+
+    for l, bs in enumerate(nbit_strings):
+        for j in range(indices.shape[0]):
+            for k in range(indices.shape[1]):
+                first_order_coefficients[l, j, k] = alphas_dict[l, indices[j,k]]
+
+    return (probabilities, first_order_coefficients)
