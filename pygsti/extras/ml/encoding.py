@@ -224,7 +224,8 @@ def dense_dataset_encoding(ds, n, circs=None):
 
     return freqs_array
 
-def error_generator_tensors(circuits, error_generators, pspec, alpha_representation='concise',  measurements: str= 'probabilities',pauli_params: list= None, process_num: int=5):
+def error_generator_tensors(circuits, error_generators, pspec, alpha_representation='concise',  measurements: str= 'probabilities', 
+                            pauli_maximum_weight: int=1, process_num: int=5):
     """
     TODO
     """
@@ -232,7 +233,8 @@ def error_generator_tensors(circuits, error_generators, pspec, alpha_representat
     if alpha_representation == 'matrix':
         probabilities, alphas = first_order_outcome_probabilities_tensors(circuits, error_generators, pspec, indices=indices)
     elif alpha_representation == 'concise':
-        probabilities, alphas = first_order_outcome_probabilities_tensors_concise(circuits, pspec, indices, signs, measurements = measurements, pauli_params = pauli_params, process_num=process_num)        
+        probabilities, alphas = first_order_outcome_probabilities_tensors_concise(circuits, pspec, indices, signs, measurements = measurements, 
+                                                                                  pauli_maximum_weight = pauli_maximum_weight, process_num=process_num)        
     else:
         _warnings.NotImplementedError('No other representations have been implemented yet!')
     return {'indices':indices, 'signs':signs, 'probabilities':probabilities, 'alphas':alphas}
