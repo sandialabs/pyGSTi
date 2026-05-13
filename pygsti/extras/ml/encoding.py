@@ -545,7 +545,7 @@ def first_order_outcome_probabilities_tensors_concise(circuits, pspec, indices, 
         
     elif measurements == 'paulis':
         
-        pauli_list = make_paulis(pauli_maximum_weight, num_qubits)
+        pauli_list = make_paulis(num_qubits, pauli_maximum_weight)
         shape = (indices.shape[0], len(pauli_list), indices.shape[1], indices.shape[2])
         first_order_coefficients = _np.zeros(shape, float)
         measurements = _np.zeros((len(circuits),len(pauli_list)))
