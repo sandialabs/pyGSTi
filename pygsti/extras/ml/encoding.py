@@ -461,6 +461,42 @@ def dense_alpha_matrix(circuit, num_qubits, populate_for_error_generators=None, 
 #                 alphas[i].append(alpha)
 
 #     return contributing_error_generators, alphas
+def first_order_outcome_probabilities_tensors(circuits, error_generators, pspec, indices=None, prior_error_generators=None, prior_alphas=None):
+    """
+    TODO
+    """
+    if prior_error_generators is not None:
+        assert(len(set(error_generators).intersection(set(prior_error_generators))) == 0), "Can only add new error generators!"
+
+    num_qubits = pspec.num_qubits
+    nbit_strings = [''.join(p) for p in _itertools.product('01', repeat=num_qubits)]
+
+    alphas = _np.zeros((len(circuits), 2 ** num_qubits, 2 * 4 ** num_qubits), float)
+    probabilities = _np.zeros((len(circuits), 2 ** num_qubits), float)
+      
+    for i, circuit in enumerate(circuits):
+
+        # Compute the error-free probabilities for each bit string.
+        tableau = circuit.convert_to_stim_tableau()
+        probabilities[i, :] = _np.array([_egptools.stabilizer_probability(tableau, bs) for bs in nbit_strings]).T
+
+        # Compute the alpha matrix for the circuit, filling in only those 
+        if prior_error_generators is not None:
+            prior_alpha_matrix = prior_alphas[i, :, :]
+        else:
+            prior_alpha_matrix = None
+
+        if indices is not None:
+            unique_end_of_circuit_error_generators = list(set(indices[i,:,:].flatten()))
+        else:
+            # We compute the entire alpha matrix
+            unique_end_of_circuit_error_generators = None
+
+        alphas[i, :, :] = dense_alpha_matrix(tableau, num_qubits, populate_for_error_generators=unique_end_of_circuit_error_generators,
+                                             existing_alpha_matrix=prior_alpha_matrix)
+    
+    return probabilities, alphas
+
 
 def first_order_outcome_probabilities_tensors_concise(circuits, pspec, indices, signs, measurements: str= 'probabilities',pauli_params: list= None ,process_num: int= 5):
     """
