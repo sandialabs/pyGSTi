@@ -501,7 +501,7 @@ def first_order_outcome_probabilities_tensors(circuits, error_generators, pspec,
 
 
 def first_order_outcome_probabilities_tensors_concise(circuits, pspec, indices, signs, measurements: str='probabilities', 
-                                                      measurement_paulis = list:None, process_num: int=5):
+                                                      measurement_paulis: list=None, process_num: int=5):
     """
     TODO
 
