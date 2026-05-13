@@ -393,6 +393,8 @@ def stim_to_pygsti_circuit(circuit, qubit_labels, qubit_relabelling_dict=None, s
                     'SQRT_Y': 'Gypi2',
                     'SQRT_Y_DAG': 'Gympi2',
                     'SQRT_X_DAG': 'Gxmpi2',
+                    'T': 'Gt',
+                    'TDAG': 'Gtdag',
                     'Z': 'Gzpi',
                     'Y': 'Gypi', 
                     'X':'Gxpi',
@@ -430,7 +432,9 @@ def stim_to_pygsti_circuit(circuit, qubit_labels, qubit_relabelling_dict=None, s
         return new_mapping
     
     gate_layers = []
-    cstr = str(circuit)
+    if type(circuit)==stim.Circuit:
+        cstr = str(circuit)
+    else: cstr = circuit
     #need to keep track of current virtual qubits and map
     current_qubit_mapping = {q:q for q in qubit_labels}
     gates_happened = False
