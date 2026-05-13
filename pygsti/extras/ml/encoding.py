@@ -225,7 +225,7 @@ def dense_dataset_encoding(ds, n, circs=None):
     return freqs_array
 
 def error_generator_tensors(circuits, error_generators, pspec, alpha_representation='concise',  measurements: str= 'probabilities', 
-                            pauli_maximum_weight: int=1, process_num: int=5):
+                            measurement_paulis: list=None, process_num: int=5):
     """
     TODO
     """
@@ -234,7 +234,7 @@ def error_generator_tensors(circuits, error_generators, pspec, alpha_representat
         probabilities, alphas = first_order_outcome_probabilities_tensors(circuits, error_generators, pspec, indices=indices)
     elif alpha_representation == 'concise':
         probabilities, alphas = first_order_outcome_probabilities_tensors_concise(circuits, pspec, indices, signs, measurements = measurements, 
-                                                                                  pauli_maximum_weight = pauli_maximum_weight, process_num=process_num)        
+                                                                                  measurement_paulis = measurement_paulis, process_num=process_num)        
     else:
         _warnings.NotImplementedError('No other representations have been implemented yet!')
     return {'indices':indices, 'signs':signs, 'probabilities':probabilities, 'alphas':alphas}
@@ -501,7 +501,7 @@ def first_order_outcome_probabilities_tensors(circuits, error_generators, pspec,
 
 
 def first_order_outcome_probabilities_tensors_concise(circuits, pspec, indices, signs, measurements: str='probabilities', 
-                                                      pauli_maximum_weight: int=1, process_num: int=5):
+                                                      measurement_paulis = list:None, process_num: int=5):
     """
     TODO
 
@@ -545,13 +545,13 @@ def first_order_outcome_probabilities_tensors_concise(circuits, pspec, indices, 
         
     elif measurements == 'paulis':
         
-        pauli_list = make_paulis(num_qubits, pauli_maximum_weight)
-        shape = (indices.shape[0], len(pauli_list), indices.shape[1], indices.shape[2])
+        assert(measurement_paulis is not None), "Must provided the measurement Pauli operators!"
+        shape = (indices.shape[0], len(measurement_paulis), indices.shape[1], indices.shape[2])
         first_order_coefficients = _np.zeros(shape, float)
-        measurements = _np.zeros((len(circuits),len(pauli_list)))
+        measurements = _np.zeros((len(circuits),len(measurement_paulis)))
         circ_indices_tuples=[]
         for idx,circ in enumerate(circuits):
-            circ_indices_tuples.append((circ, indices[idx], num_qubits, pauli_list)) 
+            circ_indices_tuples.append((circ, indices[idx], num_qubits, measurement_paulis)) 
         with Pool(process_num) as p:
             output_list = p.starmap(_circuit_loop_paulis, circ_indices_tuples)
 
@@ -559,7 +559,7 @@ def first_order_outcome_probabilities_tensors_concise(circuits, pspec, indices, 
             measurements[idx]=tup[0]
             first_order_coefficients[idx]=tup[1]
 
-        for l, bs in enumerate(pauli_list):
+        for l, pauli in enumerate(measurement_paulis):
             first_order_coefficients[:, l, :, :] = first_order_coefficients[:, l, :, :] * signs
 
 
@@ -580,12 +580,10 @@ def _circuit_loop_probs(circuit: _Circuit, indices, nbit_strings, num_qubits: in
     for l, bs in enumerate(nbit_strings):
         for error_generator_index in unique_indices:
             egtype =  _tools.index_to_error_gen(error_generator_index, num_qubits)[0]
-            #print(egtype)
+
             if egtype == 'H' and (_np.isclose(probabilities[l], 0.) or _np.isclose(probabilities[l], 1.)):
                 alpha = 0
-            #elif egtype == 'S' and not (_np.isclose(probabilities[i, l], 0.) or _np.isclose(probabilities[i, l], 1.)):
-            #    alpha = 0
-            #else:
+
             alpha = scale * alpha_coefficient(error_generator_index, num_qubits, tableau, bs)
             alphas_dict[l, error_generator_index] = alpha
 
@@ -611,13 +609,11 @@ def _circuit_loop_paulis(circuit: _Circuit, indices, num_qubits: int, paulis: li
         for error_generator_index in unique_indices:
             egtype =  _tools.index_to_error_gen(error_generator_index, num_qubits)[0]
             #print(egtype)
-            if egtype == 'H' and (_np.isclose(measurements[l], -1.) or _np.isclose(measurements[l], 1.)):
-                alpha = 0
-            #elif egtype == 'S' and not (_np.isclose(probabilities[i, l], 0.) or _np.isclose(probabilities[i, l], 1.)):
+            # TIM THINKS THIS IS CORRECT BUT COMMENTING OUT WHILE BUG FIXING
+            #if egtype == 'H' and (_np.isclose(measurements[l], -1.) or _np.isclose(measurements[l], 1.)):
             #    alpha = 0
-            #else:
-            alpha = alpha_coefficient_pauli(error_generator_index, num_qubits, tableau, bs)
-            alphas_dict[l, error_generator_index] = alpha
+
+            alphas_dict[l, error_generator_index] = alpha_coefficient_pauli(error_generator_index, num_qubits, tableau, bs)
 
 
     for l, bs in enumerate(paulis):
@@ -655,27 +651,3 @@ def make_paulis_of_weight(num_qubits: int, weight: int):
         result.append(''.join(chars))
 
     return [_stim.PauliString(pauli) for pauli in result]
-
-# def _make_paulis(weight: int, num_qubits: int, paulis: list) -> list:
-#     identity_pauli = num_qubits * 'I'
-#     pauli_dict={}
-#     pauli_dict[0]=[identity_pauli] 
-#     for curr_weight in range(weight):
-#         pauli_dict[curr_weight+1]=[]
-#     for old_pauli in pauli_dict[curr_weight]:
-#         for qbt_lbl in range(num_qubits):
-#             for pauli in paulis:
-#                 if old_pauli[qbt_lbl] == 'I':
-#                     if qbt_lbl + 1 < num_qubits: 
-#                         pauli_dict[curr_weight+1].append(old_pauli[:qbt_lbl]+pauli+old_pauli[(qbt_lbl+1)])
-#                     else:
-#                         pauli_dict[curr_weight+1].append(old_pauli[:qbt_lbl]+pauli)
-#     measurement_list=[]
-#     for key in pauli_dict:
-#         for pauli in pauli_dict[key]:
-#             if not key == 0:
-#                 measurement_list.append(_stim.PauliString(pauli))
-#     return measurement_list
-
-
-
