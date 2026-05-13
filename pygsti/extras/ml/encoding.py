@@ -643,7 +643,7 @@ def make_paulis_of_weight(num_qubits: int, weight: int):
     """
     
     # Generate all combinations of positions for 'Z'
-    positions = combinations(range(num_qubits), weight)
+    positions = _itertools.combinations(range(num_qubits), weight)
     
     result = []
     for pos in positions:
