@@ -498,7 +498,8 @@ def first_order_outcome_probabilities_tensors(circuits, error_generators, pspec,
     return probabilities, alphas
 
 
-def first_order_outcome_probabilities_tensors_concise(circuits, pspec, indices, signs, measurements: str= 'probabilities',pauli_params: list= None ,process_num: int= 5):
+def first_order_outcome_probabilities_tensors_concise(circuits, pspec, indices, signs, measurements: str='probabilities', 
+                                                      pauli_maximum_weight: int=1, process_num: int=5):
     """
     TODO
 
@@ -524,8 +525,6 @@ def first_order_outcome_probabilities_tensors_concise(circuits, pspec, indices, 
     num_qubits = pspec.num_qubits
     nbit_strings = [''.join(p) for p in _itertools.product('01', repeat=num_qubits)]
 
-    
-
     if measurements == 'probabilites':
         shape = (indices.shape[0], 2 ** num_qubits, indices.shape[1], indices.shape[2])
         first_order_coefficients = _np.zeros(shape, float)
@@ -544,7 +543,7 @@ def first_order_outcome_probabilities_tensors_concise(circuits, pspec, indices, 
         
     elif measurements == 'paulis':
         
-        pauli_list = _make_paulis(pauli_params[0], num_qubits, pauli_params[1])
+        pauli_list = make_paulis(pauli_maximum_weight, num_qubits)
         shape = (indices.shape[0], len(pauli_list), indices.shape[1], indices.shape[2])
         first_order_coefficients = _np.zeros(shape, float)
         measurements = _np.zeros((len(circuits),len(pauli_list)))
@@ -626,23 +625,55 @@ def _circuit_loop_paulis(circuit: _Circuit, indices, num_qubits: int, paulis: li
 
     return (measurements, first_order_coefficients)
 
-def _make_paulis(weight: int, num_qubits: int, paulis: list) -> list:
-    identity_pauli = num_qubits * 'I'
-    pauli_dict={}
-    pauli_dict[0]=[identity_pauli] 
-    for curr_weight in range(weight):
-        pauli_dict[curr_weight+1]=[]
-    for old_pauli in pauli_dict[curr_weight]:
-        for qbt_lbl in range(num_qubits):
-            for pauli in paulis:
-                if old_pauli[qbt_lbl] == 'I':
-                    if qbt_lbl + 1 < num_qubits: 
-                        pauli_dict[curr_weight+1].append(old_pauli[:qbt_lbl]+pauli+old_pauli[(qbt_lbl+1)])
-                    else:
-                        pauli_dict[curr_weight+1].append(old_pauli[:qbt_lbl]+pauli)
-    measurement_list=[]
-    for key in pauli_dict:
-        for pauli in pauli_dict[key]:
-            if not key == 0:
-                measurement_list.append(_stim.PauliString(pauli))
-    return measurement_list
+
+def make_paulis(num_qubits: int, maximum_weight: int):
+    """
+    """
+    paulis = []
+    for w in range(1, maximum_weight+1):
+        paulis += make_paulis_of_weight(num_qubits, w)
+    return paulis
+
+def make_paulis_of_weight(num_qubits: int, weight: int):
+    """
+    num_qubits : number of qubits
+    weight : the weight of the Pauli operators
+    """
+    
+    # Generate all combinations of positions for 'Z'
+    positions = combinations(range(num_qubits), weight)
+    
+    result = []
+    for pos in positions:
+        # Start with all 'I's
+        chars = ['I'] * num_qubits
+        # Place 'Z' at the chosen positions
+        for p in pos:
+            chars[p] = 'Z'
+        result.append(''.join(chars))
+
+    return [_stim.PauliString(pauli) for pauli in result]
+
+# def _make_paulis(weight: int, num_qubits: int, paulis: list) -> list:
+#     identity_pauli = num_qubits * 'I'
+#     pauli_dict={}
+#     pauli_dict[0]=[identity_pauli] 
+#     for curr_weight in range(weight):
+#         pauli_dict[curr_weight+1]=[]
+#     for old_pauli in pauli_dict[curr_weight]:
+#         for qbt_lbl in range(num_qubits):
+#             for pauli in paulis:
+#                 if old_pauli[qbt_lbl] == 'I':
+#                     if qbt_lbl + 1 < num_qubits: 
+#                         pauli_dict[curr_weight+1].append(old_pauli[:qbt_lbl]+pauli+old_pauli[(qbt_lbl+1)])
+#                     else:
+#                         pauli_dict[curr_weight+1].append(old_pauli[:qbt_lbl]+pauli)
+#     measurement_list=[]
+#     for key in pauli_dict:
+#         for pauli in pauli_dict[key]:
+#             if not key == 0:
+#                 measurement_list.append(_stim.PauliString(pauli))
+#     return measurement_list
+
+
+
