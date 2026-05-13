@@ -360,7 +360,7 @@ def alpha_coefficient_pauli(i, num_qubits, tableau, pauli):
     float
         The alpha coefficient
     """
-    return _np.float64(_egptools.alpha(_tools.index_to_error_gen(i, num_qubits, as_label=True), tableau, pauli).real)
+    return _np.float64(_egptools.alpha_pauli(_tools.index_to_error_gen(i, num_qubits, as_label=True), tableau, pauli))
 
 def _get_tableau(circuit_or_tableau):
     """
@@ -551,6 +551,7 @@ def first_order_outcome_probabilities_tensors_concise(circuits, pspec, indices, 
         measurements = _np.zeros((len(circuits),len(measurement_paulis)))
         circ_indices_tuples=[]
 
+        # TIM COPIED OUT WHILE BUG HUNTING
         # for idx, circ in enumerate(circuits):
         #     circ_indices_tuples.append((circ, indices[idx], num_qubits, measurement_paulis)) 
 
@@ -561,6 +562,7 @@ def first_order_outcome_probabilities_tensors_concise(circuits, pspec, indices, 
         #     measurements[idx] = tup[0]
         #     first_order_coefficients[idx] = tup[1]
 
+        # TIM PUT THIS IN WHILE BUG HUNTING (REMOVING PARALLEL CODE HE DOESN'T UNDERSTAND)
         for idx, circ in enumerate(circuits):
             measurements[idx, :], first_order_coefficients[idx, :, :, :] = _circuit_loop_paulis(circ, indices[idx], num_qubits, measurement_paulis)
 
@@ -590,7 +592,7 @@ def _circuit_loop_probs(circuit: _Circuit, indices, nbit_strings, num_qubits: in
             alphas_dict[l, error_generator_index] = alpha
 
 
-    for l, bs in enumerate(nbit_strings):
+    for l in range(len(nbit_strings)):
         for j in range(indices.shape[0]):
             for k in range(indices.shape[1]):
                 first_order_coefficients[l, j, k] = alphas_dict[l, indices[j,k]]
@@ -607,7 +609,7 @@ def _circuit_loop_paulis(circuit: _Circuit, indices, num_qubits: int, paulis: li
     #scale = 1 / 2 ** _egptools.random_support(tableau) #TODO: This might overflow
     measurements = _np.array([_egptools.stabilizer_pauli_expectation(tableau, p) for p in paulis]).T
     alphas_dict = {}
-    for l, pauli in enumerate(paulis):
+    for l, p in enumerate(paulis):
         for error_generator_index in unique_indices:
             egtype =  _tools.index_to_error_gen(error_generator_index, num_qubits)[0]
             #print(egtype)
@@ -615,7 +617,7 @@ def _circuit_loop_paulis(circuit: _Circuit, indices, num_qubits: int, paulis: li
             #if egtype == 'H' and (_np.isclose(measurements[l], -1.) or _np.isclose(measurements[l], 1.)):
             #    alpha = 0
 
-            alphas_dict[l, error_generator_index] = alpha_coefficient_pauli(error_generator_index, num_qubits, tableau, pauli)
+            alphas_dict[l, error_generator_index] = alpha_coefficient_pauli(error_generator_index, num_qubits, tableau, p)
 
 
     for l in range(len(paulis)):
