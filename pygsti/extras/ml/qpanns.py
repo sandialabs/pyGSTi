@@ -1,4 +1,14 @@
-""" Quantum physics aware neural networks (QPANNs) """
+"""Quantum physics aware neural networks (QPANNs).
+
+This module defines Keras models and layers implementing the QPANN architecture described
+in https://arxiv.org/abs/2406.05636 (and subsequent internal evolution).
+
+At a high level, a QPANN:
+  1) Encodes a circuit as a tensor (depth x encoding_length).
+  2) Predicts per-layer error rates for a set of modelled elementary error generators.
+  3) Combines predicted error rates with precomputed circuit-specific coefficients to
+     produce first-order approximations to outcome probabilities (or other metrics).
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -23,6 +33,20 @@ class QPANN(_keras.Model):
     computer. QPANNs are based on the neural network structure introduced in https://arxiv.org/abs/2406.05636,
     but have developed since that paper in various ways.
 
+    The model maps circuit encodings (plus auxiliary propagation/alpha information) to
+    predicted outcome probabilities using a first-order error model.
+
+    Attributes
+    ----------
+    encoding_length : int
+        Per-layer encoding feature length.
+    modelled_error_generators : list
+        List of elementary error generators this model predicts rates for.
+    snipper : list[list[int]]
+        Feature-selection specification: for each error generator, which encoding indices
+        are relevant when predicting its rate.
+    probability_computation : {'concise','expanded'}
+        Chooses between two probability-computation layers.
     """
     def __init__(self, encoding_length : int, modelled_error_generators: list,  snipper: list,
                  dense_units=[30, 20, 10, 5, 5], probability_computation='concise', **kwargs):
@@ -47,16 +71,17 @@ class QPANN(_keras.Model):
             the tuple is a single-element tuple where that single element is a string for the 
             Pauli indexing the error (e.g., for 4 qubits, this could be 'XYZI').
 
-        snipper : list
-            A list specifying ... TODO
+        snipper : list[list[int]]
+             For each error generator, a list of encoding indices to extract as inputs
+            to its rate-prediction subnetwork.
 
-        dense_units : list
+        dense_units : list[int], default [30, 20, 10, 5, 5]
             A list of integers, specifying the number of dense units in the neural network
             that learns the mapping from a circuit to matrix of rates of each error in that
             this QPANN models.
 
-        probability_computation : 'concise' or 'expanded'
-            TODO.
+        probability_computation : {'concise','expanded'}, default 'concise'
+            Selects the probability approximation implementation.
 
         
         Returns
@@ -76,6 +101,7 @@ class QPANN(_keras.Model):
         self.hamiltonian_mask = _tf.constant([i[0] == 'H' for i in self.modelled_error_generators])
 
     def get_config(self):
+        """Return a serializable config dictionary for Keras model saving/loading."""
         # This is required for any custom Keras model. Just contains all of the custom attributes.
         # Must all be serializable or have a way specified to serialize them.
         config = super().get_config()
@@ -91,7 +117,7 @@ class QPANN(_keras.Model):
         return config
 
     def build(self):
-        # This builds the model. The 
+        """Instantiate sublayers used by this QPANN (rate predictor + probability layer)."""
         self.dense_layer = CircuitToErrorRatesEinSum(self.snipper, self.modelled_error_generators, self.dense_units)
         if self.probability_computation == 'expanded':
             self.probability_approximation_layer = ProbabilitiesLayer()
@@ -107,9 +133,17 @@ class QPANN(_keras.Model):
         Parameters
         ----------
         inputs : list
-            If this QPANN has probability_computation == 'expanded', this is a four-element list.  If this QPANN
-            has probability_computation == 'concise', this is a two-element list. In both cases, the first element
-            of this list is a 
+            Per-circuit inputs. Expected structure depends on `self.probability_computation`:
+
+            * If 'expanded':
+                [circuit_encoding, signs, permutations, scaled_alpha_matrix, probabilities_ideal]
+            * If 'concise':
+                [circuit_encoding, corrections_coefficients, probabilities_ideal]
+
+        Returns
+        -------
+        tf.Tensor
+            Probability vector over bitstrings (shape `(2**n,)`).
         """
         circuit_encoding = inputs[0]  # circuit
         # Computes the error rates matrix, which has shape (circuit depth , self.modelled_error_generators)
@@ -137,6 +171,7 @@ class QPANN(_keras.Model):
 
     # @_tf.function
     def call(self, inputs):
+        """Vectorize `circuit_to_probability` over a batch using `tf.map_fn`."""
         return _tf.map_fn(self.circuit_to_probability, inputs, fn_output_signature=_tf.float32)
     
 # ------------------------------------------------------------------- #
@@ -145,15 +180,32 @@ class QPANN(_keras.Model):
 
 # @_keras.utils.register_keras_serializable()
 class CircuitToErrorRatesEinSum(_keras.layers.Layer):
+    """Layer mapping a circuit encoding to per-error-generator error rates.
+
+    This layer uses a "snipper" (list of index lists) to gather relevant features
+    for each modelled error generator, then applies an `EinsumSubNetwork` to predict
+    rates.
+
+    Output is a tensor of shape `(depth, num_modelled_error_generators)` for each circuit.
+    """
     def __init__(self, snipper, modelled_error_generators, dense_units=[30, 20, 10, 5, 5], **kwargs):
         """
-        layer_snipper: func
-            A function that takes a primitive error generator and maps it to a list that encodes which parts
-            of a circuit layer to `snip out` as input to dense neural network that predicts the error rate
-            of that primitive error generator.
+        # layer_snipper: func
+        #     A function that takes a primitive error generator and maps it to a list that encodes which parts
+        #     of a circuit layer to `snip out` as input to dense neural network that predicts the error rate
+        #     of that primitive error generator.
 
-        modelled_error_generators: list
-            A list of the primitive error generators that are to be predicted.
+        Initialize the layer.
+
+        Parameters
+        ----------
+        snipper : list[list[int]]
+            For each modelled error generator, the indices to gather from the circuit encoding.
+        modelled_error_generators : list
+            List of primitive error generators whose rates are  to be predicted.
+        dense_units : list[int], default [30,20,10,5,5]
+            Hidden layer widths; a final output unit is appended internally.
+
         """
         super().__init__()
         
@@ -167,6 +219,8 @@ class CircuitToErrorRatesEinSum(_keras.layers.Layer):
         self.hamiltonian_mask = _tf.constant([i[0] == 'H' for i in self.modelled_error_generators])
 
     def get_config(self):
+        """Return a serializable config dictionary for Keras layer saving/loading."""
+
         config = super().get_config()
         config.update({
             'number_of_modelled_error_generators': self.number_of_modelled_error_generators,
@@ -179,14 +233,29 @@ class CircuitToErrorRatesEinSum(_keras.layers.Layer):
         return config
     
     def compute_output_shape(self, input_shape):
+        """Compute output shape: `(None, depth, num_modelled_error_generators)`."""
         # Define the output shape based on the input shape and the number of tracked error generators
         return (None, input_shape[0], self.number_of_modelled_error_generators)
     
     def build(self, input_shape):
+        """Instantiate the internal subnetwork used to predict per-generator rates."""
         self.dense = EinsumSubNetwork(self.dense_units, self.snipper)        
         super().build(input_shape)
     
     def call(self, inputs):
+        """Predict per-layer error rates from a circuit encoding.
+
+        Parameters
+        ----------
+        inputs : tf.Tensor
+            Circuit encoding for one circuit, shape `(depth, encoding_length)` (or batch-compatible
+            shape where leading dimension is batch when called in batch mode).
+
+        Returns
+        -------
+        tf.Tensor
+            Error rates tensor of shape `(batch, num_modelled_error_generators)` as currently implemented.
+        """
         max_len_gate_encoding = max([len(layer_encoding) for layer_encoding in self.snipper])
         indices_tensor = _tf.ragged.constant(self.snipper).to_tensor(default_value=-1, 
             shape=[len(self.snipper), max_len_gate_encoding]) # If fewer gate encodings than encoding_length, pad with -1 (illegal index)
@@ -227,7 +296,22 @@ class CircuitToErrorRatesEinSum(_keras.layers.Layer):
         return x
 
 class EinsumSubNetwork(_keras.layers.Layer):
+    """Subnetwork used by `CircuitToErrorRatesEinSum` to predict rates per error generator.
+
+    Internally this is a `keras.Sequential` made of `CustomDense` layers whose parameters
+    are replicated over a leading "error generator" dimension, enabling vectorized
+    per-generator predictions.
+    """
     def __init__(self, units, snipper):
+        """Initialize the subnetwork.
+
+        Parameters
+        ----------
+        units : list[int]
+            Layer widths; last element is output dimension per generator.
+        snipper : list[list[int]]
+            Snipper specification; used here to determine number of modelled error generators.
+        """
         super().__init__()
         self.units = units
         self.outdim = units[-1]
@@ -235,7 +319,7 @@ class EinsumSubNetwork(_keras.layers.Layer):
         self.snipper = snipper
 
     def build(self, input_shape):
-
+        """Build the underlying Sequential model (stack of CustomDense layers)."""
         kernel_regularizer = None#_keras.regularizers.L2(1E-4)  # Adjust the regularization factor as needed
         bias_regularizer = None# _keras.regularizers.L2(1E-4)    # Adjust the regularization factor as needed
         init = _keras.initializers.RandomUniform(minval=-0.0001, maxval=0.0001)
@@ -247,6 +331,7 @@ class EinsumSubNetwork(_keras.layers.Layer):
             [_cl.CustomDense(self.units[-1], self.number_of_modelled_error_generators, activation='linear', kernel_initializer=init, bias_initializer=init)])
 
     def get_config(self):
+        """Return serializable config for Keras."""
         config = super().get_config()
         config.update({
             'outdim': self.outdim,
@@ -255,25 +340,47 @@ class EinsumSubNetwork(_keras.layers.Layer):
         return config
 
     def call(self, inputs):
+        """Forward pass through the subnetwork."""
         return self.sequential(inputs)
 
 # ------------------------------------------------------------- #
 #        Output layers for the QPANNs (error matrices --> output)
 # ------------------------------------------------------------- #
 class ProbabilitiesLayer(_keras.layers.Layer):
-    """
-    TODO
+    """Expanded probability-approximation layer.
+
+    This layer consumes:
+      * predicted per-layer error rates
+      * propagation permutation indices `P`
+      * propagation signs `S`
+      * a dense scaled alpha matrix
+      * ideal probabilities
+
+    and outputs first-order corrected probabilities.
     """
     def __init__(self, **kwargs):
+        """Initialize the layer."""
         super(ProbabilitiesLayer, self).__init__(**kwargs)
         self.bitstring_shape = None
     
     def compute_output_shape(self, input_shape):
+        """Return output shape `(None, bitstring_shape)` once bitstring_shape is known."""
         # Define the output shape based on the input shape and the number of tracked error generators
         return (None, self.bitstring_shape)
 
     def call(self, inputs):
-        # TODO : Comment this
+        """Compute first-order corrected probabilities using dense alpha representation.
+
+        Parameters
+        ----------
+        inputs : list
+            [error_rates, P, S, scaled_alpha_matrix, Px_ideal]
+
+        Returns
+        -------
+        tf.Tensor
+            Approximate probability vector.
+        """
         error_rates, P, S, scaled_alpha_matrix, Px_ideal = inputs
         self.bitstring_shape = Px_ideal.shape[0]
         signed_error_rates = _tf.math.multiply(S, error_rates) 
@@ -287,18 +394,34 @@ class ProbabilitiesLayer(_keras.layers.Layer):
         return Px_approximate
 
 class ProbabilitiesLayerConcise(_keras.layers.Layer):
-    """
-    TODO
+    """Concise probability-approximation layer used by current QPANN workflow.
+
+    This layer expects correction coefficients already aligned with each circuit's
+    error-rate tensor, enabling a simple elementwise multiply-and-sum.
     """
     def __init__(self, **kwargs):
+        """Initialize the layer."""
         super(ProbabilitiesLayerConcise, self).__init__(**kwargs)
         self.bitstring_shape = None
     
     def compute_output_shape(self, input_shape):
+        """Return output shape `(None, bitstring_shape)` once bitstring_shape is known."""
         # Define the output shape based on the input shape and the number of tracked error generators
         return (None, self.bitstring_shape)
 
     def call(self, inputs):
+        """Compute first-order corrected probabilities using concise coefficients.
+
+        Parameters
+        ----------
+        inputs : list
+            [error_rates, corrections_coefficients, probabilities_ideal]
+
+        Returns
+        -------
+        tf.Tensor
+            Approximate probability vector.
+        """
         error_rates, corrections_coefficients, probabilities_ideal = inputs
         # Here we multiple each of the correction coefficients by the corresponding error rate.
         # The first axis of corrections_coefficients is the bit-string axis, so the error_rates
@@ -309,18 +432,26 @@ class ProbabilitiesLayerConcise(_keras.layers.Layer):
         return probabilities
 
 class FidelityLayer(_keras.layers.Layer):
-    """
-    TODO
+    """(Incomplete/experimental) layer intended to map error rates to process fidelity predictions.
+
+    Warning
+    -------
+    This class appears incomplete/duplicated (two `call` methods exist) and references
+    undefined variables (e.g., `Px_ideal` in one call). It is preserved as-is; docstrings
+    here reflect intent rather than guaranteed behavior.
     """
     def __init__(self, **kwargs):
+        """Initialize the layer."""
         super(FidelityLayer, self).__init__(**kwargs)
         self.bitstring_shape = None
     
     def compute_output_shape(self, input_shape):
+        """Return output shape `(None, bitstring_shape)` once defined."""
         # Define the output shape based on the input shape and the number of tracked error generators
         return (None, self.bitstring_shape)
 
     def call(self, inputs):
+        """Placeholder/legacy implementation (see warning in class docstring)."""
         error_rates, P, S = inputs
         self.bitstring_shape = Px_ideal.shape[0]
         signed_error_rates = _tf.math.multiply(S, error_rates) 
@@ -330,6 +461,22 @@ class FidelityLayer(_keras.layers.Layer):
         return None
         
     def calc_masked_err_rates(error_rates, P, mask):
+        """Helper: sum signed error rates grouped by propagated error-generator indices.
+
+        Parameters
+        ----------
+        error_rates : tf.Tensor
+            Signed per-layer error rates.
+        P : tf.Tensor
+            Propagated index tensor.
+        mask : tf.Tensor
+            Boolean/0-1 mask selecting a subset of errors.
+
+        Returns
+        -------
+        tf.Tensor
+            Summed masked error rates per unique propagated index.
+        """
         masked_error_rates = _tf.math.multiply(_tf.cast(mask, _tf.float32), error_rates)
         masked_P = _tf.math.multiply(mask, P)
         flat_masked_error_rates, flat_masked_P = _tf.reshape(masked_error_rates, [-1]), _tf.reshape(masked_P, [-1])

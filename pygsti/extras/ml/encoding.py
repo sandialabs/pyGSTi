@@ -1,4 +1,16 @@
-""" Methods for encoding circuits into array and creating other information about circuits needed for QPANNs """
+"""Methods for encoding circuits into arrays and creating other circuit-derived tensors for QPANNs.
+
+This module provides:
+  * Circuit encoders that map `pygsti.circuits.Circuit` objects to fixed-shape numpy arrays.
+  * Utilities for batching circuits into tensors.
+  * Utilities for computing error-propagation tensors and first-order probability correction
+    coefficients (alpha-like quantities) used by QPANN models.
+
+The core idea is to represent a circuit as a depth-by-features array, then compute additional
+tensors that describe how error generators propagate through the circuit and how they affect
+measurement outcome probabilities in a first-order approximation.
+"""
+
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -21,8 +33,14 @@ from tqdm import trange as _trange
 
 class CircuitEncoder(object):
     """
-    An object that converts Circuit objects into numpy arrays. This is a base class that
-    contains some general-purpose routines but not a specific encoding method.
+   Base class for encoders that map `pygsti.circuits.Circuit` objects to numpy arrays.
+
+    A `CircuitEncoder` defines:
+      * A per-layer encoding (`layer_encoding`)
+      * Optional encodings for implicit initialization/measurement layers
+      * A fixed per-layer feature length (`self.length`)
+
+    Derived classes implement `layer_encoding` and usually `indices_for_qubits`.
     """
     def __init__(self, pspec):
         """
@@ -36,21 +54,38 @@ class CircuitEncoder(object):
         Returns
         -------
         CircuitEncoder
+
+        Notes
+        -----
+        Derived classes should set `self.length` to the feature length of each encoded layer.
         """
         self.pspec = pspec
         self.length = None # This should be specified in a derived class
 
     def __call__(self, circuit, padded_depth=None):
         """
-        Turns the input circuit circuit, a Circuit object, into a numpy array.
+        Encode a circuit as a 2D numpy array.
+
+        The returned encoding is constructed as:
+
+            initialization_encoding(circuit)
+            + [layer_encoding(layer_i) for each layer i]
+            + padding layers (if padded_depth > circuit.depth)
+            + measurement_encoding(circuit)
 
         Parameters
         ----------
-        circuit : Circuit
-            The circuit to encode
+        circuit : pygsti.circuits.Circuit
+            Circuit to encode.
+        padded_depth : int or None, optional
+            If not None, pad/truncate the layer portion to this depth (padding uses
+            `layer_encoding(None)`). If None, uses `circuit.depth`.
 
-        padded_depth : None or int
-            THe 
+        Returns
+        -------
+        numpy.ndarray
+            Array of shape `(encoding_depth, self.length)` where `encoding_depth`
+            depends on `padded_depth` and the init/measurement encoding depths.
         """
         if padded_depth is None: padded_depth = circuit.depth
         circuit_array = []
@@ -72,11 +107,13 @@ class CircuitEncoder(object):
 
         Parameters
         ----------
-        circuit
+        circuit : pygsti.circuits.Circuit
+            Circuit whose initialization is to be encoded.
 
         Returns
         -------
-        List of lists.
+        list[list[float]] or list[list[int]]
+            A list of per-layer feature vectors. Empty if initialization is not represented.
         """
         return []
 
@@ -84,6 +121,11 @@ class CircuitEncoder(object):
         """
         Returns the length of the initalization encoding list, i.e., the length of lists returned by
         `initialization_encoding`.
+
+        Returns
+        -------
+        int
+            The length of the list returned by `initialization_encoding`.
         """
         return 0
 
@@ -97,11 +139,13 @@ class CircuitEncoder(object):
 
         Parameters
         ----------
-        circuit
+        circuit : pygsti.circuits.Circuit
+            Circuit whose measurement is to be encoded.
 
         Returns
         -------
-        List of lists.
+        list[list[float]] or list[list[int]]
+            A list of per-layer feature vectors. Empty if measurement is not represented.
         """
         return []
 
@@ -109,6 +153,11 @@ class CircuitEncoder(object):
         """
         Returns the length of the measurement encoding list, i.e., the length of lists returned by
         `measurement_encoding`.
+
+        Returns
+        -------
+        int
+            The length of the list returned by `measurement_encoding`.
         """
         return 0
 
@@ -121,13 +170,18 @@ class CircuitEncoder(object):
 
         Parameters
         ----------
-        layer : List or Tuple of Labels
-            The layer to turn into a list of numerical values.
+        layer : tuple or list of pygsti.baseobjs.Label, or None
+            The layer to turn into a list of numerical values. `None` is used for padding layers.
 
         Returns
         -------
-        List
-            The encoded layer.
+        list
+            Encoded layer as a list of length `self.length`.
+
+        Raises
+        ------
+        NotImplementedError
+            Always, in the base class.
         """
         raise NotImplementedError("Specified in a derived class!")
 
@@ -139,31 +193,65 @@ class CircuitEncoder(object):
         Parameters
         ----------
         max_circuit_depth : int
-            The maximum depth of the circuits that will be encoded using the encoder.
+            The maximum depth of the circuits that will be encoded using the encoder (excluding implicit init/measurement).
 
         Returns
         -------
         int
             The encoding depth, which is `max_circuit_depth` + the depths for initialization
-            and measurment encoding.
+            and measurment encoding. (i.e. `max_circuit_depth + initialization_encoding_depth() + measurement_encoding_depth()`)
         """
         return max_circuit_depth + self.initialization_encoding_depth() + self.measurement_encoding_depth()
 
     def indices_for_qubits(self, qubits):
         """
-        TODO
+        Return encoding indices that correspond to operations touching the specified qubits.
+
+        Derived encoders should implement this to support "snippers" and locality-based
+        feature selection.
+
+        Parameters
+        ----------
+        qubits : iterable
+            Qubit identifiers/labels as used by `self.pspec` and the encoder.
+
+        Returns
+        -------
+        list[int]
+            Indices into the per-layer encoding vector.
+
+        Raises
+        ------
+        NotImplementedError
+            Always, in the base class.
         """
         raise NotImplementedError("Specified in a derived class!")
 
 class StandardCircuitEncoder(CircuitEncoder):
     """
-    An object that converts Circuit objects into numpy arrays. This uses a simple method that
-    is now the `standard` approach when using quantum-physics-aware neural networks. It encodes
-    a layer a
+    "Standard" circuit encoder used by QPANN workflows.
+
+    Each layer is encoded as a one-hot (or multi-hot) vector over all gate labels
+    available in the `ProcessorSpec`. If multiple gates occur in a layer, multiple
+    entries can be 1.
+
+    Notes
+    -----
+    `self.gate_indexing` is a flat list of all available gate labels across all gate names
+    and all allowed qubit placements; the per-layer encoding length is `len(self.gate_indexing)`.
     """
+
     def __init__(self, pspec):
         """
-        TODO
+        Construct a StandardCircuitEncoder.
+
+        Parameters
+        ----------
+        pspec : ProcessorSpec
+            Processor specification that defines:
+              * `gate_names`
+              * `qubit_labels`
+              * `available_gatelabels(...)`
         """
         self.pspec = pspec
         all_gates = []
@@ -174,10 +262,19 @@ class StandardCircuitEncoder(CircuitEncoder):
 
     def layer_encoding(self, layer):
         """
-        TODO
+        Encode a layer as a multi-hot vector over `self.gate_indexing`.
 
-        EXPECTS A CIRCUIT LAYER AS  A TUPLE OR A LIST OF LABEL OBJECTS.
+        Parameters
+        ----------
+        layer : tuple or list of pygsti.baseobjs.Label objects, or None
+            The layer to encode. If None, returns an all-zeros vector.
+
+        Returns
+        -------
+        list[float]
+            A list of length `self.length` containing 0/1 floats.
         """
+        
         if layer is not None:
             assert(isinstance(layer, (tuple, list))), "The layer must be a list or tuple of label objects, or None!"
         if layer is not None:
@@ -190,15 +287,41 @@ class StandardCircuitEncoder(CircuitEncoder):
 
     def indices_for_qubits(self, qubits):
         """
-        TODO
+        Return encoding indices for gate labels that touch any of the specified qubits.
+
+        Parameters
+        ----------
+        qubits : iterable
+            Qubit labels.
+
+        Returns
+        -------
+        list[int]
+            Indices into `self.gate_indexing` (and hence into the per-layer encoding).
         """
         return [i for i, gate in enumerate(self.gate_indexing) if len(set(qubits).intersection(gate.qubits)) > 0]
 
 
 def circuits_to_tensor(circuits, encoder, encoding_depth=None):
     """
-    TODO
+    Encode a list of circuits into a 3D tensor.
+
+    Parameters
+    ----------
+    circuits : list[pygsti.circuits.Circuit]
+        Circuits to encode.
+    encoder : CircuitEncoder
+        Encoder used to convert each circuit to a 2D array.
+    encoding_depth : int or None, optional
+        If None, uses the maximum circuit depth in `circuits` and computes
+        the corresponding encoder depth via `encoder.depth(max_depth)`.
+
+    Returns
+    -------
+    numpy.ndarray
+        Tensor of shape `(len(circuits), encoding_depth, encoder.length)`.
     """
+
     if encoding_depth is None: 
         max_depth = _np.max([c.depth for c in circuits])
         encoding_depth = encoder.depth(max_depth)
@@ -211,8 +334,23 @@ def circuits_to_tensor(circuits, encoder, encoding_depth=None):
 
 def dense_dataset_encoding(ds, n, circs=None):
     """
-    TODO
+    Convert a pyGSTi dataset into a dense frequency array over all (2^n) bitstrings.
+
+    Parameters
+    ----------
+    ds : pygsti.data.DataSet
+        Dataset keyed by circuits, with outcome counts.
+    n : int
+        Number of qubits (determines (2^n) outcomes).
+    circs : list[pygsti.circuits.Circuit] or None, optional
+        Subset of circuits to include. If None, uses `list(ds.keys())`.
+
+    Returns
+    -------
+    numpy.ndarray
+        Array of shape `(num_circuits, 2**n)` with frequencies for each bitstring.
     """
+
     if circuits is None: circuits = list(ds.keys())
     nbit_strings = [] # TO DO
     freqs_array = _np.zeros((len(circuits), 2**n), float)
@@ -224,7 +362,32 @@ def dense_dataset_encoding(ds, n, circs=None):
 
 def error_generator_tensors(circuits, error_generators, pspec, alpha_representation='concise'):
     """
-    TODO
+    Compute the tensors needed by QPANN probability-approximation layers.
+
+    This is a convenience wrapper that combines:
+      * error-propagation tensors (`indices`, `signs`)
+      * first-order outcome tensors (`probabilities`, and either dense alphas or concise coefficients)
+
+    Parameters
+    ----------
+    circuits : list[pygsti.circuits.Circuit]
+        Circuits of interest.
+    error_generators : list
+        Elementary error generators to consider (see `circuit_error_propagation_matrices`).
+    pspec : ProcessorSpec
+        Processor specification (used mainly for num_qubits).
+    alpha_representation : {'concise', 'matrix'}, default 'concise'
+        Which alpha/first-order representation to compute.
+
+    Returns
+    -------
+    dict
+        Dictionary with keys:
+          * 'indices' : numpy.ndarray
+          * 'signs' : numpy.ndarray
+          * 'probabilities' : numpy.ndarray
+          * 'alphas' : numpy.ndarray
+        where the meaning/shape of 'alphas' depends on `alpha_representation`.
     """
     indices, signs = error_propagation_tensors(circuits, error_generators, pspec)
     if alpha_representation == 'matrix':
@@ -239,23 +402,35 @@ def circuit_error_propagation_matrices(circuit, error_generators):
     """
     Computers the `indices` and `signs` matrices used in quantum physics aware neural networks,
     for the input circuit and the error generators specified in the `error_generators` list.
-    TODO : More details here.
-    ----------
-    circuit : Circuit
-        The circuit to compute the error progagation matrices for.
 
+    Conceptually, this function:
+      1. Constructs Stim layers for the circuit.
+      2. Propagates a fixed set of elementary error generators through each layer.
+      3. Records (a) which end-of-layer error generator each one maps to (an index),
+         and (b) the sign acquired under propagation.
+
+    Parameters
+    ----------
+    circuit : pygsti.circuits.Circuit
+        Circuit to compute propagation data for.
     error_generators : list
-        A list of error generators for which to compute the error propagation matrices.
-        Each element of this list is a tuple, where the first element is the error generator
-        type ('H'', 'S', 'C', or 'A') and second element of the list is a tuple of Pauli strings.
+        List of error generator labels. Each element should be a tuple:
+            (errorgen_type, paulis_tuple)
+        where `errorgen_type` is the error generator type ('H'', 'S', 'C', or 'A') and `paulis_tuple` is a tuple of Pauli strings.
         For 'H' and 'S', this is a single Pauli string. The Pauli strings should be length-n strings
-        where n is the number of qubits on which `circuit` acts.
+        where n is the number of qubits on which `circuit` acts.        
+
+
         
     Returns
     -------
-    TODO
-        These error generators occur after each layer in the circuit, and the output of 
-        this function specifies how each of those error generators comp
+    indices : numpy.ndarray
+        Integer array of shape `(circuit.depth, len(error_generators))` giving, for each
+        layer and each generator inserted after that layer, the index of the propagated
+        (end-of-circuit) elementary error generator.
+    signs : numpy.ndarray
+        Integer array of the same shape giving (+-1) sign factors for each propagation.
+
     """
     error_propagator = _ep.ErrorGeneratorPropagator(None)
     stim_layers = error_propagator.construct_stim_layers(circuit, drop_first_layer=True)
@@ -273,14 +448,39 @@ def circuit_error_propagation_matrices(circuit, error_generators):
 def error_propagation_tensors(circuits, error_generators, pspec, prior_error_generators=None, 
                               prior_indices=None, prior_signs=None):
     """
-    TODO
+    Compute batched error-propagation tensors (`indices`, `signs`) for multiple circuits.
 
+    Parameters
+    ----------
+    circuits : list[pygsti.circuits.Circuit]
+        Circuits to process.
+    error_generators : list
+        New error generators to add.
+    pspec : ProcessorSpec
+        Processor spec; used for `num_qubits` and to determine max circuit depth.
+    prior_error_generators : list or None, optional
+        Previously computed generators. If provided, this function appends new generators
+        after the prior ones (and checks that there is no overlap).
+    prior_indices : numpy.ndarray or None, optional
+        Previously computed indices tensor to copy into the left block.
+    prior_signs : numpy.ndarray or None, optional
+        Previously computed signs tensor to copy into the left block.
+
+    Returns
+    -------
+    indices : numpy.ndarray
+        Array of shape `(num_circuits, max_depth, num_error_generators_total)` with propagated indices.
+    signs : numpy.ndarray
+        Array of the same shape with (+-1) sign factors.
+
+    Notes
+    -----
+    For a circuit with depth < max_depth, the trailing layers remain zero-filled.
     For more information on what a circuit's `indices` and `signs` matrix encode, see the docstring for
     the function `circuit_error_propagation_matrices`, which this function calls to compute these matrices
     for each circuit.
-
-
     """
+
     if prior_error_generators is not None:
         assert(len(set(error_generators).intersection(set(prior_error_generators))) == 0), "Can only add new error generators!"
         num_pregs = len(prior_error_generators)
@@ -317,13 +517,13 @@ def alpha_coefficient(i, num_qubits, tableau, bs):
         The index of the error generator, as specified in the ordering of ml.tools.index_to_error_gen
 
     num_qubits : int
-        The number of qubits
+        The number of qubits (n)
 
     tableau : stim.Tableau
-        The tableau of the circuit for which we are calculating the alpha coefficient
+        The stabilizer tableau of the circuit for which we are calculating the alpha coefficient
 
     bs : str
-        The bit string for which the alpha coefficient is to be computed.
+        The bit string (of length n)for which the alpha coefficient is to be computed.
 
     Returns
     -------
@@ -335,6 +535,21 @@ def alpha_coefficient(i, num_qubits, tableau, bs):
 def _get_tableau(circuit_or_tableau):
     """
     Helper function that returns a tableau given a Circuit or a Stim.Tableau object
+
+    Parameters
+    ----------
+    circuit_or_tableau : pygsti.circuits.Circuit or stim.Tableau
+        Object to convert/validate.
+
+    Returns
+    -------
+    stim.Tableau
+        Tableau representation of the circuit.
+
+    Raises
+    ------
+    ValueError
+        If input is neither a `Circuit` nor a `stim.Tableau`.
     """
     if isinstance(circuit_or_tableau, _Circuit):
         return circuit_or_tableau.convert_to_stim_tableau()
@@ -357,13 +572,13 @@ def dense_alpha_matrix(circuit, num_qubits, populate_for_error_generators=None, 
     num_qubits: int
         The number of qubits in the circuit.
 
-    populate_for_error_generators : None or list of integers.
+    populate_for_error_generators : list[int] or None, optional
         If not None, the indices of the error generators for which to compute the alpha tensor for.
         If None, the entire alpha tensor is computed. If a list of integers, this function creates
         an alpha tensor that is zero except for the alphas corresponding to the end-of-circuit 
         error generators in this list.
 
-    existing_alpha_matrix : None or numpy array of shape (2**n, 2 * 4**n)
+    existing_alpha_matrix : None or numpy.ndarray of shape (2**n, 2 * 4**n), optional
         An existing partially-populated alpha matrix. Note that providing an existing alpha matrix
         has no purpose if `populuate_for_error_generators` is None, as then the complete alpha
         matrix is computed. 
@@ -436,7 +651,32 @@ def dense_alpha_matrix(circuit, num_qubits, populate_for_error_generators=None, 
 
 def first_order_outcome_probabilities_tensors(circuits, error_generators, pspec, indices=None, prior_error_generators=None, prior_alphas=None):
     """
-    TODO
+    Compute ideal outcome probabilities and dense alpha matrices for a batch of circuits.
+
+    Parameters
+    ----------
+    circuits : list[pygsti.circuits.Circuit]
+        Circuits to process.
+    error_generators : list
+        Currently unused directly (kept for API symmetry); alphas are computed in the
+        canonical indexing over all H/S end-of-circuit generators, optionally restricted
+        by `indices`.
+    pspec : ProcessorSpec
+        Processor spec; used for `num_qubits`.
+    indices : numpy.ndarray or None, optional
+        If provided, only compute alpha columns for end-of-circuit generator indices that
+        appear in `indices[i,:,:]` for each circuit i.
+    prior_error_generators : list or None, optional
+        If provided, indicates we are updating existing alpha matrices (no overlap allowed).
+    prior_alphas : numpy.ndarray or None, optional
+        Existing alpha tensor to partially reuse.
+
+    Returns
+    -------
+    probabilities : numpy.ndarray
+        Array of shape `(num_circuits, 2**n)` with ideal outcome probabilities.
+    alphas : numpy.ndarray
+        Array of shape `(num_circuits, 2**n, 2*4**n)` with dense alpha matrices.
     """
     if prior_error_generators is not None:
         assert(len(set(error_generators).intersection(set(prior_error_generators))) == 0), "Can only add new error generators!"
@@ -472,7 +712,31 @@ def first_order_outcome_probabilities_tensors(circuits, error_generators, pspec,
 
 def first_order_outcome_probabilities_tensors_concise(circuits, pspec, indices, signs):
     """
-    TODO
+    Compute ideal probabilities and a concise first-order correction coefficient tensor.
+
+    This routine produces a representation tailored to the "concise" QPANN probability layer:
+    instead of returning the full dense alpha matrix, it returns coefficients already aligned
+    with the circuit's propagated `indices` tensor.
+
+    Parameters
+    ----------
+    circuits : list[pygsti.circuits.Circuit] or list[stim.Tableau]
+        Circuits (or tableaux) to process.
+    pspec : ProcessorSpec
+        Processor spec; used for `num_qubits`.
+    indices : numpy.ndarray
+        Propagation indices tensor of shape `(num_circuits, depth, num_errgens)`.
+    signs : numpy.ndarray
+        Propagation sign tensor of same shape as `indices`.
+
+    Returns
+    -------
+    probabilities : numpy.ndarray
+        Ideal outcome probabilities of shape `(num_circuits, 2**n)`.
+    first_order_coefficients : numpy.ndarray
+        Coefficient tensor of shape `(num_circuits, 2**n, depth, num_errgens)` such that
+        the first-order perturbation is computed by summing `coefficients * error_rates`
+        over the last two axes.
     """
     num_qubits = pspec.num_qubits
     nbit_strings = [''.join(p) for p in _itertools.product('01', repeat=num_qubits)]
