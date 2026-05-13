@@ -550,21 +550,23 @@ def first_order_outcome_probabilities_tensors_concise(circuits, pspec, indices, 
         first_order_coefficients = _np.zeros(shape, float)
         measurements = _np.zeros((len(circuits),len(measurement_paulis)))
         circ_indices_tuples=[]
-        for idx,circ in enumerate(circuits):
-            circ_indices_tuples.append((circ, indices[idx], num_qubits, measurement_paulis)) 
-        with Pool(process_num) as p:
-            output_list = p.starmap(_circuit_loop_paulis, circ_indices_tuples)
 
-        for idx, tup in enumerate(output_list):
-            measurements[idx]=tup[0]
-            first_order_coefficients[idx]=tup[1]
+        # for idx, circ in enumerate(circuits):
+        #     circ_indices_tuples.append((circ, indices[idx], num_qubits, measurement_paulis)) 
 
-        for l, pauli in enumerate(measurement_paulis):
+        # with Pool(process_num) as p:
+        #     output_list = p.starmap(_circuit_loop_paulis, circ_indices_tuples)
+
+        # for idx, tup in enumerate(output_list):
+        #     measurements[idx] = tup[0]
+        #     first_order_coefficients[idx] = tup[1]
+
+        for idx, circ in enumerate(circuits):
+            measurements[idx, :], first_order_coefficients[idx, :, :, :] = _circuit_loop_paulis(circ, indices[idx], num_qubits, measurement_paulis)
+
+        for l in range(len(measurement_paulis)):
             first_order_coefficients[:, l, :, :] = first_order_coefficients[:, l, :, :] * signs
 
-
-    
-    
     return measurements, first_order_coefficients
 
 def _circuit_loop_probs(circuit: _Circuit, indices, nbit_strings, num_qubits: int)-> tuple:
@@ -600,12 +602,12 @@ def _circuit_loop_paulis(circuit: _Circuit, indices, num_qubits: int, paulis: li
     unique_indices = set(indices.flatten())
     
     tableau = _get_tableau(circuit)
-    shape = ( len(paulis), indices.shape[0], indices.shape[1])
+    shape = (len(paulis), indices.shape[0], indices.shape[1])
     first_order_coefficients = _np.zeros(shape, float)
     #scale = 1 / 2 ** _egptools.random_support(tableau) #TODO: This might overflow
     measurements = _np.array([_egptools.stabilizer_pauli_expectation(tableau, p) for p in paulis]).T
     alphas_dict = {}
-    for l, bs in enumerate(paulis):
+    for l, pauli in enumerate(paulis):
         for error_generator_index in unique_indices:
             egtype =  _tools.index_to_error_gen(error_generator_index, num_qubits)[0]
             #print(egtype)
@@ -613,10 +615,10 @@ def _circuit_loop_paulis(circuit: _Circuit, indices, num_qubits: int, paulis: li
             #if egtype == 'H' and (_np.isclose(measurements[l], -1.) or _np.isclose(measurements[l], 1.)):
             #    alpha = 0
 
-            alphas_dict[l, error_generator_index] = alpha_coefficient_pauli(error_generator_index, num_qubits, tableau, bs)
+            alphas_dict[l, error_generator_index] = alpha_coefficient_pauli(error_generator_index, num_qubits, tableau, pauli)
 
 
-    for l, bs in enumerate(paulis):
+    for l in range(len(paulis)):
         for j in range(indices.shape[0]):
             for k in range(indices.shape[1]):
                 first_order_coefficients[l, j, k] = alphas_dict[l, indices[j,k]]
