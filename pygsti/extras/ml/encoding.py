@@ -609,7 +609,7 @@ def _circuit_loop_paulis(circuit: _Circuit, indices, num_qubits: int, paulis: li
         for error_generator_index in unique_indices:
             egtype =  _tools.index_to_error_gen(error_generator_index, num_qubits)[0]
             #print(egtype)
-            if egtype == 'H' and (_np.isclose(measurements[l], 0.) or _np.isclose(measurements[l], 1.)):
+            if egtype == 'H' and (_np.isclose(measurements[l], -1.) or _np.isclose(measurements[l], 1.)):
                 alpha = 0
             #elif egtype == 'S' and not (_np.isclose(probabilities[i, l], 0.) or _np.isclose(probabilities[i, l], 1.)):
             #    alpha = 0
