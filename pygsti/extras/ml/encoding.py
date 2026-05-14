@@ -527,7 +527,7 @@ def first_order_outcome_probabilities_tensors_concise(circuits, pspec, indices, 
     num_qubits = pspec.num_qubits
     nbit_strings = [''.join(p) for p in _itertools.product('01', repeat=num_qubits)]
 
-    if measurements == 'probabilites':
+    if measurements == 'probabilities':
         shape = (indices.shape[0], 2 ** num_qubits, indices.shape[1], indices.shape[2])
         first_order_coefficients = _np.zeros(shape, float)
         measurements= _np.zeros((len(circuits), 2 ** num_qubits), float)
