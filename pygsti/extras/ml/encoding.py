@@ -17,7 +17,7 @@ from pygsti.errorgenpropagation import localstimerrorgen as _lseg
 from pygsti.extras.ml import errgentools as _tools
 from pygsti.tools import errgenproptools as _egptools
 from pygsti.circuits import Circuit as _Circuit
-from tqdm import trange as _trange
+import tqdm
 from multiprocessing import Pool
 from itertools import starmap
 
@@ -535,7 +535,7 @@ def first_order_outcome_probabilities_tensors_concise(circuits, pspec, indices, 
         for idx,circ in enumerate(circuits):
             circ_indices_tuples.append((circ,indices[idx],nbit_strings,num_qubits))  
         with Pool(process_num) as p:
-            output_list = p.starmap(_circuit_loop_probs, circ_indices_tuples)
+            output_list = p.starmap(_circuit_loop_probs, tqdm.tqdm(circ_indices_tuples))
         for idx, tup in enumerate(output_list):
             measurements[idx]=tup[0]
             first_order_coefficients[idx]=tup[1]
@@ -556,7 +556,7 @@ def first_order_outcome_probabilities_tensors_concise(circuits, pspec, indices, 
             circ_indices_tuples.append((circ, indices[idx], num_qubits, measurement_paulis)) 
 
         with Pool(process_num) as p:
-            output_list = p.starmap(_circuit_loop_paulis, circ_indices_tuples)
+            output_list = p.starmap(_circuit_loop_paulis, tqdm.tqdm(circ_indices_tuples))
 
         for idx, tup in enumerate(output_list):
             measurements[idx, :] = tup[0]
