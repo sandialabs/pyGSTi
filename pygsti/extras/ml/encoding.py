@@ -552,19 +552,19 @@ def first_order_outcome_probabilities_tensors_concise(circuits, pspec, indices, 
         circ_indices_tuples=[]
 
         # TIM COPIED OUT WHILE BUG HUNTING
-        # for idx, circ in enumerate(circuits):
-        #     circ_indices_tuples.append((circ, indices[idx], num_qubits, measurement_paulis)) 
+        for idx, circ in enumerate(circuits):
+            circ_indices_tuples.append((circ, indices[idx], num_qubits, measurement_paulis)) 
 
-        # with Pool(process_num) as p:
-        #     output_list = p.starmap(_circuit_loop_paulis, circ_indices_tuples)
+        with Pool(process_num) as p:
+            output_list = p.starmap(_circuit_loop_paulis, circ_indices_tuples)
 
-        # for idx, tup in enumerate(output_list):
-        #     measurements[idx] = tup[0]
-        #     first_order_coefficients[idx] = tup[1]
+        for idx, tup in enumerate(output_list):
+            measurements[idx, :] = tup[0]
+            first_order_coefficients[idx, :, :, :] = tup[1]
 
         # TIM PUT THIS IN WHILE BUG HUNTING (REMOVING PARALLEL CODE HE DOESN'T UNDERSTAND)
-        for idx, circ in enumerate(circuits):
-            measurements[idx, :], first_order_coefficients[idx, :, :, :] = _circuit_loop_paulis(circ, indices[idx], num_qubits, measurement_paulis)
+        #for idx, circ in enumerate(circuits):
+        #    measurements[idx, :], first_order_coefficients[idx, :, :, :] = _circuit_loop_paulis(circ, indices[idx], num_qubits, measurement_paulis)
 
         for l in range(len(measurement_paulis)):
             first_order_coefficients[:, l, :, :] = first_order_coefficients[:, l, :, :] * signs
