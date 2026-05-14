@@ -128,21 +128,6 @@ doc/html/*
 doc/_auto
 doc/_build
 
-# Customer Data #
-#################
-scripts/profiling/report/*.ipynb
-scripts/profiling/report/Analyze+2Q+data.py
-scripts/profiling/report/*.html
-scripts/profiling/*.html
-scripts/profiling/report/standard_report.py
-scripts/profiling/report/tp_report.py
-scripts/profiling/report/rigetti_nocache.py
-
-# Profiling data #
-#################
-scripts/profiling/output
-scripts/profiling/data
-
 # Other Local-only Files #
 ############################
 local
