@@ -171,7 +171,7 @@ def paulistring_to_index(ps, num_qubits):
 ##### Noah's Updated implementation 5/8/2026 #####
 def up_to_weight_k_paulis(k: int, n: int):
     """
-    Return all n-qubit Pauli strings with weight 1..k (non-identity count).
+    Return all n-qubit Pauli strings with weight 1..k (non-identity count). If k=0, returns the all-identity string. If k>n, automatically sets k=n.
 
     A Pauli string is a length-n string over {'I','X','Y','Z'}.
     The *weight* is the number of non-'I' characters.
@@ -194,8 +194,8 @@ def up_to_weight_k_paulis(k: int, n: int):
         All Pauli strings of weight 1..k.
     """
 
-    if not isinstance(k, int) or k < 0:
-        raise TypeError("Pauli weight must be a non-negative integer.")
+    if not isinstance(k, int) or k < 1:
+        raise TypeError("Pauli weight must be an integer > 1.")
     
     if not isinstance(n, int) or n < 0:
         raise TypeError("Number of qubits must be a non-negative integer.")
@@ -203,11 +203,6 @@ def up_to_weight_k_paulis(k: int, n: int):
     # Use a mutable "template" list of characters for efficient updates.
     # We will copy this list and then overwrite selected positions with X/Y/Z.
     base = list("I" * n)
-
-    # No weight-0 (all-identity) strings are returned by this routine.
-    # If k<1, there are no valid strings to produce.
-    if k < 1:
-        return base
 
     # Weight cannot exceed the number of qubits.
     if k > n:
@@ -321,7 +316,7 @@ def up_to_weight_k_error_gens_from_qubit_graph(k: int, n: int, qubit_graph_lapla
     Parameters
     ----------
     k : int
-        Maximum Pauli weight (only `k <= 2` supported by underlying Pauli enumerator).
+        Maximum Pauli weight.
     n : int
         Number of qubits. If None, inferred from `qubit_graph_laplacian.shape[0]`.
     qubit_graph_laplacian : numpy.ndarray
