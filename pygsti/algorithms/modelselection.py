@@ -435,8 +435,13 @@ def do_greedy_from_full_exact(initial_model, data, er_thresh=2.0, verbosity=2, m
         vector corresponding to the fitted best reduced model found at its corresponding level
     """
     if comm is not None:
+        
         rank = comm.Get_rank()
         size = comm.Get_size()
+        if rank >0:
+            print("parallelization not implemented yet")
+            exit()
+
     else:
         rank = 0
         size = 1

@@ -313,6 +313,9 @@ class FogiTester(BaseCase):
         #TODO: Uncomment when issue #600 is resolved, remove line above
         #self.assertTrue(cp.is_equivalent(cp2))
         
+    def test_foginess(self):
+        #All FOGI errors must satisfy the equation
+        #|rho>><<rho| L_rho - L_M M 
         
 
 

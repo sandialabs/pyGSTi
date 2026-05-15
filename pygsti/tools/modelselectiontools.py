@@ -801,7 +801,7 @@ def reduced_model_approx_GST_fast(red_rowandcol_H, red_row_H, x0, param_to_remov
         return x0_prime
 
 def print_table(table):
-    columns = "  " + " {: <25}"*len(len(table))
+    columns = "  " + " {: <25}"*len(table)
     for l, row in enumerate(table):
         if l == 0:
             print(columns.format(*row), '\n')
@@ -832,13 +832,13 @@ def compare_parameters_simple(parent_model_vec, red_model_vec, embedder_matrix, 
             table_data.append([parent_model_vec[i], red_model_vec[j], labels[i]])
             j += 1
     assert len(red_model_vec) == j
-    print_table(table_data)
-    """
+    #print_table(table_data)
+    
     for l, row in enumerate(table_data):
         if l == 0:
             print("   {: <25} {: <25} ".format(*row), '\n')
         else:
-            print(str(l-1)+"   {: <25} {: <25} {: <25}".format(*row), '\n')"""
+            print(str(l-1)+"   {: <25} {: <25} {: <25}".format(*row), '\n')
 
 def ams_results_table(trace, ev_ratio_costs, extra_column=None):
     reducer = create_embedder_matrix_from_trace(trace).T
