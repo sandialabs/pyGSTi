@@ -9,9 +9,12 @@ Protocol object
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 # ***************************************************************************************************
+from __future__ import annotations
+
 from typing import Optional, Literal
 import collections as _collections
 import copy as _copy
+import dataclasses as _dataclasses
 import numpy as _np
 import itertools as _itertools
 import pathlib as _pathlib
@@ -23,9 +26,81 @@ from pygsti import circuits as _circuits
 from pygsti import data as _data
 from pygsti.tools import NamedDict as _NamedDict
 from pygsti.tools import listtools as _lt
+from pygsti.tools import mpitools as _mpitools
 from pygsti.tools.dataframetools import _process_dataframe
 from pygsti.baseobjs.mongoserializable import MongoSerializable as _MongoSerializable
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
+
+
+@_dataclasses.dataclass
+class SlurmSettings:
+    """
+    Settings for auto-generating a SLURM batch script via
+    :meth:`Protocol.stage_slurm`.
+
+    Pass an instance as the ``slurm`` argument to
+    :meth:`Protocol.stage_slurm`.  The resulting ``.sbatch`` file can be
+    submitted directly with ``sbatch <script_path>``.
+
+    Parameters
+    ----------
+    script_path : str or Path
+        Where to write the ``.sbatch`` file.
+
+    partition : str or None
+        SLURM partition (queue) name.  Written as
+        ``#SBATCH --partition=<value>``.  When ``None``, a ``FILL_IN``
+        placeholder is emitted and a comment reminds you to edit before
+        submitting.
+
+    time : str or None
+        Walltime limit in SLURM format, e.g. ``'4:00:00'`` or
+        ``'1-00:00:00'``.  When ``None``, a ``FILL_IN`` placeholder is
+        emitted.
+
+    nodes : int
+        Number of nodes to request (``#SBATCH --nodes``).  Default ``1``.
+        Used together with ``num_ranks`` to compute ``--ntasks-per-node``.
+
+    job_name : str or None
+        Job name (``#SBATCH --job-name``).  Defaults to the protocol
+        class name when passed to :meth:`Protocol.stage_slurm`.
+
+    output : str or None
+        Path for the SLURM stdout log (``#SBATCH --output``).  Defaults
+        to ``slurm-%j.out`` in the same directory as ``script_path``.
+
+    error : str or None
+        Path for the SLURM stderr log (``#SBATCH --error``).  Defaults
+        to ``slurm-%j.err`` in the same directory as ``script_path``.
+
+    Notes
+    -----
+    The generated script uses ``srun`` to launch the MPI workers; this
+    is the SLURM-native launcher and inherits the job allocation
+    automatically (no ``-n`` flag needed).
+
+    ``--cpus-per-task`` and the BLAS thread environment variables
+    (``OMP_NUM_THREADS``, ``MKL_NUM_THREADS``, etc.) are set to the
+    value of ``blas_threads_per_rank`` passed to :meth:`Protocol.stage_slurm`.
+    If that value is ``0`` (the default auto-detect), note that it is
+    measured on the machine where you call ``stage_slurm``, which may differ
+    from the HPC compute nodes.  Pass an explicit ``blas_threads_per_rank``
+    to :meth:`Protocol.stage_slurm` if your nodes have a different core count.
+
+    The generated script includes a commented block of optional
+    ``#SBATCH`` directives (``--account``, ``--qos``, ``--constraint``,
+    ``--exclusive``, ``--mem``, ``--mail-user``, etc.) that are commonly
+    needed but too site-specific to set automatically.  Edit the script
+    and uncomment the ones you need before submitting.
+    """
+    script_path: str
+    partition: str | None = None
+    time: str | None = None
+    nodes: int = 1
+    job_name: str | None = None
+    output: str | None = None
+    error: str | None = None
 
 
 class Protocol(_MongoSerializable):
@@ -124,6 +199,316 @@ class Protocol(_MongoSerializable):
         ProtocolResults
         """
         raise NotImplementedError("Derived classes should implement this!")
+
+    def run_mpi(self, data: 'ProtocolData', num_ranks: int, *,
+                mpiexec: str = 'auto',
+                extra_mpi_args: list[str] | None = None,
+                ranks_per_host: int | None = None,
+                env: dict | None = None,
+                persistent_dir: str | _pathlib.Path | None = None,
+                dry_run: bool = False,
+                blas_threads_per_rank: int = 0,
+                **run_kwargs):
+        """
+        Run this protocol in parallel using MPI workers launched as a subprocess.
+        The subprocess environment variables will be set as
+
+            worker_env = {**_os.environ, **_blas_env, **(env or {})}
+
+        where ``_blas_env`` is inferred from `blas_threads_per_rank` (see Notes).
+
+        This method can be called from anywhere (e.g., Jupyter notebooks or scripts)
+        without requiring the caller to manage MPI communicators or write launcher
+        scripts manually.
+
+        Parameters
+        ----------
+        data : ProtocolData
+            The input data.
+
+        num_ranks : int
+            Number of MPI worker processes to launch.  When 1, falls back to
+            a plain :meth:`run` call with no MPI overhead.
+
+        mpiexec : str, keyword-only
+            MPI launcher executable name or path.  ``'auto'`` (default) searches
+            PATH for ``mpiexec``, ``mpirun``, or ``mpiexec.hydra`` in that order.
+
+        extra_mpi_args : list of str, keyword-only
+            Extra arguments inserted between the launcher and the Python executable,
+            e.g. ``['--oversubscribe']`` or ``['--hostfile', 'hosts.txt']``.
+
+        ranks_per_host : int, keyword-only
+            Number of ranks per virtual host.  Sets ``PYGSTI_MAX_HOST_PROCS`` in
+            the worker environment.  ``None`` (default) uses actual hostnames.
+
+        env : dict, keyword-only
+            Extra environment variables forwarded to worker processes, merged on top
+            of the current ``os.environ``.  ``ranks_per_host`` takes precedence over
+            ``PYGSTI_MAX_HOST_PROCS`` supplied here.
+
+        persistent_dir : str or Path, keyword-only
+            Permanent directory for data and results.  Created if it does not
+            already exist.  When ``None`` (default), the existing on-disk data
+            path is reused if available; otherwise a temporary directory is used
+            and deleted on return.  Required when ``dry_run=True``.
+
+        dry_run : bool, keyword-only
+            When ``True``, we write working files to ``persistent_dir`` and return ``None``. 
+            The recommended launch command is printed to console if `self.verbosity` is
+            unset or positive.
+            
+            Requires ``persistent_dir`` to be set.
+
+        blas_threads_per_rank : int, keyword-only
+            Number of threads each worker rank allows BLAS libraries to use.
+            ``0`` (default) auto-detects an appropriate value.  See Notes.
+
+        **run_kwargs
+            Keyword arguments forwarded to `Protocol.run` for each worker. Examples of
+            arguments you might want to forward include `simulator`, `optimizers`, or
+            `disable_checkpointing`. These arguments will be serialized via pickle.
+
+        Returns
+        -------
+        ProtocolResults or None
+            ``None`` when ``dry_run=True``.
+
+        Notes
+        -----
+        **Shared memory and host topology.**
+        pyGSTi uses a two-level communicator hierarchy: a *host communicator*
+        (``host_comm``) groups ranks that share a physical host and can exchange
+        data via shared memory, while an *inter-host communicator*
+        (``interhost_comm``) connects one rank per host for cross-host MPI.
+        Collective operations (gather, allreduce, broadcast) use a two-phase
+        pattern — first within the host, then across hosts — when shared memory
+        is enabled.
+
+        Setting ``PYGSTI_USE_SHARED_MEMORY=0`` (via ``env``) disables shared
+        memory entirely.  In this case ``host_comm`` is ``None`` and all
+        communication goes directly through the full communicator; the host
+        grouping has no effect.  ``ranks_per_host`` is therefore only meaningful
+        when shared memory is enabled.
+
+        **Choosing** ``ranks_per_host``.
+        On a single compute node all ranks share one hostname, so by default
+        pyGSTi places them all in one host group and uses shared memory across
+        all of them.  Setting ``ranks_per_host=k`` splits the ranks into
+        ``num_ranks // k`` virtual hosts of ``k`` ranks each, producing
+        ``k``-rank shared-memory groups connected by MPI across groups.  This
+        is useful for testing multi-node behavior on a single machine, or for
+        matching a known NUMA or hardware partition boundary.
+
+        **Thread oversubscription.**
+        When ``blas_threads_per_rank > 0``, that value is set for
+        ``OMP_NUM_THREADS``, ``OPENBLAS_NUM_THREADS``, ``MKL_NUM_THREADS``,
+        ``NUMEXPR_NUM_THREADS``, and ``BLIS_NUM_THREADS`` in the worker
+        environment.  When ``blas_threads_per_rank == 0`` (the default), the
+        value is computed as ``max(1, num_cpus // num_ranks)`` where
+        ``num_cpus`` is the physical CPU core count of the current machine
+        (falling back to the logical count if the physical count is
+        unavailable). These variables are applied before ``env``, so explicit
+        entries in ``env`` override them.
+
+        **Job schedulers.**
+        To generate a SLURM batch script, use :meth:`stage_slurm` instead.
+        For other schedulers (PBS, LSF, etc.), use ``dry_run=True`` together
+        with ``persistent_dir`` to write the data and runner script to a permanent
+        location. The recommended MPI launch command will be written to console
+        if `self.verbosity` is unset or positive.
+        """
+        import os as _os
+        import subprocess as _subprocess
+        import sys as _sys
+        import tempfile as _tempfile
+
+        if hasattr(self, 'verbosity'):
+            verbosity = self.verbosity  # type: ignore
+        else:
+            verbosity = 1
+
+        if num_ranks == 1:
+            if dry_run:
+                msg  = "dry_run=True is incompatible with num_ranks=1, as in this case we revert\n"
+                msg += "back to the standard `run` method without any MPI overhead."
+                raise ValueError(msg)
+            out = self.run(data, **run_kwargs)
+            return out
+
+        if dry_run and persistent_dir is None:
+            msg  = "persistent_dir must be set when dry_run=True, "
+            msg += "so that generated files persist after run_mpi returns."
+            raise ValueError(msg)
+
+        mpiexec  = _mpitools.resolve_mpiexec(mpiexec)
+        blas_tpr = _mpitools.compute_blas_threads(num_ranks, blas_threads_per_rank)
+        if verbosity > 0:
+            print(f"run_mpi: setting blas_threads_per_rank={blas_tpr}\n")
+
+        _blas_env = {k: str(blas_tpr) for k in (
+            'OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS',
+            'MKL_NUM_THREADS', 'NUMEXPR_NUM_THREADS', 'BLIS_NUM_THREADS',
+        )}
+
+        # Build the worker environment: current env + BLAS defaults + caller overrides + ranks_per_host.
+        worker_env = {**_os.environ, **_blas_env, **(env or {})}
+        if ranks_per_host is not None:
+            worker_env['PYGSTI_MAX_HOST_PROCS'] = str(ranks_per_host)
+
+        if persistent_dir is not None:
+            # All artifacts go to the caller-supplied directory, which is created
+            # by data.write() if it does not already exist.
+            persistent_dir = str(_pathlib.Path(persistent_dir))
+            data.write(persistent_dir)
+            runner_path = _mpitools.write_mpi_runner_artifacts(self, run_kwargs, persistent_dir, True)
+            cmd = [mpiexec, '-n', str(num_ranks)]
+            if extra_mpi_args:
+                cmd.extend(extra_mpi_args)
+            cmd.extend([_sys.executable, runner_path])
+
+            if dry_run:
+                if verbosity > 0:
+                    print("run_mpi dry_run — runner script written to:", runner_path)
+                    print("Command:", ' '.join(cmd))
+                return None
+
+            _subprocess.run(cmd, check=True, env=worker_env)
+            out = _io.read_results_from_dir(persistent_dir, name=self.name)
+            return out
+
+        # persistent_dir is None: live run only (dry_run=True was rejected above).
+        # Use a temporary directory for all artifacts; it is cleaned up on return.
+        with _tempfile.TemporaryDirectory() as _tmpdir:
+            tmpdir = str(_pathlib.Path(_tmpdir))
+            data.write(tmpdir)
+
+            runner_path = _mpitools.write_mpi_runner_artifacts(self, run_kwargs, tmpdir, False)
+            cmd = [mpiexec, '-n', str(num_ranks)]
+            if extra_mpi_args:
+                cmd.extend(extra_mpi_args)
+            cmd.extend([_sys.executable, runner_path])
+
+            _subprocess.run(cmd, check=True, env=worker_env)
+            out = _io.read_results_from_dir(tmpdir, name=self.name)
+            return out
+
+    def stage_slurm(self, data: 'ProtocolData',
+                    num_ranks: int,
+                    slurm: SlurmSettings,
+                    work_dir: str | _pathlib.Path,
+                    *,
+                    ranks_per_host: int | None = None,
+                    blas_threads_per_rank: int = 0,
+                    **run_kwargs) -> str:
+        """
+        Write all working files to ``work_dir`` and generate a SLURM batch
+        script ready for ``sbatch`` submission.
+
+        This is the SLURM-specific counterpart to :meth:`run_mpi`.  It does
+        **not** launch any processes; call ``sbatch <slurm.script_path>`` from
+        a terminal or batch system to submit the job.
+
+        Parameters
+        ----------
+        data : ProtocolData
+            The input data.
+
+        num_ranks : int
+            Total number of MPI worker processes.
+
+        slurm : SlurmSettings
+            SLURM script options.  See :class:`SlurmSettings` for details.
+
+        work_dir : str or Path
+            Permanent directory where data, the protocol, the pickled kwargs,
+            and the runner script are written.  All paths embedded in the
+            generated batch script point here.
+
+        ranks_per_host : int, keyword-only
+            Number of ranks per shared-memory group.  When set, a commented
+            ``export PYGSTI_MAX_HOST_PROCS=<value>`` line is emitted in the
+            batch script (uncomment to activate).  ``None`` (default) uses
+            a suggested value of ``num_ranks // slurm.nodes``.
+
+        blas_threads_per_rank : int, keyword-only
+            Number of BLAS threads per rank.  ``0`` (default) auto-detects
+            based on the current machine's CPU count.  This value sets both
+            ``--cpus-per-task`` in the batch script and the BLAS environment
+            variable exports.
+
+            .. note::
+                Auto-detection measures the machine on which you call
+                ``stage_slurm`` (typically a login node), which may differ
+                from the HPC compute nodes.  Pass an explicit value if your
+                compute nodes have a different core count.
+
+        **run_kwargs
+            Forwarded to :meth:`run` in each worker.  Serialized via
+            :mod:`pickle`.
+
+        Returns
+        -------
+        script_path : str
+            The file path of the generated SLURM script.
+
+        Notes
+        -----
+        The generated script uses ``srun`` as the MPI launcher.  ``srun`` is
+        SLURM-native and inherits the job allocation automatically, so no
+        ``-n`` flag is needed.
+
+        The script also contains a commented block of optional ``#SBATCH``
+        directives (``--account``, ``--qos``, ``--constraint``, etc.) that
+        are commonly needed but too site-specific to set automatically.
+        Uncomment and edit the relevant lines before submitting.
+        """
+        
+        if hasattr(self, 'verbosity'):
+            verbosity : int = self.verbosity  # type: ignore
+        else:
+            verbosity = 1
+
+        should_log = blas_threads_per_rank == 0
+        blas_threads_per_rank = _mpitools.compute_blas_threads(num_ranks, blas_threads_per_rank)
+        if verbosity > 0 and should_log:
+            msg = f"stage_slurm: computed blas_threads_per_rank={blas_threads_per_rank} for num_ranks={num_ranks}.\n"
+            msg += "             Note: measured on this machine; pass blas_threads_per_rank=<value>"
+            msg += " explicitly if your HPC compute nodes have a different core count.\n"
+            print(msg)
+
+        work_dir = str(_pathlib.Path(work_dir))
+        data.write(work_dir)
+        runner_path = _mpitools.write_mpi_runner_artifacts(self, run_kwargs, work_dir, True)
+        ntasks_per_node, remainder = divmod(num_ranks, slurm.nodes)
+        if remainder != 0 and verbosity > 0:
+            msg  = f"stage_slurm: num_ranks={num_ranks} is not evenly divisible by "
+            msg += f"slurm.nodes={slurm.nodes}; the SLURM script may request "
+            msg += "a non-uniform task layout."
+            _warnings.warn(msg)
+
+        script_content = _mpitools.build_slurm_script(
+            job_name=slurm.job_name or type(self).__name__,
+            nodes=slurm.nodes,
+            ntasks_per_node=ntasks_per_node,
+            cpus_per_task=blas_threads_per_rank,
+            time=slurm.time,
+            partition=slurm.partition,
+            output=slurm.output,
+            error=slurm.error,
+            ranks_per_host=ranks_per_host,
+            num_ranks=num_ranks,
+            runner_path=runner_path,
+            script_path=str(slurm.script_path),
+        )
+        script_path = str(slurm.script_path)
+        with open(script_path, 'w') as _f:
+            _f.write(script_content)
+
+        if verbosity > 0:
+            print(f"stage_slurm: SLURM script written to {script_path}")
+            print(f"Submit with:  sbatch {script_path}\n")
+        return script_path
 
     def write(self, dirname):
         """
@@ -3333,6 +3718,7 @@ class DataCountsSimulator(DataSimulator):
                             self.alias_dict, self.collision_action,
                             self.record_zero_counts, comm, memlimit, self.times)
         return ProtocolData(edesign, ds)
+
 
 class ProtocolCheckpoint(_NicelySerializable):
     """
