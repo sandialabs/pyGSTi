@@ -147,7 +147,10 @@ def format_dem_stim(dem_dict, n_logical):
     '''
     formats a dictionary of event probabilities into a stim dem
     '''
-    n_detectors = len(list(dem_dict.keys())[0])
+    if dem_dict:
+        n_detectors = len(list(dem_dict.keys())[0])
+    else:
+        n_detectors = 0
     #detectors called D0,D1,...D(n_detectors-1)
     #need to add in logical detectors as a separate thing
     dem_string = ''

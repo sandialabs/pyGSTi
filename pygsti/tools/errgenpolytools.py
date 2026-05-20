@@ -296,7 +296,8 @@ def errorgen_gate_contributors(model, errorgen, circuit, layer_idx, include_spam
         assert isinstance(errorgen, _LEEL), f'Unsupported `errorgen` type {type(errorgen)}.'
     
     circuit_layer = circuit.layer(layer_idx)
-
+    #print(f'{circuit_layer=}')
+    #print(f'{circuit.layer_label(layer_idx)=}')
     if isinstance(model, _ExplicitOpModel):
         #check if this error generator is in the error generator coefficient dictionary for this layer, and if not return the empty dictionary.
         circuit_layer_operator = model.circuit_layer_operator(circuit_layer)

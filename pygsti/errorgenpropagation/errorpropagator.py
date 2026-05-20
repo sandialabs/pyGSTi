@@ -712,6 +712,8 @@ class ErrorGeneratorPropagator:
                         gate_contributors = _epoly.errorgen_gate_contributors(self.model, errgen_coeff_lbl, circuit, j, include_spam=include_spam) 
                         assert len(gate_contributors) == 1, 'Cannot unambiguously map this error generator to a corresponding gate.'
                         gate_label = gate_contributors[0]
+                        #print(f'{gate_label=}')
+                        #print(f'{gate_contributors=}')
                     else:
                         gate_label = None
 

@@ -13,6 +13,7 @@ Tools for approximate non-Markovian simulation using cumulant expansion methods.
 import stim
 from itertools import chain 
 from pygsti.tools import errgenproptools as _eprop
+from pygsti.baseobjs import Label as _Label
 
 
 def cumulant_expansion(errorgen_layers, errorgen_transform_maps, cov_func, cumulant_order=2, truncation_threshold=1e-14):

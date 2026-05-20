@@ -113,7 +113,7 @@ def create_processor_spec(pcircuit, qubit_labels, gates=['Gcnot','Gh']):
     
     return pspec
 
-def build_model(error_rates, pspec):
+def build_model(error_rates, pspec, spam_depolarization_rate=0):
     """
     Creates a *spatially homogeneous* error model from
     the given error rates dictionary. Could easily be generalized to
@@ -132,8 +132,11 @@ def build_model(error_rates, pspec):
                                                                        state_space=state_space,
                                                                        evotype='stabilizer')
         perfect_gate = StaticCliffordOp(pspec.gate_unitaries[gate_name], evotype='stabilizer')
-        exp_errorgen = ExpErrorgenOp(lindblad_errorgen)
-        gate_mm = ComposedOp([perfect_gate, exp_errorgen])
+        if lindblad_errorgen:
+            exp_errorgen = ExpErrorgenOp(lindblad_errorgen)
+            gate_mm = ComposedOp([perfect_gate, exp_errorgen])
+        else:
+            gate_mm = perfect_gate
         return gate_mm
     
     for i, gate_name in enumerate(oneQ_gate_names):         
@@ -291,18 +294,21 @@ def local_depolarizing_errorgen(num_qubits, depolarization_rate):
     return composed_errorgen
     
 
-def build_model(error_rates, pspec, oneQ_gate_names, twoQ_gate_names):
+def build_model(error_rates, pspec, oneQ_gate_names, twoQ_gate_names, state_prep_depol_rate=0, meas_depol_rate=0):
     gate_dictionary = dict()
 
-    
     def create_gate_object(erates, num_qubits, gate_name):
         state_space = QubitSpace(num_qubits)
-        lindblad_errorgen = LindbladErrorgen.from_elementary_errorgens(erates,
+        perfect_gate = StaticCliffordOp(pspec.gate_unitaries[gate_name], evotype='stabilizer')
+        if erates:
+            lindblad_errorgen = LindbladErrorgen.from_elementary_errorgens(erates,
                                                                        state_space=state_space,
                                                                        evotype='stabilizer')
-        perfect_gate = StaticCliffordOp(pspec.gate_unitaries[gate_name], evotype='stabilizer')
-        exp_errorgen = ExpErrorgenOp(lindblad_errorgen)
-        gate_mm = ComposedOp([perfect_gate, exp_errorgen])
+        
+            exp_errorgen = ExpErrorgenOp(lindblad_errorgen)
+            gate_mm = ComposedOp([perfect_gate, exp_errorgen])
+        else:
+            gate_mm = perfect_gate
         return gate_mm
     
     for i, gate_name in enumerate(oneQ_gate_names):         
@@ -317,10 +323,11 @@ def build_model(error_rates, pspec, oneQ_gate_names, twoQ_gate_names):
 
     num_qubits = pspec.num_qubits
     
-    prep_errorgen = local_depolarizing_errorgen(num_qubits, 0)
+    prep_errorgen = local_depolarizing_errorgen(num_qubits, state_prep_depol_rate)
+    meas_errorgen = local_depolarizing_errorgen(num_qubits, meas_depol_rate)
     prep_layers = {Label('rho0'): ComposedState(ComputationalBasisState(zvals = ['0']*num_qubits, evotype='stabilizer'), ExpErrorgenOp(prep_errorgen))}
     #setting the number of qubits for the base POVM is a hack...
-    povm_layers = {Label('Mdefault'): ComposedPOVM(ExpErrorgenOp(prep_errorgen), ComputationalBasisPOVM(1, evotype='stabilizer', state_space=QubitSpace(1)))}
+    povm_layers = {Label('Mdefault'): ComposedPOVM(ExpErrorgenOp(meas_errorgen), ComputationalBasisPOVM(1, evotype='stabilizer', state_space=QubitSpace(1)))}
 
 
     #prep_layers = None
@@ -347,6 +354,8 @@ def stim_to_pygsti_circuit(circuit, qubit_labels, qubit_relabelling_dict=None, s
 
     measurements = []
     detectors = []
+
+    gate_equivalence_classes = dict()
 
     def convert_1q_layer(gatename, stim_layer_string, current_qubit_mapping):
         gate_dict= {'H':'Gh', 
@@ -460,3 +469,168 @@ def stim_to_pygsti_circuit(circuit, qubit_labels, qubit_relabelling_dict=None, s
     pyg_c.done_editing()
     
     return pyg_c, current_qubit_mapping, measurements, detectors
+
+
+def stim_to_pygsti_circuit_revised(
+    circuit, qubit_labels, qubit_relabelling_dict=None,
+    show_qubit_mappings=False, include_observables=False, include_idles=False
+):
+    if qubit_relabelling_dict is None:
+        qubit_relabelling_dict = {q: q for q in qubit_labels}
+
+    measurements = []
+    detectors = []
+
+    # physical -> current virtual (your existing map)
+    current_qubit_mapping = {q: qubit_relabelling_dict[q] for q in qubit_labels}
+
+    # NEW: virtual -> physical (reverse map)
+    virt_to_phys = {v: p for p, v in current_qubit_mapping.items()}
+
+    # NEW: track physical support for each emitted pyGSTi layer string
+    layer_phys_support = []  # list[set[int]]
+
+    def convert_1q_layer(gatename, stim_layer_string, current_qubit_mapping):
+        gate_dict = {
+            'H': 'Gh',
+            'SQRT_Y': 'Gypi2',
+            'SQRT_Y_DAG': 'Gympi2',
+            'SQRT_X_DAG': 'Gxmpi2',
+            'Z': 'Gzpi',
+            'Y': 'Gypi',
+            'X': 'Gxpi',
+            'I': 'Gi'
+        }
+        pygsti_name = gate_dict[gatename]
+        virt_targets = [current_qubit_mapping[int(s)] for s in stim_layer_string.split(' ')[1:]]
+        layer_str = '[' + ''.join([f'{pygsti_name}:{v}' for v in virt_targets]) + ']'
+        return layer_str, virt_targets
+
+    def convert_2q_layer(gatename, stim_layer_string, current_qubit_mapping):
+        gate_dict = {'CZ': 'Gcphase', 'CX': 'Gcnot'}
+        cnot_qubits = stim_layer_string.split(' ')[1:]
+        num = len(cnot_qubits) // 2
+        pieces = []
+        virt_targets = []
+        for i in range(num):
+            v1 = current_qubit_mapping[int(cnot_qubits[2*i])]
+            v2 = current_qubit_mapping[int(cnot_qubits[2*i+1])]
+            virt_targets.extend([v1, v2])
+            pieces.append(f"{gate_dict[gatename]}:{v1}:{v2}")
+        layer_str = '[' + ''.join(pieces) + ']'
+        return layer_str, virt_targets
+
+    def update_qubit_mapping_after_measurement(line, current_qubit_mapping, qubit_labels, virt_to_phys):
+        """
+        Minimal change version of your update_qubit_mapping:
+        when a physical qubit p is measured, allocate a fresh virtual id vnew
+        and update BOTH:
+          current_qubit_mapping[p] = vnew
+          virt_to_phys[vnew] = p
+        """
+        new_mapping = current_qubit_mapping.copy()
+
+        if line.split(' ')[0] == 'MPP':
+            qs = []
+            for prod in line.split(' ')[1:]:
+                _, qs_prod = parse_pauli_product(prod, {q: q for q in qubit_labels})
+                qs.extend(qs_prod)
+            qs = list(set(qs))
+        else:
+            qs = list(map(int, line.split(' ')[1:]))
+
+        nqs = max(virt_to_phys.keys()) + 1 if len(virt_to_phys) > 0 else 0
+
+        for i, p in enumerate(qs):
+            vnew = nqs + i
+            new_mapping[p] = vnew
+            virt_to_phys[vnew] = p
+
+        return new_mapping
+
+    gate_layers = []
+    cstr = str(circuit)
+    gates_happened = False
+
+    for line in cstr.split('\n'):
+        tokens = line.split(' ')
+        if len(tokens) == 0 or tokens[0] == '':
+            continue
+
+        if tokens[0] in ['H', 'SQRT_Y', 'SQRT_Y_DAG', 'Z', 'X', 'Y', 'SQRT_X_DAG', 'I']:
+            gatename = tokens[0]
+            layer_str, virt_targets = convert_1q_layer(gatename, line, current_qubit_mapping)
+            gate_layers.append(layer_str)
+            layer_phys_support.append(set(virt_to_phys[v] for v in virt_targets))
+            gates_happened = True
+
+            if include_idles:
+                unused_vs = [current_qubit_mapping[k] for k in qubit_labels if str(k) not in tokens[1:]]
+                idle_str = '[' + ''.join([f'Gi:{v}' for v in unused_vs]) + ']'
+                gate_layers.append(idle_str)
+                layer_phys_support.append(set(virt_to_phys[v] for v in unused_vs))
+
+        elif tokens[0] in ['CX', 'CZ']:
+            gatename = tokens[0]
+            layer_str, virt_targets = convert_2q_layer(gatename, line, current_qubit_mapping)
+            gate_layers.append(layer_str)
+            layer_phys_support.append(set(virt_to_phys[v] for v in virt_targets))
+            gates_happened = True
+
+            if include_idles:
+                unused_vs = [current_qubit_mapping[k] for k in qubit_labels if str(k) not in tokens[1:]]
+                idle_str = '[' + ''.join([f'Gi:{v}' for v in unused_vs]) + ']'
+                gate_layers.append(idle_str)
+                layer_phys_support.append(set(virt_to_phys[v] for v in unused_vs))
+
+        elif tokens[0] in ['M', 'R', 'MR', 'MPP']:
+            if tokens[0] in ['M', 'MR']:
+                measurements.extend([('Z', (current_qubit_mapping[int(q)],)) for q in tokens[1:]])
+            elif tokens[0] == 'MPP':
+                measurements.extend([parse_pauli_product(prod, current_qubit_mapping) for prod in tokens[1:]])
+
+            # This matches your original behavior: only refresh mapping for non-MPP measurement layers
+            if gates_happened and tokens[0] != 'MPP':
+                current_qubit_mapping = update_qubit_mapping_after_measurement(
+                    line, current_qubit_mapping, qubit_labels, virt_to_phys
+                )
+                if show_qubit_mappings:
+                    print(current_qubit_mapping)
+
+        elif 'DETECTOR' in tokens[0]:
+            det = []
+            for arg in tokens[1:]:
+                if 'rec' in arg:
+                    rel_meas = int(re.findall(r'\[-(\d+)\]', arg)[0])
+                    targ = len(measurements) - 1 * rel_meas
+                    det.append(targ)
+            detectors.append(det)
+
+        elif 'OBSERVABLE_INCLUDE' in line.split('(')[0]:
+            if include_observables:
+                det = []
+                for arg in tokens[1:]:
+                    if 'rec' in arg:
+                        rel_meas = int(re.findall(r'\[-(\d+)\]', arg)[0])
+                        targ = len(measurements) - 1 * rel_meas
+                        det.append(targ)
+                detectors.append(det)
+
+        elif 'TICK' in tokens or 'QUBIT_COORDS' in tokens or 'SHIFT_COORDS' in tokens[0]:
+            pass
+        else:
+            print(f'{tokens=}')
+            print(f'instruction not found for {line}')
+
+    nlines = 1 + max(current_qubit_mapping.values())
+    pyg_c = pygsti.circuits.Circuit(
+        ''.join(gate_layers) + '@(' + ','.join([str(q) for q in range(nlines)]) + ')',
+        editable=True
+    )
+    pyg_c.delete_idle_layers_inplace()
+    pyg_c.done_editing()
+
+    # NEW: equivalence info you can use immediately:
+    # for each emitted layer, which physical qubits it acted on
+    # (note: indices refer to gate_layers BEFORE delete_idle_layers_inplace)
+    return pyg_c, current_qubit_mapping, measurements, detectors, virt_to_phys, layer_phys_support
