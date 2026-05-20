@@ -13,7 +13,12 @@ Covariance function specialized to the case of a quasistatic DC noise process.
 from pygsti.modelmembers.covariances.covariancefunc import CovarianceFunction as _CovarianceFunction
 from pygsti.modelmembers import ModelMember as _ModelMember
 from pygsti.baseobjs.errorgenlabel import ElementaryErrorgenLabel as _ElementaryErrorgenLabel
+from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE
+from pygsti.baseobjs import Label as _Label
 import numpy as _np
+from functools import cache
+import stim
+
 
 class QuasistaticDCCovarianceFunction(_CovarianceFunction):
 
@@ -25,7 +30,7 @@ class QuasistaticDCCovarianceFunction(_CovarianceFunction):
     def from_errorgen_labels(error_generator_labels):
         pass
 
-    def __init__(self, error_generator_labels):
+    def __init__(self, error_generator_labels, virt_to_phys_map=None):
         """
         Initialize an instance of a quasistatic DC covariance function.
         The covariance function of a quasistatic DC process is given by:
@@ -109,6 +114,26 @@ class QuasistaticDCCovarianceFunction(_CovarianceFunction):
             self._paramlbls.append(f'Covariance for {lbl_tup}')
         self._paramlbls = _np.array(self._paramlbls, dtype=object)      
 
+        #determine whether the covariance function is "diagonal."
+        #i.e. only correlations between the same gates and same error generators on a said gate.
+        self.is_diagonal = True
+        for gate_label_1, errgen_lbl_1, gate_label_2, errgen_lbl_2 in self._errgen_label_to_param_idx.keys():
+            if (gate_label_1 == gate_label_2) and (errgen_lbl_1==errgen_lbl_2):
+                continue
+            else:
+                self.is_diagonal = False
+                break
+
+        self.virt_to_phys_map = virt_to_phys_map
+        #construct the reverse map too
+        phys_to_virt_map = dict()
+        for virt_idx, phys_idx in virt_to_phys_map.items():
+            if phys_idx not in phys_to_virt_map:
+                phys_to_virt_map[phys_idx] = []
+            phys_to_virt_map[phys_idx].append(virt_idx)
+        self.phys_to_virt_map = phys_to_virt_map
+
+
     def to_vector(self):
         return self._paramvals
 
@@ -124,8 +149,23 @@ class QuasistaticDCCovarianceFunction(_CovarianceFunction):
         Computes the correlation function. Takes as input two error generator labels and two times.
         Returns 0 if both error generator labels are not present in this covariance function.
         """
-        idx = self._errgen_label_to_param_idx.get((gate_label1, errorgen1, gate_label2, errorgen2), None)
+        if self.is_diagonal and self.virt_to_phys_map is None:
+            if (gate_label1 != gate_label2) or (errorgen1 != errorgen2):
+                return 0
+        if (gate_label1.name == 'rho0' or gate_label1.name == 'Mdefault') or (gate_label2.name == 'rho0' or gate_label2.name == 'Mdefault'):
+            return 0
+        #print(f'{(gate_label1, errorgen1, gate_label2, errorgen2)=}')
+        if self.virt_to_phys_map is not None:
+            gate_label1 = self._canonicalize_gate_label(gate_label1)
+            gate_label2 = self._canonicalize_gate_label(gate_label2)
+            errorgen1 = self._remap_errgen_paulistring_virtual_to_physical(errorgen1)
+            errorgen2 = self._remap_errgen_paulistring_virtual_to_physical(errorgen2)
 
+        idx = self._errgen_label_to_param_idx.get((gate_label1, errorgen1, gate_label2, errorgen2), None)
+        #print(f'{(gate_label1, errorgen1, gate_label2, errorgen2)=}')
+        #print(f'{gate_label1=}')
+        #print(f'{idx=}')
+        #print(type(errorgen1))
         if idx is None:
             return 0
         else:
@@ -143,3 +183,29 @@ class QuasistaticDCCovarianceFunction(_CovarianceFunction):
             the number of independent parameters.
         """
         return len(self.variances)
+
+    @cache    
+    def _canonicalize_gate_label(self, gate_lbl):
+        # gate_lbl.sslbls is a tuple of virtual qubits
+        phys_sslbls = tuple(self.virt_to_phys_map[v] for v in gate_lbl.sslbls)
+        return _Label(gate_lbl.name, phys_sslbls)
+    
+    @cache
+    def _remap_errgen_paulistring_virtual_to_physical(self, errgen_virt):
+        """
+        ps_virt: stim.PauliString defined on virtual indices (length >= max virtual index + 1)
+        Returns a stim.PauliString of length n_phys_qubits, with Paulis moved to physical indices.
+        """
+        ps_virts = errgen_virt.basis_element_labels
+        remapped_ps = []
+        for ps_virt in ps_virts:
+            #print(ps_virt)
+            ps_phys = stim.PauliString('I' * len(ps_virts[0]))
+            # iterate over all indices of the virtual string
+            for i, virt_list in enumerate(self.phys_to_virt_map.values()):
+                for virt_idx in virt_list:
+                    if ps_virt[virt_idx] != 0:
+                        ps_phys[i] = ps_virt[virt_idx]
+                        break
+            remapped_ps.append(ps_phys)
+        return _LSE(errgen_virt.errorgen_type, tuple(remapped_ps))
