@@ -16,7 +16,6 @@ include jupyter_notebooks/Tutorials/other/advanced/*.ipynb
 include jupyter_notebooks/Examples/*.ipynb
 include jupyter_notebooks/Tutorials/tutorial_files/.git_placeholder
 include jupyter_notebooks/Examples/example_files/.git_placeholder
-include scripts/upgrade2v0.9.7.py
 include test/runTests.py
 include test/__init__.py
 include test/unit/__init__.py

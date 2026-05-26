@@ -266,7 +266,7 @@ class GeneralMethodBase(object):
             self.model['Non-existent-key'] = np.zeros((4, 4), 'd')  # can't set things not in the model
 
     def test_raise_on_set_bad_prep_key(self):
-        with self.assertRaises(KeyError):
+        with self.assertRaises(ValueError):
             self.model.preps['foobar'] = [1.0 / np.sqrt(2), 0, 0, 0]  # bad key prefix
 
     def test_raise_on_get_bad_povm_key(self):

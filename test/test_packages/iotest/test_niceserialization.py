@@ -23,8 +23,8 @@ class NiceSerializationTester(BaseTestCase):
         pspec = pygsti.processors.QubitProcessorSpec(4, ('Gxpi2', 'Gypi2', 'Gcnot'), geometry='line')
 
         # 1Q GST
-        gst_design0 = smq1Q_XYI.get_gst_experiment_design(4, qubit_labels=[0])
-        gst_design1 = smq1Q_XYI.get_gst_experiment_design(4, qubit_labels=[1])
+        gst_design0 = smq1Q_XYI.create_gst_experiment_design(4, qubit_labels=[0])
+        gst_design1 = smq1Q_XYI.create_gst_experiment_design(4, qubit_labels=[1])
         gst_design0.add_default_protocol(pygsti.protocols.StandardGST("full TP"))
 
         # 2Q Direct RB

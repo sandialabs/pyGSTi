@@ -11,7 +11,6 @@ Custom implementation of the Levenberg-Marquardt Algorithm
 #***************************************************************************************************
 
 import os as _os
-import signal as _signal
 import time as _time
 
 import numpy as _np
@@ -24,11 +23,8 @@ from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrint
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 
-# Make sure SIGINT will generate a KeyboardInterrupt (even if we're launched in the background)
-# This may be problematic for multithreaded parallelism above pyGSTi, e.g. Dask,
-# so this can be turned off by setting the PYGSTI_NO_CUSTOMLM_SIGINT environment variable
-if 'PYGSTI_NO_CUSTOMLM_SIGINT' not in _os.environ:
-    _signal.signal(_signal.SIGINT, _signal.default_int_handler)
+from pygsti.optimize._sigint import install_sigint_handler as _install_sigint_handler
+_install_sigint_handler()
 
 #constants
 _MACH_PRECISION = 1e-12
