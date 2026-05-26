@@ -485,12 +485,8 @@ class OpModel(Model):
 
     @sim.setter
     def sim(self, simulator):
-        try:  # don't fail if state space doesn't have an integral # of qubits
-            nqubits = self.state_space.num_qubits
-        except ValueError:
-            nqubits = None
         # TODO: This should probably also take evotype (e.g. 'chp' should probably use a CHPForwardSim, etc)
-        simulator = _fwdsim.ForwardSimulator.cast(simulator, nqubits)
+        simulator = _fwdsim.ForwardSimulator.cast(simulator)
         if isinstance(simulator.model, OpModel) and id(simulator.model) != id(self):
             msg =\
             f"""
