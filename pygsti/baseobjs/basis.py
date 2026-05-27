@@ -12,6 +12,7 @@ Defines the Basis object and supporting functions
 from __future__ import annotations
 # Used to allow certain type annotations. (e.g. class method returning instance of the class).
 
+from typing import Sequence
 import copy as _copy
 import itertools as _itertools
 import warnings as _warnings
@@ -54,6 +55,20 @@ def _sparse_equal(a, b, atol=1e-8):
         V1 = v1[sidx1]
         V2 = v2[sidx2]
     return _np.allclose(V1, V2, atol=atol)
+
+
+def default_basis_for_udims(udims: Sequence[int]) -> Basis:
+    if len(udims) == 1:
+        d = udims[0]
+        if d == 3:
+            return Basis.cast('gm', 9)
+        if d == 2:
+            return Basis.cast('pp', 4)
+        # should not reach this point
+        raise ValueError()
+    bases = [default_basis_for_udims([u]) for u in udims]
+    basis = TensorProdBasis(bases)
+    return basis
 
 
 class Basis(_NicelySerializable):

@@ -39,9 +39,12 @@ from pygsti.models.localnoisemodel import LocalNoiseModel as _LocalNoiseModel
 from pygsti.models.cloudnoisemodel import CloudNoiseModel as _CloudNoiseModel
 from pygsti.baseobjs import label as _label
 from pygsti.baseobjs import statespace as _statespace
-from pygsti.baseobjs.basis import Basis as _Basis
-from pygsti.baseobjs.basis import ExplicitBasis as _ExplicitBasis
-from pygsti.baseobjs.basis import DirectSumBasis as _DirectSumBasis
+from pygsti.baseobjs.basis import (
+    Basis           as _Basis, 
+    ExplicitBasis   as _ExplicitBasis,
+    DirectSumBasis  as _DirectSumBasis,
+    TensorProdBasis as _TensorProdBasis
+)
 from pygsti.baseobjs.qubitgraph import QubitGraph as _QubitGraph
 from pygsti.tools import basistools as _bt
 from pygsti.tools import internalgates as _itgs
@@ -1466,6 +1469,13 @@ def _setup_local_gates(processor_spec, evotype, modelnoise=None, custom_gates=No
     gatedict : dict
         A dictionary mapping gate names to local gate operations.
     """
+    if isinstance(basis, _TensorProdBasis):
+        b0 : _Basis = basis.component_bases[0]
+        if all(b0.name == bi.name for bi in basis.component_bases[1:]):
+            basis = b0.name
+        else:
+            raise NotImplementedError()
+
     std_gate_unitaries = _itgs.standard_gatename_unitaries()
     if custom_gates is None: custom_gates = {}
     if modelnoise is None: modelnoise = _OpModelPerOpNoise({})

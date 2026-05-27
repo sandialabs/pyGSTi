@@ -1909,10 +1909,13 @@ class StandardGST(_proto.Protocol):
             target_model = self.target_model
         elif isinstance(data.edesign, HasProcessorSpec):
             # warnings.warn(...) -- or try/except and warn if fails?
+            from pygsti.baseobjs.basis import default_basis_for_udims
+            udims = data.edesign.processor_spec.qudit_udims
+            basis = default_basis_for_udims(udims)
             target_model = _models.modelconstruction._create_explicit_model(
                 data.edesign.processor_spec, None, evotype='default', simulator='auto',
                 ideal_gate_type='static', ideal_prep_type='auto', ideal_povm_type='auto',
-                embed_gates=False, basis='pp')  # HARDCODED basis!
+                embed_gates=False, basis=basis)
         else:
             target_model = None  # Usually this path leads to an error being raised below.
 
