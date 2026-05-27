@@ -57,18 +57,25 @@ def _sparse_equal(a, b, atol=1e-8):
     return _np.allclose(V1, V2, atol=atol)
 
 
-def default_basis_for_udims(udims: Sequence[int]) -> Basis:
-    if len(udims) == 1:
-        d = udims[0]
-        if d == 3:
-            return Basis.cast('gm', 9)
-        if d == 2:
-            return Basis.cast('pp', 4)
-        # should not reach this point
-        raise ValueError()
-    bases = [default_basis_for_udims([u]) for u in udims]
-    basis = TensorProdBasis(bases)
-    return basis
+def default_basis_for_udims(udims: Sequence[int]):
+    """
+    Pick a default basis spec for a system whose per-qudit Hilbert-space dimensions
+    are given by `udims`.
+
+    Returns a basis-name string ('pp', 'gm') when every qudit has the same dimension,
+    because a name is dimension-agnostic and resolves correctly at every downstream
+    use site (e.g. when a single-qudit sub-op needs the per-qudit basis rather than
+    the full product basis). Only genuinely mixed-dimension systems return an
+    explicit `TensorProdBasis`.
+    """
+    udim_to_name = {2: 'pp', 3: 'gm'}
+    unsupported = [u for u in udims if u not in udim_to_name]
+    if unsupported:
+        raise ValueError("No default basis for per-qudit dimensions %s; supported dims are %s."
+                         % (unsupported, sorted(udim_to_name)))
+    if all(u == udims[0] for u in udims):
+        return udim_to_name[udims[0]]
+    return TensorProdBasis([(udim_to_name[u], u * u) for u in udims])
 
 
 class Basis(_NicelySerializable):
