@@ -283,7 +283,7 @@ def albert_factor(d, failcount=0, rand_state=None):
         n = Axb_mod2(B, z).T
         x = _np.array(_np.dot(n, L), dtype='int')
         zer = _np.zeros([t - ind - 1, 1])
-        L = _np.array(_np.bmat([[_np.eye(1), x], [zer, L]]), dtype='int')
+        L = _np.block([[_np.eye(1), x], [zer, L]]).astype('int')
 
     Qinv = inv_mod2(dot_mod2(P, N))
     L = dot_mod2(_np.array(Qinv), L)
@@ -500,7 +500,7 @@ def proper_permutation(a):
     for ind in range(t):
         perm = fix_top(a[ind:, ind:])
         zer = _np.zeros([ind, t - ind])
-        full_perm = _np.array(_np.bmat([[_np.eye(ind), zer], [zer.T, perm]]))
+        full_perm = _np.block([[_np.eye(ind), zer], [zer.T, perm]])
         a = multidot_mod2([full_perm, a, full_perm.T])
         Ps += [full_perm]
 #     return Ps

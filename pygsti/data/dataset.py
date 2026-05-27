@@ -30,6 +30,7 @@ from pygsti.baseobjs.label import Label as _Label
 from pygsti.tools import NamedDict as _NamedDict
 from pygsti.tools import listtools as _lt
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
+from pygsti.tools.exceptions import ImplicitlyDoneEditingCircuitWarning as _ImplicitlyDoneEditingCircuitWarning
 
 # import scipy.special as _sps
 # import scipy.fftpack as _fft
@@ -575,18 +576,18 @@ class _DataSetRow(object):
                         cntDict.setitem_unsafe(ol, cnt)
             else:
                 for ol, i in self.dataset.olIndex.items():
-                    inds = oli_tslc[oli_tslc == i]
+                    inds = _np.where(oli_tslc == i)[0]
                     if len(inds) > 0 or all_outcomes:
                         cntDict.setitem_unsafe(ol, float(sum(self.reps[tslc][inds])))
         else:
             if self.reps is None:
                 for ol_index in oli_tslc:
                     ol = self.dataset.ol[ol_index]
-                    cntDict.setitem_unsafe(ol, 1.0 + cntDict.getitem_unsafe(ol, 0.0))
+                    cntDict.setitem_unsafe(ol, float(1.0 + cntDict.getitem_unsafe(ol, 0.0)))
             else:
                 for ol_index, reps in zip(oli_tslc, self.reps[tslc]):
                     ol = self.dataset.ol[ol_index]
-                    cntDict.setitem_unsafe(ol, reps + cntDict.getitem_unsafe(ol, 0.0))
+                    cntDict.setitem_unsafe(ol, float(reps + cntDict.getitem_unsafe(ol, 0.0)))
 
         return cntDict
 
@@ -1412,9 +1413,13 @@ class DataSet(_MongoSerializable):
         if self.collisionAction == "keepseparate":
             if circuit in self.cirIndex:
                 tagged_circuit = circuit.copy(editable=True)
-                i = 1; tagged_circuit.occurrence = i
-                while tagged_circuit in self.cirIndex:
-                    i += 1; tagged_circuit.occurrence = i
+                with _warnings.catch_warnings():
+                    i = 1; tagged_circuit.occurrence = i
+                    _warnings.simplefilter('ignore', _ImplicitlyDoneEditingCircuitWarning)
+                    # ^ We need that to suppress the warning in triggered from
+                    #   evaluation of `tagged_circuit in self.cirIndex`.
+                    while tagged_circuit in self.cirIndex:
+                        i += 1; tagged_circuit.occurrence = i
                 tagged_circuit.done_editing()
                 #add data for a new (duplicate) circuit
                 circuit = tagged_circuit
@@ -2967,8 +2972,7 @@ class DataSet(_MongoSerializable):
         else:
             f = file_or_filename
 
-        with _compat.patched_uuid():
-            state_dict = _pickle.load(f)
+        state_dict = _pickle.load(f)
 
         if "gsIndexKeys" in state_dict:
             _warnings.warn("Loading a deprecated-format DataSet.  Please re-save asap.")

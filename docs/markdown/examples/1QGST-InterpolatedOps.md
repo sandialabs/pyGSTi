@@ -23,6 +23,7 @@ np.set_printoptions(precision=4, linewidth=120, floatmode='maxprec_equal')
 ```{code-cell} ipython3
 import pygsti
 import pygsti.extras.interpygate as interp
+import csaps  # needed for interpygate to function normally!
 from pygsti.tools.basistools import change_basis
 from pygsti.modelpacks import smq1Q_XY
 ```
@@ -326,7 +327,8 @@ fim = pygsti.tools.edesigntools.calculate_fisher_information_matrix(model,
 ```
 
 ```{code-cell} ipython3
-np.log(np.linalg.inv(fim))
+import scipy.linalg as la
+la.logm(np.linalg.inv(fim))
 ```
 
 ```{code-cell} ipython3

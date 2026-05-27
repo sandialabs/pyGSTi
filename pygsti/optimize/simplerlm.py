@@ -11,7 +11,6 @@ Custom implementation of the Levenberg-Marquardt Algorithm (but simpler than cus
 #***************************************************************************************************
 
 import os as _os
-import signal as _signal
 import time as _time
 
 import numpy as _np
@@ -25,11 +24,8 @@ from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySeri
 from pygsti.objectivefns.objectivefns import Chi2Function, TimeIndependentMDCObjectiveFunction
 from typing import Callable
 
-#Make sure SIGINT will generate a KeyboardInterrupt (even if we're launched in the background)
-#This may be problematic for multithreaded parallelism above pyGSTi, e.g. Dask,
-#so this can be turned off by setting the PYGSTI_NO_CUSTOMLM_SIGINT environment variable
-if 'PYGSTI_NO_CUSTOMLM_SIGINT' not in _os.environ:
-    _signal.signal(_signal.SIGINT, _signal.default_int_handler)
+from pygsti.optimize._sigint import install_sigint_handler as _install_sigint_handler
+_install_sigint_handler()
 
 #constants
 _MACH_PRECISION = 1e-12
@@ -287,6 +283,8 @@ class SimplerLMOptimizer(Optimizer):
             objective_func, jacobian, x0,
             max_iter=self.maxiter,
             num_fd_iters=self.fditer,
+            # NOTE: I think the fallback values below will NEVER be triggered. 
+            # Should probably remove them. See __init__ instead.
             f_norm2_tol=self.tol.get('f', 1.0),
             jac_norm_tol=self.tol.get('jac', 1e-6),
             rel_ftol=self.tol.get('relf', 1e-6),
@@ -583,7 +581,7 @@ def simplish_leastsq(
 
             if norm_JTf < jac_norm_tol:
                 if oob_check_interval <= 1:
-                    msg = "norm(jacobian) is at most %g" % jac_norm_tol
+                    msg = "norm(J'f) is at most %g" % jac_norm_tol
                     converged = True
                     break
                 else:

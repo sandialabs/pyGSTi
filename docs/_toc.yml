@@ -123,10 +123,12 @@ parts:
     - file: markdown/examples/Leakage-automagic
     - file: markdown/examples/Leakage-manual
   - file: markdown/examples/1QGST-InterpolatedOps
+  - file: markdown/examples/Robust-GST
   - file: markdown/examples/MPI
     sections:
     - file: markdown/examples/MPI-GermSelection
     - file: markdown/examples/MPI-RunningGST
+    - file: markdown/examples/MPI-RunningGST-Automagic
   - file: markdown/examples/GOpt-AddingNewOptimizations
   - file: markdown/examples/GOpt-NonIdealTargets
   - file: markdown/examples/Reports-LGSTonly

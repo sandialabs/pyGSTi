@@ -19,6 +19,12 @@ latex:
 bibtex_bibfiles:
   - references.bib
 
+# MyST Markdown parser extensions
+parse:
+  myst_enable_extensions:
+    - dollarmath
+    - amsmath
+
 # Information about where the book exists on the web
 repository:
   url: https://github.com/sandialabs/pyGSTi  # Online location of your book

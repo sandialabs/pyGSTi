@@ -13,7 +13,8 @@ Matrix related utility functions
 import functools as _functools
 import itertools as _itertools
 import warnings as _warnings
-import typing as _typing
+
+from typing import Protocol, Any, runtime_checkable, TypeVar, Optional, Union
 
 import numpy as _np
 import scipy.linalg as _spl
@@ -65,7 +66,7 @@ def gram_matrix(m, adjoint=False):
     return out
 
 
-def is_hermitian(mx, tol=1e-9):
+def is_hermitian(mx: _np.ndarray, tol: float=1e-9) -> bool:
     """
     Test whether mx is a hermitian matrix.
 
@@ -86,7 +87,17 @@ def is_hermitian(mx, tol=1e-9):
     if m != n:
         return False
     else:
-        return _np.all(_np.abs(mx - mx.T.conj()) <= tol)
+        return bool(_np.all(_np.abs(mx - mx.T.conj()) <= tol))
+
+
+def assert_hermitian(mat : _np.ndarray, tol: Union[float,_np.floating]) -> None:
+    hermiticity_error = _np.abs(mat - mat.T.conj())
+    if _np.any(hermiticity_error > tol):
+        message = f"""
+            Input matrix 'mat' is not Hermitian, up to tolerance {tol}.
+            The absolute values of entries in (mat - mat^H) are \n{hermiticity_error}. 
+        """
+        raise ValueError(message)
 
 
 def is_pos_def(mx, tol=1e-9, attempt_cholesky=False):
@@ -794,6 +805,44 @@ def approximate_matrix_log(m, target_logm, target_weight=10.0, tol=1e-6):
         #      _np.linalg.norm(logM-target_logm)**2)
 
     return logM
+
+
+def eigenvalues(m: _np.ndarray, *, assume_hermitian: Optional[bool] = None, assume_normal: bool = False):
+    if assume_hermitian is None:
+        assume_hermitian = is_hermitian(m)
+    if assume_hermitian:
+        # Make sure it's Hermtian in exact arithmetic. This helps with
+        # reproducibility across different implementations of LAPACK.
+        if not m.flags.writeable:
+            m = m.copy()
+        m += m.T.conj()
+        m /= 2
+        return _np.linalg.eigvalsh(m)
+    elif assume_normal:
+        temp = _spl.schur(m, output='complex')
+        evals = _np.diag(temp[1])
+        return evals
+    else:
+        return _np.linalg.eigvals(m)
+
+
+def eigendecomposition(m: _np.ndarray, *, assume_hermitian: Optional[bool] = None):
+    if assume_hermitian is None:
+        assume_hermitian = is_hermitian(m)
+    if assume_hermitian:
+        # Make sure it's Hermtian in exact arithmetic. This helps with
+        # reproducibility across different implementations of LAPACK.
+        if not m.flags.writeable:
+            m = m.copy()
+        m += m.T.conj()
+        m /= 2
+        evals, evecs = _np.linalg.eigh(m)
+        inv_evecs = evecs.T.conj()
+    else:
+        evals, evecs = _np.linalg.eigh(m)
+        inv_evecs = _np.linalg.inv(evecs)
+    return evecs, evals, inv_evecs
+
 
 
 def real_matrix_log(m, action_if_imaginary="raise", tol=1e-8):
@@ -2397,8 +2446,25 @@ def sign_fix_qr(q, r, tol=1e-6):
     return qq, rr
 
 
-def is_operatorlike(obj: _typing.Any) -> bool:
-    return hasattr(obj, '__matmul__') and hasattr(obj, '__rmatmul__') and hasattr(obj, 'T') and hasattr(obj, 'conj')
+# a TypeVar to allow methods to return "self"
+_T = TypeVar("_T", bound="OperatorLike")
+
+
+@runtime_checkable
+class OperatorLike(Protocol[_T]): # type: ignore
+
+    @property
+    def T(self) -> _T:
+        ...
+
+    def __matmul__(self, other: Any) -> Any:
+        ...
+
+    def __rmatmul__(self, other: Any) -> Any:
+        ...
+
+    def conj(self) -> _T:
+        ...
 
 
 class IdentityOperator:
@@ -2422,10 +2488,10 @@ class IdentityOperator:
     #   has __array_priority__ of 10). 
     #
 
-    def __matmul__(self, other: _typing.Any) -> _typing.Any:
+    def __matmul__(self, other: Any) -> Any:
         return other
     
-    def __rmatmul__(self, other: _typing.Any) -> _typing.Any:
+    def __rmatmul__(self, other: Any) -> Any:
         return other
     
     @property
@@ -2434,3 +2500,12 @@ class IdentityOperator:
     
     def conj(self):
         return self
+
+
+def to_operatorlike(obj):
+    if obj is None:
+        return IdentityOperator()
+    elif isinstance(obj, OperatorLike):
+        return obj
+    else:
+        raise ValueError()
