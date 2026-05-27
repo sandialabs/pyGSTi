@@ -1,4 +1,4 @@
 # Read-the-docs build requirements for pyGSTi.
 # The pyGSTi package itself plus its [docs] optional-deps group (jupyter-book,
-# jupytext, matplotlib, numpy). Single source of truth lives in pyproject.toml.
+# jupytext, matplotlib). Single source of truth lives in pyproject.toml.
 .[docs]
