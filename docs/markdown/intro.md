@@ -6,13 +6,17 @@ jupytext:
     format_version: 0.13
     jupytext_version: 1.17.3
 kernelspec:
-  display_name: Python 3
+  display_name: Python 3 (ipykernel)
   language: python
   name: python3
 ---
 
 # pyGSTi
 Welcome! This notebook serves as a top-level "readme" document for pyGSTi.  It and the other notebooks in this directory describe and demonstrate how you can use the `pygsti` package to accomplish various tasks related to quantum characterization.  We'll start with a brief general introduction and then move on to specifics.
+
+```{tip}
+**Running these notebooks.** This site renders the source MyST Markdown without executing cells, so you won't see outputs (plots, tables) inline. To run a notebook yourself: use the rocket icon at the top right of any page to launch it in Binder or Colab, or use the download dropdown (cloud icon) to grab the `.ipynb` and run it in your own Jupyter environment.
+```
 
 ## What does pyGSTi do?
 PyGSTi is a **Python framework for modeling and analyzing collections of qubits**, more affectionately called quantum information processors (QIPs).  We use "**QIP**" generously to include systems of just 1 or 2 qubits in addition to larger systems.  Initially pyGSTi was developed to perform a single type of data analysis called gate set tomography (GST), from where pyGSTi derives it's name.  While GST is still a central capability of the package, pyGSTi is capable of modeling QIP behavior and analyzing QIP data much more generally.

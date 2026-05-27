@@ -6,9 +6,9 @@ jupytext:
     format_version: 0.13
     jupytext_version: 1.17.3
 kernelspec:
-  display_name: api_updates
+  display_name: Python 3 (ipykernel)
   language: python
-  name: api_updates
+  name: python3
 ---
 
 # Cirq Integration

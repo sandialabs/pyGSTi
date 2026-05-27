@@ -162,14 +162,20 @@ for version control convenience, but can be converted to Jupyter notebooks as ne
 The recommended way to view the documentation is on [ReadTheDocs](https://pygsti.readthedocs.io/en/latest/),
 although the raw Markdown files can also be looked at on [GitHub](https://github.com/sandialabs/pyGSTi/blob/master/docs/markdown/intro.md).
 
-When using the ReadTheDocs version, you can [**interactively** explore the tutorials using Binder](https://mybinder.org/v2/gh/sandialabs/pyGSTi/master)
-by clicking the rocket button on the top of any tutorial page. If the document opens in the Markdown version,
-right-click and open as a Notebook to have Jupytext convert it to a runnable notebook.
+The site renders the source MyST Markdown without executing notebook cells, so you won't see outputs (plots, tables) inline.
+Each rendered page offers two ways to run the notebook yourself:
+
+- **Rocket icon → Binder or Colab:** launches a fully-provisioned notebook environment in your browser with no local install.
+- **Cloud/download icon → "Download this page" dropdown:** grab the `.ipynb` (or the `.md` source) and run it in your own Jupyter setup.
 
 #### Building the documentation *locally*
-The documentation is built using JupyterBook. Presuming you have `jupytext` and `jupyter-book` installed
-from `pip` and have followed the *local installation* directions above,
-the following command will build all the documentation:
+The docs are built using [Jupyter Book v1](https://jupyterbook.org). Note: v2 is a separate product (MyST Engine + Node.js)
+that doesn't support our autodoc-based API reference yet, so we pin `jupyter-book<2`.
+
+To install the build dependencies along with pyGSTi:
+    ``pip install -e .[docs]``
+
+then build:
     ``jb build docs``
 
 Then open `docs/_build/html/index.html` in a web browser to look through the documentation.
@@ -196,9 +202,22 @@ command to execute a cell within the Jupyter notebook is ``Shift+Enter``, not
 just ``Enter``.
 
 #### Contributing notebook changes
-Note that only the Markdown files are stored in the repository. If you have made changes to a notebook that
-you wish to push back to the repo, you must run another `jupytext --sync markdown/**/*.md` from the ``docs`` folder
-to resync the Markdown file with the changes you have made in the notebook, and then commit the updated Markdown file.
+**Only the `docs/markdown/*.md` files are version-controlled.** The `docs/notebooks/` directory is gitignored —
+it's a build artifact materialized by `jupytext --sync`. The canonical source is the `.md` file, and edits there
+"win" on the next sync. So:
+
+- If you find it more convenient to edit the `.ipynb` (e.g. for interactive iteration), **sync your edits back to
+  Markdown before committing**: from the `docs/` folder run `jupytext --sync markdown/**/*.md`, then commit the updated `.md`.
+- If you edit a `.ipynb` and forget to sync, your changes will be silently overwritten the next time anyone runs the sync. When in doubt, edit the `.md`.
+
+A few other gotchas worth knowing when editing the MyST sources:
+
+- **Block math (`$$...$$`) needs blank lines around it.** A single `$` is inline math; multiple `$$` blocks crammed
+  against surrounding text get parsed as inline math chains and render incorrectly.
+- **Don't change `kernelspec.name` away from `python3`** when adding a new file. Jupyter writes the local conda
+  env name into the notebook metadata; that name then propagates through `jupytext --sync` and breaks execution on
+  anyone else's machine.
+- **Adding a new tutorial** requires editing `docs/_toc.yml` to slot the new file into the navigation.
 
 License
 -------

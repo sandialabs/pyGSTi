@@ -42,6 +42,7 @@ html:
 launch_buttons:
   notebook_interface: "jupyterlab"
   binderhub_url: "https://mybinder.org"
+  colab_url: "https://colab.research.google.com"
 
 # Sphinx options
 sphinx:
@@ -62,4 +63,5 @@ sphinx:
     exclude_patterns: ["notebooks/", "**/*.ipynb"]
     suppress_warnings:
     - "etoc.toctree"
+    - "myst.xref_missing"
     templates_path: ["_templates"]

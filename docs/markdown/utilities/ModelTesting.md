@@ -6,9 +6,9 @@ jupytext:
     format_version: 0.13
     jupytext_version: 1.17.3
 kernelspec:
-  display_name: gst_checkpointing
+  display_name: Python 3 (ipykernel)
   language: python
-  name: gst_checkpointing
+  name: python3
 ---
 
 # Model Testing

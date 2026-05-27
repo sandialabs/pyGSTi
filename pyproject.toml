@@ -54,6 +54,12 @@ classifiers=[
 diamond_norm = [
     'cvxpy>=1.4.0'
 ]
+docs = [
+    'jupyter-book>=0.15,<2',
+    'jupytext>=1.16',
+    'matplotlib',
+    'numpy'
+]
 evolutionary_optimization = ['deap']
 extensions = ['cython']
 html_reports = ['jinja2', 'MarkupSafe']

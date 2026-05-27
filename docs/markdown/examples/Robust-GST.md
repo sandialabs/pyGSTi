@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-### Robust GST using Total Variation Distance (TVD)
+# Robust GST using Total Variation Distance (TVD)
 
 This notebook demonstrates a robustness feature in pyGSTi: performing long-sequence GST using different final-stage objective functions.
 
@@ -163,7 +163,7 @@ def print_summary_table_for_demo(
     return
 ```
 
-### Stage data for "normal" GST
+## Stage data for "normal" GST
 
 We use pyGSTi’s built-in **1-qubit XYI** model pack (`smq1Q_XYI`) to define the target model and a standard GST experiment design
 
@@ -185,7 +185,7 @@ ds_ori       = pygsti.data.simulate_data(depol_model, circuitlists[-1], num_samp
 fit_mode     = 'CPTPLND'
 ```
 
- ### Inject outliers and run the fits
+## Inject outliers and run the fits
 
 To test robustness, we intentionally corrupt a fraction of circuits:
 
@@ -218,7 +218,7 @@ results_ori, results_cor = build_all_results_for_demo(
 )
 ```
 
-### Evaluating the results
+## Evaluating the results
 
 We've fit four models:
 - Train on the original data using `-logl`

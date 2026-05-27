@@ -100,9 +100,16 @@ jobs:
     - name: Run notebook regression
       if: ${{ inputs.run-notebook-tests == 'true' }}
       run: |
-        # If we are running notebooks, we also need to download and compile CHP
-        curl -o ./jupyter_notebooks/Tutorials/algorithms/advanced/chp.c https://www.scottaaronson.com/chp/chp.c
-        gcc -o ./jupyter_notebooks/Tutorials/algorithms/advanced/chp ./jupyter_notebooks/Tutorials/algorithms/advanced/chp.c
+        # Tutorials live as MyST Markdown under docs/markdown/; jupytext
+        # materializes the paired .ipynb mirror under docs/notebooks/ for
+        # nbval to consume.
+        pip install -e .[docs]
+        (cd docs && jupytext --sync 'markdown/**/*.md')
+
+        # Download and compile CHP for the Clifford-simulation notebook;
+        # put the binary on PATH so pygsti.evotypes.chp.chpexe = 'chp' resolves.
+        curl -o /tmp/chp.c https://www.scottaaronson.com/chp/chp.c
+        gcc -o /usr/local/bin/chp /tmp/chp.c
 
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-        python -m pytest -n auto --nbval-lax --dist loadscope --nbval-current-env --durations=25 jupyter_notebooks
+        python -m pytest -n auto --nbval-lax --dist loadscope --nbval-current-env --durations=25 docs/notebooks

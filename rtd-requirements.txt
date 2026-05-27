@@ -1,12 +1,4 @@
-####### Read-the-docs requirements (for building documentation) #######
-numpy
-scipy
-plotly
-pandas
-networkx
-numpydoc
-sphinx==6.2.1
-sphinx_rtd_theme>=1.2.2
-sphinx-autoapi
-jupytext>=0.16
-jupyter-book
+# Read-the-docs build requirements for pyGSTi.
+# The pyGSTi package itself plus its [docs] optional-deps group (jupyter-book,
+# jupytext, matplotlib, numpy). Single source of truth lives in pyproject.toml.
+.[docs]
