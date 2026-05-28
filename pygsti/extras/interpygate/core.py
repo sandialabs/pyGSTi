@@ -32,6 +32,14 @@ except ImportError:
           "Interpolated gates will default to linear interpolation."
     warnings.warn(msg, MissingDependencyWarning)
 
+try:
+    from sklearn.gaussian_process import GaussianProcessRegressor as _GPR
+    from sklearn.gaussian_process.kernels import Matern as _MaternKernel
+    from sklearn.gaussian_process.kernels import ConstantKernel as _ConstantKernel
+    use_sklearn = True
+except ImportError:
+    use_sklearn = False
+
 if use_csaps:
     class custom_interpolator():
         # This class restructures the csaps.NdGridCubicSmoothingSpline API to be consistent
@@ -59,6 +67,31 @@ if use_csaps:
             grid_points += [mesh[s]]
 
         return custom_interpolator(_cubicSpline(grid_points, values, smooth=1))
+
+if use_sklearn:
+    class _gprMod():
+        # Wrapper to handle multi-output array shapes for GPR.
+        def __init__(self, points, values, **kwargs):
+            self.points = _np.array(points)
+            self.values = _np.array(values)
+            self.out_shape = self.values.shape[1:]
+            
+            # Reshape values into 2D (num_samples, num_features) to support multi-output GPR
+            flat_values = self.values.reshape(self.values.shape[0], -1)
+            
+            # Default to a Matern kernel (v=2.5 provides C2 smoothness, good for physical models)
+            kernel = _ConstantKernel(1.0, (1e-3, 1e3)) * _MaternKernel(1.0, (1e-2, 1e2), nu=2.5)
+            self.model = _GPR(kernel=kernel, n_restarts_optimizer=5, random_state=42)
+            self.model.fit(self.points, flat_values)
+
+        def __call__(self, *v):
+            v_arr = _np.array(v)
+            if v_arr.ndim == 1:
+                v_arr = v_arr.reshape(1, -1)
+            
+            # Predict
+            pred = self.model.predict(v_arr)
+            return pred[0].reshape(self.out_shape)
 
     # interpolator_and_args = (spline_interpolator, {'shape': (7,3,3)})
 
@@ -599,28 +632,43 @@ class InterpolatedQuantityFactory(object):
                 interp_cls, interp_kwargs = (_cubicSplineMod, {'shape': self.grid_shape})
             else:
                 raise ValueError("csaps package is not loaded, so 'spline' interpolator is not available.")
+        elif self.interpolator_and_args == 'gpr':
+            if use_sklearn:
+                interp_cls, interp_kwargs = (_gprMod, {})
+            else:
+                raise ValueError("scikit-learn is not loaded, so 'gpr' interpolator is not available.")
         else:
             interp_cls, interp_kwargs = self.interpolator_and_args
 
         # Build the interpolators
-        for int_ind, index_tuple in enumerate(my_index_tuples):
-            values = [data_at_point[index_tuple] for data_at_point in self.data]
-            my_interpolators[int_ind] = interp_cls(self.points, values, **interp_kwargs)
-
-        if comm is not None:
-            all_interpolators = comm.gather(my_interpolators, root=0)
-        else:
-            all_interpolators = [my_interpolators]
-
-        if rank == 0:
-            all_interpolators = _flatten(all_interpolators)
-            interpolators = _np.empty(self.qty_shape, dtype='object')
-            for interp, index_tuple in zip(all_interpolators, _flatten(all_index_tuples)):
-                interpolators[index_tuple] = interp
+        if self.interpolator_and_args == 'gpr':
+            # GPR is trained as a single multi-output model to save massive amounts of time
+            if rank == 0:
+                multi_interpolator = interp_cls(self.points, self.data, **interp_kwargs)
+            else:
+                multi_interpolator = None
             if comm is not None:
-                comm.bcast(interpolators, root=0)
+                multi_interpolator = comm.bcast(multi_interpolator, root=0)
+            interpolators = multi_interpolator
         else:
-            interpolators = comm.bcast(None, root=0)
+            for int_ind, index_tuple in enumerate(my_index_tuples):
+                values = [data_at_point[index_tuple] for data_at_point in self.data]
+                my_interpolators[int_ind] = interp_cls(self.points, values, **interp_kwargs)
+
+            if comm is not None:
+                all_interpolators = comm.gather(my_interpolators, root=0)
+            else:
+                all_interpolators = [my_interpolators]
+
+            if rank == 0:
+                all_interpolators = _flatten(all_interpolators)
+                interpolators = _np.empty(self.qty_shape, dtype='object')
+                for interp, index_tuple in zip(all_interpolators, _flatten(all_index_tuples)):
+                    interpolators[index_tuple] = interp
+                if comm is not None:
+                    comm.bcast(interpolators, root=0)
+            else:
+                interpolators = comm.bcast(None, root=0)
 
         if self._parameter_ranges is not None:
             parameter_range_bounds = [(rng[0], rng[1]) if isinstance(rng, tuple) else (min(rng), max(rng))
@@ -644,6 +692,8 @@ class InterpolatedQuantity(object):
 
     @property
     def qty_shape(self):
+        if use_sklearn and isinstance(self.interpolators, _gprMod):
+            return self.interpolators.out_shape
         return self.interpolators.shape
 
     @property
@@ -655,6 +705,9 @@ class InterpolatedQuantity(object):
         if not all([(a <= b <= c) for b, (a, c) in zip(v, self.parameter_ranges)]):
             raise ValueError("Parameter out of range.")
 
+        if use_sklearn and isinstance(self.interpolators, _gprMod):
+            return self.interpolators(*v)
+        
         value = _np.zeros(self.qty_shape, dtype='d')
         for i, interpolator in enumerate(self.interpolators.flat):
             u = interpolator(*v)

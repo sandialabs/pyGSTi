@@ -5,6 +5,7 @@ from scipy.interpolate import LinearNDInterpolator as _linND
 import pygsti
 import pygsti.extras.interpygate as interp
 from pygsti.extras.interpygate.core import use_csaps as USE_CSAPS
+from pygsti.extras.interpygate.core import use_sklearn as USE_SKLEARN
 from pygsti.tools.basistools import change_basis
 from pygsti.modelpacks import smq1Q_XY
 from pathlib import Path
@@ -127,6 +128,15 @@ class InterpygateConstructionTester(BaseCase):
                                     parameter_ranges=self.param_ranges, argument_indices=self.arg_indices, 
                                     interpolator_and_args='spline')
             op = opfactory_spline.create_op([0,np.pi/4])
+            op.from_vector([1])
+            self.assertArraysAlmostEqual(op, self.static_target)
+
+        if USE_SKLEARN:
+            opfactory_gpr = interp.InterpolatedOpFactory.create_by_interpolating_physical_process(
+                                    self.target_op, self.gate_process, argument_ranges=self.arg_ranges, 
+                                    parameter_ranges=self.param_ranges, argument_indices=self.arg_indices, 
+                                    interpolator_and_args='gpr')
+            op = opfactory_gpr.create_op([0,np.pi/4])
             op.from_vector([1])
             self.assertArraysAlmostEqual(op, self.static_target)
 
