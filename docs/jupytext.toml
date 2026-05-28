@@ -1,0 +1,11 @@
+# jupytext pairing: every file in markdown/ is paired with one in notebooks/.
+#
+# CONTRIBUTOR NOTE: The *.md files under markdown/ are the canonical source.
+# The notebooks/ directory is gitignored — it's a build artifact materialized
+# by `jupytext --sync markdown/**/*.md`. Edits made directly to a generated
+# .ipynb will be overwritten on the next sync unless you sync them BACK first:
+#   jupytext --sync notebooks/path/to/foo.ipynb
+# When in doubt, edit the .md.
+[formats]
+"notebooks/" = "ipynb"
+"markdown/" = "md:myst"

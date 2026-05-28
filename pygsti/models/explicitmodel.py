@@ -157,7 +157,8 @@ class ExplicitOpModel(_mdl.OpModel):
         #assert(default_param in ('full','TP','CPTP','H+S','S','static',
         #                         'H+S terms','clifford','H+S clifford terms'))
         def flagfn(typ): return {'auto_embed': True, 'match_parent_statespace': True,
-                                 'match_parent_evotype': True, 'cast_to_type': typ}
+                                 'match_parent_evotype': True, 'cast_to_type': typ,
+                                 'validate_keys': True}
 
         if default_prep_type == "auto":
             default_prep_type = _state.state_type_from_op_type(default_gate_type)
@@ -170,7 +171,9 @@ class ExplicitOpModel(_mdl.OpModel):
         self.povms = _OrderedMemberDict(self, default_povm_type, povm_prefix, flagfn("povm"))
         self.operations = _OrderedMemberDict(self, default_gate_type, gate_prefix, flagfn("operation"))
         self.instruments = _OrderedMemberDict(self, default_instrument_type, instrument_prefix, flagfn("instrument"))
-        self.factories = _OrderedMemberDict(self, default_gate_type, gate_prefix, flagfn("factory"))
+        self.factories = _OrderedMemberDict(self, default_gate_type, gate_prefix,
+                                            {'auto_embed': True, 'match_parent_statespace': True,
+                                             'match_parent_evotype': True, 'cast_to_type': "factory"})
         self.effects_prefix = effect_prefix
         self._default_gauge_group = None
 
