@@ -40,6 +40,13 @@ try:
 except ImportError:
     use_sklearn = False
 
+try:
+    import torch as _torch
+    import gpytorch as _gpytorch
+    use_gpytorch = True
+except ImportError:
+    use_gpytorch = False
+
 if use_csaps:
     class custom_interpolator():
         # This class restructures the csaps.NdGridCubicSmoothingSpline API to be consistent
@@ -67,6 +74,71 @@ if use_csaps:
             grid_points += [mesh[s]]
 
         return custom_interpolator(_cubicSpline(grid_points, values, smooth=1))
+
+if use_gpytorch:
+    class ExactMultitaskGPModel(_gpytorch.models.ExactGP):
+        def __init__(self, train_x, train_y, likelihood, num_tasks):
+            super(ExactMultitaskGPModel, self).__init__(train_x, train_y, likelihood)
+            self.mean_module = _gpytorch.means.MultitaskMean(
+                _gpytorch.means.ConstantMean(), num_tasks=num_tasks
+            )
+            self.covar_module = _gpytorch.kernels.MultitaskKernel(
+                _gpytorch.kernels.MaternKernel(nu=2.5), num_tasks=num_tasks, rank=1
+            )
+
+        def forward(self, x):
+            mean_x = self.mean_module(x)
+            covar_x = self.covar_module(x)
+            return _gpytorch.distributions.MultitaskMultivariateNormal(mean_x, covar_x)
+
+    class _gpytorchMod():
+        def __init__(self, points, values, **kwargs):
+            self.out_shape = values.shape[1:]
+            num_tasks = int(_np.prod(self.out_shape))
+            
+            # Prepare PyTorch tensors
+            flat_values = values.reshape(values.shape[0], num_tasks)
+            self.train_x = _torch.tensor(points, dtype=_torch.float64)
+            self.train_y = _torch.tensor(flat_values, dtype=_torch.float64)
+
+            self.likelihood = _gpytorch.likelihoods.MultitaskGaussianLikelihood(num_tasks=num_tasks)
+            self.model = ExactMultitaskGPModel(self.train_x, self.train_y, self.likelihood, num_tasks)
+            
+            # Ensure model uses float64
+            self.model = self.model.to(_torch.float64)
+            self.likelihood = self.likelihood.to(_torch.float64)
+
+            # Training
+            self.model.train()
+            self.likelihood.train()
+            
+            # Use the adam optimizer
+            optimizer = _torch.optim.Adam(self.model.parameters(), lr=0.1)
+            mll = _gpytorch.mlls.ExactMarginalLogLikelihood(self.likelihood, self.model)
+            
+            n_iter = kwargs.get('n_iter', 25)
+            for i in range(n_iter):
+                optimizer.zero_grad()
+                output = self.model(self.train_x)
+                loss = -mll(output, self.train_y)
+                loss.backward()
+                optimizer.step()
+                
+            self.model.eval()
+            self.likelihood.eval()
+            
+        def __call__(self, *v):
+            v_arr = _np.array(v)
+            if v_arr.ndim == 1:
+                v_arr = v_arr.reshape(1, -1)
+            
+            test_x = _torch.tensor(v_arr, dtype=_torch.float64)
+            
+            with _torch.no_grad(), _gpytorch.settings.fast_pred_var():
+                predictions = self.likelihood(self.model(test_x))
+                mean = predictions.mean.numpy()
+            
+            return mean[0].reshape(self.out_shape)
 
 if use_sklearn:
     class _gprMod():
@@ -633,10 +705,14 @@ class InterpolatedQuantityFactory(object):
             else:
                 raise ValueError("csaps package is not loaded, so 'spline' interpolator is not available.")
         elif self.interpolator_and_args == 'gpr':
-            if use_sklearn:
+            if use_gpytorch:
+                interp_cls, interp_kwargs = (_gpytorchMod, {})
+            elif use_sklearn:
+                import warnings
+                warnings.warn("gpytorch not found. Falling back to scikit-learn GPR (slower).")
                 interp_cls, interp_kwargs = (_gprMod, {})
             else:
-                raise ValueError("scikit-learn is not loaded, so 'gpr' interpolator is not available.")
+                raise ValueError("Neither gpytorch nor scikit-learn are loaded, so 'gpr' interpolator is not available.")
         else:
             interp_cls, interp_kwargs = self.interpolator_and_args
 
@@ -692,6 +768,8 @@ class InterpolatedQuantity(object):
 
     @property
     def qty_shape(self):
+        if use_gpytorch and isinstance(self.interpolators, _gpytorchMod):
+            return self.interpolators.out_shape
         if use_sklearn and isinstance(self.interpolators, _gprMod):
             return self.interpolators.out_shape
         return self.interpolators.shape
@@ -705,6 +783,8 @@ class InterpolatedQuantity(object):
         if not all([(a <= b <= c) for b, (a, c) in zip(v, self.parameter_ranges)]):
             raise ValueError("Parameter out of range.")
 
+        if use_gpytorch and isinstance(self.interpolators, _gpytorchMod):
+            return self.interpolators(*v)
         if use_sklearn and isinstance(self.interpolators, _gprMod):
             return self.interpolators(*v)
         
