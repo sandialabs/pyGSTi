@@ -148,7 +148,7 @@ class InterpygateTestCase(BaseTestCase):
                         ])
         interp_op = interp.InterpolatedDenseOp.create_by_interpolating_physical_process(
             target_op, example_process, param_ranges, comm=_comm,
-            mpi_workers_per_process=mpi_workers_per_process)
+            mpi_workers_per_process=mpi_workers_per_process, interpolator_and_args='spline')
 
         self.assertEqual(interp_op.num_params, 6)
         interp_op.from_vector([1.1, -0.01, -0.11, 0.055, 0.155, 1.59])
@@ -196,7 +196,7 @@ class InterpygateTestCase(BaseTestCase):
         example_process = ExampleProcess_timedep()
         opfactory = interp.InterpolatedOpFactory.create_by_interpolating_physical_process(
             TargetOpFactory(), example_process, arg_ranges, param_ranges, arg_indices, comm=_comm,
-            mpi_workers_per_process=mpi_workers_per_process)
+            mpi_workers_per_process=mpi_workers_per_process, interpolator_and_args='spline')
 
         self.assertEqual(opfactory.num_params, 4)
         v = _np.array([0.01, 0.01, 0.055, 0.055])
@@ -241,7 +241,7 @@ class InterpygateTestCase(BaseTestCase):
                          ])
         interp_op = interp.InterpolatedDenseOp.create_by_interpolating_physical_process(
             target_op, example_process, param_ranges, comm=_comm,
-            mpi_workers_per_process=mpi_workers_per_process)
+            mpi_workers_per_process=mpi_workers_per_process, interpolator_and_args='spline')
         
         self.assertEqual(interp_op.num_params, 6)
         interp_op.from_vector([1.1, -0.01, -0.11, 0.055, 0.155, 1.59])
@@ -289,7 +289,7 @@ class InterpygateTestCase(BaseTestCase):
         example_process = ExampleProcess()
         opfactory = interp.InterpolatedOpFactory.create_by_interpolating_physical_process(
             TargetOpFactory(), example_process, arg_ranges, param_ranges, arg_indices, comm=_comm,
-            mpi_workers_per_process=mpi_workers_per_process)
+            mpi_workers_per_process=mpi_workers_per_process, interpolator_and_args='spline')
 
         self.assertEqual(opfactory.num_params, 4)
         v = _np.array([0.01, 0.01, 0.055, 0.055])

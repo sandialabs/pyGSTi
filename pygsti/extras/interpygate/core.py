@@ -693,11 +693,14 @@ class InterpolatedQuantityFactory(object):
         my_interpolators = _np.empty(len(my_index_tuples), dtype=object)
 
         if self.interpolator_and_args is None:
-            if use_csaps:
-                interp_cls, interp_kwargs = (_cubicSplineMod, {'shape': self.grid_shape})
+            if use_gpytorch or use_sklearn:
+                self.interpolator_and_args = 'gpr'
+            elif use_csaps:
+                self.interpolator_and_args = 'spline'
             else:
-                interp_cls, interp_kwargs = (_linND, {'rescale': True})
-        elif self.interpolator_and_args == 'linear':
+                self.interpolator_and_args = 'linear'
+
+        if self.interpolator_and_args == 'linear':
             interp_cls, interp_kwargs = (_linND, {'rescale': True})
         elif self.interpolator_and_args == 'spline':
             if use_csaps:
