@@ -9,7 +9,7 @@ Defines the ElementaryErrorgenLabel class and supporting functionality.
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
-
+from __future__ import annotations
 
 def _to_int_or_strip(x):  # (same as in slowcircuitparser.py)
     return int(x) if x.strip().isdigit() else x.strip()
@@ -340,7 +340,7 @@ class GlobalElementaryErrorgenLabel(ElementaryErrorgenLabel):
             ret.append(''.join(lbl))
         return tuple(ret)
 
-    def map_state_space_labels(self, mapper):
+    def map_state_space_labels(self, mapper) -> GlobalElementaryErrorgenLabel:
         """
         Creates a new GlobalElementaryErrorgenLabel whose `sslbls` attribute is updated according to a mapping function.
 
@@ -361,7 +361,7 @@ class GlobalElementaryErrorgenLabel(ElementaryErrorgenLabel):
         mapped_sslbls = tuple(map(mapper_func, self.sslbls))
         return GlobalElementaryErrorgenLabel(self.errorgen_type, self.basis_element_labels, mapped_sslbls)
 
-    def sort_sslbls(self):
+    def sort_sslbls(self) -> GlobalElementaryErrorgenLabel:
         """
         Creates a new GlobalElementaryErrorgenLabel with sorted (potentially reordered) state space labels.
 
