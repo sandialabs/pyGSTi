@@ -129,6 +129,6 @@ All other `tools/` files import from `baseobjs` (or stdlib/numpy/scipy) and noth
 
 ## Canonical examples
 
-There's no single notebook that exercises `tools/` end-to-end (it's a library, not a feature). The best place to see real usage is the test suite under [test/unit/tools/](../pygsti-repo/test/unit/tools/), which is well-organized and one of the cleaner parts of the test tree.
+There's no single notebook that exercises `tools/` end-to-end (it's a library, not a feature). The best place to see real usage is the test suite under [test/unit/tools/](../test/unit/tools/), which is well-organized and one of the cleaner parts of the test tree.
 
-For specific topics, the notebooks under [docs/markdown/utilities/](../pygsti-repo/docs/markdown/utilities/) cover some of the higher-level helpers.
+For specific topics, the notebooks under [docs/markdown/utilities/](../docs/markdown/utilities/) cover some of the higher-level helpers.

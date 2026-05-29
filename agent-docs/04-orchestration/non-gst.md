@@ -106,7 +106,7 @@ Niche design variants, framework-constructed result containers, intermediate abs
 
 ## Canonical examples
 
-- [docs/markdown/protocols/](../../pygsti-repo/docs/markdown/protocols/) — notebooks for several non-GST protocols: drift characterization, RPE, mirror-circuit benchmarks, parity benchmarking, volumetric benchmarks, interpolated operators.
-- [docs/markdown/protocols/DriftCharacterization.md](../../pygsti-repo/docs/markdown/protocols/DriftCharacterization.md), [RobustPhaseEstimation.md](../../pygsti-repo/docs/markdown/protocols/RobustPhaseEstimation.md).
-- [docs/markdown/rb/](../../pygsti-repo/docs/markdown/rb/) — RB tutorials (the RB Protocol lives in `protocols/rb.py`; supporting analysis can pull from `extras/` and `tools/rbtheory.py`).
-- **Skip [docs/markdown/protocols/IdleTomography.md](../../pygsti-repo/docs/markdown/protocols/IdleTomography.md)** — the underlying subsystem under `extras/idletomography/` is broken. See [08-domain-plugins.md](../08-domain-plugins.md).
+- [docs/markdown/protocols/](../../docs/markdown/protocols/) — notebooks for several non-GST protocols: drift characterization, RPE, mirror-circuit benchmarks, parity benchmarking, volumetric benchmarks, interpolated operators.
+- [docs/markdown/protocols/DriftCharacterization.md](../../docs/markdown/protocols/DriftCharacterization.md), [RobustPhaseEstimation.md](../../docs/markdown/protocols/RobustPhaseEstimation.md).
+- [docs/markdown/rb/](../../docs/markdown/rb/) — RB tutorials (the RB Protocol lives in `protocols/rb.py`; supporting analysis can pull from `extras/` and `tools/rbtheory.py`).
+- **Skip [docs/markdown/protocols/IdleTomography.md](../../docs/markdown/protocols/IdleTomography.md)** — the underlying subsystem under `extras/idletomography/` is broken. See [08-domain-plugins.md](../08-domain-plugins.md).

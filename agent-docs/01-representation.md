@@ -178,16 +178,16 @@ The third layer has a non-obvious consequence: **representation degeneracies in 
 
 ## Canonical examples
 
-Notebook sources under [docs/markdown/](../pygsti-repo/docs/markdown/) are useful teaching material, although they may be out-of-date.
+Notebook sources under [docs/markdown/](../docs/markdown/) are useful teaching material, although they may be out-of-date.
 Tests are mediocre as documentation; consult them only when you need to see actual API usage in isolation.
 
-- [docs/markdown/objects/Circuit.md](../pygsti-repo/docs/markdown/objects/Circuit.md) — Circuit and Label semantics in depth.
-- [docs/markdown/objects/ExplicitModel.md](../pygsti-repo/docs/markdown/objects/ExplicitModel.md), [ImplicitModel.md](../pygsti-repo/docs/markdown/objects/ImplicitModel.md) — Model variants.
-- [docs/markdown/objects/Operators.md](../pygsti-repo/docs/markdown/objects/Operators.md) — gate parameterizations actually used in practice.
-- [docs/markdown/objects/ModelParameterization.md](../pygsti-repo/docs/markdown/objects/ModelParameterization.md) — parameterization modes including CPTPLND.
-- [docs/markdown/objects/ModelNoise.md](../pygsti-repo/docs/markdown/objects/ModelNoise.md) — noise composition patterns; SPAM noise modeling.
-- [docs/markdown/objects/Instruments.md](../pygsti-repo/docs/markdown/objects/Instruments.md), [CustomOperator.md](../pygsti-repo/docs/markdown/objects/CustomOperator.md), [CustomPOVM.md](../pygsti-repo/docs/markdown/objects/CustomPOVM.md) — Instrument and custom-operator extension patterns.
-- [docs/markdown/objects/ModelMemberGraph.md](../pygsti-repo/docs/markdown/objects/ModelMemberGraph.md), [StateSpace.md](../pygsti-repo/docs/markdown/objects/StateSpace.md), [MatrixBases.md](../pygsti-repo/docs/markdown/objects/MatrixBases.md) — supporting infrastructure.
-- [docs/markdown/objects/ParameterLabels.md](../pygsti-repo/docs/markdown/objects/ParameterLabels.md), [ParameterBounds.md](../pygsti-repo/docs/markdown/objects/ParameterBounds.md) — parameter introspection.
+- [docs/markdown/objects/Circuit.md](../docs/markdown/objects/Circuit.md) — Circuit and Label semantics in depth.
+- [docs/markdown/objects/ExplicitModel.md](../docs/markdown/objects/ExplicitModel.md), [ImplicitModel.md](../docs/markdown/objects/ImplicitModel.md) — Model variants.
+- [docs/markdown/objects/Operators.md](../docs/markdown/objects/Operators.md) — gate parameterizations actually used in practice.
+- [docs/markdown/objects/ModelParameterization.md](../docs/markdown/objects/ModelParameterization.md) — parameterization modes including CPTPLND.
+- [docs/markdown/objects/ModelNoise.md](../docs/markdown/objects/ModelNoise.md) — noise composition patterns; SPAM noise modeling.
+- [docs/markdown/objects/Instruments.md](../docs/markdown/objects/Instruments.md), [CustomOperator.md](../docs/markdown/objects/CustomOperator.md), [CustomPOVM.md](../docs/markdown/objects/CustomPOVM.md) — Instrument and custom-operator extension patterns.
+- [docs/markdown/objects/ModelMemberGraph.md](../docs/markdown/objects/ModelMemberGraph.md), [StateSpace.md](../docs/markdown/objects/StateSpace.md), [MatrixBases.md](../docs/markdown/objects/MatrixBases.md) — supporting infrastructure.
+- [docs/markdown/objects/ParameterLabels.md](../docs/markdown/objects/ParameterLabels.md), [ParameterBounds.md](../docs/markdown/objects/ParameterBounds.md) — parameter introspection.
 
 Source-side anchor for "how do I construct an `ExplicitOpModel` from scratch": [pygsti/models/modelconstruction.py:59](../pygsti/models/modelconstruction.py#L59) and its `create_explicit_model_from_expressions` helper.

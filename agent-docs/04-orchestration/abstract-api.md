@@ -17,7 +17,7 @@ proto   = pygsti.protocols.StandardGST(modes=("CPTPLND", "Target"), gaugeopt_sui
 results = proto.run(data)
 ```
 
-The driver functions ([`run_long_sequence_gst`](../../pygsti/drivers/longsequence.py#L315), [`run_stdpractice_gst`](../../pygsti/drivers/longsequence.py#L680)) wrap this same flow but are explicitly labeled an "older-style function-centric API" in [docs/markdown/gst/Overview-functionbased.md](../../pygsti-repo/docs/markdown/gst/Overview-functionbased.md), which recommends switching to the class-based path. See [drivers.md](drivers.md) for the wrapper layer.
+The driver functions ([`run_long_sequence_gst`](../../pygsti/drivers/longsequence.py#L315), [`run_stdpractice_gst`](../../pygsti/drivers/longsequence.py#L680)) wrap this same flow but are explicitly labeled an "older-style function-centric API" in [docs/markdown/gst/Overview-functionbased.md](../../docs/markdown/gst/Overview-functionbased.md), which recommends switching to the class-based path. See [drivers.md](drivers.md) for the wrapper layer.
 
 If you're adding a new workflow, add a `Protocol` subclass and contain its logic in its `.run()` method.
 
@@ -99,5 +99,5 @@ Runners, mixins, composed designs, simulators, post-processors, and supporting r
 
 ## Canonical examples
 
-- [docs/markdown/overview/00-Protocols.md](../../pygsti-repo/docs/markdown/overview/00-Protocols.md) — orientation-level introduction to the Protocol contract.
-- [docs/markdown/overview/02-Using-Essential-Objects.md](../../pygsti-repo/docs/markdown/overview/02-Using-Essential-Objects.md) — how `ExperimentDesign`, `ProtocolData`, `Protocol`, and `ProtocolResults` fit together.
+- [docs/markdown/overview/00-Protocols.md](../../docs/markdown/overview/00-Protocols.md) — orientation-level introduction to the Protocol contract.
+- [docs/markdown/overview/02-Using-Essential-Objects.md](../../docs/markdown/overview/02-Using-Essential-Objects.md) — how `ExperimentDesign`, `ProtocolData`, `Protocol`, and `ProtocolResults` fit together.

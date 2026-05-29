@@ -59,8 +59,8 @@ flowchart TD
 
 ## Canonical examples (orientation-level)
 
-- [docs/markdown/overview/00-Protocols.md](../pygsti-repo/docs/markdown/overview/00-Protocols.md) — orientation-level introduction to the Protocol contract.
-- [docs/markdown/overview/02-Using-Essential-Objects.md](../pygsti-repo/docs/markdown/overview/02-Using-Essential-Objects.md) — how the core objects fit together.
-- [docs/markdown/gst/Overview.md](../pygsti-repo/docs/markdown/gst/Overview.md) — the canonical class-API GST tutorial. (Also linked from [gst.md](04-orchestration/gst.md).)
+- [docs/markdown/overview/00-Protocols.md](../docs/markdown/overview/00-Protocols.md) — orientation-level introduction to the Protocol contract.
+- [docs/markdown/overview/02-Using-Essential-Objects.md](../docs/markdown/overview/02-Using-Essential-Objects.md) — how the core objects fit together.
+- [docs/markdown/gst/Overview.md](../docs/markdown/gst/Overview.md) — the canonical class-API GST tutorial. (Also linked from [gst.md](04-orchestration/gst.md).)
 
 GST-specific examples live in [gst.md](04-orchestration/gst.md); non-GST examples (drift, RPE, mirror-circuit benchmarks, parity benchmarking, volumetric benchmarks, RB) live in [non-gst.md](04-orchestration/non-gst.md); legacy-driver tutorials live in [drivers.md](04-orchestration/drivers.md).

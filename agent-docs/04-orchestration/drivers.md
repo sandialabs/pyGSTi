@@ -36,9 +36,9 @@ The bootstrap helpers (`create_bootstrap_dataset`, `create_bootstrap_models`) ar
 ## Pitfalls and gotchas
 
 - **Driver functions are legacy.** Don't add new ones. If a tutorial calls `run_long_sequence_gst`, that's a reasonable migration target — port to `StandardGST(...).run(data)` (or `GateSetTomography(...).run(data)`) when you next touch the call site.
-- **The function-centric tutorial labels itself "older-style."** [docs/markdown/gst/Overview-functionbased.md](../../pygsti-repo/docs/markdown/gst/Overview-functionbased.md) explicitly recommends switching to the class-based path.
+- **The function-centric tutorial labels itself "older-style."** [docs/markdown/gst/Overview-functionbased.md](../../docs/markdown/gst/Overview-functionbased.md) explicitly recommends switching to the class-based path.
 
 ## Canonical examples
 
-- [docs/markdown/gst/Overview-functionbased.md](../../pygsti-repo/docs/markdown/gst/Overview-functionbased.md) — the legacy function-based tutorial. Useful when porting old code.
-- [docs/markdown/gst/Driverfunctions.md](../../pygsti-repo/docs/markdown/gst/Driverfunctions.md) — driver functions in detail.
+- [docs/markdown/gst/Overview-functionbased.md](../../docs/markdown/gst/Overview-functionbased.md) — the legacy function-based tutorial. Useful when porting old code.
+- [docs/markdown/gst/Driverfunctions.md](../../docs/markdown/gst/Driverfunctions.md) — driver functions in detail.

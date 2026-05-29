@@ -99,7 +99,7 @@ The reportables file is **predominantly hand-written**, not generated. Adding a 
 
 If you're new to `report/` and have a change to make:
 
-1. Read [docs/markdown/reporting/Workspace.md](../pygsti-repo/docs/markdown/reporting/Workspace.md), then [WorkspaceSwitchboards.md](../pygsti-repo/docs/markdown/reporting/WorkspaceSwitchboards.md). These are the canonical conceptual intros.
+1. Read [docs/markdown/reporting/Workspace.md](../docs/markdown/reporting/Workspace.md), then [WorkspaceSwitchboards.md](../docs/markdown/reporting/WorkspaceSwitchboards.md). These are the canonical conceptual intros.
 2. In code, read the `Workspace` class skeleton ([workspace.py:177–270](../pygsti/report/workspace.py#L177)) — focus on `__init__`, `_makefactory`, and the digest interaction.
 3. Then read one simple factory function — [`create_general_report` at factory.py:579](../pygsti/report/factory.py#L579) is a reasonable choice because it's shorter than `construct_standard_report`.
 4. **Do not start in [reportables.py](../pygsti/report/reportables.py).** 2868 lines of metric formulas with no scaffolding to orient on. Only go there to add or fix a specific metric.
@@ -147,10 +147,10 @@ This subpackage is small (~600 lines, 2 files) and stable. You only need to touc
 
 ## Canonical examples
 
-Notebooks under [docs/markdown/reporting/](../pygsti-repo/docs/markdown/reporting/) are the only good teaching material. There are no high-quality code-level examples inside the `report/` subpackage itself.
+Notebooks under [docs/markdown/reporting/](../docs/markdown/reporting/) are the only good teaching material. There are no high-quality code-level examples inside the `report/` subpackage itself.
 
-- [docs/markdown/reporting/ReportGeneration.md](../pygsti-repo/docs/markdown/reporting/ReportGeneration.md) — top-level report-generation walkthrough.
-- [docs/markdown/reporting/Workspace.md](../pygsti-repo/docs/markdown/reporting/Workspace.md) — the Workspace cache model.
-- [docs/markdown/reporting/WorkspaceExamples.md](../pygsti-repo/docs/markdown/reporting/WorkspaceExamples.md) — concrete plot/table examples.
-- [docs/markdown/reporting/WorkspaceSwitchboards.md](../pygsti-repo/docs/markdown/reporting/WorkspaceSwitchboards.md) — switchboard mechanics.
-- [docs/markdown/Reporting.md](../pygsti-repo/docs/markdown/Reporting.md) — top-level entry point in the jupyter-book.
+- [docs/markdown/reporting/ReportGeneration.md](../docs/markdown/reporting/ReportGeneration.md) — top-level report-generation walkthrough.
+- [docs/markdown/reporting/Workspace.md](../docs/markdown/reporting/Workspace.md) — the Workspace cache model.
+- [docs/markdown/reporting/WorkspaceExamples.md](../docs/markdown/reporting/WorkspaceExamples.md) — concrete plot/table examples.
+- [docs/markdown/reporting/WorkspaceSwitchboards.md](../docs/markdown/reporting/WorkspaceSwitchboards.md) — switchboard mechanics.
+- [docs/markdown/Reporting.md](../docs/markdown/Reporting.md) — top-level entry point in the jupyter-book.

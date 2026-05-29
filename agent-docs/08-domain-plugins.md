@@ -83,7 +83,7 @@ flowchart TD
 
 ## Canonical examples
 
-- [docs/markdown/protocols/](../pygsti-repo/docs/markdown/protocols/) — notebooks for several extras-housed protocols: drift characterization, RPE, mirror-circuit benchmarks, parity benchmarking, volumetric benchmarks, interpolated operators.
-- [docs/markdown/protocols/DriftCharacterization.md](../pygsti-repo/docs/markdown/protocols/DriftCharacterization.md), [RobustPhaseEstimation.md](../pygsti-repo/docs/markdown/protocols/RobustPhaseEstimation.md), [InterpolatedOperators.md](../pygsti-repo/docs/markdown/protocols/InterpolatedOperators.md).
-- **Skip [docs/markdown/protocols/IdleTomography.md](../pygsti-repo/docs/markdown/protocols/IdleTomography.md)** — broken subsystem.
-- [docs/markdown/rb/](../pygsti-repo/docs/markdown/rb/) — RB tutorials (the RB Protocol lives in `protocols/rb.py`; supporting analysis can pull from `extras/` and `tools/rbtheory.py`).
+- [docs/markdown/protocols/](../docs/markdown/protocols/) — notebooks for several extras-housed protocols: drift characterization, RPE, mirror-circuit benchmarks, parity benchmarking, volumetric benchmarks, interpolated operators.
+- [docs/markdown/protocols/DriftCharacterization.md](../docs/markdown/protocols/DriftCharacterization.md), [RobustPhaseEstimation.md](../docs/markdown/protocols/RobustPhaseEstimation.md), [InterpolatedOperators.md](../docs/markdown/protocols/InterpolatedOperators.md).
+- **Skip [docs/markdown/protocols/IdleTomography.md](../docs/markdown/protocols/IdleTomography.md)** — broken subsystem.
+- [docs/markdown/rb/](../docs/markdown/rb/) — RB tutorials (the RB Protocol lives in `protocols/rb.py`; supporting analysis can pull from `extras/` and `tools/rbtheory.py`).

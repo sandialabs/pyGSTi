@@ -2,9 +2,11 @@
 
 > **NOTE FOR HUMANS:** these docs use [Mermaid](https://mermaid.js.org/) diagrams. To view them rendered, install a Mermaid-aware Markdown viewer — e.g., the **"Markdown Preview Mermaid Support"** extension in VS Code, or read the files on GitHub (which renders Mermaid in `.md` files natively). Without one, the diagram code blocks will display as plain text.
 
-This folder is hierarchical orientation material for agents (and new group developers) working on **pyGSTi** itself. It covers architecture, key abstractions, and non-obvious gotchas. It does *not* teach pyGSTi as a library — for that, read the jupyter-book at [docs/markdown/](../pygsti-repo/docs/markdown/) in the source tree.
+This folder is hierarchical orientation material for agents (and new group developers) working on **pyGSTi** itself. It covers architecture, key abstractions, and non-obvious gotchas. It does *not* teach pyGSTi as a library — for that, read the jupyter-book at [docs/markdown/](../docs/markdown/) in the source tree.
 
 Read this file first, then jump into the subsystem doc(s) relevant to your task.
+
+> **A note to agents on doc accuracy.** These docs are intentionally maintained at a "not overtly wrong" bar, not at a "perfectly accurate" one — they're a hint system to reduce trial-and-error, not a contract. **If, while doing real work, you find that what these docs say contradicts what the code actually does, treat the code as authoritative and flag the discrepancy to the user.** Be specific: name the file, the section, the claim, and the contradicting code path. Don't silently work around it, and don't edit the docs yourself unless the user asks you to.
 
 ## What pyGSTi is
 
@@ -88,6 +90,6 @@ The actionable concern is therefore not "the fallback is slow" but **"silent fal
 
 ## What's not in here
 
-- **User-facing usage docs** for pyGSTi as a library: see the jupyter-book at [pygsti-repo/docs/markdown/](../pygsti-repo/docs/markdown/). Notebooks under `docs/markdown/gst/`, `docs/markdown/objects/`, `docs/markdown/reporting/`, `docs/markdown/examples/`, and friends are the canonical tutorials.
+- **User-facing usage docs** for pyGSTi as a library: see the jupyter-book at [docs/markdown/](../docs/markdown/). Notebooks under `docs/markdown/gst/`, `docs/markdown/objects/`, `docs/markdown/reporting/`, `docs/markdown/examples/`, and friends are the canonical tutorials.
 - **In-flight project state and active threads**: see [sandialabs/pyGSTi](https://github.com/sandialabs/pyGSTi/issues) on GitHub.
 - **Code conventions, build/test environment, lint rules**: see the repository's `README.md`, `CONTRIBUTING.md`, and `pyproject.toml`.
