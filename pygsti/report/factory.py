@@ -18,6 +18,8 @@ import zipfile as _zipfile
 
 import numpy as _np
 
+from typing import Union
+
 from pygsti.report import Report as _Report
 from pygsti.report import autotitle as _autotitle
 from pygsti.report import merge_helpers as _merge
@@ -184,8 +186,7 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
     Ls = None
 
     for results in results_dict.values():
-        est_labels = _add_new_estimate_labels(est_labels, results.estimates,
-                                              combine_robust)
+        est_labels = _add_new_estimate_labels(est_labels, results.estimates, combine_robust)
         loc_Ls = results.circuit_lists['final'].xs \
             if isinstance(results.circuit_lists['final'], _PlaquetteGridCircuitStructure) else [0]
         Ls = _add_new_labels(Ls, loc_Ls)
@@ -311,10 +312,8 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
             else:
                 est_modvi = est
 
-            switchBd.objfn_builder[d, i] = est.parameters.get(
-                'final_objfn_builder', _objfns.ObjectiveFunctionBuilder.create_from('logl'))
-            switchBd.objfn_builder_modvi[d, i] = est_modvi.parameters.get(
-                'final_objfn_builder', _objfns.ObjectiveFunctionBuilder.create_from('logl'))
+            switchBd.objfn_builder[d, i] = est.parameters.get('final_objfn_builder', _objfns.ObjectiveFunctionBuilder.create_from('logl'))
+            switchBd.objfn_builder_modvi[d, i] = _objfns.ObjectiveFunctionBuilder.create_from('logl')
             switchBd.params[d, i] = est.parameters
             
             #add the final mdc store
@@ -1128,6 +1127,24 @@ def find_std_clifford_compilation(model, verbosity=0):
     return None
 
 
+def _validated_confidence_level(cl: Union[float, int, None]):
+    if cl is None:
+        return cl
+    if cl < 1:
+        msg = \
+        f"""
+        Confidence level should be specified as a percent from 0 to 100. Reasonable
+        values for this argument are usually between 80 and 99.5.
+        
+        We received confidence level={cl}, which we assume was accidentally passed as
+        a proportion. We'll multiply by 100 and proceed. 
+        """
+        _warnings.warn(msg)
+        cl = cl * 100
+    assert 0 < cl and cl < 100
+    return cl
+
+
 # TODO these factories should really be Report subclasses
 def construct_standard_report(results, title="auto",
                               confidence_level=None, comm=None, ws=None,
@@ -1202,6 +1219,7 @@ def construct_standard_report(results, title="auto",
              in this particular report. Strings will be cast to lowercase, 
              stripped of white space, and then mapped to omitted Section classes
              as follows
+
                 {
                     'summary'         : SummarySection,
                     'goodness'        : GoodnessSection,
@@ -1231,8 +1249,12 @@ def construct_standard_report(results, title="auto",
 
     printer = _VerbosityPrinter.create_printer(verbosity, comm=comm)
     ws = ws or _ws.Workspace()
+    confidence_level = _validated_confidence_level(confidence_level)
 
     advanced_options = advanced_options or {}
+    n_leak = advanced_options.get('n_leak', 0)
+    # ^ It would be preferable to store n_leak in a Basis object, or something similar.
+    #   We're using this for now since it's simple and gets the job done.
     linlogPercentile = advanced_options.get('linlog percentile', 5)
     nmthreshold = advanced_options.get('nmthreshold', DEFAULT_NONMARK_ERRBAR_THRESHOLD)
     embed_figures = advanced_options.get('embed_figures', True)
@@ -1247,12 +1269,8 @@ def construct_standard_report(results, title="auto",
                           " confidence interval - please note the updated function signature"))
 
     if title is None or title == "auto":
-        autoname = _autotitle.generate_name()
+        autoname = _autotitle.generate_name(log_warning=True)
         title = "GST Report for " + autoname
-        _warnings.warn(("You should really specify `title=` when generating reports,"
-                        " as this makes it much easier to identify them later on.  "
-                        "Since you didn't, pyGSTi has generated a random one"
-                        " for you: '{}'.").format(autoname))
 
     pdfInfo = [('Author', 'pyGSTi'), ('Title', title),
                ('Keywords', 'GST'), ('pyGSTi Version', _pygsti_version)]
@@ -1324,7 +1342,11 @@ def construct_standard_report(results, title="auto",
     try:
         idt_results = _construct_idtresults(idtIdleOp, idtPauliDicts, results, printer)
     except Exception as e:
-        _warnings.warn("Idle tomography failed:\n" + str(e))
+        if isinstance(e, ValueError) and 'Expected matrix of shape' in str(e):
+            msg = "Idle tomography skipped. Currently, this is only supported for 2-level systems."
+            printer.log(msg)
+        else:
+            _warnings.warn("Idle tomography unexpectedly failed:\n" + str(e))
         idt_results = {}
     if len(idt_results) > 0:
         sections.append(_section.IdleTomographySection())
@@ -1375,7 +1397,8 @@ def construct_standard_report(results, title="auto",
         'gauge_opt_labels': tuple(gauge_opt_labels),
         'max_lengths': tuple(Ls),
         'switchbd_maxlengths': tuple(swLs),
-        'show_unmodeled_error': bool('ShowUnmodeledError' in flags)
+        'show_unmodeled_error': bool('ShowUnmodeledError' in flags),
+        'n_leak' : n_leak
     }
 
     templates = dict(
@@ -1499,12 +1522,8 @@ def construct_nqnoise_report(results, title="auto",
                           " confidence interval - please note the updated function signature"))
 
     if title is None or title == "auto":
-        autoname = _autotitle.generate_name()
+        autoname = _autotitle.generate_name(log_warning=True)
         title = "GST Report for " + autoname
-        _warnings.warn(("You should really specify `title=` when generating reports,"
-                        " as this makes it much easier to identify them later on.  "
-                        "Since you didn't, pyGSTi has generated a random one"
-                        " for you: '{}'.").format(autoname))
 
     pdfInfo = [('Author', 'pyGSTi'), ('Title', title),
                ('Keywords', 'GST'), ('pyGSTi Version', _pygsti_version)]
@@ -1660,12 +1679,8 @@ def create_drift_report(results, title='auto', ws=None, verbosity=1):
     ws = ws or _ws.Workspace()
 
     if title is None or title == "auto":
-        autoname = _autotitle.generate_name()
+        autoname = _autotitle.generate_name(log_warning=True)
         title = "Drift Report for " + autoname
-        _warnings.warn(("You should really specify `title=` when generating reports,"
-                        " as this makes it much easier to identify them later on.  "
-                        "Since you didn't, pyGSTi has generated a random one"
-                        " for you: '{}'.").format(autoname))
 
     pdfInfo = [('Author', 'pyGSTi'), ('Title', title),
                ('Keywords', 'GST'), ('pyGSTi Version', _pygsti_version)]

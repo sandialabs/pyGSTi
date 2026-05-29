@@ -262,8 +262,9 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         nprocs = resource_alloc.comm_size
         nAtomComms = num_atom_processors
         nAtoms = len(create_atom_args)
-        printer.log("*** Distributing %d atoms to %d atom-processing groups (%s cores) ***" %
-                    (nAtoms, nAtomComms, nprocs))
+        if comm is not None:
+            printer.log("*** Distributing %d atoms to %d atom-processing groups (%s cores) ***" %
+                        (nAtoms, nAtomComms, nprocs))
 
         assert(nAtomComms <= nAtoms), ("Cannot request more atom-processors (%d) than there are atoms (%d)!"
                                        % (nAtomComms, nAtoms))
@@ -300,15 +301,16 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
             assert(len(myAtomCommIndices) == 1), ("There needs to be at least one processor per atom-processing comm."
                                                   " Try using fewer atom-processors!")
             myAtomCommIndex = myAtomCommIndices[0]
-            printer.log("    More atom-processors than hosts: each host gets ~%d atom-processors"
-                        % len(myHostsAtomCommIndices))
+            if comm is not None:
+                printer.log("    More atom-processors than hosts: each host gets ~%d atom-processors"
+                            % len(myHostsAtomCommIndices))
 
         else:  # nAtomComms < nHosts
             assert(len(myHostsAtomCommIndices) == 1), "Each host should be assigned to exactly 1 atomComm"
             myAtomCommIndex = myHostsAtomCommIndices[0]
-            atom_processing_subcomm = comm.Split(color=myAtomCommIndex, key=rank) \
-                if (comm is not None) else None
-            printer.log("    More hosts than atom-processors: each host helps 1 atom-processor")
+            atom_processing_subcomm = None if comm is None else comm.Split(color=myAtomCommIndex, key=rank)
+            if comm is None:
+                printer.log("    More hosts than atom-processors: each host helps 1 atom-processor")
 
         #Mark whether this processor is a part of the last/final atom processor group, as only
         # this group will add "extra" penalty term elements to their objective function arrays.
@@ -432,8 +434,9 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
                                                        " comm. Try using fewer param-processors!")
                 myParamCommIndex = myParamCommIndices[0]
                 nHostsWithinAtomComm = 1  # needed for param2 test below
-                printer.log(("    Atom-processors already occupy a single node, dividing atom-processor into %d"
-                             " param-processors.") % num_param_processors)
+                if comm is not None:
+                    printer.log(("    Atom-processors already occupy a single node, dividing atom-processor into %d"
+                                " param-processors.") % num_param_processors)
                 # atom_subcomm_owner_rank = paramCommOwners[myParamCommIndex]
 
             else:  # then distribute params among hosts, then among host_comm's procs - this is similar
@@ -465,10 +468,11 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
                         if (atom_processing_subcomm is not None) else None
                     printer.log("    More host-per-atom-proc than param-processors: each host helps 1 param-processor")
 
-            printer.log("*** Divided %d-host atom-processor (~%d procs) into %d param-processing groups ***" %
-                        (nHostsWithinAtomComm,
-                         atom_processing_subcomm.size if (atom_processing_subcomm is not None) else 1,
-                         num_param_processors))
+            if comm is not None:
+                printer.log("*** Divided %d-host atom-processor (~%d procs) into %d param-processing groups ***" %
+                            (nHostsWithinAtomComm,
+                            atom_processing_subcomm.size if (atom_processing_subcomm is not None) else 1,
+                            num_param_processors))
 
             #Get param indices for this processor (the ones for this proc's param_processing_subcomm)
             myParamIndices, paramOwners, _ = _mpit.distribute_indices_base(

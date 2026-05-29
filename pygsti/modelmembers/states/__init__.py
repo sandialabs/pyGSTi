@@ -260,13 +260,12 @@ def convert(state, to_type, basis, ideal_state=None, flatten_structure=False, cp
                 proj_basis = 'PP' if state.state_space.is_entirely_qubits else basis
                 errorgen = _LindbladErrorgen.from_error_generator(state.state_space.dim, to_type, proj_basis,
                                                                   basis, truncate=True, evotype=state.evotype)
+                
                 if st is not state and not _np.allclose(st.to_dense(), state.to_dense()):
                     
-                    dense_st = st.to_dense()
-                    dense_state = state.to_dense()
+                    dense_st = st.to_dense(on_space='HilbertSchmidt')
+                    dense_state = state.to_dense(on_space='HilbertSchmidt')
                     num_qubits = st.state_space.num_qubits
-                    
-                    
 
                     #GLND for states suffers from "trivial gauge" freedom. This function identifies
                     #the physical directions to avoid this gauge.

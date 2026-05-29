@@ -1,4 +1,9 @@
-""" Circuit snippers for use in QPANNs """
+"""Circuit "snippers" for QPANNs.
+
+A snipper is a locality/feature-selection specification used by QPANN rate-prediction layers.
+For each elementary error generator, it returns a list of indices into the circuit encoder's
+per-layer feature vector that should be used as inputs when predicting that generator's rate.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -12,20 +17,21 @@ import numpy as _np
 
 def undirected_adjacency_matrix_from_edges(edges, qubit_labels):
     """
-    Constructs the adjacency matrix for the graph with nodes given by
-    `qubit_labels` and edges given by `edges.
+    Constructs the undirected adjacency matrix for the graph with nodes given by `qubit_labels` and edges given by `edges.
 
     Parameters
     ----------
-    edges : list
-        List of tuples of edges, where each element of each edge is an element of `qubit_labels`
+    edges : list list[tuple]
+        List of tuples of edges `(u, v)`, where each element of each edge is an element of `qubit_labels`. (i.e. `u` and `v` are elements of `qubit_labels`)
 
     qubit_labels : list
-        The nodes of the graph
+        Node labels defining the ordering of rows/columns in the returned matrix.
 
     Returns
     -------
-    numpy array
+    numpy.ndarray
+        Integer adjacency matrix of shape `(len(qubit_labels), len(qubit_labels))` with
+        symmetric entries in {0,1}.
     """
     adjacency_matrix = _np.zeros((len(qubit_labels), len(qubit_labels)), int)
     for edge in edges:
@@ -67,12 +73,17 @@ def layer_snipper_from_qubit_graph(error_generators, encoder, adjacency_matrix, 
 
     Returns 
     -------
-    list
+    list[list[int]]
         A list of lists, of the same length as `error_generators`. The ith element of this list
         is the indices in the layer encoding used by `encoder` that a QPANN should look at for
         predicting the rate of the corresponding error generator. This list is in the correct
         format to be passed to an initialization of a QPANN, as the `snipper` argument.
-
+        
+    Notes
+    -----
+    This function computes a graph Laplacian `L = D - A` and uses `L**hops` to infer which
+    nodes are within `hops` steps (via nonzero entries). This is a heuristic; depending on
+    graph structure, using powers of the adjacency matrix may be more conventional.
     """
     # Compute the set of qubits that are within `hops` steps on the adjacency graph of each qubit,
     # by computing the Lapalacian and taking its `hops` power.

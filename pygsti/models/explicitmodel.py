@@ -10,6 +10,8 @@ Defines the ExplicitOpModel class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
+
 import collections as _collections
 import itertools as _itertools
 import uuid as _uuid
@@ -24,7 +26,10 @@ from pygsti.models.memberdict import OrderedMemberDict as _OrderedMemberDict
 from pygsti.models.layerrules import LayerRules as _LayerRules
 from pygsti.models.modelparaminterposer import ModelParamsInterposer as _ModelParamsInterposer
 from pygsti.models.fogistore import FirstOrderGaugeInvariantStore as _FirstOrderGaugeInvariantStore
-from pygsti.models.gaugegroup import GaugeGroup as _GaugeGroup
+from pygsti.models.gaugegroup import (
+    GaugeGroup as _GaugeGroup,
+    GaugeGroupElement as _GaugeGroupElement
+)
 from pygsti.forwardsims.forwardsim import ForwardSimulator as _FSim
 from pygsti.forwardsims import matrixforwardsim as _matrixfwdsim
 from pygsti.modelmembers import instruments as _instrument
@@ -46,6 +51,9 @@ from pygsti.tools import slicetools as _slct
 from pygsti.tools import listtools as _lt
 from pygsti import SpaceT
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
+from typing import Union, Literal
+from pygsti.tools.exceptions import UnknownGaugeSpaceDimension as _UnknownGaugeSpaceDimension
+
 
 
 class ExplicitOpModel(_mdl.OpModel):
@@ -232,10 +240,19 @@ class ExplicitOpModel(_mdl.OpModel):
         return self._default_gauge_group
 
     @default_gauge_group.setter
-    def default_gauge_group(self, value):
+    def default_gauge_group(self, value: Union[Literal['tp', 'unitary'], _GaugeGroup]):
         """
         The default gauge group.
         """
+        if isinstance(value, str):
+            lower = value.lower()
+            if lower == 'unitary':
+                value = _gg.UnitaryGaugeGroup(self.state_space, self.basis, self.evotype)
+            elif lower == 'tp':
+                value = _gg.TPGaugeGroup(self.state_space, self.basis, self.evotypes)
+            else:
+                msg = f'string "{value}" cannot be used to set this model\'s gauge group.'
+                raise ValueError(msg)
         self._default_gauge_group = value
 
     @property
@@ -332,9 +349,49 @@ class ExplicitOpModel(_mdl.OpModel):
             raise KeyError("Key %s has an invalid prefix" % label)
 
     def convert_members_inplace(self, to_type, categories_to_convert='all', labels_to_convert='all',
-                                ideal_model=None, flatten_structure=False, set_default_gauge_group=False, cptp_truncation_tol= 1e-7, spam_cp_penalty = 1e-7):
+                                ideal_model=None, flatten_structure=False, set_default_gauge_group=False, 
+                                cptp_truncation_tol= 1e-7, spam_cp_penalty = 1e-7):
         """
-        TODO: docstring -- like set_all_parameterizations but doesn't set default gauge group by default
+        Method for converting the parameterizations of modelmembers within this model to new ones in-place.
+
+        Parameters
+        ----------
+        to_type :  str
+            String specifier for the parameterization type to convert to.
+        
+        categories_to_convert : str or list of str, optional (default 'all')
+            Categories of modelmembers to perform conversion on. Allowed options are:
+            'all', 'ops' or 'operations' (these two are aliases for the same option),
+            'instruments', 'povms' or 'preps'.
+        
+        labels_to_convert : str or list of `Label`, optional (default 'all')
+            A string specifier, or list of `Label` objects, specifying the set
+            of objects (state preparations, operations, instruments, etc.) within the model 
+            to apply the conversion to.
+
+         ideal_model : `Model`, optional (default None)
+            A model containing modelmembers instantiated such that they all correspond to the ideal
+            actions of the given gate set elements. It is recommended that this be specified when
+            converting to an error-generator-based parameterization.
+        
+        flatten_structure : bool, optional (default False)
+            When `False`, the sub-members of composed and embedded operations
+            are separately converted, leaving the original modelmember structure
+            unchanged.  When `True`, composed and embedded operations are "flattened"
+            into a single modelmember parameterized according to the requested `to_type`.
+
+        set_default_gauge_group : bool, optional (default False)
+            A flag specifying whether the default gauge group for the model should be updated
+            to the default value associated with the specified value of `to_type`.
+            See `set_default_gauge_group_for_member_type` for more on these default gauge groups.
+
+        cptp_truncation_tol : float, optional (default 1e-7)
+            Tolerance term used to enforce the CPTP constraint on gates when moving between different
+            parameterizations.
+
+        spam_cp_penalty : float, optional (default 1e-7)
+            Penalty term used to enforce the CP constraint on SPAM when moving between different
+            parameterizations.        
         """
         if isinstance(categories_to_convert, str): categories_to_convert = (categories_to_convert,)
         if any([c in categories_to_convert for c in ('all', 'ops', 'operations')]):
@@ -356,21 +413,34 @@ class ExplicitOpModel(_mdl.OpModel):
             for lbl, povm in self.povms.items():
                 if labels_to_convert == 'all' or lbl in labels_to_convert:
                     ideal = ideal_model.povms.get(lbl, None) if (ideal_model is not None) else None
-                    self.povms[lbl] = _povm.convert (povm, to_type, self.basis, ideal, flatten_structure, cp_penalty=spam_cp_penalty)
+                    self.povms[lbl] = _povm.convert(povm, to_type, self.basis, ideal, flatten_structure, cp_penalty=spam_cp_penalty)
 
         self._clean_paramvec()  # param indices were probabaly updated
         if set_default_gauge_group:
             self.set_default_gauge_group_for_member_type(to_type)
 
     def set_default_gauge_group_for_member_type(self, member_type):
-        """ TODO: docstring """
+        """ 
+        Updates the default gauge group to the default value for the specified modelmember type.
+
+        Parameters
+        ----------
+        member_type : str
+            A string specifier for the modelmember type used to select the gauge group type.
+            Mapping is the following:
+
+            - 'full' -> `FullGaugeGroup`
+            - 'full TP', 'TP', `TPGaugeGroup`
+            - 'CPTP' or Anything that is a valid lindblad type -> `UnitaryGaugeGroup`
+            - Otherwise -> `TrivialGaugeGroup`
+        """
         if member_type == 'full':
             self.default_gauge_group = _gg.FullGaugeGroup(self.state_space, self.basis, self.evotype)
-        elif member_type in ['full TP', 'TP']:  # TODO: get from verbose_conversion dictionary of modelmembers?
+        elif member_type in ('full TP', 'TP'):  # TODO: get from verbose_conversion dictionary of modelmembers?
             self.default_gauge_group = _gg.TPGaugeGroup(self.state_space, self.basis, self.evotype)
-        elif member_type == 'CPTP':
+        elif _ot.is_valid_lindblad_paramtype(member_type) or member_type == 'CPTP':
             self.default_gauge_group = _gg.UnitaryGaugeGroup(self.state_space, self.basis, self.evotype)
-        else:  # typ in ('static','H+S','S', 'H+S terms', ...)
+        else:  
             self.default_gauge_group = _gg.TrivialGaugeGroup(self.state_space)
 
     def set_all_parameterizations(self, gate_type, prep_type="auto", povm_type="auto",
@@ -416,7 +486,7 @@ class ExplicitOpModel(_mdl.OpModel):
             indicates the maximum amount of truncation induced deviation from the original operations
             (measured by frobenius distance) we're willing to accept without marking the conversion
             as failed.
-        spam_cp_penalty : float, optional (default .5)
+        spam_cp_penalty : float, optional (default 0.5)
             Converting SPAM operations to an error generator representation may 
             introduce trivial gauge degrees of freedom. These gauge degrees of freedom 
             are called trivial because they quite literally do not change the dense representation 
@@ -522,6 +592,42 @@ class ExplicitOpModel(_mdl.OpModel):
         return sum(rhoSize) + sum(povmSize) + sum(opSize) + sum(instSize)
 
     @property
+    def num_modeltest_params(self) -> int:
+        """
+        The parameter count to use when testing this model against data.
+
+        Often times, this is the same as :meth:`num_params`, but there are times
+        when it can convenient or necessary to use a parameter count different than
+        the actual number of parameters in this model.
+        """
+        if not hasattr(self, '_num_modeltest_params'):
+            self._num_modeltest_params = None
+
+        if self._num_modeltest_params is not None:
+            return self._num_modeltest_params
+
+        from pygsti.models.model import MEMLIMIT_FOR_NONGAUGE_PARAMS
+        if MEMLIMIT_FOR_NONGAUGE_PARAMS is not None:
+            # We'd like to return self.num_nongauge_params, but accessing that property
+            # performs a memory-intensive computation in ExplicitOpModelCalc._buildup_dpg.
+            # If we have inadequate memory then we skip that computation.
+            buildup_dpg_mem = _np.dtype('d').itemsize * (self.num_params + self.state_space.dim**2)
+            buildup_dpg_mem *= self.num_elements  # type: ignore
+            if buildup_dpg_mem > MEMLIMIT_FOR_NONGAUGE_PARAMS:
+                _warnings.warn(("ExplicitOpModel.num_modeltest_params did not compute number of *non-gauge* parameters - "
+                                "using total (make MEMLIMIT_FOR_NONGAUGE_PARAMS larger if you really want "
+                                "the count of nongauge params)"), _UnknownGaugeSpaceDimension)
+                return self.num_params
+
+        try:
+            return self.num_nongauge_params
+        except:  # numpy can throw a LinAlgError or sparse cases can throw a NotImplementedError
+            _warnings.warn(("ExplicOpModel.num_modeltest_params could not obtain number of *non-gauge* parameters"
+                            " - using total instead"), _UnknownGaugeSpaceDimension)
+            return self.num_params
+
+
+    @property
     def num_nongauge_params(self):
         """
         Return the number of non-gauge parameters in this model.
@@ -591,7 +697,7 @@ class ExplicitOpModel(_mdl.OpModel):
         item_weights : dict, optional
             Dictionary of weighting factors for individual gates and spam operators.
             Keys can be gate, state preparation, POVM effect, spam labels, or the
-            special strings "gates" or "spam" whic represent the entire set of gate
+            special strings "gates" or "spam" which represent the entire set of gate
             or SPAM operators, respectively.  Values are floating point numbers.
             These weights define the metric used to compute the non-gauge space,
             *orthogonal* the gauge space, that is projected onto.
@@ -927,9 +1033,9 @@ class ExplicitOpModel(_mdl.OpModel):
                                          self.factories.items()):
             yield (lbl, obj)
 
-#TODO: how to handle these given possibility of different parameterizations...
-#  -- maybe only allow these methods to be called when using a "full" parameterization?
-#  -- or perhaps better to *move* them to the parameterization class
+    # TODO: how to handle these given possibility of different parameterizations...
+    #   -- maybe only allow these methods to be called when using a "full" parameterization?
+    #   -- or perhaps better to *move* them to the parameterization class
     def depolarize(self, op_noise=None, spam_noise=None, max_op_noise=None,
                    max_spam_noise=None, seed=None):
         """
@@ -1101,7 +1207,7 @@ class ExplicitOpModel(_mdl.OpModel):
         newModel._clean_paramvec()  # rotate may leave dirty members
         return newModel
 
-    def randomize_with_unitary(self, scale, seed=None, rand_state=None):
+    def randomize_with_unitary(self, scale, seed=None, rand_state=None, transform_spam=False, param_preserving=False):
         """
         Create a new model with random unitary perturbations.
 
@@ -1125,6 +1231,12 @@ class ExplicitOpModel(_mdl.OpModel):
             across multiple random function calls but you don't want to bother
             with manually incrementing seeds between those calls.
 
+        param_preserving : bool
+            If False, then all members of the returned model will have "full" parameterization.
+
+            If True, then we use ComposedOp (and ComposedState and ComposedPOVM) to define a 
+            model with unitarily-transformed members while retaining the parameterization of `self`.
+
         Returns
         -------
         Model
@@ -1142,18 +1254,55 @@ class ExplicitOpModel(_mdl.OpModel):
 
         mdl_randomized = self.copy()
 
+        def rand_unitary_as_superop():
+            rand_mat = rndm.randn(unitary_dim, unitary_dim) + 1j * rndm.randn(unitary_dim, unitary_dim)
+            rand_herm = rand_mat.T.conj() + rand_mat
+            rand_herm /= _scipy.linalg.norm(rand_herm)
+            rand_herm *= scale * _np.sqrt(unitary_dim)
+            rand_unitary = _scipy.linalg.expm(-1j * rand_herm)
+            rand_op = _op.StaticUnitaryOp(rand_unitary, self.basis)
+            return rand_op
+
+        if param_preserving:
+            from pygsti.modelmembers.states import ComposedState
+            from pygsti.modelmembers.povms import ComposedPOVM
+            def transformed_gate(rand_op, gate): # type: ignore
+                ops_to_compose = gate.factorops if hasattr(gate, 'factorops') else [gate]
+                ops_to_compose.append(rand_op)
+                return _op.ComposedOp(ops_to_compose)    
+            def transformed_stateprep(rand_op, rho): # type: ignore
+                return ComposedState(rho, rand_op)
+            def transformed_povm(rand_op, M): # type: ignore
+                return ComposedPOVM(rand_op, M)
+        else:
+            from pygsti.modelmembers.states import FullState
+            from pygsti.modelmembers.povms import create_from_dmvecs
+            def transformed_gate(rand_op, gate):
+                rand_op = rand_op.to_dense()
+                return _op.FullArbitraryOp(rand_op @ gate.to_dense())
+            def transformed_stateprep(rand_op, rho):
+                rand_op = rand_op.to_dense()
+                return FullState(rand_op @ rho)
+            def transformed_povm(rand_op, M):
+                rand_op = rand_op.to_dense()
+                dmvecs = {elbl: rand_op @ e.to_dense() for elbl, e in M.items()}
+                return create_from_dmvecs(dmvecs, 'full')
+
         for opLabel, gate in self.operations.items():
-            randMat = scale * (rndm.randn(unitary_dim, unitary_dim)
-                               + 1j * rndm.randn(unitary_dim, unitary_dim))
-            randMat = _np.transpose(_np.conjugate(randMat)) + randMat
-            # make randMat Hermetian: (A_dag + A)^dag = (A_dag + A)
-            randUnitary = _scipy.linalg.expm(-1j * randMat)
+            rand_op = rand_unitary_as_superop()
+            mdl_randomized.operations[opLabel] = transformed_gate(rand_op, gate)
 
-            randOp = _ot.unitary_to_superop(randUnitary, self.basis)
+        if transform_spam:
+    
+            for preplbl, rho in self.preps.items():
+                rand_op = rand_unitary_as_superop()
+                mdl_randomized.preps[preplbl] = transformed_stateprep(rand_op, rho)
 
-            mdl_randomized.operations[opLabel] = _op.FullArbitraryOp(_np.dot(randOp, gate.to_dense("HilbertSchmidt")))
-
-        #Note: this function does NOT randomize instruments
+            for povmlbl, M in self.povms.items():
+                rand_op = rand_unitary_as_superop()
+                mdl_randomized.povms[povmlbl] = transformed_povm(rand_op, M)
+                
+        # Note: this function does NOT randomize instruments
 
         return mdl_randomized
 
@@ -1416,11 +1565,9 @@ class ExplicitOpModel(_mdl.OpModel):
         print("Basis = ", self.basis.name)
         print("Choi Matrices:")
         for (label, gate) in self.operations.items():
-            print(("Choi(%s) in pauli basis = \n" % label,
-                   _mt.mx_to_string_complex(_jt.jamiolkowski_iso(gate))))
-            print(("  --eigenvals = ", sorted(
-                [ev.real for ev in _np.linalg.eigvals(
-                    _jt.jamiolkowski_iso(gate))]), "\n"))
+            jmx : _np.ndarray = _jt.jamiolkowski_iso(gate) # type: ignore
+            print(("Choi(%s) in pauli basis = \n" % label, _mt.mx_to_string_complex(jmx)))
+            print(("  --eigenvals = ", sorted(_mt.eigenvalues(jmx, assume_hermitian=True).tolist()), "\n"))
         print(("Sum of negative Choi eigenvalues = ", _jt.sum_of_negative_choi_eigenvalues(self)))
 
     def _effect_labels_for_povm(self, povm_lbl):
@@ -1579,6 +1726,10 @@ class ExplicitOpModel(_mdl.OpModel):
                                        availability,
                                        instrument_names=list(self.instruments.keys()), nonstd_instruments=self.instruments)
 
+    def copy(self) -> ExplicitOpModel:
+        c = super().copy()  # <-- that is indeed an ExplicitOpModel
+        return c # type: ignore
+
     def create_modelmember_graph(self):
         return _MMGraph({
             'preps': self.preps,
@@ -1623,8 +1774,9 @@ class ExplicitOpModel(_mdl.OpModel):
             if (state['default_gauge_group'] is not None) else None
         param_interposer = _ModelParamsInterposer.from_nice_serialization(state['parameter_interposer']) \
             if (state['parameter_interposer'] is not None) else None
+        
         fogi_store = _FirstOrderGaugeInvariantStore.from_nice_serialization(state['fogi_store']) \
-            if (state['fogi_store'] is not None) else None
+            if (state.get('fogi_store', None) is not None) else None
         param_labels = state.get('parameter_labels', None)
         param_bounds = state.get('parameter_bounds', None)
 
@@ -1688,6 +1840,72 @@ class ExplicitOpModel(_mdl.OpModel):
     def _op_decomposition(self, op_label):
         """Returns the target and error-generator-containing error map parts of the operation for `op_label` """
         return self.operations[op_label], self.operations[op_label]
+
+
+def transform_composed_model(mdl: ExplicitOpModel, s : _GaugeGroupElement) -> ExplicitOpModel:
+    """
+    Return a copy of `mdl` whose members have been gauge-transformed by `s`,
+    while retaining the parameterization of `mdl`.
+    
+    This function's implementation requires that `mdl` use ComposedState for
+    stateprep and ComposedPOVM for measurements. It does NOT require that
+    operations be represented with ComposedOp. It ignores any factories that
+    might be present in mdl.
+    """
+    from pygsti.models import ExplicitOpModel
+    assert isinstance(mdl, ExplicitOpModel)
+    if len(mdl.factories) > 0:
+        _warnings.warn('The returned model will not retain the factories in mdl.')
+    if len(mdl.instruments) > 0:
+        raise NotImplementedError('Models with instruments are not supported.')
+
+    oldmdl = mdl
+
+    def mycopy(_m):
+        # This function is a hack. It makes us robust to errors
+        # arising from copy.deepcopy in (re)linking model members
+        # to parent model objects.
+        s = _m.to_nice_serialization()
+        t = ExplicitOpModel.from_nice_serialization(s)
+        return t
+    
+    mdl = mycopy(oldmdl)
+
+    from pygsti.modelmembers.operations import ComposedOp, StaticArbitraryOp
+    from pygsti.modelmembers.povms import ComposedPOVM
+    from pygsti.modelmembers.states import ComposedState
+
+    U    = StaticArbitraryOp(s.transform_matrix,         basis=oldmdl.basis)
+    invU = StaticArbitraryOp(s.transform_matrix_inverse, basis=oldmdl.basis) 
+
+    # NOTE: the operations passed to ComposedOp are interpreted in
+    # reverse order. For example, ComposedOp([X,Y,Z]) is applied to
+    # a vector v as Z @ Y @ X @ v.
+
+    for key, rho in oldmdl.preps.items():
+        # replace each ComposedState superket `rhoVec` with `invU @ rhoVec`;
+        # do this by packing invU into a new ComposedState's error map.
+        assert isinstance(rho, ComposedState)
+        static_rho = rho.state_vec
+        errmap  = ComposedOp([rho.error_map, invU])
+        mdl.preps[key] = ComposedState(static_rho, errmap)
+
+    for key, povm in oldmdl.povms.items():
+        # replace each ComposedPOVM `p` with another ComposedPOVM `q`, where
+        # effects `Evec` belonging to `p` are mapped to effects `EVec @ U` 
+        # belonging to `q`. Do this by packing U into the error map of `q`.
+        assert isinstance(povm, ComposedPOVM)
+        static_povm = povm.base_povm
+        errmap = ComposedOp([U, povm.error_map])
+        mdl.povms[key] = ComposedPOVM(errmap, static_povm, mx_basis=oldmdl.basis)
+
+    for key, op in oldmdl.operations.items():
+        # replace each operation `G` with `invU @ G @ U`.
+        op_s = ComposedOp([U, op, invU])
+        mdl.operations[key] = op_s
+
+    mdl._clean_paramvec()  # transform may leave dirty members
+    return mdl
 
 
 class ExplicitLayerRules(_LayerRules):

@@ -10,11 +10,14 @@ The LinearOperator class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
+
 import numpy as _np
 
 from pygsti.baseobjs.opcalc import bulk_eval_compact_polynomials_complex as _bulk_eval_compact_polynomials_complex
 from pygsti.modelmembers import modelmember as _modelmember
 from pygsti.tools import optools as _ot
+from pygsti.tools import matrixtools as _mt
 from pygsti import SpaceT
 
 #Note on initialization sequence of Operations within a Model:
@@ -27,7 +30,7 @@ from pygsti import SpaceT
 # 3) the LinearOperator is assigned/added to a dict within the Model.  As a part of this
 #    process, the LinearOperator's 'gpindices' member is set, if it isn't already, and the
 #    Model's "global" parameter vector (and number of params) is updated as
-#    needed to accomodate new parameters.
+#    needed to accommodate new parameters.
 #
 # Note: gpindices may be None (before initialization) or any valid index
 #  into a 1D numpy array (e.g. a slice or integer array).  It may NOT have
@@ -44,7 +47,7 @@ from pygsti import SpaceT
 
 class LinearOperator(_modelmember.ModelMember):
     """
-    Base class for all operation representations
+    Base class for all *square* operation representations
 
     Parameters
     ----------
@@ -91,6 +94,14 @@ class LinearOperator(_modelmember.ModelMember):
         int
         """
         return (self.dim)**2
+
+    @property
+    def shape(self) -> tuple[int, int]:
+        # Provide this function to mimic numpy array semantics.
+        #
+        # We can't rely on self._rep.shape since superclasses
+        # are given broad freedom to define semantics of self._rep.
+        return (self.dim, self.dim)
 
     def set_dense(self, m):
         """
@@ -145,6 +156,14 @@ class LinearOperator(_modelmember.ModelMember):
         numpy.ndarray
         """
         raise NotImplementedError("to_dense(...) not implemented for %s objects!" % self.__class__.__name__)
+
+    def _to_transformed_dense(self, T_domain: _mt.OperatorLike, T_codomain: _mt.OperatorLike, on_space: SpaceT='minimal') -> _np.ndarray:
+        """
+        Return an array representation of the linear operator obtained by composing T_domain,
+        self.to_dense(), and T_codomain --- in that order.
+        """
+        out = T_codomain @ self.to_dense(on_space=on_space) @ T_domain
+        return out
 
     def acton(self, state, on_space='minimal'):
         """
@@ -381,95 +400,6 @@ class LinearOperator(_modelmember.ModelMember):
 
         return [t for t in terms_at_order if t.magnitude >= min_term_mag]
 
-    def frobeniusdist_squared(self, other_op, transform=None, inv_transform=None):
-        """
-        Return the squared frobenius difference between this operation and `other_op`
-
-        Optionally transforms this operation first using matrices
-        `transform` and `inv_transform`.  Specifically, this operation gets
-        transfomed as: `O => inv_transform * O * transform` before comparison with
-        `other_op`.
-
-        Parameters
-        ----------
-        other_op : DenseOperator
-            The other operation.
-
-        transform : numpy.ndarray, optional
-            Transformation matrix.
-
-        inv_transform : numpy.ndarray, optional
-            Inverse of `transform`.
-
-        Returns
-        -------
-        float
-        """
-        if transform is None and inv_transform is None:
-            return _ot.frobeniusdist_squared(self.to_dense("minimal"), other_op.to_dense("minimal"))
-        else:
-            return _ot.frobeniusdist_squared(_np.dot(
-                inv_transform, _np.dot(self.to_dense("minimal"), transform)),
-                other_op.to_dense("minimal"))
-
-    def frobeniusdist(self, other_op, transform=None, inv_transform=None):
-        """
-        Return the frobenius distance between this operation and `other_op`.
-
-        Optionally transforms this operation first using matrices
-        `transform` and `inv_transform`.  Specifically, this operation gets
-        transfomed as: `O => inv_transform * O * transform` before comparison with
-        `other_op`.
-
-        Parameters
-        ----------
-        other_op : DenseOperator
-            The other operation.
-
-        transform : numpy.ndarray, optional
-            Transformation matrix.
-
-        inv_transform : numpy.ndarray, optional
-            Inverse of `transform`.
-
-        Returns
-        -------
-        float
-        """
-        return _np.sqrt(self.frobeniusdist_squared(other_op, transform, inv_transform))
-
-    def residuals(self, other_op, transform=None, inv_transform=None):
-        """
-        The per-element difference between this `DenseOperator` and `other_op`.
-
-        Optionally, tansforming this operation first as
-        `O => inv_transform * O * transform`.
-
-        Parameters
-        ----------
-        other_op : DenseOperator
-            The operation to compare against.
-
-        transform : numpy.ndarray, optional
-            Transformation matrix.
-
-        inv_transform : numpy.ndarray, optional
-            Inverse of `transform`.
-
-        Returns
-        -------
-        numpy.ndarray
-            A 1D-array of size equal to that of the flattened operation matrix.
-        """
-        dense_self = self.to_dense("minimal")
-        if transform is not None:
-            assert inv_transform is not None
-            dense_self = inv_transform @ (dense_self @ transform)
-        else:
-            assert inv_transform is None
-        return (dense_self - other_op.to_dense("minimal")).ravel()
-
-
     def jtracedist(self, other_op, transform=None, inv_transform=None):
         """
         Return the Jamiolkowski trace distance between this operation and `other_op`.
@@ -495,9 +425,8 @@ class LinearOperator(_modelmember.ModelMember):
         if transform is None and inv_transform is None:
             return _ot.jtracedist(self.to_dense("minimal"), other_op.to_dense("minimal"))
         else:
-            return _ot.jtracedist(_np.dot(
-                inv_transform, _np.dot(self.to_dense("minimal"), transform)),
-                other_op.to_dense("minimal"))
+            arg = inv_transform @ self.to_dense("minimal") @ transform
+            return _ot.jtracedist(arg, other_op.to_dense("minimal"))
 
     def diamonddist(self, other_op, transform=None, inv_transform=None):
         """
@@ -524,9 +453,8 @@ class LinearOperator(_modelmember.ModelMember):
         if transform is None and inv_transform is None:
             return _ot.diamonddist(self.to_dense("minimal"), other_op.to_dense("minimal"))
         else:
-            return _ot.diamonddist(_np.dot(
-                inv_transform, _np.dot(self.to_dense("minimal"), transform)),
-                other_op.to_dense("minimal"))
+            arg = inv_transform @ self.to_dense("minimal") @ transform
+            return _ot.diamonddist(arg, other_op.to_dense("minimal"))
 
     def transform_inplace(self, s):
         """
@@ -552,7 +480,7 @@ class LinearOperator(_modelmember.ModelMember):
         """
         Smx = s.transform_matrix
         Si = s.transform_matrix_inverse
-        self.set_dense(_np.dot(Si, _np.dot(self.to_dense("minimal"), Smx)))
+        self.set_dense(Si @ self.to_dense("minimal") @ Smx)
 
     def spam_transform_inplace(self, s, typ):
         """
@@ -580,9 +508,9 @@ class LinearOperator(_modelmember.ModelMember):
         None
         """
         if typ == 'prep':
-            self.set_dense(_np.dot(s.transform_matrix_inverse, self.to_dense("minimal")))
+            self.set_dense(s.transform_matrix_inverse @ self.to_dense("minimal"))
         elif typ == 'effect':
-            self.set_dense(_np.dot(self.to_dense("minimal"), s.transform_matrix))
+            self.set_dense(self.to_dense("minimal") @ s.transform_matrix)
         else:
             raise ValueError("Invalid `typ` argument: %s" % typ)
 
@@ -616,7 +544,7 @@ class LinearOperator(_modelmember.ModelMember):
         else:
             assert(len(amount) == self.dim - 1)
             D = _np.diag([1] + list(1.0 - _np.array(amount, 'd')))
-        self.set_dense(_np.dot(D, self.to_dense("minimal")))
+        self.set_dense(D @  self.to_dense("minimal"))
 
     def rotate(self, amount, mx_basis="gm"):
         """
@@ -647,7 +575,7 @@ class LinearOperator(_modelmember.ModelMember):
         None
         """
         rotnMx = _ot.rotation_gate_mx(amount, mx_basis)
-        self.set_dense(_np.dot(rotnMx, self.to_dense("minimal")))
+        self.set_dense(rotnMx @ self.to_dense("minimal"))
 
     def deriv_wrt_params(self, wrt_filter=None):
         """

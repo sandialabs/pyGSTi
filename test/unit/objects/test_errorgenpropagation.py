@@ -27,8 +27,8 @@ class ErrorgenPropTester(BaseCase):
         self.circuit = create_random_circuit(pspec, 4, sampler='edgegrab', samplerargs=[0.4,], rand_state=12345)
         self.circuit_length_1 = create_random_circuit(pspec, 1, sampler='edgegrab', samplerargs=[0.4,], rand_state=12345)
         typ = 'H'
-        max_stochastic = {'S': .0005, 'H': 0, 'H+S': .0001}
-        max_hamiltonian = {'S': 0, 'H': .00005, 'H+S': .0001}
+        max_stochastic = {'S': 0.0005, 'H': 0, 'H+S': 0.0001}
+        max_hamiltonian = {'S': 0, 'H': 0.00005, 'H+S': 0.0001}
         max_strengths = {1: {'S': max_stochastic[typ], 'H': max_hamiltonian[typ]},
                         2: {'S': 3*max_stochastic[typ], 'H': 3*max_hamiltonian[typ]}
                         }
@@ -135,7 +135,7 @@ class ErrorgenPropTester(BaseCase):
         
         target_model = smq2Q_XYCPHASE.target_model('full TP')
         noisy_model = target_model.copy()
-        noisy_model = noisy_model.rotate(max_rotate = .01)
+        noisy_model = noisy_model.rotate(max_rotate = 0.01)
         noisy_model.set_all_parameterizations('GLND')
         errorgen_propagator = ErrorGeneratorPropagator(noisy_model)
         circuit_2Q = list(smq2Q_XYCPHASE.create_gst_experiment_design(4).all_circuits_needing_data)[-1]
@@ -209,7 +209,7 @@ def probabilities_errorgen_prop(error_propagator, target_model, circuit, use_bch
     for i, effect in enumerate(ideal_meas.values()):
         dense_effect = effect.to_dense().copy()
         dense_prep = ideal_prep.to_dense().copy()
-        prob_vec[i] = np.linalg.multi_dot([dense_effect.reshape((1,len(dense_effect))), eoc_channel, ideal_channel, dense_prep.reshape((len(dense_prep),1))])
+        prob_vec[i] = np.linalg.multi_dot([dense_effect.reshape((1, -1)), eoc_channel, ideal_channel, dense_prep.reshape((-1, 1))]).item()
     return prob_vec
 
 def probabilities_fwdsim(noise_model, circuit):

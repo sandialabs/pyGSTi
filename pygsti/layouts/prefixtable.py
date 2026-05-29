@@ -152,7 +152,7 @@ class PrefixTable(object):
         return sum(self.num_state_propagations_by_circuit_no_caching().values())
 
     def find_splitting_new(self, max_sub_table_size=None, num_sub_tables=None, initial_cost_metric='size',
-                           rebalancing_cost_metric='propagations', imbalance_threshold=1.2, minimum_improvement_threshold=.1,
+                           rebalancing_cost_metric='propagations', imbalance_threshold=1.2, minimum_improvement_threshold=0.1,
                            verbosity=0):
         """
         Find a partition of the indices of this table to define a set of sub-tables with the desire properties.
@@ -174,11 +174,11 @@ class PrefixTable(object):
 
         imbalance_threshold : float, optional (default 1.2)
             This number serves as a tolerance parameter for a final load balancing refinement
-            to the splitting. The value coresponds to a threshold value of the ratio of the heaviest
+            to the splitting. The value corresponds to a threshold value of the ratio of the heaviest
             to the lightest subtree such that ratios below this value are considered sufficiently
             balanced and processing stops.
 
-        minimum_improvement_threshold : float, optional (default .1)
+        minimum_improvement_threshold : float, optional (default 0.1)
             A parameter for the final load balancing refinement process that sets a minimum balance
             improvement (improvement to the ratio of the sizes of two subtrees) such that a rebalancing
             step is considered worth performing (even if it would otherwise bring the imbalance parameter
@@ -207,7 +207,7 @@ class PrefixTable(object):
             if num_sub_tables is None or num_sub_tables == 1:
                 return [set(range(len(table_contents)))]
             
-        #construct a tree structure describing the prefix strucure of the circuit set.
+        #construct a tree structure describing the prefix structure of the circuit set.
         circuit_tree = _build_prefix_tree(self.sorted_circuits_to_evaluate, self.circuit_reps, self.orig_indices)
         circuit_tree_nx = circuit_tree.to_networkx_graph()
         
@@ -274,7 +274,7 @@ class PrefixTable(object):
                     partitioned_tree.nodes[edge[1]]['prop_cost'] += partitioned_tree.edges[edge[0], edge[1]]['promotion_cost']
             partitioned_tree.remove_edges_from(cut_edges)
         
-        #Collect the original circuit indices for each of the parititioned subtrees.
+        #Collect the original circuit indices for each of the partitioned subtrees.
         orig_index_groups = []
         for root in new_roots:
             if isinstance(root,tuple):
@@ -352,7 +352,7 @@ class PrefixTable(object):
                 def cost_fn(rem): return len(rem)  # length of remainder = #-apply ops needed
             elif cost_metric == "size":
                 def cost_fn(rem): return 1  # everything costs 1 in size of table
-            else: raise ValueError("Uknown cost metric: %s" % cost_metric)
+            else: raise ValueError("Unknown cost metric: %s" % cost_metric)
 
             subTables = []
             curSubTable = set()  # destination index of 0th evaluant
@@ -596,7 +596,7 @@ class PrefixTableJacobian(object):
         sorted_circuit_lengths_by_class = [sorted_circuit_lengths[class_indices[0]] 
                                            for class_indices in unique_parameter_circuit_dependency_classes.values()]
         
-        #also need representatives fo the entries in sorted_parameter_circuit_dependencies for each class,
+        #also need representatives for the entries in sorted_parameter_circuit_dependencies for each class,
         #and for sorted_parameter_circuit_dependencies_orig_indices
         sorted_parameter_circuit_dependencies_by_class = [sorted_parameter_circuit_dependencies[class_indices[0]] 
                                                           for class_indices in unique_parameter_circuit_dependency_classes.values()]
@@ -707,10 +707,10 @@ def _build_table(sorted_circuits_to_evaluate, cache_hits, max_cache_size, circui
 
     # Build prefix table: construct list, only caching items with hits > 0 (up to max_cache_size)
     cacheIndices = []  # indices into circuits_to_evaluate of the results to cache
-    table_contents = [None]*len(sorted_circuits_to_evaluate)
+    num_sorted_circuits = len(sorted_circuits_to_evaluate)
+    table_contents = [None]*num_sorted_circuits
     curCacheSize = 0
-    for j, (i, _) in zip(orig_indices,enumerate(sorted_circuits_to_evaluate)):
-        
+    for j, (i, _) in zip(orig_indices, enumerate(sorted_circuits_to_evaluate)):
         circuit_rep = circuit_reps[i] 
         L = circuit_lengths[i]
 
@@ -1642,7 +1642,7 @@ def tree_partition_kundu_misra(tree, max_weight, weight_key='cost', test_leaves 
         assert all([tree_nodes[leaf][weight_key]<=max_weight for leaf in leaves]), msg
         
     #precompute a list of subtree weights which will be dynamically updated as we make cuts. Also
-    #parition tree into levels based on distance from root.
+    #partition tree into levels based on distance from root.
     if precomp_levels is None and precomp_weights is None:
         tree_levels, subtree_weights = _partition_levels_and_compute_subtree_weights(tree, root, weight_key)
     else:
@@ -1716,7 +1716,7 @@ def _bisection_pass(partitioned_tree, cut_edges, new_roots, num_sub_tables, weig
             new_roots.append(cut_edge[1])
             #cut the prescribed edge.
             partitioned_tree.remove_edge(cut_edge[0], cut_edge[1])
-        #check whether we need to continue paritioning subtrees.
+        #check whether we need to continue partitioning subtrees.
         if len(new_roots) == num_sub_tables:
             break
     #sort the new root nodes in case there are determinism issues
@@ -1757,7 +1757,7 @@ def _refinement_pass(partitioned_tree, roots, weight_key, imbalance_threshold=1.
             #lighter tree in line.
             root_cost =  partitioned_tree_nodes[heavy_light_pairs[i][0][0]][weight_key] if weight_key == 'prop_cost' else 0
 
-            rebalancing_target_fraction = (.5*(heavy_light_weights[i][0] - heavy_light_weights[i][1]))/heavy_light_weights[i][0]
+            rebalancing_target_fraction = (0.5*(heavy_light_weights[i][0] - heavy_light_weights[i][1]))/heavy_light_weights[i][0]
             cut_edge, new_subtree_weights =_bisect_tree(partitioned_tree, heavy_light_pairs[i][0][0], heavy_light_pairs[i][0][1], 
                                                         weight_key, root_cost = root_cost,
                                                         target_proportion = rebalancing_target_fraction)

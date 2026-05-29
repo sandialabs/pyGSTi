@@ -13,6 +13,7 @@ Functions related deprecating other functions
 import sys as _sys
 import types as _types
 import warnings as _warnings
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning as _pyGSTiDeprecationWarning
 
 
 def warn_deprecated(name, replacement=None):
@@ -35,7 +36,7 @@ def warn_deprecated(name, replacement=None):
     if replacement is not None:
         message += '\n    '
         message += 'Please use {} instead.'.format(replacement)
-    _warnings.warn(message)
+    _warnings.warn(message, _pyGSTiDeprecationWarning)
 
 
 def deprecate(replacement=None):
