@@ -253,47 +253,48 @@ def kraus_polar_instrument(
     return inst
 
 
-def instrument_from_effects(members, basis: BasisLike, to_type: Optional[str] = None,
-                            atol: float = 1e-6) -> Union[Instrument, TPInstrument]:
+def instrument_superops_from_effects(members, basis: BasisLike,
+                                     atol: float = 1e-6) -> dict[str, _np.ndarray]:
     """
-    Build an Instrument (or TPInstrument) from a ``{label: (gate, effect)}`` mapping.
+    Build instrument member superoperators from a ``{label: (effect, gate)}`` mapping.
 
     This is a convenience for the common case in which an (ideal) instrument is
-    described as a collection of (gate, effect, label) triples.  Each member is
+    described as a collection of (effect, gate, label) triples.  Each member is
     the composition
 
         I_k : rho  |->  G_k( E_k^{1/2} rho E_k^{1/2} ),
 
     i.e. a "soft" measurement of the POVM effect E_k followed by the
-    trace-preserving post-measurement map G_k. 
-    
+    trace-preserving post-measurement map G_k.
+
     This function assembles the member superoperators `G_k @ rootconj_superop(E_k)`
-    for you. It lets you use a variety of representations for the (gate, effect)
-    pairs (including omitting the gate entirely) and performs conversions as needed.
+    for you, accepting a variety of representations for the effect and gate
+    (including omitting the gate entirely) and performing conversions as needed.
+    The returned mapping is exactly the ``op_arrays`` dict consumed by
+    :func:`kraus_polar_instrument`, and can also be handed directly to the
+    :class:`Instrument` constructor::
+
+        superops  = instrument_superops_from_effects({'p0': E0, 'p1': E1}, basis)
+        inst      = Instrument(superops)                     # plain / dense
+        inst_cptp = kraus_polar_instrument(superops, basis)  # CP-constrained
 
     Parameters
     ----------
     members : dict
-        Maps each outcome label to either a ``(gate, effect)`` pair or a bare
-        ``effect`` (in which case the gate defaults to the identity, giving the
-        pure "measure-and-collapse" member ``rho |-> E_k^{1/2} rho E_k^{1/2}``).
 
-        - ``effect`` may be a POVM-effect superket (a length-``d**2`` vector in
-          ``basis``), a Hermitian ``d x d`` matrix, or any object with a
-          ``to_dense()`` method (e.g. a :class:`POVMEffect`).  We require
-          ``0 <= E_k <= I``.
+        Maps each outcome label to either an ``(effect, gate)`` pair or a bare
+        ``effect`` (in which case the gate defaults to the identity).
+
+        - ``effect`` may be a POVM-effect superket (a length-``d**2`` vector in ``basis``),
+          a Hermitian ``d x d`` matrix, or any object with a ``to_dense()`` method
+          (e.g., a :class:`POVMEffect`).  We require ``0 <= E_k <= I``.
+
         - ``gate`` may be a ``d**2 x d**2`` superoperator (in ``basis``), a
           ``d x d`` unitary, ``None`` (the identity), or any object with a
-          ``to_dense('HilbertSchmidt')`` method (e.g. a :class:`LinearOperator`).
+          ``to_dense('HilbertSchmidt')`` method (e.g., a :class:`LinearOperator`).
 
     basis : Basis or str
         The basis in which dense arrays are represented.
-
-    to_type : str, optional
-        If given, the assembled (dense) instrument is passed through
-        :func:`convert` to this parameterization (e.g. ``'CPTPLND'``,
-        ``'full TP'``).  If ``None`` (the default), a plain dense ``Instrument``
-        is returned.
 
     atol : float, optional
         Absolute tolerance for the per-gate trace-preservation check and the
@@ -301,16 +302,18 @@ def instrument_from_effects(members, basis: BasisLike, to_type: Optional[str] = 
 
     Returns
     -------
-    Instrument
-        A dense ``Instrument``, or -- when ``to_type`` is given -- whatever
-        :func:`convert` produces for that type (e.g. a ``TPInstrument`` for
-        ``'full TP'``).
+    dict[str, numpy.ndarray]
+        Mapping from each outcome label to its dense member superoperator (in ``basis``).
     """
+    def _effect_of(val):
+        return val[0] if isinstance(val, tuple) else val
+
+    def _gate_of(val):
+        return val[1] if isinstance(val, tuple) and len(val) > 1 else None
+
     if isinstance(basis, str):
         # Infer the Hilbert-Schmidt dimension from the first effect.
-        first = next(iter(members.values()))
-        if isinstance(first, tuple): # then we have a gate and an effect; grab the effect.
-            first = first[1]
+        first = _effect_of(next(iter(members.values())))
         arr = _np.asarray(first.to_dense() if hasattr(first, 'to_dense') else first)
         if arr.ndim == 1 or (arr.ndim == 2 and arr.shape[1] == 1):
             dim = arr.shape[0]
@@ -350,9 +353,8 @@ def instrument_from_effects(members, basis: BasisLike, to_type: Optional[str] = 
     inst_arrays = dict()
     effect_sum = _np.zeros((udim, udim), dtype=complex)
     for label, val in members.items():
-        gate, effect = val if isinstance(val, tuple) else (None, val)
-        E_superket = as_superket(effect)
-        G_superop = as_superop(gate)
+        E_superket = as_superket(_effect_of(val))
+        G_superop = as_superop(_gate_of(val))
         if not _np.allclose(I_superket @ G_superop, I_superket, atol=atol):
             raise ValueError(f"The post-measurement gate for outcome {label!r} is not TP.")
         # rootconj_superop validates 0 <= E_k <= I and raises/warns otherwise.
@@ -363,7 +365,4 @@ def instrument_from_effects(members, basis: BasisLike, to_type: Optional[str] = 
         raise ValueError("The provided effects do not sum to the identity; an "
                          "instrument's effects must satisfy sum_k E_k == I.")
 
-    inst = Instrument(inst_arrays)
-    if to_type is not None:
-        inst = convert(inst, to_type, basis)
-    return inst
+    return inst_arrays
