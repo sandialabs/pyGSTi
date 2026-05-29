@@ -2,7 +2,7 @@ import numpy as np
 
 import pygsti.modelmembers.operations as op
 from pygsti.modelmembers import instruments as inst
-from pygsti.modelmembers.instruments import kraus_polar_instrument
+from pygsti.modelmembers.instruments import kraus_polar_instrument, instrument_from_effects
 from pygsti.modelmembers.instruments import Instrument, TPInstrument
 from pygsti.modelmembers.operations import RootConjOperator, SummedOperator
 from pygsti.modelmembers import povms as pv
@@ -187,6 +187,67 @@ class KrausPolarInstrumentTester(BaseCase):
         sop = SummedOperator([r1], self.basis)
         with self.assertRaises(NotImplementedError):
             sop.deriv_wrt_params()
+
+
+class InstrumentFromEffectsTester(BaseCase):
+    """Tests for the instrument_from_effects convenience constructor."""
+
+    def setUp(self):
+        model = std.target_model()
+        self.E0 = np.asarray(model.povms['Mdefault']['0'].to_dense()).reshape(-1)
+        self.E1 = np.asarray(model.povms['Mdefault']['1'].to_dense()).reshape(-1)
+        self.basis = model.basis
+        # Manual reference members for an ideal projective Z measurement.
+        self.Gmz_plus = np.outer(self.E0, self.E0)
+        self.Gmz_minus = np.outer(self.E1, self.E1)
+
+    def test_effect_only_reproduces_projectors(self):
+        # With the gate defaulting to the identity, the members are the
+        # ideal projective measurement maps rho -> E^1/2 rho E^1/2.
+        inst = instrument_from_effects({'p0': self.E0, 'p1': self.E1}, self.basis)
+        self.assertIsInstance(inst, Instrument)
+        self.assertSetEqual(set(inst.keys()), {'p0', 'p1'})
+        self.assertArraysAlmostEqual(inst['p0'].to_dense(), self.Gmz_plus)
+        self.assertArraysAlmostEqual(inst['p1'].to_dense(), self.Gmz_minus)
+
+    def test_identity_gate_matches_effect_only(self):
+        bare = instrument_from_effects({'p0': self.E0, 'p1': self.E1}, self.basis)
+        with_gate = instrument_from_effects(
+            {'p0': (np.eye(4), self.E0), 'p1': (None, self.E1)}, self.basis)
+        for k in bare.keys():
+            self.assertArraysAlmostEqual(with_gate[k].to_dense(), bare[k].to_dense())
+
+    def test_total_channel_is_trace_preserving(self):
+        inst = instrument_from_effects({'p0': self.E0, 'p1': self.E1}, self.basis)
+        total = sum(member.to_dense('HilbertSchmidt') for member in inst.values())
+        # First row encodes trace preservation in the (normalized) pp basis.
+        np.testing.assert_allclose(total[0], [1, 0, 0, 0], atol=1e-9)
+
+    def test_unitary_gate_and_matrix_effect(self):
+        # A post-measurement Z on outcome p1, and effects given as 2x2 matrices.
+        from pygsti.tools import optools as ot
+        proj0 = np.array([[1, 0], [0, 0]], dtype=complex)
+        proj1 = np.array([[0, 0], [0, 1]], dtype=complex)
+        Z = np.array([[1, 0], [0, -1]], dtype=complex)
+        inst = instrument_from_effects(
+            {'p0': (np.eye(2), proj0), 'p1': (Z, proj1)}, self.basis)
+        expected_p1 = ot.unitary_to_superop(Z, self.basis) @ ot.rootconj_superop(self.E1, self.basis)
+        self.assertArraysAlmostEqual(inst['p0'].to_dense(), self.Gmz_plus)
+        self.assertArraysAlmostEqual(inst['p1'].to_dense(), expected_p1)
+
+    def test_to_type_passthrough(self):
+        tp = instrument_from_effects({'p0': self.E0, 'p1': self.E1}, self.basis, to_type='full TP')
+        self.assertIsInstance(tp, TPInstrument)
+        cptp = instrument_from_effects({'p0': self.E0, 'p1': self.E1}, self.basis, to_type='CPTPLND')
+        self.assertIsInstance(cptp, Instrument)
+
+    def test_raises_when_effects_incomplete(self):
+        with self.assertRaises(ValueError):
+            instrument_from_effects({'p0': self.E0, 'p1': self.E0}, self.basis)
+
+    def test_raises_on_non_tp_gate(self):
+        with self.assertRaises(ValueError):
+            instrument_from_effects({'p0': (0.9 * np.eye(4), self.E0), 'p1': self.E1}, self.basis)
 
 
 class TPInstrumentOpTester(ImmutableDenseOpBase, BaseCase):

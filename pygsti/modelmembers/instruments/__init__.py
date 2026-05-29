@@ -22,7 +22,7 @@ import numpy as _np
 from pygsti.tools import optools as _ot, basistools as _bt
 from pygsti.tools.exceptions import DubiousTargetWarning as _DubiousTargetWarning
 from pygsti.baseobjs.label import Label
-from pygsti.baseobjs.basis import BasisLike
+from pygsti.baseobjs.basis import Basis, BasisLike
 from pygsti.modelmembers import operations as _op
 from pygsti.modelmembers import povms as _pv
 from pygsti.modelmembers.povms.basepovm import _BasePOVM
@@ -250,4 +250,120 @@ def kraus_polar_instrument(
 
     inst = Instrument(inst_ops)
 
+    return inst
+
+
+def instrument_from_effects(members, basis: BasisLike, to_type: Optional[str] = None,
+                            atol: float = 1e-6) -> Union[Instrument, TPInstrument]:
+    """
+    Build an Instrument (or TPInstrument) from a ``{label: (gate, effect)}`` mapping.
+
+    This is a convenience for the common case in which an (ideal) instrument is
+    described as a collection of (gate, effect, label) triples.  Each member is
+    the composition
+
+        I_k : rho  |->  G_k( E_k^{1/2} rho E_k^{1/2} ),
+
+    i.e. a "soft" measurement of the POVM effect E_k followed by the
+    trace-preserving post-measurement map G_k. 
+    
+    This function assembles the member superoperators `G_k @ rootconj_superop(E_k)`
+    for you. It lets you use a variety of representations for the (gate, effect)
+    pairs (including omitting the gate entirely) and performs conversions as needed.
+
+    Parameters
+    ----------
+    members : dict
+        Maps each outcome label to either a ``(gate, effect)`` pair or a bare
+        ``effect`` (in which case the gate defaults to the identity, giving the
+        pure "measure-and-collapse" member ``rho |-> E_k^{1/2} rho E_k^{1/2}``).
+
+        - ``effect`` may be a POVM-effect superket (a length-``d**2`` vector in
+          ``basis``), a Hermitian ``d x d`` matrix, or any object with a
+          ``to_dense()`` method (e.g. a :class:`POVMEffect`).  We require
+          ``0 <= E_k <= I``.
+        - ``gate`` may be a ``d**2 x d**2`` superoperator (in ``basis``), a
+          ``d x d`` unitary, ``None`` (the identity), or any object with a
+          ``to_dense('HilbertSchmidt')`` method (e.g. a :class:`LinearOperator`).
+
+    basis : Basis or str
+        The basis in which dense arrays are represented.
+
+    to_type : str, optional
+        If given, the assembled (dense) instrument is passed through
+        :func:`convert` to this parameterization (e.g. ``'CPTPLND'``,
+        ``'full TP'``).  If ``None`` (the default), a plain dense ``Instrument``
+        is returned.
+
+    atol : float, optional
+        Absolute tolerance for the per-gate trace-preservation check and the
+        completeness check ``sum_k E_k == I``.
+
+    Returns
+    -------
+    Instrument
+        A dense ``Instrument``, or -- when ``to_type`` is given -- whatever
+        :func:`convert` produces for that type (e.g. a ``TPInstrument`` for
+        ``'full TP'``).
+    """
+    if isinstance(basis, str):
+        # Infer the Hilbert-Schmidt dimension from the first effect.
+        first = next(iter(members.values()))
+        if isinstance(first, tuple): # then we have a gate and an effect; grab the effect.
+            first = first[1]
+        arr = _np.asarray(first.to_dense() if hasattr(first, 'to_dense') else first)
+        if arr.ndim == 1 or (arr.ndim == 2 and arr.shape[1] == 1):
+            dim = arr.shape[0]
+        elif arr.ndim == 2 and arr.shape[0] == arr.shape[1]:
+            dim = arr.shape[0] ** 2   # a Hermitian (udim x udim) matrix
+        else:
+            raise ValueError("Could not infer the dimension from the effects; "
+                             "pass `basis` as a Basis object instead of a string.")
+        basis = Basis.cast(basis, dim)
+    else:
+        basis = Basis.cast(basis)  # makes linter happy (view `basis` a Basis object)
+
+    dim = basis.dim
+    udim = round(dim ** 0.5)
+    I_hilbert = _np.eye(udim)
+    I_superket = _bt.stdmx_to_vec(I_hilbert, basis).reshape(-1)  # <<I| extracts the trace
+
+    def as_superket(effect):
+        arr = _np.asarray(effect.to_dense() if hasattr(effect, 'to_dense') else effect)
+        if arr.ndim == 2 and arr.shape == (udim, udim):
+            arr = _bt.stdmx_to_vec(arr, basis)   # Hermitian d x d matrix -> superket
+        return arr.reshape(-1)
+
+    def as_superop(gate):
+        if gate is None:
+            return _np.eye(dim)
+        if hasattr(gate, 'to_dense'):
+            return _np.asarray(gate.to_dense('HilbertSchmidt'))
+        arr = _np.asarray(gate)
+        if arr.shape == (udim, udim):
+            return _ot.unitary_to_superop(arr, basis)   # type: ignore  # unitary -> superop
+        if arr.shape == (dim, dim):
+            return arr
+        raise ValueError(f"Gate has shape {arr.shape}; expected a ({dim}, {dim}) "
+                         f"superoperator or a ({udim}, {udim}) unitary.")
+
+    inst_arrays = dict()
+    effect_sum = _np.zeros((udim, udim), dtype=complex)
+    for label, val in members.items():
+        gate, effect = val if isinstance(val, tuple) else (None, val)
+        E_superket = as_superket(effect)
+        G_superop = as_superop(gate)
+        if not _np.allclose(I_superket @ G_superop, I_superket, atol=atol):
+            raise ValueError(f"The post-measurement gate for outcome {label!r} is not TP.")
+        # rootconj_superop validates 0 <= E_k <= I and raises/warns otherwise.
+        inst_arrays[label] = G_superop @ _ot.rootconj_superop(E_superket, basis)
+        effect_sum += _bt.vec_to_stdmx(E_superket, basis, keep_complex=True)
+
+    if not _np.allclose(effect_sum, I_hilbert, atol=atol):
+        raise ValueError("The provided effects do not sum to the identity; an "
+                         "instrument's effects must satisfy sum_k E_k == I.")
+
+    inst = Instrument(inst_arrays)
+    if to_type is not None:
+        inst = convert(inst, to_type, basis)
     return inst
