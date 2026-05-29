@@ -1,0 +1,5 @@
+# Local doc build dependencies for pyGSTi.
+# Single source of truth lives in pyproject.toml's [docs] optional-deps group.
+# Run from the repo root: `pip install -e .[docs]`, or directly:
+#   pip install -r docs/requirements.txt
+.[docs]

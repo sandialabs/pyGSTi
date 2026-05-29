@@ -1636,8 +1636,7 @@ def create_crosstalk_free_model(processor_spec, custom_gates=None,
 
     simulator : ForwardSimulator or {"auto", "matrix", "map"}
         The simulator used to compute predicted probabilities for the
-        resulting :class:`Model`.  Using `"auto"` selects `"matrix"` when there
-        are 2 qubits or less, and otherwise selects `"map"`.
+        resulting :class:`Model`.  Using `"auto"` currently selects `"map"`.
 
     on_construction_error : {'raise','warn',ignore'}
         What to do when the creation of a gate with the given
@@ -1844,8 +1843,7 @@ def create_cloud_crosstalk_model(processor_spec, custom_gates=None,
 
     simulator : ForwardSimulator or {"auto", "matrix", "map"}
         The simulator used to compute predicted probabilities for the
-        resulting :class:`Model`.  Using `"auto"` selects `"matrix"` when there
-        are 2 qubits or less, and otherwise selects `"map"`.
+        resulting :class:`Model`.  Using `"auto"` currently selects `"map"`.
 
     independent_gates : bool, optional
         Whether gates are allowed independent noise or not.  If False,
@@ -2074,8 +2072,7 @@ def create_cloud_crosstalk_model_from_hops_and_weights(
     simulator : ForwardSimulator or {"auto", "matrix", "map"}
         The circuit simulator used to compute any
         requested probabilities, e.g. from :meth:`probs` or
-        :meth:`bulk_probs`.  Using `"auto"` selects `"matrix"` when there
-        are 2 qudits or less, and otherwise selects `"map"`.
+        :meth:`bulk_probs`.  Using `"auto"` currently selects `"map"`.
 
     evotype : Evotype or str, optional
         The evolution type of this model, describing how states are
