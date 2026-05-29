@@ -1028,7 +1028,7 @@ def _do_runopt(objective, optimizer, printer):
     `objective` using `optimizer`.
 
     This is factored out as a separate function because of the differences
-    when running Taylor-term simtype calculations, which utilize this
+    when running Taylor-term simulator calculations, which utilize this
     as a subroutine (see :func:`_do_term_runopt`).
 
     Parameters
