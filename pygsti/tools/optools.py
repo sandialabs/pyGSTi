@@ -161,10 +161,12 @@ def fidelity(a, b):
 
     trace_warning = f"The input matrix %s has trace %s, which deviates from 1 by more than {__SCALAR_TOL__}. Beware result!"
 
-    if _np.abs(_np.trace(a) - 1) > __SCALAR_TOL__:
-        _warnings.warn(trace_warning % ('a', str(_np.trace(a))), _NumericalDomainWarning)
-    if _np.abs(_np.trace(b) - 1) > __SCALAR_TOL__:
-        _warnings.warn(trace_warning % ('b', str(_np.trace(b))), _NumericalDomainWarning)
+    tr_a = _np.trace(a).real 
+    tr_b = _np.trace(b).real
+    if _np.abs(tr_a - 1) > __SCALAR_TOL__:
+        _warnings.warn(trace_warning % ('a', str(tr_a)), _NumericalDomainWarning)
+    if _np.abs(tr_b - 1) > __SCALAR_TOL__:
+        _warnings.warn(trace_warning % ('b', str(tr_b)), _NumericalDomainWarning)
 
     r, vec = fast_density_rank(a, __SCALAR_TOL__)
     if r <= 1:
@@ -638,7 +640,7 @@ def minimal_kraus_decomposition(op_x: _np.ndarray, op_basis: _Basis, error_tol:f
     evecs = evecs[:, keep]
     out = []
     for i, ev in enumerate(evals):
-        temp = _np.sqrt(ev) * evecs[:, i].reshape((d, d), order='F')
+        temp = _np.sqrt(ev) * evecs[:, i].reshape((d, d), order='C')
         out.append(temp)
     return out
 

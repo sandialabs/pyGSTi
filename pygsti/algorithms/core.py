@@ -468,10 +468,10 @@ def _construct_a(effect_fiducials, model):
         #A[k,:] = st[0,:] # E_k == kth row of A
         for i in range(dim):  # propagate each basis initial state
             basis_st[i] = 1.0
-            model.preps['rho_LGST_tmp'] = basis_st
-            probs = model.probabilities(_circuits.Circuit(('rho_LGST_tmp',), line_labels=estr.line_labels) + estr)
+            model.preps['rho_lgst_tmp'] = basis_st
+            probs = model.probabilities(_circuits.Circuit(('rho_lgst_tmp',), line_labels=estr.line_labels) + estr)
             A[eoff:eoff + povmLen, i] = [probs[(ol,)] for ol in model.povms[povmLbl]]  # CHECK will this work?
-            del model.preps['rho_LGST_tmp']
+            del model.preps['rho_lgst_tmp']
             basis_st[i] = 0.0
 
         eoff += povmLen
@@ -497,16 +497,16 @@ def _construct_b(prep_fiducials, model):
         basis_E = _np.zeros((dim, 1), 'd')
         basis_E[i] = 1.0
         basis_Es.append(basis_E)
-    model.povms['M_LGST_tmp_povm'] = _povm.UnconstrainedPOVM(
+    model.povms['M_lgst_tmp_povm'] = _povm.UnconstrainedPOVM(
         [("E%d" % i, E) for i, E in enumerate(basis_Es)], evotype='default')
 
     for k, rhostr in enumerate(prep_fiducials):
         #Build fiducial | rho_k > := Circuit(prepSpec[0:-1]) | rhoVec[ prepSpec[-1] ] >
         # B[:,k] = st[:,0] # rho_k == kth column of B
-        probs = model.probabilities(rhostr + _circuits.Circuit(('M_LGST_tmp_povm',), line_labels=rhostr.line_labels))
+        probs = model.probabilities(rhostr + _circuits.Circuit(('M_lgst_tmp_povm',), line_labels=rhostr.line_labels))
         B[:, k] = [probs[("E%d" % i,)] for i in range(dim)]  # CHECK will this work?
 
-    del model.povms['M_LGST_tmp_povm']
+    del model.povms['M_lgst_tmp_povm']
     model.povms.default_param = old_default_param
 
     return B
@@ -1028,7 +1028,7 @@ def _do_runopt(objective, optimizer, printer):
     `objective` using `optimizer`.
 
     This is factored out as a separate function because of the differences
-    when running Taylor-term simtype calculations, which utilize this
+    when running Taylor-term simulator calculations, which utilize this
     as a subroutine (see :func:`_do_term_runopt`).
 
     Parameters
