@@ -2,8 +2,8 @@ import numpy as np
 
 import pygsti.modelmembers.operations as op
 from pygsti.modelmembers import instruments as inst
-from pygsti.modelmembers.instruments import kraus_polar_instrument, instrument_from_effects
-from pygsti.modelmembers.instruments import Instrument, TPInstrument
+from pygsti.modelmembers.instruments import kraus_polar_instrument, instrument_superops_from_effects
+from pygsti.modelmembers.instruments import Instrument, TPInstrument, convert
 from pygsti.modelmembers.operations import RootConjOperator, SummedOperator
 from pygsti.modelmembers import povms as pv
 from pygsti.modelpacks.legacy import std1Q_XYI as std
@@ -189,8 +189,8 @@ class KrausPolarInstrumentTester(BaseCase):
             sop.deriv_wrt_params()
 
 
-class InstrumentFromEffectsTester(BaseCase):
-    """Tests for the instrument_from_effects convenience constructor."""
+class InstrumentSuperopsFromEffectsTester(BaseCase):
+    """Tests for the instrument_superops_from_effects convenience constructor."""
 
     def setUp(self):
         model = std.target_model()
@@ -201,27 +201,39 @@ class InstrumentFromEffectsTester(BaseCase):
         self.Gmz_plus = np.outer(self.E0, self.E0)
         self.Gmz_minus = np.outer(self.E1, self.E1)
 
+    def test_returns_superop_dict(self):
+        superops = instrument_superops_from_effects({'p0': self.E0, 'p1': self.E1}, self.basis)
+        self.assertIsInstance(superops, dict)
+        self.assertSetEqual(set(superops.keys()), {'p0', 'p1'})
+        for mx in superops.values():
+            self.assertEqual(np.asarray(mx).shape, (self.basis.dim, self.basis.dim))
+
     def test_effect_only_reproduces_projectors(self):
         # With the gate defaulting to the identity, the members are the
         # ideal projective measurement maps rho -> E^1/2 rho E^1/2.
-        inst = instrument_from_effects({'p0': self.E0, 'p1': self.E1}, self.basis)
-        self.assertIsInstance(inst, Instrument)
-        self.assertSetEqual(set(inst.keys()), {'p0', 'p1'})
-        self.assertArraysAlmostEqual(inst['p0'].to_dense(), self.Gmz_plus)
-        self.assertArraysAlmostEqual(inst['p1'].to_dense(), self.Gmz_minus)
+        superops = instrument_superops_from_effects({'p0': self.E0, 'p1': self.E1}, self.basis)
+        self.assertArraysAlmostEqual(superops['p0'], self.Gmz_plus)
+        self.assertArraysAlmostEqual(superops['p1'], self.Gmz_minus)
 
     def test_identity_gate_matches_effect_only(self):
-        bare = instrument_from_effects({'p0': self.E0, 'p1': self.E1}, self.basis)
-        with_gate = instrument_from_effects(
-            {'p0': (np.eye(4), self.E0), 'p1': (None, self.E1)}, self.basis)
+        bare = instrument_superops_from_effects({'p0': self.E0, 'p1': self.E1}, self.basis)
+        with_gate = instrument_superops_from_effects(
+            {'p0': (self.E0, np.eye(4)), 'p1': (self.E1, None)}, self.basis)
         for k in bare.keys():
-            self.assertArraysAlmostEqual(with_gate[k].to_dense(), bare[k].to_dense())
+            self.assertArraysAlmostEqual(with_gate[k], bare[k])
 
     def test_total_channel_is_trace_preserving(self):
-        inst = instrument_from_effects({'p0': self.E0, 'p1': self.E1}, self.basis)
-        total = sum(member.to_dense('HilbertSchmidt') for member in inst.values())
+        superops = instrument_superops_from_effects({'p0': self.E0, 'p1': self.E1}, self.basis)
+        total = sum(superops.values())
         # First row encodes trace preservation in the (normalized) pp basis.
         np.testing.assert_allclose(total[0], [1, 0, 0, 0], atol=1e-9)
+
+    def test_feeds_downstream_constructors(self):
+        # The returned dict is exactly the op_arrays consumed downstream.
+        superops = instrument_superops_from_effects({'p0': self.E0, 'p1': self.E1}, self.basis)
+        self.assertIsInstance(Instrument(superops), Instrument)
+        self.assertIsInstance(kraus_polar_instrument(superops, self.basis), Instrument)
+        self.assertIsInstance(convert(Instrument(superops), 'full TP', self.basis), TPInstrument)
 
     def test_unitary_gate_and_matrix_effect(self):
         # A post-measurement Z on outcome p1, and effects given as 2x2 matrices.
@@ -229,25 +241,19 @@ class InstrumentFromEffectsTester(BaseCase):
         proj0 = np.array([[1, 0], [0, 0]], dtype=complex)
         proj1 = np.array([[0, 0], [0, 1]], dtype=complex)
         Z = np.array([[1, 0], [0, -1]], dtype=complex)
-        inst = instrument_from_effects(
-            {'p0': (np.eye(2), proj0), 'p1': (Z, proj1)}, self.basis)
+        superops = instrument_superops_from_effects(
+            {'p0': (proj0, np.eye(2)), 'p1': (proj1, Z)}, self.basis)
         expected_p1 = ot.unitary_to_superop(Z, self.basis) @ ot.rootconj_superop(self.E1, self.basis)
-        self.assertArraysAlmostEqual(inst['p0'].to_dense(), self.Gmz_plus)
-        self.assertArraysAlmostEqual(inst['p1'].to_dense(), expected_p1)
-
-    def test_to_type_passthrough(self):
-        tp = instrument_from_effects({'p0': self.E0, 'p1': self.E1}, self.basis, to_type='full TP')
-        self.assertIsInstance(tp, TPInstrument)
-        cptp = instrument_from_effects({'p0': self.E0, 'p1': self.E1}, self.basis, to_type='CPTPLND')
-        self.assertIsInstance(cptp, Instrument)
+        self.assertArraysAlmostEqual(superops['p0'], self.Gmz_plus)
+        self.assertArraysAlmostEqual(superops['p1'], expected_p1)
 
     def test_raises_when_effects_incomplete(self):
         with self.assertRaises(ValueError):
-            instrument_from_effects({'p0': self.E0, 'p1': self.E0}, self.basis)
+            instrument_superops_from_effects({'p0': self.E0, 'p1': self.E0}, self.basis)
 
     def test_raises_on_non_tp_gate(self):
         with self.assertRaises(ValueError):
-            instrument_from_effects({'p0': (0.9 * np.eye(4), self.E0), 'p1': self.E1}, self.basis)
+            instrument_superops_from_effects({'p0': (self.E0, 0.9 * np.eye(4)), 'p1': self.E1}, self.basis)
 
 
 class TPInstrumentOpTester(ImmutableDenseOpBase, BaseCase):
