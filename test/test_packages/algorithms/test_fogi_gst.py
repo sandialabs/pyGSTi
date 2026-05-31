@@ -20,18 +20,6 @@ def do_small_gauge_transform(base_model, target_model, model_type, gauge_basis, 
     random_gauge_el = pygsti.models.gaugegroup.TPDiagGaugeGroupElement(random_tp_op) # why not TPGaugeGroupElement
     mdl2.transform_inplace(random_gauge_el)
     mdl2.convert_members_inplace(model_type, ideal_model=target_model)  #mdl2.set_all_parameterizations(model_type)
-    # categories_to_convert='ops',
-    #print(mdl2.strdiff(model))  #DEBUG
-
-    #DEBUG
-    #cmp_egs = base_model.errorgen_coefficients()
-    #for lbl, coeffs in mdl2.errorgen_coefficients().items():
-    #    print(lbl)
-    #    coeffs_cmp = cmp_egs[lbl]
-    #    for eglbl, val in coeffs.items():
-    #        if abs(coeffs_cmp[eglbl] - val) > 1e-8:
-    #            print(eglbl, coeffs_cmp[eglbl], val)
-    #    print("\n")
 
     mdl2.setup_fogi(gauge_basis, None, None,
                     reparameterize=reparam, dependent_fogi_action='drop', include_spam=include_spam)
@@ -272,110 +260,17 @@ class CrosstalkFreeFOGIGSTTester(FOGIGSTTestCase, BaseTestCase):
                                            implicit_idle_mode='only_global')
 
 
-#If we enable this, it causes above class to fail (???!) with an Arpack error.  These should be independent,
-# so something very strange is going on here.  Don't have time to debug now, so just disabling this test.
-#class CloudCrosstalkFOGIGSTTester(FOGIGSTTestCase, BaseTestCase):
-#    def create_pspec(self):
-#        nQubits = 1
-#        pspec = pygsti.processors.QubitProcessorSpec(nQubits, ['Gxpi2', 'Gypi2', 'Gi' ],  # 'Gcnot'
-#                                             #availability={'Gcnot': [(0,1)]},  # to match smq2Q_XYCNOT
-#                                             geometry='line')
-#        return pspec
-#
-#    def create_model(self):
-#        pspec = self.create_pspec()
-#        return pygsti.models.create_cloud_crosstalk_model_from_hops_and_weights(
-#            pspec, max_idle_weight=1, max_spam_weight=2, extra_gate_weight=1, maxhops=1,
-#            gate_type='H+s', spam_type='H+s', connected_highweight_errors=False,
-#            implicit_idle_mode='only_global')
+class CloudCrosstalkFOGIGSTTester(FOGIGSTTestCase, BaseTestCase):
+   def create_pspec(self):
+       nQubits = 1
+       pspec = pygsti.processors.QubitProcessorSpec(nQubits, ['Gxpi2', 'Gypi2', 'Gi' ],  # 'Gcnot'
+                                            #availability={'Gcnot': [(0,1)]},  # to match smq2Q_XYCNOT
+                                            geometry='line')
+       return pspec
 
-
-def build_debug_plot1(model, nFOGI, reparam):
-    # ## TEST 1: FOGI errors
-    # Target is perturbed by FOGI errors and the effect of small gauge transforms on the noisy model is studied.
-    from matplotlib import pyplot as plt
-    np.random.seed(123456)
-    xs = np.logspace(-4, -1, 10)
-    basemdl = model.copy()
-    num_samples_per_gauge_mag = 10
-
-    ys_fogi_dict = {}; yerr_fogi_dict = {}
-    ys_fogv_dict = {}; yerr_fogv_dict = {}
-    for base_err_strength in [1e-4, 1e-3, 1e-2, 1e-1]:
-        print("******* Computing for base-model error strength %g *******" % base_err_strength)
-        #include_fogv = False  # needed to just compare FOGI (and not gauge)
-        #ar = basemdl.fogi_errorgen_components_array(include_fogv=True, normalized_elem_gens=reparam)
-        ar_fogi = base_err_strength * (np.random.rand(nFOGI) - 0.5)
-        basemdl.set_fogi_errorgen_components_array(ar_fogi, include_fogv=False, normalized_elem_gens=reparam)
-        base_data = basemdl.fogi_errorgen_components_array(include_fogv=True, normalized_elem_gens=reparam)
-        ys_fogi, yerrs_fogi, ys_fogv, yerrs_fogv = generate_small_gauge_transform_data(basemdl, xs, base_data,
-                                                                                       num_samples_per_gauge_mag)
-        ys_fogi_dict[base_err_strength] = ys_fogi
-        yerr_fogi_dict[base_err_strength] = yerrs_fogi
-        ys_fogv_dict[base_err_strength] = ys_fogv
-        yerr_fogv_dict[base_err_strength] = yerrs_fogv
-
-    plt.figure(figsize=(9, 9))
-    plt.plot(xs, [x**2 for x in xs], linestyle='--', color='k', label='x**2 (for reference)')
-    plt.plot(xs, xs, linestyle=':', color='k', label='x (for reference)')
-    plt.yscale('log')
-    plt.xscale('log')
-    plt.title('How much do gauge transformations affect FOGI quantities?\n(are they really FOGI?) samples-per-point = %d'
-              % num_samples_per_gauge_mag,
-              size=14)
-    plt.xlabel("Gauge transform strength (avg. mag. of element in T)", size=14)
-    plt.ylabel("Avg change in a FOGI error rate", size=14)
-    plt.xticks(size=13)
-    plt.yticks(size=13)
-    for base_err_strength in [1e-4, 1e-3, 1e-2, 1e-1]:
-        ebc = plt.errorbar(xs, ys_fogi_dict[base_err_strength], yerr=yerr_fogi_dict[base_err_strength], marker='o',
-                           label='base err %g' % base_err_strength)
-        plt.errorbar(xs, ys_fogv_dict[base_err_strength], yerr=yerr_fogv_dict[base_err_strength],
-                     color=ebc.lines[0].get_color(), marker='o', linestyle=':', label=None)
-    plt.legend(fontsize=13)
-
-
-def build_debug_plot2(model, reparam):
-    # ## TEST 2: general errors
-    # Target is perturbed by generic errors, then the effect of small gauge transforms on the noisy model is studied.
-    from matplotlib import pyplot as plt
-
-    np.random.seed(123456)
-    xs = np.logspace(-4, -1, 10)
-    basemdl = model.copy()
-    num_samples_per_gauge_mag = 10
-
-    ys_fogi_dict = {}; yerr_fogi_dict = {}
-    ys_fogv_dict = {}; yerr_fogv_dict = {}
-    for base_err_strength in [1e-4, 1e-3, 1e-2, 1e-1]:
-        print("******* Computing for base-model error strength %g *******" % base_err_strength)
-        #include_fogv = False  # needed to just compare FOGI (and not gauge)
-        ar = basemdl.fogi_errorgen_components_array(include_fogv=True, normalized_elem_gens=reparam)
-        ar_fogi = base_err_strength * (np.random.rand(len(ar)) - 0.5)
-        basemdl.set_fogi_errorgen_components_array(ar_fogi, include_fogv=True, normalized_elem_gens=reparam)
-        base_data = basemdl.fogi_errorgen_components_array(include_fogv=True, normalized_elem_gens=reparam)
-        ys_fogi, yerrs_fogi, ys_fogv, yerrs_fogv = generate_small_gauge_transform_data(basemdl, xs, base_data,
-                                                                                       num_samples_per_gauge_mag)
-        ys_fogi_dict[base_err_strength] = ys_fogi
-        yerr_fogi_dict[base_err_strength] = yerrs_fogi
-        ys_fogv_dict[base_err_strength] = ys_fogv
-        yerr_fogv_dict[base_err_strength] = yerrs_fogv
-
-    plt.figure(figsize=(9, 9))
-    plt.plot(xs, [x**2 for x in xs], linestyle='--', color='k', label='x**2 (for reference)')
-    plt.plot(xs, xs, linestyle=':', color='k', label='x (for reference)')
-    plt.yscale('log')
-    plt.xscale('log')
-    plt.title('How much do gauge transformations affect FOGI quantities?\n(are they really FOGI?) samples-per-point = %d'
-              % num_samples_per_gauge_mag,
-              size=14)
-    plt.xlabel("Gauge transform strength (avg. mag. of element in T)", size=14)
-    plt.ylabel("Avg change in a FOGI error rate", size=14)
-    plt.xticks(size=13)
-    plt.yticks(size=13)
-    for base_err_strength in [1e-4, 1e-3, 1e-2, 1e-1]:
-        ebc = plt.errorbar(xs, ys_fogi_dict[base_err_strength], yerr=yerr_fogi_dict[base_err_strength], marker='o',
-                           label='base err %g' % base_err_strength)
-        plt.errorbar(xs, ys_fogv_dict[base_err_strength], yerr=yerr_fogv_dict[base_err_strength],
-                     color=ebc.lines[0].get_color(), marker='o', linestyle=':', label=None)
-    plt.legend(fontsize=13)
+   def create_model(self):
+       pspec = self.create_pspec()
+       return pygsti.models.create_cloud_crosstalk_model_from_hops_and_weights(
+           pspec, max_idle_weight=1, max_spam_weight=2, extra_gate_weight=1, maxhops=1,
+           gate_type='H+s', spam_type='H+s', connected_highweight_errors=False,
+           implicit_idle_mode='only_global')

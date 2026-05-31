@@ -24,18 +24,6 @@ class FiducialPairReductionTestCase(AlgorithmTestCase):
     #Two out of the three tests that were in the following function were superfluous, and taking
     #n_random out to very large values takes a long time to run, so I don't think it is worth the time
     #from a testing standpoint.
-#    def test_intelligentFiducialPairReduction(self):
-#
-#        #test out some additional code paths: random mode, very large n_random
-#
-#        fidPairs = self.runSilent( #huge n_random (should cap to all pairs)
-#            pygsti.alg.find_sufficient_fiducial_pairs_per_germ,
-#                       std.target_model(), std.prep_fiducials(), std.meas_fiducials(),
-#                       std.germs(lite=True), prep_povm_tuples="first",
-#                       search_mode="random",
-#                       constrain_to_tp=True,
-#                       n_random=1000000, seed=None, verbosity=0,
-#                       mem_limit=1024*256)
 
     def test_FPR_test_pairs(self):
         target_model = std.target_model()

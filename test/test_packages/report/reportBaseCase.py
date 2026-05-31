@@ -24,9 +24,6 @@ class ReportBaseCase(BaseTestCase):
         datagen_gateset = target_model.depolarize(op_noise=0.05, spam_noise=0.1)
         datagen_gateset2 = target_model.depolarize(op_noise=0.1, spam_noise=0.05).rotate((0.15,-0.03,0.03))
 
-        #cls.specs = pygsti.construction.build_spam_specs(std.fiducials, effect_labels=['E0'])
-        #  #only use the first EVec
-
         op_labels = list(target_model.operations.keys())
         #use minimally informationally complete prep and measurement fids
         cls.min_prep_fids = std.prep_fiducials()[0:4]

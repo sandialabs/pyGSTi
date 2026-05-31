@@ -435,24 +435,6 @@ Gy 11001100
             pygsti.io.read_time_dependent_dataset(temp_files + "/BadTDDataset.txt")
 
 
-    @unittest.skip("We probably won't be able to unpickle old files given the amount of refactoring")
-    def test_load_old_dataset(self):
-        #pygsti.baseobjs.results.enable_old_python_results_unpickling()
-        with pygsti.io.enable_old_object_unpickling():
-            with open(compare_files + "/pygsti0.9.6.dataset.pkl", 'rb') as f:
-                ds = pickle.load(f)
-        #pygsti.baseobjs.results.disable_old_python_results_unpickling()
-        #pygsti.io.disable_old_object_unpickling()
-        with open(temp_files + "/repickle_old_dataset.pkl", 'wb') as f:
-            pickle.dump(ds, f)
-
-        with pygsti.io.enable_old_object_unpickling("0.9.7"):
-            with open(compare_files + "/pygsti0.9.7.dataset.pkl", 'rb') as f:
-                ds = pickle.load(f)
-        with open(temp_files + "/repickle_old_dataset.pkl", 'wb') as f:
-            pickle.dump(ds, f)
-
-
     def test_auxinfo(self):
         # creating and loading a text-format dataset file w/auxiliary info
         dataset_txt = \

@@ -62,12 +62,6 @@ class NQubitTestCase(BaseTestCase):
 
     def test_sequential_sequenceselection(self):
 
-        #only test when reps are fast (b/c otherwise this test is slow!)
-        #try: from pygsti.objects.replib import fastreplib
-        #except ImportError:
-        #    warnings.warn("Skipping test_sequential_sequenceselection b/c no fastreps!")
-        #    return
-
         nQubits = 2
         maxLengths = [1,2]
         cnot_edges = [(i,i+1) for i in range(nQubits-1)] #only single direction
@@ -116,27 +110,9 @@ class NQubitTestCase(BaseTestCase):
 
         compare_gss = PlaquetteGridCircuitStructure.read(compare_files + "/nqubit_1Q_seqs.json")
 
-        #expList_tups_mod = [tuple( etup[0:3] + ('XX','XX')) for etup in expList_tups ]
-        #for etup in expList_tups:
-        #    etup_mod = tuple( etup[0:3] + ('XX','XX'))
-        #    if etup_mod not in compare_tups:
-        #        print("Not found: ", etup)
-        #
-        #    #if (etup[0] != ctup[0]) or (etup[1] != ctup[1]) or (etup[2] != ctup[2]):
-        #    #    print("Mismatch:",(etup[0] != ctup[0]), (etup[1] != ctup[1]), (etup[2] != ctup[2]))
-        #    #    print(etup); print(ctup)
-        #    #    print(tuple(etup[0]))
-        #    #    print(tuple(ctup[0]))
-
         self.assertEqual(set(gss), set(compare_gss))
 
     def test_2Q(self):
-
-        #only test when reps are fast (b/c otherwise this test is slow!)
-        #try: from pygsti.objects.replib import fastreplib
-        #except ImportError:
-        #    warnings.warn("Skipping test_2Q b/c no fastreps!")
-        #    return
 
         gss = PlaquetteGridCircuitStructure.read(compare_files + "/nqubit_2Q_seqs.json")
         expList = list(gss)
@@ -167,12 +143,6 @@ class NQubitTestCase(BaseTestCase):
                                                     #don't for the 3Q case?
 
     def test_2Q_terms(self):
-
-        #only test when reps are fast (b/c otherwise this test is slow!)
-        #try: from pygsti.objects.replib import fastreplib
-        #except ImportError:
-        #    warnings.warn("Skipping test_2Q_terms b/c no fastreps!")
-        #    return
 
         gss = PlaquetteGridCircuitStructure.read(compare_files + "/nqubit_2Q_seqs.json")
         expList = list(gss)
@@ -205,12 +175,6 @@ class NQubitTestCase(BaseTestCase):
                                                     gauge_opt_suite_name='none')
 
     def test_3Q(self):
-
-        ##only test when reps are fast (b/c otherwise this test is slow!)
-        #try: from pygsti.objects.replib import fastreplib
-        #except ImportError:
-        #    warnings.warn("Skipping test_3Q b/c no fastreps!")
-        #    return
 
         nQubits = 3
         target_model = build_XYCNOT_cloudnoise_model(

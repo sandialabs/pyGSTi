@@ -13,7 +13,6 @@ class AlgorithmsBase(BaseTestCase):
 
         self.fiducials = std.fiducials
         self.germs = std.germs
-        #OLD self.specs = pygsti.construction.build_spam_specs(self.fiducials, effect_labels=['E0']) #only use the first EVec
 
         self.op_labels = list(self.model.operations.keys()) # also == std.gates
         self.lgstStrings = pygsti.circuits.create_lgst_circuits(self.fiducials, self.fiducials, self.op_labels)
