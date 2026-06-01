@@ -87,10 +87,6 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
         The total number of elements in this layout.  In a multi-processor context,
         the number of elements locally owned by the current processor.
 
-    num_elements : int
-        The total number of circuits in this layout.  In a multi-processor context,
-        the number of circuits locally owned by the current processor.
-
     global_layout : CircuitOutcomeProbabilityArrayLayout
         A layout containing all the circuits in their original order, that is the
         same on all processors and doesn't depend on a specific resource allocation.
@@ -206,13 +202,14 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
             "Inconsistency: %d distinct indices but max index + 1 is %d!" % (len(indices), self._size)
 
         self._outcomes = dict()
-        self._element_indices = dict()
+        self._element_indices : dict[tuple, slice] = dict()
         sort_idx_func = lambda x: x[0]
         for i_unique, tuples in elindex_outcome_tuples.items():
             sorted_tuples = sorted(tuples, key=sort_idx_func)  # sort by element index
             elindices, outcomes = zip(*sorted_tuples)  # sorted by elindex so we make slices whenever possible
             self._outcomes[i_unique] = tuple(outcomes)
-            self._element_indices[i_unique] = _slct.list_to_slice(elindices, array_ok=True)
+            s = _slct.list_to_slice(elindices, array_ok=True)
+            self._element_indices[i_unique] = s # type: ignore
 
 #    def hotswap_circuits(self, circuits, unique_complete_circuits=None):
 #        self.circuits = circuits if isinstance(circuits, _CircuitList) else _CircuitList(circuits)
@@ -744,7 +741,9 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
 
     def __iter__(self):
         for circuit, i in self._unique_circuit_index.items():
-            for element_index, outcome in zip(self._element_indices[i], self._outcomes[i]):
+            indices = _slct.to_array(self._element_indices[i])
+            iterator = zip(indices, self._outcomes[i])
+            for element_index, outcome in iterator:
                 yield element_index, circuit, outcome
 
     def iter_unique_circuits(self):

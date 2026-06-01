@@ -6,7 +6,7 @@ import numpy as np
 
 import pygsti.protocols.estimate
 from pygsti.extras import drift
-from pygsti.modelpacks.legacy import stdQT_XYIMS
+from pygsti.modelpacks import smq1Q_XY
 from ..report.reportBaseCase import ReportBaseCase
 from ..testutils import compare_files, temp_files
 from pygsti.baseobjs import Label
@@ -107,7 +107,7 @@ class TestWorkspace(ReportBaseCase):
         gsCPTP = self.tgt.depolarize(0.01,0.01); gsCPTP.set_all_parameterizations("CPTPLND")
         gsGM = self.mdl.depolarize(0.01,0.01); gsGM.basis = pygsti.baseobjs.Basis.cast("gm", 4)
         gsSTD = self.mdl.depolarize(0.01,0.01); gsSTD.basis = pygsti.baseobjs.Basis.cast("std", 4)
-        gsQT = stdQT_XYIMS.target_model().depolarize(0.01,0.01)
+        gsQT = smq1Q_XY.target_model().depolarize(0.01,0.01)
 
         #Construct confidence regions
         def make_cr(mdl):
@@ -136,12 +136,12 @@ class TestWorkspace(ReportBaseCase):
         tbls.append( w.SpamParametersTable(self.mdl, cr ) )
         tbls.append( w.SpamParametersTable(gsMultiSpam, cr ) )
 
-        tbls.append( w.GatesTable(self.mdl, ["mytitle"], display_as="boxes", confidence_region_info=cr ) )
-        tbls.append( w.GatesTable(self.mdl, ["mytitle"], display_as="numbers", confidence_region_info=cr ) )
-        tbls.append( w.GatesTable(gsTP, ["mytitle"], display_as="numbers", confidence_region_info=cr2TP ) )
-        tbls.append( w.GatesTable(gsCPTP, ["mytitle"], display_as="numbers", confidence_region_info=cr2CPTP ) )
+        tbls.append( w.GatesTable(self.mdl, ["mytitle"], display_as="boxes", confidence_region_infos=cr ) )
+        tbls.append( w.GatesTable(self.mdl, ["mytitle"], display_as="numbers", confidence_region_infos=cr ) )
+        tbls.append( w.GatesTable(gsTP, ["mytitle"], display_as="numbers", confidence_region_infos=cr2TP ) )
+        tbls.append( w.GatesTable(gsCPTP, ["mytitle"], display_as="numbers", confidence_region_infos=cr2CPTP ) )
         with self.assertRaises(ValueError):
-            w.GatesTable(self.mdl, ["mytitle"], display_as="foobar", confidence_region_info=cr )
+            w.GatesTable(self.mdl, ["mytitle"], display_as="foobar", confidence_region_infos=cr )
 
         tbls.append( w.ChoiTable(self.mdl, ["mytitle"], cr ) )
         tbls.append( w.ChoiTable(gsQT, ["mytitle"], None ) )
@@ -158,7 +158,7 @@ class TestWorkspace(ReportBaseCase):
         tbls.append( w.ErrgenTable(self.mdl, self.tgt, cr, display_as="numbers", gen_type="logG-logT") )
         tbls.append( w.ErrgenTable(gsGM, self.tgt, cr, display_as="numbers", gen_type="logGTi") )
         #tbls.append( w.ErrgenTable(gsSTD, self.tgt, cr, display_as="numbers", gen_type="logGTi") )  # first el of basis must be I!!!
-        tbls.append( w.ErrgenTable(gsQT, stdQT_XYIMS.target_model(), cr, display_as="numbers", gen_type="logGTi") )
+        tbls.append( w.ErrgenTable(gsQT, smq1Q_XY.target_model(), cr, display_as="numbers", gen_type="logGTi") )
         with self.assertRaises(ValueError):
             w.ErrgenTable(self.mdl, self.tgt, cr, display=('foobar',))
         with self.assertRaises(AssertionError):
@@ -316,7 +316,7 @@ class TestWorkspace(ReportBaseCase):
         plts.append(w.MatrixPlot(gmx, -1, 1, ['a','b','c','d'], ['e','f','g','h'], "X", "Y",
                                  colormap = pygsti.report.colormaps.DivergingColormap(vmin=-2, vmax=2)))
         plts.append( w.MatrixPlot(gmx, -1,1, ['a','b','c','d'], ['e','f','g','h'], "X", "Y",colormap=None))
-        plts.append( w.GateMatrixPlot(gmx, -1,1, "pp", "in", "out", box_labels=True) )
+        plts.append( w.GateMatrixPlot(gmx, -1,1, "pp", 'pp', "in", "out", box_labels=True) )
 
         #Polar plots don't work in latest plotly -- no 'r' variable -- TODO update (but these plots are unused) POLAR SKIP
         #plts.append( w.PolarEigenvaluePlot([np.linalg.eigvals(self.mdl.operations['Gx'])],["purple"],scale=1.5) )
@@ -672,6 +672,7 @@ class TestWorkspace(ReportBaseCase):
 
 
         # ----- _circuit_color_scatterplot -----
+        colormap = pygsti.report.colormaps.SequentialColormap(0,10)
         pygsti.report.workspaceplots._circuit_color_scatterplot(
             gss, mxs, colormap, sum_up=True)
         pygsti.report.workspaceplots._circuit_color_scatterplot(
@@ -699,7 +700,7 @@ class TestWorkspace(ReportBaseCase):
 
         # ---- _opmatrix_color_boxplot ----
         pygsti.report.workspaceplots._opmatrix_color_boxplot(
-            np.identity(4,'d'), -1.0, 1.0, mx_basis="pp", mx_basis_y="gm")
+            np.identity(4,'d'), -1.0, 1.0, mx_basis_x="pp", mx_basis_y="gm")
           # test weird case when there's different bases on diff axes
 
         # ---- _matrix_color_boxplot ----

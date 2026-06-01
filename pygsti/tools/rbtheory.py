@@ -17,7 +17,7 @@ import numpy as _np
 from pygsti.tools import matrixtools as _mtls
 from pygsti.tools import optools as _optls
 from pygsti.tools import rbtools as _rbtls
-
+from pygsti import SpaceT
 
 def predicted_rb_number(model, target_model, weights=None, d=None, rtype='EI'):
     """
@@ -90,7 +90,7 @@ def predicted_rb_number(model, target_model, weights=None, d=None, rtype='EI'):
     """
     if d is None: d = int(round(_np.sqrt(model.dim)))
     p = predicted_rb_decay_parameter(model, target_model, weights=weights)
-    r = _rbtls.p_to_r(p, d=d, rtype=rtype)
+    r = _rbtls.p_to_r(p, d=d, rtype=rtype) if _np.isnan(p) else _np.nan
     return r
 
 
@@ -132,15 +132,18 @@ def predicted_rb_decay_parameter(model, target_model, weights=None):
         The second largest eigenvalue of L. This is the RB decay parameter
         for various types of RB.
     """
-    L = L_matrix(model, target_model, weights=weights)
-    E = _np.absolute(_np.linalg.eigvals(L))
-    E = _np.flipud(_np.sort(E))
-    if abs(E[0] - 1) > 10**(-12):
-        _warnings.warn("Output may be unreliable because the model is not approximately trace-preserving.")
+    try:
+        L = L_matrix(model, target_model, weights=weights)
+        E = _np.absolute(_np.linalg.eigvals(L))
+        E = _np.flipud(_np.sort(E))
+        if abs(E[0] - 1) > 10**(-12):
+            _warnings.warn("Output may be unreliable because the model is not approximately trace-preserving.")
 
-    if E[1].imag > 10**(-10):
-        _warnings.warn("Output may be unreliable because the RB decay constant has a significant imaginary component.")
-    p = abs(E[1])
+        if E[1].imag > 10**(-10):
+            _warnings.warn("Output may be unreliable because the RB decay constant has a significant imaginary component.")
+        p = abs(E[1])
+    except _np.linalg.LinAlgError:
+        p = _np.nan
     return p
 
 
@@ -323,11 +326,19 @@ def L_matrix(model, target_model, weights=None):  # noqa N802
             weights[key] = 1.
 
     normalizer = _np.sum(_np.array([weights[key] for key in list(target_model.operations.keys())]))
-    L_matrix = (1 / normalizer) * _np.sum(
+    # TODO: improve efficiency
+    #
+    #   1. Accumuate the summands in this list comprehension in-place. (Might already happen but that's non-obvious)
+    #   2. Use the fact that target gates are unitary and so their superoperator representation inverses should
+    #      be their transposes.
+    #   3. Have the option to return this matrix as an implicit abstract linear operator, so that anyone who wants
+    #      eigenvalue info can try to get it from an iterative method instead of a full eigendecomposition.
+    #   
+    L_matrix = (1 / normalizer) * _np.sum([
         weights[key] * _np.kron(
-            model.operations[key].to_dense(on_space='HilbertSchmidt').T,
-            _np.linalg.inv(target_model.operations[key].to_dense(on_space='HilbertSchmidt'))
-        ) for key in target_model.operations.keys())
+            model.operations[key].to_dense("HilbertSchmidt").T,
+            _np.linalg.inv(target_model.operations[key].to_dense("HilbertSchmidt"))
+        ) for key in target_model.operations.keys()])
 
     return L_matrix
 

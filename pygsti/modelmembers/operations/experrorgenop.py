@@ -10,8 +10,8 @@ The ExpErrorgenOp class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import warnings as _warnings
 import math
+from typing import Union
 
 import numpy as _np
 import scipy.linalg as _spl
@@ -19,11 +19,12 @@ import scipy.sparse as _sps
 import scipy.sparse.linalg as _spsl
 
 from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
-from pygsti.modelmembers.operations.lindbladerrorgen import LindbladParameterization as _LindbladParameterization
+from pygsti.modelmembers.operations.lindbladerrorgen import LindbladErrorgen as _LindbladErrorgen
+from pygsti.modelmembers.operations.embeddederrorgen import EmbeddedErrorgen as _EmbeddedErrorGen
 from pygsti.modelmembers import modelmember as _modelmember, term as _term
 from pygsti.modelmembers.errorgencontainer import ErrorGeneratorContainer as _ErrorGeneratorContainer
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
-from pygsti.tools import matrixtools as _mt
+from pygsti import SpaceT
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 MAX_EXPONENT = _np.log(_np.finfo('d').max) - 10.0  # so that exp(.) doesn't overflow
@@ -44,7 +45,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         operator is `exp(L)`.
     """
 
-    def __init__(self, errorgen):
+    def __init__(self, errorgen : Union[_LindbladErrorgen, _EmbeddedErrorGen]):
         # Extract superop dimension from 'errorgen'
         state_space = errorgen.state_space
         self.errorgen = errorgen  # don't copy (allow object reuse)
@@ -115,7 +116,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         """
         if self._rep_type == 'dense':
             # compute matrix-exponential explicitly
-            self.exp_err_gen = _spl.expm(self.errorgen.to_dense(on_space='HilbertSchmidt'))  # used in deriv_wrt_params
+            self.exp_err_gen = _spl.expm(self.errorgen.to_dense("HilbertSchmidt"))  # used in deriv_wrt_params
 
             dense = self.exp_err_gen
             self._rep.base.flags.writeable = True
@@ -170,7 +171,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         self.exp_terms_cache = {}
         self.local_term_poly_coeffs = {}
 
-    def to_dense(self, on_space='minimal'):
+    def to_dense(self, on_space: SpaceT='minimal'):
         """
         Return this operation as a dense matrix.
 
@@ -187,7 +188,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
             return _spl.expm(self.errorgen.to_dense(on_space))
 
     #FUTURE: maybe remove this function altogether, as it really shouldn't be called
-    def to_sparse(self, on_space='minimal'):
+    def to_sparse(self, on_space: SpaceT='minimal'):
         """
         Return the operation as a sparse matrix.
 
@@ -239,7 +240,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
             #Deriv wrt hamiltonian params
             derrgen = self.errorgen.deriv_wrt_params(None)  # apply filter below; cache *full* deriv
             derrgen.shape = (d2, d2, -1)  # separate 1st d2**2 dim to (d2,d2)
-            dexpL = _d_exp_x(self.errorgen.to_dense(on_space='minimal'), derrgen, self.exp_err_gen)
+            dexpL = _d_exp_x(self.errorgen.to_dense("minimal"), derrgen, self.exp_err_gen)
             derivMx = dexpL.reshape(d2**2, self.num_params)  # [iFlattenedOp,iParam]
 
             assert(_np.linalg.norm(_np.imag(derivMx)) < IMAG_TOL), \
@@ -314,7 +315,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
             dEdp.shape = (d2, d2, nP)  # separate 1st d2**2 dim to (d2,d2)
             d2Edp2.shape = (d2, d2, nP, nP)  # ditto
 
-            series, series2 = _d2_exp_series(self.errorgen.to_dense(on_space='minimal'), dEdp, d2Edp2)
+            series, series2 = _d2_exp_series(self.errorgen.to_dense("minimal"), dEdp, d2Edp2)
             term1 = series2
             term2 = _np.einsum("ija,jkq->ikaq", series, series)
             d2expL = _np.einsum("ikaq,kj->ijaq", term1 + term2,
@@ -695,7 +696,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
            or isinstance(s, _gaugegroup.TPSpamGaugeGroupElement):
             U = s.transform_matrix
             Uinv = s.transform_matrix_inverse
-            mx = self.to_dense(on_space='minimal') if self._rep_type == 'dense' else self.to_sparse(on_space='minimal')
+            mx = self.to_dense("minimal") if self._rep_type == 'dense' else self.to_sparse(on_space="minimal")
 
             #just act on postfactor and Lindbladian exponent:
             if typ == "prep":

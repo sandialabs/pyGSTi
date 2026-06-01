@@ -23,9 +23,10 @@ class InstrumentTestCase(BaseTestCase):
         self.povm_ident = self.target_model.povms['Mdefault']['0'] + self.target_model.povms['Mdefault']['1']
 
         self.mdl_target_wTP = self.target_model.copy()
-        self.mdl_target_wTP.instruments['IzTP'] = pygsti.modelmembers.instruments.TPInstrument({'plus': Gmz_plus, 'minus': Gmz_minus})
+        self.mdl_target_wTP.instruments['Iztp'] = pygsti.modelmembers.instruments.TPInstrument({'plus': Gmz_plus, 'minus': Gmz_minus})
 
         super(InstrumentTestCase, self).setUp()
+
 
     def testFutureFunctionality(self):
         #Test instrument construction with elements whose gpindices are already initialized.
@@ -66,7 +67,7 @@ class InstrumentTestCase(BaseTestCase):
 
         self.assertAlmostEqual(mdl.frobeniusdist(self.mdl_target_wTP),0.0)
 
-        for lbl in ('Iz','IzTP'):
+        for lbl in ('Iz','Iztp'):
             v = mdl.to_vector()
             gates = mdl.instruments[lbl].simplify_operations(prefix="ABC")
             for igate in gates.values():
@@ -151,8 +152,8 @@ class InstrumentTestCase(BaseTestCase):
 
         #LSGST
         results = pygsti.run_long_sequence_gst(ds, self.target_model, fiducials, fiducials, germs, max_lengths)
-        #print(results.estimates[results.name].models['go0'])
-        mdl_est = results.estimates[results.name].models['go0']
+        #print(results.estimates[results.name].models['stdgaugeopt'])
+        mdl_est = results.estimates[results.name].models['stdgaugeopt']
         mdl_est_opt = pygsti.gaugeopt_to_target(mdl_est, mdl_datagen)
         print("Frobdiff = ", mdl_datagen.frobeniusdist(mdl_est))
         print("Frobdiff after GOpt = ", mdl_datagen.frobeniusdist(mdl_est_opt))
@@ -164,7 +165,7 @@ class InstrumentTestCase(BaseTestCase):
         self.assertEqual(mdl_targetTP.num_params,71) # 3 + 4*2 + 12*5 = 71
         #print(mdl_targetTP)
         resultsTP = pygsti.run_long_sequence_gst(ds, mdl_targetTP, fiducials, fiducials, germs, max_lengths, verbosity=4)
-        mdl_est = resultsTP.estimates[resultsTP.name].models['go0']
+        mdl_est = resultsTP.estimates[resultsTP.name].models['stdgaugeopt']
         mdl_est_opt = pygsti.gaugeopt_to_target(mdl_est, mdl_datagen)
         print("TP Frobdiff = ", mdl_datagen.frobeniusdist(mdl_est))
         print("TP Frobdiff after GOpt = ", mdl_datagen.frobeniusdist(mdl_est_opt))

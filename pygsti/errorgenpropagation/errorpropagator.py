@@ -51,7 +51,7 @@ class ErrorGeneratorPropagator:
         self.model = model
 
     def eoc_error_channel(self, circuit, include_spam=True, use_bch=False,
-                          bch_kwargs=None, mx_basis='pp'):
+                          bch_kwargs=None, mx_basis='pp', circuit_conversion_kwargs=None):
         """
         Propagate all of the error generators for each circuit layer to the end of the circuit
         and return the result of exponentiating these error generators, and if necessary taking
@@ -77,6 +77,12 @@ class ErrorGeneratorPropagator:
             Either a `Basis` object, or a string which can be cast to a `Basis`, specifying the
             basis in which to return the process matrix for the error channel.
 
+        circuit_conversion_kwargs : dict, optional (default None)
+            A set of optional kwargs which will be passed into the `convert_to_stim_tableau_layers`
+            method of the `Circuit` class to control the behavior of the conversion. Please see the
+            documentation for this method for additional information on supported arguments and
+            values.
+
         Returns
         -------
         eoc_error_channel : numpy.ndarray
@@ -86,12 +92,12 @@ class ErrorGeneratorPropagator:
 
         if use_bch:
             #should return a single dictionary of error generator rates
-            propagated_error_generator = self.propagate_errorgens_bch(circuit, **bch_kwargs)
+            propagated_error_generator = self.propagate_errorgens_bch(circuit, **bch_kwargs, circuit_conversion_kwargs=circuit_conversion_kwargs)
             #convert this to a process matrix
             return _spl.expm(self.errorgen_layer_dict_to_errorgen(propagated_error_generator, mx_basis='pp'))
             
         else:
-            propagated_error_generators = self.propagate_errorgens(circuit, include_spam)
+            propagated_error_generators = self.propagate_errorgens(circuit, include_spam, circuit_conversion_kwargs=circuit_conversion_kwargs)
             #loop though the propagated error generator layers and construct their error generators.
             #Then exponentiate
             exp_error_generators = []
@@ -171,7 +177,7 @@ class ErrorGeneratorPropagator:
     #    return eoc_error_channel
 #
 
-    def propagate_errorgens(self, circuit, include_spam=True):
+    def propagate_errorgens(self, circuit, include_spam=True, circuit_conversion_kwargs=None):
         """
         Propagate all of the error generators for each circuit layer to the end without
         any recombinations or averaging.
@@ -185,6 +191,12 @@ class ErrorGeneratorPropagator:
             If True then we include in the propagation the error generators associated
             with state preparation and measurement.
 
+        circuit_conversion_kwargs : dict, optional (default None)
+            A set of optional kwargs which will be passed into the `convert_to_stim_tableau_layers`
+            method of the `Circuit` class to control the behavior of the conversion. Please see the
+            documentation for this method for additional information on supported arguments and
+            values.
+
         Returns
         -------
         propagated_errorgen_layers : list of lists of dictionaries
@@ -195,7 +207,7 @@ class ErrorGeneratorPropagator:
 
         #start by converting the input circuit into a list of stim Tableaus with the 
         #first element dropped.
-        stim_layers = self.construct_stim_layers(circuit, drop_first_layer = not include_spam)
+        stim_layers = self.construct_stim_layers(circuit, drop_first_layer = not include_spam, circuit_conversion_kwargs=circuit_conversion_kwargs)
         
         #We next want to construct a new set of Tableaus corresponding to the cumulative products
         #of each of the circuit layers with those that follow. These Tableaus correspond to the
@@ -215,7 +227,7 @@ class ErrorGeneratorPropagator:
         return propagated_errorgen_layers
         
 
-    def propagate_errorgens_bch(self, circuit, bch_order=1, include_spam=True, truncation_threshold=1e-14):
+    def propagate_errorgens_bch(self, circuit, bch_order=1, include_spam=True, truncation_threshold=1e-14, mode='magnus', circuit_conversion_kwargs=None):
         """
         Propagate all of the error generators for each circuit to the end,
         performing approximation/recombination using the BCH approximation.
@@ -236,20 +248,41 @@ class ErrorGeneratorPropagator:
         truncation_threshold : float, optional (default 1e-14)
             Threshold below which any error generators with magnitudes below this value
             are truncated during the BCH approximation.
+        
+        mode : str, optional ('magnus' default)
+            This specifies whether to apply the BCH approximation using a given order
+            of the Magnus expansion (default mode of 'magnus') or via repeated application of
+            the pairwise BCH of the given order 'pairwise'. 'magnus' mode supports up to 
+            the third-order Magnus expansion, while 'pairwise' supports up to fifth-order
+            in the BCH approximation.
+        
+        circuit_conversion_kwargs : dict, optional (default None)
+            A set of optional kwargs which will be passed into the `convert_to_stim_tableau_layers`
+            method of the `Circuit` class to control the behavior of the conversion. Please see the
+            documentation for this method for additional information on supported arguments and
+            values.
         """
 
-        propagated_errorgen_layers = self.propagate_errorgens(circuit, include_spam=include_spam)
+        propagated_errorgen_layers = self.propagate_errorgens(circuit, include_spam=include_spam, circuit_conversion_kwargs=circuit_conversion_kwargs)
         #if length one no need to do anything.
         if len(propagated_errorgen_layers)==1:
             return propagated_errorgen_layers[0]
         
-        #otherwise iterate through in reverse order (the propagated layers are
-        #in circuit ordering and not matrix multiplication ordering at the moment)
-        #and combine the terms pairwise
-        combined_err_layer = propagated_errorgen_layers[-1]
-        for i in range(len(propagated_errorgen_layers)-2, -1, -1):
-            combined_err_layer = _eprop.bch_approximation(combined_err_layer, propagated_errorgen_layers[i],
-                                                            bch_order=bch_order, truncation_threshold=truncation_threshold)
+        if mode == 'magnus':
+            assert bch_order<=3, 'The highest order Magnus expansion supported is currently third-order, requested {bch_order}.'
+            combined_err_layer = _eprop.magnus_expansion(propagated_errorgen_layers, magnus_order=bch_order, truncation_threshold=truncation_threshold)
+
+        elif mode == 'pairwise':
+            assert bch_order<=5, 'The highest order pairwise BCH expansion supported is currently fifth-order, requested {bch_order}.'
+            #iterate through in reverse order (the propagated layers are
+            #in circuit ordering and not matrix multiplication ordering at the moment)
+            #and combine the terms pairwise
+            combined_err_layer = propagated_errorgen_layers[-1]
+            for i in range(len(propagated_errorgen_layers)-2, -1, -1):
+                combined_err_layer = _eprop.bch_approximation(combined_err_layer, propagated_errorgen_layers[i],
+                                                                bch_order=bch_order, truncation_threshold=truncation_threshold)
+        else:
+            NotImplementedError(f'Unrecognized mode {mode}')
 
         return combined_err_layer
         
@@ -304,7 +337,7 @@ class ErrorGeneratorPropagator:
 #        return propagated_errorgen_layers
 
 
-    def errorgen_transform_map(self, circuit, include_spam=True):
+    def errorgen_transform_map(self, circuit, include_spam=True, circuit_conversion_kwargs=None):
         """
         Construct a map giving the relationship between input error generators and their final
         value following propagation through the circuit.  
@@ -317,10 +350,16 @@ class ErrorGeneratorPropagator:
         include_spam : bool, optional (default True)
             If True then we include in the propagation the error generators associated
             with state preparation and measurement.
+
+        circuit_conversion_kwargs : dict, optional (default None)
+            A set of optional kwargs which will be passed into the `convert_to_stim_tableau_layers`
+            method of the `Circuit` class to control the behavior of the conversion. Please see the
+            documentation for this method for additional information on supported arguments and
+            values.
         """
         #start by converting the input circuit into a list of stim Tableaus with the 
         #first element dropped.
-        stim_layers = self.construct_stim_layers(circuit, drop_first_layer = not include_spam)
+        stim_layers = self.construct_stim_layers(circuit, drop_first_layer = not include_spam, circuit_conversion_kwargs=circuit_conversion_kwargs)
         
         #We next want to construct a new set of Tableaus corresponding to the cumulative products
         #of each of the circuit layers with those that follow. These Tableaus correspond to the
@@ -418,7 +457,7 @@ class ErrorGeneratorPropagator:
         
         return label_list_for_errorgen
 
-    def construct_stim_layers(self, circuit, drop_first_layer=True):
+    def construct_stim_layers(self, circuit, drop_first_layer=True, circuit_conversion_kwargs=None):
         """
         Converts a `Circuit` to a list of stim Tableau objects corresponding to each
         gate layer.
@@ -432,6 +471,12 @@ class ErrorGeneratorPropagator:
             If True the first Tableau for the first gate layer is dropped in the returned output.
             This default setting is what is primarily used in the context of error generator 
             propagation.
+        
+        circuit_conversion_kwargs : dict, optional (default None)
+            A set of optional kwargs which will be passed into the `convert_to_stim_tableau_layers`
+            method of the `Circuit` class to control the behavior of the conversion. Please see the
+            documentation for this method for additional information on supported arguments and
+            values.
 
         Returns
         -------
@@ -440,8 +485,12 @@ class ErrorGeneratorPropagator:
             for each layer of the input pygsti `Circuit`, with the first layer optionally dropped.
         """
 
-        stim_dict=standard_gatenames_stim_conversions()
-        stim_layers=circuit.convert_to_stim_tableau_layers(gate_name_conversions=stim_dict)
+        if circuit_conversion_kwargs is None:
+            circuit_conversion_kwargs = {}
+        if 'gate_name_conversions' not in circuit_conversion_kwargs:
+            circuit_conversion_kwargs['gate_name_conversions'] = standard_gatenames_stim_conversions()
+
+        stim_layers=circuit.convert_to_stim_tableau_layers(**circuit_conversion_kwargs)
         if drop_first_layer and len(stim_layers)>0:
             stim_layers = stim_layers[1:]
         return stim_layers

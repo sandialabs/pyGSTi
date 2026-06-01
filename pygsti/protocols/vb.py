@@ -87,6 +87,37 @@ class ByDepthDesign(_proto.CircuitListsDesign):
         ret.circuit_lists = [self.circuit_lists[i] for i in list_indices_to_keep]
         return ret
 
+    def merge_with(self, other_edesign, remove_duplicates=True, sort_depths=False):
+        """
+        Merge this experiment design with another one and return the result.
+
+        Parameters
+        ----------
+        other_edesign: ByDepthDesign
+            The other experiment design to merge
+
+        Returns
+        -------
+        ByDepthDesign
+        """
+        assert self.qubit_labels == other_edesign.qubit_labels, "To merge, qubit_labels must be equal"
+
+        depths = []
+        circuits_by_depth = {}
+        for obj in (self, other_edesign):
+            for d, cl in zip(obj.depths, obj.circuit_lists):
+                if d in circuits_by_depth:
+                    circuits_by_depth[d].extend(cl)
+                else:
+                    depths.append(d)
+                    circuits_by_depth[d] = list(cl)
+
+        if sort_depths:
+            depths = sorted(depths)
+        
+        circuit_lists = [circuits_by_depth[d] for d in depths]
+        return ByDepthDesign(depths, circuit_lists, self.qubit_labels, remove_duplicates=remove_duplicates)
+
 
 class BenchmarkingDesign(ByDepthDesign):
     """
@@ -238,6 +269,60 @@ class BenchmarkingDesign(ByDepthDesign):
 
     def _truncate_to_available_data_inplace(self, dataset):
         self._truncate_to_circuits_inplace(set(dataset.keys()))
+
+    def _merge_data(self, other_edesign, sort_depths):
+        assert self.paired_with_circuit_attrs == other_edesign.paired_with_circuit_attrs, \
+            "To merge, `paired_with_circuit_attrs` must be equal"
+
+        depths = []
+        circuits_by_depth = {}
+        paired_attrs_by_depth = {nm: {} for nm in self.paired_with_circuit_attrs}
+
+        for obj in (self, other_edesign):
+            for i, (d, cl) in enumerate(zip(obj.depths, obj.circuit_lists)):
+                if d in circuits_by_depth:
+                    circuits_by_depth[d].extend(cl)
+                    for paired_attr in self.paired_with_circuit_attrs:
+                        val = getattr(obj, paired_attr)  # e.g. self.idealout_lists
+                        paired_attrs_by_depth[paired_attr][d].extend(val[i])
+
+                else:
+                    depths.append(d)
+                    circuits_by_depth[d] = list(cl)
+                    for paired_attr in self.paired_with_circuit_attrs:
+                        val = getattr(obj, paired_attr)  # e.g. self.idealout_lists
+                        paired_attrs_by_depth[paired_attr][d] = list(val[i])
+
+        if sort_depths:
+            depths = sorted(depths)
+        return depths, circuits_by_depth, paired_attrs_by_depth
+
+    def merge_with(self, other_edesign, remove_duplicates=True, sort_depths=False):
+        """
+        Merge this experiment design with another one and return the result.
+
+        The returned design will contain the union of the circuits in the two
+        experiment designs being merged, and will contain depth, ideal-output,
+        etc. metadata that is updated appropriately.
+
+        Parameters
+        ----------
+        other_edesign: BenchmarkingDesign
+            The other experiment design to merge
+
+        Returns
+        -------
+        BenchmarkingDesign
+        """
+        assert self.qubit_labels == other_edesign.qubit_labels, "To merge, qubit_labels must be equal"
+        depths, circuits_by_depth, paired_attrs_by_depth = self._merge_data(other_edesign, sort_depths)
+
+        circuit_lists = [circuits_by_depth[d] for d in depths]
+        idealouts_per_depth = paired_attrs_by_depth.pop('idealout_lists')
+        ideal_outs = [idealouts_per_depth[d] for d in depths]
+        return BenchmarkingDesign(depths, circuit_lists, ideal_outs, self.qubit_labels,
+                                  remove_duplicates=remove_duplicates)
+
 
 
 class PeriodicMirrorCircuitDesign(BenchmarkingDesign):

@@ -21,6 +21,7 @@ def _reset_index(df):
     import pandas as _pd
     index_df = df.index.to_frame(index=False)
     df = df.reset_index(drop=True)
+    df.columns = df.columns.tolist() # convert CategoricalIndex to normal Index
     # In merge is important the order in which you pass the dataframes
     # if the index contains a Categorical. I.e.,
     # pd.merge(df, index_df, left_index=True, right_index=True) does not work.

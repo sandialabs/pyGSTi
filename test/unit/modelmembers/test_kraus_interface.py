@@ -171,13 +171,13 @@ class KrausInterfaceModelTestBase(object):
                                                [0., 0.9, 0., 0.],
                                                [0., 0., 0.9, 0.],
                                                [0., 0., 0., 0.9]])
-        self.assertArraysAlmostEqual(op.to_dense(on_space='HilbertSchmidt'), self.expected_idle_superop)
+        self.assertArraysAlmostEqual(op.to_dense('HilbertSchmidt'), self.expected_idle_superop)
 
     def test_stochastic_op_creation(self):
         ss = QubitSpace(1)
         op = StochasticNoiseOp(ss, initial_rates=[0.025, 0.025, 0.025], evotype=self.evotype) # 0.025 = 0.1/4
         try:
-            self.assertArraysAlmostEqual(op.to_dense(on_space='HilbertSchmidt'), self.expected_idle_superop)
+            self.assertArraysAlmostEqual(op.to_dense('HilbertSchmidt'), self.expected_idle_superop)
         except NotImplementedError:
             pass  # ok if to_dense not implemented, as for CHP evotype
 
@@ -198,7 +198,7 @@ class KrausInterfaceModelTestBase(object):
         self.assertTrue(isinstance(ops[('Gypi2', 0)], ComposedOp))
 
         try:
-            Gx_error = mdl_sto.operations['Gxpi2', 0].factorops[1].to_dense(on_space='HilbertSchmidt')
+            Gx_error = mdl_sto.operations['Gxpi2', 0].factorops[1].to_dense('HilbertSchmidt')
             self.assertArraysAlmostEqual(Gx_error, self.expected_idle_superop)
         except NotImplementedError:
             pass  # ok if not implemented, as for CHP evotype

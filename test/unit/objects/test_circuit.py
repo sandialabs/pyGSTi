@@ -2,11 +2,14 @@ import copy
 import pickle
 import unittest
 import numpy as np
+import warnings
+import pytest
 
 from pygsti.circuits import circuit
 from pygsti.baseobjs import Label, CircuitLabel
 from pygsti.processors import QubitProcessorSpec
 from pygsti.tools import symplectic
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning
 from pygsti.models import modelconstruction as mc
 from ..util import BaseCase
 
@@ -82,6 +85,11 @@ class CircuitTester(BaseCase):
         c = circuit.Circuit(layer_labels=labels, line_labels=['Q0', 'Q1'], editable=True)
         cnew = circuit.Circuit(c)
         self.assertEqual(cnew, c)
+
+    def test_construct_malformed_input(self):
+        with pytest.raises(ValueError):
+            c = circuit.Circuit([("Gxpi2", "A0")])
+        return
 
     def test_create_circuitlabel(self):
         # test automatic creation of "power" subcircuits when needed
@@ -253,7 +261,6 @@ class CircuitTester(BaseCase):
         self.assertEqual(c.compilable_layer_indices, (1,))
         self.assertArraysEqual(c.compilable_by_layer, np.array([False,True,False]))
         
-
         expected_tup = (Label(('Gi', 'Q0')), Label(('Gx', 'Q8')), Label(('Gy', 'Q1')), '@', 'Q0', 'Q1', 'Q8', 'Q12', '__CMPLBL__', 1)
         self.assertEqual(c.tup, expected_tup)
 
@@ -469,6 +476,20 @@ class CircuitMethodTester(BaseCase):
         c.compress_depth_inplace(one_q_gate_relations=oneQrelations)
         self.assertEqual(c.depth, 3)
 
+    def test_logically_equivalent_circuits_are_equal(self):
+        circ1 = circuit.Circuit([[("Gxpi2", 0), ("Gypi2", 1)]])
+        circ2 = circuit.Circuit([[("Gypi2", 1), ("Gxpi2", 0)]], editable=True)
+
+        self.assertTrue(circ1 == circ2)
+        self.assertTrue(hash(circ1) == hash(circ2))
+
+        circ3 = circuit.Circuit([("Gxpi2", 0), ("Gypi2", 1)])  # initialize circ1 as a new circuit with 2 layers.
+        circ4 = circuit.Circuit([("Gypi2", 1), ("Gxpi2", 0)])
+
+        self.assertTrue(circ3 != circ4)
+        # (X, I) (I, Y) does not have the same effect as (I, Y) (X, I) with not perfect idles.
+        return
+
     def test_convert_to_quil(self):
         # Quil string with setup, each layer, and block_between_layers=True (current default)
         quil_str = """DECLARE ro BIT[2]
@@ -497,7 +518,7 @@ MEASURE 2 ro[2]
         ckt = circuit.Circuit([Label('Gxpi2',0), Label(()), Label([Label('Gh',0), Label('Gtdag',1)]), 
                                Label('Gcnot', (0,1))], line_labels=(0,1))
 
-        converted_qasm = ckt.convert_to_openqasm()
+        converted_qasm = ckt.convert_to_openqasm(include_delay_on_idle=True)
         #this is really just doing a check if anything has changed. I.e. an integration test.
         expected_qasm = 'OPENQASM 2.0;\ninclude "qelib1.inc";\n\nopaque delay(t) q;\n\nqreg q[2];'\
                         +'\ncreg cr[2];\n\nu3(1.570796326794897, 4.71238898038469, 1.570796326794897) q[0];\ndelay(0) q[1];'\
@@ -521,7 +542,7 @@ MEASURE 2 ro[2]
         #Manually build this circuit directly in cirq and compare.
         qubit_00 = cirq.GridQubit(0,0)
         qubit_01 = cirq.GridQubit(0,1)
-        moment1 = cirq.Moment([cirq.XPowGate(exponent=.5).on(qubit_00), cirq.I(qubit_01)])
+        moment1 = cirq.Moment([cirq.XPowGate(exponent=0.5).on(qubit_00), cirq.I(qubit_01)])
         moment2 = cirq.Moment([cirq.I(qubit_00), cirq.I(qubit_01)])
         moment3 = cirq.Moment([cirq.PhasedXZGate(axis_phase_exponent=0.14758361765043326, 
                                                             x_exponent=0.4195693767448338, 
@@ -541,7 +562,7 @@ MEASURE 2 ro[2]
 
         qubit_00 = cirq.GridQubit(0,0)
         qubit_01 = cirq.GridQubit(0,1)
-        moment1 = cirq.Moment([cirq.XPowGate(exponent=.5).on(qubit_00), cirq.I(qubit_01)])
+        moment1 = cirq.Moment([cirq.XPowGate(exponent=0.5).on(qubit_00), cirq.I(qubit_01)])
         moment2 = cirq.Moment([cirq.I(qubit_00), cirq.I(qubit_01)])
         moment3 = cirq.Moment([cirq.PhasedXZGate(axis_phase_exponent=0.14758361765043326, 
                                                  x_exponent=0.4195693767448338, 
@@ -602,7 +623,108 @@ MEASURE 2 ro[2]
         self.assertEqual(ckt_global_idle_custom, converted_pygsti_circuit_global_idle_custom)
         self.assertEqual(ckt_global_idle_custom, converted_pygsti_circuit_global_idle_custom_1)
         self.assertEqual(ckt_global_idle_none, converted_pygsti_circuit_global_idle_none)
+
+
+    def test_from_qiskit(self):
+        try:
+            import qiskit
+        except ImportError:
+            self.skipTest('Qiskit is required for this operation, and does not appear to be installed.')
+
+        qc = qiskit.QuantumCircuit(4)
+
+        qc.x(0)
+        qc.cx(0,1)
+        qc.h(3)
+        qc.cz(2,3)
+        qc.rz(0.5, 2)
+        qc.rz(0.5, 3)
+        qc.rz(0.5, 0)
+        qc.barrier(0,1)
+        qc.z(3)
+        qc.cz(0,2)
+
+        expected_ps_circ = circuit.Circuit([Label([Label('Gxpi', 'Q0'), Label('Gh', 'Q3')]),
+                                            Label([Label('Gcnot', ('Q0', 'Q1')), Label('Gcphase', ('Q2','Q3'))]),
+                                            Label([Label('Gzr', 'Q2', args=[0.5]), Label('Gzr', 'Q3', args=[0.5]), Label('Gzr', 'Q0', args=[0.5])]),
+                                            Label([Label('Gzpi', 'Q3'), Label('Gcphase', ('Q0', 'Q2'))])
+                                            ], line_labels=('Q0', 'Q1', 'Q2', 'Q3'))
         
+        expected_mapping = {i: f'Q{i}' for i in range(4)}
+
+        observed_ps_circ, observed_mapping = circuit.Circuit.from_qiskit(qc)
+
+        self.assertEqual(expected_ps_circ, observed_ps_circ)
+
+        self.assertEqual(expected_mapping, observed_mapping)
+
+
+    def test_to_from_qiskit_round_trip(self):
+        try:
+            import qiskit
+        except ImportError:
+            self.skipTest('Qiskit is required for this operation, and does not appear to be installed.')
+
+        
+        expected_ps_circ = circuit.Circuit([Label([Label('Gxpi', 'Q0'), Label('Gh', 'Q3')]),
+                                            Label([Label('Gcnot', ('Q0', 'Q1')), Label('Gcphase', ('Q2','Q3'))]),
+                                            Label([Label('Gzr', 'Q2', args=[0.5]), Label('Gzr', 'Q3', args=[0.5]), Label('Gzr', 'Q0', args=[0.5])]),
+                                            Label([Label('Gzpi', 'Q3'), Label('Gcphase', ('Q0', 'Q2'))])
+                                            ], line_labels=('Q0', 'Q1', 'Q2', 'Q3'))
+        
+    
+        qk_circ = expected_ps_circ.convert_to_qiskit(qubit_conversion='remove-Q')
+        observed_ps_circ, observed_mapping = circuit.Circuit.from_qiskit(qk_circ)
+        
+        expected_mapping = {i: f'Q{i}' for i in range(4)}
+
+        self.assertEqual(expected_ps_circ, observed_ps_circ)
+        self.assertEqual(expected_mapping, observed_mapping)   
+
+        
+    def test_convert_to_stim_tableau(self):
+        #TODO: Add correctness checks for generated Tableaus.
+        #these tests (with the exception of two explicitly meant to raise caught exceptions)
+        #are intended to simply check that these methods run to completion with each of these configurations
+        #and should only fail with an uncaught exception.
+        try:
+            import stim
+        except ImportError:
+            self.skipTest("Stim is required for this operation, and it does not appear to be installed.")
+
+        test_circuit = circuit.Circuit([Label('Gxpi2',0), Label('Gxpi2', 1)], line_labels=(0,1))
+        tableau0 = test_circuit.convert_to_stim_tableau()
+        #more qubits than line labels (with max line label less than number of qubits)
+        test_circuit.convert_to_stim_tableau(num_qubits=3)
+
+        #Circuit where circuit layers need to be mapped into 0,1.
+        test_circuit_1 = circuit.Circuit([Label('Gxpi2',3), Label('Gxpi2', 4)], line_labels=(3,4))
+        tableau1 = test_circuit_1.convert_to_stim_tableau()
+
+        self.assertEqual(tableau0, tableau1)
+
+        #string line labels:
+        test_circuit_2 = circuit.Circuit([Label('Gxpi2','Q1'), Label('Gxpi2', 'Q2')], line_labels=('Q1', 'Q2'))
+        tableau2 = test_circuit_2.convert_to_stim_tableau()
+
+        self.assertEqual(tableau0, tableau2)
+
+        #test non-traditional line labels:
+        test_circuit_3 = circuit.Circuit([Label('Gxpi2','Qalice'), Label('Gxpi2', 'Qbob')], line_labels=('Qalice', 'Qbob'))
+
+        #confirm this fails when called with default args.
+        with self.assertRaises(RuntimeError):
+            test_circuit_3.convert_to_stim_tableau()
+
+        tableau3 = test_circuit_3.convert_to_stim_tableau(qubit_label_conversions={'Qalice':0, 'Qbob':1})   
+        print(tableau0)
+        print(tableau3)
+        self.assertEqual(tableau0, tableau3)
+
+        #test incomplete conversion dictionary.
+        with self.assertRaises(AssertionError):
+            test_circuit_3.convert_to_stim_tableau(qubit_label_conversions={'Qalice':0, 'Qcharlie':1})
+
     def test_done_editing(self):
         self.c.done_editing()
         with self.assertRaises(AssertionError):
@@ -622,7 +744,9 @@ MEASURE 2 ro[2]
         # Tests the circuit simulator
         mdl = mc.create_crosstalk_free_model(ps)
         c = circuit.Circuit(layer_labels=[Label('Gh', 'Q0'), Label('Gcnot', ('Q0', 'Q1'))], line_labels=['Q0', 'Q1'])
-        out = c.simulate(mdl)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', category=pyGSTiDeprecationWarning)
+            out = c.simulate(mdl)
         self.assertLess(abs(out['00'] - 0.5), 10**-10)
         self.assertLess(abs(out['11'] - 0.5), 10**-10)
 
@@ -672,33 +796,38 @@ MEASURE 2 ro[2]
         self.assertAlmostEqual(pdict['1'], 0.5)
 
         ## SAME results from circuit.simulate, except with smaller dicts (because 0s are dropped)
-        pdict = c.simulate(mdl)
-        self.assertEqual(len(pdict), 2)
-        self.assertAlmostEqual(pdict['0000'], 0.5)
-        self.assertAlmostEqual(pdict['1000'], 0.5)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', category=pyGSTiDeprecationWarning)
+            
+            pdict = c.simulate(mdl)
+            self.assertEqual(len(pdict), 2)
+            self.assertAlmostEqual(pdict['0000'], 0.5)
+            self.assertAlmostEqual(pdict['1000'], 0.5)
 
-        pdict = cp.simulate(mdl)
-        self.assertEqual(len(pdict), 2)
-        self.assertAlmostEqual(pdict['0000'], 0.5)
-        self.assertAlmostEqual(pdict['0010'], 0.5)
+            pdict = cp.simulate(mdl)
+            self.assertEqual(len(pdict), 2)
+            self.assertAlmostEqual(pdict['0000'], 0.5)
+            self.assertAlmostEqual(pdict['0010'], 0.5)
 
-        pdict = c01.simulate(mdl)
-        self.assertEqual(len(pdict), 2)
-        self.assertAlmostEqual(pdict['00'], 0.5)
-        self.assertAlmostEqual(pdict['10'], 0.5)
+            pdict = c01.simulate(mdl)
+            self.assertEqual(len(pdict), 2)
+            self.assertAlmostEqual(pdict['00'], 0.5)
+            self.assertAlmostEqual(pdict['10'], 0.5)
 
-        pdict = c10.simulate(mdl)
-        self.assertEqual(len(pdict), 2)
-        self.assertAlmostEqual(pdict['00'], 0.5)
-        self.assertAlmostEqual(pdict['01'], 0.5)
+            pdict = c10.simulate(mdl)
+            self.assertEqual(len(pdict), 2)
+            self.assertAlmostEqual(pdict['00'], 0.5)
+            self.assertAlmostEqual(pdict['01'], 0.5)
 
-        pdict = c0.simulate(mdl)
-        self.assertEqual(len(pdict), 2)
-        self.assertAlmostEqual(pdict['0'], 0.5)
-        self.assertAlmostEqual(pdict['1'], 0.5)
+            pdict = c0.simulate(mdl)
+            self.assertEqual(len(pdict), 2)
+            self.assertAlmostEqual(pdict['0'], 0.5)
+            self.assertAlmostEqual(pdict['1'], 0.5)
+        return
 
 
 class CircuitOperationTester(BaseCase):
+
     # TODO merge with CircuitMethodTester
     def setUp(self):
         self.s1 = circuit.Circuit(('Gx', 'Gx'), stringrep="Gx^2")

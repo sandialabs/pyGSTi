@@ -1,23 +1,12 @@
 include README.md CONTRIBUTING.md LICENSE
 include pyproject.toml
-include install_locally.py
 include requirements.txt
 include optional-requirements.txt
-include jupyter_notebooks/START_HERE.ipynb
-include jupyter_notebooks/FAQ.ipynb
-include jupyter_notebooks/Tutorials/*.ipynb
-include jupyter_notebooks/Tutorials/algorithms/*.ipynb
-include jupyter_notebooks/Tutorials/objects/*.ipynb
-include jupyter_notebooks/Tutorials/reporting/*.ipynb
-include jupyter_notebooks/Tutorials/other/*.ipynb
-include jupyter_notebooks/Tutorials/algorithms/advanced/*.ipynb
-include jupyter_notebooks/Tutorials/objects/advanced/*.ipynb
-include jupyter_notebooks/Tutorials/reporting/advanced/*.ipynb
-include jupyter_notebooks/Tutorials/other/advanced/*.ipynb
-include jupyter_notebooks/Examples/*.ipynb
-include jupyter_notebooks/Tutorials/tutorial_files/.git_placeholder
-include jupyter_notebooks/Examples/example_files/.git_placeholder
-include scripts/upgrade2v0.9.7.py
+include docs/_toc.yml docs/_config.yml docs/jupytext.toml docs/references.bib
+include docs/requirements.txt docs/api.rst
+include docs/pyGSTi_icon_wht.png
+recursive-include docs/markdown *.md
+recursive-include docs/_templates *
 include test/runTests.py
 include test/__init__.py
 include test/unit/__init__.py
@@ -28,4 +17,3 @@ include test/test_packages/*/*.py
 include test/test_packages/extras/*.py
 include test/test_packages/cmp_chk_files/*
 include test/test_packages/temp_test_files/.placeholder
-recursive-include doc/html *

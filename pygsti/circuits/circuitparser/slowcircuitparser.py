@@ -9,6 +9,7 @@
 #***************************************************************************************************
 
 from pygsti.baseobjs import label as _lbl
+import sys
 
 
 def _to_int_or_strip(x):
@@ -65,7 +66,7 @@ def parse_circuit(code, create_subcircuits=True, integerize_sslbls=True):
     return tuple(result), labels, occurrence_id, compilable_indices
 
 
-def parse_label(code, integerize_sslbls=True):
+def parse_label(code: str, integerize_sslbls=True) -> _lbl.Label:
     create_subcircuits = False
     segment = 0  # segment for gates/instruments vs. preps vs. povms: 0 = *any*
     interlayer_marker = u''  # matches nothing - no interlayer markerg
@@ -194,23 +195,37 @@ def _get_next_simple_lbl(s, start, end, integerize_sslbls, segment):
         args.append(arg); last = i
 
     sslbls = []
-    while i < end and s[i] == ':':
+    while i < end and s[i] == u':':
         i += 1
         last = i
+        is_int = True
         while i < end:
             c = s[i]
-            if 'a' <= c <= 'z' or '0' <= c <= '9' or c == '_' or c == 'Q':
+            if u'0' <= c <= u'9':
                 i += 1
+            elif u'a' <= c <= u'z' or c == u'_':
+                # Labels can contain any combination of lowercase letters and underscores.
+                i += 1
+                is_int = False
+            elif c in (u'G', u'M', u'I', u'S'):
+                # These reserved characters (all uppercase letters) indicate that we've already
+                # seen everything there is to see for the most recent/current label.
+                break
+            elif last == i and c in (u'Q', u'T', u'L'):
+                # Labels can start with reserved uppercase letters Q, T, and L, per the 
+                # StateSpace documentation.
+                i += 1
+                is_int = False
+            elif last == i and u'A' <= c <= u'Z':
+                msg = f"Invalid target label: {s[last:i + 1]!r}. Labels can't start with uppercase letters other than Q, T, and L."
+                raise ValueError(msg)
             else:
                 break
-        if integerize_sslbls:
-            try:
-                val = int(s[last:i])
-            except:
-                val = s[last:i]
-            sslbls.append(val); last = i
+        if integerize_sslbls and is_int:
+            sslbls.append(int(s[last:i]))
         else:
-            sslbls.append(s[last:i]); last = i
+            sslbls.append(sys.intern(s[last:i]))
+        last = i
 
     if i < end and s[i] == '!':
         i += 1
