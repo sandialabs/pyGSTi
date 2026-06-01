@@ -158,7 +158,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         # no caches used, so fill methods don't add additional arrays
         return super()._array_types_for_method(method_name)
 
-    def __init__(self, model=None,  # below here are simtype-specific args
+    def __init__(self, model=None,  # below here are simulator-specific args
                  mode="pruned", max_order=3, desired_perr=0.01, allowed_perr=0.1,
                  min_term_mag=None, max_paths_per_outcome=1000, perr_heuristic="none",
                  max_term_stages=5, path_fraction_threshold=0.9, oob_check_interval=10, cache=None,
