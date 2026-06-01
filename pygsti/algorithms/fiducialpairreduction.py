@@ -27,7 +27,6 @@ from pygsti.circuits import circuitconstruction as _gsc
 from pygsti.models import ExplicitOpModel as _ExplicitOpModel
 from pygsti.models import ImplicitOpModel as _ImplicitOpModel
 from pygsti.modelmembers.operations import EigenvalueParamDenseOp as _EigenvalueParamDenseOp
-from pygsti.modelmembers.povms import convert as _convert_povm
 from pygsti.tools import remove_duplicates as _remove_duplicates
 from pygsti.tools import slicetools as _slct
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
@@ -2075,21 +2074,11 @@ def _make_spam_static(model):
 
 def _copy_to_static_explicitop_model(mdl):
     """Create and return an "effective" a copy of `mdl` that is an ExplicitOpModel with static elements.
-    
-    If `mdl` is already an ExplicitOpModel it is copied and returned
-     after setting all paramterizations to 'static'.
-    Otherwise an ExplicitOpModel is constructed from quantities within
-     `mdl` (for instance, if `mdl` is an ImplicitOpModel), namely:
-      mdl.state_space, mdl.basis, mdl.sim, and mdl.evotype.  Then elements
-      from mdl.operation_blks['layers'], mdl.prep_blks['layers'], and mdl.povm_blks['layers']
-      are copied into the new ExplicitOpModel as static dense elements.
-    
-    NOTE: instruments are not currently handled, nor is every operation or spam element
-      necessarily copied, so this function should be used with caution, as it falls
-      short of a full converter between model types.
 
-    This function is primarily useful within FPR applications where code 
-    assumes an ExplicitOpModel but the user may pass in other model types.
+    If `mdl` is already an ExplicitOpModel it is copied; otherwise (e.g. if
+    `mdl` is an ImplicitOpModel) it is first converted to an ExplicitOpModel
+    via :meth:`ImplicitOpModel.to_explicit_model`.  Either way all of the
+    returned model's parameterizations are then set to 'static'.
 
     Parameters
     ----------
@@ -2098,25 +2087,10 @@ def _copy_to_static_explicitop_model(mdl):
     Returns
     -------
     Model
-        A copy of `mdl` with all SPAM elements set to 'static' parameterization.
+        A copy of `mdl` with all elements set to 'static' parameterization.
     """
-    if isinstance(mdl, _ExplicitOpModel):
-        ret = mdl.copy()
-        ret.set_all_parameterizations('static')
-    else:
-        ret = _ExplicitOpModel(mdl.state_space, mdl.basis,
-                           default_gate_type='static',
-                           default_prep_type='static',
-                           default_povm_type='static',
-                           default_instrument_type='static',
-                           simulator=mdl.sim.copy(), evotype=mdl.evotype)
-        for k, v in mdl.prep_blks['layers'].items():
-            ret.preps[k] = v.to_dense()
-        for k, v in mdl.povm_blks['layers'].items():
-            ret.povms[k] = _convert_povm(v.copy(), 'static', mdl.basis)
-        for k, v in mdl.operation_blks['layers'].items():
-            ret.operations[k] = v.to_dense()
-
+    ret = mdl.copy() if isinstance(mdl, _ExplicitOpModel) else mdl.to_explicit_model()
+    ret.set_all_parameterizations('static')
     assert ret.num_params == 0
     return ret
 
