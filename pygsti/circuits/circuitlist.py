@@ -9,14 +9,16 @@ Defines the CircuitList class, for holding meta-data alongside a list or tuple o
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 # ***************************************************************************************************
+from __future__ import annotations
+from typing import Optional
 import copy as _copy
 import uuid as _uuid
 import numpy as _np
 
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
+from pygsti.baseobjs.label import Label as _Label
 from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.tools import listtools as _lt
-
 
 class CircuitList(_NicelySerializable):
     """
@@ -60,7 +62,10 @@ class CircuitList(_NicelySerializable):
             return circuits
         return cls(circuits)
 
-    def __init__(self, circuits, op_label_aliases=None, circuit_rules=None, circuit_weights=None, name=None):
+    def __init__(self, circuits: list[_Circuit],
+                 op_label_aliases: Optional[dict[_Label, _Circuit]]=None,
+                 circuit_rules: Optional[list[tuple]]=None,
+                 circuit_weights:Optional[list]=None, name:Optional[str]=None):
         """
         Create a CircuitList.
 
@@ -247,7 +252,15 @@ class CircuitList(_NicelySerializable):
         
         return ret
 
-    def tensor_circuits(self, other_circuitlist, new_name=None):
+    def tensor_circuits(self, other_circuitlist: CircuitList, new_name: Optional[str]=None):
+        """
+        Given two `CircuitList` objects, X, Y, combine the two of them so that every `Circuit` or `CircuitList`
+        within this `CircuitList`, X, is tensored with the corresponding `Circuit` or `CircuitList` in Y.
+
+        Note that one must ensure that you do not have a mismatch between X, Y such that c_i in X is a
+        `CircuitList` but c_i in Y is a `Circuit`.
+        """
+        assert not isinstance(other_circuitlist, _Circuit)
         assert len(self) == len(other_circuitlist)
         circuits = []
         for c1,c2 in zip(self._circuits, other_circuitlist._circuits):

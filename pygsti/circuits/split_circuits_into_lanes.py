@@ -77,6 +77,8 @@ def compute_subcircuits(circuit: Circuit,
                         cache_lanes_in_circuit: bool = False) -> list[list[LabelTupTup]]:
     """
     Split a circuit into multiple subcircuits which do not talk across lanes.
+
+    Returns a list of those subcircuits in the format of a list of layers.
     """
 
     if "lanes" in circuit.saved_auxinfo:
@@ -138,6 +140,13 @@ def batch_tensor(
     target_lines : Optional[Sequence[Tuple[int,...]]] = None
     ) -> Circuit:
     """
+    `circuits`: Sequence of `Circuit` the circuits you want to tensor together.
+    `layer_mappers`: dictionary of lane size to a dictionary of `Label` to `Label`.
+    'target_lines' : Optional sequence of state space labels used by each circuit.
+    `global_line_order`: The final order of the state space labels (used if one wants to make it not just arange(total_lines))
+
+    Tensor together a sequence of Circuits padding smaller circuits to the length of the largest circuit
+    with noisy idles.
     """
     assert len(circuits) > 0
 

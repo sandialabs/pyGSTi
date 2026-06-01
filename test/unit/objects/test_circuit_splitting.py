@@ -10,7 +10,7 @@ def build_circuit(num_qubits: int, depth_L: int, allowed_gates: set[str]) -> _Ci
     single qubit gates specified in allowed gates.
     """
     my_circuit = []
-    for lnum in range(depth_L):
+    for _ in range(depth_L):
         layer = []
         for qnum in range(num_qubits):
             gate = str(np.random.choice(allowed_gates))
@@ -46,7 +46,7 @@ def build_circuit_with_multiple_qubit_gates_with_designated_lanes(
         else:
             n_qs_to_gates_avail[val] = [key]
 
-    for lnum in range(depth_L):
+    for _ in range(depth_L):
         layer = []
         start_point = 0
 
@@ -80,8 +80,6 @@ def build_circuit_with_multiple_qubit_gates_with_designated_lanes(
 
 
 def test_subcircuits_splits_can_create_empty_sub_circuit():
-
-
     original = _Circuit([], line_labels=[0])
 
     qubits_to_lanes = {0: 0}
@@ -92,7 +90,6 @@ def test_subcircuits_splits_can_create_empty_sub_circuit():
     assert original == _Circuit(attempt[0], line_labels=[0])
 
 def test_subcircuits_split_can_be_cached():
-
     gates_to_num_used = {"X": 1, "Y": 1, "Z": 1, "CNOT": 2, "CZ": 2}
 
     depth = 10

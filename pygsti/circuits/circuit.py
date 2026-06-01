@@ -2553,7 +2553,7 @@ class Circuit(object):
                             lane_to_qubits: dict[int, tuple[int, ...]]) -> Circuit:
         """
         Store the tensor lanes in the circuit if appropriate. 
-        Note that this should only be called in the case that the sub_circuit_list
+        Note that this should only be called in the case that `sub_circuit_list`
         when tensored is equivalent to the current circuit.
         """
 
