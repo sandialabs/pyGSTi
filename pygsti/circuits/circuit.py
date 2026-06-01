@@ -2548,6 +2548,7 @@ class Circuit(object):
         cpy.tensor_circuit_inplace(circuit, line_order)
         if self._static: cpy.done_editing()
         return cpy
+
     
     def _cache_tensor_lanes(self, sub_circuit_list: list[_Label],
                             lane_to_qubits: dict[int, tuple[int, ...]]) -> Circuit:
