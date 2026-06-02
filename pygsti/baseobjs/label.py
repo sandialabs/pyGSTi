@@ -1464,12 +1464,12 @@ class CircuitLabel(LabelTupTupWithTime, tuple):
         """
         return self[2]
 
-    @property
-    def args(self) -> None:
-        """
-        This label's arguments.
-        """
-        raise NotImplementedError("TODO!")
+    # @property
+    # def args(self) -> None:
+    #     """
+    #     This label's arguments.
+    #     """
+    #     raise NotImplementedError("TODO!")
 
     @property
     def components(self) -> tuple[ConcreteLabel, ...]:

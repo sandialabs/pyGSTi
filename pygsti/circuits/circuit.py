@@ -2561,7 +2561,7 @@ class Circuit(object):
             if isinstance(other_lbl, _CircuitLabel) and other_lbl.depth == 1:
                 other_lbl = _Label(other_lbl.components, other_lbl.sslbls, other_lbl.time, other_lbl.args)
 
-            nq_prior: int = lbl.num_qubits
+            nq_prior: int = lbl.num_qubits if lbl.num_qubits is not None else 0
 
             if isinstance(lbl, _CircuitLabel) and isinstance(other_lbl, _CircuitLabel):
                 assert lbl.depth == other_lbl.depth, "Embedded circuits must have the same depth when tensoring together."
@@ -2574,7 +2574,6 @@ class Circuit(object):
                 assert lbl.num_qubits == other_lbl.num_qubits + nq_prior
             elif isinstance(lbl, _LabelTupTup):
                 lbl = _Label((*lbl, other_lbl))
-                assert isinstance(lbl, _LabelTupTup)
                 assert lbl.num_qubits == other_lbl.num_qubits + nq_prior
             elif isinstance(other_lbl, _LabelTupTup):
                 lbl = _Label((lbl, *other_lbl))
