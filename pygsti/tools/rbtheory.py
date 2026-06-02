@@ -17,6 +17,7 @@ import numpy as _np
 from pygsti.tools import matrixtools as _mtls
 from pygsti.tools import optools as _optls
 from pygsti.tools import rbtools as _rbtls
+from pygsti.tools.exceptions import NumericalDomainWarning as _NumericalDomainWarning
 from pygsti import SpaceT
 
 def predicted_rb_number(model, target_model, weights=None, d=None, rtype='EI'):
@@ -137,10 +138,12 @@ def predicted_rb_decay_parameter(model, target_model, weights=None):
         E = _np.absolute(_np.linalg.eigvals(L))
         E = _np.flipud(_np.sort(E))
         if abs(E[0] - 1) > 10**(-12):
-            _warnings.warn("Output may be unreliable because the model is not approximately trace-preserving.")
+            _warnings.warn("Output may be unreliable because the model is not approximately trace-preserving.",
+                           _NumericalDomainWarning)
 
         if E[1].imag > 10**(-10):
-            _warnings.warn("Output may be unreliable because the RB decay constant has a significant imaginary component.")
+            _warnings.warn("Output may be unreliable because the RB decay constant has a significant imaginary component.",
+                           _NumericalDomainWarning)
         p = abs(E[1])
     except _np.linalg.LinAlgError:
         p = _np.nan
@@ -202,13 +205,15 @@ def rb_gauge(model, target_model, weights=None, mx_basis=None, eigenvector_weigh
     gam_max = gam[index_max]
 
     if abs(gam_max - 1) > 10**(-12):
-        _warnings.warn("Output may be unreliable because the model is not approximately trace-preserving.")
+        _warnings.warn("Output may be unreliable because the model is not approximately trace-preserving.",
+                       _NumericalDomainWarning)
 
     absgam[index_max] = 0.0
     index_2ndmax = _np.argmax(absgam)
     decay_constant = gam[index_2ndmax]
     if decay_constant.imag > 10**(-12):
-        _warnings.warn("Output may be unreliable because the RB decay constant has a significant imaginary component.")
+        _warnings.warn("Output may be unreliable because the RB decay constant has a significant imaginary component.",
+                       _NumericalDomainWarning)
 
     vec_l_operator = vecs[:, index_max] + eigenvector_weighting * vecs[:, index_2ndmax]
 
