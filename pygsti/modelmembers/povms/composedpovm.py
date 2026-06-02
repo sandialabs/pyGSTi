@@ -9,21 +9,31 @@ Defines the ComposedPOVM class
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
+from __future__ import annotations
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    import torch as _torch
+try:
+    import torch as _torch
+except ImportError:
+    pass
 
 import collections as _collections
 from typing import Optional
 
+import numpy as _np
 from pygsti.modelmembers.povms.composedeffect import ComposedPOVMEffect as _ComposedPOVMEffect
 from pygsti.modelmembers.povms.computationalpovm import ComputationalBasisPOVM as _ComputationalBasisPOVM
 from pygsti.modelmembers.povms.povm import POVM as _POVM
 from pygsti.modelmembers.operations import LinearOperator as _LinearOperator
+from pygsti.modelmembers.torchable import Torchable as _Torchable
 
 from pygsti.evotypes import Evotype as _Evotype
 from pygsti.modelmembers import operations as _op
 from pygsti.baseobjs.basis import BasisLike as _BasisLike, Basis as _Basis
 
 
-class ComposedPOVM(_POVM):
+class ComposedPOVM(_POVM, _Torchable):
     """
     A parameterized POVM that is effectively a *single* parameterized gate followed by
     a static (usually, computational basis) POVM.
@@ -271,6 +281,26 @@ class ComposedPOVM(_POVM):
         """
         # Recall self.base_povm.num_params == 0
         return self.error_map.to_vector()
+
+    def stateless_data(self):
+        """Constants for the torch path (issue 607).
+
+        Returns ``(base_effect_rows, error_map_type, error_map_sd)``.  All parameters belong to the
+        (Torchable) error map; the base POVM is static (0 params).  Each composed effect is
+        ``<E_base| error_map``, so the POVM matrix (one row per effect, in this POVM's effect order) is
+        ``base_effect_rows @ error_map_superop`` -- and ``povm_matrix @ super_ket`` gives the outcome
+        probabilities.
+        """
+        base_rows = _np.ascontiguousarray(
+            _np.stack([self.base_povm[k].to_dense('HilbertSchmidt') for k in self.keys()]))
+        return (_torch.from_numpy(base_rows), type(self.error_map), self.error_map.stateless_data())
+
+    @staticmethod
+    def torch_base(sd, t_param):
+        """Differentiable POVM matrix ``base_effect_rows @ error_map_superop`` from the parameter tensor."""
+        t_base_rows, emap_type, emap_sd = sd
+        superop = emap_type.torch_base(emap_sd, t_param)
+        return t_base_rows @ superop
 
     def from_vector(self, v, close=False, dirty_value=True):
         """

@@ -9,7 +9,14 @@ The ComposedState class and supporting functionality.
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
-
+from __future__ import annotations
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    import torch as _torch
+try:
+    import torch as _torch
+except ImportError:
+    pass
 
 import numpy as _np
 
@@ -17,9 +24,10 @@ from pygsti.modelmembers.states.state import State as _State
 from pygsti.modelmembers.states.staticstate import StaticState as _StaticState
 from pygsti.modelmembers import modelmember as _modelmember, term as _term
 from pygsti.modelmembers.errorgencontainer import ErrorMapContainer as _ErrorMapContainer
+from pygsti.modelmembers.torchable import Torchable as _Torchable
 from pygsti import SpaceT
 
-class ComposedState(_State):
+class ComposedState(_State, _Torchable):
     """
     A representation of the superket `errormap @ state_vec` induced by a superoperator
     `errormap` and a superket `state_vec`, where `state_vec.num_params == 0`. 
@@ -144,6 +152,23 @@ class ComposedState(_State):
         """
         #error map acts on dmVec
         return _np.dot(self.error_map.to_dense(on_space), self.state_vec.to_dense(on_space))
+
+    def stateless_data(self):
+        """Constants for the torch path (issue 607).
+
+        Returns ``(static_ket, error_map_type, error_map_sd)``.  All parameters belong to the (Torchable)
+        error map; the prepared super-ket is ``error_map_superop @ static_ket`` (cf. ``to_dense``), where
+        ``static_ket`` is the constant base state in Hilbert-Schmidt space.
+        """
+        static_ket = _np.ascontiguousarray(self.state_vec.to_dense('HilbertSchmidt'))
+        return (_torch.from_numpy(static_ket), type(self.error_map), self.error_map.stateless_data())
+
+    @staticmethod
+    def torch_base(sd, t_param):
+        """Differentiable super-ket ``error_map_superop @ static_ket`` from the parameter tensor."""
+        t_static_ket, emap_type, emap_sd = sd
+        superop = emap_type.torch_base(emap_sd, t_param)
+        return superop @ t_static_ket
 
     def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):
         """

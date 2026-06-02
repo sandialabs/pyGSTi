@@ -39,6 +39,16 @@ def _noisy_cptp_model(mode, seed=4):
     return m
 
 
+def _noisy_full_cptp_model(seed=5):
+    """1-qubit model with Lindblad (CPTPLND) SPAM *and* operations -- prep is a ComposedState, POVM is a
+    ComposedPOVM, gates are ComposedOps -- perturbed off the ideal."""
+    m = smq1Q_XYI.target_model()
+    m.set_all_parameterizations('CPTPLND')
+    rng = np.random.default_rng(seed)
+    m.from_vector(m.to_vector() + 0.03 * rng.standard_normal(m.num_params))
+    return m
+
+
 def _a_composed_op(model):
     """A gate ``ComposedOp([static_ideal, ExpErrorgenOp])`` from the model."""
     for op in model.operations.values():
@@ -93,3 +103,34 @@ def test_composedop_torch_base(mode):
 
     assert np.allclose(_torch_base_np(op), op.to_dense('HilbertSchmidt'), atol=1e-9)
     assert np.allclose(_jacrev_np(op), op.deriv_wrt_params(), atol=1e-6)
+
+
+def test_composedstate_torch_base():
+    """ComposedState (Lindblad SPAM prep) torch_base = error_map_superop @ static_ket; reproduces
+    to_dense and its analytic Jacobian.  ComposedState.torch_base returns a super-ket (1-D)."""
+    rho = _noisy_full_cptp_model().preps['rho0']
+    sd = rho.stateless_data()
+    t = torch.from_numpy(np.ascontiguousarray(rho.to_vector()))
+
+    assert np.allclose(_torch_base_np(rho), rho.to_dense('HilbertSchmidt'), atol=1e-9)
+    J = torch.func.jacrev(lambda tp: type(rho).torch_base(sd, tp))(t).detach().numpy()
+    assert np.allclose(J, rho.deriv_wrt_params(), atol=1e-6)
+
+
+def test_composedpovm_torch_base():
+    """ComposedPOVM (Lindblad SPAM measurement) torch_base = base_effect_rows @ error_map_superop;
+    reproduces the per-effect dual vectors and their analytic Jacobians.  Rows are in POVM-effect order
+    (the row order TorchForwardSimulator multiplies against the super-ket)."""
+    povm = _noisy_full_cptp_model().povms['Mdefault']
+    sd = povm.stateless_data()
+    t = torch.from_numpy(np.ascontiguousarray(povm.to_vector()))
+
+    # value: row i is effect i's dual vector
+    eff_rows = np.stack([povm[k].to_dense('HilbertSchmidt') for k in povm.keys()])
+    assert np.allclose(type(povm).torch_base(sd, t).detach().numpy(), eff_rows, atol=1e-9)
+
+    # autodiff Jacobian (n_effects, dim, n_params) == stacked per-effect deriv_wrt_params
+    J = torch.func.jacrev(lambda tp: type(povm).torch_base(sd, tp))(t).detach().numpy()
+    Jref = np.stack([povm[k].deriv_wrt_params() for k in povm.keys()])
+    assert J.shape == Jref.shape
+    assert np.allclose(J, Jref, atol=1e-6)

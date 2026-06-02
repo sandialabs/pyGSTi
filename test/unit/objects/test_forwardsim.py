@@ -331,19 +331,18 @@ class ForwardSimConsistencyTester(TestCase):
 
 
 class LindbladForwardSimConsistencyTester(TestCase):
-    """End-to-end check that TorchForwardSimulator runs on a CPTPLND (Lindblad) model and agrees with
-    the other forward simulators (GitHub issue 607).  The gates are ComposedOp([static ideal,
-    ExpErrorgenOp]); state prep / POVM are kept 'full TP' so every model member is Torchable."""
+    """End-to-end check that TorchForwardSimulator runs on a full CPTPLND (Lindblad) model and agrees
+    with the other forward simulators (GitHub issue 607).  Every model member is a Lindblad-composed
+    object: the prep is a ComposedState, the POVM a ComposedPOVM, and each gate a
+    ComposedOp([static ideal, ExpErrorgenOp]) -- exercising the whole Torchable op + SPAM chain."""
 
     PROBS_TOL = 1e-12
     JACS_TOL = 1e-9
 
     def setUp(self):
         model = smq1Q_XYI.target_model()
-        # TP spam (TPState/TPPOVM are Torchable) + CPTPLND operations
-        # (ComposedOp([StaticUnitaryOp, ExpErrorgenOp])).
-        model.convert_members_inplace('full TP')
-        model.convert_members_inplace('CPTPLND', categories_to_convert='ops')
+        # Lindblad SPAM *and* operations: ComposedState prep, ComposedPOVM, ComposedOp gates.
+        model.set_all_parameterizations('CPTPLND')
         # perturb off the ideal so the error generators are nonzero
         rng = np.random.default_rng(7)
         model.from_vector(model.to_vector() + 0.03 * rng.standard_normal(model.num_params))
