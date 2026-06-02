@@ -1,4 +1,5 @@
 import pickle
+import pytest
 
 import numpy as np
 
@@ -107,6 +108,7 @@ class DenseStateBase(StateBase):
         self.assertArraysAlmostEqual(vec_copy.to_dense(), self.vec.to_dense())
         self.assertEqual(type(vec_copy), type(self.vec))
 
+    @pytest.mark.filterwarnings("ignore:divide by zero encountered in divide:RuntimeWarning")
     def test_arithmetic(self):
         result = self.vec + self.vec
         self.assertEqual(type(result), np.ndarray)
