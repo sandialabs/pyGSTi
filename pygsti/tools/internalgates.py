@@ -23,6 +23,9 @@ import warnings as _warnings
 import numpy as _np
 import scipy.linalg as _spl
 
+from pygsti.tools.exceptions import (QiskitInteropWarning as _QiskitInteropWarning,
+                                     MissingDependencyWarning as _MissingDependencyWarning)
+
 from pygsti.tools import optools as _ot
 from pygsti.tools import symplectic as _symp
 from pygsti.baseobjs.unitarygatefunction import UnitaryGateFunction as _UnitaryGateFunction
@@ -962,10 +965,12 @@ def standard_gatenames_qiskit_conversions() -> Dict[str, Tuple[qiskit.circuit.In
 
         if qiskit.__version__ != '2.1.1':
             _warnings.warn("function 'standard_gatenames_qiskit_conversions()' is designed for qiskit version 2.1.1 \
-                    and may not function properly for your qiskit version, which is " + qiskit.__version__)
+                    and may not function properly for your qiskit version, which is " + qiskit.__version__,
+                           _QiskitInteropWarning)
             
     except ImportError:
-        _warnings.warn("This operation requires qiskit, which does not appear to be installed.")
+        _warnings.warn("This operation requires qiskit, which does not appear to be installed.",
+                       _MissingDependencyWarning)
 
     std_gatenames_to_qiskit = {}
 

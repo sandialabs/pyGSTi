@@ -220,7 +220,7 @@ def read_multidataset(filename, cache=False, collision_action="aggregate",
 
             printer.log("Writing cache file (to speed future loads): %s"
                         % cache_filename)
-            mds.save(cache_filename)
+            mds.write_binary(cache_filename)
 
         else:
             # otherwise must use standard dataset file format
