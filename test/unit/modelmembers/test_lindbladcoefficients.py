@@ -21,8 +21,6 @@ under cholesky/depol, so param round-trips are checked only via block_data):
   * elementary_errorgens values + round-trip; coefficient/param labels; NicelySerializable
     round-trip; convert; is_similar; near-singular 'other'/cholesky truncation.
 """
-import hashlib
-
 import numpy as np
 from numpy.typing import ArrayLike
 import pytest
@@ -297,61 +295,50 @@ def test_static_deriv_shapes():
         assert blk.superop_deriv_wrt_params(G, np.empty(0), superops_are_flat=True).shape[-1] == 0
 
 
-# Snapshot of the Term-simulator polynomial coefficients (1-qubit pp, fixed block_data below).
-# Guards the block-type split's move of _create_lindblad_term_objects_* (term count + a
-# platform-independent fingerprint of every term's Polynomial.coeffs).  Values are regenerated
-# from the current, golden-validated code; the fingerprint is integer-quantized (see
-# _term_fingerprint), so they are identical on Linux and Windows.
+# Snapshot of the Term-simulator polynomial coefficients (1-qubit pp, fixed block_data below),
+# guarding the block-type split's move of _create_lindblad_term_objects_*.  We pin each term's
+# coefficient *evaluated at a fixed generic parameter point* (see _evaluated_term_coeffs) rather than
+# a hash of its serialized form: polynomial values are platform-independent (deterministic IEEE
+# arithmetic, identical on Linux/Windows to ~1e-15), whereas the serialized monomial keys, float
+# repr, and +0.0/-0.0 signs are not -- which is what made the earlier hashed snapshot fail on Windows.
+# Each entry is (term count, sorted multiset of evaluated coefficients); compared with a tolerance.
 _TERM_SNAPSHOT_1Q = {
-    ('ham', 'static'):            (6,  '51b66691aec58f41'),
-    ('ham', 'elements'):          (6,  '4678afcfae6f2f46'),
-    ('other_diagonal', 'static'): (9,  'a93ab7917787cbf5'),
-    ('other_diagonal', 'elements'):  (9, '740224cf5de53b06'),
-    ('other_diagonal', 'cholesky'):  (9, '420d40c4ef90f283'),
-    ('other_diagonal', 'depol'):     (9, 'de25c201ccac84b6'),
-    ('other_diagonal', 'reldepol'):  (9, '519adfe0c63611cd'),
-    ('other', 'static'):          (27, 'ed030cf097f2f2bf'),
-    ('other', 'elements'):        (27, 'f1b5685854dc434c'),
-    ('other', 'cholesky'):        (27, '358c013b0ac41bb0'),
+    ('ham', 'static'): (6, (-0.212132034j, -0.141421356j, -0.070710678j, 0.070710678j, 0.141421356j, 0.212132034j)),
+    ('ham', 'elements'): (6, (-0.494974747j, -0.403050865j, -0.311126984j, 0.311126984j, 0.403050865j, 0.494974747j)),
+    ('other_diagonal', 'static'): (9, (-0.075, -0.075, -0.05, -0.05, -0.025, -0.025, 0.05, 0.1, 0.15)),
+    ('other_diagonal', 'elements'): (9, (-0.175, -0.175, -0.1425, -0.1425, -0.11, -0.11, 0.22, 0.285, 0.35)),
+    ('other_diagonal', 'cholesky'): (9, (-0.1225, -0.1225, -0.081225, -0.081225, -0.0484, -0.0484, 0.0968, 0.16245, 0.245)),
+    ('other_diagonal', 'depol'): (9, (-0.1225, -0.1225, -0.1225, -0.1225, -0.1225, -0.1225, 0.245, 0.245, 0.245)),
+    ('other_diagonal', 'reldepol'): (9, (-0.175, -0.175, -0.175, -0.175, -0.175, -0.175, 0.35, 0.35, 0.35)),
+    ('other', 'static'): (27, (-48.5, -48.5, -30.5, -30.5, -30.5, -30.5, -19.25, -19.25, -12.5, -12.5, -12.5, -12.5, -8.0, -8.0, -8.0, -8.0, -3.5, -3.5, 7.0, 16.0, 16.0, 25.0, 25.0, 38.5, 61.0, 61.0, 97.0)),
+    ('other', 'elements'): (27, ((-0.1425-0.0775j), (-0.1425-0.0775j), (-0.11+0.02j), (-0.11+0.02j), (-0.105+0.025j), (-0.0775-0.1425j), (-0.0775-0.1425j), (-0.04+0.22j), (-0.0125+0.0525j), (-0.0125+0.0525j), -0.175j, -0.175j, -0.17j, -0.045j, -0.045j, 0.085j, 0.085j, 0.09j, 0.35j, (0.02-0.11j), (0.02-0.11j), (0.025-0.105j), (0.0525-0.0125j), (0.0525-0.0125j), (0.155+0.285j), (0.22-0.04j), (0.285+0.155j))),
+    ('other', 'cholesky'): (27, (-0.1225, -0.1225, (-0.11335+0.044175j), (-0.11335+0.044175j), (-0.09055-0.006175j), (-0.09055-0.006175j), (-0.05425-0.09975j), (-0.05425-0.09975j), (-0.05425+0.09975j), (-0.05425+0.09975j), (-0.04705-0.04775j), (-0.04705-0.04775j), (-0.04705+0.04775j), (-0.04705+0.04775j), (-0.028-0.154j), (-0.028+0.154j), (0.014-0.077j), (0.014-0.077j), (0.014+0.077j), (0.014+0.077j), (0.0941-0.0955j), (0.0941+0.0955j), (0.1085-0.1995j), (0.1085+0.1995j), (0.1811+0.01235j), (0.2267-0.08835j), 0.245)),
 }
 _TERM_SNAPSHOT_CONFIGS = list(_TERM_SNAPSHOT_1Q.keys())
 
 
-# Quantize coefficients to this resolution before hashing.  Collapses cross-platform float
-# artifacts -- +0.0 vs -0.0 and last-ULP wobble in math-library output -- to identical integers,
-# making the fingerprint reproducible across Linux/Windows.  (Monomial keys are already small
-# non-negative ints that pack identically on 32- and 64-bit platforms.)
-_TERM_FP_SCALE = 10 ** 9
+def _term_eval_point(num_params):
+    """A fixed, generic point for this block's polynomial variables (indices 0 .. num_params-1)."""
+    return {i: 0.7 - 0.13 * i for i in range(num_params)}
 
 
-def _term_fingerprint(terms):
-    """Platform-independent fingerprint of a list of polynomial terms.
+def _evaluated_term_coeffs(terms, num_params):
+    """Sorted multiset of each term's Polynomial coefficient evaluated at ``_term_eval_point``.
 
-    Each term's ``Polynomial.coeffs`` becomes a sorted tuple of ``(monomial, re, im)`` triples:
-    ``monomial`` is the tuple of variable indices and ``re``/``im`` are the coefficient's real and
-    imaginary parts quantized to ``_TERM_FP_SCALE``.  Numerically-zero monomials are dropped and the
-    all-integer structure is hashed, so the result is independent of float ``repr`` -- the source of
-    the earlier Linux-vs-Windows discrepancy.
+    Comparing *evaluated* polynomials sidesteps the platform-dependent serialization of the
+    coefficients (packed monomial keys, float ``repr``, +0.0 vs -0.0): the values are deterministic
+    IEEE arithmetic, identical across Linux/Windows to ~1e-15, so a tolerance comparison guards the
+    construction while being immune to those representation differences.  Sorting makes the
+    comparison a multiset check (insensitive to any benign reordering of the term list).
     """
-    sigs = []
-    for t in terms:
-        sig = []
-        for k, v in t.coeff.coeffs.items():
-            c = complex(v)
-            re = int(round(c.real * _TERM_FP_SCALE))
-            im = int(round(c.imag * _TERM_FP_SCALE))
-            if re == 0 and im == 0:
-                continue
-            sig.append((tuple(int(i) for i in k), re, im))
-        sig.sort()
-        sigs.append(tuple(sig))
-    sigs.sort()
-    return hashlib.sha1(repr(sigs).encode()).hexdigest()[:16]
+    pt = _term_eval_point(num_params)
+    vals = [complex(t.coeff.evaluate(pt)) for t in terms]
+    return sorted(vals, key=lambda z: (round(z.real, 9), round(z.imag, 9)))
 
 
 @pytest.mark.parametrize("bt,pm", _TERM_SNAPSHOT_CONFIGS, ids=["%s-%s" % k for k in _TERM_SNAPSHOT_1Q])
 def test_create_lindblad_term_objects_snapshot_1q(bt, pm):
-    """Pin the Term-simulator polynomial coefficients (count + platform-independent fingerprint)
+    """Pin the Term-simulator polynomial coefficients (count + values at a fixed evaluation point)
     to guard the block-type split's move of _create_lindblad_term_objects_*."""
     from pygsti.baseobjs.statespace import QubitSpace
     pp = Basis.cast('pp', 4)
@@ -363,9 +350,10 @@ def test_create_lindblad_term_objects_snapshot_1q(bt, pm):
         blk.block_data[:] = np.array([0.1, 0.2, 0.3])[:len(blk.basis_element_labels)]
     blk._coefficients_need_update = True
     terms = blk.create_lindblad_term_objects(0, 100, 'statevec', QubitSpace(1))
-    expected_count, expected_hash = _TERM_SNAPSHOT_1Q[(bt, pm)]
+    expected_count, expected_coeffs = _TERM_SNAPSHOT_1Q[(bt, pm)]
     assert len(terms) == expected_count
-    assert _term_fingerprint(terms) == expected_hash
+    actual = _evaluated_term_coeffs(terms, blk.num_params)
+    assert np.allclose(actual, np.asarray(expected_coeffs), atol=1e-7, rtol=1e-7)
     # sanity: every monomial references only this block's own parameters (0 .. num_params-1)
     var_indices = {int(i) for t in terms for k in t.coeff.coeffs for i in k}
     assert all(0 <= i < blk.num_params for i in var_indices)
