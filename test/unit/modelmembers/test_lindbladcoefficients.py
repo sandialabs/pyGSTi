@@ -21,6 +21,8 @@ under cholesky/depol, so param round-trips are checked only via block_data):
   * elementary_errorgens values + round-trip; coefficient/param labels; NicelySerializable
     round-trip; convert; is_similar; near-singular 'other'/cholesky truncation.
 """
+import hashlib
+
 import numpy as np
 import pytest
 
@@ -283,6 +285,52 @@ def test_other_cholesky_truncation_near_singular():
     bd = (C @ C.conj().T).astype(complex)
     blk = LCB('other', pp, initial_block_data=bd, param_mode='cholesky', truncate=True)
     assert np.allclose(blk.block_data, bd, atol=1e-6)
+
+
+# Snapshot of the Term-simulator polynomial coefficients (1-qubit pp, fixed block_data below),
+# generated from the pre-refactor code.  Guards the block-type split's move of
+# _create_lindblad_term_objects_* (count + a hash of all terms' Polynomial.coeffs).
+_TERM_SNAPSHOT_1Q = {
+    ('ham', 'static'):            (6,  'bb697653e167e1ea'),
+    ('ham', 'elements'):          (6,  '167e8530daa8c3c2'),
+    ('other_diagonal', 'static'): (9,  '8f4ecb17fd64a16c'),
+    ('other_diagonal', 'elements'):  (9, 'e1e341741e994e87'),
+    ('other_diagonal', 'cholesky'):  (9, '93b4c49fe6469e64'),
+    ('other_diagonal', 'depol'):     (9, '26594d67358c52d7'),
+    ('other_diagonal', 'reldepol'):  (9, '28850a5764660304'),
+    ('other', 'static'):          (27, '0f434ddab05c2818'),
+    ('other', 'elements'):        (27, '709cf132c89e1fb0'),
+    ('other', 'cholesky'):        (27, '742ea93b1f30fccb'),
+}
+
+
+def _term_fingerprint(terms):
+    sigs = []
+    for t in terms:
+        sig = tuple(sorted((tuple(int(i) for i in k), round(complex(v).real, 12), round(complex(v).imag, 12))
+                           for k, v in t.coeff.coeffs.items()))
+        sigs.append(sig)
+    sigs.sort()
+    return hashlib.sha1(repr(sigs).encode()).hexdigest()[:16]
+
+
+@pytest.mark.parametrize("bt,pm", list(_TERM_SNAPSHOT_1Q.keys()),
+                         ids=["%s-%s" % k for k in _TERM_SNAPSHOT_1Q])
+def test_create_lindblad_term_objects_snapshot_1q(bt, pm):
+    """Pin the Term-simulator polynomial coefficients (counts + hash) to guard the block-type split."""
+    from pygsti.baseobjs.statespace import QubitSpace
+    pp = Basis.cast('pp', 4)
+    blk = LCB(bt, pp, param_mode=pm)
+    if bt == 'other':
+        A = np.arange(1, 10, dtype=float).reshape(3, 3)
+        blk.block_data[:, :] = (A @ A.T).astype(complex)        # fixed PD real matrix
+    else:
+        blk.block_data[:] = np.array([0.1, 0.2, 0.3])[:len(blk.basis_element_labels)]
+    blk._coefficients_need_update = True
+    terms = blk.create_lindblad_term_objects(0, 100, 'statevec', QubitSpace(1))
+    expected_count, expected_hash = _TERM_SNAPSHOT_1Q[(bt, pm)]
+    assert len(terms) == expected_count
+    assert _term_fingerprint(terms) == expected_hash
 
 
 def test_static_deriv_shapes():
