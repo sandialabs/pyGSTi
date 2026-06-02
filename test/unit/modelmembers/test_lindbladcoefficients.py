@@ -24,6 +24,7 @@ under cholesky/depol, so param round-trips are checked only via block_data):
 import hashlib
 
 import numpy as np
+from numpy.typing import ArrayLike
 import pytest
 
 from pygsti.baseobjs.basis import Basis
@@ -41,7 +42,7 @@ VALID = {
 BASES = [('pp', 4), ('gm', 9), ('pp', 16)]
 
 
-def _cases(include_other_big):
+def _cases(include_other_big) -> list[tuple[str, int, str, str]]:
     out = []
     for bname, dim in BASES:
         for bt, pms in VALID.items():
@@ -52,24 +53,23 @@ def _cases(include_other_big):
     return out
 
 
-ALL_CASES = _cases(include_other_big=True)
-FD_CASES = [c for c in _cases(include_other_big=False) if c[3] != 'static']
-HESS_CASES = [c for c in FD_CASES if not (c[2] == 'other' and c[1] > 4)]
+ALL_CASES  = _cases(include_other_big=True)
+FD_CASES   = [ c for c in _cases(include_other_big=False) if c[3] != 'static']
+HESS_CASES = [ c for c in FD_CASES if not (c[2] == 'other' and c[1] > 4)     ]
 
 
-def _ident(c):
+def _config_as_string(c : tuple[str, int, str, str]) -> str:
     return "%s%d-%s-%s" % c
 
 
-def make_block(bname, dim, bt, pm, data_seed=None):
+def make_block(bname: str, dim: int, bt: str, pm: str, data_seed=None):
     basis = Basis.cast(bname, dim)
-    blk = LCB(bt, basis, param_mode=pm)
+    blk   = LCB(bt, basis, param_mode=pm)
     if data_seed is not None and blk.num_params > 0:
         rng = np.random.default_rng(data_seed)
         if bt == 'other' and pm == 'cholesky':
-            # Use well-conditioned PD block_data so to_vector's eigh+cholesky is numerically
-            # stable (random Cholesky params can produce a near-singular C C^dag, whose params
-            # are ill-conditioned).  The near-singular path is exercised separately by
+            # Use well-conditioned PD block_data so to_vector's cholesky is numerically
+            # stable. The near-singular path is exercised separately by
             # test_other_cholesky_truncation_near_singular.
             n = len(blk.basis_element_labels)
             A = rng.standard_normal((n, n)) + 1j * rng.standard_normal((n, n))
@@ -80,13 +80,13 @@ def make_block(bname, dim, bt, pm, data_seed=None):
     return blk
 
 
-def block_data_flat_of(bname, dim, bt, pm, v):
+def block_data_flat_of(bname: str, dim: int, bt: str, pm: str, v: ArrayLike):
     blk = LCB(bt, Basis.cast(bname, dim), param_mode=pm)
     blk.from_vector(np.asarray(v, float))
     return blk.block_data.ravel().copy()
 
 
-def Gflat(blk, bname):
+def Gflat(blk: LCB, bname: str):
     return np.asarray(blk.create_lindblad_term_superoperators(bname, sparse=False,
                                                               include_1norms=False, flat=True))
 
@@ -103,7 +103,7 @@ def fd_jac(f, v, eps=1e-6):
     return out
 
 
-@pytest.mark.parametrize("c", ALL_CASES, ids=_ident)
+@pytest.mark.parametrize("c", ALL_CASES, ids=_config_as_string)
 def test_num_params_matches_formula(c):
     bname, dim, bt, pm = c
     blk = make_block(bname, dim, bt, pm)
@@ -120,7 +120,7 @@ def test_num_params_matches_formula(c):
     assert blk.to_vector().shape == (expected,)
 
 
-@pytest.mark.parametrize("c", ALL_CASES, ids=_ident)
+@pytest.mark.parametrize("c", ALL_CASES, ids=_config_as_string)
 def test_block_data_param_roundtrip(c):
     bname, dim, bt, pm = c
     blk = make_block(bname, dim, bt, pm, data_seed=1)
@@ -134,7 +134,7 @@ def test_block_data_param_roundtrip(c):
     assert np.allclose(blk.to_vector(), v, atol=1e-9)    # to_vector idempotent
 
 
-@pytest.mark.parametrize("c", FD_CASES, ids=_ident)
+@pytest.mark.parametrize("c", FD_CASES, ids=_config_as_string)
 def test_deriv_wrt_params_finite_diff(c):
     bname, dim, bt, pm = c
     blk = LCB(bt, Basis.cast(bname, dim), param_mode=pm)
@@ -145,7 +145,7 @@ def test_deriv_wrt_params_finite_diff(c):
     assert np.allclose(np.imag(fd), np.imag(analytic), atol=1e-5, rtol=1e-4)
 
 
-@pytest.mark.parametrize("c", FD_CASES, ids=_ident)
+@pytest.mark.parametrize("c", FD_CASES, ids=_config_as_string)
 def test_superop_deriv_finite_diff_and_chain_rule(c):
     bname, dim, bt, pm = c
     blk = LCB(bt, Basis.cast(bname, dim), param_mode=pm)
@@ -168,7 +168,7 @@ def test_superop_deriv_finite_diff_and_chain_rule(c):
     assert np.allclose(np.real(chain), sd, atol=1e-7)
 
 
-@pytest.mark.parametrize("c", HESS_CASES, ids=_ident)
+@pytest.mark.parametrize("c", HESS_CASES, ids=_config_as_string)
 def test_superop_hessian_chain_rule(c):
     bname, dim, bt, pm = c
     blk = LCB(bt, Basis.cast(bname, dim), param_mode=pm)
@@ -187,7 +187,7 @@ def test_superop_hessian_chain_rule(c):
     assert np.allclose(np.real(chain), h, atol=1e-4, rtol=1e-3)
 
 
-@pytest.mark.parametrize("c", ALL_CASES, ids=_ident)
+@pytest.mark.parametrize("c", ALL_CASES, ids=_config_as_string)
 def test_elementary_errorgens_roundtrip(c):
     bname, dim, bt, pm = c
     blk = make_block(bname, dim, bt, pm, data_seed=3)
@@ -240,7 +240,7 @@ def test_labels_snapshot_1q():
     assert LCB('ham', pp, param_mode='static').param_labels == []
 
 
-@pytest.mark.parametrize("c", ALL_CASES, ids=_ident)
+@pytest.mark.parametrize("c", ALL_CASES, ids=_config_as_string)
 def test_serialization_roundtrip(c):
     bname, dim, bt, pm = c
     blk = make_block(bname, dim, bt, pm, data_seed=5)
@@ -254,7 +254,7 @@ def test_serialization_roundtrip(c):
         assert np.allclose(blk2.to_vector(), blk.to_vector(), atol=1e-12)
 
 
-@pytest.mark.parametrize("c", ALL_CASES, ids=_ident)
+@pytest.mark.parametrize("c", ALL_CASES, ids=_config_as_string)
 def test_convert_preserves_block_data(c):
     bname, dim, bt, pm = c
     blk = make_block(bname, dim, bt, pm, data_seed=9)
@@ -287,6 +287,16 @@ def test_other_cholesky_truncation_near_singular():
     assert np.allclose(blk.block_data, bd, atol=1e-6)
 
 
+def test_static_deriv_shapes():
+    pp = Basis.cast('pp', 4)
+    for bt, coeff_shape in [('ham', (3,)), ('other_diagonal', (3,)), ('other', (3, 3))]:
+        blk = LCB(bt, pp, param_mode='static')
+        assert blk.num_params == 0
+        assert blk.deriv_wrt_params().shape == coeff_shape + (0,)
+        G = Gflat(blk, 'pp')
+        assert blk.superop_deriv_wrt_params(G, np.empty(0), superops_are_flat=True).shape[-1] == 0
+
+
 # Snapshot of the Term-simulator polynomial coefficients (1-qubit pp, fixed block_data below),
 # generated from the pre-refactor code.  Guards the block-type split's move of
 # _create_lindblad_term_objects_* (count + a hash of all terms' Polynomial.coeffs).
@@ -302,6 +312,7 @@ _TERM_SNAPSHOT_1Q = {
     ('other', 'elements'):        (27, '709cf132c89e1fb0'),
     ('other', 'cholesky'):        (27, '742ea93b1f30fccb'),
 }
+_TERM_SNAPSHOT_CONFIGS = list(_TERM_SNAPSHOT_1Q.keys())
 
 
 def _term_fingerprint(terms):
@@ -314,8 +325,7 @@ def _term_fingerprint(terms):
     return hashlib.sha1(repr(sigs).encode()).hexdigest()[:16]
 
 
-@pytest.mark.parametrize("bt,pm", list(_TERM_SNAPSHOT_1Q.keys()),
-                         ids=["%s-%s" % k for k in _TERM_SNAPSHOT_1Q])
+@pytest.mark.parametrize("bt,pm", _TERM_SNAPSHOT_CONFIGS, ids=["%s-%s" % k for k in _TERM_SNAPSHOT_1Q])
 def test_create_lindblad_term_objects_snapshot_1q(bt, pm):
     """Pin the Term-simulator polynomial coefficients (counts + hash) to guard the block-type split."""
     from pygsti.baseobjs.statespace import QubitSpace
@@ -331,13 +341,3 @@ def test_create_lindblad_term_objects_snapshot_1q(bt, pm):
     expected_count, expected_hash = _TERM_SNAPSHOT_1Q[(bt, pm)]
     assert len(terms) == expected_count
     assert _term_fingerprint(terms) == expected_hash
-
-
-def test_static_deriv_shapes():
-    pp = Basis.cast('pp', 4)
-    for bt, coeff_shape in [('ham', (3,)), ('other_diagonal', (3,)), ('other', (3, 3))]:
-        blk = LCB(bt, pp, param_mode='static')
-        assert blk.num_params == 0
-        assert blk.deriv_wrt_params().shape == coeff_shape + (0,)
-        G = Gflat(blk, 'pp')
-        assert blk.superop_deriv_wrt_params(G, np.empty(0), superops_are_flat=True).shape[-1] == 0
